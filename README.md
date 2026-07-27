@@ -203,14 +203,13 @@ archive/divoom_daemon/ Archived Python daemon SERVER (superseded by divoomd,
 build.sh / run.sh      build the Rust binaries / run the GUI (+ daemon + menubar)
 scripts/build_libdivoom.sh   cross-platform native (C accelerator) build
 scripts/build_release.sh     build the shippable Divoom.app + dmg (py2app)
-docs/                  ARCHITECTURE, REVIEW, planning rounds, SESSION_HANDOFF
+docs/                  SESSION_HANDOFF, protocol refs, release docs
 tests/                 pytest suite
 ```
 
 ## Contributing / working notes
 
-This repo is worked by multiple agents and sessions sharing one git tree. See
+ This repo is worked by multiple agents and sessions sharing one git tree. See
 **`AGENTS.md`** for conventions, **`docs/SESSION_HANDOFF.md`** for current state +
-open threads, **`ARCHITECTURE.md`** for the system map, and
-**`docs/REVIEW_2026-06.md`** for the latest code/UX/architecture review. Keep
+open threads, and **`ARCHITECTURE.md`** for the system map. Keep
 tests green and update the handoff each round.
