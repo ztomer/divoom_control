@@ -335,74 +335,16 @@ chunk no longer means a permanently failed upload.
 
 ---
 
-## Recommendations for daemon implementation
+## Implementation status (all DONE)
 
-### 1. Add channel-switch helpers to the daemon
+The recommendations below were made when this doc was written and have since shipped:
 
-Support BOTH the hass-divoom/legacy 10-byte format (for backward compat with `show_clock()`) and the APK 10-byte format (for rich overlay toggles):
-
-```python
-# Template for divoom_daemon/api_channels.py
-
-async def set_clock_rich(device, *, style: int = 0, twentyfour: bool = True,
-                          humidity: bool = False, weather: bool = False,
-                          date: bool = False, color: str = "#ffffff") -> bool:
-    """Set CLOCK channel using the APK's 10-byte C2() format.
-    
-    This controls the rich clock display with overlay toggles (humidity,
-    weather, date parameters). hass-divoom uses a DIFFERENT 10-byte
-    format (byte 4=weather, 5=temp, 6=calendar) which our existing
-    show_clock() already implements.
-    """
-    r, g, b = _parse_color(color)
-    payload = [
-        0x00,                           # ENV_MODE
-        int(twentyfour),                # time_type
-        style & 0xFF,                   # time_show_mode (clock face 0-14)
-        0x01,                           # time_check[0] (always 1)
-        int(humidity),                  # time_check[1] humidity
-        int(weather),                   # time_check[2] weather
-        int(date),                      # time_check[3] date
-        r, g, b,                        # RGB
-    ]
-    return await device.send_command(0x45, payload)
-
-
-async def set_temperature_channel(device, *, celsius: bool = True,
-                                  color: str = "#ffffff") -> bool:
-    """Switch to TEMPRETURE channel using the APK's 6-byte format.
-    
-    Byte layout: [0x01, unit(0=C/1=F), R, G, B, 0x00].
-    Verified against APK, hass-divoom (TimeboxMini), and futpib.
-    """
-    r, g, b = _parse_color(color)
-    payload = [
-        0x01,                           # TEMPRETURE mode
-        int(not celsius),               # 0=Celsius, 1=Fahrenheit
-        r, g, b,                        # RGB
-        0x00,                           # padding
-    ]
-    return await device.send_command(0x45, payload)
-```
-
-### 2. Preserve existing `show_clock()` as the "legacy" overlay format
-
-Our current `show_clock()` 10-byte format matches hass-divoom — don't break it. Instead, add the APK's `CmdManager.C2()` format as a new `set_clock_rich()` function. The device firmware follows the APK payload layout; the two formats produce different overlay results on the same device.
-
-### 3. Use the APK's 6-byte `t2()` for TEMPRETURE channel switch
-
-The `[0x01, unit, R, G, B, 0x00]` format is confirmed by APK + hass-divoom (TimeboxMini). This is what we need for the weather channel switch. The device freeze we saw earlier was likely BLE interleaving (not invalid bytes).
-
-### 4. Add daemon-level command queue
-
-The 50-200ms pacing and interleaving risk are confirmed by all sources. Consider:
-- A per-device asyncio lock that wraps multi-phase operations (0x8B, 0x49)
-- A simple command queue in `DeviceOwner` that waits for one operation to finish before dispatching the next
-- Rejecting or queuing channel switches during ongoing animation pushes
-
-### 5. Weather push remains 0x5F only (no channel switch)
-
-Cross-confirmed by APK + hass-divoom: `send_weather()` / `Weather.set()` sends 0x5F only. The channel switch (0x45) is a separate operation. Our revert was correct.
+- **Channel-switch helpers** — `set_clock_rich()` (APK C2() 10-byte format) and
+  `set_temperature_channel()` (6-byte APK format) implemented in daemon RPC (R26).
+- **Command queue** — ring-buffer command queue in `divoom_daemon/command_queue.py` (R27).
+- **Weather push** — confirmed 0x5F only, channel switch is separate (R26 revert).
+- **`show_clock()` legacy format preserved** — APK C2() added as `set_clock_rich()`;
+  the two overlay layouts coexist.
 
 ---
 

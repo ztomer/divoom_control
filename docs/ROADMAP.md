@@ -69,325 +69,90 @@ record. Phase 5 step 5.3 (the irreversible `divoom_daemon/` server archival)
 shipped 2026-07-13 on explicit user sign-off — see the "Native Rust daemon"
 section below for detail. No remaining thread here.
 
-### Short-to-medium term
+### Short-to-medium term (all shipped)
 
-| Workstream | Depends on | Notes |
-|-----------|-----------|-------|
-| **`show_clock()` overlay reorder** | — | **DONE (R60)** — realigned to APK `C2()` canonical `[0x00, t, style, 0x01, humidity, weather, date, R,G,B]`; wire-byte test added. |
-| **`get_*` read-back timeouts** | — | **DONE (R60)** — bounded + cached in both Python (`ble_reads.read_with_retry` 2.5s + last-good cache) and Rust (every `get_*` uses `ctx.timeout`; daemon wraps call in `tokio::time::timeout` 30s clamped [1,120]). |
-| **R12 visual pass** | — | **DONE (2026-07-14).** User: "use gemini." Captured real screenshots (dashboard, appbar close-up, tab-strip close-up) and sent them to Gemini Pro (`gemini-bridge` skill, Chrome transport) for a Rams/Kare critique. Verified each finding against the actual source before applying — 3 of 5 were false positives from the test-harness screenshot (headless-Chromium font fallback rendered `{}%`/`{}/15` icon glyphs as literal braces; the appbar already had `align-items:center`; inactive-tab contrast was already borderline-passing WCAG AA). 2 were real, verified, and fixed: (1) the tab strip's active state used a solid saturated `--primary` fill + white text, a different "selected" visual language than the sidebar's own established translucent-tint pattern (`.nav-btn.active` — `rgba(255,90,31,0.12)` bg + primary text + tinted border) — unified `tabs.css`'s `.tab-btn.active` to match; (2) the sidebar's device chips (`.device-chips`) had their text starting 2px off from the nav-item text's left edge (12px sidebar + 12px nav-btn padding = 24px vs. 12px + 2px + 8px = 22px) — bumped `.device-chips` padding 2px→4px to land both at the same 24px offset. `tests/test_tabs_chrome.py` updated to pin the new contract; full GUI e2e suite green. |
-| **R12 hardware verification** | user-driven | Album cover, custom-art/live/weather on real device. |
-| **Menubar connection-feedback: live-hardware confirmation** | — | **DONE (2026-07-13, real hardware).** Launched the packaged v0.22.10 app (`dist/Divoom.app`), confirmed a real device (Pixoo-1) auto-connected, then verified the menubar icon via `screencapture` (computer-use MCP was disconnected — native CLI fallback): connected → green, `disconnect` command → orange (idle) within one poll cycle, reconnected → green again. Full round-trip confirmed on real hardware, not just the mock-transport test suite. |
-| **Daemon-down banner / reconnect regression check** | — | **DONE (2026-07-13, real hardware).** With the packaged app running and a real device connected: `kill -9` the daemon → auto-reconnect self-healed in ~1s (GUI correctly updated to reflect the dropped device). Re-ran with the daemon binary renamed away (forcing respawn to fail) → the "Background service isn't running" banner correctly appeared; restored the binary and clicked the banner's Reconnect button → banner cleared, daemon respawned and confirmed responsive. Both the auto-heal and manual-reconnect paths verified working. |
-| **Inline-style → CSS-token migration, batches 3-5** | — | **DONE (2026-07-13).** `templates_routines.js` (10 of 21 migrated/removed, 11 left inline per the plan's one-off-sizing/display:none exceptions), `templates_widgets.js` (31 of 51), `templates_settings.js` (15 of 39, plus 8 more deleted as redundant with the global reset) — the remainder in each file is deliberately-inline one-off/unique styling, not unmigrated debt. 8 new utility classes added to `style_extra.css` (`.mb-12/.mb-18/.mt-6/.clip-shrink/.label-caption/.text-12/.grid-layout.single-col`, plus reuse of existing ones). Verified via `getComputedStyle()` diffing (Playwright, real `index.html`) against the pre-migration box model for every migrated element — zero divergences — plus the full `test_e2e_*` GUI suite (50 tests) green. |
+The following workstreams from earlier rounds are complete:
 
-### Divoom Cloud HTTP (200+ endpoints)
+- **`show_clock()` overlay reorder (R60)** — realigned to APK C2() canonical format.
+- **`get_*` read-back timeouts (R60)** — bounded + cached in both Python and Rust.
+- **R12 visual pass (2026-07-14)** — Gemini design critique, 2 real CSS fixes applied.
+- **Menubar connection-feedback (v0.22.10)** — hardware-verified on real Pixoo-1.
+- **Daemon-down banner / reconnect (v0.22.10)** — hardware-verified, auto-heal confirmed.
+- **Inline-style → CSS-token migration batches 3-5 (v0.22.11)** — all three files completed.
+- **R12 hardware verification** — user-driven (album cover, custom art, weather on real device).
 
-**Status: UNBLOCKED (2026-07-13) — user provided the decompiled APK source**
-at `references/apk/decompiled_src/` (`com/divoom/Divoom/http/HttpCommand.java`
-is the master list of all ~230 server command name constants; request/response
-field shapes live under `http/request/` and `http/response/`). This resolves
-the prior "next step needs the user" ask.
+### Cloud HTTP — 533/533 endpoints cataloged
 
-**Clock-face store: fixed, working live, and wired into the GUI (2026-07-13).**
-`list_clock_faces()`/`CLOCK_FACE_CLASSIFY` originally called
-`GetCategoryFileListV2` with an assumed `Classify` value — confirmed via
-source to be the PIXEL-ART/monthly-best gallery endpoint (its only real
-callers are `CloudGalleriaFragment`/`CloudVerify*`/`FillGameModel`, none
-clock-related). A phone-app-internal replacement,
-`Channel/StoreClockGetClassify` + `Channel/StoreClockGetList` (per
-`WifiChannelModel.java`'s `R()` method), was tried next and abandoned: it
-returns `RC=12` (`HTTP_REQUEST_EMPTY`) against the real server for a reason
-`BaseParams._postSync` (a JADX "not decompiled" stub) can't confirm from
-source — though `OkHttpUtils.postSyncInternal`, which it calls into, IS fully
-decompiled and confirms no hidden headers/signing, so the gap is specific to
-that endpoint's body/account requirements, not the transport.
+Full catalog at `docs/cloud_api/` (all 16 batches complete). Key shipped features:
 
-The actual fix: `Channel/GetDialType` + `Channel/GetDialList`, Divoom's
-**public, unauthenticated developer API** (doc.divoom-gz.com/web/#/12?
-page_id=190 — not in `HttpCommand.java`'s phone-app-internal catalog at all;
-found via the independent `r12f/divoom` Rust crate on GitHub, which documents
-the same official page). **Confirmed live** — real category names and
-`ClockId`/`Name` data, no credentials needed. Implemented in
-`divoom_lib/cloud.py` (`get_dial_types`/`get_dial_list`/`list_clock_faces`)
-and `divoomd/src/cloud_category.rs` (parity, wired into `cloud_cmds.rs`/
-`daemon.rs` dispatch) — end-to-end-tested against the real daemon socket, not
-just mocked.
+- **Clock-face store** — public `Channel/GetDialType`+`GetDialList` API found via
+  `r12f/divoom` crate. Wired into GUI as "Cloud Clock Faces" browser in Clock panel.
+  Tests: 4 Playwright e2e.
+- **Playlist browse+push** — `Playlist/GetMyList`/`SendDevice` confirmed RC=0. Wired
+  into GUI as "Playlists" sub-tab in Pixel Art panel. Tests: 3 Playwright e2e.
+- **AidSleep browse+play** — `RC=3` was a missing server-side device registration.
+  `BlueDevice/NewDevice` lazy-registers on first use. Wired into GUI as "Sleep Sounds"
+  sub-tab in Schedule panel. Tests: 4 Playwright e2e.
+- **Photo album management** — `Photo/GetAlbumList` (cloud browse) + `Photo/PlayAlbum`
+  (LAN apply). Wired into GUI as "Photo Albums" sub-tab.
+- **LAN-getter completeness** — 8 read-back counterparts of BLE Set commands.
+- **Channel extras** — 5-LCD commands, Voice/SendText, Danmaku: backend-only, not GUI-wired
+  (need hardware or render confirmation).
+- **`Cloud/ToDevice`** — unimplemented (unconfirmed semantics, no live caller).
+- **`search_weather_city`** — implemented but not GUI-wired (weather uses system location).
 
-**Wired into the GUI**: a new "Cloud Clock Faces" browser in the Clock channel
-panel (`divoom_gui/web_ui/cloud_clock_faces.js` + `index.html`, backend
-`divoom_gui/clock_faces.py`) — pick a category, browse the list, Apply. No
-new device-apply plumbing needed: `display.show_clock(clock=clock_id)`
-already routed large ids through `lan.set_clock()`
-(`Channel/SetClockSelectId` to the device's own LAN IP) when the device has
-WiFi connectivity, so Apply reuses the existing `set_clock()` API verbatim.
-4 new Playwright e2e tests (`tests/test_e2e_clock_faces.py`) cover: initial
-load without a tab click (the panel is active by default), switching
-categories, the existing "connect a device first" guard, and applying with
-the correct `ClockId` reaching `set_clock()`.
+### WiFi/LAN command completeness — 45 total, all implemented
 
-**The other ~500 `HttpCommand.java` endpoints: fully cataloged (2026-07-14).**
-User: "do research, search the web, if not found, write it down into a
-separate md file (unknown commands)." Full research sweep of all 533 command
-constants — purpose, request/response field shapes (from decompiled
-`http/request/**`/`http/response/**` classes), relevance (`device-control`
-vs. Divoom's own `account/social`/`internal/moderation` layer), and source
-confidence, dispatched as 16 parallel research batches by domain. Result:
-**`docs/cloud_api/README.md`** (index + the full catalog, all 16 batches
-complete, **533 of 533 commands documented**) and
-**`docs/cloud_api/UNKNOWN_COMMANDS.md`** (13 of 533 commands with zero
-signal beyond the bare string). Three genuine new-feature leads surfaced:
-**AidSleep browse+play** and **Playlist browse+push** — both DONE, live,
-wired into the GUI (below); **`Cloud/ToDevice`** — unconfirmed semantics, no
-live caller found, not picked up.
+Counted from `HttpCommand.java`'s `DeviceAndServerCmd` (43) + `ForceDeviceHttp` (2).
+All 4 clusters implemented:
+1. **Photo album management** (DONE, live, GUI-wired).
+2. **LAN-getter completeness** (DONE, 8 read-back counterparts).
+3. **Channel extras + Voice/SendText** (DONE, backend only, NOT GUI-wired — needs hardware).
+4. **Danmaku scrolling overlay** (DONE, backend only, NOT GUI-wired — unconfirmed render).
 
-**Playlist browse+push: DONE, live, wired into the GUI (2026-07-14).**
-`Playlist/GetMyList`/`Playlist/GetMyImageList` confirmed RC=0 against a real
-account (`divoom_lib/cloud.py`'s `get_my_playlists`/`get_playlist_images`,
-Rust parity in `cloud_category.rs`). Push reuses the existing LAN transport
-— `Playlist/SendDevice` is in `HttpCommand.java`'s `DeviceAndServerCmd`
-array, so it's a local-device-HTTP-only call, not cloud
-(`lan_transport.py`'s `send_playlist`, Rust `device_call`'s
-`lan.send_playlist`). New "Playlists" sub-tab in the Pixel Art panel
-(`templates_pixel_art.js`, `divoom_gui/web_ui/playlists.js`, backend
-`divoom_gui/playlists.py` + `LightingApi.push_playlist`) — browse, Push.
-Reused the clock-face browser's list-row/Apply-button CSS verbatim (no new
-markup). 3 new Playwright e2e tests (`tests/test_e2e_playlists.py`) mirror
-`test_e2e_clock_faces.py`.
+Bonus fix: device-selector "not in range" badge now counts consecutive scan misses
+(downgrades after 2), not a one-shot startup flag. 5 new e2e tests.
 
-**AidSleep browse+play: DONE, live, wired into the GUI (2026-07-14) — the
-RC=3 mystery is FIXED, not a dead end.** First pass concluded (wrongly) that
-`AidSleep/GetAllList`'s `RC=3` ("request data is incomplete") was
-unresolvable: every request-shape hypothesis failed identically (guest and
-real-login accounts, every request-class field, `DeviceId`
-0/omitted/placeholder, `Type` 0/1/2, `GetAllList`/`GetMyList`, 0-/1-based
-paging), and a live `Device/GetListV2` call showed this account had **zero
-devices bound server-side**. That last fact turned out to be the actual
-cause, not a dead end: continuing the `misc_small.md` cloud-API research
-batch surfaced `BlueDevice/NewDevice` — the real app's device-registration
-call (`APP/GetServerUTC` for a signed timestamp, then `BlueDevice/NewDevice`
-with `UTC`/`UTCEncrypt` + `Type`/`SubType`, returning a real
-`BluetoothDeviceId`/`DevicePassword`). This project's `virtual_device.json`
-was never populated because nothing had ever called it. Registering one
-live immediately turned `RC=3` into `RC=0` with a real sleep-sound catalog
-(Gentle Rain, Ocean Waves, Fireplace, ...). Implemented in
-`divoom_auth.ensure_virtual_device`/`divoomd::cloud::ensure_virtual_device`
-(lazy, one-time registration per machine/account, cached to
-`virtual_device.json`, only triggered by the feature that actually needs
-it — not on every `authenticate()` call, since it has a real server-side
-side effect). The BLE play/add/delete/exit commands
-(`divoom_lib/tools/aid_sleep.py`, Rust `device_call::aid_sleep`) reuse the
-project's existing SPP_JSON BLE framing unchanged (command_id=1, JSON
-payload — confirmed identical to the decompiled APK's `bluetooth.q#B()`).
-New "Sleep Sounds" sub-tab in the Schedule panel (`templates_routines.js`,
-`divoom_gui/web_ui/aid_sleep.js`, backend `divoom_gui/aid_sleep.py` +
-`LightingApi.play_aid_sleep`) — pick Natural Sound/White Noise/Music, Play.
-4 new Playwright e2e tests (`tests/test_e2e_aid_sleep.py`) mirror the
-Playlist/clock-face pattern.
+### Deferred
 
-`Cloud/ToDevice` remains unimplemented — unconfirmed semantics, no live
-caller found, lower priority, not picked up this round.
-
-**Shipped (R61 + follow-up):**
-1. ~~Cloud auth broken (`RC=10`)~~ — fixed R61.
-2. `get_category_file_list`, `search_weather_city` — shipped, Python+Rust parity, tested.
-3. `get_dial_types`/`get_dial_list`/`list_clock_faces` — the real, working, public clock-face endpoints (2026-07-13); confirmed live and wired into the GUI's Clock channel panel.
-4. New transport: `divoom_lib/cloud.py` module (library was BLE-only + device LAN) — shipped.
-5. `search_weather_city` remains implemented but NOT GUI-wired — the weather widget uses system/OS location, not a Divoom device-weather-city search; wiring it needs a UX decision (what does picking a city actually do?) that wasn't made this round.
-
-### WiFi/LAN command completeness (2026-07-14)
-
-User: "how many functions are wifi related? we can add the support for
-that." Counted precisely from `HttpCommand.java`'s routing arrays
-(`DeviceAndServerCmd` + `ForceDeviceHttp` — exactly the commands Divoom's
-own app posts to the device's local WiFi HTTP API instead of the cloud):
-**45 total.** 10 were already implemented; picked 4 clusters to close the
-rest of the gap (~8 were pure LAN duplicates of already-BLE-working
-features, low value; `Cloud/ToDevice`-adjacent calendar EnterCalendar
-commands stayed unimplemented — thin signal, no decompiled payload).
-
-1. **Photo album management — DONE, live, wired into the GUI.**
-   `Photo/GetAlbumList` (cloud browse) + `Photo/PlayAlbum` (LAN apply, in
-   `DeviceAndServerCmd`) — new "Photo Albums" 5th sub-tab in the Pixel Art
-   panel, same browse-then-apply shape as Playlist/AidSleep. Also
-   implemented (backend-only, no GUI hook — full photo-level CRUD needs
-   thumbnail UI, a bigger scope): `SetAlbumCover`, `DeletePhoto`,
-   `RemovePhotoFromAlbum`, `DevicePhotoToAlbum`, `GetPhotoList` (the last is
-   in `ForceDeviceHttp`, always local).
-2. **LAN-getter completeness pass — DONE, backend only.** 8 read-back
-   counterparts of already-implemented Set commands (EqPosition, RGBInfo,
-   AmbientLight, OnOffScreen, NoiseStatus, Timer, ScoreBoard, StopWatch) —
-   same feature, now also reachable over LAN when previously BLE-only.
-3. **Channel extras + Voice/SendText — DONE, backend only, NOT GUI-wired.**
-   `Set5LcdChannelType`/`Set5LcdWholeClockId`/`SetProduceTime` need real
-   5-LCD "Times Gate" multi-panel hardware this project doesn't own.
-   `SetNightPreview`/`ExitNightPreview` and `Voice/SendText` are
-   implemented but `Voice/SendText` specifically needs the same
-   real-hardware render confirmation `push_text` already learned the hard
-   way it can't skip (R32 §D: a superficially-similar "set light phone
-   word" command ACKed cleanly but didn't render on Pixoo-class matrices).
-4. **Danmaku scrolling overlay — DONE, backend only, NOT GUI-wired.**
-   `Danmaku/SendText` (same unconfirmed-render caveat as Voice/SendText)
-   and `Danmaku/RandomFace` (no confirmed live caller anywhere in the
-   decompiled app — may be dead/unused server-side).
-
-Also fixed while investigating: the device-selector chip's **"not in
-range" badge was startup-only** — a device confirmed present once this
-session never got flagged again even if it genuinely dropped out of BLE
-range later, since the union-only scan merge (R46 #5) never downgraded an
-address. Now counts consecutive scan misses per address and downgrades
-after 2 in a row (daemon-owned/streaming devices exempt — they don't
-advertise by design). `divoom_gui/web_ui/device_selector.js`, 5 new e2e
-tests in `test_e2e_device_status_chips.py`.
-
-### Deferred (R12 §D)
-
-See `docs/archive/rounds/PLANNING_ROUND12_D_AUDIT.md` for the full audit:
-- `pic_scan_ctrl` 0x35 claim — **partially resolved (2026-07-13, real hardware).**
-  Hardware-tested on a real Pixoo-1: both `control=0` (mode/speed) and
-  `control=1` (image-data) GATT writes for 0x35 ACK cleanly — no rejection,
-  error, or disconnect, device stays responsive after. This is transport-level
-  confirmation only (ACK != device-confirmed semantic handling — a firmware
-  can silently ACK-and-drop an unrecognized opcode); no visual on-device
-  effect was confirmed (no camera on the physical device). Upgraded from
-  "wholly untested" to "accepted without error by the device's BLE stack,"
-  not fully verified as functionally correct. See the comment at
-  `divoom_lib/display/drawing.py::pic_scan_ctrl` / `divoomd/src/device_call/
-  drawing.rs` for the full writeup.
-- Cloud HTTP surface (above, now active in R61).
+- **`pic_scan_ctrl` 0x35** — partially resolved (2026-07-13, real hardware).
+  Accepted without error by BLE stack; no visual confirmation (no camera).
+  See `divoom_lib/display/drawing.py` / `divoomd/src/device_call/drawing.rs`.
+- **`Cloud/ToDevice`** — unimplemented, unconfirmed semantics.
+- **R12 hardware verification** — user-driven (album cover, custom art, weather on real device).
 
 ---
 
-## Native Rust daemon (`divoomd/`)
+## Native Rust daemon (`divoomd/`) — DONE
 
-**Goal: ACHIEVED.** The Python daemon backend was deprecated in favor of the
-compiled Rust daemon (100% socket + hardware parity reached 2026-06-29) and
-archived 2026-07-13 — see "Archived" below.
+**Goal: ACHIEVED.** The Python daemon backend was deprecated in favor of
+`divoomd` (Rust, built on `btleplug` + `tokio` + `serde`) at 100% socket +
+hardware parity (2026-06-29). Python daemon server archived 2026-07-13 (13
+server-side modules moved to `archive/divoom_daemon/`, client-side infra stays
+active in `divoom_daemon/` — `daemon_client.py`, `daemon_protocol.py`,
+`macos_notifications.py`). Full device parity (54 → 0 gaps), cloud decode,
+hardware-verified on Pixoo/Timoo/Ditoo/Tivoo Max. Menubar is a standalone Rust
+agent (`native-port/divoom-menubar/`); the GUI stays the Python pywebview UI
+(the native-egui-UI effort was explored and retired). `cargo test` 63/63 both
+feature matrices.
 
-**Decision: Rust** (over C / C++ / Zig). `btleplug` is the one mature
-cross-platform BLE API (the bleak analog); `tokio` maps the asyncio-heavy daemon
-1:1; compile-time memory/thread safety suits a 24/7 hardware-owning binary frame
-parser; `serde` covers the NDJSON socket protocol. Footprint and single-device
-perf were a wash across all four candidates — cross-platform BLE + async broke the
-tie. The full language evaluation + phased plan lived in
-`docs/PLANNING_NATIVE_PORT.md`, removed 2026-06-28 once the port shipped; recover
-from git history if needed.
+Key: `divoomd` is now the **sole shipping daemon** — no `DIVOOM_USE_RUST_DAEMON`
+opt-out. `archive/tests/` (469 tests) is excluded from default pytest but still
+runnable standalone.
 
-**Architecture:** daemon-only port behind the unix-socket NDJSON seam — the Python
-GUI / menubar / CLI are unchanged clients, the Python daemon stays ground truth
-until parity, and the C encoders (`libdivoom`) are reused via FFI.
+## Architecture summary
 
-**Status (2026-06-28): functionally complete + hardware-verified.** Shipped R54–R56
-— full `device_call.*` surface, cloud auth, gallery sync, monthly-best loop, macOS
-notifications, wall, live jobs, art/hot-update, SPP bridge, TCP+token auth, Python
-auto-spawn (`DIVOOM_USE_RUST_DAEMON`). Hardening Phases 1–4 done: hardware-free core
-build restored + CI-gated (both feature matrices), 500-LOC compliance gated, E2E
-verified hardware-free (CI) and on a **real Timoo over BLE** (connect/brightness/
-exclusive/MCP/disconnect). `cargo test` 63/63 both matrices.
-
-**Parity (2026-06-29): COMPLETE.** Full `device_call` method parity (54 → 0 gaps vs
-the Python Divoom API) + full cloud image-decode parity (magic 9/18/26 AES/LZO +
-0xAA → GIF, byte-verified vs the Python oracle, rendered on Pixoo/Tivoo-Max/Timoo).
-The Rust daemon became the **default** (`DIVOOM_USE_RUST_DAEMON` on when `divoomd`
-is present); the Python backend was **kept as the reference/fallback implementation**
-at the time (per user directive then in force) until the archival below
-superseded that directive. Niche subsystems (drawing-pad, SD-music, animation
-gif-chunk primitives) are wire-tested but not hardware-verified.
-
-**Remaining (optional): DONE (2026-07-13, real hardware).** Ditoo-light-2 was back
-in range — connected, fetched a real cloud gallery file (`fetch_gallery`
-classify=18), pushed it via `sync_artwork` (`success:true`), and a post-push
-`get_brightness` read-back matched the pre-push value — no device-stick,
-matching the same pattern already confirmed on Pixoo/Timoo. Niche subsystems
-hardware-exercised: `music.app_need_get_music_list` (SD music query) and
-`drawing.drawing_mul_pad_enter`/`drawing_pad_exit` (drawing-pad round-trip)
-both ACK cleanly; `animation.app_get_user_define_info` (0x8e read-back)
-timed out with no reply on this Ditoo — inconclusive (unsupported vs. no
-saved slot to report) but confirmed non-destructive: no crash/wedge, device
-stayed responsive to further calls. Findings documented inline at each
-call site.
-
-### Archived: Python daemon server (2026-07-13, explicit user sign-off)
-
-`divoomd` (Rust) is now the **sole shipping daemon** — no fallback, no
-`DIVOOM_USE_RUST_DAEMON` opt-out. The Python daemon *server* implementation was
-moved (not deleted — `git mv`, full history preserved) from `divoom_daemon/` to
-`archive/divoom_daemon/`:
-
-- **Moved:** `daemon.py`, `device_owner.py`, `socket_server.py`,
-  `command_queue.py`, `notification_service.py`, `live_jobs.py`, and the
-  `owner_*.py` handler modules (art/connect/live/loop/notify/wall/util) — 13
-  files, internal cross-imports rewritten to `archive.divoom_daemon.*`.
-- **Stayed active** in `divoom_daemon/` (client-side infra every consumer
-  still needs, regardless of which daemon implementation is running):
-  `daemon_client.py` (spawn/find/`ensure_daemon()`), `daemon_protocol.py` (the
-  NDJSON wire client), `daemon_config.py`, `spp_bridge.py`,
-  `macos_notifications.py`/`notification_router.py` (GUI Settings still calls
-  these directly). `divoom_daemon/__init__.py` now documents the
-  client-library-only role.
-- **`daemon_client.spawn_daemon()`** no longer has a `-m divoom_lib.cli daemon`
-  Python-fallback branch — it raises a clear `RuntimeError` if no `divoomd`
-  binary resolves, instead of emitting a command that no longer works.
-- **`divoom-control daemon`** (the CLI subcommand, `cli_commands.cmd_daemon()`)
-  now prints a pointer at `divoomd` and returns 1, rather than importing the
-  archived server module.
-- **Tests:** 47 test files that exercised only the archived server code moved
-  to `archive/tests/` (excluded from `pytest`'s `testpaths = ["tests"]`, so no
-  longer run by default/CI — same treatment as the source); 6 of those were
-  *split* file-by-file where some tests needed the archived server
-  (`DivoomDaemon`/`DeviceOwner`/`SocketServer` fixtures) and others tested
-  still-active client code (`spawn_daemon`, `bundle_python`, TCC-disclaim,
-  `DaemonDeviceProxy`'s status cache) — the client-side tests stayed in
-  `tests/`. `archive/tests/conftest.py` is a copy of `tests/conftest.py` so the
-  archived suite is still independently runnable/collectible on request.
-- **Verified:** full `tests/` suite green post-move (2731 passed, 97 skipped);
-  `archive/tests/` collects cleanly (469 tests, zero collection errors, not run
-  by default); `check_no_emoji.py`/`check_file_size.py` gates clean (the one
-  file-size violation, `divoomd/src/macos_notifications.rs`, predates this
-  change and is untouched by it).
-- **Docs updated:** `README.md` (package description, requirements, "Run the
-  daemon" instructions now point at `divoomd` directly, project layout).
-
-### Native menubar (done) + UI decision (2026-06-30)
-
-**Final architecture:** the desktop **UI stays the Python pywebview GUI**; the
-**daemon is Rust** (`divoomd`); the **menubar is a standalone Rust agent**
-(`native-port/divoom-menubar/`) that replaces the pyobjc menubar. The Python `.app`
-bundles both Rust binaries. The native-egui-UI effort below (and its full
-Python-free goal) was **explored and then retired** — `native-port/divoom-ui/` is
-deleted. The text below is historical.
-
-### (Historical) Next: native UI + menubar (planned) — `docs/PLANNING_NATIVE_UI.md`
-
-With the daemon ported, the last Python surfaces are the **pywebview GUI** and
-**pyobjc menubar**. Plan: replace both with a single native Rust binary
-(`native-port/divoom-ui/`) so the shipped bundle is Python-free. **Decision:
-Rust-hosted webview** (`wry`/`tao`/`tray-icon`/`muda`, à la carte — no Node)
-keeping the existing 9,172-LOC static `web_ui/` frontend **verbatim** and
-reimplementing the ~70-method `gui_api` bridge in Rust (mostly thin daemon-
-forwarders; UI stays a socket client of `divoomd`). 6 phases, gated on a Phase-0
-`window.pywebview.api`-shim spike. The Python UI is archived in-tree, never
-deleted. Independent of the parked v0.21.0 release (daemon BT grant).
-
----
+- **UI**: Python pywebview GUI (unchanged, 9k-LOC static `web_ui/` frontend).
+- **Daemon**: Rust `divoomd` (unix-socket NDJSON, sole BLE/LAN owner).
+- **Menubar**: Rust `divoom-menubar` (standalone agent, replaces pyobjc).
+- **Encoders**: C `libdivoom` (LANCZOS downsampler, reused via FFI).
+- **Transport**: BLE (CoreBluetooth via `btleplug`) + LAN (HTTP to device) + Cloud (HTTP to Divoom).
 
 ## Planning docs by round
 
-Historical round plans (R3–R61) are archived under `docs/archive/rounds/`, and
-fully-shipped/superseded workstream plans under `docs/archive/superseded/`
-(recover either from git history if needed). No active planning doc at repo
-root right now — the open items above are small/independent enough not to
-need one; start a new `PLANNING_ROUND62.md` when the next round's scope
-needs its own plan.
-
-Archived in R61 (#0, all fully shipped or superseded — see each file's own
-status header for detail): `PLANNING_ROUND57.md`/`58`/`59`/`60`,
-`PLANNING_BLE_HARDENING.md`, `PLANNING_SOCKET_HARDENING.md`,
-`PLANNING_daemon_ownership.md`, `PLANNING_NATIVE_PORT_HARDENING.md`,
-`PLANNING_NEXT_PHASE.md`, `PLANNING_inline_styles.md` (batches 3-5 tracked above
-instead), `ARCH_GAP_SCAN_2026-06.md`, `PARITY_TRACKER_NATIVE_UI.md`.
-Archived after R61 shipped (v0.22.9) and its e2e-verification follow-up
-shipped (v0.22.10): `PLANNING_ROUND61.md`.
+Historical round plans (R3–R61) archived under `docs/archive/rounds/`.
+Shipped/superseded workstream plans under `docs/archive/superseded/`.
+`PLANNING_ROUND62.md` and later shipped rounds also archived there.
 
 
 
