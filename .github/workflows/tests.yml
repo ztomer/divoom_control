@@ -78,6 +78,11 @@ jobs:
       - name: No #[allow] in tracked Rust source (house gate)
         working-directory: ./
         run: python3 tools/check_no_allow.py
+      - name: Install D-Bus headers
+        # clippy --all-features enables `ble` → btleplug → dbus → libdbus-sys,
+        # which needs the system dbus-1.pc. Without this the clippy step fails
+        # on Ubuntu even though the job is otherwise the no-BLE core gate.
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
       - name: cargo fmt --check
         run: cargo fmt --all -- --check
       - name: cargo clippy (all targets, all features, deny warnings)
