@@ -32,7 +32,7 @@ fn encode_frames_to_gif(frames: &[(Vec<u8>, u32)], w: u32, h: u32) -> Option<Vec
                 return None;
             }
             let mut rgba = Vec::with_capacity((w * h * 4) as usize);
-            for px in rgb[..expected].chunks_exact(3) {
+            for px in rgb[..expected].as_chunks::<3>().0 {
                 rgba.extend_from_slice(&[px[0], px[1], px[2], 0xFF]);
             }
             let img = RgbaImage::from_raw(w, h, rgba)?;
@@ -81,8 +81,12 @@ mod tests {
     use std::path::PathBuf;
 
     fn raw(name: &str) -> Vec<u8> {
-        std::fs::read(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/cloud_fixtures").join(name))
-            .expect("fixture")
+        std::fs::read(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/cloud_fixtures")
+                .join(name),
+        )
+        .expect("fixture")
     }
 
     #[test]
@@ -100,6 +104,10 @@ mod tests {
         assert!(gif.starts_with(b"GIF"), "resolved output must be a GIF");
         let frames = crate::image_proc::process_image_bytes(gif, 16, 100).expect("re-decode");
         assert_eq!(frames.len(), 6, "6 frames survive the GIF round-trip");
-        assert_eq!((frames[0].1, frames[0].2), (16, 16), "resized to device size");
+        assert_eq!(
+            (frames[0].1, frames[0].2),
+            (16, 16),
+            "resized to device size"
+        );
     }
 }

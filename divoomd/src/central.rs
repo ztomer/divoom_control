@@ -59,9 +59,15 @@ mod tests {
     #[test]
     fn is_dead_central_matches_wedge_and_channel_closed() {
         assert!(is_dead_central("connect failed: Channel closed"));
-        assert!(is_dead_central("scan timed out: central may be stale (Channel closed)"));
-        assert!(is_dead_central("BLE discovery timed out: central may be stale (Channel closed)"));
-        assert!(is_dead_central("BLE scan start timed out: central may be stale (Channel closed)"));
+        assert!(is_dead_central(
+            "scan timed out: central may be stale (Channel closed)"
+        ));
+        assert!(is_dead_central(
+            "BLE discovery timed out: central may be stale (Channel closed)"
+        ));
+        assert!(is_dead_central(
+            "BLE scan start timed out: central may be stale (Channel closed)"
+        ));
     }
 
     #[test]
@@ -77,7 +83,11 @@ mod tests {
         let c = BleCentral::Faulty;
         // Without the timeout guard this would hang forever. Assert it returns
         // and errors instead.
-        let r = timeout(Duration::from_secs(20), ble::scan(&c, Duration::from_secs(2))).await;
+        let r = timeout(
+            Duration::from_secs(20),
+            ble::scan(&c, Duration::from_secs(2)),
+        )
+        .await;
         assert!(r.is_ok(), "scan must not hang on a wedged central");
         let res = r.unwrap();
         assert!(res.is_err(), "wedged scan should error");
@@ -87,7 +97,11 @@ mod tests {
     #[tokio::test]
     async fn connect_on_wedged_central_returns_within_bounds() {
         let c = BleCentral::Faulty;
-        let r = timeout(Duration::from_secs(30), ble::BleTransport::connect(&c, "any-id")).await;
+        let r = timeout(
+            Duration::from_secs(30),
+            ble::BleTransport::connect(&c, "any-id"),
+        )
+        .await;
         assert!(r.is_ok(), "connect must not hang on a wedged central");
         let res = r.unwrap();
         assert!(res.is_err(), "wedged connect should error");

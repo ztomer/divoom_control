@@ -58,7 +58,13 @@ fn parse_args() -> ConfigArgs {
         i += 1;
     }
 
-    ConfigArgs { socket_path, host, port, token, mac }
+    ConfigArgs {
+        socket_path,
+        host,
+        port,
+        token,
+        mac,
+    }
 }
 
 /// Single-instance + stale-socket handling: if the path exists and something is
@@ -75,9 +81,7 @@ fn bind(socket_path: &str) -> std::io::Result<UnixListener> {
     UnixListener::bind(socket_path)
 }
 
-use divoomd::socket_server::{
-    serve, serve_tcp, CONNECTION_IDLE_TIMEOUT, MAX_CONNECTIONS,
-};
+use divoomd::socket_server::{serve, serve_tcp, CONNECTION_IDLE_TIMEOUT, MAX_CONNECTIONS};
 
 fn env_usize(key: &str, default: usize) -> usize {
     match std::env::var(key) {
@@ -88,10 +92,7 @@ fn env_usize(key: &str, default: usize) -> usize {
 
 fn env_duration(key: &str, default: Duration) -> Duration {
     match std::env::var(key) {
-        Ok(v) => v
-            .parse::<u64>()
-            .map(Duration::from_secs)
-            .unwrap_or(default),
+        Ok(v) => v.parse::<u64>().map(Duration::from_secs).unwrap_or(default),
         Err(_) => default,
     }
 }
@@ -156,9 +157,14 @@ async fn main() {
     // daemon, not the main one). Without this gate the main daemon would push
     // gallery animations to every configured device on each startup. Enable with
     // DIVOOMD_MONTHLY_BEST=1.
-    if matches!(std::env::var("DIVOOMD_MONTHLY_BEST").as_deref(), Ok("1") | Ok("true") | Ok("yes")) {
+    if matches!(
+        std::env::var("DIVOOMD_MONTHLY_BEST").as_deref(),
+        Ok("1") | Ok("true") | Ok("yes")
+    ) {
         eprintln!("divoomd: monthly-best background sync enabled");
-        tokio::spawn(divoomd::monthly_best::monthly_best_loop_task(daemon.clone()));
+        tokio::spawn(divoomd::monthly_best::monthly_best_loop_task(
+            daemon.clone(),
+        ));
     }
 
     let max_connections = env_usize("DIVOOMD_MAX_CONNECTIONS", MAX_CONNECTIONS);

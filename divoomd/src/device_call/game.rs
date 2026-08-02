@@ -1,7 +1,7 @@
+use super::CallCtx;
+use crate::protocol::err_reply;
 use serde_json::{json, Value};
 use std::time::Duration;
-use crate::protocol::err_reply;
-use super::CallCtx;
 
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
@@ -11,10 +11,16 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
 
     match method {
         "game.show_game" | "show_game" => {
-            let value = args.first().copied()
+            let value = args
+                .first()
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("value")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let payload = if value > 0 { [0x01, value] } else { [0x00, 0x00] };
+            let payload = if value > 0 {
+                [0x01, value]
+            } else {
+                [0x00, 0x00]
+            };
             match dev.send_command(0xa0, &payload, true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("show_game failed: {e}")),
@@ -27,7 +33,9 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
         }
         "game.set_key_down" | "set_key_down" => {
-            let key = args.first().copied()
+            let key = args
+                .first()
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("key")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
             match dev.send_command(0x17, &[key], true).await {
@@ -36,7 +44,9 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
         }
         "game.set_key_up" | "set_key_up" => {
-            let key = args.first().copied()
+            let key = args
+                .first()
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("key")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
             match dev.send_command(0x21, &[key], true).await {
@@ -45,7 +55,9 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
         }
         "game.set_magic_ball_answer" | "set_magic_ball_answer" => {
-            let answer = args.first().copied()
+            let answer = args
+                .first()
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("answer")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
             match dev.send_command(0x88, &[answer], true).await {
@@ -54,9 +66,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
         }
         "game.send_gamecontrol" | "send_gamecontrol" => {
-            let value_arg = raw_args.first()
-                .or_else(|| kw.and_then(|v| v.get("value")));
-            
+            let value_arg = raw_args.first().or_else(|| kw.and_then(|v| v.get("value")));
+
             let control_value = match value_arg {
                 None => 0,
                 Some(Value::String(s)) => match s.to_lowercase().as_str() {

@@ -17,7 +17,11 @@ pub type Frame = (Vec<u8>, i32, i32, u16);
 /// `default_time_ms` is used for static images and GIF frames with no delay.
 ///
 /// CPU-bound — callers should invoke via `tokio::task::spawn_blocking`.
-pub fn process_image_bytes(data: Vec<u8>, size: u32, default_time_ms: u16) -> Result<Vec<Frame>, String> {
+pub fn process_image_bytes(
+    data: Vec<u8>,
+    size: u32,
+    default_time_ms: u16,
+) -> Result<Vec<Frame>, String> {
     if data.len() >= 3 && &data[0..3] == b"GIF" {
         process_gif(data, size, default_time_ms)
     } else {
@@ -34,9 +38,12 @@ fn process_static(data: &[u8], size: u32, time_ms: u16) -> Result<Vec<Frame>, St
 
 fn process_gif(data: Vec<u8>, size: u32, default_time_ms: u16) -> Result<Vec<Frame>, String> {
     use image::codecs::gif::GifDecoder;
-    let decoder = GifDecoder::new(std::io::Cursor::new(data))
-        .map_err(|e| format!("gif decoder: {e}"))?;
-    let frames = decoder.into_frames().collect_frames().map_err(|e| format!("gif frames: {e}"))?;
+    let decoder =
+        GifDecoder::new(std::io::Cursor::new(data)).map_err(|e| format!("gif decoder: {e}"))?;
+    let frames = decoder
+        .into_frames()
+        .collect_frames()
+        .map_err(|e| format!("gif frames: {e}"))?;
     if frames.is_empty() {
         return Err("GIF has no frames".into());
     }

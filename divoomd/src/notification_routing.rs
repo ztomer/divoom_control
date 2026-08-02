@@ -40,11 +40,19 @@ pub fn get_routing_path() -> std::path::PathBuf {
 pub fn load_routing_rules() -> Vec<(String, u8)> {
     let p = get_routing_path();
     if !p.exists() {
-        return DEFAULT_ROUTING.iter().map(|(s, t)| (s.to_string(), *t)).collect();
+        return DEFAULT_ROUTING
+            .iter()
+            .map(|(s, t)| (s.to_string(), *t))
+            .collect();
     }
     let data = match std::fs::read_to_string(&p) {
         Ok(s) => s,
-        Err(_) => return DEFAULT_ROUTING.iter().map(|(s, t)| (s.to_string(), *t)).collect(),
+        Err(_) => {
+            return DEFAULT_ROUTING
+                .iter()
+                .map(|(s, t)| (s.to_string(), *t))
+                .collect()
+        }
     };
     let raw: Result<Vec<Vec<serde_json::Value>>, _> = serde_json::from_str(&data);
     match raw {
@@ -58,12 +66,18 @@ pub fn load_routing_rules() -> Vec<(String, u8)> {
                 }
             }
             if rules.is_empty() {
-                DEFAULT_ROUTING.iter().map(|(s, t)| (s.to_string(), *t)).collect()
+                DEFAULT_ROUTING
+                    .iter()
+                    .map(|(s, t)| (s.to_string(), *t))
+                    .collect()
             } else {
                 rules
             }
         }
-        Err(_) => DEFAULT_ROUTING.iter().map(|(s, t)| (s.to_string(), *t)).collect(),
+        Err(_) => DEFAULT_ROUTING
+            .iter()
+            .map(|(s, t)| (s.to_string(), *t))
+            .collect(),
     }
 }
 
@@ -76,9 +90,10 @@ pub fn save_routing_rules(rules: &[(String, u8)]) -> Result<(), String> {
     sorted.sort_by(|a, b| a.0.cmp(&b.0));
 
     let json_val = serde_json::Value::Array(
-        sorted.iter()
+        sorted
+            .iter()
             .map(|(s, t)| serde_json::json!([s, t]))
-            .collect()
+            .collect(),
     );
     let serialized = serde_json::to_string_pretty(&json_val).map_err(|e| e.to_string())? + "\n";
     std::fs::write(&p, serialized).map_err(|e| e.to_string())?;
@@ -86,7 +101,9 @@ pub fn save_routing_rules(rules: &[(String, u8)]) -> Result<(), String> {
 }
 
 pub fn route_app(app_id: &str, rules: &[(String, u8)]) -> Option<u8> {
-    if app_id.is_empty() { return None; }
+    if app_id.is_empty() {
+        return None;
+    }
     let a = app_id.to_lowercase();
     for (substr, app_type) in rules {
         if a.contains(substr) {

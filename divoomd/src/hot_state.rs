@@ -123,9 +123,24 @@ mod tests {
     fn per_device_keying_overwrites_same_device() {
         let tmp = TempDir::new().unwrap();
         let path = tmp.path().join("hot_update_state.json");
-        record_check_at(&path, "dev1", &json!({"served": [1], "manifest": 3, "downloaded": 3})).unwrap();
-        record_check_at(&path, "dev2", &json!({"served": [], "manifest": 3, "downloaded": 3})).unwrap();
-        record_check_at(&path, "dev1", &json!({"served": [], "manifest": 3, "downloaded": 3})).unwrap();
+        record_check_at(
+            &path,
+            "dev1",
+            &json!({"served": [1], "manifest": 3, "downloaded": 3}),
+        )
+        .unwrap();
+        record_check_at(
+            &path,
+            "dev2",
+            &json!({"served": [], "manifest": 3, "downloaded": 3}),
+        )
+        .unwrap();
+        record_check_at(
+            &path,
+            "dev1",
+            &json!({"served": [], "manifest": 3, "downloaded": 3}),
+        )
+        .unwrap();
         let map = load_map(&path);
         assert_eq!(map.len(), 2);
         assert_eq!(map["dev1"]["served"].as_u64().unwrap(), 0); // overwritten, not appended

@@ -3,7 +3,7 @@
 use std::future::Future;
 use std::pin::Pin;
 
-use divoomd::autoprobe::{autoprobe, Protocol, Prober};
+use divoomd::autoprobe::{autoprobe, Prober, Protocol};
 
 /// A mock prober that answers `true` only for the configured framing(s).
 struct Mock {
@@ -23,25 +23,37 @@ impl Prober for Mock {
 
 #[tokio::test]
 async fn detects_ios_le_when_it_answers() {
-    let m = Mock { ios_le_answers: true, basic_answers: false };
+    let m = Mock {
+        ios_le_answers: true,
+        basic_answers: false,
+    };
     assert_eq!(autoprobe(&m).await, Protocol::IosLe);
 }
 
 #[tokio::test]
 async fn falls_back_to_basic_when_only_basic_answers() {
-    let m = Mock { ios_le_answers: false, basic_answers: true };
+    let m = Mock {
+        ios_le_answers: false,
+        basic_answers: true,
+    };
     assert_eq!(autoprobe(&m).await, Protocol::Basic);
 }
 
 #[tokio::test]
 async fn defaults_to_basic_when_neither_answers() {
-    let m = Mock { ios_le_answers: false, basic_answers: false };
+    let m = Mock {
+        ios_le_answers: false,
+        basic_answers: false,
+    };
     assert_eq!(autoprobe(&m).await, Protocol::Basic);
 }
 
 #[tokio::test]
 async fn prefers_ios_le_when_both_answer() {
     // iOS-LE is probed first, so it wins even if Basic would also answer.
-    let m = Mock { ios_le_answers: true, basic_answers: true };
+    let m = Mock {
+        ios_le_answers: true,
+        basic_answers: true,
+    };
     assert_eq!(autoprobe(&m).await, Protocol::IosLe);
 }

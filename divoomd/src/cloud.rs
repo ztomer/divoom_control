@@ -1,13 +1,13 @@
 //! Divoom cloud API authentication and token caching.
 //! Ported from `divoom_lib/divoom_auth.py`.
 
+use hmac::{Hmac, Mac};
+use md5::{Digest, Md5};
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-use hmac::{Hmac, Mac};
-use md5::{Md5, Digest};
 
 type HmacMd5 = Hmac<Md5>;
 
@@ -64,14 +64,18 @@ fn hmac_md5_hex(message: &str) -> String {
     let mut mac = HmacMd5::new_from_slice(HMAC_KEY).expect("HMAC can take key of any size");
     mac.update(message.as_bytes());
     let result = mac.finalize();
-    result.into_bytes().iter().map(|b| format!("{:02x}", b)).collect()
+    result
+        .into_bytes()
+        .iter()
+        .map(|b| format!("{:02x}", b))
+        .collect()
 }
-
 
 async fn post_cloud(path: &str, body: &Value) -> Result<Value, String> {
     let client = reqwest::Client::new();
     let url = format!("{}/{}", BASE_URL, path);
-    let res = client.post(&url)
+    let res = client
+        .post(&url)
         .header("Content-Type", "application/json; charset=utf-8")
         .header("Connection", "close")
         .header("User-Agent", "okhttp/4.12.0")
@@ -98,7 +102,10 @@ async fn login_email(email: &str, pwhash: &str) -> Result<DivoomCredentials, Str
         "DeviceId": 0,
     });
     let data = post_cloud("UserLogin", &body).await?;
-    let rc = data.get("ReturnCode").and_then(|v| v.as_i64()).unwrap_or(-1);
+    let rc = data
+        .get("ReturnCode")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(-1);
     if rc == 4 {
         return Err(format!("Email not registered: {email}"));
     }
@@ -106,7 +113,10 @@ async fn login_email(email: &str, pwhash: &str) -> Result<DivoomCredentials, Str
         return Err("Password is incorrect".to_string());
     }
     if rc != 0 {
-        return Err(format!("UserLogin failed: RC={rc} msg={:?}", data.get("ReturnMessage")));
+        return Err(format!(
+            "UserLogin failed: RC={rc} msg={:?}",
+            data.get("ReturnMessage")
+        ));
     }
     let token = data.get("Token").and_then(|v| v.as_i64()).unwrap_or(0);
     let user_id = data.get("UserId").and_then(|v| v.as_i64()).unwrap_or(0);
@@ -125,7 +135,10 @@ async fn get_server_utc() -> i64 {
             return utc;
         }
     }
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64
 }
 
 async fn login_guest() -> Result<DivoomCredentials, String> {
@@ -149,9 +162,15 @@ async fn login_guest() -> Result<DivoomCredentials, String> {
         "UserId": 0,
     });
     let data = post_cloud("User/NewGuest", &body).await?;
-    let rc = data.get("ReturnCode").and_then(|v| v.as_i64()).unwrap_or(-1);
+    let rc = data
+        .get("ReturnCode")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(-1);
     if rc != 0 {
-        return Err(format!("UserNewGuest failed: RC={rc} msg={:?}", data.get("ReturnMessage")));
+        return Err(format!(
+            "UserNewGuest failed: RC={rc} msg={:?}",
+            data.get("ReturnMessage")
+        ));
     }
     let token = data.get("Token").and_then(|v| v.as_i64()).unwrap_or(0);
     let user_id = data.get("UserId").and_then(|v| v.as_i64()).unwrap_or(0);
@@ -204,7 +223,9 @@ pub async fn get_credentials(force_refresh: bool) -> Result<DivoomCredentials, S
             let elapsed = guard.unwrap().elapsed().unwrap_or_default().as_secs();
             AUTH_FAIL_COOLDOWN_SECS.saturating_sub(elapsed)
         };
-        return Err(format!("Divoom cloud auth unavailable (retry in {remaining}s)"));
+        return Err(format!(
+            "Divoom cloud auth unavailable (retry in {remaining}s)"
+        ));
     }
 
     match login_guest().await {
@@ -248,12 +269,24 @@ pub(crate) async fn ensure_virtual_device() -> Result<(i64, i64), String> {
         "SubType": subtype,
     });
     let data = post_cloud("BlueDevice/NewDevice", &body).await?;
-    let rc = data.get("ReturnCode").and_then(|v| v.as_i64()).unwrap_or(-1);
+    let rc = data
+        .get("ReturnCode")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(-1);
     if rc != 0 {
-        return Err(format!("BlueDevice/NewDevice failed: RC={rc} msg={:?}", data.get("ReturnMessage")));
+        return Err(format!(
+            "BlueDevice/NewDevice failed: RC={rc} msg={:?}",
+            data.get("ReturnMessage")
+        ));
     }
-    let new_device_id = data.get("BluetoothDeviceId").and_then(|v| v.as_i64()).unwrap_or(0);
-    let new_device_pw = data.get("DevicePassword").and_then(|v| v.as_i64()).unwrap_or(0);
+    let new_device_id = data
+        .get("BluetoothDeviceId")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+    let new_device_pw = data
+        .get("DevicePassword")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
     let _ = crate::cloud_store::save_virtual_device(new_device_id, new_device_pw, type_, subtype);
     Ok((new_device_id, new_device_pw))
 }
@@ -268,8 +301,14 @@ pub(crate) fn load_virtual_device() -> (i64, i64, i64, i64) {
         if path.exists() {
             if let Ok(content) = std::fs::read_to_string(&path) {
                 if let Ok(val) = serde_json::from_str::<Value>(&content) {
-                    device_id = val.get("BluetoothDeviceId").and_then(|v| v.as_i64()).unwrap_or(0);
-                    device_pw = val.get("DevicePassword").and_then(|v| v.as_i64()).unwrap_or(0);
+                    device_id = val
+                        .get("BluetoothDeviceId")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0);
+                    device_pw = val
+                        .get("DevicePassword")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0);
                     dev_type = val.get("Type").and_then(|v| v.as_i64()).unwrap_or(0);
                     dev_subtype = val.get("SubType").and_then(|v| v.as_i64()).unwrap_or(0);
                 }
@@ -279,8 +318,13 @@ pub(crate) fn load_virtual_device() -> (i64, i64, i64, i64) {
     (device_id, device_pw, dev_type, dev_subtype)
 }
 
-#[allow(dead_code)]
-pub(crate) static TEST_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
+/// Serializes tests that touch shared mutable global state (env vars, HOME,
+/// Divoom cloud auth) across modules. Compiled only under `#[cfg(test)]`, so it
+/// is never dead in production builds and other test modules reach it via
+/// `crate::cloud::TEST_MUTEX`. A `tokio` mutex because the tests hold the guard
+/// across `.await` points (a `std` guard would block the executor).
+#[cfg(test)]
+pub(crate) static TEST_MUTEX: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
 
 #[cfg(test)]
 mod tests {
@@ -288,8 +332,10 @@ mod tests {
     use std::fs;
     use tempfile::TempDir;
 
-    fn lock_test() -> std::sync::MutexGuard<'static, ()> {
-        TEST_MUTEX.get_or_init(|| Mutex::new(())).lock().unwrap()
+    fn lock_test() -> tokio::sync::MutexGuard<'static, ()> {
+        TEST_MUTEX
+            .get_or_init(|| tokio::sync::Mutex::new(()))
+            .blocking_lock()
     }
 
     #[test]
@@ -312,7 +358,7 @@ mod tests {
 
         let conf_dir = temp.path().join(".config").join("divoom-control");
         fs::create_dir_all(&conf_dir).unwrap();
-        
+
         let config_ini = "[divoom]\nemail = test_user@divoom.com\npassword = test_password_123\n";
         fs::write(conf_dir.join("config.ini"), config_ini).unwrap();
 
@@ -347,17 +393,28 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let cache_file = temp.path().join(".config").join("divoom-control").join("auth_token.json");
+            let cache_file = temp
+                .path()
+                .join(".config")
+                .join("divoom-control")
+                .join("auth_token.json");
             let metadata = fs::metadata(cache_file).unwrap();
             let mode = metadata.permissions().mode();
             assert_eq!(mode & 0o777, 0o600);
         }
 
-        let cache_file = temp.path().join(".config").join("divoom-control").join("auth_token.json");
+        let cache_file = temp
+            .path()
+            .join(".config")
+            .join("divoom-control")
+            .join("auth_token.json");
         let content = fs::read_to_string(&cache_file).unwrap();
         let mut val: serde_json::Value = serde_json::from_str(&content).unwrap();
-        
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
         val["saved_at"] = serde_json::Value::Number((now - 24 * 3600).into());
         fs::write(&cache_file, serde_json::to_string(&val).unwrap()).unwrap();
 
@@ -366,7 +423,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_auth_failure_cooldown() {
-        let _lock = lock_test();
+        let _lock = TEST_MUTEX
+            .get_or_init(|| tokio::sync::Mutex::new(()))
+            .lock()
+            .await;
         let temp = TempDir::new().unwrap();
         std::env::set_var("HOME", temp.path());
 
@@ -378,7 +438,7 @@ mod tests {
         assert!(res.is_err());
         let err = res.unwrap_err();
         assert!(err.contains("Divoom cloud auth unavailable"));
-        
+
         let long_ago = SystemTime::now() - Duration::from_secs(130);
         *last_auth_fail_at().lock().unwrap() = Some(long_ago);
 
@@ -387,4 +447,3 @@ mod tests {
         assert!(!err.contains("Divoom cloud auth unavailable"));
     }
 }
-

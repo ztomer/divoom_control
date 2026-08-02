@@ -72,12 +72,35 @@ fn parse_ios_le_matches_python() {
         match (&got, &c["result"]) {
             (None, Value::Null) => {}
             (Some(n), expected) if !expected.is_null() => {
-                assert_eq!(n.command_id as u64, expected["command_id"].as_u64().unwrap(), "cmd for {}", c["in"]);
-                assert_eq!(to_hex(&n.payload), expected["payload"].as_str().unwrap(), "payload for {}", c["in"]);
-                assert_eq!(n.packet_number as u64, expected["packet_number"].as_u64().unwrap(), "pkt for {}", c["in"]);
-                assert_eq!(n.checksum as u64, expected["checksum"].as_u64().unwrap(), "cksum for {}", c["in"]);
+                assert_eq!(
+                    n.command_id as u64,
+                    expected["command_id"].as_u64().unwrap(),
+                    "cmd for {}",
+                    c["in"]
+                );
+                assert_eq!(
+                    to_hex(&n.payload),
+                    expected["payload"].as_str().unwrap(),
+                    "payload for {}",
+                    c["in"]
+                );
+                assert_eq!(
+                    n.packet_number as u64,
+                    expected["packet_number"].as_u64().unwrap(),
+                    "pkt for {}",
+                    c["in"]
+                );
+                assert_eq!(
+                    n.checksum as u64,
+                    expected["checksum"].as_u64().unwrap(),
+                    "cksum for {}",
+                    c["in"]
+                );
             }
-            _ => panic!("parse_ios_le mismatch for {}: rust={:?} python={}", c["in"], got, c["result"]),
+            _ => panic!(
+                "parse_ios_le mismatch for {}: rust={:?} python={}",
+                c["in"], got, c["result"]
+            ),
         }
     }
 }
@@ -91,10 +114,25 @@ fn parse_basic_matches_python() {
         let expected = c["messages"].as_array().unwrap();
         assert_eq!(msgs.len(), expected.len(), "message count for {}", c["in"]);
         for (got, exp) in msgs.iter().zip(expected) {
-            assert_eq!(got.command_id as u64, exp["command_id"].as_u64().unwrap(), "cmd for {}", c["in"]);
-            assert_eq!(to_hex(&got.payload), exp["payload"].as_str().unwrap(), "payload for {}", c["in"]);
+            assert_eq!(
+                got.command_id as u64,
+                exp["command_id"].as_u64().unwrap(),
+                "cmd for {}",
+                c["in"]
+            );
+            assert_eq!(
+                to_hex(&got.payload),
+                exp["payload"].as_str().unwrap(),
+                "payload for {}",
+                c["in"]
+            );
         }
         // the drained buffer must equal Python's returned remainder
-        assert_eq!(to_hex(&buf), c["remainder"].as_str().unwrap(), "remainder for {}", c["in"]);
+        assert_eq!(
+            to_hex(&buf),
+            c["remainder"].as_str().unwrap(),
+            "remainder for {}",
+            c["in"]
+        );
     }
 }

@@ -1,6 +1,6 @@
-use serde_json::{json, Value};
-use crate::protocol::err_reply;
 use super::CallCtx;
+use crate::protocol::err_reply;
+use serde_json::{json, Value};
 
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
@@ -11,13 +11,19 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
 
     match method {
         "design.set_eq" | "set_eq" => {
-            let dynamic = kw.and_then(|v| v.get("dynamic")).and_then(|v| v.as_bool())
+            let dynamic = kw
+                .and_then(|v| v.get("dynamic"))
+                .and_then(|v| v.as_bool())
                 .or_else(|| raw_args.first().and_then(|v| v.as_bool()))
                 .unwrap_or(false);
-            let mode = args.get(1).copied()
+            let mode = args
+                .get(1)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("mode")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let stream = kw.and_then(|v| v.get("stream")).and_then(|v| v.as_bool())
+            let stream = kw
+                .and_then(|v| v.get("stream"))
+                .and_then(|v| v.as_bool())
                 .or_else(|| raw_args.get(2).and_then(|v| v.as_bool()))
                 .unwrap_or(false);
             let payload = [0x1eu8, dynamic as u8, mode, stream as u8];
@@ -27,7 +33,9 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
         }
         "design.set_language" | "set_language" => {
-            let lang = args.first().copied()
+            let lang = args
+                .first()
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("lang")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
             match dev.send_command(0xbd, &[0x26, lang], true).await {
@@ -36,16 +44,25 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
         }
         "design.set_user_define_time" | "set_user_define_time" => {
-            let hour = args.first().copied()
+            let hour = args
+                .first()
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("hour")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let minute = args.get(1).copied()
+            let minute = args
+                .get(1)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("minute")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let second = args.get(2).copied()
+            let second = args
+                .get(2)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("second")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            match dev.send_command(0xbd, &[0x14, hour, minute, second], true).await {
+            match dev
+                .send_command(0xbd, &[0x14, hour, minute, second], true)
+                .await
+            {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("set_user_define_time failed: {e}")),
             }
@@ -72,7 +89,9 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
         }
         "design.set_screen_dir" | "set_screen_dir" => {
-            let direction = args.first().copied()
+            let direction = args
+                .first()
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("direction")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
             match dev.send_command(0xbd, &[0x23, direction], true).await {
@@ -81,7 +100,9 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
         }
         "design.set_screen_mirror" | "set_screen_mirror" => {
-            let on = kw.and_then(|v| v.get("on")).and_then(|v| v.as_bool())
+            let on = kw
+                .and_then(|v| v.get("on"))
+                .and_then(|v| v.as_bool())
                 .or_else(|| kw.and_then(|v| v.get("enabled")).and_then(|v| v.as_bool()))
                 .or_else(|| raw_args.first().and_then(|v| v.as_bool()))
                 .unwrap_or(false);
@@ -97,7 +118,9 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
         }
         "design.use_user_define_index" | "use_user_define_index" => {
-            let page = args.first().copied()
+            let page = args
+                .first()
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("page")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
             match dev.send_command(0xbd, &[0x17, page], true).await {
@@ -106,7 +129,9 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
         }
         "design.clear_user_define_index" | "clear_user_define_index" => {
-            let page = args.first().copied()
+            let page = args
+                .first()
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("page")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
             match dev.send_command(0xbd, &[0x16, page], true).await {

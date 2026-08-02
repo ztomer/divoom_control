@@ -27,20 +27,44 @@ async fn ping_and_status_shapes() {
 #[tokio::test]
 async fn exclusive_steal_reject_through_handler() {
     let d = Daemon::new();
-    let a = d.handle(make_request("exclusive_start", Some(json!({"token": "A"})), None)).await;
+    let a = d
+        .handle(make_request(
+            "exclusive_start",
+            Some(json!({"token": "A"})),
+            None,
+        ))
+        .await;
     assert_eq!(a["success"], json!(true));
     assert_eq!(a["token"], json!("A"));
 
     // a competing session is rejected immediately (the R53.x steal-reject)
-    let b = d.handle(make_request("exclusive_start", Some(json!({"token": "B"})), None)).await;
+    let b = d
+        .handle(make_request(
+            "exclusive_start",
+            Some(json!({"token": "B"})),
+            None,
+        ))
+        .await;
     assert_eq!(b["success"], json!(false));
     assert!(b["error"].as_str().unwrap().contains("exclusively held"));
 
-    let end = d.handle(make_request("exclusive_end", Some(json!({"token": "A"})), None)).await;
+    let end = d
+        .handle(make_request(
+            "exclusive_end",
+            Some(json!({"token": "A"})),
+            None,
+        ))
+        .await;
     assert_eq!(end["success"], json!(true));
 
     // after release, B can acquire
-    let b2 = d.handle(make_request("exclusive_start", Some(json!({"token": "B"})), None)).await;
+    let b2 = d
+        .handle(make_request(
+            "exclusive_start",
+            Some(json!({"token": "B"})),
+            None,
+        ))
+        .await;
     assert_eq!(b2["success"], json!(true));
 }
 
@@ -55,10 +79,22 @@ async fn exclusive_start_requires_token() {
 #[tokio::test]
 async fn device_commands_are_honestly_unimplemented() {
     let d = Daemon::new();
-    let r = d.handle(make_request("device_call", Some(json!({"method": "device.unimplemented_method"})), None)).await;
+    let r = d
+        .handle(make_request(
+            "device_call",
+            Some(json!({"method": "device.unimplemented_method"})),
+            None,
+        ))
+        .await;
     assert_eq!(r["success"], json!(false), "must NOT fake success");
     let err = r["error"].as_str().unwrap();
-    assert!(err.contains("no device connected") || err.contains("not implemented") || err.contains("not ported"), "Unexpected error: {}", err);
+    assert!(
+        err.contains("no device connected")
+            || err.contains("not implemented")
+            || err.contains("not ported"),
+        "Unexpected error: {}",
+        err
+    );
 }
 
 #[tokio::test]
@@ -66,16 +102,36 @@ async fn device_name_commands_route_to_device_call() {
     let d = Daemon::new();
     // get_device_name returns "no device connected" when no device is connected,
     // which confirms it is routed to cmd_device_call (implemented)
-    let r1 = d.handle(make_request("device_call", Some(json!({"method": "device.get_device_name"})), None)).await;
+    let r1 = d
+        .handle(make_request(
+            "device_call",
+            Some(json!({"method": "device.get_device_name"})),
+            None,
+        ))
+        .await;
     assert_eq!(r1["success"], json!(false));
     let err1 = r1["error"].as_str().unwrap();
-    assert!(err1.contains("no device connected") || err1.contains("not implemented"), "Unexpected error: {}", err1);
+    assert!(
+        err1.contains("no device connected") || err1.contains("not implemented"),
+        "Unexpected error: {}",
+        err1
+    );
 
     // set_device_name returns "no device connected"
-    let r2 = d.handle(make_request("device_call", Some(json!({"method": "device.set_device_name", "args": ["NewName"]})), None)).await;
+    let r2 = d
+        .handle(make_request(
+            "device_call",
+            Some(json!({"method": "device.set_device_name", "args": ["NewName"]})),
+            None,
+        ))
+        .await;
     assert_eq!(r2["success"], json!(false));
     let err2 = r2["error"].as_str().unwrap();
-    assert!(err2.contains("no device connected") || err2.contains("not implemented"), "Unexpected error: {}", err2);
+    assert!(
+        err2.contains("no device connected") || err2.contains("not implemented"),
+        "Unexpected error: {}",
+        err2
+    );
 }
 
 #[tokio::test]
@@ -119,8 +175,14 @@ async fn ported_commands_route_to_device_call() {
         ("set_alarm_gif", json!([0, 100, 1, [0, 1, 2]])),
         ("alarm.get_memorial_time", json!([])),
         ("get_memorial_time", json!([])),
-        ("alarm.set_memorial_time", json!([0, 1, 1, 1, 12, 0, 1, "Memorial"])),
-        ("set_memorial_time", json!([0, 1, 1, 1, 12, 0, 1, "Memorial"])),
+        (
+            "alarm.set_memorial_time",
+            json!([0, 1, 1, 1, 12, 0, 1, "Memorial"]),
+        ),
+        (
+            "set_memorial_time",
+            json!([0, 1, 1, 1, 12, 0, 1, "Memorial"]),
+        ),
         ("alarm.set_memorial_gif", json!([0, 100, 1, [0, 1, 2]])),
         ("set_memorial_gif", json!([0, 100, 1, [0, 1, 2]])),
         ("alarm.set_alarm_listen", json!([1, 0, 15])),
@@ -129,8 +191,14 @@ async fn ported_commands_route_to_device_call() {
         ("set_alarm_volume", json!([15])),
         ("alarm.set_alarm_volume_control", json!([1, 0])),
         ("set_alarm_volume_control", json!([1, 0])),
-        ("sleep.show_sleep", json!([60, 0, 1, 875, 10, [255, 255, 255], 100])),
-        ("show_sleep", json!([60, 0, 1, 875, 10, [255, 255, 255], 100])),
+        (
+            "sleep.show_sleep",
+            json!([60, 0, 1, 875, 10, [255, 255, 255], 100]),
+        ),
+        (
+            "show_sleep",
+            json!([60, 0, 1, 875, 10, [255, 255, 255], 100]),
+        ),
         ("sleep.get_sleep_scene", json!([])),
         ("get_sleep_scene", json!([])),
         ("sleep.set_sleep_scene_listen", json!([1, 0, 15])),
@@ -141,13 +209,25 @@ async fn ported_commands_route_to_device_call() {
         ("set_sleep_color", json!([[0, 0, 255]])),
         ("sleep.set_sleep_light", json!([50])),
         ("set_sleep_light", json!([50])),
-        ("sleep.set_sleep_scene", json!([0, 1, [0, 0], 10, [255, 255, 255], 50])),
-        ("set_sleep_scene", json!([0, 1, [0, 0], 10, [255, 255, 255], 50])),
+        (
+            "sleep.set_sleep_scene",
+            json!([0, 1, [0, 0], 10, [255, 255, 255], 50]),
+        ),
+        (
+            "set_sleep_scene",
+            json!([0, 1, [0, 0], 10, [255, 255, 255], 50]),
+        ),
         ("aid_sleep.play", json!([256, 0])),
         ("aid_sleep.exit", json!([])),
         ("aid_sleep.delete", json!([256, 0])),
-        ("timeplan.set_time_manage_info", json!([1, 8, 0, 127, 0, 1, 875, 15, 1])),
-        ("set_time_manage_info", json!([1, 8, 0, 127, 0, 1, 875, 15, 1])),
+        (
+            "timeplan.set_time_manage_info",
+            json!([1, 8, 0, 127, 0, 1, 875, 15, 1]),
+        ),
+        (
+            "set_time_manage_info",
+            json!([1, 8, 0, 127, 0, 1, 875, 15, 1]),
+        ),
         ("timeplan.set_time_manage_ctrl", json!([1, 0])),
         ("set_time_manage_ctrl", json!([1, 0])),
         ("text.set_light_phone_word_attr", json!([1, 10, 0])),
@@ -205,12 +285,27 @@ async fn ported_commands_route_to_device_call() {
         ("system.get_device_temp", json!([])),
         ("get_device_temp", json!([])),
         ("device.get_device_temp", json!([])),
-        ("system.send_net_temp", json!([2026, 6, 23, 10, 0, 1, [[25, 1]]])),
+        (
+            "system.send_net_temp",
+            json!([2026, 6, 23, 10, 0, 1, [[25, 1]]]),
+        ),
         ("send_net_temp", json!([2026, 6, 23, 10, 0, 1, [[25, 1]]])),
-        ("device.send_net_temp", json!([2026, 6, 23, 10, 0, 1, [[25, 1]]])),
-        ("system.send_net_temp_disp", json!([[true, false, false, false, false], 30])),
-        ("send_net_temp_disp", json!([[true, false, false, false, false], 30])),
-        ("device.send_net_temp_disp", json!([[true, false, false, false, false], 30])),
+        (
+            "device.send_net_temp",
+            json!([2026, 6, 23, 10, 0, 1, [[25, 1]]]),
+        ),
+        (
+            "system.send_net_temp_disp",
+            json!([[true, false, false, false, false], 30]),
+        ),
+        (
+            "send_net_temp_disp",
+            json!([[true, false, false, false, false], 30]),
+        ),
+        (
+            "device.send_net_temp_disp",
+            json!([[true, false, false, false, false], 30]),
+        ),
         ("system.get_net_temp_disp", json!([])),
         ("get_net_temp_disp", json!([])),
         ("device.get_net_temp_disp", json!([])),
@@ -240,18 +335,22 @@ async fn ported_commands_route_to_device_call() {
     ];
 
     for (method, args) in methods {
-        let r = d.handle(make_request("device_call", Some(json!({"method": method, "args": args})), None)).await;
+        let r = d
+            .handle(make_request(
+                "device_call",
+                Some(json!({"method": method, "args": args})),
+                None,
+            ))
+            .await;
         assert_eq!(r["success"], json!(false), "method {} should fail", method);
         let err = r["error"].as_str().unwrap();
         assert!(
-            err.contains("no device connected") || err.contains("not implemented") || err.contains("not ported"),
+            err.contains("no device connected")
+                || err.contains("not implemented")
+                || err.contains("not ported"),
             "Method {} returned unexpected error: {}",
             method,
             err
         );
     }
 }
-
-
-
-

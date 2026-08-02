@@ -9,12 +9,23 @@ use tokio::net::UnixStream;
 
 // name -> channel int (LIGHT_MODE_NAMES in mcp_tools.py).
 const LIGHT_MODES: [(&str, i64); 8] = [
-    ("clock", 0), ("lightning", 1), ("cloud", 2), ("vj", 3),
-    ("visualizer", 4), ("design", 5), ("scoreboard", 6), ("animation", 7),
+    ("clock", 0),
+    ("lightning", 1),
+    ("cloud", 2),
+    ("vj", 3),
+    ("visualizer", 4),
+    ("design", 5),
+    ("scoreboard", 6),
+    ("animation", 7),
 ];
 // name -> WeatherType int (weather.py: 1=clear,3=cloudy,5=storm,6=rain,8=snow,9=fog).
 const WEATHER_TYPES: [(&str, i64); 6] = [
-    ("clear", 1), ("cloudy", 3), ("thunderstorm", 5), ("rain", 6), ("snow", 8), ("fog", 9),
+    ("clear", 1),
+    ("cloudy", 3),
+    ("thunderstorm", 5),
+    ("rain", 6),
+    ("snow", 8),
+    ("fog", 9),
 ];
 
 /// The `tools/list` descriptors (name + description + inputSchema), matching the
@@ -70,17 +81,39 @@ pub async fn call_tool(name: &str, a: &Value, sock: &str) -> Result<Value, Strin
             Ok(json!({ "ok": true, "level": level }))
         }
         "set_light_mode" => {
-            let mode = a.get("mode").and_then(|v| v.as_str()).ok_or("mode must be a string")?;
-            let channel = LIGHT_MODES.iter().find(|(n, _)| *n == mode).map(|(_, c)| *c)
-                .ok_or_else(|| format!("mode must be one of {:?}", LIGHT_MODES.iter().map(|(n, _)| *n).collect::<Vec<_>>()))?;
+            let mode = a
+                .get("mode")
+                .and_then(|v| v.as_str())
+                .ok_or("mode must be a string")?;
+            let channel = LIGHT_MODES
+                .iter()
+                .find(|(n, _)| *n == mode)
+                .map(|(_, c)| *c)
+                .ok_or_else(|| {
+                    format!(
+                        "mode must be one of {:?}",
+                        LIGHT_MODES.iter().map(|(n, _)| *n).collect::<Vec<_>>()
+                    )
+                })?;
             dc(sock, "control.set_light_mode", json!([channel])).await?;
             Ok(json!({ "ok": true, "mode": mode, "channel": channel }))
         }
         "set_weather" => {
             let temp = need_int(a, "temperature_c", -127, 128)?;
-            let weather = a.get("weather").and_then(|v| v.as_str()).ok_or("weather must be a string")?;
-            let wt = WEATHER_TYPES.iter().find(|(n, _)| *n == weather).map(|(_, t)| *t)
-                .ok_or_else(|| format!("weather must be one of {:?}", WEATHER_TYPES.iter().map(|(n, _)| *n).collect::<Vec<_>>()))?;
+            let weather = a
+                .get("weather")
+                .and_then(|v| v.as_str())
+                .ok_or("weather must be a string")?;
+            let wt = WEATHER_TYPES
+                .iter()
+                .find(|(n, _)| *n == weather)
+                .map(|(_, t)| *t)
+                .ok_or_else(|| {
+                    format!(
+                        "weather must be one of {:?}",
+                        WEATHER_TYPES.iter().map(|(n, _)| *n).collect::<Vec<_>>()
+                    )
+                })?;
             dc(sock, "weather.set", json!([temp, wt])).await?;
             Ok(json!({ "ok": true, "temperature_c": temp, "weather": weather }))
         }
@@ -92,8 +125,15 @@ pub async fn call_tool(name: &str, a: &Value, sock: &str) -> Result<Value, Strin
             let enabled = a.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true);
             let status = if enabled { 1 } else { 0 };
             // set_alarm(index, status, hour, minute, week, mode=0, trigger_mode=1)
-            dc(sock, "alarm.set_alarm", json!([index, status, hour, minute, week, 0, 1])).await?;
-            Ok(json!({ "ok": true, "index": index, "hour": hour, "minute": minute, "weekday_mask": week, "enabled": enabled }))
+            dc(
+                sock,
+                "alarm.set_alarm",
+                json!([index, status, hour, minute, week, 0, 1]),
+            )
+            .await?;
+            Ok(
+                json!({ "ok": true, "index": index, "hour": hour, "minute": minute, "weekday_mask": week, "enabled": enabled }),
+            )
         }
         "set_radio" => {
             let freq = need_int(a, "freq_x10", 875, 1080)?;
@@ -101,39 +141,65 @@ pub async fn call_tool(name: &str, a: &Value, sock: &str) -> Result<Value, Strin
             Ok(json!({ "ok": true, "freq_x10": freq }))
         }
         "set_low_power" => {
-            let enabled = a.get("enabled").and_then(|v| v.as_bool()).ok_or("enabled must be a boolean")?;
-            dc(sock, "device.set_low_power_switch", json!([if enabled { 1 } else { 0 }])).await?;
+            let enabled = a
+                .get("enabled")
+                .and_then(|v| v.as_bool())
+                .ok_or("enabled must be a boolean")?;
+            dc(
+                sock,
+                "device.set_low_power_switch",
+                json!([if enabled { 1 } else { 0 }]),
+            )
+            .await?;
             Ok(json!({ "ok": true, "enabled": enabled }))
         }
         "set_screen_orientation" => {
             let degrees = need_int(a, "degrees", 0, 270)?;
-            let dir = match degrees { 0 => 0, 90 => 1, 180 => 2, 270 => 3, _ => return Err("degrees must be 0, 90, 180, or 270".into()) };
+            let dir = match degrees {
+                0 => 0,
+                90 => 1,
+                180 => 2,
+                270 => 3,
+                _ => return Err("degrees must be 0, 90, 180, or 270".into()),
+            };
             let mirror = a.get("mirror").and_then(|v| v.as_bool()).unwrap_or(false);
             dc(sock, "design.set_screen_dir", json!([dir])).await?;
             dc(sock, "design.set_screen_mirror", json!([mirror])).await?;
             Ok(json!({ "ok": true, "degrees": degrees, "mirror": mirror }))
         }
         "show_image" => {
-            let file = a.get("file").and_then(|v| v.as_str()).filter(|s| !s.is_empty())
+            let file = a
+                .get("file")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
                 .ok_or("file must be a non-empty local path string")?;
             let bytes = std::fs::read(file).map_err(|e| format!("cannot read {file}: {e}"))?;
             push_image_bytes(sock, &bytes).await?;
             Ok(json!({ "ok": true, "file": file }))
         }
         "push_animation" => {
-            let file = a.get("file").and_then(|v| v.as_str()).filter(|s| !s.is_empty());
-            let data = a.get("data").and_then(|v| v.as_str()).filter(|s| !s.is_empty());
+            let file = a
+                .get("file")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty());
+            let data = a
+                .get("data")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty());
             if file.is_some() == data.is_some() {
                 return Err("provide exactly one of 'file' or 'data'".into());
             }
             let bytes = if let Some(f) = file {
                 std::fs::read(f).map_err(|e| format!("cannot read {f}: {e}"))?
             } else {
-                base64::engine::general_purpose::STANDARD.decode(data.unwrap())
+                base64::engine::general_purpose::STANDARD
+                    .decode(data.unwrap())
                     .map_err(|e| format!("invalid base64: {e}"))?
             };
             push_image_bytes(sock, &bytes).await?;
-            Ok(json!({ "ok": true, "note": "pushed first frame (full animation streaming is a follow-up)" }))
+            Ok(
+                json!({ "ok": true, "note": "pushed first frame (full animation streaming is a follow-up)" }),
+            )
         }
         "play_sound" => {
             let dur = need_int(a, "duration_ms", 100, 3000)?;
@@ -159,7 +225,10 @@ pub async fn call_tool(name: &str, a: &Value, sock: &str) -> Result<Value, Strin
 // --- helpers -----------------------------------------------------------------
 
 fn need_int(a: &Value, key: &str, lo: i64, hi: i64) -> Result<i64, String> {
-    let v = a.get(key).and_then(|v| v.as_i64()).ok_or_else(|| format!("{key} must be an integer"))?;
+    let v = a
+        .get(key)
+        .and_then(|v| v.as_i64())
+        .ok_or_else(|| format!("{key} must be an integer"))?;
     if v < lo || v > hi {
         return Err(format!("{key} must be in [{lo}..{hi}] (got {v})"));
     }
@@ -177,26 +246,49 @@ fn opt_int(a: &Value, key: &str, lo: i64, hi: i64, default: i64) -> Result<i64, 
 /// via the daemon's `show_image` (rgb kwargs). Device size is 16 for now.
 async fn push_image_bytes(sock: &str, bytes: &[u8]) -> Result<(), String> {
     let img = image::load_from_memory(bytes).map_err(|e| format!("decode failed: {e}"))?;
-    let small = img.resize_exact(16, 16, image::imageops::FilterType::Nearest).to_rgb8();
+    let small = img
+        .resize_exact(16, 16, image::imageops::FilterType::Nearest)
+        .to_rgb8();
     let rgb: Vec<u8> = small.into_raw();
-    dc_kw(sock, "show_image", json!({ "w": 16, "h": 16, "time_ms": 100, "rgb": rgb })).await?;
+    dc_kw(
+        sock,
+        "show_image",
+        json!({ "w": 16, "h": 16, "time_ms": 100, "rgb": rgb }),
+    )
+    .await?;
     Ok(())
 }
 
 /// device_call with positional args; errors if the daemon reports failure.
 async fn dc(sock: &str, method: &str, args: Value) -> Result<Value, String> {
-    let reply = cmd(sock, "device_call", json!({ "method": method, "args": args })).await?;
+    let reply = cmd(
+        sock,
+        "device_call",
+        json!({ "method": method, "args": args }),
+    )
+    .await?;
     check(reply)
 }
 
 async fn dc_kw(sock: &str, method: &str, kwargs: Value) -> Result<Value, String> {
-    let reply = cmd(sock, "device_call", json!({ "method": method, "args": [], "kwargs": kwargs })).await?;
+    let reply = cmd(
+        sock,
+        "device_call",
+        json!({ "method": method, "args": [], "kwargs": kwargs }),
+    )
+    .await?;
     check(reply)
 }
 
 /// device_call returning the `result` value (None on failure) — for read tools.
 async fn dc_result(sock: &str, method: &str, args: Value) -> Value {
-    match cmd(sock, "device_call", json!({ "method": method, "args": args })).await {
+    match cmd(
+        sock,
+        "device_call",
+        json!({ "method": method, "args": args }),
+    )
+    .await
+    {
         Ok(v) if v.get("success").and_then(|s| s.as_bool()) == Some(true) => {
             v.get("result").cloned().unwrap_or(Value::Null)
         }
@@ -208,8 +300,31 @@ fn check(reply: Value) -> Result<Value, String> {
     if reply.get("success").and_then(|s| s.as_bool()) == Some(true) {
         Ok(reply)
     } else {
-        Err(reply.get("error").and_then(|e| e.as_str()).unwrap_or("device call failed").to_string())
+        Err(reply
+            .get("error")
+            .and_then(|e| e.as_str())
+            .unwrap_or("device call failed")
+            .to_string())
     }
+}
+
+/// One NDJSON request/reply against the daemon socket.
+async fn cmd(sock: &str, command: &str, args: Value) -> Result<Value, String> {
+    let stream = UnixStream::connect(sock)
+        .await
+        .map_err(|e| format!("daemon not reachable: {e}"))?;
+    let (read, mut write) = stream.into_split();
+    let mut buf = serde_json::to_vec(&json!({ "command": command, "args": args })).unwrap();
+    buf.push(b'\n');
+    write.write_all(&buf).await.map_err(|e| e.to_string())?;
+    write.flush().await.map_err(|e| e.to_string())?;
+    let mut reader = BufReader::new(read);
+    let mut line = String::new();
+    reader
+        .read_line(&mut line)
+        .await
+        .map_err(|e| e.to_string())?;
+    serde_json::from_str(&line).map_err(|e| format!("bad reply: {e}"))
 }
 
 #[cfg(test)]
@@ -230,18 +345,4 @@ mod tests {
         assert_eq!(LIGHT_MODES.len(), 8);
         assert_eq!(WEATHER_TYPES.len(), 6);
     }
-}
-
-/// One NDJSON request/reply against the daemon socket.
-async fn cmd(sock: &str, command: &str, args: Value) -> Result<Value, String> {
-    let stream = UnixStream::connect(sock).await.map_err(|e| format!("daemon not reachable: {e}"))?;
-    let (read, mut write) = stream.into_split();
-    let mut buf = serde_json::to_vec(&json!({ "command": command, "args": args })).unwrap();
-    buf.push(b'\n');
-    write.write_all(&buf).await.map_err(|e| e.to_string())?;
-    write.flush().await.map_err(|e| e.to_string())?;
-    let mut reader = BufReader::new(read);
-    let mut line = String::new();
-    reader.read_line(&mut line).await.map_err(|e| e.to_string())?;
-    serde_json::from_str(&line).map_err(|e| format!("bad reply: {e}"))
 }

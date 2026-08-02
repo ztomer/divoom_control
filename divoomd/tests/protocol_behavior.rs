@@ -47,7 +47,11 @@ fn iter_messages_keeps_partial_trailing_frame_as_remainder() {
     let buf = b"{\"a\":1}\n{\"b\":2"; // second frame has no trailing newline
     let (msgs, rem) = iter_messages(buf);
     assert_eq!(msgs, vec![json!({"a": 1})]);
-    assert_eq!(rem, b"{\"b\":2".to_vec(), "incomplete frame is the remainder");
+    assert_eq!(
+        rem,
+        b"{\"b\":2".to_vec(),
+        "incomplete frame is the remainder"
+    );
 }
 
 #[test]
@@ -89,8 +93,14 @@ fn make_request_defaults_args_to_empty_object() {
 
 #[test]
 fn replies_have_success_flag() {
-    assert_eq!(ok_reply(json!({"result": 60})), json!({"success": true, "result": 60}));
-    assert_eq!(err_reply("boom"), json!({"success": false, "error": "boom"}));
+    assert_eq!(
+        ok_reply(json!({"result": 60})),
+        json!({"success": true, "result": 60})
+    );
+    assert_eq!(
+        err_reply("boom"),
+        json!({"success": false, "error": "boom"})
+    );
 }
 
 // ── COMMANDS map parity ─────────────────────────────────────────────────────

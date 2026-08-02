@@ -86,20 +86,29 @@ pub async fn get_animated_preview(args: &Value) -> Value {
 }
 
 pub async fn sync_artwork(daemon: &Daemon, args: &Value) -> Value {
-    let _ = daemon.tx.send(json!({"type":"hot_progress","progress":0,"phase":"starting"}));
+    let _ = daemon
+        .tx
+        .send(json!({"type":"hot_progress","progress":0,"phase":"starting"}));
     let file_id = match args.get("file_id").and_then(|v| v.as_str()) {
         Some(f) if !f.is_empty() => f.to_string(),
         _ => {
-            let _ = daemon.tx.send(json!({"type":"hot_progress","progress":100,"phase":"error"}));
+            let _ = daemon
+                .tx
+                .send(json!({"type":"hot_progress","progress":100,"phase":"error"}));
             return err_reply("sync_artwork requires 'file_id'");
         }
     };
-    let size = args.get("default_size").and_then(|v| v.as_u64()).unwrap_or(16);
+    let size = args
+        .get("default_size")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(16);
 
     let file_bytes = match download_cloud_file(&file_id).await {
         Ok(b) => b,
         Err(e) => {
-            let _ = daemon.tx.send(json!({"type":"hot_progress","progress":100,"phase":"error"}));
+            let _ = daemon
+                .tx
+                .send(json!({"type":"hot_progress","progress":100,"phase":"error"}));
             return err_reply(&format!("sync_artwork: {e}"));
         }
     };
@@ -107,7 +116,9 @@ pub async fn sync_artwork(daemon: &Daemon, args: &Value) -> Value {
     let img = match resolve_to_gif(&file_bytes) {
         Some(b) => b,
         None => {
-            let _ = daemon.tx.send(json!({"type":"hot_progress","progress":100,"phase":"error"}));
+            let _ = daemon
+                .tx
+                .send(json!({"type":"hot_progress","progress":100,"phase":"error"}));
             return err_reply(&format!(
                 "sync_artwork: unrecognized container magic {} (could not resolve to an image; \
                  never raw-streamed to avoid sticking the device).",
@@ -128,7 +139,10 @@ pub async fn sync_artwork(daemon: &Daemon, args: &Value) -> Value {
         token: None,
     }))
     .await;
-    let ok = res.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+    let ok = res
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     let _ = daemon.tx.send(json!({"type":"hot_progress","progress":100,"phase":if ok {"done"} else {"error"}, "result":{"success":ok}}));
     json!({"success": ok})
 }
@@ -156,7 +170,9 @@ mod tests {
         assert!(url.starts_with("data:image/gif;base64,"));
         // Decodes back to a real image (sanity: the base64 body is valid GIF bytes).
         let b64 = url.strip_prefix("data:image/gif;base64,").unwrap();
-        let bytes = base64::engine::general_purpose::STANDARD.decode(b64).unwrap();
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .unwrap();
         assert!(bytes.starts_with(b"GIF8"));
     }
 

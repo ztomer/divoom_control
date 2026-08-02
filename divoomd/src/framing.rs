@@ -10,7 +10,11 @@ use crate::models;
 /// 0xFFFF`. With `escape`, body bytes 0x01/0x02/0x03 expand to their 2-byte escape
 /// sequences.
 pub fn encode_basic_payload(payload: &[u8], escape: bool) -> Vec<u8> {
-    let mut body: Vec<u8> = Vec::with_capacity(if escape { payload.len() * 2 } else { payload.len() });
+    let mut body: Vec<u8> = Vec::with_capacity(if escape {
+        payload.len() * 2
+    } else {
+        payload.len()
+    });
     if escape {
         for &b in payload {
             match b {
@@ -160,15 +164,21 @@ pub fn parse_basic_protocol_frames(buf: &mut Vec<u8>) -> Vec<BasicMessage> {
             (message[3], message[4..message.len() - 3].to_vec())
         };
 
-        let calculated: u32 =
-            message[1..message.len() - 3].iter().map(|&b| b as u32).sum::<u32>() & 0xFFFF;
+        let calculated: u32 = message[1..message.len() - 3]
+            .iter()
+            .map(|&b| b as u32)
+            .sum::<u32>()
+            & 0xFFFF;
         let received =
             (message[message.len() - 3] as u32) | ((message[message.len() - 2] as u32) << 8);
         if received != calculated {
             continue;
         }
 
-        messages.push(BasicMessage { command_id, payload });
+        messages.push(BasicMessage {
+            command_id,
+            payload,
+        });
     }
 
     messages

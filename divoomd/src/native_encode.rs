@@ -24,7 +24,11 @@ pub fn find_encoder_lib() -> Option<std::path::PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let root = exe.parent()?.parent()?.parent()?.parent()?;
     let candidate = root.join("divoom_lib").join("libdivoom_compact.dylib");
-    if candidate.exists() { Some(candidate) } else { None }
+    if candidate.exists() {
+        Some(candidate)
+    } else {
+        None
+    }
 }
 
 // const u8* rgb, int w, int h, u16 time_ms, u8* out, int out_size -> int written
@@ -53,7 +57,15 @@ impl NativeEncoder {
         vec![0u8; header + 256 * 3 + (w as usize) * (h as usize)]
     }
 
-    fn call_frame(&self, sym: &[u8], rgb: &[u8], w: i32, h: i32, time_ms: u16, header: usize) -> Option<Vec<u8>> {
+    fn call_frame(
+        &self,
+        sym: &[u8],
+        rgb: &[u8],
+        w: i32,
+        h: i32,
+        time_ms: u16,
+        header: usize,
+    ) -> Option<Vec<u8>> {
         let mut out = Self::out_buf(w, h, header);
         let n = out.len() as i32;
         // SAFETY: rgb is w*h*3 bytes, out is sized to the C's worst case; the C
@@ -70,12 +82,24 @@ impl NativeEncoder {
     }
 
     /// `divoom_encode_animation_frame` — one 0x49 frame body (7-byte header).
-    pub fn encode_animation_frame(&self, rgb: &[u8], w: i32, h: i32, time_ms: u16) -> Option<Vec<u8>> {
+    pub fn encode_animation_frame(
+        &self,
+        rgb: &[u8],
+        w: i32,
+        h: i32,
+        time_ms: u16,
+    ) -> Option<Vec<u8>> {
         self.call_frame(b"divoom_encode_animation_frame", rgb, w, h, time_ms, 7)
     }
 
     /// `divoom_encode_animation_frame_32` — the 32x32 encoder (8-byte header).
-    pub fn encode_animation_frame_32(&self, rgb: &[u8], w: i32, h: i32, time_ms: u16) -> Option<Vec<u8>> {
+    pub fn encode_animation_frame_32(
+        &self,
+        rgb: &[u8],
+        w: i32,
+        h: i32,
+        time_ms: u16,
+    ) -> Option<Vec<u8>> {
         self.call_frame(b"divoom_encode_animation_frame_32", rgb, w, h, time_ms, 8)
     }
 

@@ -6,7 +6,7 @@
 //! module can't be unit-tested (it needs a device); its verification is over the
 //! socket against a real Pixoo/Ditoo once the daemon `.app` holds the BT grant.
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use btleplug::api::{
     CharPropFlags, Characteristic, Manager as _, Peripheral as _, ScanFilter, WriteType,
@@ -20,14 +20,14 @@ use crate::central::BleCentral;
 /// notification delivery — so callers hold it (the daemon caches one; each
 /// `BleTransport` keeps a clone).
 pub use btleplug::platform::Adapter;
-use futures::StreamExt;
 use tokio::sync::{mpsc, Mutex};
 use uuid::Uuid;
 
 use crate::autoprobe::Protocol;
 use crate::framing;
-use crate::models::IOS_LE_HEADER;
 use crate::response::{self, Frame};
+
+mod connect;
 
 // Divoom GATT (ISSC transparent-UART service), from divoom_lib/divoom.py.
 const WRITE_UUID: Uuid = Uuid::from_u128(0x49535343_8841_43f4_a8d4_ecbe34729bb3);
@@ -62,12 +62,10 @@ pub struct Discovered {
 /// Create the platform adapter. The caller must keep it alive (see [`Adapter`]).
 pub async fn make_central() -> BleResult<BleCentral> {
     let manager = Manager::new().await?;
-    let adapter = manager
-        .adapters()
-        .await?
-        .into_iter()
-        .next()
-        .ok_or_else(|| -> Box<dyn std::error::Error + Send + Sync> { "no BLE adapter".into() })?;
+    let adapter =
+        manager.adapters().await?.into_iter().next().ok_or_else(
+            || -> Box<dyn std::error::Error + Send + Sync> { "no BLE adapter".into() },
+        )?;
     Ok(BleCentral::Real(adapter))
 }
 
@@ -98,9 +96,16 @@ pub async fn scan(central: &BleCentral, timeout: Duration) -> BleResult<Vec<Disc
         central.stop_scan().await?;
         let mut out = Vec::new();
         for p in central.peripherals().await? {
-            let name = p.properties().await?.and_then(|pr| pr.local_name).unwrap_or_default();
+            let name = p
+                .properties()
+                .await?
+                .and_then(|pr| pr.local_name)
+                .unwrap_or_default();
             if DEVICE_NAME_HINTS.iter().any(|h| name.contains(h)) {
-                out.push(Discovered { name, id: p.id().to_string() });
+                out.push(Discovered {
+                    name,
+                    id: p.id().to_string(),
+                });
             }
         }
         Ok(out)
@@ -127,128 +132,7 @@ impl BleTransport {
     /// services, subscribes to notifications, spawns the frame-parsing task, and
     /// runs the autoprobe to pick the framing.
     pub async fn connect(central: &BleCentral, id: &str) -> BleResult<Self> {
-        // Ensure the peripheral is known to the adapter. A single fixed scan window
-        // intermittently misses a device on macOS (its next advertisement may not
-        // land inside the window) — most visibly on RECONNECT after a disconnect.
-        // Poll the discovered set until the target appears or a deadline passes,
-        // mirroring the Python daemon's reconnect-scan retries.
-        let _dbg = std::env::var("DIVOOMD_BLE_DEBUG").is_ok();
-        if _dbg { eprintln!("[ble][connect] start_scan"); }
-        // EVERY central await below is bounded by a timeout. On a dead
-        // CoreBluetooth session `start_scan`/`peripherals`/`stop_scan` hang forever
-        // with no error, which would wedge `connect` and defeat the caller's
-        // `reset_central` self-heal (it only fires on an `Err`). Each timeout turns
-        // the hang into an `Err` matching `is_dead_central`, so the daemon rebuilds
-        // the central + retries instead of hanging.
-        match tokio::time::timeout(Duration::from_secs(5), central.start_scan(ScanFilter::default())).await {
-            Ok(r) => r?,
-            Err(_) => {
-                return Err(
-                    "BLE scan start timed out: central may be stale (Channel closed)".into(),
-                )
-            }
-        }
-        let deadline = Instant::now() + Duration::from_secs(8);
-        let mut found = None;
-        while Instant::now() < deadline {
-            match tokio::time::timeout(Duration::from_secs(2), central.peripherals()).await {
-                Ok(peripherals) => {
-                    if let Some(p) = peripherals?
-                        .into_iter()
-                        .find(|p| p.id().to_string() == id)
-                    {
-                        found = Some(p);
-                        break;
-                    }
-                }
-                Err(_) => {
-                    let _ = tokio::time::timeout(Duration::from_secs(3), central.stop_scan()).await;
-                    return Err(
-                        "BLE discovery timed out: central may be stale (Channel closed)".into(),
-                    );
-                }
-            }
-            tokio::time::sleep(Duration::from_millis(400)).await;
-        }
-        let _ = tokio::time::timeout(Duration::from_secs(3), central.stop_scan()).await;
-        let peripheral = found.ok_or_else(|| "device not found in scan".to_string())?;
-        if _dbg { eprintln!("[ble][connect] found peripheral, connecting"); }
-
-        // NOTE (Linux/BlueZ): these dual-mode Divoom devices also advertise the
-        // classic SPP profile (UUID 0x1101), and BlueZ routes connect() to BR/EDR —
-        // returning org.bluez.Error.BREDR.ProfileUnavailable ("No more profiles to
-        // connect to") or a D-Bus "Timeout waiting for reply", even though the LE
-        // GATT link briefly comes up. CoreBluetooth (macOS) connects fine. Making
-        // BLE connect reliable on Linux needs forcing the LE transport / pairing /
-        // disabling BR/EDR — tracked in scripts/linux_remote/README.md. Scan works
-        // on Linux today; connect does not.
-        match tokio::time::timeout(CONNECT_TIMEOUT, peripheral.connect()).await {
-            Ok(r) => { if _dbg { eprintln!("[ble][connect] connect returned"); } r?; }
-            Err(_) => return Err("BLE connect timed out".into()),
-        }
-        if _dbg { eprintln!("[ble][connect] discover_services"); }
-        match tokio::time::timeout(CONNECT_TIMEOUT, peripheral.discover_services()).await {
-            Ok(r) => r?,
-            Err(_) => return Err("BLE discover_services timed out".into()),
-        }
-        let chars = peripheral.characteristics();
-        let write_char = chars.iter().find(|c| c.uuid == WRITE_UUID).ok_or("no write characteristic")?.clone();
-        let notify_char = chars.iter().find(|c| c.uuid == NOTIFY_UUID).ok_or("no notify characteristic")?.clone();
-
-        match tokio::time::timeout(CONNECT_TIMEOUT, peripheral.subscribe(&notify_char)).await {
-            Ok(r) => r?,
-            Err(_) => return Err("BLE subscribe timed out".into()),
-        }
-        let mut notifications = peripheral.notifications().await?;
-        let (tx, rx) = mpsc::channel::<Frame>(256);
-
-        // Parse inbound bytes into Frames using the ported framing: iOS-LE frames
-        // are self-delimited (header-prefixed); Basic frames need a stateful buffer.
-        tokio::spawn(async move {
-            let mut basic_buf: Vec<u8> = Vec::new();
-            while let Some(n) = notifications.next().await {
-                let data = n.value;
-                if std::env::var("DIVOOMD_BLE_DEBUG").is_ok() {
-                    let hx: String = data.iter().map(|b| format!("{b:02x}")).collect();
-                    eprintln!("[ble] rx {} bytes: {hx}", data.len());
-                }
-                if data.len() >= 4 && data[0..4] == IOS_LE_HEADER {
-                    if let Some(p) = framing::parse_ios_le_notification(&data) {
-                        if tx.send(Frame { command_id: p.command_id, payload: p.payload }).await.is_err() {
-                            break;
-                        }
-                    }
-                } else {
-                    basic_buf.extend_from_slice(&data);
-                    for m in framing::parse_basic_protocol_frames(&mut basic_buf) {
-                        if std::env::var("DIVOOMD_BLE_DEBUG").is_ok() {
-                            eprintln!("[ble] basic frame cmd=0x{:02x} ({} payload bytes)", m.command_id, m.payload.len());
-                        }
-                        if tx.send(Frame { command_id: m.command_id, payload: m.payload }).await.is_err() {
-                            return;
-                        }
-                    }
-                }
-            }
-        });
-
-        let dev_name = peripheral
-            .properties()
-            .await
-            .ok()
-            .flatten()
-            .and_then(|pr| pr.local_name);
-
-        let mut transport = Self {
-            _central: central.clone(),
-            peripheral,
-            write_char,
-            protocol: Protocol::Basic,
-            rx: Mutex::new(rx),
-            device_name: std::sync::Mutex::new(dev_name),
-        };
-        transport.autoprobe().await;
-        Ok(transport)
+        connect::connect(central, id).await
     }
 
     pub fn device_name(&self) -> Option<String> {
@@ -281,12 +165,24 @@ impl BleTransport {
     }
 
     /// Encode `[command_id, args...]` in the active framing and write it.
-    pub async fn send_command(&self, command_id: u8, args: &[u8], write_with_response: bool) -> BleResult<()> {
+    pub async fn send_command(
+        &self,
+        command_id: u8,
+        args: &[u8],
+        write_with_response: bool,
+    ) -> BleResult<()> {
         if std::env::var("DIVOOMD_BLE_DEBUG").is_ok() {
             let n = args.len().min(12);
             let hx: String = args[..n].iter().map(|b| format!("{b:02x}")).collect();
-            eprintln!("[ble] tx cmd=0x{command_id:02x} ({} args){}", args.len(),
-                      if n > 0 { format!(" {hx}{}", if args.len() > n { ".." } else { "" }) } else { String::new() });
+            eprintln!(
+                "[ble] tx cmd=0x{command_id:02x} ({} args){}",
+                args.len(),
+                if n > 0 {
+                    format!(" {hx}{}", if args.len() > n { ".." } else { "" })
+                } else {
+                    String::new()
+                }
+            );
         }
         let mut payload = Vec::with_capacity(1 + args.len());
         payload.push(command_id);
@@ -460,7 +356,9 @@ impl BleTransport {
         let deadline = tokio::time::Instant::now() + timeout;
         loop {
             let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
-            if remaining.is_zero() { return None; }
+            if remaining.is_zero() {
+                return None;
+            }
             let frame = {
                 let mut rx = self.rx.lock().await;
                 match tokio::time::timeout(remaining, rx.recv()).await {

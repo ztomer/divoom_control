@@ -1,6 +1,6 @@
-use serde_json::{json, Value};
-use crate::protocol::err_reply;
 use super::CallCtx;
+use crate::protocol::err_reply;
+use serde_json::{json, Value};
 
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
@@ -36,31 +36,55 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
         }
         "alarm.set_alarm" | "set_alarm" => {
-            let alarm_index = args.first().copied()
-                .or_else(|| kw.and_then(|v| v.get("alarm_index")).and_then(|v| v.as_i64()))
+            let alarm_index = args
+                .first()
+                .copied()
+                .or_else(|| {
+                    kw.and_then(|v| v.get("alarm_index"))
+                        .and_then(|v| v.as_i64())
+                })
                 .unwrap_or(0) as u8;
-            let status = args.get(1).copied()
+            let status = args
+                .get(1)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("status")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let hour = args.get(2).copied()
+            let hour = args
+                .get(2)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("hour")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let minute = args.get(3).copied()
+            let minute = args
+                .get(3)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("minute")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let week = args.get(4).copied()
+            let week = args
+                .get(4)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("week")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let mode = args.get(5).copied()
+            let mode = args
+                .get(5)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("mode")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let trigger_mode = args.get(6).copied()
-                .or_else(|| kw.and_then(|v| v.get("trigger_mode")).and_then(|v| v.as_i64()))
+            let trigger_mode = args
+                .get(6)
+                .copied()
+                .or_else(|| {
+                    kw.and_then(|v| v.get("trigger_mode"))
+                        .and_then(|v| v.as_i64())
+                })
                 .unwrap_or(0) as u8;
-            let fm_freq = args.get(7).copied()
+            let fm_freq = args
+                .get(7)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("fm_freq")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u16;
-            let volume = args.get(8).copied()
+            let volume = args
+                .get(8)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("volume")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
 
@@ -81,19 +105,36 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
         }
         "alarm.set_alarm_gif" | "set_alarm_gif" => {
-            let alarm_index = args.first().copied()
-                .or_else(|| kw.and_then(|v| v.get("alarm_index")).and_then(|v| v.as_i64()))
+            let alarm_index = args
+                .first()
+                .copied()
+                .or_else(|| {
+                    kw.and_then(|v| v.get("alarm_index"))
+                        .and_then(|v| v.as_i64())
+                })
                 .unwrap_or(0) as u8;
-            let total_length = args.get(1).copied()
-                .or_else(|| kw.and_then(|v| v.get("total_length")).and_then(|v| v.as_i64()))
+            let total_length = args
+                .get(1)
+                .copied()
+                .or_else(|| {
+                    kw.and_then(|v| v.get("total_length"))
+                        .and_then(|v| v.as_i64())
+                })
                 .unwrap_or(0) as u16;
-            let gif_id = args.get(2).copied()
+            let gif_id = args
+                .get(2)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("gif_id")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let data: Vec<u8> = raw_args.get(3)
+            let data: Vec<u8> = raw_args
+                .get(3)
                 .and_then(|v| v.as_array())
                 .or_else(|| kw.and_then(|v| v.get("data")).and_then(|v| v.as_array()))
-                .map(|a| a.iter().filter_map(|x| x.as_u64().map(|n| n as u8)).collect())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_u64().map(|n| n as u8))
+                        .collect()
+                })
                 .unwrap_or_default();
 
             let mut payload = Vec::with_capacity(4 + data.len());
@@ -136,30 +177,48 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
         }
         "alarm.set_memorial_time" | "set_memorial_time" => {
-            let dialy_id = args.first().copied()
+            let dialy_id = args
+                .first()
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("dialy_id")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let on_off = args.get(1).copied()
+            let on_off = args
+                .get(1)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("on_off")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let month = args.get(2).copied()
+            let month = args
+                .get(2)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("month")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let day = args.get(3).copied()
+            let day = args
+                .get(3)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("day")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let hour = args.get(4).copied()
+            let hour = args
+                .get(4)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("hour")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let minute = args.get(5).copied()
+            let minute = args
+                .get(5)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("minute")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let have_flag = args.get(6).copied()
+            let have_flag = args
+                .get(6)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("have_flag")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let title_name = raw_args.get(7)
+            let title_name = raw_args
+                .get(7)
                 .and_then(|v| v.as_str())
-                .or_else(|| kw.and_then(|v| v.get("title_name")).and_then(|v| v.as_str()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("title_name"))
+                        .and_then(|v| v.as_str())
+                })
                 .unwrap_or("");
 
             let mut title_bytes = title_name.as_bytes().to_vec();
@@ -186,19 +245,36 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
         }
         "alarm.set_memorial_gif" | "set_memorial_gif" => {
-            let memorial_index = args.first().copied()
-                .or_else(|| kw.and_then(|v| v.get("memorial_index")).and_then(|v| v.as_i64()))
+            let memorial_index = args
+                .first()
+                .copied()
+                .or_else(|| {
+                    kw.and_then(|v| v.get("memorial_index"))
+                        .and_then(|v| v.as_i64())
+                })
                 .unwrap_or(0) as u8;
-            let total_length = args.get(1).copied()
-                .or_else(|| kw.and_then(|v| v.get("total_length")).and_then(|v| v.as_i64()))
+            let total_length = args
+                .get(1)
+                .copied()
+                .or_else(|| {
+                    kw.and_then(|v| v.get("total_length"))
+                        .and_then(|v| v.as_i64())
+                })
                 .unwrap_or(0) as u16;
-            let gif_id = args.get(2).copied()
+            let gif_id = args
+                .get(2)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("gif_id")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let data: Vec<u8> = raw_args.get(3)
+            let data: Vec<u8> = raw_args
+                .get(3)
                 .and_then(|v| v.as_array())
                 .or_else(|| kw.and_then(|v| v.get("data")).and_then(|v| v.as_array()))
-                .map(|a| a.iter().filter_map(|x| x.as_u64().map(|n| n as u8)).collect())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_u64().map(|n| n as u8))
+                        .collect()
+                })
                 .unwrap_or_default();
 
             let mut payload = Vec::with_capacity(4 + data.len());
@@ -213,13 +289,19 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
         }
         "alarm.set_alarm_listen" | "set_alarm_listen" => {
-            let on_off = args.first().copied()
+            let on_off = args
+                .first()
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("on_off")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let mode = args.get(1).copied()
+            let mode = args
+                .get(1)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("mode")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let volume = args.get(2).copied()
+            let volume = args
+                .get(2)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("volume")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
             match dev.send_command(0xa5, &[on_off, mode, volume], true).await {
@@ -228,7 +310,9 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
         }
         "alarm.set_alarm_volume" | "set_alarm_volume" => {
-            let volume = args.first().copied()
+            let volume = args
+                .first()
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("volume")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
             match dev.send_command(0xa6, &[volume], true).await {
@@ -237,10 +321,14 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
         }
         "alarm.set_alarm_volume_control" | "set_alarm_volume_control" => {
-            let control = args.first().copied()
+            let control = args
+                .first()
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("control")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let index = args.get(1).copied()
+            let index = args
+                .get(1)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("index")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
             match dev.send_command(0x82, &[control, index], true).await {

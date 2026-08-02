@@ -1,11 +1,14 @@
 //! Hot-channel update session: manifest fetch, file download, BLE streaming.
 //! Split from art.rs to keep both files under the 500-LOC ground rule.
 
-use std::sync::Arc;
 use serde_json::{json, Value};
+use std::sync::Arc;
 
+use crate::art::{device_type_for_size, HotProgress};
 use crate::daemon::Daemon;
-use crate::art::{HotProgress, device_type_for_size};
+
+#[cfg(feature = "ble")]
+mod session;
 
 const HOT_API: &str = "https://appin.divoom-gz.com/Hot/GetHotFiles32";
 const HOT_FILE_BASE: &str = "https://fin.divoom-gz.com/";
@@ -13,20 +16,32 @@ const CHUNK_SIZE: usize = 256;
 const IDLE_DONE_TIMEOUT_SECS: f64 = 5.0;
 const HTTP_TIMEOUT_SECS: u64 = 15;
 
-struct HotFile { vendor_id: u32, file_id: String, version: u32, sha1: String, body: Vec<u8> }
+struct HotFile {
+    vendor_id: u32,
+    file_id: String,
+    version: u32,
+    sha1: String,
+    body: Vec<u8>,
+}
 
 impl HotFile {
-    fn checksum(&self) -> u32 { self.body.iter().map(|&b| b as u32).sum::<u32>() }
+    fn checksum(&self) -> u32 {
+        self.body.iter().map(|&b| b as u32).sum::<u32>()
+    }
     fn packet(&self, idx: usize) -> Vec<u8> {
         let start = idx * CHUNK_SIZE;
         let chunk = if start < self.body.len() {
             &self.body[start..(start + CHUNK_SIZE).min(self.body.len())]
-        } else { &[] };
+        } else {
+            &[]
+        };
         let mut p = chunk.to_vec();
         p.resize(CHUNK_SIZE, 0);
         p
     }
-    fn packet_count(&self) -> usize { (self.body.len() + CHUNK_SIZE - 1) / CHUNK_SIZE }
+    fn packet_count(&self) -> usize {
+        self.body.len().div_ceil(CHUNK_SIZE)
+    }
 }
 
 /// Read a u32 from a JSON value that may be a NUMBER or a quoted STRING. The hot
@@ -48,21 +63,50 @@ fn json_u32(v: Option<&Value>) -> u32 {
 /// shape (string `Version`, numeric `VendorId`).
 fn parse_hot_manifest(data: &Value) -> Vec<HotFile> {
     let mut files = Vec::new();
-    for vendor in data.get("VendorList").and_then(|v| v.as_array()).unwrap_or(&vec![]) {
+    for vendor in data
+        .get("VendorList")
+        .and_then(|v| v.as_array())
+        .unwrap_or(&vec![])
+    {
         let vid = json_u32(vendor.get("VendorId"));
-        for f in vendor.get("FileList").and_then(|v| v.as_array()).unwrap_or(&vec![]) {
-            let file_id = f.get("FileId").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        for f in vendor
+            .get("FileList")
+            .and_then(|v| v.as_array())
+            .unwrap_or(&vec![])
+        {
+            let file_id = f
+                .get("FileId")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
             let version = json_u32(f.get("Version"));
-            let sha1 = f.get("Sha1").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            files.push(HotFile { vendor_id: vid, file_id, version, sha1, body: Vec::new() });
+            let sha1 = f
+                .get("Sha1")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            files.push(HotFile {
+                vendor_id: vid,
+                file_id,
+                version,
+                sha1,
+                body: Vec::new(),
+            });
         }
     }
     files
 }
 
-async fn fetch_hot_manifest(client: &reqwest::Client, device_type: u32) -> Result<Vec<HotFile>, String> {
+async fn fetch_hot_manifest(
+    client: &reqwest::Client,
+    device_type: u32,
+) -> Result<Vec<HotFile>, String> {
     let body = serde_json::json!({"DeviceType": device_type, "IsTest": false});
-    let resp = client.post(HOT_API).json(&body).send().await
+    let resp = client
+        .post(HOT_API)
+        .json(&body)
+        .send()
+        .await
         .map_err(|e| e.to_string())?;
     let data: Value = resp.json().await.map_err(|e| e.to_string())?;
     Ok(parse_hot_manifest(&data))
@@ -70,12 +114,20 @@ async fn fetch_hot_manifest(client: &reqwest::Client, device_type: u32) -> Resul
 
 async fn download_hot_file(client: &reqwest::Client, f: &mut HotFile) -> bool {
     let url = format!("{HOT_FILE_BASE}{}", f.file_id);
-    let resp = match client.get(&url).send().await { Ok(r) => r, Err(_) => return false };
-    let body = match resp.bytes().await { Ok(b) => b.to_vec(), Err(_) => return false };
+    let resp = match client.get(&url).send().await {
+        Ok(r) => r,
+        Err(_) => return false,
+    };
+    let body = match resp.bytes().await {
+        Ok(b) => b.to_vec(),
+        Err(_) => return false,
+    };
     if !f.sha1.is_empty() {
         // verify SHA-1
         let digest = sha1_digest(&body);
-        if digest != f.sha1.to_lowercase() { return false; }
+        if digest != f.sha1.to_lowercase() {
+            return false;
+        }
     }
     f.body = body;
     true
@@ -87,35 +139,63 @@ fn sha1_digest(data: &[u8]) -> String {
     let bit_len = (data.len() as u64) * 8;
     let mut padded = data.to_vec();
     padded.push(0x80);
-    while padded.len() % 64 != 56 { padded.push(0); }
-    padded.extend_from_slice(&bit_len.to_be_bytes());
-    for chunk in padded.chunks_exact(64) {
-        let mut w = [0u32; 80];
-        for i in 0..16 { w[i] = u32::from_be_bytes(chunk[4*i..4*i+4].try_into().unwrap()); }
-        for i in 16..80 { w[i] = (w[i-3]^w[i-8]^w[i-14]^w[i-16]).rotate_left(1); }
-        let (mut a,mut b,mut c,mut d,mut e) = (h[0],h[1],h[2],h[3],h[4]);
-        for i in 0..80 {
-            let (f_val, k) = match i {
-                0..=19  => ((b&c)|(!b&d), 0x5A827999u32),
-                20..=39 => (b^c^d, 0x6ED9EBA1),
-                40..=59 => ((b&c)|(b&d)|(c&d), 0x8F1BBCDC),
-                _       => (b^c^d, 0xCA62C1D6),
-            };
-            let temp = a.rotate_left(5).wrapping_add(f_val).wrapping_add(e).wrapping_add(k).wrapping_add(w[i]);
-            e=d; d=c; c=b.rotate_left(30); b=a; a=temp;
-        }
-        h[0]=h[0].wrapping_add(a); h[1]=h[1].wrapping_add(b);
-        h[2]=h[2].wrapping_add(c); h[3]=h[3].wrapping_add(d);
-        h[4]=h[4].wrapping_add(e);
+    while padded.len() % 64 != 56 {
+        padded.push(0);
     }
-    format!("{:08x}{:08x}{:08x}{:08x}{:08x}", h[0],h[1],h[2],h[3],h[4])
+    padded.extend_from_slice(&bit_len.to_be_bytes());
+    for chunk in padded.as_chunks::<64>().0 {
+        let mut w = [0u32; 80];
+        for i in 0..16 {
+            w[i] = u32::from_be_bytes(chunk[4 * i..4 * i + 4].try_into().unwrap());
+        }
+        for i in 16..80 {
+            w[i] = (w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16]).rotate_left(1);
+        }
+        let (mut a, mut b, mut c, mut d, mut e) = (h[0], h[1], h[2], h[3], h[4]);
+        for (i, wi) in w.iter().enumerate() {
+            let (f_val, k) = match i {
+                0..=19 => ((b & c) | (!b & d), 0x5A827999u32),
+                20..=39 => (b ^ c ^ d, 0x6ED9EBA1),
+                40..=59 => ((b & c) | (b & d) | (c & d), 0x8F1BBCDC),
+                _ => (b ^ c ^ d, 0xCA62C1D6),
+            };
+            let temp = a
+                .rotate_left(5)
+                .wrapping_add(f_val)
+                .wrapping_add(e)
+                .wrapping_add(k)
+                .wrapping_add(*wi);
+            e = d;
+            d = c;
+            c = b.rotate_left(30);
+            b = a;
+            a = temp;
+        }
+        h[0] = h[0].wrapping_add(a);
+        h[1] = h[1].wrapping_add(b);
+        h[2] = h[2].wrapping_add(c);
+        h[3] = h[3].wrapping_add(d);
+        h[4] = h[4].wrapping_add(e);
+    }
+    format!(
+        "{:08x}{:08x}{:08x}{:08x}{:08x}",
+        h[0], h[1], h[2], h[3], h[4]
+    )
 }
 
-fn pick_file<'a>(files: &'a [HotFile], vendor_id: u32, version: u32) -> Option<&'a HotFile> {
-    let candidates: Vec<_> = files.iter()
-        .filter(|f| f.vendor_id == vendor_id && !f.body.is_empty()).collect();
-    if let Some(exact) = candidates.iter().find(|f| f.version == version) { return Some(exact); }
-    candidates.iter().filter(|f| f.version >= version).min_by_key(|f| f.version).copied()
+fn pick_file(files: &[HotFile], vendor_id: u32, version: u32) -> Option<&HotFile> {
+    let candidates: Vec<_> = files
+        .iter()
+        .filter(|f| f.vendor_id == vendor_id && !f.body.is_empty())
+        .collect();
+    if let Some(exact) = candidates.iter().find(|f| f.version == version) {
+        return Some(exact);
+    }
+    candidates
+        .iter()
+        .filter(|f| f.version >= version)
+        .min_by_key(|f| f.version)
+        .copied()
 }
 
 // ── Manifest + body cache, keyed by device_type (pixel class) ──────────────
@@ -126,9 +206,8 @@ fn pick_file<'a>(files: &'a [HotFile], vendor_id: u32, version: u32) -> Option<&
 // session, so sharing across devices is safe. Ports `_load_hot_files` /
 // `_MANIFEST_CACHE_TTL` from `divoom_lib/tools/hot_update.py`.
 const MANIFEST_CACHE_TTL_SECS: u64 = 300;
-type HotCache = std::sync::Mutex<
-    std::collections::HashMap<u32, (std::time::Instant, Arc<Vec<HotFile>>)>,
->;
+type HotCache =
+    std::sync::Mutex<std::collections::HashMap<u32, (std::time::Instant, Arc<Vec<HotFile>>)>>;
 static MANIFEST_CACHE: std::sync::OnceLock<HotCache> = std::sync::OnceLock::new();
 fn manifest_cache() -> &'static HotCache {
     MANIFEST_CACHE.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
@@ -136,7 +215,9 @@ fn manifest_cache() -> &'static HotCache {
 
 /// Drop all cached manifests (test hook / force-refresh).
 #[cfg(test)]
-fn clear_manifest_cache() { manifest_cache().lock().unwrap().clear(); }
+fn clear_manifest_cache() {
+    manifest_cache().lock().unwrap().clear();
+}
 
 /// Return `(files, downloaded_count, from_cache)` for `device_type`, reusing a
 /// recent cached download for the same device class so N same-size devices don't
@@ -164,15 +245,22 @@ async fn load_hot_files(
 
     // Miss → fetch the manifest + download every body.
     let mut files = fetch_hot_manifest(client, device_type).await?;
-    if files.is_empty() { return Err("empty hot manifest".into()); }
+    if files.is_empty() {
+        return Err("empty hot manifest".into());
+    }
     let total = files.len();
     progress.set(json!({"phase": "downloading", "current": 0, "total": total}));
     let mut ok_dl = 0usize;
     for (i, f) in files.iter_mut().enumerate() {
-        if download_hot_file(client, f).await { ok_dl += 1; }
-        progress.set(json!({"phase":"downloading","current":i+1,"total":total,"file_id":&f.file_id}));
+        if download_hot_file(client, f).await {
+            ok_dl += 1;
+        }
+        progress
+            .set(json!({"phase":"downloading","current":i+1,"total":total,"file_id":&f.file_id}));
     }
-    if ok_dl == 0 { return Err("no hot files downloadable".into()); }
+    if ok_dl == 0 {
+        return Err("no hot files downloadable".into());
+    }
 
     let arc = Arc::new(files);
     manifest_cache()
@@ -191,7 +279,8 @@ pub(crate) async fn run_hot_update(
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(HTTP_TIMEOUT_SECS))
         .user_agent("okhttp/4.12.0")
-        .build().map_err(|e| e.to_string())?;
+        .build()
+        .map_err(|e| e.to_string())?;
 
     // 1+2. Manifest + bodies, cached per device_type so N same-size devices
     // don't each re-hit the CDN (load_hot_files emits the "downloading" progress
@@ -218,9 +307,15 @@ pub(crate) async fn run_hot_update(
         // it is pure HTTP; only the BLE exchange needs exclusivity. get_status /
         // hot_update_progress are lock-free so the progress UI is unaffected.)
         let guard = daemon.device.lock().await;
-        let dev = match guard.as_ref() { Some(d) => d.clone(), None => return Err("no device connected".into()) };
-        if matches!(&*dev, crate::daemon::DeviceTransport::Ble(_) | crate::daemon::DeviceTransport::Spp(_)) {
-            let result = run_hot_session(&*dev, &files, ok_dl, progress).await?;
+        let dev = match guard.as_ref() {
+            Some(d) => d.clone(),
+            None => return Err("no device connected".into()),
+        };
+        if matches!(
+            &*dev,
+            crate::daemon::DeviceTransport::Ble(_) | crate::daemon::DeviceTransport::Spp(_)
+        ) {
+            let result = session::run_hot_session(&dev, &files, ok_dl, progress).await?;
             // Parity with the Python daemon (owner_art.show_hot_channel): after a
             // successful push, switch the device to the HOT/cloud channel so it
             // actually shows what we just uploaded. Without this the files land in
@@ -234,124 +329,6 @@ pub(crate) async fn run_hot_update(
         }
     }
     Err("hot_update requires BLE/SPP transport".into())
-}
-
-#[cfg(feature = "ble")]
-async fn run_hot_session(
-    ble: &crate::daemon::DeviceTransport,
-    files: &[HotFile],
-    ok_dl: usize,
-    progress: Arc<HotProgress>,
-) -> Result<Value, String> {
-    use tokio::time::Duration;
-
-    // Build 0x9B manifest payload: [count] + {vendorId:4 LE, newestVersion:4 LE}*
-    let mut vendors: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
-    for f in files.iter().filter(|f| !f.body.is_empty()) {
-        let e = vendors.entry(f.vendor_id).or_insert(0);
-        if f.version > *e { *e = f.version; }
-    }
-    let mut manifest_payload = vec![vendors.len() as u8];
-    for (vid, newest) in &vendors {
-        manifest_payload.extend_from_slice(&vid.to_le_bytes());
-        manifest_payload.extend_from_slice(&newest.to_le_bytes());
-    }
-    if ble.send_command(0x9B, &manifest_payload, true).await.is_err() {
-        return Err("manifest (0x9B) write failed".into());
-    }
-
-    let cmd_f7: u8 = 0xF7; let cmd_9d: u8 = 0x9D; let cmd_9e: u8 = 0x9E; let cmd_9f: u8 = 0x9F;
-    let idle_to = Duration::from_secs_f64(IDLE_DONE_TIMEOUT_SECS);
-    let mut served: Vec<Value> = Vec::new();
-    let mut pending_request: Option<Vec<u8>> = None;
-    let dbg = std::env::var("DIVOOMD_BLE_DEBUG").is_ok();
-    if dbg {
-        eprintln!("[hot] sent 0x9B manifest: {} vendor(s), {} files downloaded", vendors.len(), ok_dl);
-    }
-
-    loop {
-        let (cmd, payload) = if let Some(p) = pending_request.take() {
-            (cmd_f7, p)
-        } else {
-            match ble.wait_for_any_response(&[cmd_f7, cmd_9f], idle_to).await {
-                Some((c, p)) => (c, p),
-                None => { if dbg { eprintln!("[hot] wait([f7,9f]) TIMED OUT after {IDLE_DONE_TIMEOUT_SECS}s -> ending (device quiet)"); } break; } // device quiet — up to date
-            }
-        };
-        if cmd == cmd_9f { if dbg { eprintln!("[hot] got 0x9F (pause) -> break"); } break; }
-        if payload.len() < 8 { if dbg { eprintln!("[hot] got 0x{cmd:02x} short payload len={} -> skip", payload.len()); } continue; }
-        let vendor_id = u32::from_le_bytes(payload[0..4].try_into().unwrap_or([0;4]));
-        let version = u32::from_le_bytes(payload[4..8].try_into().unwrap_or([0;4]));
-        let f = match pick_file(files, vendor_id, version) {
-            Some(f) => { if dbg { eprintln!("[hot] request vendor={vendor_id} v{version} -> pick_file MATCH {} v{}", f.file_id, f.version); } f },
-            None => { if dbg { eprintln!("[hot] request vendor={vendor_id} v{version} -> pick_file NONE -> break (nothing to serve)"); } break; }
-        };
-        // Send 0x9D file info
-        let mut info = Vec::new();
-        info.extend_from_slice(&f.vendor_id.to_le_bytes());
-        info.extend_from_slice(&(f.body.len() as u32).to_le_bytes());
-        info.extend_from_slice(&f.checksum().to_le_bytes());
-        info.extend_from_slice(&f.version.to_le_bytes());
-        if ble.send_command(cmd_9d, &info, true).await.is_err() {
-            return Err("file info (0x9D) write failed".into());
-        }
-        // Wait for 0x9D ack
-        let ack = match ble.wait_for_any_response(&[cmd_9d, cmd_f7], idle_to).await {
-            Some(a) => a,
-            None => { if dbg { eprintln!("[hot] no 0x9D ack (timeout) -> break"); } break; },
-        };
-        if ack.0 == cmd_f7 { if dbg { eprintln!("[hot] 0x9D ack was another 0xF7 -> re-loop"); } pending_request = Some(ack.1); continue; }
-        let p2 = &ack.1;
-        if p2.is_empty() || p2[0] != 0 { if dbg { eprintln!("[hot] 0x9D ack declined (payload {:02x?}) -> skip file", p2); } continue; }
-        let start_pkt = if p2.len() >= 3 { u16::from_le_bytes([p2[1], p2[2]]) as usize } else { 0 };
-        if dbg { eprintln!("[hot] 0x9D accepted, streaming from packet {start_pkt} of {}", f.packet_count()); }
-
-        // Stream file packets
-        let total = f.packet_count();
-        let mut confirmed = false;
-        for idx in start_pkt..total {
-            let mut pkt_payload = Vec::new();
-            pkt_payload.extend_from_slice(&(idx as u16).to_le_bytes());
-            pkt_payload.extend_from_slice(&f.packet(idx));
-            if ble.send_command(cmd_9e, &pkt_payload, true).await.is_err() { break; }
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
-        // Post-stream: serve resends until device declares done
-        loop {
-            match ble.wait_for_any_response(&[cmd_9e, cmd_f7], idle_to).await {
-                None => break, // IDLE_DONE_TIMEOUT — unconfirmed
-                Some((c, p)) if c == cmd_f7 => {
-                    pending_request = Some(p);
-                    confirmed = true;
-                    break;
-                }
-                Some((_, p)) if !p.is_empty() && (p[0] == 1 || p[0] == 2) => {
-                    confirmed = true;
-                    break;
-                }
-                Some((_, p)) if p.len() >= 3 && p[0] == 0 => {
-                    let ridx = u16::from_le_bytes([p[1], p[2]]) as usize;
-                    let mut rp = Vec::new();
-                    rp.extend_from_slice(&(ridx as u16).to_le_bytes());
-                    rp.extend_from_slice(&f.packet(ridx));
-                    let _ = ble.send_command(cmd_9e, &rp, true).await;
-                }
-                _ => {}
-            }
-        }
-        served.push(json!({"file_id": &f.file_id, "version": f.version, "confirmed": confirmed}));
-        let n_served = served.len();
-        progress.set(json!({"phase":"uploading","current":n_served,"total":ok_dl,"file_id":&f.file_id}));
-    }
-
-    let confirmed_count = served.iter().filter(|s| s.get("confirmed").and_then(|v| v.as_bool()).unwrap_or(false)).count();
-    Ok(json!({
-        "success": true,
-        "served": served,
-        "manifest": files.len(),
-        "downloaded": ok_dl,
-        "confirmed": confirmed_count,
-    }))
 }
 
 #[cfg(test)]
@@ -385,12 +362,17 @@ mod tests {
         let files = parse_hot_manifest(&data);
         assert_eq!(files.len(), 2);
         assert_eq!(files[0].vendor_id, 40005454);
-        assert_eq!(files[0].version, 1103, "string Version must parse, not zero");
+        assert_eq!(
+            files[0].version, 1103,
+            "string Version must parse, not zero"
+        );
         assert_eq!(files[1].version, 1112);
 
         // With bodies present, the device's request for v1103 must resolve.
         let mut with_bodies = files;
-        for f in &mut with_bodies { f.body = vec![0u8; 4]; }
+        for f in &mut with_bodies {
+            f.body = vec![0u8; 4];
+        }
         let picked = pick_file(&with_bodies, 40005454, 1103);
         assert!(picked.is_some(), "pick_file must match a held version");
         assert_eq!(picked.unwrap().version, 1103);
@@ -403,10 +385,15 @@ mod tests {
         clear_manifest_cache();
         let dt = 99u32; // synthetic device_type — no real CDN entry
         let cached = Arc::new(vec![HotFile {
-            vendor_id: 1, file_id: "x.bin".into(), version: 5,
-            sha1: String::new(), body: vec![1, 2, 3, 4],
+            vendor_id: 1,
+            file_id: "x.bin".into(),
+            version: 5,
+            sha1: String::new(),
+            body: vec![1, 2, 3, 4],
         }]);
-        manifest_cache().lock().unwrap()
+        manifest_cache()
+            .lock()
+            .unwrap()
             .insert(dt, (std::time::Instant::now(), cached.clone()));
 
         // reqwest::Client is unused on a hit; if the cache missed this would hit

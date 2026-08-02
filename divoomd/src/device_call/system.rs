@@ -1,6 +1,6 @@
-use serde_json::{json, Value};
-use crate::protocol::err_reply;
 use super::CallCtx;
+use crate::protocol::err_reply;
+use serde_json::{json, Value};
 
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
@@ -11,7 +11,9 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
 
     match method {
         "time.set_hour_type" | "set_hour_type" | "system.set_hour_type" => {
-            let hour_type = args.first().copied()
+            let hour_type = args
+                .first()
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("hour_type")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
             match dev.send_command(0x2c, &[hour_type], true).await {
@@ -26,7 +28,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         // minute, second) positionally or as kwargs.
         "system.set_date_time" | "set_date_time" | "sync_time" | "time.set_date_time" => {
             let g = |i: usize, k: &str, d: i64| {
-                args.get(i).copied()
+                args.get(i)
+                    .copied()
                     .or_else(|| kw.and_then(|v| v.get(k)).and_then(|v| v.as_i64()))
                     .unwrap_or(d)
             };
@@ -51,15 +54,20 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 Err(e) => err_reply(&format!("set_date_time failed: {e}")),
             }
         }
-        "bluetooth.set_bluetooth_password" | "set_bluetooth_password" | "system.set_bluetooth_password" => {
-            let control = args.first().copied()
+        "bluetooth.set_bluetooth_password"
+        | "set_bluetooth_password"
+        | "system.set_bluetooth_password" => {
+            let control = args
+                .first()
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("control")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let password = raw_args.get(1)
+            let password = raw_args
+                .get(1)
                 .and_then(|v| v.as_str())
                 .or_else(|| kw.and_then(|v| v.get("password")).and_then(|v| v.as_str()))
                 .unwrap_or("");
-            
+
             let mut payload = Vec::new();
             payload.push(control);
 
@@ -79,12 +87,14 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         }
         "device.get_work_mode" | "system.get_work_mode" | "get_work_mode" => {
             match dev.send_command_and_wait(0x13, &[], timeout).await {
-                Some(p) if p.len() >= 1 => json!({"success": true, "result": p[0] as i64}),
+                Some(p) if !p.is_empty() => json!({"success": true, "result": p[0] as i64}),
                 _ => json!({"success": true, "result": Value::Null}),
             }
         }
         "device.set_work_mode" | "system.set_work_mode" | "set_work_mode" => {
-            let mode = args.first().copied()
+            let mode = args
+                .first()
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("mode")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
             match dev.send_command(0x05, &[mode], true).await {
@@ -93,10 +103,14 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
         }
         // control.set_light_mode is the same single-byte 0x45 channel select.
-        "system.set_channel" | "set_channel" | "device.set_channel"
-        | "control.set_light_mode" => {
-            let channel_id = args.first().copied()
-                .or_else(|| kw.and_then(|v| v.get("channel_id")).and_then(|v| v.as_i64()))
+        "system.set_channel" | "set_channel" | "device.set_channel" | "control.set_light_mode" => {
+            let channel_id = args
+                .first()
+                .copied()
+                .or_else(|| {
+                    kw.and_then(|v| v.get("channel_id"))
+                        .and_then(|v| v.as_i64())
+                })
                 .or_else(|| kw.and_then(|v| v.get("channel")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
             match dev.send_command(0x45, &[channel_id], true).await {
@@ -106,7 +120,9 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         }
         // Control.set_hot (0x26): enable/disable hot mode.
         "control.set_hot" | "set_hot" => {
-            let enabled = args.first().map(|v| *v != 0)
+            let enabled = args
+                .first()
+                .map(|v| *v != 0)
                 .or_else(|| kw.and_then(|v| v.get("enabled")).and_then(|v| v.as_bool()))
                 .unwrap_or(false);
             match dev.send_command(0x26, &[enabled as u8], true).await {
@@ -116,7 +132,9 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         }
         // Control.set_keyboard (0x23): single Ditoo key press.
         "control.set_keyboard" | "set_keyboard" => {
-            let key = args.first().copied()
+            let key = args
+                .first()
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("key")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
             match dev.send_command(0x23, &[key], true).await {
@@ -125,7 +143,9 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
         }
         "system.send_sd_status" | "send_sd_status" | "device.send_sd_status" => {
-            let status = args.first().copied()
+            let status = args
+                .first()
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("status")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
             match dev.send_command(0x15, &[status], true).await {
@@ -146,25 +166,37 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
         }
         "system.send_net_temp" | "send_net_temp" | "device.send_net_temp" => {
-            let year = args.first().copied()
+            let year = args
+                .first()
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("year")).and_then(|v| v.as_i64()))
                 .unwrap_or(2026) as u16;
-            let month = args.get(1).copied()
+            let month = args
+                .get(1)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("month")).and_then(|v| v.as_i64()))
                 .unwrap_or(1) as u8;
-            let day = args.get(2).copied()
+            let day = args
+                .get(2)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("day")).and_then(|v| v.as_i64()))
                 .unwrap_or(1) as u8;
-            let hour = args.get(3).copied()
+            let hour = args
+                .get(3)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("hour")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let minute = args.get(4).copied()
+            let minute = args
+                .get(4)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("minute")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let num = args.get(5).copied()
+            let num = args
+                .get(5)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("num")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            
+
             let mut payload = Vec::new();
             payload.extend_from_slice(&year.to_le_bytes());
             payload.push(month);
@@ -173,10 +205,11 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             payload.push(minute);
             payload.push(num);
 
-            let temp_data = raw_args.get(6)
+            let temp_data = raw_args
+                .get(6)
                 .or_else(|| kw.and_then(|v| v.get("temp_data")))
                 .and_then(|v| v.as_array());
-            
+
             if let Some(arr) = temp_data {
                 for item in arr {
                     if let Some(pair) = item.as_array() {
@@ -196,19 +229,31 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
         }
         "system.send_net_temp_disp" | "send_net_temp_disp" | "device.send_net_temp_disp" => {
-            let display_modes = raw_args.first()
+            let display_modes = raw_args
+                .first()
                 .or_else(|| kw.and_then(|v| v.get("display_modes")))
                 .and_then(|v| v.as_array());
-            let time_minutes = args.get(1).copied()
-                .or_else(|| kw.and_then(|v| v.get("time_minutes")).and_then(|v| v.as_i64()))
+            let time_minutes = args
+                .get(1)
+                .copied()
+                .or_else(|| {
+                    kw.and_then(|v| v.get("time_minutes"))
+                        .and_then(|v| v.as_i64())
+                })
                 .unwrap_or(0) as u16;
-            
+
             let mut payload = Vec::new();
             if let Some(arr) = display_modes {
                 for mode_val in arr.iter().take(5) {
                     let mode_byte = match mode_val {
-                        Value::Bool(b) => if *b { 1 } else { 0 },
-                        Value::Number(n) => if n.as_i64().unwrap_or(0) != 0 { 1 } else { 0 },
+                        Value::Bool(b) => {
+                            if *b {
+                                1
+                            } else {
+                                0
+                            }
+                        }
+                        Value::Number(n) if n.as_i64().unwrap_or(0) != 0 => 1,
                         _ => 0,
                     };
                     payload.push(mode_byte);
@@ -239,15 +284,29 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         // weather.set(temp, weather_type) is the same 0x5f command (two's-complement
         // temp byte). set_temperature/set_weather are the stateful Python variants;
         // mapped here too (caller passes both args).
-        "system.send_current_temp" | "send_current_temp" | "device.send_current_temp"
-        | "weather.set" | "weather.set_temperature" | "weather.set_weather" => {
-            let temp = args.first().copied()
+        "system.send_current_temp"
+        | "send_current_temp"
+        | "device.send_current_temp"
+        | "weather.set"
+        | "weather.set_temperature"
+        | "weather.set_weather" => {
+            let temp = args
+                .first()
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("temp")).and_then(|v| v.as_i64()))
-                .or_else(|| kw.and_then(|v| v.get("temperature")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("temperature"))
+                        .and_then(|v| v.as_i64())
+                })
                 .unwrap_or(0) as i8;
-            let weather = args.get(1).copied()
+            let weather = args
+                .get(1)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("weather")).and_then(|v| v.as_i64()))
-                .or_else(|| kw.and_then(|v| v.get("weather_type")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("weather_type"))
+                        .and_then(|v| v.as_i64())
+                })
                 .unwrap_or(0) as u8;
             match dev.send_command(0x5f, &[temp as u8, weather], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
@@ -255,7 +314,9 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
         }
         "system.set_temp_type" | "set_temp_type" | "device.set_temp_type" => {
-            let temp_type = args.first().copied()
+            let temp_type = args
+                .first()
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("temp_type")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
             match dev.send_command(0x2b, &[temp_type], true).await {
@@ -263,8 +324,13 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 Err(e) => err_reply(&format!("set_temp_type failed: {e}")),
             }
         }
-        "sound.set_song_display_control" | "system.set_song_display_control" | "set_song_display_control" | "device.set_song_display_control" => {
-            let control = args.first().copied()
+        "sound.set_song_display_control"
+        | "system.set_song_display_control"
+        | "set_song_display_control"
+        | "device.set_song_display_control" => {
+            let control = args
+                .first()
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("control")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
             match dev.send_command(0x83, &[control], true).await {
@@ -272,46 +338,82 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 Err(e) => err_reply(&format!("set_song_display_control failed: {e}")),
             }
         }
-        "sound.set_power_on_voice_volume" | "system.set_power_on_voice_volume" | "set_power_on_voice_volume" | "device.set_power_on_voice_volume" => {
-            let control = args.first().copied()
+        "sound.set_power_on_voice_volume"
+        | "system.set_power_on_voice_volume"
+        | "set_power_on_voice_volume"
+        | "device.set_power_on_voice_volume" => {
+            let control = args
+                .first()
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("control")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let volume = args.get(1).copied()
+            let volume = args
+                .get(1)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("volume")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let payload = if control == 1 { vec![control, volume] } else { vec![control] };
+            let payload = if control == 1 {
+                vec![control, volume]
+            } else {
+                vec![control]
+            };
             match dev.send_command(0xbb, &payload, true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("set_power_on_voice_volume failed: {e}")),
             }
         }
         "system.set_power_on_channel" | "device.set_power_on_channel" => {
-            let control = args.first().copied()
+            let control = args
+                .first()
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("control")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let channel_id = args.get(1).copied()
-                .or_else(|| kw.and_then(|v| v.get("channel_id")).and_then(|v| v.as_i64()))
+            let channel_id = args
+                .get(1)
+                .copied()
+                .or_else(|| {
+                    kw.and_then(|v| v.get("channel_id"))
+                        .and_then(|v| v.as_i64())
+                })
                 .unwrap_or(0) as u8;
-            let payload = if control == 1 { vec![control, channel_id] } else { vec![control] };
+            let payload = if control == 1 {
+                vec![control, channel_id]
+            } else {
+                vec![control]
+            };
             match dev.send_command(0x8a, &payload, true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("set_power_on_channel failed: {e}")),
             }
         }
         "system.set_boot_gif" | "device.set_boot_gif" => {
-            let on_off = args.first().copied()
+            let on_off = args
+                .first()
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("on_off")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let total_length = args.get(1).copied()
-                .or_else(|| kw.and_then(|v| v.get("total_length")).and_then(|v| v.as_i64()))
+            let total_length = args
+                .get(1)
+                .copied()
+                .or_else(|| {
+                    kw.and_then(|v| v.get("total_length"))
+                        .and_then(|v| v.as_i64())
+                })
                 .unwrap_or(0) as u16;
-            let gif_id = args.get(2).copied()
+            let gif_id = args
+                .get(2)
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("gif_id")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
-            let data: Vec<u8> = raw_args.get(3)
+            let data: Vec<u8> = raw_args
+                .get(3)
                 .and_then(|v| v.as_array())
                 .or_else(|| kw.and_then(|v| v.get("data")).and_then(|v| v.as_array()))
-                .map(|a| a.iter().filter_map(|x| x.as_u64().map(|n| n as u8)).collect())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_u64().map(|n| n as u8))
+                        .collect()
+                })
                 .unwrap_or_default();
 
             let mut payload = Vec::with_capacity(4 + data.len());
@@ -325,8 +427,13 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 Err(e) => err_reply(&format!("set_boot_gif failed: {e}")),
             }
         }
-        "sound.set_sound_control" | "system.set_sound_control" | "set_sound_control" | "device.set_sound_control" => {
-            let enable = args.first().copied()
+        "sound.set_sound_control"
+        | "system.set_sound_control"
+        | "set_sound_control"
+        | "device.set_sound_control" => {
+            let enable = args
+                .first()
+                .copied()
                 .or_else(|| kw.and_then(|v| v.get("enable")).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as u8;
             match dev.send_command(0xa7, &[enable], true).await {
@@ -334,12 +441,13 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 Err(e) => err_reply(&format!("set_sound_control failed: {e}")),
             }
         }
-        "sound.get_sound_control" | "system.get_sound_control" | "get_sound_control" | "device.get_sound_control" => {
-            match dev.send_command_and_wait(0xa8, &[], timeout).await {
-                Some(p) if p.len() >= 1 => json!({"success": true, "result": p[0] as i64}),
-                _ => json!({"success": true, "result": Value::Null}),
-            }
-        }
+        "sound.get_sound_control"
+        | "system.get_sound_control"
+        | "get_sound_control"
+        | "device.get_sound_control" => match dev.send_command_and_wait(0xa8, &[], timeout).await {
+            Some(p) if !p.is_empty() => json!({"success": true, "result": p[0] as i64}),
+            _ => json!({"success": true, "result": Value::Null}),
+        },
         _ => err_reply("unimplemented system command"),
     }
 }

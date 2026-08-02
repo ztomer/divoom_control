@@ -36,17 +36,28 @@ pub enum LanError {
 impl std::fmt::Display for LanError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LanError::BadStatus { status, command } => write!(f, "device returned HTTP {status} for {command}"),
-            LanError::NonJson { command, snippet } => write!(f, "device returned non-JSON for {command}: {snippet:?}"),
-            LanError::Rejected { code, command } => write!(f, "device rejected {command}: error_code={code}"),
-            LanError::NetworkError { message, command } => write!(f, "LAN request failed for {command}: {message}"),
+            LanError::BadStatus { status, command } => {
+                write!(f, "device returned HTTP {status} for {command}")
+            }
+            LanError::NonJson { command, snippet } => {
+                write!(f, "device returned non-JSON for {command}: {snippet:?}")
+            }
+            LanError::Rejected { code, command } => {
+                write!(f, "device rejected {command}: error_code={code}")
+            }
+            LanError::NetworkError { message, command } => {
+                write!(f, "LAN request failed for {command}: {message}")
+            }
         }
     }
 }
 
 impl LanTransport {
     pub fn new(device_ip: impl Into<String>, local_token: i64) -> Self {
-        LanTransport { device_ip: device_ip.into(), local_token }
+        LanTransport {
+            device_ip: device_ip.into(),
+            local_token,
+        }
     }
 
     pub fn base_url(&self) -> String {
@@ -71,7 +82,8 @@ impl LanTransport {
     pub async fn post(&self, command: &str, extra: Option<Value>) -> Result<Value, LanError> {
         let body = self.build_body(command, extra);
         let client = reqwest::Client::new();
-        let res = client.post(&self.base_url())
+        let res = client
+            .post(self.base_url())
             .header("Content-Type", "application/json")
             .json(&body)
             .timeout(std::time::Duration::from_secs(5))
@@ -121,7 +133,10 @@ pub fn validate_response(status: u16, text: &str, command: &str) -> Result<Value
         snippet: text.chars().take(120).collect(),
     })?;
     if status != 200 {
-        return Err(LanError::BadStatus { status, command: command.to_string() });
+        return Err(LanError::BadStatus {
+            status,
+            command: command.to_string(),
+        });
     }
     match result.get("error_code") {
         None | Some(Value::Null) => {}

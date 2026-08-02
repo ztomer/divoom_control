@@ -43,7 +43,9 @@ pub enum AcquireError {
 impl std::fmt::Display for AcquireError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AcquireError::HeldByAnother => write!(f, "device is exclusively held by another session"),
+            AcquireError::HeldByAnother => {
+                write!(f, "device is exclusively held by another session")
+            }
             AcquireError::Stopped => write!(f, "queue is stopped"),
         }
     }
@@ -239,7 +241,11 @@ impl CommandQueue {
             return Step::Wait(None);
         }
         if let Some(owner) = g.owner.clone() {
-            if let Some(idx) = g.pending.iter().position(|j| j.token.as_deref() == Some(owner.as_str())) {
+            if let Some(idx) = g
+                .pending
+                .iter()
+                .position(|j| j.token.as_deref() == Some(owner.as_str()))
+            {
                 g.arm_deadline(self.exclusive_timeout); // owner made progress
                 return Step::Run(g.pending.remove(idx).unwrap());
             }

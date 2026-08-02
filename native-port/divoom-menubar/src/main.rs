@@ -41,8 +41,13 @@ const POLL: Duration = Duration::from_secs(2);
 const SUBSCRIBE_RETRY_DELAY: Duration = Duration::from_secs(2);
 
 fn main() {
-    #[allow(unused_mut)]
+    // `set_activation_policy` below takes `&mut self`, and exists only on macOS,
+    // so the binding is `mut` only there; on other targets it stays immutable
+    // and `unused_mut` never fires.
+    #[cfg(target_os = "macos")]
     let mut event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
+    #[cfg(not(target_os = "macos"))]
+    let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
     // macOS: run as a menubar agent (no Dock icon).
     #[cfg(target_os = "macos")]
     {

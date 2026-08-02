@@ -8,51 +8,52 @@
 //! notify/response correlation, and the command queue — each pinned to the Python
 //! behavior by parity tests.
 
+pub mod art;
+pub mod art_codec;
+pub mod art_hot;
 pub mod autoprobe;
-pub mod image_proc;
 #[cfg(feature = "ble")]
 pub mod ble;
 #[cfg(feature = "ble")]
 pub mod central;
+pub mod cloud;
+mod cloud_category;
+pub mod cloud_cmds;
+mod cloud_photo;
+mod cloud_playlist;
+pub mod cloud_store;
 pub mod command_queue;
 pub mod commands;
 pub mod daemon;
-mod daemon_status;
 #[cfg(feature = "ble")]
 pub mod daemon_ble;
-pub mod framing;
-pub mod lan;
-pub mod models;
-pub mod native_encode;
-pub mod protocol;
-pub mod response;
-pub mod socket_server;
-pub mod device_call;
 pub mod daemon_connect;
 pub mod daemon_mock;
-pub mod live_jobs;
-pub mod wall;
-pub mod art_codec;
-pub mod art_hot;
-pub mod art;
+mod daemon_status;
+pub mod device_call;
+pub mod framing;
 pub mod hot_state;
+pub mod image_proc;
+pub mod lan;
+pub mod live_jobs;
 #[cfg(target_os = "macos")]
 pub mod macos_notifications;
+pub mod mcp;
+pub mod mcp_tools;
+pub mod media;
+pub mod mock_device_tests;
+pub mod mock_transport;
+pub mod models;
+pub mod monthly_best;
+pub mod native_encode;
 #[cfg(target_os = "macos")]
 pub mod notification_db;
 #[cfg(target_os = "macos")]
 pub mod notification_routing;
-pub mod transport;
+pub mod protocol;
+pub mod response;
+pub mod socket_server;
 pub mod spp;
-pub mod cloud;
-pub mod cloud_cmds;
-pub mod cloud_store;
-mod cloud_category;
-mod cloud_photo;
-pub mod mcp;
-pub mod mcp_tools;
-pub mod media;
-pub mod monthly_best;
 pub mod sync_artwork;
-pub mod mock_transport;
-pub mod mock_device_tests;
+pub mod transport;
+pub mod wall;

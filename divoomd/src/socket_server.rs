@@ -86,10 +86,10 @@ where
     let mut tmp = [0u8; 4096];
     loop {
         let n = match tokio::time::timeout(idle_timeout, stream.read(&mut tmp)).await {
-            Ok(Ok(0)) => return Ok(()),                 // EOF — peer closed
+            Ok(Ok(0)) => return Ok(()), // EOF — peer closed
             Ok(Ok(k)) => k,
             Ok(Err(e)) => return Err(e),
-            Err(_) => return Ok(()),                    // idle: dead/silent peer, drop
+            Err(_) => return Ok(()), // idle: dead/silent peer, drop
         };
         buf.extend_from_slice(&tmp[..n]);
         if buf.len() > MAX_REPLY_BYTES {
@@ -101,7 +101,8 @@ where
             let req = match serde_json::from_value::<Request>(msg) {
                 Ok(req) => req,
                 Err(_) => {
-                    let reply = err_reply("bad request: expected an object with a 'command' string");
+                    let reply =
+                        err_reply("bad request: expected an object with a 'command' string");
                     stream.write_all(&encode_message(&reply)).await?;
                     continue;
                 }
@@ -215,4 +216,3 @@ pub async fn serve_tcp<H: Handler>(
         }
     }
 }
-

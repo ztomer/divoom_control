@@ -73,7 +73,9 @@ fn find_feishin_creds() -> Option<(String, String)> {
 }
 
 fn find_subsequence(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    haystack.windows(needle.len()).position(|window| window == needle)
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
 }
 
 async fn get_feishin_playing_track(client: &reqwest::Client) -> Option<TrackInfo> {
@@ -81,9 +83,13 @@ async fn get_feishin_playing_track(client: &reqwest::Client) -> Option<TrackInfo
         return None;
     }
     let (server_url, auth_qs) = find_feishin_creds()?;
-    let api_url = format!("{}/rest/getNowPlaying.view?f=json&c=divoom&v=1.16.0&{}", server_url, auth_qs);
+    let api_url = format!(
+        "{}/rest/getNowPlaying.view?f=json&c=divoom&v=1.16.0&{}",
+        server_url, auth_qs
+    );
 
-    let res = client.get(&api_url)
+    let res = client
+        .get(&api_url)
         .timeout(Duration::from_secs(5))
         .send()
         .await
@@ -101,10 +107,17 @@ async fn get_feishin_playing_track(client: &reqwest::Client) -> Option<TrackInfo
         entries
     };
     let title = entry.get("title")?.as_str()?.to_string();
-    let artist = entry.get("artist").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let artist = entry
+        .get("artist")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
     let cover_art = entry.get("coverArt").and_then(|v| v.as_str());
     let artwork_url = cover_art.map(|id| {
-        format!("{}/rest/getCoverArt.view?f=json&c=divoom&v=1.16.0&id={}&{}", server_url, id, auth_qs)
+        format!(
+            "{}/rest/getCoverArt.view?f=json&c=divoom&v=1.16.0&id={}&{}",
+            server_url, id, auth_qs
+        )
     });
     Some(TrackInfo {
         track: title,
@@ -140,7 +153,10 @@ async fn get_kaset_playing_track() -> Option<TrackInfo> {
         let ct = info.get("currentTrack")?;
         let name = ct.get("name")?.as_str()?;
         let artist = ct.get("artist").and_then(|v| v.as_str()).unwrap_or("");
-        let artwork_url = ct.get("artworkURL").and_then(|v| v.as_str()).map(|s| s.to_string());
+        let artwork_url = ct
+            .get("artworkURL")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
         return Some(TrackInfo {
             track: name.to_string(),
             artist: artist.to_string(),
@@ -227,9 +243,14 @@ pub(super) async fn get_current_playing_track(client: &reqwest::Client) -> Optio
     None
 }
 
-pub(super) async fn fetch_album_art_url(client: &reqwest::Client, track: &str, artist: &str) -> Option<String> {
+pub(super) async fn fetch_album_art_url(
+    client: &reqwest::Client,
+    track: &str,
+    artist: &str,
+) -> Option<String> {
     let term = format!("{} {}", artist, track);
-    let res = client.get("https://itunes.apple.com/search")
+    let res = client
+        .get("https://itunes.apple.com/search")
         .query(&[("term", term.as_str()), ("limit", "1"), ("entity", "song")])
         .timeout(Duration::from_secs(5))
         .send()

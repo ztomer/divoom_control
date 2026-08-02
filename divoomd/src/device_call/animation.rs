@@ -1,7 +1,7 @@
 //! Animation upload primitives — parity port of `divoom_lib/display/animation.py`
 //! + `animation_user.py`. These are low-level gif/user-define chunk commands
-//! (the daemon's normal animation path is 0x8B streaming via show_image); ported
-//! verbatim for device_call dispatch parity. Byte orders match Python exactly.
+//!   (the daemon's normal animation path is 0x8B streaming via show_image); ported
+//!   verbatim for device_call dispatch parity. Byte orders match Python exactly.
 //!
 //! Data arrays (gif_data / file_data / data) arrive over device_call as JSON
 //! arrays of u8 in `kwargs` (or positional `args`/`blobs[0]` for the big chunk).
@@ -20,13 +20,23 @@ fn kw_i64(kw: Option<&Map<String, Value>>, name: &str) -> Option<i64> {
 fn kw_bytes(kw: Option<&Map<String, Value>>, name: &str) -> Vec<u8> {
     kw.and_then(|m| m.get(name))
         .and_then(|v| v.as_array())
-        .map(|a| a.iter().filter_map(|x| x.as_u64().map(|n| n as u8)).collect())
+        .map(|a| {
+            a.iter()
+                .filter_map(|x| x.as_u64().map(|n| n as u8))
+                .collect()
+        })
         .unwrap_or_default()
 }
 
-fn le16(v: i64) -> [u8; 2] { (v as u16).to_le_bytes() }
-fn le32(v: i64) -> [u8; 4] { (v as u32).to_le_bytes() }
-fn be32(v: i64) -> [u8; 4] { (v as u32).to_be_bytes() }
+fn le16(v: i64) -> [u8; 2] {
+    (v as u16).to_le_bytes()
+}
+fn le32(v: i64) -> [u8; 4] {
+    (v as u32).to_le_bytes()
+}
+fn be32(v: i64) -> [u8; 4] {
+    (v as u32).to_be_bytes()
+}
 
 async fn send(dev: &DeviceTransport, cmd: u8, payload: &[u8], label: &str) -> Value {
     match dev.send_command(cmd, payload, true).await {
@@ -42,20 +52,35 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     // file_data/big chunk may arrive as blob[0]; prefer it over a kwargs array.
     let blob0 = ctx.blob_map.lock().unwrap().get(&0).cloned();
     let file_data = || -> Vec<u8> {
-        if let Some(b) = &blob0 { b.clone() } else { kw_bytes(kw, "file_data") }
+        if let Some(b) = &blob0 {
+            b.clone()
+        } else {
+            kw_bytes(kw, "file_data")
+        }
     };
     let cw = || -> i64 {
-        args.first().copied().or_else(|| kw_i64(kw, "control_word")).unwrap_or(0)
+        args.first()
+            .copied()
+            .or_else(|| kw_i64(kw, "control_word"))
+            .unwrap_or(0)
     };
 
     match method {
         "animation.set_gif_speed" | "set_gif_speed" => {
-            let speed = args.first().copied().or_else(|| kw_i64(kw, "speed")).unwrap_or(0);
+            let speed = args
+                .first()
+                .copied()
+                .or_else(|| kw_i64(kw, "speed"))
+                .unwrap_or(0);
             send(dev, 0x16, &le16(speed), "set_gif_speed").await
         }
         "animation.set_light_phone_gif" | "set_light_phone_gif" => {
-            let total_len = kw_i64(kw, "total_len").or_else(|| args.first().copied()).unwrap_or(0);
-            let gif_id = kw_i64(kw, "gif_id").or_else(|| args.get(1).copied()).unwrap_or(0);
+            let total_len = kw_i64(kw, "total_len")
+                .or_else(|| args.first().copied())
+                .unwrap_or(0);
+            let gif_id = kw_i64(kw, "gif_id")
+                .or_else(|| args.get(1).copied())
+                .unwrap_or(0);
             let mut p = Vec::new();
             p.extend_from_slice(&le16(total_len));
             p.push(gif_id as u8);
@@ -93,14 +118,21 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 0 | 2 => {
                     // START_SAVING / TRANSMISSION_END: data[0] selects sub-format.
                     let data = kw_bytes(kw, "data");
-                    if data.is_empty() { return err_reply("set_user_gif: missing 'data'"); }
+                    if data.is_empty() {
+                        return err_reply("set_user_gif: missing 'data'");
+                    }
                     p.push(data[0]);
                     match data[0] {
                         1 => {
                             // LED editor: [type, speed, text_length, *data[3:]]
-                            let (speed, tl) = match (kw_i64(kw, "speed"), kw_i64(kw, "text_length")) {
+                            let (speed, tl) = match (kw_i64(kw, "speed"), kw_i64(kw, "text_length"))
+                            {
                                 (Some(s), Some(t)) if data.len() >= 3 => (s, t),
-                                _ => return err_reply("set_user_gif: LED editor needs speed+text_length"),
+                                _ => {
+                                    return err_reply(
+                                        "set_user_gif: LED editor needs speed+text_length",
+                                    )
+                                }
                             };
                             p.push(speed as u8);
                             p.push(tl as u8);
@@ -108,9 +140,17 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                         }
                         3 => {
                             // Scroll animation: [type, mode, speed LE16, len LE16]
-                            let (mode, speed, len_val) = match (kw_i64(kw, "mode"), kw_i64(kw, "speed"), kw_i64(kw, "len_val")) {
+                            let (mode, speed, len_val) = match (
+                                kw_i64(kw, "mode"),
+                                kw_i64(kw, "speed"),
+                                kw_i64(kw, "len_val"),
+                            ) {
                                 (Some(m), Some(s), Some(l)) => (m, s, l),
-                                _ => return err_reply("set_user_gif: scroll needs mode+speed+len_val"),
+                                _ => {
+                                    return err_reply(
+                                        "set_user_gif: scroll needs mode+speed+len_val",
+                                    )
+                                }
                             };
                             p.push(mode as u8);
                             p.extend_from_slice(&le16(speed));
@@ -122,7 +162,9 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 1 => {
                     // TRANSMIT_DATA: [len(data) LE16, *data]
                     let data = kw_bytes(kw, "data");
-                    if data.len() < 2 { return err_reply("set_user_gif: transmit needs >=2 data bytes"); }
+                    if data.len() < 2 {
+                        return err_reply("set_user_gif: transmit needs >=2 data bytes");
+                    }
                     p.extend_from_slice(&le16(data.len() as i64));
                     p.extend_from_slice(&data);
                 }
@@ -171,14 +213,23 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     p.push(kw_i64(kw, "index").unwrap_or(0) as u8);
                 }
                 5 => p.push(kw_i64(kw, "index").unwrap_or(0) as u8), // DELETE_ALL_BY_INDEX
-                _ => return err_reply(&format!("app_big64_user_define: unknown control word {cw}")),
+                _ => {
+                    return err_reply(&format!("app_big64_user_define: unknown control word {cw}"))
+                }
             }
             send(dev, 0x8d, &p, "app_big64_user_define").await
         }
         // modify_user_gif_items (0xb6) read-back: [data] -> response[0].
         "animation.modify_user_gif_items" | "modify_user_gif_items" => {
-            let data = args.first().copied().or_else(|| kw_i64(kw, "data")).unwrap_or(0);
-            match dev.send_command_and_wait(0xb6, &[data as u8], ctx.timeout).await {
+            let data = args
+                .first()
+                .copied()
+                .or_else(|| kw_i64(kw, "data"))
+                .unwrap_or(0);
+            match dev
+                .send_command_and_wait(0xb6, &[data as u8], ctx.timeout)
+                .await
+            {
                 Some(r) if !r.is_empty() => json!({"success": true, "result": r[0] as i64}),
                 _ => json!({"success": true, "result": Value::Null}),
             }
@@ -197,9 +248,18 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         // null result — worth a closer look if this command is picked up for
         // real use.
         "animation.app_get_user_define_info" | "app_get_user_define_info" => {
-            let idx = args.first().copied().or_else(|| kw_i64(kw, "user_index")).unwrap_or(0);
-            match dev.send_command_and_wait(0x8e, &[idx as u8], ctx.timeout).await {
-                Some(r) if !r.is_empty() => json!({"success": true, "result": parse_user_define_info(&r)}),
+            let idx = args
+                .first()
+                .copied()
+                .or_else(|| kw_i64(kw, "user_index"))
+                .unwrap_or(0);
+            match dev
+                .send_command_and_wait(0x8e, &[idx as u8], ctx.timeout)
+                .await
+            {
+                Some(r) if !r.is_empty() => {
+                    json!({"success": true, "result": parse_user_define_info(&r)})
+                }
                 _ => json!({"success": true, "result": Value::Null}),
             }
         }
@@ -210,9 +270,15 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
 /// pos(1 BE) + total_length(2 LE) + gif_id(1 BE) + *data — shared by set_rhythm_gif
 /// (0xb7) and app_send_eq_gif (0x1b).
 fn rhythm_payload(args: &[i64], kw: Option<&Map<String, Value>>) -> Vec<u8> {
-    let pos = kw_i64(kw, "pos").or_else(|| args.first().copied()).unwrap_or(0);
-    let total_length = kw_i64(kw, "total_length").or_else(|| args.get(1).copied()).unwrap_or(0);
-    let gif_id = kw_i64(kw, "gif_id").or_else(|| args.get(2).copied()).unwrap_or(0);
+    let pos = kw_i64(kw, "pos")
+        .or_else(|| args.first().copied())
+        .unwrap_or(0);
+    let total_length = kw_i64(kw, "total_length")
+        .or_else(|| args.get(1).copied())
+        .unwrap_or(0);
+    let gif_id = kw_i64(kw, "gif_id")
+        .or_else(|| args.get(2).copied())
+        .unwrap_or(0);
     let mut p = vec![pos as u8];
     p.extend_from_slice(&le16(total_length));
     p.push(gif_id as u8);

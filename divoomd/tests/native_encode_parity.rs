@@ -25,7 +25,10 @@ fn vectors() -> Value {
 }
 
 fn hex_to_bytes(s: &str) -> Vec<u8> {
-    (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
+    (0..s.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap())
+        .collect()
 }
 fn to_hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
@@ -51,21 +54,48 @@ fn ffi_image_encoders_match_python() {
     let v = vectors();
 
     for c in v["frame"].as_array().unwrap() {
-        let (w, h, t) = (c["w"].as_i64().unwrap() as i32, c["h"].as_i64().unwrap() as i32, c["time"].as_u64().unwrap() as u16);
+        let (w, h, t) = (
+            c["w"].as_i64().unwrap() as i32,
+            c["h"].as_i64().unwrap() as i32,
+            c["time"].as_u64().unwrap() as u16,
+        );
         let rgb = hex_to_bytes(c["rgb"].as_str().unwrap());
-        let got = enc.encode_animation_frame(&rgb, w, h, t).expect("frame encodes");
-        assert_eq!(to_hex(&got), c["out"].as_str().unwrap(), "animation_frame {w}x{h}");
+        let got = enc
+            .encode_animation_frame(&rgb, w, h, t)
+            .expect("frame encodes");
+        assert_eq!(
+            to_hex(&got),
+            c["out"].as_str().unwrap(),
+            "animation_frame {w}x{h}"
+        );
     }
     for c in v["static"].as_array().unwrap() {
-        let (w, h) = (c["w"].as_i64().unwrap() as i32, c["h"].as_i64().unwrap() as i32);
+        let (w, h) = (
+            c["w"].as_i64().unwrap() as i32,
+            c["h"].as_i64().unwrap() as i32,
+        );
         let rgb = hex_to_bytes(c["rgb"].as_str().unwrap());
         let got = enc.encode_static_image(&rgb, w, h).expect("static encodes");
-        assert_eq!(to_hex(&got), c["out"].as_str().unwrap(), "static_image {w}x{h}");
+        assert_eq!(
+            to_hex(&got),
+            c["out"].as_str().unwrap(),
+            "static_image {w}x{h}"
+        );
     }
     for c in v["frame32"].as_array().unwrap() {
-        let (w, h, t) = (c["w"].as_i64().unwrap() as i32, c["h"].as_i64().unwrap() as i32, c["time"].as_u64().unwrap() as u16);
+        let (w, h, t) = (
+            c["w"].as_i64().unwrap() as i32,
+            c["h"].as_i64().unwrap() as i32,
+            c["time"].as_u64().unwrap() as u16,
+        );
         let rgb = hex_to_bytes(c["rgb"].as_str().unwrap());
-        let got = enc.encode_animation_frame_32(&rgb, w, h, t).expect("frame32 encodes");
-        assert_eq!(to_hex(&got), c["out"].as_str().unwrap(), "animation_frame_32 {w}x{h}");
+        let got = enc
+            .encode_animation_frame_32(&rgb, w, h, t)
+            .expect("frame32 encodes");
+        assert_eq!(
+            to_hex(&got),
+            c["out"].as_str().unwrap(),
+            "animation_frame_32 {w}x{h}"
+        );
     }
 }

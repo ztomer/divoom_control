@@ -2,10 +2,12 @@
 //! Split out of `cloud.rs` to keep it under the 500-line house limit.
 //! Ported from `divoom_lib/cloud.py`.
 
-use std::time::Duration;
 use serde_json::{json, Value};
+use std::time::Duration;
 
-use crate::cloud::{get_credentials, load_virtual_device, BASE_URL, TIMEOUT_SECS, DivoomCredentials};
+use crate::cloud::{
+    get_credentials, load_virtual_device, DivoomCredentials, BASE_URL, TIMEOUT_SECS,
+};
 
 /// Default "Classify" for `GetCategoryFileListV2` (the pixel-art / monthly-best
 /// gallery) — matches the app's own default tab (`divoom_gui/web_ui/gallery.js`
@@ -54,23 +56,40 @@ pub async fn fetch_gallery(
 
     let url = format!("{}/GetCategoryFileListV2", BASE_URL);
     let mut req_body = make_request(&creds);
-    let mut resp = client.post(&url).json(&req_body).send().await
+    let mut resp = client
+        .post(&url)
+        .json(&req_body)
+        .send()
+        .await
         .map_err(|e| e.to_string())?;
 
     let mut data: Value = resp.json().await.map_err(|e| e.to_string())?;
-    let mut rc = data.get("ReturnCode").and_then(|v| v.as_i64()).unwrap_or(-1);
+    let mut rc = data
+        .get("ReturnCode")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(-1);
 
     if rc == 9 || rc == 10 || rc == 11 {
         creds = get_credentials(true).await?;
         req_body = make_request(&creds);
-        resp = client.post(&url).json(&req_body).send().await
+        resp = client
+            .post(&url)
+            .json(&req_body)
+            .send()
+            .await
             .map_err(|e| e.to_string())?;
         data = resp.json().await.map_err(|e| e.to_string())?;
-        rc = data.get("ReturnCode").and_then(|v| v.as_i64()).unwrap_or(-1);
+        rc = data
+            .get("ReturnCode")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(-1);
     }
 
     if rc != 0 {
-        let msg = data.get("ReturnMessage").and_then(|v| v.as_str()).unwrap_or("Unknown cloud error");
+        let msg = data
+            .get("ReturnMessage")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Unknown cloud error");
         return Err(format!("GetCategoryFileListV2 failed (RC={rc}): {msg}"));
     }
 
@@ -115,25 +134,44 @@ pub async fn get_category_file_list(classify: i64, limit: i64) -> Result<Value, 
 
     let url = format!("{}/GetCategoryFileListV2", BASE_URL);
     let mut req_body = make_request(&creds);
-    let mut resp = client.post(&url).json(&req_body).send().await
+    let mut resp = client
+        .post(&url)
+        .json(&req_body)
+        .send()
+        .await
         .map_err(|e| e.to_string())?;
     let mut data: Value = resp.json().await.map_err(|e| e.to_string())?;
-    let mut rc = data.get("ReturnCode").and_then(|v| v.as_i64()).unwrap_or(-1);
+    let mut rc = data
+        .get("ReturnCode")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(-1);
 
     if rc == 9 || rc == 10 || rc == 11 {
         creds = get_credentials(true).await?;
         req_body = make_request(&creds);
-        resp = client.post(&url).json(&req_body).send().await
+        resp = client
+            .post(&url)
+            .json(&req_body)
+            .send()
+            .await
             .map_err(|e| e.to_string())?;
         data = resp.json().await.map_err(|e| e.to_string())?;
-        rc = data.get("ReturnCode").and_then(|v| v.as_i64()).unwrap_or(-1);
+        rc = data
+            .get("ReturnCode")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(-1);
     }
 
     if rc != 0 {
-        let msg = data.get("ReturnMessage").and_then(|v| v.as_str()).unwrap_or("Unknown cloud error");
+        let msg = data
+            .get("ReturnMessage")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Unknown cloud error");
         return Err(format!("GetCategoryFileListV2 failed (RC={rc}): {msg}"));
     }
-    let list = data.get("FileList").cloned()
+    let list = data
+        .get("FileList")
+        .cloned()
         .or_else(|| data.get("List").cloned())
         .unwrap_or(Value::Array(vec![]));
     Ok(list)
@@ -168,27 +206,46 @@ pub async fn search_weather_city(keyword: &str) -> Result<Value, String> {
 
     let url = format!("{}/Weather/SearchCity", BASE_URL);
     let mut req_body = make_request(&creds);
-    let mut resp = client.post(&url).json(&req_body).send().await
+    let mut resp = client
+        .post(&url)
+        .json(&req_body)
+        .send()
+        .await
         .map_err(|e| e.to_string())?;
     let mut data: Value = resp.json().await.map_err(|e| e.to_string())?;
-    let mut rc = data.get("ReturnCode").and_then(|v| v.as_i64()).unwrap_or(-1);
+    let mut rc = data
+        .get("ReturnCode")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(-1);
 
     // Same expired-token family (RC 9/10/11) that fetch_gallery/get_category_file_list
     // already retry on — this endpoint was missing the self-heal.
     if rc == 9 || rc == 10 || rc == 11 {
         creds = get_credentials(true).await?;
         req_body = make_request(&creds);
-        resp = client.post(&url).json(&req_body).send().await
+        resp = client
+            .post(&url)
+            .json(&req_body)
+            .send()
+            .await
             .map_err(|e| e.to_string())?;
         data = resp.json().await.map_err(|e| e.to_string())?;
-        rc = data.get("ReturnCode").and_then(|v| v.as_i64()).unwrap_or(-1);
+        rc = data
+            .get("ReturnCode")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(-1);
     }
 
     if rc != 0 {
-        let msg = data.get("ReturnMessage").and_then(|v| v.as_str()).unwrap_or("Unknown cloud error");
+        let msg = data
+            .get("ReturnMessage")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Unknown cloud error");
         return Err(format!("Weather/SearchCity failed (RC={rc}): {msg}"));
     }
-    let list = data.get("CityList").cloned()
+    let list = data
+        .get("CityList")
+        .cloned()
         .or_else(|| data.get("List").cloned())
         .unwrap_or(Value::Array(vec![]));
     Ok(list)
@@ -239,7 +296,12 @@ pub async fn search_weather_city(keyword: &str) -> Result<Value, String> {
 // `cloud::ensure_virtual_device` registers one via `BlueDevice/NewDevice`
 // (confirmed live: RC=3 -> RC=0, real sleep-sound catalog).
 
-async fn get_aid_sleep_list(cmd: &str, sleep_type: i64, limit: i64, page: i64) -> Result<Value, String> {
+async fn get_aid_sleep_list(
+    cmd: &str,
+    sleep_type: i64,
+    limit: i64,
+    page: i64,
+) -> Result<Value, String> {
     let mut creds = get_credentials(false).await?;
     let (device_id, device_pw) = crate::cloud::ensure_virtual_device().await?;
 
@@ -271,25 +333,45 @@ async fn get_aid_sleep_list(cmd: &str, sleep_type: i64, limit: i64, page: i64) -
 
     let url = format!("{}/{}", BASE_URL, cmd);
     let mut req_body = make_request(&creds);
-    let mut resp = client.post(&url).json(&req_body).send().await
+    let mut resp = client
+        .post(&url)
+        .json(&req_body)
+        .send()
+        .await
         .map_err(|e| e.to_string())?;
     let mut data: Value = resp.json().await.map_err(|e| e.to_string())?;
-    let mut rc = data.get("ReturnCode").and_then(|v| v.as_i64()).unwrap_or(-1);
+    let mut rc = data
+        .get("ReturnCode")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(-1);
 
     if rc == 9 || rc == 10 || rc == 11 {
         creds = get_credentials(true).await?;
         req_body = make_request(&creds);
-        resp = client.post(&url).json(&req_body).send().await
+        resp = client
+            .post(&url)
+            .json(&req_body)
+            .send()
+            .await
             .map_err(|e| e.to_string())?;
         data = resp.json().await.map_err(|e| e.to_string())?;
-        rc = data.get("ReturnCode").and_then(|v| v.as_i64()).unwrap_or(-1);
+        rc = data
+            .get("ReturnCode")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(-1);
     }
 
     if rc != 0 {
-        let msg = data.get("ReturnMessage").and_then(|v| v.as_str()).unwrap_or("Unknown cloud error");
+        let msg = data
+            .get("ReturnMessage")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Unknown cloud error");
         return Err(format!("{cmd} failed (RC={rc}): {msg}"));
     }
-    Ok(data.get("SleepList").cloned().unwrap_or(Value::Array(vec![])))
+    Ok(data
+        .get("SleepList")
+        .cloned()
+        .unwrap_or(Value::Array(vec![])))
 }
 
 /// Browse Divoom's full cloud AidSleep catalog. `sleep_type`: 0=Natural
@@ -300,7 +382,11 @@ pub async fn fetch_aid_sleep_list(sleep_type: i64, limit: i64, page: i64) -> Res
 
 /// Same shape as `fetch_aid_sleep_list`, scoped to the user's own
 /// saved/added tracks.
-pub async fn fetch_my_aid_sleep_list(sleep_type: i64, limit: i64, page: i64) -> Result<Value, String> {
+pub async fn fetch_my_aid_sleep_list(
+    sleep_type: i64,
+    limit: i64,
+    page: i64,
+) -> Result<Value, String> {
     get_aid_sleep_list("AidSleep/GetMyList", sleep_type, limit, page).await
 }
 
@@ -313,16 +399,29 @@ pub async fn get_dial_types() -> Result<Value, String> {
         .map_err(|e| e.to_string())?;
 
     let url = format!("{}/Channel/GetDialType", BASE_URL);
-    let resp = client.post(&url).json(&json!({})).send().await
+    let resp = client
+        .post(&url)
+        .json(&json!({}))
+        .send()
+        .await
         .map_err(|e| e.to_string())?;
     let data: Value = resp.json().await.map_err(|e| e.to_string())?;
-    let rc = data.get("ReturnCode").and_then(|v| v.as_i64()).unwrap_or(-1);
+    let rc = data
+        .get("ReturnCode")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(-1);
 
     if rc != 0 {
-        let msg = data.get("ReturnMessage").and_then(|v| v.as_str()).unwrap_or("Unknown cloud error");
+        let msg = data
+            .get("ReturnMessage")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Unknown cloud error");
         return Err(format!("Channel/GetDialType failed (RC={rc}): {msg}"));
     }
-    Ok(data.get("DialTypeList").cloned().unwrap_or(Value::Array(vec![])))
+    Ok(data
+        .get("DialTypeList")
+        .cloned()
+        .unwrap_or(Value::Array(vec![])))
 }
 
 /// Fetch clock faces (`ClockId`/`Name`) for one category name.
@@ -335,16 +434,29 @@ pub async fn get_dial_list(dial_type: &str, page: i64) -> Result<Value, String> 
 
     let url = format!("{}/Channel/GetDialList", BASE_URL);
     let body = json!({ "DialType": dial_type, "Page": page });
-    let resp = client.post(&url).json(&body).send().await
+    let resp = client
+        .post(&url)
+        .json(&body)
+        .send()
+        .await
         .map_err(|e| e.to_string())?;
     let data: Value = resp.json().await.map_err(|e| e.to_string())?;
-    let rc = data.get("ReturnCode").and_then(|v| v.as_i64()).unwrap_or(-1);
+    let rc = data
+        .get("ReturnCode")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(-1);
 
     if rc != 0 {
-        let msg = data.get("ReturnMessage").and_then(|v| v.as_str()).unwrap_or("Unknown cloud error");
+        let msg = data
+            .get("ReturnMessage")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Unknown cloud error");
         return Err(format!("Channel/GetDialList failed (RC={rc}): {msg}"));
     }
-    Ok(data.get("DialList").cloned().unwrap_or(Value::Array(vec![])))
+    Ok(data
+        .get("DialList")
+        .cloned()
+        .unwrap_or(Value::Array(vec![])))
 }
 
 /// Browse the cloud clock-face store. With no `dial_type`, use the first
@@ -354,7 +466,11 @@ pub async fn list_clock_faces(dial_type: Option<String>, page: i64) -> Result<Va
         Some(t) => t,
         None => {
             let types = get_dial_types().await?;
-            match types.as_array().and_then(|a| a.first()).and_then(|v| v.as_str()) {
+            match types
+                .as_array()
+                .and_then(|a| a.first())
+                .and_then(|v| v.as_str())
+            {
                 Some(first) => first.to_string(),
                 None => return Ok(Value::Array(vec![])),
             }
@@ -363,121 +479,5 @@ pub async fn list_clock_faces(dial_type: Option<String>, page: i64) -> Result<Va
     get_dial_list(&dial_type, page).await
 }
 
-// ── Playlist browse + push to device ────────────────────────────────────
-//
-// Confirmed LIVE working 2026-07-14 (real logged-in account, RC=0). Pushing
-// a playlist to the connected device is NOT a cloud call — see
-// `device_call::mod::lan.send_playlist` (`Playlist/SendDevice` posted
-// directly to the device's own LAN IP, same mechanism as `lan.set_clock`).
-
-/// List the current user's cloud-hosted playlists (`PlayId`/`Name`/`Count`/…).
-pub async fn get_my_playlists(limit: i64, page: i64) -> Result<Value, String> {
-    let mut creds = get_credentials(false).await?;
-    let (device_id, device_pw, _, _) = load_virtual_device();
-
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(TIMEOUT_SECS))
-        .user_agent("okhttp/4.12.0")
-        .build()
-        .map_err(|e| e.to_string())?;
-
-    let start = (page - 1) * limit + 1;
-    let end = page * limit;
-    let make_request = |creds: &DivoomCredentials| -> Value {
-        let mut body = json!({
-            "Command": "Playlist/GetMyList",
-            "Token": creds.token,
-            "UserId": creds.user_id,
-            "DeviceId": device_id,
-            "StartNum": start,
-            "EndNum": end,
-        });
-        if device_pw != 0 {
-            if let Some(obj) = body.as_object_mut() {
-                obj.insert("DevicePassword".to_string(), json!(device_pw));
-            }
-        }
-        body
-    };
-
-    let url = format!("{}/Playlist/GetMyList", BASE_URL);
-    let mut req_body = make_request(&creds);
-    let mut resp = client.post(&url).json(&req_body).send().await
-        .map_err(|e| e.to_string())?;
-    let mut data: Value = resp.json().await.map_err(|e| e.to_string())?;
-    let mut rc = data.get("ReturnCode").and_then(|v| v.as_i64()).unwrap_or(-1);
-
-    if rc == 9 || rc == 10 || rc == 11 {
-        creds = get_credentials(true).await?;
-        req_body = make_request(&creds);
-        resp = client.post(&url).json(&req_body).send().await
-            .map_err(|e| e.to_string())?;
-        data = resp.json().await.map_err(|e| e.to_string())?;
-        rc = data.get("ReturnCode").and_then(|v| v.as_i64()).unwrap_or(-1);
-    }
-
-    if rc != 0 {
-        let msg = data.get("ReturnMessage").and_then(|v| v.as_str()).unwrap_or("Unknown cloud error");
-        return Err(format!("Playlist/GetMyList failed (RC={rc}): {msg}"));
-    }
-    Ok(data.get("PlayList").cloned().unwrap_or(Value::Array(vec![])))
-}
-
-/// List the images/animations inside one of the user's own playlists.
-pub async fn get_playlist_images(play_id: i64, limit: i64, page: i64) -> Result<Value, String> {
-    let mut creds = get_credentials(false).await?;
-    let (device_id, device_pw, _, _) = load_virtual_device();
-
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(TIMEOUT_SECS))
-        .user_agent("okhttp/4.12.0")
-        .build()
-        .map_err(|e| e.to_string())?;
-
-    let start = (page - 1) * limit + 1;
-    let end = page * limit * 2;
-    let make_request = |creds: &DivoomCredentials| -> Value {
-        let mut body = json!({
-            "Command": "Playlist/GetMyImageList",
-            "Token": creds.token,
-            "UserId": creds.user_id,
-            "DeviceId": device_id,
-            "PlayId": play_id,
-            "FileSort": 0,
-            "FileType": 5,
-            "FileSize": 0,
-            "Version": 19,
-            "StartNum": start,
-            "EndNum": end,
-            "RefreshIndex": 0,
-        });
-        if device_pw != 0 {
-            if let Some(obj) = body.as_object_mut() {
-                obj.insert("DevicePassword".to_string(), json!(device_pw));
-            }
-        }
-        body
-    };
-
-    let url = format!("{}/Playlist/GetMyImageList", BASE_URL);
-    let mut req_body = make_request(&creds);
-    let mut resp = client.post(&url).json(&req_body).send().await
-        .map_err(|e| e.to_string())?;
-    let mut data: Value = resp.json().await.map_err(|e| e.to_string())?;
-    let mut rc = data.get("ReturnCode").and_then(|v| v.as_i64()).unwrap_or(-1);
-
-    if rc == 9 || rc == 10 || rc == 11 {
-        creds = get_credentials(true).await?;
-        req_body = make_request(&creds);
-        resp = client.post(&url).json(&req_body).send().await
-            .map_err(|e| e.to_string())?;
-        data = resp.json().await.map_err(|e| e.to_string())?;
-        rc = data.get("ReturnCode").and_then(|v| v.as_i64()).unwrap_or(-1);
-    }
-
-    if rc != 0 {
-        let msg = data.get("ReturnMessage").and_then(|v| v.as_str()).unwrap_or("Unknown cloud error");
-        return Err(format!("Playlist/GetMyImageList failed (RC={rc}): {msg}"));
-    }
-    Ok(data.get("FileList").cloned().unwrap_or(Value::Array(vec![])))
-}
+// Playlist endpoints moved to `cloud_playlist.rs` to stay under the file cap.
+pub use crate::cloud_playlist::{get_my_playlists, get_playlist_images};

@@ -50,7 +50,9 @@ pub fn route_notification(cmd: u8, expected: Option<u8>, listen: &[u8]) -> Handl
     let is_expected = expected == Some(cmd);
     let is_generic_ack = expected.is_some()
         && cmd == GENERIC_ACK_COMMAND_ID
-        && expected.map(|e| GENERIC_ACK_COMMANDS.contains(&e)).unwrap_or(false);
+        && expected
+            .map(|e| GENERIC_ACK_COMMANDS.contains(&e))
+            .unwrap_or(false);
     if is_expected || is_generic_ack {
         HandlerAction::QueueAndClear
     } else {

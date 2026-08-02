@@ -22,11 +22,18 @@ fn kw_i64(kw: Option<&Map<String, Value>>, name: &str) -> Option<i64> {
     kw.and_then(|m| m.get(name)).and_then(|v| v.as_i64())
 }
 fn kw_bytes(kw: Option<&Map<String, Value>>, name: &str) -> Vec<u8> {
-    kw.and_then(|m| m.get(name)).and_then(|v| v.as_array())
-        .map(|a| a.iter().filter_map(|x| x.as_u64().map(|n| n as u8)).collect())
+    kw.and_then(|m| m.get(name))
+        .and_then(|v| v.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|x| x.as_u64().map(|n| n as u8))
+                .collect()
+        })
         .unwrap_or_default()
 }
-fn le16(v: i64) -> [u8; 2] { (v as u16).to_le_bytes() }
+fn le16(v: i64) -> [u8; 2] {
+    (v as u16).to_le_bytes()
+}
 
 async fn send(dev: &DeviceTransport, cmd: u8, p: &[u8], label: &str) -> Value {
     match dev.send_command(cmd, p, true).await {
@@ -42,32 +49,71 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     // big data may come as blob[0]
     let blob0 = ctx.blob_map.lock().unwrap().get(&0).cloned();
     let data = |name: &str| -> Vec<u8> {
-        if let Some(b) = &blob0 { b.clone() } else { kw_bytes(kw, name) }
+        if let Some(b) = &blob0 {
+            b.clone()
+        } else {
+            kw_bytes(kw, name)
+        }
     };
 
     match method {
-        "drawing.set_light_pic" | "set_light_pic" =>
-            send(dev, 0x44, &data("pic_data"), "set_light_pic").await,
-        "drawing.drawing_pad_exit" | "drawing_pad_exit" =>
-            send(dev, 0x5a, &[], "drawing_pad_exit").await,
-        "drawing.drawing_mul_encode_gif_play" | "drawing_mul_encode_gif_play" =>
-            send(dev, 0x6b, &[], "drawing_mul_encode_gif_play").await,
-        "drawing.drawing_ctrl_movie_play" | "drawing_ctrl_movie_play" =>
-            send(dev, 0x6e, &[i("control_command", 0) as u8], "drawing_ctrl_movie_play").await,
-        "drawing.drawing_mul_pad_enter" | "drawing_mul_pad_enter" =>
-            send(dev, 0x6f, &[i("r", 0) as u8, i("g", 0) as u8, i("b", 0) as u8], "drawing_mul_pad_enter").await,
+        "drawing.set_light_pic" | "set_light_pic" => {
+            send(dev, 0x44, &data("pic_data"), "set_light_pic").await
+        }
+        "drawing.drawing_pad_exit" | "drawing_pad_exit" => {
+            send(dev, 0x5a, &[], "drawing_pad_exit").await
+        }
+        "drawing.drawing_mul_encode_gif_play" | "drawing_mul_encode_gif_play" => {
+            send(dev, 0x6b, &[], "drawing_mul_encode_gif_play").await
+        }
+        "drawing.drawing_ctrl_movie_play" | "drawing_ctrl_movie_play" => {
+            send(
+                dev,
+                0x6e,
+                &[i("control_command", 0) as u8],
+                "drawing_ctrl_movie_play",
+            )
+            .await
+        }
+        "drawing.drawing_mul_pad_enter" | "drawing_mul_pad_enter" => {
+            send(
+                dev,
+                0x6f,
+                &[i("r", 0) as u8, i("g", 0) as u8, i("b", 0) as u8],
+                "drawing_mul_pad_enter",
+            )
+            .await
+        }
         "drawing.drawing_pad_ctrl" | "drawing_pad_ctrl" => {
-            let mut p = vec![i("r", 0) as u8, i("g", 0) as u8, i("b", 0) as u8, i("num_points", 0) as u8];
+            let mut p = vec![
+                i("r", 0) as u8,
+                i("g", 0) as u8,
+                i("b", 0) as u8,
+                i("num_points", 0) as u8,
+            ];
             p.extend_from_slice(&kw_bytes(kw, "offset_list"));
             send(dev, 0x58, &p, "drawing_pad_ctrl").await
         }
         "drawing.drawing_mul_pad_ctrl" | "drawing_mul_pad_ctrl" => {
-            let mut p = vec![i("screen_id", 0) as u8, i("r", 0) as u8, i("g", 0) as u8, i("b", 0) as u8, i("num_points", 0) as u8];
+            let mut p = vec![
+                i("screen_id", 0) as u8,
+                i("r", 0) as u8,
+                i("g", 0) as u8,
+                i("b", 0) as u8,
+                i("num_points", 0) as u8,
+            ];
             p.extend_from_slice(&kw_bytes(kw, "offset_list"));
             send(dev, 0x3a, &p, "drawing_mul_pad_ctrl").await
         }
         "drawing.drawing_big_pad_ctrl" | "drawing_big_pad_ctrl" => {
-            let mut p = vec![i("canvas_width", 0) as u8, i("screen_id", 0) as u8, i("r", 0) as u8, i("g", 0) as u8, i("b", 0) as u8, i("num_points", 0) as u8];
+            let mut p = vec![
+                i("canvas_width", 0) as u8,
+                i("screen_id", 0) as u8,
+                i("r", 0) as u8,
+                i("g", 0) as u8,
+                i("b", 0) as u8,
+                i("num_points", 0) as u8,
+            ];
             p.extend_from_slice(&kw_bytes(kw, "offset_list"));
             send(dev, 0x3b, &p, "drawing_big_pad_ctrl").await
         }

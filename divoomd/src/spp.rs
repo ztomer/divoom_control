@@ -1,11 +1,11 @@
 //! SPP transport — connects to classic Divoom Bluetooth devices (e.g. Tivoo-Max, older Ditoo)
 //! via the `spp_bridge.py` python/IOBluetooth co-process.
 
-use std::time::Duration;
-use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use serde_json::{json, Value};
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+use tokio::sync::{mpsc, Mutex};
 
 use crate::autoprobe::Protocol;
 use crate::response::{self, Frame};
@@ -24,31 +24,42 @@ impl SppTransport {
         kind: Option<&str>,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let python = std::env::var("DIVOOM_PYTHON").unwrap_or_else(|_| "python3".to_string());
-        
+
         // Find path to spp_bridge.py relative to the binary
         // (binary at divoomd/target/<profile>/divoomd → 4 parents = repo root)
         let exe = std::env::current_exe()?;
-        let root = exe.parent().ok_or("no parent")?
-            .parent().ok_or("no parent")?
-            .parent().ok_or("no parent")?
-            .parent().ok_or("no parent")?;
+        let root = exe
+            .parent()
+            .ok_or("no parent")?
+            .parent()
+            .ok_or("no parent")?
+            .parent()
+            .ok_or("no parent")?
+            .parent()
+            .ok_or("no parent")?;
         let bridge_path = root.join("divoom_daemon").join("spp_bridge.py");
 
         let mut cmd = tokio::process::Command::new(python);
-        cmd.args(&[bridge_path.to_str().unwrap(), "--mac", mac]);
+        cmd.args([bridge_path.to_str().unwrap(), "--mac", mac]);
         if let Some(n) = device_name {
-            cmd.args(&["--name", n]);
+            cmd.args(["--name", n]);
         }
         if let Some(k) = kind {
-            cmd.args(&["--kind", k]);
+            cmd.args(["--kind", k]);
         }
         cmd.stdin(std::process::Stdio::piped());
         cmd.stdout(std::process::Stdio::piped());
         cmd.stderr(std::process::Stdio::inherit());
 
         let mut child = cmd.spawn()?;
-        let stdin = child.stdin.take().ok_or("failed to open stdin of spp_bridge")?;
-        let stdout = child.stdout.take().ok_or("failed to open stdout of spp_bridge")?;
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or("failed to open stdin of spp_bridge")?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or("failed to open stdout of spp_bridge")?;
 
         let (tx, rx) = mpsc::channel::<Frame>(256);
         let connected_notify = Arc::new(tokio::sync::Notify::new());
@@ -64,16 +75,26 @@ impl SppTransport {
                     if ty == "connected" {
                         conn_clone.notify_one();
                     } else if ty == "disconnected" {
-                        let err = val.get("error").and_then(|v| v.as_str()).unwrap_or("disconnected");
+                        let err = val
+                            .get("error")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("disconnected");
                         *conn_err_clone.lock().await = Some(err.to_string());
                         conn_clone.notify_one();
                         break;
                     } else if ty == "notification" {
-                        let cmd_id = val.get("command_id").and_then(|v| v.as_u64()).unwrap_or(0) as u8;
-                        let payload: Vec<u8> = val.get("payload")
+                        let cmd_id =
+                            val.get("command_id").and_then(|v| v.as_u64()).unwrap_or(0) as u8;
+                        let payload: Vec<u8> = val
+                            .get("payload")
                             .and_then(|v| serde_json::from_value(v.clone()).ok())
                             .unwrap_or_default();
-                        let _ = tx.send(Frame { command_id: cmd_id, payload }).await;
+                        let _ = tx
+                            .send(Frame {
+                                command_id: cmd_id,
+                                payload,
+                            })
+                            .await;
                     }
                 }
             }
@@ -100,7 +121,7 @@ impl SppTransport {
             device_name: std::sync::Mutex::new(device_name.map(|s| s.to_string())),
             protocol: std::sync::Mutex::new(Protocol::Basic),
         };
-        
+
         Ok(transport)
     }
 
@@ -115,16 +136,21 @@ impl SppTransport {
     pub async fn disconnect(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let msg = json!({"command": "disconnect"});
         let mut stdin = self.child_stdin.lock().await;
-        let _ = stdin.write_all(format!("{}\n", msg.to_string()).as_bytes()).await;
+        let _ = stdin.write_all(format!("{}\n", msg).as_bytes()).await;
         let _ = stdin.flush().await;
         Ok(())
     }
 
-    pub async fn send_command(&self, command_id: u8, args: &[u8], _write_with_response: bool) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn send_command(
+        &self,
+        command_id: u8,
+        args: &[u8],
+        _write_with_response: bool,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut payload = Vec::with_capacity(1 + args.len());
         payload.push(command_id);
         payload.extend_from_slice(args);
-        
+
         let framing_str = match *self.protocol.lock().unwrap() {
             Protocol::Basic => "basic",
             Protocol::IosLe => "ios_le",
@@ -138,7 +164,7 @@ impl SppTransport {
         });
 
         let mut stdin = self.child_stdin.lock().await;
-        stdin.write_all(format!("{}\n", msg.to_string()).as_bytes()).await?;
+        stdin.write_all(format!("{}\n", msg).as_bytes()).await?;
         stdin.flush().await?;
         Ok(())
     }
@@ -156,7 +182,9 @@ impl SppTransport {
         let deadline = tokio::time::Instant::now() + timeout;
         loop {
             let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
-            if remaining.is_zero() { return None; }
+            if remaining.is_zero() {
+                return None;
+            }
             let frame = {
                 let mut rx = self.rx.lock().await;
                 match tokio::time::timeout(remaining, rx.recv()).await {
@@ -170,15 +198,25 @@ impl SppTransport {
         }
     }
 
-    pub async fn send_command_and_wait(&self, command_id: u8, args: &[u8], timeout: Duration) -> Option<Vec<u8>> {
-        let _ = self.wait_for_response(command_id, Duration::from_millis(1)).await; // drain
+    pub async fn send_command_and_wait(
+        &self,
+        command_id: u8,
+        args: &[u8],
+        timeout: Duration,
+    ) -> Option<Vec<u8>> {
+        let _ = self
+            .wait_for_response(command_id, Duration::from_millis(1))
+            .await; // drain
         if self.send_command(command_id, args, true).await.is_err() {
             return None;
         }
         self.wait_for_response(command_id, timeout).await
     }
 
-    pub async fn stream_animation_8b(&self, blob: &[u8]) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn stream_animation_8b(
+        &self,
+        blob: &[u8],
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         const CMD: u8 = 0x8B;
         const CHUNK_SIZE: usize = 256;
 

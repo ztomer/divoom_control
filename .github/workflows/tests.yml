@@ -73,6 +73,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: No #[allow] in tracked Rust source (house gate)
+        working-directory: ./
+        run: python3 tools/check_no_allow.py
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+      - name: cargo clippy (all targets, all features, deny warnings)
+        run: cargo clippy --all-targets --all-features -- -D warnings
       - name: Build core without BLE
         run: cargo build --no-default-features --locked
       - name: Test core without BLE

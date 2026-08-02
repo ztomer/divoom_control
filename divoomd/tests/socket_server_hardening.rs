@@ -70,7 +70,10 @@ async fn idle_timeout_drops_silent_peer() {
         .await
         .expect("idle timeout should close the peer within 2s")
         .expect("read should succeed (EOF)");
-    assert_eq!(n, 0, "silent peer must be dropped (EOF) by the idle timeout");
+    assert_eq!(
+        n, 0,
+        "silent peer must be dropped (EOF) by the idle timeout"
+    );
     let _ = std::fs::remove_file(&path);
 }
 
@@ -138,6 +141,9 @@ async fn subscribe_idle_drops_silent_subscriber() {
         .await
         .expect("idle timeout should close the subscriber within 2s")
         .expect("read should succeed (EOF)");
-    assert_eq!(n, 0, "silent subscriber must be dropped (EOF) by idle timeout");
+    assert_eq!(
+        n, 0,
+        "silent subscriber must be dropped (EOF) by idle timeout"
+    );
     let _ = std::fs::remove_file(&path);
 }

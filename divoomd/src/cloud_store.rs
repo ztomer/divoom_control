@@ -77,7 +77,10 @@ pub(crate) fn save_cache(creds: &DivoomCredentials) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
     let val = json!({
         "token": creds.token,
         "user_id": creds.user_id,
@@ -105,14 +108,21 @@ pub(crate) fn load_cache() -> Option<DivoomCredentials> {
     let content = std::fs::read_to_string(path).ok()?;
     let val: Value = serde_json::from_str(&content).ok()?;
     let saved_at = val.get("saved_at")?.as_u64()?;
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
     if now > saved_at && now - saved_at > 23 * 3600 {
         return None;
     }
     let creds = DivoomCredentials {
         token: val.get("token")?.as_i64()?,
         user_id: val.get("user_id")?.as_i64()?,
-        email: val.get("email").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        email: val
+            .get("email")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
         utc: val.get("utc").and_then(|v| v.as_i64()).unwrap_or(0),
     };
     if creds.is_valid() {
@@ -128,7 +138,12 @@ pub(crate) fn virtual_device_file_path() -> Option<PathBuf> {
 
 /// Persist a freshly `BlueDevice/NewDevice`-registered device identity —
 /// see `cloud::ensure_virtual_device`.
-pub(crate) fn save_virtual_device(device_id: i64, device_pw: i64, type_: i64, subtype: i64) -> Result<(), String> {
+pub(crate) fn save_virtual_device(
+    device_id: i64,
+    device_pw: i64,
+    type_: i64,
+    subtype: i64,
+) -> Result<(), String> {
     let path = virtual_device_file_path().ok_or("cannot find config directory")?;
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);

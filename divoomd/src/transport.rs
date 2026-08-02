@@ -35,17 +35,29 @@ impl DeviceTransport {
         }
     }
 
-    pub async fn send_command(&self, command_id: u8, args: &[u8], write_with_response: bool) -> BleResult<()> {
+    pub async fn send_command(
+        &self,
+        command_id: u8,
+        args: &[u8],
+        write_with_response: bool,
+    ) -> BleResult<()> {
         match self {
             #[cfg(feature = "ble")]
             DeviceTransport::Ble(b) => b.send_command(command_id, args, write_with_response).await,
-            DeviceTransport::Spp(s) => s.send_command(command_id, args, write_with_response).await.map_err(|e| e.to_string().into()),
+            DeviceTransport::Spp(s) => s
+                .send_command(command_id, args, write_with_response)
+                .await
+                .map_err(|e| e.to_string().into()),
             DeviceTransport::Lan(_) => Err("send_command not supported on LAN".into()),
             DeviceTransport::Mock(m) => m.send_command(command_id, args, write_with_response).await,
         }
     }
 
-    pub async fn wait_for_response(&self, command_id: u8, timeout: std::time::Duration) -> Option<Vec<u8>> {
+    pub async fn wait_for_response(
+        &self,
+        command_id: u8,
+        timeout: std::time::Duration,
+    ) -> Option<Vec<u8>> {
         match self {
             #[cfg(feature = "ble")]
             DeviceTransport::Ble(b) => b.wait_for_response(command_id, timeout).await,
@@ -55,7 +67,12 @@ impl DeviceTransport {
         }
     }
 
-    pub async fn send_command_and_wait(&self, command_id: u8, args: &[u8], timeout: std::time::Duration) -> Option<Vec<u8>> {
+    pub async fn send_command_and_wait(
+        &self,
+        command_id: u8,
+        args: &[u8],
+        timeout: std::time::Duration,
+    ) -> Option<Vec<u8>> {
         match self {
             #[cfg(feature = "ble")]
             DeviceTransport::Ble(b) => b.send_command_and_wait(command_id, args, timeout).await,
@@ -69,7 +86,10 @@ impl DeviceTransport {
         match self {
             #[cfg(feature = "ble")]
             DeviceTransport::Ble(b) => b.stream_animation_8b(blob).await,
-            DeviceTransport::Spp(s) => s.stream_animation_8b(blob).await.map_err(|e| e.to_string().into()),
+            DeviceTransport::Spp(s) => s
+                .stream_animation_8b(blob)
+                .await
+                .map_err(|e| e.to_string().into()),
             DeviceTransport::Lan(_) => Err("stream_animation_8b not supported on LAN".into()),
             DeviceTransport::Mock(m) => m.stream_animation_8b(blob).await,
         }

@@ -11,8 +11,8 @@
 //!   - Custom art: B1 (old) / 8C (new) header + data chunks + K0 end signal.
 //!   - Hot update:  9B manifest → device drives F7 requests → 9D info → 9E chunks.
 
-use std::sync::{Arc, Mutex};
 use serde_json::{json, Value};
+use std::sync::{Arc, Mutex};
 
 use crate::daemon::Daemon;
 
@@ -50,22 +50,35 @@ pub struct HotProgress {
 
 impl Default for HotProgress {
     fn default() -> Self {
-        Self { inner: Arc::new(Mutex::new(json!({"phase": "idle"}))) }
+        Self {
+            inner: Arc::new(Mutex::new(json!({"phase": "idle"}))),
+        }
     }
 }
 
 impl HotProgress {
     pub fn set(&self, val: Value) {
-        if let Ok(mut g) = self.inner.lock() { *g = val; }
+        if let Ok(mut g) = self.inner.lock() {
+            *g = val;
+        }
     }
     pub fn get(&self) -> Value {
-        self.inner.lock().map(|g| g.clone()).unwrap_or_else(|_| json!({}))
+        self.inner
+            .lock()
+            .map(|g| g.clone())
+            .unwrap_or_else(|_| json!({}))
     }
     /// Atomically claim the slot; returns false if an update is already running.
     pub fn try_begin(&self) -> bool {
-        let mut g = match self.inner.lock() { Ok(g) => g, Err(_) => return false };
+        let mut g = match self.inner.lock() {
+            Ok(g) => g,
+            Err(_) => return false,
+        };
         let phase = g.get("phase").and_then(|v| v.as_str()).unwrap_or("idle");
-        if matches!(phase, "starting" | "fetching_manifest" | "downloading" | "uploading") {
+        if matches!(
+            phase,
+            "starting" | "fetching_manifest" | "downloading" | "uploading"
+        ) {
             return false;
         }
         *g = json!({"phase": "starting"});
@@ -81,17 +94,23 @@ impl HotProgress {
     }
 }
 
-use crate::art_codec::{decode_hot_file, decode_magic43, decode_cloud_magic9};
+use crate::art_codec::{decode_cloud_magic9, decode_hot_file, decode_magic43};
 
 fn encode_frame(daemon: &Daemon, rgb: &[u8], w: i32, h: i32, time_ms: u16) -> Option<Vec<u8>> {
     #[cfg(feature = "ble")]
     {
         let enc = daemon.encoder()?;
-        if w == 32 && h == 32 { enc.encode_animation_frame_32(rgb, w, h, time_ms) }
-        else { enc.encode_animation_frame(rgb, w, h, time_ms) }
+        if w == 32 && h == 32 {
+            enc.encode_animation_frame_32(rgb, w, h, time_ms)
+        } else {
+            enc.encode_animation_frame(rgb, w, h, time_ms)
+        }
     }
     #[cfg(not(feature = "ble"))]
-    { let _ = (daemon, rgb, w, h, time_ms); None }
+    {
+        let _ = (daemon, rgb, w, h, time_ms);
+        None
+    }
 }
 
 // ── download + resolve cloud file to 16x16 RGB frame ─────────────────────
@@ -101,11 +120,16 @@ async fn download_and_encode_art(daemon: Arc<Daemon>, fid: String) -> Option<Vec
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(HTTP_TIMEOUT_SECS))
         .user_agent("okhttp/4.12.0")
-        .build().ok()?;
+        .build()
+        .ok()?;
     let resp = client.get(&url).send().await.ok()?;
-    if resp.status() != 200 { return None; }
+    if resp.status() != 200 {
+        return None;
+    }
     let raw = resp.bytes().await.ok()?;
-    if raw.len() < 4 { return None; }
+    if raw.len() < 4 {
+        return None;
+    }
 
     // Resolve to 768-byte RGB in a blocking thread (image decoding is CPU-bound).
     let raw_vec = raw.to_vec();
@@ -113,12 +137,17 @@ async fn download_and_encode_art(daemon: Arc<Daemon>, fid: String) -> Option<Vec
     tokio::task::spawn_blocking(move || {
         let rgb = resolve_to_rgb16x16(&raw_vec)?;
         encode_frame(&daemon_arc, &rgb, 16, 16, 500)
-    }).await.ok().flatten()
+    })
+    .await
+    .ok()
+    .flatten()
 }
 
 /// Turn any cloud CDN payload into a 768-byte 16x16 RGB buffer.
 pub(crate) fn resolve_to_rgb16x16(data: &[u8]) -> Option<Vec<u8>> {
-    if data.len() < 4 { return None; }
+    if data.len() < 4 {
+        return None;
+    }
     // Already GIF/PNG/JPG — open with image crate, resize to 16x16
     let is_gif = data.starts_with(b"GIF");
     let is_png = data.starts_with(b"\x89PNG");
@@ -152,11 +181,11 @@ pub(crate) fn decode_image_to_rgb(data: &[u8], w: u32, h: u32) -> Option<Vec<u8>
     Some(resized.to_rgb8().into_raw())
 }
 
-
-
 // ── custom art protocol helpers (APK LightMakeNewModel.java) ─────────────
 
-fn le16(v: usize) -> [u8; 2] { [(v & 0xFF) as u8, ((v >> 8) & 0xFF) as u8] }
+fn le16(v: usize) -> [u8; 2] {
+    [(v & 0xFF) as u8, ((v >> 8) & 0xFF) as u8]
+}
 
 /// Command ids from commands.rs
 const CMD_OLD: u8 = 0xB1; // set user gif
@@ -174,7 +203,9 @@ async fn push_custom_art_page(
 
     // N2 header (old mode: 0xB1 [0x00, 0x00, page])
     let header = vec![0x00u8, 0x00, page];
-    if dev.send_command(CMD_OLD, &header, true).await.is_err() { return false; }
+    if dev.send_command(CMD_OLD, &header, true).await.is_err() {
+        return false;
+    }
 
     // Data chunks
     let mut offset = 0usize;
@@ -184,7 +215,9 @@ async fn push_custom_art_page(
         let mut pkt = vec![0x01u8];
         pkt.extend_from_slice(&le16(chunk_size));
         pkt.extend_from_slice(chunk);
-        if dev.send_command(CMD_OLD, &pkt, true).await.is_err() { return false; }
+        if dev.send_command(CMD_OLD, &pkt, true).await.is_err() {
+            return false;
+        }
         sleep(Duration::from_millis(INTER_CHUNK_MS)).await;
         offset += CHUNK_SIZE;
     }
@@ -230,7 +263,9 @@ pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
         let encoded = download_and_encode_art(daemon.clone(), fid.clone()).await;
         match encoded {
             Some(e) => frames[*idx] = e,
-            None => return json!({"success": false, "error": format!("could not fetch/decode {fid}")}),
+            None => {
+                return json!({"success": false, "error": format!("could not fetch/decode {fid}")})
+            }
         }
     }
 
@@ -243,8 +278,11 @@ pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
             None => return json!({"success": false, "error": "no device connected"}),
         };
         drop(guard);
-        if matches!(&*dev, crate::daemon::DeviceTransport::Ble(_) | crate::daemon::DeviceTransport::Spp(_)) {
-            let ok = push_custom_art_page(&*dev, page, &frames).await;
+        if matches!(
+            &*dev,
+            crate::daemon::DeviceTransport::Ble(_) | crate::daemon::DeviceTransport::Spp(_)
+        ) {
+            let ok = push_custom_art_page(&dev, page, &frames).await;
             return json!({
                 "success": ok,
                 "files_pushed": slot_map.len(),
@@ -266,9 +304,13 @@ pub async fn cmd_custom_art_query_page(daemon: Arc<Daemon>, args: &Value) -> Val
             None => return json!({"success": false, "error": "no device connected"}),
         };
         drop(guard);
-        if matches!(&*dev, crate::daemon::DeviceTransport::Ble(_) | crate::daemon::DeviceTransport::Spp(_)) {
-            let resp = dev.send_command_and_wait(
-                CMD_QUERY, &[page], std::time::Duration::from_secs(4)).await;
+        if matches!(
+            &*dev,
+            crate::daemon::DeviceTransport::Ble(_) | crate::daemon::DeviceTransport::Spp(_)
+        ) {
+            let resp = dev
+                .send_command_and_wait(CMD_QUERY, &[page], std::time::Duration::from_secs(4))
+                .await;
             match resp {
                 Some(data) if data.len() >= 8 => {
                     let rtype = data[0];
@@ -280,8 +322,11 @@ pub async fn cmd_custom_art_query_page(daemon: Arc<Daemon>, args: &Value) -> Val
                         let mut ids = Vec::new();
                         let mut pos = 8;
                         for _ in 0..item_count {
-                            if pos + 4 > data.len() { break; }
-                            let fid = u32::from_le_bytes(data[pos..pos+4].try_into().unwrap_or([0;4]));
+                            if pos + 4 > data.len() {
+                                break;
+                            }
+                            let fid =
+                                u32::from_le_bytes(data[pos..pos + 4].try_into().unwrap_or([0; 4]));
                             ids.push(fid);
                             pos += 4;
                         }
@@ -289,7 +334,9 @@ pub async fn cmd_custom_art_query_page(daemon: Arc<Daemon>, args: &Value) -> Val
                     }
                     return json!({"success": false, "error": "unexpected response type"});
                 }
-                _ => return json!({"success": false, "ids": [], "error": "no response (device timed out)"}),
+                _ => {
+                    return json!({"success": false, "ids": [], "error": "no response (device timed out)"})
+                }
             }
         }
     }
@@ -302,11 +349,18 @@ pub async fn cmd_hot_update(
     args: &Value,
     progress: Arc<HotProgress>,
 ) -> Value {
-    let device_size = args.get("device_size").and_then(|v| v.as_u64()).unwrap_or(16) as u32;
+    let device_size = args
+        .get("device_size")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(16) as u32;
     let show_after = args.get("show").and_then(|v| v.as_bool()).unwrap_or(true);
     // R53: the GUI passes the device address it displays; we stamp the outcome
     // under it so "Last checked <when>" is dated and daemon-owned.
-    let address = args.get("address").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let address = args
+        .get("address")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
 
     if !progress.try_begin() {
         return json!({"success": false, "error": "hot update already in progress"});
@@ -315,7 +369,13 @@ pub async fn cmd_hot_update(
     let daemon_arc = daemon.clone();
     let progress_arc = progress.clone();
     tokio::spawn(async move {
-        let result = crate::art_hot::run_hot_update(daemon_arc.clone(), device_size, show_after, progress_arc.clone()).await;
+        let result = crate::art_hot::run_hot_update(
+            daemon_arc.clone(),
+            device_size,
+            show_after,
+            progress_arc.clone(),
+        )
+        .await;
         match result {
             Ok(summary) => {
                 // Stamp the per-device last-checked state before publishing done.

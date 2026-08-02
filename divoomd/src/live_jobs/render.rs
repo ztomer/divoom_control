@@ -9,7 +9,8 @@ const GLYPH_BYTES: usize = 32;
 const CELL: usize = 16;
 const FALLBACK_CP: u32 = 0x3F; // '?'
 
-const FONT_BYTES: &[u8] = include_bytes!("../../../divoom_lib/fonts/divoom_fond16_default_half.bin");
+const FONT_BYTES: &[u8] =
+    include_bytes!("../../../divoom_lib/fonts/divoom_fond16_default_half.bin");
 
 struct BitmapFont {
     blob: &'static [u8],
@@ -18,11 +19,14 @@ struct BitmapFont {
 
 impl BitmapFont {
     fn new(blob: &'static [u8]) -> Self {
-        Self { blob, space_width: 3 }
+        Self {
+            blob,
+            space_width: 3,
+        }
     }
 
     fn find_glyph_offset(&self, cp: u32) -> Option<usize> {
-        if cp >= FIRST_CP && cp <= LAST_CP {
+        if (FIRST_CP..=LAST_CP).contains(&cp) {
             Some(((cp - FIRST_CP) as usize) * GLYPH_BYTES)
         } else {
             None
@@ -84,6 +88,7 @@ impl BitmapFont {
         }
     }
 
+    #[expect(clippy::too_many_arguments)]
     fn draw_text(
         &self,
         buf: &mut [u8],
@@ -122,8 +127,7 @@ impl BitmapFont {
                 }
             }
             x += advance;
-            for r in 0..CELL {
-                let v = rows[r];
+            for (r, &v) in rows.iter().take(CELL).enumerate() {
                 if v == 0 {
                     continue;
                 }
@@ -163,22 +167,23 @@ pub(super) fn render_sysmon(cpu: u8, mem: u8, battery: u8, size: u32) -> Vec<u8>
     let mem_color = (90, 170, 255);
     let bat_color = (255, 60, 60);
 
-    let draw_gauge = |buf: &mut [u8], x: i32, y: i32, w_max: i32, h: i32, val: u8, color: (u8, u8, u8)| {
-        let frac = val as f32 / 100.0;
-        let w_fill = ((w_max as f32 * frac).round() as i32).clamp(1, w_max);
-        for yy in y..y + h {
-            if yy >= 0 && yy < size as i32 {
-                for xx in x..x + w_fill {
-                    if xx >= 0 && xx < size as i32 {
-                        let idx = ((yy * size as i32 + xx) * 3) as usize;
-                        buf[idx] = color.0;
-                        buf[idx + 1] = color.1;
-                        buf[idx + 2] = color.2;
+    let draw_gauge =
+        |buf: &mut [u8], x: i32, y: i32, w_max: i32, h: i32, val: u8, color: (u8, u8, u8)| {
+            let frac = val as f32 / 100.0;
+            let w_fill = ((w_max as f32 * frac).round() as i32).clamp(1, w_max);
+            for yy in y..y + h {
+                if yy >= 0 && yy < size as i32 {
+                    for xx in x..x + w_fill {
+                        if xx >= 0 && xx < size as i32 {
+                            let idx = ((yy * size as i32 + xx) * 3) as usize;
+                            buf[idx] = color.0;
+                            buf[idx + 1] = color.1;
+                            buf[idx + 2] = color.2;
+                        }
                     }
                 }
             }
-        }
-    };
+        };
 
     if size <= 16 {
         draw_gauge(&mut buf, 1, 1, 14, 3, cpu, cpu_color);
@@ -228,9 +233,25 @@ fn draw_triangle(buf: &mut [u8], size: i32, is_up: bool, color: (u8, u8, u8)) {
 
 fn draw_triangle_32(buf: &mut [u8], size: i32, is_up: bool, color: (u8, u8, u8)) {
     let y_range = if is_up {
-        vec![(4, 25, 25), (5, 24, 26), (6, 23, 27), (7, 22, 28), (8, 21, 29), (9, 21, 29), (10, 21, 29)]
+        vec![
+            (4, 25, 25),
+            (5, 24, 26),
+            (6, 23, 27),
+            (7, 22, 28),
+            (8, 21, 29),
+            (9, 21, 29),
+            (10, 21, 29),
+        ]
     } else {
-        vec![(10, 25, 25), (9, 24, 26), (8, 23, 27), (7, 22, 28), (6, 21, 29), (5, 21, 29), (4, 21, 29)]
+        vec![
+            (10, 25, 25),
+            (9, 24, 26),
+            (8, 23, 27),
+            (7, 22, 28),
+            (6, 21, 29),
+            (5, 21, 29),
+            (4, 21, 29),
+        ]
     };
     for (y, x0, x1) in y_range {
         for x in x0..=x1 {
@@ -256,11 +277,38 @@ pub(super) fn render_stock(symbol: &str, price: f64, change: f64, size: u32) -> 
 
     if size == 16 {
         draw_triangle(&mut buf, size as i32, is_up, text_color);
-        font.draw_text(&mut buf, size as i32, 0, 6, &symbol.to_uppercase(), (255, 255, 255), 1, Some(size as i32));
+        font.draw_text(
+            &mut buf,
+            size as i32,
+            0,
+            6,
+            &symbol.to_uppercase(),
+            (255, 255, 255),
+            1,
+            Some(size as i32),
+        );
     } else {
-        font.draw_text(&mut buf, size as i32, 2, 2, &symbol.to_uppercase(), (255, 255, 255), 1, Some(size as i32 - 2));
+        font.draw_text(
+            &mut buf,
+            size as i32,
+            2,
+            2,
+            &symbol.to_uppercase(),
+            (255, 255, 255),
+            1,
+            Some(size as i32 - 2),
+        );
         draw_triangle_32(&mut buf, size as i32, is_up, text_color);
-        font.draw_text(&mut buf, size as i32, 2, 16, &format!("${:.2}", price), text_color, 1, Some(size as i32 - 2));
+        font.draw_text(
+            &mut buf,
+            size as i32,
+            2,
+            16,
+            &format!("${:.2}", price),
+            text_color,
+            1,
+            Some(size as i32 - 2),
+        );
     }
 
     buf
@@ -270,7 +318,7 @@ pub(super) fn render_stock(symbol: &str, price: f64, change: f64, size: u32) -> 
 
 pub(super) fn get_battery_percent() -> Option<u8> {
     let output = std::process::Command::new("pmset")
-        .args(&["-g", "batt"])
+        .args(["-g", "batt"])
         .output()
         .ok()?;
     let text = String::from_utf8_lossy(&output.stdout);

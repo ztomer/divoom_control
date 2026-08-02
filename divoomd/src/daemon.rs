@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
 
-use std::sync::{Arc, Weak, OnceLock};
+use std::sync::{Arc, OnceLock, Weak};
 
 use crate::command_queue::CommandQueue;
 
@@ -24,6 +24,8 @@ use crate::socket_server::Handler;
 #[cfg(feature = "ble")]
 use crate::central::BleCentral;
 use tokio::sync::Mutex;
+
+mod dispatch;
 
 const EXCLUSIVE_TIMEOUT: Duration = Duration::from_secs(30);
 const ITEM_TIMEOUT: Duration = Duration::from_secs(60);
@@ -111,9 +113,11 @@ impl Daemon {
 
     /// Get (or lazy-init) the cached NativeEncoder. Returns None if the dylib is absent.
     pub(crate) fn encoder(&self) -> Option<&NativeEncoder> {
-        self.encoder.get_or_init(|| {
-            crate::native_encode::find_encoder_lib().and_then(|p| NativeEncoder::load(p).ok())
-        }).as_ref()
+        self.encoder
+            .get_or_init(|| {
+                crate::native_encode::find_encoder_lib().and_then(|p| NativeEncoder::load(p).ok())
+            })
+            .as_ref()
     }
 
     pub fn initialize_self_weak(&self, weak: Weak<Daemon>) {
@@ -121,259 +125,7 @@ impl Daemon {
     }
 
     pub(crate) async fn dispatch(&self, req: Request) -> Value {
-        match req.command.as_str() {
-            "ping" => json!({"success": true, "pong": true}),
-
-            "get_status" => {
-                #[cfg(target_os = "macos")]
-                let status = crate::macos_notifications::status_event().await;
-                #[cfg(not(target_os = "macos"))]
-                let status = json!({
-                    "state": "idle",
-                    "counters": {"seen": 0, "routed": 0, "dropped": 0}
-                });
-
-                let mut res = json!({
-                    "success": true,
-                    "uptime_s": self.started.elapsed().as_secs(),
-                });
-                if let Some(obj) = res.as_object_mut() {
-                    if let Some(st_obj) = status.as_object() {
-                        for (k, v) in st_obj {
-                            obj.insert(k.clone(), v.clone());
-                        }
-                    }
-                }
-                res
-            },
-
-            "device_status" => self.device_status().await,
-
-            // exclusive mode is fully real (uses the ported queue's acquire_now /
-            // release). The token lives in args (the request-level token is auth).
-            "exclusive_start" => match req.args.get("token").and_then(|v| v.as_str()) {
-                Some(t) => match self.queue.acquire_now(t) {
-                    Ok(()) => json!({"success": true, "token": t}),
-                    Err(e) => err_reply(&e.to_string()),
-                },
-                None => err_reply("exclusive_start requires 'token'"),
-            },
-            "exclusive_end" => match req.args.get("token").and_then(|v| v.as_str()) {
-                Some(t) => {
-                    self.queue.release(t);
-                    json!({"success": true})
-                }
-                None => err_reply("exclusive_end requires 'token'"),
-            },
-
-            // Graceful stop (Python-daemon parity): signal the main loop, which
-            // unlinks the socket and exits after letting this reply flush.
-            "shutdown" => {
-                self.shutdown.notify_one();
-                json!({"success": true, "shutting_down": true})
-            }
-
-            "probe_lan" => crate::daemon_connect::probe_lan(self).await,
-
-            "sync_artwork" => crate::sync_artwork::sync_artwork(self, &req.args).await,
-
-            "get_animated_preview" => crate::sync_artwork::get_animated_preview(&req.args).await,
-
-            #[cfg(feature = "ble")]
-            "scan" => self.cmd_scan(&req).await,
-            "connect" => self.cmd_connect(&req).await,
-            "disconnect" => self.cmd_disconnect().await,
-            "mock_simulate_drop" => crate::daemon_mock::cmd_mock_simulate_drop(self, &req).await,
-            "device_call" => self.cmd_device_call(&req).await,
-
-            "live_job_start" => {
-                let self_weak = match self.self_weak.get() {
-                    Some(w) => w.clone(),
-                    None => return err_reply("Daemon self_weak not initialized"),
-                };
-                let mac = match req.args.get("mac").and_then(|v| v.as_str()) {
-                    Some(m) => m.to_string(),
-                    None => return err_reply("live_job_start requires 'mac'"),
-                };
-                let kind = match req.args.get("kind").and_then(|v| v.as_str()) {
-                    Some(k) => k.to_string(),
-                    None => return err_reply("live_job_start requires 'kind'"),
-                };
-                let params = req.args.get("params").cloned().unwrap_or(json!({}));
-                match self_weak.upgrade() {
-                    Some(d) => match self.live_jobs.start(d, mac, kind, params).await {
-                        Ok(()) => json!({"success": true}),
-                        Err(e) => err_reply(&e),
-                    },
-                    None => err_reply("Daemon was dropped"),
-                }
-            }
-
-            "live_job_stop" => {
-                let mac = match req.args.get("mac").and_then(|v| v.as_str()) {
-                    Some(m) => m,
-                    None => return err_reply("live_job_stop requires 'mac'"),
-                };
-                let kind = match req.args.get("kind").and_then(|v| v.as_str()) {
-                    Some(k) => k,
-                    None => return err_reply("live_job_stop requires 'kind'"),
-                };
-                let stopped = self.live_jobs.stop(self, mac, kind).await;
-                json!({"success": true, "stopped": stopped})
-            }
-
-            "live_job_list" => {
-                let mac = req.args.get("mac").and_then(|v| v.as_str());
-                let list = self.live_jobs.list(mac).await;
-                json!({"success": true, "jobs": list})
-            }
-
-            "live_jobs_stop_for" => {
-                let mac_str = req.args.get("mac").and_then(|v| v.as_str());
-                let mac_owner = {
-                    let guard = self.device_id.try_lock().ok();
-                    guard.and_then(|g| g.clone())
-                };
-                let mac = match mac_str.or(mac_owner.as_deref()) {
-                    Some(m) => m,
-                    None => return err_reply("live_jobs_stop_for requires 'mac' or connected device"),
-                };
-                let count = self.live_jobs.stop_all_for_device(self, mac).await;
-                json!({"success": true, "count": count})
-            }
-
-            "set_device_activity" => {
-                let mac = match req.args.get("mac").and_then(|v| v.as_str()) {
-                    Some(m) => m.to_string(),
-                    None => return err_reply("set_device_activity requires 'mac'"),
-                };
-                let kind = match req.args.get("kind").and_then(|v| v.as_str()) {
-                    Some(k) => k.to_string(),
-                    None => return err_reply("set_device_activity requires 'kind'"),
-                };
-                let name = req.args.get("name").and_then(|v| v.as_str()).map(|s| s.to_string());
-                let preview = req.args.get("preview").and_then(|v| v.as_str()).map(|s| s.to_string());
-                self.live_jobs.set_device_activity(mac, kind, name, preview).await;
-                json!({"success": true})
-            }
-
-            "get_device_activity" => {
-                self.live_jobs.get_device_activity().await
-            }
-
-            // --- art / hot-channel commands ---
-            "custom_art_push" => {
-                let self_weak = match self.self_weak.get() {
-                    Some(w) => w.clone(),
-                    None => return err_reply("Daemon self_weak not initialized"),
-                };
-                let daemon_arc = match self_weak.upgrade() {
-                    Some(d) => d,
-                    None => return err_reply("Daemon was dropped"),
-                };
-                crate::art::cmd_custom_art_push(daemon_arc, &req.args).await
-            }
-
-            "custom_art_query_page" => {
-                let self_weak = match self.self_weak.get() {
-                    Some(w) => w.clone(),
-                    None => return err_reply("Daemon self_weak not initialized"),
-                };
-                let daemon_arc = match self_weak.upgrade() {
-                    Some(d) => d,
-                    None => return err_reply("Daemon was dropped"),
-                };
-                crate::art::cmd_custom_art_query_page(daemon_arc, &req.args).await
-            }
-
-            "hot_update" => {
-                let self_weak = match self.self_weak.get() {
-                    Some(w) => w.clone(),
-                    None => return err_reply("Daemon self_weak not initialized"),
-                };
-                let daemon_arc = match self_weak.upgrade() {
-                    Some(d) => d,
-                    None => return err_reply("Daemon was dropped"),
-                };
-                let progress = self.hot_progress.clone();
-                crate::art::cmd_hot_update(daemon_arc, &req.args, progress).await
-            }
-
-            "hot_update_progress" => {
-                crate::art::cmd_hot_update_progress(&self.hot_progress)
-            }
-
-            // --- wall command ---
-            "wall_configure" => self.cmd_wall_configure(&req).await,
-
-            // --- notification service stubs (macOS only, but wired for parity) ---
-            "start_notifications" => {
-                #[cfg(target_os = "macos")]
-                {
-                    if let Some(w) = self.self_weak.get().and_then(|w| w.upgrade()) {
-                        crate::macos_notifications::start_monitor(w).await;
-                        let mut status = crate::macos_notifications::status_event().await;
-                        status["success"] = json!(true);
-                        return status;
-                    }
-                }
-                json!({
-                    "success": false,
-                    "error": "notifications not available on this platform",
-                    "state": "idle",
-                    "counters": {"seen": 0, "routed": 0, "dropped": 0},
-                    "unsupported": true
-                })
-            }
-
-            "stop_notifications" => {
-                #[cfg(target_os = "macos")]
-                {
-                    crate::macos_notifications::stop_monitor().await;
-                    let mut status = crate::macos_notifications::status_event().await;
-                    status["success"] = json!(true);
-                    return status;
-                }
-                #[cfg(not(target_os = "macos"))]
-                json!({
-                    "success": true,
-                    "state": "idle",
-                    "counters": {"seen": 0, "routed": 0, "dropped": 0}
-                })
-            }
-
-            "notification_status" => {
-                #[cfg(target_os = "macos")]
-                { return crate::macos_notifications::notification_status().await; }
-                #[cfg(not(target_os = "macos"))]
-                json!({
-                    "success": true,
-                    "state": "idle",
-                    "counters": {"seen": 0, "routed": 0, "dropped": 0}
-                })
-            }
-
-            "set_routing" => {
-                #[cfg(target_os = "macos")]
-                { return crate::macos_notifications::set_routing(&req.args).await; }
-                #[cfg(not(target_os = "macos"))]
-                json!({"success": true})
-            }
-
-            "fetch_gallery" | "save_credentials" | "get_credentials"
-            | "get_cached_credentials" | "get_category_file_list"
-            | "get_dial_types" | "get_dial_list"
-            | "list_clock_faces" | "search_weather_city"
-            | "get_aid_sleep_list" | "get_my_aid_sleep_list"
-            | "get_my_playlists" | "get_playlist_images"
-            | "get_photo_albums" => {
-                crate::cloud_cmds::handle(&req.command, &req).await
-            }
-
-            other => err_reply(&format!(
-                "command not implemented in the native daemon yet: {other}"
-            )),
-        }
+        dispatch::dispatch(self, req).await
     }
 
     #[cfg(feature = "ble")]
@@ -435,8 +187,11 @@ impl Daemon {
                     let id = self.device_id.lock().await.clone();
                     let degraded = reply.get("success").and_then(|v| v.as_bool()) != Some(true);
                     let st = if degraded { "degraded" } else { "active" };
-                    let _ = self.tx.send(
-                        crate::daemon_connect::status_payload(true, id.as_deref(), Some(st)));
+                    let _ = self.tx.send(crate::daemon_connect::status_payload(
+                        true,
+                        id.as_deref(),
+                        Some(st),
+                    ));
                 }
                 reply
             }
@@ -444,8 +199,11 @@ impl Daemon {
                 let msg = format!("device op timed out after {req_timeout:.0}s");
                 if guard.is_some() {
                     let id = self.device_id.lock().await.clone();
-                    let _ = self.tx.send(
-                        crate::daemon_connect::status_payload(true, id.as_deref(), Some("degraded")));
+                    let _ = self.tx.send(crate::daemon_connect::status_payload(
+                        true,
+                        id.as_deref(),
+                        Some("degraded"),
+                    ));
                 }
                 err_reply(&msg)
             }
@@ -461,8 +219,6 @@ impl Daemon {
         crate::wall::cmd_wall_configure(self, req).await
     }
 }
-
-
 
 impl Handler for Daemon {
     fn handle<'a>(&'a self, req: Request) -> Pin<Box<dyn Future<Output = Value> + Send + 'a>> {

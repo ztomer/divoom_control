@@ -26,7 +26,12 @@ pub(crate) async fn cmd_mock_simulate_drop(daemon: &Daemon, req: &Request) -> Va
         return err_reply("mock_simulate_drop requires an active mock connection");
     }
 
-    let reason = req.args.get("reason").and_then(|v| v.as_str()).unwrap_or("dropped").to_string();
+    let reason = req
+        .args
+        .get("reason")
+        .and_then(|v| v.as_str())
+        .unwrap_or("dropped")
+        .to_string();
     let id = daemon.device_id.lock().await.clone();
 
     // Step 1: link goes unhealthy — still owned, dot flips amber (mirrors the
@@ -65,12 +70,20 @@ mod tests {
     #[tokio::test]
     async fn mock_simulate_drop_broadcasts_degraded_then_disconnected() {
         let daemon = Daemon::new();
-        let c = cmd_connect(&daemon, &make_request("connect", Some(json!({"mock": true})), None)).await;
+        let c = cmd_connect(
+            &daemon,
+            &make_request("connect", Some(json!({"mock": true})), None),
+        )
+        .await;
         assert_eq!(c["connection_state"], json!("connected"));
 
         let mut rx = daemon.tx.subscribe();
 
-        let req = make_request("mock_simulate_drop", Some(json!({"reason": "out_of_range"})), None);
+        let req = make_request(
+            "mock_simulate_drop",
+            Some(json!({"reason": "out_of_range"})),
+            None,
+        );
         let res = cmd_mock_simulate_drop(&daemon, &req).await;
         assert_eq!(res["success"], json!(true));
         assert_eq!(res["connection_state"], json!("disconnected"));
@@ -89,7 +102,9 @@ mod tests {
         assert_eq!(degraded_evt["reason"], json!("out_of_range"));
 
         // Second broadcast: disconnected, no longer connected/owned.
-        let disconnected_evt = rx.try_recv().expect("disconnected status broadcast missing");
+        let disconnected_evt = rx
+            .try_recv()
+            .expect("disconnected status broadcast missing");
         assert_eq!(disconnected_evt["type"], json!("status"));
         assert_eq!(disconnected_evt["state"], json!("disconnected"));
         assert_eq!(disconnected_evt["connected"], json!(false));
@@ -106,8 +121,13 @@ mod tests {
     #[tokio::test]
     async fn mock_simulate_drop_defaults_reason_to_dropped() {
         let daemon = Daemon::new();
-        cmd_connect(&daemon, &make_request("connect", Some(json!({"mock": true})), None)).await;
-        let res = cmd_mock_simulate_drop(&daemon, &make_request("mock_simulate_drop", None, None)).await;
+        cmd_connect(
+            &daemon,
+            &make_request("connect", Some(json!({"mock": true})), None),
+        )
+        .await;
+        let res =
+            cmd_mock_simulate_drop(&daemon, &make_request("mock_simulate_drop", None, None)).await;
         assert_eq!(res["reason"], json!("dropped"));
     }
 
@@ -115,7 +135,8 @@ mod tests {
     #[tokio::test]
     async fn mock_simulate_drop_with_no_device_errors() {
         let daemon = Daemon::new();
-        let res = cmd_mock_simulate_drop(&daemon, &make_request("mock_simulate_drop", None, None)).await;
+        let res =
+            cmd_mock_simulate_drop(&daemon, &make_request("mock_simulate_drop", None, None)).await;
         assert_eq!(res["success"], json!(false));
         assert!(res["error"].as_str().unwrap().contains("mock"));
     }
@@ -133,7 +154,8 @@ mod tests {
         ));
         *daemon.device_id.lock().await = Some("LAN:127.0.0.1".to_string());
 
-        let res = cmd_mock_simulate_drop(&daemon, &make_request("mock_simulate_drop", None, None)).await;
+        let res =
+            cmd_mock_simulate_drop(&daemon, &make_request("mock_simulate_drop", None, None)).await;
         assert_eq!(res["success"], json!(false));
         // The real (non-mock) device must be left untouched.
         assert!(daemon.device.lock().await.is_some());

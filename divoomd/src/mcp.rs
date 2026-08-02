@@ -49,7 +49,11 @@ async fn handle_line(line: &str, sock: &str) -> Option<Value> {
         Err(e) => return Some(err(Value::Null, -32700, &format!("parse error: {e}"))),
     };
     if req.get("jsonrpc").and_then(|v| v.as_str()) != Some("2.0") {
-        return Some(err(req.get("id").cloned().unwrap_or(Value::Null), -32600, "jsonrpc must be '2.0'"));
+        return Some(err(
+            req.get("id").cloned().unwrap_or(Value::Null),
+            -32600,
+            "jsonrpc must be '2.0'",
+        ));
     }
     let id = req.get("id").cloned();
     let method = req.get("method").and_then(|v| v.as_str()).unwrap_or("");
@@ -69,7 +73,10 @@ async fn handle_line(line: &str, sock: &str) -> Option<Value> {
         "tools/call" => {
             let params = req.get("params").cloned().unwrap_or_else(|| json!({}));
             let name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
-            let args = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
+            let args = params
+                .get("arguments")
+                .cloned()
+                .unwrap_or_else(|| json!({}));
             match crate::mcp_tools::call_tool(name, &args, sock).await {
                 Ok(value) => Ok(tool_content(&value, false)),
                 // Tool-level errors are returned as a result with isError, per MCP.

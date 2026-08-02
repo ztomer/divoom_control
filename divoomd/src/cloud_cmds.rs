@@ -15,8 +15,16 @@ pub async fn handle(command: &str, req: &Request) -> Value {
                 None => return err_reply("fetch_gallery requires 'classify'"),
             };
             let limit = req.args.get("limit").and_then(|v| v.as_i64()).unwrap_or(30);
-            let file_sort = req.args.get("file_sort").and_then(|v| v.as_i64()).unwrap_or(1);
-            let file_size = req.args.get("file_size").and_then(|v| v.as_i64()).unwrap_or(127);
+            let file_sort = req
+                .args
+                .get("file_sort")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(1);
+            let file_size = req
+                .args
+                .get("file_size")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(127);
             match crate::cloud::fetch_gallery(classify, limit, file_sort, file_size).await {
                 Ok(res) => json!({ "success": true, "result": res }),
                 Err(e) => err_reply(&e),
@@ -25,13 +33,19 @@ pub async fn handle(command: &str, req: &Request) -> Value {
 
         "save_credentials" => {
             let email = req.args.get("email").and_then(|v| v.as_str()).unwrap_or("");
-            let password = req.args.get("password").and_then(|v| v.as_str()).unwrap_or("");
+            let password = req
+                .args
+                .get("password")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             if email.is_empty() || password.is_empty() {
                 return err_reply("save_credentials requires 'email' and 'password'");
             }
             match crate::cloud_store::save_config(email, password) {
                 Ok(()) => match crate::cloud::get_credentials(true).await {
-                    Ok(creds) => json!({ "success": true, "email": creds.email, "user_id": creds.user_id }),
+                    Ok(creds) => {
+                        json!({ "success": true, "email": creds.email, "user_id": creds.user_id })
+                    }
                     Err(e) => err_reply(&format!("saved, but login failed: {e}")),
                 },
                 Err(e) => err_reply(&e),
@@ -39,7 +53,11 @@ pub async fn handle(command: &str, req: &Request) -> Value {
         }
 
         "get_credentials" => {
-            let force = req.args.get("force_refresh").and_then(|v| v.as_bool()).unwrap_or(false);
+            let force = req
+                .args
+                .get("force_refresh")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             match crate::cloud::get_credentials(force).await {
                 Ok(creds) => json!({
                     "success": true,
@@ -66,7 +84,10 @@ pub async fn handle(command: &str, req: &Request) -> Value {
         },
 
         "get_category_file_list" => {
-            let classify = req.args.get("classify").and_then(|v| v.as_i64())
+            let classify = req
+                .args
+                .get("classify")
+                .and_then(|v| v.as_i64())
                 .unwrap_or(crate::cloud::DEFAULT_GALLERY_CLASSIFY);
             let limit = req.args.get("limit").and_then(|v| v.as_i64()).unwrap_or(20);
             match crate::cloud::get_category_file_list(classify, limit).await {
@@ -93,7 +114,11 @@ pub async fn handle(command: &str, req: &Request) -> Value {
         }
 
         "list_clock_faces" => {
-            let dial_type = req.args.get("dial_type").and_then(|v| v.as_str()).map(|s| s.to_string());
+            let dial_type = req
+                .args
+                .get("dial_type")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
             let page = req.args.get("page").and_then(|v| v.as_i64()).unwrap_or(1);
             match crate::cloud::list_clock_faces(dial_type, page).await {
                 Ok(res) => json!({ "success": true, "result": res }),
@@ -102,7 +127,11 @@ pub async fn handle(command: &str, req: &Request) -> Value {
         }
 
         "search_weather_city" => {
-            let keyword = req.args.get("keyword").and_then(|v| v.as_str()).unwrap_or("");
+            let keyword = req
+                .args
+                .get("keyword")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             match crate::cloud::search_weather_city(keyword).await {
                 Ok(res) => json!({ "success": true, "result": res }),
                 Err(e) => err_reply(&e),
@@ -149,12 +178,10 @@ pub async fn handle(command: &str, req: &Request) -> Value {
             }
         }
 
-        "get_photo_albums" => {
-            match crate::cloud::get_photo_albums().await {
-                Ok(res) => json!({ "success": true, "result": res }),
-                Err(e) => err_reply(&e),
-            }
-        }
+        "get_photo_albums" => match crate::cloud::get_photo_albums().await {
+            Ok(res) => json!({ "success": true, "result": res }),
+            Err(e) => err_reply(&e),
+        },
 
         other => err_reply(&format!("not a cloud command: {other}")),
     }

@@ -11,3 +11,18 @@ python3 "$root/tools/check_no_emoji.py" --staged || {
 python3 "$root/tools/check_file_size.py" --staged || {
     echo "pre-commit: staged source file over the 500-line house limit — split it." >&2
     exit 1; }
+
+# Rust quality gate (house rule: structural, not disciplinary). The divoomd
+# workspace lives in divoomd/, so the gate runs cargo there while the no-#[allow]
+# checker scans the whole repo from its root. Skips cleanly if no Rust is staged.
+if git diff --cached --name-only | grep -qE '\.rs$'; then
+    rust_gate="$HOME/Projects/scripts/bin/rust_gate.sh"
+    if [ -x "$rust_gate" ]; then
+        "$rust_gate" "$root" "$root/divoomd" || {
+            echo "pre-commit: Rust gate failed — fix the findings, do not add #[allow]." >&2
+            exit 1; }
+    else
+        echo "pre-commit: rust_gate.sh not found at $rust_gate — install the house gate." >&2
+        exit 1
+    fi
+fi

@@ -10,13 +10,16 @@
 //! `notification_routing.rs` (both split out to stay under the 500-LOC house
 //! limit) — this file keeps the monitor state/loop and device-forwarding.
 
+use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::sync::Arc;
-use serde_json::{json, Value};
 use tokio::sync::Mutex;
 
 use crate::daemon::Daemon;
-use crate::notification_db::{fetch_new_records, find_notification_db_path, initial_max_delivered_date, parse_notification_record};
+use crate::notification_db::{
+    fetch_new_records, find_notification_db_path, initial_max_delivered_date,
+    parse_notification_record,
+};
 use crate::notification_routing::{load_routing_rules, route_app, save_routing_rules};
 
 // ── state ─────────────────────────────────────────────────────────────────
@@ -54,7 +57,9 @@ impl MonitorState {
 static MONITOR: std::sync::OnceLock<Arc<Mutex<MonitorState>>> = std::sync::OnceLock::new();
 
 fn state() -> Arc<Mutex<MonitorState>> {
-    MONITOR.get_or_init(|| Arc::new(Mutex::new(MonitorState::new()))).clone()
+    MONITOR
+        .get_or_init(|| Arc::new(Mutex::new(MonitorState::new())))
+        .clone()
 }
 
 // ── public API ────────────────────────────────────────────────────────────
@@ -63,8 +68,10 @@ fn state() -> Arc<Mutex<MonitorState>> {
 pub async fn start_monitor(daemon: Arc<Daemon>) {
     let st = state();
     let mut guard = st.lock().await;
-    if guard.running { return; }
-    
+    if guard.running {
+        return;
+    }
+
     // Probe database existence and accessibility
     let db_path = match find_notification_db_path() {
         Some(p) => p,
@@ -75,9 +82,12 @@ pub async fn start_monitor(daemon: Arc<Daemon>) {
             return;
         }
     };
-    
+
     // Test if we can open and read
-    match rusqlite::Connection::open_with_flags(&db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY) {
+    match rusqlite::Connection::open_with_flags(
+        &db_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    ) {
         Ok(conn) => {
             if let Err(e) = conn.execute("SELECT 1", []) {
                 guard.last_db_error = Some(format!("Database read failed (FDA permission?): {e}"));
@@ -116,13 +126,19 @@ pub async fn stop_monitor() {
     let st = state();
     let mut guard = st.lock().await;
     guard.running = false;
-    if let Some(h) = guard.task.take() { h.abort(); }
+    if let Some(h) = guard.task.take() {
+        h.abort();
+    }
     eprintln!("[macos_notifications] monitor stopped");
 }
 
 fn status_event_payload(guard: &MonitorState) -> Value {
     let state_str = if guard.running {
-        if guard.db_error_streak >= 5 { "error" } else { "active" }
+        if guard.db_error_streak >= 5 {
+            "error"
+        } else {
+            "active"
+        }
     } else {
         "idle"
     };
@@ -201,11 +217,17 @@ pub async fn set_routing(args: &Value) -> Value {
 
 const POLL_INTERVAL_MS: u64 = 1000;
 
-async fn monitor_loop(daemon: Arc<Daemon>, st: Arc<Mutex<MonitorState>>, db_path: std::path::PathBuf) {
+async fn monitor_loop(
+    daemon: Arc<Daemon>,
+    st: Arc<Mutex<MonitorState>>,
+    db_path: std::path::PathBuf,
+) {
     loop {
         {
             let guard = st.lock().await;
-            if !guard.running { return; }
+            if !guard.running {
+                return;
+            }
         }
         tokio::time::sleep(tokio::time::Duration::from_millis(POLL_INTERVAL_MS)).await;
 
@@ -297,7 +319,11 @@ async fn monitor_loop(daemon: Arc<Daemon>, st: Arc<Mutex<MonitorState>>, db_path
 async fn forward_notification(daemon: &Daemon, app_type: u8, text: &str) -> bool {
     let mut payload = Vec::new();
     if text.is_empty() {
-        let wire = if app_type >= 8 { app_type + 1 } else { app_type };
+        let wire = if app_type >= 8 {
+            app_type + 1
+        } else {
+            app_type
+        };
         payload.push(wire);
     } else {
         let mut text_bytes = text.as_bytes().to_vec();
@@ -328,6 +354,8 @@ async fn forward_notification(daemon: &Daemon, app_type: u8, text: &str) -> bool
         }
     }
     #[cfg(not(feature = "ble"))]
-    { let _ = (daemon, payload); }
+    {
+        let _ = (daemon, payload);
+    }
     false
 }

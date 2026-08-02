@@ -1,12 +1,12 @@
 //! Monthly Best sync background service.
 //! Ports `divoom_lib/monthly_best_daemon.py`.
 
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
 
 use crate::daemon::Daemon;
 use crate::protocol::Request;
@@ -26,8 +26,12 @@ pub struct HotchannelConfig {
     pub device_galleries: HashMap<String, Value>,
 }
 
-fn default_interval() -> u64 { 3600 }
-fn default_classify() -> i64 { 18 }
+fn default_interval() -> u64 {
+    3600
+}
+fn default_classify() -> i64 {
+    18
+}
 
 pub fn load_hotchannel_config() -> HotchannelConfig {
     let mut path = match crate::cloud::config_dir() {
@@ -46,7 +50,7 @@ pub fn load_hotchannel_config() -> HotchannelConfig {
         Ok(c) => c,
         Err(_) => return default_config(),
     };
-    
+
     // Normalize values
     cfg.interval = cfg.interval.clamp(60, 2592000); // 60s to 30 days
     if cfg.classify <= 0 {
@@ -66,14 +70,20 @@ fn default_config() -> HotchannelConfig {
 }
 
 pub fn extract_gif_from_magic_43(data: &[u8]) -> Option<Vec<u8>> {
-    if data.len() < 10 || data[0] != 43 { return None; }
+    if data.len() < 10 || data[0] != 43 {
+        return None;
+    }
     let text_len = u32::from_le_bytes(data[6..10].try_into().ok()?) as usize;
     let text_end = 10 + text_len;
-    if data.len() < text_end + 4 { return None; }
-    let gif_len = u32::from_le_bytes(data[text_end..text_end+4].try_into().ok()?) as usize;
+    if data.len() < text_end + 4 {
+        return None;
+    }
+    let gif_len = u32::from_le_bytes(data[text_end..text_end + 4].try_into().ok()?) as usize;
     let gif_start = text_end + 4;
     let gif_end = gif_start + gif_len;
-    if gif_end > data.len() { return None; }
+    if gif_end > data.len() {
+        return None;
+    }
     let gif_data = &data[gif_start..gif_end];
     if gif_data.starts_with(b"GIF89a") || gif_data.starts_with(b"GIF87a") {
         return Some(gif_data.to_vec());
@@ -103,14 +113,21 @@ pub async fn monthly_best_loop_task(daemon: Arc<Daemon>) {
                 }
             }
 
-            println!("[ ==> ] Fetching gallery for target {} (classify={})...", target, classify);
+            println!(
+                "[ ==> ] Fetching gallery for target {} (classify={})...",
+                target, classify
+            );
             // Limit to 5 items to match python daemon default limit
             match crate::cloud::fetch_gallery(classify, 5, 1, 127).await {
                 Ok(resp_val) => {
                     let file_list = resp_val.get("FileList").and_then(|v| v.as_array());
                     if let Some(files) = file_list {
                         if !files.is_empty() {
-                            println!("[ Ok  ] Found {} files. Syncing to {}...", files.len(), target);
+                            println!(
+                                "[ Ok  ] Found {} files. Syncing to {}...",
+                                files.len(),
+                                target
+                            );
                             if let Err(e) = sync_files_to_device(&daemon, target, files).await {
                                 eprintln!("[ Err ] Failed to sync to {}: {}", target, e);
                             }
@@ -123,7 +140,10 @@ pub async fn monthly_best_loop_task(daemon: Arc<Daemon>) {
             }
         }
 
-        println!("[ ==> ] Sleeping for {} seconds until next monthly best cycle...", interval_secs);
+        println!(
+            "[ ==> ] Sleeping for {} seconds until next monthly best cycle...",
+            interval_secs
+        );
         sleep(Duration::from_secs(interval_secs)).await;
     }
 }
@@ -135,8 +155,7 @@ async fn sync_files_to_device(
 ) -> Result<(), String> {
     // 1. Connect
     let mut connect_args = json!({});
-    if target.starts_with("LAN:") {
-        let ip = &target[4..];
+    if let Some(ip) = target.strip_prefix("LAN:") {
         connect_args = json!({
             "lan_ip": ip
         });
@@ -152,10 +171,17 @@ async fn sync_files_to_device(
         args: connect_args,
         token: None,
     };
-    
+
     let res = daemon.dispatch(req_connect).await;
-    if !res.get("success").and_then(|v| v.as_bool()).unwrap_or(false) {
-        let err = res.get("error").and_then(|v| v.as_str()).unwrap_or("unknown connection error");
+    if !res
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+    {
+        let err = res
+            .get("error")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown connection error");
         return Err(format!("Connection to {} failed: {}", target, err));
     }
 
@@ -171,11 +197,20 @@ async fn sync_files_to_device(
             Some(f) => f,
             None => continue,
         };
-        let file_name = item.get("FileName").and_then(|v| v.as_str()).unwrap_or("unnamed");
+        let file_name = item
+            .get("FileName")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unnamed");
 
-        println!("[ ==> ] Downloading item [{}/{}]: {} ({})...", idx + 1, files.len(), file_name, file_id);
+        println!(
+            "[ ==> ] Downloading item [{}/{}]: {} ({})...",
+            idx + 1,
+            files.len(),
+            file_name,
+            file_id
+        );
         let dl_url = format!("https://fin.divoom-gz.com/{}", file_id);
-        
+
         let resp = match client.get(&dl_url).send().await {
             Ok(r) => r,
             Err(e) => {
@@ -185,7 +220,11 @@ async fn sync_files_to_device(
         };
 
         if resp.status() != 200 {
-            eprintln!("[ Wrn ] Download of {} failed with status {}", file_name, resp.status());
+            eprintln!(
+                "[ Wrn ] Download of {} failed with status {}",
+                file_name,
+                resp.status()
+            );
             continue;
         }
 
@@ -220,7 +259,10 @@ async fn sync_files_to_device(
                     token: None,
                 };
                 let res_show = daemon.dispatch(req_show).await;
-                res_show.get("success").and_then(|v| v.as_bool()).unwrap_or(false)
+                res_show
+                    .get("success")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
             }
             None => {
                 eprintln!(
@@ -277,7 +319,9 @@ mod tests {
 
     #[test]
     fn test_load_hotchannel_config() {
-        let _lock = crate::cloud::TEST_MUTEX.get_or_init(|| std::sync::Mutex::new(())).lock().unwrap();
+        let _lock = crate::cloud::TEST_MUTEX
+            .get_or_init(|| tokio::sync::Mutex::new(()))
+            .blocking_lock();
         let temp = TempDir::new().unwrap();
         std::env::set_var("HOME", temp.path());
 

@@ -35,9 +35,15 @@ async fn exclusive_defers_non_matching_until_release() {
     q.acquire_now("X").unwrap();
 
     let (l1, l2, l3) = (l.clone(), l.clone(), l.clone());
-    let o1 = q.submit(Some("X".into()), async move { l1.lock().unwrap().push("x1".into()); });
-    let none = q.submit(None, async move { l2.lock().unwrap().push("none".into()); });
-    let o2 = q.submit(Some("X".into()), async move { l3.lock().unwrap().push("x2".into()); });
+    let o1 = q.submit(Some("X".into()), async move {
+        l1.lock().unwrap().push("x1".into());
+    });
+    let none = q.submit(None, async move {
+        l2.lock().unwrap().push("none".into());
+    });
+    let o2 = q.submit(Some("X".into()), async move {
+        l3.lock().unwrap().push("x2".into());
+    });
 
     o1.await.unwrap();
     o2.await.unwrap();
@@ -56,7 +62,10 @@ async fn acquire_now_rejects_steal_immediately() {
 
     let t0 = Instant::now();
     assert_eq!(q.acquire_now("B"), Err(AcquireError::HeldByAnother));
-    assert!(t0.elapsed() < Duration::from_millis(100), "steal-reject must be immediate");
+    assert!(
+        t0.elapsed() < Duration::from_millis(100),
+        "steal-reject must be immediate"
+    );
     assert_eq!(q.owner().as_deref(), Some("A"), "slot must NOT be stolen");
 
     // same-token re-acquire is idempotent
@@ -73,10 +82,15 @@ async fn orphaned_exclusive_auto_releases() {
     q.acquire_now("A").unwrap(); // A holds but never submits
 
     let l2 = l.clone();
-    let rx = q.submit(None, async move { l2.lock().unwrap().push("free".into()); });
+    let rx = q.submit(None, async move {
+        l2.lock().unwrap().push("free".into());
+    });
 
     let res = tokio::time::timeout(Duration::from_secs(2), rx).await;
-    assert!(res.is_ok() && res.unwrap().is_ok(), "tokenless item should run after force-release");
+    assert!(
+        res.is_ok() && res.unwrap().is_ok(),
+        "tokenless item should run after force-release"
+    );
     assert_eq!(*l.lock().unwrap(), vec!["free"]);
     assert_eq!(q.owner(), None, "owner must be force-released");
 }
@@ -93,5 +107,8 @@ async fn item_timeout_rejects_waiting_item() {
     let waiter = q.submit(None, async { 2u32 });
 
     assert_eq!(slow.await.unwrap(), 1);
-    assert!(waiter.await.is_err(), "an item waiting past item_timeout must be rejected");
+    assert!(
+        waiter.await.is_err(),
+        "an item waiting past item_timeout must be rejected"
+    );
 }

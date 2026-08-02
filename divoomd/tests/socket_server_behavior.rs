@@ -65,7 +65,12 @@ async fn request_reply_round_trip() {
     let path = temp_sock("rr");
     let _ = std::fs::remove_file(&path);
     let listener = UnixListener::bind(&path).unwrap();
-    tokio::spawn(serve(listener, Arc::new(Echo::new()), MAX_CONNECTIONS, CONNECTION_IDLE_TIMEOUT));
+    tokio::spawn(serve(
+        listener,
+        Arc::new(Echo::new()),
+        MAX_CONNECTIONS,
+        CONNECTION_IDLE_TIMEOUT,
+    ));
 
     let mut client = UnixStream::connect(&path).await.unwrap();
     let req = make_request("scan", Some(json!({"timeout": 5})), Some("tok".into()));
@@ -90,12 +95,19 @@ async fn two_pipelined_requests_get_two_replies() {
     let path = temp_sock("pipe");
     let _ = std::fs::remove_file(&path);
     let listener = UnixListener::bind(&path).unwrap();
-    tokio::spawn(serve(listener, Arc::new(Echo::new()), MAX_CONNECTIONS, CONNECTION_IDLE_TIMEOUT));
+    tokio::spawn(serve(
+        listener,
+        Arc::new(Echo::new()),
+        MAX_CONNECTIONS,
+        CONNECTION_IDLE_TIMEOUT,
+    ));
 
     let mut client = UnixStream::connect(&path).await.unwrap();
     // send two requests back-to-back in one write
     let mut payload = encode_message(&serde_json::to_value(make_request("a", None, None)).unwrap());
-    payload.extend(encode_message(&serde_json::to_value(make_request("b", None, None)).unwrap()));
+    payload.extend(encode_message(
+        &serde_json::to_value(make_request("b", None, None)).unwrap(),
+    ));
     client.write_all(&payload).await.unwrap();
 
     // read until we have two newline-terminated lines
@@ -121,11 +133,19 @@ async fn malformed_line_gets_error_reply() {
     let path = temp_sock("bad");
     let _ = std::fs::remove_file(&path);
     let listener = UnixListener::bind(&path).unwrap();
-    tokio::spawn(serve(listener, Arc::new(Echo::new()), MAX_CONNECTIONS, CONNECTION_IDLE_TIMEOUT));
+    tokio::spawn(serve(
+        listener,
+        Arc::new(Echo::new()),
+        MAX_CONNECTIONS,
+        CONNECTION_IDLE_TIMEOUT,
+    ));
 
     let mut client = UnixStream::connect(&path).await.unwrap();
     // valid JSON but not a Request (no "command") -> error reply, connection stays up
-    client.write_all(b"{\"not\":\"a request\"}\n").await.unwrap();
+    client
+        .write_all(b"{\"not\":\"a request\"}\n")
+        .await
+        .unwrap();
     let line = read_one_line(&mut client).await;
     let (msgs, _rem) = iter_messages(&line);
     assert_eq!(msgs[0]["success"], json!(false));
@@ -140,7 +160,12 @@ async fn subscription_and_event_broadcast() {
     let _ = std::fs::remove_file(&path);
     let listener = UnixListener::bind(&path).unwrap();
     let handler = Arc::new(Echo::new());
-    tokio::spawn(serve(listener, handler.clone(), MAX_CONNECTIONS, CONNECTION_IDLE_TIMEOUT));
+    tokio::spawn(serve(
+        listener,
+        handler.clone(),
+        MAX_CONNECTIONS,
+        CONNECTION_IDLE_TIMEOUT,
+    ));
 
     let mut client = UnixStream::connect(&path).await.unwrap();
     let req = make_request("subscribe", None, None);
@@ -173,4 +198,3 @@ async fn subscription_and_event_broadcast() {
 
     let _ = std::fs::remove_file(&path);
 }
-

@@ -8,7 +8,10 @@ use serde_json::json;
 fn build_body_merges_command_token_and_extra() {
     let lan = LanTransport::new("192.168.1.42", 0);
     let body = lan.build_body("Channel/SetIndex", Some(json!({"SelectIndex": 2})));
-    assert_eq!(body, json!({"Command": "Channel/SetIndex", "LocalToken": 0, "SelectIndex": 2}));
+    assert_eq!(
+        body,
+        json!({"Command": "Channel/SetIndex", "LocalToken": 0, "SelectIndex": 2})
+    );
 }
 
 #[test]
@@ -33,13 +36,25 @@ fn validate_tolerates_missing_error_code() {
 fn validate_rejects_nonzero_error_code() {
     // HTTP 200 with a non-zero error_code is a REJECTION, not a silent success.
     let err = validate_response(200, r#"{"error_code":5}"#, "Channel/SetIndex").unwrap_err();
-    assert_eq!(err, LanError::Rejected { code: "5".into(), command: "Channel/SetIndex".into() });
+    assert_eq!(
+        err,
+        LanError::Rejected {
+            code: "5".into(),
+            command: "Channel/SetIndex".into()
+        }
+    );
 }
 
 #[test]
 fn validate_rejects_non_200_with_json_body() {
     let err = validate_response(500, r#"{"error_code":0}"#, "X").unwrap_err();
-    assert_eq!(err, LanError::BadStatus { status: 500, command: "X".into() });
+    assert_eq!(
+        err,
+        LanError::BadStatus {
+            status: 500,
+            command: "X".into()
+        }
+    );
 }
 
 #[test]
