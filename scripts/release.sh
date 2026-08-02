@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
 # release.sh — one-shot release for divoom-control. In order:
+#   0. check GitHub CI is green for the commit being tagged [skippable]
 #   1. build the DMG (scripts/build_release.sh)  [skippable]
 #   2. git tag vX.Y.Z (annotated, notes from CHANGELOG) + push to origin
 #   3. GitHub release on the code repo with the DMG attached
@@ -10,8 +11,15 @@
 # re-running clobbers the DMG asset and re-PUTs the cask, so a partial run is
 # safe to resume.
 #
+# RELEASE RULE: a release is only cut when GitHub CI is green for the commit
+# being tagged. The only exception is credit depletion (GitHub Actions billing
+# exhaustion) — that is a money wall, not a code signal, so it does not block.
+# release.sh auto-detects that failure and proceeds; use --skip-ci-check if
+# detection ever misses.
+#
 #   scripts/release.sh                # full run
 #   scripts/release.sh --skip-build   # reuse an existing dist/ DMG (faster)
+#   scripts/release.sh --skip-ci-check  # skip the CI gate (only for credit depletion)
 #
 # Requires: gh (authenticated: `gh auth login`), the macOS build toolchain that
 # scripts/build_release.sh needs, and push access to both repos below.
@@ -25,7 +33,61 @@ TAP="ztomer/homebrew-tap"         # cask repo
 CASK_PATH="Casks/divoom-control.rb"
 
 SKIP_BUILD=0
-[ "${1:-}" = "--skip-build" ] && SKIP_BUILD=1
+CHECK_CI=1
+for arg in "$@"; do
+  case "$arg" in
+    --skip-build) SKIP_BUILD=1 ;;
+    --skip-ci-check) CHECK_CI=0 ;;
+    *) echo "ERROR: unknown option: $arg" >&2; exit 1 ;;
+  esac
+done
+
+# ci_gate — refuse to cut a release while GitHub CI is red for the commit being
+# tagged. Query the check-runs for HEAD; block on a failing or still-running
+# run. Allow ONLY a failure that reads like credit/billing depletion.
+ci_gate() {
+  local sha="$1"
+  echo "→ checking GitHub CI status for ${sha}"
+  local json
+  json="$(gh api "repos/${REPO}/commits/${sha}/check-runs" 2>/dev/null)" \
+    || { echo "  ERROR: could not query CI status (gh api failed)" >&2; exit 1; }
+  local verdict
+  verdict="$(python3 - "$json" <<'PY'
+import json, re, sys
+data = json.load(sys.stdin)
+runs = data.get("check_runs") or []
+if not runs:
+    print("NO_RUNS"); raise SystemExit
+incomplete = [r["name"] for r in runs if r.get("status") != "completed"]
+if incomplete:
+    print("PENDING " + ", ".join(incomplete)); raise SystemExit
+for r in runs:
+    c = r.get("conclusion")
+    if c in ("success", "neutral", "skipped"):
+        continue
+    out = r.get("output") or {}
+    blob = " ".join(str(x) for x in (r.get("name"), out.get("title"), out.get("summary")) if x)
+    if re.search(r"\b(credit|billing)\w*\b|out of minutes|usage limit", blob, re.I):
+        print("CREDITS " + r["name"]); raise SystemExit
+    print("FAIL " + r["name"]); raise SystemExit
+print("OK")
+PY
+)"
+  case "$verdict" in
+    OK) echo "  ✓ CI green (all check runs passed)" ;;
+    CREDITS*)
+      echo "  ⚠ CI failure on '${verdict#CREDITS }' looks like credit/billing depletion —"
+      echo "    allowing (per release rule: that's a money wall, not a code signal)." ;;
+    PENDING*)
+      echo "  ERROR: CI still running — ${verdict#PENDING }. Wait for it to finish." >&2; exit 1 ;;
+    FAIL*)
+      echo "  ERROR: CI check run failed — ${verdict#FAIL }. Refusing to cut a release on a red CI." >&2; exit 1 ;;
+    NO_RUNS)
+      echo "  ERROR: no CI check runs found for ${sha} — cannot verify CI is green." >&2
+      echo "  (If this is credit depletion, re-run with --skip-ci-check.)" >&2; exit 1 ;;
+    *) echo "  ERROR: could not parse CI status (${verdict})" >&2; exit 1 ;;
+  esac
+}
 
 VERSION="$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
 TAG="v${VERSION}"
@@ -43,6 +105,14 @@ if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
 fi
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 [ "$BRANCH" = "main" ] || echo "⚠ tagging from branch '${BRANCH}', not main (the tag captures HEAD regardless)."
+
+# Release rule: only cut when GitHub CI is green for the commit being tagged
+# (exception: credit depletion). Abort otherwise — see ci_gate above.
+if [ "$CHECK_CI" -eq 1 ]; then
+  ci_gate "$(git rev-parse HEAD)"
+else
+  echo "→ skipping CI check (--skip-ci-check)"
+fi
 
 # ── 1. build DMG ────────────────────────────────────────────────────────────
 if [ "$SKIP_BUILD" -eq 1 ] && [ -f "$DMG" ]; then

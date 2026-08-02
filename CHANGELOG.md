@@ -4,6 +4,15 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## Unreleased
+
+- **release rule:** cutting a release is only allowed when GitHub CI is green for
+  the commit being tagged. `scripts/release.sh` now runs a preflight `ci_gate`
+  that queries the commit's check-runs and aborts on a red / still-running /
+  unverifiable CI. The one exception is **credit depletion** (GitHub Actions
+  billing exhaustion) — auto-detected from the failure message; `--skip-ci-check`
+  is the manual override for that case only.
+
 ## v0.22.21 — house Rust quality gate + 500-line file splits
 
 - **ci:** wire the house Rust gate into CI + the pre-commit hook —

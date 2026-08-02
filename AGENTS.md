@@ -49,3 +49,16 @@ These are lessons paid for in real shipped bugs; don't relearn them.
   prefer the mock-device E2E (`tests/test_e2e_mock_device.py`) for wire checks.
 - **Build discipline**: delete dead code; document the decision, not just the
   code; foundation before cutover; test before you trust.
+
+## Release rule — CI must be green to cut a release
+
+Cutting a release (`scripts/release.sh`) is only allowed when **GitHub CI is
+green for the commit being tagged** (`check-runs` on HEAD all pass). The ONE
+exception is **credit depletion** (GitHub Actions billing exhaustion) — that is a
+money wall, not a code signal, so it does not block.
+
+This is enforced structurally in `scripts/release.sh` (preflight `ci_gate`):
+it aborts on a red or still-running check run, auto-allows a failure that reads
+like credit/billing depletion, and refuses when CI status can't be verified.
+`--skip-ci-check` is the manual override for the credit-depletion case only —
+never use it to ship on a genuinely failing CI.

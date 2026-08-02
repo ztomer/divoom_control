@@ -26,7 +26,13 @@ shared memory. Read this on entry and **update it at the end of every round**
      first tag pointed at a pre-bump commit), built `dist/Divoom-v0.22.21.dmg`,
      created the GitHub release with the DMG (40MB), bumped the Homebrew cask to
      v0.22.21 + sha256. Install: `brew install --cask ztomer/tap/divoom-control`.
-  4. Full suite green (102 lib+integration Rust tests; Python suite per last rounds).
+  4. **NEW RELEASE RULE (structural):** a release may only be cut when GitHub CI
+     is green for the tagged commit. `release.sh` preflight `ci_gate` checks the
+     commit's check-runs and aborts on red/pending/unverifiable CI; the sole
+     exception is credit depletion (auto-detected; `--skip-ci-check` overrides).
+     Rule also written into AGENTS.md. `ci_gate` branch-tested (OK/FAIL/PENDING/
+     CREDITS/NO_RUNS).
+  5. Full suite green (102 lib+integration Rust tests; Python suite per last rounds).
 
 - **2026-07-14 (Round 64) — gallery: decode magic 8/12, broken-image removal.
   RELEASED v0.22.20.** Four workstreams done:
