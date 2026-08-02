@@ -4,6 +4,23 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## v0.22.21 — house Rust quality gate + 500-line file splits
+
+- **ci:** wire the house Rust gate into CI + the pre-commit hook —
+  `cargo fmt --check`, `cargo clippy --all-targets --all-features -D
+  warnings`, and a new `tools/check_no_allow.py` (no `#[allow]` in
+  tracked source). divoomd had never been clippy-gated; ~53 warnings
+  across 13 files fixed. Also fixed the clippy step on Ubuntu: the
+  `rust-core` job now installs `libdbus-1-dev` so `--all-features`
+  (`ble` → btleplug → dbus) builds there too.
+- **house style:** split 9 files over the 500-line cap
+  (cloud_category, art_hot, device_call/basic, live_jobs/mod, wall,
+  ble, daemon, daemon_connect, art_codec) into submodules; all 328
+  source files are back under the cap.
+- **style:** one-time `cargo fmt --all` reformat (the codebase was
+  never fmt-clean; 68 files, +5947/−2736). Kept per decision.
+- 102 lib+integration tests pass; emoji + 500-LOC gates clean.
+
 ## v0.22.20 — gallery: decode the rest (magic 8 / 12) + broken-image removal
 
 - **fix(gallery decode):** `decode_cloud_frames` only handled magic
