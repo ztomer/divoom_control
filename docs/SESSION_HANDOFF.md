@@ -16,8 +16,20 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-08-02 (Round 65) — house Rust gate + v0.22.21 release.** Shipped + released:
+  1. Wired the house Rust gate into CI + pre-commit (`cargo fmt --check`, clippy
+     `--all-features -D warnings`, `tools/check_no_allow.py`); ~53 warnings fixed,
+     #[allow] sites removed, 9 over-500-line files split, one-time `cargo fmt`.
+  2. CI fix: the `rust-core` job's `cargo clippy --all-features` pulls `ble` →
+     btleplug → dbus on Ubuntu; added `libdbus-1-dev pkg-config` install step.
+  3. **RELEASED v0.22.21** via `scripts/release.sh` — re-cut the tag at HEAD (the
+     first tag pointed at a pre-bump commit), built `dist/Divoom-v0.22.21.dmg`,
+     created the GitHub release with the DMG (40MB), bumped the Homebrew cask to
+     v0.22.21 + sha256. Install: `brew install --cask ztomer/tap/divoom-control`.
+  4. Full suite green (102 lib+integration Rust tests; Python suite per last rounds).
+
 - **2026-07-14 (Round 64) — gallery: decode magic 8/12, broken-image removal.
-  NOT YET RELEASED (planned v0.22.20).** Four workstreams done:
+  RELEASED v0.22.20.** Four workstreams done:
   1. Detect & remove broken images — `is_black_image()` (conservative), `preview_valid()` drops
      corrupt cached previews, `<img onerror>` removes dead tiles in gallery JS.
   2. Decode magic 8 (static AES image) and magic 12 (scroll buffer) — new branches in
@@ -36,7 +48,6 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Open threads / next up
 
-- **Release v0.22.20**: confirm live gallery renders fully, then cut release.
 - **R12 user-POV visual pass**: deferred to user (needs live app + real device for screenshots).
 - **Cloud HTTP**: 533/533 commands cataloged (`docs/cloud_api/`). Clock-face store wired into
   GUI. Playlist browse+push + AidSleep browse+play both shipped. `Cloud/ToDevice` remains
