@@ -283,3 +283,24 @@ async def test_discover_all_early_exit_returns_before_timeout(fake_scanner):
     )
     assert len(completed) == 4
     assert fake_scanner.instances[0].stopped is True
+
+
+def test_check_bluetooth_permission_denied():
+    """When macOS Bluetooth authorization is denied (status 2), return False cleanly."""
+    mock_cb = MagicMock()
+    mock_cb.CBCentralManager.authorization.return_value = 2
+    with patch.dict("sys.modules", {"CoreBluetooth": mock_cb}), patch("sys.platform", "darwin"):
+        ok, reason = discovery.check_bluetooth_permission()
+        assert ok is False
+        assert "denied or restricted" in reason
+
+
+def test_check_bluetooth_permission_allowed():
+    """When macOS Bluetooth authorization is allowed (status 3), return True."""
+    mock_cb = MagicMock()
+    mock_cb.CBCentralManager.authorization.return_value = 3
+    with patch.dict("sys.modules", {"CoreBluetooth": mock_cb}), patch("sys.platform", "darwin"):
+        ok, reason = discovery.check_bluetooth_permission()
+        assert ok is True
+        assert reason == "ok"
+

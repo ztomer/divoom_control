@@ -187,6 +187,21 @@ def pick_char_uuid(preferred_uuid: str | None, candidates: list, prefix_hint: st
     return candidates[0].uuid if candidates else None
 
 
+def check_bluetooth_permission() -> tuple[bool, str]:
+    """Check macOS Bluetooth authorization status without triggering a silent process abort."""
+    import sys
+    if sys.platform != "darwin":
+        return True, "ok"
+    try:
+        import CoreBluetooth
+        auth = CoreBluetooth.CBCentralManager.authorization()
+        if auth in (1, 2):
+            return False, f"macOS Bluetooth authorization is denied or restricted (status={auth})"
+    except Exception as e:
+        logger.debug("Could not query CBCentralManager authorization: %s", e)
+    return True, "ok"
+
+
 async def discover_all_divoom_devices(timeout: float = 5.0, expected: int = 0) -> list[dict]:
     """
     Scans BLE devices and returns a list of discovered Divoom devices.
@@ -206,6 +221,11 @@ async def discover_all_divoom_devices(timeout: float = 5.0, expected: int = 0) -
     connected peripheral stops advertising) — or its name needs adding to
     DIVOOM_NAME_KEYWORDS.
     """
+    ok, reason = check_bluetooth_permission()
+    if not ok:
+        logger.warning("BLE scan skipped: %s", reason)
+        return []
+
     logger.info(
         "Scanning for Divoom BLE devices (timeout=%.1fs, early-exit at %s)...",
         timeout, expected if expected > 0 else "off")
