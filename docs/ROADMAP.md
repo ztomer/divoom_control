@@ -113,6 +113,35 @@ All 4 clusters implemented:
 Bonus fix: device-selector "not in range" badge now counts consecutive scan misses
 (downgrades after 2), not a one-shot startup flag. 5 new e2e tests.
 
+### Migrate the GUI e2e suite off Playwright/Chromium → camoufox
+
+**Scope correction:** the Playwright dependency is **not** in `divoom_lib` (zero
+hits there). It is the GUI e2e suite — **15 test files under `tests/`** that
+drive `divoom_gui/web_ui/` via `p.chromium.launch(headless=True)`, plus the two
+CI steps that install it (`.github/workflows/tests.yml:45,50`).
+
+Move these to **camoufox** (anti-detect Firefox, driven through the same
+Playwright API — so the migration is mostly the launch call plus the browser
+install step, not a rewrite of the 15 suites).
+
+Why now:
+- **The skip guard does not guard.** CI claims these "skip via
+  `pytest.importorskip`" when the browser is absent, but `importorskip` only
+  checks the Python *module* — the browser *binary* being missing raises
+  `BrowserType.launch: Executable doesn't exist`, so they **fail** instead of
+  skipping. Measured 2026-08-17: a clean checkout with the `playwright` module
+  installed but no chromium produced **69 failures/errors** that look like real
+  regressions and are not. Fix the guard as part of this move (probe the
+  browser, not the import) regardless of which engine wins.
+- Chromium is a ~130 MB per-machine download that every fresh dev environment
+  silently fails without.
+- camoufox is already the house browser-automation transport (see the
+  `gemini-camoufox` skill), so this consolidates on one engine.
+
+Acceptance: all 15 suites green under camoufox; a missing browser **skips**
+(proven by deleting the browser and watching them skip, not by assuming);
+CI install step updated; no `p.chromium` references left in `tests/`.
+
 ### Deferred
 
 - **`pic_scan_ctrl` 0x35** — partially resolved (2026-07-13, real hardware).
