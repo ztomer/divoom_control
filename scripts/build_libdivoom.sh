@@ -21,8 +21,10 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 LIB_DIR="${PROJECT_ROOT}/divoom_lib"
 NATIVE_SRC_DIR="${LIB_DIR}/native_src"
 
-OS="$(uname -s)"
-ARCH="$(uname -m)"
+# OS/ARCH are overridable so the platform gate below is testable without a
+# cross-arch machine (tests/test_build_platform_gate.py drives it).
+OS="${DIVOOM_BUILD_OS:-$(uname -s)}"
+ARCH="${DIVOOM_BUILD_ARCH:-$(uname -m)}"
 
 # -ffp-contract=off: forbid FMA contraction of `a*b+c` into a single fused op.
 # At -O3 with SIMD, clang contracts differently across versions/arches, which
@@ -59,7 +61,18 @@ case "${OS}" in
     ;;
 esac
 
-# Detect arch — ARM gets NEON, x86_64 gets SSE2.
+# ── Platform gate: 64-bit only ────────────────────────────────────────
+# macOS is Apple silicon only — Apple has dropped Intel Macs, so have we.
+# Linux keeps x86_64 (and aarch64); only macOS loses its x86_64 build.
+if [[ "${OS}" == "Darwin" && ( "${ARCH}" == "x86_64" || "${ARCH}" == "amd64" ) ]]; then
+  echo "✗ macOS Intel (x86_64) is not supported — Apple silicon (arm64) only." >&2
+  echo "  Linux x86_64 remains supported; this gate is macOS-specific." >&2
+  exit 1
+fi
+
+# Detect arch — ARM gets NEON, x86_64 gets SSE2. Anything else is a hard
+# failure: a 32-bit build (i686/armv7) previously fell through to a silent
+# "no SIMD flags" build that was never compiled, run, or tested by anyone.
 case "${ARCH}" in
   arm64|aarch64)
     ARCH_FLAGS=(-march=armv8-a+simd)
@@ -68,9 +81,17 @@ case "${ARCH}" in
     ARCH_FLAGS=(-msse2)
     ;;
   *)
-    echo "Unknown arch: ${ARCH}. Building with no SIMD flags." >&2
+    echo "✗ Unsupported architecture: ${ARCH}. 64-bit only (arm64/aarch64 or x86_64)." >&2
+    exit 1
     ;;
 esac
+
+# Test seam: exit right after the platform gate, before the (slow) compile, so
+# the ACCEPT direction of the gate is testable too — not just the reject path.
+if [[ -n "${DIVOOM_BUILD_GATE_ONLY:-}" ]]; then
+  echo "gate ok: ${OS}/${ARCH}"
+  exit 0
+fi
 
 echo "Building ${OUT} for ${OS}/${ARCH} with ${CC}…"
 "${CC}" "${CFLAGS[@]}" "${ARCH_FLAGS[@]}" \

@@ -113,6 +113,30 @@ verify. Deferrable without blocking 1-3.
 - Fix the dead `docs/archive/rounds/` links in `docs/README.md` +
   `docs/SESSION_HANDOFF.md`.
 
+### Phase 6 — drop macOS Intel (x86_64) support
+
+Apple no longer ships or supports Intel Macs; neither do we. The shipped app,
+the DMG, and the C accelerator become **Apple silicon only**.
+
+**Scope boundary — this is macOS Intel, NOT x86_64 wholesale.** `divoom_lib` and
+`divoomd` still support **Linux x86_64** (README, the `rust-core` /
+`rust-ble-linux` CI jobs, BlueZ). So:
+
+- `divoom_lib/native_src/compact.c` — the non-NEON `memcpy` fallback **stays**;
+  it serves Linux x86_64. Do not delete it.
+- `scripts/build_libdivoom.sh` — the `x86_64 -> -msse2` branch **stays for
+  Linux** but must **fail loudly on Darwin/x86_64** rather than silently
+  producing an unsupported Intel dylib.
+- `setup_app.py` / `divoom.spec` — assert arm64; never emit `universal2`.
+- `README.md` — "Requires macOS 11 (Big Sur) or later" is now wrong on its own;
+  state **Apple silicon required**.
+- Homebrew cask (`ztomer/homebrew-tap`, separate repo) — declare `arm64` only,
+  so Intel users get a clean "unsupported" rather than a broken install.
+
+Acceptance: a Darwin/x86_64 build attempt fails with a clear message; the
+produced `Divoom.app` reports arm64-only (`lipo -archs`); Linux x86_64 CI jobs
+stay green.
+
 ## Verification per phase
 
 `python3 -m pytest -q` (record pass/skip), `cargo test --workspace`,

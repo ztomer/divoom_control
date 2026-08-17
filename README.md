@@ -62,7 +62,10 @@ both are held to the same correctness tests (see *Testing*).
 
 ## Requirements
 
-- **macOS or Linux** for `divoom_lib` + `divoomd` (BLE via `bleak` in Python /
+- **macOS (Apple silicon) or Linux (x86_64 / aarch64)** for `divoom_lib` +
+  `divoomd`. **Intel Macs are not supported** — Apple has dropped them, so have
+  we; note this is macOS-specific, Linux x86_64 remains fully supported. 32-bit
+  targets (i686 / armv7) are not supported on any OS. (BLE via `bleak` in Python /
   `btleplug` in Rust — CoreBluetooth on macOS, BlueZ on Linux). The **GUI +
   menu-bar + now-playing sync are macOS-only** today.
 - **Python 3.10+** (uses `X | None` type syntax). CI and the shipped app build on
@@ -88,7 +91,7 @@ brew upgrade --cask ztomer/tap/divoom-control
 
 This installs a self-contained `Divoom.app` (GUI + menu-bar agent + bundled
 daemon). The first scan prompts once for Bluetooth — grant it. Requires macOS 11
-(Big Sur) or later.
+(Big Sur) or later on **Apple silicon**; Intel Macs are not supported.
 
 ### From source (library / daemon / dev)
 
