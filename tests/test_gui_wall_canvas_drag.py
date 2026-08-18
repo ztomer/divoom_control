@@ -14,7 +14,7 @@ This test file verifies:
      exclusive: clicking on a wall screen does NOT trigger a window
      drag, and clicking on the appbar does NOT affect wall screens.
 
-Requires: pip install playwright && playwright install chromium
+Requires: pip install playwright camoufox && python3 -m camoufox fetch
 Runs in the normal pytest suite. Skips if Playwright is unavailable.
 """
 import contextlib
@@ -26,6 +26,7 @@ import time
 from pathlib import Path
 
 import pytest
+from tests.support.browser import launch_sync
 
 try:
     from playwright.sync_api import sync_playwright
@@ -67,18 +68,18 @@ def _serve_directory(directory: Path):
 
 pytestmark = pytest.mark.skipif(
     sync_playwright is None,
-    reason="playwright not installed (pip install playwright && playwright install chromium)",
+    reason="playwright not installed (pip install playwright camoufox)",
 )
 
 
 @pytest.fixture(scope="module")
 def browser():
-    """Single Chromium instance for the whole test module."""
+    """Single browser instance for the whole test module."""
     if sync_playwright is None:
         yield None
         return
     with sync_playwright() as p:
-        with p.chromium.launch(headless=True) as b:
+        with launch_sync(p) as b:
             yield b
 
 

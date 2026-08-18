@@ -22,6 +22,7 @@ import socketserver
 import threading
 import pytest
 from pathlib import Path
+from tests.support.browser import launch_sync
 
 playwright = pytest.importorskip("playwright.sync_api", reason="playwright not installed")
 sync_playwright = playwright.sync_playwright
@@ -62,7 +63,7 @@ def main():
         return 2
 
     with _serve_directory(WEB_UI_DIR) as url, sync_playwright() as p, \
-         p.chromium.launch(headless=True) as browser:
+         launch_sync(p) as browser:
         ctx = browser.new_context(viewport={"width": 1280, "height": 800})
         # Stub a richer pywebview so the page's widget init doesn't fail
         ctx.add_init_script("""

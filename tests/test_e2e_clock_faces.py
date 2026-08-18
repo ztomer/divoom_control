@@ -6,6 +6,7 @@ Skipped if Playwright / a browser isn't installed.
 """
 import pytest
 from pathlib import Path
+from tests.support.browser import launch as launch_browser, require_browser
 
 INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.html"
 
@@ -30,7 +31,7 @@ window.pywebview = { api: new Proxy({}, { get: (_t, name) => (...args) => {
 
 
 async def _open(p):
-    browser = await p.chromium.launch(headless=True)
+    browser = await launch_browser(p)
     page = await browser.new_page()
     await page.add_init_script(_MOCK_API)
     await page.goto(f"file://{INDEX_HTML}")
@@ -44,7 +45,7 @@ async def test_clock_panel_loads_dial_types_and_first_list_on_open():
     """The Clock panel is active by default -- the cloud browser must load
     without any tab click (this was a real gap: showChannelPanel() only
     fires on click, so an init-time-only trigger was required)."""
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
@@ -66,7 +67,7 @@ async def test_clock_panel_loads_dial_types_and_first_list_on_open():
 
 @pytest.mark.asyncio
 async def test_switching_dial_type_reloads_the_list():
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
@@ -83,7 +84,7 @@ async def test_switching_dial_type_reloads_the_list():
 
 @pytest.mark.asyncio
 async def test_apply_without_a_device_shows_connect_prompt_and_does_not_call_set_clock():
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
@@ -111,7 +112,7 @@ async def test_apply_with_a_device_calls_set_clock_with_the_real_clock_id():
     """The whole point of this feature: applying a browsed cloud clock face
     reuses the existing set_clock() -> display.show_clock() path -- no new
     device-apply plumbing, just the real ClockId from GetDialList."""
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:

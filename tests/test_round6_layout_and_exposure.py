@@ -30,6 +30,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from tests.support.browser import launch as launch_browser, require_browser
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 INDEX_HTML = REPO_ROOT / "divoom_gui" / "web_ui" / "index.html"
@@ -687,11 +688,11 @@ def test_r18_subtabs_have_icons_and_fit_content():
 async def test_gallery_and_hot_channel_layouts_render_cleanly():
     """Smoke test: load index.html in headless Chromium, click the Gallery
     and Hot Channel tabs, and assert the right layout elements exist."""
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await launch_browser(p)
         page = await browser.new_page()
         await page.goto(f"file://{INDEX_HTML}")
         await page.wait_for_load_state("domcontentloaded")

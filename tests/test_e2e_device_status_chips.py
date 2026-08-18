@@ -10,6 +10,7 @@ installed.
 """
 import pytest
 from pathlib import Path
+from tests.support.browser import launch as launch_browser, require_browser
 
 INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.html"
 
@@ -26,7 +27,7 @@ window.pywebview = { api: new Proxy({}, { get: (_t, name) => (...args) => {
 
 
 async def _open(p):
-    browser = await p.chromium.launch(headless=True)
+    browser = await launch_browser(p)
     page = await browser.new_page()
     await page.add_init_script(_MOCK_API)
     await page.goto(f"file://{INDEX_HTML}")
@@ -37,7 +38,7 @@ async def _open(p):
 
 @pytest.mark.asyncio
 async def test_active_device_chip_is_marked_active():
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
     async with async_playwright() as p:
         browser, page = await _open(p)
@@ -58,7 +59,7 @@ async def test_active_device_chip_is_marked_active():
 
 @pytest.mark.asyncio
 async def test_streaming_chip_shows_kind_and_clears_when_active():
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
     async with async_playwright() as p:
         browser, page = await _open(p)
@@ -90,7 +91,7 @@ async def test_streaming_chip_shows_kind_and_clears_when_active():
 
 @pytest.mark.asyncio
 async def test_degraded_chip_shows_reconnecting_badge():
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
     async with async_playwright() as p:
         browser, page = await _open(p)
@@ -121,7 +122,7 @@ async def test_degraded_chip_shows_reconnecting_badge():
 
 @pytest.mark.asyncio
 async def test_known_undetected_chip_is_distinct():
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
     async with async_playwright() as p:
         browser, page = await _open(p)
@@ -163,7 +164,7 @@ async def test_known_undetected_chip_is_distinct():
 
 @pytest.mark.asyncio
 async def test_detected_device_is_not_known_chip():
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
     async with async_playwright() as p:
         browser, page = await _open(p)
@@ -186,7 +187,7 @@ async def test_detected_device_is_not_known_chip():
 
 @pytest.mark.asyncio
 async def test_lan_device_renders_as_chip():
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
     async with async_playwright() as p:
         browser, page = await _open(p)
@@ -207,7 +208,7 @@ async def test_lan_device_renders_as_chip():
 
 @pytest.mark.asyncio
 async def test_duplicate_known_address_not_double_rendered():
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
     async with async_playwright() as p:
         browser, page = await _open(p)
@@ -230,7 +231,7 @@ async def test_owned_devices_event_adds_daemon_owned_missing_from_scan():
     # R59: the daemon PUSHES owned-device changes as `owned_devices` events; the
     # old 4s get_device_activity poll (refreshOwnedDevices) is gone. Drive the
     # live handler window.Divoom.onOwnedDevices directly.
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
     async with async_playwright() as p:
         browser, page = await _open(p)
@@ -258,7 +259,7 @@ async def test_owned_devices_event_adds_daemon_owned_missing_from_scan():
 
 @pytest.mark.asyncio
 async def test_merge_discovered_devices_unions_by_address():
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
     async with async_playwright() as p:
         browser, page = await _open(p)
@@ -283,7 +284,7 @@ async def test_restored_device_shows_not_in_range_until_confirmed():
     # this session. Before the fix, these looked identical to a live/detected
     # chip; unconfirmed:true must produce the same "not in range" treatment as
     # the knownPending merge already gets.
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
     async with async_playwright() as p:
         browser, page = await _open(p)
@@ -310,7 +311,7 @@ async def test_scan_merge_clears_unconfirmed_flag():
     # the "not in range" badge — mergeDiscoveredDevices' union-only merge (R46
     # #5) can add/update an address but never on its own downgrades one, so
     # clearing unconfirmed explicitly on a scan hit is what actually fixes it.
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
     async with async_playwright() as p:
         browser, page = await _open(p)
@@ -335,7 +336,7 @@ async def test_single_scan_miss_does_not_downgrade():
     # R62 (user-reported): a device present all session that a scan just
     # happens to skip once must NOT immediately flash "not in range" — a
     # single miss isn't reliable proof of absence.
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
     async with async_playwright() as p:
         browser, page = await _open(p)
@@ -360,7 +361,7 @@ async def test_mid_session_scan_misses_downgrade_after_threshold():
     # present THIS session must ALSO show "not in range" if it later drops
     # out of BLE range mid-session -- consecutive scan misses (not just one)
     # now downgrade it live, the same badge the restore path already gets.
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
     async with async_playwright() as p:
         browser, page = await _open(p)
@@ -382,7 +383,7 @@ async def test_mid_session_scan_misses_downgrade_after_threshold():
 
 @pytest.mark.asyncio
 async def test_redetection_resets_the_miss_counter():
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
     async with async_playwright() as p:
         browser, page = await _open(p)
@@ -406,7 +407,7 @@ async def test_daemon_owned_device_exempt_from_scan_miss_downgrade():
     # R47: an owned/streaming device intentionally doesn't advertise (it's
     # connected, not idle) so a scan ALWAYS misses it -- that must never be
     # read as "not in range".
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
     async with async_playwright() as p:
         browser, page = await _open(p)
@@ -435,7 +436,7 @@ async def test_active_device_never_shows_not_in_range_even_if_unconfirmed():
     # carry a stale unconfirmed flag (the confirming scan/activity update
     # hasn't landed yet) — the active dot is the stronger, more current
     # signal and must never be contradicted by a "not in range" badge.
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
     async with async_playwright() as p:
         browser, page = await _open(p)
@@ -461,7 +462,7 @@ async def test_active_device_never_shows_not_in_range_even_if_unconfirmed():
 
 @pytest.mark.asyncio
 async def test_render_device_dots_empty_state_no_crash():
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
     async with async_playwright() as p:
         browser, page = await _open(p)

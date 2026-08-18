@@ -6,6 +6,7 @@ card. Requires `playwright` and `--run-integration`.
 
 import pytest
 from pathlib import Path
+from tests.support.browser import launch as launch_browser, require_browser
 
 INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.html"
 
@@ -14,11 +15,11 @@ INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.htm
 async def test_hot_channel_button_visible_with_many_preview_items():
     """Update button stays at the bottom of the Hot Channel card
     when many preview items are rendered."""
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await launch_browser(p)
         page = await browser.new_page()
         await page.goto(f"file://{INDEX_HTML}")
         await page.wait_for_load_state("domcontentloaded")
@@ -79,11 +80,11 @@ async def test_hot_channel_button_visible_with_many_preview_items():
 @pytest.mark.asyncio
 async def test_gallery_scrolls_internally_not_whole_card():
     """The gallery scrolls internally, not the whole card."""
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await launch_browser(p)
         page = await browser.new_page()
         await page.goto(f"file://{INDEX_HTML}")
         await page.wait_for_load_state("domcontentloaded")

@@ -10,6 +10,7 @@ Skipped if Playwright / a browser isn't installed.
 """
 import pytest
 from pathlib import Path
+from tests.support.browser import launch as launch_browser, require_browser
 
 INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.html"
 
@@ -27,7 +28,7 @@ window.pywebview = { api: new Proxy({}, { get: (_t, name) => (...args) => {
 
 
 async def _open(p):
-    browser = await p.chromium.launch(headless=True)
+    browser = await launch_browser(p)
     page = await browser.new_page()
     await page.add_init_script(_MOCK_API)
     await page.goto(f"file://{INDEX_HTML}")
@@ -40,7 +41,7 @@ async def _open(p):
 async def test_scan_shows_progress_then_result():
     """While scanning, a 'Scanning…' indicator is visible; afterwards it hides and
     a result toast reports the count — the user is never left wondering."""
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
@@ -72,7 +73,7 @@ async def test_scan_shows_progress_then_result():
 async def test_connect_shows_connecting_then_connected():
     """Connecting raises an immediate 'Connecting…' toast + a connecting pulse, and
     success flips to a 'Connected' toast, an active dot, and the device banner."""
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
@@ -114,7 +115,7 @@ async def test_connect_shows_connecting_then_connected():
 async def test_connect_failure_surfaces_the_reason():
     """A failed connect must explain WHY (the daemon's actionable reason), not fail
     silently — and reset the banner so nothing looks connected."""
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
@@ -147,7 +148,7 @@ async def test_connect_failure_surfaces_the_reason():
 async def test_action_without_device_guides_the_user():
     """Triggering a device action with nothing connected must tell the user what to
     do, not no-op silently."""
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
@@ -171,7 +172,7 @@ async def test_streaming_and_degraded_devices_are_visibly_distinct():
     """A daemon-owned device streaming a live widget shows a 'streaming' ring; a
     degraded link shows a distinct 'reconnecting' state — so a busy or struggling
     screen is never indistinguishable from an idle one."""
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
@@ -206,7 +207,7 @@ async def test_streaming_and_degraded_devices_are_visibly_distinct():
 async def test_scan_failure_is_surfaced_not_silent():
     """If the scan backend dies, the user is told (error toast) and the spinner is
     cleared — not left spinning forever."""
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
@@ -233,7 +234,7 @@ async def test_scan_failure_is_surfaced_not_silent():
 async def test_degraded_link_shows_distinct_state():
     """A link that reports connected-but-failing (DEGRADED) shows a distinct amber
     state + a 'reconnecting' hint on the appbar dot — not a misleading solid OK."""
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
@@ -260,7 +261,7 @@ async def test_gallery_requests_the_active_device_resolution():
     """Regression: the community gallery must fetch art at the active device's
     panel size — not always 16px. (banner-device-res moved to Settings, so the old
     reader always hit the 16x16 fallback, shipping 16px art to a 64px Pixoo.)"""
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
@@ -284,7 +285,7 @@ async def test_gallery_requests_the_active_device_resolution():
 async def test_wall_button_communicates_screen_count():
     """The Virtual Wall affordance only appears when a wall is configured and tells
     the user how many screens it drives."""
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
@@ -316,7 +317,7 @@ async def test_known_but_undetected_device_shows_distinct_state():
     """A device seen in a previous session but missed by the current scan must
     still appear in the sidebar as a distinct 'known' chip — not vanish. Closing
     the "known device that wasn't detected" gap (R50)."""
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:

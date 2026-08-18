@@ -42,12 +42,15 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt || true
-          pip install pytest pillow pyaudio playwright
+          pip install pytest pillow pyaudio playwright camoufox
 
-      - name: Install Playwright browser (chromium)
-        # The GUI e2e suites (tests/test_e2e_*.py) drive a headless Chromium.
-        # Without the browser binary they skip via pytest.importorskip.
-        run: python -m playwright install chromium
+      - name: Install the camoufox browser
+        # The GUI e2e suites (15 modules) drive headless camoufox via
+        # tests/support/browser.py. Without the binary they now genuinely SKIP
+        # (tests/test_e2e_browser_guard.py pins that) — before R66 the
+        # importorskip guard only checked the Python module, so a missing
+        # browser produced 69 failures that looked like real regressions.
+        run: python -m camoufox fetch
 
       - name: Build native dylib
         run: bash scripts/build_libdivoom.sh

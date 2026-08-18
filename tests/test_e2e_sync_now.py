@@ -7,6 +7,7 @@ the ``onSyncNowProgress``/``onSyncNowComplete`` events the backend fires
 """
 import pytest
 from pathlib import Path
+from tests.support.browser import launch as launch_browser, require_browser
 
 INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.html"
 
@@ -29,7 +30,7 @@ window.pywebview = { api: new Proxy({}, { get: (_t, name) => (...args) => {
 
 
 async def _open_auto_sync_tab(p):
-    browser = await p.chromium.launch(headless=True)
+    browser = await launch_browser(p)
     page = await browser.new_page()
     await page.add_init_script(_MOCK_API)
     await page.goto(f"file://{INDEX_HTML}")
@@ -48,7 +49,7 @@ async def _open_auto_sync_tab(p):
 
 @pytest.mark.asyncio
 async def test_sync_now_button_calls_backend_and_disables_while_running():
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
@@ -65,7 +66,7 @@ async def test_sync_now_button_calls_backend_and_disables_while_running():
 
 @pytest.mark.asyncio
 async def test_sync_now_progress_updates_the_right_device_row():
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:

@@ -15,17 +15,18 @@ Loads the real index.html via file:// in headless Chromium. Skipped if Playwrigh
 """
 import pytest
 from pathlib import Path
+from tests.support.browser import launch as launch_browser, require_browser
 
 INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.html"
 
 
 @pytest.mark.asyncio
 async def test_settings_moved_to_appbar_gear():
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await launch_browser(p)
         try:
             page = await browser.new_page()
             await page.goto(f"file://{INDEX_HTML}")
@@ -61,11 +62,11 @@ async def test_corner_transport_indicator_removed():
     """R32: the bottom-right connectivity indicator pill (.corner-transports
     with the four #tr-*-dot dots) was removed — the per-device sidebar dots
     convey state now. Assert none of it survives in the rendered DOM."""
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await launch_browser(p)
         try:
             page = await browser.new_page(viewport={"width": 1100, "height": 720})
             await page.goto(f"file://{INDEX_HTML}")

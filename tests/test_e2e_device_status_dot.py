@@ -15,6 +15,7 @@ installed.
 """
 import pytest
 from pathlib import Path
+from tests.support.browser import launch as launch_browser, require_browser
 
 INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.html"
 
@@ -36,7 +37,7 @@ _STATUS_EVENT = "window.Divoom.onDaemonEvent"
 
 
 async def _open(p):
-    browser = await p.chromium.launch(headless=True)
+    browser = await launch_browser(p)
     page = await browser.new_page()
     await page.add_init_script(_MOCK_API)
     await page.goto(f"file://{INDEX_HTML}")
@@ -61,7 +62,7 @@ def _dot_info(page):
 
 @pytest.mark.asyncio
 async def test_status_dot_connected_ble():
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
     async with async_playwright() as p:
         browser, page = await _open(p)
@@ -81,7 +82,7 @@ async def test_status_dot_connected_ble():
 
 @pytest.mark.asyncio
 async def test_status_dot_connected_lan():
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
     async with async_playwright() as p:
         browser, page = await _open(p)
@@ -100,7 +101,7 @@ async def test_status_dot_connected_lan():
 async def test_status_dot_connected_wall():
     # The wall has no daemon `status` event of its own — its dot is set by the
     # real connectDevice path (connection_events.js:53), which is the live code.
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
     async with async_playwright() as p:
         browser, page = await _open(p)
@@ -117,7 +118,7 @@ async def test_status_dot_connected_wall():
 
 @pytest.mark.asyncio
 async def test_status_dot_degraded_keeps_appconnected():
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
     async with async_playwright() as p:
         browser, page = await _open(p)
@@ -137,7 +138,7 @@ async def test_status_dot_degraded_keeps_appconnected():
 
 @pytest.mark.asyncio
 async def test_status_dot_disconnected_flips_appconnected():
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
     async with async_playwright() as p:
         browser, page = await _open(p)
@@ -158,7 +159,7 @@ async def test_status_dot_disconnected_flips_appconnected():
 async def test_status_dot_state_disconnected_overrides_stale_connected():
     """Regression: a daemon reporting connected:true but state:disconnected must
     show DISCONNECTED (amber/green would lie). This is the honest-state fix."""
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
     async with async_playwright() as p:
         browser, page = await _open(p)
@@ -180,7 +181,7 @@ async def test_status_dot_state_disconnected_overrides_stale_connected():
 async def test_status_dot_malformed_event_leaves_dot_untouched():
     # onDaemonEvent guards on a null/non-object event and returns early, so the
     # dot keeps whatever the last valid event set.
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
     async with async_playwright() as p:
         browser, page = await _open(p)
@@ -206,7 +207,7 @@ async def test_status_dot_event_is_authoritative():
     # In the event model a disconnect event ALWAYS wins (it's the source of
     # truth), even if the UI currently thinks it's connected — there's no
     # appConnected gate like the old polling safety net had.
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
     async with async_playwright() as p:
         browser, page = await _open(p)
@@ -229,7 +230,7 @@ async def test_status_dot_safety_net_refresh_connection_state():
     # The 4s polling heartbeat was removed, but refreshConnectionState is kept
     # as a documented fallback. This guards it still flips the dot honestly when
     # driven directly (e.g. a future re-enable).
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
     async with async_playwright() as p:
         browser, page = await _open(p)

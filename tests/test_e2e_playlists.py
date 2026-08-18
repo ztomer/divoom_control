@@ -6,6 +6,7 @@ Skipped if Playwright / a browser isn't installed.
 """
 import pytest
 from pathlib import Path
+from tests.support.browser import launch as launch_browser, require_browser
 
 INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.html"
 
@@ -25,7 +26,7 @@ window.pywebview = { api: new Proxy({}, { get: (_t, name) => (...args) => {
 
 
 async def _open_playlists_tab(p):
-    browser = await p.chromium.launch(headless=True)
+    browser = await launch_browser(p)
     page = await browser.new_page()
     await page.add_init_script(_MOCK_API)
     await page.goto(f"file://{INDEX_HTML}")
@@ -38,7 +39,7 @@ async def _open_playlists_tab(p):
 
 @pytest.mark.asyncio
 async def test_playlists_tab_loads_the_users_cloud_playlists():
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
@@ -55,7 +56,7 @@ async def test_playlists_tab_loads_the_users_cloud_playlists():
 
 @pytest.mark.asyncio
 async def test_push_without_a_device_shows_connect_prompt_and_does_not_call_push_playlist():
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
@@ -83,7 +84,7 @@ async def test_push_with_a_device_calls_push_playlist_with_the_real_play_id():
     """The whole point of this feature: pushing a browsed cloud playlist
     reuses the existing LAN Playlist/SendDevice path -- no new device-apply
     plumbing, just the real PlayId from Playlist/GetMyList."""
-    pytest.importorskip("playwright.async_api")
+    require_browser()
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
