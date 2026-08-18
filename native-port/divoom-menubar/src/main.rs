@@ -9,6 +9,7 @@
 
 mod daemon;
 mod launch;
+mod resubscribe;
 mod state;
 mod tray;
 
@@ -70,18 +71,21 @@ fn main() {
         let proxy = event_loop.create_proxy();
         let quitting = quitting.clone();
         thread::spawn(move || {
-            while !quitting.load(Ordering::Relaxed) {
-                daemon::subscribe(
-                    |_ev| {
-                        let _ = proxy.send_event(UserEvent::DaemonEvent);
-                    },
-                    || quitting.load(Ordering::Relaxed),
-                );
-                if quitting.load(Ordering::Relaxed) {
-                    break;
-                }
-                thread::sleep(SUBSCRIBE_RETRY_DELAY);
-            }
+            // Loop body lives in resubscribe.rs so the "never die on a daemon
+            // drop" guard (R53.39) is unit-testable — it was previously inline
+            // here and therefore unreachable from any test.
+            resubscribe::resubscribe_until_quit(
+                || {
+                    daemon::subscribe(
+                        |_ev| {
+                            let _ = proxy.send_event(UserEvent::DaemonEvent);
+                        },
+                        || quitting.load(Ordering::Relaxed),
+                    );
+                },
+                || thread::sleep(SUBSCRIBE_RETRY_DELAY),
+                || quitting.load(Ordering::Relaxed),
+            );
         });
     }
 
