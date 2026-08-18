@@ -4,7 +4,7 @@
     (driven by scripts/build_release.sh in a dedicated build venv)
 
 What ships: the four runtime packages (divoom_lib / divoom_daemon / divoom_gui /
-divoom_menubar) and their package data (web_ui/, fonts/, the native dylib), plus
+divoom_gui) and their package data (web_ui/, fonts/, the native dylib), plus
 the third-party runtime deps (bleak, aiohttp, Pillow, pywebview, pyobjc).
 
 What does NOT ship — enforced by `excludes` + listing only the runtime packages:
@@ -62,7 +62,6 @@ _RES_FILES = [
         "divoomd/target/release/divoomd",
         # The native Rust menubar agent — the GUI spawns it (see gui_main
         # _resolve_menubar_binary, which finds it via RESOURCEPATH). Replaces the
-        # pyobjc menubar (divoom_menubar/ stays in-tree as reference).
         "native-port/divoom-menubar/target/release/divoom-menubar",
         "divoom_lib/libdivoom_compact.dylib",
     ) if os.path.exists(p)
@@ -80,7 +79,7 @@ OPTIONS = {
     # tree (not byte-compiled into the zip), so web_ui/, fonts/ and the native
     # dylib travel with their package and resolve via Path(__file__).parent.
     "packages": [
-        "divoom_lib", "divoom_daemon", "divoom_gui", "divoom_menubar",
+        "divoom_lib", "divoom_daemon", "divoom_gui",
         "bleak", "aiohttp", "PIL", "webview",
         "objc", "Foundation", "AppKit", "CoreBluetooth", "WebKit", "Quartz",
     ],

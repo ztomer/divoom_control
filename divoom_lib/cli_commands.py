@@ -354,13 +354,13 @@ async def cmd_daemon(args: argparse.Namespace) -> int:
     "Native Rust daemon" section. This subcommand is kept only to give a
     clear, actionable error instead of a raw ImportError; the historical
     implementation still exists (moved, not deleted) at
-    `archive/divoom_daemon/daemon.py` if it's ever needed for reference."""
+    git history if it's ever needed for reference (recover from git history (archived in 046cdf8, removed in R66 2026-08-17))."""
     print(
         "The Python daemon server has been archived — divoomd (Rust) is now "
         "the only supported daemon. Build/run divoomd directly, or use "
         "divoom_daemon.daemon_client.ensure_daemon()/spawn_daemon() which "
         "auto-spawns it. The archived Python implementation is kept for "
-        "reference at archive/divoom_daemon/ but is no longer runnable via "
+        "recoverable from git history but is no longer runnable via "
         "this CLI command.",
         file=sys.stderr,
     )
@@ -368,17 +368,19 @@ async def cmd_daemon(args: argparse.Namespace) -> int:
 
 
 def cmd_menubar(args: argparse.Namespace) -> int:
-    """Launch the macOS menubar agent (R15 §6). Connects to the daemon as a
-    client (no BLE, no socket server). This is a blocking call that runs the
-    Cocoa event loop."""
-    import sys
-    from pathlib import Path
-    repo_root = Path(__file__).resolve().parents[1]
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
-    # The menubar runs its own Cocoa event loop — just import and run main()
-    from divoom_menubar.menubar import main
-    main()
-    return 0
+    """The pyobjc menubar was removed 2026-08-17 (R66) in favour of the native
+    Rust agent, `native-port/divoom-menubar/`, which is what the shipped .app
+    has bundled since the native cutover. This subcommand is kept only to give
+    a clear, actionable error instead of a raw ImportError -- same treatment
+    `cmd_daemon` got when the Python daemon server was archived."""
+    print(
+        "The Python menubar has been removed — the native Rust agent "
+        "(divoom-menubar) is now the only menubar. Run it with "
+        "`./run.sh --menubar`, or let the GUI spawn it (`./run.sh`). Build it "
+        "with `./build.sh`. Its resubscribe guard lives in "
+        "native-port/divoom-menubar/src/resubscribe.rs.",
+        file=sys.stderr,
+    )
+    return 1
 
 

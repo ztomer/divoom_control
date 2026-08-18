@@ -93,7 +93,7 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["divoom_lib*", "divoom_daemon*", "divoom_gui*", "divoom_menubar*"]
+include = ["divoom_lib*", "divoom_daemon*", "divoom_gui*"]
 exclude = ["tests*", "examples*", "references*", "scripts*", "docs*"]
 
 [tool.setuptools.package-data]

@@ -2,7 +2,7 @@
 
 The rest of this suite (every test that drives a real in-process SocketServer)
 depends on the archived divoom_daemon.socket_server module and moved to
-archive/tests/test_socket_hardening.py, which kept the original name since it
+archive/tests/ (removed in R66; in git history) test_socket_hardening.py, which kept the original name since it
 carries the bulk of the file's tests.
 """
 import sys

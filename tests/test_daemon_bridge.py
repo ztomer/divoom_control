@@ -3,7 +3,7 @@ status cache — the parts that do NOT need a live daemon.
 
 The proxy-dispatch tests (built on a real in-process DivoomDaemon over a temp
 socket) depend on the archived divoom_daemon.daemon server module and moved to
-archive/tests/test_daemon_bridge.py.
+archive/tests/ (removed in R66; in git history) test_daemon_bridge.py.
 """
 import os
 import sys

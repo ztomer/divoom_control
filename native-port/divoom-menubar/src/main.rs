@@ -1,7 +1,7 @@
 //! divoom-menubar — the native (Rust) menubar agent. A windowless tray app that
 //! polls divoomd over the NDJSON socket for status + active devices and launches
-//! the Python pywebview dashboard. Replaces the pyobjc menubar (`divoom_menubar/`)
-//! while the desktop UI stays Python and the daemon stays Rust.
+//! the Python pywebview dashboard. Replaced the pyobjc menubar (removed in R66,
+//! 2026-08-17); the desktop UI stays Python and the daemon stays Rust.
 //!
 //! Built on tao (event loop) + tray-icon. tray-icon needs an event loop on the
 //! main thread; tao gives the classic run() closure. We poll the daemon on a

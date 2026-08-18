@@ -3,7 +3,7 @@ surface as a hard error to the user (the daemon is just mid-(re)start).
 
 The server-side startup-race tests (real SocketServer instances) depend on
 the archived divoom_daemon.socket_server module and moved to
-archive/tests/test_daemon_socket_hardening.py.
+archive/tests/ (removed in R66; in git history) test_daemon_socket_hardening.py.
 """
 import sys
 from pathlib import Path

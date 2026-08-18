@@ -157,7 +157,7 @@ CI install step updated; no `p.chromium` references left in `tests/`.
 **Goal: ACHIEVED.** The Python daemon backend was deprecated in favor of
 `divoomd` (Rust, built on `btleplug` + `tokio` + `serde`) at 100% socket +
 hardware parity (2026-06-29). Python daemon server archived 2026-07-13 (13
-server-side modules moved to `archive/divoom_daemon/`, client-side infra stays
+server-side modules archived, then removed from the tree in R66, client-side infra stays
 active in `divoom_daemon/` — `daemon_client.py`, `daemon_protocol.py`,
 `macos_notifications.py`). Full device parity (54 → 0 gaps), cloud decode,
 hardware-verified on Pixoo/Timoo/Ditoo/Tivoo Max. Menubar is a standalone Rust
@@ -166,8 +166,8 @@ agent (`native-port/divoom-menubar/`); the GUI stays the Python pywebview UI
 feature matrices.
 
 Key: `divoomd` is now the **sole shipping daemon** — no `DIVOOM_USE_RUST_DAEMON`
-opt-out. `archive/tests/` (469 tests) is excluded from default pytest but still
-runnable standalone.
+opt-out. The archived server and its 469 tests were removed from the tree in
+R66 (2026-08-17); recover from git history if ever needed.
 
 ## Architecture summary
 

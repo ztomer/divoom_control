@@ -21,7 +21,8 @@ and the menu-bar agent), and a native accelerator:
    the shipped app runs. `divoom_daemon/` (the Python package) is now client-only:
    the shared NDJSON-socket client library every consumer (GUI, menubar, CLI,
    MCP) uses to talk to whichever daemon is running. The original Python daemon
-   *server* implementation was archived to `archive/divoom_daemon/` (2026-07-13)
+   *server* implementation was archived (2026-07-13) and then removed from the
+   tree in R66 (2026-08-17) -- recover from git history (archived in 046cdf8, removed in R66 2026-08-17)
    once the Rust daemon reached parity — kept for historical reference only, not
    built, run, or tested by anything in this repo.
 3. **`divoom_gui/`** — a [pywebview](https://pywebview.flowrl.com/) desktop
@@ -201,8 +202,6 @@ divoom_gui/            Desktop Control Center (pywebview, macOS) — daemon clie
   web_ui/                frontend (app.js, channels.js, widgets.js, …)
 native-port/           Other native Rust binaries (bundled in the shipped .app)
   divoom-menubar/        the menu-bar/tray agent (tao + tray-icon)
-archive/divoom_daemon/ Archived Python daemon SERVER (superseded by divoomd,
-                          2026-07-13) — historical reference only, not built/run
 build.sh / run.sh      build the Rust binaries / run the GUI (+ daemon + menubar)
 scripts/build_libdivoom.sh   cross-platform native (C accelerator) build
 scripts/build_release.sh     build the shippable Divoom.app + dmg (py2app)

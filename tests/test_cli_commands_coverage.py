@@ -559,13 +559,11 @@ async def test_cmd_daemon_reports_archived_and_fails(capsys) -> None:
 # ── cmd_menubar ──────────────────────────────────────────────────────────
 
 
-def test_cmd_menubar_delegates_to_main(monkeypatch) -> None:
-    called = {"ran": False}
-
-    def fake_main() -> None:
-        called["ran"] = True
-
-    monkeypatch.setattr("divoom_menubar.menubar.main", fake_main)
+def test_cmd_menubar_is_retired_and_points_at_the_rust_agent(capsys) -> None:
+    """R66: the pyobjc menubar was removed; the subcommand survives only to give
+    an actionable error rather than a raw ImportError (same as cmd_daemon)."""
     rc = cli_commands.cmd_menubar(_parse("menubar"))
-    assert rc == 0
-    assert called["ran"] is True
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "run.sh --menubar" in err
+    assert "divoom-menubar" in err

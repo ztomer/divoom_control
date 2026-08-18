@@ -1,6 +1,6 @@
 """CLIENT LIBRARY — the Rust `divoomd` binary is the sole shipping daemon.
 This package no longer contains a Python daemon SERVER implementation (that
-was archived to `archive/divoom_daemon/` on 2026-07-13, explicit user
+was archived on 2026-07-13 and removed from the tree in R66; recover from git history (archived in 046cdf8, removed in R66 2026-08-17), explicit user
 sign-off — see `docs/ROADMAP.md`'s "Native Rust daemon" section for the
 parity/soak history that gated it). What remains here is the shared CLIENT
 infrastructure every consumer (GUI, menubar, CLI, MCP) uses to talk to

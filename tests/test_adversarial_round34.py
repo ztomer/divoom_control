@@ -5,7 +5,7 @@
 
 (Hashimoto's notification-monitor health-error test lived here too, but it
 depends on the archived divoom_daemon.notification_service server module and
-moved to archive/tests/test_adversarial_round34.py.)
+moved to archive/tests/ (removed in R66; in git history) test_adversarial_round34.py.)
 """
 import asyncio
 import dataclasses
