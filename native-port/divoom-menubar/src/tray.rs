@@ -64,15 +64,40 @@ impl Tray {
             }
         }
         let _ = menu.append(&PredefinedMenuItem::separator());
-        let _ = menu.append(&MenuItem::with_id(self.launch_id.clone(), "Launch Dashboard", true, None));
-        let _ = menu.append(&MenuItem::with_id(self.notif_open_id.clone(), "Open Notifications…", true, None));
+        let _ = menu.append(&MenuItem::with_id(
+            self.launch_id.clone(),
+            "Launch Dashboard",
+            true,
+            None,
+        ));
+        let _ = menu.append(&MenuItem::with_id(
+            self.notif_open_id.clone(),
+            "Open Notifications…",
+            true,
+            None,
+        ));
         let _ = menu.append(&PredefinedMenuItem::separator());
         // Start is enabled when stopped; Stop when running (parity with pyobjc,
         // which shows both — we just disable the inapplicable one).
-        let _ = menu.append(&MenuItem::with_id(self.notif_start_id.clone(), "Start Notifications", !notif_running, None));
-        let _ = menu.append(&MenuItem::with_id(self.notif_stop_id.clone(), "Stop Notifications", notif_running, None));
+        let _ = menu.append(&MenuItem::with_id(
+            self.notif_start_id.clone(),
+            "Start Notifications",
+            !notif_running,
+            None,
+        ));
+        let _ = menu.append(&MenuItem::with_id(
+            self.notif_stop_id.clone(),
+            "Stop Notifications",
+            notif_running,
+            None,
+        ));
         let _ = menu.append(&PredefinedMenuItem::separator());
-        let _ = menu.append(&MenuItem::with_id(self.quit_id.clone(), "Quit Divoom (stop daemon)", true, None));
+        let _ = menu.append(&MenuItem::with_id(
+            self.quit_id.clone(),
+            "Quit Divoom (stop daemon)",
+            true,
+            None,
+        ));
         self.icon.set_menu(Some(Box::new(menu)));
     }
 
@@ -86,7 +111,11 @@ impl Tray {
         // monitor (`status`, above) — never whether a device is BLE/LAN
         // connected. connection_state() adds that as the primary signal;
         // notif_running now only affects the tooltip (see resolve_icon_state).
-        let connection_state = if offline { None } else { daemon::connection_state() };
+        let connection_state = if offline {
+            None
+        } else {
+            daemon::connection_state()
+        };
         let (icon_state, tooltip) =
             resolve_icon_state(!offline, connection_state.as_deref(), notif_running);
         if self.last_icon_state != Some(icon_state) {
@@ -98,13 +127,21 @@ impl Tray {
             self.last_tooltip = tooltip;
         }
 
-        let devices = if offline { Vec::new() } else { daemon::device_activity() };
+        let devices = if offline {
+            Vec::new()
+        } else {
+            daemon::device_activity()
+        };
 
         let sig = format!(
             "{}|{}|{}",
             if offline { "off" } else { "on" },
             notif_running,
-            devices.iter().map(|(n, k)| format!("{n}:{k}")).collect::<Vec<_>>().join(",")
+            devices
+                .iter()
+                .map(|(n, k)| format!("{n}:{k}"))
+                .collect::<Vec<_>>()
+                .join(",")
         );
         if sig != self.last_sig {
             self.rebuild(&devices, notif_running);
@@ -167,7 +204,8 @@ fn make_icon(rgb: [u8; 3]) -> tray_icon::Icon {
         let dx = fx - mid;
         let dy = fy - cy;
         let dist_from_arc = radius - (dx * dx + dy * dy).sqrt();
-        let near_left = fx <= mid && (fx - left).abs() <= STROKE && fy >= top - STROKE && fy <= bottom + STROKE;
+        let near_left =
+            fx <= mid && (fx - left).abs() <= STROKE && fy >= top - STROKE && fy <= bottom + STROKE;
         let near_top = fx <= mid && (fy - top).abs() <= STROKE;
         let near_bottom = fx <= mid && (fy - bottom).abs() <= STROKE;
         let near_bowl = fx >= mid && dist_from_arc.abs() <= STROKE;

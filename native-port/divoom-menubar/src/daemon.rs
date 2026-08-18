@@ -22,7 +22,9 @@ pub fn request(command: &str, args: Value) -> Option<Value> {
 
     let stream = UnixStream::connect(socket_path()).ok()?;
     stream.set_read_timeout(Some(Duration::from_secs(6))).ok()?;
-    stream.set_write_timeout(Some(Duration::from_secs(6))).ok()?;
+    stream
+        .set_write_timeout(Some(Duration::from_secs(6)))
+        .ok()?;
     let mut w = stream.try_clone().ok()?;
     let mut line = serde_json::to_vec(&json!({ "command": command, "args": args })).ok()?;
     line.push(b'\n');
@@ -67,7 +69,9 @@ pub fn status() -> Status {
 /// follow-up — the menubar previously never read this at all).
 pub fn connection_state() -> Option<String> {
     let v = request("device_status", json!({}))?;
-    v.get("connection_state").and_then(|s| s.as_str()).map(str::to_string)
+    v.get("connection_state")
+        .and_then(|s| s.as_str())
+        .map(str::to_string)
 }
 
 /// Open a `subscribe` stream and call `on_event` for each broadcast until the
@@ -81,8 +85,13 @@ pub fn subscribe(mut on_event: impl FnMut(Value), should_stop: impl Fn() -> bool
     use std::os::unix::net::UnixStream;
     use std::time::Duration;
 
-    let Ok(mut stream) = UnixStream::connect(socket_path()) else { return false };
-    if stream.set_read_timeout(Some(Duration::from_millis(500))).is_err() {
+    let Ok(mut stream) = UnixStream::connect(socket_path()) else {
+        return false;
+    };
+    if stream
+        .set_read_timeout(Some(Duration::from_millis(500)))
+        .is_err()
+    {
         return false;
     }
     let req = match serde_json::to_vec(&json!({ "command": "subscribe" })) {
@@ -105,8 +114,9 @@ pub fn subscribe(mut on_event: impl FnMut(Value), should_stop: impl Fn() -> bool
         match stream.read(&mut chunk) {
             Ok(0) => return true, // daemon closed the stream
             Ok(n) => buf.extend_from_slice(&chunk[..n]),
-            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock
-                || e.kind() == std::io::ErrorKind::TimedOut =>
+            Err(e)
+                if e.kind() == std::io::ErrorKind::WouldBlock
+                    || e.kind() == std::io::ErrorKind::TimedOut =>
             {
                 continue; // short read timeout so should_stop() stays responsive
             }
@@ -134,13 +144,25 @@ pub fn subscribe(_on_event: impl FnMut(Value), _should_stop: impl Fn() -> bool) 
 /// Active devices the daemon knows about → `(name, kind)` rows for the menu
 /// (parity with the pyobjc menubar's activity tiles; lightweight, no BLE scan).
 pub fn device_activity() -> Vec<(String, String)> {
-    let Some(v) = request("get_device_activity", json!({})) else { return Vec::new() };
-    let Some(map) = v.get("activity").and_then(|a| a.as_object()) else { return Vec::new() };
+    let Some(v) = request("get_device_activity", json!({})) else {
+        return Vec::new();
+    };
+    let Some(map) = v.get("activity").and_then(|a| a.as_object()) else {
+        return Vec::new();
+    };
     let mut rows: Vec<(String, String)> = map
         .values()
         .map(|d| {
-            let name = d.get("name").and_then(|n| n.as_str()).unwrap_or("Divoom").to_string();
-            let kind = d.get("kind").and_then(|k| k.as_str()).unwrap_or("").to_string();
+            let name = d
+                .get("name")
+                .and_then(|n| n.as_str())
+                .unwrap_or("Divoom")
+                .to_string();
+            let kind = d
+                .get("kind")
+                .and_then(|k| k.as_str())
+                .unwrap_or("")
+                .to_string();
             (name, kind)
         })
         .collect();
@@ -150,10 +172,16 @@ pub fn device_activity() -> Vec<(String, String)> {
 
 /// Whether the notification listener is running (menu label state).
 pub fn notifications_running() -> bool {
-    let Some(v) = request("notification_status", json!({})) else { return false };
+    let Some(v) = request("notification_status", json!({})) else {
+        return false;
+    };
     v.get("running")
         .and_then(|r| r.as_bool())
-        .or_else(|| v.get("state").and_then(|s| s.as_str()).map(|s| s == "running"))
+        .or_else(|| {
+            v.get("state")
+                .and_then(|s| s.as_str())
+                .map(|s| s == "running")
+        })
         .unwrap_or(false)
 }
 
@@ -195,8 +223,11 @@ mod tests {
     impl FakeDaemon {
         fn start(reply: Value, subscribe_events: Vec<Value>) -> FakeDaemon {
             let guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-            let path = format!("/tmp/divoom_menubar_test_{}_{:?}.sock",
-                std::process::id(), thread::current().id());
+            let path = format!(
+                "/tmp/divoom_menubar_test_{}_{:?}.sock",
+                std::process::id(),
+                thread::current().id()
+            );
             let _ = std::fs::remove_file(&path);
             let listener = UnixListener::bind(&path).expect("bind fake daemon socket");
             std::env::set_var("DIVOOM_SOCKET", &path);
@@ -230,7 +261,10 @@ mod tests {
                 }
             });
 
-            FakeDaemon { socket_path: path, _guard: guard }
+            FakeDaemon {
+                socket_path: path,
+                _guard: guard,
+            }
         }
     }
 

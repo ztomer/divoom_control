@@ -30,7 +30,9 @@ pub fn dashboard(extra: &[&str]) {
             cmd.args(extra);
         }
     }
-    cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
     let _ = cmd.spawn();
 }
 
@@ -54,8 +56,12 @@ pub fn quit() {
 /// Read `[gui] keep_daemon_alive` from `~/.config/divoom-control/config.ini`
 /// (default false → shared lifecycle). Minimal hand-parse — no ini crate.
 fn keep_daemon_alive() -> bool {
-    let Some(path) = config_path() else { return false };
-    let Ok(text) = std::fs::read_to_string(path) else { return false };
+    let Some(path) = config_path() else {
+        return false;
+    };
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return false;
+    };
     let mut in_gui = false;
     for raw in text.lines() {
         let line = raw.trim();
@@ -68,7 +74,10 @@ fn keep_daemon_alive() -> bool {
         }
         if let Some((k, v)) = line.split_once('=') {
             if k.trim().eq_ignore_ascii_case("keep_daemon_alive") {
-                return matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on");
+                return matches!(
+                    v.trim().to_ascii_lowercase().as_str(),
+                    "1" | "true" | "yes" | "on"
+                );
             }
         }
     }

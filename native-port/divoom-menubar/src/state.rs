@@ -51,17 +51,24 @@ pub fn resolve_icon_state(
     notif_active: bool,
 ) -> (IconState, String) {
     let (state, mut tooltip) = if !daemon_reachable {
-        (IconState::Offline, "Divoom Control — daemon offline".to_string())
+        (
+            IconState::Offline,
+            "Divoom Control — daemon offline".to_string(),
+        )
     } else {
         match connection_state {
-            Some("connected") => {
-                (IconState::Connected, "Divoom Control — device connected".to_string())
-            }
+            Some("connected") => (
+                IconState::Connected,
+                "Divoom Control — device connected".to_string(),
+            ),
             Some("degraded") => (
                 IconState::Degraded,
                 "Divoom Control — link degraded, reconnecting".to_string(),
             ),
-            _ => (IconState::Idle, "Divoom Control — no device connected".to_string()),
+            _ => (
+                IconState::Idle,
+                "Divoom Control — no device connected".to_string(),
+            ),
         }
     };
     if daemon_reachable && notif_active {
@@ -78,7 +85,10 @@ mod tests {
     fn offline_wins_regardless_of_connection_state_or_notif() {
         let (s, t) = resolve_icon_state(false, Some("connected"), true);
         assert_eq!(s, IconState::Offline);
-        assert!(!t.contains("notifications"), "notif detail must not leak when unreachable");
+        assert!(
+            !t.contains("notifications"),
+            "notif detail must not leak when unreachable"
+        );
     }
 
     #[test]
@@ -115,7 +125,10 @@ mod tests {
     fn notif_activity_changes_tooltip_not_color() {
         let (s1, t1) = resolve_icon_state(true, Some("connected"), false);
         let (s2, t2) = resolve_icon_state(true, Some("connected"), true);
-        assert_eq!(s1, s2, "notification activity must not change the icon state/color");
+        assert_eq!(
+            s1, s2,
+            "notification activity must not change the icon state/color"
+        );
         assert_ne!(t1, t2);
         assert!(t2.contains("notifications"));
     }
