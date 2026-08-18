@@ -57,6 +57,22 @@ green for the commit being tagged** (`check-runs` on HEAD all pass). The ONE
 exception is **credit depletion** (GitHub Actions billing exhaustion) — that is a
 money wall, not a code signal, so it does not block.
 
+### CI is currently unavailable — use `scripts/ci_local.sh`
+
+**As of 2026-08-17 GitHub Actions credits are exhausted, so CI always fails.**
+That is the money wall the credit-depletion exception exists for, but it also
+means **CI catches nothing right now** — a red check is not a code signal, and a
+green one is unobtainable.
+
+Until billing is restored, **`./scripts/ci_local.sh` is the gate**. It mirrors
+`.github/workflows/tests.yml` job-for-job (house gates, Rust core without BLE,
+Rust with BLE, the Python suite). Run it before every push and before any
+release.
+
+Do NOT mistake the pre-commit hook for CI. It is deliberately narrow so commits
+stay fast, and is weaker in three ways: it checks only **staged** files, gates
+only **divoomd** (never `native-port/divoom-menubar`), and runs **no tests**.
+
 This is enforced structurally in `scripts/release.sh` (preflight `ci_gate`):
 it aborts on a red or still-running check run, auto-allows a failure that reads
 like credit/billing depletion, and refuses when CI status can't be verified.
