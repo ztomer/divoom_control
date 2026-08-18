@@ -28,7 +28,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-REPO="ztomer/divoom_lib"          # code repo — hosts the tag + release + DMG asset
+REPO="ztomer/divoom_control"      # code repo — hosts the tag + release + DMG asset
+                                  # (renamed from divoom_lib; the old name only redirects)
 TAP="ztomer/homebrew-tap"         # cask repo
 CASK_PATH="Casks/divoom-control.rb"
 
@@ -180,6 +181,7 @@ s = re.sub(r'sha256 \"[0-9a-fA-F]+\"', 'sha256 \"%s\"' % os.environ['SHA'], s, c
 # The app is arm64-only since R66 (Apple dropped Intel Macs, so did we). Without
 # an arch constraint Homebrew happily installs the arm64 DMG on an Intel Mac and
 # the user gets a broken app instead of a clean \"unsupported\" message.
+s = s.replace('ztomer/divoom_lib', 'ztomer/divoom_control')  # repo was renamed
 if 'depends_on arch:' not in s:
     s = re.sub(r'(\n\s*depends_on macos:[^\n]*\n)',
                r'\\1  depends_on arch: :arm64\n', s, count=1)

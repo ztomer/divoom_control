@@ -81,8 +81,8 @@ divoom-control = "divoom_lib.cli:main"
 
 [project.urls]
 # Update these once the repo has a public home.
-"Source" = "https://github.com/ztomer/divoom-control"
-"Issues" = "https://github.com/ztomer/divoom-control/issues"
+"Source" = "https://github.com/ztomer/divoom_control"
+"Issues" = "https://github.com/ztomer/divoom_control/issues"
 
 # ── setuptools: package discovery + data files ───────────────────────
 
