@@ -40,11 +40,21 @@ def _run_guard() -> str | None:
     return None
 
 
-def test_skips_when_the_browser_is_not_downloaded(monkeypatch) -> None:
-    """installed_verstr() returning empty means 'no binary' -> skip, not fail."""
-    import camoufox.pkgman
+def test_skips_when_the_browser_is_genuinely_not_installed(monkeypatch) -> None:
+    """Drive camoufox's OWN not-installed path, not a stub of our probe.
 
-    monkeypatch.setattr(camoufox.pkgman, "installed_verstr", lambda: "")
+    `get_active_path() is None` is exactly what camoufox reports when no browser
+    has been fetched; `installed_verstr()` then raises CamoufoxNotInstalled.
+    Patching that instead of our own `installed_verstr` reference means this
+    exercises the real library code, so it stays honest if camoufox changes how
+    absence is signalled — an earlier version of this test stubbed
+    `installed_verstr` to return "", a condition the library never actually
+    produces, which proved only that our branch worked and not that reality
+    reaches it.
+    """
+    import camoufox.multiversion
+
+    monkeypatch.setattr(camoufox.multiversion, "get_active_path", lambda: None)
     reason = _run_guard()
     assert reason is not None, "a missing browser binary must skip, not proceed to launch"
     assert "camoufox fetch" in reason, f"skip reason must say how to fix it, got: {reason}"

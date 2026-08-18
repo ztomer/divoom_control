@@ -113,34 +113,30 @@ All 4 clusters implemented:
 Bonus fix: device-selector "not in range" badge now counts consecutive scan misses
 (downgrades after 2), not a one-shot startup flag. 5 new e2e tests.
 
-### Migrate the GUI e2e suite off Playwright/Chromium → camoufox
+### GUI e2e suite migrated to camoufox — SHIPPED (R66, v0.23.0)
 
-**Scope correction:** the Playwright dependency is **not** in `divoom_lib` (zero
-hits there). It is the GUI e2e suite — **15 test files under `tests/`** that
-drive `divoom_gui/web_ui/` via `p.chromium.launch(headless=True)`, plus the two
-CI steps that install it (`.github/workflows/tests.yml:45,50`).
+All 15 modules moved off Playwright/Chromium behind one seam
+(`tests/support/browser.py`); no `p.chromium` references remain in `tests/`.
+CI installs camoufox instead of chromium.
 
-Move these to **camoufox** (anti-detect Firefox, driven through the same
-Playwright API — so the migration is mostly the launch call plus the browser
-install step, not a rewrite of the 15 suites).
+The guard defect that motivated this is fixed and pinned by
+`tests/test_e2e_browser_guard.py`: `pytest.importorskip` only proved the Python
+*module* imported, so a missing browser **binary** produced 69 failures that
+read as real regressions. `require_browser()` now probes the binary.
 
-Why now:
-- **The skip guard does not guard.** CI claims these "skip via
-  `pytest.importorskip`" when the browser is absent, but `importorskip` only
-  checks the Python *module* — the browser *binary* being missing raises
-  `BrowserType.launch: Executable doesn't exist`, so they **fail** instead of
-  skipping. Measured 2026-08-17: a clean checkout with the `playwright` module
-  installed but no chromium produced **69 failures/errors** that look like real
-  regressions and are not. Fix the guard as part of this move (probe the
-  browser, not the import) regardless of which engine wins.
-- Chromium is a ~130 MB per-machine download that every fresh dev environment
-  silently fails without.
-- camoufox is already the house browser-automation transport (see the
-  `gemini-camoufox` skill), so this consolidates on one engine.
+Acceptance met, with one honest note on how: the criterion said "proven by
+deleting the browser". It is instead proven by driving camoufox's own
+not-installed path (`get_active_path() -> None`, which makes `installed_verstr()`
+raise `CamoufoxNotInstalled`) rather than deleting a ~150 MB install per run.
+That is stronger than the first attempt, which stubbed `installed_verstr` to
+return `""` — a value the library never actually produces, so it proved our
+branch worked without proving reality reaches it. The suite also asserts the
+guard does NOT over-skip, since a guard that always skipped would silently
+disable all 15 suites while looking green.
 
-Acceptance: all 15 suites green under camoufox; a missing browser **skips**
-(proven by deleting the browser and watching them skip, not by assuming);
-CI install step updated; no `p.chromium` references left in `tests/`.
+Two latent test races surfaced during the move (both waited on a proxy DOM
+signal and asserted on a different one — a Chromium timing coincidence) and were
+fixed as a class.
 
 ### Deferred
 
