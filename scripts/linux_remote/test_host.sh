@@ -39,7 +39,7 @@ bluetoothctl power on  >/dev/null 2>&1 || true
 sleep 1
 pkill -f target/release/divoomd 2>/dev/null
 rm -f /tmp/divoomd.sock
-./divoomd/target/release/divoomd --socket /tmp/divoomd.sock >/tmp/divoomd.log 2>&1 &
+./target/release/divoomd --socket /tmp/divoomd.sock >/tmp/divoomd.log 2>&1 &
 DPID=$!
 for _ in $(seq 1 50); do [ -S /tmp/divoomd.sock ] && break; sleep 0.2; done
 python3 scripts/linux_remote/scan.py /tmp/divoomd.sock || true

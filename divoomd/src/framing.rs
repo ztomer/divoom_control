@@ -1,6 +1,6 @@
 //! Basic + iOS-LE wire framing, ported byte-for-byte from `divoom_lib/framing.py`.
 //! Parity is enforced by `tests/framing_parity.rs` against vectors generated from
-//! the Python implementation (`native-port/gen_framing_vectors.py`).
+//! the Python implementation (`scripts/codegen/gen_framing_vectors.py`).
 
 use crate::models;
 

@@ -17,7 +17,7 @@ and the menu-bar agent), and a native accelerator:
    is the **single owner** of the device connection and serves a command/event
    protocol over a Unix socket and (optionally) TCP. On macOS it also does
    notification monitoring. Runs on **macOS and Linux**. Paired with a **native
-   Rust menu-bar agent**, `native-port/divoom-menubar/` — together these are what
+   Rust menu-bar agent**, `divoom-menubar/` — together these are what
    the shipped app runs. `divoom_daemon/` (the Python package) is now client-only:
    the shared NDJSON-socket client library every consumer (GUI, menubar, CLI,
    MCP) uses to talk to whichever daemon is running. The original Python daemon
@@ -115,10 +115,10 @@ is only for headless/networked use):
 
 ```bash
 # local only (Unix socket; the GUI auto-spawns this for you)
-./divoomd/target/release/divoomd --socket /tmp/divoom.sock
+./target/release/divoomd --socket /tmp/divoom.sock
 
 # headless network server on a LAN, token-authenticated (R19)
-./divoomd/target/release/divoomd --host 0.0.0.0 --port 9009 --token "$DIVOOM_DAEMON_TOKEN"
+./target/release/divoomd --host 0.0.0.0 --port 9009 --token "$DIVOOM_DAEMON_TOKEN"
 ```
 
 Remote clients (including the GUI) target it by setting `DIVOOM_DAEMON_HOST`,
@@ -200,8 +200,7 @@ divoom_gui/            Desktop Control Center (pywebview, macOS) — daemon clie
   gui_main.py            launcher + Python↔JS bridge; spawns divoomd + divoom-menubar
   daemon_bridge.py       re-exports ensure_daemon()/DaemonDeviceProxy for the GUI
   web_ui/                frontend (app.js, channels.js, widgets.js, …)
-native-port/           Other native Rust binaries (bundled in the shipped .app)
-  divoom-menubar/        the menu-bar/tray agent (tao + tray-icon)
+divoom-menubar/        the menu-bar/tray agent, Rust (tao + tray-icon)
 build.sh / run.sh      build the Rust binaries / run the GUI (+ daemon + menubar)
 scripts/build_libdivoom.sh   cross-platform native (C accelerator) build
 scripts/build_release.sh     build the shippable Divoom.app + dmg (py2app)

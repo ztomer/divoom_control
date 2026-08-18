@@ -90,5 +90,5 @@ def test_should_quit_menubar_on_exit(keep, quit_mb, expect):
 # The three menubar-client lifecycle tests that lived here (shutdown dispatch,
 # follow-on-dropped-subscription, resubscribe-on-transient-drop) exercised the
 # removed pyobjc menubar. Their behaviour now lives in the native Rust agent and
-# is pinned by native-port/divoom-menubar/src/resubscribe.rs (R53.39 guard) and
+# is pinned by divoom-menubar/src/resubscribe.rs (R53.39 guard) and
 # daemon.rs -- see R66 Phase 1.

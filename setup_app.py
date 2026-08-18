@@ -59,10 +59,10 @@ APP = ["divoom_gui/gui_main.py"]
 # Python daemon then ships as the fallback). build_release.sh builds divoomd first.
 _RES_FILES = [
     p for p in (
-        "divoomd/target/release/divoomd",
+        "target/release/divoomd",
         # The native Rust menubar agent — the GUI spawns it (see gui_main
         # _resolve_menubar_binary, which finds it via RESOURCEPATH). Replaces the
-        "native-port/divoom-menubar/target/release/divoom-menubar",
+        "target/release/divoom-menubar",
         "divoom_lib/libdivoom_compact.dylib",
     ) if os.path.exists(p)
 ]

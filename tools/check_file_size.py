@@ -23,7 +23,7 @@ SOURCE_EXTS = (".rs", ".py", ".js", ".css", ".sh", ".c", ".h")
 # Trees we don't author or that are intentionally exempt from the source limit:
 #   tests/, **/tests/      — test files may legitimately be long (fixtures/cases)
 #   docs/divoom_docs/      — captured Divoom API responses (vendor data)
-#   native-port/**/target/ — Rust build output
+#   target/ — Rust build output (one workspace dir since R66)
 EXCLUDE_PREFIXES = ("tests/", "docs/divoom_docs/")
 EXCLUDE_SUBSTRINGS = ("/tests/", "/target/", "/__pycache__/")
 

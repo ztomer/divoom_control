@@ -59,10 +59,10 @@ dist-native/
 
 # Rust native crate build artifacts
 # Cargo build output. Since R66 the repo pins a single repo-local target/
-# (.cargo/config.toml), so one root-level rule covers every crate.
-/target/
-native-port/divoom-menubar/target/
-divoomd/target/
+# (.cargo/config.toml). Unanchored so it also catches any stale per-crate
+# target/ left behind by the pre-workspace layout — a root-anchored rule
+# let divoom-menubar/target/ (2214 files) get committed once already.
+target/
 
 # Runtime state written by the daemon/CLI — never belongs in git.
 .divoom_last_working_char.json

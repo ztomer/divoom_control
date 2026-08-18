@@ -25,18 +25,11 @@ impl SppTransport {
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let python = std::env::var("DIVOOM_PYTHON").unwrap_or_else(|_| "python3".to_string());
 
-        // Find path to spp_bridge.py relative to the binary
-        // (binary at divoomd/target/<profile>/divoomd → 4 parents = repo root)
-        let exe = std::env::current_exe()?;
-        let root = exe
-            .parent()
-            .ok_or("no parent")?
-            .parent()
-            .ok_or("no parent")?
-            .parent()
-            .ok_or("no parent")?
-            .parent()
-            .ok_or("no parent")?;
+        // Find spp_bridge.py by searching UP for the dir containing
+        // divoom_daemon/, not by counting parents — the count changed when R66
+        // made this a workspace crate (target/ moved to the repo root).
+        let root = crate::paths::find_root_containing("divoom_daemon")
+            .ok_or("could not locate divoom_daemon/ from the running binary")?;
         let bridge_path = root.join("divoom_daemon").join("spp_bridge.py");
 
         let mut cmd = tokio::process::Command::new(python);

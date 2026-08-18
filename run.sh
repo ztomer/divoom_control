@@ -29,7 +29,7 @@ for a in "$@"; do
   esac
 done
 
-MENUBAR="native-port/divoom-menubar/target/$PROFILE/divoom-menubar"
+MENUBAR="target/$PROFILE/divoom-menubar"
 
 # Find + stop processes whose command line matches $1 (TERM, then KILL stragglers).
 # Patterns are specific enough not to match this script (bash .../run.sh).

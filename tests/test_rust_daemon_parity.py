@@ -23,7 +23,7 @@ def rust_daemon_ctx():
     repo_root = Path(__file__).parent.parent
     bin_path = None
     for folder in ("release", "debug"):
-        candidate = repo_root / "divoomd" / "target" / folder / "divoomd"
+        candidate = repo_root / "target" / folder / "divoomd"
         if candidate.exists():
             bin_path = candidate
             break
@@ -131,9 +131,9 @@ def test_rust_set_routing(rust_daemon_ctx):
 def test_rust_tcp_token_auth():
     # Locate the compiled Rust binary
     repo_root = Path(__file__).parent.parent
-    bin_path = repo_root / "divoomd" / "target" / "debug" / "divoomd"
+    bin_path = repo_root / "target" / "debug" / "divoomd"
     if not bin_path.exists():
-        bin_path = repo_root / "divoomd" / "target" / "release" / "divoomd"
+        bin_path = repo_root / "target" / "release" / "divoomd"
     if not bin_path.exists():
         pytest.skip(f"Rust binary not found at {bin_path}. Run cargo build first.")
 
@@ -203,9 +203,9 @@ def test_rust_tcp_token_auth():
 def test_rust_default_mac():
     # Locate the compiled Rust binary
     repo_root = Path(__file__).parent.parent
-    bin_path = repo_root / "divoomd" / "target" / "debug" / "divoomd"
+    bin_path = repo_root / "target" / "debug" / "divoomd"
     if not bin_path.exists():
-        bin_path = repo_root / "divoomd" / "target" / "release" / "divoomd"
+        bin_path = repo_root / "target" / "release" / "divoomd"
     if not bin_path.exists():
         pytest.skip(f"Rust binary not found at {bin_path}. Run cargo build first.")
 

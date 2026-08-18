@@ -18,7 +18,10 @@ python3 "$root/tools/check_file_size.py" --staged || {
 if git diff --cached --name-only | grep -qE '\.rs$'; then
     rust_gate="$HOME/Projects/scripts/bin/rust_gate.sh"
     if [ -x "$rust_gate" ]; then
-        "$rust_gate" "$root" "$root/divoomd" || {
+        # Workspace root, not "$root/divoomd": since R66 both crates are
+        # members, and pointing the gate at divoomd alone is exactly why
+        # divoom-menubar went unformatted and unlinted for its whole life.
+        "$rust_gate" "$root" "$root" || {
             echo "pre-commit: Rust gate failed — fix the findings, do not add #[allow]." >&2
             exit 1; }
     else

@@ -2,7 +2,7 @@
 """Generate ground-truth framing vectors from the Python implementation, so the
 Rust daemon (divoomd) can assert byte-for-byte parity in its tests.
 
-    PYTHONPATH=<repo root> python3 native-port/gen_framing_vectors.py
+    PYTHONPATH=<repo root> python3 scripts/codegen/gen_framing_vectors.py
 
 Writes divoomd/tests/framing_vectors.json. Re-run whenever the Python
 framing changes; the Rust tests then pin the new behavior. The Python framing is

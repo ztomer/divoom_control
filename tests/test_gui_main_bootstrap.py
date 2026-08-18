@@ -259,7 +259,7 @@ def test_resolve_menubar_binary_dev_tree_release(monkeypatch, tmp_path):
     repo_root = tmp_path
     fake_module_file = repo_root / "divoom_gui" / "gui_main.py"
     monkeypatch.setattr(gui_main, "__file__", str(fake_module_file))
-    target = repo_root / "native-port" / "divoom-menubar" / "target" / "release"
+    target = repo_root / "target" / "release"
     target.mkdir(parents=True)
     (target / "divoom-menubar").write_text("x")
 

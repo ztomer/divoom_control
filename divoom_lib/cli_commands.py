@@ -369,7 +369,7 @@ async def cmd_daemon(args: argparse.Namespace) -> int:
 
 def cmd_menubar(args: argparse.Namespace) -> int:
     """The pyobjc menubar was removed 2026-08-17 (R66) in favour of the native
-    Rust agent, `native-port/divoom-menubar/`, which is what the shipped .app
+    Rust agent, `divoom-menubar/`, which is what the shipped .app
     has bundled since the native cutover. This subcommand is kept only to give
     a clear, actionable error instead of a raw ImportError -- same treatment
     `cmd_daemon` got when the Python daemon server was archived."""
@@ -378,7 +378,7 @@ def cmd_menubar(args: argparse.Namespace) -> int:
         "(divoom-menubar) is now the only menubar. Run it with "
         "`./run.sh --menubar`, or let the GUI spawn it (`./run.sh`). Build it "
         "with `./build.sh`. Its resubscribe guard lives in "
-        "native-port/divoom-menubar/src/resubscribe.rs.",
+        "divoom-menubar/src/resubscribe.rs.",
         file=sys.stderr,
     )
     return 1

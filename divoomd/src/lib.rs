@@ -50,6 +50,7 @@ pub mod native_encode;
 pub mod notification_db;
 #[cfg(target_os = "macos")]
 pub mod notification_routing;
+pub mod paths;
 pub mod protocol;
 pub mod response;
 pub mod socket_server;

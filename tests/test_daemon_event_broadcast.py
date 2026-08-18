@@ -27,7 +27,7 @@ if str(_REPO) not in sys.path:
 
 from divoom_daemon.daemon_protocol import DaemonClient  # noqa: E402
 
-_DIVOOMD = _REPO / "divoomd" / "target" / "release" / "divoomd"
+_DIVOOMD = _REPO / "target" / "release" / "divoomd"
 
 
 def _wait_for_socket(path: Path, timeout: float = 10.0) -> None:

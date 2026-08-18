@@ -120,8 +120,8 @@ def test_spawn_daemon_rust_binary_env_invalid_path_falls_through(monkeypatch, tm
     pid = daemon_client.spawn_daemon(str(tmp_path / "sock"))
     assert pid == 999
     # Resolved via the dev build tree fallback, not the discarded env path.
-    assert seen["cmd"][0].endswith("/divoomd/target/release/divoomd") or \
-        seen["cmd"][0].endswith("/divoomd/target/debug/divoomd")
+    assert seen["cmd"][0].endswith("/target/release/divoomd") or \
+        seen["cmd"][0].endswith("/target/debug/divoomd")
 
 
 def test_spawn_daemon_raises_when_no_rust_binary_resolves(monkeypatch, tmp_path):

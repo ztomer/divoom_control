@@ -411,7 +411,7 @@ def _resolve_menubar_binary() -> "str | None":
         return bundled
     repo_root = Path(__file__).resolve().parents[1]
     for folder in ("release", "debug"):
-        p = repo_root / "native-port" / "divoom-menubar" / "target" / folder / "divoom-menubar"
+        p = repo_root / "target" / folder / "divoom-menubar"
         if p.exists():
             return str(p)
     return None

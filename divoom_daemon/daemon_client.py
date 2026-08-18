@@ -191,7 +191,7 @@ def spawn_daemon(
         # repo root is parents[1].
         repo_root = Path(__file__).resolve().parents[1]
         for folder in ["release", "debug"]:
-            p = repo_root / "divoomd" / "target" / folder / "divoomd"
+            p = repo_root / "target" / folder / "divoomd"
             if p.exists():
                 rust_bin = str(p)
                 break

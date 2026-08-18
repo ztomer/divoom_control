@@ -43,15 +43,15 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
 fi
 
 info "cargo build ${FLAG:-(debug)} — divoomd"
-( cd divoomd && cargo build $FLAG )
+cargo build $FLAG -p divoomd
 ok "divoomd"
 
 info "cargo build ${FLAG:-(debug)} — divoom-menubar"
-( cd native-port/divoom-menubar && cargo build $FLAG )
+cargo build $FLAG -p divoom-menubar
 ok "divoom-menubar"
 
 section "Done"
-ok "binaries under native-port/*/target/$PROFILE/"
+ok "binaries under target/$PROFILE/"
 if [[ "$PROFILE" == "debug" ]]; then
   info "run the app with:  ./run.sh --debug"
 else

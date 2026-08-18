@@ -1,5 +1,5 @@
 //! Byte-for-byte parity of the Rust FFI against the Python image encoders.
-//! Vectors come from native-port/gen_image_vectors.py (the Python reference, which
+//! Vectors come from scripts/codegen/gen_image_vectors.py (the Python reference, which
 //! routes through the same libdivoom_compact). A match confirms the FFI marshalling
 //! is correct. Skips if the dylib isn't built.
 

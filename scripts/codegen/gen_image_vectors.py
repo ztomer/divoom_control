@@ -4,7 +4,7 @@
 libdivoom_compact. The Rust FFI calls the SAME C functions, so a match confirms the
 FFI marshalling (pointers, out-buffer sizing, return-length truncation) is correct.
 
-    PYTHONPATH=<repo root> python3 native-port/gen_image_vectors.py
+    PYTHONPATH=<repo root> python3 scripts/codegen/gen_image_vectors.py
 """
 import json
 import random

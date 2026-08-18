@@ -24,7 +24,7 @@ The menubar's own live icon state isn't asserted on here either — reading a
 real NSStatusItem's tooltip from outside the process needs macOS
 Accessibility automation, which is a separate, heavier piece of tooling this
 file intentionally doesn't take on. What IS asserted: the same daemon
-`device_status`/`connection_state` contract the menubar (native-port/
+`device_status`/`connection_state` contract the menubar (
 divoom-menubar/src/daemon.rs::connection_state) and the GUI (divoom_gui/
 scanner_mixin.py::get_connection_state) both read UI feedback from — so a
 live run at least proves that contract holds against real (not mocked)

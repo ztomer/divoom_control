@@ -1,5 +1,5 @@
 //! Command name -> protocol id, GENERATED from divoom_lib.models.COMMANDS.
-//! Do not edit by hand; regenerate via native-port/gen_commands.py.
+//! Do not edit by hand; regenerate via scripts/codegen/gen_commands.py.
 
 /// Resolve a command NAME to its protocol id, or `None` if unknown.
 pub fn command_id(name: &str) -> Option<u8> {

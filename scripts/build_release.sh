@@ -54,7 +54,7 @@ command -v cargo >/dev/null 2>&1 || { echo "ERROR: cargo not found (needed for d
 echo "→ building native rust daemon (divoomd)"
 ( cd divoomd && cargo build --release )
 echo "→ building native rust menubar (divoom-menubar)"
-( cd native-port/divoom-menubar && cargo build --release )
+cargo build --release -p divoom-menubar
 
 # 2. App icon → packaging/Divoom.icns (regenerate so it always matches source).
 echo "→ generating app icon (.icns)"

@@ -2,7 +2,7 @@
 """Generate divoomd/src/commands.rs from divoom_lib.models.COMMANDS
 (the authoritative command name -> id map). Re-run when COMMANDS changes:
 
-    PYTHONPATH=<repo root> python3 native-port/gen_commands.py
+    PYTHONPATH=<repo root> python3 scripts/codegen/gen_commands.py
 """
 from pathlib import Path
 
@@ -13,7 +13,7 @@ def main():
     cmds = models.COMMANDS
     out = [
         "//! Command name -> protocol id, GENERATED from divoom_lib.models.COMMANDS.",
-        "//! Do not edit by hand; regenerate via native-port/gen_commands.py.",
+        "//! Do not edit by hand; regenerate via scripts/codegen/gen_commands.py.",
         "",
         "/// Resolve a command NAME to its protocol id, or `None` if unknown.",
         "pub fn command_id(name: &str) -> Option<u8> {",

@@ -71,7 +71,7 @@ release.
 
 Do NOT mistake the pre-commit hook for CI. It is deliberately narrow so commits
 stay fast, and is weaker in three ways: it checks only **staged** files, gates
-only **divoomd** (never `native-port/divoom-menubar`), and runs **no tests**.
+only **divoomd** (never `divoom-menubar`), and runs **no tests**.
 
 This is enforced structurally in `scripts/release.sh` (preflight `ci_gate`):
 it aborts on a red or still-running check run, auto-allows a failure that reads

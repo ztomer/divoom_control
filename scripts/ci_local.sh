@@ -6,7 +6,7 @@
 # (staged files only, divoomd only, no tests) so commits stay fast; that means it
 # is WEAKER than CI in three ways and must not be mistaken for it:
 #   - it checks only STAGED files, CI checks the whole tree
-#   - it gates only divoomd, never native-port/divoom-menubar
+#   - it gates only divoomd, never divoom-menubar
 #   - it never runs a single test
 #
 # Mirrors .github/workflows/tests.yml job-for-job. Run before every push and

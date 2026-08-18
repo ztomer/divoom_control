@@ -83,7 +83,7 @@ def _free_port() -> int:
 
 def _find_rust_binary() -> Path | None:
     for folder in ("release", "debug"):
-        candidate = REPO_ROOT / "divoomd" / "target" / folder / "divoomd"
+        candidate = REPO_ROOT / "target" / folder / "divoomd"
         if candidate.exists():
             return candidate
     return None

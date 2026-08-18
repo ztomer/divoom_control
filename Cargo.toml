@@ -2,7 +2,7 @@
 resolver = "2"
 members = [
     "divoomd",
-    "native-port/divoom-menubar",
+    "divoom-menubar",
 ]
 
 # references/ holds three VENDORED Cargo projects (gitignored) kept as protocol
