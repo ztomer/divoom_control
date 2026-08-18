@@ -4,7 +4,13 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
-## R66 — repo restructure: one Rust workspace, dead code out, gates that actually gate (2026-08-17)
+## v0.23.0 — Apple silicon only; one Rust workspace; dead code out; gates that actually gate (R66, 2026-08-17)
+
+**Breaking: Intel Macs are no longer supported.** Apple has dropped them, so
+have we. The Homebrew cask now declares `depends_on arch: :arm64`, so an Intel
+Mac gets a clean "unsupported" rather than a broken install. 32-bit targets are
+unsupported on any OS. **Linux x86_64 is unaffected** — this drops macOS Intel,
+not x86_64.
 
 Layout round. The tree still described the *migration* that produced it rather
 than the system it produced, and several gates turned out to be checking less

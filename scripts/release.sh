@@ -177,6 +177,12 @@ import os, re, sys
 s = sys.stdin.read()
 s = re.sub(r'version \"[^\"]+\"', 'version \"%s\"' % os.environ['VER'], s, count=1)
 s = re.sub(r'sha256 \"[0-9a-fA-F]+\"', 'sha256 \"%s\"' % os.environ['SHA'], s, count=1)
+# The app is arm64-only since R66 (Apple dropped Intel Macs, so did we). Without
+# an arch constraint Homebrew happily installs the arm64 DMG on an Intel Mac and
+# the user gets a broken app instead of a clean \"unsupported\" message.
+if 'depends_on arch:' not in s:
+    s = re.sub(r'(\n\s*depends_on macos:[^\n]*\n)',
+               r'\\1  depends_on arch: :arm64\n', s, count=1)
 sys.stdout.write(s)
 ")"
 if [ "$NEW_CASK" = "$CUR_CASK" ]; then

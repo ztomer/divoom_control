@@ -16,7 +16,7 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
-- **2026-08-17 (Round 66) — repo restructure + gate repairs. NOT released.**
+- **2026-08-17 (Round 66) — repo restructure + gate repairs. RELEASED v0.23.0.**
   Layout round; net **-14,240 LOC**. Suite: **Python 2910 / 2816 passed / 0
   failed / 94 skipped; Rust 119 passed** across the workspace (was divoomd-only
   before this round). Full detail in `docs/PLANNING_ROUND66.md` + CHANGELOG.
