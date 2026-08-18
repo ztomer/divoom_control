@@ -92,17 +92,25 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Open threads / next up
 
-- **The R66 CI workflow changes are UNVERIFIED.** `.github/workflows/tests.yml`
-  now runs the Rust jobs from the workspace root and installs camoufox instead
-  of chromium. The YAML parses and every command was proven locally via
-  `ci_local.sh`, but the workflow has not executed because Actions billing is
-  out. **Re-check it the moment credits are restored.**
-- **R66 not released.** Layout + gates only, no user-facing behaviour change;
-  `pyproject.toml` stays at 0.22.21. `release.sh`'s `ci_gate` cannot verify a
-  green CI while billing is out (documented credit-depletion exception).
-- **`ZoneTilerWM` has an unmerged branch `drop-intel-macos`** — the house
-  Apple-silicon-only policy applied there (it was the only other project still
-  building universal). Merge when ready.
+- **R66 CI workflow: VERIFIED GREEN (2026-08-18).** All five jobs pass on
+  `2d7beb9`. The logs confirm the gate parity is real, not merely configured:
+  `rust-ble`'s workspace clippy checks `divoom-menubar` and runs its 13 tests
+  (no CI job had ever run them before R66), and `test` fetches camoufox.
+
+- **INCIDENT — v0.23.0 shipped on a RED CI, and it was NOT billing.** Four of
+  five jobs were green; `rust-core` failed for a real reason introduced in R66
+  Phase 5: workspace-wide clippy on the LINUX runner pulls in `divoom-menubar`,
+  whose tao/tray-icon deps need GTK/glib, which that runner does not install.
+  The release was cut assuming the red was credit depletion, without reading
+  the log. Diagnosing it took two minutes. Fixed in `2d7beb9` (`rust-core` lints
+  `-p divoomd`; macOS `rust-ble` owns the workspace clippy, being the only
+  platform where the menubar builds without extra system packages). **No user
+  impact** — the DMG was built and verified locally on macOS.
+  Two rules now in `AGENTS.md`: diagnose a red CI, never assume billing (red and
+  out-of-credits look identical from outside — that is exactly why the gate
+  exists); and `ci_local.sh` runs on THIS machine only, so Linux-only failures
+  in `rust-core`/`rust-ble-linux` are structurally invisible to it.
+
 - **R12 user-POV visual pass**: deferred to user (needs live app + real device for screenshots).
 - **Cloud HTTP**: 533/533 commands cataloged (`docs/cloud_api/`). Clock-face store wired into
 
