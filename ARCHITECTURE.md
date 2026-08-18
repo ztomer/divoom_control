@@ -2,38 +2,49 @@
 
 High-level map of `divoom-control` for humans and AI agents. The lower half
 (protocols, transports, framing) describes the **library**; this top half
-describes the **three-package system** the library now lives inside.
+describes the **system** the library lives inside.
 
-## Three packages (R17)
+## The system (current as of R66, 2026-08-17)
+
+The shipped `Divoom.app` is a Python GUI driving two native Rust binaries:
 
 ```
-divoom_lib/      pure protocol + transports + encoders + CLI + MCP + weather.
-                 The native accelerator (libdivoom_compact.{dylib|so|dll}) and the
-                 device bitmap font (divoom_lib/fonts/, R28) live here. No
-                 host/OS/GUI deps beyond bleak. Runs on macOS + Linux.
-divoom_daemon/   headless, always-on agent: the SINGLE owner of the device
-                 connection, a Unix + optional TCP event/command server, and
-                 (macOS only) notification monitoring/routing + the menu-bar app.
-                 daemon_client.py holds the client plumbing (DaemonClient,
-                 DaemonDeviceProxy, ensure_daemon) shared by the GUI + MCP server.
-divoom_gui/      pywebview desktop "Control Center" — presentation only. A thin
-                 client of the daemon (it owns no BLE connection). macOS today.
-                 daemon_bridge.py re-exports divoom_daemon.daemon_client.
+divoomd/          THE DAEMON (Rust). Single owner of the device connection;
+                  serves an NDJSON command/event protocol over a Unix socket and
+                  optionally TCP; on macOS also does notification monitoring.
+                  macOS + Linux. This is the runtime core.
+divoom-menubar/   The menu-bar/tray agent (Rust, tao + tray-icon). A daemon
+                  client. macOS. Bundled in the shipped .app.
+divoom_lib/       Pure protocol + transports + encoders + CLI + MCP + weather.
+                  The native accelerator (libdivoom_compact.{dylib|so}) and the
+                  device bitmap font (divoom_lib/fonts/, R28) live here. No
+                  host/OS/GUI deps beyond bleak. macOS + Linux.
+divoom_client/    Daemon CLIENT library (Python) — spawn/find/talk to divoomd.
+                  DaemonClient, DaemonDeviceProxy, ensure_daemon, the NDJSON wire
+                  protocol, and the macOS notification plumbing. Named
+                  divoom_daemon/ until R66; it has held no daemon since the
+                  Python server was archived 2026-07-13.
+divoom_gui/       pywebview desktop "Control Center" — presentation only. A thin
+                  client of the daemon (owns no BLE connection). macOS today.
+                  daemon_bridge.py re-exports divoom_client.daemon_client.
 ```
 
-### Single-owner model (R17 "full cutover")
+Both Rust crates are members of one Cargo workspace (root `Cargo.toml`), building
+into a single repo-local `target/` pinned by `.cargo/config.toml`.
+
+### Single-owner model
 
 A BLE connection can be held by exactly **one** process, so the **daemon owns the
-device** and the GUI is a thin RPC client:
+device** and everything else is an RPC client:
 
 ```mermaid
 graph LR
-    GUI[divoom_gui pywebview] -- NDJSON over Unix/TCP --> Daemon[divoom_daemon]
+    GUI[divoom_gui pywebview] -- NDJSON over Unix/TCP --> Daemon[divoomd Rust]
+    Menubar[divoom-menubar Rust] -- NDJSON --> Daemon
     MCP[divoom-control mcp-server] -- device_call --> Daemon
     CLI[divoom-control CLI] --> Lib[divoom_lib]
-    Daemon -- owns --> Lib
-    Lib --> Conn[DivoomConnection]
-    Conn --> Dev[Divoom device  BLE / BT-SPP / LAN]
+    Daemon --> Dev[Divoom device  BLE / BT-SPP / LAN]
+    Lib --> Dev
 ```
 
 - The GUI proxies every device call through the daemon's generic `device_call`
@@ -43,6 +54,9 @@ graph LR
   builds its tool catalog against a `DaemonDeviceProxy` rather than opening its
   own BLE connection (which would fight the daemon for the single-owner device).
   `--mac` optional; `--host/--port/--token` target a remote daemon.
+- **The CLI** (`divoom_lib.cli`) is the one consumer that can own the device
+  directly, via `divoom_lib`. If the daemon is running it already holds the
+  connection — stop it first, or go through the daemon protocol.
 - **Daemon protocol:** newline-delimited JSON (control plane) over a Unix socket
   (local, trusted) and, optionally, TCP (`--host`/`--port`/`--token`, R19).
   Binary device data (images/GIFs) is shipped via base64 `blobs` only when the
@@ -50,17 +64,21 @@ graph LR
 - **Device-bound text** (tickers, sysmon, notifications) is rasterised with the
   crisp 1-bit bitmap font in `divoom_lib/fonts/` (extracted from the Divoom APK,
   R28) — never an anti-aliased TrueType font, which is unreadable at 16/32/64px.
-- See `docs/PLANNING_ROUND16.md`/`17`/`19`/`20`/`28` for the daemon, cutover,
-  network server, Linux-compat, and MCP-via-daemon/bitmap-font rounds.
 
-### Platform support (R20)
+### Platform support
 
-`divoom_lib` + `divoom_daemon` run on **macOS and Linux** (BLE via bleak/BlueZ;
+`divoom_lib` + `divoomd` run on **macOS (Apple silicon) and Linux
+(x86_64 / aarch64)** (BLE via bleak/BlueZ;
 the network server is platform-neutral). The native lib builds per-platform via
 `scripts/build_libdivoom.sh` (`.dylib`/`.so`), resolved by
 `divoom_lib/native_lib.py`. macOS-only features degrade cleanly on Linux:
 notification monitoring → idle/"unsupported", now-playing/cover-art → no-op, the
 menu-bar agent is macOS-only.
+
+**Intel Macs are not supported** (R66) — Apple dropped them, so did we. 32-bit
+targets are not supported on any OS. `scripts/build_libdivoom.sh` hard-fails on
+both rather than silently building something untested;
+`tests/test_build_platform_gate.py` pins it.
 
 ## Library system overview
 
@@ -138,7 +156,7 @@ The system architecture is governed by strict technical guidelines established d
 
 To maintain high maintainability, rapid semantic searches, and easy codebase updates for both human developers and AI agents, the project targets a strict limit:
 *   **No File Above 500 Lines of Code (LOC)**: no Python/C/JS/CSS source file in
-    `divoom_lib`/`divoom_daemon`/`divoom_gui` exceeds 500 LOC.
+    `divoom_lib`/`divoom_client`/`divoom_gui` exceeds 500 LOC.
 *   **Status (2026-06): enforced + clean.** The 2026-06 regression (11 oversized
     files incl. `gui_api.py` 921, `daemon.py` 730) was fully retired via R23
     (gui_api/daemon collaborator splits, cli→cli_commands, constants→

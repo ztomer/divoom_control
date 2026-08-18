@@ -27,5 +27,7 @@
 - **[RELEASING.md](RELEASING.md)** — release process (.dmg, Homebrew cask).
 
 ## Historical (planning rounds)
-Archived under `docs/archive/rounds/`. Each is a point-in-time record; for
-current state read SESSION_HANDOFF + ROADMAP + the canonical docs above.
+Pruned to git history — `docs/archive/rounds/` no longer exists. Each was a
+point-in-time record; for current state read SESSION_HANDOFF + ROADMAP + the
+canonical docs above. Recover one with
+`git log --diff-filter=D -- 'docs/**/PLANNING_*'`.

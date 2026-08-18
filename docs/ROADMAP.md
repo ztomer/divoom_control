@@ -64,8 +64,8 @@ Suite: Rust 63+ passed / Python 3197 passed / 97 skipped (see `CHANGELOG.md` + C
 ### Near-term (next round)
 
 Native-port hardening (Phases 1-4 + Phase-5 command parity) shipped; see
-`docs/archive/superseded/PLANNING_NATIVE_PORT_HARDENING.md` for the historical
-record. Phase 5 step 5.3 (the irreversible `divoom_daemon/` server archival)
+the historical record in git history (the plan docs were pruned per the
+"one forward-looking backlog" rule). Phase 5 step 5.3 (the irreversible `divoom_daemon/` server archival)
 shipped 2026-07-13 on explicit user sign-off — see the "Native Rust daemon"
 section below for detail. No remaining thread here.
 
@@ -180,8 +180,9 @@ R66 (2026-08-17); recover from git history if ever needed.
 
 ## Planning docs by round
 
-Historical round plans (R3–R61) archived under `docs/archive/rounds/`.
-Shipped/superseded workstream plans under `docs/archive/superseded/`.
+Historical round plans (R3–R61) and superseded workstream plans were pruned to
+git history — `docs/archive/rounds/` and `docs/archive/superseded/` no longer
+exist. Recover any of them with `git log --diff-filter=D -- 'docs/**/PLANNING_*'`.
 `PLANNING_ROUND62.md` and later shipped rounds also archived there.
 
 

@@ -50,7 +50,7 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 - **2026-07-14 (Round 62) — 7-bug batch. RELEASED v0.22.18.** Gallery cache-retry, hot-channel
   button fix, Sync Now feature, light-mode toast contrast fix, device-settings alignment fix.
-  Details in `docs/archive/rounds/PLANNING_ROUND62.md`.
+  Details in git history (round plans were pruned).
 
 ## Open threads / next up
 
@@ -63,7 +63,7 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 The full round-by-round history (R3–R64, ~2k lines) is archived at
 `docs/archive/SESSION_HANDOFF_2026-07-27.md`. Recover individual rounds from
-`CHANGELOG.md`, `docs/archive/rounds/PLANNING_ROUND*.md`, and `git log`.
+`CHANGELOG.md`, `docs/PLANNING_ROUND*.md` (current round only), and `git log`.
 
 ## Hardware note
 

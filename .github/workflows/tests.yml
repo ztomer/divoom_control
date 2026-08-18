@@ -56,8 +56,7 @@ jobs:
       - name: Build native divoomd (ble) for the Rust-daemon parity suite
         # Without this, tests/test_rust_daemon_parity.py skips (no binary) so the
         # Rust↔Python parity tests never run in CI. Default features include `ble`.
-        working-directory: divoomd
-        run: cargo build --locked
+        run: cargo build -p divoomd --locked
 
       - name: Run tests (C + Python parity + Rust-daemon parity + GUI e2e + audio)
         run: python3 -m pytest -q
@@ -66,31 +65,33 @@ jobs:
     # The hardware-/platform-free gate for the native daemon. Builds + tests the
     # protocol/transport core WITHOUT the `ble` feature (no btleplug), on Linux —
     # this is what regressed unnoticed in e4bd424 because no CI ran cargo.
+    #
+    # R66: runs from the WORKSPACE ROOT, not `working-directory: divoomd`. The
+    # old scoping meant divoom-menubar was never formatted, linted, built, or
+    # tested by any gate — it had never once been through cargo fmt. fmt/clippy
+    # cover every member; --no-default-features stays pinned to `-p divoomd`
+    # because the no-BLE core gate is about that crate specifically.
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: divoomd
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - name: No #[allow] in tracked Rust source (house gate)
-        working-directory: ./
         run: python3 tools/check_no_allow.py
       - name: Install D-Bus headers
         # clippy --all-features enables `ble` → btleplug → dbus → libdbus-sys,
         # which needs the system dbus-1.pc. Without this the clippy step fails
         # on Ubuntu even though the job is otherwise the no-BLE core gate.
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
-      - name: cargo fmt --check
+      - name: cargo fmt --check (whole workspace)
         run: cargo fmt --all -- --check
-      - name: cargo clippy (all targets, all features, deny warnings)
+      - name: cargo clippy (whole workspace, all targets/features, deny warnings)
         run: cargo clippy --all-targets --all-features -- -D warnings
       - name: Build core without BLE
-        run: cargo build --no-default-features --locked
+        run: cargo build -p divoomd --no-default-features --locked
       - name: Test core without BLE
-        run: cargo test --no-default-features --locked
+        run: cargo test -p divoomd --no-default-features --locked
 
   rust-ble:
     # Full native daemon build with the `ble` feature (btleplug against
@@ -102,8 +103,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Build native dylib (FFI encoder parity test dependency)
         run: bash scripts/build_libdivoom.sh
-      - name: Build + test with BLE
-        working-directory: divoomd
+      - name: Build + test with BLE (whole workspace)
+        # Workspace root: this also builds and runs divoom-menubar's tests,
+        # which no CI job reached before R66.
         run: cargo test --locked
 
   rust-ble-linux:
@@ -111,13 +113,10 @@ jobs:
     # no runtime claim (maintainer has no Linux hardware). Non-blocking.
     runs-on: ubuntu-latest
     continue-on-error: true
-    defaults:
-      run:
-        working-directory: divoomd
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Install BlueZ/D-Bus headers (btleplug build dep)
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
       - name: Build with BLE (compile-only)
-        run: cargo build --features ble --locked
+        run: cargo build -p divoomd --features ble --locked
