@@ -1,5 +1,5 @@
 //! Daemon socket protocol — newline-delimited JSON ("NDJSON"), ported from
-//! `divoom_daemon/daemon_protocol.py`. This is the language-agnostic seam: the
+//! `divoom_client/daemon_protocol.py`. This is the language-agnostic seam: the
 //! Python GUI/menubar/CLI clients talk to either daemon over it unchanged, and the
 //! Python test suite becomes the conformance oracle for the Rust server.
 //!

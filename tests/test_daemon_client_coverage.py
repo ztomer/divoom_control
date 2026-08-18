@@ -1,4 +1,4 @@
-"""R61 coverage push: divoom_daemon.daemon_client branches not exercised by
+"""R61 coverage push: divoom_client.daemon_client branches not exercised by
 test_daemon_bridge.py (proxy happy paths against a real in-process daemon) or
 test_daemon_client_wedge.py (client-side socket timeouts).
 
@@ -26,13 +26,13 @@ from unittest.mock import ANY, MagicMock
 
 import pytest
 
-from divoom_daemon import daemon_client
-from divoom_daemon.daemon_client import (
+from divoom_client import daemon_client
+from divoom_client.daemon_client import (
     DaemonDeviceProxy,
     _LanView,
     _ProxyExclusiveCtx,
 )
-from divoom_daemon.daemon_protocol import ENV_HOST, DaemonClient
+from divoom_client.daemon_protocol import ENV_HOST, DaemonClient
 
 
 def _run(coro):

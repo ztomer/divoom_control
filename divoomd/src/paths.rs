@@ -79,10 +79,10 @@ mod tests {
         let (root, bin) = layout(
             tmp.path(),
             "target/x86_64-unknown-linux-gnu/release/divoomd",
-            "divoom_daemon",
+            "divoom_client",
         );
         assert_eq!(
-            find_root_containing_from(&bin, "divoom_daemon").unwrap(),
+            find_root_containing_from(&bin, "divoom_client").unwrap(),
             root
         );
     }

@@ -464,7 +464,7 @@ def test_start_shutdown_follower_notifies_ondaemondown_and_backs_off(monkeypatch
         sleep_calls.append(secs)
         raise _StopLoop()
 
-    monkeypatch.setattr("divoom_daemon.daemon_protocol.DaemonClient", FakeDaemonClient)
+    monkeypatch.setattr("divoom_client.daemon_protocol.DaemonClient", FakeDaemonClient)
     monkeypatch.setattr("time.sleep", fake_sleep)
 
     # Suppress the default thread-exception traceback dump: _StopLoop escaping
@@ -504,7 +504,7 @@ def test_start_shutdown_follower_swallows_evaluate_js_failure(monkeypatch):
     def fake_sleep(secs):
         raise _StopLoop()
 
-    monkeypatch.setattr("divoom_daemon.daemon_protocol.DaemonClient", FakeDaemonClient)
+    monkeypatch.setattr("divoom_client.daemon_protocol.DaemonClient", FakeDaemonClient)
     monkeypatch.setattr("time.sleep", fake_sleep)
 
     old_hook = threading.excepthook
@@ -667,7 +667,7 @@ def test_main_happy_path_darwin_shared_lifecycle(monkeypatch, tmp_path):
         def shutdown(self):
             shutdown_calls.append(True)
 
-    monkeypatch.setattr("divoom_daemon.daemon_protocol.DaemonClient", FakeDaemonClient)
+    monkeypatch.setattr("divoom_client.daemon_protocol.DaemonClient", FakeDaemonClient)
     terminate_calls = []
     monkeypatch.setattr(gui_main, "_terminate_menubar_agent", lambda: terminate_calls.append(True))
 
@@ -697,7 +697,7 @@ def test_main_keep_alive_skips_daemon_stop_and_menubar_terminate(monkeypatch, tm
         def shutdown(self):
             shutdown_calls.append(True)
 
-    monkeypatch.setattr("divoom_daemon.daemon_protocol.DaemonClient", FakeDaemonClient)
+    monkeypatch.setattr("divoom_client.daemon_protocol.DaemonClient", FakeDaemonClient)
     terminate_calls = []
     monkeypatch.setattr(gui_main, "_terminate_menubar_agent", lambda: terminate_calls.append(True))
 
@@ -736,7 +736,7 @@ def test_main_no_closing_event_still_stops_daemon_once_after_start(monkeypatch, 
         def shutdown(self):
             shutdown_calls.append(True)
 
-    monkeypatch.setattr("divoom_daemon.daemon_protocol.DaemonClient", FakeDaemonClient)
+    monkeypatch.setattr("divoom_client.daemon_protocol.DaemonClient", FakeDaemonClient)
     monkeypatch.setattr(gui_main, "_terminate_menubar_agent", lambda: None)
 
     with pytest.raises(SystemExit):

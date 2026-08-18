@@ -67,7 +67,7 @@ class PresetsManagerMixin:
     def load_config(self) -> str:
         logger.info("GUI Action: Loading configurations...")
         try:
-            from divoom_daemon.daemon_config import DEFAULT_SCAN_TIMEOUT, DEFAULT_SCAN_LIMIT
+            from divoom_client.daemon_config import DEFAULT_SCAN_TIMEOUT, DEFAULT_SCAN_LIMIT
             default_timeout, default_limit = int(DEFAULT_SCAN_TIMEOUT), DEFAULT_SCAN_LIMIT
             config_file = Path.home() / ".config" / "divoom-control" / "config.ini"
             cfg = configparser.ConfigParser()

@@ -2,6 +2,6 @@
 
 Pure presentation: the window launcher (`gui_main`), the Python<->JS bridge
 (`gui_api`), and the web UI (`web_ui/`). Background device-driving lives in
-`divoom_daemon`; the protocol/device library is `divoom_lib`. See
+`divoom_client`; the protocol/device library is `divoom_lib`. See
 docs/PLANNING_ROUND17.md for the 3-way split.
 """

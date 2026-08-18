@@ -134,8 +134,8 @@ def parse_notification_record(
 
 # Routing (app→type rules + MacAppRouter) lives in notification_router.py to
 # keep this file under the 500-LOC cap; re-exported here so existing
-# `from divoom_daemon.macos_notifications import MacAppRouter/...` imports work.
-from divoom_daemon.notification_router import (  # noqa: F401,E402
+# `from divoom_client.macos_notifications import MacAppRouter/...` imports work.
+from divoom_client.notification_router import (  # noqa: F401,E402
     DEFAULT_ROUTING,
     ROUTING_PATH,
     MacAppRouter,

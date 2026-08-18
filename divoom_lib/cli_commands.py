@@ -312,8 +312,8 @@ async def cmd_mcp_server(args: argparse.Namespace) -> int:
     so there is nothing to disconnect on exit (the daemon keeps owning the
     device for the GUI/menubar)."""
     import os
-    from divoom_daemon.daemon_protocol import ENV_HOST, ENV_PORT, ENV_TOKEN
-    from divoom_daemon.daemon_client import ensure_daemon, DaemonDeviceProxy
+    from divoom_client.daemon_protocol import ENV_HOST, ENV_PORT, ENV_TOKEN
+    from divoom_client.daemon_client import ensure_daemon, DaemonDeviceProxy
 
     # A remote daemon is selected purely via env (DaemonClient.from_env /
     # ensure_daemon read these); mirror the CLI flags into the environment so a
@@ -358,7 +358,7 @@ async def cmd_daemon(args: argparse.Namespace) -> int:
     print(
         "The Python daemon server has been archived — divoomd (Rust) is now "
         "the only supported daemon. Build/run divoomd directly, or use "
-        "divoom_daemon.daemon_client.ensure_daemon()/spawn_daemon() which "
+        "divoom_client.daemon_client.ensure_daemon()/spawn_daemon() which "
         "auto-spawns it. The archived Python implementation is kept for "
         "recoverable from git history but is no longer runnable via "
         "this CLI command.",

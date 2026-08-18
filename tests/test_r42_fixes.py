@@ -36,7 +36,7 @@ def test_get_scan_settings_defaults_when_missing(tmp_path, monkeypatch):
 # ── §2 macOS 26 NC DB discovery ────────────────────────────────────────────
 
 def test_nc_db_discovery_includes_macos26_group_container(tmp_path, monkeypatch):
-    from divoom_daemon import macos_notifications as mn
+    from divoom_client import macos_notifications as mn
     if not sys.platform.startswith("darwin"):
         pytest.skip("darwin-only discovery")
     db = tmp_path / "Library" / "Group Containers" / "group.com.apple.usernoted" / "db2" / "db"
@@ -50,7 +50,7 @@ def test_nc_db_discovery_includes_macos26_group_container(tmp_path, monkeypatch)
 
 
 def test_nc_db_unreadable_raises_actionable_permission_error(tmp_path):
-    from divoom_daemon.macos_notifications import MacNotificationMonitor
+    from divoom_client.macos_notifications import MacNotificationMonitor
     import sqlite3 as _sq
     db = tmp_path / "db"
     db.write_bytes(b"not-a-db")

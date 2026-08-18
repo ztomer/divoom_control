@@ -18,7 +18,7 @@ import logging
 from dataclasses import dataclass, fields
 from pathlib import Path
 
-logger = logging.getLogger("divoom_daemon")
+logger = logging.getLogger("divoom_client")
 
 CONFIG_DIR = Path.home() / ".config" / "divoom-control"
 CONFIG_FILE = CONFIG_DIR / "daemon.ini"

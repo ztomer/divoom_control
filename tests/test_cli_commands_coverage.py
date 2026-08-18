@@ -488,7 +488,7 @@ class _FakeMCPServer:
 
 async def test_cmd_mcp_server_errors_when_daemon_unreachable(monkeypatch) -> None:
     monkeypatch.setattr(
-        "divoom_daemon.daemon_client.ensure_daemon", lambda *a, **k: None
+        "divoom_client.daemon_client.ensure_daemon", lambda *a, **k: None
     )
     with pytest.raises(SystemExit) as exc:
         await cli_commands.cmd_mcp_server(_parse("mcp-server"))
@@ -498,14 +498,14 @@ async def test_cmd_mcp_server_errors_when_daemon_unreachable(monkeypatch) -> Non
 async def test_cmd_mcp_server_local_happy_path(monkeypatch) -> None:
     fake_client = object()
     monkeypatch.setattr(
-        "divoom_daemon.daemon_client.ensure_daemon", lambda *a, **k: fake_client
+        "divoom_client.daemon_client.ensure_daemon", lambda *a, **k: fake_client
     )
 
     class FakeProxy:
         def __init__(self, client) -> None:
             self.client = client
 
-    monkeypatch.setattr("divoom_daemon.daemon_client.DaemonDeviceProxy", FakeProxy)
+    monkeypatch.setattr("divoom_client.daemon_client.DaemonDeviceProxy", FakeProxy)
     monkeypatch.setattr("divoom_lib.mcp_server.MCPServer", _FakeMCPServer)
     monkeypatch.setattr(
         "divoom_lib.mcp_tools.build_tool_catalog", lambda proxy: ["t1", "t2", "t3"]
@@ -523,14 +523,14 @@ async def test_cmd_mcp_server_remote_host_sets_env(monkeypatch) -> None:
     monkeypatch.setattr(os, "environ", os.environ.copy())
     fake_client = object()
     monkeypatch.setattr(
-        "divoom_daemon.daemon_client.ensure_daemon", lambda *a, **k: fake_client
+        "divoom_client.daemon_client.ensure_daemon", lambda *a, **k: fake_client
     )
 
     class FakeProxy:
         def __init__(self, client) -> None:
             self.client = client
 
-    monkeypatch.setattr("divoom_daemon.daemon_client.DaemonDeviceProxy", FakeProxy)
+    monkeypatch.setattr("divoom_client.daemon_client.DaemonDeviceProxy", FakeProxy)
     monkeypatch.setattr("divoom_lib.mcp_server.MCPServer", _FakeMCPServer)
     monkeypatch.setattr("divoom_lib.mcp_tools.build_tool_catalog", lambda proxy: [])
 

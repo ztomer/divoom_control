@@ -1,10 +1,14 @@
-"""CLIENT LIBRARY — the Rust `divoomd` binary is the sole shipping daemon.
-This package no longer contains a Python daemon SERVER implementation (that
-was archived on 2026-07-13 and removed from the tree in R66; recover from git history (archived in 046cdf8, removed in R66 2026-08-17), explicit user
-sign-off — see `docs/ROADMAP.md`'s "Native Rust daemon" section for the
-parity/soak history that gated it). What remains here is the shared CLIENT
-infrastructure every consumer (GUI, menubar, CLI, MCP) uses to talk to
-whichever daemon is running, regardless of implementation language:
+"""Client library for talking to the Divoom daemon.
+
+The Rust `divoomd` binary is the sole shipping daemon. This package holds the
+shared CLIENT infrastructure every consumer (GUI, menubar, CLI, MCP) uses to
+reach whichever daemon is running, regardless of implementation language.
+
+Renamed from `divoom_daemon` in R66 (2026-08-17): the package had contained no
+daemon since the Python server was archived on 2026-07-13 (explicit user
+sign-off; recover from git history at 046cdf8), and the old name made every
+reader assume otherwise. See `docs/ROADMAP.md`'s "Native Rust daemon" section
+for the parity/soak history that gated the cutover.
 
 - `daemon_client.py` — spawn/find/`ensure_daemon()` the Rust binary.
 - `daemon_protocol.py` — the NDJSON wire client (`DaemonClient`), framing,

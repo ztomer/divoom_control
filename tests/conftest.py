@@ -119,7 +119,7 @@ def pytest_collection_modifyitems(config, items):
 # -full-suite flake in test_owner_art_coverage.py, where a mock.patch()'d module
 # attribute was occasionally seen unmocked). Leading hypothesis: some
 # owner_with_device-style fixture's DeviceOwner.stop() returns before its
-# "device-loop" background thread (divoom_daemon/owner_loop.py) has actually
+# "device-loop" background thread (divoom_client/owner_loop.py) has actually
 # exited, letting it survive into a later, unrelated test. DeviceOwner.stop()
 # now joins that thread (and bounds its executor shutdown) to close the gap —
 # this fixture is the trip-wire: if a thread named "device-loop" is EVER still

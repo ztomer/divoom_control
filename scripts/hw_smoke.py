@@ -39,7 +39,7 @@ def section(t): print(); hr(); print(f"{_BOLD}  {t}{_RESET}"); hr()
 
 
 def _client():
-    from divoom_daemon.daemon_protocol import DaemonClient
+    from divoom_client.daemon_protocol import DaemonClient
     return DaemonClient()
 
 

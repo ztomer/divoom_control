@@ -15,7 +15,7 @@ from unittest.mock import patch
 
 import pytest
 
-from divoom_daemon.macos_notifications import (
+from divoom_client.macos_notifications import (
     DEFAULT_ROUTING,
     MacAppRouter,
     ROUTING_PATH,
@@ -45,7 +45,7 @@ def test_load_returns_defaults_when_configured_path_missing(
     # ROUTING_PATH + load_routing_table now live in notification_router (the
     # routing concern was split out of macos_notifications for the 500-LOC cap);
     # patch the attribute load_routing_table actually reads.
-    import divoom_daemon.notification_router as nrouter
+    import divoom_client.notification_router as nrouter
     monkeypatch.setattr(nrouter, "ROUTING_PATH", tmp_path / "nope.json")
     rules = load_routing_table()
     assert rules == DEFAULT_ROUTING
@@ -117,7 +117,7 @@ def test_load_logs_warning_on_corrupt_file(tmp_path: Path, caplog) -> None:
     import logging
     p = tmp_path / "routing.json"
     p.write_text("not json at all")
-    with caplog.at_level(logging.WARNING, logger="divoom_daemon.macos_notifications"):
+    with caplog.at_level(logging.WARNING, logger="divoom_client.macos_notifications"):
         load_routing_table(p)
     assert any("corrupt" in m.lower() for m in caplog.text.splitlines()), caplog.text
 
@@ -232,7 +232,7 @@ def test_env_var_overrides_default_path(
     from importlib import reload
     # ROUTING_PATH is resolved from the env var at import of notification_router
     # (where it now lives), so reload THAT module to pick up the override.
-    import divoom_daemon.notification_router as nrouter
+    import divoom_client.notification_router as nrouter
     reload(nrouter)
     try:
         assert str(nrouter.ROUTING_PATH) == str(custom)

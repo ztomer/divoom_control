@@ -50,7 +50,7 @@ import pytest
 
 sys.path.append(str(Path(__file__).parent.parent))
 
-from divoom_daemon.daemon_protocol import DaemonClient
+from divoom_client.daemon_protocol import DaemonClient
 
 REPO_ROOT = Path(__file__).parent.parent
 INDEX_HTML = REPO_ROOT / "divoom_gui" / "web_ui" / "index.html"

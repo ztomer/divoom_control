@@ -93,7 +93,7 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["divoom_lib*", "divoom_daemon*", "divoom_gui*"]
+include = ["divoom_lib*", "divoom_client*", "divoom_gui*"]
 exclude = ["tests*", "examples*", "references*", "scripts*", "docs*"]
 
 [tool.setuptools.package-data]
@@ -131,7 +131,7 @@ markers = [
 # Reproducible baseline so `coverage run -m pytest` measures the same tree
 # every time (see REVIEW_2026-06 §0.3 — the prior review quoted a coverage
 # table that did not match reality). Real TOTAL was 62% on 2026-06-09.
-source = ["divoom_lib", "divoom_gui", "divoom_daemon"]
+source = ["divoom_lib", "divoom_gui", "divoom_client"]
 branch = true
 
 [tool.coverage.report]

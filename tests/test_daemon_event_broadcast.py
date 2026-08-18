@@ -25,7 +25,7 @@ _REPO = Path(__file__).resolve().parents[1]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from divoom_daemon.daemon_protocol import DaemonClient  # noqa: E402
+from divoom_client.daemon_protocol import DaemonClient  # noqa: E402
 
 _DIVOOMD = _REPO / "target" / "release" / "divoomd"
 

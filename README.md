@@ -18,7 +18,7 @@ and the menu-bar agent), and a native accelerator:
    protocol over a Unix socket and (optionally) TCP. On macOS it also does
    notification monitoring. Runs on **macOS and Linux**. Paired with a **native
    Rust menu-bar agent**, `divoom-menubar/` — together these are what
-   the shipped app runs. `divoom_daemon/` (the Python package) is now client-only:
+   the shipped app runs. `divoom_client/` (the Python package) is client-only:
    the shared NDJSON-socket client library every consumer (GUI, menubar, CLI,
    MCP) uses to talk to whichever daemon is running. The original Python daemon
    *server* implementation was archived (2026-07-13) and then removed from the
@@ -190,7 +190,7 @@ divoom_lib/            Async BLE/LAN library (macOS + Linux)
   native/ + native_src/  ctypes wrappers + C sources for encoders/downsampler
   libdivoom_compact.*    built native library (.dylib / .so)
   cli.py                 the `divoom-control` CLI
-divoom_daemon/         Daemon CLIENT library (spawn/find/talk to divoomd)
+divoom_client/         Daemon CLIENT library (spawn/find/talk to divoomd)
   daemon_client.py        spawn_daemon()/ensure_daemon(), DaemonDeviceProxy
   daemon_protocol.py     NDJSON wire protocol + DaemonClient
   macos_notifications.py notification_router.py   notification plumbing (macOS)

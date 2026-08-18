@@ -3,7 +3,7 @@
     python setup_app.py py2app          # build dist/Divoom.app
     (driven by scripts/build_release.sh in a dedicated build venv)
 
-What ships: the four runtime packages (divoom_lib / divoom_daemon / divoom_gui /
+What ships: the four runtime packages (divoom_lib / divoom_client / divoom_gui /
 divoom_gui) and their package data (web_ui/, fonts/, the native dylib), plus
 the third-party runtime deps (bleak, aiohttp, Pillow, pywebview, pyobjc).
 
@@ -79,7 +79,7 @@ OPTIONS = {
     # tree (not byte-compiled into the zip), so web_ui/, fonts/ and the native
     # dylib travel with their package and resolve via Path(__file__).parent.
     "packages": [
-        "divoom_lib", "divoom_daemon", "divoom_gui",
+        "divoom_lib", "divoom_client", "divoom_gui",
         "bleak", "aiohttp", "PIL", "webview",
         "objc", "Foundation", "AppKit", "CoreBluetooth", "WebKit", "Quartz",
     ],

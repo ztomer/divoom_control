@@ -2,7 +2,7 @@
 surface as a hard error to the user (the daemon is just mid-(re)start).
 
 The server-side startup-race tests (real SocketServer instances) depend on
-the archived divoom_daemon.socket_server module and moved to
+the archived divoom_client.socket_server module and moved to
 archive/tests/ (removed in R66; in git history) test_daemon_socket_hardening.py.
 """
 import sys
@@ -12,8 +12,8 @@ import pytest
 
 sys.path.append(str(Path(__file__).parent.parent))
 
-from divoom_daemon import daemon_protocol
-from divoom_daemon.daemon_protocol import DaemonClient, encode_message
+from divoom_client import daemon_protocol
+from divoom_client.daemon_protocol import DaemonClient, encode_message
 
 
 # ── client: bounded connect-retry on a transient refusal ───────────────────

@@ -30,7 +30,7 @@ import pytest
 
 sys.path.append(str(Path(__file__).parent.parent))
 
-from divoom_daemon import spp_bridge
+from divoom_client import spp_bridge
 
 
 # ── Fakes ───────────────────────────────────────────────────────────────────

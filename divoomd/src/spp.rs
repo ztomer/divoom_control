@@ -26,11 +26,11 @@ impl SppTransport {
         let python = std::env::var("DIVOOM_PYTHON").unwrap_or_else(|_| "python3".to_string());
 
         // Find spp_bridge.py by searching UP for the dir containing
-        // divoom_daemon/, not by counting parents — the count changed when R66
+        // divoom_client/, not by counting parents — the count changed when R66
         // made this a workspace crate (target/ moved to the repo root).
-        let root = crate::paths::find_root_containing("divoom_daemon")
-            .ok_or("could not locate divoom_daemon/ from the running binary")?;
-        let bridge_path = root.join("divoom_daemon").join("spp_bridge.py");
+        let root = crate::paths::find_root_containing("divoom_client")
+            .ok_or("could not locate divoom_client/ from the running binary")?;
+        let bridge_path = root.join("divoom_client").join("spp_bridge.py");
 
         let mut cmd = tokio::process::Command::new(python);
         cmd.args([bridge_path.to_str().unwrap(), "--mac", mac]);

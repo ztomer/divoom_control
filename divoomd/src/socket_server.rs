@@ -1,5 +1,5 @@
 //! Unix-socket NDJSON server — the request/reply transport, ported from
-//! `divoom_daemon/socket_server.py`. This is the conformance seam: a client (the
+//! the archived Python socket_server.py. This is the conformance seam: a client (the
 //! Python GUI/menubar/CLI, or the Python test suite as an oracle) connects, sends
 //! one `{"command","args","token"?}` line, and reads one reply line.
 //!

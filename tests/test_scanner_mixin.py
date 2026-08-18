@@ -148,7 +148,7 @@ def test_get_device_activity_exception_returns_empty(host):
 # ── get_scan_settings ──────────────────────────────────────────────────────
 
 def test_get_scan_settings_no_file_uses_defaults(host):
-    from divoom_daemon.daemon_config import DEFAULT_SCAN_TIMEOUT, DEFAULT_SCAN_LIMIT
+    from divoom_client.daemon_config import DEFAULT_SCAN_TIMEOUT, DEFAULT_SCAN_LIMIT
     out = json.loads(host.get_scan_settings())
     assert out == {"timeout": int(DEFAULT_SCAN_TIMEOUT), "limit": DEFAULT_SCAN_LIMIT}
 
@@ -162,7 +162,7 @@ def test_get_scan_settings_reads_persisted_values(host, tmp_path):
 def test_get_scan_settings_exception_falls_back_to_defaults(host, tmp_path):
     """A malformed config.ini raises inside the try; the except branch must
     still return sane (default) values rather than propagate."""
-    from divoom_daemon.daemon_config import DEFAULT_SCAN_TIMEOUT, DEFAULT_SCAN_LIMIT
+    from divoom_client.daemon_config import DEFAULT_SCAN_TIMEOUT, DEFAULT_SCAN_LIMIT
     _write_ini(tmp_path, "not an ini file *** broken\n")
     out = json.loads(host.get_scan_settings())
     assert out == {"timeout": int(DEFAULT_SCAN_TIMEOUT), "limit": DEFAULT_SCAN_LIMIT}
@@ -211,7 +211,7 @@ def test_scan_devices_explicit_timeout_and_limit(host, tmp_path):
 
 def test_scan_devices_defaults_from_daemon_config(host, tmp_path):
     from unittest.mock import MagicMock
-    from divoom_daemon.daemon_config import load_daemon_config
+    from divoom_client.daemon_config import load_daemon_config
     cfg = load_daemon_config()
     client = MagicMock()
     client.scan.return_value = {"success": True, "devices": []}

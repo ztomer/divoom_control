@@ -63,7 +63,7 @@ def test_apibase_run_async_returns_value_on_success():
 def test_push_animation_deletes_its_temp_file(tmp_path):
     """A bytes payload writes a temp .gif; it must be unlinked after the push
     (success AND error), not leaked for the process lifetime."""
-    from divoom_daemon.daemon_client import DaemonDeviceProxy
+    from divoom_client.daemon_client import DaemonDeviceProxy
 
     seen = {}
 
@@ -91,7 +91,7 @@ def test_push_animation_deletes_its_temp_file(tmp_path):
 
 
 def test_push_animation_deletes_temp_file_on_error():
-    from divoom_daemon.daemon_client import DaemonDeviceProxy
+    from divoom_client.daemon_client import DaemonDeviceProxy
 
     seen = {}
 

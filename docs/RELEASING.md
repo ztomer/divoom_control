@@ -39,12 +39,12 @@ open dist/Divoom.app
 - First scan prompts for Bluetooth — **grant it once** (the bundle declares
   `NSBluetoothAlwaysUsageDescription`, so macOS shows the normal dialog).
 - Confirm: device scan finds screens, connect + push works, the menu-bar agent
-  appears, and the daemon spawns (`/tmp/divoom_daemon.log`). Since v0.21.4 the GUI
+  appears, and the daemon spawns (`/tmp/divoomd.log`). Since v0.21.4 the GUI
   spawns the native `divoomd` **TCC-disclaimed** so it's its own BT-responsible
   process (its embedded `com.divoom.divoomd` Info.plist), independent of who
   launched the `.app` — before that an undisclaimed daemon inherited the
   launcher's responsibility and SIGABRT'd mid-scan under any non-granted parent
-  (Terminal, another app). See `divoom_daemon/daemon_client.py:spawn_daemon`.
+  (Terminal, another app). See `divoom_client/daemon_client.py:spawn_daemon`.
 
 ## 4. Tag + GitHub release (outward-facing — do once verified)
 

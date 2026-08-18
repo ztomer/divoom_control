@@ -254,7 +254,7 @@ class TestDivoomGuiAPI(unittest.TestCase):
             self.assertFalse(self.api.stop_notification_listener()["running"])
 
     @patch("sys.platform", new="darwin")
-    @patch("divoom_daemon.macos_notifications.find_notification_db_path",
+    @patch("divoom_client.macos_notifications.find_notification_db_path",
            return_value=Path("/fake/db.sqlite"))
     def test_start_notification_listener_delegates_to_daemon(self, _db):
         client = self._fake_client(state="active")
@@ -278,7 +278,7 @@ class TestDivoomGuiAPI(unittest.TestCase):
         self.assertIn("macOS", result["error"])
 
     @patch("sys.platform", new="darwin")
-    @patch("divoom_daemon.macos_notifications.find_notification_db_path",
+    @patch("divoom_client.macos_notifications.find_notification_db_path",
            return_value=Path("/fake/db.sqlite"))
     def test_start_notification_listener_reports_daemon_error(self, _db):
         client = self._fake_client(state="error", error="db not found")
@@ -297,11 +297,11 @@ class TestDivoomGuiAPI(unittest.TestCase):
     def test_gui_does_not_instantiate_local_monitor(self):
         """Regression for the §1.2 double-route fix: the GUI must never build
         its own MacNotificationMonitor — that is the daemon's job."""
-        with patch("divoom_daemon.macos_notifications.MacNotificationMonitor") as mock_cls, \
+        with patch("divoom_client.macos_notifications.MacNotificationMonitor") as mock_cls, \
              patch.object(self.api, "_client", return_value=self._fake_client(state="active")), \
              patch("sys.platform", new="darwin"), \
-             patch("divoom_daemon.macos_notifications.find_notification_db_path", return_value=None), \
-             patch("divoom_daemon.macos_notifications.load_routing_table", return_value=[]):
+             patch("divoom_client.macos_notifications.find_notification_db_path", return_value=None), \
+             patch("divoom_client.macos_notifications.load_routing_table", return_value=[]):
             self.api.start_notification_listener()
             self.api.stop_notification_listener()
             self.api.is_notification_listener_running()
@@ -311,14 +311,14 @@ class TestDivoomGuiAPI(unittest.TestCase):
     # ── status snapshot + routing save (Settings card) ────────────────
 
     @patch("sys.platform", new="darwin")
-    @patch("divoom_daemon.macos_notifications.find_notification_db_path",
+    @patch("divoom_client.macos_notifications.find_notification_db_path",
            return_value=Path("/fake/db.sqlite"))
     def test_get_notification_listener_status_shape(self, _db):
         """The status dict has every key the JS side renders; counters + state
         come from the daemon, rules from disk."""
         client = self._fake_client(state="active",
                                    counters={"seen": 12, "routed": 8, "dropped": 4})
-        with patch("divoom_daemon.macos_notifications.load_routing_table",
+        with patch("divoom_client.macos_notifications.load_routing_table",
                    return_value=[("whatsapp", 6), ("com.apple.mail", 7)]), \
              patch.object(self.api, "_client", return_value=client):
             s = self.api.get_notification_listener_status()
@@ -344,7 +344,7 @@ class TestDivoomGuiAPI(unittest.TestCase):
     def test_save_notification_routing_delegates_to_daemon(self):
         """save_notification_routing validates then forwards to set_routing."""
         client = self._fake_client()
-        with patch("divoom_daemon.macos_notifications.load_routing_table",
+        with patch("divoom_client.macos_notifications.load_routing_table",
                    return_value=[("whatsapp", 6)]), \
              patch.object(self.api, "_client", return_value=client):
             result = self.api.save_notification_routing('[["whatsapp", 6]]')
@@ -356,7 +356,7 @@ class TestDivoomGuiAPI(unittest.TestCase):
         """Invalid JSON returns the previous rules and a non-null error,
         without ever touching the daemon."""
         client = self._fake_client()
-        with patch("divoom_daemon.macos_notifications.load_routing_table",
+        with patch("divoom_client.macos_notifications.load_routing_table",
                    return_value=[("whatsapp", 6)]), \
              patch.object(self.api, "_client", return_value=client):
             result = self.api.save_notification_routing("this is not json")
@@ -367,7 +367,7 @@ class TestDivoomGuiAPI(unittest.TestCase):
 
     def test_save_notification_routing_daemon_unavailable(self):
         """No daemon → previous rules + error, nothing written."""
-        with patch("divoom_daemon.macos_notifications.load_routing_table",
+        with patch("divoom_client.macos_notifications.load_routing_table",
                    return_value=[("whatsapp", 6)]), \
              patch.object(self.api, "_client", return_value=None):
             result = self.api.save_notification_routing('[["whatsapp", 6]]')
@@ -1850,8 +1850,8 @@ class TestGuiApiTopLevelCoverage(unittest.TestCase):
 
     def test_get_notification_listener_status_daemon_unavailable(self):
         with patch("sys.platform", new="darwin"), \
-             patch("divoom_daemon.macos_notifications.find_notification_db_path", return_value=None), \
-             patch("divoom_daemon.macos_notifications.load_routing_table", return_value=[]), \
+             patch("divoom_client.macos_notifications.find_notification_db_path", return_value=None), \
+             patch("divoom_client.macos_notifications.load_routing_table", return_value=[]), \
              patch.object(self.api, "_client", return_value=None):
             s = self.api.get_notification_listener_status()
         self.assertTrue(s["platform_supported"])
@@ -1861,7 +1861,7 @@ class TestGuiApiTopLevelCoverage(unittest.TestCase):
     # ---- save_notification_routing: invalid entries + daemon-side failure --
 
     def test_save_notification_routing_invalid_entries(self):
-        with patch("divoom_daemon.macos_notifications.load_routing_table", return_value=[("x", 1)]):
+        with patch("divoom_client.macos_notifications.load_routing_table", return_value=[("x", 1)]):
             result = self.api.save_notification_routing('[["whatsapp", "not-an-int"]]')
         self.assertIsNotNone(result["error"])
         self.assertIn("Invalid routing entries", result["error"])
@@ -1870,7 +1870,7 @@ class TestGuiApiTopLevelCoverage(unittest.TestCase):
     def test_save_notification_routing_set_routing_failure(self):
         fake = MagicMock()
         fake.set_routing.return_value = {"success": False, "error": "device busy"}
-        with patch("divoom_daemon.macos_notifications.load_routing_table", return_value=[("x", 1)]), \
+        with patch("divoom_client.macos_notifications.load_routing_table", return_value=[("x", 1)]), \
              patch.object(self.api, "_client", return_value=fake):
             result = self.api.save_notification_routing('[["whatsapp", 6]]')
         self.assertEqual(result["error"], "device busy")

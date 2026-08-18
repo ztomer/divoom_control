@@ -1,6 +1,6 @@
 //! divoomd — native (Rust) port of the Divoom daemon.
 //!
-//! Built in parallel to the authoritative Python daemon (`divoom_daemon/`); the
+//! Built in parallel to the since-archived Python daemon server; the
 //! Python implementation stays ground truth and this is switched in only at 100%
 //! socket + hardware parity. See docs/ROADMAP.md.
 //!

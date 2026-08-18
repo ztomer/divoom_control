@@ -12,7 +12,7 @@ import pytest
 
 sys.path.append(str(Path(__file__).parent.parent))
 
-from divoom_daemon import daemon_config as dc
+from divoom_client import daemon_config as dc
 
 
 def test_defaults_match_named_constants():

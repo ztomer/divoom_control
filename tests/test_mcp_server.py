@@ -476,7 +476,7 @@ def test_cmd_mcp_server_routes_through_daemon(monkeypatch) -> None:
     ensure_daemon — it must NOT open its own BLE connection (_resolve_device)."""
     import asyncio
     from divoom_lib import cli_commands
-    from divoom_daemon import daemon_client
+    from divoom_client import daemon_client
 
     # Fail loudly if the old BLE path is taken.
     def _boom(*a, **k):

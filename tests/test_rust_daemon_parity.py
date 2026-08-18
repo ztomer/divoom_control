@@ -14,7 +14,7 @@ import pytest
 
 sys.path.append(str(Path(__file__).parent.parent))
 
-from divoom_daemon.daemon_protocol import DaemonClient
+from divoom_client.daemon_protocol import DaemonClient
 
 
 @pytest.fixture
@@ -413,7 +413,7 @@ def test_rust_mcp_via_daemon(rust_daemon_ctx):
     observe success, which is what this verifies.)
     """
     import asyncio
-    from divoom_daemon.daemon_client import DaemonDeviceProxy
+    from divoom_client.daemon_client import DaemonDeviceProxy
     from divoom_lib.mcp_server import MCPServer
     from divoom_lib.mcp_tools import build_tool_catalog
 

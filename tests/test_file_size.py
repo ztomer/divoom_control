@@ -1,6 +1,6 @@
 """The 500-LOC rule, enforced (see ARCHITECTURE.md + docs/REVIEW_2026-06.md §1).
 
-No tracked source file under divoom_lib / divoom_daemon / divoom_gui may exceed
+No tracked source file under divoom_lib / divoom_client / divoom_gui may exceed
 500 lines. Existing offenders are pinned in ALLOWLIST as acknowledged debt — the
 list may only SHRINK. A new oversized file fails the suite; shrinking an allowed
 file below 500 and not removing it from the list also fails (so the debt is
@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 _REPO = Path(__file__).resolve().parents[1]
-_DIRS = ["divoom_lib", "divoom_daemon", "divoom_gui"]
+_DIRS = ["divoom_lib", "divoom_client", "divoom_gui"]
 _EXTS = {".py", ".c", ".js", ".css"}
 _LIMIT = 500
 

@@ -2,7 +2,7 @@
 
 The BLE device can be held by only one process, so the **daemon is the sole
 device owner** and every other process (GUI, MCP server, CLI helpers) is a thin
-RPC client. This module lives in ``divoom_daemon`` so any layer can import it
+RPC client. This module lives in ``divoom_client`` so any layer can import it
 without a backwards ``divoom_lib`` → ``divoom_gui`` dependency;
 ``divoom_gui.daemon_bridge`` re-exports everything here for backward compat.
 
@@ -30,7 +30,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from divoom_daemon.daemon_protocol import (
+from divoom_client.daemon_protocol import (
     DEFAULT_SOCKET_PATH,
     ENV_HOST,
     DaemonClient,
@@ -187,7 +187,7 @@ def spawn_daemon(
             if dylib.exists():
                 rust_env_extra["DIVOOMD_ENCODER_LIB"] = str(dylib)
     if not rust_bin:
-        # daemon_client.py lives at <repo>/divoom_daemon/daemon_client.py, so the
+        # daemon_client.py lives at <repo>/divoom_client/daemon_client.py, so the
         # repo root is parents[1].
         repo_root = Path(__file__).resolve().parents[1]
         for folder in ["release", "debug"]:
@@ -196,19 +196,19 @@ def spawn_daemon(
                 rust_bin = str(p)
                 break
     # The Rust daemon is the sole shipping daemon (the Python reference server was
-    # archived 2026-07-13 — see divoom_daemon/__init__.py); there is no longer a
+    # archived 2026-07-13 — see divoom_client/__init__.py); there is no longer a
     # Python-daemon spawn fallback. Raise clearly rather than emitting a
     # `-m divoom_lib.cli daemon` command that no longer works.
     if rust_bin is None:
         raise RuntimeError(
             "divoomd (Rust daemon) binary not found — set DIVOOM_RUST_BINARY, "
             "build divoomd/, or run from a packaged .app. The Python daemon "
-            "server was archived; see divoom_daemon/__init__.py."
+            "server was archived; see divoom_client/__init__.py."
         )
     cmd = [rust_bin, "--socket", socket_path]
     if mac:
         cmd += ["--mac", mac]
-    log_path = os.environ.get("DIVOOM_DAEMON_LOG", "/tmp/divoom_daemon.log")
+    log_path = os.environ.get("DIVOOM_DAEMON_LOG", "/tmp/divoom_client.log")
     try:
         with open(log_path, "a", buffering=1) as fh:
             fh.write(f"\n==== daemon spawn from pid {os.getpid()} ====\n")

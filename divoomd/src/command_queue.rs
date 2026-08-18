@@ -1,5 +1,5 @@
 //! Serialized device command queue with exclusive-mode locking — a behavioral
-//! port of `divoom_daemon/command_queue.py`.
+//! port of `the archived Python command_queue.py`.
 //!
 //! This is NOT a line-for-line port: the Python queue bridges thread-based RPC
 //! callers onto a single asyncio loop (`run_coroutine_threadsafe` + concurrent

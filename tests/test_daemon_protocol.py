@@ -11,7 +11,7 @@ import pytest
 sys.path.append(str(Path(__file__).parent.parent))
 sys.path.append(str(Path(__file__).parent.parent / "divoom_gui"))
 
-from divoom_daemon.daemon_protocol import (
+from divoom_client.daemon_protocol import (
     EVENT_STATUS, EVENT_NOTIFICATION, SUBSCRIBE_COMMAND,
     encode_message, iter_messages, make_request,
     make_status_event, make_notification_event, DaemonClient,

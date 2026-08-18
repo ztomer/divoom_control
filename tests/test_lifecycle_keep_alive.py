@@ -5,7 +5,7 @@ routing a shutdown event to its callback. All event-driven — no polling
 anywhere in the path.
 
 The daemon's-own shutdown-broadcast test (which spins up a real archived
-divoom_daemon.daemon.DivoomDaemon) moved to
+divoom_client.daemon.DivoomDaemon) moved to
 archive/tests/ (removed in R66; in git history) test_lifecycle_keep_alive.py.
 """
 import sys
@@ -16,7 +16,7 @@ import pytest
 sys.path.append(str(Path(__file__).parent.parent))
 
 from divoom_lib import lifecycle_config as lc
-from divoom_daemon.daemon_protocol import EVENT_SHUTDOWN
+from divoom_client.daemon_protocol import EVENT_SHUTDOWN
 
 
 # ── flag persistence ──────────────────────────────────────────────────────

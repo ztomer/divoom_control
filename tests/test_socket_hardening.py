@@ -1,14 +1,14 @@
 """Socket-protocol client hardening: the client-side reply-size cap.
 
 The rest of this suite (every test that drives a real in-process SocketServer)
-depends on the archived divoom_daemon.socket_server module and moved to
+depends on the archived divoom_client.socket_server module and moved to
 archive/tests/ (removed in R66; in git history) test_socket_hardening.py, which kept the original name since it
 carries the bulk of the file's tests.
 """
 import sys
 from pathlib import Path
 
-from divoom_daemon.daemon_protocol import DaemonClient
+from divoom_client.daemon_protocol import DaemonClient
 
 sys.path.append(str(Path(__file__).parent.parent))
 
@@ -16,7 +16,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 # ── client-side reply cap (H2 client) ──────────────────────────────────────
 
 def test_client_caps_oversized_reply(monkeypatch):
-    from divoom_daemon import daemon_protocol
+    from divoom_client import daemon_protocol
 
     class _FloodSock:
         def __enter__(self): return self

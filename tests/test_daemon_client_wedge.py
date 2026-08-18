@@ -22,7 +22,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 sys.path.append(str(Path(__file__).parent.parent / "divoom_gui"))
 
-from divoom_daemon.daemon_protocol import DaemonClient
+from divoom_client.daemon_protocol import DaemonClient
 
 
 def _sock_path() -> str:

@@ -283,7 +283,7 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
         if client is None:
             return {"running": False, "error": "daemon unavailable"}
         reply = client.start_notifications()
-        from divoom_daemon.macos_notifications import find_notification_db_path
+        from divoom_client.macos_notifications import find_notification_db_path
         db_path = find_notification_db_path()
         out = {
             "running": self._daemon_state_running(reply),
@@ -322,7 +322,7 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
               "error": str | None,
             }
         """
-        from divoom_daemon.macos_notifications import (
+        from divoom_client.macos_notifications import (
             ROUTING_PATH, load_routing_table, find_notification_db_path,
         )
         if sys.platform != "darwin":
@@ -370,7 +370,7 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
         unchanged and a non-null ``error`` string — the GUI shows the
         error and keeps the user's draft.
         """
-        from divoom_daemon.macos_notifications import load_routing_table
+        from divoom_client.macos_notifications import load_routing_table
         import json as _json
         try:
             parsed = _json.loads(json_text) if json_text.strip() else []

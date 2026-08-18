@@ -11,7 +11,7 @@ socket. Two interaction modes share one connection grammar:
 
 All messages are newline-delimited JSON ("NDJSON"): one compact JSON object per
 line. This module has the framing, the message/event shapes, and a thin client.
-The server lives in ``divoom_daemon/daemon.py``; clients are the menubar + the GUI.
+The server lives in ``divoom_client/daemon.py``; clients are the menubar + the GUI.
 """
 from __future__ import annotations
 
@@ -117,7 +117,7 @@ class DaemonClient:
                  timeout: float | None = None,
                  *, host: str | None = None, port: int | None = None,
                  token: str | None = None):
-        from divoom_daemon.daemon_config import load_daemon_config
+        from divoom_client.daemon_config import load_daemon_config
         self.socket_path = socket_path
         # Default the quick-command read timeout from the daemon config so the
         # "2 seconds" lives in one place (daemon.ini) rather than here.
@@ -238,7 +238,7 @@ class DaemonClient:
         # timeout abandoned those calls mid-stream ("images are not pushed").
         # A long read timeout is safe: it only applies while a live daemon is
         # processing; a dead daemon still fails fast at connect.
-        from divoom_daemon.daemon_config import load_daemon_config
+        from divoom_client.daemon_config import load_daemon_config
         return self.send_command("device_call", payload,
                                  read_timeout=load_daemon_config().sync_read_timeout)
 
@@ -252,13 +252,13 @@ class DaemonClient:
         op (a wall 0x8B push runs 10-30s+). At 2s the client timed out while the
         daemon went on to acquire → orphaned token + a spurious failure to the GUI,
         wedging the device until the 30s G3 idle release."""
-        from divoom_daemon.daemon_config import load_daemon_config
+        from divoom_client.daemon_config import load_daemon_config
         return self.send_command("exclusive_start", {"token": token},
                                  read_timeout=load_daemon_config().sync_read_timeout)
 
     def exclusive_end(self, token: str) -> dict:
         """End the exclusive-mode session for ``token``. Returns the daemon reply."""
-        from divoom_daemon.daemon_config import load_daemon_config
+        from divoom_client.daemon_config import load_daemon_config
         return self.send_command("exclusive_end", {"token": token},
                                  read_timeout=load_daemon_config().sync_read_timeout)
 
@@ -291,14 +291,14 @@ class DaemonClient:
 
         Uses the longer ``connect_timeout`` (BLE setup is slow — the 2s default
         read timeout would give up mid-handshake and surface as "timed out")."""
-        from divoom_daemon.daemon_config import load_daemon_config
+        from divoom_client.daemon_config import load_daemon_config
         return self.send_command("connect", {
             "mac": mac, "lan_ip": lan_ip, "lan_token": lan_token,
             "device_name": device_name, "use_ios_le_protocol": use_ios_le_protocol,
         }, read_timeout=load_daemon_config().connect_timeout)
 
     def disconnect_device(self) -> dict:
-        from divoom_daemon.daemon_config import load_daemon_config
+        from divoom_client.daemon_config import load_daemon_config
         return self.send_command("disconnect",
                                  read_timeout=load_daemon_config().connect_timeout)
 
@@ -315,7 +315,7 @@ class DaemonClient:
         # only replies AFTER scanning for `timeout` seconds, so the client must
         # wait longer than that or the read times out before the (successful)
         # reply arrives. The fallbacks + the read slack live in daemon.ini.
-        from divoom_daemon.daemon_config import load_daemon_config
+        from divoom_client.daemon_config import load_daemon_config
         cfg = load_daemon_config()
         if timeout is None:
             timeout = cfg.scan_timeout
@@ -331,7 +331,7 @@ class DaemonClient:
         # than the quick-command timeout (the 2s read abandoned the reply, the
         # GUI never got its wall handle, and every wall push then failed with
         # "no wall configured" even though the daemon-side wall was healthy).
-        from divoom_daemon.daemon_config import load_daemon_config
+        from divoom_client.daemon_config import load_daemon_config
         return self.send_command("wall_configure",
                                  {"slots": slots, "cell_size": cell_size},
                                  read_timeout=load_daemon_config().connect_timeout)
@@ -374,7 +374,7 @@ class DaemonClient:
         Uses the long ``sync_read_timeout`` — the daemon only replies after the
         download + full BLE stream, which takes far longer than the quick-command
         timeout (a short read here falsely reported every upload as failed)."""
-        from divoom_daemon.daemon_config import load_daemon_config
+        from divoom_client.daemon_config import load_daemon_config
         return self.send_command("sync_artwork", {
             "file_id": file_id, "default_size": default_size, "target": target,
         }, read_timeout=load_daemon_config().sync_read_timeout)
@@ -391,14 +391,14 @@ class DaemonClient:
             slots: preferred full-page mapping {slot 0-11: file_id};
                    unmapped slots are cleared on the device
         """
-        from divoom_daemon.daemon_config import load_daemon_config
+        from divoom_client.daemon_config import load_daemon_config
         return self.send_command("custom_art_push", {
             "file_ids": file_ids, "page": page, "slot": slot, "slots": slots,
         }, read_timeout=load_daemon_config().sync_read_timeout)
 
     def custom_art_query_page(self, page: int = 0) -> dict:
         """Query device for filled slot IDs on a custom art page."""
-        from divoom_daemon.daemon_config import load_daemon_config
+        from divoom_client.daemon_config import load_daemon_config
         return self.send_command(
             "custom_art_query_page", {"page": page},
             read_timeout=load_daemon_config().sync_read_timeout)

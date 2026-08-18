@@ -158,7 +158,8 @@ CI install step updated; no `p.chromium` references left in `tests/`.
 `divoomd` (Rust, built on `btleplug` + `tokio` + `serde`) at 100% socket +
 hardware parity (2026-06-29). Python daemon server archived 2026-07-13 (13
 server-side modules archived, then removed from the tree in R66, client-side infra stays
-active in `divoom_daemon/` — `daemon_client.py`, `daemon_protocol.py`,
+active in `divoom_client/` (renamed from `divoom_daemon/` in R66) —
+`daemon_client.py`, `daemon_protocol.py`,
 `macos_notifications.py`). Full device parity (54 → 0 gaps), cloud decode,
 hardware-verified on Pixoo/Timoo/Ditoo/Tivoo Max. Menubar is a standalone Rust
 agent (`divoom-menubar/`); the GUI stays the Python pywebview UI

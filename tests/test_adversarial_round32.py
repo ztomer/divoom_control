@@ -23,8 +23,8 @@ sys.path.append(str(Path(__file__).parent.parent / "divoom_gui"))
 # ── Hashimoto: exclusive RPC timeout ────────────────────────────────────────
 
 def test_exclusive_rpcs_use_long_read_timeout():
-    from divoom_daemon.daemon_protocol import DaemonClient
-    from divoom_daemon.daemon_config import load_daemon_config
+    from divoom_client.daemon_protocol import DaemonClient
+    from divoom_client.daemon_config import load_daemon_config
 
     expected = load_daemon_config().sync_read_timeout
     assert expected >= 100  # sanity: it's the long (sync_artwork) timeout, not 2s

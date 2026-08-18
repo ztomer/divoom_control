@@ -292,7 +292,7 @@ def main():
                 should_stop_daemon_on_dashboard_quit, should_quit_menubar_on_exit)
             keep_alive = get_keep_daemon_alive()
             if should_stop_daemon_on_dashboard_quit(keep_alive):
-                from divoom_daemon.daemon_protocol import DaemonClient, DEFAULT_SOCKET_PATH
+                from divoom_client.daemon_protocol import DaemonClient, DEFAULT_SOCKET_PATH
                 logger.info(f"{reason}; stopping daemon (shared lifecycle).")
                 DaemonClient(DEFAULT_SOCKET_PATH, timeout=1.0).shutdown()
             # The native menu bar doesn't follow the daemon's shutdown broadcast,
@@ -332,7 +332,7 @@ def _make_daemon_event_handler(window):
     window when shared lifecycle is on.
     """
     import json as _json
-    from divoom_daemon.daemon_protocol import EVENT_SHUTDOWN
+    from divoom_client.daemon_protocol import EVENT_SHUTDOWN
 
     def on_event(ev: dict) -> None:
         if not isinstance(ev, dict):
@@ -382,7 +382,7 @@ def _start_shutdown_follower(window) -> None:
     import time as _time
 
     def _run():
-        from divoom_daemon.daemon_protocol import DaemonClient, DEFAULT_SOCKET_PATH
+        from divoom_client.daemon_protocol import DaemonClient, DEFAULT_SOCKET_PATH
         while True:
             try:
                 DaemonClient(DEFAULT_SOCKET_PATH, timeout=2.0).subscribe(
@@ -453,7 +453,7 @@ def _spawn_menubar_agent() -> None:
             env["DIVOOM_GUI_PYTHON"] = sys.executable
             env["DIVOOM_GUI_SCRIPT"] = ""
         else:
-            from divoom_daemon.daemon_client import bundle_python
+            from divoom_client.daemon_client import bundle_python
             env["DIVOOM_GUI_PYTHON"] = bundle_python() or sys.executable
             env["DIVOOM_GUI_SCRIPT"] = str(Path(__file__).resolve())
         subprocess.Popen(

@@ -1,5 +1,5 @@
 //! NDJSON socket-protocol behavior + COMMANDS map parity. Mirrors the framing
-//! semantics of divoom_daemon/daemon_protocol.py (iter_messages / encode_message /
+//! semantics of divoom_client/daemon_protocol.py (iter_messages / encode_message /
 //! make_request) and pins a few command ids against divoom_lib.models.COMMANDS.
 
 use divoomd::commands::{command_id, COMMAND_COUNT};
@@ -65,7 +65,7 @@ fn iter_messages_empty_buffer() {
 
 #[test]
 fn parses_python_encoded_request() {
-    // exact bytes from divoom_daemon.daemon_protocol.encode_message(
+    // exact bytes from divoom_client.daemon_protocol.encode_message(
     //   make_request("scan", {"timeout": 5}, "tok"))
     let py = b"{\"command\":\"scan\",\"args\":{\"timeout\":5},\"token\":\"tok\"}\n";
     let (msgs, rem) = iter_messages(py);

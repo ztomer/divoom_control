@@ -140,7 +140,7 @@ class ScannerMixin:
         Settings inputs restore between sessions — save_scan_settings wrote them
         on every scan but nothing ever read them back."""
         import configparser
-        from divoom_daemon.daemon_config import DEFAULT_SCAN_TIMEOUT, DEFAULT_SCAN_LIMIT
+        from divoom_client.daemon_config import DEFAULT_SCAN_TIMEOUT, DEFAULT_SCAN_LIMIT
         timeout, limit = int(DEFAULT_SCAN_TIMEOUT), DEFAULT_SCAN_LIMIT
         try:
             config_file = Path.home() / ".config" / "divoom-control" / "config.ini"
@@ -194,7 +194,7 @@ class ScannerMixin:
         # nothing, so the scan defaults live in ONE place. The UI normally passes
         # the user's chosen timeout (Divoom scans are slow — 30-60s — hence the
         # large defaults).
-        from divoom_daemon.daemon_config import load_daemon_config
+        from divoom_client.daemon_config import load_daemon_config
         cfg = load_daemon_config()
         if timeout is None:
             timeout = int(cfg.scan_timeout)

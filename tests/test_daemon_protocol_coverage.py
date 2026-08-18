@@ -1,4 +1,4 @@
-"""R61 coverage push: divoom_daemon.daemon_protocol.DaemonClient branches not
+"""R61 coverage push: divoom_client.daemon_protocol.DaemonClient branches not
 exercised by test_daemon_protocol.py (framing + a real fake-daemon
 round-trip), test_daemon_client_wedge.py, or test_daemon_socket_hardening.py.
 
@@ -28,8 +28,8 @@ from unittest.mock import patch
 
 import pytest
 
-import divoom_daemon.daemon_protocol as daemon_protocol_mod
-from divoom_daemon.daemon_protocol import (
+import divoom_client.daemon_protocol as daemon_protocol_mod
+from divoom_client.daemon_protocol import (
     DaemonClient,
     encode_message,
     iter_messages,

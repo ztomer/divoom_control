@@ -2,7 +2,7 @@
 status cache — the parts that do NOT need a live daemon.
 
 The proxy-dispatch tests (built on a real in-process DivoomDaemon over a temp
-socket) depend on the archived divoom_daemon.daemon server module and moved to
+socket) depend on the archived divoom_client.daemon server module and moved to
 archive/tests/ (removed in R66; in git history) test_daemon_bridge.py.
 """
 import os
@@ -14,10 +14,10 @@ import pytest
 sys.path.append(str(Path(__file__).parent.parent))
 sys.path.append(str(Path(__file__).parent.parent / "divoom_gui"))
 
-# The implementation lives in divoom_daemon.daemon_client (R28); monkeypatching
+# The implementation lives in divoom_client.daemon_client (R28); monkeypatching
 # below targets that module's globals, which ensure_daemon resolves against.
 # divoom_gui.daemon_bridge re-exports the same objects.
-from divoom_daemon import daemon_client as daemon_bridge
+from divoom_client import daemon_client as daemon_bridge
 from divoom_gui.daemon_bridge import daemon_alive, ensure_daemon
 
 
@@ -89,7 +89,7 @@ def test_exclusive_end_failure_is_logged_not_raised(caplog):
     __aexit__ must surface it (can't raise — would mask a body exception)."""
     import asyncio
     import logging
-    from divoom_daemon.daemon_client import _ProxyExclusiveCtx
+    from divoom_client.daemon_client import _ProxyExclusiveCtx
 
     class _Client:
         def exclusive_end(self, token):
@@ -111,7 +111,7 @@ def test_exclusive_end_failure_is_logged_not_raised(caplog):
 def test_exclusive_end_success_is_quiet(caplog):
     import asyncio
     import logging
-    from divoom_daemon.daemon_client import _ProxyExclusiveCtx
+    from divoom_client.daemon_client import _ProxyExclusiveCtx
 
     class _Client:
         def exclusive_end(self, token):
@@ -135,7 +135,7 @@ def test_exclusive_end_success_is_quiet(caplog):
 def test_proxy_status_cache_dedupes_intra_op_reads():
     """is_connected/lan/_conn read back-to-back in one op must share ONE
     device_status() RPC, not fire three blocking round-trips."""
-    from divoom_daemon.daemon_client import DaemonDeviceProxy
+    from divoom_client.daemon_client import DaemonDeviceProxy
 
     calls = {"n": 0}
 
@@ -153,7 +153,7 @@ def test_proxy_status_cache_dedupes_intra_op_reads():
 
 def test_proxy_status_cache_refetches_after_ttl():
     """Once the short TTL lapses, a fresh read refetches (no permanent staleness)."""
-    from divoom_daemon.daemon_client import DaemonDeviceProxy
+    from divoom_client.daemon_client import DaemonDeviceProxy
 
     calls = {"n": 0}
 

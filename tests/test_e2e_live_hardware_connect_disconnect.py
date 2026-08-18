@@ -17,7 +17,7 @@ SHARED daemon there's no way to tell "idle, safe to disturb" from "someone is
 mid-session with this device" from the outside. If you want to exercise a
 real connect/disconnect cycle by hand, drive the daemon directly:
 
-    python3 -c "from divoom_daemon.daemon_protocol import DaemonClient; \\
+    python3 -c "from divoom_client.daemon_protocol import DaemonClient; \\
         c = DaemonClient('/tmp/divoom.sock'); print(c.device_status())"
 
 The menubar's own live icon state isn't asserted on here either — reading a
@@ -39,7 +39,7 @@ import pytest
 
 sys.path.append(str(Path(__file__).parent.parent))
 
-from divoom_daemon.daemon_protocol import DaemonClient, DEFAULT_SOCKET_PATH
+from divoom_client.daemon_protocol import DaemonClient, DEFAULT_SOCKET_PATH
 
 
 @pytest.fixture

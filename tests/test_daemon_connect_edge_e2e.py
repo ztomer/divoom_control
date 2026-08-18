@@ -24,8 +24,8 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 sys.path.append(str(Path(__file__).parent.parent / "divoom_gui"))
 
-from divoom_daemon.daemon_client import daemon_alive, spawn_daemon
-from divoom_daemon.daemon_protocol import DaemonClient, DEFAULT_SOCKET_PATH
+from divoom_client.daemon_client import daemon_alive, spawn_daemon
+from divoom_client.daemon_protocol import DaemonClient, DEFAULT_SOCKET_PATH
 
 # Handle for the daemon THIS test file spawned — an int pid (disclaimed
 # posix_spawn path) or a subprocess.Popen (fallback path). Only ever

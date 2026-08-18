@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from divoom_lib.utils import discovery
-from divoom_daemon.daemon_protocol import DaemonClient
+from divoom_client.daemon_protocol import DaemonClient
 
 
 def test_background_thread() -> None:

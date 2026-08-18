@@ -35,7 +35,7 @@ AE_DESC = "Divoom Control reads the now-playing track from Music and Spotify to 
 datas = []
 datas += collect_data_files("divoom_gui")          # web_ui/** (frontend)
 datas += collect_data_files("divoom_lib")          # fonts/*.bin + the native dylib
-datas += collect_data_files("divoom_daemon")       # any packaged data
+datas += collect_data_files("divoom_client")       # any packaged data
 # Rust binaries the GUI spawns — bundled under bin/ (resolved via sys._MEIPASS).
 for _src in ("target/release/divoomd",
              "target/release/divoom-menubar"):

@@ -25,7 +25,7 @@ from typing import Optional
 
 import pytest
 
-from divoom_daemon.macos_notifications import (
+from divoom_client.macos_notifications import (
     DEFAULT_ROUTING,
     MacAppRouter,
     MacNotificationMonitor,
@@ -307,7 +307,7 @@ def test_find_notification_db_path_returns_none_off_macos() -> None:
 
 
 def test_module_exports_expected_symbols() -> None:
-    import divoom_daemon.macos_notifications as m
+    import divoom_client.macos_notifications as m
     assert callable(m.MacNotificationMonitor)
     assert callable(m.MacAppRouter)
     assert callable(m.parse_notification_record)
@@ -320,7 +320,7 @@ def test_module_exports_expected_symbols() -> None:
 import subprocess
 from unittest.mock import PropertyMock, patch
 
-import divoom_daemon.macos_notifications as macos_notifications
+import divoom_client.macos_notifications as macos_notifications
 
 
 # ── `find_notification_db_path` — every branch, deterministically ─────

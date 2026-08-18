@@ -187,7 +187,7 @@ def _make_handlers(divoom) -> dict[str, Any]:
             file_or_data = file  # type: ignore[assignment]
         # If divoom is a DaemonDeviceProxy, use push_animation (exclusive).
         # Otherwise fall back to display.show_image.
-        from divoom_daemon.daemon_client import DaemonDeviceProxy
+        from divoom_client.daemon_client import DaemonDeviceProxy
         if isinstance(divoom, DaemonDeviceProxy):
             ok = await divoom.push_animation(file_or_data)
         else:

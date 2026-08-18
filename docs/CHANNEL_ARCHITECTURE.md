@@ -341,7 +341,7 @@ The recommendations below were made when this doc was written and have since shi
 
 - **Channel-switch helpers** — `set_clock_rich()` (APK C2() 10-byte format) and
   `set_temperature_channel()` (6-byte APK format) implemented in daemon RPC (R26).
-- **Command queue** — ring-buffer command queue in `divoom_daemon/command_queue.py` (R27).
+- **Command queue** — ring-buffer command queue, since ported to `divoomd/src/command_queue.rs` (R27).
 - **Weather push** — confirmed 0x5F only, channel switch is separate (R26 revert).
 - **`show_clock()` legacy format preserved** — APK C2() added as `set_clock_rich()`;
   the two overlay layouts coexist.
