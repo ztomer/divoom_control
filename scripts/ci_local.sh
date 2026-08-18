@@ -9,9 +9,17 @@
 #   - it gates only divoomd, never divoom-menubar
 #   - it never runs a single test
 #
-# Mirrors .github/workflows/tests.yml job-for-job. Run before every push and
-# before cutting a release (scripts/release.sh's ci_gate cannot verify a green
-# CI while billing is out — see AGENTS.md's credit-depletion exception).
+# Mirrors .github/workflows/tests.yml job-for-job, WITH ONE LIMIT THAT MATTERS:
+# it runs on this machine only. CI's rust-core / rust-ble-linux jobs run on
+# Ubuntu, so a Linux-only failure is invisible here. That is not hypothetical --
+# v0.23.0 shipped with a red rust-core because workspace-wide clippy pulled in
+# divoom-menubar (tao/tray-icon -> GTK/glib), which builds fine on macOS and
+# fails on a Linux runner without a GTK toolchain. A green run here means "the
+# macOS-reachable jobs pass", never "CI would be green".
+#
+# Run before every push and before cutting a release (scripts/release.sh's
+# ci_gate cannot verify a green CI while billing is out — see AGENTS.md's
+# credit-depletion exception).
 #
 #   ./scripts/ci_local.sh            all jobs
 #   ./scripts/ci_local.sh --fast     skip the Python suite (the slow one)

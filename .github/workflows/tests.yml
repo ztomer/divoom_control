@@ -87,10 +87,16 @@ jobs:
         # which needs the system dbus-1.pc. Without this the clippy step fails
         # on Ubuntu even though the job is otherwise the no-BLE core gate.
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
-      - name: cargo fmt --check (whole workspace)
+      - name: cargo fmt --check (whole workspace — no system deps needed)
         run: cargo fmt --all -- --check
-      - name: cargo clippy (whole workspace, all targets/features, deny warnings)
-        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: cargo clippy (divoomd, all targets/features, deny warnings)
+        # Scoped to divoomd deliberately: this is the LINUX job, and a
+        # workspace-wide clippy pulls in divoom-menubar, whose tao/tray-icon
+        # deps need GTK/glib. That crate is macOS-only and never ships on
+        # Linux, so installing a GTK toolchain here would be buying a
+        # dependency to lint a binary this platform does not build.
+        # The macOS rust-ble job lints the whole workspace instead.
+        run: cargo clippy -p divoomd --all-targets --all-features -- -D warnings
       - name: Build core without BLE
         run: cargo build -p divoomd --no-default-features --locked
       - name: Test core without BLE
@@ -106,6 +112,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Build native dylib (FFI encoder parity test dependency)
         run: bash scripts/build_libdivoom.sh
+      - name: cargo clippy (whole workspace, all targets/features, deny warnings)
+        # macOS owns the workspace-wide lint: it is the only platform where
+        # divoom-menubar (tao/tray-icon) builds without extra system packages.
+        run: cargo clippy --all-targets --all-features -- -D warnings
       - name: Build + test with BLE (whole workspace)
         # Workspace root: this also builds and runs divoom-menubar's tests,
         # which no CI job reached before R66.

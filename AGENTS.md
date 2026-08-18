@@ -69,6 +69,16 @@ Until billing is restored, **`./scripts/ci_local.sh` is the gate**. It mirrors
 Rust with BLE, the Python suite). Run it before every push and before any
 release.
 
+**It runs on this machine only.** CI's `rust-core` and `rust-ble-linux` jobs run
+on Ubuntu, so a **Linux-only failure is invisible locally** — v0.23.0 shipped
+with a red `rust-core` for exactly that reason. A green `ci_local.sh` means "the
+macOS-reachable jobs pass", never "CI would be green".
+
+**And never assume a red CI is billing — read the failure.** The whole point of
+the gate is that "red" and "out of credits" look identical from the outside. The
+v0.23.0 run had 4 of 5 jobs GREEN and one real failure; treating it as billing
+skipped a diagnosis that took two minutes.
+
 Do NOT mistake the pre-commit hook for CI. It is deliberately narrow so commits
 stay fast, and is weaker in three ways: it checks only **staged** files, gates
 only **divoomd** (never `divoom-menubar`), and runs **no tests**.
