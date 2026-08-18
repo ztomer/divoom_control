@@ -1,6 +1,6 @@
 # Planning Round 66 — repo restructure: retire `native-port/`, one Rust workspace, drop dead code
 
-**Status**: in progress
+**Status**: shipped (2026-08-17)
 **Started**: 2026-08-17
 **Predecessor**: R65 (house Rust gate + v0.22.21 release)
 
@@ -147,4 +147,60 @@ the round is called done.
 
 ## Outcome / what shipped
 
-_(filled in as phases land)_
+All six phases shipped, plus the camoufox migration. 12 commits, net
+**-14,240 LOC** (188 files, 2,935 insertions / 17,175 deletions).
+
+| Phase | Commit | Result |
+|---|---|---|
+| 0 | — | 9.2 GB reclaimed (worktrees + orphaned target dirs) |
+| 1 | `7cbc713`, `43a3f92`, `11f6e9a` | spike-ble, divoom_menubar/, archive/ removed (~12.6k LOC) |
+| 2 | `bc1c0f5` | Cargo workspace; divoom-menubar gated for the first time |
+| 3 | `b5c7319` | native-port/ retired; binary-path class fixed |
+| 4 | `bc2316e` | divoom_daemon/ -> divoom_client/ (159 refs) |
+| 5 | `b99c18d` | CI workspace parity; ARCHITECTURE/docs made true |
+| 6 | `3dd42ea` | 64-bit only, macOS Apple-silicon only |
+| camoufox | `08d3878`, `a548be2` | 15 e2e suites migrated; guard fixed; 2 races fixed |
+
+### What the round actually found
+
+The layout work was the stated goal; the value was in the gates that reported
+success while checking something narrower than they claimed. Every one of these
+was invisible to a green suite:
+
+1. **`divoom-menubar` had never been formatted** — CI (`working-directory:
+   divoomd`) and the pre-commit hook (`"$root/divoomd"`) both scoped to one
+   crate. `cargo fmt --all` from the new workspace root produced 129 insertions
+   across all four of its source files.
+2. **4-parent path arithmetic** in `native_encode.rs` and `spp.rs`. The
+   workspace moved the binary one level shallower. `find_encoder_lib()` returns
+   `Option`, so it degrades silently to no native encoder; `spp.rs` would point
+   at a nonexistent bridge. Fixed as a class (`divoomd/src/paths.rs`).
+3. **The e2e skip guard did not guard** — `importorskip` checks the module, not
+   the browser binary. That is what made this round's first baseline show 69
+   failures that looked like real regressions.
+4. **The arch `*)` fallback warned and built anyway**, so a 32-bit host produced
+   an untested binary.
+5. **Two e2e tests waited on a proxy signal** and asserted on a different one;
+   passing was a Chromium timing coincidence.
+6. **`ARCHITECTURE.md` claimed the Python package owned the device** ~5 weeks
+   after that stopped being true, while `AGENTS.md` sends every agent to read it.
+
+### Deviations from the plan
+
+- **Phase 6 (drop macOS Intel) was added mid-round** at the user's request, and
+  applied house-wide: `ZoneTilerWM` was the only other project still building
+  universal, on branch `drop-intel-macos`. Recorded as standing rule #3 in
+  `~/.claude/CLAUDE.md` + the `target-platform-policy` skill.
+- **`scripts/ci_local.sh` was added** (not in the original plan) because GitHub
+  Actions credits ran out mid-round, making CI a dead signal.
+- **The `rust/` grouping alternative stayed rejected** — Phase 2 delivered the
+  gate parity that was the real motivation.
+
+### Open / carried forward
+
+- **The CI workflow changes are unverified.** Actions credits are exhausted; the
+  YAML parses and every command was proven locally via `ci_local.sh`, but the
+  workflow itself has not run. Re-check when billing is restored.
+- **Not released.** The round is layout + gates, no user-facing behaviour change;
+  `pyproject.toml` stays at 0.22.21. `release.sh`'s `ci_gate` cannot verify green
+  CI while billing is out (the documented credit-depletion exception).

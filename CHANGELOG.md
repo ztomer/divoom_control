@@ -4,6 +4,105 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## R66 — repo restructure: one Rust workspace, dead code out, gates that actually gate (2026-08-17)
+
+Layout round. The tree still described the *migration* that produced it rather
+than the system it produced, and several gates turned out to be checking less
+than they claimed. Net **-14,240 LOC** (188 files, 2,935 insertions / 17,175
+deletions).
+
+**Suite: Python 2910 tests / 2816 passed / 0 failed / 94 skipped; Rust 119
+passed across the workspace (was divoomd-only before this round).** Verified
+with `scripts/ci_local.sh` — all CI-equivalent jobs pass.
+
+### Dead code removed (~12.6k LOC)
+- **`native-port/spike-ble/`** — the Phase-1 BLE port spike, superseded by
+  `divoomd`. Zero references anywhere.
+- **`divoom_menubar/`** (648 LOC) — the pyobjc menubar, superseded by the Rust
+  tray agent. `setup_app.py` called it "in-tree as reference", yet it was still
+  listed in the py2app packages AND pyproject's discovery, so **every shipped
+  DMG carried a menubar that never ran**. `cmd_menubar` retired (actionable
+  error + exit 1) rather than deleted, matching how `cmd_daemon` was retired.
+- **`archive/`** (63 files, ~12k LOC) — the Python daemon server, archived
+  2026-07-13. Nothing imported it, but three CI gates scanned it every run.
+  Removing it also retired a workaround: `pytest.ini` carried
+  `--ignore=archive` purely because `archive/tests/conftest.py` re-registered
+  `--run-hardware` and aborted collection.
+
+### One Cargo workspace — and a crate that had never been gated
+Root virtual manifest, `resolver = "2"`, one `Cargo.lock`, one repo-local
+`target/`. `exclude = ["references"]` is mandatory: the three vendored
+protocol-reference crates otherwise break every cargo invocation.
+
+This closed a real hole. CI's `rust-core`/`rust-ble` both ran
+`working-directory: divoomd`, and the pre-commit hook passed
+`"$root/divoomd"` — so **`divoom-menubar` was outside every gate**: no fmt, no
+clippy, no build, no test. Running `cargo fmt --all` from the new root proved
+it: the crate **had never once been formatted** (129 insertions across all four
+source files). Both CI jobs and the hook now gate the workspace root.
+
+### `native-port/` retired — and the path class it hid
+`native-port/divoom-menubar/` → `divoom-menubar/`, `gen_*.py` →
+`scripts/codegen/`. ~30 references updated.
+
+Two files did not merely *reference* the path, they did arithmetic on it:
+`exe.parent()?.parent()?.parent()?.parent()?` — "4 parents = project root".
+Under the workspace the binary sits one level shallower. **Neither would have
+failed loudly**: `find_encoder_lib()` returns `Option`, so it silently degrades
+to no native encoder; `spp.rs` would hand the SPP bridge a nonexistent path.
+Tests stay green either way. Fixed as a class in `divoomd/src/paths.rs` —
+search UP for a marker directory, immune to workspace / shared
+`CARGO_TARGET_DIR` / `cargo run` / .app layouts. Four tests, including the
+must-return-`None` case so it cannot walk to `/` and claim success.
+
+### `divoom_daemon/` → `divoom_client/`
+The package contained no daemon; its own docstring opened "CLIENT LIBRARY —" in
+caps to counteract the name. 159 references across 43 Python files, packaging,
+Rust, and docs. ROADMAP's historical shipped-rounds rows deliberately left
+naming the old paths — they record where code was at the time.
+
+### 64-bit only; macOS is Apple silicon only
+`build_libdivoom.sh`'s arch `case` ended in a `*)` that warned and **kept
+going**, so a 32-bit host silently built something nobody had ever compiled or
+tested. Both macOS-Intel and 32-bit are now hard failures, with an overridable
+`OS`/`ARCH` seam so both the reject AND accept directions are testable on one
+machine (`tests/test_build_platform_gate.py`, 10 cases). Linux x86_64 is
+unaffected — this drops macOS Intel, not x86_64.
+
+### e2e suites moved to camoufox — and the guard that never guarded
+The 15 GUI e2e modules guarded with `pytest.importorskip("playwright.async_api")`,
+which only proves the *module* imports. With the package installed but no
+browser downloaded they did not skip — they raised
+`BrowserType.launch: Executable doesn't exist` and produced **69 failures that
+read exactly like real regressions**. That is precisely what this round's first
+baseline run was. Now one seam (`tests/support/browser.py`) probes the binary,
+and `tests/test_e2e_browser_guard.py` pins both directions (it must skip when
+absent, and must NOT over-skip — a guard that always skipped would disable all
+15 suites while looking green).
+
+The migration also exposed a latent harness defect in two tests, **not** a
+camoufox flake: both waited on a proxy DOM signal and then asserted on a
+different one, so the passing order was a Chromium timing coincidence — and when
+the proxy was already in its final state, the wait returned instantly, before
+the behaviour under test had happened. Both now wait on the condition they
+assert.
+
+### Docs made true
+`ARCHITECTURE.md`'s headline section still said `divoom_daemon/` was "the SINGLE
+owner of the device connection" — false since the Rust cutover, and `AGENTS.md`
+points every agent at that file on entry. Rewritten to the real topology.
+`docs/archive/rounds/` and `docs/archive/superseded/` do not exist (pruned to
+git history) yet 6 references still pointed into them. `RELEASING.md` named
+`/tmp/divoom_daemon.log`; the daemon writes `/tmp/divoomd.log`.
+
+### CI is unavailable — `scripts/ci_local.sh` is the gate
+GitHub Actions credits are exhausted, so CI always fails: a red check is not a
+code signal and a green one is unobtainable. `ci_local.sh` mirrors `tests.yml`
+job-for-job. The pre-commit hook is NOT a substitute — it checks only staged
+files, gated only `divoomd`, and runs no tests. **The workflow YAML changes in
+this round are unverified**; the YAML parses and every command was proven
+locally, but the workflow itself has not executed. Re-check when billing returns.
+
 ## Unreleased
 
 - **release rule:** cutting a release is only allowed when GitHub CI is green for
