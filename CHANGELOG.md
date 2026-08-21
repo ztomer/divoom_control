@@ -4,6 +4,21 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## v0.24.0 — Rust dependency refresh (2026-08-21)
+
+### Changed
+- **divoomd**: rusqlite 0.31→0.40 (9 release lines), base64 0.22→0.23,
+  btleplug 0.11→0.12, reqwest 0.12→0.13 (feature rename `rustls-tls` →
+  `rustls` + `webpki-roots`; `.query()` moved behind the new `query`
+  feature), libloading 0.8→0.9 (`Library::new` now takes `AsFilename`;
+  `NativeEncoder::load` switched to `AsRef<Path>`).
+- **divoom-menubar**: tray-icon 0.19→0.24, tao 0.31→0.37.
+
+### Verified
+- `scripts/ci_local.sh` all CI-equivalent jobs green: house gates, divoomd
+  clippy + build/test with and without default features, BLE cargo tests,
+  native dylib build, full Python pytest suite.
+
 ## v0.23.0 — Apple silicon only; one Rust workspace; dead code out; gates that actually gate (R66, 2026-08-17)
 
 **Breaking: Intel Macs are no longer supported.** Apple has dropped them, so

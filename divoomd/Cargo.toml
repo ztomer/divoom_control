@@ -24,14 +24,14 @@ ble = ["dep:btleplug", "dep:futures", "dep:uuid"]
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync", "time", "macros", "net", "io-util", "io-std", "signal", "process"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-libloading = "0.8"
-base64 = "0.22"
+libloading = "0.9"
+base64 = "0.23"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif"] }
-btleplug = { version = "0.11", optional = true }
+btleplug = { version = "0.12", optional = true }
 futures = { version = "0.3", optional = true }
 uuid = { version = "1", optional = true }
-reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
-rusqlite = { version = "0.31", features = ["bundled"] }
+reqwest = { version = "0.13", features = ["json", "rustls", "webpki-roots", "query", "charset"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
 plist = "1"
 sysinfo = "0.30"
 md-5 = "0.10"

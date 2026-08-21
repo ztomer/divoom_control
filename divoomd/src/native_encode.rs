@@ -7,8 +7,6 @@
 //! fixed this session), so byte-parity against the Python output is the contract
 //! (`tests/native_encode_parity.rs`).
 
-use std::ffi::OsStr;
-
 use libloading::{Library, Symbol};
 
 /// Find the libdivoom_compact dylib: `DIVOOMD_ENCODER_LIB` env override, else
@@ -45,9 +43,9 @@ pub struct NativeEncoder {
 impl NativeEncoder {
     /// Load the dylib by path. Returns an error if it can't be opened (the caller
     /// then uses the pure-Rust / Python-parity path instead).
-    pub fn load<P: AsRef<OsStr>>(path: P) -> Result<Self, libloading::Error> {
+    pub fn load<P: AsRef<std::path::Path>>(path: P) -> Result<Self, libloading::Error> {
         // SAFETY: loading a trusted, in-repo dylib we built; no init side effects.
-        let lib = unsafe { Library::new(path)? };
+        let lib = unsafe { Library::new(path.as_ref())? };
         Ok(Self { lib })
     }
 
