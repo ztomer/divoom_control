@@ -53,9 +53,11 @@ ci_gate() {
   json="$(gh api "repos/${REPO}/commits/${sha}/check-runs" 2>/dev/null)" \
     || { echo "  ERROR: could not query CI status (gh api failed)" >&2; exit 1; }
   local verdict
+  # NOTE: the heredoc IS the python program (fed via stdin), so the JSON must
+  # be read from argv[1] — sys.stdin is already exhausted by the script itself.
   verdict="$(python3 - "$json" <<'PY'
 import json, re, sys
-data = json.load(sys.stdin)
+data = json.loads(sys.argv[1])
 runs = data.get("check_runs") or []
 if not runs:
     print("NO_RUNS"); raise SystemExit
