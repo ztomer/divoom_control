@@ -66,3 +66,6 @@ target/
 
 # Runtime state written by the daemon/CLI — never belongs in git.
 .divoom_last_working_char.json
+
+# opencode session state (local agent scratch, never shared)
+.opencode/
