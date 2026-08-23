@@ -347,29 +347,53 @@ def test_build_api_constructs_real_gui_api():
 #
 # CLASS: any handler branch that answers BEFORE consuming Content-Length.
 # The server replies correctly and then closes with the client's body still
-# unread, which sends an RST; the client's next write dies with EPIPE and it
-# never reads the status code. do_POST had three such branches (401
-# unauthorized, 404 non-/api/ path, 404 unknown method) and CI run 32655925962
-# hit the 401 one -- a clean 401 surfaced as BrokenPipeError.
+# unread; the peer's next write dies with EPIPE and it never gets to READ the
+# status code. do_POST had three such branches (401 unauthorized, 404
+# non-/api/ path, 404 unknown method) and CI run 32655925962 hit the 401 --
+# a clean 401 surfaced as BrokenPipeError.
 #
-# The tests below force the race that CI hit by chance: send the headers, wait,
-# THEN send the body. Without the drain in _send() the server has long since
-# replied and closed, so the body write raises EPIPE deterministically.
+# TRANSPORT MATTERS, and this is the whole reason these tests are here rather
+# than on the TCP fixture: over loopback TCP the same scenario does NOT
+# reproduce (measured -- the client's second write is absorbed and the 401 is
+# read back fine). Only AF_UNIX fails the write, which is exactly the socket
+# the CI test was using. A TCP version of this test passes with the fix
+# REMOVED, i.e. it is decoration, not a gate.
 #
-# Teeth: delete the `self._drain_body()` call at the top of `_send()` and all
-# three go red with BrokenPipeError.
+# The delay forces the window CI lost by chance: send headers, pause, THEN the
+# body. Without _drain_body() the server has long since replied and closed.
+#
+# Teeth (verified 2026-08-23): delete the `self._drain_body()` call at the top
+# of `_send()` and all three params raise BrokenPipeError.
 
 _EARLY_RETURN_PATHS = [
-    pytest.param("/api/set_vj_effect", "wrong-token", 401, id="401-unauthorized"),
-    pytest.param("/nope", "secret-tok", 404, id="404-not-an-api-path"),
-    pytest.param("/api/no_such_method", "secret-tok", 404, id="404-unknown-method"),
+    pytest.param("/api/set_vj_effect", "wrong-token", "401", id="401-unauthorized"),
+    pytest.param("/nope", "unix-tok", "404", id="404-not-an-api-path"),
+    pytest.param("/api/no_such_method", "unix-tok", "404", id="404-unknown-method"),
 ]
 
 
-def _post_with_delayed_body(port: int, path: str, token: str, delay: float = 0.30):
+@pytest.fixture
+def unix_token_server():
+    """Token-gated control server on a Unix socket (the transport CI failed on).
+
+    Short /tmp path, not tmp_path -- AF_UNIX rejects pytest's long tmp_path on
+    macOS (same constraint the sibling unix tests document).
+    """
+    sock_path = f"/tmp/t_div_drain_{os.getpid()}_{time.time_ns()}.sock"
+    api = FakeApi()
+    httpd, _thread = cs.serve_unix_in_background(api, sock_path, token="unix-tok")
+    try:
+        yield api, sock_path
+    finally:
+        httpd.shutdown()
+        if os.path.exists(sock_path):
+            os.unlink(sock_path)
+
+
+def _post_with_delayed_body(sock_path, path, token, delay=0.30):
     """Send headers, pause, then the body -- and return the status line.
 
-    Raises BrokenPipeError/ConnectionResetError if the server hung up on us
+    Propagates BrokenPipeError/ConnectionResetError if the server hung up on us
     mid-write, which is precisely the defect under test.
     """
     import socket as _socket
@@ -377,21 +401,26 @@ def _post_with_delayed_body(port: int, path: str, token: str, delay: float = 0.3
     body = b"[5]"
     head = (
         f"POST {path} HTTP/1.1\r\n"
-        f"Host: 127.0.0.1\r\n"
+        f"Host: localhost\r\n"
         f"Authorization: Bearer {token}\r\n"
         f"Content-Type: application/json\r\n"
         f"Content-Length: {len(body)}\r\n"
-        f"Connection: close\r\n"
         f"\r\n"
     ).encode()
 
-    sock = _socket.create_connection(("127.0.0.1", port), timeout=5)
+    sock = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
+    sock.settimeout(5)
+    sock.connect(sock_path)
     try:
         sock.sendall(head)
         time.sleep(delay)  # the window CI lost the race in
         sock.sendall(body)  # EPIPE here if the server already replied + closed
+        # Read to EOF, not just the status line: closing mid-response leaves the
+        # server writing into a dead socket, and socketserver prints a traceback
+        # for it. Harmless, but intermittent stderr noise makes a suite that
+        # much harder to read.
         raw = b""
-        while b"\r\n" not in raw:
+        while True:
             chunk = sock.recv(4096)
             if not chunk:
                 break
@@ -402,30 +431,35 @@ def _post_with_delayed_body(port: int, path: str, token: str, delay: float = 0.3
 
 
 @pytest.mark.parametrize("path,token,expected", _EARLY_RETURN_PATHS)
-def test_early_return_paths_read_the_body_before_replying(token_server, path, token, expected):
-    """The client must be able to finish writing and then READ our status code."""
-    _api, base = token_server
-    port = int(base.rsplit(":", 1)[1])
-    status = _post_with_delayed_body(port, path, token)
-    assert str(expected) in status, f"expected {expected}, got {status!r}"
+def test_early_return_paths_read_the_body_before_replying(
+    unix_token_server, path, token, expected
+):
+    """The client must finish writing and then READ our status code."""
+    _api, sock_path = unix_token_server
+    status = _post_with_delayed_body(sock_path, path, token)
+    assert expected in status, f"expected {expected}, got {status!r}"
 
 
-def test_wrong_token_raises_runtime_error_not_broken_pipe(token_server):
+def test_wrong_token_over_unix_raises_runtime_error_not_broken_pipe(unix_token_server):
     """The user-visible contract: call() surfaces a clean error, never EPIPE.
 
-    This is the assertion CI run 32655925962 failed -- it raised BrokenPipeError
-    where the test (correctly) expected RuntimeError.
+    This is the assertion CI run 32655925962 failed -- BrokenPipeError where the
+    test (correctly) expected RuntimeError.
+
+    Honest note: this one is DOCUMENTATION, not the gate. With the fix removed
+    it still passes locally, because cs.call() sends its 3-byte body fast enough
+    to win the race on this machine -- which is precisely why the bug read as
+    "flaky CI" for as long as it did. The parametrized test above forces the
+    window and is the test with teeth.
     """
-    _api, base = token_server
-    port = int(base.rsplit(":", 1)[1])
+    _api, sock_path = unix_token_server
     with pytest.raises(RuntimeError):
-        cs.call("set_vj_effect", 5, base_url=base, token="wrong-token")
+        cs.call("set_vj_effect", 5, socket_path=sock_path, token="wrong-token")
 
 
-def test_drain_is_bounded_and_does_not_hang_on_an_oversized_body(token_server):
-    """A body larger than _MAX_DRAIN must not read unbounded on an unauth'd path."""
-    from control_server import make_handler
-
-    handler = make_handler(FakeApi(), "secret-tok")
+def test_drain_is_bounded_in_both_size_and_time():
+    """The drain reads for callers that have NOT authenticated yet, so an
+    oversized or stalled body must not read unbounded or pin a thread."""
+    handler = cs.make_handler(FakeApi(), "unix-tok")
     assert handler._MAX_DRAIN <= (4 << 20), "drain ceiling must stay modest"
     assert handler.timeout is not None, "an unauth'd read needs a time bound too"
