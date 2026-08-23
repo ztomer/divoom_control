@@ -26,7 +26,26 @@ keep their existing ``async_playwright()`` structure.
 
 from __future__ import annotations
 
+import os
+
 import pytest
+
+# How long a UI wait may take before a test gives up.
+#
+# This is a BUDGET, not an assertion. No e2e test here measures how FAST the UI
+# is; every wait asserts that a condition EVENTUALLY holds. So a tight budget
+# cannot catch a defect a generous one misses — it can only turn a momentarily
+# slow machine into a red test that reads like a regression. The suites had
+# ~47 ad-hoc budgets (16x 2000ms, 14x 4000ms, 7x 5000ms), each invented at its
+# call site, and on 2026-08-23 two of them went red during a release while the
+# machine was busy with a py2app build: the same suite that normally finishes
+# in 372s took 618s.
+#
+# Deliberately NOT applied to absence assertions ("this must not appear"),
+# where a short timeout IS the assertion. Those keep their own explicit values.
+#
+# Override for a slow CI box with DIVOOM_E2E_TIMEOUT_MS.
+UI_TIMEOUT_MS = int(os.environ.get("DIVOOM_E2E_TIMEOUT_MS", "20000"))
 
 
 def require_browser() -> None:

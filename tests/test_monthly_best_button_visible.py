@@ -6,7 +6,11 @@ card. Requires `playwright` and `--run-integration`.
 
 import pytest
 from pathlib import Path
-from tests.support.browser import launch as launch_browser, require_browser
+from tests.support.browser import (
+    UI_TIMEOUT_MS,
+    launch as launch_browser,
+    require_browser,
+)
 
 INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.html"
 
@@ -25,16 +29,23 @@ async def test_hot_channel_button_visible_with_many_preview_items():
         await page.wait_for_load_state("domcontentloaded")
 
         # R39+: Hot Channel is a Pixel Art sub-tab.
-        await page.click('.nav-btn[data-tab="pixel-art"]', timeout=2000)
-        await page.wait_for_selector("#pixel-art.active", timeout=2000)
-        await page.click('[data-pixel-tab="pixel-hot-channel"]', timeout=2000)
-        await page.wait_for_selector("#pixel-hot-channel.active", timeout=2000)
+        await page.click('.nav-btn[data-tab="pixel-art"]', timeout=UI_TIMEOUT_MS)
+        await page.wait_for_selector("#pixel-art.active", timeout=UI_TIMEOUT_MS)
+        await page.click('[data-pixel-tab="pixel-hot-channel"]', timeout=UI_TIMEOUT_MS)
+        await page.wait_for_selector("#pixel-hot-channel.active", timeout=UI_TIMEOUT_MS)
 
         # Inject 50 fake preview items into the hot preview list.
-        await page.evaluate("""
+        #
+        # Same silent-no-op class as the gallery injector below, but this one
+        # fails WORSE: the assertions after it only mean anything if the list
+        # is actually overflowing. A no-op left an EMPTY card, in which the
+        # button is trivially inside its bounds -- so the test passed while
+        # measuring nothing. A vacuous pass is worse than a timeout.
+        await page.wait_for_selector("#hot-preview-list", timeout=UI_TIMEOUT_MS)
+        seeded = await page.evaluate("""
             () => {
                 const list = document.getElementById('hot-preview-list');
-                if (!list) return;
+                if (!list) return -1;
                 list.innerHTML = '';
                 for (let i = 0; i < 50; i++) {
                     const item = document.createElement('div');
@@ -43,8 +54,14 @@ async def test_hot_channel_button_visible_with_many_preview_items():
                     item.textContent = 'Preview ' + (i + 1);
                     list.appendChild(item);
                 }
+                return list.children.length;
             }
         """)
+        assert seeded == 50, (
+            f"preview injection did not take effect (returned {seeded}) — "
+            "#hot-preview-list was missing. The layout assertions below would "
+            "have passed vacuously against an empty card."
+        )
         await page.wait_for_timeout(200)
 
         card_box = await page.locator("#pixel-hot-channel .card.glass-card").first.bounding_box()
@@ -90,16 +107,26 @@ async def test_gallery_scrolls_internally_not_whole_card():
         await page.wait_for_load_state("domcontentloaded")
 
         # R39+: Gallery is a Pixel Art sub-tab.
-        await page.click('.nav-btn[data-tab="pixel-art"]', timeout=2000)
-        await page.wait_for_selector("#pixel-art.active", timeout=2000)
-        await page.click('[data-pixel-tab="pixel-gallery"]', timeout=2000)
-        await page.wait_for_selector("#pixel-gallery.active", timeout=2000)
+        await page.click('.nav-btn[data-tab="pixel-art"]', timeout=UI_TIMEOUT_MS)
+        await page.wait_for_selector("#pixel-art.active", timeout=UI_TIMEOUT_MS)
+        await page.click('[data-pixel-tab="pixel-gallery"]', timeout=UI_TIMEOUT_MS)
+        await page.wait_for_selector("#pixel-gallery.active", timeout=UI_TIMEOUT_MS)
 
         # Inject 100 items to ensure overflow.
-        await page.evaluate("""
+        #
+        # The injector used to end its missing-container branch with a bare
+        # `return` -- a silent no-op. With the container not yet in the DOM
+        # nothing was injected, and the wait below then blocked on a condition
+        # that could never become true, dying at the timeout with an opaque
+        # TimeoutError that named nothing. That is what the 2026-08-23 release
+        # flake looked like from the outside: a 5s (then 20s) timeout on a
+        # layout check that is normally instant. Fail AT the injection instead,
+        # where the cause is still visible.
+        await page.wait_for_selector("#gallery-container", timeout=UI_TIMEOUT_MS)
+        injected = await page.evaluate("""
             () => {
                 const grid = document.getElementById('gallery-container');
-                if (!grid) return;
+                if (!grid) return -1;
                 grid.innerHTML = '';
                 for (let i = 0; i < 100; i++) {
                     const item = document.createElement('div');
@@ -108,15 +135,21 @@ async def test_gallery_scrolls_internally_not_whole_card():
                     item.textContent = 'Item ' + (i + 1);
                     grid.appendChild(item);
                 }
+                return grid.children.length;
             }
         """)
+        assert injected == 100, (
+            f"gallery injection did not take effect (returned {injected}) — "
+            "#gallery-container was missing or unwritable. The scroll wait "
+            "below would have timed out for this reason, naming nothing."
+        )
         # Wait for layout to settle and scroll height to exceed client height
         await page.wait_for_function("""
             () => {
                 const g = document.getElementById('gallery-container');
                 return g && g.scrollHeight > g.clientHeight;
             }
-        """, timeout=5000)
+        """, timeout=UI_TIMEOUT_MS)
 
         gallery_scroll = await page.evaluate("""
             () => {

@@ -26,7 +26,7 @@ import time
 from pathlib import Path
 
 import pytest
-from tests.support.browser import launch_sync
+from tests.support.browser import UI_TIMEOUT_MS, launch_sync
 
 try:
     from playwright.sync_api import sync_playwright
@@ -125,8 +125,13 @@ PYWEBVIEW_STUB = """
 ACTIVATE_WALL_TAB_JS = """
     // The wall canvas lives inside #display-wall which is hidden by default
     // (display: none). Add the .active class so it's visible for testing.
+    //
+    // Throws rather than silently doing nothing when the tab is absent. A
+    // no-op here left the wait_for_selector on #arranger-canvas to time out
+    // opaquely -- naming the canvas, not the missing tab that caused it.
     const wallTab = document.getElementById('display-wall');
-    if (wallTab) wallTab.classList.add('active');
+    if (!wallTab) throw new Error('#display-wall not in the DOM - cannot activate the wall tab');
+    wallTab.classList.add('active');
 """
 
 
@@ -137,9 +142,9 @@ def _open_wall_tab(page) -> None:
     default (see gui/web_ui/sidebar.css .tab-content { display: none; }).
     Tests must activate the tab before interacting with the canvas.
     """
-    page.wait_for_selector("#arranger-canvas", state="attached", timeout=5000)
+    page.wait_for_selector("#arranger-canvas", state="attached", timeout=UI_TIMEOUT_MS)
     page.evaluate(ACTIVATE_WALL_TAB_JS)
-    page.wait_for_selector("#arranger-canvas", state="visible", timeout=5000)
+    page.wait_for_selector("#arranger-canvas", state="visible", timeout=UI_TIMEOUT_MS)
 
 
 # ── Tests ────────────────────────────────────────────────────────────────────
@@ -386,7 +391,7 @@ def test_appbar_drag_does_not_affect_wall_node(browser):
         context.add_init_script(PYWEBVIEW_STUB)
         page = context.new_page()
         page.goto(url, wait_until="domcontentloaded")
-        page.wait_for_selector(".integrated-appbar", state="visible", timeout=5000)
+        page.wait_for_selector(".integrated-appbar", state="visible", timeout=UI_TIMEOUT_MS)
         _open_wall_tab(page)
         page.evaluate(SEED_WALL_NODE_JS)
         page.wait_for_timeout(50)
