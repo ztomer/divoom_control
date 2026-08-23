@@ -76,6 +76,16 @@ if [ "$FAST" = "1" ]; then
 else
   section "Python suite"
   run "build native dylib"          bash scripts/build_libdivoom.sh
+  # NOT a failing gate locally: CI fetches the browser, a dev machine may
+  # legitimately not have the ~150 MB download. But a silent absence means all
+  # 15 GUI e2e suites SKIP, so a green run here would mean far less than it
+  # looks like. Say so out loud instead.
+  if python3 tools/check_camoufox_installed.py >/tmp/ci_local_camoufox.log 2>&1; then
+    ok "camoufox browser present ($(cat /tmp/ci_local_camoufox.log))"
+  else
+    warn "no camoufox browser — the 15 GUI e2e suites will SKIP, not run"
+    warn "  install with: python3 -m camoufox fetch"
+  fi
   run "pytest"                      python3 -m pytest -q
 fi
 

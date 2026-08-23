@@ -46,11 +46,38 @@ jobs:
 
       - name: Install the camoufox browser
         # The GUI e2e suites (15 modules) drive headless camoufox via
-        # tests/support/browser.py. Without the binary they now genuinely SKIP
+        # tests/support/browser.py. Without the binary they genuinely SKIP
         # (tests/test_e2e_browser_guard.py pins that) — before R66 the
         # importorskip guard only checked the Python module, so a missing
         # browser produced 69 failures that looked like real regressions.
-        run: python -m camoufox fetch
+        #
+        # `camoufox fetch` EXITS 0 WHEN IT INSTALLS NOTHING. Run 32654312489
+        # hit GitHub's unauthenticated API rate limit (60/hr, shared across
+        # every Actions runner on that egress IP), printed three 403s and
+        # "Synced 0 versions from 0 repos.", and still reported this step
+        # green. The damage surfaced later, in pytest, looking like a test
+        # regression. Two independent fixes, because either alone still lies:
+        #   1. GITHUB_TOKEN removes the CAUSE — camoufox reads it (pkgman.py)
+        #      and it lifts the limit to 1000/hr/repo.
+        #   2. The verify step removes the SILENCE — a step that cannot fail
+        #      is not a gate, so we check the artifact, not the exit code.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          # The retry LOOPS ON THE VERIFICATION, not on the exit code. Looping on
+          # the exit code would never retry the failure we actually saw, because
+          # that failure exits 0 -- the loop would break on attempt 1 every time.
+          for attempt in 1 2 3; do
+            python -m camoufox fetch || true
+            if python3 tools/check_camoufox_installed.py; then
+              exit 0
+            fi
+            echo "attempt ${attempt}: no browser installed; retrying in $((attempt * 15))s"
+            sleep $((attempt * 15))
+          done
+          python3 tools/check_camoufox_installed.py  # emit the failure and exit non-zero
+          exit 1
 
       - name: Build native dylib
         run: bash scripts/build_libdivoom.sh
