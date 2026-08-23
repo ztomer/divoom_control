@@ -73,10 +73,66 @@ def make_handler(api, token: str | None):
     class Handler(BaseHTTPRequestHandler):
         server_version = "DivoomControl/1.0"
 
+        # A client that announces a Content-Length and then stalls must not pin a
+        # handler thread forever -- _drain_body() below reads on behalf of callers
+        # that have NOT authenticated yet, so the read has to be bounded in time as
+        # well as in size. Generous for a loopback/AF_UNIX API.
+        timeout = 10
+
+        # Ceiling on how much unread body an error path will swallow before
+        # answering. Past this the reply may still race the client's write (see
+        # _drain_body), but the server never reads unbounded bytes for an
+        # unauthenticated peer.
+        _MAX_DRAIN = 1 << 20  # 1 MiB
+
+        # Class-level default so it is well-defined even if a request aborts
+        # before handle_one_request() runs; the per-request reset lives there.
+        _body_read = False
+
         def log_message(self, fmt, *args):  # quieter logging
             logger.debug("%s - %s", self.address_string(), fmt % args)
 
+        def handle_one_request(self):
+            # Handler instances are reused across keep-alive requests on one
+            # connection, so the "did we consume this body" flag is per REQUEST.
+            self._body_read = False
+            return super().handle_one_request()
+
+        def _read_body(self) -> bytes:
+            """Consume the request body exactly once."""
+            self._body_read = True
+            length = int(self.headers.get("Content-Length") or 0)
+            return self.rfile.read(length) if length else b""
+
+        def _drain_body(self) -> None:
+            """Swallow an unread request body before answering.
+
+            An error path that replies and closes while the client is still
+            writing its body leaves unread bytes in the receive buffer; closing
+            then sends an RST, so the client's next write fails with EPIPE and it
+            never gets to READ the status code we correctly sent. The reply is
+            right and unreadable -- which is how a clean 401 surfaced as
+            ``BrokenPipeError`` (CI run 32655925962).
+
+            Called from _send() rather than from each error branch on purpose: the
+            three pre-body returns in do_POST were all one class, and a rule you
+            have to remember at every new early return is not a rule.
+            """
+            if self._body_read:
+                return
+            self._body_read = True
+            headers = getattr(self, "headers", None)
+            if headers is None:
+                return
+            remaining = min(int(headers.get("Content-Length") or 0), self._MAX_DRAIN)
+            while remaining > 0:
+                chunk = self.rfile.read(min(remaining, 65536))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+
         def _send(self, code: int, payload: dict):
+            self._drain_body()
             body = json.dumps(payload).encode("utf-8")
             self.send_response(code)
             self.send_header("Content-Type", "application/json")
@@ -107,8 +163,7 @@ def make_handler(api, token: str | None):
             if method not in methods:
                 return self._send(404, {"ok": False, "error": f"unknown method {method!r}"})
 
-            length = int(self.headers.get("Content-Length") or 0)
-            raw = self.rfile.read(length) if length else b""
+            raw = self._read_body()
             args, kwargs = [], {}
             if raw:
                 try:
