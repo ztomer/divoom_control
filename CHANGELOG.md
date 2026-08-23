@@ -4,6 +4,64 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## Unreleased — flaky-CI round: three gates that lied, one real bug (2026-08-23)
+
+Chased "the CI is flaky" to root causes. It was not flakiness in the usual
+sense: every one of the four findings was a defect that happened to surface
+intermittently. Suite: **Python 2920 tests / 0 failed / 0 errors / 94 skipped**
+(+10 new); Rust workspace green; `ci_local.sh --fast` all jobs pass.
+
+### Fixed
+- **`control_server`: early error replies now drain the request body.**
+  CLASS: a handler branch answering BEFORE consuming `Content-Length` leaves
+  unread bytes in the receive buffer; the close then RSTs, so the client's next
+  write dies with EPIPE and it never gets to READ the status code we correctly
+  sent. `do_POST` had three such branches (401 unauthorized, 404 non-`/api/`
+  path, 404 unknown method). CI run 32655925962 lost that race on the 401 and
+  reported `BrokenPipeError` where a clean `RuntimeError` was expected. This is
+  a real bug any client POSTing with a bad token can hit — it merely *reads* as
+  a flaky test. Fixed at the class level: `_send()` drains first, so no early
+  return (present or future) can forget. Bounded in size (`_MAX_DRAIN`, 1 MiB)
+  and time (handler `timeout`), since it reads for unauthenticated callers.
+- **e2e browser guard is now structural, not conventional.** R66 asked all 15
+  e2e modules to call `require_browser()`; 13 did. The two that did not were
+  exactly the two sync-API ones, so a missing browser ERRORED them at fixture
+  setup (6 errors, run 32654312489) while the other 13 skipped. `launch()` /
+  `launch_sync()` now guard themselves, and a scan test keeps the seam the only
+  door.
+- **The guard suite's own bail-out was the same mistake one function over.**
+  `if not installed_verstr()` was written against a return-value contract
+  camoufox does not have — it RAISES `CamoufoxNotInstalled` when nothing is
+  fetched — so the "does not over-skip" test blew up instead of skipping on a
+  browserless machine. That was the `FAILED ... CamoufoxNotInstalled` in CI.
+- **The camoufox install step verified nothing.** `python -m camoufox fetch`
+  **exits 0 when it installs nothing**: run 32654312489 hit GitHub's
+  unauthenticated API rate limit (60/hr, shared across every Actions runner on
+  that egress IP), printed three 403s and `Synced 0 versions from 0 repos.`,
+  and still reported the step green — the damage surfaced minutes later inside
+  pytest, looking like a test regression. Fixed on both axes: `GITHUB_TOKEN`
+  removes the cause (camoufox reads it; 1000/hr/repo), and
+  `tools/check_camoufox_installed.py` removes the silence by checking the
+  artifact. The retry loops on the VERIFICATION, not the exit code — looping on
+  the exit code would never retry this failure, since it exits 0.
+
+### Added
+- `tools/check_camoufox_installed.py` — install verification, used as the CI
+  retry's loop condition and reported (as a warning, not a failure) by
+  `ci_local.sh` so a local green cannot silently mean "all 15 e2e suites
+  skipped".
+- Regression tests for all four, each proven able to fail.
+
+### Notes on method
+- The first version of the body-drain test ran against the **TCP** fixture and
+  passed with the fix removed — an instrument blind to what it measured. Over
+  loopback TCP the scenario does not reproduce; only AF_UNIX fails the write,
+  and AF_UNIX is the socket CI was on. Measured both ways, then rewritten.
+- Both "browser absent" states are driven through camoufox's OWN signals rather
+  than stubs of our probe, and every new gate is tested in the accept direction
+  too — a checker that always failed would look like a working gate while
+  blocking CI permanently.
+
 ## v0.24.0 — Rust dependency refresh (2026-08-21)
 
 ### Changed

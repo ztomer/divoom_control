@@ -16,6 +16,30 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-08-23 — flaky-CI round. Four findings, none of them flakiness.**
+  Suite: **Python 2920 / 0 failed / 0 errors / 94 skipped** (+10 new);
+  Rust workspace green; `ci_local.sh --fast` all jobs pass. Detail in CHANGELOG.
+
+  1. **`control_server` early error replies did not drain the request body**
+     (real shipping bug, not a test problem). Three branches in `do_POST`
+     answered above the `rfile.read()`; the close RSTs and the client's next
+     write dies with EPIPE before it can read our status code. Any client
+     POSTing with a bad token can hit it. Fixed as a class in `_send()`.
+  2. **The e2e browser guard was conventional, not structural.** 13 of 15
+     modules called `require_browser()`; the two sync-API ones did not, so a
+     missing browser errored them while the rest skipped. The guard now lives
+     inside `launch()`/`launch_sync()`.
+  3. **The guard suite's own bail-out** used `if not installed_verstr()`, but
+     that function RAISES when nothing is fetched. Same class, one function over.
+  4. **`camoufox fetch` exits 0 when it installs nothing.** A GitHub API rate
+     limit produced a green step and no browser. `GITHUB_TOKEN` kills the cause;
+     `tools/check_camoufox_installed.py` kills the silence.
+
+  Method note worth keeping: the first body-drain test ran on **TCP** and passed
+  with the fix REMOVED. The defect only reproduces on **AF_UNIX**. A test written
+  against the wrong transport is a green light bolted over the bug — measure the
+  instrument before trusting the reading.
+
 - **2026-08-17 (Round 66) — repo restructure + gate repairs. RELEASED v0.23.0.**
   Layout round; net **-14,240 LOC**. Suite: **Python 2910 / 2816 passed / 0
   failed / 94 skipped; Rust 119 passed** across the workspace (was divoomd-only
@@ -48,11 +72,14 @@ shared memory. Read this on entry and **update it at the end of every round**
   - `ARCHITECTURE.md` still said `divoom_daemon/` owned the device, ~5 weeks
     after the Rust cutover, while `AGENTS.md` sends every agent to read it.
 
-- **CI IS DOWN — `./scripts/ci_local.sh` is the gate.** GitHub Actions credits
-  are exhausted, so CI always fails: a red check is not a code signal and a
-  green one is unobtainable. `ci_local.sh` mirrors `tests.yml` job-for-job. The
-  pre-commit hook is NOT a substitute (staged files only, no tests). See
-  `AGENTS.md`.
+- **CI IS BACK UP (2026-08-23).** This supersedes the "credits are exhausted"
+  state that stood from 2026-08-17: `a7a699f` re-enabled `tests.yml` and it runs
+  green on `main`. A red check is a code signal again — read the log, never
+  assume billing (that assumption is what shipped v0.23.0 on a red CI).
+  `ci_local.sh` remains the pre-push gate and still mirrors `tests.yml`
+  job-for-job, but it runs on THIS machine only, so Linux-only failures in
+  `rust-core`/`rust-ble-linux` stay structurally invisible to it. The pre-commit
+  hook is NOT a substitute (staged files only, no tests). See `AGENTS.md`.
 
 - **2026-08-02 (Round 65) — house Rust gate + v0.22.21 release.** Shipped + released:
   1. Wired the house Rust gate into CI + pre-commit (`cargo fmt --check`, clippy

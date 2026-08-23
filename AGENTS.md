@@ -57,17 +57,16 @@ green for the commit being tagged** (`check-runs` on HEAD all pass). The ONE
 exception is **credit depletion** (GitHub Actions billing exhaustion) — that is a
 money wall, not a code signal, so it does not block.
 
-### CI is currently unavailable — use `scripts/ci_local.sh`
+### CI is back up (2026-08-23) — `scripts/ci_local.sh` is still the pre-push gate
 
-**As of 2026-08-17 GitHub Actions credits are exhausted, so CI always fails.**
-That is the money wall the credit-depletion exception exists for, but it also
-means **CI catches nothing right now** — a red check is not a code signal, and a
-green one is unobtainable.
+**Superseded state:** from 2026-08-17 GitHub Actions credits were exhausted and
+CI always failed. That is no longer true — `a7a699f` re-enabled `tests.yml` and
+it runs green on `main`. **A red check is a code signal again.**
 
-Until billing is restored, **`./scripts/ci_local.sh` is the gate**. It mirrors
+**`./scripts/ci_local.sh` remains the pre-push gate** regardless: it mirrors
 `.github/workflows/tests.yml` job-for-job (house gates, Rust core without BLE,
-Rust with BLE, the Python suite). Run it before every push and before any
-release.
+Rust with BLE, the Python suite) and catches things before you spend a CI run.
+Run it before every push and before any release.
 
 **It runs on this machine only.** CI's `rust-core` and `rust-ble-linux` jobs run
 on Ubuntu, so a **Linux-only failure is invisible locally** — v0.23.0 shipped
@@ -78,6 +77,18 @@ macOS-reachable jobs pass", never "CI would be green".
 the gate is that "red" and "out of credits" look identical from the outside. The
 v0.23.0 run had 4 of 5 jobs GREEN and one real failure; treating it as billing
 skipped a diagnosis that took two minutes.
+
+**A step that cannot fail is not a gate.** `python -m camoufox fetch` exits 0
+when it installs nothing (a GitHub API rate limit produced three 403s, "Synced 0
+versions from 0 repos.", and a green step). Any CI step that INSTALLS or
+GENERATES something must verify the artifact, not the exit code — and a retry
+must loop on the verification, because looping on an exit code never retries a
+failure that exits 0. See `tools/check_camoufox_installed.py`.
+
+**Check which transport/environment a defect actually needs before writing its
+test.** This round's body-drain regression test was first written against the
+TCP fixture and passed with the fix REMOVED; the bug only reproduces on AF_UNIX.
+A test on the wrong transport is a green light bolted over the bug.
 
 Do NOT mistake the pre-commit hook for CI. It is deliberately narrow so commits
 stay fast, and is weaker in three ways: it checks only **staged** files, gates
