@@ -63,6 +63,14 @@ money wall, not a code signal, so it does not block.
 CI always failed. That is no longer true — `a7a699f` re-enabled `tests.yml` and
 it runs green on `main`. **A red check is a code signal again.**
 
+**This repo is PUBLIC, and GitHub Actions on standard runners is FREE for public
+repositories.** No credits are consumed by `divoom_control`, so "we are out of
+credits" is not a reason to skip CI here — whatever the state of the account's
+private-repo minutes. Verified 2026-08-23: runs 32663891706 and 32666052786 both
+executed and went green while the account was believed to be out of credits.
+Check `gh run list` before concluding CI is unavailable; the belief has now
+outlived the fact twice, and the last time it did, v0.23.0 shipped on a red CI.
+
 **`./scripts/ci_local.sh` remains the pre-push gate** regardless: it mirrors
 `.github/workflows/tests.yml` job-for-job (house gates, Rust core without BLE,
 Rust with BLE, the Python suite) and catches things before you spend a CI run.

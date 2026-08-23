@@ -198,9 +198,13 @@ was invisible to a green suite:
 
 ### Open / carried forward
 
-- **The CI workflow changes are unverified.** Actions credits are exhausted; the
-  YAML parses and every command was proven locally via `ci_local.sh`, but the
-  workflow itself has not run. Re-check when billing is restored.
+- **The CI workflow changes are VERIFIED — CLOSED 2026-08-23.** Run
+  32663891706 was green on all five jobs. The premise of the original note was
+  also wrong: this repo is PUBLIC, and GitHub Actions on standard runners is
+  free for public repositories, so no credits were ever being consumed here.
+  (Original note: "Actions credits are exhausted; the YAML parses and every
+  command was proven locally via `ci_local.sh`, but the workflow itself has not
+  run. Re-check when billing is restored.")
 - **Not released.** The round is layout + gates, no user-facing behaviour change;
   `pyproject.toml` stays at 0.22.21. `release.sh`'s `ci_gate` cannot verify green
   CI while billing is out (the documented credit-depletion exception).

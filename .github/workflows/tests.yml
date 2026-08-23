@@ -10,8 +10,8 @@ jobs:
     # permitted (tools/check_no_emoji.py). Fast, no build needed.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
       - name: Check for disallowed emoji
@@ -23,9 +23,9 @@ jobs:
     # macOS so clang builds the dylib and the native (C) encoder tests actually run.
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
 
@@ -103,7 +103,7 @@ jobs:
     # because the no-BLE core gate is about that crate specifically.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -135,7 +135,7 @@ jobs:
     # encoder-parity test runs instead of skipping.
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - name: Build native dylib (FFI encoder parity test dependency)
         run: bash scripts/build_libdivoom.sh
@@ -154,7 +154,7 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - name: Install BlueZ/D-Bus headers (btleplug build dep)
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config

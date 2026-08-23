@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
-# ci_local.sh — run the FULL CI gate locally, because GitHub Actions credits are
-# exhausted and CI now always fails.
+# ci_local.sh — run the FULL CI gate locally, before spending a CI run on it.
 #
-# This is the only remaining signal. The pre-commit hook is deliberately narrow
+# GitHub Actions is ACTIVE for this repo. It is PUBLIC, and Actions on standard
+# runners is free for public repositories, so no credits are consumed and a red
+# check is a real code signal. (The 2026-08-17 "credits are exhausted" state is
+# over — see AGENTS.md.) This script is the fast local gate, NOT a substitute
+# for reading the CI result.
+#
+# The pre-commit hook is deliberately narrow
 # (staged files only, divoomd only, no tests) so commits stay fast; that means it
 # is WEAKER than CI in three ways and must not be mistaken for it:
 #   - it checks only STAGED files, CI checks the whole tree
@@ -17,9 +22,10 @@
 # fails on a Linux runner without a GTK toolchain. A green run here means "the
 # macOS-reachable jobs pass", never "CI would be green".
 #
-# Run before every push and before cutting a release (scripts/release.sh's
-# ci_gate cannot verify a green CI while billing is out — see AGENTS.md's
-# credit-depletion exception).
+# Run before every push and before cutting a release. release.sh's ci_gate then
+# checks the REAL CI result for the commit being tagged; this script passing is
+# a precondition for that, not a replacement (the credit-depletion exception in
+# AGENTS.md is a dormant safety valve, not the current state).
 #
 #   ./scripts/ci_local.sh            all jobs
 #   ./scripts/ci_local.sh --fast     skip the Python suite (the slow one)
