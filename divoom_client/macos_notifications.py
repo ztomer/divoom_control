@@ -195,6 +195,12 @@ class MacNotificationMonitor:
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
         self._last_seen: float = 0.0
+        # rowids already processed whose delivered_date == _last_seen. The
+        # timestamp alone is not a usable cursor: delivered_date is not unique,
+        # so a strict `>` silently drops any record that ties the newest one
+        # already processed. Bounded by how many notifications share ONE
+        # timestamp, not by table size.
+        self._seen_at_cursor: set[int] = set()
         # Counters useful for tests + observability.
         self.records_seen: int = 0
         self.records_routed: int = 0
@@ -249,6 +255,7 @@ class MacNotificationMonitor:
             ) from e
         self._stop.clear()
         self._last_seen = self._initial_max_delivered_date()
+        self._seen_at_cursor = self._rowids_at(self._last_seen)
         self._thread = threading.Thread(
             target=self._run, args=(sink,), daemon=True, name="MacNotificationMonitor"
         )
@@ -281,12 +288,33 @@ class MacNotificationMonitor:
             logger.debug(f"_initial_max_delivered_date: {e}")
         return 0.0
 
-    def _fetch_new(self) -> list[tuple[bytes, float]]:
+    def _rowids_at(self, delivered: float) -> set[int]:
+        """rowids sharing ``delivered`` — the tie set the cursor must remember.
+
+        Used to seed the cursor at startup so the newest already-delivered
+        notifications are not replayed, while still allowing a LATER record
+        that ties their timestamp to come through.
+        """
         try:
             with sqlite3.connect(str(self._db_path), timeout=0.5) as conn:
                 rows = conn.execute(
-                    "SELECT data, delivered_date FROM record "
-                    "WHERE delivered_date > ? ORDER BY delivered_date ASC",
+                    "SELECT rowid FROM record WHERE delivered_date = ?", (delivered,)
+                ).fetchall()
+            return {int(r[0]) for r in rows}
+        except sqlite3.Error as e:
+            logger.debug(f"_rowids_at: {e}")
+            return set()
+
+    def _fetch_new(self) -> list[tuple[int, bytes, float]]:
+        try:
+            with sqlite3.connect(str(self._db_path), timeout=0.5) as conn:
+                rows = conn.execute(
+                    # `>=`, not `>`: a record inserted AFTER we advanced the
+                    # cursor but sharing its delivered_date would never satisfy
+                    # a strict `>` and would be dropped forever. Ties are
+                    # excluded below by rowid instead, which is exact.
+                    "SELECT rowid, data, delivered_date FROM record "
+                    "WHERE delivered_date >= ? ORDER BY delivered_date ASC, rowid ASC",
                     (self._last_seen,),
                 ).fetchall()
         except sqlite3.Error as e:
@@ -299,14 +327,21 @@ class MacNotificationMonitor:
             return []
         self._db_error_streak = 0
         self._last_db_error = None
-        return [(bytes(r[0]), float(r[1])) for r in rows]
+        return [
+            (int(r[0]), bytes(r[1]), float(r[2]))
+            for r in rows
+            if not (float(r[2]) == self._last_seen and int(r[0]) in self._seen_at_cursor)
+        ]
 
     def _run(self, sink: Sink) -> None:
         while not self._stop.is_set():
             try:
-                for raw, delivered in self._fetch_new():
+                for rowid, raw, delivered in self._fetch_new():
                     if delivered > self._last_seen:
                         self._last_seen = delivered
+                        self._seen_at_cursor = {rowid}
+                    else:
+                        self._seen_at_cursor.add(rowid)
                     self.records_seen += 1
                     parsed = parse_notification_record(raw, delivered)
                     if parsed is None:

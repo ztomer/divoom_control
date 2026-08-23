@@ -425,7 +425,20 @@ def test_initial_max_delivered_date_returns_zero_on_db_error(tmp_path) -> None:
 def test_run_loop_handles_two_records_with_identical_delivered_date(tmp_path) -> None:
     """L308->310: the second of two records sharing one delivered_date must
     still be processed (records_seen bumps) even though it's no longer
-    STRICTLY greater than the (already-updated) _last_seen."""
+    STRICTLY greater than the (already-updated) _last_seen.
+
+    The two inserts are SEPARATED BY A POLL PASS on purpose. Written as two
+    back-to-back inserts, this test almost always caught both records in one
+    query -- where ties are harmless, because the query returned them before
+    the cursor moved -- and so it exercised the across-batch tie it names only
+    when the poll happened to land in the gap. That is the flake seen on
+    2026-08-23: the run that DID get the interleaving found the real bug
+    (`WHERE delivered_date > ?` drops any record tying the cursor, forever) and
+    failed, after ~2900 runs that never reached the branch.
+
+    Waiting for records_seen >= 1 forces the cursor to advance to 700.0 before
+    B exists, so every run now takes the path.
+    """
     db = tmp_path / "db.sqlite"
     _create_db(db)
     m, clock, _ = _make_monitor(db, interval=0.05)
@@ -433,9 +446,34 @@ def test_run_loop_handles_two_records_with_identical_delivered_date(tmp_path) ->
     m.start(sink=lambda *a: sink_calls.append(a))
     try:
         _insert_record(db, "com.whatsapp.WhatsApp", "A", "a", 700.0)
+        _wait_for(lambda: m.records_seen >= 1, timeout=2.0)  # cursor now == 700.0
         _insert_record(db, "com.whatsapp.WhatsApp", "B", "b", 700.0)
         _wait_for(lambda: m.records_seen >= 2, timeout=2.0)
         assert len(sink_calls) == 2
+    finally:
+        m.stop()
+
+
+def test_startup_seed_does_not_replay_but_admits_a_later_tie(tmp_path) -> None:
+    """The startup cursor must exclude existing records without excluding a
+    LATER record that ties their delivered_date.
+
+    Seeding _last_seen from MAX(delivered_date) alone cannot tell those two
+    cases apart -- it either replays history (`>=`) or drops the tie (`>`).
+    The rowid tie-set is what separates them.
+    """
+    db = tmp_path / "db.sqlite"
+    _create_db(db)
+    _insert_record(db, "com.whatsapp.WhatsApp", "old", "already delivered", 900.0)
+    m, clock, _ = _make_monitor(db, interval=0.05)
+    sink_calls = []
+    m.start(sink=lambda *a: sink_calls.append(a))
+    try:
+        _insert_record(db, "com.whatsapp.WhatsApp", "new", "same timestamp", 900.0)
+        _wait_for(lambda: m.records_seen >= 1, timeout=2.0)
+        assert [c[1] for c in sink_calls] == ["new"], (
+            f"expected only the NEW record, got {sink_calls}"
+        )
     finally:
         m.stop()
 
