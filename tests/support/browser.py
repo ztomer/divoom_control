@@ -51,7 +51,10 @@ async def launch(p):
     """Launch the e2e browser from an ``async_playwright()`` instance.
 
     Drop-in for the old ``p.chromium.launch(headless=True)``.
+
+    Calls :func:`require_browser` itself -- see the note on :func:`launch_sync`.
     """
+    require_browser()
     from camoufox.utils import launch_options
 
     return await p.firefox.launch(**launch_options(headless=True))
@@ -62,7 +65,15 @@ def launch_sync(p):
 
     Drop-in for ``p.chromium.launch(headless=True)`` under ``sync_playwright()``.
     Two suites (wall-canvas drag, the live-widgets diagnostic) use the sync API.
+
+    The guard lives HERE, not only at each call site. R66 asked all 15 e2e
+    modules to call ``require_browser()``; 13 did. The two that did not were
+    exactly the two sync-API ones, so on a machine with no browser they ERRORED
+    (``CamoufoxNotInstalled`` at fixture setup) while the other 13 skipped --
+    CI run 32654312489, 6 errors. A guard you have to remember to call is not a
+    guard, so getting a browser now requires passing it by construction.
     """
+    require_browser()
     from camoufox.utils import launch_options
 
     return p.firefox.launch(**launch_options(headless=True))

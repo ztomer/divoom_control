@@ -19,6 +19,8 @@ the guard's decision, not camoufox's installer.
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 from tests.support import browser as browser_support
@@ -73,6 +75,28 @@ def test_skips_when_the_pkgman_probe_raises(monkeypatch) -> None:
     assert "camoufox fetch" in reason
 
 
+def _browser_is_installed() -> bool:
+    """True only if camoufox reports a real, active install.
+
+    ``installed_verstr()`` RAISES ``CamoufoxNotInstalled`` when nothing is
+    fetched -- it does not return a falsy string. The bail-out here used to be
+    ``if not installed_verstr()``, written against a return-value contract the
+    library does not have, so on a browserless machine this test blew up with
+    ``CamoufoxNotInstalled`` instead of skipping (CI run 32654312489). That is
+    the same mistake the sibling test's docstring warns about, made one function
+    over: asserting on a shape the library never produces.
+
+    Loudness about a missing browser belongs in the CI install step, which now
+    verifies its own effect; the suite's job is to skip honestly.
+    """
+    try:
+        from camoufox.pkgman import installed_verstr
+
+        return bool(installed_verstr())
+    except Exception:
+        return False
+
+
 def test_allows_the_test_when_a_browser_is_present() -> None:
     """The guard must not over-skip: with a real browser installed it passes.
 
@@ -80,8 +104,59 @@ def test_allows_the_test_when_a_browser_is_present() -> None:
     disabling all 15 e2e suites -- the failure mode that hides regressions.
     """
     pytest.importorskip("camoufox.pkgman")
-    from camoufox.pkgman import installed_verstr
-
-    if not installed_verstr():
+    if not _browser_is_installed():
         pytest.skip("no camoufox browser on this machine — nothing to assert")
     assert _run_guard() is None, "guard must allow the test when a browser IS installed"
+
+
+def test_launch_helpers_guard_themselves(monkeypatch) -> None:
+    """Getting a browser must require passing the guard, by construction.
+
+    R66 relied on all 15 e2e modules remembering to call ``require_browser()``.
+    The two sync-API suites did not, so a missing browser ERRORED them at
+    fixture setup while the other 13 skipped. Both helpers now guard internally.
+
+    Teeth (verified 2026-08-23): drop the ``require_browser()`` call from
+    ``launch_sync`` and this goes red -- the call falls through to the
+    playwright object instead of skipping.
+    """
+    from _pytest.outcomes import Skipped
+
+    import camoufox.multiversion
+
+    monkeypatch.setattr(camoufox.multiversion, "get_active_path", lambda: None)
+
+    with pytest.raises(Skipped):
+        browser_support.launch_sync(object())  # never reaches the playwright arg
+
+    async def _call_async() -> None:
+        await browser_support.launch(object())
+
+    with pytest.raises(Skipped):
+        asyncio.run(_call_async())
+
+
+def test_every_e2e_module_gets_its_browser_through_the_seam() -> None:
+    """No suite may launch a browser behind the helpers' backs.
+
+    The guard is only structural while ``tests/support/browser.py`` is the one
+    way to get a browser. A module calling ``p.firefox.launch``/``p.chromium
+    .launch`` directly would reintroduce the R66 hole with the guard still
+    looking healthy.
+    """
+    from pathlib import Path
+
+    this_file = Path(__file__).resolve()
+    tests_dir = this_file.parent
+    offenders = []
+    for path in sorted(tests_dir.glob("test_*.py")):
+        if path.resolve() == this_file:
+            continue  # this module NAMES the banned calls to ban them
+        text = path.read_text(encoding="utf-8")
+        for engine in ("p.firefox.launch", "p.chromium.launch", "p.webkit.launch"):
+            if engine in text:
+                offenders.append(f"{path.name}: {engine}")
+    assert not offenders, (
+        "e2e suites must launch via tests.support.browser, not directly: "
+        + ", ".join(offenders)
+    )
