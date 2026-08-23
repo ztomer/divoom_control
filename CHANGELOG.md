@@ -4,6 +4,50 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## v0.24.2 — dropped notifications on tied timestamps (2026-08-23)
+
+### Fixed
+- **`macos_notifications`: notifications sharing a `delivered_date` with the
+  last-processed one were dropped forever.** The poll cursor was a
+  `delivered_date` float queried with `WHERE delivered_date > ?`. Ties *within*
+  one batch are harmless — the query already returned them — so this survived
+  ~2900 test runs. Across batches it is not: once the cursor reaches a
+  timestamp, a record arriving later that ties it can never satisfy `>` and is
+  silently dropped for the lifetime of the monitor. `delivered_date` is a
+  CFAbsoluteTime float and real notifications do tie; simultaneous arrivals are
+  exactly when both matter.
+
+  The stated spec was already correct and unimplemented — the test's own
+  docstring said the tied record "must still be processed". It only passed
+  because it almost never reached that state.
+
+  Fix: `delivered_date` stays the coarse cursor, but ties break by stable
+  identity — `>=` plus a `_seen_at_cursor` set of rowids already processed at
+  the cursor timestamp. A timestamp alone cannot be exact in both directions
+  (`>` drops the tie, `>=` replays history); only identity separates "already
+  delivered" from "new, same second". `start()` seeds both halves so existing
+  notifications are not replayed.
+
+  Affects v0.24.1 and earlier.
+
+### Changed
+- **CI: migrated off the deprecated Node 20 action runtimes** (house rule: never
+  build on deprecated APIs). `actions/checkout@v4` and `actions/setup-python@v5`
+  are `node20`; both moved to `@v7` (`node24`) after checking the runtimes and
+  reviewing breaking changes — checkout v7 only restricts fork checkouts on
+  `pull_request_target`/`workflow_run`, triggers this workflow does not use.
+- **Retired the last "CI is down" claims** from `.githooks/pre-push`,
+  `scripts/ci_local.sh`, and `docs/PLANNING_ROUND66.md`. The load-bearing
+  correction is in `AGENTS.md`: this repo is PUBLIC, and GitHub Actions on
+  standard runners is free for public repositories, so no credits are consumed
+  here regardless of the account's private-repo balance.
+
+### Tests
+- The flaky tie test now FORCES the interleaving (waits for a poll pass between
+  the two inserts) so it takes the branch every run instead of by luck.
+- New startup-seed test covering the replay-vs-tie distinction.
+- Teeth proven: restoring `>` turns both red deterministically.
+
 ## v0.24.1 — flaky-CI round: three gates that lied, one real bug (2026-08-23)
 
 Chased "the CI is flaky" to root causes. It was not flakiness in the usual

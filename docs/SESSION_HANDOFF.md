@@ -16,6 +16,32 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-08-23 (later) — v0.24.2: a dropped-notification bug the flaky CI was
+  hiding.** The pre-push gate rejected a docs/CI commit on
+  `test_run_loop_handles_two_records_with_identical_delivered_date`. It passed
+  3/3 in isolation in 14ms, so the cause was not slowness: the monitor never saw
+  the second record.
+
+  **Root cause** — `divoom_client/macos_notifications.py` polled with
+  `WHERE delivered_date > ?` against a cursor it advances as it goes. Ties
+  WITHIN a batch are harmless (the query already returned them), which is why
+  this survived ~2900 runs. ACROSS batches, a record arriving later that ties
+  the cursor can never satisfy `>` and is dropped for the monitor's lifetime.
+  Fixed by breaking ties on stable identity (`>=` + a rowid set at the cursor
+  timestamp) — a timestamp alone cannot be exact in both directions.
+
+  The test's own docstring already stated the correct behaviour; the code never
+  implemented it, and the test only reached the branch by luck. It now forces
+  the interleaving, so it takes the path every run.
+
+  Also: migrated CI off the deprecated Node20 actions (checkout@v4 /
+  setup-python@v5 -> @v7), and retired the last "CI is down" claims from
+  `.githooks/pre-push`, `scripts/ci_local.sh`, `docs/PLANNING_ROUND66.md`.
+  **The load-bearing fact, now in AGENTS.md: this repo is PUBLIC, so GitHub
+  Actions on standard runners is FREE — no credits are consumed here, whatever
+  the account's private-repo balance.** That belief has now outlived the fact
+  twice; the last time, v0.23.0 shipped on a red CI.
+
 - **2026-08-23 — flaky-CI round. Four findings, none of them flakiness.**
   Suite: **Python 2920 / 0 failed / 0 errors / 94 skipped** (+10 new);
   Rust workspace green; `ci_local.sh --fast` all jobs pass. Detail in CHANGELOG.
