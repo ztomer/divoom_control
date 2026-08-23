@@ -4,7 +4,7 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
-## Unreleased — flaky-CI round: three gates that lied, one real bug (2026-08-23)
+## v0.24.1 — flaky-CI round: three gates that lied, one real bug (2026-08-23)
 
 Chased "the CI is flaky" to root causes. It was not flakiness in the usual
 sense: every one of the four findings was a defect that happened to surface
