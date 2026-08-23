@@ -16,6 +16,25 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-08-23 (later still) — v0.24.3: e2e injectors that silently did
+  nothing.** Chased the two browser tests that reddened the v0.24.2 release.
+  **Could not reproduce the flake** — not under a saturated 16-core machine,
+  not across the full 166-test e2e subset, not on 3x re-runs of the exact
+  failing command. What the code did show: three injected scripts ended their
+  missing-element branch with a bare `return`, so a missing container raised
+  nothing and pushed the damage downstream — the gallery one into an
+  unsatisfiable wait (an opaque TimeoutError naming the layout check, which is
+  why 5s -> 20s did not help), and the hot-preview one into a **vacuous pass**
+  against an empty card. All three now fail at the precondition and name it.
+
+  Also centralized ~47 ad-hoc e2e timeout budgets as `UI_TIMEOUT_MS` in the
+  seam. Budgets are not assertions here — nothing measures UI speed — so a
+  tight one cannot catch what a generous one misses. NOT applied to absence
+  assertions, where a short timeout IS the assertion.
+
+  Honest scope carried into the CHANGELOG: the no-op fixes are proven
+  root-cause work; the budget change is unproven hardening.
+
 - **2026-08-23 (later) — v0.24.2: a dropped-notification bug the flaky CI was
   hiding.** The pre-push gate rejected a docs/CI commit on
   `test_run_loop_handles_two_records_with_identical_delivered_date`. It passed

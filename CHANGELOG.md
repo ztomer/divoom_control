@@ -4,6 +4,40 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## v0.24.3 — e2e injectors that silently did nothing (2026-08-23)
+
+### Fixed
+- **Three injected e2e scripts ended their missing-element branch with a bare
+  `return`**, so a missing container raised nothing and deferred the damage:
+  - *gallery*: nothing injected, so the wait for `scrollHeight > clientHeight`
+    blocked on a condition that could never become true and died at the timeout
+    naming the layout check rather than the absent container. This is what the
+    v0.24.2 release failure looked like from outside, and why raising the
+    budget from 5s to 20s did not help.
+  - *hot-preview*: worse — the layout assertions only mean anything if the list
+    overflows. Against an empty card the button is trivially within bounds, so
+    the test **passed while measuring nothing**.
+  - *wall tab*: an `if (wallTab)` no-op left the wait on `#arranger-canvas` to
+    time out naming the canvas, not the absent tab.
+
+  All three now fail at the precondition and name it. Proven by renaming each
+  container: opaque `TimeoutError` becomes
+  `injection did not take effect (returned -1) — #hot-preview-list was missing`.
+
+### Changed
+- **e2e timeout budgets centralized** as `UI_TIMEOUT_MS` in the browser seam
+  (20s, override with `DIVOOM_E2E_TIMEOUT_MS`). The suites carried ~47 ad-hoc
+  values invented per call site. These are budgets, not assertions — no test
+  measures UI speed — so a tight one cannot catch a defect a generous one
+  misses; it can only redden a busy machine. Not applied to absence assertions,
+  where a short timeout IS the assertion.
+
+### Honest scope
+The no-op fixes are root-cause work and are proven. The budget change is
+hardening for a defect never reproduced — not under a saturated 16-core
+machine, not across the full 166-test e2e subset, not on repeated runs of the
+exact failing command — and is not claimed as a fix for it.
+
 ## v0.24.2 — dropped notifications on tied timestamps (2026-08-23)
 
 ### Fixed
