@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Full local gate before anything leaves this machine.
+#
+# tests.yml is renamed .disabled — GitHub Actions is unavailable on this account.
+# scripts/ci_local.sh mirrors it job-for-job WITH ONE LIMIT: CI's rust-core and
+# rust-ble-linux jobs ran on Ubuntu, and this runs on macOS. A Linux-only
+# failure is invisible here, which is not hypothetical (v0.23.0 shipped a red
+# rust-core because workspace clippy pulls divoom-menubar -> GTK/glib). Green
+# here means "the macOS-reachable jobs pass", never "CI would be green".
+set -euo pipefail
+root="$(git rev-parse --show-toplevel)"
+exec "$root/scripts/ci_local.sh"

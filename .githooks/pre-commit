@@ -16,7 +16,12 @@ python3 "$root/tools/check_file_size.py" --staged || {
 # workspace lives in divoomd/, so the gate runs cargo there while the no-#[allow]
 # checker scans the whole repo from its root. Skips cleanly if no Rust is staged.
 if git diff --cached --name-only | grep -qE '\.rs$'; then
-    rust_gate="$HOME/Projects/scripts/bin/rust_gate.sh"
+    # The house Rust gate now lives in its own public repo (gates_of_heck)
+    # instead of a private scripts folder. The old path is kept as a fallback
+    # so a machine that has not cloned it yet still gates, but the two copies
+    # WILL drift — the public one is the source of truth.
+    rust_gate="${GATES_OF_HECK:-$HOME/Projects/gates_of_heck}/gates/rust_gate.sh"
+    [ -x "$rust_gate" ] || rust_gate="$HOME/Projects/scripts/bin/rust_gate.sh"
     if [ -x "$rust_gate" ]; then
         # Workspace root, not "$root/divoomd": since R66 both crates are
         # members, and pointing the gate at divoomd alone is exactly why
