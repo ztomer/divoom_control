@@ -1,7 +1,8 @@
 # gates_of_heck configuration. All keys optional; delete what you don't use.
-GOH_MAX_LINES=500                 # file-length cap; unset disables the check
 # GOH_EXCLUDE='vendor/|\.generated\.'   # shared vendor/generated exemption
-GOH_EXCLUDE='docs/divoom_docs/'   # captured Divoom API responses + sample gallery data (third-party)
+GOH_MAX_LINES=500                 # file-length cap; unset disables the check
+# Exported because GOH_CI_STEPS below interpolates it in a child shell.
+export GOH_EXCLUDE='docs/divoom_docs/'   # captured Divoom API responses + sample gallery data (third-party)
 # GOH_LINE_EXCLUDE='third_party/'       # length-only alias
 # GOH_PY_COV_MIN=95
 # GOH_SWIFT_MODE=xcode            # or spm
@@ -11,3 +12,21 @@ GOH_EXCLUDE='docs/divoom_docs/'   # captured Divoom API responses + sample galle
 
 # Length-only exemption: captured third-party API data (not hand-written code).
 GOH_LINE_EXCLUDE='docs/divoom_docs/'
+
+# ── Local CI steps (consumed by $GOH/gates/local_ci.sh via ci_local.sh) ────
+# Mirrors .github/workflows/tests.yml job-for-job.
+#
+# WHAT MACOS-LOCAL CANNOT SEE: this machine is macOS. CI's rust-core and
+# rust-ble-linux jobs run on Ubuntu, so a Linux-only failure (missing GTK
+# toolchain, BlueZ/D-Bus headers) is invisible here — v0.23.0 shipped with a
+# red rust-core exactly that way. A green run means "the macOS-reachable jobs
+# pass", never "CI would be green". release.sh's ci_gate checks the REAL CI
+# result for the commit being tagged; this list passing is a precondition for
+# that, not a replacement.
+#
+# The Python suite lives in scripts/py_ci.sh (the slow, divoom-specific job;
+# ci_local.sh --fast skips it). Coverage: bash scripts/rust_coverage.sh
+# (divoomd crate, floor pinned at 29% — measured 2026-08-25, no floor existed
+# before).
+export GOH="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
+GOH_CI_STEPS='./scripts/house_emoji_gate.sh:python3 tools/check_file_size.py:python3 tools/check_no_allow.py:cargo fmt --all -- --check:cargo clippy --all-targets --all-features -- -D warnings:cargo build -p divoomd --no-default-features --locked:cargo test -p divoomd --no-default-features --locked:cargo test --locked'
