@@ -4,6 +4,30 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## v0.26.0 — harness unification: local CI delegates to gates_of_heck (2026-08-25)
+
+### Changed
+- `scripts/ci_local.sh` is a thin driver over `$GOH/gates/local_ci.sh`; the job
+  list is declarative in `.gatesrc` (`GOH_CI_STEPS`), same 8 jobs in the same
+  order as before. `--fast` still skips exactly one step (the Python suite).
+- `scripts/py_ci.sh` (new) is the genuinely divoom-specific CI job — dylib
+  build, camoufox presence stated out loud when absent (suites SKIP, not run),
+  pytest.
+- `scripts/house_emoji_gate.sh` (new): emoji gate with `GOH_EXCLUDE` applied
+  conditionally; kept out of the colon-separated `GOH_CI_STEPS` because its
+  parameter expansions contain colons.
+
+### Added
+- A coverage floor where none existed: `scripts/rust_coverage.sh` now
+  delegates to `$GOH/gates/coverage_gate.sh --lang rust`, pinned at 29% of
+  coverable lines (measured 2026-08-25 at 29.74%, 3066/10311). Previously any
+  coverage passed.
+
+### Removed
+- No forked checkers remain: file-size and no-allow checks run the house
+  copies, and the honest "what macOS-local cannot see" statement moved into
+  `.gatesrc` above the step list.
+
 ## v0.25.0 — every file under the 500-line cap (2026-08-25)
 
 ### Changed
