@@ -8,3 +8,8 @@ GOH_EXCLUDE='docs/divoom_docs/'   # captured Divoom API responses + sample galle
 # GOH_SWIFT_SCHEME=MyAppTests
 # GOH_SWIFT_COV_MIN=95
 # GOH_MAX_SCRATCH_GB=25           # disk-hygiene ceiling (full runs only)
+
+# DEBT (2026-08-24): 14 test files predate the house 500-line cap (largest
+# test_gui_api.py at 1951). Splitting is a dedicated pass, not part of the
+# gates migration. Remove as each is split.
+GOH_LINE_EXCLUDE='docs/divoom_docs/|tests/'
