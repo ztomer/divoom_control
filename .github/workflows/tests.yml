@@ -7,15 +7,22 @@ on:
 jobs:
   no-emoji:
     # House style gate: emoji are a failure state — only the Kare icon set is
-    # permitted (tools/check_no_emoji.py). Fast, no build needed.
+    # permitted (the canonical checker in gates_of_heck: checks/check_no_emoji.py,
+    # consumed via GOH_DIR). Fast, no build needed.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      # Canonical house gates live in the public gates_of_heck repo.
+      - name: Check out gates_of_heck
+        uses: actions/checkout@v7
+        with:
+          repository: ztomer/gates_of_heck
+          path: goh
       - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
       - name: Check for disallowed emoji
-        run: python3 tools/check_no_emoji.py
+        run: python3 "$GITHUB_WORKSPACE/goh/checks/check_no_emoji.py"
       - name: Check source files within 500-line house limit
         run: python3 tools/check_file_size.py
 

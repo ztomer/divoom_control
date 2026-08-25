@@ -50,7 +50,8 @@ EMOJI_RANGES = [
 
 # The Kare icon set + approved typographic arrows / Mac-key glyphs are PERMITTED
 # everywhere — they are functional iconography, not decorative emoji. This mirrors
-# the authoritative house gate `tools/check_no_emoji.py` (its ALLOWED set) and the
+# the authoritative house emoji gate in gates_of_heck ($GOH_DIR/checks/
+# check_no_emoji.py, formerly tools/check_no_emoji.py) and the
 # rule in CLAUDE.md (→ ✓ ✗ ⚠ ↔ ↑ ↓ + ← ⌘ ⌥ ⌨). Listed by CODEPOINT so this file
 # never contains the literal glyphs.
 ALLOWED_CODEPOINTS = {
@@ -71,15 +72,14 @@ def _is_emoji(ch: str) -> bool:
 # ~/projects/scripts/_stylerc). These are functional TUI iconography, not
 # decorative emoji — the R14 section-6 ban targets the latter.
 #   tui/lib.{sh,py}        — the self-contained Kare TUI style helpers.
-#   tools/check_no_emoji.py — the house emoji gate; it lists the permitted Kare
-#                             glyphs in its ALLOWED set + status messages.
+#   tools/check_no_emoji.py — the canonical house emoji gate now lives in the
+#                             gates_of_heck checkout ($GOH_DIR/checks/); it lists
+#                             the permitted Kare glyphs in its ALLOWED set +
+#                             status messages.
 #   tools/check_file_size.py — the 500-line gate; uses the same Kare check/cross
 #                              glyphs in its status output.
 EXEMPT_FILES = {
     "scripts/hw_smoke.py",
-    "tui/lib.sh",
-    "tui/lib.py",
-    "tools/check_no_emoji.py",
     "tools/check_file_size.py",
 }
 
@@ -138,7 +138,7 @@ def test_emoji_range_table_includes_known_blocks() -> None:
     assert _is_emoji("\U0001F389")  # 0x1F389 (symbols)
     assert _is_emoji("\u2600")   # 0x2600 sun (misc symbols, forbidden; \u-escaped)
     assert _is_emoji("\u2705")  # 0x2705 check-mark-button (dingbats, forbidden; \u-escaped)
-    # ...but the permitted Kare icons are NOT flagged (mirror tools/check_no_emoji.py).
+    # ...but the permitted Kare icons are NOT flagged (mirror the house gate).
     assert not _is_emoji("\u2713")  # \u2713 allowed
     assert not _is_emoji("\u2717")  # \u2717 allowed
     assert not _is_emoji("\u26A0")  # \u26A0 allowed

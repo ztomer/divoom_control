@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Full local gate before anything leaves this machine.
-#
-# tests.yml is ACTIVE and runs on every push (this repo is PUBLIC, so GitHub
-# Actions on standard runners is free — no credits are consumed). This hook is
-# not a replacement for it; it is the cheaper, earlier gate that catches things
-# before a runner ever starts.
-#
-# scripts/ci_local.sh mirrors tests.yml job-for-job WITH ONE LIMIT: CI's
-# rust-core and rust-ble-linux jobs run on Ubuntu, and this runs on macOS. A
-# Linux-only failure is invisible here, which is not hypothetical (v0.23.0
-# shipped a red rust-core because workspace clippy pulls divoom-menubar ->
-# GTK/glib). Green here means "the macOS-reachable jobs pass", never "CI would
-# be green" — so read the CI result too, do not stop at a green hook.
+# pre-push — runs the FULL gate before anything leaves this machine.
+# Installed by gates_of_heck/install.sh. There is no CI behind this; if this
+# hook is skipped, it is not run.
 set -euo pipefail
+
+GOH="${GOH_DIR:-${GOH:-$HOME/Projects/gates_of_heck}}"
 root="$(git rev-parse --show-toplevel)"
-exec "$root/scripts/ci_local.sh"
+gate="$root/tools/gate.sh"
+
+if [ ! -f "$gate" ]; then
+    echo "✗ pre-push: $root/tools/gate.sh missing — run '$GOH/install.sh $root'" \
+        "to create the starter" >&2
+    exit 1
+fi
+
+exec bash "$gate" --full

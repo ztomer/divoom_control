@@ -31,8 +31,9 @@
 #   ./scripts/ci_local.sh --fast     skip the Python suite (the slow one)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=../tui/lib.sh
-source "$ROOT/tui/lib.sh"
+# shellcheck source=/Users/ztomer/Projects/gates_of_heck/tui/lib.sh
+GOH="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
+source "$GOH/tui/lib.sh"
 cd "$ROOT"
 
 FAST=0
@@ -60,7 +61,10 @@ run() {  # run <label> <cmd...>
 
 # ── job: no-emoji (whole tree, not just staged) ───────────────────────
 section "House gates"
-run "no-emoji (all tracked files)"  python3 tools/check_no_emoji.py
+# The canonical checker takes per-repo exemptions from GOH_EXCLUDE (.gatesrc),
+# same seam gates/structural.sh uses.
+[ -f "$ROOT/.gatesrc" ] && source "$ROOT/.gatesrc"
+run "no-emoji (all tracked files)"  python3 "${GOH_DIR:-$HOME/Projects/gates_of_heck}/checks/check_no_emoji.py" ${GOH_EXCLUDE:+--exclude "$GOH_EXCLUDE"}
 run "file-size 500-line limit"      python3 tools/check_file_size.py
 run "no #[allow] in Rust source"    python3 tools/check_no_allow.py
 
