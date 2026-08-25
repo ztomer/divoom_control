@@ -4,6 +4,18 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## v0.25.0 — every file under the 500-line cap (2026-08-25)
+
+### Changed
+- All 14 over-cap test files split along subject seams into focused modules
+  with shared fixtures deduplicated into `tests/support/` (largest:
+  `test_gui_api.py` 1951 lines -> 9 modules + `support/gui_api_base.py`).
+  Test-function counts verified identical before/after for every file.
+- `tests/` removed from the `GOH_LINE_EXCLUDE` length exemption in
+  `.gatesrc`; only `docs/divoom_docs/` (captured third-party API data)
+  remains exempt. The 2026-08-24 DEBT note is resolved and removed.
+- Verified by the repo's own `make test`: 2827 passed, 94 skipped.
+
 ## v0.24.3 — e2e injectors that silently did nothing (2026-08-23)
 
 ### Fixed
