@@ -47,7 +47,7 @@ window.DivoomTemplates.widgets = `                <div class="grid-layout three-
                                 </div>
                                 <div class="widget-preview-ticker" id="ticker-preview-box" style="flex:1; min-width:0; margin:0; padding:12px;">
                                     <div class="mini-canvas-view" style="min-width:0;">
-                                        <div class="ticker-arrow-mock">▲</div>
+                                        <div class="ticker-arrow-mock">↑</div>
                                         <div class="ticker-price-mock">$64,285</div>
                                         <div class="ticker-name-mock">BTC</div>
                                     </div>

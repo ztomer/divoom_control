@@ -81,7 +81,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             if (nameMock) nameMock.textContent = symbol;
                             if (priceMock) priceMock.textContent = `$${res.price}`;
                             if (arrowMock) {
-                                arrowMock.textContent = res.change >= 0 ? "▲" : "▼";
+                                arrowMock.textContent = res.change >= 0 ? "↑" : "↓";
                                 arrowMock.style.color = res.change >= 0 ? "var(--secondary)" : "red";
                             }
                             showTickerDevicePreview(res.preview);
@@ -126,7 +126,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (nameMock) nameMock.textContent = symbol;
                     if (priceMock) priceMock.textContent = `$${res.price}`;
                     if (arrowMock) {
-                        arrowMock.textContent = res.change >= 0 ? "▲" : "▼";
+                        arrowMock.textContent = res.change >= 0 ? "↑" : "↓";
                         arrowMock.style.color = res.change >= 0 ? "var(--secondary)" : "red";
                     }
                     showTickerDevicePreview(res.preview);

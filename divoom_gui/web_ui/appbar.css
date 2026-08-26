@@ -123,6 +123,13 @@
 .win-btn.min:hover { background-color: #ffaa14; }
 .win-btn.max:hover { background-color: #1cc033; }
 
+.win-btn.max:hover::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border: 1px solid rgba(0, 0, 0, 0.75);
+}
+
 /* R32: the bottom-right connectivity indicator pill + its dot and tooltip
    styles were removed. The sidebar device dots have their own styles (in
    sidebar.css). */
