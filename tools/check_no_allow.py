@@ -37,24 +37,31 @@ def _is_compiled_src(rel: str) -> bool:
     return "/src/" in rel or rel.startswith("src/") or "/benches/" in rel or rel.startswith("benches/")
 
 
+# `-z` + NUL splitting is load-bearing: without it git QUOTES paths holding
+# non-ASCII ("caf\303\251.rs") — names p.exists() can never match, so those
+# files were silently skipped instead of policed.
+def _split(out: bytes) -> list[str]:
+    return [n.decode("utf-8", "replace") for n in out.split(b"\0") if n]
+
+
 def _staged_files(root: Path):
     out = subprocess.run(
-        ["git", "-C", str(root), "diff", "--cached", "--name-only", "--diff-filter=ACM"],
+        ["git", "-C", str(root), "diff", "--cached", "--name-only", "-z",
+         "--diff-filter=ACM"],
         capture_output=True,
-        text=True,
         check=True,
     )
-    return [Path(root) / f for f in out.stdout.splitlines() if f.endswith(".rs") and _is_compiled_src(f)]
+    return [Path(root) / f for f in _split(out.stdout)
+            if f.endswith(".rs") and _is_compiled_src(f)]
 
 
 def _tracked_files(root: Path):
     out = subprocess.run(
-        ["git", "-C", str(root), "ls-files", "*.rs"],
+        ["git", "-C", str(root), "ls-files", "-z", "*.rs"],
         capture_output=True,
-        text=True,
         check=True,
     )
-    return [Path(root) / f for f in out.stdout.splitlines() if _is_compiled_src(f)]
+    return [Path(root) / f for f in _split(out.stdout) if _is_compiled_src(f)]
 
 
 def _is_generated(path: Path) -> bool:

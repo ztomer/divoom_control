@@ -45,12 +45,14 @@ def _is_source(f: str) -> bool:
 
 
 def _files(root: str, staged: bool):
-    if staged:
-        out = subprocess.run(["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
-                             cwd=root, capture_output=True, text=True).stdout
-    else:
-        out = subprocess.run(["git", "ls-files"], cwd=root, capture_output=True, text=True).stdout
-    return [f for f in out.split("\n") if f and _is_source(f)]
+    # `-z` + NUL splitting is load-bearing: without it git QUOTES paths holding
+    # non-ASCII ("caf\303\251.py"), a name open() can never resolve — those
+    # files were silently unpoliced (open() failed and the loop continued).
+    cmd = (["git", "diff", "--cached", "--name-only", "-z", "--diff-filter=ACM"]
+           if staged else ["git", "ls-files", "-z"])
+    out = subprocess.run(cmd, cwd=root, capture_output=True).stdout
+    names = [n.decode("utf-8", "replace") for n in out.split(b"\0")]
+    return [f for f in names if f and _is_source(f)]
 
 
 def main() -> int:
