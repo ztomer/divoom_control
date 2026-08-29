@@ -26,7 +26,16 @@ import threading
 logger = logging.getLogger("divoom_gui.permissions")
 
 # AppleScript-controllable players the cover-art widget queries.
-_AUTOMATION_TARGETS = ("Music", "Spotify")
+#
+# R67/C3: this was a hardcoded ("Music", "Spotify") while the now-playing code
+# also addressed Kaset — so Kaset was never primed, its Apple Event was denied
+# in the headless daemon, and the daemon got no track even though the foreground
+# GUI (which prompts visibly) could see one. The list now comes from the single
+# registry every consumer reads; tests/test_media_player_registry.py fails if
+# they ever diverge again.
+from divoom_lib.utils.media_players import apple_event_players
+
+_AUTOMATION_TARGETS = apple_event_players()
 
 
 def _prime_automation() -> None:

@@ -67,12 +67,25 @@ mod tests {
                 "device_call",
                 Some(json!({
                     "method": "display.show_clock",
+                    // R67/C1: this used to pass weather/temp/calendar. Those
+                    // were the WRONG names — the canonical overlay fields (the
+                    // Python builder, from the APK's C2()) are
+                    // humidity/weather/date, and this arm wrote the three
+                    // kwargs it did accept straight into bytes 4/5/6. So the
+                    // call said "weather + temp" and the bytes below actually
+                    // mean "humidity + weather".
+                    //
+                    // The pinned BYTES were right (validated against
+                    // hass-divoom) and are unchanged; only the names that
+                    // produce them are corrected. A golden test that encodes
+                    // the wrong field names is part of the defect, not a
+                    // constraint on fixing it.
                     "kwargs": {
                         "clock": 4,
                         "twentyfour": false,
+                        "humidity": true,
                         "weather": true,
-                        "temp": true,
-                        "calendar": false,
+                        "date": false,
                         "color": "#00ff00"
                     }
                 })),

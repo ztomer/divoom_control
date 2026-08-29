@@ -314,7 +314,20 @@ class Display:
         return None
 
     async def show_light(self, color: str, brightness: int | None = None, power: bool | None = None, lightning_type: int | None = None) -> bool:
-        """Show light on the Divoom device in the color"""
+        """Show light on the Divoom device in the color.
+
+        ``lightning_type`` selects the ambient effect (0 Plain, 1 Love,
+        2 Plants, 3 Sleeping, 4 No-Mosquito). BLE/SPP carry it in byte 5 of the
+        0x45 lighting packet.
+
+        R67/C1: on LAN this used to drop ``lightning_type`` on the floor and
+        return True, so every effect silently rendered as Plain Colour and the
+        UI reported success. Divoom's HTTP API has no field for it —
+        ``Channel/SetAmbientLight`` accepts only Brightness/Color/Power — so the
+        effect is genuinely unreachable over Wi-Fi. That is a real limitation,
+        and the honest response is to refuse it rather than fake it, matching
+        how ``show_effects`` already handles VJ-on-LAN.
+        """
         if power is None:
             power = True
         if brightness is None:
@@ -322,29 +335,30 @@ class Display:
         brightness = to_int_if_str(brightness)
 
         rgb_color = self.communicator.convert_color(color)
+        effect = to_int_if_str(lightning_type) if lightning_type is not None \
+            else constants.LIGHTNING_TYPE_PLAIN_COLOR
 
         if self.communicator.lan:
+            if effect != constants.LIGHTNING_TYPE_PLAIN_COLOR:
+                self.logger.warning(
+                    "Ambient effect %s is not supported on Wi-Fi (LAN) devices — "
+                    "Channel/SetAmbientLight has no effect field. Only Plain "
+                    "Colour is reachable over LAN.", effect)
+                return False
             await self.communicator.lan.set_ambient_light(
                 brightness, rgb_color[0], rgb_color[1], rgb_color[2], 1 if power else 0
             )
             return True
 
-        # Channel number for Lightning is 0x01
-        channel_number = constants.LIGHTNING_CHANNEL_NUMBER
-        
-        # Type of Lightning: 0x00 for Plain color by default
-        type_of_lightning = to_int_if_str(lightning_type) if lightning_type is not None else constants.LIGHTNING_TYPE_PLAIN_COLOR
-
-        # Power state: 0x01 for on, 0x00 for off
-        power_state = bool_to_byte(power)
-        
+        # Wire: [channel, R, G, B, brightness, lighting_type, power, 0, 0, 0].
+        # Mirrors divoomd/src/packets.rs::LightPacket — keep the two in step.
         args = [
-            constants.LIGHTNING_CHANNEL_NUMBER, # Channel number for Lightning
+            constants.LIGHTNING_CHANNEL_NUMBER,
             rgb_color[0], rgb_color[1], rgb_color[2],
             brightness,
-            type_of_lightning,
-            power_state,
-            constants.FIXED_STRING_BYTE, constants.FIXED_STRING_BYTE, constants.FIXED_STRING_BYTE # Fixed String 000000
+            effect,
+            bool_to_byte(power),
+            constants.FIXED_STRING_BYTE, constants.FIXED_STRING_BYTE, constants.FIXED_STRING_BYTE
         ]
         return await self.communicator.send_command("set channel light", args)
 

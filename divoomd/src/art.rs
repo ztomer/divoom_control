@@ -12,9 +12,13 @@
 //!   - Hot update:  9B manifest → device drives F7 requests → 9D info → 9E chunks.
 
 use serde_json::{json, Value};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use crate::daemon::Daemon;
+
+// R67/C6: HotProgress moved to its own module when art.rs crossed the 500-line
+// cap. Re-exported so `crate::art::HotProgress` keeps working for callers.
+pub use crate::hot_progress::HotProgress;
 
 // ── constants ─────────────────────────────────────────────────────────────
 
@@ -42,57 +46,6 @@ pub(crate) fn device_type_for_size(size: u32) -> u32 {
 }
 
 // ── progress state (shared between hot_update caller and background task) ─
-
-#[derive(Clone)]
-pub struct HotProgress {
-    inner: Arc<Mutex<Value>>,
-}
-
-impl Default for HotProgress {
-    fn default() -> Self {
-        Self {
-            inner: Arc::new(Mutex::new(json!({"phase": "idle"}))),
-        }
-    }
-}
-
-impl HotProgress {
-    pub fn set(&self, val: Value) {
-        if let Ok(mut g) = self.inner.lock() {
-            *g = val;
-        }
-    }
-    pub fn get(&self) -> Value {
-        self.inner
-            .lock()
-            .map(|g| g.clone())
-            .unwrap_or_else(|_| json!({}))
-    }
-    /// Atomically claim the slot; returns false if an update is already running.
-    pub fn try_begin(&self) -> bool {
-        let mut g = match self.inner.lock() {
-            Ok(g) => g,
-            Err(_) => return false,
-        };
-        let phase = g.get("phase").and_then(|v| v.as_str()).unwrap_or("idle");
-        if matches!(
-            phase,
-            "starting" | "fetching_manifest" | "downloading" | "uploading"
-        ) {
-            return false;
-        }
-        *g = json!({"phase": "starting"});
-        true
-    }
-    /// Reset a stuck "starting" state (queue-expired before task ran).
-    pub fn clear_stuck_starting(&self) {
-        if let Ok(mut g) = self.inner.lock() {
-            if g.get("phase").and_then(|v| v.as_str()) == Some("starting") {
-                *g = json!({"phase":"error","error":"hot update did not start (queue timeout)"});
-            }
-        }
-    }
-}
 
 use crate::art_codec::{decode_cloud_magic9, decode_hot_file, decode_magic43};
 

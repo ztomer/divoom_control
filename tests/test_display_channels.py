@@ -300,3 +300,81 @@ async def test_switch_channel_non_lan_dispatch_table(display: Display) -> None:
 async def test_switch_channel_non_lan_unknown_channel_returns_false(display: Display) -> None:
     result = await display.switch_channel("teleport")
     assert result is False
+
+
+# ── R67/C1: the ambient effect byte ───────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("effect", [0, 1, 2, 3, 4])
+async def test_show_light_ble_carries_the_effect_byte(display: Display, effect: int) -> None:
+    """Every ambient mode must reach byte 5 of the 0x45 lighting packet.
+
+    R67/C1: the Rust device_call handler hardcoded this byte to 0x00, so all
+    five modes rendered as Plain Colour while the RPC reported success. The
+    Python builder always had it right; this pins that so the two cannot drift
+    apart again (see divoomd/src/packets.rs::LightPacket).
+    """
+    display.communicator.lan = None
+    display.communicator.send_command = AsyncMock(return_value=True)
+    display.communicator.convert_color = MagicMock(return_value=[0, 255, 204])
+
+    await display.show_light(color="00FFCC", brightness=80, power=True,
+                             lightning_type=effect)
+
+    _, args = display.communicator.send_command.await_args.args
+    assert args[5] == effect, f"effect byte must be {effect}, got {args[5]}"
+    assert args[0] == 0x01, "byte 0 is the lighting channel"
+    assert args[1:4] == [0, 255, 204], "bytes 1-3 are RGB"
+    assert args[4] == 80, "byte 4 is brightness"
+    assert args[6] == 1, "byte 6 is power"
+
+
+@pytest.mark.asyncio
+async def test_show_light_ble_modes_produce_distinct_payloads(display: Display) -> None:
+    """Five modes, five different packets — the R67 defect in one assertion."""
+    display.communicator.lan = None
+    display.communicator.convert_color = MagicMock(return_value=[0, 255, 204])
+    seen = set()
+    for effect in range(5):
+        display.communicator.send_command = AsyncMock(return_value=True)
+        await display.show_light(color="00FFCC", brightness=80, power=True,
+                                 lightning_type=effect)
+        seen.add(tuple(display.communicator.send_command.await_args.args[1]))
+    assert len(seen) == 5, f"expected 5 distinct payloads, got {len(seen)}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("effect", [1, 2, 3, 4])
+async def test_show_light_lan_refuses_effects_it_cannot_express(
+        display: Display, effect: int) -> None:
+    """LAN must REFUSE a non-Plain effect, not silently render Plain.
+
+    Divoom's HTTP API has no effect field — Channel/SetAmbientLight takes only
+    Brightness/Color/Power — so the effect is genuinely unreachable over Wi-Fi.
+    Reporting success for a mode the device never received is the dishonest
+    state this asserts against (house rule: honest placeholders).
+    """
+    display.communicator.lan = MagicMock()
+    display.communicator.lan.set_ambient_light = AsyncMock()
+    display.communicator.convert_color = MagicMock(return_value=[0, 255, 204])
+
+    result = await display.show_light(color="00FFCC", brightness=80, power=True,
+                                      lightning_type=effect)
+
+    assert result is False, "LAN must not claim success for an unreachable effect"
+    display.communicator.lan.set_ambient_light.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_show_light_lan_still_serves_plain_colour(display: Display) -> None:
+    """The refusal above must be narrow: Plain Colour still works over LAN."""
+    display.communicator.lan = MagicMock()
+    display.communicator.lan.set_ambient_light = AsyncMock()
+    display.communicator.convert_color = MagicMock(return_value=[0, 255, 204])
+
+    result = await display.show_light(color="00FFCC", brightness=80, power=True,
+                                      lightning_type=0)
+
+    assert result is True
+    display.communicator.lan.set_ambient_light.assert_awaited_once_with(80, 0, 255, 204, 1)

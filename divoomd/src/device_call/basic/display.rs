@@ -3,6 +3,7 @@
 //! ground rule.
 
 use super::CallCtx;
+use crate::packets::{ClockPacket, LightPacket, LightingType, CMD_SET_LIGHT_MODE};
 use crate::protocol::err_reply;
 use serde_json::{json, Value};
 
@@ -13,10 +14,16 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     let kw = ctx.kwargs;
 
     match method {
+        // R67/C1: this arm used to hardcode 24h, humidity, weather, date AND the
+        // colour, so the wall path (`t.show_clock(clock=style)`) silently
+        // discarded the user's colour. It now reads the same fields as its
+        // `display.` sibling, through the one shared packet.
         "device.show_clock" | "show_clock" => {
-            let clock = args.first().copied().unwrap_or(0).clamp(0, 15) as u8;
-            let payload = [0u8, 1, clock, 1, 0, 0, 0, 0xFF, 0xFF, 0xFF];
-            match dev.send_command(0x45, &payload, true).await {
+            let p = clock_packet_from_call(args, raw_args, kw);
+            match dev
+                .send_command(CMD_SET_LIGHT_MODE, &p.to_bytes(), true)
+                .await
+            {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("show_clock failed: {e}")),
             }
@@ -74,7 +81,11 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             };
 
             if let Err(e) = dev
-                .send_command(0x45, &[0x05, 0, 0, 0, 0, 0, 0, 0, 0, 0], false)
+                .send_command(
+                    CMD_SET_LIGHT_MODE,
+                    &crate::packets::channel_switch(crate::packets::Channel::Design),
+                    false,
+                )
                 .await
             {
                 return err_reply(&format!("show_design failed: {e}"));
@@ -115,106 +126,53 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 Err(e) => err_reply(&format!("stream_animation_8b failed: {e}")),
             }
         }
+        // R67/C1: this arm read kwargs named weather/temp/calendar and wrote
+        // them into bytes 4/5/6 — but the canonical order (Python's builder,
+        // from the APK's C2()) is humidity/weather/date. Asking for weather
+        // therefore turned on HUMIDITY, and `humidity=` was not even accepted.
+        // Both the names and the slots now come from ClockPacket.
         "display.show_clock" => {
-            let clock = kw
-                .and_then(|v| v.get("clock"))
-                .and_then(|v| v.as_i64())
-                .or_else(|| args.first().copied())
-                .unwrap_or(0)
-                .clamp(0, 15) as u8;
-            let twentyfour = kw
-                .and_then(|v| v.get("twentyfour"))
-                .and_then(|v| v.as_bool())
-                .unwrap_or(true);
-            let weather = kw
-                .and_then(|v| v.get("weather"))
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
-            let temp = kw
-                .and_then(|v| v.get("temp"))
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
-            let calendar = kw
-                .and_then(|v| v.get("calendar"))
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
-            let [r, g, b] = kw
-                .and_then(|v| v.get("color"))
-                .and_then(|v| v.as_str())
-                .and_then(parse_hex_color)
-                .unwrap_or([0xFF, 0xFF, 0xFF]);
-            let payload = [
-                0u8, // env = 0 (clock channel)
-                twentyfour as u8,
-                clock,
-                1u8, // clock_active
-                weather as u8,
-                temp as u8,
-                calendar as u8,
-                r,
-                g,
-                b,
-            ];
-            match dev.send_command(0x45, &payload, true).await {
+            let p = clock_packet_from_call(args, raw_args, kw);
+            match dev
+                .send_command(CMD_SET_LIGHT_MODE, &p.to_bytes(), true)
+                .await
+            {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("display.show_clock failed: {e}")),
             }
         }
         "display.set_clock_rich" => {
-            let style = kw
-                .and_then(|v| v.get("style"))
-                .and_then(|v| v.as_i64())
-                .unwrap_or(0)
-                .clamp(0, 15) as u8;
-            let twentyfour = kw
-                .and_then(|v| v.get("twentyfour"))
-                .and_then(|v| v.as_bool())
-                .unwrap_or(true);
-            let humidity = kw
-                .and_then(|v| v.get("humidity"))
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
-            let weather = kw
-                .and_then(|v| v.get("weather"))
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
-            let date = kw
-                .and_then(|v| v.get("date"))
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
-            let [r, g, b] = kw
-                .and_then(|v| v.get("color"))
-                .and_then(|v| v.as_str())
-                .and_then(parse_hex_color)
-                .unwrap_or([0xFF, 0xFF, 0xFF]);
-            let payload = [
-                0x00, // env = 0
-                twentyfour as u8,
-                style,
-                1u8, // clock active
-                humidity as u8,
-                weather as u8,
-                date as u8,
-                r,
-                g,
-                b,
-            ];
-            match dev.send_command(0x45, &payload, true).await {
+            let p = clock_packet_from_call(args, raw_args, kw);
+            match dev
+                .send_command(CMD_SET_LIGHT_MODE, &p.to_bytes(), true)
+                .await
+            {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("display.set_clock_rich failed: {e}")),
             }
         }
         "display.show_design" => {
             match dev
-                .send_command(0x45, &[0x05, 0, 0, 0, 0, 0, 0, 0, 0, 0], false)
+                .send_command(
+                    CMD_SET_LIGHT_MODE,
+                    &crate::packets::channel_switch(crate::packets::Channel::Design),
+                    false,
+                )
                 .await
             {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("display.show_design failed: {e}")),
             }
         }
+        // R67/C1: the lighting-type byte was hardcoded to 0x00 here, so all five
+        // ambient modes sent identical Plain-Colour packets while every RPC
+        // returned success. `power` was also read only from kwargs, never from
+        // positional index 2 — it defaulted to true and happened to be right.
+        // Python's signature is show_light(color, brightness, power, lightning_type)
+        // and DaemonDeviceProxy forwards those positionally, so both are read
+        // positionally-or-by-keyword now.
         "display.show_light" | "light.show_light" | "show_light" => {
-            let [r, g, b] = color_from_arg(raw_args, kw).unwrap_or([0xFF, 0xFF, 0xFF]);
+            let rgb = color_from_arg(raw_args, kw).unwrap_or([0xFF, 0xFF, 0xFF]);
             let brightness = args
                 .get(1)
                 .copied()
@@ -224,22 +182,29 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 })
                 .unwrap_or(100)
                 .clamp(0, 100) as u8;
-            let power = kw
-                .and_then(|v| v.get("power"))
+            let power = raw_args
+                .get(2)
                 .and_then(|v| v.as_bool())
+                .or_else(|| kw.and_then(|v| v.get("power")).and_then(|v| v.as_bool()))
                 .unwrap_or(true);
-            let payload = [
-                0x01u8,
-                r,
-                g,
-                b,
+            let kind = LightingType::from_i64(
+                raw_args
+                    .get(3)
+                    .and_then(|v| v.as_i64())
+                    .or_else(|| {
+                        kw.and_then(|v| v.get("lightning_type"))
+                            .and_then(|v| v.as_i64())
+                    })
+                    .or_else(|| kw.and_then(|v| v.get("mode_type")).and_then(|v| v.as_i64()))
+                    .unwrap_or(0),
+            );
+            let payload = LightPacket {
+                rgb,
                 brightness,
-                0x00,
-                power as u8,
-                0x00,
-                0x00,
-                0x00,
-            ];
+                kind,
+                power,
+            }
+            .to_bytes();
             match dev.send_command(0x45, &payload, true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("display.show_light failed: {e}")),
@@ -252,7 +217,7 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .copied()
                 .or_else(|| kw.and_then(|v| v.get("number")).and_then(|v| v.as_i64()))
                 .unwrap_or(0);
-            let payload = [0x03u8, (number + 1) as u8, 0, 0, 0, 0, 0, 0, 0, 0];
+            let payload = crate::packets::vj_effect(number.clamp(0, 254) as u8);
             match dev.send_command(0x45, &payload, true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("display.show_effects failed: {e}")),
@@ -265,7 +230,7 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .copied()
                 .or_else(|| kw.and_then(|v| v.get("number")).and_then(|v| v.as_i64()))
                 .unwrap_or(0);
-            let payload = [0x04u8, number as u8, 0, 0, 0, 0, 0, 0, 0, 0];
+            let payload = crate::packets::visualization(number.clamp(0, 255) as u8);
             match dev.send_command(0x45, &payload, true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("display.show_visualization failed: {e}")),
@@ -273,7 +238,7 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         }
         // Scoreboard channel: 0x45 [0x06, 0×9] (Python show_scoreboard).
         "display.show_scoreboard" | "show_scoreboard" => {
-            let payload = [0x06u8, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+            let payload = crate::packets::channel_switch(crate::packets::Channel::Scoreboard);
             match dev.send_command(0x45, &payload, true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("display.show_scoreboard failed: {e}")),
@@ -320,6 +285,55 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
         }
         _ => err_reply("unimplemented display command"),
+    }
+}
+
+/// Build a `ClockPacket` from a device_call's positional + keyword arguments.
+///
+/// R67/C1: three arms used to parse these fields independently, with different
+/// kwarg names and different slot assignments. One parser, one packet, one
+/// source of truth for the wire layout — a caller can no longer land `weather`
+/// in the humidity slot because it never chooses a slot.
+///
+/// `clock` and `style` are accepted as aliases for the face index: Python has
+/// `show_clock(clock=...)` and `set_clock_rich(style=...)` for the same field.
+fn clock_packet_from_call(
+    args: &[i64],
+    raw_args: &[Value],
+    kw: Option<&serde_json::Map<String, Value>>,
+) -> ClockPacket {
+    let kwb = |name: &str, default: bool| -> bool {
+        kw.and_then(|v| v.get(name))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(default)
+    };
+    let style = kw
+        .and_then(|v| v.get("clock"))
+        .and_then(|v| v.as_i64())
+        .or_else(|| kw.and_then(|v| v.get("style")).and_then(|v| v.as_i64()))
+        .or_else(|| args.first().copied())
+        .unwrap_or(0)
+        .clamp(0, 15) as u8;
+    let rgb = kw
+        .and_then(|v| v.get("color"))
+        .and_then(|v| v.as_str())
+        .and_then(parse_hex_color)
+        .or_else(|| {
+            raw_args
+                .get(1)
+                .and_then(|v| v.as_str())
+                .and_then(parse_hex_color)
+        })
+        .unwrap_or([0xFF, 0xFF, 0xFF]);
+    ClockPacket {
+        env: 0,
+        twentyfour: kwb("twentyfour", true),
+        style,
+        active: true,
+        humidity: kwb("humidity", false),
+        weather: kwb("weather", false),
+        date: kwb("date", false),
+        rgb,
     }
 }
 

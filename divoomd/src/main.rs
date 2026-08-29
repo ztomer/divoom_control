@@ -9,6 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use divoomd::daemon::Daemon;
+use divoomd::socket_owner::{release_socket, SocketOwnership};
 use tokio::net::UnixListener;
 
 struct ConfigArgs {
@@ -118,6 +119,9 @@ async fn main() {
             std::process::exit(1);
         }
     };
+    // Record which file we bound, so shutdown can tell "our socket" from "a
+    // socket that replaced ours" (R67/C5).
+    let owned = SocketOwnership::of(&socket_path);
     eprintln!("divoomd listening on {socket_path}");
 
     let mut tcp_listener = None;
@@ -208,7 +212,7 @@ async fn main() {
     // scan-frequency throttle → empty scans).
     #[cfg(feature = "ble")]
     daemon.stop_scan_cleanup().await;
-    let _ = std::fs::remove_file(&socket_path);
+    release_socket(&socket_path, owned);
 }
 
 /// Resolve when SIGINT or SIGTERM arrives, so the socket is unlinked on a clean

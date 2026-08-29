@@ -87,6 +87,7 @@ impl Daemon {
 
     pub fn new_with_mac(default_mac: Option<String>) -> Self {
         let (tx, _) = tokio::sync::broadcast::channel(32);
+        let tx_for_hot = tx.clone();
         Daemon {
             queue: CommandQueue::new(Some(EXCLUSIVE_TIMEOUT), Some(ITEM_TIMEOUT)),
             started: Instant::now(),
@@ -104,7 +105,10 @@ impl Daemon {
             tx,
             live_jobs: Arc::new(crate::live_jobs::LiveJobCoordinator::new()),
             self_weak: OnceLock::new(),
-            hot_progress: Arc::new(crate::art::HotProgress::default()),
+            // R67/C6: wired to the event bus, so every phase change is
+            // BROADCAST as well as stored. A store-only cell is what left the
+            // hot-channel button stuck on "Preparing...".
+            hot_progress: Arc::new(crate::art::HotProgress::with_events(tx_for_hot)),
             wall: Mutex::new(None),
             wall_slots: Mutex::new(serde_json::Map::new()),
             shutdown: Arc::new(tokio::sync::Notify::new()),
