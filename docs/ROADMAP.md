@@ -81,6 +81,23 @@ gives MediaRemote the track AND the real cover-art bytes, with no credential
 scraping and no dependency on the server. The daemon now says so: `players`
 returns a `hint` naming the setting and where to find it.
 
+**Left OFF by user decision (2026-08-29).** The Subsonic path therefore stays as
+the working, if weaker, Feishin source. Two things learned while attempting it,
+worth not rediscovering:
+
+* Editing `config.json` does NOT work. Feishin's renderer keeps its own copy of
+  the settings and pushes it back to `config.json` at startup, so an edited
+  value is silently reverted — Feishin even raises a "discrepancies were found
+  between the settings in the renderer and the main process" warning. The
+  setting lives in a compressed LevelDB block in `Local Storage`, which is not
+  safely editable while the app runs. The UI is the only route.
+* Driving that UI from here is blocked: ZoneTilerWM's transparent overlay
+  hit-tests above the Feishin window, so synthetic clicks are refused, and the
+  computer-use allowlist does not recognise ZoneTilerWM as an installable app.
+  Feishin's settings tabs are not keyboard-reachable either (Tab order skips the
+  tablist and goes from the header straight into the content), so there is no
+  keyboard-only path to the toggle.
+
 What shipped as a result:
 
 * `nowplaying/src/discovery.rs` + the helper's `np_players` — enumerate every
