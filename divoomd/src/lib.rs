@@ -55,6 +55,8 @@ pub mod notification_db;
 pub mod notification_routing;
 pub mod now_playing;
 pub mod packets;
+#[cfg(test)]
+mod packets_tests;
 pub mod paths;
 pub mod protocol;
 pub mod response;

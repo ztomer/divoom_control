@@ -386,10 +386,22 @@ async fn run_weather(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
                                                     false,
                                                 )
                                                 .await;
+                                            // R67: was a hand-built
+                                            // [temp as u8, type] pair. The
+                                            // temperature encoding is
+                                            // two's-complement for negatives
+                                            // and now lives in one tested
+                                            // place (packets::WeatherPacket).
+                                            let packet = crate::packets::WeatherPacket {
+                                                temperature_c: temp_c,
+                                                weather: crate::packets::WeatherType::from_i64(
+                                                    weather_type as i64,
+                                                ),
+                                            };
                                             let _ = dev_t
                                                 .send_command(
-                                                    0x5f,
-                                                    &[temp_c as u8, weather_type],
+                                                    crate::packets::CMD_SET_TEMP_WEATHER,
+                                                    &packet.to_bytes(),
                                                     true,
                                                 )
                                                 .await;

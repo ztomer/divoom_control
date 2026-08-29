@@ -126,3 +126,73 @@ mod tests {
         assert_eq!(payload[8], 5, "light is at true position 5");
     }
 }
+
+/// R67: `switch_channel` used to hand-write five 0x45 byte arrays, one of which
+/// was a full clock packet spelled out by hand. These pin the bytes so the
+/// conversion to the shared builders is provably behaviour-preserving.
+#[cfg(test)]
+mod switch_channel_tests {
+    use crate::daemon::{Daemon, DeviceTransport};
+    use crate::protocol::make_request;
+    use crate::socket_server::Handler;
+    use serde_json::json;
+
+    async fn sent(channel: &str) -> (u8, Vec<u8>) {
+        let d = Daemon::new();
+        let conn = d
+            .handle(make_request("connect", Some(json!({"mock": true})), None))
+            .await;
+        assert!(conn["success"].as_bool().unwrap_or(false));
+        let res = d
+            .handle(make_request(
+                "device_call",
+                Some(json!({"method": "display.switch_channel", "args": [channel]})),
+                None,
+            ))
+            .await;
+        assert!(
+            res["success"].as_bool().unwrap_or(false),
+            "{channel}: {res}"
+        );
+        let guard = d.device.lock().await;
+        let transport = guard.as_ref().expect("connected device");
+        let DeviceTransport::Mock(ref mock) = **transport else {
+            panic!("expected mock transport")
+        };
+        let cmds = mock.sent_commands.lock().unwrap();
+        let (id, payload) = &cmds[0];
+        (*id, payload.clone())
+    }
+
+    #[tokio::test]
+    async fn every_channel_keeps_its_exact_bytes() {
+        // The pre-refactor arrays, byte for byte.
+        for (channel, want) in [
+            ("clock", vec![0x00, 1, 0, 1, 0, 0, 0, 0xFF, 0xFF, 0xFF]),
+            ("visualizer", vec![0x04, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+            ("vj", vec![0x03, 1, 0, 0, 0, 0, 0, 0, 0, 0]),
+            ("design", vec![0x05, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+            ("scoreboard", vec![0x06, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+        ] {
+            let (id, payload) = sent(channel).await;
+            assert_eq!(id, 0x45, "{channel} must go out as 0x45");
+            assert_eq!(payload, want, "{channel} payload changed");
+        }
+    }
+
+    #[tokio::test]
+    async fn an_unknown_channel_is_refused_not_guessed() {
+        let d = Daemon::new();
+        d.handle(make_request("connect", Some(json!({"mock": true})), None))
+            .await;
+        let res = d
+            .handle(make_request(
+                "device_call",
+                Some(json!({"method": "display.switch_channel", "args": ["nonsense"]})),
+                None,
+            ))
+            .await;
+        assert!(!res["success"].as_bool().unwrap_or(false));
+        assert!(res["error"].as_str().unwrap_or("").contains("nonsense"));
+    }
+}
