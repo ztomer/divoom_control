@@ -28,6 +28,8 @@ static NSString *const kFrameworkPath =
     @"/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote";
 
 typedef void (*MRGetNowPlayingInfo_t)(dispatch_queue_t, void (^)(CFDictionaryRef));
+typedef void (*MRGetNowPlayingClients_t)(dispatch_queue_t, void (^)(CFArrayRef));
+typedef CFStringRef (*MRClientAccessor_t)(const void *);
 
 /// JSON-encode one string, quotes included. Round-tripping through
 /// NSJSONSerialization handles quotes, backslashes, newlines and non-BMP
@@ -105,6 +107,74 @@ void np_get(void) {
         // The callback is delivered on the main queue, so we must PUMP the
         // runloop rather than block on a semaphore — waiting would deadlock the
         // very queue the reply needs.
+        NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:5.0];
+        while (!done && [deadline timeIntervalSinceNow] > 0) {
+            [[NSRunLoop mainRunLoop] runMode:NSDefaultRunLoopMode
+                                  beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+        }
+        if (!done) emit(@"{\"ok\":false,\"error\":\"timeout\"}");
+    }
+}
+
+/// List every app REGISTERED with Now Playing, as one JSON line.
+///
+/// # Why this is needed (R67, user-reported)
+///
+/// `np_get` returns the ONE session macOS considers current, and macOS keeps
+/// that session on a player after it is PAUSED. So a paused Kaset masks a
+/// playing Feishin, and a caller reading only the session concludes that Feishin
+/// is not playing — when in fact Feishin was never a candidate.
+///
+/// Enumerating the clients separates two very different facts:
+///   * "this app is registered and could own the session", versus
+///   * "this app is what is playing right now".
+///
+/// It also answers a question that otherwise needs the user to quit apps: an app
+/// ABSENT from this list does not publish to Now Playing at all, and can only be
+/// reached by its own mechanism. Measured 2026-08-29: Kaset appears (twice — the
+/// app and its WebKit GPU helper), Feishin does not.
+///
+/// NOTE: `MRMediaRemoteGetNowPlayingApplicationDisplayName` and
+/// `...ApplicationPID` SEGFAULT when called this way on macOS 26.6.2. The two
+/// accessors used here do not. Do not "simplify" this by switching to them.
+void np_players(void) {
+    @autoreleasepool {
+        void *handle = dlopen(kFrameworkPath.UTF8String, RTLD_LAZY);
+        if (!handle) {
+            emit(@"{\"ok\":false,\"error\":\"framework_unavailable\"}");
+            return;
+        }
+        MRGetNowPlayingClients_t getClients =
+            dlsym(handle, "MRMediaRemoteGetNowPlayingClients");
+        MRClientAccessor_t getBundle = dlsym(handle, "MRNowPlayingClientGetBundleIdentifier");
+        MRClientAccessor_t getName = dlsym(handle, "MRNowPlayingClientGetDisplayName");
+        if (!getClients) {
+            emit(@"{\"ok\":false,\"error\":\"symbol_missing\"}");
+            return;
+        }
+
+        __block BOOL done = NO;
+        getClients(dispatch_get_main_queue(), ^(CFArrayRef arr) {
+            NSMutableString *out =
+                [NSMutableString stringWithString:@"{\"ok\":true,\"players\":["];
+            CFIndex n = arr ? CFArrayGetCount(arr) : 0;
+            BOOL first = YES;
+            for (CFIndex i = 0; i < n; i++) {
+                const void *client = CFArrayGetValueAtIndex(arr, i);
+                if (!client) continue;
+                CFStringRef bundle = getBundle ? getBundle(client) : NULL;
+                CFStringRef name = getName ? getName(client) : NULL;
+                if (!first) [out appendString:@","];
+                first = NO;
+                [out appendFormat:@"{\"bundle_id\":%@,\"name\":%@}",
+                     JSONString((__bridge NSString *)bundle),
+                     JSONString((__bridge NSString *)name)];
+            }
+            [out appendString:@"]}"];
+            emit(out);
+            done = YES;
+        });
+
         NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:5.0];
         while (!done && [deadline timeIntervalSinceNow] > 0) {
             [[NSRunLoop mainRunLoop] runMode:NSDefaultRunLoopMode

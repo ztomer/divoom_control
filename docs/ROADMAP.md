@@ -63,64 +63,42 @@ Suite: Rust 63+ passed / Python 3197 passed / 97 skipped (see `CHANGELOG.md` + C
 
 ### Near-term (next round)
 
-**Feishin as a `nowplaying` provider (R67 Phase 2 follow-up).**
+**Feishin — RESOLVED 2026-08-29. Root cause found; no further work needed here.**
 
-R67 moved now-playing and album art to macOS MediaRemote (the `nowplaying`
-crate), which covers every player that publishes to the system Now Playing
-source and needs no Apple Events. Feishin is the one source that does NOT go
-through it: the old Python path read Feishin's cached Navidrome/Subsonic
-credentials out of its Electron LevelDB store and queried the server directly,
-which is a genuinely different mechanism.
+Feishin never appeared in now-playing because **its own `mediaSession` setting
+is OFF** (`~/Library/Application Support/Feishin/config.json` reads
+`"mediaSession": false`). With it off, Feishin does not register as a macOS Now
+Playing client at all, so MediaRemote cannot see it however loudly it plays —
+and the Subsonic fallback could not see it either, because `getNowPlaying` asks
+the SERVER, which depends on scrobble pings.
 
-`divoom_lib/utils/media_source_feishin.py` still exists and still works, but
-nothing calls it any more — the code that did was deleted with the rest of the
-duplicate. So today:
+This was settled by enumerating the Now Playing client registry rather than by
+asking the user to quit apps: the registry listed Kaset twice (the app and its
+WebKit GPU helper) and Feishin not at all.
 
-* if Feishin publishes to Now Playing, MediaRemote already covers it and this
-  is a no-op;
-* if it does not, a Feishin track reaches the device only once this is folded
-  into the crate as a second provider.
+**The fix is one setting in Feishin, not code here.** Turning Media Session on
+gives MediaRemote the track AND the real cover-art bytes, with no credential
+scraping and no dependency on the server. The daemon now says so: `players`
+returns a `hint` naming the setting and where to find it.
 
-**PORTED (2026-08-29), and the probe was inconclusive — read this before
-spending more time on it.** `nowplaying/src/feishin.rs` now holds the
-LevelDB-credential scrape + Subsonic lookup, recovered from the deleted
-`divoomd/src/live_jobs/music.rs` rather than rewritten, and is chained after
-MediaRemote. `divoom_lib/utils/media_source_feishin.py` is deleted.
+What shipped as a result:
 
-What the live probe established, with Feishin playing:
+* `nowplaying/src/discovery.rs` + the helper's `np_players` — enumerate every
+  registered Now Playing client, separating *registered* from *playing*. This
+  is the fix for the reported problem that a PAUSED Kaset masked a playing
+  Feishin: registration and playback are now different questions.
+* The `players` daemon RPC and `DaemonClient.players()`.
+* `nowplaying/src/feishin.rs` (Subsonic path) is kept as a fallback for a user
+  who leaves Media Session off, but it is the WEAKER path and is documented as
+  such. If Media Session becomes reliably on, this module can be deleted.
 
-* the credential scrape **works** — `cargo run -p nowplaying --example
-  feishin_probe` reports credentials found;
-* Navidrome's `getNowPlaying` returns **no entry** anyway. That endpoint reports
-  what the SERVER believes is playing, which depends on the client sending
-  now-playing/scrobble pings; this Feishin/Navidrome pair does not appear to
-  feed it in a way the endpoint reflects promptly;
-* MediaRemote meanwhile reported a **paused** Kaset session, not Feishin.
-
-So neither path saw Feishin, for two different reasons, and it is NOT yet
-established whether Feishin publishes to macOS Now Playing at all.
-
-**To settle it:** quit Kaset (so nothing else owns the Now Playing session),
-play something in Feishin, and run `cargo run -p nowplaying --example probe`.
-- If it reports the Feishin track -> MediaRemote covers Feishin, and
-  `nowplaying/src/feishin.rs` can be deleted as dead weight.
-- If it reports nothing -> Feishin needs a local source. The Subsonic path is
-  the wrong instrument (it asks the server, not the app); the right one is
-  Feishin's own state, the way Kaset was read locally.
-
-**Do not try to shortcut that with the client-enumeration APIs.** MediaRemote
-exports `MRMediaRemoteGetNowPlayingClients`,
-`MRMediaRemoteGetNowPlayingApplicationDisplayName` and
-`...ApplicationPID`, which would identify the session owner without touching
-the user's players. All three **segfault** (exit 139) when called the way the
-info-dictionary API is called, on macOS 26.6.2 — attempted 2026-08-29. The
-shipped helper deliberately calls none of them, and the info dictionary itself
-carries no app identity (verified by dumping every key it returns). The manual
-step above is the cheap, reliable experiment; the API route costs more than it
-saves.
-
-The ported provider is harmless in the meantime: it only runs when MediaRemote
-has nothing actively playing, and returns `None` when the server has no entry.
+**Known limitation, deliberately not guessed around:** when SEVERAL apps are
+registered, the active session cannot be attributed to one of them — the info
+dictionary carries no app identity, and the APIs that would supply it
+(`MRMediaRemoteGetNowPlayingApplicationDisplayName`, `...ApplicationPID`,
+`MRNowPlayingClientGetParentApplicationBundleIdentifier`) either segfault or do
+not exist on macOS 26.6.2. `is_playing` is reported as `null` (unknown) in that
+case rather than blamed on the wrong app.
 
 ### Short-to-medium term (all shipped)
 

@@ -55,6 +55,55 @@ impl FeishinUnavailable {
     }
 }
 
+/// Feishin's own config file.
+fn config_path() -> Option<PathBuf> {
+    let home = std::env::var("HOME").ok()?;
+    Some(PathBuf::from(home).join("Library/Application Support/Feishin/config.json"))
+}
+
+/// Has the user enabled Feishin's Media Session integration?
+///
+/// # Why this matters more than anything else in this file
+///
+/// Feishin publishes to macOS Now Playing only when its `mediaSession` setting
+/// is ON. With it OFF, Feishin never registers as a Now Playing client — it is
+/// invisible to MediaRemote no matter how loudly it is playing, which is
+/// exactly what made it look unreachable (verified 2026-08-29: the client
+/// registry listed Kaset twice and Feishin not at all, and Feishin's config
+/// read `"mediaSession": false`).
+///
+/// Turning it ON is strictly better than everything this module does: MediaRemote
+/// then supplies the track AND the real cover-art bytes, with no credential
+/// scraping and no dependency on the server's scrobble state. So when Feishin is
+/// running with the setting off, that is worth SAYING rather than silently
+/// falling back to the weaker path.
+///
+/// `None` when the config cannot be read — absence of evidence, not evidence of
+/// absence.
+pub fn media_session_enabled() -> Option<bool> {
+    let text = std::fs::read_to_string(config_path()?).ok()?;
+    let cfg: serde_json::Value = serde_json::from_str(&text).ok()?;
+    cfg.get("mediaSession").and_then(|v| v.as_bool())
+}
+
+/// A one-line, ACTIONABLE hint when Feishin is running but cannot be seen
+/// through Now Playing. `None` when there is nothing useful to say.
+pub fn hint() -> Option<String> {
+    if !is_running() {
+        return None;
+    }
+    match media_session_enabled() {
+        Some(false) => Some(
+            "Feishin is running but its Media Session setting is OFF, so macOS \
+             cannot see what it is playing. Enable it in Feishin's settings \
+             (Settings > General > Media Session) to get track info and cover \
+             art automatically."
+                .to_string(),
+        ),
+        _ => None,
+    }
+}
+
 fn store_dir() -> Option<PathBuf> {
     let home = std::env::var("HOME").ok()?;
     Some(PathBuf::from(home).join("Library/Application Support/Feishin/Local Storage/leveldb"))
@@ -308,6 +357,20 @@ mod tests {
             &blob[cred_start..cred_start + cred_end],
             b"u=me&t=abc&s=xyz"
         );
+    }
+
+    #[test]
+    fn the_hint_is_actionable_when_media_session_is_off() {
+        // A diagnostic the user cannot act on is barely better than silence, so
+        // the hint must name the setting AND where to find it.
+        if !is_running() {
+            return; // nothing to hint about
+        }
+        if media_session_enabled() == Some(false) {
+            let h = hint().expect("a hint when the setting is off");
+            assert!(h.contains("Media Session"), "must name the setting: {h}");
+            assert!(h.contains("Settings"), "must say where to find it: {h}");
+        }
     }
 
     #[test]

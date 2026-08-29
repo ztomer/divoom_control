@@ -18,6 +18,48 @@
 
 use serde_json::{json, Value};
 
+/// Handle `players` — who is out there, and who is actually playing.
+///
+/// R67: `now_playing` returns the ONE session macOS considers current, and
+/// macOS keeps that session on a paused player. So a paused Kaset made a
+/// playing Feishin look silent, and nothing in the reply could distinguish
+/// "Feishin is not playing" from "Feishin was never visible". This separates
+/// registration from playback and names the players.
+pub fn cmd_players(_args: &Value) -> Value {
+    #[cfg(target_os = "macos")]
+    {
+        let players: Vec<Value> = nowplaying::players()
+            .into_iter()
+            .map(|p| {
+                json!({
+                    "id": p.id,
+                    "name": p.name,
+                    "via": match p.via {
+                        nowplaying::discovery::Reach::MediaRemote => "media_remote",
+                        nowplaying::discovery::Reach::OwnProvider => "own_provider",
+                    },
+                    // `null` means UNKNOWN, which is a different claim from
+                    // `false`. The session carries no app identity, so with
+                    // several registered players we cannot say which is playing.
+                    "is_playing": p.is_playing,
+                })
+            })
+            .collect();
+        let mut out = json!({"success": true, "players": players});
+        // An actionable hint beats a silent gap: Feishin only reaches Now
+        // Playing when its Media Session setting is on.
+        if let Some(h) = nowplaying::feishin::hint() {
+            out["hint"] = json!(h);
+        }
+        out
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        json!({"success": true, "players": [],
+               "reason": "media players are only discoverable on macOS"})
+    }
+}
+
 /// Handle `now_playing`.
 ///
 /// Args:

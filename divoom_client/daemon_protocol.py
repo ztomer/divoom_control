@@ -355,6 +355,17 @@ class DaemonClient:
         return self.send_command("now_playing",
                                  {"include_artwork": bool(include_artwork)})
 
+    def players(self) -> dict:
+        """Every media player the daemon can see, and which is playing.
+
+        R67: `now_playing` reports the ONE session macOS considers current, and
+        macOS keeps that session on a PAUSED player — so a paused Kaset made a
+        playing Feishin look silent. This separates registration from playback,
+        and carries a `hint` when a player is running but unreachable for a
+        reason the user can fix.
+        """
+        return self.send_command("players")
+
     def live_job_start(self, mac: str, kind: str, params: dict) -> dict:
         return self.send_command("live_job_start", {"mac": mac, "kind": kind, "params": params})
 

@@ -182,19 +182,54 @@ pub fn current_track() -> Result<Option<Track>, String> {
 /// strictly better than failing outright, and the arch mismatch (if any) then
 /// surfaces in the helper's stderr rather than as silence.
 fn helper_command(loader: &Path, dylib: &Path) -> Command {
+    helper_command_for(loader, dylib, "np_get")
+}
+
+/// The same entitled host, for any function the helper exports.
+fn helper_command_for(loader: &Path, dylib: &Path, func: &str) -> Command {
     if Path::new(ARCH_PATH).is_file() {
         let mut cmd = Command::new(ARCH_PATH);
         cmd.arg("-arm64")
             .arg(PERL_PATH)
             .arg(loader)
             .arg(dylib)
-            .arg("np_get");
+            .arg(func);
         cmd
     } else {
         let mut cmd = Command::new(PERL_PATH);
-        cmd.arg(loader).arg(dylib).arg("np_get");
+        cmd.arg(loader).arg(dylib).arg(func);
         cmd
     }
+}
+
+/// Run one helper entry point and return its single JSON line.
+fn run_helper(func: &str) -> Result<String, String> {
+    if let Some(reason) = unavailable() {
+        return Err(reason.reason());
+    }
+    let (dylib, loader) = locate_helper().ok_or("helper not found")?;
+    let (output, stderr) = run_with_timeout(
+        &mut helper_command_for(&loader, &dylib, func),
+        HELPER_TIMEOUT,
+    )?;
+    let stdout = String::from_utf8_lossy(&output);
+    match stdout.lines().find(|l| l.trim_start().starts_with('{')) {
+        Some(l) => Ok(l.to_string()),
+        None if !stderr.is_empty() => Err(format!("helper failed: {stderr}")),
+        None => Err(format!(
+            "helper produced no JSON and no error (got {} bytes)",
+            stdout.len()
+        )),
+    }
+}
+
+/// Every app registered with macOS Now Playing.
+///
+/// Registration is NOT playback — it means the app could own the session. An
+/// app absent from this list does not publish to Now Playing at all and can only
+/// be reached by its own provider.
+pub fn registered_players() -> Result<Vec<crate::discovery::Player>, String> {
+    crate::discovery::parse_players(&run_helper("np_players")?)
 }
 
 /// Run a command with a wall-clock bound, draining both pipes concurrently.

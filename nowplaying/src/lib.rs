@@ -39,6 +39,8 @@
 
 pub mod artwork;
 pub mod availability;
+#[cfg(target_os = "macos")]
+pub mod discovery;
 pub mod track;
 
 #[cfg(target_os = "macos")]
@@ -85,6 +87,41 @@ pub fn current_track() -> Result<Option<Track>, String> {
 #[cfg(not(target_os = "macos"))]
 pub fn current_track() -> Result<Option<Track>, String> {
     Err(Unavailable::NotMacOS.reason())
+}
+
+/// Every media player we can see, and which one is actually PLAYING.
+///
+/// Combines the apps registered with macOS Now Playing (which get metadata and
+/// artwork for free) with the ones reachable only by their own provider. That
+/// distinction matters: an app absent from the Now Playing registry can never
+/// appear in `current_track()`'s MediaRemote answer no matter how loudly it is
+/// playing — measured on macOS 26.6.2, Feishin is exactly such an app.
+#[cfg(target_os = "macos")]
+pub fn players() -> Vec<discovery::Player> {
+    let mut found = media_remote::registered_players().unwrap_or_default();
+
+    // The session tells us which registered player is playing (and whether it is
+    // merely paused). Everything else stays `None` — unknown, not stopped.
+    let session = media_remote::current_track().ok().flatten();
+    discovery::annotate_with_session(&mut found, session.as_ref());
+
+    // Feishin does not register with Now Playing, so it is invisible above.
+    // Report it whenever it is reachable, with its real playing state.
+    if feishin::unavailable().is_none() {
+        let playing = feishin::current_track().is_some();
+        found.push(discovery::Player {
+            id: "Feishin".to_string(),
+            name: "Feishin".to_string(),
+            via: discovery::Reach::OwnProvider,
+            is_playing: Some(playing),
+        });
+    }
+    found
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn players() -> Vec<()> {
+    Vec::new()
 }
 
 /// Why now-playing cannot work here, or `None` if it can.

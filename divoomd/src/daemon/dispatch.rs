@@ -200,6 +200,10 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
         // process asking for Apple Music access.
         "now_playing" => crate::now_playing::cmd_now_playing(&req.args),
 
+        // Registration is not playback: a paused player keeps the session, so
+        // "who is out there" and "who is playing" are separate questions.
+        "players" => crate::now_playing::cmd_players(&req.args),
+
         // --- wall command ---
         "wall_configure" => daemon.cmd_wall_configure(&req).await,
 
