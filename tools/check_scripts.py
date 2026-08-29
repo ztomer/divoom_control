@@ -41,6 +41,21 @@ from tui.lib import err, info, ok  # noqa: E402
 REPO = Path(__file__).resolve().parent.parent
 SCRIPTS = REPO / "scripts"
 
+
+def tracked_scripts() -> list[Path]:
+    """Every shell/Python tool this repo ships.
+
+    scripts/ plus the repo-root shell entrypoints (install.sh, run.sh,
+    build.sh...) — those are the ones users actually invoke, so leaving them
+    ungated would repeat the mistake this checker exists to prevent.
+    """
+    found: list[Path] = []
+    if SCRIPTS.is_dir():
+        found += sorted(SCRIPTS.rglob("*.sh"))
+        found += sorted(SCRIPTS.rglob("*.py"))
+    found += sorted(p for p in REPO.glob("*.sh") if p.is_file())
+    return found
+
 # `python -m foo.bar`, `python3.14 -m foo.bar`, `"$PY" -m foo.bar`
 RUN_MODULE_RE = re.compile(r"-m\s+([a-zA-Z_][\w.]*)")
 
@@ -71,7 +86,7 @@ def check_shell(failures: list[str]) -> None:
     # `command -v` is a shell builtin, not a binary — shutil.which is the
     # portable answer and does not spawn a process.
     have_shellcheck = shutil.which("shellcheck") is not None
-    for sh in sorted(SCRIPTS.rglob("*.sh")):
+    for sh in [p for p in tracked_scripts() if p.suffix == ".sh"]:
         rel = sh.relative_to(REPO)
         if subprocess.run(["bash", "-n", str(sh)], capture_output=True).returncode != 0:
             failures.append(f"{rel}: bash syntax error")
@@ -84,7 +99,7 @@ def check_shell(failures: list[str]) -> None:
 
 
 def check_python(failures: list[str]) -> None:
-    for py in sorted(SCRIPTS.rglob("*.py")):
+    for py in [p for p in tracked_scripts() if p.suffix == ".py"]:
         rel = py.relative_to(REPO)
         try:
             ast.parse(py.read_text(encoding="utf-8"))
@@ -94,7 +109,7 @@ def check_python(failures: list[str]) -> None:
 
 def check_module_refs(failures: list[str]) -> None:
     """A script must not invoke a REPO module that no longer exists."""
-    for path in sorted(list(SCRIPTS.rglob("*.sh")) + list(SCRIPTS.rglob("*.py"))):
+    for path in tracked_scripts():
         rel = path.relative_to(REPO)
         text = path.read_text(encoding="utf-8", errors="replace")
         for line_no, line in enumerate(text.splitlines(), 1):
@@ -111,15 +126,12 @@ def check_module_refs(failures: list[str]) -> None:
 
 
 def main() -> int:
-    if not SCRIPTS.is_dir():
-        ok("[scripts] no scripts/ directory")
-        return 0
     failures: list[str] = []
     check_shell(failures)
     check_python(failures)
     check_module_refs(failures)
 
-    n = len(list(SCRIPTS.rglob("*.sh"))) + len(list(SCRIPTS.rglob("*.py")))
+    n = len(tracked_scripts())
     if failures:
         err(f"[scripts] {len(failures)} problem(s) in {n} scripts")
         for f in failures:

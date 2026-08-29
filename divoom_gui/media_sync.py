@@ -325,70 +325,76 @@ class MediaSyncMixin(GallerySyncMixin):
         dev = self.current_divoom
         if dev and dev.lan:
             params["lan_token"] = getattr(dev.lan, "local_token", 0)
+        # R67/C2: the weather job reads params["location"] and this never sent
+        # it, so the daemon fell back to IP geolocation while the GUI preview
+        # resolved the location its own way. Same machine usually agrees — but
+        # not when the daemon was started separately (the dev bundle, launchd)
+        # and so did not inherit the GUI's DIVOOM_CONTROL_WEATHER_* env. Send
+        # the resolved value rather than letting two resolvers guess apart.
+        try:
+            from divoom_lib.weather_provider import _resolve_location
+            location = _resolve_location(None)
+            if location:
+                params["location"] = location
+        except Exception as e:
+            logger.debug(f"could not resolve weather location for live params: {e}")
         return params
 
-    def toggle_sysmon_sync(self, enable: bool) -> bool:
-        logger.info(f"GUI Action: Toggle sysmon sync to {enable}")
-        self.sysmon_sync_active = enable
+    @staticmethod
+    def _job_reply_ok(reply) -> bool:
+        """Did the daemon actually accept the live-job command?
+
+        R67/C4: every toggle used to `return True` without reading the reply, so
+        a job the daemon refused still showed as enabled. "Switched on" and
+        "working" must not be the same signal.
+        """
+        if isinstance(reply, dict):
+            return bool(reply.get("success", False))
+        return bool(reply)
+
+    def _toggle_live_job(self, enable: bool, kind: str, params: dict | None = None) -> bool:
+        """Start or stop one live job and report what the daemon actually said."""
         client = self._client()
         if client is None:
             return False
         mac = self._active_device_mac()
         if not mac:
             return False
-        if enable:
-            client.live_job_start(mac, "sysmon", self._get_live_params())
-        else:
-            client.live_job_stop(mac, "sysmon")
-        return True
+        try:
+            if enable:
+                reply = client.live_job_start(mac, kind, params or self._get_live_params())
+            else:
+                reply = client.live_job_stop(mac, kind)
+        except Exception as e:
+            logger.error(f"live job {kind} {'start' if enable else 'stop'} failed: {e}")
+            return False
+        ok = self._job_reply_ok(reply)
+        if not ok:
+            logger.warning(f"daemon refused live job {kind}: {reply}")
+        return ok
+
+    def toggle_sysmon_sync(self, enable: bool) -> bool:
+        logger.info(f"GUI Action: Toggle sysmon sync to {enable}")
+        self.sysmon_sync_active = enable
+        return self._toggle_live_job(enable, "sysmon")
 
     def toggle_stocks_sync(self, enable: bool, symbol: str = "") -> bool:
         logger.info(f"GUI Action: Toggle stocks sync to {enable} for symbol {symbol}")
         self.stocks_sync_active = enable
         if symbol:
             self.stocks_symbol = symbol
-        client = self._client()
-        if client is None:
-            return False
-        mac = self._active_device_mac()
-        if not mac:
-            return False
-        if enable:
-            params = self._get_live_params()
-            params["symbol"] = symbol or getattr(self, "stocks_symbol", "")
-            client.live_job_start(mac, "stocks", params)
-        else:
-            client.live_job_stop(mac, "stocks")
-        return True
+        params = self._get_live_params()
+        params["symbol"] = symbol or getattr(self, "stocks_symbol", "")
+        return self._toggle_live_job(enable, "stocks", params)
 
     def toggle_music_sync(self, enable: bool) -> bool:
         logger.info(f"GUI Action: Toggle music sync to {enable}")
         self.music_sync_active = enable
-        client = self._client()
-        if client is None:
-            return False
-        mac = self._active_device_mac()
-        if not mac:
-            return False
-        if enable:
-            client.live_job_start(mac, "music", self._get_live_params())
-        else:
-            client.live_job_stop(mac, "music")
-        return True
+        return self._toggle_live_job(enable, "music")
 
     def toggle_weather_sync(self, enable: bool) -> bool:
         logger.info(f"GUI Action: Toggle weather sync to {enable}")
-        client = self._client()
-        if client is None:
-            return False
-        mac = self._active_device_mac()
-        if not mac:
-            return False
-        if enable:
-            client.live_job_start(mac, "weather", self._get_live_params())
-        else:
-            client.live_job_stop(mac, "weather")
-        return True
+        return self._toggle_live_job(enable, "weather")
 
     # ── 2. AUDIO VISUALIZER API BINDINGS ──
     def toggle_audio_visualizer(self, enable: bool) -> bool:

@@ -25,7 +25,21 @@ sys.path.append(str(Path(__file__).parent.parent))
 sys.path.append(str(Path(__file__).parent.parent / "divoom_gui"))
 
 from divoom_client.daemon_client import daemon_alive, spawn_daemon
-from divoom_client.daemon_protocol import DaemonClient, DEFAULT_SOCKET_PATH
+from divoom_client.daemon_protocol import DaemonClient
+
+# R67: this suite used to spawn its daemon on DEFAULT_SOCKET_PATH
+# (/tmp/divoom.sock) — the very path the user's app owns. So the whole file
+# refused to run whenever Divoom was open, turning eight tests red for an
+# environmental reason and burying real failures in the noise. Twice in one
+# round the "8 failures" turned out to be nothing but a running app.
+#
+# The tests do not need the well-known path; they need A path. Using a
+# dedicated one makes the suite independent of whatever else is running, and
+# keeps the guard below meaningful: a daemon answering HERE really is a
+# leftover from a previous run of this file.
+DEFAULT_SOCKET_PATH = os.environ.get(
+    "DIVOOM_TEST_SOCKET", "/tmp/divoom_e2e_tests.sock"
+)
 
 # Handle for the daemon THIS test file spawned — an int pid (disclaimed
 # posix_spawn path) or a subprocess.Popen (fallback path). Only ever

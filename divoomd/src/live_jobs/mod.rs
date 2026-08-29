@@ -5,10 +5,12 @@ use std::time::Duration;
 use crate::daemon::{Daemon, DeviceTransport};
 
 mod coordinator;
+mod health;
 mod music;
 mod render;
 
 pub use coordinator::LiveJobCoordinator;
+pub use health::{JobHealth, JobState};
 
 use music::{fetch_album_art_url, get_current_playing_track};
 use render::{get_battery_percent, render_stock, render_sysmon};
@@ -62,11 +64,27 @@ async fn run_sysmon(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
     let size = params.get("size").and_then(|v| v.as_u64()).unwrap_or(16) as u32;
     let mut sys = sysinfo::System::new_all();
 
+    // R67/C4: a job with no device used to push nothing, say nothing, and
+    // sleep its full interval. It now reports its state on every change and
+    // re-checks briskly while waiting.
+    let health = daemon_weak
+        .upgrade()
+        .map(|d| health::JobHealth::new("sysmon", &mac, d.tx.clone()));
+    let normal_interval = Duration::from_secs(5);
+
     loop {
         let daemon = match daemon_weak.upgrade() {
             Some(d) => d,
             None => break,
         };
+        let connected = get_device_transport(&daemon, &mac).await.is_some();
+        if let Some(h) = &health {
+            if connected {
+                h.running();
+            } else {
+                h.waiting();
+            }
+        }
 
         sys.refresh_cpu();
         sys.refresh_memory();
@@ -100,7 +118,12 @@ async fn run_sysmon(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
                 .await;
         }
 
-        tokio::time::sleep(Duration::from_secs(5)).await;
+        let nap = if connected {
+            normal_interval
+        } else {
+            health::wait_interval(normal_interval)
+        };
+        tokio::time::sleep(nap).await;
     }
 }
 
@@ -119,11 +142,27 @@ async fn run_stocks(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
         .build()
         .unwrap_or_default();
 
+    // R67/C4: a job with no device used to push nothing, say nothing, and
+    // sleep its full interval. It now reports its state on every change and
+    // re-checks briskly while waiting.
+    let health = daemon_weak
+        .upgrade()
+        .map(|d| health::JobHealth::new("stocks", &mac, d.tx.clone()));
+    let normal_interval = Duration::from_secs(15);
+
     loop {
         let daemon = match daemon_weak.upgrade() {
             Some(d) => d,
             None => break,
         };
+        let connected = get_device_transport(&daemon, &mac).await.is_some();
+        if let Some(h) = &health {
+            if connected {
+                h.running();
+            } else {
+                h.waiting();
+            }
+        }
 
         let api_url = format!(
             "https://query1.finance.yahoo.com/v8/finance/chart/{}",
@@ -184,7 +223,12 @@ async fn run_stocks(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
             }
         }
 
-        tokio::time::sleep(Duration::from_secs(15)).await;
+        let nap = if connected {
+            normal_interval
+        } else {
+            health::wait_interval(normal_interval)
+        };
+        tokio::time::sleep(nap).await;
     }
 }
 
@@ -196,11 +240,27 @@ async fn run_weather(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
         .to_string();
     let client = reqwest::Client::new();
 
+    // R67/C4: a job with no device used to push nothing, say nothing, and
+    // sleep its full interval. It now reports its state on every change and
+    // re-checks briskly while waiting.
+    let health = daemon_weak
+        .upgrade()
+        .map(|d| health::JobHealth::new("weather", &mac, d.tx.clone()));
+    let normal_interval = Duration::from_secs(15 * 60);
+
     loop {
         let daemon = match daemon_weak.upgrade() {
             Some(d) => d,
             None => break,
         };
+        let connected = get_device_transport(&daemon, &mac).await.is_some();
+        if let Some(h) = &health {
+            if connected {
+                h.running();
+            } else {
+                h.waiting();
+            }
+        }
 
         let mut url = "https://wttr.in/".to_string();
         if !location.is_empty() {
@@ -280,7 +340,12 @@ async fn run_weather(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
             }
         }
 
-        tokio::time::sleep(Duration::from_secs(15 * 60)).await;
+        let nap = if connected {
+            normal_interval
+        } else {
+            health::wait_interval(normal_interval)
+        };
+        tokio::time::sleep(nap).await;
     }
 }
 
@@ -291,11 +356,27 @@ async fn run_music(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
     let mut last_track = String::new();
     let mut last_artist = String::new();
 
+    // R67/C4: a job with no device used to push nothing, say nothing, and
+    // sleep its full interval. It now reports its state on every change and
+    // re-checks briskly while waiting.
+    let health = daemon_weak
+        .upgrade()
+        .map(|d| health::JobHealth::new("music", &mac, d.tx.clone()));
+    let normal_interval = Duration::from_millis(1500);
+
     loop {
         let daemon = match daemon_weak.upgrade() {
             Some(d) => d,
             None => break,
         };
+        let connected = get_device_transport(&daemon, &mac).await.is_some();
+        if let Some(h) = &health {
+            if connected {
+                h.running();
+            } else {
+                h.waiting();
+            }
+        }
 
         if let Some(track_info) = get_current_playing_track(&client).await {
             if track_info.track != last_track || track_info.artist != last_artist {
@@ -355,6 +436,11 @@ async fn run_music(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
             }
         }
 
-        tokio::time::sleep(Duration::from_millis(1500)).await;
+        let nap = if connected {
+            normal_interval
+        } else {
+            health::wait_interval(normal_interval)
+        };
+        tokio::time::sleep(nap).await;
     }
 }
