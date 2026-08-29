@@ -9,8 +9,7 @@
 # devices may be out of range).
 set -uo pipefail
 source "$HOME/.cargo/env" 2>/dev/null || true
-cd "$(cd "$(dirname "$0")/../.." && pwd)"   # repo root
-REPO="$(pwd)"
+cd "$(cd "$(dirname "$0")/../.." && pwd)" || exit 1   # repo root
 RC=0
 sect() { echo; echo "============== $* =============="; }
 

@@ -71,3 +71,24 @@ def test_supported_platforms_pass_the_gate(os_name: str, arch: str) -> None:
     r = _run(os_name, arch)
     assert r.returncode == 0, f"{os_name}/{arch} should pass, stderr={r.stderr}"
     assert "gate ok" in r.stdout
+
+
+@pytest.mark.parametrize("os_name", ["FreeBSD", "OpenBSD", "SunOS", "Windows_NT"])
+def test_unsupported_os_is_rejected(os_name: str) -> None:
+    """An unsupported OS must HARD-FAIL, not fall through to a generic build.
+
+    R67: the arch `*)` branch was hardened in R66 and the OS `*)` branch was
+    not — it printed "Unsupported OS: X. Building a generic .so with -shared."
+    and kept going, shipping a binary for a platform nobody has compiled, run,
+    or tested. That is the same silent-untested-binary failure the arch gate
+    exists to prevent, so it gets the same treatment and the same teeth.
+
+    Teeth: restore the warn-and-continue branch in build_libdivoom.sh and this
+    goes red (it was written against the broken script first, and did).
+    """
+    r = _run(os_name, "x86_64")
+    assert r.returncode == 1, (
+        f"{os_name} should be rejected, got exit {r.returncode}: {r.stdout}{r.stderr}")
+    assert "Unsupported OS" in r.stderr
+    assert "Building a generic" not in r.stderr, (
+        "the gate must refuse, not announce a fallback build")

@@ -40,6 +40,7 @@ case "${OS}" in
     CC="${CC:-clang}"
     OUT="${LIB_DIR}/libdivoom_compact.dylib"
     CFLAGS+=(-dynamiclib)
+    # shellcheck disable=SC2054  # the commas are inside single -Wl, arguments
     LD_FLAGS=(
       -dynamiclib
       -Wl,-install_name,@rpath/libdivoom_compact.dylib
@@ -53,11 +54,12 @@ case "${OS}" in
     LD_FLAGS=(-shared -lm)
     ;;
   *)
-    echo "Unsupported OS: ${OS}. Building a generic .so with -shared." >&2
-    CC="${CC:-cc}"
-    OUT="${LIB_DIR}/libdivoom_compact.so"
-    CFLAGS+=(-shared)
-    LD_FLAGS=(-shared)
+    # R67: this used to warn and build a generic .so anyway — the same
+    # silently-ships-an-untested-binary shape the ARCH gate below already
+    # rejects. R66 hard-failed the arch case and left this one; supported
+    # OSes are macOS and Linux, and anything else is a hard failure.
+    echo "✗ Unsupported OS: ${OS}. Supported: Darwin (Apple silicon), Linux." >&2
+    exit 1
     ;;
 esac
 
