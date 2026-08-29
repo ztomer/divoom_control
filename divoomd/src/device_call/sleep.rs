@@ -10,32 +10,23 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
 
     match method {
         "sleep.show_sleep" | "show_sleep" => {
-            let sleeptime = kw
-                .and_then(|v| v.get("sleeptime"))
-                .and_then(|v| v.as_i64())
-                .or_else(|| args.first().copied())
-                .unwrap_or(60) as u8;
-            let sleepmode = kw
-                .and_then(|v| v.get("sleepmode"))
-                .and_then(|v| v.as_i64())
-                .or_else(|| args.get(1).copied())
-                .unwrap_or(0) as u8;
-            let on = kw
-                .and_then(|v| v.get("on"))
-                .and_then(|v| v.as_i64())
-                .or_else(|| args.get(2).copied())
-                .unwrap_or(1) as u8;
-            let frequency = kw
-                .and_then(|v| v.get("frequency"))
-                .and_then(|v| v.as_i64())
-                .or_else(|| args.get(3).copied())
-                .unwrap_or(0) as u16;
-            let volume = kw
-                .and_then(|v| v.get("volume"))
-                .and_then(|v| v.as_i64())
-                .or_else(|| args.get(4).copied())
-                .unwrap_or(16) as u8;
-            let color_val = kw.and_then(|v| v.get("color")).or_else(|| raw_args.get(5));
+            // R67/C7: these indices were read from the COMPACTED numeric list
+            // and did not match the Python signature in either order or
+            // position. `show_sleep` is
+            //   (value, sleeptime, sleepmode, volume, color, brightness,
+            //    frequency, on)
+            //      0        1          2         3      4        5
+            //                                                    6      7
+            // so `color` is at 4 (it was read from 5) and every numeric was off
+            // as soon as the caller passed `value` or `color` positionally.
+            // Keyword callers were always fine, which is why this survived.
+            use crate::device_call::pos_i64;
+            let sleeptime = pos_i64(raw_args, 1, kw, "sleeptime", 60) as u8;
+            let sleepmode = pos_i64(raw_args, 2, kw, "sleepmode", 0) as u8;
+            let volume = pos_i64(raw_args, 3, kw, "volume", 16) as u8;
+            let frequency = pos_i64(raw_args, 6, kw, "frequency", 0) as u16;
+            let on = pos_i64(raw_args, 7, kw, "on", 1) as u8;
+            let color_val = kw.and_then(|v| v.get("color")).or_else(|| raw_args.get(4));
             let [r, g, b] = if let Some(cv) = color_val {
                 if let Some(arr) = cv.as_array() {
                     let ns: Vec<u8> = arr
@@ -55,11 +46,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             } else {
                 [255, 255, 255]
             };
-            let brightness = kw
-                .and_then(|v| v.get("brightness"))
-                .and_then(|v| v.as_i64())
-                .or_else(|| args.get(6).copied())
-                .unwrap_or(100) as u8;
+            let brightness = pos_i64(raw_args, 5, kw, "brightness", 100) as u8;
 
             let mut payload = Vec::with_capacity(10);
             payload.push(sleeptime);
@@ -166,16 +153,13 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
         }
         "sleep.set_sleep_scene" | "set_sleep_scene" => {
-            let mode = args
-                .first()
-                .copied()
-                .or_else(|| kw.and_then(|v| v.get("mode")).and_then(|v| v.as_i64()))
-                .unwrap_or(0) as u8;
-            let on = args
-                .get(1)
-                .copied()
-                .or_else(|| kw.and_then(|v| v.get("on")).and_then(|v| v.as_i64()))
-                .unwrap_or(0) as u8;
+            // R67/C7: fm_freq and color are LISTS, which the numeric list
+            // drops — so `volume` (true position 3) was read as the 4th NUMBER
+            // (which is `light`), and `light` fell off the end entirely.
+            // Signature: (mode, on, fm_freq, volume, color, light).
+            use crate::device_call::pos_i64;
+            let mode = pos_i64(raw_args, 0, kw, "mode", 0) as u8;
+            let on = pos_i64(raw_args, 1, kw, "on", 0) as u8;
             let fm_freq: Vec<u8> = raw_args
                 .get(2)
                 .and_then(|v| v.as_array())
@@ -191,11 +175,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             } else {
                 vec![0, 0]
             };
-            let volume = args
-                .get(3)
-                .copied()
-                .or_else(|| kw.and_then(|v| v.get("volume")).and_then(|v| v.as_i64()))
-                .unwrap_or(0) as u8;
+            let volume = pos_i64(raw_args, 3, kw, "volume", 0) as u8;
             let color_val = raw_args.get(4).or_else(|| kw.and_then(|v| v.get("color")));
             let [r, g, b] = if let Some(cv) = color_val {
                 if let Some(arr) = cv.as_array() {
@@ -216,11 +196,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             } else {
                 [255, 255, 255]
             };
-            let light = args
-                .get(5)
-                .copied()
-                .or_else(|| kw.and_then(|v| v.get("light")).and_then(|v| v.as_i64()))
-                .unwrap_or(0) as u8;
+            let light = pos_i64(raw_args, 5, kw, "light", 0) as u8;
 
             let mut payload = Vec::with_capacity(9);
             payload.push(mode);

@@ -14,6 +14,8 @@ pub mod art_hot;
 pub mod autoprobe;
 #[cfg(feature = "ble")]
 pub mod ble;
+#[cfg(test)]
+mod c7_positional_tests;
 #[cfg(feature = "ble")]
 pub mod central;
 pub mod cloud;

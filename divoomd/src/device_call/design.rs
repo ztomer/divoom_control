@@ -16,11 +16,9 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .and_then(|v| v.as_bool())
                 .or_else(|| raw_args.first().and_then(|v| v.as_bool()))
                 .unwrap_or(false);
-            let mode = args
-                .get(1)
-                .copied()
-                .or_else(|| kw.and_then(|v| v.get("mode")).and_then(|v| v.as_i64()))
-                .unwrap_or(0) as u8;
+            // R67/C7: `dynamic` is a bool at position 0, which the numeric list
+            // drops — so args[1] was the SECOND number, not `mode`.
+            let mode = crate::device_call::pos_i64(raw_args, 1, kw, "mode", 0) as u8;
             let stream = kw
                 .and_then(|v| v.get("stream"))
                 .and_then(|v| v.as_bool())

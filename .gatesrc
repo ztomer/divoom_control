@@ -29,4 +29,4 @@ GOH_LINE_EXCLUDE='docs/divoom_docs/'
 # (divoomd crate, floor pinned at 29% — measured 2026-08-25, no floor existed
 # before).
 export GOH="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
-GOH_CI_STEPS='./scripts/house_emoji_gate.sh:python3 tools/check_file_size.py:python3 tools/check_no_allow.py:python3 tools/check_scripts.py:python3 tools/check_version_consistency.py:cargo fmt --all -- --check:cargo clippy --all-targets --all-features -- -D warnings:cargo build -p divoomd --no-default-features --locked:cargo test -p divoomd --no-default-features --locked:cargo test --locked'
+GOH_CI_STEPS='./scripts/house_emoji_gate.sh:python3 tools/check_file_size.py:python3 tools/check_no_allow.py:python3 tools/check_scripts.py:python3 tools/check_version_consistency.py:python3 tools/check_positional_args.py:cargo fmt --all -- --check:cargo clippy --all-targets --all-features -- -D warnings:cargo build -p divoomd --no-default-features --locked:cargo test -p divoomd --no-default-features --locked:cargo test --locked'

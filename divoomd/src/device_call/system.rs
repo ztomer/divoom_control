@@ -120,11 +120,10 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         }
         // Control.set_hot (0x26): enable/disable hot mode.
         "control.set_hot" | "set_hot" => {
-            let enabled = args
-                .first()
-                .map(|v| *v != 0)
-                .or_else(|| kw.and_then(|v| v.get("enabled")).and_then(|v| v.as_bool()))
-                .unwrap_or(false);
+            // R67/C7: `args` drops non-numerics, and a JSON `true` is not an
+            // i64 — so a positional set_hot(True) produced an EMPTY list, fell
+            // through to a missing kwarg, and sent FALSE. Read the true index.
+            let enabled = crate::device_call::pos_bool(raw_args, 0, kw, "enabled", false);
             match dev.send_command(0x26, &[enabled as u8], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("set_hot failed: {e}")),
@@ -233,14 +232,11 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .first()
                 .or_else(|| kw.and_then(|v| v.get("display_modes")))
                 .and_then(|v| v.as_array());
-            let time_minutes = args
-                .get(1)
-                .copied()
-                .or_else(|| {
-                    kw.and_then(|v| v.get("time_minutes"))
-                        .and_then(|v| v.as_i64())
-                })
-                .unwrap_or(0) as u16;
+            // R67/C7: `display_modes` is a LIST, which the numeric list drops,
+            // so args[1] was past the end and a positional time_minutes was
+            // always lost. It sits at true position 1.
+            let time_minutes =
+                crate::device_call::pos_i64(raw_args, 1, kw, "time_minutes", 0) as u16;
 
             let mut payload = Vec::new();
             if let Some(arr) = display_modes {
