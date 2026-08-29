@@ -16,6 +16,34 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-08-29 (R67 Phase 2) — the album-art library. DONE and verified.**
+  Suite: **Python 2926 / 0 failed / 94 skipped; Rust 196 / 0.** Gates green.
+
+  Now-playing is a standalone `nowplaying` crate on macOS MediaRemote. Both old
+  implementations are DELETED (`divoomd/src/live_jobs/music.rs` and 164 lines of
+  `divoom_lib/utils/media_source.py`), along with the iTunes-Search URL guessing
+  that could never resolve YouTube-Music content.
+
+  **Read this before touching it:** a direct `dlopen` of MediaRemote from an
+  unentitled process succeeds and returns a NULL dictionary — it fails looking
+  exactly like "nothing is playing". `/usr/bin/perl` carries the entitlement, so
+  the query runs inside perl via our dylib. Two traps found the hard way:
+  MediaRemote declares `image/jpeg` over TIFF bytes (sniff, never trust), and
+  perl's architecture is INHERITED from the launching process (arm64 from a
+  shell, x86_64 from the daemon) so the host is pinned with `arch -arm64`.
+
+  **The app no longer requests Automation access to music players at all** —
+  MediaRemote needs no Apple Events, so C3's cause is gone rather than patched.
+
+  **Method note:** all three helper bugs (pipe deadlock on 1.6MB of base64,
+  discarded stderr, arch mismatch) were found by RUNNING it against the live
+  system, not by review. The deadlock in particular passes with any small
+  fixture and hangs only on real artwork.
+
+  **Open:** the C7 audit (49 unaudited `args.get(N)` reads); C2's remaining half
+  (weather + sysmon are still implemented twice); Feishin is still a Python-only
+  provider and not yet folded into the crate; Phases 3 (weather) and 4 (wall).
+
 - **2026-08-29 (R67) — six symptoms, seven classes. Phase 0 + 1 done, verified
   on hardware.** Full analysis + plan: `docs/PLANNING_ROUND67.md`.
   Suite: **Python 2943 / 0 failed / 94 skipped; Rust 157 / 0.** All gates green.

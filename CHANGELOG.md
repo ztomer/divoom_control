@@ -4,6 +4,55 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## Unreleased — R67 Phase 2: the album-art library (2026-08-29)
+
+Now-playing and cover art move to a standalone `nowplaying` crate built on macOS
+MediaRemote. This closes C2 for music and dissolves C3 entirely.
+
+**What the probe established, before any design.** On macOS 26.6.2 a direct
+`dlopen` of MediaRemote from an ordinary process succeeds, `dlsym` succeeds, and
+the callback returns a NULL dictionary — Apple entitlement-gated the read API in
+15.4, and it fails in the shape of "nothing is playing". `/usr/bin/perl` carries
+that entitlement and a dylib loaded into it inherits it, so the query runs
+through a ~60-line helper of ours (`nowplaying/native/np_helper.m`) — the
+approach `mediaremote-adapter` (BSD-3) established, implemented independently so
+nothing third-party is vendored.
+
+**What changed.** Deleted `divoomd/src/live_jobs/music.rs` and 164 lines of the
+same logic in `divoom_lib/utils/media_source.py` — both drove AppleScript at
+each player and then guessed a cover-art URL from the iTunes Search API, a guess
+that cannot resolve non-album content and needs a network round trip in order to
+fail. Added the crate, the `now_playing` daemon RPC, and `DaemonClient.now_playing`.
+The GUI is now a client and renders the same artwork bytes the device is pushed,
+as a `data:` URL — the web UI runs from a `file://` origin where WKWebView blocks
+remote subresources, which is why the old remote `artwork_url` showed broken.
+
+**The app no longer asks for Automation access to music players.** MediaRemote
+needs no Apple Events, so nothing queries a player over AppleScript and the
+priming list is empty. The drift gate now discovers player queries across the
+tree rather than reading a hardcoded file list, and fails in both directions.
+
+**Two properties of the source, discovered rather than assumed:** the declared
+MIME lies (`image/jpeg` over TIFF bytes — everything sniffs magic numbers, and
+`divoomd`'s `image` crate needed the `tiff` feature it did not have), and perl's
+architecture is INHERITED (the same command ran arm64 from a shell and x86_64
+from the daemon, where perl refused our arm64 dylib — the host is now pinned
+with `arch -arm64` rather than shipping a policy-violating fat dylib).
+
+**Three bugs found during verification rather than review:** a pipe deadlock
+(stdout read only after exit, against ~1.6MB of base64 through a 64KB buffer —
+passes with any small fixture, hangs on every real track); `stderr` discarded,
+which made the next one undiagnosable; and the architecture mismatch it hid.
+Separately, live-job health needed a resync path — events fire only on
+transitions, so a late subscriber saw nothing until `live_job_list` learned to
+report current state.
+
+Verified on hardware: Kaset -> MediaRemote -> daemon -> Pixoo-1, 363,390 bytes
+of TIFF cover art, streamed to the panel; and the same through the installed
+/Applications bundle.
+
+Python 2926 / 94 skipped. Rust 196 / 0.
+
 ## Unreleased — R67: live-system defect round (2026-08-29)
 
 Six user-reported symptoms, traced to **seven classes** rather than seven

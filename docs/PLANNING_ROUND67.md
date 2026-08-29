@@ -421,7 +421,7 @@ A defect that reached the user means the harness has a hole. Close it first.
 9. **C3** — derive the Automation priming list from the consumer registry; add
    Kaset; surface denied grants honestly in the UI.
 
-### Phase 2 — the standalone music / album-art library
+### Phase 2 — the standalone music / album-art library — **DONE**
 
 The user's suggestion, and the right call. `~/Projects/ZoneTilerWM` already
 solved this properly in `Sources/ZTMediaRemote/`: it wraps the private
@@ -543,9 +543,8 @@ Real app, real screenshots at real scale, light and dark, per the
 
 ## 7. Outcome
 
-**Phase 0 and Phase 1 are complete and verified. Phase 5 (install.sh) shipped
-early, on request.** Phases 2 (album-art library), 3 (weather), and 4 (virtual
-wall) are not started.
+**Phases 0, 1, 2 and 5 are complete and verified.** Phases 3 (weather) and 4
+(virtual wall) are not started.
 
 Suite: **Python 2943 / 0 failed / 94 skipped** (from 2920/94 at the round's
 start, +23). **Rust 157 / 0** (from 119 in R66, +38). All gates green: emoji,
@@ -583,12 +582,47 @@ real install exposed them:
 2. **The version stamp** (`da051e6`) — v0.25.0 and v0.26.0 both shipped bundles
    reporting 0.24.3, because bumping `pyproject.toml` was a manual step.
 
+### Phase 2 outcome — the `nowplaying` crate
+
+**The probe decided the design.** On macOS 26.6.2 a direct `dlopen` of
+MediaRemote from an ordinary process **succeeds**, `dlsym` **succeeds**, and the
+callback hands back a NULL dictionary — Apple entitlement-gated the read API in
+15.4, and it fails in the shape of "nothing is playing". Anything built on the
+obvious approach would have looked idle forever. `/usr/bin/perl` carries the
+entitlement and a dylib loaded into it inherits it, which is why
+`nowplaying/native/np_helper.m` is a dylib driven by a perl loader rather than a
+normal binary.
+
+Two properties of the source, both discovered rather than assumed:
+
+* **The declared MIME lies** — `image/jpeg` over bytes beginning `4d 4d 00 2a`
+  (TIFF). Everything sniffs magic numbers. `divoomd`'s `image` crate also lacked
+  the `tiff` feature, so every real cover would have failed to decode.
+* **perl's architecture is inherited, not fixed** — the same command ran arm64
+  from a shell and **x86_64** from the daemon, where perl then refused our arm64
+  dylib. The helper host is now pinned with `arch -arm64`; a fat dylib would
+  violate the Apple-silicon-only policy.
+
+**C3 dissolved rather than being patched.** MediaRemote needs no Apple Events,
+so nothing queries a player over AppleScript, `apple_event_players()` is empty,
+and the app no longer asks for Automation access to music players at all.
+
+**Three bugs found during verification, not review:** a pipe deadlock (stdout
+read only after exit, against ~1.6 MB of base64 through a 64 KB buffer — passes
+with any small fixture, hangs on every real track); `stderr` discarded, which
+made the next one undiagnosable; and the architecture mismatch it was hiding.
+
 ### Open, and deliberately not rushed
 
 - **C7 audit** — 49 other `args.get(N)` / `args.first()` reads are unaudited;
   `text.rs` is known-latent. One verified handler at a time, not a blind sweep.
-- **C2** — the twelve duplicate implementations remain. This is Phase 2's job,
-  and the album-art library is what makes it worth doing rather than a patch.
+- **C2, the remaining half** — weather and sysmon are still implemented twice
+  (Python for the preview, Rust for the device). Music is done; the same
+  treatment is Phase 3's job for weather.
+- **Feishin** is still a Python-only provider (`media_source_feishin.py`) and is
+  not yet a `nowplaying` provider. It needs no Apple Events, so it is not
+  urgent — but until it is folded in, a Feishin track only reaches the device if
+  Feishin publishes to Now Playing.
 - **Phases 3 and 4** — weather provider unification, virtual wall.
 - The GUI's ambient preview tiles are still static CSS that do not reflect
   device state (C2's dishonest-preview half).
