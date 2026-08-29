@@ -16,6 +16,52 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-08-29 (R67) — six symptoms, seven classes. Phase 0 + 1 done, verified
+  on hardware.** Full analysis + plan: `docs/PLANNING_ROUND67.md`.
+  Suite: **Python 2943 / 0 failed / 94 skipped; Rust 157 / 0.** All gates green.
+
+  The round started by probing the LIVE system rather than the code, and that
+  is what cracked it: **two divoomd processes were running**, one a 34-hour
+  orphan with no listener still holding the BLE central. `scan` and `connect`
+  both worked fine (2.1s). "Connection is unreliable" was never a radio
+  problem — it was process ownership.
+
+  **The mechanism, confirmed by reproducing it:** the daemon unlinked its socket
+  on shutdown without checking it still owned it. Killing the orphan DELETED the
+  live daemon's socket, which left that one running and unreachable, so the GUI
+  spawned another. Self-sustaining. Fixed by recording `(dev, inode)` at bind
+  (`divoomd/src/socket_owner.rs`).
+
+  Seven classes; C1/C3/C4/C5/C6/C7 fixed, C2 deferred to Phase 2:
+  C1 one wire packet with four disagreeing builders (weather overlay landed in
+  the humidity byte; ambient type byte hardcoded); C2 every live-widget data
+  source implemented twice, Python for the preview and Rust for the device;
+  C3 the TCC priming list missing Kaset; C4 live jobs silently no-op with a
+  15-minute sleep; C5 above; C6 `HotProgress` stored without broadcasting, so
+  the hot button hung on "Preparing…"; C7 positional args read from a COMPACTED
+  list, so ambient brightness sent the mode number.
+
+  **Method note worth keeping:** C7 and the version-stamp bug were both found
+  during VERIFICATION, not review. `device_call` returns success even when the
+  payload is wrong, so any harness asserting on RPC results is structurally
+  blind to this whole class. `scripts/hw_e2e.py` asserts on the
+  `DIVOOMD_BLE_DEBUG` wire trace instead, and that is what caught brightness
+  tracking the mode. C7 also CORRECTS an earlier conclusion in this round that
+  arity problems were "not a class" — that was right about dropped parameters
+  and blind to misaligned ones.
+
+  **New tooling:** `install.sh` (self-contained bundle to `/Applications`;
+  the app now runs entirely from there), `scripts/hw_e2e.py`,
+  `scripts/daemon_ping.py`, `tools/check_scripts.py`,
+  `tools/check_version_consistency.py`. `make_dev_daemon_app.sh` had been dead
+  since R66 and now verifies the bundle it builds.
+
+  **Open threads:** the C7 audit (49 unaudited `args.get(N)` reads; `text.rs`
+  known-latent), C2 / Phase 2 (the standalone album-art library — ZoneTilerWM's
+  `Sources/ZTMediaRemote/` is the reference: MediaRemote via mediaremote-adapter,
+  real artwork bytes, player-agnostic), Phase 3 weather unification, Phase 4
+  virtual wall (untested, expected C1 fallout on the wall path).
+
 - **2026-08-23 (later still) — v0.24.3: e2e injectors that silently did
   nothing.** Chased the two browser tests that reddened the v0.24.2 release.
   **Could not reproduce the flake** — not under a saturated 16-core machine,

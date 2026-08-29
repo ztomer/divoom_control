@@ -543,5 +543,52 @@ Real app, real screenshots at real scale, light and dark, per the
 
 ## 7. Outcome
 
-_To be filled in at the end of the round: suite counts, what shipped, what was
-deferred and why._
+**Phase 0 and Phase 1 are complete and verified. Phase 5 (install.sh) shipped
+early, on request.** Phases 2 (album-art library), 3 (weather), and 4 (virtual
+wall) are not started.
+
+Suite: **Python 2943 / 0 failed / 94 skipped** (from 2920/94 at the round's
+start, +23). **Rust 157 / 0** (from 119 in R66, +38). All gates green: emoji,
+file size, no_allow, scripts, version, fmt, clippy `-D warnings`.
+
+### Shipped
+
+| Commit | What |
+| --- | --- |
+| `5e71a6a` | Phase 0 — harness repair |
+| `126eb25` | C1, C3, C5, C6 |
+| `8e01796` | C7 |
+| `0eea608` | C4, `install.sh`, e2e socket isolation |
+| `da051e6` | version-consistency gate |
+
+### Verified on hardware (Pixoo-1, `scripts/hw_e2e.py` + `DIVOOMD_BLE_DEBUG`)
+
+- **ambient** — five modes produce `0100ffcc50{00,01,02,03,04}01000000`: five
+  distinct payloads with brightness stable at `0x50`.
+- **clock** — humidity / weather / date each set only their own byte (4 / 5 / 6).
+- **hot channel** — `starting → fetching_manifest → downloading 0..20/20 → done`,
+  terminal event delivered, so the button can leave "Preparing…".
+- **reconnect** — 5/5 cycles, 2.0–5.6s, exactly one daemon throughout.
+- **installed app** — runs entirely from `/Applications`, both Rust binaries
+  resolved from inside the bundle, one daemon, device connects, ambient applies.
+
+### Two findings that arrived during verification
+
+Both were invisible to the code and to the suite, and only the wire trace or a
+real install exposed them:
+
+1. **C7** (`8e01796`) — ambient *brightness* was transmitting the mode number,
+   because positional arguments were read from a compacted numeric list. This
+   also **corrects** the "arity drops are not a class" conclusion in §3.
+2. **The version stamp** (`da051e6`) — v0.25.0 and v0.26.0 both shipped bundles
+   reporting 0.24.3, because bumping `pyproject.toml` was a manual step.
+
+### Open, and deliberately not rushed
+
+- **C7 audit** — 49 other `args.get(N)` / `args.first()` reads are unaudited;
+  `text.rs` is known-latent. One verified handler at a time, not a blind sweep.
+- **C2** — the twelve duplicate implementations remain. This is Phase 2's job,
+  and the album-art library is what makes it worth doing rather than a patch.
+- **Phases 3 and 4** — weather provider unification, virtual wall.
+- The GUI's ambient preview tiles are still static CSS that do not reflect
+  device state (C2's dishonest-preview half).

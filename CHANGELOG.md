@@ -4,6 +4,59 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## Unreleased — R67: live-system defect round (2026-08-29)
+
+Six user-reported symptoms, traced to **seven classes** rather than seven
+patches. Full analysis in `docs/PLANNING_ROUND67.md`.
+
+**Harness first** (house rule #1 — a defect that reached a user means the
+harness has a hole):
+- `scripts/make_dev_daemon_app.sh` had been DEAD since R66: it built an .app
+  that exec'd `python -m divoom_lib.cli daemon`, a subcommand archived twelve
+  days earlier that only prints an error. It now execs `divoomd` and `--verify`
+  launches the bundle it just built, failing unless it answers `ping`.
+- `scripts/hw_e2e.py` — live-hardware scenarios asserting on the
+  `DIVOOMD_BLE_DEBUG` wire trace, not on RPC success. `device_call` returns
+  success even when the payload carries the wrong byte, so a success-only
+  harness is blind to exactly this round's defects. It found two of them.
+- `scripts/daemon_ping.py`, `tools/check_scripts.py` (the gate `scripts/` never
+  had), `tools/check_version_consistency.py`.
+
+**Fixed as classes:**
+- **C1** One wire packet, many builders. The 0x45 family had four disagreeing
+  builders. `display.show_clock` put weather/temp/calendar in bytes 4/5/6 where
+  the canonical order is humidity/weather/date — asking for weather turned on
+  HUMIDITY. `display.show_light` hardcoded the lighting-type byte, so all five
+  ambient modes sent identical Plain packets. `device.show_clock` hardcoded five
+  fields including the colour. Now typed `ClockPacket`/`LightPacket` with named
+  fields and one serializer each.
+- **C3** The Automation priming list drifted from the consumer list: Kaset was
+  addressed in both languages and primed in neither, so its Apple Event was
+  denied in the headless daemon while the foreground GUI worked. One registry,
+  one gate over both implementations.
+- **C4** Live jobs pushed nothing, said nothing, and slept — 15 minutes for
+  weather — with no device. They now publish `live_job_state` on transitions and
+  re-check every 5s while waiting; GUI toggles report what the daemon said.
+- **C5** The daemon unlinked its socket on shutdown without checking it still
+  owned it, so killing one daemon deleted a live one's socket, leaving it
+  running, unreachable, and still holding the BLE central. Ownership is now
+  `(dev, inode)` recorded at bind.
+- **C6** `HotProgress` stored progress and never broadcast it, while R59 had
+  deleted the GUI's poll — the hot-channel button sat on "Preparing…" forever
+  and stayed disabled. Store and broadcast are now one operation.
+- **C7** Positional arguments were read from a COMPACTED numeric list, so
+  ambient brightness transmitted the mode number. Found by the wire trace on
+  real hardware.
+
+**Also:** `install.sh` installs a self-contained bundle to `/Applications`
+(removing C5's enabler — the repo bundle just exec'd python with no cleanup);
+`build_libdivoom.sh`'s unsupported-OS branch now hard-fails instead of building
+an untested binary; the connect e2e suite no longer collides with the user's
+running app; `pyproject.toml` 0.24.3 -> 0.26.0 (two releases had shipped
+reporting the stale value).
+
+Python 2943 / 0 failed / 94 skipped. Rust 157 / 0.
+
 ## v0.26.0 — harness unification: local CI delegates to gates_of_heck (2026-08-25)
 
 ### Changed
