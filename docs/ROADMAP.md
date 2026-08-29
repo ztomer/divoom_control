@@ -108,6 +108,17 @@ play something in Feishin, and run `cargo run -p nowplaying --example probe`.
   the wrong instrument (it asks the server, not the app); the right one is
   Feishin's own state, the way Kaset was read locally.
 
+**Do not try to shortcut that with the client-enumeration APIs.** MediaRemote
+exports `MRMediaRemoteGetNowPlayingClients`,
+`MRMediaRemoteGetNowPlayingApplicationDisplayName` and
+`...ApplicationPID`, which would identify the session owner without touching
+the user's players. All three **segfault** (exit 139) when called the way the
+info-dictionary API is called, on macOS 26.6.2 — attempted 2026-08-29. The
+shipped helper deliberately calls none of them, and the info dictionary itself
+carries no app identity (verified by dumping every key it returns). The manual
+step above is the cheap, reliable experiment; the API route costs more than it
+saves.
+
 The ported provider is harmless in the meantime: it only runs when MediaRemote
 has nothing actively playing, and returns `None` when the server has no entry.
 
