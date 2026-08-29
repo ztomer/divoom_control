@@ -26,6 +26,15 @@ pub struct LiveJobCoordinator {
     tasks: JobTasks,
     activity: Arc<Mutex<HashMap<String, ActivityEntry>>>,
     params: Arc<Mutex<HashMap<(String, String), Value>>>,
+    /// Last published health per (mac, kind) — the RESYNC path for
+    /// `live_job_state`.
+    ///
+    /// R67: `JobHealth` deliberately emits only on TRANSITIONS, so a UI that
+    /// subscribes after a job is already running sees nothing at all and cannot
+    /// tell "healthy" from "never started". That is the same hole C6 left in the
+    /// hot channel — the push was added and the pull was not kept — so
+    /// `list()` reports the current state alongside each job.
+    health: Arc<Mutex<HashMap<(String, String), Value>>>,
 }
 
 impl Default for LiveJobCoordinator {
@@ -40,7 +49,25 @@ impl LiveJobCoordinator {
             tasks: Arc::new(Mutex::new(HashMap::new())),
             activity: Arc::new(Mutex::new(HashMap::new())),
             params: Arc::new(Mutex::new(HashMap::new())),
+            health: Arc::new(Mutex::new(HashMap::new())),
         }
+    }
+
+    /// Record a job's latest health, so `list()` can answer a late subscriber.
+    pub async fn record_health(&self, mac: &str, kind: &str, state: Value) {
+        self.health
+            .lock()
+            .await
+            .insert((mac.to_string(), kind.to_string()), state);
+    }
+
+    /// Forget a stopped job's health — a state left behind after the job is
+    /// gone is worse than none, because it reads as current.
+    pub async fn forget_health(&self, mac: &str, kind: &str) {
+        self.health
+            .lock()
+            .await
+            .remove(&(mac.to_string(), kind.to_string()));
     }
 
     fn now_secs() -> u64 {
@@ -100,6 +127,7 @@ impl LiveJobCoordinator {
     }
 
     pub async fn stop(&self, _daemon: &Daemon, mac: &str, kind: &str) -> bool {
+        self.forget_health(mac, kind).await;
         let key = (mac.to_string(), kind.to_string());
         let handle = self.tasks.lock().await.remove(&key);
         if let Some(h) = handle {
@@ -146,15 +174,31 @@ impl LiveJobCoordinator {
 
     pub async fn list(&self, mac: Option<&str>) -> Vec<Value> {
         let tasks = self.tasks.lock().await;
+        let health = self.health.lock().await;
         let mut list = Vec::new();
         for (m, k) in tasks.keys() {
             if mac.is_none() || mac == Some(m) {
-                list.push(json!({
+                let mut entry = json!({
                     "mac": m,
                     "kind": k,
                     "done": false,
                     "cancelled": false,
-                }));
+                });
+                // The resync half of the event stream: `live_job_state` fires
+                // only on transitions, so a client that subscribed late learns
+                // the current state from here instead of guessing.
+                match health.get(&(m.clone(), k.clone())) {
+                    Some(state) => {
+                        entry["state"] = state.get("state").cloned().unwrap_or(json!("running"));
+                        if let Some(detail) = state.get("detail") {
+                            entry["detail"] = detail.clone();
+                        }
+                    }
+                    // Started, but has not completed a cycle yet. Saying
+                    // "starting" is honest; claiming "running" would not be.
+                    None => entry["state"] = json!("starting"),
+                }
+                list.push(entry);
             }
         }
         list

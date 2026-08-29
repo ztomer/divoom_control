@@ -77,6 +77,29 @@ impl JobHealth {
         }
     }
 
+    /// The JSON body for a state, tagged for the event bus.
+    fn event_for(&self, state: &JobState) -> Value {
+        let mut ev = json!({
+            "type": "live_job_state",
+            "kind": self.kind,
+            "mac": self.mac,
+            "state": state.tag(),
+        });
+        if let Some(d) = state.detail() {
+            ev["detail"] = json!(d);
+        }
+        ev
+    }
+
+    /// The current state, for a client that subscribed too late to see the
+    /// transition. Callers store this where `live_job_list` can read it.
+    pub fn snapshot(&self) -> Option<Value> {
+        self.last
+            .lock()
+            .ok()
+            .and_then(|g| g.as_ref().map(|s| self.event_for(s)))
+    }
+
     /// Record the current state; emit `live_job_state` if it differs from the
     /// last one. Returns true when an event was emitted.
     pub fn report(&self, state: JobState) -> bool {
@@ -90,16 +113,7 @@ impl JobHealth {
             }
             *guard = Some(state.clone());
         }
-        let mut ev = json!({
-            "type": "live_job_state",
-            "kind": self.kind,
-            "mac": self.mac,
-            "state": state.tag(),
-        });
-        if let Some(d) = state.detail() {
-            ev["detail"] = json!(d);
-        }
-        let _ = self.tx.send(ev);
+        let _ = self.tx.send(self.event_for(&state));
         true
     }
 
@@ -227,5 +241,48 @@ mod tests {
             wait_interval(Duration::from_secs(2)),
             Duration::from_secs(2)
         );
+    }
+}
+
+#[cfg(test)]
+mod snapshot_tests {
+    use super::*;
+
+    #[test]
+    fn snapshot_answers_a_client_that_subscribed_too_late() {
+        // R67: events fire only on transitions, so a UI attaching after a job is
+        // already running would otherwise see nothing and could not tell
+        // "healthy" from "never started". This is the resync half.
+        let (tx, _rx) = tokio::sync::broadcast::channel(8);
+        let h = JobHealth::new("music", "AA:BB", tx);
+        assert!(h.snapshot().is_none(), "nothing reported yet");
+
+        h.running();
+        let snap = h.snapshot().expect("a snapshot after reporting");
+        assert_eq!(snap["state"], json!("running"));
+        assert_eq!(snap["kind"], json!("music"));
+        assert_eq!(snap["mac"], json!("AA:BB"));
+    }
+
+    #[test]
+    fn snapshot_carries_the_failure_reason() {
+        let (tx, _rx) = tokio::sync::broadcast::channel(8);
+        let h = JobHealth::new("weather", "AA:BB", tx);
+        h.failed("wttr.in returned 503");
+        let snap = h.snapshot().unwrap();
+        assert_eq!(snap["state"], json!("failed"));
+        assert_eq!(snap["detail"], json!("wttr.in returned 503"));
+    }
+
+    #[test]
+    fn snapshot_and_event_agree() {
+        // The two halves must describe the same thing; if they can disagree,
+        // a late subscriber gets a different answer than an early one.
+        let (tx, mut rx) = tokio::sync::broadcast::channel(8);
+        let h = JobHealth::new("sysmon", "AA:BB", tx);
+        h.waiting();
+        let event = rx.try_recv().expect("an event");
+        let snap = h.snapshot().expect("a snapshot");
+        assert_eq!(event, snap);
     }
 }
