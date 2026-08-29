@@ -81,6 +81,10 @@ fn track_to_json(track: &nowplaying::Track, include_artwork: bool) -> Value {
         // bytes, so the same song does not look new every poll.
         "identity": track.identity(),
         "display": track.display(),
+        // Paused is not playing. MediaRemote keeps reporting a paused session's
+        // track, so a UI that ignored this would show a stopped player as live
+        // and a widget would push art for it.
+        "is_playing": track.is_playing,
     });
 
     if let Some(art) = &track.artwork {
@@ -146,6 +150,7 @@ mod tests {
                 b"MM\x00\x2a".to_vec(),
                 Some("image/jpeg".into()),
             )),
+            is_playing: true,
         };
         let a = track_to_json(&t, false);
         t.artwork = Some(Artwork::new(b"MM\x00\x2aDIFFERENT".to_vec(), None));
@@ -176,6 +181,7 @@ mod tests {
             album: None,
             source: "MediaRemote".into(),
             artwork: Some(Artwork::new(vec![0xFF, 0xD8, 0xFF, 0xE0], None)),
+            is_playing: true,
         };
         let with = track_to_json(&t, true);
         assert!(with["artwork_b64"].as_str().is_some());
@@ -186,5 +192,47 @@ mod tests {
             json!(4),
             "size is always reported so a client can decide to fetch"
         );
+    }
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod paused_tests {
+    use super::*;
+    use nowplaying::Track;
+
+    fn track(is_playing: bool) -> Track {
+        Track {
+            title: Some("Golden Spires".into()),
+            artist: Some("Mastodon".into()),
+            album: None,
+            source: "MediaRemote".into(),
+            artwork: None,
+            is_playing,
+        }
+    }
+
+    #[test]
+    fn the_reply_states_whether_it_is_actually_playing() {
+        // MediaRemote goes on reporting a session's track after it is PAUSED
+        // (PlaybackRate 0, measured on macOS 26.6.2). A UI that could not tell
+        // the difference would show a stopped player as live.
+        assert_eq!(
+            track_to_json(&track(true), false)["is_playing"],
+            json!(true)
+        );
+        assert_eq!(
+            track_to_json(&track(false), false)["is_playing"],
+            json!(false)
+        );
+    }
+
+    #[test]
+    fn a_paused_track_is_still_reported_not_hidden() {
+        // Showing what is cued up beats showing nothing; the caller decides
+        // whether to push it.
+        let reply = track_to_json(&track(false), false);
+        assert_eq!(reply["playing"], json!(true), "there IS a track");
+        assert_eq!(reply["is_playing"], json!(false), "but it is paused");
+        assert_eq!(reply["title"], json!("Golden Spires"));
     }
 }

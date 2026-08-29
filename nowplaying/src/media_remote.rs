@@ -119,12 +119,23 @@ pub fn parse_helper_output(line: &str) -> Result<Option<Track>, String> {
         .filter(|bytes| !bytes.is_empty())
         .map(|bytes| Artwork::new(bytes, text("artwork_mime_declared")));
 
+    // PlaybackRate 0 means paused. MediaRemote goes on reporting a paused
+    // session's track indefinitely, so without this a widget would push cover
+    // art for something nobody is listening to.
+    let is_playing = v
+        .get("playback_rate")
+        .and_then(|r| r.as_f64())
+        .map(|r| r > 0.0)
+        // Absent rate: assume playing rather than silently showing nothing.
+        .unwrap_or(true);
+
     Ok(Some(Track {
         title: text("title"),
         artist: text("artist"),
         album: text("album"),
         source: "MediaRemote".to_string(),
         artwork,
+        is_playing,
     }))
 }
 

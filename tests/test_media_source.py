@@ -7,73 +7,18 @@ import pytest
 from PIL import Image
 
 from divoom_lib.utils import media_source
-from divoom_lib.utils import media_source_feishin as feishin_mod
 
 
 
 
 
 
-def test_get_feishin_playing_track():
-    """Feishin returns a track via Navidrome Subsonic API."""
-    api_response = {
-        "subsonic-response": {
-            "status": "ok",
-            "nowPlaying": {
-                "entry": [{
-                    "title": "Feishin Song",
-                    "artist": "Feishin Artist",
-                    "coverArt": "ar-42",
-                }]
-            }
-        }
-    }
-    mock_resp = MagicMock()
-    mock_resp.read.return_value = json.dumps(api_response).encode("utf-8")
-    with patch.object(feishin_mod, "_feishin_is_running", return_value=True), \
-         patch.object(feishin_mod, "_feishin_creds",
-                      return_value=("http://server:4533", "u=admin&s=abc&t=def")), \
-         patch("urllib.request.urlopen", return_value=MagicMock(__enter__=lambda self: mock_resp)):
-        res = feishin_mod.get_feishin_playing_track()
-    assert res == {
-        "track": "Feishin Song",
-        "artist": "Feishin Artist",
-        "source": "Feishin",
-        "artwork_url": "http://server:4533/rest/getCoverArt.view?f=json&c=divoom&v=1.16.0&u=admin&s=abc&t=def&id=ar-42&size=500",
-    }
 
 
-def test_get_feishin_nothing_playing():
-    """Feishin running but no track playing."""
-    api_response = {
-        "subsonic-response": {
-            "status": "ok",
-            "nowPlaying": {}
-        }
-    }
-    mock_resp = MagicMock()
-    mock_resp.read.return_value = json.dumps(api_response).encode("utf-8")
-    with patch.object(feishin_mod, "_feishin_is_running", return_value=True), \
-         patch.object(feishin_mod, "_feishin_creds",
-                      return_value=("http://server:4533", "u=admin&s=abc&t=def")), \
-         patch("urllib.request.urlopen", return_value=MagicMock(__enter__=lambda self: mock_resp)):
-        res = feishin_mod.get_feishin_playing_track()
-    assert res is None
 
 
-def test_get_feishin_not_running():
-    """Feishin not running → no track."""
-    with patch.object(feishin_mod, "_feishin_is_running", return_value=False):
-        res = feishin_mod.get_feishin_playing_track()
-    assert res is None
 
 
-def test_get_feishin_no_creds():
-    """Feishin running but no credentials found."""
-    with patch.object(feishin_mod, "_feishin_is_running", return_value=True), \
-         patch.object(feishin_mod, "_feishin_creds", return_value=None):
-        res = feishin_mod.get_feishin_playing_track()
-    assert res is None
 
 
 

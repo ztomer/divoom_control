@@ -8,5 +8,8 @@ license = "MIT"
 [dependencies]
 serde_json = "1"
 base64 = "0.23"
+# Feishin talks Subsonic over HTTP(S); blocking matches this crate's sync API
+# (divoomd already wraps the whole query in spawn_blocking).
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "json", "rustls", "webpki-roots"] }
 
 [dev-dependencies]

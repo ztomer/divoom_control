@@ -71,7 +71,15 @@ void np_get(void) {
                 // reported as "no track", and availability is probed separately.
                 [out appendString:@",\"playing\":false"];
             } else {
-                [out appendString:@",\"playing\":true"];
+                // PAUSED IS NOT PLAYING. MediaRemote keeps reporting the last
+                // session's track after it is paused, with
+                // PlaybackRate == 0 — measured on macOS 26.6.2 with a paused
+                // player still owning the Now Playing session. Treating that as
+                // "playing" makes a live widget push cover art for something
+                // nobody is listening to, and hides a DIFFERENT app that really
+                // is playing. The rate is reported so the caller decides.
+                double rate = [info[@"kMRMediaRemoteNowPlayingInfoPlaybackRate"] doubleValue];
+                [out appendFormat:@",\"playing\":true,\"playback_rate\":%g", rate];
                 [out appendFormat:@",\"title\":%@",
                      JSONString(info[@"kMRMediaRemoteNowPlayingInfoTitle"])];
                 [out appendFormat:@",\"artist\":%@",

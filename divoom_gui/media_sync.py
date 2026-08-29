@@ -97,6 +97,10 @@ class MediaSyncMixin(GallerySyncMixin):
                 "album": reply.get("album"),
                 "source": reply.get("source"),
                 "identity": reply.get("identity"),
+                # Paused is not playing: MediaRemote keeps reporting a session's
+                # track after it is paused, so the card must be able to say so
+                # rather than showing a stopped player as live.
+                "is_playing": reply.get("is_playing", True),
                 "preview": preview,
             })
         except Exception as e:

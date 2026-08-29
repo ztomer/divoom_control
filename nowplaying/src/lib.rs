@@ -42,6 +42,8 @@ pub mod availability;
 pub mod track;
 
 #[cfg(target_os = "macos")]
+pub mod feishin;
+#[cfg(target_os = "macos")]
 pub mod media_remote;
 
 pub use artwork::{Artwork, ImageFormat};
@@ -51,13 +53,33 @@ pub use track::Track;
 /// The current track from the best available source, or `Ok(None)` when nothing
 /// is playing.
 ///
-/// Today that is MediaRemote alone: it covers every player that publishes to
-/// Now Playing, which on this machine includes Kaset, Music, and Spotify.
-/// Sources that do NOT publish there (a Navidrome client read through its own
-/// API, say) belong behind this same function as additional providers.
+/// # Provider order, and why the fallthrough is conditional
+///
+/// MediaRemote first: it covers every player that publishes to the system Now
+/// Playing source, and it returns the exact artwork the player is displaying.
+///
+/// Feishin second, and ONLY when MediaRemote has nothing actively playing.
+/// The subtlety that makes the condition necessary: MediaRemote keeps reporting
+/// a session's track after it is PAUSED (measured on macOS 26.6.2), so a paused
+/// player would otherwise mask a different app that really is playing. A paused
+/// MediaRemote track is still returned when no other provider has anything —
+/// showing what is cued up beats showing nothing — but it never wins over live
+/// playback elsewhere.
 #[cfg(target_os = "macos")]
 pub fn current_track() -> Result<Option<Track>, String> {
-    media_remote::current_track()
+    let from_media_remote = media_remote::current_track();
+
+    if let Ok(Some(track)) = &from_media_remote {
+        if track.is_playing {
+            return from_media_remote;
+        }
+    }
+
+    // MediaRemote has nothing, or only something paused.
+    if let Some(track) = feishin::current_track() {
+        return Ok(Some(track));
+    }
+    from_media_remote
 }
 
 #[cfg(not(target_os = "macos"))]

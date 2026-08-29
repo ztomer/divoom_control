@@ -17,6 +17,13 @@ pub struct Track {
     /// where the data came from, and useful when two sources disagree.
     pub source: String,
     pub artwork: Option<Artwork>,
+    /// Is it actually PLAYING, as opposed to paused?
+    ///
+    /// MediaRemote keeps reporting the last session's track after it is paused
+    /// (PlaybackRate 0, measured on macOS 26.6.2). A paused track is still worth
+    /// showing in a UI, but pushing it to a device — or treating it as proof
+    /// that nothing else is playing — is wrong.
+    pub is_playing: bool,
 }
 
 impl PartialEq for Artwork {
@@ -67,6 +74,7 @@ mod tests {
             album: album.map(str::to_string),
             source: "test".into(),
             artwork: None,
+            is_playing: true,
         }
     }
 

@@ -63,6 +63,20 @@ pub(super) async fn run_music(daemon_weak: Weak<Daemon>, mac: String, params: Va
                 .await;
             }
             Ok(None) => {}
+            // A PAUSED track is not pushed. MediaRemote keeps reporting a
+            // session's track after it is paused, so without this the panel
+            // would keep showing cover art for something nobody is listening
+            // to — and would re-push it on every reconnect.
+            Ok(Some(track)) if !track.is_playing => {
+                report_health(
+                    &daemon,
+                    &health,
+                    &mac,
+                    JOB_KIND,
+                    health::JobState::Failed(format!("paused: {}", track.display())),
+                )
+                .await;
+            }
             Ok(Some(track)) => {
                 let identity = track.identity();
                 if identity != last_identity {

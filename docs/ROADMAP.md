@@ -63,11 +63,53 @@ Suite: Rust 63+ passed / Python 3197 passed / 97 skipped (see `CHANGELOG.md` + C
 
 ### Near-term (next round)
 
-Native-port hardening (Phases 1-4 + Phase-5 command parity) shipped; see
-the historical record in git history (the plan docs were pruned per the
-"one forward-looking backlog" rule). Phase 5 step 5.3 (the irreversible `divoom_daemon/` server archival)
-shipped 2026-07-13 on explicit user sign-off — see the "Native Rust daemon"
-section below for detail. No remaining thread here.
+**Feishin as a `nowplaying` provider (R67 Phase 2 follow-up).**
+
+R67 moved now-playing and album art to macOS MediaRemote (the `nowplaying`
+crate), which covers every player that publishes to the system Now Playing
+source and needs no Apple Events. Feishin is the one source that does NOT go
+through it: the old Python path read Feishin's cached Navidrome/Subsonic
+credentials out of its Electron LevelDB store and queried the server directly,
+which is a genuinely different mechanism.
+
+`divoom_lib/utils/media_source_feishin.py` still exists and still works, but
+nothing calls it any more — the code that did was deleted with the rest of the
+duplicate. So today:
+
+* if Feishin publishes to Now Playing, MediaRemote already covers it and this
+  is a no-op;
+* if it does not, a Feishin track reaches the device only once this is folded
+  into the crate as a second provider.
+
+**PORTED (2026-08-29), and the probe was inconclusive — read this before
+spending more time on it.** `nowplaying/src/feishin.rs` now holds the
+LevelDB-credential scrape + Subsonic lookup, recovered from the deleted
+`divoomd/src/live_jobs/music.rs` rather than rewritten, and is chained after
+MediaRemote. `divoom_lib/utils/media_source_feishin.py` is deleted.
+
+What the live probe established, with Feishin playing:
+
+* the credential scrape **works** — `cargo run -p nowplaying --example
+  feishin_probe` reports credentials found;
+* Navidrome's `getNowPlaying` returns **no entry** anyway. That endpoint reports
+  what the SERVER believes is playing, which depends on the client sending
+  now-playing/scrobble pings; this Feishin/Navidrome pair does not appear to
+  feed it in a way the endpoint reflects promptly;
+* MediaRemote meanwhile reported a **paused** Kaset session, not Feishin.
+
+So neither path saw Feishin, for two different reasons, and it is NOT yet
+established whether Feishin publishes to macOS Now Playing at all.
+
+**To settle it:** quit Kaset (so nothing else owns the Now Playing session),
+play something in Feishin, and run `cargo run -p nowplaying --example probe`.
+- If it reports the Feishin track -> MediaRemote covers Feishin, and
+  `nowplaying/src/feishin.rs` can be deleted as dead weight.
+- If it reports nothing -> Feishin needs a local source. The Subsonic path is
+  the wrong instrument (it asks the server, not the app); the right one is
+  Feishin's own state, the way Kaset was read locally.
+
+The ported provider is harmless in the meantime: it only runs when MediaRemote
+has nothing actively playing, and returns `None` when the server has no entry.
 
 ### Short-to-medium term (all shipped)
 

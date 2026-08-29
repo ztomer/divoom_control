@@ -49,7 +49,11 @@ document.addEventListener("DOMContentLoaded", () => {
             if (nameEl) nameEl.textContent = info.track;
             if (artistEl) {
                 const artist = info.artist || "Unknown artist";
-                artistEl.textContent = info.source ? `${artist} (${info.source})` : artist;
+                const src = info.source ? ` (${info.source})` : "";
+                // Paused is not playing — say so instead of showing a stopped
+                // player as live.
+                const paused = info.is_playing === false ? " · paused" : "";
+                artistEl.textContent = `${artist}${src}${paused}`;
             }
             // R67/C2: the cover used to be pointed at a REMOTE artwork_url. The
             // web UI is loaded from a file:// origin, where WKWebView blocks

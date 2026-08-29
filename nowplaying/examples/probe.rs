@@ -14,6 +14,10 @@ fn main() {
         Ok(None) => println!("nothing playing"),
         Ok(Some(t)) => {
             println!("source : {}", t.source);
+            println!(
+                "playing: {}",
+                if t.is_playing { "yes" } else { "NO (paused)" }
+            );
             println!("display: {}", t.display());
             println!("title  : {:?}", t.title);
             println!("artist : {:?}", t.artist);
