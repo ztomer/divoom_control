@@ -282,6 +282,48 @@ as an explicit resync path and wire it as the reconnect path rather than leaving
 it orphaned. Add a gate that flags GUI API methods with no caller (dead surface
 is either a missing feature or deletable code; both need a decision).
 
+
+### C7 — positional arguments read from a COMPACTED list
+
+**Found during Phase 1 verification, by the new wire-trace harness, on real
+hardware.** It also corrects an earlier finding in this document.
+
+`device_call` builds its numeric argument list with `filter_map(as_i64)`, which
+**compacts**: every non-numeric entry is dropped, so `args[i]` is the i-th
+NUMBER, not the i-th ARGUMENT. For
+`show_light("#00FFCC", 80, true, 2)` the list is `[80, 2]`, and the handler's
+`args.get(1)` returned the **mode**:
+
+```
+mode 0 -> 0100ffcc 00 00 01 000000     brightness byte = 0x00
+mode 1 -> 0100ffcc 01 01 01 000000     brightness byte = 0x01
+mode 2 -> 0100ffcc 02 02 01 000000     brightness byte = 0x02
+                   ^^ expected 0x50 (=80) throughout
+```
+
+Ambient brightness has been transmitting the mode number for as long as the GUI
+has passed `mode_type`, and mode 0 meant brightness 0.
+
+**This corrects [Verified non-classes](#verified-non-classes).** That section
+concluded arity problems were "not a class" after five spot-checks came back
+false positives. That was correct about **dropped** parameters and blind to
+**misaligned** ones — a different defect with the same surface. A handler mixing
+compacted `args[i]` with true positions reads a neighbouring argument's value
+with complete confidence, and no amount of reading the Python signature reveals
+it. Only the bytes did.
+
+**Class-level fix.** `pos_i64()` / `pos_bool()` in
+`divoomd/src/device_call/args.rs` read from `raw_args` (true positions) with a
+keyword fallback. `args` keeps a warning that it is compacted and safe only
+where every argument is numeric.
+
+**Scope, stated plainly.** `show_light` is fixed and proven on hardware. **49
+other `args.get(N)` / `args.first()` reads remain unaudited.** At least one more
+is latently wrong: `text.rs` reads `args.get(1)` for `text_box_id` after a
+leading string, which works today only because callers pass it as a keyword.
+The full audit is open work — sweeping 49 sites blind would be worse than doing
+it deliberately, one verified handler at a time.
+
 ---
 
 ## 3. Verified non-classes
@@ -289,7 +331,7 @@ is either a missing feature or deletable code; both need a decision).
 Recorded so the next session does not re-investigate them, and because a
 suspected class that fails to generalize is a result worth keeping.
 
-**`device_call` argument-arity drops — NOT a class.** An automated audit
+**`device_call` argument-arity drops — NOT a class** (but see [C7](#c7--positional-arguments-read-from-a-compacted-list), which IS one). An automated audit
 comparing every Rust `device_call` arm against its Python signature flagged 60
 arms as dropping parameters. Five were spot-checked by eye
 (`scoreboard.set_scoreboard`, `sleep.show_sleep`, `aid_sleep.delete`,
@@ -298,6 +340,11 @@ positives** — they read arguments through `args.first()`, `kw_i64()` or
 `get_i64()` helpers the regex did not match. The detector is noise and the number
 is not reportable. The real defects are the payload-literal ones in C1, found by
 reading the code, not by the grep.
+
+**Correction (added after hardware verification):** this conclusion was right
+about parameters being *dropped* and wrong about the broader question. C7 is a
+real class in the same code — parameters read at the wrong INDEX — and it was
+invisible to both the grep and the Python signatures. It took a wire trace.
 
 **Stale references to R66-removed code — 2 instances, not a class.**
 `scripts/make_dev_daemon_app.sh` execs `python -m divoom_lib.cli daemon`, which
@@ -412,6 +459,25 @@ fallback).
 14. Live multi-device run (Pixoo-1 + Timoo-light-4 + Tivoo-Max-light-3 are all
     in range), then fix what it surfaces. Expected fallout is C1 (`set_light`
     and `show_clock` drop parameters on the wall branch).
+
+
+### Phase 5 — a real installer (`install.sh`)
+
+Requested mid-round. Today `Divoom.app/Contents/MacOS/Divoom` is
+`exec python3 divoom_gui/gui_main.py` against the repo checkout, with no
+cleanup — which is [C5](#c5--a-runtime-invariant-enforced-by-the-launcher-instead-of-the-system)'s
+enabler, since the only single-instance cleanup lives in `run.sh`.
+
+15. `install.sh` builds everything current and installs ONE self-contained
+    bundle to `/Applications`: the GUI, `divoomd`, and `divoom-menubar` inside
+    `Contents/MacOS`, the web UI and fonts in `Contents/Resources`, the native
+    encoder dylib alongside. The app then runs entirely from `/Applications`
+    with no dependency on the source tree.
+16. The launcher enforces single-ownership on start (the invariant belongs to
+    the product, not to `run.sh`), and the daemon/menubar are resolved from
+    inside the bundle rather than from `target/release`.
+17. Version stamping and an uninstall path, so an upgrade replaces rather than
+    accumulates.
 
 ---
 

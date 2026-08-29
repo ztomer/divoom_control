@@ -422,4 +422,72 @@ mod tests {
             panic!("Expected connected device");
         }
     }
+
+    /// R67/C7: positional args must be read by their TRUE index.
+    ///
+    /// `show_light(color, brightness, power, lightning_type)` is forwarded
+    /// positionally by DaemonDeviceProxy. The handler used to index the
+    /// COMPACTED numeric list, which drops the colour string and the bool — so
+    /// for ("#00FFCC", 80, true, 2) it was [80, 2] and index 1 gave the MODE.
+    /// The ambient brightness slider therefore transmitted the mode number, and
+    /// mode 0 meant brightness 0. Only a wire trace on real hardware exposed it.
+    #[tokio::test]
+    async fn test_mock_show_light_reads_brightness_not_the_mode() {
+        for (mode, want_type) in [(0u8, 0u8), (2, 2), (4, 4)] {
+            let d = setup_mock_daemon().await;
+            let call_res = d
+                .handle(make_request(
+                    "device_call",
+                    Some(json!({
+                        "method": "display.show_light",
+                        // A STRING first — this is what shifts the numeric list.
+                        "args": ["#00FFCC", 80, true, mode],
+                    })),
+                    None,
+                ))
+                .await;
+            assert!(call_res["success"].as_bool().unwrap_or(false));
+
+            let device_lock = d.device.lock().await;
+            let transport_arc = device_lock.as_ref().expect("connected device");
+            let DeviceTransport::Mock(ref mock) = **transport_arc else {
+                panic!("Expected Mock transport");
+            };
+            let cmds = mock.sent_commands.lock().unwrap();
+            let (cmd_id, payload) = &cmds[0];
+            assert_eq!(*cmd_id, 0x45);
+            assert_eq!(
+                *payload,
+                vec![0x01, 0x00, 0xFF, 0xCC, 80, want_type, 0x01, 0x00, 0x00, 0x00],
+                "mode {mode}: brightness must be 80 (not the mode), type must be {want_type}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_mock_show_light_honours_power_off_positionally() {
+        let d = setup_mock_daemon().await;
+        let call_res = d
+            .handle(make_request(
+                "device_call",
+                Some(json!({
+                    "method": "display.show_light",
+                    "args": ["#FF0000", 55, false, 1],
+                })),
+                None,
+            ))
+            .await;
+        assert!(call_res["success"].as_bool().unwrap_or(false));
+
+        let device_lock = d.device.lock().await;
+        let transport_arc = device_lock.as_ref().expect("connected device");
+        let DeviceTransport::Mock(ref mock) = **transport_arc else {
+            panic!("Expected Mock transport");
+        };
+        let cmds = mock.sent_commands.lock().unwrap();
+        let (_, payload) = &cmds[0];
+        assert_eq!(payload[4], 55, "brightness");
+        assert_eq!(payload[5], 1, "lighting type");
+        assert_eq!(payload[6], 0, "power off must survive the positional read");
+    }
 }

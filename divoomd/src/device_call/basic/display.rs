@@ -172,21 +172,15 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         // and DaemonDeviceProxy forwards those positionally, so both are read
         // positionally-or-by-keyword now.
         "display.show_light" | "light.show_light" | "show_light" => {
+            // R67/C7: brightness used to read `args.get(1)` — the COMPACTED
+            // numeric list, which for ("#00FFCC", 80, true, 2) is [80, 2]. So
+            // index 1 was the MODE, and the ambient brightness slider silently
+            // sent the mode number instead (mode 0 meant brightness 0). Found
+            // by the wire trace on real hardware; no test could see it.
             let rgb = color_from_arg(raw_args, kw).unwrap_or([0xFF, 0xFF, 0xFF]);
-            let brightness = args
-                .get(1)
-                .copied()
-                .or_else(|| {
-                    kw.and_then(|v| v.get("brightness"))
-                        .and_then(|v| v.as_i64())
-                })
-                .unwrap_or(100)
-                .clamp(0, 100) as u8;
-            let power = raw_args
-                .get(2)
-                .and_then(|v| v.as_bool())
-                .or_else(|| kw.and_then(|v| v.get("power")).and_then(|v| v.as_bool()))
-                .unwrap_or(true);
+            let brightness =
+                crate::device_call::pos_i64(raw_args, 1, kw, "brightness", 100).clamp(0, 100) as u8;
+            let power = crate::device_call::pos_bool(raw_args, 2, kw, "power", true);
             let kind = LightingType::from_i64(
                 raw_args
                     .get(3)

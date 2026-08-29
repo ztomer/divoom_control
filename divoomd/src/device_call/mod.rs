@@ -1,3 +1,4 @@
+mod args;
 use crate::daemon::{Daemon, DeviceTransport};
 use crate::protocol::Request;
 use serde_json::Value;
@@ -30,6 +31,8 @@ pub mod tools;
 
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 
+pub(crate) use args::{pos_bool, pos_i64};
+
 pub async fn handle_device_call(
     _daemon: &Daemon,
     dev: &DeviceTransport,
@@ -41,7 +44,17 @@ pub async fn handle_device_call(
         None => return crate::protocol::err_reply("device_call requires 'method'"),
     };
 
-    // Numeric positional args (for brightness, clock, etc.)
+    // Numeric positional args (for brightness, clock, etc.).
+    //
+    // WARNING (R67/C7): this list is COMPACTED — `filter_map` drops every
+    // non-numeric entry, so `args[i]` is the i-th NUMBER, not the i-th
+    // ARGUMENT. For a call like show_light("#00FFCC", 80, true, 2) it is
+    // [80, 2], and `args.get(1)` yields the mode, not the brightness. That
+    // silently swapped ambient brightness for the mode number on real hardware
+    // until a wire trace caught it.
+    //
+    // Use `pos_i64()` for anything positional. `args` is retained only for
+    // handlers whose arguments are all numeric, where the two agree.
     let args: Vec<i64> = req
         .args
         .get("args")
