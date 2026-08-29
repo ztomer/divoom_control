@@ -55,61 +55,78 @@ class MediaSyncMixin(GallerySyncMixin):
             return json.dumps({"success": False, "error": str(e)})
 
     def get_current_track_info(self) -> str:
-        try:
-            track_info = media_source.get_current_playing_track()
-            if not track_info:
-                return json.dumps({})
-            track = track_info.get("track")
-            artist = track_info.get("artist")
-            source = track_info.get("source")
-            art_url = track_info.get("artwork_url") or media_source.fetch_album_art_url(track, artist)
-            preview_url = ""
-            if art_url:
-                size = self._active_device_size()
-                out_path = media_source.render_and_downsample_artwork(art_url, size=size)
-                if out_path and out_path.exists():
-                    preview_url = self._frame_to_data_url(out_path)
-            return json.dumps({
-                "track": track, "artist": artist, "source": source,
-                "artwork_url": art_url, "preview": preview_url
-            })
-        except Exception:
-            return json.dumps({})
+        """What is playing — asked of the DAEMON, not discovered here.
 
-    def push_music_cover_now(self) -> str:
-        """Manual cover-art push triggered from the music card UI button.
+        R67/C2: this used to call `media_source.get_current_playing_track()`,
+        which ran osascript inside the GUI process against each player in turn
+        and then guessed a cover-art URL from the iTunes Search API. That was a
+        second implementation of a question the daemon already answered, and
+        being in the GUI process is why the GUI asked for Apple Music access.
 
-        Re-fetches album art for the current track, renders it at the
-        active device size, and pushes the frame to the device. Returns
-        a JSON status object the UI can toast on.
+        The preview image is now the SAME artwork the device is pushed —
+        downsampled from the same bytes — rather than a lookalike fetched from a
+        different source. It is also a `data:` URL: the web UI is served from a
+        `file://` origin, where WKWebView blocks remote subresources, which is
+        why the old remote `artwork_url` rendered as a broken image.
         """
         try:
-            cache = getattr(self, "current_track_cache", None)
-            if not cache or not cache.get("track"):
-                return json.dumps({"success": False, "error": "No track playing"})
-            if not self._has_push_target():
-                return json.dumps({"success": False, "error": "No device connected"})
+            client = self._client()
+            if client is None:
+                return json.dumps({})
+            reply = client.now_playing(include_artwork=True)
+            if not isinstance(reply, dict):
+                return json.dumps({})
 
-            track = cache["track"]
-            artist = cache.get("artist", "")
-            art_url = media_source.fetch_album_art_url(track, artist)
-            if not art_url:
-                return json.dumps({"success": False, "error": "Could not fetch album art"})
+            if not reply.get("available", False):
+                # Honest unavailable state: say WHY rather than looking idle.
+                return json.dumps({"available": False,
+                                   "reason": reply.get("reason", "unavailable")})
+            if not reply.get("playing", False):
+                return json.dumps({"available": True, "playing": False})
 
-            size = self._active_device_size()
-            out_path = media_source.render_and_downsample_artwork(art_url, size=size)
-            if not out_path or not out_path.exists():
-                return json.dumps({"success": False, "error": "Failed to render artwork"})
+            preview = ""
+            art_b64 = reply.get("artwork_b64")
+            if art_b64:
+                preview = self._artwork_preview(art_b64)
 
-            ok = self._push_frame(out_path, size)
-            preview_url = self._frame_to_data_url(out_path) if ok else ""
-            # Update cache so the UI shows the pushed preview
-            cache["artwork_url"] = art_url
-            cache["preview"] = preview_url
-            return json.dumps({"success": ok, "preview": preview_url})
+            return json.dumps({
+                "available": True,
+                "playing": True,
+                "track": reply.get("title"),
+                "artist": reply.get("artist"),
+                "album": reply.get("album"),
+                "source": reply.get("source"),
+                "identity": reply.get("identity"),
+                "preview": preview,
+            })
         except Exception as e:
-            logger.error(f"push_music_cover_now failed: {e}")
-            return json.dumps({"success": False, "error": str(e)})
+            logger.warning(f"now_playing failed: {e}")
+            return json.dumps({})
+
+    def _artwork_preview(self, artwork_b64: str) -> str:
+        """Downsample the daemon's artwork bytes to the device size, as a data URL.
+
+        Uses the same renderer path the device frame comes from, so the card and
+        the panel cannot drift (house rule: previews mirror live state through
+        the shared renderer, never a parallel pipeline).
+        """
+        import base64 as _b64
+        import io
+        try:
+            raw = _b64.b64decode(artwork_b64)
+            size = self._active_device_size()
+            from PIL import Image
+            # PIL sniffs the container itself, which matters: macOS reports
+            # image/jpeg for what are actually TIFF bytes, so anything that
+            # trusted the declared MIME would pick the wrong decoder.
+            img = Image.open(io.BytesIO(raw)).convert("RGB")
+            img = img.resize((size, size), Image.LANCZOS)
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            return "data:image/png;base64," + _b64.b64encode(buf.getvalue()).decode("ascii")
+        except Exception as e:
+            logger.debug(f"artwork preview failed: {e}")
+            return ""
 
     def _active_device_size(self, default: int = 16) -> int:
         try:

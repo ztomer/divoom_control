@@ -59,8 +59,18 @@ def _prime_automation() -> None:
 
 def prime_permissions() -> None:
     """Trigger the app's TCC prompts up front (macOS only). Best-effort and
-    threaded, so it never blocks GUI launch."""
+    threaded, so it never blocks GUI launch.
+
+    R67/Phase 2: with now-playing moved to MediaRemote there is nothing left to
+    prime — `_AUTOMATION_TARGETS` is empty — so this returns immediately and
+    the user is never asked for an Automation grant the app does not use. The
+    machinery stays because the moment a player has to be driven over
+    AppleScript again, listing it in the registry is all that is required.
+    """
     if sys.platform != "darwin":
+        return
+    if not _AUTOMATION_TARGETS:
+        logger.debug("no Apple Events targets to prime (now-playing uses MediaRemote)")
         return
     threading.Thread(target=_prime_automation, name="perm-prime",
                      daemon=True).start()

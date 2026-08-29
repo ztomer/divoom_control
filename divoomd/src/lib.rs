@@ -51,6 +51,7 @@ pub mod native_encode;
 pub mod notification_db;
 #[cfg(target_os = "macos")]
 pub mod notification_routing;
+pub mod now_playing;
 pub mod packets;
 pub mod paths;
 pub mod protocol;

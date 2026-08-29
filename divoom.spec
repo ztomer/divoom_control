@@ -37,8 +37,13 @@ datas += collect_data_files("divoom_gui")          # web_ui/** (frontend)
 datas += collect_data_files("divoom_lib")          # fonts/*.bin + the native dylib
 datas += collect_data_files("divoom_client")       # any packaged data
 # Rust binaries the GUI spawns — bundled under bin/ (resolved via sys._MEIPASS).
+# The now-playing helper ships ALONGSIDE the daemon: nowplaying's resolver looks
+# next to the executable and in a sibling bin/, so both halves must land in the
+# same place or the daemon reports "helper not installed" at runtime.
 for _src in ("target/release/divoomd",
-             "target/release/divoom-menubar"):
+             "target/release/divoom-menubar",
+             "nowplaying/native/libnp_helper.dylib",
+             "nowplaying/native/np_load.pl"):
     if os.path.exists(_ex(_src)):
         datas += [(_ex(_src), "bin")]
 

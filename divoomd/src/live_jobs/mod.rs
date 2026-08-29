@@ -6,14 +6,37 @@ use crate::daemon::{Daemon, DeviceTransport};
 
 mod coordinator;
 mod health;
-mod music;
 mod render;
 
 pub use coordinator::LiveJobCoordinator;
 pub use health::{JobHealth, JobState};
 
-use music::{fetch_album_art_url, get_current_playing_track};
 use render::{get_battery_percent, render_stock, render_sysmon};
+
+/// One call into the now-playing library, isolated so the macOS-only dependency
+/// has a single seam and the job body stays readable.
+///
+/// R67/C2: this replaces `music::get_current_playing_track` +
+/// `music::fetch_album_art_url` — an AppleScript sweep over each player
+/// followed by an iTunes Search URL guessed from the track name. The guess
+/// could not resolve non-album content (YouTube Music, podcasts, live sets) and
+/// needed a network round trip in order to fail. MediaRemote returns the exact
+/// image the player is displaying, as bytes.
+/// Blocking: it spawns `/usr/bin/perl` and waits up to 8s. Callers on the async
+/// runtime MUST go through `now_playing_track_async`, or a slow helper stalls
+/// every other task on the executor — including the BLE command queue.
+#[cfg(target_os = "macos")]
+fn now_playing_track() -> Result<Option<nowplaying::Track>, String> {
+    nowplaying::current_track()
+}
+
+/// The async-safe wrapper: runs the blocking query on the blocking pool.
+#[cfg(target_os = "macos")]
+async fn now_playing_track_async() -> Result<Option<nowplaying::Track>, String> {
+    tokio::task::spawn_blocking(now_playing_track)
+        .await
+        .map_err(|e| format!("now-playing task failed: {e}"))?
+}
 
 // --- Device Helpers ---
 
@@ -351,10 +374,10 @@ async fn run_weather(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
 
 async fn run_music(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
     let size = params.get("size").and_then(|v| v.as_u64()).unwrap_or(16) as u32;
-    let client = reqwest::Client::new();
 
-    let mut last_track = String::new();
-    let mut last_artist = String::new();
+    // Keyed on the track's identity (artist/title/album), which deliberately
+    // EXCLUDES artwork bytes so the same song does not re-push every tick.
+    let mut last_identity = String::new();
 
     // R67/C4: a job with no device used to push nothing, say nothing, and
     // sleep its full interval. It now reports its state on every change and
@@ -378,28 +401,47 @@ async fn run_music(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
             }
         }
 
-        if let Some(track_info) = get_current_playing_track(&client).await {
-            if track_info.track != last_track || track_info.artist != last_artist {
-                let mut art_url = track_info.artwork_url;
-                if art_url.is_none() {
-                    art_url =
-                        fetch_album_art_url(&client, &track_info.track, &track_info.artist).await;
+        match now_playing_track_async().await {
+            Err(e) => {
+                if let Some(h) = &health {
+                    h.failed(format!("now-playing unavailable: {e}"));
                 }
-
-                if let Some(url) = art_url {
-                    if let Ok(resp) = client.get(&url).send().await {
-                        if let Ok(bytes) = resp.bytes().await {
-                            if let Ok(frames) =
-                                crate::image_proc::process_image_bytes(bytes.to_vec(), size, 100)
-                            {
-                                if let Some((rgb, w, h, t)) = frames.first() {
+            }
+            Ok(None) => {}
+            Ok(Some(track)) => {
+                let identity = track.identity();
+                if identity != last_identity {
+                    match track.artwork.as_ref() {
+                        // Metadata but no cover — common for podcasts and
+                        // streams. Say so rather than leaving the previous
+                        // track's art on the panel as if it were current.
+                        None => {
+                            if let Some(h) = &health {
+                                h.failed(format!("no cover art for {}", track.display()));
+                            }
+                            last_identity = identity;
+                        }
+                        Some(art) => match crate::image_proc::process_image_bytes(
+                            art.bytes.clone(),
+                            size,
+                            100,
+                        ) {
+                            Err(e) => {
+                                if let Some(h) = &health {
+                                    h.failed(format!(
+                                        "could not decode {} cover art ({} bytes): {e}",
+                                        art.format.mime(),
+                                        art.len()
+                                    ));
+                                }
+                            }
+                            Ok(frames) => {
+                                if let Some((rgb, w, h_px, t)) = frames.first() {
                                     if get_device_transport(&daemon, &mac).await.is_some() {
                                         let d_weak = daemon_weak.clone();
                                         let mac_clone = mac.clone();
                                         let rgb_vec = rgb.clone();
-                                        let w_val = *w;
-                                        let h_val = *h;
-                                        let t_val = *t;
+                                        let (w_val, h_val, t_val) = (*w, *h_px, *t);
                                         let success = daemon
                                             .queue
                                             .run(None, async move {
@@ -422,15 +464,19 @@ async fn run_music(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
                                             })
                                             .await
                                             .unwrap_or(false);
-
+                                        // Advance only on a CONFIRMED push, so a
+                                        // failure retries next tick instead of
+                                        // being recorded as done.
                                         if success {
-                                            last_track = track_info.track.clone();
-                                            last_artist = track_info.artist.clone();
+                                            last_identity = identity;
+                                            if let Some(h) = &health {
+                                                h.running();
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
+                        },
                     }
                 }
             }

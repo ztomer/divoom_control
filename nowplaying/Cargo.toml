@@ -1,0 +1,12 @@
+[package]
+name = "nowplaying"
+version = "0.1.0"
+edition = "2021"
+description = "Now-playing track + album artwork on macOS, with artwork as real bytes."
+license = "MIT"
+
+[dependencies]
+serde_json = "1"
+base64 = "0.23"
+
+[dev-dependencies]

@@ -339,6 +339,22 @@ class DaemonClient:
     def probe_lan(self) -> dict:
         return self.send_command("probe_lan")
 
+    def now_playing(self, include_artwork: bool = False) -> dict:
+        """What is playing, from the daemon's single source of truth.
+
+        R67/C2: the GUI used to answer this itself, in Python, by driving
+        AppleScript at each player and then guessing a cover-art URL from the
+        iTunes Search API — a second implementation of what the daemon already
+        did, running in the GUI process, which is why the GUI was the thing
+        asking for Apple Music access.
+
+        ``include_artwork`` attaches the raw image bytes as base64. They are
+        ~360KB, so a poller should watch ``identity`` (which excludes artwork)
+        and only fetch the bytes when it changes.
+        """
+        return self.send_command("now_playing",
+                                 {"include_artwork": bool(include_artwork)})
+
     def live_job_start(self, mac: str, kind: str, params: dict) -> dict:
         return self.send_command("live_job_start", {"mac": mac, "kind": kind, "params": params})
 

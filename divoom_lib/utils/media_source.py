@@ -15,174 +15,27 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from divoom_lib.fonts import get_small_font
-from divoom_lib.utils.media_source_feishin import get_feishin_playing_track
 
 logger = logging.getLogger(__name__)
 
 
-def get_current_playing_track() -> dict | None:
-    """
-    Queries Feishin, Kaset, Spotify, and Apple Music on macOS.
-    Returns: {"track": str, "artist": str, "source": str,
-              "artwork_url": str | None} or None.
-
-    macOS-only (AppleScript/osascript). On Linux/Windows there is no portable
-    now-playing source wired up yet, so this returns None (cover-art sync simply
-    no-ops). A future MPRIS/playerctl backend could fill this in on Linux.
-
-    When the source provides a direct artwork URL (e.g. Kaset's YouTube
-    thumbnail or Feishin's Navidrome cover art), it is returned as
-    `artwork_url` so callers can skip the iTunes Search API fallback.
-    """
-    if sys.platform != "darwin":
-        return None
-    # 1. Check Feishin (Navidrome client) — queries the server's Subsonic API
-    #    via cached credentials from Feishin's Local Storage.
-    feishin = get_feishin_playing_track()
-    if feishin:
-        return feishin
-
-    # 2. Check Kaset (YouTube Music client) — its AppleScript returns a full
-    #    JSON blob with a direct YouTube thumbnail URL, which is higher-quality
-    #    and more reliable than the iTunes Search API for non-album content.
-    kaset_script = """
-    if application "Kaset" is running then
-        tell application "Kaset"
-            set infoJson to get player info
-            if infoJson is not "" then
-                return infoJson
-            end if
-        end tell
-    end if
-    return ""
-    """
-    try:
-        proc = subprocess.run(["osascript", "-e", kaset_script], capture_output=True, text=True, timeout=2)
-        raw = proc.stdout.strip()
-        if raw:
-            info = json.loads(raw)
-            if info.get("isPlaying") and info.get("currentTrack"):
-                ct = info["currentTrack"]
-                name = ct.get("name", "")
-                artist = ct.get("artist", "")
-                art_url = ct.get("artworkURL") or None
-                if name:
-                    return {"track": name, "artist": artist, "source": "Kaset", "artwork_url": art_url}
-    except Exception as e:
-        logger.debug(f"Kaset AppleScript check failed: {e}")
-
-    # 3. Check Spotify
-    spotify_script = """
-    if application "Spotify" is running then
-        tell application "Spotify"
-            if player state is playing then
-                return name of current track & " -|- " & artist of current track
-            end if
-        end tell
-    end if
-    return ""
-    """
-    try:
-        proc = subprocess.run(["osascript", "-e", spotify_script], capture_output=True, text=True, timeout=2)
-        res = proc.stdout.strip()
-        if res and "-|-" in res:
-            parts = res.split(" -|- ")
-            return {"track": parts[0], "artist": parts[1], "source": "Spotify", "artwork_url": None}
-    except Exception as e:
-        logger.debug(f"Spotify AppleScript check failed: {e}")
-
-    # 4. Check Apple Music (Music.app)
-    music_script = """
-    if application "Music" is running then
-        tell application "Music"
-            if player state is playing then
-                return name of current track & " -|- " & artist of current track
-            end if
-        end tell
-    end if
-    return ""
-    """
-    try:
-        proc = subprocess.run(["osascript", "-e", music_script], capture_output=True, text=True, timeout=2)
-        res = proc.stdout.strip()
-        if res and "-|-" in res:
-            parts = res.split(" -|- ")
-            return {"track": parts[0], "artist": parts[1], "source": "Apple Music", "artwork_url": None}
-    except Exception as e:
-        logger.debug(f"Apple Music AppleScript check failed: {e}")
-
-    return None
-
-
-def fetch_album_art_url(track: str, artist: str) -> str | None:
-    """Queries iTunes search API to find the album cover artwork URL."""
-    try:
-        term = f"{artist} {track}"
-        url_encoded = urllib.parse.quote(term)
-        api_url = f"https://itunes.apple.com/search?term={url_encoded}&limit=1&entity=song"
-        
-        req = urllib.request.Request(api_url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            results = data.get("results", [])
-            if results:
-                # Get high-resolution 100x100 artwork and replace size with 500x500
-                artwork_url = results[0].get("artworkUrl100")
-                if artwork_url:
-                    return artwork_url.replace("100x100bb.jpg", "500x500bb.jpg")
-    except Exception as e:
-        logger.warning(f"iTunes album artwork search failed: {e}")
-    return None
-
-
-def render_and_downsample_artwork(artwork_url: str, size: int = 16) -> Path | None:
-    """Downloads an artwork cover and downsamples it to Divoom grid resolution using a SOTA pipeline."""
-    try:
-        scratch_dir = Path(__file__).parent.parent.parent / "scratch"
-        scratch_dir.mkdir(parents=True, exist_ok=True)
-        out_path = scratch_dir / f"album_art_{size}.png"
-        
-        req = urllib.request.Request(artwork_url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            raw_img_data = resp.read()
-            
-            from io import BytesIO
-            from PIL import ImageEnhance, ImageFilter
-            img = Image.open(BytesIO(raw_img_data))
-            
-            # 1. Pre-process original high-res image (convert to RGB, enhance contrast & sharpness)
-            img_rgb = img.convert("RGB")
-            contrast_enhancer = ImageEnhance.Contrast(img_rgb)
-            img_enhanced = contrast_enhancer.enhance(1.2)
-            sharpness_enhancer = ImageEnhance.Sharpness(img_enhanced)
-            img_enhanced = sharpness_enhancer.enhance(1.3)
-            
-            # 2. Smooth downscale using LANCZOS
-            try:
-                resample_filter = Image.Resampling.LANCZOS
-            except AttributeError:
-                try:
-                    resample_filter = Image.LANCZOS
-                except AttributeError:
-                    resample_filter = Image.ANTIALIAS
-            
-            resized_img = img_enhanced.resize((size, size), resample_filter)
-            
-            # 3. Post-downscale sharpening
-            sharpened_img = resized_img.filter(ImageFilter.SHARPEN)
-            
-            # 4. Quantize to adaptive 64-color palette with dithering for retro pixel-art look
-            dither_val = Image.Dither.FLOYDSTEINBERG if hasattr(Image, 'Dither') else 1
-            quantized_img = sharpened_img.quantize(colors=64, dither=dither_val)
-            
-            # 5. Convert back to RGB for device/display compatibility
-            final_img = quantized_img.convert("RGB")
-            final_img.save(out_path)
-            return out_path
-    except Exception as e:
-        logger.error(f"Downsampling artwork failed: {e}")
-    return None
-
+# ── now-playing REMOVED (R67/C2, 2026-08-29) ──────────────────────────────
+#
+# `get_current_playing_track`, `fetch_album_art_url` and
+# `render_and_downsample_artwork` lived here and were a SECOND implementation of
+# what divoomd already did in Rust. Both drove AppleScript at each player in
+# turn and then guessed a cover-art URL from the iTunes Search API — a guess
+# that cannot resolve non-album content (YouTube Music, podcasts, live sets) and
+# needs a network round trip in order to fail. Running in the GUI process is
+# also why the GUI was the thing asking for Apple Music access.
+#
+# The daemon now owns the question and answers it from macOS MediaRemote, which
+# returns the exact image the player is displaying, as bytes, for every player
+# that publishes to Now Playing — with no per-app Automation grant. Ask it:
+#
+#     DaemonClient().now_playing(include_artwork=True)
+#
+# See the `nowplaying` crate and divoomd/src/now_playing.rs.
 
 def fetch_stock_ticker(symbol: str) -> dict | None:
     """

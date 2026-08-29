@@ -12,51 +12,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // (Frameless window drag handler lives in app.js, see "0. FRAMELESS WINDOW DRAG".)
 
-    // ── 2. LIVE COVER ART POLLING (visualizer removed: Rams #10) ──
-    let trackTimer = null;
     let sysmonTimer = null;
     let stockTimer = null;
 
-    function pollTrackInfo() {
-        if (window.pywebview && window.pywebview.api && window.pywebview.api.get_current_track_info) {
-            window.pywebview.api.get_current_track_info().then(infoJson => {
-                if (infoJson) {
-                    const info = JSON.parse(infoJson);
-                    if (info && info.track) {
-                        document.getElementById("music-track-name").textContent = info.track;
-                        document.getElementById("music-artist-name").textContent = `${info.artist} (${info.source})`;
-                        if (info.artwork_url) {
-                            document.getElementById("music-cover-img").src = info.artwork_url;
-                        }
-                        const devPrev = document.getElementById("music-device-preview");
-                        if (devPrev && info.preview) {
-                            devPrev.src = info.preview;
-                            devPrev.style.display = "inline-block";
-                            // R46 #2: cover art is the device's last-active element.
-                            if (selectedWidget === "music") window.markActiveDeviceFrame?.(info.preview);
-                        }
-                    }
-                }
-            });
-        }
-    }
-
-    function startTrackPolling() {
-        if (trackTimer) return;
-        pollTrackInfo();
-        trackTimer = setInterval(pollTrackInfo, 3000);
-    }
-
-    function stopTrackPolling() {
-        if (trackTimer) {
-            clearInterval(trackTimer);
-            trackTimer = null;
-        }
-    }
-
-    // R11: the manual "Push Cover Art" button is obsolete — cover art is pushed
-    // automatically when sync is on and the track changes (and immediately on
-    // enable). The button + its handler were removed.
+    // ── 2. LIVE COVER ART ─────────────────────────────────────────────
+    // Split to widgets_music.js for the 500-line cap; it exposes
+    // window.startTrackPolling / window.stopTrackPolling and asks this file
+    // which card is selected via window.selectedWidgetIs().
+    const startTrackPolling = () => window.startTrackPolling?.();
+    const stopTrackPolling = () => window.stopTrackPolling?.();
 
     // ── 3. YAHOO STOCKS TICKER WIDGET ──
     // R24 #9: no "Display" button — a symbol is shown automatically when typed
@@ -185,6 +149,9 @@ document.addEventListener("DOMContentLoaded", () => {
     //  declaration at line ~284 already attaches the handler.)
 
     let selectedWidget = "music"; // Default selected widget is cover art
+    // Single owner of the selection; widgets_music.js asks rather than keeping
+    // a second copy that could drift.
+    window.selectedWidgetIs = (id) => selectedWidget === id;
     let weatherTimer = null;  // R15 §3: 10-minute poll for the weather card
 
     // R15 §3: weather card icon SVGs (one per WeatherType). Inline so the

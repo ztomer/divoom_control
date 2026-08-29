@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "divoomd",
     "divoom-menubar",
+    "nowplaying",
 ]
 
 # references/ holds three VENDORED Cargo projects (gitignored) kept as protocol

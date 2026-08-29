@@ -195,6 +195,11 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
 
         "hot_update_progress" => crate::art::cmd_hot_update_progress(&daemon.hot_progress),
 
+        // R67/C2: the ONE place "what is playing?" is answered. The GUI used to
+        // answer it a second time in Python, which is why the GUI was the
+        // process asking for Apple Music access.
+        "now_playing" => crate::now_playing::cmd_now_playing(&req.args),
+
         // --- wall command ---
         "wall_configure" => daemon.cmd_wall_configure(&req).await,
 

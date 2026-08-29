@@ -43,6 +43,15 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   fi
 fi
 
+# The MediaRemote helper the daemon shells out to for now-playing + album art.
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  if bash scripts/build_nowplaying_helper.sh >/dev/null 2>&1; then
+    ok "now-playing helper"
+  else
+    warn "now-playing helper failed to build — album art will report unavailable"
+  fi
+fi
+
 info "cargo build ${FLAG:-(debug)} — divoomd"
 cargo build $FLAG -p divoomd
 ok "divoomd"

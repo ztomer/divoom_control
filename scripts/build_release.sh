@@ -51,6 +51,11 @@ if ! command -v cargo >/dev/null 2>&1 && [ -x "${HOME}/.cargo/bin/cargo" ]; then
   export PATH="${HOME}/.cargo/bin:${PATH}"
 fi
 command -v cargo >/dev/null 2>&1 || { echo "ERROR: cargo not found (needed for divoomd/divoom-menubar)." >&2; exit 1; }
+# The now-playing helper (MediaRemote host dylib + its perl loader), shipped
+# next to the daemon inside the bundle.
+echo "→ building now-playing helper"
+bash scripts/build_nowplaying_helper.sh >/dev/null
+
 echo "→ building native rust daemon (divoomd)"
 ( cd divoomd && cargo build --release )
 echo "→ building native rust menubar (divoom-menubar)"
@@ -69,7 +74,7 @@ APP="dist/Divoom.app"
 [[ -d "${APP}" ]] || { echo "ERROR: PyInstaller did not produce ${APP}." >&2; exit 1; }
 
 # 2b. Ensure the bundled Rust binaries are executable (PyInstaller datas can drop +x).
-for b in divoomd divoom-menubar; do
+for b in divoomd divoom-menubar libnp_helper.dylib np_load.pl; do
   f="${APP}/Contents/Frameworks/bin/${b}"
   if [[ -f "${f}" ]]; then
     chmod +x "${f}"
