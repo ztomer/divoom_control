@@ -643,14 +643,38 @@ reason.
 
 ### Open, and deliberately not rushed
 
-- **C7 audit** — 49 other `args.get(N)` / `args.first()` reads are unaudited;
-  `text.rs` is known-latent. One verified handler at a time, not a blind sweep.
-- **C2, the remaining half** — weather and sysmon are still implemented twice
-  (Python for the preview, Rust for the device). Music is done; the same
-  treatment is Phase 3's job for weather.
-- **Feishin** is still a Python-only provider (`media_source_feishin.py`) and is
-  not yet a `nowplaying` provider. It needs no Apple Events, so it is not
-  urgent — but until it is folded in, a Feishin track only reaches the device if
-  Feishin publishes to Now Playing.
-- The GUI's ambient preview tiles are still static CSS that do not reflect
-  device state (C2's dishonest-preview half).
+_Reviewed and corrected 2026-08-30 — the previous list had gone stale as the
+phases landed._
+
+**Done since this list was first written:** the C7 audit (all 64 positional
+readers checked, 6 real bugs fixed, `tools/check_positional_args.py` gating it),
+Phase 3 (weather), Phase 4 (virtual wall), the Feishin port, and the daemon
+protocol audit.
+
+**A correction:** `text.rs` was recorded here as a "known-latent" C7 instance.
+It is not. Its arms match on a numeric control word rather than a method name,
+and they belong to `set_light_phone_word_attr(control: int, **kwargs)` — only
+`control` is positional, so the `args.get(1)`/`args.get(2)` reads are never
+populated by the proxy and the kwargs fallback is the live path. The original
+claim was an overstatement.
+
+Genuinely remaining:
+
+- **C2's last piece — sysmon is still implemented twice.**
+  `divoom_lib/utils/media_source.py` renders the preview (psutil) and
+  `divoomd/src/live_jobs/render.rs` renders what the device gets. Music and
+  weather have both been unified; this is the same treatment. Lower value than
+  those two were — the numbers are simple and there is no artwork to disagree
+  about — but the preview and the panel can still drift.
+- **The ambient preview tiles are static CSS** (`channels_grids.js`): flat
+  colour blocks that do not reflect device state. This is C2's
+  dishonest-preview half, and the reason the ambient bug looked like
+  "green/magenta" rather than "the mode never reached the device".
+- **Feishin's Media Session is off by user choice**, so the weaker Subsonic path
+  remains its source. One toggle in Feishin whenever wanted.
+- **Two daemons observed once, not reproduced.** A deliberate simultaneous-launch
+  race shows the bind guard holds (the loser exits "cannot bind: File exists"),
+  so this was probably a startup transient. Worth re-checking if connection
+  flakiness returns.
+- **Nothing is released.** Every change since v0.26.0 sits under `## Unreleased`;
+  shipping needs a version bump, a CHANGELOG stanza and a tag.
