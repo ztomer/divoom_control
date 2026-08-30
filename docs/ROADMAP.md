@@ -1,7 +1,9 @@
 # Roadmap — divoom-control
 
 Consolidated view of shipped rounds, current state, and future work.
-See `docs/PLANNING_ROUND*.md` for detailed scope per round.
+Per-round plans are pruned to git history once shipped; this file is the
+forward-looking one. Recover a round plan with
+`git log --diff-filter=D -- 'docs/PLANNING_*'`.
 
 ---
 
@@ -45,8 +47,8 @@ See `docs/PLANNING_ROUND*.md` for detailed scope per round.
 | **R60** | Open-thread verification: docstring strip, durable `device_call` parity test (caught + closed 15 key-alias gaps), `show_clock()` realigned to APK `C2()` canonical, `get_*` read-back timeouts bounded+cached, Python daemon marked REFERENCE/FALLBACK, Ditoo soak, cloud-decode push (3/4 devices) | — | `tests/test_device_call_parity.py`, `display/__init__.py`, `divoom_daemon/*` |
 | **R61** | Release v0.22.9 + doc prune + **Cloud HTTP** (`UserNewGuest` RC=10 fix + clock-face store) + coverage gate (≥95%, hit 96%) + hardware-verified device detect/connect | — | `divoom_auth.py`, `cloud.py`, `cloud_cmds.rs` |
 | **R61 follow-up** | Release v0.22.10 — real daemon+UI e2e connect/disconnect verification (mock-transport drop simulation, `tests/e2e_gui_bridge.py`) + **native menubar now shows device connect/disconnect/degraded** (previously only reflected the notification monitor) + device-loop thread-teardown hardening | 3197/97/0 | `divoomd/src/daemon_mock.rs`, `divoom-menubar/src/state.rs`, `tests/test_e2e_gui_daemon_connect_disconnect.py` |
-| **R66** | Repo restructure: one Cargo workspace, `divoom_daemon/`->`divoom_client/`, -14,240 LOC, six silently-degraded gates repaired | Py 2910/94, Rs 119/0 | `Cargo.toml`, `divoomd/src/paths.rs`, `docs/PLANNING_ROUND66.md` |
-| **R67** | Live-defect round: 7 named classes. Typed 0x45/0x5F packets; hot-channel events; socket ownership; live-job health; MediaRemote album art + player discovery; weather unified; **the virtual wall never worked** (3 showstoppers); daemon protocol audit + capability negotiation | Py 2904/0/94, Rs 244/0 | `divoomd/src/packets.rs`, `nowplaying/`, `divoomd/src/wall/dispatch.rs`, `docs/PLANNING_ROUND67.md` |
+| **R66** | Repo restructure: one Cargo workspace, `divoom_daemon/`->`divoom_client/`, -14,240 LOC, six silently-degraded gates repaired | Py 2910/94, Rs 119/0 | `Cargo.toml`, `divoomd/src/paths.rs` |
+| **R67** | Live-defect round: 7 named classes. Typed 0x45/0x5F packets; hot-channel events; socket ownership; live-job health; MediaRemote album art + player discovery; weather unified; **the virtual wall never worked** (3 showstoppers); daemon protocol audit + capability negotiation | Py 2904/0/94, Rs 244/0 | `divoomd/src/packets.rs`, `nowplaying/`, `divoomd/src/wall/dispatch.rs` |
 
 Suite: Rust 63+ passed / Python 3197 passed / 97 skipped (see `CHANGELOG.md` + CI).
 
@@ -88,7 +90,7 @@ Playing client at all. Settled by enumerating the client registry rather than
 by asking the user to quit apps. The fix is one toggle in Feishin, not code
 here; the daemon's `players` reply carries a hint naming the setting. Left off
 by user decision, so `nowplaying/src/feishin.rs` (Subsonic) remains its weaker
-source. Detail in `docs/PLANNING_ROUND67.md`.
+source. Detail in the v0.27.0 CHANGELOG stanza.
 
 **Open:**
 
@@ -103,7 +105,21 @@ source. Detail in `docs/PLANNING_ROUND67.md`.
   *execute* the Python renderer, which is the shape C2 covers. Low value: simple
   numbers, no artwork to disagree about.
 
-### Short-to-medium term (all shipped)
+### Deferred: raise the camoufox pin (e2e main-world migration)
+
+CI pins the browser BUILD (`camoufox set official/stable/152.0.4-beta.28`);
+pinning the pip package is not enough, since 0.5.4 accepts any build in
+`[alpha.1, 1)`. From build 152.0.4-beta.29 `page.evaluate`
+runs in an ISOLATED WORLD, so the app's globals (`window.DivoomState`, every
+render function) read as `undefined` and 60 e2e tests fail — with the page
+itself perfectly healthy (probed 2026-08-30: 29 scripts 200 OK, DOM built, zero
+console errors). Unpinned, that upgrade turned CI red on 2026-08-25 with no
+code change.
+
+Raising the pin means prefixing every `evaluate` / `wait_for_function` in the 15
+e2e modules with camoufox's `mw:`; `main_world_eval=True` only enables the
+prefix and does NOT restore the old default (verified). Rationale and method
+live at `tests/support/browser.py`.
 
 ### Short-to-medium term (all shipped)
 
@@ -215,7 +231,8 @@ R66 (2026-08-17); recover from git history if ever needed.
 Historical round plans (R3–R61) and superseded workstream plans were pruned to
 git history — `docs/archive/rounds/` and `docs/archive/superseded/` no longer
 exist. Recover any of them with `git log --diff-filter=D -- 'docs/**/PLANNING_*'`.
-`PLANNING_ROUND62.md` and later shipped rounds also archived there.
+`PLANNING_ROUND62.md` and later shipped rounds also archived there, including R66 and R67 (pruned 2026-08-30 once both shipped). This
+ROADMAP is the one forward-looking document; round plans are history.
 
 
 

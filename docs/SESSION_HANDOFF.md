@@ -12,9 +12,49 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 - **opencode**: `opencode -s ses_184471307ffeCUHgzv9w51O0oA` (or `opencode export <id>`).
 - **Claude Code**: reads `CLAUDE.md` → `AGENTS.md` → this file, plus `git log`.
-- Both: `git log --oneline`, `CHANGELOG.md`, `docs/PLANNING_ROUND*.md`.
+- Both: `git log --oneline`, `CHANGELOG.md`, `docs/ROADMAP.md`.
+- Historical entries below cite `docs/PLANNING_ROUNDn.md` files that were
+  pruned to git history once their round shipped (house rule: one
+  forward-looking doc). Recover one with
+  `git log --diff-filter=D -- 'docs/PLANNING_*'`.
 
 ## Current state — _update this section each round_
+
+- **2026-08-30 (R67 close-out) — three CI-only failures fixed; release still
+  UNTAGGED pending a green run.** Local gates green; Python suite green
+  locally on camoufox 0.5.4.
+
+  All three were the same shape: **a fact verified in one environment and
+  trusted in another.**
+
+  * `check_positional_args` gave OPPOSITE verdicts on macOS and Linux for the
+    same commit. It regexed raw source (so a comment quoting `args.get(1)`
+    matched as code) and picked Python signatures first-wins over an unsorted
+    `rglob` (so the annotated-vs-bare `show_light` winner depended on
+    filesystem order). The APFS answer masked the comment bug; ext4 exposed it.
+    Now sorted + richest-signature-wins + comment-blind (`tools/_srcscan.py`,
+    also used by `check_weather_parity`). Both defects pinned by
+    `tests/test_positional_gate.py`, each proven red first.
+  * **The Linux build broke twice this round** on an ungated reference to the
+    macOS-only `nowplaying` crate. A macOS box cannot see that class, so CI was
+    the only instrument. `scripts/check_linux_build.sh` now cross-compiles
+    divoomd for Linux with zig (wired into `.gatesrc`), calibrated by
+    confirming it reproduces CI's exact `error[E0432]`.
+  * **The 60 browser-e2e failures were never ours.** Unpinned `camoufox`
+    upgraded to 0.5.5, whose browser isolates `page.evaluate` from the main
+    world, so `window.DivoomState` reads `undefined`. Reproduced locally and
+    probed (29 scripts 200 OK, DOM built, zero console errors -- the page is
+    fine). The variable is the BROWSER BUILD: same package 0.5.4, beta.29 fails
+    and beta.28 passes, and a package pin alone would NOT have fixed CI. Pinned
+    with `camoufox set official/stable/152.0.4-beta.28`.
+
+  **Open thread:** raising the camoufox pin is a MIGRATION — every `evaluate` /
+  `wait_for_function` in the 15 e2e modules needs camoufox's `mw:` prefix
+  (`main_world_eval=True` alone does not restore the old default; verified).
+  Details at `tests/support/browser.py`.
+
+  **Next action: tag v0.27.0** once CI is green (`scripts/release.sh`). The
+  version, CHANGELOG and crates are all at 0.27.0 already.
 
 - **2026-08-29 (R67 Phases 3-4) — ROADMAP COMPLETE. All phases verified on
   hardware.** Python **2904 / 0 failed / 94 skipped; Rust 243 / 0.** Gates green.
@@ -288,7 +328,7 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 The full round-by-round history (R3–R64, ~2k lines) is archived at
 `docs/archive/SESSION_HANDOFF_2026-07-27.md`. Recover individual rounds from
-`CHANGELOG.md`, `docs/PLANNING_ROUND*.md` (current round only), and `git log`.
+`CHANGELOG.md`, `docs/ROADMAP.md`, and `git log`.
 
 ## Hardware note
 

@@ -9,8 +9,9 @@ After **each round of work**, before stopping, update the cross-session handoff 
 the next agent (Claude or opencode) can continue:
 
 1. Update **`docs/SESSION_HANDOFF.md`** — "Current state" + "Open threads".
-2. Add/extend the round's **`CHANGELOG.md`** entry, and the current
-   **`docs/PLANNING_ROUND*.md`** outcome section.
+2. Add/extend the round's **`CHANGELOG.md`** entry, and record shipped/open
+   work in **`docs/ROADMAP.md`** (the one forward-looking doc — per-round
+   planning files are pruned to git history once the round ships).
 3. **Commit** each logical change with a clear message; keep tests green
    (`python3 -m pytest`) and note pass/skip counts.
 

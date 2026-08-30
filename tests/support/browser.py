@@ -15,6 +15,28 @@ Before R66 each of the 15 e2e modules called
 2. **The engine was copy-pasted 17 times.** Swapping it meant touching every
    file, which is why it never happened. It is now one function.
 
+Version: CI pins the **browser build** to ``official/stable/152.0.4-beta.28``
+via ``camoufox set``. Pinning the pip package is NOT sufficient -- camoufox
+0.5.4 accepts any build in ``[alpha.1, 1)``, so a bare ``camoufox fetch`` takes
+the newest one regardless.
+
+Browser build 152.0.4-beta.29 (2026-08-20) runs ``page.evaluate`` in an
+ISOLATED WORLD,
+so main-world globals the app defines -- ``window.DivoomState`` and every
+render function -- read as ``undefined``. The page itself is fine: probed on
+2026-08-30, all 29 scripts fetch 200, the DOM builds, and there is not a single
+console or page error. Only the *view* from ``evaluate`` changed. That upgrade
+alone turned CI red on 2026-08-25 (60 failures, no code change) while every
+developer machine, holding an older cached browser, stayed green. Isolated on
+2026-08-30 by holding the package at 0.5.4 and moving ONLY the build: beta.29
+fails, beta.28 passes.
+
+Raising the pin is a MIGRATION, not a version bump: camoufox exposes the main
+world through an ``mw:`` script prefix, and ``main_world_eval=True`` only
+enables that prefix -- it does not restore the old default (verified, the test
+still fails with it on). Every ``evaluate`` / ``wait_for_function`` call in the
+15 e2e modules would need the prefix.
+
 Engine: **camoufox** (anti-detect Firefox) rather than Chromium. It is the house
 browser-automation transport (see the ``gemini-camoufox`` skill), so this
 consolidates on one engine instead of also carrying a ~130 MB Chromium download

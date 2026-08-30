@@ -14,8 +14,11 @@ MUST update the handoff so the *next* session — including the opencode session
 1. **docs/SESSION_HANDOFF.md** — update "Current state" + "Open threads / next
    up". This is the canonical living state both tools read first.
 2. **CHANGELOG.md** — add/extend the round's entry (what shipped, where, why).
-3. **docs/PLANNING_ROUNDn.md** — fill the "outcome / what shipped" section of the
-   current round's plan (and create the next round's plan when starting one).
+3. **docs/ROADMAP.md** — record what shipped and what is still open. This is the
+   ONE forward-looking document; per-round `PLANNING_ROUNDn.md` files are pruned
+   to git history once their round ships (house rule: a per-feature plan
+   graveyard rots and misleads later sessions). Write a round plan while a round
+   is in flight if it helps, then prune it on the way out.
 4. **Commit** the work with a clear, scoped message (one logical change per
    commit) so `git log` is a faithful, readable history of the round.
 5. **Tests green** before you call a round done (`python3 -m pytest`), and state

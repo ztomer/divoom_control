@@ -34,6 +34,52 @@ Six new structural gates: `check_scripts`, `check_positional_args`,
 
 Python 2912 / 0 failed / 94 skipped. Rust 244 / 0.
 
+### When the gates disagreed with CI
+
+Three of this round's own gates were wrong in ways that only CI could see, and
+each is the same shape as the bugs they were built to catch: a fact checked in
+one environment and trusted in another.
+
+**`check_positional_args` returned different verdicts on different
+filesystems.** It failed CI on `display.show_light` and passed locally on the
+same commit. Two stacked defects: it regexed RAW SOURCE, so the comment
+explaining that brightness *"used to read `args.get(1)`"* matched as if it were
+code — the gate flagged the handler it had already fixed; and it selected
+Python signatures with `setdefault` over an UNSORTED `rglob`, so for a name
+defined twice (`show_light`: annotated in `display/__init__.py`, bare in
+`display/light.py`) the winner depended on directory order. APFS returned the
+bare one, which masked defect 1; ext4 returned the annotated one, which
+unmasked it. Now sorted, richest-signature-wins, and comment-blind via
+`tools/_srcscan.py` — which `check_weather_parity` also uses, since it would
+have read a commented-out `(code, WeatherType::X)` as a live table entry.
+
+**60 browser e2e tests went red with no code change.** CI had been failing
+since 2026-08-25 and the range that broke it touched only gate scripts -- no
+web UI, no test support. The cause was an UNPINNED test dependency: `pip
+install camoufox` picked up 0.5.5 (browser 152.0.4-beta.29), which runs
+`page.evaluate` in an ISOLATED WORLD, so `window.DivoomState` and every render
+function read as `undefined`. Reproduced locally by building a 0.5.5
+environment -- byte-identical error -- and probed to rule out the obvious
+alternative: all 29 scripts fetch 200, the DOM builds, and there is not one
+console or page error. The page works; only `evaluate`'s view of it changed.
+The variable is the BROWSER BUILD, not the pip package: holding camoufox at
+0.5.4 and moving only the build reproduces it exactly (beta.29 fails, beta.28
+passes). Pinning the package would not have fixed CI -- 0.5.4 accepts any build
+in `[alpha.1, 1)`, so `camoufox fetch` still takes the newest. CI now pins the
+build with `camoufox set official/stable/152.0.4-beta.28`. Raising it is a
+migration (every `evaluate` needs camoufox's `mw:` prefix; `main_world_eval=True`
+alone does not restore the old default), recorded at `tests/support/browser.py`.
+
+**The Linux build broke twice the same way.** `nowplaying` is macOS-only
+(MediaRemote), and a reference to it stayed ungated — the second time as
+`use music_job::run_music` beside an already-gated `mod`. A macOS machine is
+structurally incapable of seeing that class, so the full local gate went green
+both times and CI was the only instrument, making each fix a blind
+push-and-wait. `scripts/check_linux_build.sh` now cross-compiles divoomd for
+`x86_64-unknown-linux-gnu` with zig and is wired into the local gate;
+calibrated by removing the cfg and confirming it reproduces CI's exact
+`error[E0432]` before being trusted.
+
 ### Weather, and a virtual wall that never worked
 
 **Weather (C2's remaining half).** The Rust and Python WMO tables were diffed

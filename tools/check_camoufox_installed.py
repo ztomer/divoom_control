@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify a camoufox browser BINARY is actually installed.
+"""Verify the EXPECTED camoufox browser build is the active one.
 
 `python -m camoufox fetch` exits 0 when it installs nothing. CI run 32654312489
 hit GitHub's unauthenticated API rate limit, printed three 403s and "Synced 0
@@ -8,7 +8,19 @@ later inside pytest, looking like a test regression rather than a failed
 install. A step that cannot fail is not a gate, so check the artifact rather
 than the exit code.
 
-Exit 0 when a browser is present (prints the version), non-zero otherwise.
+It also checks WHICH build is active, because the build is load-bearing:
+152.0.4-beta.29 runs `page.evaluate` in an isolated world, so the app's globals
+read as `undefined` and 60 e2e tests fail while the page itself is healthy.
+Pinning the pip package does not prevent that -- camoufox 0.5.4 accepts any
+build in [alpha.1, 1), so a bare `fetch` takes the newest. Checking only that
+*a* browser exists would let that drift back in silently, which is the same
+failure this file was written for one level down.
+
+Override with CAMOUFOX_EXPECTED_BUILD when deliberately testing another build;
+set it empty to skip the build check and only require presence.
+
+Exit 0 when the expected browser is active (prints the version), non-zero
+otherwise.
 
 Used by .github/workflows/tests.yml (as the retry's loop condition, so a
 transient rate limit retries instead of poisoning the run) and reported by
@@ -18,7 +30,12 @@ skipped".
 
 from __future__ import annotations
 
+import os
 import sys
+
+# Keep in step with `camoufox set` in .github/workflows/tests.yml and the
+# rationale in tests/support/browser.py.
+EXPECTED_BUILD = os.environ.get("CAMOUFOX_EXPECTED_BUILD", "152.0.4-beta.28")
 
 
 def installed_version() -> str | None:
@@ -45,6 +62,16 @@ def main() -> int:
             "camoufox browser NOT installed — `camoufox fetch` may have exited 0 "
             "without installing anything (check for GitHub API 403 rate limits "
             "above). The 15 GUI e2e suites cannot run.",
+            file=sys.stderr,
+        )
+        return 1
+    if EXPECTED_BUILD and version != EXPECTED_BUILD:
+        print(
+            f"camoufox browser is {version}, expected {EXPECTED_BUILD}. The e2e "
+            f"suite is pinned to a build whose page.evaluate reaches the MAIN "
+            f"world; a newer build isolates it and fails ~60 tests with the app "
+            f"working fine. Run: python -m camoufox set "
+            f"official/stable/{EXPECTED_BUILD}  (see tests/support/browser.py)",
             file=sys.stderr,
         )
         return 1

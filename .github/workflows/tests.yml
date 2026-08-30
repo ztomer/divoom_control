@@ -71,7 +71,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt || true
-          pip install pytest pillow pyaudio playwright camoufox
+          # Pinned for reproducibility. NOTE: this pin is not the one that
+          # fixes the e2e suite -- the BROWSER BUILD is (see the fetch step
+          # below). 0.5.4 accepts any build in [alpha.1, 1), so pinning the
+          # package alone still lets `fetch` take the newest browser.
+          pip install pytest pillow pyaudio playwright 'camoufox==0.5.4'
 
       - name: Install the camoufox browser
         # The GUI e2e suites (15 modules) drive headless camoufox via
@@ -90,6 +94,16 @@ jobs:
         #      and it lifts the limit to 1000/hr/repo.
         #   2. The verify step removes the SILENCE — a step that cannot fail
         #      is not a gate, so we check the artifact, not the exit code.
+        #
+        # The BROWSER BUILD is pinned, and pinning the pip package is NOT
+        # enough: camoufox 0.5.4 accepts any build in [alpha.1, 1), so a bare
+        # `fetch` takes the newest. Build 152.0.4-beta.29 (2026-08-20) runs
+        # page.evaluate in an ISOLATED WORLD — window.DivoomState reads
+        # undefined and 60 e2e tests fail while the page itself is healthy.
+        # That is what turned CI red on 2026-08-25 with no code change.
+        # Proven on 2026-08-30 by holding the package at 0.5.4 and moving only
+        # the build: beta.29 fails, beta.28 passes. See tests/support/browser.py
+        # for the migration needed to raise this pin.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -98,7 +112,7 @@ jobs:
           # the exit code would never retry the failure we actually saw, because
           # that failure exits 0 -- the loop would break on attempt 1 every time.
           for attempt in 1 2 3; do
-            python -m camoufox fetch || true
+            python -m camoufox set official/stable/152.0.4-beta.28 || true
             if python3 tools/check_camoufox_installed.py; then
               exit 0
             fi
