@@ -38,12 +38,8 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import socket
-import subprocess
 import sys
-import tempfile
 import threading
-import time
 from pathlib import Path
 
 import pytest
@@ -51,6 +47,7 @@ import pytest
 sys.path.append(str(Path(__file__).parent.parent))
 
 from divoom_client.daemon_protocol import DaemonClient
+from tests.support.gui_daemon_stack import IsolatedStack
 from tests.support.browser import (
     add_init_js,
     eval_js,
@@ -82,111 +79,22 @@ window.pywebview = { api: new Proxy({}, { get: (_t, name) => (...args) => {
 """
 
 
-def _free_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
 def _find_rust_binary() -> Path | None:
-    """The most recently BUILT divoomd. See tests/support/daemon_binary.py for
-    why `target/release` must not simply win: nothing here rebuilds it, so a
-    leftover release binary silently became the daemon under test."""
+    """The built divoomd matching this tree's version.
+
+    See tests/support/daemon_binary.py for why `target/release` must not simply
+    win, and why the answer is the binary's own version rather than its path.
+    """
     from tests.support.daemon_binary import find_divoomd
 
     return find_divoomd()
 
 
-class _IsolatedStack:
-    """Owns the daemon + bridge subprocesses; kills only its own PIDs."""
-
-    def __init__(self, bin_path: Path):
-        self.socket_path = f"/tmp/divoomd_e2e_gui_{os.getpid()}.sock"
-        if os.path.exists(self.socket_path):
-            os.remove(self.socket_path)
-        self.bridge_port = _free_port()
-        self.fake_home = tempfile.mkdtemp(prefix="divoom_e2e_home_")
-        self.bridge_url = f"http://127.0.0.1:{self.bridge_port}"
-
-        self.daemon_proc = subprocess.Popen(
-            [str(bin_path), "--socket", self.socket_path],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-        )
-        self._wait_for_socket(self.socket_path)
-
-        self.bridge_proc = subprocess.Popen(
-            [sys.executable, str(BRIDGE_SCRIPT),
-             "--socket-path", self.socket_path,
-             "--port", str(self.bridge_port),
-             "--fake-home", self.fake_home],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-        )
-        self._wait_for_http(self.bridge_port)
-
-        self.client = DaemonClient(self.socket_path)
-        self._assert_daemon_is_current(bin_path)
-
-    def _assert_daemon_is_current(self, bin_path: Path) -> None:
-        """Fail loudly, and CLEAN UP FIRST, if the daemon is not this version.
-
-        `self.close` is passed as the teardown: this runs inside `__init__`, so
-        raising without it leaves the daemon holding the shared socket path and
-        its advisory startup lock, and the next three tests die with "another
-        divoomd is starting up" instead of the actual reason.
-        """
-        from tests.support.daemon_binary import assert_daemon_is_current
-
-        assert_daemon_is_current(self.client, bin_path, on_mismatch=self.close)
-
-    def _wait_for_socket(self, path: str, timeout: float = 5.0) -> None:
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            if os.path.exists(path):
-                return
-            if self.daemon_proc.poll() is not None:
-                out, err = self.daemon_proc.communicate(timeout=1.0)
-                pytest.fail(f"divoomd exited early. stdout={out} stderr={err}")
-            time.sleep(0.05)
-        pytest.fail(f"divoomd never bound {path}")
-
-    # Generous: the bridge is a fresh interpreter that cold-imports the whole
-    # divoom_gui stack (bleak, pyobjc, PIL, aiohttp) before it binds. That is
-    # sub-second warm locally but seconds on a cold CI runner under load, so a
-    # tight timeout produced spurious "never opened port" errors.
-    def _wait_for_http(self, port: int, timeout: float = 30.0) -> None:
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            try:
-                with socket.create_connection(("127.0.0.1", port), timeout=0.2):
-                    return
-            except OSError:
-                if self.bridge_proc.poll() is not None:
-                    out, err = self.bridge_proc.communicate(timeout=1.0)
-                    pytest.fail(f"e2e_gui_bridge exited early. stdout={out} stderr={err}")
-                time.sleep(0.05)
-        # Still alive but never bound — kill it and surface its output so a real
-        # hang is diagnosable rather than an opaque timeout.
-        self.bridge_proc.terminate()
-        try:
-            out, err = self.bridge_proc.communicate(timeout=2.0)
-        except subprocess.TimeoutExpired:
-            self.bridge_proc.kill()
-            out, err = self.bridge_proc.communicate(timeout=2.0)
-        pytest.fail(
-            f"e2e_gui_bridge never opened port {port} in {timeout}s. "
-            f"stdout={out} stderr={err}")
-
-    def close(self) -> None:
-        for proc in (self.bridge_proc, self.daemon_proc):
-            proc.terminate()
-        for proc in (self.bridge_proc, self.daemon_proc):
-            try:
-                proc.wait(timeout=3.0)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait(timeout=2.0)
-        if os.path.exists(self.socket_path):
-            os.remove(self.socket_path)
+# The stack itself lives in tests/support/gui_daemon_stack.py: this file was at
+# 448 of the 500-line cap, and its teardown invariant needs to be testable from
+# a module that does not require a browser to be collected.
+# See tests/test_e2e_stack_teardown.py.
+_IsolatedStack = IsolatedStack
 
 
 class _EventRelay:

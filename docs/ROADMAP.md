@@ -136,6 +136,27 @@ minutes). So phases 2 and 3 land the plumbing and say plainly, in the UI, that
 the render is unconfirmed — rather than either blocking on hardware or pretending
 the feature is verified.
 
+#### Step ledger — the resumable state
+
+Each step is one commit. **Update the status column in the same commit as the
+step**, so this table and the git history cannot drift: a session that resumes
+here reads the first non-DONE row and starts there, and that only works if the
+table is written by the step rather than by a tidy-up pass afterwards.
+
+| Step | What | Status |
+|------|------|--------|
+| P1.1 | Every exit from `_IsolatedStack.__init__` goes through `close()` | TODO |
+| P1.2 | Socket path keyed on per-stack identity, not the pytest PID | TODO |
+| P1.3 | Regression test: no surviving PIDs on each failure path | TODO |
+| P1.4 | Sweep the sibling harnesses for the same shape | TODO |
+| P2.1 | Audit the five LAN commands' arg + reply shapes against the daemon | TODO |
+| P2.2 | GUI API methods forwarding to the daemon (client, never a 2nd impl) | TODO |
+| P2.3 | Voice/SendText UI + e2e | TODO |
+| P2.4 | Danmaku UI (send text, random face) + e2e | TODO |
+| P2.5 | 5-LCD UI, gated on the negotiated capability + e2e | TODO |
+| P3.1 | `search_weather_city` UI + e2e | TODO |
+| P4.1 | Raise the Rust coverage floor off 29%, in steps | TODO |
+
 #### Phase 1 — the e2e harness leaks the processes it spawns
 
 Found while auditing on 2026-08-30: **ten orphaned processes** from earlier
