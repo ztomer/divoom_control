@@ -230,6 +230,23 @@ impl WeatherPacket {
     }
 }
 
+/// Parse `#RRGGBB` (or `RRGGBB`) into bytes.
+///
+/// R67: this existed in THREE copies — display.rs, text.rs and sleep.rs. A
+/// helper duplicated per file is one that eventually differs per file, which is
+/// the same class as the packet builders this module exists to unify.
+pub fn parse_hex_color(s: &str) -> Option<[u8; 3]> {
+    let s = s.trim().trim_start_matches('#');
+    if s.len() != 6 {
+        return None;
+    }
+    Some([
+        u8::from_str_radix(&s[0..2], 16).ok()?,
+        u8::from_str_radix(&s[2..4], 16).ok()?,
+        u8::from_str_radix(&s[4..6], 16).ok()?,
+    ])
+}
+
 /// A bare channel-switch packet: `[channel, 0 x 9]`.
 ///
 /// The device needs the full 10 bytes to switch reliably; a short packet is

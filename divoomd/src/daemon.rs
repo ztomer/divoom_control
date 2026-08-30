@@ -62,7 +62,7 @@ pub struct Daemon {
     encoder: OnceLock<Option<NativeEncoder>>,
     pub(crate) tx: tokio::sync::broadcast::Sender<Value>,
     pub live_jobs: Arc<crate::live_jobs::LiveJobCoordinator>,
-    self_weak: OnceLock<Weak<Daemon>>,
+    pub(crate) self_weak: OnceLock<Weak<Daemon>>,
     /// Shared progress state for the background hot-update task.
     pub hot_progress: Arc<crate::art::HotProgress>,
     /// Current wall coordinator (None when no wall is active).
@@ -150,6 +150,16 @@ impl Daemon {
         let token = req.args.get("token").and_then(|v| v.as_str());
         if let Err(e) = self.queue.check_allowed(token) {
             return err_reply(&e.to_string());
+        }
+
+        // R67: `target` was NEVER READ. The Python client has always sent
+        // `target: "wall"` for wall operations (DaemonDeviceProxy(target="wall")),
+        // and the daemon ignored it and used the single device — so a configured
+        // wall received nothing, and with no single device connected the GUI got
+        // "no device connected" instead. Together with the address-casing bug in
+        // ble/connect.rs, that is why the virtual wall did not work at all.
+        if req.args.get("target").and_then(|v| v.as_str()) == Some("wall") {
+            return self.wall_device_call(req).await;
         }
 
         let guard = self.device.lock().await;

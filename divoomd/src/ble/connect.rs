@@ -47,7 +47,20 @@ pub(super) async fn connect(central: &BleCentral, id: &str) -> BleResult<BleTran
     while Instant::now() < deadline {
         match tokio::time::timeout(Duration::from_secs(2), central.peripherals()).await {
             Ok(peripherals) => {
-                if let Some(p) = peripherals?.into_iter().find(|p| p.id().to_string() == id) {
+                // R67: case-INSENSITIVE. This was `==`, and it made the virtual
+                // wall impossible to connect on macOS: `wall_configure`
+                // uppercases its slot keys (a convention that fits real MAC
+                // addresses like AA:BB:CC), while macOS identifies peripherals
+                // by a LOWERCASE UUID. The uppercased id therefore matched
+                // nothing and every slot failed with "All wall slots failed to
+                // connect" — for a device that had just been found by a scan.
+                //
+                // Fixed at the matching site rather than at the one caller, so
+                // no future caller has to know the casing convention.
+                if let Some(p) = peripherals?
+                    .into_iter()
+                    .find(|p| p.id().to_string().eq_ignore_ascii_case(id))
+                {
                     found = Some(p);
                     break;
                 }

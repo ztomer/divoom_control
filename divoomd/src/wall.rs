@@ -8,6 +8,7 @@ use std::sync::Arc;
 use crate::daemon::{Daemon, DeviceTransport};
 
 mod cmds;
+mod dispatch;
 pub(crate) use cmds::cmd_wall_configure;
 
 pub struct WallConfig {
@@ -298,25 +299,58 @@ impl DivoomWall {
         ok && self.degraded_slots().is_empty()
     }
 
-    pub async fn set_light(&self, color: [u8; 3], brightness: u8) -> bool {
+    /// R67: this hand-built `[0x01, brightness, R, G, B, 0x01]` — with
+    /// BRIGHTNESS AND RGB TRANSPOSED against the canonical
+    /// `[channel, R, G, B, brightness, type, power, 0, 0, 0]`, only six bytes
+    /// instead of ten, and the trailing `0x01` landing in the lighting-TYPE
+    /// slot rather than power. So a wall ambient push sent the wrong colour,
+    /// the wrong brightness and mode "Love". The Python wall never had this
+    /// bug because it DELEGATES to `display.show_light`; the port re-derived
+    /// the payload by hand and got it wrong.
+    pub async fn set_light(
+        &self,
+        color: [u8; 3],
+        brightness: u8,
+        kind: crate::packets::LightingType,
+    ) -> bool {
+        let packet = crate::packets::LightPacket {
+            rgb: color,
+            brightness,
+            kind,
+            power: true,
+        };
+        self.broadcast_command(crate::packets::CMD_SET_LIGHT_MODE, &packet.to_bytes())
+            .await
+    }
+
+    pub async fn show_clock(&self, clock: u8) -> bool {
+        let packet = crate::packets::ClockPacket {
+            style: clock,
+            ..Default::default()
+        };
+        self.broadcast_command(crate::packets::CMD_SET_LIGHT_MODE, &packet.to_bytes())
+            .await
+    }
+
+    /// R67: was `[0x03, number]` — two bytes, and NOT 1-indexed. The device
+    /// needs the full ten (see the padding notes in
+    /// `divoom_lib/display/__init__.py`) and VJ effects are 1-indexed on BLE,
+    /// so this sent the wrong effect in a packet the device may ignore outright.
+    pub async fn show_effects(&self, number: u8) -> bool {
         self.broadcast_command(
-            0x45,
-            &[0x01, brightness, color[0], color[1], color[2], 0x01],
+            crate::packets::CMD_SET_LIGHT_MODE,
+            &crate::packets::vj_effect(number),
         )
         .await
     }
 
-    pub async fn show_clock(&self, clock: u8) -> bool {
-        self.broadcast_command(0x45, &[0x00, 0x01, clock, 0x01, 0, 0, 0, 0xFF, 0xFF, 0xFF])
-            .await
-    }
-
-    pub async fn show_effects(&self, number: u8) -> bool {
-        self.broadcast_command(0x45, &[0x03, number]).await
-    }
-
+    /// R67: was `[0x04, number]` — two bytes where the device needs ten.
     pub async fn show_visualization(&self, number: u8) -> bool {
-        self.broadcast_command(0x45, &[0x04, number]).await
+        self.broadcast_command(
+            crate::packets::CMD_SET_LIGHT_MODE,
+            &crate::packets::visualization(number),
+        )
+        .await
     }
 
     pub async fn set_brightness(&self, brightness: u8) -> bool {

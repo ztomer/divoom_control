@@ -272,3 +272,71 @@ mod tests {
         assert_eq!(visualization(4)[1], 4);
     }
 }
+
+/// R67: the virtual wall's payloads, which were built by hand and wrong.
+///
+/// The Python wall never had these bugs because it DELEGATES to
+/// `display.show_light` / `show_clock`; the Rust port re-derived each payload
+/// and got the field order, the length and the indexing wrong. These pin the
+/// canonical bytes so a future hand-rolled "optimisation" fails loudly.
+#[cfg(test)]
+mod wall_payloads {
+    use crate::packets::*;
+
+    #[test]
+    fn wall_ambient_is_not_transposed() {
+        // WAS: [0x01, brightness, R, G, B, 0x01] — brightness and RGB swapped,
+        // six bytes instead of ten, and that trailing 0x01 landing in the
+        // lighting-TYPE slot rather than power. A wall ambient push therefore
+        // sent the wrong colour, the wrong brightness, and mode "Love".
+        let bytes = LightPacket {
+            rgb: [0x00, 0xFF, 0xCC],
+            brightness: 80,
+            kind: LightingType::PlainColor,
+            power: true,
+        }
+        .to_bytes();
+        assert_eq!(bytes.len(), 10, "the device needs the full ten bytes");
+        assert_eq!(&bytes[1..4], &[0x00, 0xFF, 0xCC], "RGB at 1..4");
+        assert_eq!(bytes[4], 80, "brightness at 4, NOT at 1");
+        assert_eq!(bytes[5], 0, "lighting type, NOT power");
+        assert_eq!(bytes[6], 1, "power at 6");
+    }
+
+    #[test]
+    fn wall_vj_effects_are_ten_bytes_and_one_indexed() {
+        // WAS: [0x03, number] — two bytes, and not 1-indexed, so it asked for
+        // the wrong effect in a packet the device may ignore outright.
+        let bytes = vj_effect(2);
+        assert_eq!(bytes.len(), 10);
+        assert_eq!(bytes[0], 0x03);
+        assert_eq!(bytes[1], 3, "VJ effects are 1-indexed on the wire");
+    }
+
+    #[test]
+    fn wall_visualization_is_ten_bytes() {
+        // WAS: [0x04, number] — two bytes where the device needs ten.
+        let bytes = visualization(1);
+        assert_eq!(bytes.len(), 10);
+        assert_eq!(&bytes[0..2], &[0x04, 1]);
+    }
+
+    #[test]
+    fn wall_clock_keeps_the_canonical_overlay_order() {
+        let bytes = ClockPacket {
+            style: 4,
+            ..Default::default()
+        }
+        .to_bytes();
+        assert_eq!(bytes, [0, 1, 4, 1, 0, 0, 0, 0xFF, 0xFF, 0xFF]);
+    }
+
+    #[test]
+    fn the_shared_hex_parser_replaces_three_copies() {
+        assert_eq!(parse_hex_color("#00FFCC"), Some([0x00, 0xFF, 0xCC]));
+        assert_eq!(parse_hex_color("00ffcc"), Some([0x00, 0xFF, 0xCC]));
+        assert_eq!(parse_hex_color("#fff"), None, "short form is not accepted");
+        assert_eq!(parse_hex_color("nonsense"), None);
+        assert_eq!(parse_hex_color(""), None);
+    }
+}
