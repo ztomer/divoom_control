@@ -69,6 +69,32 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    // P2.4 — Danmaku overlay. Reuses the text + colour inputs above rather than
+    // growing a second set: it is a different DELIVERY mechanism (the device's
+    // own overlay layer, drawn over whatever channel is showing) for the same
+    // message, not a different message.
+    //
+    // The toast says LAN, and that is load-bearing. Danmaku/SendText is
+    // LAN-only, so on a BLE-only device this fails for a reason that has
+    // nothing to do with the text — naming the transport is the difference
+    // between "it is broken" and "this device is not on wifi".
+    const danmakuBtn = document.getElementById("send-danmaku-btn");
+    if (danmakuBtn) {
+        danmakuBtn.addEventListener("click", () => {
+            const text = (document.getElementById("text-content-input")?.value || "").trim();
+            if (!text) { window.showToast("Enter some text first", "error"); return; }
+            if (!window.requireDevice()) return;
+            const color = document.getElementById("text-color-input")?.value || "#00ffcc";
+            if (window.pywebview?.api?.send_danmaku_text) {
+                window.pywebview.api.send_danmaku_text(text, color).then(res => {
+                    window.showToast(
+                        res ? "Overlay sent" : "Failed to send overlay",
+                        res ? "success" : "error", " LAN");
+                });
+            }
+        });
+    }
+
     // Round 6 — Scoreboard channel wiring. The scoreboard is a TOOL
     // (0x72 set tool, TOOL_TYPE_SCORE) on a channel (0x06). The channel
     // switch is handled above (the channel-card click fires

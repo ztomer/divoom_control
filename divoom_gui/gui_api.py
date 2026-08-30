@@ -158,6 +158,9 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
                   speed: int = 50, effect_style: int = 1) -> bool:
         return self.lighting.push_text(text, color, font_size, speed, effect_style)
 
+    def send_danmaku_text(self, text: str, color: str = "#FFFFFF") -> bool:
+        return self.lighting.send_danmaku_text(text, color)
+
     def get_alarms(self) -> str:
         return self.tools.get_alarms()
 

@@ -393,6 +393,19 @@
                                         </div>
                                     </div>
                                     <button id="push-text-btn" class="glow-btn" style="margin-top:16px; width:100%;">Push to Device</button>
+                                    <!-- P2.4: Danmaku is the device's OWN overlay layer, drawn
+                                         over whatever channel is showing — a different mechanism
+                                         from the button above, which renders a bitmap and uploads
+                                         it. It reuses the text and colour inputs rather than
+                                         growing a second set.
+
+                                         The "not verified" line is not hedging. This command ACKs
+                                         cleanly and nobody has watched it draw on a matrix here;
+                                         R32 §D is the case where exactly that combination rendered
+                                         nothing. Saying so is what makes the button honest, and it
+                                         tells the user what to report back on. -->
+                                    <button id="send-danmaku-btn" class="glow-btn secondary" style="margin-top:8px; width:100%;">Send as overlay (Danmaku)</button>
+                                    <p class="panel-hint" id="danmaku-hint" style="margin-top:6px; font-size:11px;">Overlay draws on top of the current channel. Not yet verified on real hardware — tell us if it works.</p>
                                 </div>
                                 <!-- R33: Sessions panel (ex-Tools → Sessions) -->
                                 <div class="channel-panel" id="panel-sessions">

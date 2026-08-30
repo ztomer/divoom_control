@@ -152,7 +152,7 @@ table is written by the step rather than by a tidy-up pass afterwards.
 | P2.1 | Audit the five LAN commands' arg + reply shapes against the daemon | DONE |
 | P3.1a | `search_weather_city` backend: persisted location tier + GUI API | DONE |
 | P3.1b | `search_weather_city` UI panel + camoufox e2e | DONE |
-| P2.4 | Danmaku SendText UI + e2e, render marked unconfirmed | TODO |
+| P2.4 | Danmaku SendText UI + e2e, render marked unconfirmed | DONE |
 | P4.1 | Raise the Rust coverage floor off 29%, in steps | TODO |
 | ~~P2.2~~ | ~~GUI API methods~~ — folded into P3.1 / P2.4; there is no shared layer worth building for two commands | DROPPED |
 | ~~P2.3~~ | ~~Voice/SendText UI~~ — duplicates the working `push_text`; see P2.1 audit | DROPPED |

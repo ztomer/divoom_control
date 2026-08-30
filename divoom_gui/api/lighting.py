@@ -270,6 +270,43 @@ class LightingApi(ApiBase):
             logger.error(f"Playlist push failed: {e}")
             return False
 
+    def send_danmaku_text(self, text: str, color: str = "#FFFFFF") -> bool:
+        """Send a Danmaku scrolling bullet-chat overlay (Danmaku/SendText,
+        LAN-only — see divoomd/src/device_call/lan.rs).
+
+        **The render is UNCONFIRMED on real hardware.** This command is in the
+        vendor app's DeviceAndServerCmd table and ACKs cleanly, but nobody has
+        watched it draw on a matrix here. R32 §D is the cautionary case: a
+        superficially similar "set light phone word" command ACKed and rendered
+        nothing. The UI says so next to the button rather than presenting this
+        as equivalent to `push_text`, which uses the known-working bitmap path.
+
+        Distinct from `push_text`, not a duplicate of it: this is the device's
+        own overlay layer, drawn over whatever channel is showing, rather than a
+        bitmap we render and upload.
+
+        Wall mode is rejected up front for the same reason album and playlist
+        playback are — the overlay targets one device's own display, not a
+        composite image across several.
+        """
+        logger.info("GUI Action: Sending Danmaku overlay text...")
+        if self._current_target_mode == "wall":
+            logger.warning("Danmaku overlay is not supported on a Virtual Wall target")
+            return False
+        text = (text or "").strip()
+        if not text:
+            logger.warning("Danmaku text is empty; nothing to send")
+            return False
+        try:
+            # Keyword args: the daemon handler reads "Text"/"TextColor" by name
+            # (get_arg_str(kw, ...)), and positional args would silently land as
+            # neither — the command would ACK having sent an empty string.
+            return self._dispatch(
+                lambda t: t.lan.send_danmaku_text(Text=text, TextColor=color))
+        except Exception as e:
+            logger.error(f"Danmaku send failed: {e}")
+            return False
+
     def play_aid_sleep(self, sleep_id: int, sleep_type: int = 0) -> bool:
         """Play a browsed AidSleep cloud sound on the device (AidSleep/Play —
         BLE/SPP JSON, no cloud round-trip; see divoom_lib/tools/aid_sleep.py
