@@ -21,6 +21,50 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-08-30 (v0.28.3) — version parity made structural. NOT TAGGED, NOT
+  RELEASED.** The version is deliberately ahead of `v0.28.2`; that is the normal
+  state between bumping and cutting. Cut it with `scripts/release.sh` once CI is
+  green, or keep accumulating into it — nothing here is half-done.
+
+  **The rule, now enforced rather than remembered: `divoomd` and
+  `divoom-menubar` always report the app version. Anything else is stale, and
+  stale means rebuild.**
+
+  v0.28.2 left a note saying `target/release/divoomd` was 0.27.0 on this machine
+  and "the harness handles it". It was hiding a live defect. `spawn_daemon`
+  picked the binary by walking `["release", "debug"]`, so the stale one won
+  unconditionally — and `ensure_daemon` stops a daemon whose version does not
+  match, then respawns from that same path. Spawn stale, notice, kill, repeat.
+  The user would see a daemon that will not stay up, with nothing naming the
+  version.
+
+  * **Selection goes by VERSION now**, in `divoom_client/binary_resolver.py`,
+    shared by the app and the test suite so the two cannot disagree about which
+    daemon is "the" daemon. Location, mtime and assert-afterwards were all
+    proxies for the binary's own version.
+  * **`divoomd --version` used to START A DAEMON.** The parser had no such
+    branch and silently ignored anything unrecognised, so the flag fell through
+    to the default socket — and so did every typo. Parsing is now
+    `divoomd/src/cli_args.rs`, a pure function with 11 tests; unknown arguments
+    and missing values are hard errors. `divoom-menubar` had the same hole and
+    no CLI at all; 5 tests.
+  * **`tools/check_built_binaries.py`** checks artifacts, not manifests. It runs
+    AFTER the cargo steps in `.gatesrc` and both Rust CI jobs — reading
+    `target/` before anything is built would pass on the absence of its own
+    subject.
+
+  **Careful here:** the `--version` probe passes a throwaway `--socket` to
+  `divoomd` and NOT to the menubar. The redirect stops an old divoomd from
+  littering `/tmp/divoomd.sock` when the timeout SIGKILLs it; the menubar binds
+  no socket and refuses trailing arguments, so giving it one turns the probe into
+  an exit-2 that reads as "stale". Both directions are pinned by tests.
+
+  **Next up: `docs/ROADMAP.md` → "R69 plan".** Four phases that need no hardware
+  and no user: the e2e harness process leak (ten orphans found while auditing —
+  two of three `__init__` failure paths bypass teardown), GUI-wiring the five
+  backend-only LAN commands, `search_weather_city`, and raising the Rust
+  coverage floor off 29%.
+
 - **2026-08-30 (v0.28.2) — SHIPPED. Tooling and docs; the app is unchanged.**
   Tag `9790649` on a green CI (run 33328371650); GitHub release +
   `Divoom-v0.28.2.dmg` (sha256 `4efff246...`), cask verified to carry that sha.
@@ -152,9 +196,15 @@ shared memory. Read this on entry and **update it at the end of every round**
     on this machine indefinitely. The version bump exposed it (0.27.0 vs an
     expected 0.28.0 → the client's version guard stopped it mid-test →
     `[Errno 2]`, which reads like a socket bug). Now newest-by-mtime plus a
-    `daemon_version` assertion at fixture setup. **Note for next session:**
-    `target/release/divoomd` on this machine is still 0.27.0; the harness
-    handles it, but rebuild it if you touch release packaging.
+    `daemon_version` assertion at fixture setup.
+
+    **Closed 2026-08-30 (v0.28.3).** The note that used to sit here — "release is
+    still 0.27.0 on this machine; the harness handles it" — was the finding
+    written down instead of fixed. Coping with a stale binary is not the same as
+    not having one. Binary selection now goes by VERSION everywhere
+    (`divoom_client/binary_resolver.py`), `divoomd --version` answers without
+    starting a daemon, and `tools/check_built_binaries.py` fails the build when a
+    compiled artifact disagrees with the tree.
 
   Through-line: four of the failures this round were not product defects. Two
   were gates wrong about their own subject, one was a fix that had not been
@@ -244,11 +294,27 @@ shared memory. Read this on entry and **update it at the end of every round**
   exists); and `ci_local.sh` runs on THIS machine only, so Linux-only failures
   in `rust-core`/`rust-ble-linux` are structurally invisible to it.
 
+- **The buildable work is planned, not listed here.** `docs/ROADMAP.md` →
+  "R69 plan — what can be built without the user in the loop" has the four
+  phases, in order, with acceptance for each. The items below are what is left
+  after that: none of them is unbuilt, they are UNWATCHED, and there is no code
+  to write until someone looks at a device.
+
 - **R12 user-POV visual pass**: deferred to user (needs live app + real device for screenshots).
 - **sysmon on a real device**: the RPC and the frame are verified against a real
   daemon over the real socket, but nobody has watched the gauges on a matrix.
   Needs hardware.
-- **Cloud HTTP**: 533/533 commands cataloged (`docs/cloud_api/`). Clock-face store wired into
+- **Cloud HTTP**: 533/533 commands cataloged (`docs/cloud_api/`). Clock-face
+  store, playlist browse+push and AidSleep browse+play are all shipped and
+  GUI-wired. What is still open is listed in `docs/ROADMAP.md` under "Open
+  workstreams": four backend-only LAN clusters with no GUI surface, and
+  `Cloud/ToDevice`, which stays unimplemented because its semantics were never
+  confirmed and there is no live caller to infer them from.
+
+  _(This bullet was truncated mid-sentence for four commits — it lost its
+  continuation lines in the 2026-08-30 prune and read "Clock-face store wired
+  into". Recovered from `git show 78b1986:docs/SESSION_HANDOFF.md` and rewritten
+  as current state rather than restored verbatim.)_
 
 ## Earlier history
 

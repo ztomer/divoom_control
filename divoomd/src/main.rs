@@ -1,7 +1,12 @@
 //! divoomd — the native daemon binary. Owns a unix socket and serves the NDJSON
-//! protocol. Runs in parallel to the Python daemon (default socket
-//! `/tmp/divoomd.sock`, distinct from the Python `/tmp/divoom.sock`) so both can
-//! coexist during the port. See docs/ROADMAP.md.
+//! protocol; it is the sole shipping daemon.
+//!
+//! The default socket is `/tmp/divoomd.sock`. It differs from the app's
+//! `/tmp/divoom.sock` for historical reasons: the two paths let this daemon run
+//! alongside the Python one during the port. That Python daemon server was
+//! archived on 2026-07-13 and removed from the tree in R66 — only the client
+//! side survives, in `divoom_client/` — so the distinct default is now just a
+//! default, not a coexistence mechanism. See docs/ROADMAP.md.
 //!
 //!   divoomd [--socket /path/to.sock]
 //!

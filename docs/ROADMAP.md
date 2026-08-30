@@ -9,6 +9,19 @@ forward-looking one. Recover a round plan with
 
 ## Shipped
 
+- **v0.28.3 — R69**: version parity made structural. Binary selection goes by
+  VERSION rather than by location or mtime, `divoomd --version` answers without
+  starting a daemon (it used to start one), both binaries refuse unknown
+  arguments instead of ignoring them, and `tools/check_built_binaries.py` fails
+  the build when a compiled artifact disagrees with the tree.
+- **v0.28.2**: tooling and docs only; the app is byte-for-byte the behaviour of
+  v0.28.1. `scripts/gui_pov.py` promoted out of a scratchpad, macOS Bluetooth
+  TCC written down, 14 dead scripts and `docs/archive/` pruned.
+- **v0.28.1**: the GUI killed the daemon. `now_playing`/`players` built a
+  `reqwest::blocking::Client` inside an async context, and dropping its private
+  tokio runtime aborted the process — so opening the app with music paused took
+  down the background service. Found by launching the app, not by the 2961
+  passing tests.
 - **v0.28.0 — R68**: two gates that were wrong about their own subject; the
   socket "hold it open" rule made structural (`HeldSocket`, enforced by Rust's
   drop order rather than by three comments); camoufox raised to the latest build
@@ -106,6 +119,99 @@ by user decision, so `nowplaying/src/feishin.rs` (Subsonic) remains its weaker
 source. Detail in the v0.27.0 CHANGELOG stanza.
 
 **Open: nothing in this workstream.** Both items closed in R68.
+
+### R69 plan — what can be built without the user in the loop
+
+_Written 2026-08-30. Everything still open at the end of R68 was blocked on
+hardware or on someone watching a matrix. That is a real constraint on
+CONFIRMING a render; it is not a constraint on WRITING the thing. The work below
+is ordered so each phase is independently shippable, and each ends in a state the
+user can exercise whenever they feel like it and report back._
+
+**The standing division of labour.** Code, tests and gates are ours. "Does the
+overlay actually scroll on a 32×32 matrix" is the user's, and no amount of green
+suite substitutes for it (v0.28.1 is the standing proof: 2961 tests, five green
+CI jobs, and a daemon-killing crash that launching the app found in twenty
+minutes). So phases 2 and 3 land the plumbing and say plainly, in the UI, that
+the render is unconfirmed — rather than either blocking on hardware or pretending
+the feature is verified.
+
+#### Phase 1 — the e2e harness leaks the processes it spawns
+
+Found while auditing on 2026-08-30: **ten orphaned processes** from earlier
+sessions — four `divoomd` and six `e2e_gui_bridge.py`, some days old, four of
+them sharing one socket path.
+
+Two defects, and the second is why the first was survivable long enough to pile
+up:
+
+* `_IsolatedStack.__init__` has three failure paths and only one cleans up.
+  `_assert_daemon_is_current` correctly passes `on_mismatch=self.close`, but
+  `_wait_for_socket` calls `pytest.fail` with the daemon still running, and
+  `_wait_for_http` kills the bridge and leaves the daemon. Raising from a
+  constructor means the fixture never receives the object, so its
+  `finally: stack.close()` never runs — the teardown is bypassed precisely when
+  something has already gone wrong. This is the bypassed-funnel class: every
+  exit from `__init__` must go through `close()`, structurally, not by
+  remembering to.
+* the socket path is keyed on `os.getpid()` — the *pytest process* PID, which is
+  constant for the whole run. Every stack in that process therefore shares one
+  path, so a single leaked daemon makes the next test collide with it. Key on
+  per-stack identity instead.
+
+Acceptance: a test that spawns a stack, forces each failure path in turn, and
+asserts no surviving PIDs. Prove it red first by reverting one cleanup.
+
+#### Phase 2 — GUI-wire the four backend-only LAN clusters
+
+All five commands exist in `divoomd/src/device_call/lan.rs` and are reachable
+over the socket today. None has any GUI surface — confirmed by grep, no hit for
+any of them anywhere in `divoom_gui/`:
+
+| Command | Cluster |
+|---|---|
+| `lan.send_voice_text` | Voice/SendText |
+| `lan.send_danmaku_text`, `lan.danmaku_random_face` | Danmaku overlay |
+| `lan.set_5lcd_channel_type`, `lan.set_5lcd_whole_clock_id` | 5-LCD channel extras |
+
+Each is the same shape and can be done independently: a `divoom_gui` API method
+that forwards to the daemon (a client, never a second implementation — R67/C2),
+a control in the panel it belongs to, and a camoufox e2e test driving it through
+the real bridge.
+
+Two things to get right rather than discover later:
+
+* **The 5-LCD controls must not appear on devices that have no 5-LCD.** Gate on
+  the capability the daemon already negotiates (R67), not on a device-name
+  match.
+* **Say the render is unconfirmed, in the UI.** These four shipped as
+  backend-only precisely because nobody has watched them draw. A control that
+  silently does nothing on the user's hardware is worse than one that says it is
+  unverified — honest placeholders, and it tells the user exactly what to report
+  back on.
+
+#### Phase 3 — `search_weather_city`
+
+Implemented in `divoomd/src/cloud_category.rs`, wired to the `search_weather_city`
+RPC, and unreachable from the GUI. Weather currently uses the system location,
+which is the right default and should stay the default; this is the manual
+override for when it is wrong. Small enough to fold into phase 2 if it lands
+first.
+
+#### Phase 4 — raise the Rust coverage floor
+
+`scripts/rust_coverage.sh` pins divoomd at **29%**, measured 2026-08-25 when no
+floor existed at all. 29% is a ratchet against regression, not a standard — the
+Python side holds 95%. Raise it in steps, each step closing pure-logic gaps
+first (seam-and-cover), and never by loosening what is measured.
+
+#### Explicitly NOT in this plan
+
+* **`Cloud/ToDevice`** — semantics unconfirmed and no live caller to infer them
+  from. Implementing it blind would be guessing at a wire format, which is the
+  one thing this project has consistently refused to do.
+* **`pic_scan_ctrl` 0x35, sysmon-on-a-matrix, the R12 visual pass** — these are
+  not unbuilt, they are unwatched. There is no code to write.
 
 - **Ambient preview tiles** were listed here as static CSS colour blocks. They
   were not: `0869425` had already replaced them with the picked colour for Plain
