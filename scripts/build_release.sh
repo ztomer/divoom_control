@@ -84,6 +84,29 @@ for b in divoomd divoom-menubar libnp_helper.dylib np_load.pl; do
   fi
 done
 
+# 2c. The bundled binaries must report the app version. This is the LAST moment
+# a mismatch is fixable: `binary_resolver.resolve` deliberately uses a bundled
+# binary even when it cannot confirm the version, because "rebuild" is not an
+# action available to someone running an installed app. That leniency is only
+# safe if the build refuses to produce a bundle with the wrong binary in it.
+#
+# Checked against the BUNDLE, not target/ — those are two different artifacts,
+# and PyInstaller copies rather than links, so a collection that picked up a
+# stale file would be invisible to a target/-only check.
+echo "→ verifying bundled binary versions"
+BUNDLE_VERSION="$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
+for b in divoomd divoom-menubar; do
+  f="${APP}/Contents/Frameworks/bin/${b}"
+  [[ -f "${f}" ]] || continue
+  got="$("${f}" --version 2>/dev/null | awk '{print $2}')"
+  if [[ "${got}" != "${BUNDLE_VERSION}" ]]; then
+    echo "ERROR: bundled ${b} reports '${got:-<nothing>}', expected ${BUNDLE_VERSION}." >&2
+    echo "       A DMG built from this would ship a daemon that disagrees with its own app." >&2
+    exit 1
+  fi
+  echo "  ✓ ${b} ${got}"
+done
+
 # 3. Guard: the reverse-engineered APK / references must never be in the bundle.
 if find "${APP}" \( -iname '*smali*' -o -path '*references*' -o -iname '*.apk' \) | grep -q .; then
   echo "ERROR: reverse-engineered references leaked into the bundle — aborting." >&2

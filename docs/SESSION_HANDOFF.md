@@ -53,7 +53,15 @@ shared memory. Read this on entry and **update it at the end of every round**
     `target/` before anything is built would pass on the absence of its own
     subject.
 
-  **Careful here:** the `--version` probe passes a throwaway `--socket` to
+  **Careful here (1):** a bundle and a dev tree get DIFFERENT rules in
+  `resolve()`, and flattening them into one candidate list is wrong in a way the
+  unit tests did not see. Inside a packaged app the answer comes from the
+  bundle, always — version preferred, but an unverifiable bundled binary is used
+  anyway, because "rebuild" is not available to someone running an installed
+  app. In the dev tree the version match is required. Reaching from a bundle
+  into somebody's `target/` would run a daemon the bundle was never built with.
+
+  **Careful here (2):** the `--version` probe passes a throwaway `--socket` to
   `divoomd` and NOT to the menubar. The redirect stops an old divoomd from
   littering `/tmp/divoomd.sock` when the timeout SIGKILLs it; the menubar binds
   no socket and refuses trailing arguments, so giving it one turns the probe into

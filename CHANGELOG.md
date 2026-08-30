@@ -4,6 +4,131 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## v0.28.3 — Version parity made structural (UNRELEASED, 2026-08-30)
+
+**Not tagged and not released.** The version is deliberately ahead of the newest
+tag; that is the normal state between bumping and cutting, and
+`check_version_consistency.py` allows it in that direction only.
+
+### The daemon binary is now chosen by its VERSION
+
+The standing rule, written down: **`divoomd` and `divoom-menubar` always report
+the app version. Anything else is stale, and stale means rebuild.**
+
+`check_version_consistency.py` (R67) already kept the DECLARED versions in step —
+pyproject, the CHANGELOG stanza, the tag, both crate manifests. It says nothing
+about what is COMPILED, and that was the gap. `target/release/divoomd` is
+refreshed only by `scripts/build_release.sh`, so after a version bump it sits at
+the previously shipped version indefinitely. On the development machine it was
+**0.27.0 against a 0.28.2 tree**, and every declared-parity gate stayed green
+throughout, because the manifests were right and only the artifacts were wrong.
+
+v0.28.2 recorded that straggler as a note for the next session. Coping with a
+stale binary is not the same as not having one, and the note was hiding a live
+defect:
+
+* `spawn_daemon` resolved the binary by walking `["release", "debug"]` and
+  taking the first that existed, so the stale one won unconditionally.
+* `ensure_daemon` stops a daemon whose version does not match — then respawns
+  from that same path. Spawn stale, notice, kill, spawn stale again. The user
+  sees a daemon that will not stay up, and nothing names the version.
+
+The fix is to stop using a proxy. Location (`spawn_daemon`), mtime
+(`tests/support/daemon_binary.py`) and assert-after-the-fact are all stand-ins
+for the binary's own version, so `divoom_client/binary_resolver.py` asks the
+binary. Both call sites share it: the app and the test suite can no longer
+disagree about which daemon is "the" daemon.
+
+### `divoomd --version` started a daemon
+
+Nobody could ask cheaply because there was nothing to ask. The parser had no
+`--version` branch and silently ignored whatever it did not recognise, so the
+flag fell through to "serve the default socket". Every typo did the same:
+`--sokcet /tmp/x.sock` served `/tmp/divoomd.sock` while looking like it had been
+told otherwise, and `--port banana` started a unix-only daemon that never
+mentioned TCP again (`.parse().ok()` swallowed it).
+
+That is the failure-path-no-op class — the branch meant to REFUSE was never
+written. Argument parsing moved to `divoomd/src/cli_args.rs` as a pure function
+over a slice, 11 unit tests covering both directions. Unknown arguments and
+missing values are hard errors (exit 2); `--version` and `--help` print and exit
+before any socket work.
+
+`divoom-menubar` had the identical hole and no CLI surface whatsoever: it
+accepted and ignored every argument, so a mistyped flag silently launched a
+second tray icon. Same treatment, 5 unit tests.
+
+### The version probe cannot litter
+
+A binary too old for `--version` ignores it and starts serving, so the probe's
+timeout must SIGKILL it — which skips `HeldSocket::drop` and leaves the socket
+file behind. The probe therefore passes `--socket` to a throwaway path: without
+it, a version check's side effect would be a stale `/tmp/divoomd.sock`, the exact
+failure the daemon carries recovery code for. Pinned by a test asserting the
+default path never appears in the probe's argv.
+
+### The gate
+
+`tools/check_built_binaries.py` checks artifacts rather than manifests. Wired
+into `.gatesrc` and both Rust CI jobs **after** their build steps — a gate that
+reads `target/` and runs first would find nothing built and pass on the absence
+of its own subject. Missing is a skip (CI builds only what a job needs);
+present-and-disagreeing is a failure.
+
+It went red on its first run and named both stale release binaries, then red
+again on this release's own version bump before the rebuild. Two independent
+demonstrations that it bites, plus stub-driven tests keeping both the failure and
+the correct-skip reachable.
+
+`scripts/build_release.sh` now verifies the binaries **inside the built bundle**
+report the app version, and aborts if not. That is the last moment a mismatch is
+fixable, and it is what makes the runtime leniency safe: the resolver uses a
+bundled binary even when it cannot confirm the version, so the build has to
+refuse to produce a bundle with the wrong binary in it. Checked against the
+bundle rather than `target/` because PyInstaller copies — a collection step that
+picked up a stale file would be invisible to a `target/`-only check.
+
+### Three regressions the suite caught, and the rule that came out of them
+
+The first cut of `resolve()` treated bundle and dev tree as one flat candidate
+list, version-matched across it, and returned None for an override that did not
+exist. The full Python suite failed five tests, and three were real:
+
+* **`DIVOOM_RUST_BINARY` pointing at a moved path stopped resolution.** That
+  variable being stale must be survivable — discarding it and carrying on is
+  long-standing documented behaviour, and the new code turned it into "divoomd
+  binary not found" with a perfectly good binary in `target/`.
+* **A packaged app could fall out of its own bundle into a developer's
+  `target/`.** If the bundled binary could not be probed, the flat list simply
+  moved on to the next candidate — which would run a daemon the bundle was never
+  built with.
+
+The rule that fixes both: a bundle and a dev tree are different things and get
+different rules. Inside a bundle the answer comes from the bundle, always;
+version is preferred, but an unverifiable bundled binary is used anyway, because
+"rebuild" is not an action available to someone running an installed app and
+refusing to start is worse than starting the only daemon that shipped. In the
+dev tree the version match is required — that is where the rebuild is possible,
+and where returning the stale binary caused the loop. Build-time is where the
+bundle is kept honest, by `build_release.sh` plus the new gate.
+
+The other two failures were the gate tests, which passed alone and failed in the
+full suite: `tools/` is a bare directory with no `__init__.py` while
+`divoom_lib/tools/` is a real package, so what `import tools` resolves to depends
+on what else touched `sys.path` earlier in the run. Loaded by file path now.
+
+### Docs
+
+* `docs/SESSION_HANDOFF.md`: the Cloud HTTP bullet had been truncated
+  mid-sentence for four commits — it lost its continuation lines in the
+  2026-08-30 prune and read "Clock-face store wired into". Recovered from
+  `78b1986` and rewritten as current state.
+* The 0.27.0 straggler note is replaced by what closed it.
+* `docs/ROADMAP.md`: v0.28.1 and v0.28.2 were missing from "Shipped" entirely.
+* `divoomd/src/main.rs`'s header still described the daemon as running "in
+  parallel to the Python daemon ... so both can coexist during the port". That
+  server was archived 2026-07-13 and removed in R66.
+
 ## v0.28.2 — Tooling and docs; no user-facing change (2026-08-30)
 
 **The app is functionally identical to v0.28.1.** No product code changed. This

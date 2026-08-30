@@ -70,17 +70,27 @@ def binary_version(path: Path, timeout: float = PROBE_TIMEOUT) -> str | None:
     call. `stdin` is closed and the output captured so it can never inherit this
     process's terminal.
 
-    `--socket` is passed to a throwaway path for that same case, and it is not
-    decoration. A hard kill skips `HeldSocket::drop`, so the socket file it bound
-    is left behind; without this the probe would litter `/tmp/divoomd.sock` — the
-    DEFAULT path — with a stale socket, i.e. a version check whose side effect is
-    the exact failure the daemon has code to recover from. A current binary never
-    reaches the flag: `--version` short-circuits the parser before it.
+    For `divoomd` only, `--socket` is passed to a throwaway path, and it is not
+    decoration. A hard kill skips `HeldSocket::drop`, so the socket an old binary
+    bound is left behind; without this the probe would litter
+    `/tmp/divoomd.sock` — the DEFAULT path — with a stale socket, i.e. a version
+    check whose side effect is the exact failure the daemon has code to recover
+    from. A current binary never reaches the flag: `--version` short-circuits the
+    parser before it.
+
+    It is passed to `divoomd` ALONE because the litter is divoomd's. The menubar
+    binds no socket, and it refuses trailing arguments after `--version` (a lone
+    flag is the whole request, since the agent takes no configuration) — so
+    appending one there turns a version probe into an exit-2. Learned by doing
+    exactly that: the gate caught it on the first run after the flag landed.
     """
+    extra = ["--socket", "<probe>"] if path.name == "divoomd" else []
     with tempfile.TemporaryDirectory(prefix="divoomd_version_probe_") as tmp:
+        if extra:
+            extra[1] = str(Path(tmp) / "probe.sock")
         try:
             proc = subprocess.run(
-                [str(path), "--version", "--socket", str(Path(tmp) / "probe.sock")],
+                [str(path), "--version", *extra],
                 capture_output=True, text=True, timeout=timeout,
                 stdin=subprocess.DEVNULL,
             )
@@ -138,26 +148,55 @@ def bundled_candidates(name: str = "divoomd") -> list[Path]:
 
 
 def resolve(name: str = "divoomd", *, override: str | None = None) -> Path | None:
-    """The binary to run for `name`, chosen by version, or None if none is current.
+    """The binary to run for `name`, or None when nothing usable is present.
 
-    Order: an explicit override (the caller has said which one, so it is not
-    ours to second-guess), then the bundle, then the dev tree.
+    Three sources, and they are NOT one flat list — a bundle and a dev tree mean
+    different things, so they get different rules:
+
+    * an explicit `override` that exists wins outright: the caller has named the
+      binary, and that is not ours to second-guess. An override pointing at a
+      path that does NOT exist is discarded and resolution continues, which is
+      long-standing documented behaviour (`DIVOOM_RUST_BINARY` set to a stale
+      path must not brick the app).
+    * inside a packaged app, the answer comes from the BUNDLE and never from a
+      dev tree. Falling out of a shipped `.app` into somebody's `target/`
+      directory would run a binary the bundle was never built with. Version is
+      still preferred, but a bundle whose version cannot be confirmed is used
+      anyway with a warning: "rebuild" is not an action available to someone
+      running an installed app, and refusing to start is worse than starting
+      the only daemon that shipped. `scripts/build_release.sh` plus
+      `tools/check_built_binaries.py` are what keep that binary honest, at build
+      time, where the rebuild is possible.
+    * in the dev tree, a version match is REQUIRED. This is the case where
+      "stale means rebuild" is actionable, and returning the stale binary is
+      what produced the spawn/kill/respawn loop.
     """
     if override:
         p = Path(override)
-        return p if p.exists() else None
-
-    candidates = bundled_candidates(name) + built_candidates(name)
-    if not candidates:
-        return None
+        if p.exists():
+            return p
+        logger.warning("%s does not exist; ignoring the override", override)
 
     expected = _expected_version()
-    if not expected:
-        # Unknowable expectation: fall back to recency rather than refusing to
-        # run anything at all.
-        return candidates[0]
 
-    for path in candidates:
+    bundled = bundled_candidates(name)
+    if bundled:
+        for path in bundled:
+            if not expected or binary_version(path) == expected:
+                return path
+        logger.warning(
+            "no bundled %s reports %s; using %s anyway — a packaged app has no "
+            "other daemon to fall back to", name, expected, bundled[0])
+        return bundled[0]
+
+    built = built_candidates(name)
+    if not built:
+        return None
+    if not expected:
+        # Unknowable expectation: recency, rather than refusing to run anything
+        # at all. An unknown expectation is not evidence of a problem.
+        return built[0]
+    for path in built:
         if binary_version(path) == expected:
             return path
     return None

@@ -99,6 +99,24 @@ def test_the_probe_never_touches_the_default_socket(tmp_path):
     assert "/tmp/divoomd.sock" not in argv
 
 
+def test_the_menubar_is_probed_without_a_socket_argument(tmp_path):
+    """The socket redirect is divoomd's, and giving it to the menubar breaks it.
+
+    divoom-menubar binds no socket and refuses trailing arguments after
+    `--version` — a lone flag is the whole request, since the agent takes no
+    configuration. Appending `--socket` there turns a version probe into an
+    exit-2, which the resolver reads as "stale". Caught by the gate on the first
+    run after the flag landed; pinned here so a generic probe cannot creep back.
+    """
+    b = tmp_path / "divoom-menubar"
+    log = tmp_path / "argv.txt"
+    b.write_text(f'#!/bin/sh\necho "$@" > {log}\necho "divoom-menubar 0.28.3"\n')
+    b.chmod(b.stat().st_mode | stat.S_IEXEC)
+
+    assert binary_resolver.binary_version(b) == "0.28.3"
+    assert log.read_text().strip() == "--version"
+
+
 # ── resolve ───────────────────────────────────────────────────────────────────
 
 def test_the_matching_version_wins_over_the_newer_stale_one(tree, monkeypatch):
@@ -145,8 +163,56 @@ def test_an_explicit_override_is_not_second_guessed(tree, monkeypatch):
     assert binary_resolver.resolve("divoomd", override=str(b)) == b
 
 
-def test_a_missing_override_resolves_to_none(tree):
+def test_an_override_pointing_nowhere_is_discarded_and_resolution_continues(tree, monkeypatch):
+    """Long-standing documented behaviour: `DIVOOM_RUST_BINARY` left over from a
+    moved checkout must not brick the app.
+
+    Broken once already — the first version of `resolve` returned None on a
+    missing override, which turned a stale environment variable into "divoomd
+    binary not found" with a perfectly good binary sitting in target/.
+    """
+    good = stub_binary(tree / "target" / "debug" / "divoomd", prints="divoomd 0.28.3")
+    monkeypatch.setattr(binary_resolver, "_expected_version", lambda: "0.28.3")
+
+    assert binary_resolver.resolve("divoomd", override="/nope/divoomd") == good
+
+
+def test_a_missing_override_with_nothing_built_resolves_to_none(tree):
     assert binary_resolver.resolve("divoomd", override="/nope/divoomd") is None
+
+
+def test_a_bundled_binary_wins_over_the_dev_tree(tree, monkeypatch, tmp_path):
+    """Inside a packaged app the answer comes from the BUNDLE, full stop.
+
+    Falling out of a shipped .app into a developer's target/ would run a daemon
+    the bundle was never built with. Also broken once: version-matching across
+    one flat candidate list sent an unprobeable bundled binary to the dev tree.
+    """
+    bundle = tmp_path / "bundle"
+    bundled = stub_binary(bundle / "bin" / "divoomd", prints="divoomd 0.28.3")
+    stub_binary(tree / "target" / "debug" / "divoomd", prints="divoomd 0.28.3")
+    monkeypatch.setattr(sys, "_MEIPASS", str(bundle), raising=False)
+    monkeypatch.setattr(binary_resolver, "_expected_version", lambda: "0.28.3")
+
+    assert binary_resolver.resolve("divoomd") == bundled
+
+
+def test_an_unverifiable_bundled_binary_is_used_rather_than_the_dev_tree(
+        tree, monkeypatch, tmp_path):
+    """"Rebuild" is not an action available to someone running an installed app.
+
+    So a bundle whose version cannot be confirmed is still the right answer:
+    refusing to start is worse than starting the only daemon that shipped, and
+    reaching into target/ instead would be actively wrong. The build-time gate
+    is what keeps that binary honest.
+    """
+    bundle = tmp_path / "bundle"
+    bundled = stub_binary(bundle / "bin" / "divoomd", prints="not a version line")
+    stub_binary(tree / "target" / "debug" / "divoomd", prints="divoomd 0.28.3")
+    monkeypatch.setattr(sys, "_MEIPASS", str(bundle), raising=False)
+    monkeypatch.setattr(binary_resolver, "_expected_version", lambda: "0.28.3")
+
+    assert binary_resolver.resolve("divoomd") == bundled
 
 
 def test_nothing_built_resolves_to_none(tree):
@@ -173,6 +239,24 @@ def test_stale_report_is_empty_when_the_expectation_is_unknown(tree, monkeypatch
 # ── the real binaries, and the gate over them ─────────────────────────────────
 
 REPO = Path(__file__).resolve().parent.parent
+
+
+def _load_gate():
+    """Load `tools/check_built_binaries.py` BY PATH, not by `import tools.…`.
+
+    `tools/` is a bare directory with no `__init__.py`, and `divoom_lib/tools/`
+    IS a real package. Whichever of the two `import tools` resolves to depends
+    on what else has touched `sys.path` earlier in the run — so the import
+    worked when this file ran alone and raised ModuleNotFoundError in the full
+    suite. Addressing the file directly has no such ambiguity.
+    """
+    import importlib.util
+
+    path = REPO / "tools" / "check_built_binaries.py"
+    spec = importlib.util.spec_from_file_location("_gate_under_test", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 @pytest.mark.parametrize("name", binary_resolver.PRODUCT_BINARIES)
@@ -203,7 +287,12 @@ def test_the_real_binaries_reject_an_unknown_argument(name):
                           capture_output=True, text=True, timeout=15,
                           stdin=subprocess.DEVNULL)
     assert proc.returncode == 2, proc.stdout + proc.stderr
-    assert "unknown argument" in proc.stderr
+    # The two binaries word it differently on purpose — divoomd rejects the one
+    # argument it could not place, the menubar rejects the whole argv because it
+    # accepts no configuration at all. Both must NAME what they refused, which
+    # is the part that matters to whoever typed it.
+    assert "--definitely-not-a-flag" in proc.stderr
+    assert "--help" in proc.stderr
 
 
 def test_the_gate_passes_on_this_tree():
@@ -223,8 +312,7 @@ def test_the_gate_fails_when_a_built_binary_is_stale(tmp_path, monkeypatch):
     monkeypatch.setattr(binary_resolver, "REPO_ROOT", tmp_path)
     stub_binary(tmp_path / "target" / "release" / "divoomd", prints="divoomd 0.27.0")
 
-    import tools.check_built_binaries as gate
-
+    gate = _load_gate()
     monkeypatch.setattr(gate, "expected_daemon_version", lambda: "0.28.2")
     assert gate.main() == 1
 
@@ -234,7 +322,6 @@ def test_the_gate_skips_rather_than_fails_when_nothing_is_built(tmp_path, monkey
     there would fire the gate on the absence of a problem."""
     monkeypatch.setattr(binary_resolver, "REPO_ROOT", tmp_path)
 
-    import tools.check_built_binaries as gate
-
+    gate = _load_gate()
     monkeypatch.setattr(gate, "expected_daemon_version", lambda: "0.28.2")
     assert gate.main() == 0
