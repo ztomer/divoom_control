@@ -25,6 +25,18 @@ jobs:
         run: python3 "$GITHUB_WORKSPACE/goh/checks/check_no_emoji.py"
       - name: Check source files within 500-line house limit
         run: python3 tools/check_file_size.py
+      # R67: these ran ONLY in the local gate list, so local and CI disagreed
+      # about what "green" means — the same divergence the house rules name,
+      # pointing the other way. They resolve the TUI via tools/_tui.py, which
+      # finds the goh checkout above and degrades to plain text if absent.
+      - name: Scripts parse, lint, and reference live modules
+        run: python3 tools/check_scripts.py
+      - name: Positional args are not read from the compacted list
+        run: python3 tools/check_positional_args.py
+      - name: Rust and Python weather maps agree
+        run: python3 tools/check_weather_parity.py
+      - name: Version is consistent across pyproject, CHANGELOG, tags and crates
+        run: python3 tools/check_version_consistency.py
 
   test:
     # macOS so clang builds the dylib and the native (C) encoder tests actually run.

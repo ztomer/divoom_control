@@ -23,8 +23,8 @@ import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, os.environ.get("GOH_DIR", os.path.expanduser("~/Projects/gates_of_heck")))
-from tui.lib import err, info, ok  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _tui import err, info, ok  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 RUST_TABLE = REPO / "divoomd" / "src" / "weather.rs"
