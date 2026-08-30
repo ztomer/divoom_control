@@ -345,8 +345,18 @@ pub async fn cmd_hot_update(
 }
 
 /// Handle `hot_update_progress` command.
+///
+/// R67: this returned the bare progress object, with NO `success` key — the
+/// only reply in the whole protocol without one. A client that branches on
+/// `reply["success"]` (which every other reply supports) got a KeyError or a
+/// silent falsy. Measured across every read-only command; this was the sole
+/// offender.
 pub fn cmd_hot_update_progress(progress: &HotProgress) -> Value {
-    progress.get()
+    let mut out = progress.get();
+    if let Some(obj) = out.as_object_mut() {
+        obj.insert("success".to_string(), json!(true));
+    }
+    out
 }
 
 // ── hot update session (delegated to art_hot.rs) ─────────────────────────

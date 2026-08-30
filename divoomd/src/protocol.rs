@@ -28,7 +28,7 @@ pub fn encode_message(obj: &Value) -> Vec<u8> {
 /// Blank lines are skipped; a malformed line is skipped (not an error) so one bad
 /// frame can't wedge the stream. Mirrors `iter_messages`: `*lines, remainder =
 /// buffer.split(b"\n")`.
-pub fn iter_messages(buffer: &[u8]) -> (Vec<Value>, Vec<u8>) {
+pub fn iter_messages(buffer: &[u8]) -> (Vec<Result<Value, String>>, Vec<u8>) {
     let mut parts: Vec<&[u8]> = buffer.split(|&b| b == b'\n').collect();
     // split always yields >= 1 element; the last is the bytes after the final '\n'.
     let remainder = parts.pop().unwrap_or(&[]).to_vec();
@@ -38,13 +38,52 @@ pub fn iter_messages(buffer: &[u8]) -> (Vec<Value>, Vec<u8>) {
         if trimmed.is_empty() {
             continue;
         }
-        if let Ok(s) = std::str::from_utf8(trimmed) {
-            if let Ok(v) = serde_json::from_str::<Value>(s) {
-                messages.push(v);
-            }
+        // R67: a line that does not parse yields an Err rather than being
+        // DROPPED. It used to be silently discarded, so a client that sent
+        // malformed JSON got no reply at all and blocked until its own read
+        // timeout — while every other error returned a clean
+        // {"success":false,"error":...} immediately. Measured: a truncated
+        // frame produced a TimeoutError on the client and nothing on the wire.
+        match std::str::from_utf8(trimmed) {
+            Err(_) => messages.push(Err("line is not valid UTF-8".to_string())),
+            Ok(s) => match serde_json::from_str::<Value>(s) {
+                Ok(v) => messages.push(Ok(v)),
+                Err(e) => messages.push(Err(format!("line is not valid JSON: {e}"))),
+            },
         }
     }
     (messages, remainder)
+}
+
+/// The NDJSON protocol version this daemon speaks.
+///
+/// R67: there was no version and no capability signal of any kind, so a client
+/// could not tell an OLD daemon from a new one except by calling a command and
+/// reading the "command not implemented in the native daemon yet" error. That
+/// is exactly how this round wasted a debugging cycle: a `players` call
+/// returned an empty list because the installed app was running a daemon built
+/// before that command existed, and nothing in the reply said so.
+///
+/// Bump the MINOR when adding a command or a reply field (backwards
+/// compatible); bump the MAJOR when changing or removing one.
+pub const PROTOCOL_VERSION: &str = "1.1";
+
+/// Commands this daemon can answer, for capability negotiation.
+///
+/// A client that wants a feature can ASK instead of calling and interpreting an
+/// error string — error text is not an API, and matching on it is how clients
+/// break when a message is reworded.
+pub fn protocol_capabilities() -> Vec<&'static str> {
+    vec![
+        "device_call",
+        "hot_update",
+        "live_jobs",
+        "notifications",
+        "now_playing",
+        "players",
+        "wall",
+        "weather",
+    ]
 }
 
 /// A client request: `{"command": ..., "args": {...}, "token"?: ...}`.

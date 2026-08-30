@@ -21,6 +21,12 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
             let mut res = json!({
                 "success": true,
                 "uptime_s": daemon.started.elapsed().as_secs(),
+                // R67: a client can now ASK what this daemon speaks instead of
+                // discovering it by calling a command and parsing an error
+                // string. Error text is not an API.
+                "protocol_version": crate::protocol::PROTOCOL_VERSION,
+                "daemon_version": env!("CARGO_PKG_VERSION"),
+                "capabilities": crate::protocol::protocol_capabilities(),
             });
             if let Some(obj) = res.as_object_mut() {
                 if let Some(st_obj) = status.as_object() {

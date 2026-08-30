@@ -152,6 +152,14 @@ impl Daemon {
             return err_reply(&e.to_string());
         }
 
+        // Validate the REQUEST before the connection. This used to check the
+        // device first, so a device_call with no `method` was reported as
+        // "no device connected" — a diagnosis that sends the caller to look at
+        // the wrong thing entirely.
+        if req.args.get("method").and_then(|v| v.as_str()).is_none() {
+            return err_reply("device_call requires a 'method' string");
+        }
+
         // R67: `target` was NEVER READ. The Python client has always sent
         // `target: "wall"` for wall operations (DaemonDeviceProxy(target="wall")),
         // and the daemon ignored it and used the single device — so a configured

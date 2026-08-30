@@ -83,7 +83,7 @@ async fn request_reply_round_trip() {
     let (msgs, _rem) = iter_messages(&line);
     assert_eq!(msgs.len(), 1);
     assert_eq!(
-        msgs[0],
+        *msgs[0].as_ref().unwrap(),
         json!({"success": true, "echo": "scan", "args": {"timeout": 5}, "token": "tok"})
     );
 
@@ -122,8 +122,8 @@ async fn two_pipelined_requests_get_two_replies() {
     }
     let (msgs, _rem) = iter_messages(&buf);
     assert_eq!(msgs.len(), 2);
-    assert_eq!(msgs[0]["echo"], json!("a"));
-    assert_eq!(msgs[1]["echo"], json!("b"));
+    assert_eq!(msgs[0].as_ref().unwrap()["echo"], json!("a"));
+    assert_eq!(msgs[1].as_ref().unwrap()["echo"], json!("b"));
 
     let _ = std::fs::remove_file(&path);
 }
@@ -148,8 +148,11 @@ async fn malformed_line_gets_error_reply() {
         .unwrap();
     let line = read_one_line(&mut client).await;
     let (msgs, _rem) = iter_messages(&line);
-    assert_eq!(msgs[0]["success"], json!(false));
-    assert!(msgs[0]["error"].as_str().unwrap().contains("bad request"));
+    assert_eq!(msgs[0].as_ref().unwrap()["success"], json!(false));
+    assert!(msgs[0].as_ref().unwrap()["error"]
+        .as_str()
+        .unwrap()
+        .contains("bad request"));
 
     let _ = std::fs::remove_file(&path);
 }
@@ -178,8 +181,8 @@ async fn subscription_and_event_broadcast() {
     let line = read_one_line(&mut client).await;
     let (msgs, _rem) = iter_messages(&line);
     assert_eq!(msgs.len(), 1);
-    assert_eq!(msgs[0]["type"], json!("status"));
-    assert_eq!(msgs[0]["state"], json!("idle"));
+    assert_eq!(msgs[0].as_ref().unwrap()["type"], json!("status"));
+    assert_eq!(msgs[0].as_ref().unwrap()["state"], json!("idle"));
 
     // 2. Broadcast a custom event
     let event = json!({
@@ -194,7 +197,7 @@ async fn subscription_and_event_broadcast() {
     let line2 = read_one_line(&mut client).await;
     let (msgs2, _rem) = iter_messages(&line2);
     assert_eq!(msgs2.len(), 1);
-    assert_eq!(msgs2[0], event);
+    assert_eq!(msgs2[0].as_ref().unwrap(), &event);
 
     let _ = std::fs::remove_file(&path);
 }

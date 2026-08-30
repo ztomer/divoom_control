@@ -98,6 +98,16 @@ where
         let (msgs, remainder) = iter_messages(&buf);
         buf = remainder;
         for msg in msgs {
+            // A line that failed to PARSE now gets an answer too. Silence was
+            // indistinguishable from a hung daemon.
+            let msg = match msg {
+                Ok(v) => v,
+                Err(reason) => {
+                    let reply = err_reply(&format!("bad request: {reason}"));
+                    stream.write_all(&encode_message(&reply)).await?;
+                    continue;
+                }
+            };
             let req = match serde_json::from_value::<Request>(msg) {
                 Ok(req) => req,
                 Err(_) => {

@@ -25,28 +25,57 @@ fn encode_then_iter_round_trips() {
     let obj = json!({"command": "set_brightness", "args": {"value": 80}, "token": "t"});
     let (msgs, rem) = iter_messages(&encode_message(&obj));
     assert_eq!(msgs.len(), 1);
-    assert_eq!(msgs[0], obj);
+    assert_eq!(msgs[0].as_ref().unwrap(), &obj);
     assert!(rem.is_empty());
 }
 
 #[test]
 fn iter_messages_multi_blank_and_malformed() {
-    // two valid frames, a blank line, and a malformed line — all in one buffer
+    // Two valid frames, a blank line, and a malformed line — all in one buffer.
+    //
+    // R67: this used to assert the malformed line was "skipped, not an error".
+    // That silence is the defect: the SERVER drops the line, never replies, and
+    // the client blocks until its own read timeout — measured as a TimeoutError
+    // with nothing on the wire, while every other error answers immediately.
+    // A malformed frame now yields an Err the caller can answer.
+    //
+    // Blank lines are still skipped: a stray newline is framing noise, not a
+    // request, and answering it would be chatter.
     let mut buf = Vec::new();
     buf.extend_from_slice(b"{\"a\":1}\n");
-    buf.extend_from_slice(b"\n"); // blank -> skipped
-    buf.extend_from_slice(b"{bad json\n"); // malformed -> skipped, not an error
+    buf.extend_from_slice(b"\n"); // blank -> skipped, still
+    buf.extend_from_slice(b"{bad json\n"); // malformed -> reported
     buf.extend_from_slice(b"{\"b\":2}\n");
     let (msgs, rem) = iter_messages(&buf);
-    assert_eq!(msgs, vec![json!({"a": 1}), json!({"b": 2})]);
+
+    assert_eq!(msgs.len(), 3, "two valid frames and one reported failure");
+    assert_eq!(msgs[0].as_ref().unwrap(), &json!({"a": 1}));
+    assert!(
+        msgs[1].is_err(),
+        "the malformed line must be REPORTED, not dropped"
+    );
+    assert!(msgs[1].as_ref().unwrap_err().contains("JSON"));
+    assert_eq!(
+        msgs[2].as_ref().unwrap(),
+        &json!({"b": 2}),
+        "a bad frame must not swallow the frames after it"
+    );
     assert!(rem.is_empty());
+}
+
+#[test]
+fn iter_messages_reports_non_utf8_separately() {
+    let (msgs, _) = iter_messages(b"\xff\xfe not utf8\n");
+    assert_eq!(msgs.len(), 1);
+    assert!(msgs[0].as_ref().unwrap_err().contains("UTF-8"));
 }
 
 #[test]
 fn iter_messages_keeps_partial_trailing_frame_as_remainder() {
     let buf = b"{\"a\":1}\n{\"b\":2"; // second frame has no trailing newline
     let (msgs, rem) = iter_messages(buf);
-    assert_eq!(msgs, vec![json!({"a": 1})]);
+    assert_eq!(msgs.len(), 1);
+    assert_eq!(msgs[0].as_ref().unwrap(), &json!({"a": 1}));
     assert_eq!(
         rem,
         b"{\"b\":2".to_vec(),
@@ -72,7 +101,7 @@ fn parses_python_encoded_request() {
     assert!(rem.is_empty());
     assert_eq!(msgs.len(), 1);
     // parse into the typed Request
-    let req: Request = serde_json::from_value(msgs[0].clone()).unwrap();
+    let req: Request = serde_json::from_value(msgs[0].clone().unwrap()).unwrap();
     assert_eq!(req.command, "scan");
     assert_eq!(req.args, json!({"timeout": 5}));
     assert_eq!(req.token.as_deref(), Some("tok"));

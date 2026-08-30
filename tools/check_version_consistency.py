@@ -14,6 +14,12 @@ structural gate belongs (house rule: gates are structural, not disciplinary).
 Checked here:
   * `pyproject.toml` version == the newest `## vX.Y.Z` stanza in CHANGELOG.md
   * if the repo has tags, that version is also the newest release tag
+  * the PRODUCT crates (divoomd, divoom-menubar) carry that same version
+
+The crate check exists because `divoomd` reports its version over the wire in
+`get_status`, and it said 0.1.0 while the product was 0.26.0 — the same stale
+stamp that shipped in two DMGs, one layer down. `nowplaying/` is deliberately
+NOT checked: it is a standalone reusable library and versions independently.
 
 The tag check is skipped in a shallow clone or a fresh repo with no tags, and it
 deliberately allows the version to be AHEAD of the newest tag: that is the
@@ -33,6 +39,11 @@ from tui.lib import err, info, ok  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 CHANGELOG_HEADING = re.compile(r"^##\s+v(\d+\.\d+\.\d+)", re.M)
+CRATE_VERSION = re.compile(r'^version\s*=\s*"([^"]+)"', re.M)
+
+# Crates that ARE the product and must carry its version. `nowplaying` is a
+# standalone library and is deliberately absent.
+PRODUCT_CRATES = ("divoomd", "divoom-menubar")
 
 
 def parse_version(text: str) -> tuple[int, ...]:
@@ -80,6 +91,19 @@ def main() -> int:
             f"CFBundleShortVersionString, so the shipped app would report "
             f"{version}."
         )
+
+    for crate in PRODUCT_CRATES:
+        manifest = REPO / crate / "Cargo.toml"
+        if not manifest.is_file():
+            continue
+        m = CRATE_VERSION.search(manifest.read_text(encoding="utf-8"))
+        if not m:
+            failures.append(f"{crate}/Cargo.toml has no version")
+        elif m.group(1) != version:
+            failures.append(
+                f"{crate}/Cargo.toml says {m.group(1)} but pyproject says "
+                f"{version}. divoomd reports this over the wire in get_status, "
+                f"so a stale value misinforms every client.")
 
     tag = newest_tag_version()
     if tag is not None and parse_version(version) < parse_version(tag):
