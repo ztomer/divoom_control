@@ -269,12 +269,21 @@ def test_resolve_location_uses_location_env_when_no_lat_lon() -> None:
         del os.environ["DIVOOM_CONTROL_WEATHER_LOCATION"]
 
 
-def test_resolve_location_default() -> None:
-    """No env, no argument -> "" so wttr.in geolocates by the caller's IP
-    (replaces the old hardcoded Berlin default)."""
+def test_resolve_location_default(tmp_path, monkeypatch) -> None:
+    """No env, no argument, no saved city -> "" so wttr.in geolocates by the
+    caller's IP (replaces the old hardcoded Berlin default).
+
+    HOME is redirected deliberately. Since P3.1 the last tier before "" is the
+    city saved in `~/.config/divoom-control/config.ini`, so without this the
+    assertion would depend on whether the DEVELOPER had set a weather city — it
+    passes on a machine that has never used the feature and flips red on one
+    that has. A test whose result depends on the user's own config is not
+    testing the code.
+    """
     import os
     for k in ("DIVOOM_CONTROL_WEATHER_LAT", "DIVOOM_CONTROL_WEATHER_LON", "DIVOOM_CONTROL_WEATHER_LOCATION"):
         os.environ.pop(k, None)
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
     assert _resolve_location(None) == ""
 
 

@@ -16,6 +16,7 @@ from divoom_gui.clock_faces import ClockFacesMixin
 from divoom_gui.playlists import PlaylistsMixin
 from divoom_gui.aid_sleep import AidSleepMixin
 from divoom_gui.photo_albums import PhotoAlbumsMixin
+from divoom_gui.weather_city import WeatherCityMixin
 from divoom_gui.lighting_forward import LightingForwardMixin
 
 from divoom_gui.api import AsyncLoopThread
@@ -29,7 +30,7 @@ logger = logging.getLogger("divoom_gui")
 
 class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin,
                    LifecycleSettingsMixin, ClockFacesMixin, PlaylistsMixin, AidSleepMixin,
-                   PhotoAlbumsMixin, LightingForwardMixin):
+                   PhotoAlbumsMixin, WeatherCityMixin, LightingForwardMixin):
     """The PyWebView JS api bridge orchestrator."""
     def __init__(self) -> None:
         self.loop_thread = AsyncLoopThread()

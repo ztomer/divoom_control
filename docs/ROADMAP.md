@@ -150,7 +150,8 @@ table is written by the step rather than by a tidy-up pass afterwards.
 | P1.3 | Regression test: no surviving PIDs on each failure path | DONE |
 | P1.4 | Sweep the sibling harnesses for the same shape | DONE |
 | P2.1 | Audit the five LAN commands' arg + reply shapes against the daemon | DONE |
-| P3.1 | `search_weather_city` UI + e2e (promoted: verifiable with no hardware) | TODO |
+| P3.1a | `search_weather_city` backend: persisted location tier + GUI API | DONE |
+| P3.1b | `search_weather_city` UI panel + camoufox e2e | TODO |
 | P2.4 | Danmaku SendText UI + e2e, render marked unconfirmed | TODO |
 | P4.1 | Raise the Rust coverage floor off 29%, in steps | TODO |
 | ~~P2.2~~ | ~~GUI API methods~~ — folded into P3.1 / P2.4; there is no shared layer worth building for two commands | DROPPED |

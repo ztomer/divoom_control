@@ -21,8 +21,16 @@ Location resolution order:
   2. ``DIVOOM_CONTROL_WEATHER_LAT`` / ``DIVOOM_CONTROL_WEATHER_LON``
      env vars (reverse-geocoded by wttr.in's coordinate format)
   3. ``DIVOOM_CONTROL_WEATHER_LOCATION`` env var
-  4. ``"Berlin"`` — a sensible default that wttr.in accepts as a city
-     name. (No geolocation lookup; we don't ship that.)
+  4. the saved location in ``~/.config/divoom-control/config.ini``
+     (``[weather] location``), set by the GUI's city search
+  5. ``""`` — an empty location makes wttr.in geolocate by the caller's IP,
+     and the real city is read back from ``nearest_area``.
+
+  (Item 4 is the only persisted tier; the env vars stay above it so a
+  deliberate override still wins for debugging. Items 1-3 and 5 predate it.
+  This list used to end at ``"Berlin"`` — a hardcoded default that was
+  replaced by IP geolocation without the docstring being updated, so it
+  documented a city the code had already stopped using.)
 
 The interface is intentionally tiny so the GUI can swap providers
 without touching the weather-card code::
@@ -121,17 +129,56 @@ class WeatherInfo:
     fetched_at: float  # unix epoch seconds
 
 
+WEATHER_CONFIG_SECTION = "weather"
+
+
+def saved_location() -> str:
+    """The location saved by the GUI's city search, or "" if none is set.
+
+    Reads the same `~/.config/divoom-control/config.ini` the rest of the GUI
+    persists to. Stored as wttr.in's `"lat,lon"` coordinate form rather than a
+    city name: `Weather/SearchCity` returns `Lat`/`Lon` alongside the name, and
+    coordinates survive the fact that Divoom's city namespace and wttr.in's are
+    not the same one — a `CityId` from Divoom means nothing to wttr.in, but a
+    latitude does.
+
+    Any failure reads as "not set". A malformed config file must not stop the
+    weather widget from working; falling through to IP geolocation is a working
+    answer, and raising here would take out the whole live job.
+    """
+    import configparser
+    from pathlib import Path
+
+    try:
+        path = Path.home() / ".config" / "divoom-control" / "config.ini"
+        if not path.exists():
+            return ""
+        cfg = configparser.ConfigParser()
+        cfg.read(path)
+        if cfg.has_option(WEATHER_CONFIG_SECTION, "location"):
+            return (cfg.get(WEATHER_CONFIG_SECTION, "location") or "").strip()
+    except Exception as e:  # noqa: BLE001 - see docstring
+        logger.debug(f"could not read saved weather location: {e}")
+    return ""
+
+
 def _resolve_location(explicit: Optional[str]) -> str:
     """Pick the location string, applying overrides in priority order:
 
       1. explicit argument
       2. DIVOOM_CONTROL_WEATHER_LAT / _LON
       3. DIVOOM_CONTROL_WEATHER_LOCATION
+      4. the saved location from the GUI's city search
 
     With none set, returns "" — an empty location makes wttr.in **geolocate by
     the caller's IP** (``https://wttr.in/?format=j1``), and the real city is read
     back from the response's ``nearest_area``. This replaces the old hardcoded
-    "Berlin" default (which was wrong for everyone not in Berlin)."""
+    "Berlin" default (which was wrong for everyone not in Berlin).
+
+    The saved location sits BELOW the env vars deliberately: those are a
+    deliberate per-run override (and the dev bundle/launchd case R67/C2 fixed
+    depends on them), so a stored preference must not silently outrank one.
+    """
     if explicit:
         return explicit
     lat = os.environ.get("DIVOOM_CONTROL_WEATHER_LAT")
@@ -141,6 +188,9 @@ def _resolve_location(explicit: Optional[str]) -> str:
     env_loc = os.environ.get("DIVOOM_CONTROL_WEATHER_LOCATION")
     if env_loc:
         return env_loc
+    saved = saved_location()
+    if saved:
+        return saved
     return ""  # let wttr.in geolocate by IP
 
 
