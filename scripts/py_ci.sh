@@ -21,11 +21,43 @@ if ! bash scripts/build_libdivoom.sh >/tmp/py_ci_dylib.log 2>&1; then
 fi
 ok "native dylib built"
 
+have_camoufox=0
 if python3 tools/check_camoufox_installed.py >/tmp/py_ci_camoufox.log 2>&1; then
     ok "camoufox browser present ($(cat /tmp/py_ci_camoufox.log))"
+    have_camoufox=1
 else
     warn "no camoufox browser — the 15 GUI e2e suites will SKIP, not run"
     warn "  install with: python3 -m camoufox fetch"
 fi
 
-python3 -m pytest -q
+# ── coverage floor (R70 P0.4) ────────────────────────────────────────────────
+#
+# Scoped to divoom_gui + divoom_client: the code the GUI actually SHIPS.
+# `divoom_lib` is deliberately out of scope — it is reference-only (the
+# protocol ground truth the Rust port was derived from), and folding it in
+# would make this number a claim about a code path that is not the product.
+#
+# This lives here rather than in .gatesrc's GOH_PY_COV_MIN because the house
+# py_gate.sh is COMMENTED OUT in tools/gate.sh — which is the whole mechanical
+# reason the "coverage gate (>=95%)" this repo credited to R61 was enforced by
+# nobody: the setting was real and its consumer was disabled. It also scopes
+# --cov to a single pkg_dir, which cannot express "these two packages, not that
+# third one".
+#
+# The floor only BINDS when camoufox is present. Without it 15 e2e suites skip,
+# coverage drops for a reason that has nothing to do with the change under
+# test, and a red floor would be punishing the wrong thing. Not enforcing it is
+# said out loud rather than passed over in silence — the same rule this script
+# already applies to the skipping suites themselves.
+COV_MIN="${DIVOOM_PY_COV_MIN:-89}"
+
+if [ "$have_camoufox" -eq 1 ]; then
+    info "pytest (coverage floor ${COV_MIN}% over divoom_gui + divoom_client)"
+    python3 -m pytest -q \
+        --cov=divoom_gui --cov=divoom_client \
+        --cov-report=term-missing:skip-covered \
+        --cov-fail-under="$COV_MIN"
+else
+    warn "coverage floor NOT enforced — needs camoufox for a comparable number"
+    python3 -m pytest -q
+fi
