@@ -20,6 +20,19 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-08-30 — v0.28.1 SHIPPED and verified in the bundle.** Tag `a37fb70` on
+  a green CI (run 33320160112); GitHub release + `Divoom-v0.28.1.dmg`
+  (sha256 `1e2f9bde...`), Homebrew cask carrying that exact sha.
+  Verified against the artifact users install, not just the source tree: the
+  daemon inside `Divoom.app/Contents/Frameworks/bin/divoomd` answers
+  `now_playing` / `players` / `sysmon` three rounds running and stays alive —
+  the exact sequence that aborted it in v0.28.0.
+
+  **v0.28.0 was live on Homebrew with that crash for a few hours.** It shipped
+  with "nobody has clicked it" recorded as a known gap, which is not the same as
+  mitigating the gap. If validation is cheap enough to write down, do it before
+  the release.
+
 - **2026-08-30 (v0.28.1) — the GUI was exercised for real, and it killed the
   daemon.** v0.28.0 shipped with "nobody has launched the app and clicked it"
   recorded as the open risk. Doing that found three defects in one sitting.
