@@ -167,7 +167,7 @@ it makes it a second implementation of documentation.
 | 6 | `media_sync.py:84-106` album-art preview resizes `Image.LANCZOS` | music job pushes via `image_proc::process_image_bytes` → `FilterType::Nearest` | source |
 | 7 | `mcp_control.py:118` spawns `[sys.executable, "-m", "divoom_lib.cli", "mcp-server"]` | `divoomd mcp` (`mcp.rs`, a documented port of the Python server) | bundled `divoomd mcp` served `tools/list` = 13 tools |
 
-**Two of these are worse than redundancy.**
+**Two of these are worse than redundancy** (both carry their fix in P3/P4 below).
 
 **#6 is a docstring that is false about its own function.** It states "Uses the
 same renderer path the device frame comes from, so the card and the panel
@@ -228,6 +228,162 @@ daemon_protocol.py` has NO wrapper for a single one of the twelve-plus cloud
 commands. Every panel that needed one found it easier to import `CloudClient`
 than to add a method. Fix the class: add the wrappers first, then route the
 panels, then delete the Python paths — not one panel at a time.
+
+### R70 plan — seven phases, allowlist-ratcheted
+
+**Completion criterion is mechanical, not a judgement call:** the P0 gate ships
+with an allowlist seeded to exactly today's violations, each phase deletes the
+entries it earned, and the class is closed when the allowlist is EMPTY. A phase
+that cannot delete its entries did not finish, whatever its tests say.
+
+**Order is forced by two house rules, not by convenience.** The harness comes
+before the bug (#1), so the gate that would have caught all twelve is P0 — built
+while the tree is still dirty, which is the only time its ability to fail can be
+observed. And the seam comes before the panels: every one of these twelve chose
+`CloudClient` over a wrapper that did not exist, so routing panels first would
+just re-run the decision that caused it.
+
+**P0 — the gate, before anything moves.**
+
+- **P0.1** `tools/check_gui_is_a_client.py`: fail if `divoom_gui/` imports
+  `divoom_lib.cloud`, `bleak`, `urllib.request`, `pyaudio` or `psutil`, or
+  CONSTRUCTS pixels (`Image.new`, `ImageDraw`, `font.render`, `.resize(`).
+  Decoding daemon bytes (`Image.frombytes`) stays legal — that is the
+  `sysmon_widget.py` shape. Seed `ALLOWLIST` with today's violations.
+- **P0.2** Prove it bites, in BOTH directions (rule #2): a violation off the
+  allowlist must fail, AND an allowlist entry that no longer matches must fail.
+  An allowlist that silently tolerates its own rot is a hole, not a ratchet.
+- **P0.3** Wire into `.gatesrc` `GOH_CI_STEPS` and
+  `.github/workflows/tests.yml`. Local and CI identical (rule #14 corollary).
+- **P0.4** Turn the Python coverage floor ON. `GOH_PY_COV_MIN` is commented out
+  in `.gatesrc` and `scripts/py_ci.sh` runs a bare `pytest -q`, so the "≥95%
+  coverage gate" this file credits to R61 is enforced by NOBODY — the exact
+  R69/P4.1 finding, still live on the Python side. Baseline it here so P5's
+  deletions are judgeable instead of merely green.
+
+**P1 — the seam (pure addition, nothing rerouted yet).**
+
+- **P1.1** `daemon_protocol.py` wrappers for all 12 cloud commands +
+  `get_animated_preview`.
+- **P1.2** Daemon `render_widget {kind, size, params}` → `{frame_rgb_b64, ...}`,
+  generalizing `cmd_sysmon` (kinds: `sysmon`, `stocks`, `notification`, `text`,
+  `album_art`). ONE command, not four more — four bespoke siblings would leave
+  the class alive for widget #6. `sysmon` stays as a thin alias: the working
+  path is not churned to prove a point.
+- **P1.3** ONE GUI helper `_widget_frame(kind, params)` that every panel calls.
+  A single funnel, so "render it here instead" has nowhere to live.
+- **P1.4** Parity fixtures per kind against the Python renderer it replaces, so
+  the port is CHECKED rather than assumed (every R67 packet bug was found this
+  way, and Python was right every time).
+
+**P2 — cloud browse moves.** Findings #1, #2, #3, #4.
+
+- **P2.1** Route the five panels through the wrappers; drop `CloudClient` from
+  `divoom_gui/`.
+- **P2.2** `fetch_gallery` + asset download/decode → daemon; delete
+  `gallery_download.py` and the `urllib` in `gallery_sync.py`.
+- **P2.3** `hot_update_preview` → the daemon's manifest.
+- **P2.4** Every panel says WHY it is empty. **Closes the Deferred item** — the
+  reason already exists daemon-side and the GUI discards it.
+- **P2.5** Verify all 8 commands round-trip LIVE before deleting their Python
+  twins. `get_photo_albums` answers `RC=3` today; the R61 note below says that
+  is missing `BlueDevice/NewDevice` registration, so close it here.
+- Allowlist: `divoom_lib.cloud` and `urllib.request` entries deleted.
+
+**P3 — the renderers move.** Findings #5, #6, and `_render_text_png`.
+
+- **P3.1** Stocks → `render_widget`; delete the GUI's Yahoo fetch and PIL draw.
+- **P3.2** Album art → `render_widget`; the LANCZOS/NEAREST drift ends. The
+  false docstring is fixed by making it TRUE.
+- **P3.3** Text → `render_widget` over `render.rs`'s `BitmapFont`; delete
+  `_render_text_png`. One bitmap font in the product, not two.
+- **P3.4** A CLASS-level regression test: for EVERY widget kind, the preview
+  bytes and the pushed bytes come from one call. Per-widget assertions are what
+  let stocks survive the sysmon fix.
+- Allowlist: the PIL-construction entries deleted.
+
+**P4 — MCP.** Finding #7.
+
+- **P4.1** REPRODUCE the bundle failure first. The prediction is read off the
+  code path; it may fail differently, and a fix aimed at a predicted symptom is
+  a guess.
+- **P4.2** Spawn `divoomd mcp`, resolved through
+  `divoom_client.binary_resolver.resolve()`. Never a second resolver — that IS
+  the R69 class.
+- **P4.3** Test both shapes. R69 "careful here (1)": a bundle and a dev tree get
+  DIFFERENT rules, and flattening them is wrong in a way unit tests miss.
+- **P4.4** The Python MCP server stays as reference; it loses its GUI caller.
+
+**P5 — delete the dead weight.** Findings #8-#12.
+
+- **P5.1** `gui_main.py` — the `bleak`/`Divoom`/`DivoomWall` imports.
+- **P5.2** `audio_visualizer.py` + `toggle_audio_visualizer`/`get_audio_levels`.
+  Note `pyaudio` is not in `requirements.txt` at all — an undeclared dependency
+  in dead code — while CI brew-installs PortAudio on every macOS run for it.
+- **P5.3** `api/widgets.py` unreachable block + `push_weather`.
+- **P5.4** `trigger_notification`.
+- **P5.5** Delete the tests pinning all of the above. A test pinning a dead
+  second implementation is PART of the defect (rule #8), not coverage worth
+  keeping. Re-baseline P0.4's floor deliberately and state the number.
+- **P5.6** `divoom.spec`: drop `collect_submodules("bleak")` and remeasure the
+  bundle. If the GUI truly cannot reach BLE, the bundle proves it by working
+  without it.
+
+**P6 — close the class.**
+
+- **P6.1** Allowlist empty. Enforced, not asserted.
+- **P6.2** User-POV run of the REAL app (rule #4) across every touched panel —
+  green tests are not a shipped feature, and v0.28.1 is this project's own
+  proof.
+- **P6.3** CHANGELOG stanza, version bump, release.
+
+**Traps, named up front.**
+
+- **An unwired daemon command is normally a DECISION** (R69/P2.1), and that
+  presumption still holds for everything NOT in the findings table. These twelve
+  were checked individually: `get_animated_preview`'s own comment names the
+  Python GUI as its parity target, and the cloud commands lost their client when
+  the native egui UI was retired. Orphaned, not declined.
+- **Routing to the daemon can expose a WEAKER port.** Verify live before
+  deleting any Python twin; a gap found that way is a port bug to fix, never a
+  reason to keep the second implementation.
+- **Deleting code moves coverage.** Say the number out loud; a floor lowered
+  quietly is a floor that stops meaning anything.
+- **The bundle and the dev tree behave differently.** Every spawn/resolve change
+  gets tested in both shapes.
+
+**Step ledger** — each step updates its own row in the commit that does the
+work, so the table and git history cannot disagree (the R69 discipline).
+
+| Step | State | Notes |
+|------|-------|-------|
+| P0.1 gate | TODO | |
+| P0.2 prove it bites | TODO | |
+| P0.3 wire local+CI | TODO | |
+| P0.4 Python cov floor ON | TODO | currently enforced by nobody |
+| P1.1 cloud wrappers | TODO | |
+| P1.2 `render_widget` | TODO | |
+| P1.3 `_widget_frame` funnel | TODO | |
+| P1.4 parity fixtures | TODO | |
+| P2.1 five panels | TODO | |
+| P2.2 gallery fetch+assets | TODO | |
+| P2.3 hot manifest | TODO | |
+| P2.4 failures say why | TODO | closes a Deferred item |
+| P2.5 live round-trip + RC=3 | TODO | |
+| P3.1 stocks | TODO | |
+| P3.2 album art | TODO | ends LANCZOS/NEAREST drift |
+| P3.3 text | TODO | |
+| P3.4 class-level drift test | TODO | |
+| P4.1 reproduce in bundle | TODO | before any fix |
+| P4.2 spawn `divoomd mcp` | TODO | |
+| P4.3 both shapes tested | TODO | |
+| P4.4 Python MCP → reference | TODO | |
+| P5.1-P5.4 deletions | TODO | |
+| P5.5 tests + floor rebaseline | TODO | |
+| P5.6 bleak out of the bundle | TODO | |
+| P6.1 allowlist empty | TODO | the completion criterion |
+| P6.2 user-POV pass | TODO | |
+| P6.3 CHANGELOG + release | TODO | |
 
 ### Cloud HTTP — 533/533 endpoints cataloged
 

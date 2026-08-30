@@ -162,11 +162,22 @@ shared memory. Read this on entry and **update it at the end of every round**
   args and the single-instance guard exits, so "Start MCP Server" cannot work in
   a bundle at all. Reproduce that one in the bundle before fixing it.
 
-  **The seam is the root cause, and it is where a fix should start.**
+  **The seam is the root cause, and it is where the fix starts.**
   `divoom_client/daemon_protocol.py` has no wrapper for ANY of the twelve-plus
   cloud commands, so every panel that needed one imported `CloudClient` instead.
-  Add the wrappers, then route the panels, then delete the Python paths. One
-  panel at a time leaves the class alive.
+
+  **A seven-phase plan with a step ledger is in `docs/ROADMAP.md` under "R70
+  plan". Nothing is implemented yet — all 27 steps are TODO.** The shape: P0
+  builds the gate that would have caught all twelve (while the tree is still
+  dirty, the only time its ability to FAIL can be observed), P1 adds the missing
+  seam, P2-P5 move and delete, P6 closes.
+
+  **The completion criterion is mechanical.** The P0 gate ships with an
+  allowlist seeded to exactly today's violations; each phase deletes the entries
+  it earned; the class is closed when the allowlist is EMPTY. A phase that
+  cannot delete its entries did not finish, whatever its tests say. Start at
+  P0.1 — routing a panel before the seam exists just re-runs the decision that
+  caused all twelve.
 
   Free consequence: this subsumes the Deferred "cloud browse cannot say WHY it
   is empty" item. The daemon already returns
