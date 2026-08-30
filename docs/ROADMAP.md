@@ -470,10 +470,10 @@ correct.
 
 | Step | State | Proven by |
 |------|-------|-----------|
-| P0.1 gate | TODO | |
-| P0.2 prove it bites | TODO | 4 calibration cases + empty-allowlist run at HEAD returns exactly the findings files |
-| P0.3 wire local+CI | TODO | |
-| P0.4 Python cov floor ON | TODO | drop a module's coverage, watch the floor fail |
+| P0.1 gate | **DONE** | `tools/check_gui_is_a_client.py`; 27 violations across the 12 findings' files |
+| P0.2 prove it bites | **DONE** | 18 tests; 4 sabotages each went red on the property they broke |
+| P0.3 wire local+CI | **DONE** | same position in `.gatesrc` and `tests.yml`; verified in the no-`GOH_DIR` CI shape |
+| P0.4 Python cov floor ON | **DONE** | 89% measured (not the 95% claimed); floor 99 fails / floor 1 passes |
 | P1.1 cloud wrappers | TODO | wrong command name on the wire → red |
 | P1.2 `render_widget` | TODO | sysmon bytes pinned before the refactor, identical after |
 | P1.3 `_widget_frame` funnel | TODO | every panel reaches frames through it — no second path |
