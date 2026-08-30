@@ -204,6 +204,9 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
         // "who is out there" and "who is playing" are separate questions.
         "players" => crate::now_playing::cmd_players(&req.args),
 
+        // One weather reading, shared by the preview card and the device push.
+        "weather" => crate::now_playing::cmd_weather(&req.args).await,
+
         // --- wall command ---
         "wall_configure" => daemon.cmd_wall_configure(&req).await,
 

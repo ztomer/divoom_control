@@ -18,6 +18,33 @@
 
 use serde_json::{json, Value};
 
+/// Handle `weather` — one reading, from the source the device is pushed.
+///
+/// R67/C2: the GUI used to fetch weather itself through
+/// `divoom_lib/weather_provider.py` while the daemon fetched it again for the
+/// device. Two fetches of one fact, and — because `location` was never passed
+/// through — potentially two different cities. The daemon now answers, so the
+/// card and the panel cannot disagree.
+pub async fn cmd_weather(args: &Value) -> Value {
+    let location = args
+        .get("location")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let client = reqwest::Client::new();
+    match crate::weather::fetch(&client, &location).await {
+        Ok(info) => json!({
+            "success": true,
+            "temperature_c": info.temperature_c,
+            "weather_type": info.weather as u8,
+            "location": location,
+        }),
+        // Say WHY. A weather card that silently shows nothing is the exact
+        // dead-but-green state this round has been about.
+        Err(e) => json!({"success": false, "error": e}),
+    }
+}
+
 /// Handle `players` — who is out there, and who is actually playing.
 ///
 /// R67: `now_playing` returns the ONE session macOS considers current, and

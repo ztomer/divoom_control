@@ -130,43 +130,77 @@ def test_push_weather_returns_false_when_device_send_fails(loop_thread, monkeypa
 # ── get_weather ─────────────────────────────────────────────────────────────
 
 
-def test_get_weather_happy_path_returns_expected_fields(loop_thread, monkeypatch):
+
+
+
+
+# ── get_weather: now a DAEMON client (R67/C2) ─────────────────────────────
+
+
+def _api_with_client(loop_thread, client):
+    return WidgetsApi(
+        loop_thread=loop_thread,
+        daemon_client_getter=lambda: client,
+        state_getter=lambda: {"current_divoom": None},
+    )
+
+
+class _FakeWeatherClient:
+    """Records the location it was asked for, and replies with a fixed reading."""
+
+    def __init__(self, reply):
+        self.reply = reply
+        self.asked_location = None
+
+    def weather(self, location=""):
+        self.asked_location = location
+        return self.reply
+
+
+def test_get_weather_reads_the_daemon_not_a_second_fetch(loop_thread):
+    """R67/C2: the GUI used to fetch weather itself while the daemon fetched it
+    again for the device — two code paths for one fact, and potentially two
+    different cities. The card must now report what the DAEMON says, so it
+    cannot disagree with what the panel shows."""
+    client = _FakeWeatherClient({
+        "success": True, "temperature_c": 17,
+        "weather_type": int(WeatherType.Snow), "location": "Oslo",
+    })
+    result = _api_with_client(loop_thread, client).get_weather()
+
+    assert result["temperature_c"] == 17
+    assert result["weather_type"] == int(WeatherType.Snow)
+    assert result["location"] == "Oslo"
+    assert result["provider"] == "daemon", "the reading came from the daemon"
+    assert "error" not in result
+
+
+def test_get_weather_sends_the_resolved_location(loop_thread, monkeypatch):
+    """The location is resolved LOCALLY and sent along, so the daemon does not
+    geolocate independently — the gap that let preview and device differ."""
     import divoom_lib.weather_provider as wp
 
-    info = _FakeWeatherInfo(temperature_c=17, weather_type=int(WeatherType.Snow),
-                             location="Oslo", provider="wttr.in", fetched_at=999.5)
-
-    async def _fake_get_weather(*a, **k):
-        return info
-
-    monkeypatch.setattr(wp, "get_weather", _fake_get_weather)
-
-    api = _api(loop_thread)
-    result = api.get_weather()
-    assert result == {
-        "temperature_c": 17,
-        "weather_type": int(WeatherType.Snow),
-        "location": "Oslo",
-        "provider": "wttr.in",
-        "fetched_at": 999.5,
-    }
+    monkeypatch.setattr(wp, "_resolve_location", lambda _explicit: "Reykjavik")
+    client = _FakeWeatherClient({
+        "success": True, "temperature_c": 2,
+        "weather_type": int(WeatherType.Clear), "location": "Reykjavik",
+    })
+    _api_with_client(loop_thread, client).get_weather()
+    assert client.asked_location == "Reykjavik"
 
 
-def test_get_weather_falls_back_to_stub_dict_on_exception(loop_thread, monkeypatch):
-    """A provider failure must never blow up the JS-API call — it degrades
-    to an HONEST stub (R61: placeholders must say why, R-CLAUDE.md #9)."""
-    import divoom_lib.weather_provider as wp
+def test_get_weather_reports_a_daemon_error_honestly(loop_thread):
+    """A weather card that silently shows a fabricated 0C is the dead-but-green
+    state this round is about. The failure must be visible."""
+    client = _FakeWeatherClient({"success": False, "error": "wttr.in returned 503"})
+    result = _api_with_client(loop_thread, client).get_weather()
 
-    async def _boom(*a, **k):
-        raise ConnectionError("dns failed")
+    assert result["provider"] == "error"
+    assert result["location"] == "unavailable"
+    assert "503" in result["error"]
 
-    monkeypatch.setattr(wp, "get_weather", _boom)
 
-    api = _api(loop_thread)
-    result = api.get_weather()
-    assert result["temperature_c"] == 0
-    assert result["weather_type"] == int(WeatherType.Clear)
-    assert result["location"] == "error"
-    assert result["provider"] == "stub"
-    assert result["fetched_at"] == 0.0
-    assert "dns failed" in result["error"]
+def test_get_weather_without_a_daemon_is_an_error_not_a_reading(loop_thread):
+    result = _api_with_client(loop_thread, None).get_weather()
+    assert result["provider"] == "error"
+    assert "error" in result

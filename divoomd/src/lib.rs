@@ -66,3 +66,4 @@ pub mod spp;
 pub mod sync_artwork;
 pub mod transport;
 pub mod wall;
+pub mod weather;

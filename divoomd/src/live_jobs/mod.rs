@@ -325,92 +325,51 @@ async fn run_weather(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
         )
         .await;
 
-        let mut url = "https://wttr.in/".to_string();
-        if !location.is_empty() {
-            url.push_str(&location);
-        }
-
-        let res = client
-            .get(&url)
-            .query(&[("format", "j1")])
-            .timeout(Duration::from_secs(8))
-            .send()
-            .await;
-
-        if let Ok(resp) = res {
-            if resp.status() == 200 {
-                if let Ok(body) = resp.json::<serde_json::Value>().await {
-                    if let Some(current) = body
-                        .get("current_condition")
-                        .and_then(|c| c.as_array())
-                        .and_then(|a| a.first())
-                    {
-                        let temp_str = current
-                            .get("temp_C")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("0");
-                        let code_str = current
-                            .get("weatherCode")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("113");
-
-                        let temp_c = temp_str.parse::<i8>().unwrap_or(0);
-                        let weather_code = code_str.parse::<i32>().unwrap_or(113);
-
-                        let weather_type = match weather_code {
-                            113 => 1,                   // Clear
-                            116 | 119 | 122 => 3,       // CloudySky
-                            143 | 185 | 248 | 260 => 9, // Fog
-                            176 | 263 | 266 | 281 | 284 | 293 | 296 | 299 | 302 | 305 | 308
-                            | 311 | 314 | 353 | 356 | 359 => 6, // Rain
-                            179 | 182 | 227 | 230 | 317 | 320 | 323 | 326 | 329 | 332 | 335
-                            | 338 | 350 | 362 | 365 | 368 | 371 | 374 | 377 => 8, // Snow
-                            200 | 386 | 389 | 392 | 395 => 5, // Thunderstorm
-                            _ => 1,                     // Default to Clear
-                        };
-
-                        if get_device_transport(&daemon, &mac).await.is_some() {
-                            let d_weak = daemon_weak.clone();
-                            let mac_clone = mac.clone();
-                            let _ = daemon
-                                .queue
-                                .run(None, async move {
-                                    if let Some(d) = d_weak.upgrade() {
-                                        if let Some(dev_t) =
-                                            get_device_transport(&d, &mac_clone).await
-                                        {
-                                            let _ = dev_t
-                                                .send_command(
-                                                    0x32,
-                                                    &[0x01, 0x00, 0xFF, 0xFF, 0xFF, 0x00],
-                                                    false,
-                                                )
-                                                .await;
-                                            // R67: was a hand-built
-                                            // [temp as u8, type] pair. The
-                                            // temperature encoding is
-                                            // two's-complement for negatives
-                                            // and now lives in one tested
-                                            // place (packets::WeatherPacket).
-                                            let packet = crate::packets::WeatherPacket {
-                                                temperature_c: temp_c,
-                                                weather: crate::packets::WeatherType::from_i64(
-                                                    weather_type as i64,
-                                                ),
-                                            };
-                                            let _ = dev_t
-                                                .send_command(
-                                                    crate::packets::CMD_SET_TEMP_WEATHER,
-                                                    &packet.to_bytes(),
-                                                    true,
-                                                )
-                                                .await;
-                                        }
-                                    }
-                                })
-                                .await;
-                        }
-                    }
+        // R67/C2: the fetch and the WMO mapping used to be inline here, a
+        // second copy of divoom_lib/weather_provider.py. They now live in
+        // crate::weather, which a parity gate compares against the Python side.
+        match crate::weather::fetch(&client, &location).await {
+            Err(e) => {
+                report_health(
+                    &daemon,
+                    &health,
+                    &mac,
+                    JOB_KIND,
+                    health::JobState::Failed(e),
+                )
+                .await;
+            }
+            Ok(info) => {
+                if get_device_transport(&daemon, &mac).await.is_some() {
+                    let d_weak = daemon_weak.clone();
+                    let mac_clone = mac.clone();
+                    let _ = daemon
+                        .queue
+                        .run(None, async move {
+                            if let Some(d) = d_weak.upgrade() {
+                                if let Some(dev_t) = get_device_transport(&d, &mac_clone).await {
+                                    let _ = dev_t
+                                        .send_command(
+                                            0x32,
+                                            &[0x01, 0x00, 0xFF, 0xFF, 0xFF, 0x00],
+                                            false,
+                                        )
+                                        .await;
+                                    let packet = crate::packets::WeatherPacket {
+                                        temperature_c: info.temperature_c,
+                                        weather: info.weather,
+                                    };
+                                    let _ = dev_t
+                                        .send_command(
+                                            crate::packets::CMD_SET_TEMP_WEATHER,
+                                            &packet.to_bytes(),
+                                            true,
+                                        )
+                                        .await;
+                                }
+                            }
+                        })
+                        .await;
                 }
             }
         }

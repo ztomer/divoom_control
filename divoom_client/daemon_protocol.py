@@ -366,6 +366,16 @@ class DaemonClient:
         """
         return self.send_command("players")
 
+    def weather(self, location: str = "") -> dict:
+        """One weather reading, from the source that feeds the device.
+
+        R67/C2: the GUI used to fetch this itself while the daemon fetched it
+        again for the device — two fetches of one fact, and potentially two
+        different cities, because `location` was never passed through. Empty
+        `location` lets the provider geolocate.
+        """
+        return self.send_command("weather", {"location": location or ""})
+
     def live_job_start(self, mac: str, kind: str, params: dict) -> dict:
         return self.send_command("live_job_start", {"mac": mac, "kind": kind, "params": params})
 
