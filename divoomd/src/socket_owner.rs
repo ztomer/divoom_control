@@ -23,6 +23,22 @@
 //! A path is not an identity; `(dev, inode)` is. Recording that pair at bind
 //! time lets shutdown distinguish "our socket" from "a socket that replaced
 //! ours", and only remove the former.
+//!
+//! # Required invariant: hold the listener open until after `release_socket`
+//!
+//! `(dev, ino)` identifies a file only while that inode CANNOT BE REUSED, and
+//! what guarantees that is an open descriptor. An inode is freed once its link
+//! count and open count both reach zero, and Linux hands freed inode numbers
+//! straight back out; macOS/APFS rarely does, which is exactly why this was
+//! invisible here and caught by Linux CI.
+//!
+//! So the daemon must keep its bound `UnixListener` OPEN across the ownership
+//! check. `main` originally did not: `serve` consumed the listener and
+//! `tokio::select!` dropped that future on shutdown, closing the socket well
+//! before `release_socket` ran. In that window a daemon B could unlink, rebind,
+//! and be handed our exact `(dev, ino)` — and A would then delete B's live
+//! socket, recreating the outage described above. `serve` now borrows the
+//! listener so it outlives the check.
 
 /// Identity of the socket file a process bound.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -92,6 +108,21 @@ mod tests {
         let _ = f.write_all(b"x");
     }
 
+    /// Create the file and KEEP IT OPEN, the way the daemon keeps its bound
+    /// listener open.
+    ///
+    /// This is not test decoration: an open fd is what pins the inode. Both
+    /// replacement tests below originally unlinked and recreated with nothing
+    /// held open, so on ext4 the freed inode was handed straight back and the
+    /// "replacement" was indistinguishable from the original. They passed on
+    /// APFS and failed on Linux CI -- and they were RIGHT to fail: at the time,
+    /// `main` really did close the listener before calling `release_socket`.
+    fn touch_held(path: &str) -> std::fs::File {
+        let mut f = std::fs::File::create(path).expect("create");
+        let _ = f.write_all(b"x");
+        f
+    }
+
     #[test]
     fn owns_the_file_it_captured() {
         let p = tmp_path("owns");
@@ -108,7 +139,7 @@ mod tests {
         // same path. Same path, different inode — not ours.
         let p = tmp_path("replaced");
         let _ = std::fs::remove_file(&p);
-        touch(&p);
+        let held = touch_held(&p); // as the daemon holds its listener
         let owned = SocketOwnership::of(&p).expect("stat");
 
         std::fs::remove_file(&p).expect("unlink");
@@ -118,6 +149,7 @@ mod tests {
             !owned.still_owns(&p),
             "a replaced path must not be treated as ours"
         );
+        drop(held);
         let _ = std::fs::remove_file(&p);
     }
 
@@ -157,7 +189,7 @@ mod tests {
         // socket daemon B is currently listening on.
         let p = tmp_path("release_replaced");
         let _ = std::fs::remove_file(&p);
-        touch(&p);
+        let held = touch_held(&p); // A holds its listener open, as main does
         let owned = SocketOwnership::of(&p);
 
         std::fs::remove_file(&p).expect("unlink");
@@ -168,6 +200,7 @@ mod tests {
             std::path::Path::new(&p).exists(),
             "B's socket must survive A's shutdown — this is the 34-hour-orphan bug"
         );
+        drop(held);
         let _ = std::fs::remove_file(&p);
     }
 

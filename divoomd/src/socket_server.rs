@@ -175,7 +175,7 @@ where
 /// listener errors unrecoverably (callers normally `tokio::spawn` this). Concurrent connections
 /// are capped by `max_connections` (back-pressure: the accept loop waits for a free permit).
 pub async fn serve<H: Handler>(
-    listener: UnixListener,
+    listener: &UnixListener,
     handler: Arc<H>,
     max_connections: usize,
     idle_timeout: Duration,

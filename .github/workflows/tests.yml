@@ -112,6 +112,12 @@ jobs:
           # the exit code would never retry the failure we actually saw, because
           # that failure exits 0 -- the loop would break on attempt 1 every time.
           for attempt in 1 2 3; do
+            # `fetch <spec>` also SYNCS the repo list; `set` alone fails on a
+            # clean runner with "No repo cache found. Run 'camoufox sync'
+            # first." -- and 0.5.4 has no `sync` subcommand, so that advice is
+            # unfollowable. Fetching only the pinned build makes it the active
+            # one; `set` afterwards is belt-and-braces if anything else exists.
+            python -m camoufox fetch official/152.0.4-beta.28 || true
             python -m camoufox set official/stable/152.0.4-beta.28 || true
             if python3 tools/check_camoufox_installed.py; then
               exit 0

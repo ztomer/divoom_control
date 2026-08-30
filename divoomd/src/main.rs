@@ -178,7 +178,10 @@ async fn main() {
         idle_timeout.as_secs()
     );
 
-    let unix_fut = serve(listener, daemon.clone(), max_connections, idle_timeout);
+    // NOTE: `serve` BORROWS the listener, so `listener` stays open past the
+    // select below. That is load-bearing, not stylistic — see the ownership
+    // note at `release_socket` further down.
+    let unix_fut = serve(&listener, daemon.clone(), max_connections, idle_timeout);
 
     let shutdown = daemon.shutdown.clone();
     if let (Some(l), Some(t)) = (tcp_listener, tcp_token) {
@@ -212,7 +215,19 @@ async fn main() {
     // scan-frequency throttle → empty scans).
     #[cfg(feature = "ble")]
     daemon.stop_scan_cleanup().await;
+    // The listener is STILL OPEN here, and that is what makes `(dev, ino)`
+    // sufficient to identify our socket: an open fd pins the inode, so no
+    // replacement file can be handed the same one.
+    //
+    // It used to be closed by this point — `serve` consumed the listener and
+    // `tokio::select!` dropped that future on shutdown. On Linux, where inode
+    // numbers are recycled immediately, a daemon B that unlinked and rebound in
+    // that window could be handed our exact (dev, ino), and this call would
+    // then delete B's live socket: the very outage SocketOwnership exists to
+    // prevent, reintroduced one layer down. macOS never showed it; two Linux
+    // CI tests did.
     release_socket(&socket_path, owned);
+    drop(listener);
 }
 
 /// Resolve when SIGINT or SIGTERM arrives, so the socket is unlinked on a clean
