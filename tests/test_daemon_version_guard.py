@@ -1,0 +1,107 @@
+"""R67: ensure_daemon must VERIFY the daemon's version, not just its pulse.
+
+A daemon left over from an older install answers `get_status` perfectly well and
+then silently lacks whatever was added since. During R67 that cost three
+debugging cycles — most memorably a `players` call that returned an empty list
+because the running daemon predated the command, with nothing in the reply to
+say so.
+
+The guard is deliberately conservative: it restarts only on a KNOWN mismatch.
+Killing a daemon that might be current is worse than tolerating one that might
+be stale, and the first draft of this check did exactly that — it read the
+version from `importlib.metadata` (stale dist-info from an old editable install,
+0.22.21) instead of pyproject (0.26.0), and would have restarted the correct
+daemon on every startup.
+"""
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).parent.parent))
+
+import divoom_client.daemon_client as dc
+
+
+def test_expected_version_prefers_pyproject_over_stale_metadata(monkeypatch):
+    """pyproject is the gated source of truth; dist-info is routinely stale."""
+    monkeypatch.setattr(dc, "__file__", dc.__file__)  # keep the real path
+    expected = dc.expected_daemon_version()
+
+    import tomllib
+    root = Path(dc.__file__).resolve().parent.parent
+    with open(root / "pyproject.toml", "rb") as f:
+        pyproject_version = tomllib.load(f)["project"]["version"]
+
+    assert expected == pyproject_version, (
+        "expected_daemon_version must read pyproject, not installed metadata — "
+        "metadata lags a working checkout and would condemn a current daemon")
+
+
+def test_a_matching_version_is_left_alone(monkeypatch):
+    calls = {"stopped": 0, "spawned": 0}
+    monkeypatch.setattr(dc, "daemon_alive", lambda *a, **k: True)
+    monkeypatch.setattr(dc, "expected_daemon_version", lambda: "1.2.3")
+    monkeypatch.setattr(dc, "running_daemon_version", lambda *a, **k: "1.2.3")
+    monkeypatch.setattr(dc, "_stop_stale_daemon",
+                        lambda *a: calls.__setitem__("stopped", calls["stopped"] + 1) or True)
+    monkeypatch.setattr(dc, "spawn_daemon",
+                        lambda *a, **k: calls.__setitem__("spawned", calls["spawned"] + 1))
+
+    assert dc.ensure_daemon("/tmp/x.sock") is not None
+    assert calls == {"stopped": 0, "spawned": 0}, "a current daemon must not be touched"
+
+
+def test_a_stale_version_is_restarted(monkeypatch):
+    calls = {"stopped": 0, "spawned": 0}
+    monkeypatch.setattr(dc, "daemon_alive", lambda *a, **k: True)
+    monkeypatch.setattr(dc, "expected_daemon_version", lambda: "0.26.0")
+    monkeypatch.setattr(dc, "running_daemon_version", lambda *a, **k: "0.22.21")
+    monkeypatch.setattr(dc, "_stop_stale_daemon",
+                        lambda *a: calls.__setitem__("stopped", calls["stopped"] + 1) or True)
+    monkeypatch.setattr(dc, "spawn_daemon",
+                        lambda *a, **k: calls.__setitem__("spawned", calls["spawned"] + 1))
+
+    dc.ensure_daemon("/tmp/x.sock")
+    assert calls["stopped"] == 1, "a stale daemon must be stopped"
+    assert calls["spawned"] == 1, "and replaced"
+
+
+def test_a_daemon_with_no_version_counts_as_stale(monkeypatch):
+    """Pre-R67 daemons report no version at all — older than versioning itself."""
+    calls = {"stopped": 0}
+    monkeypatch.setattr(dc, "daemon_alive", lambda *a, **k: True)
+    monkeypatch.setattr(dc, "expected_daemon_version", lambda: "0.26.0")
+    monkeypatch.setattr(dc, "running_daemon_version", lambda *a, **k: None)
+    monkeypatch.setattr(dc, "_stop_stale_daemon",
+                        lambda *a: calls.__setitem__("stopped", calls["stopped"] + 1) or True)
+    monkeypatch.setattr(dc, "spawn_daemon", lambda *a, **k: None)
+
+    dc.ensure_daemon("/tmp/x.sock")
+    assert calls["stopped"] == 1
+
+
+def test_an_unknown_expectation_never_kills(monkeypatch):
+    """If we cannot tell what version to expect, leave the daemon alone.
+
+    Restarting on uncertainty would turn a diagnostic into an outage.
+    """
+    calls = {"stopped": 0}
+    monkeypatch.setattr(dc, "daemon_alive", lambda *a, **k: True)
+    monkeypatch.setattr(dc, "expected_daemon_version", lambda: None)
+    monkeypatch.setattr(dc, "running_daemon_version", lambda *a, **k: "who knows")
+    monkeypatch.setattr(dc, "_stop_stale_daemon",
+                        lambda *a: calls.__setitem__("stopped", calls["stopped"] + 1) or True)
+
+    assert dc.ensure_daemon("/tmp/x.sock") is not None
+    assert calls["stopped"] == 0
+
+
+def test_check_can_be_disabled(monkeypatch):
+    calls = {"checked": 0}
+    monkeypatch.setattr(dc, "daemon_alive", lambda *a, **k: True)
+    monkeypatch.setattr(dc, "expected_daemon_version", lambda: "0.26.0")
+    monkeypatch.setattr(dc, "running_daemon_version",
+                        lambda *a, **k: calls.__setitem__("checked", 1) or "old")
+    dc.ensure_daemon("/tmp/x.sock", check_version=False)
+    assert calls["checked"] == 0

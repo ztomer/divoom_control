@@ -45,6 +45,8 @@ See `docs/PLANNING_ROUND*.md` for detailed scope per round.
 | **R60** | Open-thread verification: docstring strip, durable `device_call` parity test (caught + closed 15 key-alias gaps), `show_clock()` realigned to APK `C2()` canonical, `get_*` read-back timeouts bounded+cached, Python daemon marked REFERENCE/FALLBACK, Ditoo soak, cloud-decode push (3/4 devices) | — | `tests/test_device_call_parity.py`, `display/__init__.py`, `divoom_daemon/*` |
 | **R61** | Release v0.22.9 + doc prune + **Cloud HTTP** (`UserNewGuest` RC=10 fix + clock-face store) + coverage gate (≥95%, hit 96%) + hardware-verified device detect/connect | — | `divoom_auth.py`, `cloud.py`, `cloud_cmds.rs` |
 | **R61 follow-up** | Release v0.22.10 — real daemon+UI e2e connect/disconnect verification (mock-transport drop simulation, `tests/e2e_gui_bridge.py`) + **native menubar now shows device connect/disconnect/degraded** (previously only reflected the notification monitor) + device-loop thread-teardown hardening | 3197/97/0 | `divoomd/src/daemon_mock.rs`, `divoom-menubar/src/state.rs`, `tests/test_e2e_gui_daemon_connect_disconnect.py` |
+| **R66** | Repo restructure: one Cargo workspace, `divoom_daemon/`->`divoom_client/`, -14,240 LOC, six silently-degraded gates repaired | Py 2910/94, Rs 119/0 | `Cargo.toml`, `divoomd/src/paths.rs`, `docs/PLANNING_ROUND66.md` |
+| **R67** | Live-defect round: 7 named classes. Typed 0x45/0x5F packets; hot-channel events; socket ownership; live-job health; MediaRemote album art + player discovery; weather unified; **the virtual wall never worked** (3 showstoppers); daemon protocol audit + capability negotiation | Py 2904/0/94, Rs 244/0 | `divoomd/src/packets.rs`, `nowplaying/`, `divoomd/src/wall/dispatch.rs`, `docs/PLANNING_ROUND67.md` |
 
 Suite: Rust 63+ passed / Python 3197 passed / 97 skipped (see `CHANGELOG.md` + CI).
 
@@ -63,59 +65,45 @@ Suite: Rust 63+ passed / Python 3197 passed / 97 skipped (see `CHANGELOG.md` + C
 
 ### Near-term (next round)
 
-**Feishin — RESOLVED 2026-08-29. Root cause found; no further work needed here.**
+_Actual state as of 2026-08-30, after R67._
 
-Feishin never appeared in now-playing because **its own `mediaSession` setting
-is OFF** (`~/Library/Application Support/Feishin/config.json` reads
-`"mediaSession": false`). With it off, Feishin does not register as a macOS Now
-Playing client at all, so MediaRemote cannot see it however loudly it plays —
-and the Subsonic fallback could not see it either, because `getNowPlaying` asks
-the SERVER, which depends on scrobble pings.
+**The Python layer is OBSOLETE and kept for REFERENCE ONLY.** `divoomd` (Rust)
+is the shipping implementation; `divoom_lib/` is the protocol ground truth the
+port was derived from, not a live second path. This matters for how findings are
+read: "X exists in both Python and Rust" is NOT automatically drift to unify —
+the Rust one is the product and the Python one is documentation. Two things are
+still true and not contradicted by it:
 
-This was settled by enumerating the Now Playing client registry rather than by
-asking the user to quit apps: the registry listed Kaset twice (the app and its
-WebKit GPU helper) and Feishin not at all.
+* where the **GUI executes** Python that duplicates a daemon job, that IS a real
+  defect (the GUI must be a client, not a second implementation) — this is what
+  R67/C2 fixed for now-playing and weather;
+* Python remains canonical for **wire formats**. Every R67 packet bug was found
+  by diffing the Rust payload against the Python builder it was ported from, and
+  Python was right every time. Parity gates that compare the two
+  (`tools/check_weather_parity.py`) keep the port honest against its reference.
 
-**The fix is one setting in Feishin, not code here.** Turning Media Session on
-gives MediaRemote the track AND the real cover-art bytes, with no credential
-scraping and no dependency on the server. The daemon now says so: `players`
-returns a `hint` naming the setting and where to find it.
+**Feishin — RESOLVED 2026-08-29.** It never appeared in now-playing because its
+own `mediaSession` setting is OFF, so it does not register as a macOS Now
+Playing client at all. Settled by enumerating the client registry rather than
+by asking the user to quit apps. The fix is one toggle in Feishin, not code
+here; the daemon's `players` reply carries a hint naming the setting. Left off
+by user decision, so `nowplaying/src/feishin.rs` (Subsonic) remains its weaker
+source. Detail in `docs/PLANNING_ROUND67.md`.
 
-**Left OFF by user decision (2026-08-29).** The Subsonic path therefore stays as
-the working, if weaker, Feishin source. Two things learned while attempting it,
-worth not rediscovering:
+**Open:**
 
-* Editing `config.json` does NOT work. Feishin's renderer keeps its own copy of
-  the settings and pushes it back to `config.json` at startup, so an edited
-  value is silently reverted — Feishin even raises a "discrepancies were found
-  between the settings in the renderer and the main process" warning. The
-  setting lives in a compressed LevelDB block in `Local Storage`, which is not
-  safely editable while the app runs. The UI is the only route.
-* Driving that UI from here is blocked: ZoneTilerWM's transparent overlay
-  hit-tests above the Feishin window, so synthetic clicks are refused, and the
-  computer-use allowlist does not recognise ZoneTilerWM as an installable app.
-  Feishin's settings tabs are not keyboard-reachable either (Tab order skips the
-  tablist and goes from the header straight into the content), so there is no
-  keyboard-only path to the toggle.
+- **Ambient preview tiles are static CSS** (`divoom_gui/web_ui/channels_grids.js`)
+  — flat colour blocks that do not reflect device state. This is the
+  dishonest-preview half of R67/C2, and the reason the ambient bug presented as
+  "green/magenta" rather than "the mode never reached the device". Fixing it is
+  what makes that class of bug visible next time.
+- **sysmon preview** is rendered by `divoom_lib/utils/media_source.py` (psutil)
+  while the device frame comes from `divoomd/src/live_jobs/render.rs`. Under the
+  reference-only rule this is NOT a unification task — but the GUI does still
+  *execute* the Python renderer, which is the shape C2 covers. Low value: simple
+  numbers, no artwork to disagree about.
 
-What shipped as a result:
-
-* `nowplaying/src/discovery.rs` + the helper's `np_players` — enumerate every
-  registered Now Playing client, separating *registered* from *playing*. This
-  is the fix for the reported problem that a PAUSED Kaset masked a playing
-  Feishin: registration and playback are now different questions.
-* The `players` daemon RPC and `DaemonClient.players()`.
-* `nowplaying/src/feishin.rs` (Subsonic path) is kept as a fallback for a user
-  who leaves Media Session off, but it is the WEAKER path and is documented as
-  such. If Media Session becomes reliably on, this module can be deleted.
-
-**Known limitation, deliberately not guessed around:** when SEVERAL apps are
-registered, the active session cannot be attributed to one of them — the info
-dictionary carries no app identity, and the APIs that would supply it
-(`MRMediaRemoteGetNowPlayingApplicationDisplayName`, `...ApplicationPID`,
-`MRNowPlayingClientGetParentApplicationBundleIdentifier`) either segfault or do
-not exist on macOS 26.6.2. `is_playing` is reported as `null` (unknown) in that
-case rather than blamed on the wrong app.
+### Short-to-medium term (all shipped)
 
 ### Short-to-medium term (all shipped)
 

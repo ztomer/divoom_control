@@ -36,6 +36,12 @@ from divoom_client.daemon_protocol import (
     DaemonClient,
 )
 
+from divoom_client.daemon_version import (  # noqa: F401  (re-exported)
+    _stop_stale_daemon,
+    expected_daemon_version,
+    running_daemon_version,
+)
+
 logger = logging.getLogger("divoom_gui")
 
 
@@ -251,6 +257,7 @@ def ensure_daemon(
     spawn: bool = True,
     wait_timeout: float = 8.0,
     detach: bool = False,
+    check_version: bool = True,
 ) -> DaemonClient | None:
     """Return a :class:`DaemonClient` for a *live* daemon, auto-spawning one if
     needed. Returns ``None`` if no daemon could be reached/started.
@@ -266,6 +273,32 @@ def ensure_daemon(
         logger.error("Remote daemon at %s:%s not reachable", remote.host, remote.port)
         return None
     if daemon_alive(socket_path):
+        # R67: VERIFY THE VERSION, do not just check for a pulse. A daemon left
+        # over from an older install answers `get_status` perfectly well and
+        # then silently lacks whatever was added since — during R67 this cost
+        # three debugging cycles, most memorably a `players` call that returned
+        # an empty list because the running daemon predated the command, with
+        # nothing in the reply to say so.
+        #
+        # Only ever restart on a KNOWN mismatch. If the expectation cannot be
+        # determined, leave the daemon alone: killing something that might be
+        # current is worse than tolerating something that might be stale.
+        expected = expected_daemon_version()
+        if expected and check_version:
+            running = running_daemon_version(socket_path)
+            if running != expected:
+                if not _stop_stale_daemon(socket_path, running, expected):
+                    return DaemonClient(socket_path)
+                if not spawn:
+                    return None
+                spawn_daemon(socket_path, mac=mac, detach=detach)
+                deadline = time.monotonic() + wait_timeout
+                while time.monotonic() < deadline:
+                    if daemon_alive(socket_path):
+                        return DaemonClient(socket_path)
+                    time.sleep(0.1)
+                logger.error("replacement daemon did not start within %.1fs", wait_timeout)
+                return None
         return DaemonClient(socket_path)
     if not spawn:
         return None
@@ -278,206 +311,12 @@ def ensure_daemon(
     logger.error("Daemon did not become ready within %.1fs", wait_timeout)
     return None
 
-
-class _DeviceCallError(RuntimeError):
-    """Raised inside the proxy awaitable when the daemon reports failure."""
-
-
-class _LanView:
-    """Minimal stand-in for ``divoom.lan`` so introspection reads still work."""
-    def __init__(self, device_ip: str | None):
-        self.device_ip = device_ip
-
-    def __bool__(self):
-        return bool(self.device_ip)
-
-
-class _ConnView:
-    """Minimal stand-in for ``divoom._conn`` (only ``.mac`` is read by the GUI)."""
-    def __init__(self, mac: str | None):
-        self.mac = mac
-
-
-# Root-only synthetic attributes answered from `device_status` rather than a
-# dotted method call.
-_STATUS_ATTRS = ("is_connected", "lan", "_conn")
-
-
-class _ProxyExclusiveCtx:
-    """Async context manager returned by ``DaemonDeviceProxy.exclusive()``."""
-
-    def __init__(self, proxy: "DaemonDeviceProxy", token: str) -> None:
-        self._proxy = proxy
-        self._token = token
-
-    async def __aenter__(self) -> "DaemonDeviceProxy":
-        client = self._proxy._client
-        reply = client.exclusive_start(self._token)
-        if not reply.get("success", False):
-            raise _DeviceCallError(reply.get("error", "exclusive_start failed"))
-        return self._proxy._with_token(self._token)
-
-    async def __aexit__(self, *exc: object) -> None:
-        # __aexit__ always runs (Python guarantees it once __aenter__ succeeded), so
-        # the token is always *attempted* to be released. But exclusive_end() returns
-        # a reply dict instead of raising; a non-success release (daemon mid-restart,
-        # socket blip past the retry budget) was silently dropped — the daemon then
-        # holds the exclusive token until the G3 idle auto-release (~30s), wedging
-        # every other caller's queue items meanwhile. We can't raise here (would mask
-        # a body exception), so log loudly for diagnosis.
-        try:
-            reply = self._proxy._client.exclusive_end(self._token)
-        except Exception as e:
-            logger.warning("exclusive_end raised for token %s: %s", self._token, e)
-            return
-        if not (reply or {}).get("success", False):
-            logger.warning("exclusive_end did not confirm release of token %s: %s "
-                           "(device wedged until the ~30s G3 auto-release)",
-                           self._token, (reply or {}).get("error"))
-
-
-class DaemonDeviceProxy:
-    """Attribute/method stand-in for a ``Divoom`` (or ``DivoomWall``) that routes
-    through a daemon.
-
-    ``proxy.display.show_light(color, b)`` records the dotted path
-    ``"display.show_light"`` and returns an awaitable that, when run, issues a
-    ``device_call`` RPC and returns the daemon's ``result`` (raising on failure).
-    Arbitrary nesting works: ``proxy.lan.set_brightness(v)`` →
-    ``"lan.set_brightness"``.
-
-    ``target`` is "device" (the single owned Divoom) or "wall" (the daemon-owned
-    DivoomWall). Root-level introspection reads (``is_connected``/``lan``/
-    ``_conn``) are answered synchronously from ``device_status``.
-    """
-
-    # Short-TTL cache for device_status() introspection. A single GUI operation
-    # reads is_connected/lan/_conn back-to-back, each previously firing its OWN
-    # blocking device_status() socket RPC; the cache collapses them to one. The TTL
-    # is short enough that staleness is negligible (and the daemon's device_call
-    # self-heals the connection regardless of a slightly-stale GUI read).
-    _STATUS_TTL = 0.25
-
-    def __init__(self, client: DaemonClient, _path: str = "", *,
-                 target: str = "device", _token: str | None = None) -> None:
-        object.__setattr__(self, "_client", client)
-        object.__setattr__(self, "_path", _path)
-        object.__setattr__(self, "_target", target)
-        object.__setattr__(self, "_token", _token)
-        object.__setattr__(self, "_status_cache", None)
-        object.__setattr__(self, "_status_cache_ts", 0.0)
-
-    def _with_token(self, token: str) -> "DaemonDeviceProxy":
-        return DaemonDeviceProxy(self._client, self._path,
-                                 target=self._target, _token=token)
-
-    async def push_animation(self, file_or_data: str | bytes,
-                              *,
-                              token: str | None = None) -> bool:
-        """Push an animation (GIF/image) to the device inside an exclusive
-        session.  ``file_or_data`` is either a local path *or* raw bytes
-        (written to a temp file first).  Calls ``display.show_image()``
-        which does the 0x8B 3-phase streaming internally.
-
-        Returns ``True`` on success.
-        """
-        import os
-        import tempfile
-        own_tmp = None
-        if isinstance(file_or_data, bytes):
-            tmp = tempfile.NamedTemporaryFile(suffix=".gif", delete=False)
-            try:
-                tmp.write(file_or_data)
-                tmp.close()
-                path = tmp.name
-                own_tmp = path
-            except OSError:
-                tmp.close()
-                raise
-        else:
-            path = file_or_data
-
-        effective_token = token or f"push-anim-{id(path)}"
-        try:
-            async with self.exclusive(effective_token) as p:
-                return bool(await p.display.show_image(path))
-        finally:
-            # Delete the temp file WE created (bytes input) — on success AND on
-            # error. Without this every byte-payload animation push leaked one
-            # /tmp/*.gif for the process lifetime.
-            if own_tmp is not None:
-                try:
-                    os.unlink(own_tmp)
-                except OSError:
-                    pass
-
-    def exclusive(self, token: str) -> _ProxyExclusiveCtx:
-        """Context manager for an exclusive-mode session on the daemon.
-
-        Usage::
-
-            async with proxy.exclusive("my-token") as p:
-                await p.display.show_light(255, 0, 0)
-                await p.lan.set_brightness(80)
-
-        Between ``exclusive_start`` and ``exclusive_end`` only calls tagged
-        with ``token`` are dispatched by the daemon's command queue — no
-        other callers can interleave."""
-        return _ProxyExclusiveCtx(self, token)
-
-    def _status(self) -> dict:
-        import time
-        now = time.monotonic()
-        if self._status_cache is not None and (now - self._status_cache_ts) < self._STATUS_TTL:
-            return self._status_cache
-        st = self._client.device_status()
-        object.__setattr__(self, "_status_cache", st)
-        object.__setattr__(self, "_status_cache_ts", now)
-        return st
-
-    def __getattr__(self, name: str) -> Any:
-        # Root-level synthetic introspection reads (device only).
-        if name in _STATUS_ATTRS and self._path == "":
-            st = self._status()
-            if name == "is_connected":
-                key = "wall" if self._target == "wall" else "connected"
-                return bool(st.get(key, False))
-            if name == "lan":
-                return _LanView(st.get("lan_ip"))
-            if name == "_conn":
-                return _ConnView(st.get("mac"))
-        if name.startswith("_"):
-            raise AttributeError(name)
-        path = f"{self._path}.{name}" if self._path else name
-        return DaemonDeviceProxy(self._client, path, target=self._target, _token=self._token)
-
-    def __call__(self, *args: Any, **kwargs: Any):
-        method = self._path
-        client = self._client
-        target = self._target
-        token = self._token
-        call_args = list(args)
-
-        # Remote daemon (TCP): no shared filesystem, so any positional arg that
-        # is a local file path must be shipped as a blob (the daemon writes it to
-        # a temp file and substitutes the path back in). Local Unix clients pass
-        # the path directly — the daemon reads the same disk.
-        blobs: dict[int, bytes] | None = None
-        if getattr(client, "is_remote", False):
-            for i, a in enumerate(call_args):
-                try:
-                    if isinstance(a, str) and os.path.isfile(a):
-                        with open(a, "rb") as f:
-                            blobs = blobs or {}
-                            blobs[i] = f.read()
-                except OSError:
-                    pass
-
-        async def _invoke():
-            reply = client.device_call(method, call_args, dict(kwargs),
-                                       target=target, blobs=blobs, token=token)
-            if not reply.get("success", False):
-                raise _DeviceCallError(reply.get("error", f"device_call {method} failed"))
-            return reply.get("result")
-
-        return _invoke()
+# The device proxy lives in daemon_proxy.py (500-line cap); re-exported so
+# `from divoom_client.daemon_client import DaemonDeviceProxy` keeps working.
+from divoom_client.daemon_proxy import (  # noqa: E402,F401
+    DaemonDeviceProxy,
+    _ConnView,
+    _DeviceCallError,
+    _LanView,
+    _ProxyExclusiveCtx,
+)
