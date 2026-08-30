@@ -202,6 +202,20 @@ so the floor was enforced by nobody. Raised to 42 and wired in as step 15.
 Both are the same shape: a signal that was true about something other than the
 question being asked.
 
+### Pre-release user-POV check
+
+`scripts/gui_pov.py` green (daemon survives, sysmon refresh counted by CALLS),
+and the new GUI surface driven through the REAL `DivoomGuiAPI` rather than the
+mocked `window.pywebview.api` the weather and danmaku e2e suites use — that mock
+is the same gap that let v0.28.1 ship a daemon-killing crash past a green suite.
+All five new methods round-trip and the daemon stays alive.
+
+Two gaps recorded rather than papered over, both in `docs/SESSION_HANDOFF.md`:
+the cloud search's SUCCESS path is unverified (the check ran under a throwaway
+HOME, so it proved the no-credentials branch), and cloud browse cannot
+distinguish "no matches" from "cloud unavailable" — a class defect shared by all
+five cloud-browse features, deliberately not changed on release eve.
+
 Suite at close: **Python 2935 passed / 94 skipped / 0 failed**, Rust 154 (no-BLE
 core) with the full workspace green, all 15 local gate steps passing.
 

@@ -176,6 +176,18 @@ Bonus fix: device-selector "not in range" badge now counts consecutive scan miss
 
 ### Deferred
 
+- **Cloud browse cannot say WHY it is empty** (found 2026-08-30 exercising the
+  real backend). `search_weather_city`, `get_dial_list`, `get_my_playlists`,
+  `get_aid_sleep_list` and the photo-album browse all catch their exception and
+  return `[]`, so every panel shows "nothing found" whether the result is
+  genuinely empty, the cloud is unreachable, or the account is unauthenticated.
+  A failed state must say why. Fix as a CLASS in the shared shape — five
+  features and their tests — not one panel at a time.
+- **`search_weather_city` success path unverified.** The pre-release check ran
+  under a throwaway HOME, so it exercised the no-credentials branch
+  (`UserNewGuest RC=10`) and proved only the error path. Needs one manual search
+  on a configured account.
+
 - **`pic_scan_ctrl` 0x35** — partially resolved (2026-07-13, real hardware).
   Accepted without error by BLE stack; no visual confirmation (no camera).
   See `divoom_lib/display/drawing.py` / `divoomd/src/device_call/drawing.rs`.

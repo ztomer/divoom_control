@@ -139,6 +139,39 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Open threads / next up
 
+- **gui_pov + real-backend check before v0.28.3 (2026-08-30) — PASSED, with two
+  honest gaps recorded rather than papered over.**
+
+  `scripts/gui_pov.py` is green: the daemon survives, and the sysmon refresh is
+  running (4 calls in ~10s, values changing). The v0.28.3 GUI surface was then
+  driven through the REAL `DivoomGuiAPI` in the bridge, because the weather and
+  danmaku e2e suites mock `window.pywebview.api` and had therefore never
+  exercised the real backend — the exact gap that let v0.28.1 ship a
+  daemon-killing crash past a green suite. All five new methods round-trip and
+  the daemon stays alive:
+  `get/set_weather_city` (save, read back, clear), `search_weather_city`,
+  `send_danmaku_text`.
+
+  **Gap 1 — the cloud path is unverified for a CONFIGURED account.** The check
+  ran under a throwaway HOME, so `search_weather_city` took the no-credentials
+  branch and returned `[]` from `UserNewGuest RC=10` (guest login, upstream
+  Divoom, documented since R61). That proves the error path, NOT the success
+  path. Verifying the success path means a live authenticated call on the real
+  account, which was deliberately not made as a background check. **First thing
+  to try by hand: open Live Widgets -> Weather, click the location line, search
+  a city.**
+
+  **Gap 2 — the panel cannot tell "no matches" from "cloud unavailable".**
+  `search_weather_city` returns `[]` for both, so the UI says "No cities found."
+  when the real reason may be an unreachable or unauthenticated cloud. That is
+  the honest-placeholder rule (a failed state must say WHY) not being met, and
+  it is the same defect in every sibling cloud browse — clock faces, playlists,
+  photo albums, aid sleep all swallow their exception and return `[]` too. Fix
+  it as a CLASS, in the shared shape, rather than one panel at a time. Not fixed
+  during the release cut on purpose: it is a contract change across five
+  features and their tests, which is not release-eve work.
+
+
 - **R66 CI workflow: VERIFIED GREEN (2026-08-18).** All five jobs pass on
   `2d7beb9`. The logs confirm the gate parity is real, not merely configured:
   `rust-ble`'s workspace clippy checks `divoom-menubar` and runs its 13 tests
