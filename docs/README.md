@@ -25,9 +25,21 @@
 
 ## Operations
 - **[RELEASING.md](RELEASING.md)** — release process (.dmg, Homebrew cask).
+- **`scripts/ci_local.sh`** — the full CI-equivalent gate; run before pushing.
+- **`scripts/gui_pov.py`** — drive the real GUI against a real daemon and report
+  what a user would see. Use before calling anything user-facing "done".
 
-## Historical (planning rounds)
-Pruned to git history — `docs/archive/rounds/` no longer exists. Each was a
-point-in-time record; for current state read SESSION_HANDOFF + ROADMAP + the
-canonical docs above. Recover one with
-`git log --diff-filter=D -- 'docs/**/PLANNING_*'`.
+## Historical
+`docs/archive/` is gone entirely (2026-08-30) — round plans, superseded
+workstream plans and the R3–R64 handoff archive were all point-in-time records,
+and keeping them alongside the live docs is how a graveyard misleads the next
+session into reading a stale plan as current.
+
+For current state read SESSION_HANDOFF + ROADMAP + the canonical docs above.
+For what shipped, read CHANGELOG. To recover a pruned file:
+
+```
+git log --diff-filter=D -- 'docs/**/PLANNING_*'      # round plans
+git log --diff-filter=D -- 'docs/archive/*'          # handoff + superseded
+git log -p -- docs/SESSION_HANDOFF.md                # older handoff entries
+```

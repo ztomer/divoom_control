@@ -46,10 +46,24 @@ These are lessons paid for in real shipped bugs; don't relearn them.
 - **GUI**: PyWebView. Python bridge in `divoom_gui/api/tools.py` (+ mixins); web
   UI in `divoom_gui/web_ui/` (modular css/js; large views live in templates per
   domain, e.g. `alarms_editor.js`, `templates_tools.js`).
-- **Hardware**: macOS Bluetooth TCC is per responsible-process; drive real BLE
-  by launching via Terminal (`open *.command`). See `docs/DEVICE_VALIDATION_PLAN.md`.
+- **Hardware**: macOS Bluetooth TCC is granted per RESPONSIBLE PROCESS. A daemon
+  launched from a shell has no grant, and the first BLE scan gets it killed with
+  **SIGABRT and no message at all** — which reads exactly like a crash in your
+  change and is not one (a Rust panic always prints). The real app is unaffected:
+  the GUI launches the daemon and owns the grant. For terminal work, either build
+  BLE-free (`cargo build -p divoomd --no-default-features`) or launch via
+  Terminal (`open *.command`) so the grant is inherited. `cargo test` rebuilds
+  `target/debug/divoomd` WITH default features, so redo the BLE-free build after
+  any test run.
 - **Tests**: hardware tests are gated/skip by default (`tests/conftest.py`);
   prefer the mock-device E2E (`tests/test_e2e_mock_device.py`) for wire checks.
+- **Does the app actually work?** `scripts/gui_pov.py` drives the REAL web UI
+  against the REAL GUI backend against a REAL daemon, with no mocks in the
+  chain, and checks the things a screenshot cannot: that the daemon is still
+  ALIVE afterwards, that a live value is actually refreshing, and (with
+  `--kill-daemon`) that the UI says so when the backend goes away. A green test
+  suite is not an answer to this question — v0.28.1 shipped a daemon-killing
+  crash past 2961 passing tests, and this script found it in twenty minutes.
 - **Build discipline**: delete dead code; document the decision, not just the
   code; foundation before cutover; test before you trust.
 

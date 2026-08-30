@@ -15,6 +15,13 @@ forward-looking one. Recover a round plan with
   through a main-world bridge; sysmon made a daemon client so the preview and
   the device draw the same bytes.
 
+_"Key files" are the paths as they stood in that round. Several no longer exist
+(`divoom_lib/device.py`, `models.py`, `hotchannel.py`, `display/clock.py`,
+`tools/calendar.py`, `notification.py` were refactored away, and the whole
+Python layer is reference-only now — `divoomd` is the product). They are left as
+written rather than retro-mapped: a historical record guessed at is worse than
+one that is plainly of its time._
+
 | Round | Summary | Suite | Key files |
 |-------|---------|-------|-----------|
 | **R3** | BLE connection scaffolding + first commands | — | `divoom_lib/connection.py`, `divoom_lib/divoom.py` |
@@ -234,11 +241,12 @@ R66 (2026-08-17); recover from git history if ever needed.
 
 ## Planning docs by round
 
-Historical round plans (R3–R61) and superseded workstream plans were pruned to
-git history — `docs/archive/rounds/` and `docs/archive/superseded/` no longer
-exist. Recover any of them with `git log --diff-filter=D -- 'docs/**/PLANNING_*'`.
-`PLANNING_ROUND62.md` and later shipped rounds also archived there, including R66 and R67 (pruned 2026-08-30 once both shipped). This
-ROADMAP is the one forward-looking document; round plans are history.
+All round plans (R3 onward) and superseded workstream plans are pruned to git
+history; `docs/archive/` no longer exists at all. This ROADMAP is the one
+forward-looking document, and CHANGELOG is the record of what shipped.
+
+Recover a pruned plan with
+`git log --diff-filter=D -- 'docs/**/PLANNING_*'`.
 
 
 

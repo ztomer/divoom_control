@@ -4,6 +4,78 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## v0.28.2 — Tooling and docs; no user-facing change (2026-08-30)
+
+**The app is functionally identical to v0.28.1.** No product code changed. This
+is a housekeeping release: the harness that found v0.28.1's crash is now part of
+the repo, and the docs and scripts were pruned to match reality.
+
+### `scripts/gui_pov.py` — the twenty minutes that found three bugs
+
+v0.28.1 shipped a daemon-killing crash past 2961 passing tests, five green CI
+jobs and a socket-level probe. Launching the app found it immediately. That is
+now a script rather than a thing someone has to think to do.
+
+It stands up the real chain with no mocks anywhere — real `divoomd` on an
+isolated socket, the real `DivoomGuiAPI` in a bridge process with `HOME`
+redirected, and the real `web_ui/index.html` in camoufox — then checks what a
+screenshot cannot:
+
+* the daemon is still **alive** afterwards (a reply is not proof the process
+  survived — that is exactly how the v0.28.1 crash hid);
+* the live refresh is actually **running**, counted by calls rather than by
+  watching a value change, because a busy machine legitimately sits at 100% and
+  "the number did not move" cannot tell that from "nothing is refreshing" (that
+  false positive fired on the check's first run);
+* with `--kill-daemon`, that the UI **says** the backend is gone instead of
+  leaving stale numbers up looking current.
+
+Every api call is logged with a timestamp, so "the backend died — here are the
+last 25 things the UI asked for" is the report, not a starting point for
+guesswork.
+
+### macOS Bluetooth TCC, written down properly
+
+Running the harness surfaced a trap worth a paragraph in `AGENTS.md`. Bluetooth
+access is granted per RESPONSIBLE PROCESS: a daemon started from a shell has no
+grant, and the first BLE scan the GUI triggers kills it with **SIGABRT and a
+completely empty stderr** — no panic, no message, nothing in the log. It reads
+exactly like a crash in whatever you just changed, and it is not one; a Rust
+panic always prints. Users are unaffected, because the GUI launches the daemon
+and owns the grant.
+
+Confirmed by differential rather than assumed: a BLE-linked build dies on the
+GUI's `scan_devices`, a `--no-default-features` build drives the identical flow
+cleanly. An earlier attempt at that differential was invalid because `cargo test`
+rebuilds `target/debug/divoomd` WITH default features — which is itself now
+documented, since it silently un-does the BLE-free build.
+
+`gui_pov.py` warns up front when its chosen binary links CoreBluetooth, and
+names TCC as the likely cause when the daemon aborts silently after a scan.
+
+### Pruned
+
+* **14 dead scripts** (~1600 lines), all unreferenced, undocumented and last
+  touched 2026-06-02..07: eight `verify_*.py` one-off protocol probes from the
+  reverse-engineering era, three serial/BLE one-offs, a colour-cycle diagnostic,
+  an SPP wire debugger superseded by `DIVOOMD_BLE_DEBUG`, and `remove_emojis.py`
+  — a one-shot migration whose hardcoded file list had 20 of 35 entries pointing
+  at files that no longer exist, and whose rule is enforced by a gate now.
+
+  A fifteenth, `test_watchface_roundtrip.py`, was pruned and then RESTORED: the
+  audit grepped for `<name>.py` and missed
+  `from scripts.test_watchface_roundtrip import verify_device` in
+  `tests/test_e2e_mock_device.py`, because a Python import carries no extension.
+  The suite caught it. The instrument was blind to the one syntax that matters
+  for Python — worth remembering before trusting the next "unreferenced" list.
+* **`docs/archive/`** entirely, including a 2000-line handoff archive, and 244
+  lines of superseded round entries from `docs/SESSION_HANDOFF.md`. That file is
+  the CURRENT state; once a round ships and its changelog stanza is written, its
+  handoff entry has done its job. Everything is recoverable from git, and the
+  docs say exactly how.
+* **A dangling reference**: `AGENTS.md` pointed at `docs/DEVICE_VALIDATION_PLAN.md`,
+  deleted in an earlier cleanup.
+
 ## v0.28.1 — Opening the GUI killed the daemon (2026-08-30)
 
 Found by doing the thing the v0.28.0 handoff said nobody had done: launching
