@@ -34,6 +34,44 @@ Six new structural gates: `check_scripts`, `check_positional_args`,
 
 Python 2912 / 0 failed / 94 skipped. Rust 244 / 0.
 
+### The socket that would not clear
+
+A stale socket file made the daemon fail to start, and nothing told the user
+why. Both halves are now fixed.
+
+The old `bind()` was check-then-act and handled exactly one case. Every other
+blocker collapsed into one opaque errno -- a directory or regular file on the
+path, a missing parent, another user's socket, a path over `sun_path` (~104
+bytes on macOS) all came out as "Address already in use" or "Invalid argument",
+and none are fixed the same way. Any successful connect was assumed to be a
+healthy divoomd, so an unrelated program listening there was reported as ours.
+
+It also lost the startup race: two daemons both saw an empty path, both
+unlinked, both bound, and the loser kept serving an unlinked inode -- reachable
+by nobody, still holding the single-owner CoreBluetooth central. That is the
+34-hour orphan `socket_owner` exists to describe, and it is CREATED at startup;
+the ownership check only limits the damage at exit.
+
+And the reason went nowhere: divoomd is spawned detached with stderr in a log
+file, so `eprintln` + `exit(1)` was invisible, and the client reported only
+"Daemon did not become ready within 8.0s" -- a statement about its own patience.
+
+`socket_bind::acquire` now holds an advisory lock on `<socket>.lock`, making
+inspect-and-bind atomic across processes, and keeps it for the daemon's
+lifetime. Blockers are distinguished and each carries a remedy. Self-healing is
+limited to the two unambiguous cases: a stale socket nothing is listening on,
+and a missing parent directory. A regular file is NEVER auto-removed -- it may
+be data, and guessing wrong is unrecoverable. Failures are written to
+`<socket>.failure`, which `divoom_client.socket_failure` reads so the client
+logs the cause and the GUI banner states it instead of "Background service
+isn't running". Exit codes are distinct: 3 already-running, 4 mid-startup, 1 a
+real problem.
+
+Verified against the real binary, not only units: a stale socket is cleared and
+the daemon serves; a second instance exits 3; a directory in the way survives
+and reaches the client as "is a directory, not a socket. Move or delete that
+file yourself."
+
 ### When the gates disagreed with CI
 
 Three of this round's own gates were wrong in ways that only CI could see, and

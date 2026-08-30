@@ -20,6 +20,23 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-08-30 (socket robustness) — stale-socket startup failures fixed and
+  made visible.** `divoomd/src/socket_bind.rs` replaces the three-line
+  check-then-act `bind()`: an advisory lock on `<socket>.lock` makes
+  inspect-and-bind atomic (closing the two-daemon startup race that CREATES the
+  orphan `socket_owner` guards against at exit), blockers are distinguished with
+  a remedy each, and only the unambiguous cases self-heal — a stale socket and a
+  missing parent directory. A regular file on the path is never auto-removed.
+
+  The reason now reaches the user: `<socket>.failure` is read by
+  `divoom_client/socket_failure.py`, logged by `ensure_daemon` in place of the
+  timeout message, and carried by `daemon_health` into the GUI banner.
+
+  **Careful here:** `serve()` BORROWS its listener, and that is load-bearing —
+  an open fd pins the socket's inode so `(dev, ino)` still identifies it at
+  shutdown. Do not change it back to owning without reading the invariant note
+  in `socket_owner.rs`.
+
 - **2026-08-30 (R67 close-out) — three CI-only failures fixed; release still
   UNTAGGED pending a green run.** Local gates green; Python suite green
   locally on camoufox 0.5.4.
