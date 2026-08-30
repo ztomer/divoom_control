@@ -179,6 +179,28 @@ shared memory. Read this on entry and **update it at the end of every round**
   P0.1 — routing a panel before the seam exists just re-runs the decision that
   caused all twelve.
 
+  **The test plan is in the same section ("R70 test plan"), and it starts from
+  the fact that all twelve passed 2935 Python tests.** More tests of the same
+  shape catch none of them, so each phase is specified as which HOLE it closes:
+
+  * **A** — the panel e2e suites stub `window.pywebview.api`, so the Python
+    backend never runs. Same hole that shipped v0.28.1's daemon-killing crash.
+    Closed with `tests/e2e_gui_bridge.py` + `IsolatedStack`, both already built.
+  * **B** — nothing compares GUI output against DAEMON output; the widget tests
+    compare the GUI renderer to itself, which is why #5 and #6 survived the
+    sysmon fix.
+  * **C** — tests only ever run in the dev tree. `test_mcp_control.py:84` pins
+    `sys.executable` as the specification and passes forever.
+  * **D** — tests PIN dead code, so "the tests pass" is why it survived.
+    `push_weather` has 4 tests and no caller. P5.0 adds the reachability check.
+
+  Every ledger row now carries its own proof, and a row goes DONE only once its
+  test has been seen RED. Two are worth knowing before starting: P3.4's album-art
+  fixture must be hard-edged, because LANCZOS and NEAREST AGREE on a gradient and
+  the test would pass on a broken build; and P2.5 needs a configured account,
+  since the v0.28.3 check ran under a throwaway HOME and proved only the error
+  path.
+
   Free consequence: this subsumes the Deferred "cloud browse cannot say WHY it
   is empty" item. The daemon already returns
   `Photo/GetAlbumList failed (RC=3): ...`; the GUI's `except → []` discards it.

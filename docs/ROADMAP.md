@@ -352,37 +352,151 @@ just re-run the decision that caused it.
 - **The bundle and the dev tree behave differently.** Every spawn/resolve change
   gets tested in both shapes.
 
+### R70 test plan — close the holes, do not just add tests
+
+**Start from the fact that matters: all twelve findings passed a 2935-test
+Python suite and 291 Rust tests.** More tests of the same shape would have
+caught none of them. Each phase's testing is therefore specified as _which hole
+it closes_, and every new test is proven RED before it is trusted green (rule
+#2 — and commit the fix BEFORE breaking it, or `git checkout` takes the fix
+with it).
+
+**The four holes, named:**
+
+- **Hole A — the e2e suites stub `window.pywebview.api` in JS, so the Python
+  backend never executes.** `test_e2e_clock_faces.py`, `_playlists`,
+  `_photo_albums`, `_aid_sleep` all do this. They are good tests OF THE PANEL
+  and are blind by construction to what Python does underneath — including
+  whether it asks the daemon or does the work itself. This is the same hole
+  that let v0.28.1 ship a daemon-killing crash past a green suite.
+  **Instrument that closes it, already built:** `tests/e2e_gui_bridge.py`
+  (real `DivoomGuiAPI` over HTTP) + `tests/support/gui_daemon_stack.py`
+  (`IsolatedStack`, a real daemon subprocess on a private socket).
+- **Hole B — nothing compares GUI-side output against DAEMON-side output.** The
+  widget tests compare the GUI renderer to itself, which cannot see a defect
+  both sides share (this is exactly why #5 and #6 survived the sysmon fix).
+  **Instrument:** byte-equality with the daemon as the reference side.
+- **Hole C — tests run only in the dev tree; the bundle shape is never
+  exercised.** `test_mcp_control.py:84` asserts
+  `cmd == ["/usr/bin/python3", "-m", "divoom_lib.cli", ...]` — it pins the
+  defect AS the specification and passes in dev forever (the R69/P1.4 pattern).
+  **Instrument:** parametrize over bundle-shape and dev-shape through
+  `binary_resolver`'s existing seam.
+- **Hole D — tests pin dead code, so "the tests pass" is WHY it survived.**
+  Nothing asks "does anything call this?". `push_weather` has 4 tests and no
+  caller. **Instrument:** a reachability check, new in P5.
+
+**P0 — the gate is the instrument, so calibrate the instrument.**
+`tests/test_check_gui_is_a_client.py` over a temp tree:
+a violation off the allowlist exits non-zero; a clean tree exits zero (an
+always-red gate is as useless as an always-green one); an allowlist entry that
+no longer matches FAILS, so the ratchet cannot rot silently; and
+`Image.frombytes` (decoding daemon bytes — the `sysmon_widget.py` shape) is NOT
+flagged while `Image.new` is, proving it discriminates rather than banning PIL.
+Then calibrate against reality: run at HEAD with an EMPTY allowlist and expect
+exactly the findings-table files. That run is also the ledger's opening count.
+P0.4 is proven the same way — drop a module's coverage on purpose and watch the
+floor fail, because a floor that has never been seen to bite is not a floor.
+
+**P1 — contract tests on the wire, not "it replied".**
+Each wrapper round-trips against `IsolatedStack` asserting the command NAME and
+args AS SENT. Prove-red by pointing a wrapper at a wrong command name: if the
+test still passes it was only asserting that the daemon answered, which every
+command satisfies. `render_widget` gets Rust unit tests plus P1.4's per-kind
+parity fixture against the Python renderer it replaces — and where the two
+differ, DECIDE which is right and record the reasoning, rather than trusting
+whichever is newer (Python was right every time in R67).
+**The specific regression risk of P1.2 is sysmon**, the one path that already
+works: pin its output bytes BEFORE the `render_widget` refactor and assert
+byte-identity after.
+
+**P2 — assert the architecture, not the return value.** For each panel: the
+command is observed on the socket AND no HTTP leaves the process (guard
+`urllib.request.urlopen` and raise). The second half is the one that encodes
+the rule — a panel that asks the daemon *and also* calls the cloud passes a
+socket-only assertion. Prove-red by reverting one panel to `CloudClient`.
+P2.4 must assert the reasons are DISTINGUISHABLE — genuinely empty, unreachable,
+and unauthenticated produce different text — or "says why" collapses into one
+generic sentence that is no better than `[]`.
+P2.5 is not a unit test: a recorded real-backend run on a CONFIGURED account.
+The v0.28.3 check ran under a throwaway HOME and proved only the error path;
+repeating that would repeat the gap, not close it.
+
+**P3 — the drift test, with a fixture that can actually show drift.**
+P3.4 parameterizes over the daemon's OWN list of kinds, so a new widget kind is
+covered without anyone remembering to add a case. Prove-red is mandatory and
+easy: flip one kind's filter from Nearest to Lanczos daemon-side and watch it go
+red — if it stays green the test is comparing the GUI to itself, which is
+precisely the blindness that hid #6. The album-art fixture must be hard-edged
+(a 1px checkerboard), because on a smooth gradient LANCZOS and NEAREST agree and
+the test would pass on a broken build.
+
+**P4 — reproduce, then rewrite the test that pinned it.**
+P4.1 drives the installed `.app`, clicks Start MCP Server, and reads
+`~/.config/divoom-control/mcp-server.log`; the predicted failure is read off a
+code path and may be wrong in its details. `test_mcp_control.py`'s spawn
+assertion is then rewritten to name the resolved daemon binary — deleting a
+test that pins a defect is part of the fix, not a loss of coverage (rule #8).
+Add a real handshake test: spawn through the controller, complete
+`initialize` + `tools/list`, expect 13 tools (verified by hand 2026-08-30).
+Prove-red by resolving to a non-existent binary — the controller must report an
+honest error, never "running".
+
+**P5 — the reachability check is the phase's real deliverable.**
+For every public `DivoomGuiAPI` method, assert a caller exists in `web_ui/` or
+an explicit allowlist entry gives the reason. That check, and nothing else,
+would have flagged `push_weather`, `trigger_notification`,
+`toggle_audio_visualizer` and `get_audio_levels` the day they went dead.
+**Careful:** `control_server.py` and the MCP surface legitimately call methods
+JS never does, so the allowlist needs REASONS, not just names — an unexplained
+entry is how this check would rot into a rubber stamp.
+Deletion itself is judged by P0.4's floor: state the before/after test counts
+and the coverage delta out loud.
+P5.6 is verified in the BUILT bundle, never the source tree (the v0.28.3 rule):
+build without `collect_submodules("bleak")`, then launch the `.app`, connect a
+device and push art from it.
+
+**P6 — the same command that returned twelve returns zero.**
+Re-run the P0 gate with an empty allowlist. Then `scripts/gui_pov.py` and a
+real-app pass over every touched panel, light and dark backdrop, because green
+tests are not a shipped feature and this project has its own v0.28.1 proof.
+
 **Step ledger** — each step updates its own row in the commit that does the
 work, so the table and git history cannot disagree (the R69 discipline).
 
-| Step | State | Notes |
-|------|-------|-------|
+Every row carries its own proof. A row goes DONE only when its test has been
+seen RED — "wrote a test, it passed" is the state this whole round exists to
+correct.
+
+| Step | State | Proven by |
+|------|-------|-----------|
 | P0.1 gate | TODO | |
-| P0.2 prove it bites | TODO | |
+| P0.2 prove it bites | TODO | 4 calibration cases + empty-allowlist run at HEAD returns exactly the findings files |
 | P0.3 wire local+CI | TODO | |
-| P0.4 Python cov floor ON | TODO | currently enforced by nobody |
-| P1.1 cloud wrappers | TODO | |
-| P1.2 `render_widget` | TODO | |
-| P1.3 `_widget_frame` funnel | TODO | |
-| P1.4 parity fixtures | TODO | |
-| P2.1 five panels | TODO | |
-| P2.2 gallery fetch+assets | TODO | |
-| P2.3 hot manifest | TODO | |
-| P2.4 failures say why | TODO | closes a Deferred item |
-| P2.5 live round-trip + RC=3 | TODO | |
-| P3.1 stocks | TODO | |
-| P3.2 album art | TODO | ends LANCZOS/NEAREST drift |
-| P3.3 text | TODO | |
-| P3.4 class-level drift test | TODO | |
-| P4.1 reproduce in bundle | TODO | before any fix |
-| P4.2 spawn `divoomd mcp` | TODO | |
-| P4.3 both shapes tested | TODO | |
-| P4.4 Python MCP → reference | TODO | |
-| P5.1-P5.4 deletions | TODO | |
-| P5.5 tests + floor rebaseline | TODO | |
-| P5.6 bleak out of the bundle | TODO | |
-| P6.1 allowlist empty | TODO | the completion criterion |
-| P6.2 user-POV pass | TODO | |
+| P0.4 Python cov floor ON | TODO | drop a module's coverage, watch the floor fail |
+| P1.1 cloud wrappers | TODO | wrong command name on the wire → red |
+| P1.2 `render_widget` | TODO | sysmon bytes pinned before the refactor, identical after |
+| P1.3 `_widget_frame` funnel | TODO | every panel reaches frames through it — no second path |
+| P1.4 parity fixtures | TODO | per-kind bytes vs the Python renderer; disagreements DECIDED, not defaulted |
+| P2.1 five panels | TODO | command on the socket AND no HTTP left the process; revert one panel → red |
+| P2.2 gallery fetch+assets | TODO | same, plus `gallery_download.py` gone |
+| P2.3 hot manifest | TODO | same |
+| P2.4 failures say why | TODO | three causes → three DISTINGUISHABLE texts. Closes a Deferred item |
+| P2.5 live round-trip + RC=3 | TODO | real backend, CONFIGURED account (not a throwaway HOME) |
+| P3.1 stocks | TODO | covered by P3.4 |
+| P3.2 album art | TODO | hard-edged checkerboard fixture; ends LANCZOS/NEAREST drift |
+| P3.3 text | TODO | covered by P3.4 |
+| P3.4 class-level drift test | TODO | kinds enumerated from the daemon; flip a filter daemon-side → red |
+| P4.1 reproduce in bundle | TODO | the real `.app` + its mcp-server.log, before any fix |
+| P4.2 spawn `divoomd mcp` | TODO | `initialize` + `tools/list` = 13 tools through the controller |
+| P4.3 both shapes tested | TODO | bundle and dev parametrized; missing binary → honest error, not "running" |
+| P4.4 Python MCP → reference | TODO | `test_mcp_control.py:84` rewritten — it pins the defect today |
+| P5.0 reachability check | TODO | flags all four dead methods on today's tree; allowlist entries carry REASONS |
+| P5.1-P5.4 deletions | TODO | suite green with the pinning tests removed |
+| P5.5 tests + floor rebaseline | TODO | before/after counts and coverage delta stated out loud |
+| P5.6 bleak out of the bundle | TODO | verified IN the built `.app`: launch, connect, push |
+| P6.1 allowlist empty | TODO | the completion criterion — same command that returned 12 returns 0 |
+| P6.2 user-POV pass | TODO | real app, every touched panel, light AND dark |
 | P6.3 CHANGELOG + release | TODO | |
 
 ### Cloud HTTP — 533/533 endpoints cataloged
