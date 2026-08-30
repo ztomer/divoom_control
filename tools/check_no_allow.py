@@ -18,11 +18,23 @@ auditable, the same way check_no_emoji.py's codepoint ranges are.
 The checker greps for the literal tokens `#[allow(` and `#![allow(` — never a
 looser regex — so `#[expect(...)]` (which ERRORS if its lint never fires, the
 "allow that cannot rot") stays permitted.
+
+COMMENTS ARE NOT CODE. The match runs over comment-stripped source (see
+`_srcscan.strip_rust_comments`), because source text does not distinguish an
+attribute from a doc comment quoting one — and a gate about `#[allow]` attracts
+prose about `#[allow]` more than most. It failed exactly that way on
+`socket_bind.rs`, whose doc comment explains why a field is named `_file`
+"rather than carrying an #[allow(dead_code)]": the gate read its own rationale
+as a violation. This is the same defect `check_positional_args.py` was fixed for
+in 0379194; the stripper was shared out then and this sibling was missed.
 """
 import re
 import subprocess
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _srcscan import strip_rust_comments  # noqa: E402
 
 _GENERATED_MARKER = "@generated"
 _ALLOW_PATTERN = re.compile(r"#!?\[allow\(")
@@ -78,12 +90,15 @@ def _scan(paths):
         if not p.exists() or _is_generated(p):
             continue
         try:
-            lines = p.read_text(errors="replace").splitlines()
+            text = p.read_text(errors="replace")
         except OSError:
             continue
-        for i, line in enumerate(lines, 1):
-            if _ALLOW_PATTERN.search(line):
-                hits.append(f"{p}:{i}: {line.strip()}")
+        # Match on the stripped text, report the original line: the stripper
+        # blanks comments in place, so line numbers stay aligned.
+        lines = text.splitlines()
+        for i, stripped in enumerate(strip_rust_comments(text).splitlines(), 1):
+            if _ALLOW_PATTERN.search(stripped):
+                hits.append(f"{p}:{i}: {lines[i - 1].strip()}")
     return hits
 
 
