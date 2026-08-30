@@ -21,8 +21,16 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
-- **2026-08-30 (v0.28.2) — tooling and docs; the app is unchanged.** No product
-  code in this release.
+- **2026-08-30 (v0.28.2) — SHIPPED. Tooling and docs; the app is unchanged.**
+  Tag `9790649` on a green CI (run 33328371650); GitHub release +
+  `Divoom-v0.28.2.dmg` (sha256 `4efff246...`), cask verified to carry that sha.
+  No product code in this release — behaviour is identical to v0.28.1.
+
+  **Session close-out (2026-08-30):** three releases in one day — v0.28.0 (six
+  red CI runs cleared, socket rule made structural, camoufox raised to latest,
+  sysmon made a daemon client), v0.28.1 (the GUI-kills-the-daemon crash, found
+  by finally running the app), v0.28.2 (this one). Open items are in
+  "Open threads" below; nothing is left half-done.
 
   * **`scripts/gui_pov.py`** — the harness that found v0.28.1's crash, promoted
     out of a scratchpad. Real daemon + real GUI backend + real page, no mocks.
