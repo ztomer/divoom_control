@@ -153,7 +153,7 @@ table is written by the step rather than by a tidy-up pass afterwards.
 | P3.1a | `search_weather_city` backend: persisted location tier + GUI API | DONE |
 | P3.1b | `search_weather_city` UI panel + camoufox e2e | DONE |
 | P2.4 | Danmaku SendText UI + e2e, render marked unconfirmed | DONE |
-| P4.1 | Raise the Rust coverage floor off 29%, in steps | TODO |
+| P4.1 | Rust coverage floor 29 -> 42, and actually enforced | DONE |
 | ~~P2.2~~ | ~~GUI API methods~~ — folded into P3.1 / P2.4; there is no shared layer worth building for two commands | DROPPED |
 | ~~P2.3~~ | ~~Voice/SendText UI~~ — duplicates the working `push_text`; see P2.1 audit | DROPPED |
 | ~~P2.5~~ | ~~5-LCD UI~~ — no such hardware here, and no per-device capability to gate on | DROPPED |
@@ -250,10 +250,26 @@ first.
 
 #### Phase 4 — raise the Rust coverage floor
 
-`scripts/rust_coverage.sh` pins divoomd at **29%**, measured 2026-08-25 when no
-floor existed at all. 29% is a ratchet against regression, not a standard — the
-Python side holds 95%. Raise it in steps, each step closing pure-logic gaps
-first (seam-and-cover), and never by loosening what is measured.
+**Done 2026-08-30, and the number was the smaller half of it.**
+
+Coverage measured **43.06%** (5356/12438), twice, identical to the digit — the
+pinned floor of 29% was 14 points stale. Raised to 42, one point of headroom.
+
+The reason it drifted is the real finding: **nothing ran it.**
+`scripts/rust_coverage.sh` appeared only in a prose comment in `.gatesrc`, never
+in `GOH_CI_STEPS`, and there is no coverage job in CI. A floor enforced by
+nobody is a number, not a gate — house rule #3 exactly. It is step 15 of the
+local gate run now, and proven to bite: `--floor 44` against the same tree exits
+1 and names the uncovered lines.
+
+**Still open:** no CI coverage job. It must run on macOS to measure the same
+scope (`nowplaying` is macOS-only and counts toward the percentage), so a Linux
+job would produce a different denominator and a floor that does not match. Local
+is currently stricter than CI, which is the safe direction — but it means the
+floor only bites for whoever runs the gate locally.
+
+Raising coverage further is open-ended and deliberately not chased here: close
+pure-logic gaps first (seam-and-cover), and never loosen what is measured.
 
 #### Explicitly NOT in this plan
 
