@@ -20,6 +20,21 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-08-30 (R68) — v0.28.0 SHIPPED.** Tagged at `6d08e4b` on a green CI
+  (run 33312022508), GitHub release published with
+  `Divoom-v0.28.0.dmg` (sha256 `2a20bb63...`), Homebrew cask bumped and
+  verified to carry that exact sha. `brew install --cask ztomer/tap/divoom-control`.
+  This release carries R67's work too — v0.27.0 was written but never tagged,
+  because CI had been red for six consecutive runs.
+
+  **Not yet validated by a human:** the sysmon GUI path changed (the preview and
+  apply buttons now go through the new `sysmon` daemon RPC instead of rendering
+  in Python). It is verified by mocks and by a socket-level probe against a real
+  daemon, but nobody has launched the app and clicked it. Published at the
+  user's explicit instruction after that was flagged. **First thing worth doing
+  next session:** open the GUI, click the system-monitor widget, confirm the
+  tile shows live gauges and Apply pushes them.
+
 - **2026-08-30 (R68, v0.28.0) — the six-run CI red is cleared; four things
   fixed, two of them gates that were wrong about their own subject.**
 
