@@ -135,7 +135,24 @@ window.DivoomTemplates.widgets = `                <div class="grid-layout three-
                                     <circle cx="8" cy="8" r="3" fill="currentColor"/>
                                 </svg>
                             </div>
-                            <span id="weather-preview-location" class="text-mono-sm" style="color: var(--text-muted);">--</span>
+                            <!-- P3.1b: the location line doubles as the way to
+                                 change it. Weather geolocates by IP, which is
+                                 right almost always and wrong exactly where
+                                 people notice (VPN, datacentre egress, living
+                                 near a border). Keeping the affordance ON the
+                                 thing it changes means the card gains no
+                                 chrome until you actually need it. -->
+                            <button type="button" id="weather-location-btn"
+                                    class="text-mono-sm weather-location-btn"
+                                    title="Click to set a city">
+                                <span id="weather-preview-location">--</span>
+                            </button>
+                            <div id="weather-city-search" class="weather-city-search" hidden>
+                                <input type="text" id="weather-city-input" class="text-input"
+                                       placeholder="Search for a city" autocomplete="off">
+                                <div id="weather-city-results" class="weather-city-results"></div>
+                                <button type="button" id="weather-city-auto">Use my location (IP)</button>
+                            </div>
                         </div>
                     </div>
 

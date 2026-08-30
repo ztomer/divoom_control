@@ -166,6 +166,12 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    // Exposed for weather_city.js: after the city changes, the card must be
+    // re-read through this same path rather than patched locally, so what it
+    // shows is what the BACKEND resolved. A save that silently failed should
+    // leave the old city on screen, not an optimistic one.
+    window.refreshWeatherPreview = refreshWeatherPreview;
+
     function startWeatherPolling() {
         if (weatherTimer) return;
         refreshWeatherPreview();

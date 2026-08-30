@@ -416,3 +416,79 @@ body.theme-light .arranger-node-image {
 }
 .cloud-clock-apply-btn:hover { border-color: var(--primary); color: var(--primary); }
 .cloud-clock-apply-btn:disabled { opacity: 0.5; cursor: default; }
+
+/* ── P3.1b: weather city override ────────────────────────────────────────────
+   The location line in the Weather card IS the control — clicking it opens the
+   search — so these styles keep it looking like the text it replaced until it
+   is hovered. The card carries no extra chrome for a control most users will
+   never need. */
+.weather-location-btn {
+    background: none;
+    border: none;
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: var(--text-muted);
+    font: inherit;
+    cursor: pointer;
+}
+.weather-location-btn:hover {
+    color: var(--text-primary);
+    border-bottom: 1px dotted var(--border-hover);
+}
+/* `display: flex` on an author rule beats the UA stylesheet's
+   `[hidden] { display: none }`, so the panel rendered while its `hidden`
+   property was true. The e2e test asserted `.hidden === true` — the DOM
+   PROPERTY — and passed the whole time the panel was visible on screen. Caught
+   by looking at a screenshot, not by any assertion. `.weather-city-search[hidden]`
+   is (0,2,0) against the base rule's (0,1,0), so it wins without !important. */
+.weather-city-search[hidden] {
+    display: none;
+}
+.weather-city-search {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+    max-width: 260px;
+}
+/* The input reuses .text-input (style_extra.css:60) rather than restyling a
+   box from scratch: that class already carries the app's --primary focus
+   border, and a bespoke rule here inherited the BROWSER's default blue focus
+   ring instead — visibly wrong next to an orange-accented UI. Caught by
+   screenshotting the panel rather than by any assertion. */
+.weather-city-search input {
+    padding: 6px 10px;
+}
+.weather-city-results {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 160px;
+    overflow-y: auto;
+}
+.weather-city-row {
+    text-align: left;
+    padding: 5px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    background: none;
+    color: var(--text-primary);
+    font-size: 13px;
+    cursor: pointer;
+}
+.weather-city-row:hover {
+    border-color: var(--border-hover);
+}
+#weather-city-auto {
+    padding: 5px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    background: none;
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+}
+#weather-city-auto:hover {
+    color: var(--text-primary);
+    border-color: var(--border-hover);
+}
