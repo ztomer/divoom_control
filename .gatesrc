@@ -31,9 +31,14 @@ GOH_LINE_EXCLUDE='docs/divoom_docs/'
 # result for the commit being tagged; this list passing is a precondition for
 # that, not a replacement.
 #
+# check_built_binaries.py runs LAST, and the position is load-bearing: it reads
+# the compiled artifacts in target/, so running it before the cargo steps would
+# find nothing built and pass vacuously — a gate that reports green on the
+# absence of its own subject.
+#
 # The Python suite lives in scripts/py_ci.sh (the slow, divoom-specific job;
 # ci_local.sh --fast skips it). Coverage: bash scripts/rust_coverage.sh
 # (divoomd crate, floor pinned at 29% — measured 2026-08-25, no floor existed
 # before).
 export GOH="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
-GOH_CI_STEPS='./scripts/house_emoji_gate.sh:python3 tools/check_file_size.py:python3 tools/check_no_allow.py:python3 tools/check_scripts.py:python3 tools/check_version_consistency.py:python3 tools/check_positional_args.py:python3 tools/check_weather_parity.py:cargo fmt --all -- --check:cargo clippy --all-targets --all-features -- -D warnings:cargo build -p divoomd --no-default-features --locked:cargo test -p divoomd --no-default-features --locked:./scripts/check_linux_build.sh:cargo test --locked'
+GOH_CI_STEPS='./scripts/house_emoji_gate.sh:python3 tools/check_file_size.py:python3 tools/check_no_allow.py:python3 tools/check_scripts.py:python3 tools/check_version_consistency.py:python3 tools/check_positional_args.py:python3 tools/check_weather_parity.py:cargo fmt --all -- --check:cargo clippy --all-targets --all-features -- -D warnings:cargo build -p divoomd --no-default-features --locked:cargo test -p divoomd --no-default-features --locked:./scripts/check_linux_build.sh:cargo test --locked:python3 tools/check_built_binaries.py'

@@ -4,68 +4,16 @@
 //! coexist during the port. See docs/ROADMAP.md.
 //!
 //!   divoomd [--socket /path/to.sock]
+//!
+//! Argument parsing lives in `divoomd::cli_args` so it can be unit-tested in
+//! both directions; this file is the shell that acts on the outcome.
 
 use std::sync::Arc;
 use std::time::Duration;
 
+use divoomd::cli_args::{self, Outcome};
 use divoomd::daemon::Daemon;
 use tokio::net::UnixListener;
-
-struct ConfigArgs {
-    socket_path: String,
-    host: Option<String>,
-    port: Option<u16>,
-    token: Option<String>,
-    mac: Option<String>,
-}
-
-fn parse_args() -> ConfigArgs {
-    let args: Vec<String> = std::env::args().collect();
-    let mut socket_path = "/tmp/divoomd.sock".to_string();
-    let mut host = None;
-    let mut port = None;
-    let mut token = std::env::var("DIVOOM_DAEMON_TOKEN").ok();
-    let mut mac = None;
-
-    let mut i = 1;
-    while i < args.len() {
-        if let Some(p) = args[i].strip_prefix("--socket=") {
-            socket_path = p.to_string();
-        } else if args[i] == "--socket" && i + 1 < args.len() {
-            socket_path = args[i + 1].clone();
-            i += 1;
-        } else if let Some(h) = args[i].strip_prefix("--host=") {
-            host = Some(h.to_string());
-        } else if args[i] == "--host" && i + 1 < args.len() {
-            host = Some(args[i + 1].clone());
-            i += 1;
-        } else if let Some(p) = args[i].strip_prefix("--port=") {
-            port = p.parse().ok();
-        } else if args[i] == "--port" && i + 1 < args.len() {
-            port = args[i + 1].parse().ok();
-            i += 1;
-        } else if let Some(t) = args[i].strip_prefix("--token=") {
-            token = Some(t.to_string());
-        } else if args[i] == "--token" && i + 1 < args.len() {
-            token = Some(args[i + 1].clone());
-            i += 1;
-        } else if let Some(m) = args[i].strip_prefix("--mac=") {
-            mac = Some(m.to_string());
-        } else if args[i] == "--mac" && i + 1 < args.len() {
-            mac = Some(args[i + 1].clone());
-            i += 1;
-        }
-        i += 1;
-    }
-
-    ConfigArgs {
-        socket_path,
-        host,
-        port,
-        token,
-        mac,
-    }
-}
 
 use divoomd::socket_server::{serve, serve_tcp, CONNECTION_IDLE_TIMEOUT, MAX_CONNECTIONS};
 
@@ -85,17 +33,36 @@ fn env_duration(key: &str, default: Duration) -> Duration {
 
 #[tokio::main]
 async fn main() {
-    // `divoomd mcp` runs the MCP stdio server (a client of the running daemon),
-    // not the daemon itself. Ported from the Python `divoom_lib.cli mcp-server`.
-    if std::env::args().nth(1).as_deref() == Some("mcp") {
-        if let Err(e) = divoomd::mcp::run().await {
-            eprintln!("divoomd mcp: {e}");
-            std::process::exit(1);
+    let argv: Vec<String> = std::env::args().skip(1).collect();
+    let args = match cli_args::parse(&argv, std::env::var("DIVOOM_DAEMON_TOKEN").ok()) {
+        // `--version` MUST answer without side effects: it is how the client and
+        // the gates ask a built binary what it is, and a probe that starts a
+        // daemon on the default socket is not a probe. Printed before any socket
+        // work for that reason.
+        Outcome::Version => {
+            println!("divoomd {}", env!("CARGO_PKG_VERSION"));
+            return;
         }
-        return;
-    }
-
-    let args = parse_args();
+        Outcome::Help => {
+            println!("{}", cli_args::USAGE);
+            return;
+        }
+        Outcome::Error(msg) => {
+            eprintln!("{msg}");
+            std::process::exit(2);
+        }
+        // `divoomd mcp` runs the MCP stdio server (a client of the running
+        // daemon), not the daemon itself. Ported from the Python
+        // `divoom_lib.cli mcp-server`.
+        Outcome::Mcp => {
+            if let Err(e) = divoomd::mcp::run().await {
+                eprintln!("divoomd mcp: {e}");
+                std::process::exit(1);
+            }
+            return;
+        }
+        Outcome::Run(cfg) => *cfg,
+    };
     let socket_path = args.socket_path;
     // Single-instance guard, stale-socket clearing and blocker diagnosis all
     // live in socket_bind::acquire, under an advisory lock so inspect-and-bind

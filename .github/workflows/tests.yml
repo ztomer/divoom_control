@@ -177,6 +177,11 @@ jobs:
         run: cargo build -p divoomd --no-default-features --locked
       - name: Test core without BLE
         run: cargo test -p divoomd --no-default-features --locked
+      - name: Built binaries report the app version (house gate)
+        # AFTER the build on purpose: this gate reads target/, so running it
+        # earlier would find nothing built and pass on the absence of its
+        # subject. See tools/check_built_binaries.py.
+        run: python3 tools/check_built_binaries.py
 
   rust-ble:
     # Full native daemon build with the `ble` feature (btleplug against
@@ -196,6 +201,11 @@ jobs:
         # Workspace root: this also builds and runs divoom-menubar's tests,
         # which no CI job reached before R66.
         run: cargo test --locked
+      - name: Built binaries report the app version (house gate)
+        # The only job that builds BOTH product binaries, so the only one where
+        # divoom-menubar's stamp is checked. Runs after the build for the same
+        # reason as in rust-core.
+        run: python3 tools/check_built_binaries.py
 
   rust-ble-linux:
     # Best-effort: prove the btleplug BlueZ backend COMPILES on Linux. No device,

@@ -18,6 +18,7 @@ pub mod ble;
 mod c7_positional_tests;
 #[cfg(feature = "ble")]
 pub mod central;
+pub mod cli_args;
 pub mod cloud;
 mod cloud_category;
 pub mod cloud_cmds;

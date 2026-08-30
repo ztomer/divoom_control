@@ -36,6 +36,7 @@ from divoom_client.daemon_protocol import (
     DaemonClient,
 )
 
+from divoom_client import binary_resolver
 from divoom_client.socket_failure import explain_daemon_failure
 from divoom_client.daemon_version import (  # noqa: F401  (re-exported)
     _stop_stale_daemon,
@@ -163,50 +164,49 @@ def spawn_daemon(
 
     Caller waits until the socket is live (see :func:`ensure_daemon`).
     """
-    # Resolve the native Rust daemon binary: env override, then the py2app .app
-    # bundle (Contents/Resources via RESOURCEPATH), then the dev build tree.
-    rust_bin = os.environ.get("DIVOOM_RUST_BINARY")
-    if rust_bin and not Path(rust_bin).exists():
-        rust_bin = None
+    # Resolve the native Rust daemon binary BY VERSION, not by location. The
+    # old code walked ["release", "debug"] and took the first that existed, so
+    # a `target/release/divoomd` left over from the last release cut won every
+    # time — and nothing in this repo rebuilds it. Paired with the version guard
+    # in `ensure_daemon`, that made an infinite loop: spawn stale, notice the
+    # mismatch, shut it down, spawn the same stale binary again. See
+    # `divoom_client/binary_resolver.py`.
+    resolved = binary_resolver.resolve(
+        "divoomd", override=os.environ.get("DIVOOM_RUST_BINARY"))
+    rust_bin = str(resolved) if resolved else None
     rust_env_extra: dict[str, str] = {}
-    # PyInstaller bundle: divoomd is collected under <_MEIPASS>/bin and the encoder
-    # dylib under <_MEIPASS>/divoom_lib (data lands in Resources for a .app).
-    _mei = getattr(sys, "_MEIPASS", None)
-    if not rust_bin and _mei:
-        for _bin in (Path(_mei) / "bin" / "divoomd",
-                     Path(_mei).parent / "Resources" / "bin" / "divoomd"):
-            if _bin.exists():
-                rust_bin = str(_bin)
-                for _dy in (Path(_mei) / "divoom_lib" / "libdivoom_compact.dylib",
-                            Path(_mei).parent / "Resources" / "divoom_lib" / "libdivoom_compact.dylib"):
-                    if _dy.exists():
-                        rust_env_extra["DIVOOMD_ENCODER_LIB"] = str(_dy)
-                        break
-                break
-    _rp = os.environ.get("RESOURCEPATH")  # set by py2app inside the .app bundle
-    if not rust_bin and _rp:
-        cand = Path(_rp) / "divoomd"
-        if cand.exists():
-            rust_bin = str(cand)
-            # The bundled daemon can't find the encoder dylib by relative path —
-            # point it at the copy shipped alongside it in Resources.
-            dylib = Path(_rp) / "libdivoom_compact.dylib"
-            if dylib.exists():
-                rust_env_extra["DIVOOMD_ENCODER_LIB"] = str(dylib)
-    if not rust_bin:
-        # daemon_client.py lives at <repo>/divoom_client/daemon_client.py, so the
-        # repo root is parents[1].
-        repo_root = Path(__file__).resolve().parents[1]
-        for folder in ["release", "debug"]:
-            p = repo_root / "target" / folder / "divoomd"
-            if p.exists():
-                rust_bin = str(p)
+    if rust_bin:
+        # The bundled daemon can't find the encoder dylib by relative path —
+        # point it at the copy shipped alongside it. PyInstaller collects it
+        # under <_MEIPASS>/divoom_lib; py2app lands it in Resources.
+        _mei = getattr(sys, "_MEIPASS", None)
+        _rp = os.environ.get("RESOURCEPATH")
+        _dylib_dirs = [d for d in (
+            Path(_mei) / "divoom_lib" if _mei else None,
+            Path(_mei).parent / "Resources" / "divoom_lib" if _mei else None,
+            Path(_rp) if _rp else None,
+        ) if d is not None]
+        for _dir in _dylib_dirs:
+            _dy = _dir / "libdivoom_compact.dylib"
+            if _dy.exists():
+                rust_env_extra["DIVOOMD_ENCODER_LIB"] = str(_dy)
                 break
     # The Rust daemon is the sole shipping daemon (the Python reference server was
     # archived 2026-07-13 — see divoom_client/__init__.py); there is no longer a
     # Python-daemon spawn fallback. Raise clearly rather than emitting a
     # `-m divoom_lib.cli daemon` command that no longer works.
     if rust_bin is None:
+        stale = binary_resolver.stale_report("divoomd")
+        if stale:
+            # Name what IS built and what it says. "not found" is a lie when the
+            # binary is sitting right there at the wrong version, and it sends
+            # the reader looking for a missing file instead of a stale one.
+            detail = "; ".join(
+                f"{p} reports {v or '<no --version>'}" for p, v in stale)
+            raise RuntimeError(
+                f"no divoomd matching this tree's version — {detail}. "
+                f"Rebuild: {binary_resolver.rebuild_hint('divoomd')}"
+            )
         raise RuntimeError(
             "divoomd (Rust daemon) binary not found — set DIVOOM_RUST_BINARY, "
             "build divoomd/, or run from a packaged .app. The Python daemon "

@@ -41,7 +41,70 @@ const POLL: Duration = Duration::from_secs(2);
 // daemon coming back up is noticed about as fast either way.
 const SUBSCRIBE_RETRY_DELAY: Duration = Duration::from_secs(2);
 
+const USAGE: &str = "\
+divoom-menubar — the native Divoom tray agent.
+
+USAGE:
+    divoom-menubar [OPTIONS]
+
+OPTIONS:
+    -V, --version               print version and exit
+    -h, --help                  print this help and exit
+
+The agent takes no configuration: it polls divoomd on the default socket.";
+
+/// What the caller should do, once the arguments have been read.
+#[derive(Debug, PartialEq, Eq)]
+enum CliOutcome {
+    /// Run the tray agent.
+    Run,
+    /// Print this on stdout and exit 0.
+    Print(String),
+    /// Print this on stderr and exit 2.
+    Refuse(String),
+}
+
+/// Read `argv` (WITHOUT the program name), BEFORE building an event loop and
+/// claiming a tray slot.
+///
+/// This exists for the same reason `divoomd::cli_args` does:
+/// `tools/check_built_binaries.py` has to be able to ask a built binary what
+/// version it is, and the only honest answer is to print and exit. It also
+/// closes the sibling of the divoomd defect — this binary accepted and ignored
+/// every argument, so a mistyped flag silently launched a second tray icon.
+///
+/// The agent takes no configuration, so anything other than a lone `--version`
+/// or `--help` is refused rather than ignored.
+fn parse_cli(argv: &[String]) -> CliOutcome {
+    if argv.is_empty() {
+        return CliOutcome::Run;
+    }
+    if let [one] = argv {
+        match one.as_str() {
+            "--version" | "-V" => {
+                return CliOutcome::Print(format!("divoom-menubar {}", env!("CARGO_PKG_VERSION")))
+            }
+            "--help" | "-h" => return CliOutcome::Print(USAGE.to_string()),
+            _ => {}
+        }
+    }
+    CliOutcome::Refuse(format!(
+        "divoom-menubar: unexpected arguments {argv:?}\n\nRun `divoom-menubar --help` for usage."
+    ))
+}
+
 fn main() {
+    match parse_cli(&std::env::args().skip(1).collect::<Vec<_>>()) {
+        CliOutcome::Print(msg) => {
+            println!("{msg}");
+            return;
+        }
+        CliOutcome::Refuse(msg) => {
+            eprintln!("{msg}");
+            std::process::exit(2);
+        }
+        CliOutcome::Run => {}
+    }
     // `set_activation_policy` below takes `&mut self`, and exists only on macOS,
     // so the binding is `mut` only there; on other targets it stays immutable
     // and `unused_mut` never fires.
@@ -147,3 +210,59 @@ fn macos_wake() {
 
 #[cfg(not(target_os = "macos"))]
 fn macos_wake() {}
+
+#[cfg(test)]
+mod cli_tests {
+    use super::*;
+
+    fn argv(items: &[&str]) -> Vec<String> {
+        items.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn no_arguments_runs_the_agent() {
+        assert_eq!(parse_cli(&argv(&[])), CliOutcome::Run);
+    }
+
+    #[test]
+    fn version_prints_the_crate_version_and_does_not_run() {
+        match parse_cli(&argv(&["--version"])) {
+            CliOutcome::Print(m) => {
+                assert!(m.starts_with("divoom-menubar "), "{m}");
+                assert!(m.contains(env!("CARGO_PKG_VERSION")), "{m}");
+            }
+            other => panic!("expected Print, got {other:?}"),
+        }
+        assert!(matches!(parse_cli(&argv(&["-V"])), CliOutcome::Print(_)));
+    }
+
+    #[test]
+    fn help_prints_usage() {
+        for a in ["--help", "-h"] {
+            match parse_cli(&argv(&[a])) {
+                CliOutcome::Print(m) => assert!(m.contains("USAGE"), "{a}: {m}"),
+                other => panic!("{a}: expected Print, got {other:?}"),
+            }
+        }
+    }
+
+    /// The agent takes no configuration, so an unrecognised flag was previously
+    /// accepted and ignored — a typo silently started a second tray icon.
+    #[test]
+    fn unknown_arguments_are_refused_not_ignored() {
+        match parse_cli(&argv(&["--socket", "/tmp/x.sock"])) {
+            CliOutcome::Refuse(m) => assert!(m.contains("--socket"), "{m}"),
+            other => panic!("expected Refuse, got {other:?}"),
+        }
+    }
+
+    /// `--version` is only an answer when it is the WHOLE request; trailing
+    /// arguments mean the caller expected something this binary cannot do.
+    #[test]
+    fn version_with_trailing_arguments_is_refused() {
+        assert!(matches!(
+            parse_cli(&argv(&["--version", "--nope"])),
+            CliOutcome::Refuse(_)
+        ));
+    }
+}

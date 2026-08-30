@@ -16,12 +16,16 @@ and "[Errno 2] No such file or directory", neither of which names the cause.
 The failing direction was the lucky one. The same hole silently passes tests
 against code that was never compiled.
 
-Two rules, both needed:
+This module first answered it with RECENCY, which is better than location but
+still a proxy: the newest binary is stale too when nobody rebuilt it after a
+version bump. Selection now goes through `divoom_client.binary_resolver`, which
+asks each candidate `--version` and takes the one that matches this tree — the
+same resolver the shipping client uses, so the tests and the app can no longer
+disagree about which daemon is "the" daemon.
 
-* pick by RECENCY, so the ordinary case is right;
-* assert the running daemon's IDENTITY, so the extraordinary case says so.
-
-Recency alone still runs a stale binary when it happens to be the newest one.
+The identity assertion below stays regardless. Selecting correctly and
+VERIFYING what actually came up are different guarantees, and the second one is
+what turns a mystery socket error into a sentence naming the version.
 """
 from __future__ import annotations
 
@@ -31,22 +35,27 @@ from pathlib import Path
 
 import pytest
 
+from divoom_client import binary_resolver
+
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def find_divoomd() -> Path | None:
-    """The most recently BUILT divoomd, or None if nothing is built."""
-    built = [REPO_ROOT / "target" / flavour / "divoomd" for flavour in ("release", "debug")]
-    built = [p for p in built if p.exists()]
-    if not built:
-        return None
-    return max(built, key=lambda p: p.stat().st_mtime)
+    """The built divoomd matching this tree's version, or None."""
+    return binary_resolver.resolve("divoomd")
 
 
 def require_divoomd() -> Path:
     """The binary to test, or skip -- never silently fall back to a stale one."""
     found = find_divoomd()
     if found is None:
+        stale = binary_resolver.stale_report("divoomd")
+        if stale:
+            detail = "; ".join(
+                f"{p} reports {v or '<no --version>'}" for p, v in stale)
+            pytest.skip(
+                f"no divoomd matching this tree's version — {detail}. "
+                f"Rebuild: {binary_resolver.rebuild_hint('divoomd')}")
         pytest.skip("divoomd binary not built. Run: cargo build -p divoomd")
     return found
 
