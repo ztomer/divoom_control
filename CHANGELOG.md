@@ -129,6 +129,82 @@ on what else touched `sys.path` earlier in the run. Loaded by file path now.
   parallel to the Python daemon ... so both can coexist during the port". That
   server was archived 2026-07-13 and removed in R66.
 
+### R69 plan — four phases, and what the audit stopped
+
+The plan was "everything left open is blocked on hardware, but that blocks
+CONFIRMING a render, not writing one". Executed one step per commit, with the
+step ledger in `docs/ROADMAP.md` updated in the same commit as the step so the
+table and the history cannot drift.
+
+**P1 — the e2e harness leaked the processes it spawned.** Ten orphans were
+found on the development machine (four `divoomd`, six bridges, some days old),
+plus **217** abandoned `divoom_e2e_home_*` directories. `_IsolatedStack.__init__`
+had three bring-up failure paths and cleaned up on one; raising from a
+constructor means the fixture never receives the object, so its
+`finally: stack.close()` never runs — teardown was bypassed precisely when
+something had already gone wrong. Now a structural funnel, with two details that
+matter: `except BaseException` (pytest.fail raises Failed <- OutcomeException <-
+BaseException, so `except Exception` would have caught none of the three
+failures while looking correct), and every attribute `close()` touches assigned
+before anything can raise. The socket path is per-stack instead of per-pytest-
+process. Extracted to `tests/support/gui_daemon_stack.py`; 6 regression tests
+driving each failure path with real subprocesses, proven red by sabotage.
+
+**P1.4 found the version-parity class still alive in shipping code.**
+`gui_main.py:_resolve_menubar_binary` walked `("release", "debug")` and took the
+first that existed — the same trap fixed for `divoomd` earlier in this release,
+still live because that fix was applied per-instance instead of swept for
+siblings. A test was pinning the defect as the specification.
+
+**P2.1 — the audit said do not build most of phase 2.** Four of the five
+backend-only LAN commands were unwired DELIBERATELY, with the reasons in the
+handler comments. 5-LCD needs "Times Gate" hardware nobody here has, and the
+plan's premise that the daemon negotiates a per-device capability to gate it on
+was false (`protocol_capabilities()` lists DAEMON features). Voice/SendText
+duplicates the working `push_text` with an unconfirmed alternative.
+Danmaku/RandomFace is dead in the vendor app itself. **An unwired backend
+command is evidence of a decision, not of an oversight.**
+
+**P3.1 — a weather city you can actually choose.** Weather geolocates by IP,
+which is wrong exactly where people notice. `Weather/SearchCity` had been
+implemented for some time with no way to reach it. What gets SAVED is
+coordinates: Divoom's `CityId` means nothing to wttr.in, and lat/lon is the one
+field pair the two namespaces share. `_resolve_location` gains one tier below
+the env vars; no daemon change was needed, because `_get_live_params` already
+sends `params["location"]`.
+
+**P2.4 — the Danmaku overlay, with the render honestly labelled.** The one
+command the audit kept. It reuses the Text panel's inputs and says on screen
+that it is not yet verified on hardware, pinned by two tests so the caveat
+cannot be quietly dropped.
+
+**P4.1 — the coverage floor was 14 points stale because nothing ran it.**
+Measured 43.06% against a pinned 29%. `rust_coverage.sh` lived only in a prose
+comment in `.gatesrc`, never in the step list, and there is no CI coverage job —
+so the floor was enforced by nobody. Raised to 42 and wired in as step 15.
+
+### Two bugs found by looking rather than by asserting
+
+* **A search panel was visible while `hidden` was true.** `display: flex` on an
+  author rule beats the UA stylesheet's `[hidden] { display: none }`. Seven e2e
+  tests passed throughout, because every assertion read the DOM PROPERTY rather
+  than what was rendered. A screenshot caught it in one look; the tests now
+  assert visibility.
+* **A lost single-instance race stopped explaining a client's error.**
+  `BindFailure::LiveInstance` means a HEALTHY daemon owns the socket, and its own
+  doc comment says it "is not an error condition" — but it was written to the
+  shared `<socket>.failure` file, whose only job is answering "why can I not
+  reach a daemon?". Clients were told "the running daemon is healthy" as the
+  reason they were seeing an error, and it never expired, because the winner
+  never re-enters `acquire`. Found live on this machine. `LiveInstance` now
+  CLEARS the stale sidecar instead of writing one.
+
+Both are the same shape: a signal that was true about something other than the
+question being asked.
+
+Suite at close: **Python 2935 passed / 94 skipped / 0 failed**, Rust 154 (no-BLE
+core) with the full workspace green, all 15 local gate steps passing.
+
 ## v0.28.2 — Tooling and docs; no user-facing change (2026-08-30)
 
 **The app is functionally identical to v0.28.1.** No product code changed. This

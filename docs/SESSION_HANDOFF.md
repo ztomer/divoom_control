@@ -67,11 +67,37 @@ shared memory. Read this on entry and **update it at the end of every round**
   no socket and refuses trailing arguments, so giving it one turns the probe into
   an exit-2 that reads as "stale". Both directions are pinned by tests.
 
-  **Next up: `docs/ROADMAP.md` → "R69 plan".** Four phases that need no hardware
-  and no user: the e2e harness process leak (ten orphans found while auditing —
-  two of three `__init__` failure paths bypass teardown), GUI-wiring the five
-  backend-only LAN commands, `search_weather_city`, and raising the Rust
-  coverage floor off 29%.
+  **R69 plan: ALL FOUR PHASES DONE (2026-08-30).** The step ledger in
+  `docs/ROADMAP.md` is the record; every step updated its own row in the same
+  commit, so the table and the git history cannot disagree. Highlights and the
+  traps are in the CHANGELOG's v0.28.3 stanza. Three things a future session
+  should not have to rediscover:
+
+  * **An unwired backend command is evidence of a DECISION, not an oversight.**
+    P2.1 was going to wire five LAN commands; four of them had been left alone
+    deliberately, with the reasons sitting in the handler comments, and one of
+    the plan's own premises (a per-device capability to gate 5-LCD on) was
+    simply false. Read why before undoing it.
+  * **Assert what is RENDERED, not the DOM property.** Seven green e2e tests
+    described a panel that was plainly visible on screen while its `hidden`
+    property was true — an author `display: flex` beats the UA stylesheet's
+    `[hidden]`. A screenshot found it immediately. Any new UI assertion should
+    use `page.is_visible` / `state="visible"`.
+  * **`.failure` sidecars can outlive their condition.** The winner of the
+    single-instance race never re-enters `acquire`, so anything written after it
+    started stays forever. `LiveInstance` now clears rather than writes.
+
+  **Open, and a decision rather than a task: no CI coverage job.** The floor is
+  enforced locally only (step 15). A CI job must run on macOS to measure the
+  same scope — `nowplaying` is macOS-only and counts toward the percentage — so
+  a Linux job would have a different denominator and a floor that does not
+  match. Local stricter than CI is the safe direction, but the floor only bites
+  for whoever runs the gate.
+
+  The plan text in `docs/ROADMAP.md` is kept as written, including the parts the
+  P2.1 audit overturned, with the correction recorded beneath it. A plan that is
+  quietly edited to match what happened teaches nothing; one that shows where it
+  was wrong is the useful artifact.
 
 - **2026-08-30 (v0.28.2) — SHIPPED. Tooling and docs; the app is unchanged.**
   Tag `9790649` on a green CI (run 33328371650); GitHub release +
