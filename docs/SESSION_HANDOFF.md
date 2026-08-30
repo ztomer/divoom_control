@@ -141,6 +141,37 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Open threads / next up
 
+- **R70 GUI/daemon boundary audit (2026-08-30) — 12 findings, ALL OPEN. Full
+  table in `docs/ROADMAP.md` under "R70".**
+
+  The question was "is anything left in the Python GUI that should live in the
+  daemon". It is: seven live duplicates where the daemon ALREADY answers the
+  command and the GUI does the work itself anyway, plus five pieces of dead
+  weight (a `bleak` import in the process that must never own BLE; a 150-LOC
+  pyaudio+numpy visualizer nothing calls; unreachable code after a `return`).
+
+  Verified against the LIVE daemon on `/tmp/divoom.sock`, not read off source:
+  `get_dial_types` returned real categories, `get_animated_preview` returned a
+  valid 2.9 KB GIF data-url, and the bundled `divoomd mcp` served 13 tools —
+  every one of them while the GUI runs its own Python twin.
+
+  **Two are not merely redundant.** `media_sync.py:84` carries a docstring
+  claiming it shares the device's renderer, and resizes LANCZOS where the device
+  gets NEAREST. And `mcp_control.py` spawns `sys.executable -m divoom_lib.cli`,
+  which inside the `.app` is the GUI binary — `parse_known_args()` eats the
+  args and the single-instance guard exits, so "Start MCP Server" cannot work in
+  a bundle at all. Reproduce that one in the bundle before fixing it.
+
+  **The seam is the root cause, and it is where a fix should start.**
+  `divoom_client/daemon_protocol.py` has no wrapper for ANY of the twelve-plus
+  cloud commands, so every panel that needed one imported `CloudClient` instead.
+  Add the wrappers, then route the panels, then delete the Python paths. One
+  panel at a time leaves the class alive.
+
+  Free consequence: this subsumes the Deferred "cloud browse cannot say WHY it
+  is empty" item. The daemon already returns
+  `Photo/GetAlbumList failed (RC=3): ...`; the GUI's `except → []` discards it.
+
 - **gui_pov + real-backend check before v0.28.3 (2026-08-30) — PASSED, with two
   honest gaps recorded rather than papered over.**
 

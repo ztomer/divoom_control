@@ -142,6 +142,93 @@ suite describing a panel that was visibly open on screen.
 Recover the plan and its step ledger with
 `git log -p -- docs/ROADMAP.md` (search for "R69 plan").
 
+### R70 — GUI/daemon boundary audit (2026-08-30, findings OPEN)
+
+**The question asked:** is there anything left in the Python GUI that should
+live in the daemon? **Answer: yes, twelve things.** R67/C2 fixed this class for
+now-playing, weather and sysmon and stopped there; the audit swept the rest of
+`divoom_gui/` for the same shape. Verified against a LIVE daemon
+(`/tmp/divoom.sock`, the installed v0.28.3 bundle), not read off the source.
+
+The rule this measures against is already written above: _where the GUI
+EXECUTES Python that duplicates a daemon job, that IS a real defect._ Python
+being reference-only does not make a GUI-side second implementation harmless —
+it makes it a second implementation of documentation.
+
+**Live duplicates — the daemon already answers, the GUI does the work anyway:**
+
+| # | GUI code | Daemon command that already exists | Evidence |
+|---|----------|-----------------------------------|----------|
+| 1 | `clock_faces.py`, `playlists.py`, `aid_sleep.py`, `photo_albums.py`, `weather_city.py` build a Python `CloudClient` in-process | `get_dial_types`, `get_dial_list`, `get_my_playlists`, `get_playlist_images`, `get_aid_sleep_list`, `get_my_aid_sleep_list`, `get_photo_albums`, `search_weather_city` — all wired at `dispatch.rs:282-295` | `get_dial_types` over the socket returned 8+ real categories |
+| 2 | `gallery_hot_api.get_animated_preview` (CDN download + magic-43 decode) | `get_animated_preview`, `dispatch.rs:71` — whose own comment at `sync_artwork.rs:68` says it is "parity with the Python GUI's `gallery_hot_api.get_animated_preview`" | returned a valid 2.9 KB `data:image/gif;base64` for a real `file_id` |
+| 3 | `gallery_sync.py:150-194` hand-rolls the POST to `appin.divoom-gz.com/GetCategoryFileListV2` — own credential cache, own `config.ini` read, own RC 9/10/11 retry, own okhttp UA; `gallery_download.py` downloads from `fin.divoom-gz.com` and decodes | `fetch_gallery`, `get_category_file_list`, `get_credentials`, `get_cached_credentials`; decode in `art_codec.rs`/`media.rs` | source |
+| 4 | `hot_update_preview` → Python `fetch_hot_manifest` | `art_hot.rs:100 fetch_hot_manifest`, same `HOT_FILE_BASE` | source |
+| 5 | `media_sync.py:176/193` fetches Yahoo + `render_stock_ticker_frame()` draws with PIL | `live_jobs/render.rs:266 render_stock()` off the same Yahoo endpoint (`mod.rs:226`) | source |
+| 6 | `media_sync.py:84-106` album-art preview resizes `Image.LANCZOS` | music job pushes via `image_proc::process_image_bytes` → `FilterType::Nearest` | source |
+| 7 | `mcp_control.py:118` spawns `[sys.executable, "-m", "divoom_lib.cli", "mcp-server"]` | `divoomd mcp` (`mcp.rs`, a documented port of the Python server) | bundled `divoomd mcp` served `tools/list` = 13 tools |
+
+**Two of these are worse than redundancy.**
+
+**#6 is a docstring that is false about its own function.** It states "Uses the
+same renderer path the device frame comes from, so the card and the panel
+cannot drift (house rule: previews mirror live state through the shared
+renderer, never a parallel pipeline)" — and then resizes LANCZOS while the
+device gets NEAREST, which `image_proc.rs` documents as deliberate ("keeps
+pixel art crisp"). The preview is smoothed, the matrix is not. The comment
+asserts exactly the invariant the code breaks.
+
+**#7 is broken in the bundle, not merely duplicated.** `mcp_control.py` has no
+`sys.frozen` branch, so in the `.app` `sys.executable` is
+`Contents/MacOS/Divoom` and `-m divoom_lib.cli mcp-server` is handed to
+`gui_main.main()`, which uses `parse_known_args()` — unknown args silently
+ignored — and then exits on the single-instance guard. The MCP card would show
+a server that starts and immediately dies. `divoomd` is bundled two directories
+away and answers today. (Read from the code path; not yet reproduced in the
+bundle — do that first.)
+
+**#1 also closes a Deferred item below for free.** "Cloud browse cannot say WHY
+it is empty" is not a missing feature — the daemon already answers
+`Photo/GetAlbumList failed (RC=3): Request data is incomplete` while the GUI's
+`except → []` renders "nothing found". The reason exists; the GUI throws it
+away by not asking. Routing the panels through the daemon IS the fix for both.
+
+**Dead weight that should not be in the GUI at all:**
+
+8. `gui_main.py:33-35` — `Divoom`, `DivoomWall`, `BleakScanner` imported, none
+   used. `bleak` is not a cosmetic import: it is the BLE stack, loaded into the
+   one process that must never own BLE, and its TCC surface with it.
+9. `audio_visualizer.py` (150 LOC, pyaudio + numpy + a capture thread) plus
+   `toggle_audio_visualizer`/`get_audio_levels` — no JS calls any of them. Dead,
+   and it drags pyaudio and numpy into the bundle.
+10. `api/widgets.py:97-118` — unreachable code after `get_weather` returns, left
+    behind by the R67/C2 migration.
+11. `api/widgets.py:20-35 push_weather` — GUI-side weather fetch, raw `0x45`
+    channel switch, `Weather(d).set()`. No JS caller; a test at
+    `test_widgets_weather.py:219` even asserts the JS handler was removed. The
+    pre-R67 weather path, alive only because its own tests still call it.
+12. `media_sync.py:267 trigger_notification` — no JS caller; renders its own
+    frame and sends raw `0x60` with a hardcoded app-code/colour map duplicating
+    `notification_routing.rs`.
+
+**What is already correct** (so the list is not read as "the GUI is all wrong"):
+now-playing, the weather card, sysmon, the wall (`DaemonDeviceProxy`),
+`sync_artwork`, `custom_art_push`, `hot_update`/`hot_update_progress`, and
+scan/connect/`device_call` are all proper daemon clients.
+`divoom_gui/sysmon_widget.py` is the reference for the shape a fix should take.
+
+**Borderline, deliberately NOT on the list:** config read/write (weather city,
+lifecycle, presets, `tickers.json`) is GUI preference storage and belongs where
+it is; constants imported from `divoom_lib.models` are reference data, not a
+second implementation. `api/lighting.py:_render_text_png` duplicates
+`render.rs`'s `BitmapFont` over the same font binary, but no daemon command
+exists to call — same class as #5, without a seam yet.
+
+**The missing seam, which is why this accumulated.** `divoom_client/
+daemon_protocol.py` has NO wrapper for a single one of the twelve-plus cloud
+commands. Every panel that needed one found it easier to import `CloudClient`
+than to add a method. Fix the class: add the wrappers first, then route the
+panels, then delete the Python paths — not one panel at a time.
+
 ### Cloud HTTP — 533/533 endpoints cataloged
 
 Full catalog at `docs/cloud_api/` (all 16 batches complete). Key shipped features:
@@ -181,7 +268,9 @@ Bonus fix: device-selector "not in range" badge now counts consecutive scan miss
   `get_aid_sleep_list` and the photo-album browse all catch their exception and
   return `[]`, so every panel shows "nothing found" whether the result is
   genuinely empty, the cloud is unreachable, or the account is unauthenticated.
-  A failed state must say why. Fix as a CLASS in the shared shape — five
+  A failed state must say why. **R70 found the reason already exists** — the
+  daemon returns it and the GUI never asks (see R70 #1); this item is subsumed
+  by that fix, not separate work. Fix as a CLASS in the shared shape — five
   features and their tests — not one panel at a time.
 - **`search_weather_city` success path unverified.** The pre-release check ran
   under a throwaway HOME, so it exercised the no-credentials branch
