@@ -21,10 +21,12 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
-- **2026-08-30 (v0.28.3) — version parity made structural. NOT TAGGED, NOT
-  RELEASED.** The version is deliberately ahead of `v0.28.2`; that is the normal
-  state between bumping and cutting. Cut it with `scripts/release.sh` once CI is
-  green, or keep accumulating into it — nothing here is half-done.
+- **2026-08-30 (v0.28.3) — SHIPPED.** Tag `1a4a273` on a green CI (all five
+  checks), GitHub release + `Divoom-v0.28.3.dmg` (sha256 `52550f48...`), cask
+  verified to carry that sha. Verified inside the DMG, not just the source tree:
+  both binaries report 0.28.3 and the bundled daemon survives the
+  `get_status`/`players`/`now_playing`/`sysmon` sequence that killed v0.28.0's.
+  `brew install --cask ztomer/tap/divoom-control`.
 
   **The rule, now enforced rather than remembered: `divoomd` and
   `divoom-menubar` always report the app version. Anything else is stale, and

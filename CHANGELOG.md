@@ -4,11 +4,14 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
-## v0.28.3 — Version parity made structural (UNRELEASED, 2026-08-30)
+## v0.28.3 — Version parity made structural (2026-08-30)
 
-**Not tagged and not released.** The version is deliberately ahead of the newest
-tag; that is the normal state between bumping and cutting, and
-`check_version_consistency.py` allows it in that direction only.
+**SHIPPED.** Tag `1a4a273` on a green CI (all five checks), GitHub release with
+`Divoom-v0.28.3.dmg` (sha256 `52550f48...`), Homebrew cask carrying that exact
+sha. Verified against the artifact users install, not the source tree: both
+binaries inside the DMG report 0.28.3, and the bundled daemon answers
+`get_status` / `players` / `now_playing` / `sysmon` and stays alive — the
+sequence that aborted the daemon in v0.28.0.
 
 ### The daemon binary is now chosen by its VERSION
 
