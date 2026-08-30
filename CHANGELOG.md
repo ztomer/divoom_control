@@ -4,7 +4,37 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
-## Unreleased — R67 Phases 3-4: weather, and a virtual wall that never worked (2026-08-29)
+## v0.27.0 — R67: seven classes, and three things that never worked (2026-08-30)
+
+Six user-reported symptoms, traced to **seven named classes** rather than seven
+patches. Three features turned out to be not merely buggy but **entirely
+non-functional**, each for reasons invisible to a green test suite:
+
+* **the virtual wall** — three independent showstoppers, any one fatal;
+* **the hot-channel button** — progress was stored and never broadcast, so it
+  sat on "Preparing..." forever;
+* **ambient modes 1-4** — the mode byte was hardcoded to 0, so every mode sent
+  Plain Colour while the RPC reported success.
+
+The through-line: each was found by TRACING the boundary — wire bytes, process
+state, a grep for a field nobody reads — never by reading code, and each was
+invisible to the suite because the suite asserted on return values that were
+cheerfully correct.
+
+New in this release: a standalone `nowplaying` crate (macOS MediaRemote album
+art as real bytes, replacing AppleScript + iTunes-Search guessing), media-player
+discovery, `now_playing` / `players` / `weather` daemon RPCs, `install.sh`
+(self-contained bundle to /Applications), protocol versioning and capability
+negotiation, and a daemon version guard that restarts a stale daemon instead of
+silently talking to it.
+
+Six new structural gates: `check_scripts`, `check_positional_args`,
+`check_weather_parity`, `check_version_consistency`, plus the hardware harness
+(`scripts/hw_e2e.py`) that asserts on the wire trace rather than on RPC success.
+
+Python 2912 / 0 failed / 94 skipped. Rust 244 / 0.
+
+### Weather, and a virtual wall that never worked
 
 **Weather (C2's remaining half).** The Rust and Python WMO tables were diffed
 FIRST and agree on all 48 codes — unlike now-playing, this duplication had not
@@ -35,7 +65,7 @@ Also: `parse_hex_color` existed in three copies, now one.
 
 Python 2904 / 0 failed / 94 skipped. Rust 243 / 0.
 
-## Unreleased — R67 Phase 2: the album-art library (2026-08-29)
+### The album-art library
 
 Now-playing and cover art move to a standalone `nowplaying` crate built on macOS
 MediaRemote. This closes C2 for music and dissolves C3 entirely.
@@ -84,7 +114,7 @@ of TIFF cover art, streamed to the panel; and the same through the installed
 
 Python 2926 / 94 skipped. Rust 196 / 0.
 
-## Unreleased — R67: live-system defect round (2026-08-29)
+### The seven classes
 
 Six user-reported symptoms, traced to **seven classes** rather than seven
 patches. Full analysis in `docs/PLANNING_ROUND67.md`.

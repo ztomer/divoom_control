@@ -1,6 +1,6 @@
 [package]
 name = "divoomd"
-version = "0.26.0"
+version = "0.27.0"
 edition = "2021"
 description = "Native (Rust) port of the Divoom daemon — built in parallel to the Python daemon, which stays ground truth."
 publish = false
