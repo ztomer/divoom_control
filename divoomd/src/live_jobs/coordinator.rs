@@ -94,7 +94,16 @@ impl LiveJobCoordinator {
             "sysmon" => tokio::spawn(super::run_sysmon(daemon_weak, mac_clone, params_clone)),
             "stocks" => tokio::spawn(super::run_stocks(daemon_weak, mac_clone, params_clone)),
             "weather" => tokio::spawn(super::run_weather(daemon_weak, mac_clone, params_clone)),
+            #[cfg(target_os = "macos")]
             "music" => tokio::spawn(super::run_music(daemon_weak, mac_clone, params_clone)),
+            // Known, but unavailable here — saying "unknown" would be a lie,
+            // and the caller could not tell a typo from a platform limit.
+            #[cfg(not(target_os = "macos"))]
+            "music" => {
+                return Err("the music live job needs macOS MediaRemote for \
+                            now-playing and album art"
+                    .to_string())
+            }
             _ => return Err(format!("unknown live job kind: {}", kind)),
         };
 

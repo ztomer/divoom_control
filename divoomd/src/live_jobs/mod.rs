@@ -6,6 +6,12 @@ use crate::daemon::{Daemon, DeviceTransport};
 
 mod coordinator;
 mod health;
+/// macOS-only: it reads now-playing through the `nowplaying` crate, which is
+/// itself a macOS-only dependency of this crate (MediaRemote does not exist
+/// elsewhere). Gating the MODULE rather than sprinkling cfgs inside it keeps
+/// the Linux build honest — R67 briefly broke it by leaving the call sites
+/// unguarded after the macOS-only helpers were introduced.
+#[cfg(target_os = "macos")]
 mod music_job;
 mod render;
 

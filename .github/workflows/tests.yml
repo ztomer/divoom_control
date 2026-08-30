@@ -22,7 +22,17 @@ jobs:
         with:
           python-version: "3.14"
       - name: Check for disallowed emoji
-        run: python3 "$GITHUB_WORKSPACE/goh/checks/check_no_emoji.py"
+        # R67: CI used to invoke the goh checker DIRECTLY while the local gate
+        # went through scripts/house_emoji_gate.sh, which passes the repo's
+        # GOH_EXCLUDE from .gatesrc. So CI scanned docs/divoom_docs/ — captured
+        # third-party Divoom API responses full of emoji — and local did not.
+        # The local gate was WEAKER than CI's, which is the house trap in its
+        # documented direction, and it is why this job had been red since
+        # 2026-08-23 while every local run said green.
+        #
+        # Both sides now run the SAME wrapper with the SAME config. A gate whose
+        # two invocations disagree is not one gate.
+        run: GOH_DIR="$GITHUB_WORKSPACE/goh" ./scripts/house_emoji_gate.sh
       - name: Check source files within 500-line house limit
         run: python3 tools/check_file_size.py
       # R67: these ran ONLY in the local gate list, so local and CI disagreed
