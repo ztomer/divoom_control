@@ -4,6 +4,125 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## v0.28.1 — Opening the GUI killed the daemon (2026-08-30)
+
+Found by doing the thing the v0.28.0 handoff said nobody had done: launching
+the real app against a real daemon and clicking the System Monitor widget.
+Three defects, in descending order of severity, none of which any test saw.
+
+### The daemon died when you asked what was playing
+
+`now_playing` and `players` call `nowplaying::current_track()`, which on the
+Feishin path builds a `reqwest::blocking::Client`. That client owns a private
+tokio runtime, and dropping a runtime inside an async context does not return an
+error — it panics on a runtime worker thread and **aborts the process**:
+
+```
+thread 'tokio-rt-worker' panicked at tokio/runtime/blocking/shutdown.rs:
+Cannot drop a runtime in a context where blocking is not allowed.
+```
+
+So the daemon did not fail the request, it **exited**, leaving its socket file
+behind so every later call got `Connection refused`. The GUI asks `now_playing`
+on load, and the Feishin path is taken whenever MediaRemote reports nothing
+playing **or only something paused** — the ordinary idle case. Opening the app
+with music paused killed the background service.
+
+`live_jobs` already called this family through `spawn_blocking`; these two
+command handlers did not. One entry point observed the rule and two skipped it,
+which is why nothing caught it: every test that exercised the live job was fine.
+
+Both handlers are now `async` and reach the blocking probe only through a single
+offload helper, so there is no synchronous entry point left to misuse. A panic
+inside the probe is now contained and reported instead of fatal.
+
+**The existing tests called the crashing function and could not see the crash.**
+They were plain `#[test]`, so they ran it with no runtime active — the one
+context where dropping a nested runtime is legal. They are `#[tokio::test]` now.
+The new regression test drops a nested runtime through the helper, reproducing
+the mechanism with no network and no Feishin install, so it is deterministic
+everywhere; the real trigger needs Feishin credentials present and would never
+have fired in CI.
+
+### The System Monitor card was frozen
+
+Clicking it selected it for about 250ms. A background reconciler
+(`restoreActiveWidgetForDevice`) polls the device's live-job list and used to
+force `selectedWidget = "music"` whenever no job was running — which is the
+normal state before a device is connected, i.e. exactly when someone is clicking
+around the widgets. The Live (5s) refresh only runs while its own widget is
+selected, so the card sat on the single reading it managed before being
+deselected, with its Live toggle still showing ON.
+
+Measured against the real page at 250ms resolution: true at 0ms, false at 250ms,
+numbers never moved again.
+
+The reconciler now ADOPTS a running job (its actual purpose) and leaves the
+selection alone when there is none. A running job is real state; "no job" is not
+evidence about what the user wants.
+
+### An unreachable daemon looked like a healthy idle machine
+
+The card's refresh did `if (!r.ok) return;` — silently. With the daemon gone it
+kept the last numbers on screen and the last frame beside them, so a dead
+service was indistinguishable from a quiet CPU. It now blanks the gauges, hides
+the frame, and says what is wrong.
+
+It says it in words: the transport marks unreachability with a FIELD
+(`unreachable`) rather than leaving callers to match on `[Errno 2] No such file
+or directory`, and the message prefers the daemon's own `<socket>.failure`
+report — the reason it recorded when it could not take the socket. That sidecar
+was built in v0.28.0 and this is the first thing to read it in the widget path.
+
+### Three test-harness defects the version bump flushed out
+
+Bumping to 0.28.1 made every stale binary mismatch its tree, which turned a
+class of silent wrongness into loud errors. All three were pre-existing.
+
+* **Binary resolution was inconsistent in three places** — release-only,
+  debug-then-release, and newest-first — and `target/release` is a trap: nothing
+  in this repo rebuilds it except cutting a release, so any test preferring it
+  silently exercised whatever version last shipped. v0.28.0 fixed ONE of these
+  and did not grep for siblings, which is the same half-fix this release
+  criticises `check_no_allow` for. All of them now go through
+  `tests/support/daemon_binary.py`, which picks the most recently built binary
+  AND asserts the running daemon's version, because recency alone still runs a
+  stale artifact when it happens to be newest.
+
+* **A version-mismatch failure leaked its daemon.** The assertion added in
+  v0.28.0 ran inside a fixture's `__init__`, so raising meant the object was
+  never returned and teardown never ran — the daemon kept the socket and its
+  advisory startup lock, and the next three tests died with "another divoomd is
+  starting up". One honest failure became four misleading ones. It tears down
+  before failing now.
+
+* **A fixture handed the daemon a REGULAR FILE as its socket path.**
+  `NamedTemporaryFile` creates the file; the daemon refuses to unlink a regular
+  file on purpose (it may be data someone cares about). Correct behaviour, and
+  the daemon said so precisely — in stderr piped to `DEVNULL` and in the
+  `<socket>.failure` sidecar nobody read. The fixture now uses a path that does
+  not exist, and its wait reports the daemon's own recorded reason instead of
+  "never came up".
+
+### A cross-channel race, exposed by the camoufox migration
+
+`test_real_event_relay_degraded_then_disconnected` waited on a DOM class and
+then asserted on the daemon's event stream — two channels with no ordering
+between them. It was always racy and simply kept winning while
+`wait_for_function` was the waiter; polling `evaluate` returns a few tens of ms
+sooner and it started losing consistently, with `disconnected` landing ~0.1s
+after the assertion. It now waits on the channel it asserts about.
+
+### Also
+
+* `divoom_gui/media_sync.py` and `web_ui/widgets.js` both crossed the 500-line
+  gate; the System Monitor card moved to `sysmon_widget.py` and
+  `widgets_sysmon.js`, matching the existing `widgets_music.js` split.
+* The GUI reads the daemon's `<socket>.failure` report from the socket the
+  CLIENT is using, not from an environment guess — otherwise a session started
+  with `--socket` silently falls back to the generic message, exactly when the
+  specific one would help most.
+
 ## v0.28.0 — R68: the gates that were wrong, and a rule nobody could break (2026-08-30)
 
 **v0.27.0 was written but never tagged.** CI had been red for six consecutive

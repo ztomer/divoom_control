@@ -300,3 +300,15 @@ input:checked + .slider-round:before {
     margin-top: 4px;
 }
 
+
+/* Sysmon "cannot read this right now" note. Deliberately quiet but present:
+   an unavailable widget must be distinguishable from an idle one, and the
+   previous behaviour -- silently keeping the last numbers on screen -- made a
+   dead daemon look like a healthy machine at 0% load. */
+.sysmon-unavailable {
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1.4;
+    text-align: center;
+    margin-top: 2px;
+}

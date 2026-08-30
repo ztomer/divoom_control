@@ -131,11 +131,10 @@ def test_rust_set_routing(rust_daemon_ctx):
 def test_rust_tcp_token_auth():
     # Locate the compiled Rust binary
     repo_root = Path(__file__).parent.parent
-    bin_path = repo_root / "target" / "debug" / "divoomd"
-    if not bin_path.exists():
-        bin_path = repo_root / "target" / "release" / "divoomd"
-    if not bin_path.exists():
-        pytest.skip(f"Rust binary not found at {bin_path}. Run cargo build first.")
+    # Newest-built, not first-found: see tests/support/daemon_binary.py
+    from tests.support.daemon_binary import require_divoomd
+
+    bin_path = require_divoomd()
 
     sp = f"/tmp/divoomd_parity_tcp_{os.getpid()}.sock"
     if os.path.exists(sp):
@@ -203,11 +202,10 @@ def test_rust_tcp_token_auth():
 def test_rust_default_mac():
     # Locate the compiled Rust binary
     repo_root = Path(__file__).parent.parent
-    bin_path = repo_root / "target" / "debug" / "divoomd"
-    if not bin_path.exists():
-        bin_path = repo_root / "target" / "release" / "divoomd"
-    if not bin_path.exists():
-        pytest.skip(f"Rust binary not found at {bin_path}. Run cargo build first.")
+    # Newest-built, not first-found: see tests/support/daemon_binary.py
+    from tests.support.daemon_binary import require_divoomd
+
+    bin_path = require_divoomd()
 
     sp = f"/tmp/divoomd_parity_mac_{os.getpid()}.sock"
     if os.path.exists(sp):

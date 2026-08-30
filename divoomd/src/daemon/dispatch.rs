@@ -204,11 +204,11 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
         // R67/C2: the ONE place "what is playing?" is answered. The GUI used to
         // answer it a second time in Python, which is why the GUI was the
         // process asking for Apple Music access.
-        "now_playing" => crate::now_playing::cmd_now_playing(&req.args),
+        "now_playing" => crate::now_playing::cmd_now_playing(&req.args).await,
 
         // Registration is not playback: a paused player keeps the session, so
         // "who is out there" and "who is playing" are separate questions.
-        "players" => crate::now_playing::cmd_players(&req.args),
+        "players" => crate::now_playing::cmd_players(&req.args).await,
 
         // One weather reading, shared by the preview card and the device push.
         "weather" => crate::now_playing::cmd_weather(&req.args).await,

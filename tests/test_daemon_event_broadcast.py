@@ -27,36 +27,72 @@ if str(_REPO) not in sys.path:
 
 from divoom_client.daemon_protocol import DaemonClient  # noqa: E402
 
-_DIVOOMD = _REPO / "target" / "release" / "divoomd"
+# Resolved centrally: `target/release` is stale unless a release was just
+# cut, and preferring it silently tested old code. See tests/support/daemon_binary.py
+from tests.support.daemon_binary import find_divoomd
 
 
-def _wait_for_socket(path: Path, timeout: float = 10.0) -> None:
+def _wait_for_socket(path: Path, timeout: float = 10.0, proc=None) -> None:
+    """Wait for the daemon to bind, and say WHY when it does not.
+
+    "never came up" is not a diagnosis. The daemon records the reason it could
+    not take the socket in `<socket>.failure` (that sidecar exists exactly so a
+    client can turn "no daemon" into an explanation), and it prints the same
+    thing to stderr. Reporting neither cost an afternoon: the fixture below used
+    to hand the daemon a path where `NamedTemporaryFile` had already created a
+    REGULAR FILE, and the daemon -- correctly, and by explicit design -- refuses
+    to delete one of those. It said so clearly and nobody was listening.
+    """
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-                s.settimeout(0.3)
+                s.settimeout(0.5)
                 s.connect(str(path))
-            return
+                return
         except OSError:
+            if proc is not None and proc.poll() is not None:
+                break
             time.sleep(0.1)
-    raise RuntimeError(f"daemon socket {path} never came up")
+    raise RuntimeError(
+        f"daemon socket {path} never came up: {_why_no_daemon(path, proc)}")
+
+
+def _why_no_daemon(path: Path, proc=None) -> str:
+    """The daemon's own account of the failure, if it left one."""
+    failure = Path(f"{path}.failure")
+    if failure.exists():
+        return " / ".join(
+            line.strip() for line in failure.read_text().splitlines() if line.strip())
+    if proc is not None and proc.poll() is not None:
+        err = ""
+        try:
+            err = (proc.stderr.read() or "") if proc.stderr else ""
+        except Exception:
+            pass
+        return f"daemon exited with code {proc.returncode}: {err.strip()[:400]}"
+    return "no reason recorded"
 
 
 @pytest.fixture
 def mock_daemon():
     """Spawn the real daemon (release binary) on a temp socket in mock mode."""
-    if not _DIVOOMD.exists():
-        pytest.skip(f"divoomd binary not built at {_DIVOOMD}")
-    sock = tempfile.NamedTemporaryFile(suffix=".sock", delete=False)
-    sock.close()
-    path = Path(sock.name)
+    _DIVOOMD = find_divoomd()
+    if _DIVOOMD is None:
+        pytest.skip("divoomd binary not built. Run: cargo build -p divoomd")
+    # A DIRECTORY plus a name that does not exist yet -- which is what a socket
+    # path actually is. `NamedTemporaryFile` CREATES a regular file, and the
+    # daemon refuses to unlink one of those on purpose: it may be data someone
+    # cares about, and guessing wrong is unrecoverable. That refusal is correct
+    # behaviour; handing it a pre-made file was the test's mistake.
+    tmpdir = tempfile.mkdtemp(prefix="divoomd_events_")
+    path = Path(tmpdir) / "daemon.sock"
     proc = subprocess.Popen(
         [str(_DIVOOMD), "--socket", str(path)],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
     )
     try:
-        _wait_for_socket(path)
+        _wait_for_socket(path, proc=proc)
         yield str(path)
     finally:
         proc.terminate()

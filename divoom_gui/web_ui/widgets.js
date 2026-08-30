@@ -111,35 +111,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     // ── 4. SYSTEM STATS MONITOR ──
-    function refreshSysmonPreview() {
-        if (!(window.pywebview && window.pywebview.api && window.pywebview.api.get_system_stats_preview)) return;
-        window.pywebview.api.get_system_stats_preview(0).then(json => {
-            try {
-                const r = JSON.parse(json);
-                if (!r.ok) return;
-                const s = r.stats || {};
-                // Update the three labeled bars (Kare: bitmap clarity, color-coded)
-                function setBar(stat, value) {
-                    const row = document.querySelector(`.sysmon-bar-row[data-stat="${stat}"]`);
-                    if (!row) return;
-                    const fill = row.querySelector(".sysmon-bar-fill");
-                    const text = row.querySelector(".sysmon-bar-value");
-                    const pct = value != null ? Math.max(0, Math.min(100, value)) : 0;
-                    if (fill) fill.style.width = `${pct}%`;
-                    if (text) text.textContent = value != null ? `${pct}%` : "n/a";
-                }
-                setBar("cpu", s.cpu);
-                setBar("mem", s.mem);
-                setBar("bat", s.battery);
-                const img = document.getElementById("sysmon-device-preview");
-                if (img && r.preview) { img.src = r.preview; img.style.display = "inline-block"; }
-                // R44 §7: when System Monitor is the active widget, mirror its
-                // frame into the lower-left device screen overlay too.
-                // R46 #2: mirror the sysmon frame as the device's last-active element.
-                if (r.preview && selectedWidget === "sysmon") window.markActiveDeviceFrame?.(r.preview);
-            } catch (e) { /* ignore */ }
-        });
-    }
+    // Rendering lives in widgets_sysmon.js; this file owns selection + the
+    // Live (5s) timer. Called through `window` so the split is explicit rather
+    // than depending on two files sharing a closure.
+    const refreshSysmonPreview = (...a) => window.refreshSysmonPreview?.(...a);
 
     // R40 §4: the "Push to Device" button was removed — the Live (5s) header
     // toggle is the single control (on = stream sysmon to the device).
@@ -211,15 +186,26 @@ document.addEventListener("DOMContentLoaded", () => {
             if (typeof resJson === "string") {
                 try { res = JSON.parse(resJson); } catch (e) {}
             }
-            if (res && res.success && res.jobs) {
-                const activeJob = res.jobs.find(j => !j.done && !j.cancelled);
-                if (activeJob) {
-                    selectedWidget = activeJob.kind;
-                } else {
-                    selectedWidget = "music";
-                }
-            } else {
-                selectedWidget = "music";
+            // ADOPT the device's truth; never OVERRIDE the user's choice.
+            //
+            // This used to force `selectedWidget = "music"` whenever the device
+            // had no live job — including 250ms after the user clicked System
+            // Monitor. The click set the selection, this poll took it straight
+            // back, and because the Live (5s) timer only runs while its widget
+            // is selected, the card then sat frozen on whatever it read once.
+            // Traced at 250ms resolution: true at 0ms, false at 250ms, and the
+            // numbers never moved again.
+            //
+            // A running job is real state worth adopting. "No job running" is
+            // NOT evidence the user wants cover art — most often it just means
+            // no device is connected yet, which is exactly when someone is
+            // clicking around the widgets. House rule: resolve user intent at
+            // interaction time, and never silently swallow a click.
+            const activeJob = (res && res.success && res.jobs)
+                ? res.jobs.find(j => !j.done && !j.cancelled)
+                : null;
+            if (activeJob) {
+                selectedWidget = activeJob.kind;
             }
             const cards = ["music", "stock", "sysmon", "weather", "notif-manual", "notif-mirror"];
             cards.forEach(id => {

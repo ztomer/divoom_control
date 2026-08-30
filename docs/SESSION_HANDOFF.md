@@ -20,6 +20,41 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-08-30 (v0.28.1) — the GUI was exercised for real, and it killed the
+  daemon.** v0.28.0 shipped with "nobody has launched the app and clicked it"
+  recorded as the open risk. Doing that found three defects in one sitting.
+
+  * **`now_playing`/`players` ABORTED the daemon.** `nowplaying::current_track()`
+    builds a `reqwest::blocking::Client` on the Feishin path; that client owns a
+    private tokio runtime, and dropping a runtime in an async context panics on
+    a worker thread and kills the process. The GUI asks `now_playing` on load,
+    and the Feishin path is taken whenever nothing is playing OR something is
+    merely PAUSED — so opening the app with music paused killed the background
+    service, which then left its socket behind. Both handlers are now `async`
+    and reach the blocking probe only through one `spawn_blocking` helper.
+    **`live_jobs` had always done this correctly**; only the two command
+    handlers skipped it.
+  * **The System Monitor card was frozen.** `restoreActiveWidgetForDevice` reset
+    `selectedWidget` to "music" whenever the device had no live job, ~250ms
+    after any click. The Live (5s) timer only runs while its widget is selected.
+    It now adopts a running job and otherwise leaves the selection alone.
+  * **A dead daemon looked like an idle machine.** The refresh returned silently
+    on failure, leaving stale numbers up. It now blanks them and says why, using
+    the `<socket>.failure` report the daemon writes, surfaced via a new
+    `unreachable` field on the transport rather than errno string-matching.
+
+  **How they hid:** the now-playing tests called the crashing function as plain
+  `#[test]`, i.e. with no runtime running — the one context where the bug is
+  impossible. They are `#[tokio::test]` now, and the new regression test drops a
+  nested runtime through the helper so it reproduces the mechanism with no
+  network and no Feishin install (the real trigger needs Feishin credentials and
+  would never fire in CI).
+
+  **Harness worth reusing:** `tests/e2e_gui_bridge.py` + camoufox drives the
+  REAL GUI backend against a REAL daemon. That is what found all three. Any
+  future "does the app actually work" question should start there.
+
+
 - **2026-08-30 (R68) — v0.28.0 SHIPPED.** Tagged at `6d08e4b` on a green CI
   (run 33312022508), GitHub release published with
   `Divoom-v0.28.0.dmg` (sha256 `2a20bb63...`), Homebrew cask bumped and
@@ -27,13 +62,10 @@ shared memory. Read this on entry and **update it at the end of every round**
   This release carries R67's work too — v0.27.0 was written but never tagged,
   because CI had been red for six consecutive runs.
 
-  **Not yet validated by a human:** the sysmon GUI path changed (the preview and
-  apply buttons now go through the new `sysmon` daemon RPC instead of rendering
-  in Python). It is verified by mocks and by a socket-level probe against a real
-  daemon, but nobody has launched the app and clicked it. Published at the
-  user's explicit instruction after that was flagged. **First thing worth doing
-  next session:** open the GUI, click the system-monitor widget, confirm the
-  tile shows live gauges and Apply pushes them.
+  **That validation happened, and it found three bugs** — see the v0.28.1 entry
+  above. The sysmon path itself was correct; what was broken around it was worse
+  than what was changed. Flagging the gap was right; shipping before closing it
+  is what put a daemon-killing bug in a published DMG for a few hours.
 
 - **2026-08-30 (R68, v0.28.0) — the six-run CI red is cleared; four things
   fixed, two of them gates that were wrong about their own subject.**

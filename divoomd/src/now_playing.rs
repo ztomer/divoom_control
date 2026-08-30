@@ -18,6 +18,8 @@
 
 use serde_json::{json, Value};
 
+use crate::protocol::err_reply;
+
 /// Handle `weather` — one reading, from the source the device is pushed.
 ///
 /// R67/C2: the GUI used to fetch weather itself through
@@ -45,6 +47,46 @@ pub async fn cmd_weather(args: &Value) -> Value {
     }
 }
 
+/// Run a blocking now-playing probe OFF the async runtime.
+///
+/// # Why this is not optional
+///
+/// `nowplaying::current_track()` and `nowplaying::players()` are synchronous,
+/// and on the Feishin path they build a `reqwest::blocking::Client`. That
+/// client owns a private tokio runtime, and dropping a runtime from inside an
+/// async context does not return an error — it PANICS, and the panic lands on a
+/// runtime worker thread, which aborts the whole process:
+///
+/// ```text
+/// thread 'tokio-rt-worker' panicked at tokio/src/runtime/blocking/shutdown.rs:
+/// Cannot drop a runtime in a context where blocking is not allowed.
+/// ```
+///
+/// So the daemon did not merely fail the request — it DIED, leaving its socket
+/// file behind, and every subsequent client call got `Connection refused`.
+/// Reproduced by opening the GUI: it asks `now_playing` on load, and the
+/// Feishin path is taken whenever MediaRemote reports nothing playing or only
+/// something paused, which is the ordinary idle case.
+///
+/// `live_jobs` already called this family through `spawn_blocking`; these two
+/// command handlers did not. One entry point observed the rule and two skipped
+/// it, which is why the crash was invisible to every test that exercised the
+/// live job rather than the command.
+///
+/// Returning through here makes the offload the ONLY way in: both handlers are
+/// `async` and hold no synchronous entry point a caller could reach past.
+async fn blocking_now_playing<F>(f: F) -> Value
+where
+    F: FnOnce() -> Value + Send + 'static,
+{
+    match tokio::task::spawn_blocking(f).await {
+        Ok(v) => v,
+        // A panic inside the closure is now contained: the task dies, the
+        // daemon does not, and the caller is told rather than dropped.
+        Err(e) => err_reply(&format!("now-playing probe failed: {e}")),
+    }
+}
+
 /// Handle `players` — who is out there, and who is actually playing.
 ///
 /// R67: `now_playing` returns the ONE session macOS considers current, and
@@ -52,7 +94,14 @@ pub async fn cmd_weather(args: &Value) -> Value {
 /// playing Feishin look silent, and nothing in the reply could distinguish
 /// "Feishin is not playing" from "Feishin was never visible". This separates
 /// registration from playback and names the players.
-pub fn cmd_players(_args: &Value) -> Value {
+pub async fn cmd_players(_args: &Value) -> Value {
+    // OFFLOADED, and that is not optional -- see `blocking_now_playing`.
+    // `nowplaying::players()` probes Feishin, which builds a
+    // `reqwest::blocking::Client`.
+    blocking_now_playing(players_blocking).await
+}
+
+fn players_blocking() -> Value {
     #[cfg(target_os = "macos")]
     {
         let players: Vec<Value> = nowplaying::players()
@@ -95,12 +144,16 @@ pub fn cmd_players(_args: &Value) -> Value {
 /// Reply shape is deliberately explicit about the three different "no track"
 /// cases, because they need different UI: unavailable (say why), nothing
 /// playing (idle), and an error (say what failed).
-pub fn cmd_now_playing(args: &Value) -> Value {
+pub async fn cmd_now_playing(args: &Value) -> Value {
     let include_artwork = args
         .get("include_artwork")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
+    // OFFLOADED -- see `blocking_now_playing`.
+    blocking_now_playing(move || now_playing_blocking(include_artwork)).await
+}
 
+fn now_playing_blocking(include_artwork: bool) -> Value {
     #[cfg(target_os = "macos")]
     {
         if let Some(reason) = nowplaying::unavailable() {
@@ -177,10 +230,14 @@ fn track_to_json(track: &nowplaying::Track, include_artwork: bool) -> Value {
 mod tests {
     use super::*;
 
-    #[test]
-    fn artwork_is_withheld_unless_asked_for() {
+    // These are `#[tokio::test]`, not `#[test]`, and that is load-bearing.
+    // As plain sync tests they called `cmd_now_playing` with NO runtime
+    // running -- the one context where dropping a nested runtime is legal --
+    // so they exercised the crashing function and could never see the crash.
+    #[tokio::test]
+    async fn artwork_is_withheld_unless_asked_for() {
         // A live widget polls this; 360KB of base64 per tick is not free.
-        let reply = cmd_now_playing(&json!({}));
+        let reply = cmd_now_playing(&json!({})).await;
         assert!(reply["success"].as_bool().unwrap_or(false) || reply.get("error").is_some());
         assert!(
             reply.get("artwork_b64").is_none(),
@@ -188,11 +245,11 @@ mod tests {
         );
     }
 
-    #[test]
-    fn the_reply_always_distinguishes_unavailable_from_idle() {
+    #[tokio::test]
+    async fn the_reply_always_distinguishes_unavailable_from_idle() {
         // Three different "no track" states need three different UI responses;
         // collapsing them is how a dead feature looks identical to a quiet one.
-        let reply = cmd_now_playing(&json!({}));
+        let reply = cmd_now_playing(&json!({})).await;
         assert!(reply.get("available").is_some(), "must state availability");
         assert!(
             reply.get("playing").is_some(),
@@ -204,6 +261,56 @@ mod tests {
                 "an unavailable source must say WHY"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn a_nested_runtime_can_be_dropped_inside_the_offload() {
+        // THE regression. `nowplaying`'s Feishin path builds a
+        // `reqwest::blocking::Client`, which owns a private tokio runtime.
+        // Dropping a runtime from an async context does not error -- it panics
+        // on a runtime worker thread and ABORTS THE PROCESS, so the daemon died
+        // and left its socket behind whenever the GUI asked what was playing
+        // and nothing was actively playing.
+        //
+        // A nested runtime reproduces the mechanism exactly, with no network
+        // and no Feishin install, so this is deterministic on every machine --
+        // unlike the real trigger, which needs Feishin credentials present and
+        // would therefore never fire in CI.
+        //
+        // If someone removes the `spawn_blocking`, this does not fail politely:
+        // it aborts the test binary. That is the correct volume for a defect
+        // that aborts the daemon.
+        let reply = blocking_now_playing(|| {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .build()
+                .expect("nested runtime");
+            drop(rt);
+            json!({"success": true, "dropped": true})
+        })
+        .await;
+        assert_eq!(reply["dropped"], json!(true));
+    }
+
+    #[tokio::test]
+    async fn a_panic_in_the_probe_is_reported_not_fatal() {
+        // Containment, not just avoidance: whatever the probe does, the daemon
+        // answers the client instead of vanishing mid-request.
+        let reply = blocking_now_playing(|| panic!("probe exploded")).await;
+        assert_eq!(reply["success"], json!(false));
+        assert!(
+            reply["error"]
+                .as_str()
+                .unwrap_or("")
+                .contains("now-playing"),
+            "the caller should be told which probe failed: {reply}"
+        );
+    }
+
+    #[tokio::test]
+    async fn players_survives_the_same_offload() {
+        let reply = cmd_players(&json!({})).await;
+        assert_eq!(reply["success"], json!(true));
+        assert!(reply.get("players").is_some(), "must list players");
     }
 
     #[cfg(target_os = "macos")]

@@ -159,7 +159,14 @@ class DaemonClient(HostDataMixin):
                      *, read_timeout: float | None = None,
                      connect_retries: int = DEFAULT_CONNECT_RETRIES) -> dict:
         """One-shot request/response. Returns the daemon's reply dict, or
-        ``{"success": False, "error": ...}`` if the daemon isn't reachable.
+        ``{"success": False, "error": ..., "unreachable": True}`` if the daemon
+        isn't reachable.
+
+        ``unreachable`` marks a TRANSPORT failure — nothing was listening, the
+        path was gone, permission was denied — as opposed to a daemon that
+        answered and said no. Callers need that distinction to show a useful
+        message, and the only alternative is matching on ``error`` text, which
+        is not an API: a reworded errno would silently change their behaviour.
 
         ``read_timeout`` overrides the socket read timeout for this call — needed
         for long-running commands (e.g. ``scan``, whose reply only arrives after
@@ -183,10 +190,10 @@ class DaemonClient(HostDataMixin):
                                 CONNECT_RETRY_BASE_DELAY * (2 ** attempt))
                     time.sleep(delay)
                     continue
-                return {"success": False, "error": str(e)}
+                return {"success": False, "error": str(e), "unreachable": True}
             except (OSError, ValueError) as e:
                 # Non-transient connect failure (bad address, perms, …) — no retry.
-                return {"success": False, "error": str(e)}
+                return {"success": False, "error": str(e), "unreachable": True}
 
             try:
                 with s:
@@ -205,7 +212,8 @@ class DaemonClient(HostDataMixin):
             except (OSError, ValueError) as e:
                 return {"success": False, "error": str(e)}
         return {"success": False,
-                "error": str(last_err) if last_err else "daemon unreachable"}
+                "error": str(last_err) if last_err else "daemon unreachable",
+                "unreachable": True}
 
     def device_call(self, method: str, args: list | None = None,
                     kwargs: dict | None = None, *, target: str = "device",

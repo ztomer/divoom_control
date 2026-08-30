@@ -62,6 +62,13 @@ def test_from_env_defaults_to_local_socket_without_host(monkeypatch):
 
 
 # ── send_command: non-transient failure + defensive fallback ──────────────
+#
+# `unreachable: True` rides along on every TRANSPORT failure. It is asserted
+# here rather than ignored because it is the field callers branch on to tell
+# "nothing was listening" from "the daemon answered and said no" — the GUI shows
+# a human sentence for the first and the daemon's own words for the second.
+# Matching on `error` text instead would make a reworded errno a silent
+# behaviour change.
 
 
 def test_send_command_nontransient_connect_error_is_not_retried(monkeypatch):
@@ -76,7 +83,7 @@ def test_send_command_nontransient_connect_error_is_not_retried(monkeypatch):
 
     monkeypatch.setattr(c, "_connect", bad_connect)
     reply = c.send_command("ping", connect_retries=3)
-    assert reply == {"success": False, "error": "denied"}
+    assert reply == {"success": False, "error": "denied", "unreachable": True}
     assert calls["n"] == 1, "a non-transient connect error must not be retried"
 
 
@@ -88,7 +95,7 @@ def test_send_command_value_error_from_connect_is_not_retried(monkeypatch):
 
     monkeypatch.setattr(c, "_connect", bad_connect)
     reply = c.send_command("ping")
-    assert reply == {"success": False, "error": "bad address"}
+    assert reply == {"success": False, "error": "bad address", "unreachable": True}
 
 
 def test_send_command_zero_attempts_hits_defensive_fallback():
@@ -97,7 +104,7 @@ def test_send_command_zero_attempts_hits_defensive_fallback():
     still produce a clean error dict (not a NameError on an unset last_err)."""
     reply = DaemonClient("/tmp/divoom_cov_unused.sock").send_command(
         "ping", connect_retries=-1)
-    assert reply == {"success": False, "error": "daemon unreachable"}
+    assert reply == {"success": False, "error": "daemon unreachable", "unreachable": True}
 
 
 # ── thin wrapper methods: delegate to send_command with the right shape ───

@@ -108,6 +108,12 @@ window.DivoomTemplates.widgets = `                <div class="grid-layout three-
                                     <b class="sysmon-bar-value text-error" id="sysmon-bat">–</b>
                                 </div>
                             </div>
+                            <!-- Honest unavailable state. These readings come
+                                 from the daemon (same source the device is
+                                 pushed), so when it cannot answer the card must
+                                 SAY SO rather than leave the last numbers up
+                                 looking live. -->
+                            <div class="sysmon-unavailable" id="sysmon-unavailable" style="display:none;"></div>
                         </div>
                     </div>
 

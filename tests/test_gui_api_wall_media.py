@@ -165,7 +165,58 @@ class TestGuiApiWallMedia(GuiApiTestBase):
         with patch.object(type(self.api), "_client", lambda self: None):
             prev = json.loads(self.api.get_system_stats_preview(16))
             self.assertFalse(prev["ok"])
-            self.assertIn("daemon", prev["error"])
+            self.assertIn("background service", prev["error"])
+
+    def test_unreachable_daemon_gets_a_sentence_not_an_errno(self):
+        """`[Errno 2] No such file or directory` in a widget card is noise.
+
+        The transport marks unreachability with a FIELD (`unreachable`), so the
+        GUI can say something human without matching on error text.
+        """
+        client = MagicMock()
+        client.sysmon.return_value = {
+            "success": False,
+            "error": "[Errno 2] No such file or directory",
+            "unreachable": True,
+        }
+        with patch.object(type(self.api), "_client", lambda self: client):
+            prev = json.loads(self.api.get_system_stats_preview(16))
+        self.assertFalse(prev["ok"])
+        self.assertNotIn("Errno", prev["error"], "raw errno must not reach the card")
+        self.assertIn("background service", prev["error"])
+
+    def test_the_failure_reason_is_read_from_the_clients_own_socket(self):
+        """The `<socket>.failure` sidecar lives next to the socket in USE.
+
+        Reading it from an env-var guess means a session started with --socket
+        silently falls back to the generic message, exactly when the specific
+        one would help most.
+        """
+        import tempfile
+        from pathlib import Path as _P
+        sock = _P(tempfile.mkdtemp()) / "custom.sock"
+        sock.with_suffix(".sock.failure").write_text(
+            "reason: /tmp/custom.sock is a regular file, not a socket\n"
+            "remedy: Move or delete that file yourself, then start the daemon again.\n"
+            "transient: false\n")
+        client = MagicMock()
+        client.socket_path = str(sock)
+        client.sysmon.return_value = {"success": False, "error": "[Errno 2]",
+                                      "unreachable": True}
+        with patch.object(type(self.api), "_client", lambda self: client):
+            prev = json.loads(self.api.get_system_stats_preview(16))
+        self.assertFalse(prev["ok"])
+        self.assertIn("not a socket", prev["error"],
+                      "the daemon's own recorded reason should reach the card")
+
+    def test_a_daemon_level_error_is_surfaced_verbatim(self):
+        """The opposite case: the daemon ANSWERED, so use its words, not ours."""
+        client = MagicMock()
+        client.sysmon.return_value = {"success": False, "error": "sysmon is disabled"}
+        with patch.object(type(self.api), "_client", lambda self: client):
+            prev = json.loads(self.api.get_system_stats_preview(16))
+        self.assertFalse(prev["ok"])
+        self.assertEqual(prev["error"], "sysmon is disabled")
 
     @patch("urllib.request.urlopen")
     def test_fetch_gallery_and_batch_sync(self, mock_urlopen):

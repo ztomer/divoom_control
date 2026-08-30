@@ -89,31 +89,12 @@ def _free_port() -> int:
 
 
 def _find_rust_binary() -> Path | None:
-    """The most recently BUILT divoomd, not the first one that happens to exist.
+    """The most recently BUILT divoomd. See tests/support/daemon_binary.py for
+    why `target/release` must not simply win: nothing here rebuilds it, so a
+    leftover release binary silently became the daemon under test."""
+    from tests.support.daemon_binary import find_divoomd
 
-    This used to prefer `target/release` unconditionally. Nothing in the repo
-    rebuilds a release binary -- `cargo build` and CI both produce `debug` --
-    so a release build left over from a past `build_release.sh` silently became
-    "the daemon under test" forever after, however old it was.
-
-    That is not a stale-cache annoyance, it is the harness measuring the wrong
-    thing while reporting confidently. It surfaced when a version bump made the
-    leftover 0.27.0 release binary mismatch the client's expectation: the client
-    version guard did its job and asked the "stale daemon" to exit, the socket
-    vanished mid-test, and two tests failed with `[Errno 2] No such file or
-    directory` -- which reads like a socket bug and cost a bisect to trace back
-    to a file nobody had thought about. It could equally have gone the other
-    way and passed a test against code that was never built.
-
-    Newest-by-mtime, plus the version assertion in `_IsolatedStack`, means the
-    harness now either tests the current daemon or says plainly that it cannot.
-    """
-    candidates = [REPO_ROOT / "target" / folder / "divoomd"
-                  for folder in ("release", "debug")]
-    built = [c for c in candidates if c.exists()]
-    if not built:
-        return None
-    return max(built, key=lambda c: c.stat().st_mtime)
+    return find_divoomd()
 
 
 class _IsolatedStack:
@@ -146,30 +127,16 @@ class _IsolatedStack:
         self._assert_daemon_is_current(bin_path)
 
     def _assert_daemon_is_current(self, bin_path: Path) -> None:
-        """Fail LOUDLY if the spawned daemon is not the version this tree expects.
+        """Fail loudly, and CLEAN UP FIRST, if the daemon is not this version.
 
-        `DaemonClient` restarts a daemon whose version does not match, which is
-        correct behaviour and catastrophic for a test: the daemon these tests
-        spawned gets stopped underneath them and every later call fails with a
-        bare `[Errno 2]`. The cause -- "the binary is old" -- appears nowhere in
-        that message.
-
-        Checked once, at setup, where it can name both versions and the fix.
+        `self.close` is passed as the teardown: this runs inside `__init__`, so
+        raising without it leaves the daemon holding the shared socket path and
+        its advisory startup lock, and the next three tests die with "another
+        divoomd is starting up" instead of the actual reason.
         """
-        from divoom_client.daemon_version import expected_daemon_version
+        from tests.support.daemon_binary import assert_daemon_is_current
 
-        expected = expected_daemon_version()
-        if not expected:
-            return  # unknown expectation never justifies failing the run
-        reply = self.client.send_command("get_status", {})
-        running = (reply or {}).get("daemon_version")
-        if running != expected:
-            pytest.fail(
-                f"{bin_path} reports daemon_version {running!r}, but this tree "
-                f"expects {expected!r}. The client's version guard will stop it "
-                f"mid-test and the failures will look like socket errors. "
-                f"Rebuild: cargo build -p divoomd"
-            )
+        assert_daemon_is_current(self.client, bin_path, on_mismatch=self.close)
 
     def _wait_for_socket(self, path: str, timeout: float = 5.0) -> None:
         deadline = time.monotonic() + timeout
@@ -325,6 +292,22 @@ async def test_real_connect_then_refresh_shows_active_dot(gui_daemon_stack):
             await browser.close()
 
 
+async def _wait_for_status_settled(relay, expected: str, timeout: float = 5.0):
+    """Wait until the relay's LAST status event is `expected`; return the states.
+
+    Returns rather than asserts so the caller keeps its own failure message,
+    and times out with the states it did see so a failure is readable.
+    """
+    deadline = asyncio.get_running_loop().time() + timeout
+    states: list = []
+    while asyncio.get_running_loop().time() < deadline:
+        states = [ev.get("state") for ev in relay.received if ev.get("type") == "status"]
+        if states and states[-1] == expected:
+            return states
+        await asyncio.sleep(0.05)
+    return states
+
+
 def _simulate_drop_or_skip(stack):
     """Send mock_simulate_drop, skipping if the native daemon hasn't implemented
     it yet. It's the hardware-free drop hook these tests hang on; without it
@@ -400,7 +383,17 @@ async def test_real_event_relay_degraded_then_disconnected(gui_daemon_stack):
                 "() => document.getElementById('global-status-dot')"
                 ".className === 'transport-dot inactive'", timeout=4000)
 
-            states = [ev.get("state") for ev in relay.received if ev.get("type") == "status"]
+            # Wait on the channel this test actually asserts about.
+            #
+            # The DOM wait above says the PAGE reacted; it says nothing about
+            # when the daemon's event stream settles. Those are two separate
+            # channels with no ordering between them, so asserting on the
+            # stream straight after a DOM wait was always a race -- it simply
+            # happened to be won while `wait_for_function` was the waiter.
+            # Polling `evaluate` returns a few tens of ms sooner and the race
+            # started being lost, consistently: the last status was `degraded`
+            # and `disconnected` landed ~0.1s later.
+            states = await _wait_for_status_settled(relay, "disconnected")
             assert "degraded" in states, f"never saw a live degraded broadcast: {states}"
             assert states[-1] == "disconnected", f"did not settle disconnected: {states}"
         finally:

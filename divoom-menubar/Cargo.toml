@@ -1,6 +1,6 @@
 [package]
 name = "divoom-menubar"
-version = "0.28.0"
+version = "0.28.1"
 edition = "2021"
 description = "Native (Rust) menubar/tray agent for divoom-control. Talks to divoomd over the NDJSON socket, shows status + active devices, and launches the Python pywebview GUI. Replaced the pyobjc menubar, which was removed in R66 (2026-08-17)."
 publish = false
