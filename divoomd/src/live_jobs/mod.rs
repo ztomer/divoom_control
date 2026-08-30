@@ -17,6 +17,7 @@ mod render;
 
 pub use coordinator::LiveJobCoordinator;
 pub use health::{JobHealth, JobState};
+#[cfg(target_os = "macos")]
 use music_job::run_music;
 
 use render::{get_battery_percent, render_stock, render_sysmon};

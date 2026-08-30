@@ -19,7 +19,14 @@ GOH_LINE_EXCLUDE='docs/divoom_docs/'
 # WHAT MACOS-LOCAL CANNOT SEE: this machine is macOS. CI's rust-core and
 # rust-ble-linux jobs run on Ubuntu, so a Linux-only failure (missing GTK
 # toolchain, BlueZ/D-Bus headers) is invisible here — v0.23.0 shipped with a
-# red rust-core exactly that way. A green run means "the macOS-reachable jobs
+# red rust-core exactly that way.
+#
+# NARROWED (R67): scripts/check_linux_build.sh now cross-compiles divoomd for
+# Linux with zig, so the commonest Linux break — a macOS-only symbol (the
+# MediaRemote-backed `nowplaying` crate) referenced from shared code — is
+# caught HERE. R67 shipped that same break twice because no local instrument
+# could see it. Still NOT covered: anything behind `--all-features`, since the
+# `ble` feature needs Linux dbus headers zig cannot supply. A green run means "the macOS-reachable jobs
 # pass", never "CI would be green". release.sh's ci_gate checks the REAL CI
 # result for the commit being tagged; this list passing is a precondition for
 # that, not a replacement.
@@ -29,4 +36,4 @@ GOH_LINE_EXCLUDE='docs/divoom_docs/'
 # (divoomd crate, floor pinned at 29% — measured 2026-08-25, no floor existed
 # before).
 export GOH="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
-GOH_CI_STEPS='./scripts/house_emoji_gate.sh:python3 tools/check_file_size.py:python3 tools/check_no_allow.py:python3 tools/check_scripts.py:python3 tools/check_version_consistency.py:python3 tools/check_positional_args.py:python3 tools/check_weather_parity.py:cargo fmt --all -- --check:cargo clippy --all-targets --all-features -- -D warnings:cargo build -p divoomd --no-default-features --locked:cargo test -p divoomd --no-default-features --locked:cargo test --locked'
+GOH_CI_STEPS='./scripts/house_emoji_gate.sh:python3 tools/check_file_size.py:python3 tools/check_no_allow.py:python3 tools/check_scripts.py:python3 tools/check_version_consistency.py:python3 tools/check_positional_args.py:python3 tools/check_weather_parity.py:cargo fmt --all -- --check:cargo clippy --all-targets --all-features -- -D warnings:cargo build -p divoomd --no-default-features --locked:cargo test -p divoomd --no-default-features --locked:./scripts/check_linux_build.sh:cargo test --locked'
