@@ -24,6 +24,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _srcscan import strip_rust_comments  # noqa: E402
 from _tui import err, info, ok  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
@@ -43,7 +44,7 @@ RUST_TYPE_VALUES = {
 
 
 def rust_map() -> dict[int, int]:
-    text = RUST_TABLE.read_text(encoding="utf-8")
+    text = strip_rust_comments(RUST_TABLE.read_text(encoding="utf-8"))
     start = text.index("WEATHER_CODE_TO_DIVOOM")
     end = text.index("];", start)
     out: dict[int, int] = {}

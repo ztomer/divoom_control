@@ -30,6 +30,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _srcscan import strip_rust_comments  # noqa: E402
 from _tui import err, info, ok  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
@@ -52,9 +53,22 @@ SIGNATURE_EXCLUDE = ("mcp_tools.py", "mcp_server.py")
 
 
 def python_signatures() -> dict[str, list[tuple[str, str]]]:
-    """method name -> [(param, annotation)], self excluded."""
+    """method name -> [(param, annotation)], self excluded.
+
+    A name can be defined more than once (`show_light` exists in both
+    `display/__init__.py`, fully annotated, and `display/light.py`, bare). This
+    used to be `rglob` + `setdefault` — FIRST ONE WINS, over an unsorted
+    directory walk — so the winner depended on filesystem order: APFS handed
+    back the unannotated one and the gate passed, ext4 handed back the
+    annotated one and it failed. Same commit, opposite verdicts, which is how a
+    CI failure became unreproducible on the machine that has to fix it.
+
+    Deterministic now, and it prefers the definition carrying the MOST
+    annotations: this gate reasons only from annotations, so the richest
+    signature is the one with something to say.
+    """
     sigs: dict[str, list[tuple[str, str]]] = {}
-    for path in PY_DIR.rglob("*.py"):
+    for path in sorted(PY_DIR.rglob("*.py")):
         if "__pycache__" in str(path) or path.name in SIGNATURE_EXCLUDE:
             continue
         try:
@@ -68,7 +82,10 @@ def python_signatures() -> dict[str, list[tuple[str, str]]]:
                 (a.arg, ast.unparse(a.annotation) if a.annotation else "")
                 for a in node.args.args[1:]
             ]
-            sigs.setdefault(node.name, params)
+            annotated = sum(1 for _, ann in params if ann)
+            prev = sigs.get(node.name)
+            if prev is None or annotated > sum(1 for _, ann in prev if ann):
+                sigs[node.name] = params
     return sigs
 
 
@@ -97,7 +114,7 @@ def rust_arms() -> list[tuple[str, list[str], set[int], Path]]:
     """(primary method, all aliases, compacted indices read, file)."""
     out = []
     for path in sorted(RUST_DIR.rglob("*.rs")):
-        src = path.read_text(encoding="utf-8")
+        src = strip_rust_comments(path.read_text(encoding="utf-8"))
         marks = [(m.start(), m.end(), re.findall(r'"([a-z_.0-9]+)"', m.group(1)))
                  for m in ARM_RE.finditer(src)]
         for i, (_, end, names) in enumerate(marks):
