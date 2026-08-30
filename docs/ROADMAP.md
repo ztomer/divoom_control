@@ -76,7 +76,10 @@ one that is plainly of its time._
 | **R66** | Repo restructure: one Cargo workspace, `divoom_daemon/`->`divoom_client/`, -14,240 LOC, six silently-degraded gates repaired | Py 2910/94, Rs 119/0 | `Cargo.toml`, `divoomd/src/paths.rs` |
 | **R67** | Live-defect round: 7 named classes. Typed 0x45/0x5F packets; hot-channel events; socket ownership; live-job health; MediaRemote album art + player discovery; weather unified; **the virtual wall never worked** (3 showstoppers); daemon protocol audit + capability negotiation | Py 2904/0/94, Rs 244/0 | `divoomd/src/packets.rs`, `nowplaying/`, `divoomd/src/wall/dispatch.rs` |
 
-Suite: Rust 63+ passed / Python 3197 passed / 97 skipped (see `CHANGELOG.md` + CI).
+Suite at v0.28.3: **Rust 291 passed** (workspace, `cargo test --locked`) / **Python 2935 passed, 94 skipped**. Rust coverage 43.06%, floor 42.
+These are the numbers as of the last release; `CHANGELOG.md` and CI are the
+per-round record. The per-round counts in the table above are historical and
+are not restated.
 
 ---
 
@@ -120,203 +123,24 @@ source. Detail in the v0.27.0 CHANGELOG stanza.
 
 **Open: nothing in this workstream.** Both items closed in R68.
 
-### R69 plan — what can be built without the user in the loop
+### Earlier shipped workstreams — pruned to git history
 
-_Written 2026-08-30. Everything still open at the end of R68 was blocked on
-hardware or on someone watching a matrix. That is a real constraint on
-CONFIRMING a render; it is not a constraint on WRITING the thing. The work below
-is ordered so each phase is independently shippable, and each ends in a state the
-user can exercise whenever they feel like it and report back._
+The camoufox pin raised to latest (R68), the GUI e2e migration off Playwright
+(R66), and the R60-R61 short-to-medium-term list were all complete and were
+being carried here as narrative. CHANGELOG is the durable record of what
+shipped; this file is for what has not. Recover any of them with
+`git log -p -- docs/ROADMAP.md`.
 
-**The standing division of labour.** Code, tests and gates are ours. "Does the
-overlay actually scroll on a 32×32 matrix" is the user's, and no amount of green
-suite substitutes for it (v0.28.1 is the standing proof: 2961 tests, five green
-CI jobs, and a daemon-killing crash that launching the app found in twenty
-minutes). So phases 2 and 3 land the plumbing and say plainly, in the UI, that
-the render is unconfirmed — rather than either blocking on hardware or pretending
-the feature is verified.
+### R69 — SHIPPED in v0.28.3 (2026-08-30)
 
-#### Step ledger — the resumable state
+Four phases, all done; the plan itself is pruned to git history per the
+one-forward-looking-doc rule. What it produced and the traps it hit are in the
+CHANGELOG's v0.28.3 stanza — including the two the plan did NOT anticipate: an
+audit that stopped three of its own steps from being built, and a green e2e
+suite describing a panel that was visibly open on screen.
 
-Each step is one commit. **Update the status column in the same commit as the
-step**, so this table and the git history cannot drift: a session that resumes
-here reads the first non-DONE row and starts there, and that only works if the
-table is written by the step rather than by a tidy-up pass afterwards.
-
-| Step | What | Status |
-|------|------|--------|
-| P1.1 | Every exit from `_IsolatedStack.__init__` goes through `close()` | DONE |
-| P1.2 | Socket path keyed on per-stack identity, not the pytest PID | DONE |
-| P1.3 | Regression test: no surviving PIDs on each failure path | DONE |
-| P1.4 | Sweep the sibling harnesses for the same shape | DONE |
-| P2.1 | Audit the five LAN commands' arg + reply shapes against the daemon | DONE |
-| P3.1a | `search_weather_city` backend: persisted location tier + GUI API | DONE |
-| P3.1b | `search_weather_city` UI panel + camoufox e2e | DONE |
-| P2.4 | Danmaku SendText UI + e2e, render marked unconfirmed | DONE |
-| P4.1 | Rust coverage floor 29 -> 42, and actually enforced | DONE |
-| ~~P2.2~~ | ~~GUI API methods~~ — folded into P3.1 / P2.4; there is no shared layer worth building for two commands | DROPPED |
-| ~~P2.3~~ | ~~Voice/SendText UI~~ — duplicates the working `push_text`; see P2.1 audit | DROPPED |
-| ~~P2.5~~ | ~~5-LCD UI~~ — no such hardware here, and no per-device capability to gate on | DROPPED |
-
-#### Phase 1 — the e2e harness leaks the processes it spawns
-
-Found while auditing on 2026-08-30: **ten orphaned processes** from earlier
-sessions — four `divoomd` and six `e2e_gui_bridge.py`, some days old, four of
-them sharing one socket path.
-
-Two defects, and the second is why the first was survivable long enough to pile
-up:
-
-* `_IsolatedStack.__init__` has three failure paths and only one cleans up.
-  `_assert_daemon_is_current` correctly passes `on_mismatch=self.close`, but
-  `_wait_for_socket` calls `pytest.fail` with the daemon still running, and
-  `_wait_for_http` kills the bridge and leaves the daemon. Raising from a
-  constructor means the fixture never receives the object, so its
-  `finally: stack.close()` never runs — the teardown is bypassed precisely when
-  something has already gone wrong. This is the bypassed-funnel class: every
-  exit from `__init__` must go through `close()`, structurally, not by
-  remembering to.
-* the socket path is keyed on `os.getpid()` — the *pytest process* PID, which is
-  constant for the whole run. Every stack in that process therefore shares one
-  path, so a single leaked daemon makes the next test collide with it. Key on
-  per-stack identity instead.
-
-Acceptance: a test that spawns a stack, forces each failure path in turn, and
-asserts no surviving PIDs. Prove it red first by reverting one cleanup.
-
-#### Phase 2 — GUI-wire the four backend-only LAN clusters
-
-All five commands exist in `divoomd/src/device_call/lan.rs` and are reachable
-over the socket today. None has any GUI surface — confirmed by grep, no hit for
-any of them anywhere in `divoom_gui/`:
-
-| Command | Cluster |
-|---|---|
-| `lan.send_voice_text` | Voice/SendText |
-| `lan.send_danmaku_text`, `lan.danmaku_random_face` | Danmaku overlay |
-| `lan.set_5lcd_channel_type`, `lan.set_5lcd_whole_clock_id` | 5-LCD channel extras |
-
-Each is the same shape: a `divoom_gui` API method that forwards to the daemon (a
-client, never a second implementation — R67/C2), a control in the panel it
-belongs to, and a camoufox e2e test driving it through the real bridge.
-
-##### P2.1 audit result (2026-08-30) — most of this phase should NOT be built
-
-The audit was supposed to confirm arg and reply shapes. It found instead that
-three of the five commands are unwired for good reasons, and that one of this
-plan's own premises was false. Recording it rather than building past it:
-
-* **`lan.set_5lcd_*` — DROP.** The plan said to gate the UI on "the capability
-  the daemon already negotiates (R67)". There is no such thing:
-  `protocol_capabilities()` is a static list of DAEMON features
-  (`device_call`, `sysmon`, `wall`, …), not per-device hardware. Gating on it
-  would need device-model detection that does not exist yet — a materially
-  bigger job than this plan implied. And it would be for a "Times Gate" 5-LCD
-  panel; the verified hardware here is Pixoo / Timoo / Ditoo / Tivoo Max, none
-  of which have five LCDs. "The user tests it later" is not available when there
-  is no device to test on, so this would ship UI that can never be validated.
-  The original author's call — plumbing only — was right.
-* **`lan.send_voice_text` — DROP.** `push_text` is already GUI-wired
-  (`gui_api.py` -> `api/lighting.py`) through the bitmap-render path that is
-  known to work. The handler's own comment records why Voice/SendText is not
-  trusted: R32 §D found that a superficially-similar "set light phone word"
-  command ACKs cleanly and fails to render on Pixoo-class matrices. Adding it
-  would put a second, unconfirmed "send text" control next to the working one —
-  an anti-feature, because the user reaches for the broken one.
-* **`lan.danmaku_random_face` — DROP.** No confirmed caller anywhere in the
-  decompiled vendor app; dead in that build. Nothing to model the UI on.
-* **`lan.send_danmaku_text` — KEEP, demoted.** A genuinely distinct feature (a
-  scrolling overlay, not a duplicate of push_text) and testable on hardware the
-  user actually owns. Render still unconfirmed, so it must say so in the UI.
-
-**The general lesson, and why the audit step earned its place:** "the backend
-exists, so wiring it up is free work" is wrong. Four of these five were left
-unwired deliberately, and the reasons were sitting in the handler comments. An
-unwired backend command is evidence of a decision, not of an oversight — read it
-before undoing it.
-
-Remaining rule for what does get built: **say the render is unconfirmed, in the
-UI.** A control that silently does nothing on the user's hardware is worse than
-one that admits it is unverified, and it tells the user exactly what to report
-back on.
-
-#### Phase 3 — `search_weather_city`
-
-Implemented in `divoomd/src/cloud_category.rs`, wired to the `search_weather_city`
-RPC, and unreachable from the GUI. Weather currently uses the system location,
-which is the right default and should stay the default; this is the manual
-override for when it is wrong. Small enough to fold into phase 2 if it lands
-first.
-
-#### Phase 4 — raise the Rust coverage floor
-
-**Done 2026-08-30, and the number was the smaller half of it.**
-
-Coverage measured **43.06%** (5356/12438), twice, identical to the digit — the
-pinned floor of 29% was 14 points stale. Raised to 42, one point of headroom.
-
-The reason it drifted is the real finding: **nothing ran it.**
-`scripts/rust_coverage.sh` appeared only in a prose comment in `.gatesrc`, never
-in `GOH_CI_STEPS`, and there is no coverage job in CI. A floor enforced by
-nobody is a number, not a gate — house rule #3 exactly. It is step 15 of the
-local gate run now, and proven to bite: `--floor 44` against the same tree exits
-1 and names the uncovered lines.
-
-**Still open:** no CI coverage job. It must run on macOS to measure the same
-scope (`nowplaying` is macOS-only and counts toward the percentage), so a Linux
-job would produce a different denominator and a floor that does not match. Local
-is currently stricter than CI, which is the safe direction — but it means the
-floor only bites for whoever runs the gate locally.
-
-Raising coverage further is open-ended and deliberately not chased here: close
-pure-logic gaps first (seam-and-cover), and never loosen what is measured.
-
-#### Explicitly NOT in this plan
-
-* **`Cloud/ToDevice`** — semantics unconfirmed and no live caller to infer them
-  from. Implementing it blind would be guessing at a wire format, which is the
-  one thing this project has consistently refused to do.
-* **`pic_scan_ctrl` 0x35, sysmon-on-a-matrix, the R12 visual pass** — these are
-  not unbuilt, they are unwatched. There is no code to write.
-
-- **Ambient preview tiles** were listed here as static CSS colour blocks. They
-  were not: `0869425` had already replaced them with the picked colour for Plain
-  and an honest "drawn by the device" placeholder for the four modes the device
-  generates from a palette we do not have. This entry was stale from the moment
-  it was written — the same commit shipped the fix and left the item open.
-- **sysmon preview** — CLOSED (R68). The GUI is now a client: the `sysmon` RPC
-  returns the stats and the exact frame `live_jobs/render.rs` would push, and
-  the tile and the device draw the same bytes. This was the last widget the GUI
-  still rendered itself.
-
-### camoufox pin raised to latest — SHIPPED (R68)
-
-CI pins the browser BUILD (`camoufox set official/stable/152.0.4-beta.29`, the
-current channel latest) with the pip package at 0.5.5. The pin stays because
-"latest" is a moving target: it is what makes a red run mean a code change, and
-`tools/check_camoufox_installed.py` verifies it rather than trusting `fetch`'s
-exit code.
-
-From beta.29 page scripting runs in an isolated world. The suite reaches the
-main world explicitly through `tests/support/browser.py` — `eval_js` (the `mw:`
-prefix plus `main_world_eval=True`), `wait_js` (polling, because
-`wait_for_function` has NO main-world form), and `add_init_js` (a `<script>`
-element appended from the isolated world, because `add_init_script` has none
-either). The deferral note here predicted only the first of those three.
-
-Rationale, probe results and the reasoning behind each live in that module.
-
-### Short-to-medium term (all shipped)
-
-The following workstreams from earlier rounds are complete:
-
-- **`show_clock()` overlay reorder (R60)** — realigned to APK C2() canonical format.
-- **`get_*` read-back timeouts (R60)** — bounded + cached in both Python and Rust.
-- **R12 visual pass (2026-07-14)** — Gemini design critique, 2 real CSS fixes applied.
-- **Menubar connection-feedback (v0.22.10)** — hardware-verified on real Pixoo-1.
-- **Daemon-down banner / reconnect (v0.22.10)** — hardware-verified, auto-heal confirmed.
-- **Inline-style → CSS-token migration batches 3-5 (v0.22.11)** — all three files completed.
-- **R12 hardware verification** — user-driven (album cover, custom art, weather on real device).
+Recover the plan and its step ledger with
+`git log -p -- docs/ROADMAP.md` (search for "R69 plan").
 
 ### Cloud HTTP — 533/533 endpoints cataloged
 
@@ -350,31 +174,6 @@ All 4 clusters implemented:
 Bonus fix: device-selector "not in range" badge now counts consecutive scan misses
 (downgrades after 2), not a one-shot startup flag. 5 new e2e tests.
 
-### GUI e2e suite migrated to camoufox — SHIPPED (R66, v0.23.0)
-
-All 15 modules moved off Playwright/Chromium behind one seam
-(`tests/support/browser.py`); no `p.chromium` references remain in `tests/`.
-CI installs camoufox instead of chromium.
-
-The guard defect that motivated this is fixed and pinned by
-`tests/test_e2e_browser_guard.py`: `pytest.importorskip` only proved the Python
-*module* imported, so a missing browser **binary** produced 69 failures that
-read as real regressions. `require_browser()` now probes the binary.
-
-Acceptance met, with one honest note on how: the criterion said "proven by
-deleting the browser". It is instead proven by driving camoufox's own
-not-installed path (`get_active_path() -> None`, which makes `installed_verstr()`
-raise `CamoufoxNotInstalled`) rather than deleting a ~150 MB install per run.
-That is stronger than the first attempt, which stubbed `installed_verstr` to
-return `""` — a value the library never actually produces, so it proved our
-branch worked without proving reality reaches it. The suite also asserts the
-guard does NOT over-skip, since a guard that always skipped would silently
-disable all 15 suites while looking green.
-
-Two latent test races surfaced during the move (both waited on a proxy DOM
-signal and asserted on a different one — a Chromium timing coincidence) and were
-fixed as a class.
-
 ### Deferred
 
 - **`pic_scan_ctrl` 0x35** — partially resolved (2026-07-13, real hardware).
@@ -396,8 +195,8 @@ active in `divoom_client/` (renamed from `divoom_daemon/` in R66) —
 `macos_notifications.py`). Full device parity (54 → 0 gaps), cloud decode,
 hardware-verified on Pixoo/Timoo/Ditoo/Tivoo Max. Menubar is a standalone Rust
 agent (`divoom-menubar/`); the GUI stays the Python pywebview UI
-(the native-egui-UI effort was explored and retired). `cargo test` 63/63 both
-feature matrices.
+(the native-egui-UI effort was explored and retired). `cargo test` is green on
+both feature matrices (291 workspace tests at v0.28.3).
 
 Key: `divoomd` is now the **sole shipping daemon** — no `DIVOOM_USE_RUST_DAEMON`
 opt-out. The archived server and its 469 tests were removed from the tree in
