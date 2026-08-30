@@ -213,6 +213,11 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
         // One weather reading, shared by the preview card and the device push.
         "weather" => crate::now_playing::cmd_weather(&req.args).await,
 
+        // Host metrics AND the exact frame the device would be shown. The GUI
+        // used to sample and render this itself in Python, which is the same
+        // second-implementation shape R67/C2 removed from now-playing.
+        "sysmon" => crate::live_jobs::sysmon::cmd_sysmon(&req.args).await,
+
         // --- wall command ---
         "wall_configure" => daemon.cmd_wall_configure(&req).await,
 

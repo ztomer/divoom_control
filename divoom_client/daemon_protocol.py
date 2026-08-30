@@ -22,6 +22,8 @@ import socket
 import time
 from typing import Any, Callable, Iterable
 
+from .daemon_host_data import HostDataMixin
+
 DEFAULT_SOCKET_PATH = "/tmp/divoom.sock"
 DEFAULT_TCP_PORT = 9009
 
@@ -105,7 +107,7 @@ def make_notification_event(app_type: int, title: str, body: str, routed: bool) 
 
 
 # ── client ──────────────────────────────────────────────────────────────
-class DaemonClient:
+class DaemonClient(HostDataMixin):
     """Thin Unix-socket client. Used by the menubar + GUI to talk to the daemon.
 
     Never raises on a missing/closed daemon — `send_command` returns an error
@@ -338,43 +340,6 @@ class DaemonClient:
 
     def probe_lan(self) -> dict:
         return self.send_command("probe_lan")
-
-    def now_playing(self, include_artwork: bool = False) -> dict:
-        """What is playing, from the daemon's single source of truth.
-
-        R67/C2: the GUI used to answer this itself, in Python, by driving
-        AppleScript at each player and then guessing a cover-art URL from the
-        iTunes Search API — a second implementation of what the daemon already
-        did, running in the GUI process, which is why the GUI was the thing
-        asking for Apple Music access.
-
-        ``include_artwork`` attaches the raw image bytes as base64. They are
-        ~360KB, so a poller should watch ``identity`` (which excludes artwork)
-        and only fetch the bytes when it changes.
-        """
-        return self.send_command("now_playing",
-                                 {"include_artwork": bool(include_artwork)})
-
-    def players(self) -> dict:
-        """Every media player the daemon can see, and which is playing.
-
-        R67: `now_playing` reports the ONE session macOS considers current, and
-        macOS keeps that session on a PAUSED player — so a paused Kaset made a
-        playing Feishin look silent. This separates registration from playback,
-        and carries a `hint` when a player is running but unreachable for a
-        reason the user can fix.
-        """
-        return self.send_command("players")
-
-    def weather(self, location: str = "") -> dict:
-        """One weather reading, from the source that feeds the device.
-
-        R67/C2: the GUI used to fetch this itself while the daemon fetched it
-        again for the device — two fetches of one fact, and potentially two
-        different cities, because `location` was never passed through. Empty
-        `location` lets the provider geolocate.
-        """
-        return self.send_command("weather", {"location": location or ""})
 
     def live_job_start(self, mac: str, kind: str, params: dict) -> dict:
         return self.send_command("live_job_start", {"mac": mac, "kind": kind, "params": params})

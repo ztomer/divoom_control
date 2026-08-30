@@ -25,11 +25,48 @@ class MediaSyncMixin(GallerySyncMixin):
                 return 16
         return 16
 
+    def _sysmon_frame(self, size: int):
+        """Ask the daemon for the host stats AND the exact frame it would push.
+
+        R67/C2 applied to the last widget still breaking it. This used to call
+        `media_source.get_system_stats()` (psutil) and
+        `media_source.render_system_stats_frame()` (PIL) inside the GUI process,
+        while the device was drawn by `divoomd/src/live_jobs/render.rs`. Two
+        renderers for one widget: the tile and the device agreed only for as
+        long as nobody edited either, and a preview that merely resembles the
+        device is the dishonest kind this project keeps finding.
+
+        Returns `(stats, frame_path)`, or raises. The PNG is written from the
+        daemon's raw RGB rather than redrawn, so the bytes on screen and the
+        bytes on the matrix have one origin.
+        """
+        client = self._client()
+        if client is None:
+            raise RuntimeError("daemon unavailable")
+        reply = client.sysmon(size=size)
+        if not isinstance(reply, dict) or not reply.get("success"):
+            raise RuntimeError((reply or {}).get("error", "sysmon unavailable"))
+
+        stats = {"cpu": reply.get("cpu", 0), "mem": reply.get("mem", 0),
+                 "battery": reply.get("battery")}
+        sz = int(reply.get("size", size))
+        raw = base64.b64decode(reply.get("frame_rgb_b64", ""))
+        expected = sz * sz * 3
+        if len(raw) != expected:
+            # Never render a partial buffer as if it were the device's frame.
+            raise RuntimeError(f"sysmon frame is {len(raw)} bytes, expected {expected}")
+
+        from PIL import Image
+        scratch = Path(__file__).parent.parent / "scratch"
+        scratch.mkdir(parents=True, exist_ok=True)
+        frame_path = scratch / f"sysmon_{sz}.png"
+        Image.frombytes("RGB", (sz, sz), raw).save(frame_path)
+        return stats, frame_path
+
     def get_system_stats_preview(self, size: int = 0) -> str:
         try:
-            stats = media_source.get_system_stats()
             sz = int(size) if size and int(size) > 0 else self._active_device_size()
-            frame_path = media_source.render_system_stats_frame(stats, size=sz)
+            stats, frame_path = self._sysmon_frame(sz)
             return json.dumps({
                 "ok": True, "size": sz, "stats": stats,
                 "preview": self._frame_to_data_url(frame_path),
@@ -40,11 +77,11 @@ class MediaSyncMixin(GallerySyncMixin):
 
     def apply_system_stats(self) -> str:
         try:
-            stats = media_source.get_system_stats()
-            if not self._has_push_target():
-                return json.dumps({"success": False, "error": "No device connected", "stats": stats})
             size = self._active_device_size()
-            frame_path = media_source.render_system_stats_frame(stats, size=size)
+            stats, frame_path = self._sysmon_frame(size)
+            if not self._has_push_target():
+                return json.dumps({"success": False, "error": "No device connected",
+                                   "stats": stats})
             res = self._push_frame(frame_path, size)
             return json.dumps({
                 "success": res, "stats": stats,

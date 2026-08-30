@@ -114,26 +114,58 @@ class TestGuiApiWallMedia(GuiApiTestBase):
             self.assertTrue(self.api.set_tickers(json.dumps(["aapl", "AAPL", "btc-usd", ""])))
             self.assertEqual(json.loads(self.api.get_tickers()), ["AAPL", "BTC-USD"])
 
-    def test_system_stats_preview_and_apply(self):
-        """Area 7: system-monitor widget renders a frame and reports stats."""
-        from pathlib import Path as _P
-        with patch("divoom_lib.utils.media_source.get_system_stats",
-                   return_value={"cpu": 12, "mem": 43, "battery": 80}), \
-             patch("divoom_lib.utils.media_source.render_system_stats_frame",
-                   return_value=_P("/tmp/sysmon_test.png")), \
+    def _sysmon_client(self, size=32, **overrides):
+        """A daemon stub whose reply carries a correctly sized RGB frame."""
+        import base64 as _b64
+        reply = {"success": True, "size": size, "cpu": 12, "mem": 43, "battery": 80,
+                 "frame_rgb_b64": _b64.b64encode(bytes(size * size * 3)).decode()}
+        reply.update(overrides)
+        stub = MagicMock()
+        stub.sysmon.return_value = reply
+        return stub
+
+    def test_system_stats_comes_from_the_daemon_not_a_second_renderer(self):
+        """Area 7 / R67-C2: the GUI is a CLIENT for sysmon, not a renderer.
+
+        The seam mocked here is the daemon call. It used to be
+        `media_source.get_system_stats` + `render_system_stats_frame`, run in
+        the GUI process — a second implementation of the widget the device gets
+        from `live_jobs/render.rs`.
+        """
+        client = self._sysmon_client(size=32)
+        with patch.object(type(self.api), "_client", lambda self: client), \
              patch.object(type(self.api), "_frame_to_data_url",
                           staticmethod(lambda p: "data:image/png;base64,BBB")):
             prev = json.loads(self.api.get_system_stats_preview(32))
-            self.assertTrue(prev["ok"])
+            self.assertTrue(prev["ok"], prev)
             self.assertEqual(prev["stats"]["cpu"], 12)
+            self.assertEqual(prev["stats"]["mem"], 43)
+            self.assertEqual(prev["stats"]["battery"], 80)
             self.assertTrue(prev["preview"].startswith("data:image/png;base64,"))
+            client.sysmon.assert_called_once_with(size=32)
 
-            # apply with no device → clear failure
+            # apply with no device → clear failure, but the stats still report
             self.api.current_divoom = None
             self.api.wall_slots = {}
             res = json.loads(self.api.apply_system_stats())
             self.assertFalse(res["success"])
             self.assertEqual(res["error"], "No device connected")
+            self.assertEqual(res["stats"]["cpu"], 12)
+
+    def test_system_stats_refuses_a_short_frame_instead_of_drawing_it(self):
+        """A truncated buffer must not be shown as if it were the device's frame."""
+        client = self._sysmon_client(size=32, frame_rgb_b64="AAAA")
+        with patch.object(type(self.api), "_client", lambda self: client):
+            prev = json.loads(self.api.get_system_stats_preview(32))
+            self.assertFalse(prev["ok"])
+            self.assertIn("expected", prev["error"])
+
+    def test_system_stats_reports_an_unavailable_daemon(self):
+        """No daemon is an honest error, not an idle-looking zeroed gauge."""
+        with patch.object(type(self.api), "_client", lambda self: None):
+            prev = json.loads(self.api.get_system_stats_preview(16))
+            self.assertFalse(prev["ok"])
+            self.assertIn("daemon", prev["error"])
 
     @patch("urllib.request.urlopen")
     def test_fetch_gallery_and_batch_sync(self, mock_urlopen):

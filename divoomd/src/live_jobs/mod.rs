@@ -14,13 +14,14 @@ mod health;
 #[cfg(target_os = "macos")]
 mod music_job;
 mod render;
+pub mod sysmon;
 
 pub use coordinator::LiveJobCoordinator;
 pub use health::{JobHealth, JobState};
 #[cfg(target_os = "macos")]
 use music_job::run_music;
 
-use render::{get_battery_percent, render_stock, render_sysmon};
+use render::{render_stock, render_sysmon};
 
 /// One call into the now-playing library, isolated so the macOS-only dependency
 /// has a single seam and the job body stays readable.
@@ -147,17 +148,10 @@ async fn run_sysmon(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
         sys.refresh_cpu();
         sys.refresh_memory();
 
-        let cpu = sys.global_cpu_info().cpu_usage() as u8;
-        let total_mem = sys.total_memory();
-        let used_mem = sys.used_memory();
-        let mem = if total_mem > 0 {
-            ((used_mem as f64 / total_mem as f64) * 100.0) as u8
-        } else {
-            0
-        };
-        let battery = get_battery_percent().unwrap_or(100);
-
-        let rgb = render_sysmon(cpu, mem, battery, size);
+        // Shared with the one-shot `sysmon` request, so the GUI's preview tile
+        // and this device frame cannot disagree -- see `live_jobs::sysmon`.
+        let s = sysmon::sample(&sys);
+        let rgb = render_sysmon(s.cpu, s.mem, s.battery, size);
 
         if get_device_transport(&daemon, &mac).await.is_some() {
             let d_weak = daemon_weak.clone();

@@ -155,7 +155,7 @@ impl BitmapFont {
 
 // --- Renderers ---
 
-pub(super) fn render_sysmon(cpu: u8, mem: u8, battery: u8, size: u32) -> Vec<u8> {
+pub(crate) fn render_sysmon(cpu: u8, mem: u8, battery: u8, size: u32) -> Vec<u8> {
     let mut buf = vec![0u8; (size * size * 3) as usize];
     for i in 0..(size * size) as usize {
         buf[i * 3] = 5;
@@ -316,7 +316,7 @@ pub(super) fn render_stock(symbol: &str, price: f64, change: f64, size: u32) -> 
 
 // --- macOS Battery stats ---
 
-pub(super) fn get_battery_percent() -> Option<u8> {
+pub(crate) fn get_battery_percent() -> Option<u8> {
     let output = std::process::Command::new("pmset")
         .args(["-g", "batt"])
         .output()

@@ -81,6 +81,7 @@ pub fn protocol_capabilities() -> Vec<&'static str> {
         "notifications",
         "now_playing",
         "players",
+        "sysmon",
         "wall",
         "weather",
     ]
