@@ -58,6 +58,8 @@ use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 use std::time::Duration;
 
+use crate::socket_owner::{HeldSocket, SocketOwnership};
+
 /// Longest usable `sockaddr_un.sun_path`, minus the NUL terminator.
 ///
 /// macOS is 104 and Linux 108. Checked up front because the kernel's own
@@ -173,14 +175,22 @@ impl BindFailure {
     }
 }
 
-/// A held socket: the listener, plus the startup lock kept open for as long as
-/// the daemon runs.
+/// A freshly bound socket, before it is handed to a runtime.
+///
+/// Short-lived by design: [`Acquired::into_held`] converts it into a
+/// [`HeldSocket`], which is what actually governs the socket's lifetime.
 #[derive(Debug)]
 pub struct Acquired {
-    pub listener: UnixListener,
-    /// Kept alive deliberately. Dropping this releases the advisory lock and
-    /// re-opens the startup race, so it must outlive the listener.
-    _lock: std::fs::File,
+    path: String,
+    listener: UnixListener,
+    lock: StartupLock,
+    /// Captured under the startup lock, microseconds after `bind`, so there is
+    /// no window in which the path could be replaced between binding it and
+    /// recording what we bound. Reading it later — as `main` used to, with its
+    /// own `SocketOwnership::of` call after the lock section — is a second
+    /// check-then-act, and check-then-act on this path is the entire bug class
+    /// [`crate::socket_owner`] exists to close.
+    owned: Option<SocketOwnership>,
 }
 
 /// The held startup lock.
@@ -188,16 +198,43 @@ pub struct Acquired {
 /// Its only job is to stay alive: dropping it releases the advisory lock and
 /// lets a second daemon race us. It is a distinct type so that `let _ = ...`
 /// (which would drop it immediately) reads as obviously wrong at the call site.
+/// The field is named `_file` rather than carrying an `#[allow(dead_code)]`:
+/// nothing reads it, and that is the point, so the underscore states the intent
+/// where a lint suppression would only have hidden the question.
 #[derive(Debug)]
-pub struct StartupLock(#[allow(dead_code)] std::fs::File);
+pub struct StartupLock {
+    _file: std::fs::File,
+}
+
+impl StartupLock {
+    /// Wrap an already-`flock`ed file as the held lock.
+    ///
+    /// Crate-visible rather than private so [`crate::socket_owner`]'s tests can
+    /// build a `HeldSocket` without going through a real `acquire`; taking the
+    /// lock is `acquire`'s job and stays here.
+    pub(crate) fn hold(file: std::fs::File) -> Self {
+        Self { _file: file }
+    }
+}
 
 impl Acquired {
-    /// Split into the bound listener and the lock that must OUTLIVE it.
+    /// Hand the socket to a runtime and take responsibility for releasing it.
     ///
-    /// Callers wrap the listener in their async runtime's type; the lock has to
-    /// be bound to a live variable for the process lifetime, not dropped here.
-    pub fn into_parts(self) -> (UnixListener, StartupLock) {
-        (self.listener, StartupLock(self._lock))
+    /// `wrap` adapts the blocking `std` listener to whatever the caller's async
+    /// runtime wants. It happens INSIDE this call so the lock, the listener and
+    /// the recorded identity are never three loose values a caller could drop,
+    /// reorder or forget one of.
+    pub fn into_held<L>(
+        self,
+        wrap: impl FnOnce(UnixListener) -> std::io::Result<L>,
+    ) -> std::io::Result<HeldSocket<L>> {
+        let Self {
+            path,
+            listener,
+            lock,
+            owned,
+        } = self;
+        Ok(HeldSocket::new(path, wrap(listener)?, lock, owned))
     }
 }
 
@@ -394,8 +431,12 @@ pub fn acquire(socket_path: &str) -> Result<Acquired, BindFailure> {
         Ok(listener) => {
             clear_failure(socket_path);
             Ok(Acquired {
+                path: socket_path.to_string(),
                 listener,
-                _lock: lock,
+                // Still under the advisory lock: no other divoomd can be
+                // between its unlink and its bind while we read this.
+                owned: SocketOwnership::of(socket_path),
+                lock: StartupLock::hold(lock),
             })
         }
         Err(e) => Err(match e.kind() {

@@ -174,8 +174,14 @@ where
 /// Accept connections forever on Unix socket, serving each on its own task. Runs until the
 /// listener errors unrecoverably (callers normally `tokio::spawn` this). Concurrent connections
 /// are capped by `max_connections` (back-pressure: the accept loop waits for a free permit).
+///
+/// Takes an `Arc` rather than the listener itself: the socket must outlive this
+/// future so the daemon can still identify its own socket file at shutdown (see
+/// [`crate::socket_owner`]). An earlier version borrowed it to force that, which
+/// only moved the problem into every caller's lifetimes — `tokio::spawn` needs
+/// `'static`, so the tests each had to `Box::leak` a listener to compile.
 pub async fn serve<H: Handler>(
-    listener: &UnixListener,
+    listener: Arc<UnixListener>,
     handler: Arc<H>,
     max_connections: usize,
     idle_timeout: Duration,

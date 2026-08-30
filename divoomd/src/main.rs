@@ -9,7 +9,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use divoomd::daemon::Daemon;
-use divoomd::socket_owner::{release_socket, SocketOwnership};
 use tokio::net::UnixListener;
 
 struct ConfigArgs {
@@ -113,22 +112,19 @@ async fn main() {
             std::process::exit(f.exit_code());
         }
     };
-    // `_startup_lock` must stay bound for the whole of main: dropping it
-    // releases the advisory lock and re-opens the two-daemon startup race.
-    let (std_listener, _startup_lock) = acquired.into_parts();
-    let listener = match std_listener
-        .set_nonblocking(true)
-        .and_then(|()| UnixListener::from_std(std_listener))
-    {
-        Ok(l) => l,
+    // `held` owns the listener, the startup lock and the identity of the file
+    // we bound. Keeping them in one value is what makes the shutdown ordering
+    // structural instead of a comment — see `socket_owner::HeldSocket`.
+    let held = match acquired.into_held(|std_listener| {
+        std_listener.set_nonblocking(true)?;
+        UnixListener::from_std(std_listener)
+    }) {
+        Ok(h) => h,
         Err(e) => {
             eprintln!("divoomd: cannot use {socket_path}: {e}");
             std::process::exit(1);
         }
     };
-    // Record which file we bound, so shutdown can tell "our socket" from "a
-    // socket that replaced ours" (R67/C5).
-    let owned = SocketOwnership::of(&socket_path);
     eprintln!("divoomd listening on {socket_path}");
 
     let mut tcp_listener = None;
@@ -185,10 +181,14 @@ async fn main() {
         idle_timeout.as_secs()
     );
 
-    // NOTE: `serve` BORROWS the listener, so `listener` stays open past the
-    // select below. That is load-bearing, not stylistic — see the ownership
-    // note at `release_socket` further down.
-    let unix_fut = serve(&listener, daemon.clone(), max_connections, idle_timeout);
+    // `held` keeps its own reference, so the socket outlives this future no
+    // matter how the select below ends.
+    let unix_fut = serve(
+        held.listener(),
+        daemon.clone(),
+        max_connections,
+        idle_timeout,
+    );
 
     let shutdown = daemon.shutdown.clone();
     if let (Some(l), Some(t)) = (tcp_listener, tcp_token) {
@@ -222,19 +222,12 @@ async fn main() {
     // scan-frequency throttle → empty scans).
     #[cfg(feature = "ble")]
     daemon.stop_scan_cleanup().await;
-    // The listener is STILL OPEN here, and that is what makes `(dev, ino)`
-    // sufficient to identify our socket: an open fd pins the inode, so no
-    // replacement file can be handed the same one.
-    //
-    // It used to be closed by this point — `serve` consumed the listener and
-    // `tokio::select!` dropped that future on shutdown. On Linux, where inode
-    // numbers are recycled immediately, a daemon B that unlinked and rebound in
-    // that window could be handed our exact (dev, ino), and this call would
-    // then delete B's live socket: the very outage SocketOwnership exists to
-    // prevent, reintroduced one layer down. macOS never showed it; two Linux
-    // CI tests did.
-    release_socket(&socket_path, owned);
-    drop(listener);
+    // Unlinks the socket only if it is still ours, with the listener necessarily
+    // still open (`HeldSocket`'s `Drop` body runs before its fields are
+    // dropped), then releases the startup lock. Explicit here because this
+    // shutdown is deliberate; a panic or an early `exit` path gets the same
+    // treatment from `Drop`.
+    held.release();
 }
 
 /// Resolve when SIGINT or SIGTERM arrives, so the socket is unlinked on a clean

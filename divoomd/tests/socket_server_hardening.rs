@@ -66,7 +66,7 @@ async fn idle_timeout_drops_silent_peer() {
     let handler = Arc::new(Stub);
     // 300ms idle: a peer that connects and sends nothing is dropped.
     tokio::spawn(serve(
-        Box::leak(Box::new(listener)),
+        Arc::new(listener),
         handler,
         8,
         Duration::from_millis(300),
@@ -93,7 +93,7 @@ async fn max_connections_backpressures_extra() {
     let handler = Arc::new(Stub);
     // max_connections = 1, long idle so the open connection keeps its permit.
     tokio::spawn(serve(
-        Box::leak(Box::new(listener)),
+        Arc::new(listener),
         handler,
         1,
         Duration::from_secs(60),
@@ -135,7 +135,7 @@ async fn subscribe_idle_drops_silent_subscriber() {
     let (tx, _rx) = broadcast::channel::<Value>(8);
     let handler = Arc::new(SilentSubStub { tx });
     tokio::spawn(serve(
-        Box::leak(Box::new(listener)),
+        Arc::new(listener),
         handler,
         8,
         Duration::from_millis(300),
