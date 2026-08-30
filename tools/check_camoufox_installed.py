@@ -8,13 +8,14 @@ later inside pytest, looking like a test regression rather than a failed
 install. A step that cannot fail is not a gate, so check the artifact rather
 than the exit code.
 
-It also checks WHICH build is active, because the build is load-bearing:
-152.0.4-beta.29 runs `page.evaluate` in an isolated world, so the app's globals
-read as `undefined` and 60 e2e tests fail while the page itself is healthy.
-Pinning the pip package does not prevent that -- camoufox 0.5.4 accepts any
-build in [alpha.1, 1), so a bare `fetch` takes the newest. Checking only that
-*a* browser exists would let that drift back in silently, which is the same
-failure this file was written for one level down.
+It also checks WHICH build is active, because the build is load-bearing.
+From 152.0.4-beta.29 page scripting runs in an ISOLATED WORLD, so the app's
+globals read as `undefined` unless the suite explicitly reaches the main world
+(tests/support/browser.py). That transition turned CI red once already, with 60
+failures and no code change. Pinning the pip package does not prevent it --
+camoufox accepts any build in [alpha.1, 1), so a bare `fetch` takes the newest.
+Checking only that *a* browser exists would let the next such change drift in
+silently, which is the same failure this file was written for one level down.
 
 Override with CAMOUFOX_EXPECTED_BUILD when deliberately testing another build;
 set it empty to skip the build check and only require presence.
@@ -35,7 +36,7 @@ import sys
 
 # Keep in step with `camoufox set` in .github/workflows/tests.yml and the
 # rationale in tests/support/browser.py.
-EXPECTED_BUILD = os.environ.get("CAMOUFOX_EXPECTED_BUILD", "152.0.4-beta.28")
+EXPECTED_BUILD = os.environ.get("CAMOUFOX_EXPECTED_BUILD", "152.0.4-beta.29")
 
 
 def installed_version() -> str | None:

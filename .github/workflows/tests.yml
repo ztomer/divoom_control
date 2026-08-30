@@ -72,10 +72,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt || true
           # Pinned for reproducibility. NOTE: this pin is not the one that
-          # fixes the e2e suite -- the BROWSER BUILD is (see the fetch step
-          # below). 0.5.4 accepts any build in [alpha.1, 1), so pinning the
-          # package alone still lets `fetch` take the newest browser.
-          pip install pytest pillow pyaudio playwright 'camoufox==0.5.4'
+          # decides whether the e2e suite passes -- the BROWSER BUILD is (see
+          # the fetch step below). camoufox accepts any build in [alpha.1, 1),
+          # so pinning the package alone still lets `fetch` take the newest.
+          pip install pytest pillow pyaudio playwright 'camoufox==0.5.5'
 
       - name: Install the camoufox browser
         # The GUI e2e suites (15 modules) drive headless camoufox via
@@ -96,14 +96,14 @@ jobs:
         #      is not a gate, so we check the artifact, not the exit code.
         #
         # The BROWSER BUILD is pinned, and pinning the pip package is NOT
-        # enough: camoufox 0.5.4 accepts any build in [alpha.1, 1), so a bare
-        # `fetch` takes the newest. Build 152.0.4-beta.29 (2026-08-20) runs
-        # page.evaluate in an ISOLATED WORLD — window.DivoomState reads
-        # undefined and 60 e2e tests fail while the page itself is healthy.
-        # That is what turned CI red on 2026-08-25 with no code change.
-        # Proven on 2026-08-30 by holding the package at 0.5.4 and moving only
-        # the build: beta.29 fails, beta.28 passes. See tests/support/browser.py
-        # for the migration needed to raise this pin.
+        # enough: camoufox accepts any build in [alpha.1, 1), so a bare `fetch`
+        # takes the newest. The pin is now beta.29 — the current latest on the
+        # official/stable channel — and the suite reaches the page's main world
+        # explicitly through tests/support/browser.py rather than relying on a
+        # build where the two worlds happened to be the same one. The pin stays
+        # because "latest" is still a moving target: it is what makes a red run
+        # mean a code change, and it is verified below rather than assumed.
+        # tests/support/browser.py documents what reaching the main world takes.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -114,11 +114,11 @@ jobs:
           for attempt in 1 2 3; do
             # `fetch <spec>` also SYNCS the repo list; `set` alone fails on a
             # clean runner with "No repo cache found. Run 'camoufox sync'
-            # first." -- and 0.5.4 has no `sync` subcommand, so that advice is
+            # first." -- and there is no `sync` subcommand, so that advice is
             # unfollowable. Fetching only the pinned build makes it the active
             # one; `set` afterwards is belt-and-braces if anything else exists.
-            python -m camoufox fetch official/152.0.4-beta.28 || true
-            python -m camoufox set official/stable/152.0.4-beta.28 || true
+            python -m camoufox fetch official/152.0.4-beta.29 || true
+            python -m camoufox set official/stable/152.0.4-beta.29 || true
             if python3 tools/check_camoufox_installed.py; then
               exit 0
             fi

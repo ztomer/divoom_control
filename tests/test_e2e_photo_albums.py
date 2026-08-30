@@ -6,7 +6,13 @@ Skipped if Playwright / a browser isn't installed.
 """
 import pytest
 from pathlib import Path
-from tests.support.browser import launch as launch_browser, require_browser
+from tests.support.browser import (
+    add_init_js,
+    eval_js,
+    launch as launch_browser,
+    require_browser,
+    wait_js,
+)
 
 INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.html"
 
@@ -28,10 +34,10 @@ window.pywebview = { api: new Proxy({}, { get: (_t, name) => (...args) => {
 async def _open_photo_albums_tab(p):
     browser = await launch_browser(p)
     page = await browser.new_page()
-    await page.add_init_script(_MOCK_API)
+    await add_init_js(page, _MOCK_API)
     await page.goto(f"file://{INDEX_HTML}")
     await page.wait_for_load_state("domcontentloaded")
-    await page.wait_for_function("() => !!window.DivoomState && !!window.renderDeviceDots")
+    await wait_js(page, "() => !!window.DivoomState && !!window.renderDeviceDots")
     await page.click(".nav-btn[data-tab='pixel-art']")
     await page.click(".tab-btn[data-pixel-tab='pixel-photo-albums']")
     return browser, page
@@ -45,7 +51,7 @@ async def test_photo_albums_tab_loads_the_devices_albums():
     async with async_playwright() as p:
         browser, page = await _open_photo_albums_tab(p)
         try:
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => document.querySelectorAll('#cloud-photo-album-list .cloud-clock-row').length > 0")
             names = await page.eval_on_selector_all(
                 "#cloud-photo-album-list .cloud-clock-name", "els => els.map(e => e.textContent)")
@@ -62,18 +68,18 @@ async def test_play_without_a_device_shows_connect_prompt_and_does_not_call_play
     async with async_playwright() as p:
         browser, page = await _open_photo_albums_tab(p)
         try:
-            await page.evaluate("""() => {
+            await eval_js(page, """() => {
                 window.__playAlbumCalls = [];
                 window.__api.play_album = (albumId) => { window.__playAlbumCalls.push(albumId); return true; };
             }""")
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => document.querySelectorAll('#cloud-photo-album-list .cloud-clock-row').length > 0")
             await page.click("#cloud-photo-album-list .cloud-clock-apply-btn")
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => document.getElementById('toast')?.classList.contains('show')")
-            toast = await page.evaluate("() => document.getElementById('toast').textContent")
+            toast = await eval_js(page, "() => document.getElementById('toast').textContent")
             assert "Connect a device first" in toast
-            calls = await page.evaluate("() => window.__playAlbumCalls")
+            calls = await eval_js(page, "() => window.__playAlbumCalls")
             assert calls == []
         finally:
             await browser.close()
@@ -90,18 +96,18 @@ async def test_play_with_a_device_calls_play_album_with_the_real_album_id():
     async with async_playwright() as p:
         browser, page = await _open_photo_albums_tab(p)
         try:
-            await page.evaluate("""() => {
+            await eval_js(page, """() => {
                 window.DivoomState.appConnected = true;
                 window.__playAlbumCalls = [];
                 window.__api.play_album = (albumId) => { window.__playAlbumCalls.push(albumId); return true; };
             }""")
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => document.querySelectorAll('#cloud-photo-album-list .cloud-clock-row').length > 0")
             await page.click("#cloud-photo-album-list .cloud-clock-apply-btn")
-            await page.wait_for_function("() => (window.__playAlbumCalls || []).length > 0")
-            calls = await page.evaluate("() => window.__playAlbumCalls")
+            await wait_js(page, "() => (window.__playAlbumCalls || []).length > 0")
+            calls = await eval_js(page, "() => window.__playAlbumCalls")
             assert calls == [7]  # first row: Trip, ClockId 7
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => document.getElementById('toast')?.textContent.includes('Album playing')")
         finally:
             await browser.close()

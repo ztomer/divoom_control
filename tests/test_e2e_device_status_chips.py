@@ -10,7 +10,13 @@ installed.
 """
 import pytest
 from pathlib import Path
-from tests.support.browser import launch as launch_browser, require_browser
+from tests.support.browser import (
+    add_init_js,
+    eval_js,
+    launch as launch_browser,
+    require_browser,
+    wait_js,
+)
 
 INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.html"
 
@@ -29,10 +35,10 @@ window.pywebview = { api: new Proxy({}, { get: (_t, name) => (...args) => {
 async def _open(p):
     browser = await launch_browser(p)
     page = await browser.new_page()
-    await page.add_init_script(_MOCK_API)
+    await add_init_js(page, _MOCK_API)
     await page.goto(f"file://{INDEX_HTML}")
     await page.wait_for_load_state("domcontentloaded")
-    await page.wait_for_function("() => !!window.DivoomState && !!window.renderDeviceDots")
+    await wait_js(page, "() => !!window.DivoomState && !!window.renderDeviceDots")
     return browser, page
 
 
@@ -43,7 +49,7 @@ async def test_active_device_chip_is_marked_active():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await page.evaluate("""() => {
+            res = await eval_js(page, """() => {
                 window.DivoomState.discoveredDevices = [{address:'AA', name:'Ditoo'}];
                 document.getElementById('banner-device-mac').textContent = 'AA';
                 window.renderDeviceDots();
@@ -64,7 +70,7 @@ async def test_streaming_chip_shows_kind_and_clears_when_active():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            idle = await page.evaluate("""() => {
+            idle = await eval_js(page, """() => {
                 window.DivoomState.discoveredDevices = [{
                     address:'AA', name:'Ditoo', daemonOwned:true,
                     activityKind:'music', activityState:'connected'}];
@@ -76,7 +82,7 @@ async def test_streaming_chip_shows_kind_and_clears_when_active():
             }""")
             assert idle["streaming"] is True
             assert "music" in idle["badge"]
-            active = await page.evaluate("""() => {
+            active = await eval_js(page, """() => {
                 document.getElementById('banner-device-mac').textContent = 'AA';
                 window.renderDeviceDots();
                 const c = document.querySelector('#device-dots .device-chip');
@@ -96,7 +102,7 @@ async def test_degraded_chip_shows_reconnecting_badge():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await page.evaluate("""() => {
+            res = await eval_js(page, """() => {
                 window.DivoomState.discoveredDevices = [{
                     address:'AA', name:'Ditoo', activityState:'degraded'}];
                 document.getElementById('banner-device-mac').textContent = '';
@@ -108,7 +114,7 @@ async def test_degraded_chip_shows_reconnecting_badge():
             assert res["degraded"] is True
             assert "reconnecting" in res["badge"]
             # A degraded link on the ACTIVE device still shows both states.
-            both = await page.evaluate("""() => {
+            both = await eval_js(page, """() => {
                 document.getElementById('banner-device-mac').textContent = 'AA';
                 window.renderDeviceDots();
                 const c = document.querySelector('#device-dots .device-chip');
@@ -127,7 +133,7 @@ async def test_known_undetected_chip_is_distinct():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await page.evaluate("""() => {
+            res = await eval_js(page, """() => {
                 window.DivoomState.discoveredDevices = [{address:'AA', name:'Ditoo'}];
                 window.__knownUndetectedDevices = [{address:'BB', name:'Pixoo'}];
                 document.getElementById('banner-device-mac').textContent = '';
@@ -169,7 +175,7 @@ async def test_detected_device_is_not_known_chip():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await page.evaluate("""() => {
+            res = await eval_js(page, """() => {
                 window.DivoomState.discoveredDevices = [{address:'AA', name:'Ditoo'}];
                 window.__knownUndetectedDevices = [{address:'AA', name:'Ditoo'}];
                 document.getElementById('banner-device-mac').textContent = '';
@@ -192,7 +198,7 @@ async def test_lan_device_renders_as_chip():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await page.evaluate("""() => {
+            res = await eval_js(page, """() => {
                 window.DivoomState.discoveredDevices = [];
                 window.__knownUndetectedDevices = [];
                 window.DivoomState.registeredLanDevices = [{ip:'10.0.0.5'}];
@@ -213,7 +219,7 @@ async def test_duplicate_known_address_not_double_rendered():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await page.evaluate("""() => {
+            res = await eval_js(page, """() => {
                 window.DivoomState.discoveredDevices = [{address:'AA', name:'Ditoo'}];
                 window.__knownUndetectedDevices = [{address:'AA', name:'Ditoo'}];
                 window.renderDeviceDots();
@@ -236,15 +242,15 @@ async def test_owned_devices_event_adds_daemon_owned_missing_from_scan():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await page.evaluate("""() => {
+            await eval_js(page, """() => {
                 window.DivoomState.discoveredDevices = [];
                 return window.Divoom.onOwnedDevices({type:'owned_devices', devices:[
                     {address:'AA', name:'Ditoo', kind:'weather', state:'connected'}]});
             }""")
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => !!document.querySelector('#device-dots .device-chip')",
                 timeout=4000)
-            res = await page.evaluate("""() => {
+            res = await eval_js(page, """() => {
                 const c = document.querySelector('#device-dots .device-chip');
                 return { value: c.dataset.value,
                          streaming: c.classList.contains('chip-streaming'),
@@ -264,7 +270,7 @@ async def test_merge_discovered_devices_unions_by_address():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await page.evaluate("""() => {
+            res = await eval_js(page, """() => {
                 window.DivoomState.discoveredDevices = [{address:'AA', name:'old'}];
                 const merged = window.mergeDiscoveredDevices([
                     {address:'AA', name:'new'}, {address:'BB', name:'Pixoo'}]);
@@ -289,7 +295,7 @@ async def test_restored_device_shows_not_in_range_until_confirmed():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await page.evaluate("""() => {
+            res = await eval_js(page, """() => {
                 window.DivoomState.discoveredDevices =
                     [{address:'AA', name:'Ditoo', unconfirmed:true}];
                 window.renderDeviceDots();
@@ -316,7 +322,7 @@ async def test_scan_merge_clears_unconfirmed_flag():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await page.evaluate("""() => {
+            res = await eval_js(page, """() => {
                 window.DivoomState.discoveredDevices =
                     [{address:'AA', name:'Ditoo', unconfirmed:true}];
                 window.mergeDiscoveredDevices([{address:'AA', name:'Ditoo'}]);
@@ -341,7 +347,7 @@ async def test_single_scan_miss_does_not_downgrade():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await page.evaluate("""() => {
+            res = await eval_js(page, """() => {
                 window.DivoomState.discoveredDevices = [{address:'AA', name:'Ditoo'}];
                 window.mergeDiscoveredDevices([]);   // one miss
                 window.renderDeviceDots();
@@ -366,7 +372,7 @@ async def test_mid_session_scan_misses_downgrade_after_threshold():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await page.evaluate("""() => {
+            res = await eval_js(page, """() => {
                 window.DivoomState.discoveredDevices = [{address:'AA', name:'Ditoo'}];
                 window.mergeDiscoveredDevices([]);   // miss 1 -- below threshold
                 window.mergeDiscoveredDevices([]);   // miss 2 -- hits threshold
@@ -388,7 +394,7 @@ async def test_redetection_resets_the_miss_counter():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await page.evaluate("""() => {
+            res = await eval_js(page, """() => {
                 window.DivoomState.discoveredDevices = [{address:'AA', name:'Ditoo'}];
                 window.mergeDiscoveredDevices([]);                    // miss 1
                 window.mergeDiscoveredDevices([{address:'AA', name:'Ditoo'}]);  // re-detected -- resets
@@ -412,7 +418,7 @@ async def test_daemon_owned_device_exempt_from_scan_miss_downgrade():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await page.evaluate("""() => {
+            res = await eval_js(page, """() => {
                 window.DivoomState.discoveredDevices = [{
                     address:'AA', name:'Ditoo', daemonOwned:true,
                     activityKind:'music', activityState:'connected'}];
@@ -441,7 +447,7 @@ async def test_active_device_never_shows_not_in_range_even_if_unconfirmed():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await page.evaluate("""() => {
+            res = await eval_js(page, """() => {
                 window.DivoomState.discoveredDevices =
                     [{address:'AA', name:'Ditoo', unconfirmed:true}];
                 document.getElementById('banner-device-mac').textContent = 'AA';
@@ -467,7 +473,7 @@ async def test_render_device_dots_empty_state_no_crash():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await page.evaluate("""() => {
+            res = await eval_js(page, """() => {
                 window.DivoomState.discoveredDevices = [];
                 window.__knownUndetectedDevices = [];
                 window.DivoomState.registeredLanDevices = [];

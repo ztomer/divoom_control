@@ -10,7 +10,13 @@ Skipped if Playwright / a browser isn't installed.
 """
 import pytest
 from pathlib import Path
-from tests.support.browser import launch as launch_browser, require_browser
+from tests.support.browser import (
+    add_init_js,
+    eval_js,
+    launch as launch_browser,
+    require_browser,
+    wait_js,
+)
 
 INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.html"
 
@@ -30,10 +36,10 @@ window.pywebview = { api: new Proxy({}, { get: (_t, name) => (...args) => {
 async def _open(p):
     browser = await launch_browser(p)
     page = await browser.new_page()
-    await page.add_init_script(_MOCK_API)
+    await add_init_js(page, _MOCK_API)
     await page.goto(f"file://{INDEX_HTML}")
     await page.wait_for_load_state("domcontentloaded")
-    await page.wait_for_function("() => !!window.DivoomState && !!window.renderDeviceDots")
+    await wait_js(page, "() => !!window.DivoomState && !!window.renderDeviceDots")
     return browser, page
 
 
@@ -47,20 +53,20 @@ async def test_scan_shows_progress_then_result():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await page.evaluate("""() => {
+            await eval_js(page, """() => {
                 window.__api.scan_devices = () => new Promise(r => setTimeout(
                     () => r(JSON.stringify([{address:'AA',name:'Ditoo'},
                                             {address:'BB',name:'Pixoo'}])), 150));
                 window.runBleScan();
             }""")
             # During the scan the indicator must be visible.
-            assert await page.evaluate(
+            assert await eval_js(page, 
                 "() => document.getElementById('scan-indicator').hidden") is False
             # Afterwards: hidden again + a 'Discovered 2' toast that's actually shown.
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => document.getElementById('scan-indicator').hidden === true",
                 timeout=4000)
-            toast = await page.evaluate(
+            toast = await eval_js(page, 
                 "() => ({c: document.getElementById('toast').className,"
                 "        t: document.getElementById('toast').textContent})")
             assert "show" in toast["c"]
@@ -79,7 +85,7 @@ async def test_connect_shows_connecting_then_connected():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await page.evaluate("""() => {
+            await eval_js(page, """() => {
                 window.__api.connect_single_device = () =>
                     new Promise(r => setTimeout(() => r(true), 120));
                 window.__api.get_device_name = () => 'Ditoo';   // realistic readback
@@ -88,7 +94,7 @@ async def test_connect_shows_connecting_then_connected():
                 window.connectDevice('Ditoo', 'AA');
             }""")
             # Immediately: feedback that a connect is in flight.
-            mid = await page.evaluate("""() => ({
+            mid = await eval_js(page, """() => ({
                 toast: document.getElementById('toast').textContent,
                 connecting: !!document.querySelector('#device-dots .device-chip.connecting')
                           || (document.getElementById('global-status-dot')||{}).className
@@ -97,9 +103,9 @@ async def test_connect_shows_connecting_then_connected():
             assert "Connecting to Ditoo" in mid["toast"]
             assert mid["connecting"]
             # After success: connected toast + active state + banner names the device.
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => window.DivoomState.appConnected === true", timeout=4000)
-            done = await page.evaluate("""() => ({
+            done = await eval_js(page, """() => ({
                 toast: document.getElementById('toast').textContent,
                 active: !!document.querySelector('#device-dots .device-chip.chip-active'),
                 banner: document.getElementById('banner-device-name').textContent
@@ -121,7 +127,7 @@ async def test_connect_failure_surfaces_the_reason():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await page.evaluate("""() => {
+            await eval_js(page, """() => {
                 window.__api.connect_single_device = () => Promise.resolve(false);
                 window.__api.get_last_connect_error = () =>
                     'Asleep or out of range — wake the screen and retry.';
@@ -129,10 +135,10 @@ async def test_connect_failure_surfaces_the_reason():
                 window.renderDeviceDots();
                 window.connectDevice('Ditoo', 'AA');
             }""")
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => /Asleep or out of range/.test(document.getElementById('toast').textContent)",
                 timeout=4000)
-            res = await page.evaluate("""() => ({
+            res = await eval_js(page, """() => ({
                 toastClass: document.getElementById('toast').className,
                 banner: document.getElementById('banner-device-name').textContent,
                 connected: window.DivoomState.appConnected
@@ -154,7 +160,7 @@ async def test_action_without_device_guides_the_user():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await page.evaluate("""() => {
+            res = await eval_js(page, """() => {
                 window.DivoomState.appConnected = false;
                 const ok = window.requireDevice();
                 return { ok, toast: document.getElementById('toast').textContent,
@@ -178,7 +184,7 @@ async def test_streaming_and_degraded_devices_are_visibly_distinct():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            streaming = await page.evaluate("""() => {
+            streaming = await eval_js(page, """() => {
                 window.DivoomState.discoveredDevices = [{
                     address:'AA', name:'Ditoo', daemonOwned:true,
                     activityKind:'music', activityState:'connected'}];
@@ -190,7 +196,7 @@ async def test_streaming_and_degraded_devices_are_visibly_distinct():
             assert streaming["streaming"] is True
             assert "music" in streaming["state"]
 
-            degraded = await page.evaluate("""() => {
+            degraded = await eval_js(page, """() => {
                 window.DivoomState.discoveredDevices[0].activityState = 'degraded';
                 window.renderDeviceDots();
                 const d = document.querySelector('#device-dots .device-chip');
@@ -213,14 +219,14 @@ async def test_scan_failure_is_surfaced_not_silent():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await page.evaluate("""() => {
+            await eval_js(page, """() => {
                 window.__api.scan_devices = () => Promise.reject(new Error('backend gone'));
                 window.runBleScan();
             }""")
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => /Scan failed/i.test(document.getElementById('toast').textContent)",
                 timeout=4000)
-            res = await page.evaluate("""() => ({
+            res = await eval_js(page, """() => ({
                 cls: document.getElementById('toast').className,
                 spinnerHidden: document.getElementById('scan-indicator').hidden
             })""")
@@ -240,16 +246,16 @@ async def test_degraded_link_shows_distinct_state():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await page.evaluate("""() => {
+            res = await eval_js(page, """() => {
                 window.DivoomState.appConnected = true;
                 window.__api.get_connection_state = () =>
                     JSON.stringify({connected:true, state:'degraded'});
                 return window.refreshConnectionState();
             }""")
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => (document.getElementById('global-status-dot')||{}).className"
                 "        ?.includes('degraded')", timeout=4000)
-            title = await page.evaluate(
+            title = await eval_js(page, 
                 "() => document.getElementById('global-status-dot').title")
             assert "degraded" in title.lower() or "reconnect" in title.lower()
         finally:
@@ -267,8 +273,8 @@ async def test_gallery_requests_the_active_device_resolution():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await page.wait_for_function("() => typeof window.readGalleryTargetSize === 'function'")
-            sizes = await page.evaluate("""() => {
+            await wait_js(page, "() => typeof window.readGalleryTargetSize === 'function'")
+            sizes = await eval_js(page, """() => {
                 const banner = document.getElementById('banner-device-name');
                 const out = {};
                 banner.textContent = 'Pixoo64'; out.pixoo64 = window.readGalleryTargetSize();
@@ -291,14 +297,14 @@ async def test_wall_button_communicates_screen_count():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            hidden0 = await page.evaluate("""() => {
+            hidden0 = await eval_js(page, """() => {
                 window.DivoomState.assignedSlots = {};
                 window.renderWallButton();
                 return document.getElementById('wall-button').hidden;
             }""")
             assert hidden0 is True   # no empty control
 
-            shown = await page.evaluate("""() => {
+            shown = await eval_js(page, """() => {
                 window.DivoomState.assignedSlots = {AA:{}, BB:{}, CC:{}};
                 window.renderWallButton();
                 const host = document.getElementById('wall-button');
@@ -324,22 +330,22 @@ async def test_known_but_undetected_device_shows_distinct_state():
         browser, page = await _open(p)
         try:
             # Render the current scan result synchronously...
-            await page.evaluate("""() => {
+            await eval_js(page, """() => {
                 window.DivoomState.discoveredDevices = [
                     {address:'AA', name:'Ditoo'}, {address:'BB', name:'Pixoo'}];
                 window.renderDeviceDots();
             }""")
             # ...then trigger the async known-devices fetch.
-            await page.evaluate("""() => {
+            await eval_js(page, """() => {
                 window.__api.get_known_devices = () =>
                     JSON.stringify([{address:'CC', name:'Tivoo', detected:false}]);
                 window.refreshKnownDevices();
             }""")
             # Wait for the async fetch + re-render to land the CC chip.
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => !!document.querySelector('#device-dots .device-chip[data-value=\"CC\"]')",
                 timeout=4000)
-            res = await page.evaluate("""() => {
+            res = await eval_js(page, """() => {
                 const chips = [...document.querySelectorAll('#device-dots .device-chip')];
                 const cc = chips.find(c => c.dataset.value === 'CC');
                 const aa = chips.find(c => c.dataset.value === 'AA');

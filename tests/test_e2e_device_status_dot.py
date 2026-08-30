@@ -15,7 +15,13 @@ installed.
 """
 import pytest
 from pathlib import Path
-from tests.support.browser import launch as launch_browser, require_browser
+from tests.support.browser import (
+    add_init_js,
+    eval_js,
+    launch as launch_browser,
+    require_browser,
+    wait_js,
+)
 
 INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.html"
 
@@ -39,22 +45,22 @@ _STATUS_EVENT = "window.Divoom.onDaemonEvent"
 async def _open(p):
     browser = await launch_browser(p)
     page = await browser.new_page()
-    await page.add_init_script(_MOCK_API)
+    await add_init_js(page, _MOCK_API)
     await page.goto(f"file://{INDEX_HTML}")
     await page.wait_for_load_state("domcontentloaded")
-    await page.wait_for_function(
+    await wait_js(page, 
         "() => !!window.DivoomState && !!window.renderDeviceDots"
         " && !!window.Divoom && !!window.Divoom.onDaemonEvent")
     return browser, page
 
 
 def _dot_cls(page):
-    return page.evaluate(
+    return eval_js(page, 
         "() => document.getElementById('global-status-dot').className")
 
 
 def _dot_info(page):
-    return page.evaluate("""() => ({
+    return eval_js(page, """() => ({
         cls: document.getElementById('global-status-dot').className,
         title: document.getElementById('global-status-dot').title,
         connected: window.DivoomState.appConnected })""")
@@ -67,7 +73,7 @@ async def test_status_dot_connected_ble():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await page.evaluate(f"""() => {{
+            await eval_js(page, f"""() => {{
                 window.DivoomState.discoveredDevices = [{{address:'AA:BB:CC', name:'Ditoo'}}];
                 {_STATUS_EVENT}({{type:'status', connected:true,
                     state:'connected', mac:'AA:BB:CC'}});
@@ -87,7 +93,7 @@ async def test_status_dot_connected_lan():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await page.evaluate(f"""() => {{
+            await eval_js(page, f"""() => {{
                 {_STATUS_EVENT}({{type:'status', connected:true,
                     state:'connected', lan_ip:'10.0.0.5'}});
             }}""")
@@ -106,8 +112,8 @@ async def test_status_dot_connected_wall():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await page.evaluate("() => window.connectDevice('Virtual Wall', 'MatrixWall')")
-            await page.wait_for_function(
+            await eval_js(page, "() => window.connectDevice('Virtual Wall', 'MatrixWall')")
+            await wait_js(page, 
                 "() => document.getElementById('global-status-dot')"
                 ".className.includes('wall')", timeout=4000)
             cls = await _dot_cls(page)
@@ -123,7 +129,7 @@ async def test_status_dot_degraded_keeps_appconnected():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await page.evaluate(f"""() => {{
+            await eval_js(page, f"""() => {{
                 window.DivoomState.appConnected = true;
                 {_STATUS_EVENT}({{type:'status', connected:true,
                     state:'degraded', mac:'AA'}});
@@ -143,7 +149,7 @@ async def test_status_dot_disconnected_flips_appconnected():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await page.evaluate(f"""() => {{
+            await eval_js(page, f"""() => {{
                 window.DivoomState.appConnected = true;
                 {_STATUS_EVENT}({{type:'status', connected:false}});
             }}""")
@@ -164,12 +170,12 @@ async def test_status_dot_state_disconnected_overrides_stale_connected():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await page.evaluate(f"""() => {{
+            await eval_js(page, f"""() => {{
                 window.DivoomState.appConnected = true;
                 {_STATUS_EVENT}({{type:'status', connected:true,
                     state:'disconnected', mac:'AA'}});
             }}""")
-            connected = await page.evaluate("() => window.DivoomState.appConnected")
+            connected = await eval_js(page, "() => window.DivoomState.appConnected")
             cls = await _dot_cls(page)
             assert "inactive" in cls
             assert connected is False
@@ -186,7 +192,7 @@ async def test_status_dot_malformed_event_leaves_dot_untouched():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await page.evaluate(f"""() => {{
+            await eval_js(page, f"""() => {{
                 window.DivoomState.appConnected = true;
                 const d = document.getElementById('global-status-dot');
                 d.className = 'transport-dot active ble';
@@ -212,11 +218,11 @@ async def test_status_dot_event_is_authoritative():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await page.evaluate(f"""() => {{
+            await eval_js(page, f"""() => {{
                 window.DivoomState.appConnected = true;
                 {_STATUS_EVENT}({{type:'status', connected:false}});
             }}""")
-            res = await page.evaluate(
+            res = await eval_js(page, 
                 "() => { const d=document.getElementById('global-status-dot');"
                 " return {cls:d.className, hasActive:d.classList.contains('active'),"
                 " hasInactive:d.classList.contains('inactive')}; }")
@@ -235,14 +241,14 @@ async def test_status_dot_safety_net_refresh_connection_state():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await page.evaluate("""() => {
+            await eval_js(page, """() => {
                 window.DivoomState.appConnected = true;
                 document.getElementById('banner-device-mac').textContent = 'AA:BB:CC';
                 window.__api.get_connection_state = () =>
                     JSON.stringify({connected:false, state:'disconnected'});
                 return window.refreshConnectionState();
             }""")
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => document.getElementById('global-status-dot')"
                 ".className.includes('inactive')", timeout=4000)
             info = await _dot_info(page)

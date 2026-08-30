@@ -22,7 +22,7 @@ import socketserver
 import threading
 import pytest
 from pathlib import Path
-from tests.support.browser import launch_sync
+from tests.support.browser import add_init_js, launch_sync
 
 playwright = pytest.importorskip("playwright.sync_api", reason="playwright not installed")
 sync_playwright = playwright.sync_playwright
@@ -66,7 +66,7 @@ def main():
          launch_sync(p) as browser:
         ctx = browser.new_context(viewport={"width": 1280, "height": 800})
         # Stub a richer pywebview so the page's widget init doesn't fail
-        ctx.add_init_script("""
+        add_init_js(ctx, """
             window._calls = {};
             function rec(name) { window._calls[name] = (window._calls[name] || 0) + 1; }
             window.pywebview = {

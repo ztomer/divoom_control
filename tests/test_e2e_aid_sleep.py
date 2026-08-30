@@ -7,7 +7,13 @@ Skipped if Playwright / a browser isn't installed.
 """
 import pytest
 from pathlib import Path
-from tests.support.browser import launch as launch_browser, require_browser
+from tests.support.browser import (
+    add_init_js,
+    eval_js,
+    launch as launch_browser,
+    require_browser,
+    wait_js,
+)
 
 INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.html"
 
@@ -33,10 +39,10 @@ window.pywebview = { api: new Proxy({}, { get: (_t, name) => (...args) => {
 async def _open_sleep_sounds_tab(p):
     browser = await launch_browser(p)
     page = await browser.new_page()
-    await page.add_init_script(_MOCK_API)
+    await add_init_js(page, _MOCK_API)
     await page.goto(f"file://{INDEX_HTML}")
     await page.wait_for_load_state("domcontentloaded")
-    await page.wait_for_function("() => !!window.DivoomState && !!window.renderDeviceDots")
+    await wait_js(page, "() => !!window.DivoomState && !!window.renderDeviceDots")
     await page.click(".nav-btn[data-tab='routines']")
     await page.click(".tab-btn[data-routines-tab='routines-sleep-sounds']")
     return browser, page
@@ -50,7 +56,7 @@ async def test_sleep_sounds_tab_loads_the_default_type_on_open():
     async with async_playwright() as p:
         browser, page = await _open_sleep_sounds_tab(p)
         try:
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => document.querySelectorAll('#aid-sleep-list .cloud-clock-row').length > 0")
             names = await page.eval_on_selector_all(
                 "#aid-sleep-list .cloud-clock-name", "els => els.map(e => e.textContent)")
@@ -67,10 +73,10 @@ async def test_switching_sound_type_reloads_the_list():
     async with async_playwright() as p:
         browser, page = await _open_sleep_sounds_tab(p)
         try:
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => document.querySelectorAll('#aid-sleep-list .cloud-clock-row').length > 0")
             await page.click("#aid-sleep-type-tabs .tab-btn[data-sleep-type='1']")
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => document.querySelector('#aid-sleep-list .cloud-clock-name')?.textContent === 'Fan Hum'")
         finally:
             await browser.close()
@@ -84,18 +90,18 @@ async def test_play_without_a_device_shows_connect_prompt_and_does_not_call_play
     async with async_playwright() as p:
         browser, page = await _open_sleep_sounds_tab(p)
         try:
-            await page.evaluate("""() => {
+            await eval_js(page, """() => {
                 window.__playAidSleepCalls = [];
                 window.__api.play_aid_sleep = (sleepId, type) => { window.__playAidSleepCalls.push([sleepId, type]); return true; };
             }""")
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => document.querySelectorAll('#aid-sleep-list .cloud-clock-row').length > 0")
             await page.click("#aid-sleep-list .cloud-clock-apply-btn")
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => document.getElementById('toast')?.classList.contains('show')")
-            toast = await page.evaluate("() => document.getElementById('toast').textContent")
+            toast = await eval_js(page, "() => document.getElementById('toast').textContent")
             assert "Connect a device first" in toast
-            calls = await page.evaluate("() => window.__playAidSleepCalls")
+            calls = await eval_js(page, "() => window.__playAidSleepCalls")
             assert calls == []
         finally:
             await browser.close()
@@ -112,18 +118,18 @@ async def test_play_with_a_device_calls_play_aid_sleep_with_the_real_sleep_id():
     async with async_playwright() as p:
         browser, page = await _open_sleep_sounds_tab(p)
         try:
-            await page.evaluate("""() => {
+            await eval_js(page, """() => {
                 window.DivoomState.appConnected = true;
                 window.__playAidSleepCalls = [];
                 window.__api.play_aid_sleep = (sleepId, type) => { window.__playAidSleepCalls.push([sleepId, type]); return true; };
             }""")
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => document.querySelectorAll('#aid-sleep-list .cloud-clock-row').length > 0")
             await page.click("#aid-sleep-list .cloud-clock-apply-btn")
-            await page.wait_for_function("() => (window.__playAidSleepCalls || []).length > 0")
-            calls = await page.evaluate("() => window.__playAidSleepCalls")
+            await wait_js(page, "() => (window.__playAidSleepCalls || []).length > 0")
+            calls = await eval_js(page, "() => window.__playAidSleepCalls")
             assert calls == [[256, 0]]  # first row: Gentle Rain, SleepId 256, type 0
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => document.getElementById('toast')?.textContent.includes('Playing on device')")
         finally:
             await browser.close()

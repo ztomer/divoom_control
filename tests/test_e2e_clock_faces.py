@@ -6,7 +6,13 @@ Skipped if Playwright / a browser isn't installed.
 """
 import pytest
 from pathlib import Path
-from tests.support.browser import launch as launch_browser, require_browser
+from tests.support.browser import (
+    add_init_js,
+    eval_js,
+    launch as launch_browser,
+    require_browser,
+    wait_js,
+)
 
 INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.html"
 
@@ -33,10 +39,10 @@ window.pywebview = { api: new Proxy({}, { get: (_t, name) => (...args) => {
 async def _open(p):
     browser = await launch_browser(p)
     page = await browser.new_page()
-    await page.add_init_script(_MOCK_API)
+    await add_init_js(page, _MOCK_API)
     await page.goto(f"file://{INDEX_HTML}")
     await page.wait_for_load_state("domcontentloaded")
-    await page.wait_for_function("() => !!window.DivoomState && !!window.renderDeviceDots")
+    await wait_js(page, "() => !!window.DivoomState && !!window.renderDeviceDots")
     return browser, page
 
 
@@ -51,12 +57,12 @@ async def test_clock_panel_loads_dial_types_and_first_list_on_open():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => document.querySelectorAll('#cloud-clock-type-select option').length > 0")
             options = await page.eval_on_selector_all(
                 "#cloud-clock-type-select option", "els => els.map(e => e.value)")
             assert options == ["Social", "Normal"]
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => document.querySelectorAll('#cloud-clock-list .cloud-clock-row').length > 0")
             names = await page.eval_on_selector_all(
                 "#cloud-clock-list .cloud-clock-name", "els => els.map(e => e.textContent)")
@@ -73,10 +79,10 @@ async def test_switching_dial_type_reloads_the_list():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => document.querySelectorAll('#cloud-clock-type-select option').length > 0")
             await page.select_option("#cloud-clock-type-select", "Normal")
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => document.querySelector('#cloud-clock-list .cloud-clock-name')?.textContent === 'Classic Digital Clock'")
         finally:
             await browser.close()
@@ -90,18 +96,18 @@ async def test_apply_without_a_device_shows_connect_prompt_and_does_not_call_set
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await page.evaluate("""() => {
+            await eval_js(page, """() => {
                 window.__setClockCalls = [];
                 window.__api.set_clock = (style, color) => { window.__setClockCalls.push([style, color]); return true; };
             }""")
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => document.querySelectorAll('#cloud-clock-list .cloud-clock-row').length > 0")
             await page.click("#cloud-clock-list .cloud-clock-apply-btn")
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => document.getElementById('toast')?.classList.contains('show')")
-            toast = await page.evaluate("() => document.getElementById('toast').textContent")
+            toast = await eval_js(page, "() => document.getElementById('toast').textContent")
             assert "Connect a device first" in toast
-            calls = await page.evaluate("() => window.__setClockCalls")
+            calls = await eval_js(page, "() => window.__setClockCalls")
             assert calls == []
         finally:
             await browser.close()
@@ -118,18 +124,18 @@ async def test_apply_with_a_device_calls_set_clock_with_the_real_clock_id():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await page.evaluate("""() => {
+            await eval_js(page, """() => {
                 window.DivoomState.appConnected = true;
                 window.__setClockCalls = [];
                 window.__api.set_clock = (style, color) => { window.__setClockCalls.push([style, color]); return true; };
             }""")
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => document.querySelectorAll('#cloud-clock-list .cloud-clock-row').length > 0")
             await page.click("#cloud-clock-list .cloud-clock-apply-btn")
-            await page.wait_for_function("() => (window.__setClockCalls || []).length > 0")
-            calls = await page.evaluate("() => window.__setClockCalls")
+            await wait_js(page, "() => (window.__setClockCalls || []).length > 0")
+            calls = await eval_js(page, "() => window.__setClockCalls")
             assert calls == [[26, "#ffffff"]]  # first row: Facebook Video, ClockId 26
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => document.getElementById('toast')?.textContent.includes('Clock face applied')")
         finally:
             await browser.close()

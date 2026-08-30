@@ -7,9 +7,11 @@ card. Requires `playwright` and `--run-integration`.
 import pytest
 from pathlib import Path
 from tests.support.browser import (
-    UI_TIMEOUT_MS,
+    eval_js,
     launch as launch_browser,
     require_browser,
+    UI_TIMEOUT_MS,
+    wait_js,
 )
 
 INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.html"
@@ -42,7 +44,7 @@ async def test_hot_channel_button_visible_with_many_preview_items():
         # button is trivially inside its bounds -- so the test passed while
         # measuring nothing. A vacuous pass is worse than a timeout.
         await page.wait_for_selector("#hot-preview-list", timeout=UI_TIMEOUT_MS)
-        seeded = await page.evaluate("""
+        seeded = await eval_js(page, """
             () => {
                 const list = document.getElementById('hot-preview-list');
                 if (!list) return -1;
@@ -123,7 +125,7 @@ async def test_gallery_scrolls_internally_not_whole_card():
         # layout check that is normally instant. Fail AT the injection instead,
         # where the cause is still visible.
         await page.wait_for_selector("#gallery-container", timeout=UI_TIMEOUT_MS)
-        injected = await page.evaluate("""
+        injected = await eval_js(page, """
             () => {
                 const grid = document.getElementById('gallery-container');
                 if (!grid) return -1;
@@ -144,14 +146,14 @@ async def test_gallery_scrolls_internally_not_whole_card():
             "below would have timed out for this reason, naming nothing."
         )
         # Wait for layout to settle and scroll height to exceed client height
-        await page.wait_for_function("""
+        await wait_js(page, """
             () => {
                 const g = document.getElementById('gallery-container');
                 return g && g.scrollHeight > g.clientHeight;
             }
         """, timeout=UI_TIMEOUT_MS)
 
-        gallery_scroll = await page.evaluate("""
+        gallery_scroll = await eval_js(page, """
             () => {
                 const g = document.getElementById('gallery-container');
                 return { scrollHeight: g.scrollHeight, clientHeight: g.clientHeight };

@@ -15,7 +15,7 @@ Loads the real index.html via file:// in headless Chromium. Skipped if Playwrigh
 """
 import pytest
 from pathlib import Path
-from tests.support.browser import launch as launch_browser, require_browser
+from tests.support.browser import eval_js, launch as launch_browser, require_browser
 
 INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.html"
 
@@ -31,7 +31,7 @@ async def test_settings_moved_to_appbar_gear():
             page = await browser.new_page()
             await page.goto(f"file://{INDEX_HTML}")
             await page.wait_for_load_state("domcontentloaded")
-            result = await page.evaluate(
+            result = await eval_js(page, 
                 """() => {
                     const sidebarSettings = [...document.querySelectorAll('.sidebar .nav-btn[data-tab]')]
                         .some(b => b.getAttribute('data-tab') === 'settings');
@@ -71,7 +71,7 @@ async def test_corner_transport_indicator_removed():
             page = await browser.new_page(viewport={"width": 1100, "height": 720})
             await page.goto(f"file://{INDEX_HTML}")
             await page.wait_for_load_state("domcontentloaded")
-            counts = await page.evaluate(
+            counts = await eval_js(page, 
                 """() => ({
                     pill: document.querySelectorAll('.corner-transports, .appbar-transports').length,
                     dots: ['tr-ble-dot','tr-lan-dot','tr-cloud-dot','tr-ext-dot']

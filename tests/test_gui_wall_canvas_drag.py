@@ -26,7 +26,7 @@ import time
 from pathlib import Path
 
 import pytest
-from tests.support.browser import UI_TIMEOUT_MS, launch_sync
+from tests.support.browser import add_init_js, eval_js, launch_sync, UI_TIMEOUT_MS
 
 try:
     from playwright.sync_api import sync_playwright
@@ -143,7 +143,7 @@ def _open_wall_tab(page) -> None:
     Tests must activate the tab before interacting with the canvas.
     """
     page.wait_for_selector("#arranger-canvas", state="attached", timeout=UI_TIMEOUT_MS)
-    page.evaluate(ACTIVATE_WALL_TAB_JS)
+    eval_js(page, ACTIVATE_WALL_TAB_JS)
     page.wait_for_selector("#arranger-canvas", state="visible", timeout=UI_TIMEOUT_MS)
 
 
@@ -158,7 +158,7 @@ def _get_canvas_origin(page) -> tuple:
     but bounding_box() returns viewport-absolute. We subtract the
     canvas origin to get canvas-relative coordinates.
     """
-    return tuple(page.evaluate("""
+    return tuple(eval_js(page, """
         (() => {
             const c = document.getElementById('arranger-canvas');
             const r = c.getBoundingClientRect();
@@ -188,7 +188,7 @@ def test_wall_canvas_renders_added_node(browser):
 
     with _serve_directory(WEB_UI_DIR) as url:
         context = browser.new_context(viewport={"width": 1280, "height": 800})
-        context.add_init_script(PYWEBVIEW_STUB)
+        add_init_js(context, PYWEBVIEW_STUB)
         page = context.new_page()
         page.goto(url, wait_until="domcontentloaded")
         _open_wall_tab(page)
@@ -198,7 +198,7 @@ def test_wall_canvas_renders_added_node(browser):
         assert len(nodes) == 0, f"expected empty canvas, got {len(nodes)} nodes"
 
         # Seed a node and re-render.
-        page.evaluate(SEED_WALL_NODE_JS)
+        eval_js(page, SEED_WALL_NODE_JS)
         page.wait_for_timeout(50)
 
         nodes = page.query_selector_all(".arranger-node")
@@ -224,11 +224,11 @@ def test_wall_canvas_drag_node_updates_position(browser):
 
     with _serve_directory(WEB_UI_DIR) as url:
         context = browser.new_context(viewport={"width": 1280, "height": 800})
-        context.add_init_script(PYWEBVIEW_STUB)
+        add_init_js(context, PYWEBVIEW_STUB)
         page = context.new_page()
         page.goto(url, wait_until="domcontentloaded")
         _open_wall_tab(page)
-        page.evaluate(SEED_WALL_NODE_JS)
+        eval_js(page, SEED_WALL_NODE_JS)
         page.wait_for_timeout(50)
 
         node = page.query_selector(".arranger-node")
@@ -251,7 +251,7 @@ def test_wall_canvas_drag_node_updates_position(browser):
         assert 65 <= ny <= 75, f"expected new y~70, got {ny}"
 
         # The state should be updated too.
-        slots = page.evaluate("window.DivoomState.assignedSlots")
+        slots = eval_js(page, "window.DivoomState.assignedSlots")
         slot = slots["AA:BB:CC:DD:EE:01"]
         assert 85 <= slot["x"] <= 95, f"expected slot.x~90, got {slot['x']}"
         assert 65 <= slot["y"] <= 75, f"expected slot.y~70, got {slot['y']}"
@@ -269,11 +269,11 @@ def test_wall_canvas_drag_node_clamped_to_canvas(browser):
 
     with _serve_directory(WEB_UI_DIR) as url:
         context = browser.new_context(viewport={"width": 1280, "height": 800})
-        context.add_init_script(PYWEBVIEW_STUB)
+        add_init_js(context, PYWEBVIEW_STUB)
         page = context.new_page()
         page.goto(url, wait_until="domcontentloaded")
         _open_wall_tab(page)
-        page.evaluate(SEED_WALL_NODE_JS)
+        eval_js(page, SEED_WALL_NODE_JS)
         page.wait_for_timeout(50)
 
         node = page.query_selector(".arranger-node")
@@ -295,7 +295,7 @@ def test_wall_canvas_drag_node_clamped_to_canvas(browser):
         # .arranger-node has a 2px border, so clientWidth is 4 less than the
         # declared 80px width. Read both values from the live DOM to assert
         # the actual clamp, not a hardcoded number.
-        dims = page.evaluate("""
+        dims = eval_js(page, """
             (() => {
                 const c = document.getElementById('arranger-canvas');
                 const n = document.querySelector('.arranger-node');
@@ -338,11 +338,11 @@ def test_wall_drag_does_not_trigger_appbar_drag(browser):
 
     with _serve_directory(WEB_UI_DIR) as url:
         context = browser.new_context(viewport={"width": 1280, "height": 800})
-        context.add_init_script(PYWEBVIEW_STUB)
+        add_init_js(context, PYWEBVIEW_STUB)
         page = context.new_page()
         page.goto(url, wait_until="domcontentloaded")
         _open_wall_tab(page)
-        page.evaluate(SEED_WALL_NODE_JS)
+        eval_js(page, SEED_WALL_NODE_JS)
         page.wait_for_timeout(50)
 
         # Drag the wall node. The appbar drag handler must NOT fire.
@@ -360,7 +360,7 @@ def test_wall_drag_does_not_trigger_appbar_drag(browser):
         page.wait_for_timeout(50)
 
         # CRITICAL: drag_window should NOT have been called.
-        drag_calls = page.evaluate("window._dragCalls")
+        drag_calls = eval_js(page, "window._dragCalls")
         assert drag_calls == [], (
             f"wall drag must NOT call drag_window, but got {drag_calls}. "
             f"This is the non-conflict requirement."
@@ -388,12 +388,12 @@ def test_appbar_drag_does_not_affect_wall_node(browser):
 
     with _serve_directory(WEB_UI_DIR) as url:
         context = browser.new_context(viewport={"width": 1280, "height": 800})
-        context.add_init_script(PYWEBVIEW_STUB)
+        add_init_js(context, PYWEBVIEW_STUB)
         page = context.new_page()
         page.goto(url, wait_until="domcontentloaded")
         page.wait_for_selector(".integrated-appbar", state="visible", timeout=UI_TIMEOUT_MS)
         _open_wall_tab(page)
-        page.evaluate(SEED_WALL_NODE_JS)
+        eval_js(page, SEED_WALL_NODE_JS)
         page.wait_for_timeout(50)
 
         # Record wall node position before appbar drag.
@@ -440,11 +440,11 @@ def test_wall_remove_button_does_not_start_drag(browser):
 
     with _serve_directory(WEB_UI_DIR) as url:
         context = browser.new_context(viewport={"width": 1280, "height": 800})
-        context.add_init_script(PYWEBVIEW_STUB)
+        add_init_js(context, PYWEBVIEW_STUB)
         page = context.new_page()
         page.goto(url, wait_until="domcontentloaded")
         _open_wall_tab(page)
-        page.evaluate(SEED_TWO_WALL_NODES_JS)
+        eval_js(page, SEED_TWO_WALL_NODES_JS)
         page.wait_for_timeout(50)
 
         # Should be 2 nodes.
@@ -467,7 +467,7 @@ def test_wall_remove_button_does_not_start_drag(browser):
         assert len(nodes) == 1, f"expected 1 node after remove, got {len(nodes)}"
 
         # No drag_window call.
-        drag_calls = page.evaluate("window._dragCalls")
+        drag_calls = eval_js(page, "window._dragCalls")
         assert drag_calls == [], (
             f"× click should not start a drag, but drag_window was called: {drag_calls}"
         )

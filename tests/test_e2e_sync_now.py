@@ -7,7 +7,13 @@ the ``onSyncNowProgress``/``onSyncNowComplete`` events the backend fires
 """
 import pytest
 from pathlib import Path
-from tests.support.browser import launch as launch_browser, require_browser
+from tests.support.browser import (
+    add_init_js,
+    eval_js,
+    launch as launch_browser,
+    require_browser,
+    wait_js,
+)
 
 INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.html"
 
@@ -32,13 +38,13 @@ window.pywebview = { api: new Proxy({}, { get: (_t, name) => (...args) => {
 async def _open_auto_sync_tab(p):
     browser = await launch_browser(p)
     page = await browser.new_page()
-    await page.add_init_script(_MOCK_API)
+    await add_init_js(page, _MOCK_API)
     await page.goto(f"file://{INDEX_HTML}")
     await page.wait_for_load_state("domcontentloaded")
-    await page.wait_for_function("() => !!window.DivoomState && !!window.renderSyncTargets")
+    await wait_js(page, "() => !!window.DivoomState && !!window.renderSyncTargets")
     await page.click('.nav-btn[data-tab="routines"]')
     await page.wait_for_selector("#routines-schedule.active")
-    await page.evaluate("""() => {
+    await eval_js(page, """() => {
         window.renderSyncTargets([
             {address: "AA:BB", name: "Pixoo", selected: true},
             {address: "CC:DD", name: "Timoo", selected: true},
@@ -56,9 +62,9 @@ async def test_sync_now_button_calls_backend_and_disables_while_running():
         browser, page = await _open_auto_sync_tab(p)
         try:
             await page.click("#sync-now-btn")
-            calls = await page.evaluate("() => window.__syncNowCalls")
+            calls = await eval_js(page, "() => window.__syncNowCalls")
             assert calls == 1
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => document.getElementById('sync-now-btn').disabled === true")
         finally:
             await browser.close()
@@ -79,7 +85,7 @@ async def test_sync_now_progress_updates_the_right_device_row():
             # auto-refresh timer (gallery.js) can re-render the targets
             # list; collapsing render→assert into a single JS turn makes
             # the test immune to that race.
-            result = await page.evaluate("""() => {
+            result = await eval_js(page, """() => {
                 window.renderSyncTargets(window.__syncTargets);
                 window.onSyncNowProgress({address: "AA:BB", phase: "connecting"});
                 window.onSyncNowProgress({address: "CC:DD", phase: "error", error: "unreachable"});
@@ -95,7 +101,7 @@ async def test_sync_now_progress_updates_the_right_device_row():
             assert "unreachable" in result["cc"]
             assert "3" in result["aaDone"]
 
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => document.getElementById('sync-now-btn').disabled === false")
             status = await page.text_content("#sync-now-status")
             assert "1/2" in status

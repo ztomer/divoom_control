@@ -51,7 +51,13 @@ import pytest
 sys.path.append(str(Path(__file__).parent.parent))
 
 from divoom_client.daemon_protocol import DaemonClient
-from tests.support.browser import launch as launch_browser, require_browser
+from tests.support.browser import (
+    add_init_js,
+    eval_js,
+    launch as launch_browser,
+    require_browser,
+    wait_js,
+)
 
 REPO_ROOT = Path(__file__).parent.parent
 INDEX_HTML = REPO_ROOT / "divoom_gui" / "web_ui" / "index.html"
@@ -189,7 +195,8 @@ class _EventRelay:
     def _on_event(self, ev: dict) -> None:
         self.received.append(ev)
         fut = asyncio.run_coroutine_threadsafe(
-            self._page.evaluate(
+            eval_js(
+                self._page,
                 "(ev) => { if (window.Divoom && window.Divoom.onDaemonEvent) "
                 "window.Divoom.onDaemonEvent(ev); }", ev),
             self._loop)
@@ -230,16 +237,16 @@ def gui_daemon_stack():
 async def _open(p, stack):
     browser = await launch_browser(p)
     page = await browser.new_page()
-    await page.add_init_script(
+    await add_init_js(page, 
         f"window.__BRIDGE_URL__ = {json.dumps(stack.bridge_url)};\n" + _REAL_BRIDGE_API)
     await page.goto(f"file://{INDEX_HTML}")
     await page.wait_for_load_state("domcontentloaded")
-    await page.wait_for_function("() => !!window.DivoomState && !!window.refreshConnectionState")
+    await wait_js(page, "() => !!window.DivoomState && !!window.refreshConnectionState")
     return browser, page
 
 
 async def _dot_class(page) -> str:
-    return await page.evaluate(
+    return await eval_js(page, 
         "() => document.getElementById('global-status-dot').className")
 
 
@@ -256,14 +263,14 @@ async def test_real_connect_then_refresh_shows_active_dot(gui_daemon_stack):
     async with async_playwright() as p:
         browser, page = await _open(p, stack)
         try:
-            await page.evaluate("() => { window.DivoomState.appConnected = true; }")
-            await page.evaluate("() => window.refreshConnectionState()")
-            await page.wait_for_function(
+            await eval_js(page, "() => { window.DivoomState.appConnected = true; }")
+            await eval_js(page, "() => window.refreshConnectionState()")
+            await wait_js(page, 
                 "() => document.getElementById('global-status-dot')"
                 ".className === 'transport-dot active ble'", timeout=4000)
             assert (await _dot_class(page)).split() == ["transport-dot", "active", "ble"]
 
-            state = await page.evaluate(
+            state = await eval_js(page, 
                 "() => window.pywebview.api.get_connection_state()"
                 ".then(r => JSON.parse(r))")
             assert state == {"connected": True, "state": "connected"}
@@ -298,8 +305,8 @@ async def test_real_drop_then_refresh_shows_inactive_dot(gui_daemon_stack):
     async with async_playwright() as p:
         browser, page = await _open(p, stack)
         try:
-            await page.evaluate("() => { window.DivoomState.appConnected = true; }")
-            await page.evaluate("() => window.refreshConnectionState()")
+            await eval_js(page, "() => { window.DivoomState.appConnected = true; }")
+            await eval_js(page, "() => window.refreshConnectionState()")
             # Wait on the flag this test actually asserts, not on the dot.
             # The dot and appConnected are separate updates, and the dot may
             # ALREADY be inactive when we arrive — in which case waiting on it
@@ -307,14 +314,14 @@ async def test_real_drop_then_refresh_shows_inactive_dot(gui_daemon_stack):
             # flag, and the assertion below races. Same class as the
             # LAN-failure test above; it surfaced when R66 moved these suites
             # to camoufox/Firefox, where the ordering differs from Chromium.
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => window.DivoomState.appConnected === false", timeout=4000)
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => document.getElementById('global-status-dot')"
                 ".className === 'transport-dot inactive'", timeout=4000)
-            assert await page.evaluate(
+            assert await eval_js(page, 
                 "() => document.getElementById('global-status-dot').title") == "Disconnected"
-            assert await page.evaluate(
+            assert await eval_js(page, 
                 "() => window.DivoomState.appConnected") is False
         finally:
             await browser.close()
@@ -335,14 +342,14 @@ async def test_real_event_relay_degraded_then_disconnected(gui_daemon_stack):
         browser, page = await _open(p, stack)
         relay = None
         try:
-            await page.evaluate("() => { window.DivoomState.appConnected = true; }")
+            await eval_js(page, "() => { window.DivoomState.appConnected = true; }")
             loop = asyncio.get_running_loop()
             relay = _EventRelay(stack.client, page, loop)
             await asyncio.sleep(0.2)  # let the subscribe connection establish
 
             _simulate_drop_or_skip(stack)
 
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => document.getElementById('global-status-dot')"
                 ".className === 'transport-dot inactive'", timeout=4000)
 
@@ -367,7 +374,7 @@ async def test_real_connect_single_device_failure_unreachable_lan(gui_daemon_sta
     async with async_playwright() as p:
         browser, page = await _open(p, stack)
         try:
-            await page.evaluate("""() => {
+            await eval_js(page, """() => {
                 window.DivoomState.discoveredDevices = [{address: 'LAN:127.0.0.1', name: 'Unreachable'}];
                 window.renderDeviceDots && window.renderDeviceDots();
                 window.connectDevice('Unreachable', 'LAN:127.0.0.1');
@@ -384,17 +391,17 @@ async def test_real_connect_single_device_failure_unreachable_lan(gui_daemon_sta
             # Waiting on the real signal does not weaken the test -- if the app
             # never raises the error toast, this times out and fails, which is
             # exactly the regression worth catching.
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => document.getElementById('toast').className.split(' ')"
                 ".includes('error')", timeout=8000)
-            toast = await page.evaluate(
+            toast = await eval_js(page, 
                 "() => ({c: document.getElementById('toast').className,"
                 "        t: document.getElementById('toast').textContent})")
             assert "error" in toast["c"].split()
             assert "Unreachable" in toast["t"]
             # The dot must still settle inactive — kept as a separate assertion
             # rather than as the (mis-used) synchronisation signal.
-            await page.wait_for_function(
+            await wait_js(page, 
                 "() => document.getElementById('global-status-dot')"
                 ".className === 'transport-dot inactive'", timeout=4000)
         finally:
