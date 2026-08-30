@@ -89,11 +89,31 @@ def _free_port() -> int:
 
 
 def _find_rust_binary() -> Path | None:
-    for folder in ("release", "debug"):
-        candidate = REPO_ROOT / "target" / folder / "divoomd"
-        if candidate.exists():
-            return candidate
-    return None
+    """The most recently BUILT divoomd, not the first one that happens to exist.
+
+    This used to prefer `target/release` unconditionally. Nothing in the repo
+    rebuilds a release binary -- `cargo build` and CI both produce `debug` --
+    so a release build left over from a past `build_release.sh` silently became
+    "the daemon under test" forever after, however old it was.
+
+    That is not a stale-cache annoyance, it is the harness measuring the wrong
+    thing while reporting confidently. It surfaced when a version bump made the
+    leftover 0.27.0 release binary mismatch the client's expectation: the client
+    version guard did its job and asked the "stale daemon" to exit, the socket
+    vanished mid-test, and two tests failed with `[Errno 2] No such file or
+    directory` -- which reads like a socket bug and cost a bisect to trace back
+    to a file nobody had thought about. It could equally have gone the other
+    way and passed a test against code that was never built.
+
+    Newest-by-mtime, plus the version assertion in `_IsolatedStack`, means the
+    harness now either tests the current daemon or says plainly that it cannot.
+    """
+    candidates = [REPO_ROOT / "target" / folder / "divoomd"
+                  for folder in ("release", "debug")]
+    built = [c for c in candidates if c.exists()]
+    if not built:
+        return None
+    return max(built, key=lambda c: c.stat().st_mtime)
 
 
 class _IsolatedStack:
@@ -123,6 +143,33 @@ class _IsolatedStack:
         self._wait_for_http(self.bridge_port)
 
         self.client = DaemonClient(self.socket_path)
+        self._assert_daemon_is_current(bin_path)
+
+    def _assert_daemon_is_current(self, bin_path: Path) -> None:
+        """Fail LOUDLY if the spawned daemon is not the version this tree expects.
+
+        `DaemonClient` restarts a daemon whose version does not match, which is
+        correct behaviour and catastrophic for a test: the daemon these tests
+        spawned gets stopped underneath them and every later call fails with a
+        bare `[Errno 2]`. The cause -- "the binary is old" -- appears nowhere in
+        that message.
+
+        Checked once, at setup, where it can name both versions and the fix.
+        """
+        from divoom_client.daemon_version import expected_daemon_version
+
+        expected = expected_daemon_version()
+        if not expected:
+            return  # unknown expectation never justifies failing the run
+        reply = self.client.send_command("get_status", {})
+        running = (reply or {}).get("daemon_version")
+        if running != expected:
+            pytest.fail(
+                f"{bin_path} reports daemon_version {running!r}, but this tree "
+                f"expects {expected!r}. The client's version guard will stop it "
+                f"mid-test and the failures will look like socket errors. "
+                f"Rebuild: cargo build -p divoomd"
+            )
 
     def _wait_for_socket(self, path: str, timeout: float = 5.0) -> None:
         deadline = time.monotonic() + timeout
