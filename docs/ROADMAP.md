@@ -149,13 +149,13 @@ table is written by the step rather than by a tidy-up pass afterwards.
 | P1.2 | Socket path keyed on per-stack identity, not the pytest PID | DONE |
 | P1.3 | Regression test: no surviving PIDs on each failure path | DONE |
 | P1.4 | Sweep the sibling harnesses for the same shape | DONE |
-| P2.1 | Audit the five LAN commands' arg + reply shapes against the daemon | TODO |
-| P2.2 | GUI API methods forwarding to the daemon (client, never a 2nd impl) | TODO |
-| P2.3 | Voice/SendText UI + e2e | TODO |
-| P2.4 | Danmaku UI (send text, random face) + e2e | TODO |
-| P2.5 | 5-LCD UI, gated on the negotiated capability + e2e | TODO |
-| P3.1 | `search_weather_city` UI + e2e | TODO |
+| P2.1 | Audit the five LAN commands' arg + reply shapes against the daemon | DONE |
+| P3.1 | `search_weather_city` UI + e2e (promoted: verifiable with no hardware) | TODO |
+| P2.4 | Danmaku SendText UI + e2e, render marked unconfirmed | TODO |
 | P4.1 | Raise the Rust coverage floor off 29%, in steps | TODO |
+| ~~P2.2~~ | ~~GUI API methods~~ — folded into P3.1 / P2.4; there is no shared layer worth building for two commands | DROPPED |
+| ~~P2.3~~ | ~~Voice/SendText UI~~ — duplicates the working `push_text`; see P2.1 audit | DROPPED |
+| ~~P2.5~~ | ~~5-LCD UI~~ — no such hardware here, and no per-device capability to gate on | DROPPED |
 
 #### Phase 1 — the e2e harness leaks the processes it spawns
 
@@ -195,21 +195,49 @@ any of them anywhere in `divoom_gui/`:
 | `lan.send_danmaku_text`, `lan.danmaku_random_face` | Danmaku overlay |
 | `lan.set_5lcd_channel_type`, `lan.set_5lcd_whole_clock_id` | 5-LCD channel extras |
 
-Each is the same shape and can be done independently: a `divoom_gui` API method
-that forwards to the daemon (a client, never a second implementation — R67/C2),
-a control in the panel it belongs to, and a camoufox e2e test driving it through
-the real bridge.
+Each is the same shape: a `divoom_gui` API method that forwards to the daemon (a
+client, never a second implementation — R67/C2), a control in the panel it
+belongs to, and a camoufox e2e test driving it through the real bridge.
 
-Two things to get right rather than discover later:
+##### P2.1 audit result (2026-08-30) — most of this phase should NOT be built
 
-* **The 5-LCD controls must not appear on devices that have no 5-LCD.** Gate on
-  the capability the daemon already negotiates (R67), not on a device-name
-  match.
-* **Say the render is unconfirmed, in the UI.** These four shipped as
-  backend-only precisely because nobody has watched them draw. A control that
-  silently does nothing on the user's hardware is worse than one that says it is
-  unverified — honest placeholders, and it tells the user exactly what to report
-  back on.
+The audit was supposed to confirm arg and reply shapes. It found instead that
+three of the five commands are unwired for good reasons, and that one of this
+plan's own premises was false. Recording it rather than building past it:
+
+* **`lan.set_5lcd_*` — DROP.** The plan said to gate the UI on "the capability
+  the daemon already negotiates (R67)". There is no such thing:
+  `protocol_capabilities()` is a static list of DAEMON features
+  (`device_call`, `sysmon`, `wall`, …), not per-device hardware. Gating on it
+  would need device-model detection that does not exist yet — a materially
+  bigger job than this plan implied. And it would be for a "Times Gate" 5-LCD
+  panel; the verified hardware here is Pixoo / Timoo / Ditoo / Tivoo Max, none
+  of which have five LCDs. "The user tests it later" is not available when there
+  is no device to test on, so this would ship UI that can never be validated.
+  The original author's call — plumbing only — was right.
+* **`lan.send_voice_text` — DROP.** `push_text` is already GUI-wired
+  (`gui_api.py` -> `api/lighting.py`) through the bitmap-render path that is
+  known to work. The handler's own comment records why Voice/SendText is not
+  trusted: R32 §D found that a superficially-similar "set light phone word"
+  command ACKs cleanly and fails to render on Pixoo-class matrices. Adding it
+  would put a second, unconfirmed "send text" control next to the working one —
+  an anti-feature, because the user reaches for the broken one.
+* **`lan.danmaku_random_face` — DROP.** No confirmed caller anywhere in the
+  decompiled vendor app; dead in that build. Nothing to model the UI on.
+* **`lan.send_danmaku_text` — KEEP, demoted.** A genuinely distinct feature (a
+  scrolling overlay, not a duplicate of push_text) and testable on hardware the
+  user actually owns. Render still unconfirmed, so it must say so in the UI.
+
+**The general lesson, and why the audit step earned its place:** "the backend
+exists, so wiring it up is free work" is wrong. Four of these five were left
+unwired deliberately, and the reasons were sitting in the handler comments. An
+unwired backend command is evidence of a decision, not of an oversight — read it
+before undoing it.
+
+Remaining rule for what does get built: **say the render is unconfirmed, in the
+UI.** A control that silently does nothing on the user's hardware is worse than
+one that admits it is unverified, and it tells the user exactly what to report
+back on.
 
 #### Phase 3 — `search_weather_city`
 
