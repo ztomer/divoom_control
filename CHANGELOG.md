@@ -4,6 +4,118 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## v0.28.0 — R68: the gates that were wrong, and a rule nobody could break (2026-08-30)
+
+**v0.27.0 was written but never tagged.** CI had been red for six consecutive
+runs, and `release.sh` refuses to cut a release over a red gate. This release
+carries R67's work as well as R68's; the v0.27.0 stanza below stands as the
+record of what that round did.
+
+Three of the six red runs were not product defects at all. Two were the GATES
+themselves being wrong, and one was a fix that had not been finished.
+
+### A gate that matched its own rationale
+
+`check_no_allow.py` failed on a doc comment explaining why a field is named
+`_file` "rather than carrying an `#[allow(dead_code)]`". It regexed raw source,
+so prose describing the violation read as the violation.
+
+This is the exact defect `check_positional_args.py` was fixed for six commits
+earlier, where a comment quoting `args.get(1)` was scanned as code. That fix
+shared the stripper out to `_srcscan.strip_rust_comments` with a docstring
+saying "any gate that regexes Rust source shares that exposure" — and then this
+sibling was not migrated. Fixing the instance and leaving the class alive is how
+it came back four days later.
+
+All three gates that INTERPRET Rust source now strip comments.
+`check_file_size.py` counts lines, where a comment IS a line, so it stays
+exempt — audited rather than assumed.
+
+### The socket rule, made structural
+
+R67 established that the bound socket must stay open until after the ownership
+check: `(dev, ino)` identifies a file only while its inode cannot be reused, and
+Linux recycles inode numbers immediately. The fix was to have `serve` BORROW the
+listener. That was not enforcement, it was a proxy for enforcement — and it cost
+more than it looked:
+
+* `tokio::spawn` needs `'static`, so all seven call sites in the integration
+  tests had to `Box::leak(Box::new(listener))`. A lifetime being used to express
+  something that is not about lifetimes.
+* the borrow landed without those call sites, so `cargo clippy --all-targets`
+  had been red on Linux ever since.
+* nothing stopped a future edit from closing the listener early again, which is
+  how the bug arrived in the first place.
+
+`HeldSocket` now owns the listener, the startup lock and the recorded identity
+together, and its `Drop` body performs the ownership-checked unlink. Rust runs a
+`Drop` body BEFORE dropping the struct's fields, so the socket is necessarily
+still open when the check runs. The invariant is a consequence of drop order
+rather than of anyone remembering to read a comment.
+
+A second check-then-act went with it: `main` read `SocketOwnership::of(path)`
+AFTER the lock section, so the path could have been replaced between our `bind`
+and our reading of what we bound — recording, and later deleting, someone else's
+socket. Identity is now captured inside `acquire`, still under the lock.
+
+Corrected while there: the module doc said "an open fd pins the inode". Probed —
+`fstat` on a bound `AF_UNIX` fd reports a *sockfs* inode with no relation to the
+filesystem entry. Right conclusion, wrong mechanism; what pins the inode is the
+path reference the kernel holds from `bind` until release.
+
+### camoufox raised to latest, through three holes not two
+
+The e2e browser had been pinned to build beta.28 because beta.29 moved page
+scripting into an ISOLATED WORLD — the app's globals read `undefined`, 60 tests
+failed, and the page itself was perfectly healthy. The recorded plan was
+"prefix every evaluate / wait_for_function with `mw:`". Probing found that plan
+was only half possible, and that a third hole mattered more than either:
+
+1. `page.evaluate` does reach the main world via `mw:` plus
+   `main_world_eval=True`. Both halves required.
+2. **`wait_for_function` has no main-world form at all** — probed on camoufox
+   0.5.4 and 0.5.5: prefixed and flagged, it still times out while the identical
+   expression through `evaluate` returns the value. `wait_js` polls instead.
+3. **`add_init_script` has none either**, and that is where the suites install
+   `window.__api` before the app reads it. All four spellings leave the page
+   unable to see what they installed. `add_init_js` bridges it the way
+   userscripts do `@run-at document-start`: the isolated world shares the DOM, so
+   an init script that appends a `<script>` element gets it run in the MAIN
+   world. Ordering verified, not assumed — `['mock', 'app']`.
+
+All 191 call sites route through `tests/support/browser.py`. That module exists
+because the launch call was copy-pasted 17 times; 191 open-coded prefixes would
+have rebuilt the problem one layer up.
+
+Full e2e suite on beta.29: 132 passed, 2 skipped.
+
+### sysmon: one renderer for the device and the preview
+
+The last widget still drawn twice. The GUI sampled psutil and rendered its own
+PIL frame while the device was drawn by `live_jobs/render.rs` — the same
+second-implementation shape R67/C2 removed from now-playing and weather, and the
+reason a preview can look right while the device is wrong.
+
+New `sysmon` daemon RPC returns the stats AND the exact frame the device would
+be shown, as base64 raw RGB. The GUI writes those bytes to a PNG and uses it for
+both the tile and the push, so screen and matrix have one origin.
+
+`sysinfo` reports CPU as a delta between refreshes, so the one-shot path
+refreshes twice around `MINIMUM_CPU_UPDATE_INTERVAL`; without it the preview
+would confidently report an idle machine. Verified against a real daemon over
+the real socket.
+
+`divoom_client/daemon_protocol.py` crossed the 500-line gate, so the host-data
+RPCs — `now_playing`, `players`, `weather`, `sysmon` — moved to
+`daemon_host_data.py`. They belong together beyond length: each answers a
+question about the HOST, and each was once answered a second time in the GUI.
+
+### Also
+
+* Ambient preview tiles were listed as an open defect; they were fixed in
+  `0869425` and the roadmap entry was stale. Corrected the doc rather than the
+  working code.
+
 ## v0.27.0 — R67: seven classes, and three things that never worked (2026-08-30)
 
 Six user-reported symptoms, traced to **seven named classes** rather than seven

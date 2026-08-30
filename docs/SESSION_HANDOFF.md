@@ -20,6 +20,47 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-08-30 (R68, v0.28.0) — the six-run CI red is cleared; four things
+  fixed, two of them gates that were wrong about their own subject.**
+
+  * **`check_no_allow.py` matched its own rationale.** It regexed raw source, so
+    a doc comment explaining why a field is named `_file` "rather than carrying
+    an `#[allow(dead_code)]`" read as the violation. Same defect
+    `check_positional_args.py` was fixed for six commits earlier — the stripper
+    was shared out to `_srcscan.strip_rust_comments` then, and this sibling was
+    never migrated. **All three gates that INTERPRET Rust source now strip
+    comments**; `check_file_size.py` counts lines and is correctly exempt.
+
+  * **The socket rule is now structural.** `serve` borrowing the listener was a
+    proxy for the real constraint, cost every test call site a
+    `Box::leak(Box::new(listener))`, and had left `clippy --all-targets` red on
+    Linux since it landed. `HeldSocket` owns the listener, the startup lock and
+    the recorded identity, and its `Drop` body does the ownership-checked
+    unlink — Rust runs a `Drop` body before dropping fields, so the socket is
+    necessarily still open when the check runs. A second check-then-act
+    (`SocketOwnership::of` read after the lock section) is gone: identity is
+    captured inside `acquire`. **Careful here:** the invariant is now drop
+    order. Do not move the release out of `Drop`, and do not add a field the
+    release depends on being alive AFTER it.
+
+  * **camoufox is at the latest build (0.5.5 / beta.29).** The recorded plan —
+    "prefix every evaluate / wait_for_function with `mw:`" — was only half
+    possible. `wait_for_function` has NO main-world form, and neither does
+    `add_init_script`, which is where the suites install `window.__api` before
+    the app reads it. All three holes are bridged in
+    `tests/support/browser.py`; 191 call sites route through it. 132 e2e pass.
+
+  * **sysmon is a daemon client.** New `sysmon` RPC returns the stats and the
+    exact frame `live_jobs/render.rs` would push; the GUI writes those bytes to
+    a PNG for both the tile and the device. The one-shot path refreshes
+    `sysinfo` twice around `MINIMUM_CPU_UPDATE_INTERVAL` — CPU is a delta, and
+    one refresh reports a confidently idle machine.
+
+  Through-line: three of the six red runs were not product defects. Two were
+  gates wrong about their own subject, one was a fix that had not been finished
+  (the borrow landed without its call sites). A red CI still has to be READ.
+
+
 - **2026-08-30 (socket robustness) — stale-socket startup failures fixed and
   made visible.** `divoomd/src/socket_bind.rs` replaces the three-line
   check-then-act `bind()`: an advisory lock on `<socket>.lock` makes
@@ -339,6 +380,9 @@ shared memory. Read this on entry and **update it at the end of every round**
   in `rust-core`/`rust-ble-linux` are structurally invisible to it.
 
 - **R12 user-POV visual pass**: deferred to user (needs live app + real device for screenshots).
+- **sysmon on a real device**: the RPC and the frame are verified against a real
+  daemon over the real socket, but nobody has watched the gauges on a matrix.
+  Needs hardware.
 - **Cloud HTTP**: 533/533 commands cataloged (`docs/cloud_api/`). Clock-face store wired into
 
 ## Earlier history

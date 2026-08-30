@@ -9,6 +9,12 @@ forward-looking one. Recover a round plan with
 
 ## Shipped
 
+- **v0.28.0 — R68**: two gates that were wrong about their own subject; the
+  socket "hold it open" rule made structural (`HeldSocket`, enforced by Rust's
+  drop order rather than by three comments); camoufox raised to the latest build
+  through a main-world bridge; sysmon made a daemon client so the preview and
+  the device draw the same bytes.
+
 | Round | Summary | Suite | Key files |
 |-------|---------|-------|-----------|
 | **R3** | BLE connection scaffolding + first commands | — | `divoom_lib/connection.py`, `divoom_lib/divoom.py` |
@@ -92,34 +98,34 @@ here; the daemon's `players` reply carries a hint naming the setting. Left off
 by user decision, so `nowplaying/src/feishin.rs` (Subsonic) remains its weaker
 source. Detail in the v0.27.0 CHANGELOG stanza.
 
-**Open:**
+**Open: nothing in this workstream.** Both items closed in R68.
 
-- **Ambient preview tiles are static CSS** (`divoom_gui/web_ui/channels_grids.js`)
-  — flat colour blocks that do not reflect device state. This is the
-  dishonest-preview half of R67/C2, and the reason the ambient bug presented as
-  "green/magenta" rather than "the mode never reached the device". Fixing it is
-  what makes that class of bug visible next time.
-- **sysmon preview** is rendered by `divoom_lib/utils/media_source.py` (psutil)
-  while the device frame comes from `divoomd/src/live_jobs/render.rs`. Under the
-  reference-only rule this is NOT a unification task — but the GUI does still
-  *execute* the Python renderer, which is the shape C2 covers. Low value: simple
-  numbers, no artwork to disagree about.
+- **Ambient preview tiles** were listed here as static CSS colour blocks. They
+  were not: `0869425` had already replaced them with the picked colour for Plain
+  and an honest "drawn by the device" placeholder for the four modes the device
+  generates from a palette we do not have. This entry was stale from the moment
+  it was written — the same commit shipped the fix and left the item open.
+- **sysmon preview** — CLOSED (R68). The GUI is now a client: the `sysmon` RPC
+  returns the stats and the exact frame `live_jobs/render.rs` would push, and
+  the tile and the device draw the same bytes. This was the last widget the GUI
+  still rendered itself.
 
-### Deferred: raise the camoufox pin (e2e main-world migration)
+### camoufox pin raised to latest — SHIPPED (R68)
 
-CI pins the browser BUILD (`camoufox set official/stable/152.0.4-beta.28`);
-pinning the pip package is not enough, since 0.5.4 accepts any build in
-`[alpha.1, 1)`. From build 152.0.4-beta.29 `page.evaluate`
-runs in an ISOLATED WORLD, so the app's globals (`window.DivoomState`, every
-render function) read as `undefined` and 60 e2e tests fail — with the page
-itself perfectly healthy (probed 2026-08-30: 29 scripts 200 OK, DOM built, zero
-console errors). Unpinned, that upgrade turned CI red on 2026-08-25 with no
-code change.
+CI pins the browser BUILD (`camoufox set official/stable/152.0.4-beta.29`, the
+current channel latest) with the pip package at 0.5.5. The pin stays because
+"latest" is a moving target: it is what makes a red run mean a code change, and
+`tools/check_camoufox_installed.py` verifies it rather than trusting `fetch`'s
+exit code.
 
-Raising the pin means prefixing every `evaluate` / `wait_for_function` in the 15
-e2e modules with camoufox's `mw:`; `main_world_eval=True` only enables the
-prefix and does NOT restore the old default (verified). Rationale and method
-live at `tests/support/browser.py`.
+From beta.29 page scripting runs in an isolated world. The suite reaches the
+main world explicitly through `tests/support/browser.py` — `eval_js` (the `mw:`
+prefix plus `main_world_eval=True`), `wait_js` (polling, because
+`wait_for_function` has NO main-world form), and `add_init_js` (a `<script>`
+element appended from the isolated world, because `add_init_script` has none
+either). The deferral note here predicted only the first of those three.
+
+Rationale, probe results and the reasoning behind each live in that module.
 
 ### Short-to-medium term (all shipped)
 
