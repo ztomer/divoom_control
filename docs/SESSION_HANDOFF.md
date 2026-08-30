@@ -56,9 +56,22 @@ shared memory. Read this on entry and **update it at the end of every round**
     `sysinfo` twice around `MINIMUM_CPU_UPDATE_INTERVAL` — CPU is a delta, and
     one refresh reports a confidently idle machine.
 
-  Through-line: three of the six red runs were not product defects. Two were
-  gates wrong about their own subject, one was a fix that had not been finished
-  (the borrow landed without its call sites). A red CI still has to be READ.
+  * **The daemon e2e harness was testing a stale binary.**
+    `_find_rust_binary` preferred `target/release/divoomd`, which nothing in
+    this repo rebuilds, so a leftover release build was "the daemon under test"
+    on this machine indefinitely. The version bump exposed it (0.27.0 vs an
+    expected 0.28.0 → the client's version guard stopped it mid-test →
+    `[Errno 2]`, which reads like a socket bug). Now newest-by-mtime plus a
+    `daemon_version` assertion at fixture setup. **Note for next session:**
+    `target/release/divoomd` on this machine is still 0.27.0; the harness
+    handles it, but rebuild it if you touch release packaging.
+
+  Through-line: four of the failures this round were not product defects. Two
+  were gates wrong about their own subject, one was a fix that had not been
+  finished (the borrow landed without its call sites), and one was a harness
+  pointed at the wrong artifact. A red CI still has to be READ — and so does a
+  GREEN one, since CI was green while local was red for a reason that had
+  nothing to do with the diff.
 
 
 - **2026-08-30 (socket robustness) — stale-socket startup failures fixed and

@@ -110,11 +110,39 @@ RPCs — `now_playing`, `players`, `weather`, `sysmon` — moved to
 `daemon_host_data.py`. They belong together beyond length: each answers a
 question about the HOST, and each was once answered a second time in the GUI.
 
+### The e2e harness was running whatever binary lay around
+
+Found by the version bump, which is the only reason it was ever found.
+
+`_find_rust_binary` preferred `target/release/divoomd` unconditionally, and
+nothing in this repo rebuilds a release binary — `cargo build` and CI both
+produce `debug`. So one leftover release build had quietly become "the daemon
+under test" on this machine, however old it was. Every green run on those tests
+was green about code that was not in the tree.
+
+The bump made the leftover 0.27.0 binary mismatch the client's expectation. The
+version guard did its job, stopped the "stale daemon", and two tests died with
+`[Errno 2] No such file or directory` — a message naming a socket, in the round
+that had just rewritten socket handling. CI stayed green throughout: a fresh
+checkout has no leftover release binary.
+
+The direction it failed in was the lucky one. The same hole passes tests against
+code that was never built.
+
+Now selects newest-by-mtime, AND asserts at fixture setup that the spawned
+daemon's reported `daemon_version` matches the tree's, failing with both
+versions and the rebuild command. Recency alone still runs a stale artifact when
+it happens to be newest; the identity check is what makes it a sentence instead
+of an errno four calls later.
+
 ### Also
 
 * Ambient preview tiles were listed as an open defect; they were fixed in
   `0869425` and the roadmap entry was stale. Corrected the doc rather than the
   working code.
+* `divoomd` ignores unknown flags and starts a daemon on the default socket —
+  `divoomd --version` binds `/tmp/divoomd.sock` instead of printing a version.
+  Noted, not fixed.
 
 ## v0.27.0 — R67: seven classes, and three things that never worked (2026-08-30)
 
