@@ -1,5 +1,6 @@
 import json
 import asyncio
+import os
 from unittest.mock import AsyncMock, MagicMock, patch
 from pathlib import Path
 import pytest
@@ -161,11 +162,24 @@ class TestGuiApiWallMedia(GuiApiTestBase):
             self.assertIn("expected", prev["error"])
 
     def test_system_stats_reports_an_unavailable_daemon(self):
-        """No daemon is an honest error, not an idle-looking zeroed gauge."""
-        with patch.object(type(self.api), "_client", lambda self: None):
-            prev = json.loads(self.api.get_system_stats_preview(16))
-            self.assertFalse(prev["ok"])
-            self.assertIn("background service", prev["error"])
+        """No daemon is an honest error, not an idle-looking zeroed gauge.
+
+        DIVOOM_SOCKET is redirected to a path that does not exist. With no
+        client, the reason lookup falls back to DEFAULT_SOCKET_PATH and reads
+        the REAL `/tmp/divoom.sock.failure` — so on a machine where a daemon
+        start had ever lost a race, this asserted against a leftover sidecar
+        from that attempt and failed with "another divoomd is already
+        listening". The machine's state is not this test's subject.
+        """
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(os.environ,
+                            {"DIVOOM_SOCKET": os.path.join(tmp, "absent.sock")}):
+                with patch.object(type(self.api), "_client", lambda self: None):
+                    prev = json.loads(self.api.get_system_stats_preview(16))
+                    self.assertFalse(prev["ok"])
+                    self.assertIn("background service", prev["error"])
 
     def test_unreachable_daemon_gets_a_sentence_not_an_errno(self):
         """`[Errno 2] No such file or directory` in a widget card is noise.

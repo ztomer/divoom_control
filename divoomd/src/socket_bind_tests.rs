@@ -284,3 +284,48 @@ fn a_successful_bind_clears_a_previous_failure() {
     drop(got);
     cleanup(&p);
 }
+
+/// A lost single-instance race must not leave a "reason" behind for clients.
+///
+/// The sidecar answers "why can I not reach a daemon?". `LiveInstance` says the
+/// opposite — a healthy daemon owns the path — so reporting it there made the
+/// file explain a client's error with "the running daemon is healthy". Found in
+/// the wild on 2026-08-30: a live daemon on /tmp/divoom.sock alongside a
+/// /tmp/divoom.sock.failure describing the attempt that lost to it.
+#[test]
+fn live_instance_is_not_a_fact_about_the_socket() {
+    assert!(
+        !BindFailure::LiveInstance.describes_the_socket(),
+        "losing the single-instance race says nothing about the socket's health"
+    );
+    // Everything else does describe it, and must keep reporting.
+    for f in [
+        BindFailure::ForeignListener,
+        BindFailure::NotASocket { kind: "directory" },
+        BindFailure::StartupInProgress,
+        BindFailure::PermissionDenied {
+            err: "denied".into(),
+        },
+        BindFailure::Io { err: "boom".into() },
+    ] {
+        assert!(f.describes_the_socket(), "{f:?} must still be reported");
+    }
+}
+
+/// Clearing is what the LOSER can do for the winner: the healthy daemon never
+/// re-enters `acquire`, so it can never clear a sidecar written after it
+/// started. Whoever loses the race is the one holding the knowledge that the
+/// old reason is obsolete.
+#[test]
+fn clear_failure_removes_a_stale_report() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path().join("s.sock").to_string_lossy().to_string();
+    write_failure(&p, &BindFailure::ForeignListener);
+    assert!(std::path::Path::new(&failure_path(&p)).exists());
+
+    clear_failure(&p);
+    assert!(
+        !std::path::Path::new(&failure_path(&p)).exists(),
+        "a stale reason outliving its condition is worse than no reason"
+    );
+}

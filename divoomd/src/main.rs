@@ -80,7 +80,16 @@ async fn main() {
             // turn "no daemon" into an actual explanation.
             eprintln!("divoomd: {}", f.reason(&socket_path));
             eprintln!("divoomd: {}", f.remedy());
-            divoomd::socket_bind::write_failure(&socket_path, &f);
+            if f.describes_the_socket() {
+                divoomd::socket_bind::write_failure(&socket_path, &f);
+            } else {
+                // We lost the single-instance race, which means a HEALTHY
+                // daemon owns this socket. Any sidecar sitting there is now
+                // describing a condition that no longer holds, so clear it
+                // rather than adding one — the winner cannot, since it never
+                // re-enters acquire().
+                divoomd::socket_bind::clear_failure(&socket_path);
+            }
             std::process::exit(f.exit_code());
         }
     };
