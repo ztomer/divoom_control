@@ -4,6 +4,37 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## Unreleased — R67 Phases 3-4: weather, and a virtual wall that never worked (2026-08-29)
+
+**Weather (C2's remaining half).** The Rust and Python WMO tables were diffed
+FIRST and agree on all 48 codes — unlike now-playing, this duplication had not
+drifted — so the fix is prevention, not repair. The mapping is now a `const`
+table (a `match` arm is invisible to a checker) with
+`tools/check_weather_parity.py` failing on either drift shape, and the GUI is a
+client of a new `weather` RPC that also receives the locally-resolved location,
+closing the gap where the card and the device could geolocate differently.
+
+**The virtual wall did not work at all**, for three independent reasons:
+
+* it could never CONNECT — `wall_configure` uppercases slot keys (a MAC-address
+  convention) while macOS uses lowercase UUIDs and the BLE connect matched
+  case-sensitively, so every slot failed for devices a scan had just found;
+* nothing REACHED a wall even when connected — the client has always sent
+  `target: "wall"` and the daemon never read it, so every call went to the
+  single device and the `DivoomWall` methods were unreachable dead code;
+* the ambient payload was TRANSPOSED — brightness and RGB swapped, six bytes
+  instead of ten, the last byte landing in the lighting-type slot; effects and
+  visualization sent two-byte packets. The Python wall never had these because
+  it delegates to the canonical builder.
+
+Verified live on a 2-panel wall: every command goes out once per panel, the
+ambient bytes are canonical, a split image streams to both, and unsupported
+methods refuse with a reason instead of silently succeeding.
+
+Also: `parse_hex_color` existed in three copies, now one.
+
+Python 2904 / 0 failed / 94 skipped. Rust 243 / 0.
+
 ## Unreleased — R67 Phase 2: the album-art library (2026-08-29)
 
 Now-playing and cover art move to a standalone `nowplaying` crate built on macOS

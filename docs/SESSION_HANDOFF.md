@@ -16,6 +16,30 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-08-29 (R67 Phases 3-4) — ROADMAP COMPLETE. All phases verified on
+  hardware.** Python **2904 / 0 failed / 94 skipped; Rust 243 / 0.** Gates green.
+
+  **The virtual wall never worked**, and it took three separate fixes:
+  `wall_configure` uppercased slot keys while macOS uses lowercase UUIDs and the
+  BLE connect compared case-sensitively (so no slot could connect); the daemon
+  never read `target: "wall"` (so nothing reached a wall that did connect, and
+  every DivoomWall method was dead code); and the ambient payload had brightness
+  and RGB transposed in a six-byte packet. Verified live on Pixoo-1 +
+  Ditoo-light-2: each command now goes out once per panel.
+
+  **Weather** needed prevention, not repair — the two WMO tables were diffed and
+  agree on all 48 codes. The mapping is a `const` table plus a parity gate; the
+  GUI is a client of a new `weather` RPC.
+
+  **Method note:** every Phase 4 bug was found by TRACING, not reading — the
+  casing bug surfaced from a real wall_configure failure, the routing bug from
+  grepping for a `target` the daemon never reads, and the transposition by
+  diffing the Rust payload against the Python builder it was ported from.
+
+  **Open:** the daemon NDJSON protocol (the user picked "device layer first",
+  and the device layer is done); Feishin's Media Session left off by choice, so
+  the weaker Subsonic path remains its source.
+
 - **2026-08-29 (R67 Phase 2) — the album-art library. DONE and verified.**
   Suite: **Python 2926 / 0 failed / 94 skipped; Rust 196 / 0.** Gates green.
 

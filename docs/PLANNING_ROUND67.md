@@ -543,8 +543,7 @@ Real app, real screenshots at real scale, light and dark, per the
 
 ## 7. Outcome
 
-**Phases 0, 1, 2 and 5 are complete and verified.** Phases 3 (weather) and 4
-(virtual wall) are not started.
+**All phases (0-5) are complete and verified on hardware.**
 
 Suite: **Python 2943 / 0 failed / 94 skipped** (from 2920/94 at the round's
 start, +23). **Rust 157 / 0** (from 119 in R66, +38). All gates green: emoji,
@@ -612,6 +611,36 @@ read only after exit, against ~1.6 MB of base64 through a 64 KB buffer — passe
 with any small fixture, hangs on every real track); `stderr` discarded, which
 made the next one undiagnosable; and the architecture mismatch it was hiding.
 
+### Phase 3 + 4 outcome
+
+**Phase 3 (weather)** turned out to need prevention, not repair: the Rust and
+Python WMO tables were diffed first and agree on all 48 codes, so that
+duplication had NOT drifted. The response is proportionate — the mapping became
+a `const` TABLE (a `match` arm is invisible to any checker) and
+`tools/check_weather_parity.py` now fails on either drift shape. The GUI became
+a client of a new `weather` RPC, and the resolved location is sent along, closing
+the gap where card and device could geolocate to different cities.
+
+**Phase 4 (virtual wall) — it did not work at all**, exactly as suspected, for
+three independent reasons, each fatal on its own:
+
+1. **It could never connect.** `wall_configure` uppercases slot keys (a MAC-address
+   convention) while macOS uses lowercase UUIDs, and the BLE connect matched
+   case-sensitively. Every slot failed for devices a scan had just found.
+2. **Nothing reached a wall even if it connected.** The client has always sent
+   `target: "wall"`; the daemon never read it. Every call went to the single
+   device. The `DivoomWall` methods were unreachable dead code.
+3. **The ambient payload was transposed** — brightness and RGB swapped, six
+   bytes instead of ten, and the last byte landing in the lighting-type slot.
+   `show_effects` and `show_visualization` sent two-byte packets. The Python
+   wall never had these bugs because it DELEGATES to the canonical builder; the
+   port re-derived each payload by hand.
+
+Verified on a live 2-panel wall (Pixoo-1 + Ditoo-light-2): configure succeeds,
+every command goes out twice — once per panel — the ambient bytes are canonical,
+a 32x16 split image streams to both, and an unsupported method refuses with a
+reason.
+
 ### Open, and deliberately not rushed
 
 - **C7 audit** — 49 other `args.get(N)` / `args.first()` reads are unaudited;
@@ -623,6 +652,5 @@ made the next one undiagnosable; and the architecture mismatch it was hiding.
   not yet a `nowplaying` provider. It needs no Apple Events, so it is not
   urgent — but until it is folded in, a Feishin track only reaches the device if
   Feishin publishes to Now Playing.
-- **Phases 3 and 4** — weather provider unification, virtual wall.
 - The GUI's ambient preview tiles are still static CSS that do not reflect
   device state (C2's dishonest-preview half).
