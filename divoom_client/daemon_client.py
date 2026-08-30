@@ -36,6 +36,7 @@ from divoom_client.daemon_protocol import (
     DaemonClient,
 )
 
+from divoom_client.socket_failure import explain_daemon_failure
 from divoom_client.daemon_version import (  # noqa: F401  (re-exported)
     _stop_stale_daemon,
     expected_daemon_version,
@@ -297,7 +298,12 @@ def ensure_daemon(
                     if daemon_alive(socket_path):
                         return DaemonClient(socket_path)
                     time.sleep(0.1)
-                logger.error("replacement daemon did not start within %.1fs", wait_timeout)
+                logger.error(
+                    "replacement daemon did not start within %.1fs: %s",
+                    wait_timeout,
+                    explain_daemon_failure(
+                        socket_path, "no reason reported by the daemon"),
+                )
                 return None
         return DaemonClient(socket_path)
     if not spawn:
@@ -308,7 +314,15 @@ def ensure_daemon(
         if daemon_alive(socket_path):
             return DaemonClient(socket_path)
         time.sleep(0.1)
-    logger.error("Daemon did not become ready within %.1fs", wait_timeout)
+    # R67: say WHY. The daemon is spawned detached with its stderr in a log
+    # file, so without this the user got "no daemon" and the actual cause -- a
+    # stale socket, a directory in the way, a permission problem -- was never
+    # surfaced anywhere they would look.
+    logger.error(
+        "Daemon did not become ready within %.1fs: %s",
+        wait_timeout,
+        explain_daemon_failure(socket_path, "no reason reported by the daemon"),
+    )
     return None
 
 # The device proxy lives in daemon_proxy.py (500-line cap); re-exported so

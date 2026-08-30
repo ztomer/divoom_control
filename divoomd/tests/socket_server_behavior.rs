@@ -1,3 +1,7 @@
+// NOTE: `serve` BORROWS its listener so the daemon can keep the socket's
+// inode pinned until after its ownership check (see socket_owner). These
+// harnesses `tokio::spawn` it, which needs 'static, so they leak the
+// listener for the life of the test process -- deliberate, and bounded.
 //! End-to-end socket-server behavior over a real unix socket, in-process: a client
 //! connects, sends NDJSON requests, and reads NDJSON replies. Proves the
 //! request/reply transport works independently of any device (hardware-free).
@@ -66,7 +70,7 @@ async fn request_reply_round_trip() {
     let _ = std::fs::remove_file(&path);
     let listener = UnixListener::bind(&path).unwrap();
     tokio::spawn(serve(
-        listener,
+        Box::leak(Box::new(listener)),
         Arc::new(Echo::new()),
         MAX_CONNECTIONS,
         CONNECTION_IDLE_TIMEOUT,
@@ -96,7 +100,7 @@ async fn two_pipelined_requests_get_two_replies() {
     let _ = std::fs::remove_file(&path);
     let listener = UnixListener::bind(&path).unwrap();
     tokio::spawn(serve(
-        listener,
+        Box::leak(Box::new(listener)),
         Arc::new(Echo::new()),
         MAX_CONNECTIONS,
         CONNECTION_IDLE_TIMEOUT,
@@ -134,7 +138,7 @@ async fn malformed_line_gets_error_reply() {
     let _ = std::fs::remove_file(&path);
     let listener = UnixListener::bind(&path).unwrap();
     tokio::spawn(serve(
-        listener,
+        Box::leak(Box::new(listener)),
         Arc::new(Echo::new()),
         MAX_CONNECTIONS,
         CONNECTION_IDLE_TIMEOUT,
@@ -164,7 +168,7 @@ async fn subscription_and_event_broadcast() {
     let listener = UnixListener::bind(&path).unwrap();
     let handler = Arc::new(Echo::new());
     tokio::spawn(serve(
-        listener,
+        Box::leak(Box::new(listener)),
         handler.clone(),
         MAX_CONNECTIONS,
         CONNECTION_IDLE_TIMEOUT,

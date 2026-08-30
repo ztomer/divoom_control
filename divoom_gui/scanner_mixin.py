@@ -114,10 +114,28 @@ class ScannerMixin:
             return json.dumps({"daemon": True})
         try:
             from divoom_gui.daemon_bridge import daemon_alive
-            return json.dumps({"daemon": bool(daemon_alive())})
+            alive = bool(daemon_alive())
         except Exception as e:
             logger.debug(f"daemon_health failed: {e}")
-            return json.dumps({"daemon": False})
+            alive = False
+        if alive:
+            return json.dumps({"daemon": True})
+        # R67: carry the REASON to the banner. "Background service isn't
+        # running" is true but unactionable; when the daemon refused to bind it
+        # knows exactly why (stale socket cleared automatically, a directory in
+        # the way, a permission problem) and wrote it next to the socket.
+        payload: dict = {"daemon": False}
+        try:
+            from divoom_client.daemon_protocol import DEFAULT_SOCKET_PATH
+            from divoom_client.socket_failure import read_socket_failure
+            failure = read_socket_failure(DEFAULT_SOCKET_PATH)
+            if failure is not None:
+                payload["reason"] = failure.reason
+                payload["remedy"] = failure.remedy
+                payload["transient"] = failure.transient
+        except Exception as e:  # never let diagnosis break liveness reporting
+            logger.debug(f"reading socket failure report failed: {e}")
+        return json.dumps(payload)
 
     def reconnect_daemon(self) -> str:
         """Drop the cached client and (re)ensure a live daemon, spawning one if

@@ -68,20 +68,6 @@ fn parse_args() -> ConfigArgs {
     }
 }
 
-/// Single-instance + stale-socket handling: if the path exists and something is
-/// actually listening, another instance owns it — exit. Otherwise remove the stale
-/// socket and bind. (Mirrors the Python daemon's single-instance guard intent.)
-fn bind(socket_path: &str) -> std::io::Result<UnixListener> {
-    if std::path::Path::new(socket_path).exists() {
-        if std::os::unix::net::UnixStream::connect(socket_path).is_ok() {
-            eprintln!("divoomd: another instance already owns {socket_path}");
-            std::process::exit(1);
-        }
-        let _ = std::fs::remove_file(socket_path);
-    }
-    UnixListener::bind(socket_path)
-}
-
 use divoomd::socket_server::{serve, serve_tcp, CONNECTION_IDLE_TIMEOUT, MAX_CONNECTIONS};
 
 fn env_usize(key: &str, default: usize) -> usize {
@@ -112,10 +98,31 @@ async fn main() {
 
     let args = parse_args();
     let socket_path = args.socket_path;
-    let listener = match bind(&socket_path) {
+    // Single-instance guard, stale-socket clearing and blocker diagnosis all
+    // live in socket_bind::acquire, under an advisory lock so inspect-and-bind
+    // is atomic against another daemon starting at the same moment.
+    let acquired = match divoomd::socket_bind::acquire(&socket_path) {
+        Ok(a) => a,
+        Err(f) => {
+            // Say it BOTH ways. stderr goes to the GUI's daemon log, which is
+            // where a human looks; the sidecar file is what the client reads to
+            // turn "no daemon" into an actual explanation.
+            eprintln!("divoomd: {}", f.reason(&socket_path));
+            eprintln!("divoomd: {}", f.remedy());
+            divoomd::socket_bind::write_failure(&socket_path, &f);
+            std::process::exit(f.exit_code());
+        }
+    };
+    // `_startup_lock` must stay bound for the whole of main: dropping it
+    // releases the advisory lock and re-opens the two-daemon startup race.
+    let (std_listener, _startup_lock) = acquired.into_parts();
+    let listener = match std_listener
+        .set_nonblocking(true)
+        .and_then(|()| UnixListener::from_std(std_listener))
+    {
         Ok(l) => l,
         Err(e) => {
-            eprintln!("divoomd: cannot bind {socket_path}: {e}");
+            eprintln!("divoomd: cannot use {socket_path}: {e}");
             std::process::exit(1);
         }
     };

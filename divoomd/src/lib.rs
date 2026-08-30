@@ -60,6 +60,7 @@ mod packets_tests;
 pub mod paths;
 pub mod protocol;
 pub mod response;
+pub mod socket_bind;
 pub mod socket_owner;
 pub mod socket_server;
 pub mod spp;

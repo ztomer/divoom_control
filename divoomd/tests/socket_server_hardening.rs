@@ -1,3 +1,7 @@
+// NOTE: `serve` BORROWS its listener so the daemon can keep the socket's
+// inode pinned until after its ownership check (see socket_owner). These
+// harnesses `tokio::spawn` it, which needs 'static, so they leak the
+// listener for the life of the test process -- deliberate, and bounded.
 //! Socket-server hardening tests (R58): idle-timeout drops silent/dead peers, and
 //! concurrent connections are capped (back-pressure) so a stuck client can't pin a
 //! permit / the device lock forever. Drives the real `serve` loop with a stub
@@ -61,7 +65,12 @@ async fn idle_timeout_drops_silent_peer() {
     let listener = UnixListener::bind(&path).unwrap();
     let handler = Arc::new(Stub);
     // 300ms idle: a peer that connects and sends nothing is dropped.
-    tokio::spawn(serve(listener, handler, 8, Duration::from_millis(300)));
+    tokio::spawn(serve(
+        Box::leak(Box::new(listener)),
+        handler,
+        8,
+        Duration::from_millis(300),
+    ));
 
     let mut client = UnixStream::connect(&path).await.unwrap();
     let mut buf = [0u8; 64];
@@ -83,7 +92,12 @@ async fn max_connections_backpressures_extra() {
     let listener = UnixListener::bind(&path).unwrap();
     let handler = Arc::new(Stub);
     // max_connections = 1, long idle so the open connection keeps its permit.
-    tokio::spawn(serve(listener, handler, 1, Duration::from_secs(60)));
+    tokio::spawn(serve(
+        Box::leak(Box::new(listener)),
+        handler,
+        1,
+        Duration::from_secs(60),
+    ));
 
     // Connection A occupies the single permit with a slow op.
     let mut a = UnixStream::connect(&path).await.unwrap();
@@ -120,7 +134,12 @@ async fn subscribe_idle_drops_silent_subscriber() {
     // watchdog (so it can't pin a permit forever).
     let (tx, _rx) = broadcast::channel::<Value>(8);
     let handler = Arc::new(SilentSubStub { tx });
-    tokio::spawn(serve(listener, handler, 8, Duration::from_millis(300)));
+    tokio::spawn(serve(
+        Box::leak(Box::new(listener)),
+        handler,
+        8,
+        Duration::from_millis(300),
+    ));
 
     let mut client = UnixStream::connect(&path).await.unwrap();
     client

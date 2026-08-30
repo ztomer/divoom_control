@@ -196,10 +196,17 @@ window.getDeviceDimensions = function(name) {
 // then surface a persistent banner with a manual Reconnect only if that fails.
 window._daemonReconnecting = false;
 
-window.setDaemonBanner = function(show) {
+window.setDaemonBanner = function(show, detail) {
     const banner = document.getElementById("daemon-banner");
     if (!banner) return;
     banner.hidden = !show;
+    // R67: show WHY when the daemon told us. The generic line is true but
+    // unactionable -- a stale socket, a file in the way and a permission
+    // problem all produced the same sentence, and none are fixed the same way.
+    const msg = banner.querySelector(".daemon-banner-msg");
+    if (!msg) return;
+    if (!msg.dataset.defaultText) msg.dataset.defaultText = msg.textContent;
+    msg.textContent = (show && detail) ? detail : msg.dataset.defaultText;
 };
 
 window.refreshDaemonHealth = async function() {
@@ -209,6 +216,9 @@ window.refreshDaemonHealth = async function() {
     try { health = JSON.parse(await api.daemon_health()); }
     catch (e) { return; }  // pywebview not ready / transient — try next tick
     if (health && health.daemon) { window.setDaemonBanner(false); return; }
+    const detail = health && health.reason
+        ? (health.remedy ? health.reason + ". " + health.remedy : health.reason)
+        : null;
     // Daemon is down. Attempt one silent auto-reconnect before nagging the user.
     if (!window._daemonReconnecting && api.reconnect_daemon) {
         window._daemonReconnecting = true;
@@ -222,7 +232,7 @@ window.refreshDaemonHealth = async function() {
         } catch (e) { /* fall through to the banner */ }
         finally { window._daemonReconnecting = false; }
     }
-    window.setDaemonBanner(true);
+    window.setDaemonBanner(true, detail);
 };
 
 // Manual reconnect (the banner button). Gives immediate feedback and re-probes.
