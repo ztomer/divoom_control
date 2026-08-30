@@ -19,17 +19,15 @@ from divoom_client.daemon_protocol import DaemonClient
 
 @pytest.fixture
 def rust_daemon_ctx():
-    # Locate the compiled Rust binary (mirrors DaemonClient's dev-tree discovery).
-    repo_root = Path(__file__).parent.parent
-    bin_path = None
-    for folder in ("release", "debug"):
-        candidate = repo_root / "target" / folder / "divoomd"
-        if candidate.exists():
-            bin_path = candidate
-            break
+    # Resolved BY VERSION through the shared helper. This used to walk
+    # ("release", "debug") and take the first that existed, with a comment
+    # saying it "mirrors DaemonClient's dev-tree discovery" — which it did,
+    # including the bug: nothing rebuilds target/release, so a leftover release
+    # binary silently became the daemon under test. That comment is also how the
+    # copy survived the v0.28.3 fix; a mirror is only as good as its next sync.
+    from tests.support.daemon_binary import require_divoomd
 
-    if bin_path is None:
-        pytest.skip("Rust binary not found. Run `cargo build` in divoomd/ first.")
+    bin_path = require_divoomd()
 
     sp = f"/tmp/divoomd_parity_{os.getpid()}.sock"
     if os.path.exists(sp):
@@ -129,9 +127,7 @@ def test_rust_set_routing(rust_daemon_ctx):
 
 
 def test_rust_tcp_token_auth():
-    # Locate the compiled Rust binary
-    repo_root = Path(__file__).parent.parent
-    # Newest-built, not first-found: see tests/support/daemon_binary.py
+    # Resolved by VERSION: see tests/support/daemon_binary.py
     from tests.support.daemon_binary import require_divoomd
 
     bin_path = require_divoomd()
@@ -200,9 +196,7 @@ def test_rust_tcp_token_auth():
 
 
 def test_rust_default_mac():
-    # Locate the compiled Rust binary
-    repo_root = Path(__file__).parent.parent
-    # Newest-built, not first-found: see tests/support/daemon_binary.py
+    # Resolved by VERSION: see tests/support/daemon_binary.py
     from tests.support.daemon_binary import require_divoomd
 
     bin_path = require_divoomd()

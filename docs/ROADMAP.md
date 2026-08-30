@@ -145,10 +145,10 @@ table is written by the step rather than by a tidy-up pass afterwards.
 
 | Step | What | Status |
 |------|------|--------|
-| P1.1 | Every exit from `_IsolatedStack.__init__` goes through `close()` | TODO |
-| P1.2 | Socket path keyed on per-stack identity, not the pytest PID | TODO |
-| P1.3 | Regression test: no surviving PIDs on each failure path | TODO |
-| P1.4 | Sweep the sibling harnesses for the same shape | TODO |
+| P1.1 | Every exit from `_IsolatedStack.__init__` goes through `close()` | DONE |
+| P1.2 | Socket path keyed on per-stack identity, not the pytest PID | DONE |
+| P1.3 | Regression test: no surviving PIDs on each failure path | DONE |
+| P1.4 | Sweep the sibling harnesses for the same shape | DONE |
 | P2.1 | Audit the five LAN commands' arg + reply shapes against the daemon | TODO |
 | P2.2 | GUI API methods forwarding to the daemon (client, never a 2nd impl) | TODO |
 | P2.3 | Voice/SendText UI + e2e | TODO |

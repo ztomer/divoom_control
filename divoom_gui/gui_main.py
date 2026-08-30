@@ -404,17 +404,26 @@ def _start_shutdown_follower(window) -> None:
 
 
 def _resolve_menubar_binary() -> "str | None":
-    """Locate the native Rust menubar binary (divoom-menubar): PyInstaller bundle,
-    py2app Resources, env override (via _resolve_bundled_binary), then dev tree."""
+    """Locate the native Rust menubar binary (divoom-menubar).
+
+    Bundle and env override first (`_resolve_bundled_binary` knows this app's
+    packaging layouts and the `DIVOOM_MENUBAR_BINARY` name); the dev tree is
+    resolved BY VERSION through the shared resolver.
+
+    That last part is not cosmetic. This function used to walk
+    `("release", "debug")` and take the first that existed — the same
+    stale-`target/release` trap fixed for `divoomd` in v0.28.3, still live here
+    because that fix was applied per-instance instead of swept for siblings.
+    Nothing in this repo rebuilds `target/release`, so a developer running the
+    GUI from source got whatever menubar was last shipped, indefinitely.
+    """
     bundled = _resolve_bundled_binary("divoom-menubar")
     if bundled:
         return bundled
-    repo_root = Path(__file__).resolve().parents[1]
-    for folder in ("release", "debug"):
-        p = repo_root / "target" / folder / "divoom-menubar"
-        if p.exists():
-            return str(p)
-    return None
+    from divoom_client import binary_resolver
+
+    found = binary_resolver.resolve("divoom-menubar")
+    return str(found) if found else None
 
 
 def _spawn_menubar_agent() -> None:

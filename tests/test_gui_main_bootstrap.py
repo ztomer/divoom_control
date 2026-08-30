@@ -251,26 +251,60 @@ def test_resolve_menubar_binary_uses_bundled(monkeypatch):
     assert gui_main._resolve_menubar_binary() == "/bundled/divoom-menubar"
 
 
-def test_resolve_menubar_binary_dev_tree_release(monkeypatch, tmp_path):
-    monkeypatch.setattr(gui_main, "_resolve_bundled_binary", lambda name: None)
-    # `_resolve_menubar_binary` computes `repo_root = Path(__file__).resolve().parents[1]`
-    # — fake `__file__` two levels under a controlled repo_root instead of touching
-    # the real Path.resolve (which is process-global and used everywhere).
-    repo_root = tmp_path
-    fake_module_file = repo_root / "divoom_gui" / "gui_main.py"
-    monkeypatch.setattr(gui_main, "__file__", str(fake_module_file))
-    target = repo_root / "target" / "release"
-    target.mkdir(parents=True)
-    (target / "divoom-menubar").write_text("x")
+def _menubar_stub(path, version: str | None):
+    """A fake divoom-menubar that answers `--version` (or does not)."""
+    import stat
 
-    assert gui_main._resolve_menubar_binary() == str(target / "divoom-menubar")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    body = f'echo "divoom-menubar {version}"\n' if version else "echo nope\n"
+    path.write_text("#!/bin/sh\n" + body)
+    path.chmod(path.stat().st_mode | stat.S_IEXEC)
+    return path
+
+
+def test_resolve_menubar_binary_dev_tree(monkeypatch, tmp_path):
+    """The dev tree is searched when nothing is bundled.
+
+    This test used to be `..._dev_tree_release` and asserted that a file in
+    `target/release` wins purely by existing — it pinned the stale-binary bug
+    rather than the behaviour. `target/release` is refreshed only by
+    `build_release.sh`, so "it is there" says nothing about whether it is this
+    tree's menubar. What must hold is that the resolved binary REPORTS this
+    version, so that is what is asserted now.
+    """
+    from divoom_client import binary_resolver
+
+    monkeypatch.setattr(gui_main, "_resolve_bundled_binary", lambda name: None)
+    monkeypatch.setattr(binary_resolver, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(binary_resolver, "_expected_version", lambda: "9.9.9")
+    good = _menubar_stub(tmp_path / "target" / "release" / "divoom-menubar", "9.9.9")
+
+    assert gui_main._resolve_menubar_binary() == str(good)
+
+
+def test_resolve_menubar_binary_ignores_a_stale_dev_tree_build(monkeypatch, tmp_path):
+    """A menubar from a previous release is not this tree's menubar.
+
+    The old code took the first that EXISTED, so a developer running from source
+    got whatever was last shipped, indefinitely — the same trap fixed for
+    `divoomd` in v0.28.3 and left alive here because that fix was applied
+    per-instance instead of swept for siblings.
+    """
+    from divoom_client import binary_resolver
+
+    monkeypatch.setattr(gui_main, "_resolve_bundled_binary", lambda name: None)
+    monkeypatch.setattr(binary_resolver, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(binary_resolver, "_expected_version", lambda: "9.9.9")
+    _menubar_stub(tmp_path / "target" / "release" / "divoom-menubar", "0.27.0")
+
+    assert gui_main._resolve_menubar_binary() is None
 
 
 def test_resolve_menubar_binary_not_found(monkeypatch, tmp_path):
+    from divoom_client import binary_resolver
+
     monkeypatch.setattr(gui_main, "_resolve_bundled_binary", lambda name: None)
-    repo_root = tmp_path
-    fake_module_file = repo_root / "divoom_gui" / "gui_main.py"
-    monkeypatch.setattr(gui_main, "__file__", str(fake_module_file))
+    monkeypatch.setattr(binary_resolver, "REPO_ROOT", tmp_path)
 
     assert gui_main._resolve_menubar_binary() is None
 
