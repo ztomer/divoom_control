@@ -75,7 +75,27 @@ ALLOWLIST: dict[str, str] = {
 
 
 def api_methods() -> set[str]:
-    from divoom_gui.gui_api import DivoomGuiAPI
+    """The REAL class's public surface.
+
+    Imported rather than AST-scanned on purpose: `DivoomGuiAPI` is assembled
+    from a dozen mixins, and an approximation of that MRO could disagree with
+    what actually exists at runtime — which is the only thing this gate cares
+    about.
+
+    The cost is a dependency, and it must announce itself. Run where pywebview
+    is absent this used to raise a bare `ModuleNotFoundError: No module named
+    'webview'` traceback, which reads as a broken gate rather than a
+    misplaced one. (`tools/_tui.py` exists because four R67 gates did exactly
+    that in CI.)
+    """
+    try:
+        from divoom_gui.gui_api import DivoomGuiAPI
+    except ImportError as exc:
+        raise SystemExit(
+            f"[api-reachable] cannot import DivoomGuiAPI ({exc}).\n"
+            f"  This gate needs the GUI's dependencies — run it from the job\n"
+            f"  that installs requirements.txt, not the dependency-free one."
+        ) from exc
 
     return {
         name

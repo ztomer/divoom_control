@@ -47,8 +47,6 @@ jobs:
         run: python3 tools/check_weather_parity.py
       - name: The GUI is a client, not a second implementation (R70)
         run: python3 tools/check_gui_is_a_client.py
-      - name: Every GUI API method has a caller (R70)
-        run: python3 tools/check_gui_api_reachable.py
       - name: Version is consistent across pyproject, CHANGELOG, tags and crates
         run: python3 tools/check_version_consistency.py
 
@@ -127,6 +125,16 @@ jobs:
           done
           python3 tools/check_camoufox_installed.py  # emit the failure and exit non-zero
           exit 1
+
+      # R70 P5.0. This gate imports DivoomGuiAPI to enumerate the REAL class —
+      # an AST approximation could disagree with the actual MRO, and the whole
+      # point is what exists at runtime. So it runs HERE, where the GUI's
+      # dependencies are installed, not in the dependency-free checks job:
+      # placed there it died with `ModuleNotFoundError: No module named
+      # 'webview'` before checking anything, which is exactly the trap
+      # tools/_tui.py was written for.
+      - name: Every GUI API method has a caller (R70)
+        run: python3 tools/check_gui_api_reachable.py
 
       - name: Build native dylib
         run: bash scripts/build_libdivoom.sh
