@@ -1,164 +1,171 @@
-"""R64 — offscreen render harness: decode EVERY gallery asset across ALL
-categories and prove none render blank.
+#!/usr/bin/env python3
+"""Prove no gallery asset renders blank — through the DAEMON's decoder.
 
-Mirrors the exact decode chain the GUI uses
-(divoom_gui.gallery_hot_api.get_animated_preview), renders every
-decoded frame to a per-category contact sheet, and asserts zero
-all-black frames. This is the headless "render every item" check —
-media_decoder is the single source of truth that feeds the UI, so a
-decoded non-blank frame == what the UI shows.
+**Why this was rewritten (R72 P3.1).** The previous version said it "mirrors the
+exact decode chain the GUI uses" and that "media_decoder is the single source of
+truth that feeds the UI". Both were true when it was written. Neither survived
+**R70 P2.3**, which moved gallery decode into the daemon precisely because the
+daemon could decode magic 9 (AES), 18/26 (AES+LZO, tiled) and 0xAA hot files
+that the GUI copy never could.
 
-Usage:
-    .buildvenv/bin/python scripts/verify_gallery_render.py [--cats 18,0,3]
-Writes contact sheets to /tmp/gallery_sheets/ and prints a report.
+So this harness had become misleading in BOTH directions: it would pass on
+assets the product cannot render, and fail on containers the product handles
+fine. A green run said nothing about what a user sees — worse than no harness,
+because it looked like one.
+
+It was also a full parallel implementation of three things the daemon owns —
+its own `divoom_auth` login, its own `urllib` POST to `appin.divoom-gz.com`, and
+its own `media_decoder` — i.e. exactly what R70 spent a round removing from the
+GUI. It survived only because no gate in this repo had ever scanned `scripts/`.
+The capability census (R72 P0) found it on its first run.
+
+Now it asks the daemon for the file list and for each decoded preview, and
+checks THOSE bytes. What it verifies is what ships.
+
+    scripts/verify_gallery_render.py                # every category
+    scripts/verify_gallery_render.py --cats 18,0,3  # a few
+    scripts/verify_gallery_render.py --limit 5      # fewer per category
+
+**Start the daemon yourself** — this refuses to spawn one, for the same reason
+`hw_verify.py` does: a shell-launched daemon has no Bluetooth TCC grant. It also
+needs a configured Divoom account, since the file list is a cloud call.
 """
+from __future__ import annotations
+
 import argparse
-import configparser
-import io
-import json
-import logging
+import base64
+import binascii
+import io as _io
 import sys
-import urllib.request
-from collections import Counter
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO))
+sys.path.insert(0, str(REPO / "tools"))
+from _tui import err, hr, info, ok, section, warn  # noqa: E402
 
-from PIL import Image  # noqa: E402
-from divoom_lib import divoom_auth, media_decoder  # noqa: E402
+from divoom_client.daemon_protocol import DEFAULT_SOCKET_PATH, DaemonClient  # noqa: E402
 
-logging.basicConfig(level=logging.WARNING, format="[ %(levelname)s ] %(message)s")
-log = logging.getLogger("verify")
-
+# The classify ids the gallery browser offers, in the order it shows them.
 CLASSIFY = [18, 0, 3, 17, 4, 8, 9, 6, 5, 15, 7, 16, 1, 40, 12, 19]
-OUT = Path("/tmp/gallery_sheets")
-OUT.mkdir(parents=True, exist_ok=True)
 
 
-def get_file_list(classify, start=1, end=30):
-    creds = divoom_auth.get_credentials()
-    body = {"Command": "GetCategoryFileListV2", "Token": creds.token,
-            "UserId": creds.user_id, "DeviceId": 0, "Classify": classify,
-            "FileSort": 1, "FileType": 5, "FileSize": 1, "Version": 19,
-            "StartNum": start, "EndNum": end, "RefreshIndex": 0}
-    req = urllib.request.Request(
-        "https://appin.divoom-gz.com/GetCategoryFileListV2",
-        data=json.dumps(body).encode(),
-        headers={"Content-Type": "application/json; charset=utf-8",
-                 "User-Agent": "okhttp/4.12.0"}, method="POST")
-    with urllib.request.urlopen(req, timeout=10) as r:
-        return json.loads(r.read()).get("FileList", [])
+def is_blank(img) -> bool:
+    """Fully transparent, or a single flat colour, counts as blank.
 
-
-def decode_all_frames(raw):
-    """Return a list of PIL frames using the GUI's full decode chain."""
-    out = []
-    if media_decoder.extract_image_from_magic_43(raw):
-        eb, _ = media_decoder.extract_image_from_magic_43(raw)
-        try:
-            out.append(Image.open(io.BytesIO(eb)).convert("RGB"))
-        except Exception:
-            pass
-    if raw[:6] in (b"GIF89a", b"GIF87a") or raw[:8] == b"\x89PNG\r\n\x1a\n" or raw[:2] == b"\xff\xd8":
-        try:
-            out.append(Image.open(io.BytesIO(raw)).convert("RGB"))
-        except Exception:
-            pass
-    else:
-        frames, _ = media_decoder.decode_cloud_frames(raw)
-        if frames:
-            out.extend(f.convert("RGB") for f in frames)
-        hot = media_decoder.decode_hot_file_format(raw)
-        if hot:
-            out.extend(Image.frombytes("RGB", (16, 16), rgb).convert("RGB")
-                      for rgb, _ in hot)
-        if not out:
-            try:
-                out.append(Image.open(io.BytesIO(raw)).convert("RGB"))
-            except Exception:
-                pass
-    return out
-
-
-def is_blank(im):
-    """Conservative: only a BROKEN frame (unreadable, degenerate, or
-    fully-transparent) counts as blank — a dark/solid-color image is
-    valid art (see media_decoder.is_black_image)."""
-    try:
-        w, h = im.size
-        if w == 0 or h == 0:
+    Kept verbatim in spirit from the previous version -- this predicate is the
+    part that had value. A dark image is NOT blank; a one-colour image is.
+    """
+    if img.mode in ("RGBA", "LA"):
+        alpha = img.getchannel("A")
+        lo, hi = alpha.getextrema()
+        if lo == 0 and hi == 0:
             return True
-        ex = im.convert("RGBA").getextrema()
-        a_lo, a_hi = ex[-1]
-        return a_lo == 0 and a_hi == 0
+    extrema = img.convert("RGB").getextrema()
+    return all(lo == hi for lo, hi in extrema)
+
+
+def decode_data_url(data_url: str):
+    """`data:image/gif;base64,...` -> a PIL image, or None if it is not one."""
+    from PIL import Image
+
+    if not isinstance(data_url, str) or "," not in data_url:
+        return None
+    try:
+        raw = base64.b64decode(data_url.split(",", 1)[1], validate=False)
+    except (binascii.Error, ValueError):
+        return None
+    if not raw:
+        return None
+    try:
+        return Image.open(_io.BytesIO(raw))
     except Exception:
-        return True
+        return None
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--cats", default="", help="comma list of classify ids")
+def require_daemon(socket_path: str) -> DaemonClient:
+    client = DaemonClient(socket_path)
+    reason = ""
+    try:
+        st = client.device_status()
+        if isinstance(st, dict) and (st.get("unreachable") or st.get("success") is False):
+            reason = str(st.get("error") or st)
+    except Exception as exc:
+        reason = str(exc)
+    if reason:
+        err(f"no daemon on {socket_path} ({reason})")
+        info("This script does not start one: a shell-launched daemon has no")
+        info("Bluetooth TCC grant and dies on its first scan. Launch the GUI.")
+        raise SystemExit(2)
+    return client
+
+
+def check_category(client, classify: int, limit: int) -> tuple[int, int, list[str]]:
+    """(checked, blank, notes) for one category."""
+    try:
+        items = client.get_category_file_list(classify, limit=limit)
+    except Exception as exc:
+        return 0, 0, [f"file list failed: {exc}"]
+    if not isinstance(items, list):
+        return 0, 0, [f"unexpected file-list reply: {items!r}"]
+
+    checked = blank = 0
+    notes: list[str] = []
+    for item in items:
+        file_id = (item or {}).get("FileId") if isinstance(item, dict) else None
+        if not file_id:
+            continue
+        try:
+            url = client.get_animated_preview(str(file_id))
+        except Exception as exc:
+            notes.append(f"{file_id}: preview failed: {exc}")
+            continue
+        img = decode_data_url(url)
+        if img is None:
+            notes.append(f"{file_id}: the daemon returned no decodable image")
+            blank += 1
+            checked += 1
+            continue
+        checked += 1
+        if is_blank(img):
+            blank += 1
+            notes.append(f"{file_id}: renders BLANK")
+    return checked, blank, notes
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--socket", default=DEFAULT_SOCKET_PATH)
+    ap.add_argument("--cats", default="", help="comma-separated classify ids")
+    ap.add_argument("--limit", type=int, default=20, help="files per category")
     args = ap.parse_args()
-    cats = [int(c) for c in args.cats.split(",") if c] or CLASSIFY
 
-    total_items = 0
-    fails = []
-    for c in cats:
-        items = get_file_list(c)
-        frames_grid = []
-        blank = 0
-        for it in items:
-            fid = it.get("FileId")
-            if not fid:
-                continue
-            total_items += 1
-            try:
-                raw = urllib.request.urlopen(
-                    urllib.request.Request("https://fin.divoom-gz.com/" + fid,
-                                          headers={"User-Agent": "okhttp/4.12.0"}),
-                    timeout=8).read()
-            except Exception as e:
-                fails.append((c, it.get("FileName"), "DL_FAIL", None))
-                continue
-            fs = decode_all_frames(raw)
-            if not fs:
-                fails.append((c, it.get("FileName"), "UNDECODABLE", raw[0]))
-                continue
-            for f in fs:
-                if is_blank(f):
-                    blank += 1
-                    # Record detail so we can tell legit solid-color art
-                    # from a wrong decode. Save the blank frame for inspection.
-                    try:
-                        ex = f.convert("RGBA").getextrema()
-                        f.save(OUT / f"blank_cat{c}_{fid.replace('/', '_')}.png")
-                    except Exception:
-                        ex = None
-                    log.warning(f"BLANK frame cat={c} magic={raw[0]} "
-                                f"name={it.get('FileName')!r} size={f.size} ex={ex}")
-            # collect first frame (upscaled) for the contact sheet
-            frames_grid.append(fs[0].resize((64, 64), Image.Resampling.NEAREST))
-        # write contact sheet
-        cols = 10
-        rows = (len(frames_grid) + cols - 1) // cols or 1
-        sheet = Image.new("RGB", (cols * 66, rows * 66), (20, 20, 20))
-        for i, f in enumerate(frames_grid):
-            x = (i % cols) * 66 + 1
-            y = (i // cols) * 66 + 1
-            sheet.paste(f, (x, y))
-        sheet.save(OUT / f"cat_{c}.png")
-        print(f"cat {c:>3}: items={len(items):>3} frames_rendered={len(frames_grid):>3} blank_frames={blank}")
+    cats = [int(c) for c in args.cats.split(",") if c.strip()] or CLASSIFY
+    client = require_daemon(args.socket)
 
-    print(f"\nTOTAL items={total_items}  FAILS={len(fails)}")
-    if fails:
-        from collections import Counter
-        print("by category:", Counter(c for c, _, _, _ in fails))
-        print("sample fails:")
-        for c, name, why, mg in fails[:15]:
-            print(f"   cat={c} {why} magic={mg} {name!r}")
-        sys.exit(1)
-    print("OK — every gallery asset across all categories decodes to a non-blank frame.")
+    section(f"gallery render check — {len(cats)} categor(ies), "
+            f"{args.limit} file(s) each, via the daemon's decoder")
+
+    total = total_blank = 0
+    for classify in cats:
+        checked, blank, notes = check_category(client, classify, args.limit)
+        total += checked
+        total_blank += blank
+        line = f"classify {classify:<3} {checked:>3} checked, {blank} blank"
+        (err if blank else ok)(line)
+        for n in notes[:5]:
+            info(f"    {n}")
+        if len(notes) > 5:
+            info(f"    (+{len(notes) - 5} more)")
+
+    hr()
+    if not total:
+        warn("nothing was checked — is the account configured?")
+        return 1
+    (err if total_blank else ok)(
+        f"{total} asset(s) checked, {total_blank} blank")
+    return 1 if total_blank else 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

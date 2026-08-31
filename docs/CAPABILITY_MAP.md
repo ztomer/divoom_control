@@ -43,7 +43,7 @@ what that phase removed.
 | ~~`get_cached_credentials`~~ | `divoom_gui/gui_api.py:59` | **CLOSED** — read moved to `load_config`, via the daemon | P1.1 |
 | ~~`get_credentials`~~ | `presets_manager.py:59` | **CLOSED** — absorbed into the daemon's `save_credentials` | P1.1 |
 | ~~`get_credentials`~~ | `presets_manager.py:61` | **CLOSED** — same | P1.1 |
-| `get_credentials` | `scripts/verify_gallery_render.py:39` | `stale-instrument` | P3.1 |
+| ~~`get_credentials`~~ | `scripts/verify_gallery_render.py` | **CLOSED** — rewritten against the daemon (P3.1) | P3.1 |
 
 **F1 in full.** The daemon has complete auth in `cloud.rs` — `login_email`,
 `login_guest`, md5 + hmac-md5, a credential cache with cooldown — and answers
@@ -104,7 +104,7 @@ invariant is about the WORK.
 | `resolve_location(...)` | `api/widgets.py:42`, `media_sync.py:299` | **`client-local`** (verdict CORRECTED) | P2.1 |
 | `saved_location()` | `weather_city.py:82` | `client-local` | — |
 | `hotchannel_config.*` | `gallery_hot_api.py:74`, `gallery_sync.py` ×7 | `shared-state` | P2.4 |
-| `media_decoder.*` | `scripts/verify_gallery_render.py` ×4 | `stale-instrument` | P3.1 |
+| ~~`media_decoder.*`~~ | `scripts/verify_gallery_render.py` ×4 | **CLOSED** with P3.1 | P3.1 |
 
 **F4's verdict was WRONG, and the correction matters more than the row.**
 
