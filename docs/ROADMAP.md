@@ -286,8 +286,12 @@ just re-run the decision that caused it.
 - **P2.4** Every panel says WHY it is empty. **Closes the Deferred item** — the
   reason already exists daemon-side and the GUI discards it.
 - **P2.5** Verify all 8 commands round-trip LIVE before deleting their Python
-  twins. `get_photo_albums` answers `RC=3` today; the R61 note below says that
-  is missing `BlueDevice/NewDevice` registration, so close it here.
+  twins. **Done early, during P1.1, on a configured account**: six returned real
+  data. Two did not, and both are daemon-side gaps to close here, not reasons to
+  keep the Python twin — `get_photo_albums` answers
+  `Photo/GetAlbumList failed (RC=3): Request data is incomplete` (the R61 note
+  below says RC=3 is a missing `BlueDevice/NewDevice` registration) and
+  `search_weather_city` answers `Weather/SearchCity failed (RC=1): Failed`.
 - Allowlist: `divoom_lib.cloud` and `urllib.request` entries deleted.
 
 **P3 — the renderers move.** Findings #5, #6, and `_render_text_png`.
@@ -474,7 +478,7 @@ correct.
 | P0.2 prove it bites | **DONE** | 18 tests; 4 sabotages each went red on the property they broke |
 | P0.3 wire local+CI | **DONE** | same position in `.gatesrc` and `tests.yml`; verified in the no-`GOH_DIR` CI shape |
 | P0.4 Python cov floor ON | **DONE** | 89% measured (not the 95% claimed); floor 99 fails / floor 1 passes |
-| P1.1 cloud wrappers | TODO | wrong command name on the wire → red |
+| P1.1 cloud wrappers | **DONE** | `daemon_cloud.py`, 14 wrappers, 22 wire tests; 3 sabotages → 3 red signatures; all 8 round-tripped live on a configured account |
 | P1.2 `render_widget` | TODO | sysmon bytes pinned before the refactor, identical after |
 | P1.3 `_widget_frame` funnel | TODO | every panel reaches frames through it — no second path |
 | P1.4 parity fixtures | TODO | per-kind bytes vs the Python renderer; disagreements DECIDED, not defaulted |
