@@ -31,7 +31,11 @@ shared memory. Read this on entry and **update it at the end of every round**
   The allowlist is honestly empty and the CLASS IS NOT CLOSED. A denylist
   enumerates forbidden means; the invariant is about ownership of ends.
 
-  **Seven findings, all verified against source while writing the plan:**
+  **Seven findings, now tracked as F1-F7 in the plan's own findings table** —
+  each row carries its evidence (file:line), the daemon equivalent, its defect
+  CLASS and the step that closes it, and the ledger's "Closes" column maps the
+  other way. A finding is closed only when its step is DONE *and* the P0 census
+  reports it clean unprompted. Summarised here; the table is canonical:
 
   * **Cloud auth is a live second implementation with the seam already built.**
     `cloud.rs` has `login_email`/`login_guest`/md5+hmac/credential cooldown and
@@ -66,6 +70,14 @@ shared memory. Read this on entry and **update it at the end of every round**
   travel to the daemon and is correct. `DateTimeCommand(d)` wraps that same
   proxy in Python logic and reads almost identically at the call site. The
   census must separate transport-through-the-daemon from logic-in-the-client.
+
+  **Three CLASSES, not seven instances** (rule #6): F1+F5 are the denylist
+  naming specific modules, so `divoom_auth` and `http.client` walk past a gate
+  that stops `divoom_lib.cloud` and `urllib.request`; F2+F3 are `divoom_lib`
+  helper objects constructed over the daemon proxy, which is why they read as
+  client code at the call site; F6 is a SCOPE class — nothing was wrong with
+  `divoom_client/`, it was never looked at. Fixing seven instances and leaving
+  those three alive is the unfinished-fix shape.
 
   **Order relative to R71:** independent. R71's P0 (make local CI structural) is
   still the first thing to do in the repo, because R72 reports its results

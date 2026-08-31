@@ -400,59 +400,40 @@ device-facing state. Clients own presentation, user intent, and their own local
 preferences. **Each capability has exactly one implementation, and it lives
 where its resource lives.**
 
-**Seven findings, all verified against source while writing this plan, none of
-which the R70 gate can see.** They are the seed of P0.3's inventory, not the
-whole of it — the point of the census is that a hand-written list is exactly
-what has failed twice now.
+#### R72 findings — F1-F7, each owned by a step
 
-1. **Cloud auth is a live second implementation, and the seam already exists.**
-   The daemon has full auth in `cloud.rs` — `login_email`, `login_guest`,
-   md5/hmac-md5, credential cache with cooldown — and answers `get_credentials`,
-   `get_cached_credentials` and `save_credentials` over the socket.
-   `divoom_client/daemon_cloud.py` ALREADY wraps `get_cached_credentials`.
-   Three GUI sites bypass all of it and call `divoom_lib.divoom_auth` directly:
-   `gui_api.py:59`, `api/connection.py:97`, `presets_manager.py:59`. This is the
-   R70 defect in its exact original shape — seam present, panel takes the Python
-   path anyway — surviving because the ban list names `divoom_lib.cloud` and not
-   `divoom_lib.divoom_auth`.
-2. **`sync_time` is reimplemented in Python, and the Python one was BROKEN.**
-   The daemon has `sync_time` and `system.set_date_time`. `api/tools.py:157`
-   calls `DateTimeCommand(d).update_date_time()`, which builds the payload byte
-   by byte in `divoom_lib/system/date_time.py` — whose own comment records that
-   it raised `AttributeError` at runtime, "swallowed by the GUI tool wrapper
-   into a silent False, so Sync Time never worked". A duplicate that is also a
-   defect, in a feature the daemon implements correctly.
-3. **`DeviceSettings` has the same hybrid shape.** `set_auto_power_off` and
-   `set_low_power` construct a `divoom_lib` class over the daemon proxy, so the
-   LOGIC is Python and only the transport is the daemon. Check each against the
-   daemon's `system.rs` equivalents.
-4. **Weather is a TOLERATED duplicate, maintained by a gate.**
-   `check_weather_parity.py` exists to keep the Python and Rust implementations
-   in step, and `api/widgets.py:24` documents a known double-fetch (the GUI
-   resolves the location, the daemon fetches it again). Two GUI sites call
-   `divoom_lib.weather_provider._resolve_location` — a PRIVATE function of the
-   library the docs call reference-only.
-5. **A third control surface lives inside the GUI process.**
-   `control_server.py` runs `socket` + `socketserver` + `http.server` and
-   reflection-dispatches every public bridge method over HTTP, alongside the
-   daemon socket and `divoomd mcp`. Note `http.client` is not on the R70 ban
-   list while `urllib.request` is — the same blind spot as finding 1.
-6. **The notification stack exists twice, and the Python half is outside the
-   gate's scope entirely.** `divoomd/src/macos_notifications.rs` polls the
-   Notification Center SQLite DB, parses binary plists and routes to slots over
-   ANCS `0x50`. `divoom_client/macos_notifications.py` (16.5K) +
-   `notification_router.py` (6.9K) are imported live by `gui_api.py` at three
-   sites. Some of that is legitimate client presentation (showing the user the
-   routing table); some is host-data access the daemon owns. Separate them.
-7. **The doctrine is false as written.** AGENTS.md, this file and the project's
-   working memory all say `divoom_lib` is REFERENCE-ONLY. `divoom_gui` imports
-   it at 30+ runtime sites — `divoom_auth`, `weather_provider`,
-   `lifecycle_config`, `utils.atomic_io`, `models`, `system.date_time`,
-   `system.device_settings`, `media_decoder`, `hotchannel_config`,
-   `hot_update_state`. This is `stated-vs-implemented` at the level of project
-   doctrine, and it is load-bearing: "Python is reference-only, so Python/Rust
-   duplication is not automatically drift" is the sentence that would suppress
-   every finding above.
+**All seven were verified against source while writing this plan** (line numbers
+current at `8a49301`), and **none of them is visible to the R70 gate**. They are
+the SEED of P0.3's census, not the whole of it: the two previous passes at this
+class both used hand-written lists and both missed things a machine would not.
+A finding is closed when its owning step is DONE **and** the census (P0)
+independently reports it clean — a fix confirmed only by the person who made it
+is the shape this round exists to stop.
+
+| ID | Finding | Evidence | Daemon already has | Class | Closed by |
+|----|---------|----------|--------------------|-------|-----------|
+| **F1** | **Cloud auth is a live second implementation, and the seam is already built.** Three GUI sites call `divoom_lib.divoom_auth` directly instead of the wrapper that exists | `gui_api.py:59`, `api/connection.py:97`, `presets_manager.py:59` + `:61`; wrapper at `daemon_cloud.py:172` | `cloud.rs` — `login_email`, `login_guest`, md5 + hmac-md5, credential cooldown; socket commands at `cloud_cmds.rs:34`/`:55`/`:73` | duplicate (R70's exact shape, seam present and bypassed) | P1.1 |
+| **F2** | **`sync_time` is reimplemented in Python AND the Python one was broken** — `AttributeError` swallowed into a silent `False`, so the feature never worked | `api/tools.py:157-158` → `divoom_lib/system/date_time.py:36-37` (the comment records the defect) | `device_call/system.rs:29` — `sync_time` / `system.set_date_time` / `set_date_time` / `time.set_date_time` | duplicate that is also a defect | P1.2 |
+| **F3** | **`DeviceSettings` has the same hybrid shape** — Python logic wrapping the daemon proxy, so transport is correct and the logic is not | `api/tools.py:175-176` (`set_auto_power_off`), `:179-180` (`set_low_power_switch`) | `device_call/system.rs` equivalents — confirm per method | duplicate (hybrid; see the proxy trap below) | P1.3 |
+| **F4** | **Weather is a TOLERATED duplicate maintained by a parity gate**, with a documented double-fetch and two callers of a PRIVATE library function | `media_sync.py:298-299`, `api/widgets.py:41-42` (`_resolve_location`); double-fetch documented at `api/widgets.py:24`; gate is `tools/check_weather_parity.py` | `weather.rs` | tolerated duplicate — a DECISION to re-make, not an oversight | P2.1, P2.2 |
+| **F5** | **A third control surface runs inside the GUI process** — reflection-dispatch HTTP over every public bridge method, alongside the daemon socket and `divoomd mcp` | `control_server.py:31`, `:32`, `:34`, and `http.client` at `:241`/`:264` | daemon socket server + `divoomd mcp` (13 tools) | scope/ownership — and a denylist blind spot: `http.client` is unbanned, `urllib.request` is banned | P3.2 |
+| **F6** | **The notification stack exists twice, and the Python half is outside the gate's scope entirely** — 581 LOC of Python against 361 of Rust, imported live at three sites | `gui_api.py:288`, `:327`, `:375` → `divoom_client/macos_notifications.py` (404) + `notification_router.py` (177) | `macos_notifications.rs` (361) — SQLite poll, binary-plist parse, slot routing, ANCS `0x50` | mixed: routing-table PRESENTATION is a client job, SQLite/plist access is not | P2.3 |
+| **F7** | **The doctrine is false as written.** "`divoom_lib` is reference-only" — the GUI imports it at **35 runtime import statements across 13 files**, 9 distinct modules | `lifecycle_config` (7), `utils.atomic_io` (6), `models` (4), `weather_provider` (3), `system.device_settings` (2), `system.date_time`, `utils.converters`, `utils.media_players`, bare `divoom_lib` (10) | n/a — this is the sentence that hides F1-F6 | `stated-vs-implemented` at the level of project doctrine | P4.1, P4.2 |
+
+**Read the table by CLASS, not row by row** (rule #6). F1 and F5 are one class —
+the denylist names specific modules, so `divoom_auth` and `http.client` walk
+past a gate that stops `divoom_lib.cloud` and `urllib.request`. F2 and F3 are
+one class — `divoom_lib` helper objects constructed over the daemon proxy, which
+is why they read as client code at the call site. F6 is a scope class, not a
+code class: nothing was ever wrong with `divoom_client/`, it was simply never
+looked at. Fixing seven instances and leaving those three classes alive is the
+unfinished-fix shape this project has already been bitten by.
+
+**F7 is the keystone and should be fixed EARLY, not last.** It is placed in P4
+because rewriting doctrine is cheap once the evidence is in, but it is the
+sentence that would end this round prematurely if a future session reads it and
+concludes there is nothing to look for. If P4 slips, the round is not finished —
+it has left the mechanism that hid the class fully intact.
 
 **Completion criterion, mechanical.** Not "we looked and it seems fine":
 
@@ -464,6 +445,12 @@ what has failed twice now.
 2. `divoom_lib` is reference-only **or the sentence is deleted**. If the GUI
    still imports it at runtime when the round ends, the docs say so plainly and
    name each surviving import and its reason.
+3. **Every F-row above is CLOSED**, and closed means two independent things:
+   its owning step is DONE, and P0's census reports it clean without being
+   told to look. A finding whose only witness is the person who fixed it is
+   not closed — that is the `verify-the-effect` rule, and F2 is this round's
+   proof of why it matters (a feature that returned `False` for months while
+   its caller reported success).
 
 **P0 — the census, and proof that it can find a duplicate.**
 
@@ -476,17 +463,19 @@ things a machine would not. The deliverable is an instrument, not an audit.
 - **P0.2** Machine-generate the PYTHON EXECUTION list: every runtime site in
   `divoom_gui/`, `divoom_client/`, `scripts/` and the packaged entry points that
   touches an owned resource. **Scope is the whole shipped Python surface**, not
-  `divoom_gui/` — finding 6 is invisible from R70's scope.
+  `divoom_gui/` — **F6** is invisible from R70's scope.
 - **P0.3** Join them into `docs/CAPABILITY_MAP.md`: capability → daemon impl →
   Python impl → verdict (duplicate / presentation / client-local / unknown).
-  Seed with the seven findings; the census must produce the rest.
+  Seed with **F1-F7**; the census must produce the rest. A census that
+  returns exactly the seven it was seeded with has not been calibrated, it
+  has been transcribed.
 - **P0.4** **Calibrate it** (`calibrate-the-instrument`). The census must
-  independently rediscover `sync_time` and `divoom_auth`, both known BEFORE it
-  runs. A census that cannot find the duplicates you already have is not
+  independently rediscover **F2** (`sync_time`) and **F1** (`divoom_auth`),
+  both known BEFORE it runs. A census that cannot find the duplicates you already have is not
   measuring what you think it is measuring, and its silence about everything
   else means nothing.
 
-**P1 — the confirmed duplicates.** Findings 1, 2, 3.
+**P1 — the confirmed duplicates. Closes F1, F2, F3.**
 
 - **P1.1** Auth through `daemon_cloud`; `divoom_lib.divoom_auth` loses its GUI
   callers. Careful: `gui_api.py:59` and `connection.py:97` are deliberately
@@ -500,7 +489,7 @@ things a machine would not. The deliverable is an instrument, not an audit.
 - **P1.4** Delete the Python paths and the tests pinning them; state the
   coverage delta.
 
-**P2 — the tolerated duplicates.** Findings 4 and 6, and the category matters
+**P2 — the tolerated duplicates. Closes F4, F6.** The category matters
 more than the two instances: a duplicate kept in step by a parity gate is a
 DECISION, and it needs to be re-made deliberately rather than inherited.
 
@@ -508,12 +497,14 @@ DECISION, and it needs to be re-made deliberately rather than inherited.
   something (a reference oracle for the port) or is maintenance debt for a
   second implementation. R67's "Python was right every time" is about WIRE
   FORMATS and is not a reason to keep executing Python in the GUI.
-- **P2.2** Kill the double-fetch documented at `api/widgets.py:24` either way.
+- **P2.2** Kill the double-fetch documented at `api/widgets.py:24` either way
+  (**F4**, second half — P2.1 can be answered without this one moving).
 - **P2.3** Notifications: separate presentation (the routing table the user
   edits) from host-data access (the SQLite DB, plist parsing). The first is a
   client job; the second is the daemon's and already exists there.
 
-**P3 — the unscoped surfaces.**
+**P3 — the unscoped surfaces. Closes F5**, and removes the scope hole that
+made F6 invisible in the first place.
 
 - **P3.1** Bring `divoom_client/`, `scripts/` and the packaged entry points into
   the census's scope permanently. This is `polyglot-gate-parity`: a second
@@ -526,24 +517,28 @@ DECISION, and it needs to be re-made deliberately rather than inherited.
 - **P3.3** The Rust menubar is a client too. Check it against the same
   invariant — it is small (1155 LOC) and was never audited for this.
 
-**P4 — make the doctrine true, or delete it.** Finding 7.
+**P4 — make the doctrine true, or delete it. Closes F7.**
 
 - **P4.1** Every surviving `divoom_lib` runtime import is listed with its reason
   in AGENTS.md. Config/atomic-write helpers are plausibly client-local; protocol
   builders and transports are not.
 - **P4.2** Rewrite the "reference-only" claim to match the code. A doctrine that
   is false in the direction of "stop looking" is worse than none, because it is
-  precisely what would have suppressed findings 1-6.
+  precisely what would have suppressed F1-F6.
 
 **P5 — replace the denylist with the invariant.**
 
 - **P5.1** The census becomes the gate; `check_gui_is_a_client.py` folds into it
   or stays as a cheap fast-path pre-check, but it is no longer the thing that
   claims the class is closed.
-- **P5.2** Prove it bites: reintroduce each of the seven findings one at a time
-  and watch the census go red on each. Seven sabotages, seven reds.
+- **P5.2** Prove it bites: reintroduce **F1-F7** one at a time and watch the
+  census go red on each. Seven sabotages, seven reds. F3 and F5 are the two
+  that will be tempting to skip — F3 because the proxy makes it look like
+  client code, F5 because it is a scope rule rather than an import. Those
+  are exactly the two whose absence let the class survive R70.
 
-**P6 — close.** Census clean, `CAPABILITY_MAP.md` current, CHANGELOG, release.
+**P6 — close.** Census clean, all seven F-rows closed under both witnesses,
+`CAPABILITY_MAP.md` current, CHANGELOG, release.
 
 **Traps, named up front.**
 
@@ -573,27 +568,27 @@ DECISION, and it needs to be re-made deliberately rather than inherited.
 work. A row goes DONE only once its proof has been SEEN, and for anything
 testable that means seen RED first.
 
-| Step | State | Proof required |
-|------|-------|----------------|
-| P0.1 owned-capability list | TODO | generated from Rust dispatch, not hand-written |
-| P0.2 python execution list | TODO | scope covers `divoom_gui` + `divoom_client` + `scripts` + entry points |
-| P0.3 `CAPABILITY_MAP.md` | TODO | every capability has a verdict; no `unreviewed` |
-| P0.4 census calibrated | TODO | independently rediscovers `sync_time` and `divoom_auth` |
-| P1.1 auth through the seam | TODO | cache-only startup behaviour preserved and pinned |
-| P1.2 `sync_time` via daemon | TODO | verified on hardware — the device's clock actually changes |
-| P1.3 `DeviceSettings` | TODO | per method, against `system.rs` |
-| P1.4 delete + rebaseline | TODO | dead Python and its tests gone; coverage delta stated |
-| P2.1 weather duplicate decided | TODO | parity gate justified as an oracle, or retired with the duplicate |
-| P2.2 double-fetch killed | TODO | one fetch, whichever side wins |
-| P2.3 notifications split | TODO | presentation stays, host-data access moves |
-| P3.1 scope widened | TODO | census covers the whole shipped Python surface |
-| P3.2 `control_server` decided | TODO | kept as a stated test harness, or removed |
-| P3.3 menubar audited | TODO | checked against the same invariant |
-| P4.1 imports listed | TODO | every surviving `divoom_lib` import has a reason in AGENTS.md |
-| P4.2 doctrine rewritten | TODO | the sentence matches the code, both halves intact |
-| P5.1 census is the gate | TODO | wired into `.gatesrc`; denylist demoted to fast-path |
-| P5.2 prove it bites | TODO | 7 findings reintroduced, 7 reds |
-| P6 close | TODO | CHANGELOG, release, map current |
+| Step | Closes | State | Proof required |
+|------|--------|-------|----------------|
+| P0.1 owned-capability list | — | TODO | generated from Rust dispatch, not hand-written |
+| P0.2 python execution list | — | TODO | scope covers `divoom_gui` + `divoom_client` + `scripts` + entry points |
+| P0.3 `CAPABILITY_MAP.md` | seeds F1-F7 | TODO | every capability has a verdict; no `unreviewed`; finds rows beyond the seven |
+| P0.4 census calibrated | F1, F2 | TODO | rediscovers both WITHOUT being told to look |
+| P1.1 auth through the seam | **F1** | TODO | cache-only startup behaviour preserved and pinned (a blocking call trades a duplicate for a hang) |
+| P1.2 `sync_time` via daemon | **F2** | TODO | verified on hardware — the device's clock actually changes, not "returns True" |
+| P1.3 `DeviceSettings` | **F3** | TODO | per method, against `system.rs` |
+| P1.4 delete + rebaseline | F1-F3 | TODO | dead Python and its tests gone; coverage delta stated |
+| P2.1 weather duplicate decided | **F4** | TODO | parity gate justified as an oracle, or retired with the duplicate |
+| P2.2 double-fetch killed | F4 | TODO | one fetch, whichever side wins |
+| P2.3 notifications split | **F6** | TODO | presentation stays, host-data access moves |
+| P3.1 scope widened | F6 (class) | TODO | census covers the whole shipped Python surface, permanently |
+| P3.2 `control_server` decided | **F5** | TODO | kept as a stated test harness, or removed; auth story stated either way |
+| P3.3 menubar audited | — | TODO | checked against the same invariant |
+| P4.1 imports listed | F7 | TODO | each of the 35 sites is client-local with a reason, or gone |
+| P4.2 doctrine rewritten | **F7** | TODO | the sentence matches the code, both halves intact |
+| P5.1 census is the gate | — | TODO | wired into `.gatesrc`; denylist demoted to fast-path |
+| P5.2 prove it bites | F1-F7 | TODO | 7 reintroduced, 7 reds — F3 and F5 included, not skipped |
+| P6 close | all | TODO | every F-row closed under BOTH witnesses; CHANGELOG, release, map current |
 
 ### Earlier shipped workstreams — pruned to git history
 
