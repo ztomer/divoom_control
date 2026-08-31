@@ -162,8 +162,19 @@ def saved_location() -> str:
     return ""
 
 
-def _resolve_location(explicit: Optional[str]) -> str:
-    """Pick the location string, applying overrides in priority order:
+def resolve_location(explicit: Optional[str]) -> str:
+    """Pick the location string, applying overrides in priority order.
+
+    PUBLIC as of R72 P2.1. Two GUI sites imported this while it was
+    underscore-prefixed -- reaching into the private surface of a module the
+    docs call reference-only, which breaks silently the day it is renamed.
+
+    It is CLIENT-LOCAL work despite living here, and the capability map says so:
+    it reads env vars and a saved preference and makes no network call. The IP
+    geolocation in the note below happens on wttr.in's side, inside the
+    DAEMON's request, when this returns "".
+
+    Priority order:
 
       1. explicit argument
       2. DIVOOM_CONTROL_WEATHER_LAT / _LON
@@ -248,7 +259,7 @@ class WTTrInProvider:
         self._timeout_s = float(timeout_s)
 
     async def fetch(self, location: Optional[str] = None) -> WeatherInfo:
-        loc = _resolve_location(location)
+        loc = resolve_location(location)
         url = f"{self.BASE_URL}/{loc}"
         params = {"format": "j1"}
 

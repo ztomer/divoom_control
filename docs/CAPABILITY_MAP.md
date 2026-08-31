@@ -101,15 +101,30 @@ invariant is about the WORK.
 |---|---|---|---|
 | ~~`DateTimeCommand(...)`~~ | `api/tools.py:158` | **CLOSED** with P1.2 | P1.2 |
 | ~~`DeviceSettings(...)`~~ | `api/tools.py:176`, `:180` | **CLOSED** with P1.3 | P1.3 |
-| `_resolve_location(...)` | `api/widgets.py:42`, `media_sync.py:299` | `duplicate` | P2.1 |
+| `resolve_location(...)` | `api/widgets.py:42`, `media_sync.py:299` | **`client-local`** (verdict CORRECTED) | P2.1 |
 | `saved_location()` | `weather_city.py:82` | `client-local` | — |
 | `hotchannel_config.*` | `gallery_hot_api.py:74`, `gallery_sync.py` ×7 | `shared-state` | P2.4 |
 | `media_decoder.*` | `scripts/verify_gallery_render.py` ×4 | `stale-instrument` | P3.1 |
 
-**`_resolve_location` is F4, and it is PRIVATE.** Two GUI sites call an
-underscore-prefixed function of the module the docs call reference-only, and
-`api/widgets.py:24` documents the resulting double-fetch: the GUI resolves the
-location, then the daemon fetches it again.
+**F4's verdict was WRONG, and the correction matters more than the row.**
+
+This file said `duplicate`, and cited `api/widgets.py:24` as documenting a
+double-fetch. Reading that docstring instead of trusting the citation: it
+documents the double-fetch being **FIXED**, by R67/C2, which moved the weather
+fetch to the daemon. I cited a fix as evidence of the defect it repaired.
+
+And `resolve_location` is not a duplicate of anything. It is PURE -- env vars
+and a saved preference, no network. The IP geolocation people assume is here
+happens on wttr.in's side, inside the DAEMON's request, when it returns "".
+Deciding which city the user means is client-local, the same verdict
+`saved_location` already has one row down.
+
+What WAS real: both GUI sites imported it while it was underscore-prefixed,
+reaching into the private surface of a module the docs call reference-only.
+Made public in P2.1. The row stays in REACHES because the census flags any call
+into an owned module and `weather_provider` still contains the (reference-only)
+fetch path -- which is honest: the row is a read-and-decide entry that has now
+been read and decided.
 
 **`saved_location` is client-local and stays.** Which city the user picked is
 the client's own preference; the daemon is told the answer, it does not need to

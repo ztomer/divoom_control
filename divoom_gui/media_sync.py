@@ -295,8 +295,8 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
         # and so did not inherit the GUI's DIVOOM_CONTROL_WEATHER_* env. Send
         # the resolved value rather than letting two resolvers guess apart.
         try:
-            from divoom_lib.weather_provider import _resolve_location
-            location = _resolve_location(None)
+            from divoom_lib.weather_provider import resolve_location
+            location = resolve_location(None)
             if location:
                 params["location"] = location
         except Exception as e:

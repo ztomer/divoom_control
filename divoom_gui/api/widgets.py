@@ -38,8 +38,8 @@ class WidgetsApi(ApiBase):
             if client is None:
                 raise RuntimeError("daemon not available")
             try:
-                from divoom_lib.weather_provider import _resolve_location
-                location = _resolve_location(None)
+                from divoom_lib.weather_provider import resolve_location
+                location = resolve_location(None)
             except Exception:
                 location = ""
             reply = client.weather(location)

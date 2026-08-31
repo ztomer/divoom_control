@@ -115,7 +115,7 @@ def test_get_weather_sends_the_resolved_location(loop_thread, monkeypatch):
     geolocate independently — the gap that let preview and device differ."""
     import divoom_lib.weather_provider as wp
 
-    monkeypatch.setattr(wp, "_resolve_location", lambda _explicit: "Reykjavik")
+    monkeypatch.setattr(wp, "resolve_location", lambda _explicit: "Reykjavik")
     client = _FakeWeatherClient({
         "success": True, "temperature_c": 2,
         "weather_type": int(WeatherType.Clear), "location": "Reykjavik",

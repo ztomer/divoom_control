@@ -27,7 +27,7 @@ from divoom_lib.weather_provider import (
     WeatherProviderError,
     WeatherProviderKind,
     _map_weather_code,
-    _resolve_location,
+    resolve_location,
     get_weather,
 )
 
@@ -239,7 +239,7 @@ def test_resolve_location_priority() -> None:
     """Explicit argument wins; then lat/lon env; then location env;
     then the default."""
     # Explicit argument wins.
-    assert _resolve_location("explicit") == "explicit"
+    assert resolve_location("explicit") == "explicit"
     # Lat/lon env.
     import os
     os.environ["DIVOOM_CONTROL_WEATHER_LAT"] = "52.5"
@@ -247,9 +247,9 @@ def test_resolve_location_priority() -> None:
     os.environ["DIVOOM_CONTROL_WEATHER_LOCATION"] = "fallback"
     try:
         # lat/lon takes priority over the location env.
-        assert _resolve_location(None) == "52.5,13.4"
+        assert resolve_location(None) == "52.5,13.4"
         # Explicit still wins.
-        assert _resolve_location("explicit") == "explicit"
+        assert resolve_location("explicit") == "explicit"
     finally:
         del os.environ["DIVOOM_CONTROL_WEATHER_LAT"]
         del os.environ["DIVOOM_CONTROL_WEATHER_LON"]
@@ -263,8 +263,8 @@ def test_resolve_location_uses_location_env_when_no_lat_lon() -> None:
         os.environ.pop(k, None)
     os.environ["DIVOOM_CONTROL_WEATHER_LOCATION"] = "Tokyo"
     try:
-        assert _resolve_location(None) == "Tokyo"
-        assert _resolve_location("Osaka") == "Osaka"  # explicit wins
+        assert resolve_location(None) == "Tokyo"
+        assert resolve_location("Osaka") == "Osaka"  # explicit wins
     finally:
         del os.environ["DIVOOM_CONTROL_WEATHER_LOCATION"]
 
@@ -284,7 +284,7 @@ def test_resolve_location_default(tmp_path, monkeypatch) -> None:
     for k in ("DIVOOM_CONTROL_WEATHER_LAT", "DIVOOM_CONTROL_WEATHER_LON", "DIVOOM_CONTROL_WEATHER_LOCATION"):
         os.environ.pop(k, None)
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
-    assert _resolve_location(None) == ""
+    assert resolve_location(None) == ""
 
 
 # ── Sanity: WeatherProviderKind enum ──────────────────────────────────
