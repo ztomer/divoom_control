@@ -130,12 +130,23 @@ been read and decided.
 the client's own preference; the daemon is told the answer, it does not need to
 own the question.
 
-**`hotchannel.json` has TWO parsers, and that is the finding.**
+**`hotchannel.json` has TWO parsers — GATED (P2.4), not removed.**
 `divoomd/src/monthly_best.rs:36` reads it in Rust; the GUI reads and WRITES it
-through `divoom_lib` in Python. Neither is wrong on its own — this is shared
-state with two independent implementations, which is the drift shape. It is not
-a straight "move it" like the rows above, so it gets its own verdict and its own
-step.
+through `divoom_lib` in Python. Unlike every other row here, this one cannot be
+fixed by deleting a duplicate: **both readers are load-bearing.** The GUI owns
+the settings UI and the daemon needs the values to run auto-sync.
+
+They AGREE today — diffed 2026-08-31, identical fields, defaults (interval 3600,
+classify 18) and clamping (60s to 30 days). So it gets the treatment R67/C2 gave
+weather: `tools/check_hotchannel_parity.py`, added while the two still match,
+which is the only time a parity gate is cheap to add.
+
+What drift would cost is concrete. `hotchannel_config.py`'s comment on
+MIN_INTERVAL says "the daemon will read-back the clamped value" — true only
+while the clamps agree. Hand-edit the file to `interval: 1` with divergent
+clamps and the GUI displays a safe 60 while the daemon hammers the cloud once a
+second: a disagreement whose only symptom is invisible on the screen that is
+supposed to report it.
 
 ## What the census found that the audit did not
 

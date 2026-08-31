@@ -45,6 +45,8 @@ jobs:
         run: python3 tools/check_positional_args.py
       - name: Rust and Python weather maps agree
         run: python3 tools/check_weather_parity.py
+      - name: hotchannel.json's two parsers agree (R72)
+        run: python3 tools/check_hotchannel_parity.py
       - name: The GUI is a client, not a second implementation (R70)
         run: python3 tools/check_gui_is_a_client.py
       - name: Version is consistent across pyproject, CHANGELOG, tags and crates
