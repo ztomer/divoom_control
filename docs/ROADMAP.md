@@ -632,9 +632,9 @@ testable that means seen RED first.
 
 | Step | Closes | State | Proof required |
 |------|--------|-------|----------------|
-| P0.1 owned-capability list | — | TODO | generated from Rust dispatch, not hand-written |
-| P0.2 python execution list | — | TODO | scope covers `divoom_gui` + `divoom_client` + `scripts` + entry points |
-| P0.3 `CAPABILITY_MAP.md` | seeds F1-F7 | TODO | every capability has a verdict; no `unreviewed`; finds rows beyond the seven |
+| P0.1 owned-capability list | **DONE** | 443 command names from the socket-dispatch and `device_call` match arms, read out of the Rust. Multi-line arms handled — catching only the `=>` form drops every alias but the last, which would have made the census quieter |
+| P0.2 python execution list | **DONE** | AST over `divoom_gui` + `divoom_client` + `scripts`. Three categories: DIRECT and WRAPPED match on NAME, REACHES catches owned WORK whose name is not a command — added after F4 proved the name-based rules were measuring their own logic |
+| P0.3 `CAPABILITY_MAP.md` | **DONE** | 26 rows, every one with a verdict, none `unknown`. Vocabulary excludes `unreviewed` on purpose. Blind spots stated (F5/F6/F7 have shapes no AST scan sees) so a clean run is never mistaken for a closed class |
 | P0.4 census calibrated | F1, F2 | TODO | rediscovers both WITHOUT being told to look |
 | P1.1 auth through the seam | **F1** | TODO | cache-only startup behaviour preserved and pinned (a blocking call trades a duplicate for a hang) |
 | P1.2 `sync_time` via daemon | **F2** | TODO | verified on hardware — the device's clock actually changes, not "returns True" |
