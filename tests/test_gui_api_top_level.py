@@ -79,12 +79,7 @@ class TestGuiApiTopLevelCoverage(unittest.TestCase):
 
     def test_connection_wrappers_forward_to_collaborator(self):
         self.api.connection = MagicMock()
-        self.api.connection.save_lan_config.return_value = True
-        self.api.connection.probe_lan.return_value = "PL"
 
-        self.assertTrue(self.api.save_lan_config("1.2.3.4", 99))
-        self.api.connection.save_lan_config.assert_called_with("1.2.3.4", 99)
-        self.assertEqual(self.api.probe_lan(), "PL")
 
     # ---- thin pass-through wrappers to Lighting/Tools/Widgets APIs ---------
 

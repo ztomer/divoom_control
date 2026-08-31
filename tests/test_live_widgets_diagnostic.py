@@ -79,7 +79,6 @@ def main():
                         if (name === "get_tickers") return Promise.resolve("[]");
                         if (name === "get_ticker_preview") return Promise.resolve('{"ok":false}');
                         if (name === "get_system_stats_preview") return Promise.resolve('{"ok":true,"stats":{"cpu":42,"mem":61,"battery":88},"preview":""}');
-                        if (name === "get_transport_status") return Promise.resolve('{"ble":{"available":true},"lan":{"available":true},"cloud":{"available":false},"external":{"available":true}}');
                         if (name === "load_config") return Promise.resolve('{"devices":[]}');
                         return Promise.resolve(null);
                     }

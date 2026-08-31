@@ -235,7 +235,7 @@ class LightingApi(ApiBase, WidgetFrameMixin):
             logger.error(f"Playlist push failed: {e}")
             return False
 
-    def send_danmaku_text(self, text: str, color: str = "#FFFFFF") -> bool:
+    def send_danmaku_text(self, text: str, color: str = "#FFFFFF") -> dict:
         """Send a Danmaku scrolling bullet-chat overlay (Danmaku/SendText,
         LAN-only — see divoomd/src/device_call/lan.rs).
 
@@ -255,22 +255,20 @@ class LightingApi(ApiBase, WidgetFrameMixin):
         composite image across several.
         """
         logger.info("GUI Action: Sending Danmaku overlay text...")
+        from divoom_gui.api import _lan_error
         if self._current_target_mode == "wall":
-            logger.warning("Danmaku overlay is not supported on a Virtual Wall target")
-            return False
+            return _lan_error("send the overlay",
+                              "a Virtual Wall has no single device to draw it on",
+                              "wall")
         text = (text or "").strip()
         if not text:
-            logger.warning("Danmaku text is empty; nothing to send")
-            return False
-        try:
-            # Keyword args: the daemon handler reads "Text"/"TextColor" by name
-            # (get_arg_str(kw, ...)), and positional args would silently land as
-            # neither — the command would ACK having sent an empty string.
-            return self._dispatch(
-                lambda t: t.lan.send_danmaku_text(Text=text, TextColor=color))
-        except Exception as e:
-            logger.error(f"Danmaku send failed: {e}")
-            return False
+            return _lan_error("send the overlay", "there is no text to send", "input")
+        # Keyword args: the daemon handler reads "Text"/"TextColor" by name
+        # (get_arg_str(kw, ...)), and positional args would silently land as
+        # neither — the command would ACK having sent an empty string.
+        return self._lan_action(
+            "send the overlay",
+            lambda t: t.lan.send_danmaku_text(Text=text, TextColor=color))
 
     def play_aid_sleep(self, sleep_id: int, sleep_type: int = 0) -> bool:
         """Play a browsed AidSleep cloud sound on the device (AidSleep/Play —

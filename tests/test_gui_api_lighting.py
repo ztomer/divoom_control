@@ -249,5 +249,4 @@ class TestLightingApiCoverage(unittest.TestCase):
         self.api.current_divoom = None
         self.assertFalse(self.api.lighting.set_clock_rich())
 
-    # ---- display_custom_art: success, exception, no-target --------------
 

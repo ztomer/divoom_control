@@ -18,7 +18,18 @@ logger = logging.getLogger("divoom_client.daemon_proxy")
 
 
 class _DeviceCallError(RuntimeError):
-    """Raised inside the proxy awaitable when the daemon reports failure."""
+    """Raised inside the proxy awaitable when the daemon reports failure.
+
+    Carries the daemon's machine-readable ``cause`` when there is one (R71
+    P3.1). Without it the proxy flattened every failure to a message string,
+    so a GUI panel could only ever say "it failed" -- which is how a BLE-only
+    user clicking Send Overlay got "Failed to send overlay" instead of "this
+    device has no LAN API". The reason existed daemon-side and died here.
+    """
+
+    def __init__(self, message: str, cause: str = ""):
+        super().__init__(message)
+        self.cause = cause
 
 
 class _LanView:
@@ -215,7 +226,9 @@ class DaemonDeviceProxy:
             reply = client.device_call(method, call_args, dict(kwargs),
                                        target=target, blobs=blobs, token=token)
             if not reply.get("success", False):
-                raise _DeviceCallError(reply.get("error", f"device_call {method} failed"))
+                raise _DeviceCallError(
+                    reply.get("error", f"device_call {method} failed"),
+                    str(reply.get("cause") or ""))
             return reply.get("result")
 
         return _invoke()

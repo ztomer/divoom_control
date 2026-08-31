@@ -430,8 +430,8 @@ its proof has been SEEN, and for anything testable that means seen RED first.
 | P2.4 `pic_scan_ctrl` 0x35 | TODO | observable effect, or marked unsupported |
 | P2.5 device-command verdicts | TODO | feeds P1.3 |
 | P2.6 `search_weather_city` live | TODO | success path on the configured account |
-| P3.1 LAN capability gate | TODO | "needs a WiFi-capable device", distinct from failed and from silence; one shared shape |
-| P3.2 `probe_lan`/`save_lan_config` | TODO | wired into the gate or deleted |
+| P3.1 LAN capability gate | **DONE** | Daemon names the cause (`device_call/mod.rs`: BLE/SPP -> `no_lan_capability`), the proxy PRESERVES it (`_DeviceCallError.cause` — it used to flatten every failure to a string), and `_lan_action` wraps it in R70's existing `{ok, error, cause}` shape. `cloud_result.js` gained the LAN hints plus `problemText()` for toast surfaces — one producer, not a second phrasing |
+| P3.2 `probe_lan`/`save_lan_config` | **DONE — both DELETED** | `save_lan_config` wrote `config.ini [lan]` and **nothing has ever read it**; the live path is `presets.json -> lan_devices` via `add_lan_device`/`delete_lan_device`/`load_lan_devices`, all JS-wired in settings_hardware.js. Wiring it up would have written config no one consumes. `probe_lan` is an unused diagnostic — the daemon already probes at connect and refuses an unreachable IP. `DaemonClient.probe_lan` is kept: the daemon command is live |
 | P3.3 5-LCD + Voice/SendText | TODO | gated capabilities naming their blocker |
 | P3.4 danmaku same gate | TODO | one capability check, not two |
 | P4.1 `Cloud/ToDevice` probed | TODO | recorded live response |

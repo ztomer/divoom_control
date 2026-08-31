@@ -46,44 +46,6 @@ class ConnectionApi(ApiBase):
             self._state_getter()["_daemon_client"] = ensure_daemon()
         return self._state_getter().get("_daemon_client")
 
-    def probe_lan(self) -> str:
-        logger.info("GUI Action: Probing LAN transport reachability (daemon)...")
-        try:
-            client = self._client()
-            if client is None:
-                return json.dumps({"reachable": False, "detail": "Daemon unavailable."})
-            reply = client.probe_lan()
-            ip = reply.get("device_ip")
-            if not ip and not reply.get("reachable"):
-                return json.dumps({"reachable": False, "detail": "No LAN IP configured. Save a device IP first."})
-            ok = bool(reply.get("reachable"))
-            return json.dumps({
-                "reachable": ok,
-                "detail": f"{' Connected' if ok else ' Unreachable'} — {ip}:9000",
-            })
-        except Exception as e:
-            return json.dumps({"reachable": False, "detail": str(e)})
-
-    def save_lan_config(self, device_ip: str, local_token: int) -> bool:
-        logger.info(f"GUI Action: Saving LAN config ip={device_ip} token={local_token}...")
-        try:
-            import configparser
-            config_file = Path.home() / ".config" / "divoom-control" / "config.ini"
-            config_file.parent.mkdir(parents=True, exist_ok=True)
-            cfg = configparser.ConfigParser()
-            if config_file.exists():
-                cfg.read(config_file)
-            if "lan" not in cfg:
-                cfg["lan"] = {}
-            cfg["lan"]["device_ip"] = device_ip
-            cfg["lan"]["local_token"] = str(local_token)
-            from divoom_lib.utils.atomic_io import atomic_write_config
-            atomic_write_config(config_file, cfg, mode=0o600)  # config.ini holds creds
-            return True
-        except Exception as e:
-            logger.error(f"Failed to save LAN config: {e}")
-            return False
-
     def _device_status(self) -> dict:
         client = self._client()
         if client is None:

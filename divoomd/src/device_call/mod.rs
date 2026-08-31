@@ -106,7 +106,34 @@ pub async fn handle_device_call(
             let kwargs = req.args.get("kwargs").and_then(|v| v.as_object());
             return lan::handle_lan_call(lan_dev, method, &args, kwargs).await;
         } else {
-            return crate::protocol::err_reply("device is not connected via LAN");
+            // R71 P3.1: say WHY, with a machine-readable cause.
+            //
+            // "device is not connected via LAN" was accurate and useless: the
+            // GUI collapsed it to a bare false and the user saw "Failed to send
+            // overlay", which reads as a broken feature rather than "this model
+            // has no LAN". Same defect R70 fixed for cloud browse, unfixed on
+            // this side. `cause` is a flag, never parsed text, so the wording
+            // can change without moving the UI.
+            let (cause, why) = match dev {
+                DeviceTransport::Spp(_) => (
+                    "no_lan_capability",
+                    "this device is connected over Bluetooth, which has no LAN API",
+                ),
+                #[cfg(feature = "ble")]
+                DeviceTransport::Ble(_) => (
+                    "no_lan_capability",
+                    "this device is connected over Bluetooth, which has no LAN API",
+                ),
+                _ => (
+                    "not_configured",
+                    "no LAN address is configured for this device",
+                ),
+            };
+            let mut reply = crate::protocol::err_reply(why);
+            if let Value::Object(ref mut m) = reply {
+                m.insert("cause".into(), Value::String(cause.into()));
+            }
+            return reply;
         }
     }
 

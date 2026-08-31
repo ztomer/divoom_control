@@ -25,6 +25,16 @@
         unreachable: "Reopen Divoom Control to start it again.",
         auth: "Sign in to your Divoom account in Settings.",
         cloud: "Divoom's servers rejected the request — try again shortly.",
+        /* R71 P3.1 — LAN-backed actions. Before these, a LAN command on a
+           Bluetooth-only device answered a bare false and the UI said "Failed
+           to send", which reads as a broken feature rather than a device that
+           has no such API. Same defect this file was written to fix for cloud
+           browse, on the other transport. */
+        no_lan_capability: "Add a WiFi-capable Divoom device in Settings → Hardware.",
+        not_configured: "Add this device's IP address in Settings → Hardware.",
+        lan: "The device did not accept the command.",
+        wall: "Pick a single device instead of a Virtual Wall.",
+        input: "",
     };
 
     /* True when the hint would only echo the reason back. */
@@ -64,5 +74,18 @@
         return null;
     }
 
-    window.DivoomCloud = { unwrap: unwrap, renderProblem: renderProblem };
+    /* The same reason+hint, as one line of text — for surfaces that report
+       through a toast rather than into a list element (the danmaku overlay is
+       the first). Deliberately the SAME producer as renderProblem: a second
+       way of phrasing "no" is how the old five-panel divergence started. */
+    function problemText(reply, fallback) {
+        const detail = (reply && reply.error) || fallback || "Could not do that.";
+        let hint = HINTS[reply && reply.cause] || "";
+        if (addsNothing(hint, detail)) hint = "";
+        return hint ? detail + " " + hint : detail;
+    }
+
+    window.DivoomCloud = {
+        unwrap: unwrap, renderProblem: renderProblem, problemText: problemText,
+    };
 })();

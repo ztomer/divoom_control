@@ -112,12 +112,6 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
             logger.error("GUI async op timed out after %.0fs", timeout)
             raise RuntimeError(f"Operation timed out after {timeout:.0f}s")
 
-    def save_lan_config(self, device_ip: str, local_token: int) -> bool:
-        return self.connection.save_lan_config(device_ip, local_token)
-
-    def probe_lan(self) -> str:
-        return self.connection.probe_lan()
-
     def minimize_window(self) -> None:
         self.window_mgr.minimize_window()
 

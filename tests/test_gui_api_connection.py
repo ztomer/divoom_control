@@ -77,119 +77,6 @@ class TestConnectionApiCoverage(unittest.TestCase):
             self.api.connection._client()
             mock_ensure.assert_called_once()
 
-    # ---- probe_lan: no daemon / no-ip / reachable / unreachable / exception
-
-    def test_probe_lan_no_daemon(self):
-        with patch.object(self.api.connection, "_client", return_value=None):
-            result = json.loads(self.api.connection.probe_lan())
-        self.assertFalse(result["reachable"])
-        self.assertIn("Daemon unavailable", result["detail"])
-
-    def test_probe_lan_no_ip_configured(self):
-        fake = MagicMock()
-        fake.probe_lan.return_value = {"device_ip": None, "reachable": False}
-        with patch.object(self.api.connection, "_client", return_value=fake):
-            result = json.loads(self.api.connection.probe_lan())
-        self.assertFalse(result["reachable"])
-        self.assertIn("No LAN IP", result["detail"])
-
-    def test_probe_lan_reachable(self):
-        fake = MagicMock()
-        fake.probe_lan.return_value = {"device_ip": "192.168.1.5", "reachable": True}
-        with patch.object(self.api.connection, "_client", return_value=fake):
-            result = json.loads(self.api.connection.probe_lan())
-        self.assertTrue(result["reachable"])
-        self.assertIn("192.168.1.5:9000", result["detail"])
-
-    def test_probe_lan_unreachable_with_ip(self):
-        fake = MagicMock()
-        fake.probe_lan.return_value = {"device_ip": "192.168.1.5", "reachable": False}
-        with patch.object(self.api.connection, "_client", return_value=fake):
-            result = json.loads(self.api.connection.probe_lan())
-        self.assertFalse(result["reachable"])
-        self.assertIn("192.168.1.5:9000", result["detail"])
-
-    def test_probe_lan_exception(self):
-        fake = MagicMock()
-        fake.probe_lan.side_effect = RuntimeError("boom")
-        with patch.object(self.api.connection, "_client", return_value=fake):
-            result = json.loads(self.api.connection.probe_lan())
-        self.assertFalse(result["reachable"])
-        self.assertIn("boom", result["detail"])
-
-    # ---- save_lan_config: fresh file / merge existing / exception ---------
-
-    def test_save_lan_config_writes_fresh_file(self):
-        with patch("divoom_lib.utils.atomic_io.atomic_write_config") as mock_write:
-            result = self.api.connection.save_lan_config("192.168.1.10", 1234)
-        self.assertTrue(result)
-        mock_write.assert_called_once()
-        cfg = mock_write.call_args.args[1]
-        self.assertEqual(cfg["lan"]["device_ip"], "192.168.1.10")
-        self.assertEqual(cfg["lan"]["local_token"], "1234")
-
-    def test_save_lan_config_merges_existing_file(self):
-        with patch.object(Path, "exists", return_value=True), \
-             patch("configparser.ConfigParser.read") as mock_read, \
-             patch("divoom_lib.utils.atomic_io.atomic_write_config") as mock_write:
-            result = self.api.connection.save_lan_config("10.0.0.5", 99)
-        self.assertTrue(result)
-        mock_read.assert_called_once()
-        mock_write.assert_called_once()
-
-    def test_save_lan_config_merges_existing_lan_section(self):
-        """The ``"lan" not in cfg`` guard's False arm: a config file that
-        already has a [lan] section must be updated in place, not replaced."""
-        def _fake_read(cfg_self, *a, **kw):
-            cfg_self["lan"] = {"device_ip": "old.ip", "local_token": "1"}
-
-        with patch.object(Path, "exists", return_value=True), \
-             patch("configparser.ConfigParser.read", _fake_read), \
-             patch("divoom_lib.utils.atomic_io.atomic_write_config") as mock_write:
-            result = self.api.connection.save_lan_config("10.0.0.5", 99)
-        self.assertTrue(result)
-        cfg = mock_write.call_args.args[1]
-        self.assertEqual(cfg["lan"]["device_ip"], "10.0.0.5")
-        self.assertEqual(cfg["lan"]["local_token"], "99")
-
-    def test_save_lan_config_exception_returns_false(self):
-        with patch("divoom_lib.utils.atomic_io.atomic_write_config", side_effect=OSError("disk full")):
-            result = self.api.connection.save_lan_config("1.2.3.4", 1)
-        self.assertFalse(result)
-
-    # ---- get_transport_status: ble/lan/cloud availability + creds error ---
-
-    def test_get_transport_status_ble_connected_no_cloud(self):
-        with patch.object(self.api.connection, "_device_status",
-                          return_value={"connected": True, "mac": "AA:BB", "lan_ip": None}), \
-             patch("divoom_lib.divoom_auth.get_cached_credentials", return_value=None):
-            result = json.loads(self.api.connection.get_transport_status())
-        self.assertTrue(result["ble"]["available"])
-        self.assertEqual(result["ble"]["detail"], "AA:BB")
-        self.assertFalse(result["lan"]["available"])
-        self.assertFalse(result["cloud"]["available"])
-        self.assertTrue(result["external"]["available"])
-
-    def test_get_transport_status_lan_and_cloud_authenticated(self):
-        creds = MagicMock()
-        creds.is_valid.return_value = True
-        with patch.object(self.api.connection, "_device_status",
-                          return_value={"connected": True, "mac": "AA:BB", "lan_ip": "10.0.0.5"}), \
-             patch("divoom_lib.divoom_auth.get_cached_credentials", return_value=creds):
-            result = json.loads(self.api.connection.get_transport_status())
-        self.assertFalse(result["ble"]["available"])
-        self.assertTrue(result["lan"]["available"])
-        self.assertEqual(result["lan"]["detail"], "10.0.0.5:9000")
-        self.assertTrue(result["cloud"]["available"])
-        self.assertEqual(result["cloud"]["detail"], "Authenticated")
-
-    def test_get_transport_status_creds_lookup_exception_is_swallowed(self):
-        with patch.object(self.api.connection, "_device_status",
-                          return_value={"connected": False, "mac": None, "lan_ip": None}), \
-             patch("divoom_lib.divoom_auth.get_cached_credentials", side_effect=RuntimeError("boom")):
-            result = json.loads(self.api.connection.get_transport_status())
-        self.assertFalse(result["cloud"]["available"])
-
     # ---- _device_status: no daemon / success / failure --------------------
 
     def test_device_status_no_daemon(self):
@@ -258,7 +145,7 @@ class TestConnectionApiCoverage(unittest.TestCase):
 
 
 # ── R61 planning item 1 coverage push: DivoomGuiAPI top-level (gui_api.py)
-# — thin pass-through wrappers (get_transport_status, switch_channel,
+# — thin pass-through wrappers (switch_channel,
 # get_alarms, live_job_*, device_call, ...) that the collaborator-level tests
 # above never touch because they call self.api.<collaborator>.<method>()
 # directly. Also covers __init__ branches (cached-creds failure, virtual

@@ -57,8 +57,6 @@ ALLOWLIST: dict[str, str] = {
     # These are NOT claims of deadness. Each needs someone to decide whether the
     # UI lost its wiring, the method is a leftover, or it is reached some way
     # this gate cannot see.
-    "probe_lan": "unreviewed — LAN discovery",
-    "save_lan_config": "unreviewed — LAN device config",
     "set_clock_rich": "unreviewed — richer clock variant",
     "set_temperature_channel": "unreviewed — channel switch",
     "set_timeplan": "unreviewed — time-plan tool",

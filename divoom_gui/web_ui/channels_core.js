@@ -87,9 +87,14 @@ document.addEventListener("DOMContentLoaded", () => {
             const color = document.getElementById("text-color-input")?.value || "#00ffcc";
             if (window.pywebview?.api?.send_danmaku_text) {
                 window.pywebview.api.send_danmaku_text(text, color).then(res => {
+                    /* R71 P3.1: res is {ok, error, cause}, not a bool. A
+                       Bluetooth-only device now says so instead of reporting a
+                       generic failure the user cannot act on. */
+                    const ok = res && res.ok;
                     window.showToast(
-                        res ? "Overlay sent" : "Failed to send overlay",
-                        res ? "success" : "error", " LAN");
+                        ok ? "Overlay sent"
+                           : window.DivoomCloud.problemText(res, "Failed to send overlay"),
+                        ok ? "success" : "error", " LAN");
                 });
             }
         });

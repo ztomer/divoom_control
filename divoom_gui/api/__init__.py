@@ -13,6 +13,13 @@ import logging
 logger = logging.getLogger("divoom_gui.api")
 
 
+
+def _lan_error(what: str, reason: str, cause: str) -> dict:
+    """One place that phrases a LAN failure (mirrors `_cloud_error`)."""
+    logger.error("%s unavailable (%s): %s", what, cause, reason)
+    return {"ok": False, "error": f"Could not {what}: {reason}", "cause": cause}
+
+
 class AsyncLoopThread(threading.Thread):
     """Single shared asyncio loop for all device-bound coroutines.
 
@@ -92,6 +99,38 @@ class ApiBase:
                 return None
             return self._wall_instance
         return self._current_divoom
+
+    def _lan_action(self, what: str, build_coro) -> dict:
+        """Run one LAN command and report WHY it failed, not just that it did.
+
+        R71 P3.1, and the same defect R70 fixed for cloud browse. Every
+        LAN-backed panel returned a bare bool, so a user on a BLE-only device
+        clicking "Send Overlay" saw "Failed to send overlay" -- indistinguishable
+        from a broken feature. The daemon knew the answer the whole time ("this
+        device is connected over Bluetooth, which has no LAN API") and the bool
+        threw it away.
+
+        Returns the shape `web_ui/cloud_result.js` already unwraps:
+        ``{ok, error, cause}``. ``cause`` is a flag and never parsed text --
+        'no_lan_capability' | 'not_configured' | 'unreachable' | 'lan' -- so the
+        wording can change without moving the UI.
+
+        This is a funnel on purpose. One place produces the shape, so a second
+        LAN panel cannot invent a third way of saying "no".
+        """
+        from divoom_client.daemon_proxy import _DeviceCallError
+
+        target = self._target()
+        if target is None:
+            return _lan_error(what, "no device is connected", "unreachable")
+        try:
+            self._run_async(build_coro(target))
+        except _DeviceCallError as exc:
+            return _lan_error(what, str(exc), exc.cause or "lan")
+        except Exception as exc:
+            logger.exception("%s failed", what)
+            return _lan_error(what, str(exc), "lan")
+        return {"ok": True, "error": "", "cause": ""}
 
     def _dispatch(self, build_coro):
         target = self._target()

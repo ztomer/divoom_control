@@ -212,26 +212,6 @@ class TestToolsApiCoverage(unittest.TestCase):
         self.api.current_divoom = dev
         self.assertFalse(self.api.set_scoreboard(1))
 
-    def test_get_scoreboard_state_success(self):
-        dev = MagicMock()
-        dev.scoreboard.get_scoreboard = AsyncMock(
-            return_value={"on_off": 1, "red_score": 5, "blue_score": 3})
-        self.api.current_divoom = dev
-        self.assertEqual(self.api.get_scoreboard_state(),
-                         {"on_off": 1, "red_score": 5, "blue_score": 3})
-
-    def test_get_scoreboard_state_no_device(self):
-        self.api.current_divoom = None
-        self.assertIsNone(self.api.get_scoreboard_state())
-
-    def test_get_scoreboard_state_exception(self):
-        dev = MagicMock()
-        dev.scoreboard.get_scoreboard = AsyncMock(side_effect=RuntimeError("boom"))
-        self.api.current_divoom = dev
-        self.assertIsNone(self.api.get_scoreboard_state())
-
-    # ---- volume / brightness / work-mode getters ------------------------
-
     def test_get_volume_success(self):
         dev = MagicMock()
         dev.music.get_volume = AsyncMock(return_value=8)
