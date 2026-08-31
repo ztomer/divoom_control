@@ -416,12 +416,12 @@ its proof has been SEEN, and for anything testable that means seen RED first.
 | P0.4 CI-coverage decided | TODO | `.gatesrc` comment states the decision; item deleted from Open threads |
 | P0.5 stray daemons reaped | **DONE (premise corrected)** | Stray PID 21632 killed, production daemon on `/tmp/divoom.sock` untouched. The harness does NOT leak: `IsolatedStack` uses per-stack `divoomd_e2e_*` sockets and kills its own PIDs; the stray was hand-started on a path referenced nowhere in the tree. No gate added, on purpose — it would fire on the documented BLE-debug workflow |
 | P1.0 gate sees 3 buckets | **DONE** | AST scan, delegation excluded. **4 python-only / 16 no-caller** (a naive scan said 13/7 — `probe_lan` forwarding to `self.connection.probe_lan()` counted as its own caller). 7 tests, 6 sabotages red. Also found: allowlist REASONS are unverified — `batch_sync_artwork`'s "called from Python (gallery_sync)" was a docstring hit; it has no production caller, only tests |
-| P1.1 preset + settings pairs | TODO | git history checked for a lost caller; wired or deleted |
+| P1.1 preset + settings pairs | **DONE** | The two pairs needed OPPOSITE treatment. `save_preset_file`/`load_preset_file` **deleted**: R43 added them + their buttons, R44 deleted the handlers AND buttons (no orphaned dead button), and named presets superseded them. `export_settings_to_path`/`import_settings_from_path` **kept, made private**: JS calls `*_dialog()` which delegates to them — a test seam, not dead. Allowlist 20 -> 16 |
 | P1.2 status-getters | TODO | surviving sibling proven to cover the caller |
 | P1.3 device commands | TODO | decided on device evidence from P2.5 |
 | P1.4 LAN pair | TODO | closed by P3.2 |
 | P1.5 remainder | TODO | each named, decided, no `unreviewed` left |
-| P1.6 tests + floor rebaseline | TODO | dead tests deleted; before/after counts and coverage delta stated |
+| P1.6 tests + floor rebaseline | TODO | dead tests deleted; before/after counts and coverage delta stated. **Owed: the floor was dropped 89.5 -> 89.0 as a working margin for the deletion phase and MUST be re-baselined UP to the final measured value here.** A ratchet that only goes down is not a ratchet |
 | P1.7 allowlist EMPTY | TODO | 20 → 0; `unreviewed` rejected as a reason string |
 | P2.0 hardware packet built | TODO | `scripts/hw_verify.py`; refuses to spawn its own daemon |
 | P2.1 packet can fail | TODO | disconnected device → ✗, not a silent pass |
