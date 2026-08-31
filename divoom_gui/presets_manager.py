@@ -274,12 +274,12 @@ class PresetsManagerMixin:
                 logger.info("Export cancelled by user.")
                 return False
                 
-            return self.export_settings_to_path(path)
+            return self._export_settings_to_path(path)
         except Exception as e:
             logger.error(f"Error opening export file dialog: {e}")
             return False
 
-    def export_settings_to_path(self, path: str) -> bool:
+    def _export_settings_to_path(self, path: str) -> bool:
         logger.info(f"Exporting settings to {path}...")
         try:
             config_dir = Path.home() / ".config" / "divoom-control"
@@ -349,12 +349,12 @@ class PresetsManagerMixin:
                 logger.info("Import cancelled by user.")
                 return False
                 
-            return self.import_settings_from_path(path)
+            return self._import_settings_from_path(path)
         except Exception as e:
             logger.error(f"Error opening import file dialog: {e}")
             return False
 
-    def import_settings_from_path(self, path: str) -> bool:
+    def _import_settings_from_path(self, path: str) -> bool:
         logger.info(f"Importing settings from {path}...")
         try:
             backup_data = json.loads(Path(path).read_text(encoding="utf-8"))
@@ -392,57 +392,3 @@ class PresetsManagerMixin:
             logger.error(f"Failed to import settings: {e}")
             return False
 
-    def save_preset_file(self, slots_json: str) -> bool:
-        logger.info("Opening save file dialog for layout preset...")
-        try:
-            import webview
-            window = getattr(self, "window", None)
-            if not window:
-                return False
-            
-            result = window.create_file_dialog(
-                webview.SAVE_DIALOG,
-                save_filename="divoom_layout.json",
-                file_types=('JSON files (*.json)', 'All files (*.*)')
-            )
-            
-            path = result[0] if isinstance(result, list) else result
-            if not path:
-                return False
-                
-            data = {
-                "type": "divoom_preset",
-                "slots": json.loads(slots_json)
-            }
-            atomic_write_text(Path(path), json.dumps(data, indent=2))
-            return True
-        except Exception as e:
-            logger.error(f"Failed to save preset to file: {e}")
-            return False
-
-    def load_preset_file(self) -> str:
-        logger.info("Opening open file dialog for layout preset...")
-        try:
-            import webview
-            window = getattr(self, "window", None)
-            if not window:
-                return ""
-            
-            result = window.create_file_dialog(
-                webview.OPEN_DIALOG,
-                allow_multiple=False,
-                file_types=('JSON files (*.json)', 'All files (*.*)')
-            )
-            
-            path = result[0] if (isinstance(result, list) and len(result) > 0) else result
-            if not path:
-                return ""
-                
-            data = json.loads(Path(path).read_text(encoding="utf-8"))
-            if isinstance(data, dict) and data.get("type") == "divoom_preset":
-                return json.dumps(data.get("slots", {}))
-            else:
-                return json.dumps(data)
-        except Exception as e:
-            logger.error(f"Failed to load preset from file: {e}")
-            return ""

@@ -30,7 +30,7 @@ def test_settings_export_import_roundtrip(tmp_path, monkeypatch):
     backup_file = tmp_path / "backup.json"
 
     # Export
-    res_export = h.export_settings_to_path(str(backup_file))
+    res_export = h._export_settings_to_path(str(backup_file))
     assert res_export is True
     assert backup_file.exists()
 
@@ -49,7 +49,7 @@ def test_settings_export_import_roundtrip(tmp_path, monkeypatch):
     (cfg_dir / "hotchannel.json").unlink()
     (cfg_dir / "notification_routing.json").unlink()
 
-    res_import = h.import_settings_from_path(str(backup_file))
+    res_import = h._import_settings_from_path(str(backup_file))
     assert res_import is True
     assert (cfg_dir / "presets.json").exists()
     assert (cfg_dir / "config.ini").exists()
@@ -60,32 +60,6 @@ def test_settings_export_import_roundtrip(tmp_path, monkeypatch):
     # Verify import content
     assert json.loads((cfg_dir / "presets.json").read_text(encoding="utf-8")) == {"my_preset": {"slots": []}}
     assert (cfg_dir / "config.ini").read_text(encoding="utf-8") == "[test_section]\nkey = value"
-
-
-def test_presets_file_save_load_file(tmp_path):
-    from divoom_gui.presets_manager import PresetsManagerMixin
-
-    # Mock webview window and dialog
-    window = MagicMock()
-    preset_path = tmp_path / "preset_file.json"
-    window.create_file_dialog.return_value = [str(preset_path)]
-
-    class Host(PresetsManagerMixin):
-        def __init__(self):
-            self.window = window
-
-    h = Host()
-    slots_json = json.dumps({"device_mac": {"x": 0, "y": 0, "size": 16}})
-
-    # Save to file
-    res = h.save_preset_file(slots_json)
-    assert res is True
-    assert preset_path.exists()
-
-    # Load from file
-    res_load_json = h.load_preset_file()
-    loaded_data = json.loads(res_load_json)
-    assert loaded_data == {"device_mac": {"x": 0, "y": 0, "size": 16}}
 
 
 @pytest.mark.asyncio

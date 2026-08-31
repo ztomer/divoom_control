@@ -64,14 +64,14 @@ def test_export_settings_dialog_exception_returns_false(home, monkeypatch):
     assert h.export_settings_dialog() is False
 
 
-# ── export_settings_to_path: all optional-file branches (lines 288-330) ───
+# ── _export_settings_to_path: all optional-file branches (lines 288-330) ───
 
 def test_export_settings_to_path_no_optional_files(home, tmp_path):
     """None of presets/config/alarms/hotchannel/routing exist -> all
     exists()-False arms taken, export still succeeds with an empty dict."""
     h = Host()
     target = tmp_path / "out.json"
-    assert h.export_settings_to_path(str(target)) is True
+    assert h._export_settings_to_path(str(target)) is True
     assert json.loads(target.read_text(encoding="utf-8")) == {}
 
 
@@ -86,7 +86,7 @@ def test_export_settings_to_path_all_optional_files_present(home, tmp_path):
 
     h = Host()
     target = tmp_path / "out2.json"
-    assert h.export_settings_to_path(str(target)) is True
+    assert h._export_settings_to_path(str(target)) is True
     data = json.loads(target.read_text(encoding="utf-8"))
     assert data == {
         "presets": {"p": 1},
@@ -108,7 +108,7 @@ def test_export_settings_to_path_corrupt_optional_files_are_skipped(home, tmp_pa
 
     h = Host()
     target = tmp_path / "out3.json"
-    assert h.export_settings_to_path(str(target)) is True
+    assert h._export_settings_to_path(str(target)) is True
     data = json.loads(target.read_text(encoding="utf-8"))
     assert data == {}
 
@@ -117,7 +117,7 @@ def test_export_settings_to_path_exception_returns_false(home, monkeypatch, tmp_
     monkeypatch.setattr(presets_manager, "atomic_write_text",
                          lambda *a, **k: (_ for _ in ()).throw(RuntimeError("fail")))
     h = Host()
-    assert h.export_settings_to_path(str(tmp_path / "x.json")) is False
+    assert h._export_settings_to_path(str(tmp_path / "x.json")) is False
 
 
 # ── import_settings_dialog (lines 332-355, webview mocked) ─────────────────
@@ -168,7 +168,7 @@ def test_import_settings_dialog_exception_returns_false(home, monkeypatch):
     assert h.import_settings_dialog() is False
 
 
-# ── import_settings_from_path: each optional key branch (lines 364-393) ───
+# ── _import_settings_from_path: each optional key branch (lines 364-393) ───
 
 def test_import_settings_from_path_restores_all_keys(home, tmp_path):
     backup = tmp_path / "backup.json"
@@ -181,7 +181,7 @@ def test_import_settings_from_path_restores_all_keys(home, tmp_path):
     }), encoding="utf-8")
 
     h = Host()
-    assert h.import_settings_from_path(str(backup)) is True
+    assert h._import_settings_from_path(str(backup)) is True
 
     cfg_dir = _cfg_dir(home)
     assert json.loads((cfg_dir / "presets.json").read_text(encoding="utf-8")) == {"p": 1}
@@ -198,7 +198,7 @@ def test_import_settings_from_path_missing_keys_skips_all_writes(home, tmp_path)
     backup.write_text(json.dumps({}), encoding="utf-8")
 
     h = Host()
-    assert h.import_settings_from_path(str(backup)) is True
+    assert h._import_settings_from_path(str(backup)) is True
 
     cfg_dir = _cfg_dir(home)
     assert not (cfg_dir / "presets.json").exists()
@@ -211,91 +211,5 @@ def test_import_settings_from_path_missing_keys_skips_all_writes(home, tmp_path)
 def test_import_settings_from_path_exception_returns_false(home, tmp_path):
     bad = tmp_path / "missing.json"  # never written -> read_text raises
     h = Host()
-    assert h.import_settings_from_path(str(bad)) is False
+    assert h._import_settings_from_path(str(bad)) is False
 
-
-# ── save_preset_file (lines 395-421, webview mocked) ───────────────────────
-
-def test_save_preset_file_no_window(home):
-    h = Host()
-    h.window = None
-    assert h.save_preset_file(json.dumps({})) is False
-
-
-def test_save_preset_file_cancelled(home):
-    h = Host()
-    h.window = MagicMock()
-    h.window.create_file_dialog.return_value = None
-    assert h.save_preset_file(json.dumps({})) is False
-
-
-def test_save_preset_file_success(home, tmp_path):
-    target = tmp_path / "layout.json"
-    h = Host()
-    h.window = MagicMock()
-    h.window.create_file_dialog.return_value = [str(target)]
-    assert h.save_preset_file(json.dumps({"AA": {"x": 1}})) is True
-    data = json.loads(target.read_text(encoding="utf-8"))
-    assert data == {"type": "divoom_preset", "slots": {"AA": {"x": 1}}}
-
-
-def test_save_preset_file_exception_returns_false(home, monkeypatch, tmp_path):
-    monkeypatch.setattr(presets_manager, "atomic_write_text",
-                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("fail")))
-    target = tmp_path / "layout.json"
-    h = Host()
-    h.window = MagicMock()
-    h.window.create_file_dialog.return_value = [str(target)]
-    assert h.save_preset_file(json.dumps({})) is False
-
-
-# ── load_preset_file (lines 423-448, webview mocked) ───────────────────────
-
-def test_load_preset_file_no_window(home):
-    h = Host()
-    h.window = None
-    assert h.load_preset_file() == ""
-
-
-def test_load_preset_file_cancelled(home):
-    h = Host()
-    h.window = MagicMock()
-    h.window.create_file_dialog.return_value = []
-    assert h.load_preset_file() == ""
-
-
-def test_load_preset_file_typed_preset_returns_slots_only(home, tmp_path):
-    src = tmp_path / "layout.json"
-    src.write_text(json.dumps({"type": "divoom_preset", "slots": {"AA": {"x": 1}}}), encoding="utf-8")
-    h = Host()
-    h.window = MagicMock()
-    h.window.create_file_dialog.return_value = [str(src)]
-    assert json.loads(h.load_preset_file()) == {"AA": {"x": 1}}
-
-
-def test_load_preset_file_untyped_data_returns_raw(home, tmp_path):
-    """else branch: dict without the divoom_preset type marker returns as-is
-    (line 445)."""
-    src = tmp_path / "layout.json"
-    src.write_text(json.dumps({"foo": "bar"}), encoding="utf-8")
-    h = Host()
-    h.window = MagicMock()
-    h.window.create_file_dialog.return_value = [str(src)]
-    assert json.loads(h.load_preset_file()) == {"foo": "bar"}
-
-
-def test_load_preset_file_non_dict_data_returns_raw(home, tmp_path):
-    src = tmp_path / "layout.json"
-    src.write_text(json.dumps([1, 2, 3]), encoding="utf-8")
-    h = Host()
-    h.window = MagicMock()
-    h.window.create_file_dialog.return_value = [str(src)]
-    assert json.loads(h.load_preset_file()) == [1, 2, 3]
-
-
-def test_load_preset_file_exception_returns_empty_string(home, tmp_path):
-    missing = tmp_path / "does_not_exist.json"
-    h = Host()
-    h.window = MagicMock()
-    h.window.create_file_dialog.return_value = [str(missing)]
-    assert h.load_preset_file() == ""
