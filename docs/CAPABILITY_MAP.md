@@ -170,6 +170,23 @@ machine-generated:
 * **`save_credentials`**, which the audit missed while listing the three read
   sites.
 
+## The Rust menubar (P3.3) — clean, and structurally so
+
+Audited against the same invariant. `divoom-menubar/src/daemon.rs` is a lean
+NDJSON socket client, and the audit's strongest result is not a reading of the
+code but of the **dependency list**: `tray-icon`, `tao`, `serde_json` and one
+CFRunLoop binding. No transport, device, HTTP, database or image crate. It
+*cannot* duplicate a daemon job, whatever anyone writes in it later.
+
+One thing it reads for itself: `[gui] keep_daemon_alive` from `config.ini`,
+hand-parsed. That makes **three** independent parsers of that file — the GUI's
+`configparser`, the daemon's hand-rolled `[divoom]` reader, and this. They read
+different sections so they do not fight over values, but they could disagree
+about what counts as TRUE, and the consequence is concrete: the GUI decides
+whether to leave the daemon running on exit and the menubar decides whether to
+kill it. `tests/test_keep_daemon_alive_parity.py` pins the agreement, written
+while the two still match.
+
 ## Known blind spots — what this census does NOT see
 
 Stated so that a clean run is never mistaken for a closed class. These are the
