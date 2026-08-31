@@ -21,6 +21,50 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-08-30 (v0.29.0) — R70 SHIPPED.** Tag `c3d09dd` on a green CI, GitHub
+  release + `Divoom-v0.29.0.dmg` (sha256 `7550f1d3...`), cask bumped. Verified
+  INSIDE the DMG, not the source tree: both binaries report 0.29.0, the new
+  `BUNDLE_VERSION` stamp is present, no `bleak` ships, and
+  `divoomd mcp` serves 13 tools.
+
+  **The round in one line: the GUI stopped being a second implementation.** The
+  `check_gui_is_a_client.py` allowlist went from 27 violations across twelve
+  files to EMPTY, and the gate fails any new one. Full detail in the CHANGELOG
+  v0.29.0 stanza and the R70 ledger in `docs/ROADMAP.md`.
+
+  **Five defects found by doing the work, none of which anyone was looking for:**
+
+  * `art_codec.rs` folded a 32-to-256-byte pixel map into a **u128** and
+    shifted by `i * 8`. It overflowed for every palette with more than one
+    colour — debug builds panic and kill the daemon worker, release builds mask
+    the shift and report real files as undecodable. **This also broke the
+    shipped hot-channel PUSH**, which runs the same decoder.
+  * The installed app **killed its own healthy daemon on every launch**: no
+    pyproject inside a bundle, so the version check read a stale
+    `divoom_control.egg-info` at 0.22.21 and declared the correct 0.28.3 daemon
+    stale. Fixed with a build-time `BUNDLE_VERSION` stamp; the metadata
+    fallback is deleted, not reordered.
+  * **"Start MCP Server" launched a second GUI window** in the bundle, plus
+    another daemon and menubar agent, served no JSON-RPC, and reported success.
+  * The **album-art preview differed from the device on 100% of pixels**
+    (LANCZOS vs NEAREST) under a docstring claiming they shared a renderer.
+  * **Gallery items in AES/LZO containers never decoded** — the daemon's
+    decoder handles magic 9/18/26 and 0xAA, the GUI's did not.
+
+  **Two process failures worth not repeating.** CI was red from P3.3 to P6.3
+  and I did not look — I ran the gates I remembered instead of
+  `scripts/ci_local.sh`, which runs all 17. And twice a `git checkout` after a
+  sabotage wiped an uncommitted fix (the project's own note warns about exactly
+  this): once it put a BLIND parity test back in the tree for four phases.
+  Commit before breaking anything, and run the whole list.
+
+  **Open, and deliberately not guessed at:** `check_gui_api_reachable.py` flags
+  **20 API methods with no JS caller** that nobody has reviewed —
+  `apply_system_stats`, `probe_lan`, `set_timeplan`, the preset-file and
+  settings import/export pairs, and more. They are allowlisted as `unreviewed`
+  and the gate prints that count on every run. Each needs a decision: lost
+  wiring, leftover, or reachable some way the gate cannot see.
+
 - **2026-08-30 (v0.28.3) — SHIPPED.** Tag `1a4a273` on a green CI (all five
   checks), GitHub release + `Divoom-v0.28.3.dmg` (sha256 `52550f48...`), cask
   verified to carry that sha. Verified inside the DMG, not just the source tree:

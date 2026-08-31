@@ -9,7 +9,7 @@ forward-looking one. Recover a round plan with
 
 ## Shipped
 
-- **v0.29.0 — R70**: the GUI is a client, not a second implementation. Twelve
+- **v0.29.0 — R70 (SHIPPED 2026-08-30)**: the GUI is a client, not a second implementation. Twelve
   findings moved to `divoomd` and the class closed structurally — the
   `check_gui_is_a_client.py` allowlist went from 27 violations across twelve
   files to EMPTY. Found five defects on the way that nobody was looking for: a
@@ -536,7 +536,7 @@ correct.
 | P5.6 bleak out of the bundle | **DONE** | out of `divoom.spec`; the frozen entry point loads ZERO bleak modules (verified). Also dropped CI's `brew install portaudio` |
 | P6.1 allowlist empty | **DONE** | 27 violations across 12 files → **0, with no exemptions** |
 | P6.2 user-POV pass | **DONE** | `gui_pov.py`, no mocks in the chain: stocks/sysmon/album art all live, album art visibly NEAREST now. Killing the daemon still SAYS so. Found a stuttering error hint no assertion could see |
-| P6.3 CHANGELOG + release | **IN PROGRESS** | v0.29.0 stanza written, version bumped; awaiting green CI before the tag |
+| P6.3 CHANGELOG + release | **DONE** | v0.29.0 tagged at `c3d09dd` on green CI; DMG sha256 `7550f1d3...`; verified INSIDE the DMG (both binaries 0.29.0, BUNDLE_VERSION stamp present, no bleak, `divoomd mcp` = 13 tools) |
 
 ### Cloud HTTP — 533/533 endpoints cataloged
 
