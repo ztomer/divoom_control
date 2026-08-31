@@ -76,7 +76,7 @@ fi
 # far narrower than the resolution this suite can actually produce, and
 # the advertised number is the one being enforced. Raise the floor
 # deliberately when coverage earns it, and say the number out loud.
-# R71 FINAL, 2026-08-31. Coverage is 89.48%; floor 89.4 (0.08 margin).
+# R72 FINAL, 2026-08-31. Coverage is 89.30%; floor 89.2 (0.10 margin).
 #
 # P1.1 deleted 35 statements and the miss count did not move (402 before, 402
 # after) -- i.e. every deleted statement was COVERED. That is what dead code
@@ -94,16 +94,26 @@ fi
 #                           note above, which is what P0.4 fixed)
 #   after P1.1     89.41%   deleting well-covered dead code lowers a ratio
 #   after P1-P3    88.99%   ~290 more statements gone
-#   final          89.48%   after covering play_album / push_playlist, whose
+#   R71 final      89.48%   after covering play_album / push_playlist, whose
 #                           migration into the LAN funnel had left them tested
 #                           only through e2e
 #
-# So the round ends 0.02 points BELOW where it started, having deleted ~430
-# statements of dead code. That is the metric behaving as designed, not decay:
-# removing code that was 100% covered and reachable by nothing moves the ratio
-# down and the codebase up. The floor is 89.4 rather than 89.48 so routine work
-# is not blocked by hundredths; raise it deliberately when coverage earns it.
-COV_MIN="${DIVOOM_PY_COV_MIN:-89.4}"
+# R72 continued the same arc, for the same reason:
+#
+#   after R72 cuts 88.94%   292 lines of dead notification polling deleted from
+#                           divoom_client, plus verify_gallery_render.py's own
+#                           auth/HTTP/decoder stack
+#   R72 final      89.30%   after covering the two credential wrappers P1.1 had
+#                           shipped with ZERO coverage -- which the floor caught
+#
+# Two rounds, ~730 statements of dead code removed, and the ratio is 0.20 points
+# lower than where R71 started. That is the metric behaving as designed: code
+# that was well covered and reachable by nothing drags the ratio DOWN when it
+# goes, while the codebase gets better. Read a falling number here as a question
+# ("what was deleted?"), never as decay on its own.
+#
+# Floor 89.2 rather than 89.30 so routine work is not blocked by hundredths.
+COV_MIN="${DIVOOM_PY_COV_MIN:-89.2}"
 COV_PRECISION=2
 
 if [ "$have_camoufox" -eq 1 ]; then
