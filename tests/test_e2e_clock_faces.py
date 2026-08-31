@@ -190,10 +190,22 @@ async def test_an_unreachable_daemon_names_the_reason_instead_of_showing_nothing
                 const el = document.querySelector('.cloud-problem-reason');
                 return !!el && el.textContent.includes('background service');
             }""")
+            # The hint must ADD something, not echo the reason. Seen on screen
+            # during the P6.2 pass, "Could not load ...: the background service
+            # is not running" followed by "The background service is not
+            # running." read as a stutter — so the hint is now what to DO, and
+            # `cloud_result.js` drops any hint the reason already contains.
             hint = await eval_js(page, """() => {
                 const el = document.querySelector('.cloud-problem-hint');
                 return el ? el.textContent : '';
             }""")
-            assert "not running" in hint, hint
+            reason = await eval_js(page, """() => {
+                const el = document.querySelector('.cloud-problem-reason');
+                return el ? el.textContent : '';
+            }""")
+            assert hint, "an unreachable service should say what to do"
+            assert "Reopen" in hint, hint
+            assert hint.rstrip(".").lower() not in reason.lower(), (
+                f"the hint only restates the reason: {hint!r} / {reason!r}")
         finally:
             await browser.close()

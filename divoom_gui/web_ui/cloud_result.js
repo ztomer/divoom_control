@@ -15,19 +15,33 @@
 (function () {
     "use strict";
 
+    /* What the user can DO about it. Deliberately not a restatement of the
+       reason: seen on screen, "Could not load clock faces: the background
+       service is not running" followed by "The background service is not
+       running." reads as a stutter and adds nothing. A hint that repeats the
+       reason is worse than no hint, so `renderProblem` drops it when the reason
+       already contains it. */
     const HINTS = {
-        unreachable: "The background service is not running.",
+        unreachable: "Reopen Divoom Control to start it again.",
         auth: "Sign in to your Divoom account in Settings.",
-        cloud: "Divoom's servers returned an error.",
+        cloud: "Divoom's servers rejected the request — try again shortly.",
     };
+
+    /* True when the hint would only echo the reason back. */
+    function addsNothing(hint, detail) {
+        if (!hint) return true;
+        const norm = (t) => String(t).toLowerCase().replace(/[.]/g, "").trim();
+        return norm(detail).includes(norm(hint));
+    }
 
     /* Render a failed browse into `el`, saying what went wrong and what to
        do about it. Deliberately not styled as an empty state: an error that
        looks like "no results" is the bug this replaces. */
     function renderProblem(el, reply, emptyLabel) {
         if (!el) return;
-        const hint = HINTS[reply && reply.cause] || "";
         const detail = (reply && reply.error) || emptyLabel || "Could not load.";
+        let hint = HINTS[reply && reply.cause] || "";
+        if (addsNothing(hint, detail)) hint = "";
         el.innerHTML =
             '<div class="empty-list cloud-problem">' +
             '<div class="cloud-problem-reason"></div>' +
