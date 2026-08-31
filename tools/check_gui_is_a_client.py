@@ -101,9 +101,9 @@ ALLOWLIST: list[tuple[str, str, str, str]] = [
     #   (P2 DONE: the five CloudClient panels, the gallery HTTP and the
     #    hot-channel manifest+preview are all daemon calls now.)
     # R70 P3 — the renderers move to the daemon.
-    ("media_sync.py", "import", "divoom_lib.utils.media_source", "R70 P3.1"),
-    ("media_sync.py", "call", "Image.open", "R70 P3.2"),
-    ("media_sync.py", "call", "resize", "R70 P3.2"),
+    # P3.1 removed the stock renderer; the ONLY remaining user is
+    # trigger_notification, which no JS calls and which P5.4 deletes.
+    ("media_sync.py", "import", "divoom_lib.utils.media_source", "R70 P5.4"),
     ("api/lighting.py", "import", "divoom_lib.fonts", "R70 P3.3"),
     ("api/lighting.py", "call", "Image.new", "R70 P3.3"),
     ("api/lighting.py", "call", "resize", "R70 P3.3"),

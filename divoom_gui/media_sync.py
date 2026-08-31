@@ -81,26 +81,27 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
             return json.dumps({})
 
     def _artwork_preview(self, artwork_b64: str) -> str:
-        """Downsample the daemon's artwork bytes to the device size, as a data URL.
+        """The album-art frame the device is given, as a data URL.
 
-        Uses the same renderer path the device frame comes from, so the card and
-        the panel cannot drift (house rule: previews mirror live state through
-        the shared renderer, never a parallel pipeline).
+        The docstring here used to read: "Uses the same renderer path the device
+        frame comes from, so the card and the panel cannot drift (house rule:
+        previews mirror live state through the shared renderer, never a parallel
+        pipeline)." It was false. This resized `Image.LANCZOS` while the daemon's
+        music job pushes through `image_proc::process_image_bytes`, which is
+        NEAREST — and R70 P1.4 measured the result: on hard-edged input the two
+        disagreed on 100% of pixels. Not a drift, a different picture, under a
+        comment asserting the exact invariant it broke.
+
+        It is true now. The daemon renders; this only encodes what it returned.
+        The decode that matters — macOS reports `image/jpeg` for bytes that are
+        actually TIFF, so nothing may trust the declared MIME — happens in the
+        daemon's `image` crate, which sniffs the container the same way PIL did.
         """
-        import base64 as _b64
-        import io
         try:
-            raw = _b64.b64decode(artwork_b64)
-            size = self._active_device_size()
-            from PIL import Image
-            # PIL sniffs the container itself, which matters: macOS reports
-            # image/jpeg for what are actually TIFF bytes, so anything that
-            # trusted the declared MIME would pick the wrong decoder.
-            img = Image.open(io.BytesIO(raw)).convert("RGB")
-            img = img.resize((size, size), Image.LANCZOS)
-            buf = io.BytesIO()
-            img.save(buf, format="PNG")
-            return "data:image/png;base64," + _b64.b64encode(buf.getvalue()).decode("ascii")
+            _extras, frame_path = self._widget_frame(
+                "album_art", self._active_device_size(),
+                {"image_b64": artwork_b64})
+            return self._frame_to_data_url(frame_path)
         except Exception as e:
             logger.debug(f"artwork preview failed: {e}")
             return ""
@@ -166,46 +167,53 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
             return ""
 
     def get_ticker_preview(self, symbol: str, size: int = 0) -> str:
+        """The stock tile, rendered by the daemon.
+
+        R70 P3.1. This used to fetch the quote from Yahoo and draw the frame
+        with PIL, in this process, while `live_jobs/render.rs::render_stock`
+        drew the one the device gets from the SAME Yahoo endpoint. Two
+        renderers for one widget — precisely what R67/C2 removed from sysmon
+        and did not sweep for siblings.
+
+        It still must not touch the CONNECTION: rendering a preview is not
+        pushing, and the old `dev.lan`/`dev.is_connected` pre-check fired two
+        blocking RPCs on the pywebview JS thread per render.
+        """
         try:
-            # NB: this only RENDERS a local preview frame — it never pushes to the
-            # device — so it must NOT touch the connection. The old dev.lan /
-            # dev.is_connected / dev.connect() pre-check fired two blocking
-            # device_status()/device_call RPCs on the pywebview JS thread per
-            # render (freezing the preview button up to the 120s _run_async cap on
-            # a wedged connect), for no benefit. Removed (same class as R53.30).
-            data = media_source.fetch_stock_ticker(symbol)
-            if not data:
-                return json.dumps({"ok": False, "error": "no data"})
             sz = int(size) if size and int(size) > 0 else self._active_device_size()
-            frame_path = media_source.render_stock_ticker_frame(symbol, data, size=sz)
+            extras, frame_path = self._widget_frame("stocks", sz, {"symbol": symbol})
             return json.dumps({
-                "ok": True, "size": sz, "symbol": symbol,
+                "ok": True, "size": sz, "symbol": extras.get("symbol", symbol),
                 "preview": self._frame_to_data_url(frame_path),
-                "price": data["price"], "change": data["change"], "pct_change": data["pct_change"],
+                "price": extras.get("price", 0.0),
+                "change": extras.get("change", 0.0),
+                "pct_change": extras.get("pct_change", 0.0),
             })
         except Exception as e:
             logger.error(f"get_ticker_preview failed: {e}")
             return json.dumps({"ok": False, "error": str(e)})
 
     def apply_stock_ticker(self, symbol: str) -> str:
+        """Push the stock tile — the SAME bytes the preview showed.
+
+        R70 P3.1: one call produces both, so the tile and the matrix cannot
+        disagree. They previously came from two renderers reading one Yahoo
+        endpoint, which is the shape that let the album-art preview drift 100%
+        of its pixels from the device.
+        """
         logger.info(f"GUI Action: Applying stock ticker for {symbol}...")
         try:
-            data = media_source.fetch_stock_ticker(symbol)
-            if not data:
-                return json.dumps({"success": False, "error": "Could not fetch ticker data"})
+            size = self._active_device_size()
+            extras, frame_path = self._widget_frame("stocks", size, {"symbol": symbol})
             if not self._has_push_target():
                 return json.dumps({"success": False, "error": "No device connected"})
-
-            size = self._active_device_size()
-            frame_path = media_source.render_stock_ticker_frame(symbol, data, size=size)
             res = self._push_frame(frame_path, size)
-
             return json.dumps({
                 "success": res,
                 "preview": self._frame_to_data_url(frame_path),
-                "price": data["price"],
-                "change": data["change"],
-                "pct_change": data["pct_change"],
+                "price": extras.get("price", 0.0),
+                "change": extras.get("change", 0.0),
+                "pct_change": extras.get("pct_change", 0.0),
             })
         except Exception as e:
             logger.error(f"Failed to apply stock ticker: {e}")

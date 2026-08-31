@@ -299,22 +299,61 @@ class TestGuiApiWallMedia(GuiApiTestBase):
         fake.sync_artwork.assert_called_once_with("9999", target="wall")
 
     def test_stock_ticker_apply(self):
-        """Test Yahoo Stock ticker downsampling and display coordination pipeline."""
-        mock_data = {"price": 105.5, "change": 1.2, "pct_change": 1.15}
-        with patch("divoom_lib.utils.media_source.fetch_stock_ticker", return_value=mock_data) as mock_fetch, \
-             patch("divoom_lib.utils.media_source.render_stock_ticker_frame", return_value=Path("/tmp/ticker.png")) as mock_render:
-            
-            # Single connected device path
+        """The stock tile comes from the DAEMON, and the push uses those bytes.
+
+        R70 P3.1. This used to stub `media_source.fetch_stock_ticker` and
+        `render_stock_ticker_frame` — the GUI's own Yahoo call and its own PIL
+        renderer, drawing a second version of the tile
+        `live_jobs/render.rs::render_stock` draws for the device off the same
+        endpoint.
+
+        Stubbing the daemon seam is also what keeps this test OFFLINE. Left
+        pointed at the old stubs after the migration it silently reached the
+        real Yahoo API through a live daemon and asserted against a moving
+        share price.
+        """
+        import base64 as _b64
+
+        frame = _b64.b64encode(bytes(16 * 16 * 3)).decode()
+        client = MagicMock()
+        client.render_widget.return_value = {
+            "success": True, "kind": "stocks", "size": 16,
+            "frame_rgb_b64": frame,
+            "symbol": "AAPL", "price": 105.5, "change": 1.2, "pct_change": 1.15,
+        }
+        with patch.object(type(self.api), "_client", lambda self: client):
             self.api.current_divoom = MagicMock()
             self.api.current_divoom.is_connected = True
             self.api.current_divoom.display.show_image = AsyncMock(return_value=True)
 
-            res = self.api.apply_stock_ticker("AAPL")
-            res_dict = json.loads(res)
+            res_dict = json.loads(self.api.apply_stock_ticker("AAPL"))
             self.assertTrue(res_dict["success"])
             self.assertEqual(res_dict["price"], 105.5)
-            mock_fetch.assert_called_with("AAPL")
-            mock_render.assert_called_with("AAPL", mock_data, size=16)
+            self.assertEqual(res_dict["change"], 1.2)
+            client.render_widget.assert_called_once_with(
+                "stocks", size=16, params={"symbol": "AAPL"})
+
+    def test_ticker_preview_and_push_come_from_one_call(self):
+        """The property P3 exists to restore: the tile and the matrix are the
+        same bytes, because one call produced both."""
+        import base64 as _b64
+
+        raw = bytes(range(256)) * 3  # 768 bytes = a 16x16 RGB frame
+        client = MagicMock()
+        client.render_widget.return_value = {
+            "success": True, "kind": "stocks", "size": 16,
+            "frame_rgb_b64": _b64.b64encode(raw).decode(),
+            "symbol": "AAPL", "price": 1.0, "change": 0.0, "pct_change": 0.0,
+        }
+        with patch.object(type(self.api), "_client", lambda self: client):
+            preview = json.loads(self.api.get_ticker_preview("AAPL", 16))
+        self.assertTrue(preview["ok"], preview)
+
+        from PIL import Image
+        written = Image.open(
+            Path(__file__).resolve().parent.parent / "scratch" / "stocks_16.png")
+        self.assertEqual(written.convert("RGB").tobytes(), raw,
+                         "the preview must be the daemon's bytes, unaltered")
 
     def test_lan_device_operations(self):
         """Add / load / delete LAN devices against a real temp presets file (the
