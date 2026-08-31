@@ -489,7 +489,7 @@ correct.
 | P0.4 Python cov floor ON | **DONE** | 89% measured (not the 95% claimed); floor 99 fails / floor 1 passes |
 | P1.1 cloud wrappers | **DONE** | `daemon_cloud.py`, 14 wrappers, 22 wire tests; 3 sabotages → 3 red signatures; all 8 round-tripped live on a configured account |
 | P1.2 `render_widget` | **DONE** | kinds sysmon/stocks/album_art; 12 Rust tests. First parity test was BLIND (compared lengths, passed under sabotage) — rewritten to re-render the reply's own stats and compare bytes |
-| P1.3 `_widget_frame` funnel | TODO | every panel reaches frames through it — no second path |
+| P1.3 `_widget_frame` funnel | **DONE** | `widget_frames.py`; sysmon migrated first; 11 tests. Pixel test verified against a REAL pixel change — a 16→16 resize is a no-op and would have looked green |
 | P1.4 parity fixtures | TODO | per-kind bytes vs the Python renderer; disagreements DECIDED, not defaulted |
 | P2.1 five panels | TODO | command on the socket AND no HTTP left the process; revert one panel → red |
 | P2.2 gallery fetch+assets | TODO | same, plus `gallery_download.py` gone |
