@@ -43,8 +43,14 @@ document.addEventListener("DOMContentLoaded", () => {
         btn.disabled = true;
         window.pywebview.api.play_album(albumId).then(res => {
             btn.disabled = false;
-            window.showToast(res ? "Album playing on device" : "Failed to play album", res ? "success" : "error", " BLE");
-            if (res && window.setDeviceActivity) {
+            /* R71 P3.4: {ok, error, cause}, not a bool — a Bluetooth-only
+               device now says so instead of "Failed to play album". */
+            const ok = res && res.ok;
+            window.showToast(
+                ok ? "Album playing on device"
+                   : window.DivoomCloud.problemText(res, "Failed to play album"),
+                ok ? "success" : "error", " LAN");
+            if (ok && window.setDeviceActivity) {
                 window.setDeviceActivity(window._activeDeviceMac(), "photo_album", { albumId });
             }
         }).catch(() => {

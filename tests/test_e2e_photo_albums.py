@@ -70,7 +70,7 @@ async def test_play_without_a_device_shows_connect_prompt_and_does_not_call_play
         try:
             await eval_js(page, """() => {
                 window.__playAlbumCalls = [];
-                window.__api.play_album = (albumId) => { window.__playAlbumCalls.push(albumId); return true; };
+                window.__api.play_album = (albumId) => { window.__playAlbumCalls.push(albumId); return { ok: true, error: '', cause: '' }; };
             }""")
             await wait_js(page, 
                 "() => document.querySelectorAll('#cloud-photo-album-list .cloud-clock-row').length > 0")
@@ -99,7 +99,7 @@ async def test_play_with_a_device_calls_play_album_with_the_real_album_id():
             await eval_js(page, """() => {
                 window.DivoomState.appConnected = true;
                 window.__playAlbumCalls = [];
-                window.__api.play_album = (albumId) => { window.__playAlbumCalls.push(albumId); return true; };
+                window.__api.play_album = (albumId) => { window.__playAlbumCalls.push(albumId); return { ok: true, error: '', cause: '' }; };
             }""")
             await wait_js(page, 
                 "() => document.querySelectorAll('#cloud-photo-album-list .cloud-clock-row').length > 0")

@@ -47,8 +47,13 @@ document.addEventListener("DOMContentLoaded", () => {
         btn.disabled = true;
         window.pywebview.api.push_playlist(playId).then(res => {
             btn.disabled = false;
-            window.showToast(res ? "Playlist pushed to device" : "Failed to push playlist", res ? "success" : "error", " BLE");
-            if (res && window.setDeviceActivity) {
+            /* R71 P3.4: {ok, error, cause}, not a bool — see photo_albums.js. */
+            const ok = res && res.ok;
+            window.showToast(
+                ok ? "Playlist pushed to device"
+                   : window.DivoomCloud.problemText(res, "Failed to push playlist"),
+                ok ? "success" : "error", " LAN");
+            if (ok && window.setDeviceActivity) {
                 window.setDeviceActivity(window._activeDeviceMac(), "playlist", { playId });
             }
         }).catch(() => {

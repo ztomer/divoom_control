@@ -70,7 +70,7 @@ async def test_push_without_a_device_shows_connect_prompt_and_does_not_call_push
         try:
             await eval_js(page, """() => {
                 window.__pushPlaylistCalls = [];
-                window.__api.push_playlist = (playId) => { window.__pushPlaylistCalls.push(playId); return true; };
+                window.__api.push_playlist = (playId) => { window.__pushPlaylistCalls.push(playId); return { ok: true, error: '', cause: '' }; };
             }""")
             await wait_js(page, 
                 "() => document.querySelectorAll('#cloud-playlist-list .cloud-clock-row').length > 0")
@@ -99,7 +99,7 @@ async def test_push_with_a_device_calls_push_playlist_with_the_real_play_id():
             await eval_js(page, """() => {
                 window.DivoomState.appConnected = true;
                 window.__pushPlaylistCalls = [];
-                window.__api.push_playlist = (playId) => { window.__pushPlaylistCalls.push(playId); return true; };
+                window.__api.push_playlist = (playId) => { window.__pushPlaylistCalls.push(playId); return { ok: true, error: '', cause: '' }; };
             }""")
             await wait_js(page, 
                 "() => document.querySelectorAll('#cloud-playlist-list .cloud-clock-row').length > 0")

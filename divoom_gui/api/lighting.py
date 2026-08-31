@@ -201,39 +201,44 @@ class LightingApi(ApiBase, WidgetFrameMixin):
             logger.error(f"Rich clock failed: {e}")
             return False
 
-    def play_album(self, album_id: int) -> bool:
+    def play_album(self, album_id: int) -> dict:
         """Play a cloud-browsed photo album on the device (Photo/PlayAlbum,
         LAN-only — see divoom_lib/lan_transport.py). Not meaningful on a
         Virtual Wall (the album targets one device's own local slideshow,
         not a composite image), so that target mode is rejected up front."""
         logger.info(f"GUI Action: Playing album {album_id} on device...")
+        from divoom_gui.api import _lan_error
         if self._current_target_mode == "wall":
-            logger.warning("Album playback is not supported on a Virtual Wall target")
-            return False
+            return _lan_error("play the album",
+                              "a Virtual Wall has no single device to play it on",
+                              "wall")
         self._stop_live_widgets()
         try:
             val = int(album_id)
-            return self._dispatch(lambda t: t.lan.play_album(val))
-        except Exception as e:
-            logger.error(f"Album playback failed: {e}")
-            return False
+        except (TypeError, ValueError):
+            return _lan_error("play the album", f"{album_id!r} is not an album id",
+                              "input")
+        return self._lan_action("play the album", lambda t: t.lan.play_album(val))
 
-    def push_playlist(self, play_id: int) -> bool:
+    def push_playlist(self, play_id: int) -> dict:
         """Push a cloud playlist to the device (Playlist/SendDevice, LAN-only —
         see divoom_lib/lan_transport.py). Not meaningful on a Virtual Wall
         (the playlist targets one device's own local slideshow, not a
         composite image), so that target mode is rejected up front."""
         logger.info(f"GUI Action: Pushing playlist {play_id} to device...")
+        from divoom_gui.api import _lan_error
         if self._current_target_mode == "wall":
-            logger.warning("Playlist push is not supported on a Virtual Wall target")
-            return False
+            return _lan_error("push the playlist",
+                              "a Virtual Wall has no single device to play it on",
+                              "wall")
         self._stop_live_widgets()
         try:
             val = int(play_id)
-            return self._dispatch(lambda t: t.lan.send_playlist(val))
-        except Exception as e:
-            logger.error(f"Playlist push failed: {e}")
-            return False
+        except (TypeError, ValueError):
+            return _lan_error("push the playlist", f"{play_id!r} is not a playlist id",
+                              "input")
+        return self._lan_action("push the playlist",
+                                lambda t: t.lan.send_playlist(val))
 
     def send_danmaku_text(self, text: str, color: str = "#FFFFFF") -> dict:
         """Send a Danmaku scrolling bullet-chat overlay (Danmaku/SendText,
