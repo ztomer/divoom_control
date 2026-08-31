@@ -47,6 +47,8 @@ jobs:
         run: python3 tools/check_weather_parity.py
       - name: The GUI is a client, not a second implementation (R70)
         run: python3 tools/check_gui_is_a_client.py
+      - name: Every GUI API method has a caller (R70)
+        run: python3 tools/check_gui_api_reachable.py
       - name: Version is consistent across pyproject, CHANGELOG, tags and crates
         run: python3 tools/check_version_consistency.py
 
