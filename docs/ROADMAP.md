@@ -502,9 +502,9 @@ correct.
 | P1.4 parity fixtures | **DONE** | album art: GUI LANCZOS vs device NEAREST differ on **100% of pixels**; daemon proven byte-identical to PIL NEAREST. Flipping the Rust filter turns both tests red |
 | P2.1 five panels | **DONE** | `cloud_panels.py` funnel; 17 tests incl. a no-HTTP guard; half-migrated panel → red. Allowlist 26 → 21 |
 | P2.2 gallery fetch+assets | **DONE** | `gallery_download.py` deleted; daemon decodes magic 9/18/26/0xAA the GUI could NOT — blank tiles fixed, not just relocated. Allowlist 21 → 17 |
-| P2.3 hot manifest | TODO | same |
+| P2.3 hot manifest | **DONE** | new `hot_manifest` command; preview 86 → 25 lines. **Found a u128 shift-overflow panic in `art_codec.rs` that also breaks the shipped hot-channel PUSH** — fixed, 13-width regression test |
 | P2.4 failures say why | **DONE** (with P2.1) | three causes → three texts, pinned; e2e asserts the reason reaches the SCREEN. Closes the Deferred item |
-| P2.5 live round-trip + RC=3 | TODO | real backend, CONFIGURED account (not a throwaway HOME) |
+| P2.5 live round-trip + RC=3 | **PARTIAL** | 8 cloud commands verified live on a configured account (P1.1); hot manifest + previews verified (P2.3). Still open: the `get_photo_albums` RC=3 and `search_weather_city` RC=1 daemon-side gaps |
 | P3.1 stocks | TODO | covered by P3.4 |
 | P3.2 album art | TODO | hard-edged checkerboard fixture; ends LANCZOS/NEAREST drift |
 | P3.3 text | TODO | covered by P3.4 |
