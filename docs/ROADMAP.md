@@ -434,8 +434,8 @@ its proof has been SEEN, and for anything testable that means seen RED first.
 | P3.2 `probe_lan`/`save_lan_config` | **DONE — both DELETED** | `save_lan_config` wrote `config.ini [lan]` and **nothing has ever read it**; the live path is `presets.json -> lan_devices` via `add_lan_device`/`delete_lan_device`/`load_lan_devices`, all JS-wired in settings_hardware.js. Wiring it up would have written config no one consumes. `probe_lan` is an unused diagnostic — the daemon already probes at connect and refuses an unreachable IP. `DaemonClient.probe_lan` is kept: the daemon command is live |
 | P3.3 5-LCD + Voice/SendText | TODO | gated capabilities naming their blocker |
 | P3.4 danmaku same gate | TODO | one capability check, not two |
-| P4.1 `Cloud/ToDevice` probed | TODO | recorded live response |
-| P4.2 decided | TODO | implemented or WONTFIX with the reason |
+| P4.1 `Cloud/ToDevice` probed | **DONE — deliberately NOT called** | The catalog already had the answer: it is **dead code in the vendor's own app** (`docs/cloud_api/cloud.md`) — the one method that builds it never sets `GalleryId`, and no caller exists in the decompiled APK. A blind call was rejected as UNINFORMATIVE: the response is `BaseResponseJson` (ReturnCode only), so RC=0 on a no-op is indistinguishable from RC=0 on a real action — and it is a **device-control** endpoint with unknown parameters against the user's live account |
+| P4.2 decided | **DONE — WONTFIX** | Even if it works it is a cloud-mediated DUPLICATE of a shipped, verified local path: pushing gallery art to a device is what `custom_art_push` / `sync_artwork` already do over BLE. Adding a second implementation of a working capability is the exact thing R70 spent a round removing. **If it is ever wanted, it needs a DEVICE-OBSERVED probe** (does the panel change?), which belongs in `scripts/hw_verify.py`, not a blind HTTP call — an endpoint whose success and no-op look identical from the outside cannot be settled at the wire |
 | P5.1 both ratchets | TODO | allowlist empty; no blocker-less open item |
 | P5.2 user-POV pass | TODO | `gui_pov.py` + real app over touched panels |
 | P5.3 release | TODO | CHANGELOG, tag, DMG verified from INSIDE the DMG |
@@ -1076,7 +1076,7 @@ Full catalog at `docs/cloud_api/` (all 16 batches complete). Key shipped feature
 - **LAN-getter completeness** — 8 read-back counterparts of BLE Set commands.
 - **Channel extras** — 5-LCD commands, Voice/SendText, Danmaku: backend-only, not GUI-wired
   (need hardware or render confirmation).
-- **`Cloud/ToDevice`** — unimplemented (unconfirmed semantics, no live caller).
+- **`Cloud/ToDevice`** — CLOSED WONTFIX in R71 P4 (see Deferred).
 - **`search_weather_city`** — implemented but not GUI-wired (weather uses system location).
 
 ### WiFi/LAN command completeness — 45 total, all implemented
@@ -1085,8 +1085,18 @@ Counted from `HttpCommand.java`'s `DeviceAndServerCmd` (43) + `ForceDeviceHttp` 
 All 4 clusters implemented:
 1. **Photo album management** (DONE, live, GUI-wired).
 2. **LAN-getter completeness** (DONE, 8 read-back counterparts).
-3. **Channel extras + Voice/SendText** (DONE, backend only, NOT GUI-wired — needs hardware).
-4. **Danmaku scrolling overlay** (DONE, backend only, NOT GUI-wired — unconfirmed render).
+3. **Channel extras + Voice/SendText** — **GATED CAPABILITIES, not open work**
+   (R71 P3.3). Backend-only by DECISION, with the reason in the code:
+   5-LCD (`Set5LcdChannelType`/`Set5LcdWholeClockId`) is blocked on **a Times
+   Gate**, which this project has no reason to own; `Voice/SendText` is blocked
+   on **real-hardware render confirmation**, because R32 §D already burned this
+   project once — a superficially similar "set light phone word" command ACKed
+   cleanly and rendered nothing, and `push_text`'s bitmap path gets the same
+   result without the risk. Neither is a gap to close; both are decisions to
+   leave alone until their blocker changes.
+4. **Danmaku scrolling overlay** — GUI-wired, render still unconfirmed, and now
+   behind the P3.1 capability gate: on a Bluetooth-only device it says so
+   instead of reporting a generic failure.
 
 Bonus fix: device-selector "not in range" badge now counts consecutive scan misses
 (downgrades after 2), not a one-shot startup flag. 5 new e2e tests.
@@ -1108,7 +1118,12 @@ Bonus fix: device-selector "not in range" badge now counts consecutive scan miss
 - **`pic_scan_ctrl` 0x35** — partially resolved (2026-07-13, real hardware).
   Accepted without error by BLE stack; no visual confirmation (no camera).
   See `divoom_lib/display/drawing.py` / `divoomd/src/device_call/drawing.rs`.
-- **`Cloud/ToDevice`** — unimplemented, unconfirmed semantics.
+- ~~**`Cloud/ToDevice`**~~ — **CLOSED WONTFIX (R71 P4)**. Dead code in the
+  vendor's own app, and a cloud-mediated duplicate of the shipped BLE
+  `custom_art_push` path. Not probed, on purpose: the response carries only a
+  ReturnCode, so a live call could not tell a real action from a no-op, and it
+  is device-control with unknown parameters. Settling it needs a device-observed
+  check in `scripts/hw_verify.py`, not an HTTP request.
 - **R12 hardware verification** — user-driven (album cover, custom art, weather on real device).
 
 ---
