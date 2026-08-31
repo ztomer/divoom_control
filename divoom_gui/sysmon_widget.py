@@ -12,16 +12,16 @@ origin (R67/C2).
 """
 from __future__ import annotations
 
-import base64
 import json
 import logging
 import os
-from pathlib import Path
+
+from divoom_gui.widget_frames import WidgetFrameMixin
 
 logger = logging.getLogger("divoom_gui")
 
 
-class SysmonWidgetMixin:
+class SysmonWidgetMixin(WidgetFrameMixin):
     """System-monitor preview and one-shot push. Mixed into the GUI API."""
 
     def _sysmon_frame(self, size: int):
@@ -38,38 +38,17 @@ class SysmonWidgetMixin:
         Returns `(stats, frame_path)`, or raises. The PNG is written from the
         daemon's raw RGB rather than redrawn, so the bytes on screen and the
         bytes on the matrix have one origin.
+
+        R70 P1.3: the body moved to
+        :meth:`divoom_gui.widget_frames.WidgetFrameMixin._widget_frame`, the one
+        way this GUI obtains a frame. Sysmon migrated FIRST on purpose — it is
+        the path that already worked, so if the funnel is wrong the widget with
+        the most scrutiny is where it shows, rather than in the two being
+        rewritten around it.
         """
-        client = self._client()
-        if client is None:
-            raise RuntimeError(self._daemon_unreachable_reason())
-        try:
-            reply = client.sysmon(size=size)
-        except OSError as exc:
-            # A bare "[Errno 2] No such file or directory" tells a user nothing.
-            # The daemon writes WHY it could not take the socket to a sidecar
-            # file precisely so a client can say something actionable here.
-            raise RuntimeError(self._daemon_unreachable_reason(client, exc)) from exc
-        if not isinstance(reply, dict) or not reply.get("success"):
-            # `unreachable` is the transport saying nothing was listening. That
-            # needs a human sentence, not the errno the socket raised.
-            if (reply or {}).get("unreachable"):
-                raise RuntimeError(self._daemon_unreachable_reason(client))
-            raise RuntimeError((reply or {}).get("error", "sysmon unavailable"))
-
-        stats = {"cpu": reply.get("cpu", 0), "mem": reply.get("mem", 0),
-                 "battery": reply.get("battery")}
-        sz = int(reply.get("size", size))
-        raw = base64.b64decode(reply.get("frame_rgb_b64", ""))
-        expected = sz * sz * 3
-        if len(raw) != expected:
-            # Never render a partial buffer as if it were the device's frame.
-            raise RuntimeError(f"sysmon frame is {len(raw)} bytes, expected {expected}")
-
-        from PIL import Image
-        scratch = Path(__file__).parent.parent / "scratch"
-        scratch.mkdir(parents=True, exist_ok=True)
-        frame_path = scratch / f"sysmon_{sz}.png"
-        Image.frombytes("RGB", (sz, sz), raw).save(frame_path)
+        extras, frame_path = self._widget_frame("sysmon", size)
+        stats = {"cpu": extras.get("cpu", 0), "mem": extras.get("mem", 0),
+                 "battery": extras.get("battery")}
         return stats, frame_path
 
     def _daemon_unreachable_reason(self, client=None, exc: Exception | None = None) -> str:

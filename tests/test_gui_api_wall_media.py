@@ -116,13 +116,22 @@ class TestGuiApiWallMedia(GuiApiTestBase):
             self.assertEqual(json.loads(self.api.get_tickers()), ["AAPL", "BTC-USD"])
 
     def _sysmon_client(self, size=32, **overrides):
-        """A daemon stub whose reply carries a correctly sized RGB frame."""
+        """A daemon stub whose reply carries a correctly sized RGB frame.
+
+        R70 P1.3: the widget asks `render_widget(kind="sysmon")` now, through
+        the single `_widget_frame` funnel, so that is the seam stubbed here.
+        The behaviour these tests assert is unchanged — only the command name
+        moved. (A MagicMock answers ANY attribute, so leaving `sysmon` stubbed
+        would have let the call through and returned a Mock where a dict was
+        expected: green stub, broken widget.)
+        """
         import base64 as _b64
-        reply = {"success": True, "size": size, "cpu": 12, "mem": 43, "battery": 80,
+        reply = {"success": True, "size": size, "kind": "sysmon",
+                 "cpu": 12, "mem": 43, "battery": 80,
                  "frame_rgb_b64": _b64.b64encode(bytes(size * size * 3)).decode()}
         reply.update(overrides)
         stub = MagicMock()
-        stub.sysmon.return_value = reply
+        stub.render_widget.return_value = reply
         return stub
 
     def test_system_stats_comes_from_the_daemon_not_a_second_renderer(self):
@@ -143,7 +152,8 @@ class TestGuiApiWallMedia(GuiApiTestBase):
             self.assertEqual(prev["stats"]["mem"], 43)
             self.assertEqual(prev["stats"]["battery"], 80)
             self.assertTrue(prev["preview"].startswith("data:image/png;base64,"))
-            client.sysmon.assert_called_once_with(size=32)
+            client.render_widget.assert_called_once_with(
+                "sysmon", size=32, params={})
 
             # apply with no device → clear failure, but the stats still report
             self.api.current_divoom = None
@@ -188,7 +198,7 @@ class TestGuiApiWallMedia(GuiApiTestBase):
         GUI can say something human without matching on error text.
         """
         client = MagicMock()
-        client.sysmon.return_value = {
+        client.render_widget.return_value = {
             "success": False,
             "error": "[Errno 2] No such file or directory",
             "unreachable": True,
@@ -215,8 +225,8 @@ class TestGuiApiWallMedia(GuiApiTestBase):
             "transient: false\n")
         client = MagicMock()
         client.socket_path = str(sock)
-        client.sysmon.return_value = {"success": False, "error": "[Errno 2]",
-                                      "unreachable": True}
+        client.render_widget.return_value = {"success": False, "error": "[Errno 2]",
+                                             "unreachable": True}
         with patch.object(type(self.api), "_client", lambda self: client):
             prev = json.loads(self.api.get_system_stats_preview(16))
         self.assertFalse(prev["ok"])
@@ -226,7 +236,8 @@ class TestGuiApiWallMedia(GuiApiTestBase):
     def test_a_daemon_level_error_is_surfaced_verbatim(self):
         """The opposite case: the daemon ANSWERED, so use its words, not ours."""
         client = MagicMock()
-        client.sysmon.return_value = {"success": False, "error": "sysmon is disabled"}
+        client.render_widget.return_value = {"success": False,
+                                             "error": "sysmon is disabled"}
         with patch.object(type(self.api), "_client", lambda self: client):
             prev = json.loads(self.api.get_system_stats_preview(16))
         self.assertFalse(prev["ok"])

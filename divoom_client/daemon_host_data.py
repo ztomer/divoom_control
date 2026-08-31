@@ -63,5 +63,41 @@ class HostDataMixin:
         used to sample psutil and draw its own PIL version, so the preview tile
         and the device were two programs that happened to agree — the same
         second-implementation shape R67/C2 removed from now-playing and weather.
+
+        Superseded by :meth:`render_widget` (``kind="sysmon"``), which answers
+        identically; kept because it is the shape every other widget is being
+        moved TO, and churning the one path that already works to prove a point
+        would be the wrong risk to take.
         """
         return self.send_command("sysmon", {"size": int(size)})
+
+    def render_widget(self, kind: str, size: int = 16,
+                      params: dict | None = None) -> dict:
+        """The exact pixels the daemon would push for ``kind``.
+
+        R70 P1.2/P1.3. The generalization of :meth:`sysmon`, and the reason it
+        is general: R67/C2 fixed sysmon's preview by asking the daemon for the
+        frame, and stopped. Stocks kept a second PIL renderer in the GUI beside
+        the daemon's `render_stock`, and the album-art preview resized LANCZOS
+        while the device got NEAREST — under a docstring claiming they shared a
+        path. Both survived because the fix had been applied per-widget.
+
+        Kinds come from the daemon (`crate::render_widget::KINDS`), so a widget
+        added there is available here without a matching edit.
+
+        Returns the daemon's reply: `frame_rgb_b64` plus whatever that kind
+        reports (sysmon adds cpu/mem/battery, stocks adds price/change).
+        """
+        return self.send_command(
+            "render_widget",
+            {"kind": str(kind), "size": int(size), "params": params or {}},
+            # Stocks reaches Yahoo and album art decodes a full-size cover;
+            # neither fits the 2s quick-command read, and a short read here
+            # would report a working widget as unavailable.
+            read_timeout=self._render_widget_timeout(),
+        )
+
+    @staticmethod
+    def _render_widget_timeout() -> float:
+        from divoom_client.daemon_config import load_daemon_config
+        return load_daemon_config().cloud_timeout
