@@ -25,6 +25,7 @@ the list can only shrink and nobody re-discovers them from scratch.
 """
 from __future__ import annotations
 
+import ast
 import re
 import sys
 from pathlib import Path
@@ -35,6 +36,11 @@ from _tui import err, info, ok, warn  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 WEB_UI = REPO / "divoom_gui" / "web_ui"
+
+# The shipped Python surface. `divoom_lib` is NOT here: it is the protocol
+# reference, and counting a call from it would let a reference-only module
+# vouch for a live API method.
+PY_SURFACE = (REPO / "divoom_gui", REPO / "divoom_client")
 
 # name -> why it has no web_ui caller. Every entry is a decision someone made.
 #
@@ -104,6 +110,54 @@ def api_methods() -> set[str]:
     }
 
 
+def python_callers(names: set[str],
+                   roots: tuple[Path, ...] = PY_SURFACE) -> dict[str, list[str]]:
+    """Where each name is called from in the shipped Python surface.
+
+    **AST, not a text scan, and that choice has a history.** Two gates in this
+    repo (`check_no_allow`, `check_positional_args`) were reddened by their own
+    prose, because source text cannot tell an attribute from a comment quoting
+    one. Attribute nodes can.
+
+    **What a hit here does and does not mean.** It means some Python code says
+    `.name(...)`. It does NOT mean the method is reachable: the caller may
+    itself be dead, and `self.foo()` from inside a dead sibling counts here.
+    That is why the bucket is a work marker and never an exemption -- resolving
+    it is reading the caller, not trusting the count.
+    """
+    found: dict[str, list[str]] = {n: [] for n in names}
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for path in sorted(root.rglob("*.py")):
+            try:
+                tree = ast.parse(path.read_text(encoding="utf-8", errors="ignore"))
+            except SyntaxError:
+                continue
+            # Exclude DELEGATION: `def probe_lan: return self.connection.probe_lan()`
+            # is the method forwarding to its implementation, not a caller of
+            # it. The first version of this scan counted those and reported 13
+            # methods as Python-reached when 6 of them were only pointing at
+            # themselves -- a confident answer about the wrong thing. A genuine
+            # self-recursive method is excluded too, and that is correct: one
+            # with no other caller is dead however loudly it calls itself.
+            delegated = set()
+            for fn in ast.walk(tree):
+                if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    for sub in ast.walk(fn):
+                        if isinstance(sub, ast.Attribute) and sub.attr == fn.name:
+                            delegated.add(id(sub))
+            for node in ast.walk(tree):
+                if (isinstance(node, ast.Attribute) and node.attr in found
+                        and id(node) not in delegated):
+                    try:
+                        where = path.relative_to(REPO)
+                    except ValueError:
+                        where = path
+                    found[node.attr].append(f"{where}:{node.lineno}")
+    return found
+
+
 def web_ui_blob() -> str:
     parts = []
     for ext in ("*.js", "*.html"):
@@ -139,12 +193,29 @@ def main() -> int:
         info("Wire it up, delete it, or add it to ALLOWLIST with a reason.")
         return 1
 
+    # Three buckets, not two (R71 P1.0). "No JS caller" conflates two states
+    # that need OPPOSITE fixes: a method reached only from Python does not
+    # belong on the pywebview bridge surface and should MOVE; a method reached
+    # from nowhere should GO. Reporting them as one number is why 20 of these
+    # sat undecided for a round.
+    callers = python_callers(unreached)
+    py_only = {n: locs for n, locs in callers.items() if locs}
+    dead = sorted(n for n in unreached if not callers[n])
+
     unreviewed = sum(1 for r in ALLOWLIST.values() if r.startswith("unreviewed"))
     ok(f"[api-reachable] OK — {len(methods)} API methods, "
        f"{len(unreached)} allowlisted")
+    info(f"  {len(py_only)} reached from Python only, {len(dead)} from nowhere")
+    for name in sorted(py_only):
+        locs = py_only[name]
+        shown = ", ".join(locs[:3]) + (f" (+{len(locs) - 3} more)" if len(locs) > 3 else "")
+        info(f"    python-only  {name} <- {shown}")
+    for name in dead:
+        info(f"    NO CALLER    {name}")
     if unreviewed:
-        warn(f"  {unreviewed} are 'unreviewed': flagged by P5.0 and awaiting a "
-             f"decision, not confirmed dead")
+        warn(f"  {unreviewed} are 'unreviewed': awaiting a decision, not "
+             f"confirmed dead. python-only is a work marker, NOT a pass — the "
+             f"caller may itself be dead.")
     return 0
 
 
