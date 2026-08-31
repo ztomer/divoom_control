@@ -14,7 +14,7 @@ from tests.support.gallery_sync_common import (  # noqa: F401
 )
 
 
-# ─────────────────────────── load_cached_gallery ───────────────────────────
+# ─────────────────────────── _load_cached_gallery ───────────────────────────
 
 def test_load_cached_gallery_malformed_json_returns_empty(tmp_path, monkeypatch):
     """Corrupt JSON on disk must not raise — caught, warned, empty list."""
@@ -25,7 +25,7 @@ def test_load_cached_gallery_malformed_json_returns_empty(tmp_path, monkeypatch)
     cfg_dir.mkdir(parents=True)
     (cfg_dir / "gallery_cache.json").write_text("{not valid json[")
 
-    out = m.load_cached_gallery()
+    out = m._load_cached_gallery()
     assert out == "[]"
 
 

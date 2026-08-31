@@ -15,7 +15,7 @@ from divoom_gui.gallery_hot_api import GalleryHotApiMixin
 
 class GallerySyncMixin(GalleryHotApiMixin):
     """Mixin for cloud-voted gallery fetching and hot-channel schedule orchestration."""
-    def load_cached_gallery(self) -> str:
+    def _load_cached_gallery(self) -> str:
         cache_file = Path.home() / ".config" / "divoom-control" / "gallery_cache.json"
         if cache_file.exists():
             try:
@@ -105,7 +105,7 @@ class GallerySyncMixin(GalleryHotApiMixin):
             f"target_size={target_size} file_sort={file_sort} file_size={file_size}..."
         )
         
-        cached_data = self.load_cached_gallery()
+        cached_data = self._load_cached_gallery()
 
         def background_fetch_worker():
             try:
@@ -199,46 +199,6 @@ class GallerySyncMixin(GalleryHotApiMixin):
 
         threading.Thread(target=background_fetch_worker, name="DivoomGalleryFetch", daemon=True).start()
         return cached_data
-
-    def batch_sync_artwork(self, artwork_json: str) -> bool:
-        """R17 P5 full cutover: the daemon owns the device, so it downloads +
-        decodes + resizes + streams the asset against its real device/wall
-        (binary never crosses the socket). The GUI just resolves the target
-        (single vs. wall) and the single-device size."""
-        ok, _err = self._sync_artwork_detailed(artwork_json)
-        return ok
-
-    def _sync_artwork_detailed(self, artwork_json: str) -> tuple[bool, str | None]:
-        """Core of batch_sync_artwork that keeps the failure REASON, so callers
-        like sync_hot_channel can report per-file errors instead of a bare bool."""
-        logger.info(f"GUI Action: Batch syncing artwork details: {artwork_json}")
-        try:
-            art = json.loads(artwork_json)
-            file_id = art["file_id"]
-            client = self._client()
-            if client is None:
-                logger.error("Batch sync failed: no daemon available")
-                return False, "no daemon available"
-
-            is_wall = (getattr(self, "current_target_mode", "single") == "wall"
-                       or (not self.current_divoom and self.wall_slots))
-            if is_wall:
-                if not self._rebuild_wall_instance():
-                    return False, "wall not configured"
-                reply = client.sync_artwork(file_id, target="wall")
-            elif self.current_divoom and (self.current_divoom.is_connected
-                                          or getattr(self.current_divoom, "lan", None)):
-                size = self._active_device_size() if hasattr(self, "_active_device_size") else 16
-                reply = client.sync_artwork(file_id, default_size=int(size), target="device")
-            else:
-                return False, "no connected device"
-            if reply.get("success"):
-                return True, None
-            return False, str(reply.get("error", "unknown daemon error"))
-        except Exception as e:
-            logger.error(f"Batch sync failed: {e}")
-            return False, str(e)
-
 
     def get_sync_candidates(self) -> str:
         from divoom_lib import hotchannel_config

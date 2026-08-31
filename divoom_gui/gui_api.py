@@ -112,9 +112,6 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
             logger.error("GUI async op timed out after %.0fs", timeout)
             raise RuntimeError(f"Operation timed out after {timeout:.0f}s")
 
-    def get_transport_status(self) -> str:
-        return self.connection.get_transport_status()
-
     def save_lan_config(self, device_ip: str, local_token: int) -> bool:
         return self.connection.save_lan_config(device_ip, local_token)
 
@@ -420,9 +417,6 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
 
     def get_work_mode(self) -> int | None:
         return self.tools.get_work_mode()
-
-    def get_scoreboard_state(self) -> dict | None:
-        return self.tools.get_scoreboard_state()
 
     def get_volume(self) -> int | None:
         return self.tools.get_volume()

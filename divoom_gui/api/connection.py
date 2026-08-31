@@ -84,27 +84,6 @@ class ConnectionApi(ApiBase):
             logger.error(f"Failed to save LAN config: {e}")
             return False
 
-    def get_transport_status(self) -> str:
-        st = self._device_status()
-        lan_ip = st.get("lan_ip")
-        mac = st.get("mac")
-        ble_connected = bool(st.get("connected") and not lan_ip)
-        # Cache-only: a status poll must never initiate (or block on, or crash
-        # on) a Divoom cloud login. Cloud shows "Authenticated" only once some
-        # real cloud op has cached a valid token.
-        from divoom_lib import divoom_auth
-        try:
-            creds = divoom_auth.get_cached_credentials()
-        except Exception:
-            creds = None
-        cloud_ok = bool(creds and creds.is_valid())
-        return json.dumps({
-            "ble": {"available": ble_connected, "label": "Bluetooth", "description": "Bluetooth — 100% local, never leaves your machine.", "detail": mac if ble_connected else None},
-            "lan": {"available": bool(lan_ip), "label": "Local Network", "description": "Local Network — 100% local, WiFi-capable devices only.", "detail": f"{lan_ip}:9000" if lan_ip else "No device IP configured"},
-            "cloud": {"available": cloud_ok, "label": "Divoom Cloud", "description": "Divoom Cloud — appin.divoom-gz.com, Divoom's servers, requires account.", "detail": "Authenticated" if cloud_ok else "Not authenticated"},
-            "external": {"available": True, "label": "Public Cloud", "description": "Public Cloud — 3rd-party APIs (weather, stocks), no login required.", "detail": "Available"},
-        })
-
     def _device_status(self) -> dict:
         client = self._client()
         if client is None:

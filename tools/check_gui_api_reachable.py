@@ -58,12 +58,8 @@ ALLOWLIST: dict[str, str] = {
     # UI lost its wiring, the method is a leftover, or it is reached some way
     # this gate cannot see.
     "apply_system_stats": "unreviewed — sysmon one-shot push; the panel may use live_job_start",
-    "batch_sync_artwork": "unreviewed — called from Python (gallery_sync)",
     "custom_art_query_page": "unreviewed — daemon round-trip, possibly UI-less",
     "display_custom_art": "unreviewed",
-    "get_scoreboard_state": "unreviewed — scoreboard tool",
-    "get_transport_status": "unreviewed — diagnostics",
-    "load_cached_gallery": "unreviewed — called from Python (fetch_gallery)",
     "probe_lan": "unreviewed — LAN discovery",
     "save_lan_config": "unreviewed — LAN device config",
     "set_clock_rich": "unreviewed — richer clock variant",

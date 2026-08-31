@@ -257,61 +257,6 @@ class TestGuiApiWallMedia(GuiApiTestBase):
         self.assertFalse(prev["ok"])
         self.assertEqual(prev["error"], "sysmon is disabled")
 
-    @patch("urllib.request.urlopen")
-    def test_fetch_gallery_and_batch_sync(self, mock_urlopen):
-        """Test cloud gallery catalog scraping and concurrent monthly best async streams."""
-        # Mock fetch_gallery HTTP JSON response
-        mock_resp = MagicMock()
-        mock_resp.read.return_value = json.dumps({
-            "FileList": [
-                {"FileName": "NeonSkull", "FileId": "9999", "LikeCnt": 1500, "FileType": 5, "PixelAmbId": "amb123"}
-            ]
-        }).encode("utf-8")
-        mock_urlopen.return_value.__enter__.return_value = mock_resp
-
-        # Mock authentication credentials
-        self.api.cached_creds = MagicMock()
-        self.api.cached_creds.token = "token123"
-        self.api.cached_creds.user_id = 99
-        self.api.cached_creds.is_valid.return_value = True
-
-        # Pre-seed cached data for the offline cache loader check.
-        # Use a real-looking file_id (not "9999") so the rebuild-on-stale path
-        # doesn't trigger (see gui/gallery_sync.py load_cached_gallery).
-        cached_items = [
-            {"name": "NeonSkull", "file_id": "group1/M00/01/AAA_neon", "likes": 1500, "magic": 5, "preview_url": "data:image/png;base64,..."}
-        ]
-
-        import threading
-        import time
-
-        with patch("pathlib.Path.exists", return_value=True), \
-             patch("pathlib.Path.read_text", return_value=json.dumps(cached_items)):
-            gallery_json = self.api.fetch_gallery(classify=1)
-            gallery = json.loads(gallery_json)
-            self.assertEqual(len(gallery), 1)
-            self.assertEqual(gallery[0]["name"], "NeonSkull")
-            self.assertEqual(gallery[0]["file_id"], "group1/M00/01/AAA_neon")
-
-            # Wait for background fetch worker to finish executing under mocked Path
-            for t in threading.enumerate():
-                if t.name == "DivoomGalleryFetch":
-                    t.join(timeout=5.0)
-
-        # R17 P5: the daemon downloads + streams the asset; the GUI delegates
-        # via sync_artwork. Wall target because wall_slots is set + no single
-        # device is connected.
-        fake = MagicMock()
-        fake.wall_configure.return_value = {"success": True, "wall": True}
-        fake.sync_artwork.return_value = {"success": True}
-        self.api._daemon_client = fake
-        self.api.wall_slots = {"AA:BB:CC:DD:EE:FF": {"x": 0, "y": 0, "size": 16}}
-
-        artwork_json = json.dumps({"file_id": "9999"})
-        sync_success = self.api.batch_sync_artwork(artwork_json)
-        self.assertTrue(sync_success)
-        fake.sync_artwork.assert_called_once_with("9999", target="wall")
-
     def test_stock_ticker_apply(self):
         """The stock tile comes from the DAEMON, and the push uses those bytes.
 

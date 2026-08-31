@@ -226,17 +226,6 @@ class ToolsApi(ApiBase):
             logger.error(f"Scoreboard set failed: {e}")
             return False
 
-    def get_scoreboard_state(self):
-        logger.info("GUI Action: Getting current scoreboard state...")
-        try:
-            target = self._current_divoom
-            if not target:
-                return None
-            return self._run_async(target.scoreboard.get_scoreboard())
-        except Exception as e:
-            logger.error(f"Scoreboard get failed: {e}")
-            return None
-
     # ── Volume / brightness getters (read-only, single device) ──────
 
     def get_volume(self):

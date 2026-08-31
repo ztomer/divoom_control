@@ -4,7 +4,7 @@ Regression test for the Monthly Best gallery cache rebuild path.
 Bug history (2026-06-05): the gallery_cache.json was overwritten with a
 single manual test entry `{"name": "NeonSkull", "file_id": "9999", ...}`
 while the on-disk cache_gallery/ directory held 500+ real Divoom
-artworks. `load_cached_gallery()` returned the stale JSON, so the
+artworks. `_load_cached_gallery()` returned the stale JSON, so the
 gallery rendered only NeonSkull instead of the full library.
 
 The fix: when the JSON cache is empty OR contains only manual
@@ -70,7 +70,7 @@ def test_load_cached_gallery_rebuilds_from_directory_when_stale(tmp_path, monkey
         {"name": "NeonSkull", "file_id": "9999", "likes": 1500, "preview_url": ""}
     ]))
 
-    out = m.load_cached_gallery()
+    out = m._load_cached_gallery()
 
     arr = json.loads(out)
     assert len(arr) == 3, f"expected 3 items rebuilt from directory, got {len(arr)}: {arr}"
@@ -106,7 +106,7 @@ def test_load_cached_gallery_keeps_real_cache(tmp_path, monkeypatch):
     cache_dir.mkdir(parents=True)
     (cache_dir / "decoy.bin").write_bytes(b"\x00")
 
-    out = m.load_cached_gallery()
+    out = m._load_cached_gallery()
 
     arr = json.loads(out)
     assert arr == real_items, f"real cache should be returned unchanged, got {arr}"
@@ -125,7 +125,7 @@ def test_load_cached_gallery_rebuilds_when_empty(tmp_path, monkeypatch):
     cache_file = tmp_path / ".config" / "divoom-control" / "gallery_cache.json"
     cache_file.write_text("[]")
 
-    out = m.load_cached_gallery()
+    out = m._load_cached_gallery()
 
     arr = json.loads(out)
     assert len(arr) == 2
@@ -138,6 +138,6 @@ def test_load_cached_gallery_returns_empty_when_no_cache_and_no_directory(tmp_pa
     monkeypatch.setenv("HOME", str(tmp_path))
     m = _make_mixin()
 
-    out = m.load_cached_gallery()
+    out = m._load_cached_gallery()
 
     assert out == "[]"
