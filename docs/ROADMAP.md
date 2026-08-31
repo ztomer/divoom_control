@@ -453,6 +453,15 @@ precisely the blindness that hid #6. The album-art fixture must be hard-edged
 (a 1px checkerboard), because on a smooth gradient LANCZOS and NEAREST agree and
 the test would pass on a broken build.
 
+**P4.1's reproduction beat its prediction, which is why the step exists.**
+The plan said the spawned process would have its args eaten by
+`parse_known_args()` and then exit on the single-instance guard. With no
+instance already running it does not exit — it launches a whole second GUI
+window, spawns another daemon and another menubar agent, and serves no
+JSON-RPC at all. `mcp_control.is_running()` then reports the MCP server as
+UP, because a process is indeed alive. A fix aimed at the predicted symptom
+("it dies immediately") would have been aimed at the wrong thing.
+
 **P4 — reproduce, then rewrite the test that pinned it.**
 P4.1 drives the installed `.app`, clicks Start MCP Server, and reads
 `~/.config/divoom-control/mcp-server.log`; the predicted failure is read off a
@@ -509,7 +518,7 @@ correct.
 | P3.2 album art | **DONE** | verified live: preview now byte-identical to the device frame, and no longer equal to the old LANCZOS one. The false docstring is true |
 | P3.3 text | **DONE** | one bitmap font in the product, not two. Deferred decision settled on rendered evidence: scaling turned "HELLO WORLD" into two rows of noise, clipping keeps glyphs intact. Text is vertically centred now |
 | P3.4 class-level drift test | **DONE** | kinds read from `render_widget::KINDS`; a new daemon kind was auto-covered by 2 tests with no test edit; a resample turns 7/9 red |
-| P4.1 reproduce in bundle | TODO | the real `.app` + its mcp-server.log, before any fix |
+| P4.1 reproduce in bundle | **DONE** | WORSE than predicted: it does not exit, it launches a SECOND GUI + daemon + menubar and never answers JSON-RPC, so `is_running()` reports success. Also surfaced the every-launch daemon kill (fixed) |
 | P4.2 spawn `divoomd mcp` | TODO | `initialize` + `tools/list` = 13 tools through the controller |
 | P4.3 both shapes tested | TODO | bundle and dev parametrized; missing binary → honest error, not "running" |
 | P4.4 Python MCP → reference | TODO | `test_mcp_control.py:84` rewritten — it pins the defect today |
