@@ -175,10 +175,26 @@ machine-generated:
 Stated so that a clean run is never mistaken for a closed class. These are the
 audit's F5, F6 and F7, and none of them has the shape the census detects:
 
-* **F5 — `control_server.py`.** A reflection-dispatch HTTP server inside the GUI
-  process (`socket` + `socketserver` + `http.server`), exposing every public
-  bridge method alongside the daemon socket and `divoomd mcp`. That is an
-  ownership question about a whole surface, not a call into `divoom_lib`.
+* **F5 — `control_server.py`. RESOLVED (P3.2): a test harness, and it now says
+  so and authenticates.**
+
+  The audit called it "a third control surface". It is not always-on: it starts
+  only when `DIVOOM_CONTROL_SERVER=1` or `DIVOOM_CONTROL_SOCKET` is set, and
+  `gui_main.py:166` already labels it "Optional headless control server surface
+  (E2E testing)". Nothing in production enables it; the only non-test caller is
+  `scripts/validate_devices.py`, which already handles a token. **Verdict: it
+  stays, as declared test tooling.**
+
+  **What was actually wrong was the auth.** `_authorized()` returned True when
+  no token was set, so a tokenless TCP surface reflection-dispatched the whole
+  GUI API — device control, credential reads, file dialogs — to any local
+  process under any user on the machine. Loopback is not an authorisation
+  boundary. `serve()` now REFUSES to start without a token.
+
+  The Unix-socket variant stays tokenless and that exemption is EARNED, not
+  assumed: it chmods the socket to 0600 explicitly rather than relying on the
+  caller's umask. Filesystem permissions are a real boundary where "it is only
+  localhost" is not.
 * **F6 — the notification stack. INVESTIGATED (P2.3); the split is now
   evidence-backed, and the deletion is the remaining work.**
 

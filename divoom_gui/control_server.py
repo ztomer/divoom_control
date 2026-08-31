@@ -190,9 +190,26 @@ def make_handler(api, token: str | None):
 
 
 def serve(api, host: str = "127.0.0.1", port: int = 8787, token: str | None = None):
-    """Start a blocking control server. Returns the server (call in a thread)."""
+    """Start a blocking control server. Returns the server (call in a thread).
+
+    **A TCP surface REQUIRES a token** (R72 P3.2). This endpoint
+    reflection-dispatches every public method of `DivoomGuiAPI` — device
+    control, credential reads, file dialogs — and `_authorized()` returns True
+    when no token is set. Bound to loopback that still means any local process,
+    under any user on the machine, can drive the whole app. "Localhost" is not
+    an authorisation boundary.
+
+    The Unix-socket variant below is exempt and does not need one: filesystem
+    permissions are a real boundary, and it chmods the socket to 0600.
+    """
     if token is None:
         token = os.environ.get("DIVOOM_CONTROL_TOKEN") or None
+    if not token:
+        raise RuntimeError(
+            "the TCP control server needs DIVOOM_CONTROL_TOKEN (or an explicit "
+            "token=): it exposes the entire GUI API, and localhost is not an "
+            "authorisation boundary. Use serve_unix() for a tokenless local "
+            "surface — a 0600 socket is a real one.")
     httpd = ThreadingHTTPServer((host, port), make_handler(api, token))
     logger.info("Divoom control server listening on http://%s:%d", host, port)
     return httpd
@@ -223,6 +240,9 @@ def serve_unix(api, socket_path: str, token: str | None = None):
     if os.path.exists(socket_path):
         os.unlink(socket_path)
     httpd = _UnixHTTPServer(socket_path, make_handler(api, token))
+    # 0600, explicitly rather than by grace of the caller's umask. This is what
+    # makes the tokenless Unix path defensible while the TCP one is not.
+    os.chmod(socket_path, 0o600)
     logger.info("Divoom control server listening on unix:%s", socket_path)
     return httpd
 

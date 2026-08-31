@@ -5,6 +5,7 @@ import os
 import sys
 import time
 import urllib.request
+from pathlib import Path
 import urllib.error
 from pathlib import Path
 
@@ -48,24 +49,38 @@ class FakeApi:
         return "secret"
 
 
+# R72 P3.2: a TCP control server now REQUIRES a token. These tests used to
+# start one without, i.e. they exercised the posture the round closed -- an
+# endpoint that reflection-dispatches the whole GUI API to any local process.
+# The token is threaded through the default fixture so the tests below exercise
+# the path that actually ships.
+_TOK = "test-token"
+
+
+def _auth(req):
+    req.add_header("Authorization", f"Bearer {_TOK}")
+    return req
+
+
 @pytest.fixture
 def server():
     api = FakeApi()
-    httpd, thread = serve_in_background(api, host="127.0.0.1", port=0)
+    httpd, thread = serve_in_background(api, host="127.0.0.1", port=0, token=_TOK)
     port = httpd.server_address[1]
     yield api, f"http://127.0.0.1:{port}"
     httpd.shutdown()
 
 
 def _get(url):
-    with urllib.request.urlopen(url, timeout=5) as r:
+    req = _auth(urllib.request.Request(url))
+    with urllib.request.urlopen(req, timeout=5) as r:
         return r.status, json.loads(r.read())
 
 
 def _post(url, payload):
     data = json.dumps(payload).encode() if payload is not None else b""
-    req = urllib.request.Request(url, data=data, method="POST",
-                                 headers={"Content-Type": "application/json"})
+    req = _auth(urllib.request.Request(url, data=data, method="POST",
+                                       headers={"Content-Type": "application/json"}))
     try:
         with urllib.request.urlopen(req, timeout=5) as r:
             return r.status, json.loads(r.read())
@@ -239,7 +254,8 @@ def test_post_path_not_under_api_404(server):
 def test_post_malformed_json_body_400(server):
     """L115-117: an unparsable JSON body is rejected with 400, not a crash."""
     _, base = server
-    status, body = _post_auth(f"{base}/api/set_vj_effect", b"{not json", raw=True)
+    status, body = _post_auth(f"{base}/api/set_vj_effect", b"{not json",
+                              token=_TOK, raw=True)
     assert status == 400 and not body["ok"] and "bad JSON" in body["error"]
 
 
@@ -247,7 +263,7 @@ def test_post_scalar_json_body_becomes_single_positional_arg(server):
     """L118-123: a bare JSON scalar (not dict/list) is wrapped as one
     positional arg."""
     api, base = server
-    status, body = _post_auth(f"{base}/api/set_vj_effect", b"7", raw=True)
+    status, body = _post_auth(f"{base}/api/set_vj_effect", b"7", token=_TOK, raw=True)
     assert status == 200 and body["ok"] and body["result"] is True
     assert api.last_vj == 7
 
@@ -322,7 +338,7 @@ def test_call_over_tcp_base_url(server):
     """L223-228: the `call()` client helper's TCP branch (base_url, not a
     unix socket)."""
     api, base = server
-    res = cs.call("set_vj_effect", 9, base_url=base)
+    res = cs.call("set_vj_effect", 9, base_url=base, token=_TOK)
     assert res is True and api.last_vj == 9
 
 
@@ -463,3 +479,4 @@ def test_drain_is_bounded_in_both_size_and_time():
     handler = cs.make_handler(FakeApi(), "unix-tok")
     assert handler._MAX_DRAIN <= (4 << 20), "drain ceiling must stay modest"
     assert handler.timeout is not None, "an unauth'd read needs a time bound too"
+
