@@ -33,6 +33,7 @@ DEFAULT_RECONNECT_SCAN_TIMEOUT = 3.0  # short scan used during auto-reconnect
 DEFAULT_CONNECT_TIMEOUT = 30.0       # client read timeout for connect/disconnect (BLE is slow)
 DEFAULT_SYNC_READ_TIMEOUT = 120.0    # client read timeout for sync_artwork (download + BLE stream)
 DEFAULT_HOT_UPDATE_TIMEOUT = 600.0   # client read timeout for hot_update (manifest of ~30 files)
+DEFAULT_CLOUD_TIMEOUT = 40.0         # client read timeout for cloud browse (see the ini comment)
 
 
 @dataclass(frozen=True)
@@ -46,6 +47,7 @@ class DaemonConfig:
     connect_timeout: float = DEFAULT_CONNECT_TIMEOUT
     sync_read_timeout: float = DEFAULT_SYNC_READ_TIMEOUT
     hot_update_timeout: float = DEFAULT_HOT_UPDATE_TIMEOUT
+    cloud_timeout: float = DEFAULT_CLOUD_TIMEOUT
 
     def scan_read_timeout(self, scan_timeout: float) -> float:
         """How long a client should wait for a scan reply: the daemon only
@@ -92,6 +94,14 @@ sync_read_timeout = {sync_read_timeout}
 # Client read timeout for the hot-channel update (downloads + serves the
 # device's file requests for Divoom's full curated set — can take minutes).
 hot_update_timeout = {hot_update_timeout}
+
+# Client read timeout for cloud browse (clock faces, playlists, sleep sounds,
+# photo albums, city search). The daemon's own HTTP timeout is 15s and an
+# expired token makes it re-authenticate and retry the call, so the worst
+# honest case is ~30s. Reading for the 2s client_timeout would abandon a reply
+# that was on its way — reporting "nothing found" for a request that succeeded,
+# which is the exact failure this whole workstream exists to end.
+cloud_timeout = {cloud_timeout}
 """
 
 _cache: DaemonConfig | None = None

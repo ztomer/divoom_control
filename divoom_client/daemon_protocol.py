@@ -23,6 +23,7 @@ import time
 from typing import Any, Callable, Iterable
 
 from .daemon_host_data import HostDataMixin
+from .daemon_cloud import CloudDataMixin, CloudUnavailable  # noqa: F401
 
 DEFAULT_SOCKET_PATH = "/tmp/divoom.sock"
 DEFAULT_TCP_PORT = 9009
@@ -107,7 +108,7 @@ def make_notification_event(app_type: int, title: str, body: str, routed: bool) 
 
 
 # ── client ──────────────────────────────────────────────────────────────
-class DaemonClient(HostDataMixin):
+class DaemonClient(HostDataMixin, CloudDataMixin):
     """Thin Unix-socket client. Used by the menubar + GUI to talk to the daemon.
 
     Never raises on a missing/closed daemon — `send_command` returns an error
