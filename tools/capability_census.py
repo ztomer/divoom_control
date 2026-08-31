@@ -34,8 +34,11 @@ different shapes and a census that only knew one would miss the other:
            builds the payload through `divoom_lib.system.date_time`, and the
            daemon has had `sync_time` all along -- and the Python one was broken.
 
-Exit status is 0 always: this is an inventory, not yet a gate. P5.1 turns it
-into one, once the map it produces has a verdict on every row.
+**This is a GATE as of R72 P5.1.** DIRECT and WRAPPED fail with no allowlist --
+both are zero and any new one is the defect this round removed. REACHES is
+allowlisted per row, each entry carrying the verdict from
+`docs/CAPABILITY_MAP.md`, and the list is a ratchet: a new call fails, and so
+does an entry that no longer matches.
 """
 from __future__ import annotations
 
@@ -67,6 +70,47 @@ OWNED_LIB = (
 )
 
 
+
+# ── the ratchet (R72 P5.1) ───────────────────────────────────────────────────
+#
+# DIRECT and WRAPPED have NO allowlist and never will: a call to a daemon
+# capability through divoom_lib, or a capability reimplemented over it, is the
+# defect this round removed. Both are zero as of R72 and any new one fails.
+#
+# REACHES is allowlisted, because those rows are legitimately per-row decisions
+# (see docs/CAPABILITY_MAP.md) and the reason has to travel with the entry --
+# an unexplained exemption is how a ratchet rots into a rubber stamp. Every
+# entry names its verdict.
+#
+# It is a RATCHET, not an exemption list: an entry that stops matching also
+# FAILS, so a fixed row takes its exemption with it instead of leaving a hole
+# for the next one to slip through. That second property is the easy one to
+# omit and the one that matters.
+REACHES_ALLOWLIST: dict[str, str] = {
+    # client-local: pure preference resolution, env vars and a saved city.
+    "divoom_gui/api/widgets.py::resolve_location":
+        "client-local — pure, no network; the daemon fetches the weather",
+    "divoom_gui/media_sync.py::resolve_location":
+        "client-local — same resolver, same reason",
+    "divoom_gui/weather_city.py::saved_location":
+        "client-local — which city the user picked is the client's own state",
+    # shared-state: one file, two parsers, held in step by
+    # tools/check_hotchannel_parity.py rather than by deleting either reader.
+    "divoom_gui/gallery_hot_api.py::hotchannel_config.get_targets":
+        "shared-state — gated by check_hotchannel_parity.py",
+    "divoom_gui/gallery_sync.py::hotchannel_config.get_targets":
+        "shared-state — gated by check_hotchannel_parity.py",
+    "divoom_gui/gallery_sync.py::hotchannel_config.get_device_classify":
+        "shared-state — gated by check_hotchannel_parity.py",
+    "divoom_gui/gallery_sync.py::hotchannel_config.load_config":
+        "shared-state — gated by check_hotchannel_parity.py",
+    "divoom_gui/gallery_sync.py::hotchannel_config.save_config":
+        "shared-state — gated by check_hotchannel_parity.py",
+    "divoom_gui/gallery_sync.py::hotchannel_config.set_targets":
+        "shared-state — gated by check_hotchannel_parity.py",
+    "divoom_gui/gallery_sync.py::hotchannel_config.set_device_galleries":
+        "shared-state — gated by check_hotchannel_parity.py",
+}
 
 def row(text: str) -> None:
     """One census finding, on STDOUT.
@@ -203,22 +247,52 @@ def main() -> int:
     section("REACHES — a call into an owned module, name not a command")
     if reaches:
         for where, name, lib in sorted(reaches):
-            row(f"{name}()  <- {where}  in {lib}")
+            key = f"{where.split(':')[0]}::{name}"
+            verdict = REACHES_ALLOWLIST.get(key)
+            if verdict:
+                # Decided, not a finding. Marking these ✗ read as ten failures
+                # on a passing run, which is how a report stops being read.
+                info(f"  · {name}()  <- {where}  [{verdict}]")
+            else:
+                row(f"{name}()  <- {where}  in {lib}  UNDECIDED")
     else:
         ok("none")
 
     hr()
-    named = len(direct) + len(wrapped)
-    total = named + len(reaches)
-    (warn if total else ok)(
-        f"{total} site(s): {len(direct)} DIRECT, {len(wrapped)} WRAPPED, "
-        f"{len(reaches)} REACHES")
-    info(f"{named} match a daemon command by NAME and are the confident set;")
-    info("REACHES is read-and-decide — a call into an owned module might be a")
-    info("pure helper, or might be the whole point (weather resolution and the")
-    info("hotchannel config both turned up there, and both are real).")
-    info("Inventory only — P5.1 turns this into a gate once every row has a")
-    info("verdict in docs/CAPABILITY_MAP.md.")
+    failed = False
+
+    if direct or wrapped:
+        err(f"[capability] {len(direct) + len(wrapped)} site(s) do a job the "
+            f"daemon owns")
+        info("These have no allowlist by design. Route them through the daemon.")
+        failed = True
+
+    seen = {f"{w.split(':')[0]}::{n}" for w, n, _lib in reaches}
+    unlisted = sorted(seen - set(REACHES_ALLOWLIST))
+    stale = sorted(set(REACHES_ALLOWLIST) - seen)
+
+    if unlisted:
+        err(f"[capability] {len(unlisted)} new call(s) into an owned module")
+        for k in unlisted:
+            info(f"  {k}")
+        info("Decide it in docs/CAPABILITY_MAP.md, then add it here WITH the")
+        info("verdict — an unexplained entry is how a ratchet becomes a rubber")
+        info("stamp.")
+        failed = True
+
+    if stale:
+        err(f"[capability] {len(stale)} stale allowlist entr(ies)")
+        for k in stale:
+            info(f"  {k} no longer matches — delete it")
+        info("A fixed row must take its exemption with it, or it leaves a hole")
+        info("for the next one.")
+        failed = True
+
+    if failed:
+        return 1
+
+    ok(f"[capability] OK — 0 DIRECT, 0 WRAPPED, "
+       f"{len(seen)} allowlisted REACHES")
     return 0
 
 
