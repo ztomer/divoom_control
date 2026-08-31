@@ -501,7 +501,7 @@ correct.
 | P1.3 `_widget_frame` funnel | **DONE** | `widget_frames.py`; sysmon migrated first; 11 tests. Pixel test verified against a REAL pixel change — a 16→16 resize is a no-op and would have looked green |
 | P1.4 parity fixtures | **DONE** | album art: GUI LANCZOS vs device NEAREST differ on **100% of pixels**; daemon proven byte-identical to PIL NEAREST. Flipping the Rust filter turns both tests red |
 | P2.1 five panels | **DONE** | `cloud_panels.py` funnel; 17 tests incl. a no-HTTP guard; half-migrated panel → red. Allowlist 26 → 21 |
-| P2.2 gallery fetch+assets | TODO | same, plus `gallery_download.py` gone |
+| P2.2 gallery fetch+assets | **DONE** | `gallery_download.py` deleted; daemon decodes magic 9/18/26/0xAA the GUI could NOT — blank tiles fixed, not just relocated. Allowlist 21 → 17 |
 | P2.3 hot manifest | TODO | same |
 | P2.4 failures say why | **DONE** (with P2.1) | three causes → three texts, pinned; e2e asserts the reason reaches the SCREEN. Closes the Deferred item |
 | P2.5 live round-trip + RC=3 | TODO | real backend, CONFIGURED account (not a throwaway HOME) |
