@@ -105,3 +105,67 @@ def test_check_can_be_disabled(monkeypatch):
                         lambda *a, **k: calls.__setitem__("checked", 1) or "old")
     dc.ensure_daemon("/tmp/x.sock", check_version=False)
     assert calls["checked"] == 0
+
+
+# ── R70 P4.1: the same trap, in the BUNDLE, where it actually shipped ────────
+
+def test_a_frozen_bundle_reads_its_version_stamp(monkeypatch, tmp_path):
+    """The shipped app must know its own version without pyproject.
+
+    v0.28.3 did not. With no pyproject inside the bundle, `expected_daemon_version`
+    fell through to `importlib.metadata`, which read the `divoom_control.egg-info`
+    PyInstaller collects from the source tree — stale at 0.22.21. The installed
+    app logged "daemon reports version 0.28.3 but 0.22.21 is expected —
+    restarting it" and killed a healthy daemon on EVERY launch, dropping its BLE
+    connection with it.
+    """
+    from divoom_client import daemon_version as dv
+
+    (tmp_path / "BUNDLE_VERSION").write_text("9.9.9\n", encoding="utf-8")
+    monkeypatch.setattr(dv.Path, "is_file", lambda self: "BUNDLE_VERSION" in str(self))
+    monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path), raising=False)
+    # Force the pyproject branch to miss, as it does inside a real bundle.
+    monkeypatch.setattr(dv, "__file__", str(tmp_path / "divoom_client" / "daemon_version.py"))
+
+    assert dv.expected_daemon_version() == "9.9.9"
+
+
+def test_a_bundle_without_a_stamp_refuses_to_guess(monkeypatch, tmp_path):
+    """No stamp means NO expectation — never a stale one.
+
+    The `importlib.metadata` fallback is gone on purpose. It produced exactly
+    one answer in the wild and that answer was wrong; an unknown expectation
+    must never justify killing something that might be fine, so returning None
+    (no check) beats a check that is confidently stale.
+    """
+    from divoom_client import daemon_version as dv
+
+    monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path), raising=False)
+    monkeypatch.setattr(dv, "__file__", str(tmp_path / "divoom_client" / "daemon_version.py"))
+    assert dv.expected_daemon_version() is None
+
+
+def test_the_metadata_fallback_is_gone():
+    """Structural: the branch that shipped the bug must not come back.
+
+    Nothing else in this module may consult installed package metadata — that
+    is the source that read 0.22.21 out of a stale egg-info.
+    """
+    import re
+
+    src = (Path(__file__).resolve().parent.parent
+           / "divoom_client" / "daemon_version.py").read_text()
+    code = re.sub(r'"""(?:.|\n)*?"""', "", src)   # docstrings may NAME it
+    code = re.sub(r"#.*", "", code)                # so may comments
+    assert "importlib.metadata" not in code, (
+        "the stale-metadata fallback is back in daemon_version.py")
+
+
+def test_the_spec_stamps_the_version_it_puts_in_the_plist():
+    """One version, two consumers. If the stamp and CFBundleShortVersionString
+    could disagree, the app would be checked against a version it does not
+    claim to be."""
+    spec = (Path(__file__).resolve().parent.parent / "divoom.spec").read_text()
+    assert "BUNDLE_VERSION" in spec, "divoom.spec no longer writes the stamp"
+    assert "_f.write(VERSION" in spec, "the stamp must be written from VERSION"
+    assert '"CFBundleShortVersionString": VERSION' in spec

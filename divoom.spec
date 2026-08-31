@@ -32,7 +32,22 @@ BT_DESC = "Divoom Control uses Bluetooth to discover and control your Divoom pix
 AE_DESC = "Divoom Control reads the now-playing track from Music and Spotify to show album art."
 
 # --- data files -------------------------------------------------------------
-datas = []
+# The product version, as a file the RUNTIME can read.
+#
+# R70 P4.1 found the app killing a healthy daemon on every launch. Inside the
+# bundle there is no pyproject.toml, so `expected_daemon_version()` fell through
+# to `importlib.metadata`, which read the `divoom_control.egg-info` PyInstaller
+# collects from the source tree — stale at 0.22.21 from some old editable
+# install. The installed v0.28.3 app therefore expected 0.22.21, declared the
+# correct 0.28.3 daemon stale, and restarted it (dropping its BLE connection)
+# every single time it started. VERSION is already computed correctly above for
+# CFBundleShortVersionString; it just was not reachable at runtime.
+_VERSION_STAMP = _ex("build/BUNDLE_VERSION")
+os.makedirs(os.path.dirname(_VERSION_STAMP), exist_ok=True)
+with open(_VERSION_STAMP, "w", encoding="utf-8") as _f:
+    _f.write(VERSION + "\n")
+
+datas = [(_VERSION_STAMP, ".")]
 datas += collect_data_files("divoom_gui")          # web_ui/** (frontend)
 datas += collect_data_files("divoom_lib")          # fonts/*.bin + the native dylib
 datas += collect_data_files("divoom_client")       # any packaged data

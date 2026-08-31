@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import time
+import sys
 from pathlib import Path
 
 from divoom_client.daemon_protocol import DEFAULT_SOCKET_PATH, DaemonClient
@@ -44,6 +45,20 @@ def expected_daemon_version() -> str | None:
     kill it on every single startup. A version check that restarts a current
     daemon is worse than no version check at all.
 
+    **That guard covered the checkout and not the bundle, and the bundle is
+    where it happened.** R70 P4.1 caught the shipped v0.28.3 app logging
+    "daemon on /tmp/divoom.sock reports version 0.28.3 but 0.22.21 is expected —
+    restarting it" on startup: no pyproject inside the app, so it fell to
+    `importlib.metadata`, which read the very same stale `divoom_control.egg-info`
+    PyInstaller had collected from the source tree. Every launch killed a healthy
+    daemon and dropped its BLE connection.
+
+    So a bundle now carries a `BUNDLE_VERSION` stamp written by `divoom.spec`
+    from the same value it puts in `CFBundleShortVersionString`, and the
+    installed-metadata branch is GONE. It produced exactly one answer in the
+    wild and that answer was wrong; None — no check at all — is strictly better
+    than a check that is confidently stale, for the reason below.
+
     Returning None (rather than guessing) matters for the same reason: an
     unknown expectation must never justify killing something that might be fine.
     """
@@ -59,15 +74,20 @@ def expected_daemon_version() -> str | None:
                 return v
     except Exception:
         pass
-    # Shipped bundle: no pyproject, so the packaged metadata is what there is.
+    # Shipped bundle: the stamp `divoom.spec` writes next to the collected data.
     try:
-        from importlib.metadata import PackageNotFoundError, version
-        try:
-            return version("divoom-control")
-        except PackageNotFoundError:
-            return None
+        mei = getattr(sys, "_MEIPASS", None)
+        if mei:
+            stamp = Path(mei) / "BUNDLE_VERSION"
+            if stamp.is_file():
+                v = stamp.read_text(encoding="utf-8").strip()
+                if v:
+                    return v
     except Exception:
-        return None
+        pass
+    # Deliberately nothing else. The installed-metadata fallback used to live
+    # here and is what shipped the bug described above.
+    return None
 
 
 def running_daemon_version(socket_path: str = DEFAULT_SOCKET_PATH,
