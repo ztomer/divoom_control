@@ -131,6 +131,253 @@ source. Detail in the v0.27.0 CHANGELOG stanza.
 
 **Open: nothing in this workstream.** Both items closed in R68.
 
+### R71 plan — close every open item, six phases
+
+**What this round is for.** After v0.29.0 nothing is half-built, but eight
+things are half-*decided*: 20 API methods nobody has ruled on, four hardware
+checks nobody has watched, a LAN cluster with no device, a cloud endpoint with
+no semantics, and a coverage floor whose only enforcement is somebody
+remembering to type a command. This round converts every one of them into
+shipped, gated-with-a-named-blocker, or closed-with-a-reason. **No item is
+allowed to survive the round in the state "unreviewed" or "unwatched".**
+
+**Completion criterion, mechanical again (the R70 discipline).** Two ratchets,
+both machine-checked, not judged:
+
+1. `check_gui_api_reachable.py`'s allowlist reaches **EMPTY**, and the reason
+   string `unreviewed` becomes ILLEGAL — the gate fails on it. Today's honest
+   placeholder must not survive as tomorrow's rubber stamp.
+2. Every entry under "Deferred" and "Open workstreams" in this file is either
+   deleted (done) or rewritten to name its BLOCKER and the capability gate that
+   makes it honest to the user. An item with no blocker and no owner is not
+   deferred, it is forgotten.
+
+**Order is forced, and P0 is not negotiable.** The keystone finding of this
+plan was found while writing it: **`tools/gate.sh --full` runs four structural
+checks — emoji, conflict markers, file length, disk hygiene — and nothing
+else.** The rust and python layers are commented out, so `pre-push` runs no
+clippy, no tests, neither coverage floor, and none of the nine
+`tools/check_*.py` gates. The 17-step list in `.gatesrc` and both coverage
+floors execute ONLY when a human types `./scripts/ci_local.sh`. That is house
+rule #3 violated at the top of the stack, and R70's own process failure is the
+receipt: *"CI was red from P3.3 to P6.3 and I did not look — I ran the gates I
+remembered instead of `scripts/ci_local.sh`."* The gate did not fail him; it was
+never wired to run. Every later phase in this plan reports "done" through those
+gates, so fixing them first is the difference between a round that is verified
+and a round that merely feels verified.
+
+**P0 — the local gate becomes a gate.**
+
+The decision "local CI is the way to go" is adopted, and adopting it means
+making it structural. A local gate that is stricter than CI is the safe
+direction; a local gate nobody runs is not a direction at all.
+
+- **P0.1** `tools/repo_gates.sh` → `./scripts/ci_local.sh`, and uncomment
+  layer 3 in `tools/gate.sh --full`. `pre-push` then runs the real list.
+- **P0.2** Prove it bites, once per CLASS of gate, each seen RED (rule #2): a
+  clippy error, a failing Rust test, a failing Python test, a coverage floor
+  breach, and one of the nine `check_*.py`. Five sabotages, five reds, then a
+  clean tree pushes. A gate suite proven only in the green direction is
+  `calibrate-the-instrument`'s exact failure.
+- **P0.3** Measure the wall-clock and **state it out loud**. If a full run is
+  too slow to sit in front of every push, the escape hatch is an explicit
+  env var that PRINTS what it skipped and why. Never a silent fast path —
+  that is how the current hole was dug.
+- **P0.4** Settle the CI-coverage question in the chosen direction: **no GitHub
+  macOS coverage job.** Rewrite `.gatesrc`'s comment from "adding the CI job is
+  an open question" to the decision and its reason (`nowplaying` is macOS-only,
+  so a Linux job would measure a different denominator and enforce a floor that
+  does not match). Delete the item from "Open threads". A decision recorded as
+  a decision stops being re-litigated every round.
+- **P0.5** Reap stray test daemons. A `target/debug/divoomd --socket
+  /tmp/divoom_r70_text.sock` spawned by R70 is **still running days later** —
+  the harness leaks the processes it starts. Teardown kills what it spawned,
+  and a check asserts no `divoomd` on a `/tmp/divoom_*` test socket outlives
+  the suite. Left alone this quietly answers future socket probes from a
+  build nobody is testing.
+
+**P1 — the 20 unreviewed methods, to an EMPTY allowlist.**
+
+- **P1.0 (harness before the bug).** The gate asks "does JS call this", which
+  cannot distinguish *reachable from nowhere* from *reachable only from
+  Python* — and those need opposite fixes. Teach it three buckets:
+  JS-reachable, Python-only, unreachable. **Careful: Python-only is not an
+  exemption.** `DivoomGuiAPI` is the pywebview bridge surface; a method only
+  Python calls does not belong on it and should move to a plain module. The
+  Python bucket is a work marker, not a pass. Prove-red in both directions.
+- **P1.1 Symmetric pairs** — `save_preset_file`/`load_preset_file`,
+  `export_settings_to_path`/`import_settings_from_path`. Two matched pairs with
+  no JS caller read like a file-dialog surface that was never wired. **Check
+  git history for a caller that once existed before deciding** (`port-parity`:
+  the removed code is part of the spec). Wire or delete, no third option.
+- **P1.2 Superseded status-getters** — `hot_update_status` vs
+  `hot_update_progress`, `is_mcp_server_running`, `is_notification_listener_running`.
+  Prove the surviving sibling actually covers the caller before deleting; the
+  trap is deleting the one the UI polls and keeping the one it does not.
+- **P1.3 Device commands** — `set_clock_rich`, `set_temperature_channel`,
+  `set_timeplan`, `display_custom_art`, `custom_art_query_page`,
+  `apply_system_stats`. These are FEATURES, not plumbing, and the wire-or-delete
+  call cannot be made from source: it needs the device. Feeds P2.5, and is the
+  one cluster in P1 that blocks on the hardware packet.
+- **P1.4 LAN pair** — `probe_lan`, `save_lan_config`. Resolved by P3, not here.
+- **P1.5 Remainder** — `get_scoreboard_state`, `get_transport_status`,
+  `live_job_stop`, `batch_sync_artwork`, `load_cached_gallery`.
+- **P1.6 Delete the tests pinning whatever dies.** Every one of the 20 has
+  tests — `probe_lan` has 20, `set_clock_rich` 19, `load_preset_file` 14. That
+  is not coverage, it is Hole D: the tests are WHY these survived unnoticed.
+  A test pinning a dead method is part of the defect (rule #8). Re-baseline the
+  floor and **state the number**.
+- **P1.7 Allowlist EMPTY**, and `unreviewed` added to a forbidden-reasons list
+  the gate rejects. Enforced, not asserted.
+
+**P2 — the hardware packet: built here, run by the user, non-blocking.**
+
+Hardware is available (Ditoo, Tivoo-Max, Timoo, Pixoo-1 — all BLE). The user
+runs the packet when they want and reports; nothing in this plan waits on it
+except P1.3 and P2.5.
+
+- **P2.0** `scripts/hw_verify.py` — drives each check against a **user-started**
+  daemon over the socket, prompts for a LOOK at the device, records verdict and
+  notes to a report file. It must **refuse to spawn its own daemon**: a
+  shell-launched daemon has no Bluetooth TCC grant and dies on the first scan
+  with SIGABRT and an empty stderr, which reads as a product crash and is not
+  one. Assert a daemon is already reachable, or stop with that explanation.
+- **P2.1** Prove the packet can report FAILURE before trusting a pass
+  (`calibrate-the-instrument`): point a check at a disconnected device and
+  require ✗. A checklist that cannot fail is a form, not an instrument.
+- **P2.2** sysmon gauges on a matrix — the RPC and the frame are verified over
+  the socket; nobody has watched the gauges.
+- **P2.3** R12 visual pass: album cover, custom art, weather on a real device.
+  Light and dark surroundings, real scale (rule #4).
+- **P2.4** `pic_scan_ctrl` 0x35. The BLE stack accepts it and no one has seen it
+  do anything. **If the packet shows no observable effect, that is the finding**
+  — an unobservable command gets marked unsupported rather than shipped as
+  though it works (rule #9). Not another round of "accepted without error".
+- **P2.5** The P1.3 device-command decisions, answered by looking at the device.
+- **P2.6** `search_weather_city` on the **configured** account — the one check
+  in the packet that is cloud, not BLE. The pre-release check ran under a
+  throwaway HOME and proved only the `UserNewGuest RC=10` error path. Live
+  Widgets → Weather → click the location line → search a city.
+
+**P3 — LAN: an honest capability gate, not a standing open workstream.**
+
+There is no WiFi-capable device and none is expected this round, so the LAN
+HTTP cluster cannot be verified. The fix is not to keep listing it as pending
+hardware — it is to make the product honest about it (rule #9).
+
+- **P3.1** A capability probe: every LAN-requiring surface asks the device and
+  says **"needs a WiFi-capable device"** — a state distinguishable from
+  "failed" and from silence. Same shared shape as R70's `_cloud_list`; fix the
+  CLASS, not one panel.
+- **P3.2** `probe_lan` / `save_lan_config` take their verdict from this. Either
+  they are the configuration path for that capability and get wired into it, or
+  they are leftovers and go. This closes P1.4.
+- **P3.3** 5-LCD (`Set5LcdChannelType`, `Set5LcdWholeClockId`) and
+  `Voice/SendText` stop being "backend-only, needs hardware" open items and
+  become documented gated capabilities naming their blocker: a Times Gate and a
+  WiFi Pixoo respectively.
+- **P3.4** Danmaku is already GUI-wired — confirm it sits behind the SAME gate
+  rather than a private one. A second capability check is the class re-opening.
+
+**P4 — `Cloud/ToDevice`: decide, stop carrying.**
+
+- **P4.1** `probe-first`: one recorded live call on the configured account. The
+  endpoint has been "unconfirmed semantics" for many rounds while the cost of
+  finding out is a single request.
+- **P4.2** Decide on that evidence — implement it, or close it WONTFIX with the
+  reason written down. Either outcome removes it from this file.
+
+**P5 — close the round.**
+
+- **P5.1** Both ratchets checked: allowlist empty with `unreviewed` illegal, and
+  no "Deferred"/"Open" entry left without a blocker or a closure reason.
+- **P5.2** `scripts/gui_pov.py` plus a real-app pass over every touched panel.
+  Green tests are not a shipped feature and this project has its own v0.28.1
+  proof.
+- **P5.3** CHANGELOG stanza, version bump, release, verified INSIDE the DMG.
+
+**Traps, named up front.**
+
+- **Commit before you sabotage.** A `git checkout` after a prove-red wiped an
+  uncommitted fix twice in R70, once leaving a BLIND parity test in the tree for
+  four phases. The project's own note warns about this and it still happened.
+- **Run the whole list, not the gates you remember.** P0 exists to make this
+  structural; until P0.1 lands, it is still discipline, which is to say it is
+  still going to fail.
+- **BLE and TCC.** The user starts the daemon; a shell-launched one dies on its
+  first scan with an empty stderr. And `cargo test` rebuilds
+  `target/debug/divoomd` WITH default features, so a `--no-default-features`
+  build does not stay BLE-free across a test run.
+- **An unwired command is often a DECISION** (R69/P2.1), and the reasons sit in
+  the handler comments. Read them before undoing anything. This presumption is
+  what makes P1's per-cluster investigation necessary rather than a bulk delete.
+- **Deleting code moves coverage.** Say the number out loud. A floor lowered
+  quietly is a floor that stops meaning anything.
+- **"Accepted without error" is not verification.** It is what `pic_scan_ctrl`
+  has had since 2026-07-13.
+
+### R71 test plan — the holes, and which phase closes each
+
+R70 closed four holes (A-D). This round's items survived those, so naming the
+NEW hole each phase closes is the only way to avoid adding tests of a shape
+that has already been proven blind.
+
+- **Hole E — the gate suite is not run by the hook that claims to gate.**
+  `pre-push` → `tools/gate.sh --full` → four structural checks. Everything this
+  repo thinks of as "the gates" is opt-in. Closed by **P0.1**, and P0.2 proves
+  it by pushing five separately-sabotaged trees and watching each be refused.
+- **Hole F — no instrument reports what the DEVICE shows.** Every test here
+  stops at the socket: the daemon's reply is checked, the pixels are not. That
+  is why sysmon, album cover and `pic_scan_ctrl` have all been "verified" and
+  simultaneously unwatched. Closed by **P2**, whose output is a report from a
+  human looking at hardware — and P2.1 makes it an instrument rather than a
+  form by proving it can say ✗.
+- **Hole G — "unavailable" and "broken" are indistinguishable.** A user with a
+  BLE-only device who opens a LAN surface gets silence, exactly the shape R70
+  fixed for cloud browse and did not generalize to LAN. Closed by **P3.1**,
+  pinned by a test per cause and an e2e that the text reaches the screen.
+- **Hole D, still open in a second population.** R70 found tests pinning dead
+  code and fixed the four it had confirmed. The other 20 came with 156 tests
+  between them and no caller. **P1.6** treats deleting those tests as part of
+  the fix; **P1.0** makes the "Python-only" bucket visible so the next
+  population is smaller.
+
+**Step ledger** — each step updates its own row in the commit that does the
+work, so the table and git history cannot disagree. A row goes DONE only once
+its proof has been SEEN, and for anything testable that means seen RED first.
+
+| Step | State | Proof required |
+|------|-------|----------------|
+| P0.1 pre-push runs local CI | TODO | `tools/repo_gates.sh` wired; a push executes the 17 steps + py_ci |
+| P0.2 prove it bites | TODO | 5 sabotage classes, 5 refused pushes, then a clean push |
+| P0.3 wall-clock stated | TODO | measured number in the CHANGELOG; any skip prints what it skipped |
+| P0.4 CI-coverage decided | TODO | `.gatesrc` comment states the decision; item deleted from Open threads |
+| P0.5 stray daemons reaped | TODO | suite leaves no `divoomd` on a `/tmp/divoom_*` test socket |
+| P1.0 gate sees 3 buckets | TODO | JS / Python-only / unreachable; prove-red both ways |
+| P1.1 preset + settings pairs | TODO | git history checked for a lost caller; wired or deleted |
+| P1.2 status-getters | TODO | surviving sibling proven to cover the caller |
+| P1.3 device commands | TODO | decided on device evidence from P2.5 |
+| P1.4 LAN pair | TODO | closed by P3.2 |
+| P1.5 remainder | TODO | each named, decided, no `unreviewed` left |
+| P1.6 tests + floor rebaseline | TODO | dead tests deleted; before/after counts and coverage delta stated |
+| P1.7 allowlist EMPTY | TODO | 20 → 0; `unreviewed` rejected as a reason string |
+| P2.0 hardware packet built | TODO | `scripts/hw_verify.py`; refuses to spawn its own daemon |
+| P2.1 packet can fail | TODO | disconnected device → ✗, not a silent pass |
+| P2.2 sysmon on a matrix | TODO | user report + capture |
+| P2.3 R12 visual pass | TODO | album cover, custom art, weather; real scale, both surrounds |
+| P2.4 `pic_scan_ctrl` 0x35 | TODO | observable effect, or marked unsupported |
+| P2.5 device-command verdicts | TODO | feeds P1.3 |
+| P2.6 `search_weather_city` live | TODO | success path on the configured account |
+| P3.1 LAN capability gate | TODO | "needs a WiFi-capable device", distinct from failed and from silence; one shared shape |
+| P3.2 `probe_lan`/`save_lan_config` | TODO | wired into the gate or deleted |
+| P3.3 5-LCD + Voice/SendText | TODO | gated capabilities naming their blocker |
+| P3.4 danmaku same gate | TODO | one capability check, not two |
+| P4.1 `Cloud/ToDevice` probed | TODO | recorded live response |
+| P4.2 decided | TODO | implemented or WONTFIX with the reason |
+| P5.1 both ratchets | TODO | allowlist empty; no blocker-less open item |
+| P5.2 user-POV pass | TODO | `gui_pov.py` + real app over touched panels |
+| P5.3 release | TODO | CHANGELOG, tag, DMG verified from INSIDE the DMG |
+
 ### Earlier shipped workstreams — pruned to git history
 
 The camoufox pin raised to latest (R68), the GUI e2e migration off Playwright

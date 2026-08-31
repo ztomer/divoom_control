@@ -21,6 +21,46 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-08-31 — R71 PLANNED, nothing implemented. The plan is in
+  `docs/ROADMAP.md` under "R71 plan"; all 29 steps are TODO. Start at P0.1.**
+
+  The round exists because after v0.29.0 nothing is half-built but eight things
+  are half-DECIDED: 20 API methods nobody has ruled on, four hardware checks
+  nobody has watched, a LAN cluster with no device, a cloud endpoint with no
+  semantics. R71 converts each into shipped, gated-with-a-named-blocker, or
+  closed-with-a-reason.
+
+  **The keystone was found while writing the plan, and it outranks everything
+  else in it: `tools/gate.sh --full` runs FOUR structural checks — emoji,
+  conflict markers, file length, disk hygiene — and nothing else.** The rust and
+  python layers are commented out, so `pre-push` runs no clippy, no tests,
+  neither coverage floor, and none of the nine `tools/check_*.py` gates. The
+  17-step list in `.gatesrc` and both coverage floors execute ONLY when a human
+  types `./scripts/ci_local.sh`. That is house rule #3 violated at the top of
+  the stack, and R70's own "CI was red from P3.3 to P6.3 and I did not look" is
+  the receipt — the gate did not fail anyone, it was never wired to run.
+  **P0 fixes that before any other phase claims a result through it.**
+
+  **Direction set by the user (2026-08-31): local CI is the enforcement layer.**
+  No GitHub macOS coverage job; P0.4 records that as a decision rather than
+  leaving it as the open question it has been for two rounds.
+
+  **Hardware for R71 is the four BLE devices** (Ditoo, Tivoo-Max, Timoo,
+  Pixoo-1) — confirmed with the user. No WiFi Pixoo and no Times Gate, so the
+  LAN HTTP cluster is UNVERIFIABLE this round and P3 makes the product honest
+  about it (a capability gate saying "needs a WiFi-capable device") instead of
+  carrying it as pending-hardware forever. The user runs the P2 hardware packet
+  when they want and reports; only P1.3 and P2.5 wait on it.
+
+  **Two live findings recorded while planning, both real, neither fixed:**
+
+  * A `target/debug/divoomd --socket /tmp/divoom_r70_text.sock` spawned by R70
+    is STILL running days later — the test harness leaks the daemons it starts.
+    P0.5.
+  * `~/.config/divoom-control/config.ini` stores the Divoom account password in
+    **plaintext** under `[divoom]`. Out of R71's scope as asked, not in the
+    ledger, and flagged here so it is not lost.
+
 - **2026-08-30 (v0.29.0) — R70 SHIPPED.** Tag `c3d09dd` on a green CI, GitHub
   release + `Divoom-v0.29.0.dmg` (sha256 `7550f1d3...`), cask bumped. Verified
   INSIDE the DMG, not the source tree: both binaries report 0.29.0, the new
@@ -184,6 +224,12 @@ shared memory. Read this on entry and **update it at the end of every round**
   blind to Linux-only CI failures.
 
 ## Open threads / next up
+
+**Everything below is now PLANNED work.** `docs/ROADMAP.md` → "R71 plan" has
+the six phases, the two mechanical ratchets, the named traps and a 29-row step
+ledger. Read the plan before acting on any individual item here — several of
+them are deliberately resolved as a CLASS (the LAN cluster, the cloud-browse
+shape) rather than one at a time.
 
 - **R70 GUI/daemon boundary audit (2026-08-30) — 12 findings, ALL OPEN. Full
   table in `docs/ROADMAP.md` under "R70".**
