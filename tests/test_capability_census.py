@@ -65,18 +65,59 @@ def test_multi_line_match_arms_are_all_captured(tmp_path, monkeypatch):
 
 # ── calibration: the two findings that predate the instrument ────────────────
 
-def test_the_census_rediscovers_F1_the_auth_bypass():
-    direct, _wrapped, _reaches = census.scan_python(census.daemon_capabilities())
-    hits = [(w, n) for w, n, _lib in direct if n.endswith("credentials")]
-    assert hits, "F1 not rediscovered — the census cannot see the auth bypass"
-    assert any("gui_api.py" in w for w, _ in hits), hits
+# **Calibrated against SYNTHETIC reproductions, not the live tree.**
+#
+# The first version of these asserted that F1 and F2 were still present in
+# `gui_api.py` and `api/tools.py`. That is a self-destroying calibration: it
+# passed only while the round had not yet succeeded, and the moment P1.1 routed
+# the auth sites to the daemon, the test that proved the census WORKS went red
+# because the census's job was done.
+#
+# The durable property is "this instrument can detect F1's shape", not "F1 is
+# still here". So each shape is reproduced in a fixture. These keep biting
+# forever, including for the fifth defect of the same shape that nobody has
+# written yet.
+
+def test_the_census_detects_F1s_shape_the_auth_bypass(tmp_path, monkeypatch):
+    """`mod.capability(...)` through a divoom_lib module."""
+    direct, _w, _r = _scan_one(
+        tmp_path, monkeypatch,
+        "from divoom_lib import divoom_auth\n"
+        "class Api:\n"
+        "    def __init__(self):\n"
+        "        self.cached = divoom_auth.get_cached_credentials()\n",
+        {"get_cached_credentials"})
+    assert [n for _w2, n, _l in direct] == ["get_cached_credentials"], direct
 
 
-def test_the_census_rediscovers_F2_the_sync_time_duplicate():
-    _direct, wrapped, _reaches = census.scan_python(census.daemon_capabilities())
-    hits = [(w, n) for w, n, _libs in wrapped if n == "sync_time"]
-    assert hits, "F2 not rediscovered — the census cannot see a reimplementation"
-    assert any("tools.py" in w for w, _ in hits), hits
+def test_the_census_detects_F2s_shape_a_reimplementation(tmp_path, monkeypatch):
+    """A function whose OWN name is a capability, reaching into divoom_lib.
+
+    Name-matching alone would miss this: the daemon calls it `sync_time` and the
+    Python spelling is `DateTimeCommand.update_date_time`.
+    """
+    _d, wrapped, _r = _scan_one(
+        tmp_path, monkeypatch,
+        "class Api:\n"
+        "    def sync_time(self):\n"
+        "        from divoom_lib.system.date_time import DateTimeCommand\n"
+        "        return DateTimeCommand(self.dev).update_date_time()\n",
+        {"sync_time"})
+    assert [n for _w2, n, _l in wrapped] == ["sync_time"], wrapped
+
+
+def test_the_live_tree_no_longer_has_F1(tmp_path, monkeypatch):
+    """The other half: P1.1 actually removed it, not just moved the test.
+
+    Separate from the calibration on purpose. If this ever goes red, the
+    duplicate came back; if the calibration above goes red, the instrument
+    broke. Collapsing them into one test is what made the first version
+    ambiguous.
+    """
+    direct, _w, _r = census.scan_python(census.daemon_capabilities())
+    gui_auth = [w for w, n, lib in direct
+                if "divoom_auth" in lib and w.startswith("divoom_gui/")]
+    assert gui_auth == [], f"the auth bypass is back in the GUI: {gui_auth}"
 
 
 def test_the_census_finds_more_than_its_seed():

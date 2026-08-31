@@ -5,7 +5,6 @@ import sys
 import webview
 from pathlib import Path
 
-from divoom_lib import divoom_auth
 
 from divoom_gui.presets_manager import PresetsManagerMixin
 from divoom_gui.media_sync import MediaSyncMixin
@@ -53,12 +52,20 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
 
         self._daemon_client = None
 
-        # Cache-only at startup: never block (or network-fail) GUI launch on a
-        # Divoom cloud login. Real auth happens lazily when a cloud op needs it.
-        try:
-            self.cached_creds = divoom_auth.get_cached_credentials()
-        except Exception as e:
-            logger.warning(f"Failed to load cached credentials on startup: {e}")
+        # R72 P1.1: no credential read at startup AT ALL, and that is stricter
+        # than the rule it replaces rather than a regression.
+        #
+        # The old line was cache-only so GUI launch never blocked on a cloud
+        # login -- but it read the cache through `divoom_lib.divoom_auth`, a
+        # second implementation of a store the daemon owns. Routing it to the
+        # daemon is not a one-line swap either: `self._client()` calls
+        # `ensure_daemon()`, which SPAWNS the daemon, and nothing spawns it
+        # during construction today. That would put a daemon spawn inside GUI
+        # startup, which is the path that produced v0.28.1's crash.
+        #
+        # So the read moves to where it is used. `cached_creds` stays None until
+        # `load_config()` asks the daemon for it -- a user-initiated settings
+        # load, not a launch step.
 
         device_cache_path = Path.home() / ".config" / "divoom-control" / "virtual_device.json"
         if not device_cache_path.exists():

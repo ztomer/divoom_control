@@ -40,9 +40,9 @@ what that phase removed.
 
 | Capability | Site | Verdict | Closed by |
 |---|---|---|---|
-| `get_cached_credentials` | `divoom_gui/gui_api.py:59` | `duplicate` | P1.1 |
-| `get_credentials` | `divoom_gui/presets_manager.py:59` | `duplicate` | P1.1 |
-| `get_credentials` | `divoom_gui/presets_manager.py:61` | `duplicate` | P1.1 |
+| ~~`get_cached_credentials`~~ | `divoom_gui/gui_api.py:59` | **CLOSED** — read moved to `load_config`, via the daemon | P1.1 |
+| ~~`get_credentials`~~ | `presets_manager.py:59` | **CLOSED** — absorbed into the daemon's `save_credentials` | P1.1 |
+| ~~`get_credentials`~~ | `presets_manager.py:61` | **CLOSED** — same | P1.1 |
 | `get_credentials` | `scripts/verify_gallery_render.py:39` | `stale-instrument` | P3.1 |
 
 **F1 in full.** The daemon has complete auth in `cloud.rs` — `login_email`,
@@ -75,7 +75,7 @@ by deleting the dead `get_transport_status`.)
 | `sync_time` | `divoom_gui/api/tools.py:156` | `duplicate` | P1.2 |
 | `set_auto_power_off` | `divoom_gui/api/tools.py:174` | `duplicate` | P1.3 |
 | `set_low_power` | `divoom_gui/api/tools.py:178` | `duplicate` | P1.3 |
-| `save_credentials` | `divoom_gui/presets_manager.py:28` | `duplicate` | P1.1 |
+| ~~`save_credentials`~~ | `presets_manager.py:28` | **CLOSED** — one call to the daemon; both hard-won rules moved into `cloud_store::save_config` | P1.1 |
 
 **F2 is a duplicate that is also a defect.** `divoom_lib/system/date_time.py:36`
 records it in its own comment: the Python path raised `AttributeError`,

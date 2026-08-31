@@ -26,40 +26,32 @@ class PresetsManagerMixin:
         return new_path
 
     def save_credentials(self, email: str, password: str) -> bool:
+        """Hand the account to the daemon, which owns the credential store.
+
+        R72 P1.1. This used to write config.ini itself and then log in through
+        `divoom_lib.divoom_auth` -- a full second implementation of a store the
+        daemon already has. Both of the hard-won rules that lived here now live
+        in `cloud_store::save_config`, where every client gets them:
+
+        * an EMPTY password means "keep the stored one". The settings form never
+          re-populates that field, so a plain re-save submits "" -- and
+          overwriting with it erased the credential, after which the next token
+          expiry degraded the account to a guest login;
+        * a re-login is only FORCED when a new password was actually supplied,
+          because forcing one without a password falls back to guest.
+
+        The daemon also had to learn not to destroy the rest of config.ini,
+        which it did before this round. Moving a duplicate is not safe until the
+        survivor is at least as good as what it replaces.
+        """
         logger.info(f"GUI Action: Saving cloud credentials for {email}...")
         try:
-            config_file = Path.home() / ".config" / "divoom-control" / "config.ini"
-            config_file.parent.mkdir(parents=True, exist_ok=True)
-            cfg = configparser.ConfigParser()
-            if config_file.exists():
-                cfg.read(config_file)
-            if "divoom" not in cfg:
-                cfg["divoom"] = {}
-            cfg["divoom"]["email"] = email
-            # Never wipe the stored password with a blank one. The settings form
-            # never re-populates the password field (security), so a plain re-save
-            # submits password="" — overwriting it here used to erase the
-            # credential, and the next 23h token-cache expiry then degraded the
-            # account to a guest token ("credentials get erased from time to
-            # time"). Only update the password when a non-empty one is provided.
-            password_changed = bool(password)
-            if password_changed:
-                cfg["divoom"]["password"] = password
-
-            # A1 atomic + A4 0600: config.ini holds the cloud password.
-            atomic_write_config(config_file, cfg, mode=0o600)
-
-            # Only invalidate the cached token + force re-auth when we actually
-            # have a new password to log in with. Otherwise keep the working cache
-            # (force-refreshing with no password would fall back to guest).
-            if password_changed:
-                auth_cache = Path.home() / ".config" / "divoom-control" / "auth_token.json"
-                if auth_cache.exists():
-                    auth_cache.unlink()
-                self.cached_creds = divoom_auth.get_credentials(force_refresh=True)
-            else:
-                self.cached_creds = divoom_auth.get_credentials()
-            return self.cached_creds.is_valid()
+            client = self._client()
+            if client is None:
+                logger.error("Cannot save credentials: no daemon available")
+                return False
+            self.cached_creds = client.save_credentials(email, password)
+            return bool(self.cached_creds and self.cached_creds.is_valid())
         except Exception as e:
             logger.error(f"Failed to save credentials: {e}")
             return False
@@ -126,6 +118,17 @@ class PresetsManagerMixin:
                     
             cloud_connected = False
             cloud_email = ""
+            # R72 P1.1: ask the DAEMON for its cached login, here rather than at
+            # startup. Cache-only on purpose -- `get_cached_credentials` cannot
+            # go to the network, so opening Settings never blocks behind a cloud
+            # round trip. A failure just means "not signed in yet".
+            if self.cached_creds is None:
+                try:
+                    client = self._client()
+                    if client is not None:
+                        self.cached_creds = client.get_cached_credentials()
+                except Exception as exc:
+                    logger.debug("cached credentials unavailable: %s", exc)
             if self.cached_creds and self.cached_creds.is_valid():
                 cloud_connected = True
                 cloud_email = self.cached_creds.email if (hasattr(self.cached_creds, "email") and self.cached_creds.email) else email

@@ -1,78 +1,124 @@
-"""Regression: saving settings with a blank password must NOT erase the stored
-Divoom password (the "credentials get erased from time to time" bug).
+"""Saving credentials DELEGATES to the daemon, and passes a blank through.
 
-The settings form never re-populates the password field, so a plain re-save
-submits password="". save_credentials used to overwrite the stored password with
-that blank, and the next 23h token-cache expiry then degraded the account to a
-guest token. The fix preserves the stored password when a blank one is given.
+**These tests changed shape in R72 P1.1, and the reason matters.** They used to
+assert the contents of `config.ini` after `save_credentials` -- because the GUI
+wrote that file itself. It no longer does: the daemon owns the credential store,
+and `save_credentials` is now one call to it.
+
+The invariant they were written to protect has NOT moved out of the codebase,
+it moved DOWN. "A blank password keeps the stored one" is now
+`cloud_store::save_config`'s job and is tested in Rust, at both the helper and
+the caller (`save_config_at_keeps_the_password_when_given_a_blank_one`). What
+is left for Python is the half only Python can get wrong: **passing the blank
+through instead of filtering it out.**
+
+That distinction is the whole point. A GUI that helpfully skipped the call when
+the password was empty, or substituted the stored one, would look correct here
+and would silently stop the email-only save from ever reaching the daemon. So
+the assertions below are about what is SENT, not about what is stored.
+
+The original bug, for context: the settings form never re-populates the password
+field, so a plain re-save submits `""`. Overwriting the stored password with
+that erased the credential, and the next 23h token-cache expiry degraded the
+account to a guest token -- "credentials get erased from time to time".
 """
-import configparser
-import sys
-from pathlib import Path
+from __future__ import annotations
 
 import pytest
 
-from divoom_gui import presets_manager
 from divoom_gui.presets_manager import PresetsManagerMixin
 
 
-class _FakeCreds:
+class _Creds:
+    def __init__(self, valid=True, email="me@example.com"):
+        self._valid = valid
+        self.email = email
+
     def is_valid(self):
-        return True
+        return self._valid
+
+
+class _FakeClient:
+    """Records what the GUI sent, and answers like the daemon."""
+
+    def __init__(self, reply=None, boom=False):
+        self.calls: list[tuple] = []
+        self._reply = reply if reply is not None else _Creds()
+        self._boom = boom
+
+    def save_credentials(self, email, password):
+        self.calls.append((email, password))
+        if self._boom:
+            raise RuntimeError("daemon said no")
+        return self._reply
 
 
 class _Host(PresetsManagerMixin):
-    def __init__(self):
+    def __init__(self, client):
         self.cached_creds = None
+        self._fake = client
+
+    def _client(self):
+        return self._fake
 
 
-@pytest.fixture
-def home(tmp_path, monkeypatch):
-    monkeypatch.setattr(presets_manager.Path, "home", staticmethod(lambda: tmp_path))
-    monkeypatch.setattr(presets_manager.divoom_auth, "get_credentials",
-                        lambda *a, **k: _FakeCreds())
-    cfg_dir = tmp_path / ".config" / "divoom-control"
-    cfg_dir.mkdir(parents=True)
-    return tmp_path, cfg_dir / "config.ini"
+def test_a_blank_password_is_PASSED_THROUGH_not_filtered():
+    """The half only the client can get wrong.
+
+    An empty password is MEANINGFUL -- the daemon reads it as "keep the stored
+    one". A GUI that skipped the call, or helpfully substituted something, would
+    make the email-only save unreachable while looking perfectly sensible.
+    """
+    client = _FakeClient()
+    host = _Host(client)
+    assert host.save_credentials("me@example.com", "") is True
+    assert client.calls == [("me@example.com", "")], client.calls
 
 
-def _read(cfg_path):
-    c = configparser.ConfigParser()
-    c.read(cfg_path)
-    return c
+def test_a_real_password_is_sent_verbatim():
+    client = _FakeClient()
+    host = _Host(client)
+    assert host.save_credentials("me@example.com", "s3cret") is True
+    assert client.calls == [("me@example.com", "s3cret")], client.calls
 
 
-def test_blank_password_preserves_stored_password(home):
-    tmp, cfg_path = home
-    host = _Host()
-    # First, a real save with email + password.
-    host.save_credentials("me@example.com", "s3cret")
-    assert _read(cfg_path)["divoom"]["password"] == "s3cret"
+def test_the_gui_no_longer_writes_config_ini_itself(tmp_path, monkeypatch):
+    """The duplicate is gone, not merely bypassed.
 
-    # Re-save with a blank password (form never re-populates it) — must NOT wipe.
-    host.save_credentials("me@example.com", "")
-    cfg = _read(cfg_path)
-    assert cfg["divoom"]["password"] == "s3cret", "blank re-save erased the password"
-    assert cfg["divoom"]["email"] == "me@example.com"
-
-
-def test_blank_password_keeps_token_cache(home):
-    tmp, cfg_path = home
-    host = _Host()
-    host.save_credentials("me@example.com", "s3cret")
-    token = tmp / ".config" / "divoom-control" / "auth_token.json"
-    token.write_text("{}", encoding="utf-8")
-    # blank re-save must not delete the working token cache
-    host.save_credentials("me@example.com", "")
-    assert token.exists(), "blank re-save nuked the token cache"
+    Pins the absence of the second implementation: with the daemon answering,
+    nothing under a redirected HOME should be touched by this call.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    client = _FakeClient()
+    _Host(client).save_credentials("me@example.com", "s3cret")
+    assert not list(tmp_path.rglob("config.ini")), (
+        f"save_credentials still writes config.ini: {list(tmp_path.rglob('*'))}")
 
 
-def test_new_password_updates_and_refreshes(home):
-    tmp, cfg_path = home
-    host = _Host()
-    host.save_credentials("me@example.com", "old")
-    token = tmp / ".config" / "divoom-control" / "auth_token.json"
-    token.write_text("{}", encoding="utf-8")
-    host.save_credentials("me@example.com", "new")
-    assert _read(cfg_path)["divoom"]["password"] == "new"
-    assert not token.exists(), "a real password change should invalidate the cache"
+def test_the_daemons_answer_decides_the_result():
+    """An invalid credential is a FAILED save, even though the call succeeded."""
+    host = _Host(_FakeClient(reply=_Creds(valid=False)))
+    assert host.save_credentials("me@example.com", "s3cret") is False
+
+
+def test_no_daemon_is_a_failure_not_a_crash():
+    class _NoClient(_Host):
+        def _client(self):
+            return None
+
+    assert _NoClient(_FakeClient()).save_credentials("a@b.com", "pw") is False
+
+
+def test_a_daemon_error_is_reported_not_raised():
+    """A raise here would surface in the pywebview bridge thread as a dead button."""
+    host = _Host(_FakeClient(boom=True))
+    assert host.save_credentials("a@b.com", "pw") is False
+
+
+def test_the_cached_credential_is_updated_from_the_reply():
+    """`load_config` reads `cached_creds`; a stale one shows the wrong account."""
+    client = _FakeClient(reply=_Creds(email="new@example.com"))
+    host = _Host(client)
+    host.save_credentials("new@example.com", "pw")
+    assert host.cached_creds is not None
+    assert host.cached_creds.email == "new@example.com"
