@@ -263,7 +263,7 @@ fn draw_triangle_32(buf: &mut [u8], size: i32, is_up: bool, color: (u8, u8, u8))
     }
 }
 
-pub(super) fn render_stock(symbol: &str, price: f64, change: f64, size: u32) -> Vec<u8> {
+pub(crate) fn render_stock(symbol: &str, price: f64, change: f64, size: u32) -> Vec<u8> {
     let mut buf = vec![0u8; (size * size * 3) as usize];
     for i in 0..(size * size) as usize {
         buf[i * 3] = 5;

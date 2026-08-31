@@ -216,6 +216,8 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
         // Host metrics AND the exact frame the device would be shown. The GUI
         // used to sample and render this itself in Python, which is the same
         // second-implementation shape R67/C2 removed from now-playing.
+        "render_widget" => crate::render_widget::cmd_render_widget(&req.args).await,
+
         "sysmon" => crate::live_jobs::sysmon::cmd_sysmon(&req.args).await,
 
         // --- wall command ---

@@ -13,7 +13,7 @@ mod health;
 /// unguarded after the macOS-only helpers were introduced.
 #[cfg(target_os = "macos")]
 mod music_job;
-mod render;
+pub mod render;
 pub mod sysmon;
 
 pub use coordinator::LiveJobCoordinator;
@@ -222,62 +222,34 @@ async fn run_stocks(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
         )
         .await;
 
-        let api_url = format!(
-            "https://query1.finance.yahoo.com/v8/finance/chart/{}",
-            symbol
-        );
-        let res = client
-            .get(&api_url)
-            .timeout(Duration::from_secs(5))
-            .send()
-            .await;
+        // ONE quote fetcher, shared with the `render_widget` one-shot
+        // (crate::render_widget::fetch_quote). This was inline here; adding a
+        // second copy for the preview would have re-created, in Rust, the very
+        // split R70 is removing from the GUI.
+        if let Ok(quote) = crate::render_widget::fetch_quote(&client, &symbol).await {
+            let rgb = render_stock(&symbol, quote.price, quote.change, size);
 
-        if let Ok(resp) = res {
-            if let Ok(body) = resp.json::<serde_json::Value>().await {
-                if let Some(result) = body
-                    .get("chart")
-                    .and_then(|c| c.get("result"))
-                    .and_then(|r| r.as_array())
-                {
-                    if let Some(meta) = result.first().and_then(|r| r.get("meta")) {
-                        let price = meta
-                            .get("regularMarketPrice")
-                            .and_then(|v| v.as_f64())
-                            .unwrap_or(0.0);
-                        let prev_close = meta
-                            .get("chartPreviousClose")
-                            .and_then(|v| v.as_f64())
-                            .unwrap_or(0.0);
-                        let change = price - prev_close;
-
-                        let rgb = render_stock(&symbol, price, change, size);
-
-                        if get_device_transport(&daemon, &mac).await.is_some() {
-                            let d_weak = daemon_weak.clone();
-                            let mac_clone = mac.clone();
-                            let _ = daemon
-                                .queue
-                                .run(None, async move {
-                                    if let Some(d) = d_weak.upgrade() {
-                                        if let Some(dev_t) =
-                                            get_device_transport(&d, &mac_clone).await
-                                        {
-                                            let _ = push_rgb_to_device(
-                                                &d,
-                                                &dev_t,
-                                                &rgb,
-                                                size as i32,
-                                                size as i32,
-                                                100,
-                                            )
-                                            .await;
-                                        }
-                                    }
-                                })
+            if get_device_transport(&daemon, &mac).await.is_some() {
+                let d_weak = daemon_weak.clone();
+                let mac_clone = mac.clone();
+                let _ = daemon
+                    .queue
+                    .run(None, async move {
+                        if let Some(d) = d_weak.upgrade() {
+                            if let Some(dev_t) = get_device_transport(&d, &mac_clone).await {
+                                let _ = push_rgb_to_device(
+                                    &d,
+                                    &dev_t,
+                                    &rgb,
+                                    size as i32,
+                                    size as i32,
+                                    100,
+                                )
                                 .await;
+                            }
                         }
-                    }
-                }
+                    })
+                    .await;
             }
         }
 
