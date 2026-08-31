@@ -240,18 +240,6 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
     # Lifecycle-settings methods (keep_daemon_alive / quit_menubar_on_exit) live
     # on LifecycleSettingsMixin so pywebview still exposes them as api.get_*().
 
-    def live_job_start(self, mac: str, kind: str, params: dict) -> dict:
-        client = self._client()
-        if client is None:
-            return {"success": False, "error": "daemon unavailable"}
-        return client.live_job_start(mac, kind, params)
-
-    def live_job_stop(self, mac: str, kind: str) -> dict:
-        client = self._client()
-        if client is None:
-            return {"success": False, "error": "daemon unavailable"}
-        return client.live_job_stop(mac, kind)
-
     def live_job_list(self, mac: str | None = None) -> dict:
         client = self._client()
         if client is None:

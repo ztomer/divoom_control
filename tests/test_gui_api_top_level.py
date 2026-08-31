@@ -152,27 +152,17 @@ class TestGuiApiTopLevelCoverage(unittest.TestCase):
             self.api.close_window()  # must not raise
         fake_client.shutdown.assert_not_called()
 
-    # ---- live_job_start / live_job_stop / live_job_list ---------------------
+    # ---- live_job_list ------------------------------------------------------
 
-    def test_live_job_methods_no_daemon(self):
+    def test_live_job_list_no_daemon(self):
         with patch.object(self.api, "_client", return_value=None):
-            self.assertEqual(self.api.live_job_start("AA:BB", "kind", {}),
-                             {"success": False, "error": "daemon unavailable"})
-            self.assertEqual(self.api.live_job_stop("AA:BB", "kind"),
-                             {"success": False, "error": "daemon unavailable"})
             self.assertEqual(self.api.live_job_list("AA:BB"),
                              {"success": False, "error": "daemon unavailable"})
 
-    def test_live_job_methods_delegate_to_daemon(self):
+    def test_live_job_list_delegates_to_daemon(self):
         fake = MagicMock()
-        fake.live_job_start.return_value = {"success": True}
-        fake.live_job_stop.return_value = {"success": True}
         fake.live_job_list.return_value = {"success": True, "jobs": []}
         with patch.object(self.api, "_client", return_value=fake):
-            self.assertEqual(self.api.live_job_start("AA:BB", "kind", {"x": 1}), {"success": True})
-            fake.live_job_start.assert_called_with("AA:BB", "kind", {"x": 1})
-            self.assertEqual(self.api.live_job_stop("AA:BB", "kind"), {"success": True})
-            fake.live_job_stop.assert_called_with("AA:BB", "kind")
             self.assertEqual(self.api.live_job_list("AA:BB"), {"success": True, "jobs": []})
             fake.live_job_list.assert_called_with("AA:BB")
 

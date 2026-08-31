@@ -63,7 +63,6 @@ ALLOWLIST: dict[str, str] = {
     "display_custom_art": "unreviewed",
     "get_scoreboard_state": "unreviewed — scoreboard tool",
     "get_transport_status": "unreviewed — diagnostics",
-    "live_job_stop": "unreviewed — JS may stop jobs via another entry point",
     "load_cached_gallery": "unreviewed — called from Python (fetch_gallery)",
     "probe_lan": "unreviewed — LAN discovery",
     "save_lan_config": "unreviewed — LAN device config",
@@ -140,8 +139,18 @@ def python_callers(names: set[str],
                     for sub in ast.walk(fn):
                         if isinstance(sub, ast.Attribute) and sub.attr == fn.name:
                             delegated.add(id(sub))
+            # Only `self.X` counts. `DaemonClient` MIRRORS these names by
+            # design -- `media_sync.py` does `client = self._client()` then
+            # `client.live_job_stop(mac, kind)`, which is the DAEMON's method,
+            # not the bridge's. Counting any base made both live_job wrappers
+            # look alive when nothing calls either. A caller on some other
+            # object is therefore not counted and shows up as "no caller",
+            # which sends it to review -- the safe direction, since the bucket
+            # is a work marker and never an exemption.
             for node in ast.walk(tree):
                 if (isinstance(node, ast.Attribute) and node.attr in found
+                        and isinstance(node.value, ast.Name)
+                        and node.value.id == "self"
                         and id(node) not in delegated):
                     try:
                         where = path.relative_to(REPO)
@@ -151,11 +160,33 @@ def python_callers(names: set[str],
     return found
 
 
+def strip_comments(text: str) -> str:
+    """Remove JS/HTML comments so prose cannot vouch for a method.
+
+    R71 P1.0 fixed exactly this on the PYTHON side (a docstring naming
+    `batch_sync_artwork` was being read as a caller) and left the JS side
+    alone -- half a class, which is how `live_job_start` stayed "reachable"
+    on the strength of one `//` comment in app_globals.js and nothing else.
+
+    `//` is only treated as a comment when it is not preceded by `:`, so the
+    `//` in `https://...` does not swallow the rest of a real line. The
+    heuristic is deliberately conservative in the direction of KEEPING code:
+    over-stripping would invent dead methods, which is the expensive mistake.
+    `tests/test_api_reachable_buckets.py` pins that known live callers
+    survive it.
+    """
+    text = re.sub(r"/\*.*?\*/", " ", text, flags=re.S)
+    text = re.sub(r"<!--.*?-->", " ", text, flags=re.S)
+    text = re.sub(r"(?m)(?<!:)//[^\n]*$", " ", text)
+    return text
+
+
 def web_ui_blob() -> str:
     parts = []
     for ext in ("*.js", "*.html"):
         for path in sorted(WEB_UI.rglob(ext)):
-            parts.append(path.read_text(encoding="utf-8", errors="ignore"))
+            parts.append(strip_comments(
+                path.read_text(encoding="utf-8", errors="ignore")))
     return "\n".join(parts)
 
 
