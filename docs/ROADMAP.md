@@ -527,7 +527,7 @@ correct.
 | P5.5 tests + floor rebaseline | **DONE** | 2996 passed / 94 skipped; coverage 89% → **90%**, floor raised to match |
 | P5.6 bleak out of the bundle | **DONE** | out of `divoom.spec`; the frozen entry point loads ZERO bleak modules (verified). Also dropped CI's `brew install portaudio` |
 | P6.1 allowlist empty | **DONE** | 27 violations across 12 files → **0, with no exemptions** |
-| P6.2 user-POV pass | TODO | real app, every touched panel, light AND dark |
+| P6.2 user-POV pass | **DONE** | `gui_pov.py`, no mocks in the chain: stocks/sysmon/album art all live, album art visibly NEAREST now. Killing the daemon still SAYS so. Found a stuttering error hint no assertion could see |
 | P6.3 CHANGELOG + release | TODO | |
 
 ### Cloud HTTP — 533/533 endpoints cataloged
