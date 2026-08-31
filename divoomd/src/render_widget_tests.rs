@@ -11,7 +11,6 @@ use base64::Engine;
 
 use crate::render_widget::{cmd_render_widget, Quote};
 
-use super::*;
 
 fn frame_bytes(reply: &Value) -> Vec<u8> {
     base64::engine::general_purpose::STANDARD
@@ -190,7 +189,7 @@ async fn empty_text_is_an_error_not_a_blank_matrix() {
 }
 
 #[tokio::test]
-async fn text_that_does_not_fit_is_CLIPPED_not_scaled() {
+async fn text_that_does_not_fit_is_clipped_not_scaled() {
     // The P3.3 decision, pinned. Two strings that share a prefix and BOTH
     // overflow the matrix must render identically — only a renderer that
     // clips can do that. A scaler fits each whole string into 16px and
