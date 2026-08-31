@@ -44,11 +44,9 @@ WEB_UI = REPO / "divoom_gui" / "web_ui"
 # An entry that stops matching FAILS, so a deleted method takes its exemption
 # with it and a newly-wired method stops being excused.
 ALLOWLIST: dict[str, str] = {
-    # ── confirmed dead (R70 audit) ──────────────────────────────────────────
-    "push_weather": "r70-delete P5.3 — pre-R67 weather path, 4 tests and no caller",
-    "trigger_notification": "r70-delete P5.4 — renders its own frame, no caller",
-    "toggle_audio_visualizer": "r70-delete P5.2 — starts the dead pyaudio worker",
-    "get_audio_levels": "r70-delete P5.2 — reads the dead pyaudio worker",
+    # The four the R70 audit confirmed dead were DELETED in P5.1-P5.4, so their
+    # entries are gone with them — this gate fails on a stale entry, which is
+    # what forces that.
     # ── flagged by P5.0, not yet reviewed ───────────────────────────────────
     # These are NOT claims of deadness. Each needs someone to decide whether the
     # UI lost its wiring, the method is a leftover, or it is reached some way

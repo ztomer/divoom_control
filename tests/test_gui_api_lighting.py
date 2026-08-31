@@ -83,86 +83,11 @@ class TestLightingApiCoverage(unittest.TestCase):
         self.api.current_divoom = dev
         self.assertFalse(self.api.lighting.push_text("HI"))
 
-    def test_push_text_unlink_oserror_is_swallowed(self):
-        dev = MagicMock()
-        dev.display.show_image = AsyncMock(return_value=True)
-        self.api.current_divoom = dev
-        with patch("os.unlink", side_effect=OSError("already gone")):
-            self.assertTrue(self.api.lighting.push_text("HI"))
-
-    # ---- _device_size: exception in the state-getter callable falls
-    # back to the 16px default --------------------------------------------
-
     def test_device_size_falls_back_to_16_on_error(self):
         self.api.__dict__["_active_device_size"] = MagicMock(side_effect=RuntimeError("boom"))
         self.assertEqual(self.api.lighting._device_size(), 16)
 
     # ---- _render_text_png scaling branches -------------------------------
-
-    def test_render_text_png_scales_down_wide_overflow(self):
-        from divoom_gui.api.lighting import LightingApi
-        path = LightingApi._render_text_png("HELLO WORLD THIS IS LONG", "#00FF00", 16, 1)
-        try:
-            from PIL import Image
-            img = Image.open(path).convert("RGB")
-            self.assertEqual(img.size, (16, 16))
-        finally:
-            import os
-            os.unlink(path)
-
-    def test_render_text_png_scales_down_tall_overflow(self):
-        # At a small device size the fixed 16px-tall glyph overflows
-        # vertically even when the text is short — exercises the
-        # height-driven rescale branch (th * scale > sz).
-        from divoom_gui.api.lighting import LightingApi
-        path = LightingApi._render_text_png("HI", "#00FF00", 8, 1)
-        try:
-            from PIL import Image
-            img = Image.open(path).convert("RGB")
-            self.assertEqual(img.size, (8, 8))
-        finally:
-            import os
-            os.unlink(path)
-
-    def test_render_text_png_save_failure_reraises_and_cleans_up(self):
-        from divoom_gui.api.lighting import LightingApi
-        import glob
-        import os
-        import tempfile as _tempfile
-        pattern = str(Path(_tempfile.gettempdir()) / "divoom_text_*")
-        before = set(glob.glob(pattern))
-        with patch("PIL.Image.Image.save", side_effect=OSError("disk full")):
-            with self.assertRaises(OSError):
-                LightingApi._render_text_png("HI", "#FFFFFF", 16, 1)
-        # Real cleanup outside the patched scope (unlink was NOT patched
-        # here, so _render_text_png's own except-branch already removed
-        # the orphaned temp file; assert no leak remains).
-        after = set(glob.glob(pattern))
-        for leaked in after - before:
-            os.unlink(leaked)
-        self.assertEqual(after - before, set())
-
-    def test_render_text_png_save_and_cleanup_both_fail(self):
-        """Both the save AND the best-effort unlink fail: the nested
-        ``except OSError: pass`` must swallow the cleanup error and the
-        original save error still propagates."""
-        from divoom_gui.api.lighting import LightingApi
-        import glob
-        import os
-        import tempfile as _tempfile
-        pattern = str(Path(_tempfile.gettempdir()) / "divoom_text_*")
-        before = set(glob.glob(pattern))
-        with patch("PIL.Image.Image.save", side_effect=OSError("disk full")), \
-             patch("os.unlink", side_effect=OSError("also gone")):
-            with self.assertRaises(OSError):
-                LightingApi._render_text_png("HI", "#FFFFFF", 16, 1)
-        # os.unlink was mocked out during the call, so the mkstemp'd file
-        # really does leak on disk; clean it up for real now that the
-        # patch is out of scope (best-effort — not the behavior under test).
-        for leaked in set(glob.glob(pattern)) - before:
-            os.unlink(leaked)
-
-    # ---- set_brightness: lan vs. BLE dispatch, exception, no-target ----
 
     def test_set_brightness_uses_lan_when_present(self):
         dev = MagicMock()

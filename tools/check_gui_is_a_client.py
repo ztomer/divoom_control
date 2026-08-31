@@ -97,21 +97,13 @@ FORBIDDEN_MODULE_ATTRS = {"ImageDraw", "ImageFont"}
 # (relative path, kind, symbol, why it is still here / which phase removes it)
 # `kind` is "import" or "call".
 ALLOWLIST: list[tuple[str, str, str, str]] = [
-    # R70 P2 — cloud browse moves to the daemon.
-    #   (P2 DONE: the five CloudClient panels, the gallery HTTP and the
-    #    hot-channel manifest+preview are all daemon calls now.)
-    # R70 P3 — DONE: stocks, album art and text all render daemon-side.
-    # P3.1 removed the stock renderer; the ONLY remaining user is
-    # trigger_notification, which no JS calls and which P5.4 deletes.
-    ("media_sync.py", "import", "divoom_lib.utils.media_source", "R70 P5.4"),
-    # R70 P5 — dead weight deleted.
-    ("gui_main.py", "import", "bleak", "R70 P5.1"),
-    ("gui_main.py", "import", "divoom_lib.divoom", "R70 P5.1"),
-    ("gui_main.py", "import", "divoom_lib.wall", "R70 P5.1"),
-    ("audio_visualizer.py", "import", "pyaudio", "R70 P5.2"),
-    ("audio_visualizer.py", "import", "numpy", "R70 P5.2"),
+    # EMPTY — R70 closed the class on 2026-08-30.
+    #
+    # This list was seeded with 26 entries, one per violation the audit found,
+    # and each phase deleted the ones it earned. An empty allowlist is the
+    # completion criterion: the same command that reported 27 violations across
+    # twelve files now reports none, and any new one fails the commit.
 ]
-
 
 def _module_names(node: ast.AST) -> list[str]:
     """Dotted module paths an import statement brings in.

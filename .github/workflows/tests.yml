@@ -62,16 +62,12 @@ jobs:
         with:
           python-version: "3.14"
 
-      - name: Install PortAudio (pyaudio build dependency)
-        # pyaudio has no macOS-arm64 wheel; it builds against Homebrew's
-        # PortAudio. Without this the audio-visualizer suite skips.
-        run: brew install portaudio
-
+      # R70 P5.2: the `brew install portaudio` step that used to sit here is
+      # gone with the audio visualizer. pyaudio has no macOS-arm64 wheel, so
+      # every macOS CI run built it from Homebrew sources — for a 150-line
+      # worker that no JS could start, and that was never in requirements.txt
+      # at all.
       - name: Install dependencies
-        env:
-          # Point pyaudio's C build at the Homebrew PortAudio headers/libs.
-          CPPFLAGS: -I/opt/homebrew/include
-          LDFLAGS: -L/opt/homebrew/lib
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt || true
@@ -79,7 +75,7 @@ jobs:
           # decides whether the e2e suite passes -- the BROWSER BUILD is (see
           # the fetch step below). camoufox accepts any build in [alpha.1, 1),
           # so pinning the package alone still lets `fetch` take the newest.
-          pip install pytest pillow pyaudio playwright 'camoufox==0.5.5'
+          pip install pytest pillow playwright 'camoufox==0.5.5'
 
       - name: Install the camoufox browser
         # The GUI e2e suites (15 modules) drive headless camoufox via
@@ -141,7 +137,7 @@ jobs:
         # Rust↔Python parity tests never run in CI. Default features include `ble`.
         run: cargo build -p divoomd --locked
 
-      - name: Run tests (C + Python parity + Rust-daemon parity + GUI e2e + audio)
+      - name: Run tests (C + Python parity + Rust-daemon parity + GUI e2e)
         run: python3 -m pytest -q
 
   rust-core:

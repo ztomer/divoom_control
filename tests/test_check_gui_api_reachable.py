@@ -80,16 +80,19 @@ def test_every_allowlist_entry_carries_a_reason():
             f"{name}: {reason!r} must say which kind of decision it is")
 
 
-def test_the_four_audit_findings_are_marked_for_deletion():
-    """The methods R70 actually verified as dead are not filed as 'unreviewed'.
+def test_the_four_audit_findings_are_gone_from_the_api_entirely():
+    """P5.1-P5.4 deleted them, so they are neither methods nor exemptions.
 
-    Recording a confirmed finding as unexamined would lose exactly the work the
-    audit did.
+    They were allowlisted as `r70-delete` while the phases ran; a deleted
+    method must take its entry with it, which this gate enforces by failing on
+    a stale one.
     """
     mod = _load()
+    methods = mod.api_methods()
     for name in ("push_weather", "trigger_notification",
                  "toggle_audio_visualizer", "get_audio_levels"):
-        assert mod.ALLOWLIST[name].startswith("r70-delete"), name
+        assert name not in methods, f"{name} is back on DivoomGuiAPI"
+        assert name not in mod.ALLOWLIST, f"{name} left a stale exemption behind"
 
 
 def test_control_server_does_not_count_as_a_caller():

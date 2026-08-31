@@ -111,6 +111,21 @@ class LightingApi(ApiBase, WidgetFrameMixin):
             logger.error(f"push_text failed: {e}")
             return False
 
+    def _device_size(self) -> int:
+        """The active device's pixel size, or 16.
+
+        R70 P3.3 note: this was deleted by accident along with
+        `_render_text_png` — the two sat adjacent, and the cut took both. The
+        full suite caught it (`push_text failed: 'LightingApi' object has no
+        attribute '_device_size'`); the targeted runs did not, because none of
+        them exercised push_text end to end.
+        """
+        getter = self._state_getter().get("_active_device_size")
+        try:
+            return int(getter() if callable(getter) else (getter or 16))
+        except Exception:
+            return 16
+
     def set_brightness(self, brightness: int) -> bool:
         logger.info(f"GUI Action: Setting brightness to {brightness}...")
         try:

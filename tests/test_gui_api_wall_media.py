@@ -81,28 +81,42 @@ class TestGuiApiWallMedia(GuiApiTestBase):
             self.assertTrue(sel.get("AA"))  # persisted target shows as selected
 
     def test_ticker_preview_returns_data_url(self):
-        """5.d: get_ticker_preview renders a frame and returns a PNG data URL."""
-        from pathlib import Path as _P
-        with patch("divoom_lib.utils.media_source.fetch_stock_ticker",
-                   return_value={"price": 100.0, "change": 1.0, "pct_change": 1.0}), \
-             patch("divoom_lib.utils.media_source.render_stock_ticker_frame",
-                   return_value=_P("/tmp/ticker_preview_test.png")), \
-             patch.object(type(self.api), "_frame_to_data_url",
-                          staticmethod(lambda p: "data:image/png;base64,AAA")):
+        """5.d: get_ticker_preview returns the daemon's frame as a PNG data URL.
+
+        R70 P3.1: the seam is `render_widget`, not the GUI's own Yahoo fetch
+        and PIL renderer.
+        """
+        import base64 as _b64
+
+        client = MagicMock()
+        client.render_widget.return_value = {
+            "success": True, "kind": "stocks", "size": 32,
+            "frame_rgb_b64": _b64.b64encode(bytes(32 * 32 * 3)).decode(),
+            "symbol": "AAPL", "price": 100.0, "change": 1.0, "pct_change": 1.0,
+        }
+        with patch.object(type(self.api), "_client", lambda self: client):
             res = json.loads(self.api.get_ticker_preview("AAPL", 32))
-            self.assertTrue(res["ok"])
-            self.assertEqual(res["size"], 32)
-            self.assertTrue(res["preview"].startswith("data:image/png;base64,"))
+        self.assertTrue(res["ok"], res)
+        self.assertEqual(res["size"], 32)
+        self.assertEqual(res["price"], 100.0)
+        self.assertTrue(res["preview"].startswith("data:image/png;base64,"))
 
     def test_apply_stock_ticker_no_target(self):
         """5.a: clear failure when there is no connected device."""
+        import base64 as _b64
+
         self.api.current_divoom = None
         self.api.wall_slots = {}
-        with patch("divoom_lib.utils.media_source.fetch_stock_ticker",
-                   return_value={"price": 1.0, "change": 0.0, "pct_change": 0.0}):
+        client = MagicMock()
+        client.render_widget.return_value = {
+            "success": True, "kind": "stocks", "size": 16,
+            "frame_rgb_b64": _b64.b64encode(bytes(16 * 16 * 3)).decode(),
+            "symbol": "AAPL", "price": 1.0, "change": 0.0, "pct_change": 0.0,
+        }
+        with patch.object(type(self.api), "_client", lambda self: client):
             res = json.loads(self.api.apply_stock_ticker("AAPL"))
-            self.assertFalse(res["success"])
-            self.assertEqual(res["error"], "No device connected")
+        self.assertFalse(res["success"])
+        self.assertEqual(res["error"], "No device connected")
 
     def test_ticker_persistence(self):
         """5.e: tickers save/load, de-duped and upper-cased."""

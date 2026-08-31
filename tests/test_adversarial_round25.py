@@ -69,27 +69,3 @@ def test_set_scoreboard_passes_valid_values_through():
 
 # ── R53.46: render-text temp cleanup on save failure ────────────────────────
 
-def test_render_text_png_unlinks_temp_on_save_failure(monkeypatch):
-    import PIL.Image
-    from divoom_gui.api.lighting import LightingApi
-
-    created = {}
-    real_mkstemp = tempfile.mkstemp
-
-    def fake_mkstemp(*a, **k):
-        fd, path = real_mkstemp(*a, **k)
-        created["path"] = path
-        return fd, path
-
-    monkeypatch.setattr(tempfile, "mkstemp", fake_mkstemp)
-
-    def _boom(self, *a, **k):
-        raise OSError("disk full")
-
-    monkeypatch.setattr(PIL.Image.Image, "save", _boom)
-
-    with pytest.raises(Exception):
-        LightingApi._render_text_png("hi", "#ffffff", 16, 1)
-
-    assert created.get("path"), "mkstemp should have been called"
-    assert not os.path.exists(created["path"]), "temp PNG leaked on save failure"

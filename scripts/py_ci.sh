@@ -49,7 +49,12 @@ fi
 # test, and a red floor would be punishing the wrong thing. Not enforcing it is
 # said out loud rather than passed over in silence — the same rule this script
 # already applies to the skipping suites themselves.
-COV_MIN="${DIVOOM_PY_COV_MIN:-89}"
+# Raised 89 -> 90 by R70 P5.5. The deletions removed more uncovered code
+# than covered: the dead audio visualizer had 100% coverage, but the
+# cloud panels (38-50%) and media_sync (31%) shrank far more. Stated out
+# loud because a floor moved quietly is a floor that stops meaning
+# anything.
+COV_MIN="${DIVOOM_PY_COV_MIN:-90}"
 
 if [ "$have_camoufox" -eq 1 ]; then
     info "pytest (coverage floor ${COV_MIN}% over divoom_gui + divoom_client)"

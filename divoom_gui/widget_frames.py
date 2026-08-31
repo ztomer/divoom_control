@@ -99,12 +99,21 @@ class WidgetFrameMixin:
     def _frame_client(self):
         """The daemon client, however the host class exposes it.
 
-        `sysmon_widget` reaches it through `self._client()`, the api layer
-        through `self._client`. Accepting both keeps this usable from either
-        without a refactor that is not part of this step.
+        `sysmon_widget` reaches it through a `_client()` METHOD, the api layer
+        through a `_client` PROPERTY. Accepting both keeps this usable from
+        either without a refactor that is not part of this step.
+
+        The test is `inspect.ismethod`, not `callable`. "Callable" cannot tell a
+        getter from a client that happens to be callable — and a `MagicMock`
+        always is, so a stubbed client got CALLED and the mixin used the return
+        value as the daemon. That produced a reply of the wrong shape and a
+        widget reporting itself unavailable, which is a confusing failure for a
+        correct stub.
         """
+        import inspect
+
         client = getattr(self, "_client", None)
-        if callable(client):
+        if inspect.ismethod(client) or inspect.isfunction(client):
             return client()
         return client
 

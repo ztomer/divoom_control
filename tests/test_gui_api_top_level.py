@@ -128,9 +128,8 @@ class TestGuiApiTopLevelCoverage(unittest.TestCase):
         self.assertEqual(self.api.get_device_name(), "Bedroom Pixoo")
 
         self.api.widgets = MagicMock()
-        self.api.widgets.push_weather.return_value = True
-        self.assertTrue(self.api.push_weather())
-
+        # push_weather was deleted in R70 P5.3: no JS caller, and it fetched
+        # weather and switched channels in the GUI process — the pre-R67 path.
         self.api.widgets.get_weather.return_value = {"temp": 70}
         self.assertEqual(self.api.get_weather(), {"temp": 70})
 

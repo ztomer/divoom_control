@@ -68,7 +68,13 @@ hiddenimports = [
     "objc", "Foundation", "AppKit", "WebKit", "CoreBluetooth", "Quartz",
     "psutil",                             # system-stats widget
 ]
-hiddenimports += collect_submodules("bleak")
+# R70 P5.1/P5.6: `bleak` is NOT bundled any more. The GUI process must never
+# own the radio — divoomd does — and after the dead `from bleak import
+# BleakScanner` came out of gui_main.py, importing the frozen entry point
+# loads zero bleak modules (verified, not assumed). `divoom_lib`'s BLE
+# transport still imports it, but that layer is reference-only and no GUI
+# path reaches it. Collecting it shipped a Bluetooth stack, and its macOS
+# TCC surface, into the one process that must not have either.
 hiddenimports += collect_submodules("aiohttp")
 hiddenimports += collect_submodules("webview")
 # Cloud-container gallery decode (media_decoder) needs these; they are

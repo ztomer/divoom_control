@@ -147,8 +147,9 @@ def test_image_new_is_not_legal(tmp_path):
 
 # ── 5. calibration against the REAL tree ─────────────────────────────────────
 
-# The files the R70 audit named. If the gate stops finding one of these while
-# the violation is still there, the gate has gone blind to its own subject.
+# The twelve files the R70 audit named, when the gate was written. Every one is
+# now clean, which is the completion criterion — kept here as the historical
+# subject so the next reader can see what the gate was calibrated against.
 R70_FINDING_FILES = {
     "aid_sleep.py", "api/lighting.py", "audio_visualizer.py", "clock_faces.py",
     "gallery_download.py", "gallery_hot_api.py", "gallery_sync.py",
@@ -157,19 +158,20 @@ R70_FINDING_FILES = {
 }
 
 
-def test_an_empty_allowlist_finds_the_real_R70_findings():
-    """The gate's subject is real, not a fixture.
+def test_the_tree_is_clean_with_no_exemptions_at_all():
+    """The R70 completion criterion, as an assertion.
 
-    Run against the shipping tree with NO exemptions, it must name exactly the
-    files the audit named — no fewer (it went blind) and no more (it acquired a
-    false positive, which is how a gate stops being believed).
+    When this gate was written, the same scan reported 27 violations across the
+    twelve files above (two of which no longer exist — `audio_visualizer.py` and
+    `gallery_download.py` were deleted, not fixed). It now reports none, with an
+    empty allowlist: the GUI asks the daemon for everything it used to do
+    itself.
     """
     mod = _load()
-    hits = set()
-    for path in sorted(mod.GUI_DIR.rglob("*.py")):
-        if mod.scan_file(path):
-            hits.add(path.relative_to(mod.GUI_DIR).as_posix())
-    assert hits == R70_FINDING_FILES
+    hits = {path.relative_to(mod.GUI_DIR).as_posix()
+            for path in sorted(mod.GUI_DIR.rglob("*.py")) if mod.scan_file(path)}
+    assert hits == set(), f"the GUI is doing the daemon's work again: {hits}"
+    assert mod.ALLOWLIST == [], "the allowlist must stay empty now that it is"
 
 
 def test_the_shipping_tree_passes_with_its_seeded_allowlist():

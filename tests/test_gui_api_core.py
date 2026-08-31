@@ -23,16 +23,23 @@ class TestGuiApiCoreBasics(GuiApiTestBase):
             mock_thread.assert_called_once()
 
     def test_push_text(self):
-        """R32 §D Text Channel: push_text renders the text to a device-sized
-        image and pushes it via display.show_image (the LPWA 0x87 path didn't
-        render on the LED matrices — nothing appeared)."""
+        """R32 §D Text Channel: push_text pushes a device-sized IMAGE via
+        display.show_image — the LPWA 0x87 path never rendered on these LED
+        matrices, so nothing appeared.
+
+        R70 P3.3: the frame comes from the daemon now (`render_widget`
+        kind=text) instead of a second bitmap-font renderer in this process, so
+        the daemon is the seam this stubs.
+        """
+        import base64 as _b64
         import os
+
         dev = MagicMock()
         dev.is_connected = True
         captured = {}
 
         async def _show_image(path):
-            # Capture while the temp file still exists (push_text unlinks it).
+            # Capture while the file still exists on disk.
             captured["path"] = path
             captured["exists"] = os.path.isfile(path)
             captured["ends_png"] = str(path).endswith(".png")
@@ -41,11 +48,23 @@ class TestGuiApiCoreBasics(GuiApiTestBase):
         dev.display.show_image = AsyncMock(side_effect=_show_image)
         self.api.current_divoom = dev
         self.api.current_target_mode = "single"
-        ok = self.api.push_text("HI", color="#FF0000", speed=40, effect_style=1)
+
+        client = MagicMock()
+        client.render_widget.return_value = {
+            "success": True, "kind": "text", "size": 16,
+            "frame_rgb_b64": _b64.b64encode(bytes(16 * 16 * 3)).decode(),
+            "text": "HI",
+        }
+        with patch.object(type(self.api.lighting), "_client",
+                          property(lambda self: client)):
+            ok = self.api.push_text("HI", color="#FF0000", speed=40, effect_style=1)
+
         self.assertTrue(ok)
         dev.display.show_image.assert_awaited_once()
         self.assertTrue(captured.get("exists"), "text image should exist during the push")
         self.assertTrue(captured.get("ends_png"))
+        client.render_widget.assert_called_once_with(
+            "text", size=16, params={"text": "HI", "color": "#FF0000", "font_size": 1})
 
     def test_push_text_empty_noop(self):
         """Empty text is a no-op (returns False, pushes nothing)."""
@@ -55,21 +74,6 @@ class TestGuiApiCoreBasics(GuiApiTestBase):
         self.api.current_target_mode = "single"
         self.assertFalse(self.api.push_text("   "))
         dev.display.show_image.assert_not_called()
-
-    def test_render_text_png_produces_sized_image(self):
-        """The text renderer produces a square device-sized RGB PNG with the
-        requested color present (no anti-aliasing)."""
-        from PIL import Image
-        from divoom_gui.api.lighting import LightingApi
-        path = LightingApi._render_text_png("HI", "#FF0000", 16, 1)
-        try:
-            img = Image.open(path).convert("RGB")
-            self.assertEqual(img.size, (16, 16))
-            colors = {c for _, c in img.getcolors(maxcolors=4096)}
-            self.assertIn((255, 0, 0), colors, "the fill color should appear in the render")
-        finally:
-            import os
-            os.unlink(path)
 
     def test_set_alarm(self):
         """R7 Alarms: set_alarm maps enabled→status and weekday mask through."""

@@ -30,10 +30,12 @@ sys.path.append(str(Path(__file__).parent))
 sys.path.append(str(Path(__file__).parent.parent))
 
 from divoom_gui.gui_api import DivoomGuiAPI
-from divoom_lib.divoom import Divoom
-from divoom_lib.wall import DivoomWall
-from bleak import BleakScanner
 from divoom_lib import divoom_auth
+
+# R70 P5.1: `Divoom`, `DivoomWall` and `bleak.BleakScanner` used to be imported
+# here and never used. `bleak` is not a cosmetic import — it is the BLE stack,
+# loaded into the one process that must never own the radio, and its macOS TCC
+# surface with it. The GUI reaches devices through DaemonDeviceProxy.
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("divoom_gui")

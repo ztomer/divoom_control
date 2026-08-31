@@ -201,8 +201,6 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
     def set_low_power(self, on) -> bool:
         return self.tools.set_low_power(on)
 
-    def push_weather(self) -> bool:
-        return self.widgets.push_weather()
 
     def set_temperature_channel(self, celsius: bool = True, color: str = "#ffffff") -> bool:
         # Route to LightingApi: it honors `color` and is wall-aware via _dispatch.
