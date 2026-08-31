@@ -117,9 +117,13 @@ shared memory. Read this on entry and **update it at the end of every round**
 
   **Two live findings recorded while planning, both real, neither fixed:**
 
-  * A `target/debug/divoomd --socket /tmp/divoom_r70_text.sock` spawned by R70
-    is STILL running days later — the test harness leaks the daemons it starts.
-    P0.5.
+  * ~~A stray R70 daemon is still running; the harness leaks daemons.~~
+    **Reaped, and the premise was wrong** (P0.5, 2026-08-31). `IsolatedStack`
+    is well-behaved — per-stack `/tmp/divoomd_e2e_<pid>_<seq>_<uuid>.sock`,
+    kills only its own PIDs. The stray sat on `/tmp/divoom_r70_text.sock`, a
+    path referenced NOWHERE in the tree, hand-started from the repo root during
+    R70's text work. No gate added on purpose: failing on "a divoomd is alive"
+    would redden the project's own BLE-debug workflow.
   * `~/.config/divoom-control/config.ini` stores the Divoom account password in
     **plaintext** under `[divoom]`. Out of R71's scope as asked, not in the
     ledger, and flagged here so it is not lost.

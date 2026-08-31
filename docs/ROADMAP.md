@@ -189,12 +189,23 @@ direction; a local gate nobody runs is not a direction at all.
   so a Linux job would measure a different denominator and enforce a floor that
   does not match). Delete the item from "Open threads". A decision recorded as
   a decision stops being re-litigated every round.
-- **P0.5** Reap stray test daemons. A `target/debug/divoomd --socket
-  /tmp/divoom_r70_text.sock` spawned by R70 is **still running days later** —
-  the harness leaks the processes it starts. Teardown kills what it spawned,
-  and a check asserts no `divoomd` on a `/tmp/divoom_*` test socket outlives
-  the suite. Left alone this quietly answers future socket probes from a
-  build nobody is testing.
+- **P0.5** ~~Reap stray test daemons; the harness leaks the processes it
+  starts.~~ **The premise was WRONG, and the investigation is the deliverable.**
+  The stray was real and is now reaped, but the harness did not create it:
+  `IsolatedStack` gives every stack its own
+  `/tmp/divoomd_e2e_<pid>_<seq>_<uuid>.sock`, kills only its own PIDs, and
+  calls `close()` even on a half-built object. The stray was on
+  `/tmp/divoom_r70_text.sock`, a path that appears **nowhere in the tree** —
+  started by hand from the repo root during R70's P3.3 text work. The
+  `divoom_cov_*` fixed paths that looked like a collision risk never spawn a
+  daemon; they only construct a `DaemonClient`.
+  **No gate was added, deliberately.** The obvious ratchet — fail if a
+  `divoomd` is alive on a `/tmp/divoom_*` socket — would fire on the project's
+  own documented BLE-debug workflow, which runs a standalone daemon on
+  `/tmp/divoom.sock` on purpose. A gate that reddens on legitimate work trains
+  people to ignore gates, and this class is a one-off human artifact rather
+  than something the code does. Recording why no gate is worth more than a bad
+  one.
 
 **P1 — the 20 unreviewed methods, to an EMPTY allowlist.**
 
@@ -403,7 +414,7 @@ its proof has been SEEN, and for anything testable that means seen RED first.
 | P0.2 prove it bites | **DONE** | All 5 classes seen RED through the REAL `.githooks/pre-push`. Four at once in one 9m11s pass (`local_ci.sh` never stops on a failure): `check_no_allow` (3), clippy (11), Rust test (13+15), Python test (18), plus `rust_coverage` (17) as collateral -> **HOOK_EXIT=1**. Coverage floor proven separately at `DIVOOM_PY_COV_MIN=99` (3003 passed, failed on the FLOOR alone, exit 1). Clean tree accepted: exit 0 |
 | P0.3 wall-clock stated | **DONE** | **full 9m22s** (18 steps, warm) / **fast 1m50s** (17 steps) on this machine, so `py_ci.sh` alone is **~7.5 min — 80% of the gate**. Default stays FULL; `DIVOOM_GATE_FAST=1` is the only hatch and announces itself. See "P0.3 measurement" below |
 | P0.4 CI-coverage decided | TODO | `.gatesrc` comment states the decision; item deleted from Open threads |
-| P0.5 stray daemons reaped | TODO | suite leaves no `divoomd` on a `/tmp/divoom_*` test socket |
+| P0.5 stray daemons reaped | **DONE (premise corrected)** | Stray PID 21632 killed, production daemon on `/tmp/divoom.sock` untouched. The harness does NOT leak: `IsolatedStack` uses per-stack `divoomd_e2e_*` sockets and kills its own PIDs; the stray was hand-started on a path referenced nowhere in the tree. No gate added, on purpose — it would fire on the documented BLE-debug workflow |
 | P1.0 gate sees 3 buckets | TODO | JS / Python-only / unreachable; prove-red both ways |
 | P1.1 preset + settings pairs | TODO | git history checked for a lost caller; wired or deleted |
 | P1.2 status-getters | TODO | surviving sibling proven to cover the caller |
