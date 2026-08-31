@@ -185,25 +185,33 @@ def scan_python(caps: set[str]) -> tuple[list[tuple], list[tuple], list[tuple]]:
             owned_aliases = {k: v for k, v in aliases.items() if _is_owned_lib(v)}
             rel = path.relative_to(REPO)
 
-            # DIRECT: mod.capability(...) — and REACHES for everything else
-            # that calls into an owned module.
+            # DIRECT: mod.capability — and REACHES for everything else that
+            # reaches into an owned module.
+            #
+            # ATTRIBUTES, not just Calls. Proving the gate bites showed that
+            # `_cb = divoom_auth.get_cached_credentials` -- the same duplicate,
+            # bound instead of invoked -- walked straight past a Call-only scan.
+            # A reference you are about to call is a reference to a job the
+            # daemon owns.
+            seen_here: set[tuple[str, str]] = set()
             for node in ast.walk(tree):
-                if not isinstance(node, ast.Call):
-                    continue
-                fn = node.func
-                if (isinstance(fn, ast.Attribute) and isinstance(fn.value, ast.Name)
-                        and fn.value.id in owned_aliases):
+                if (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
+                        and node.value.id in owned_aliases):
                     where = f"{rel}:{node.lineno}"
-                    lib = owned_aliases[fn.value.id]
-                    if fn.attr in caps:
-                        direct.append((where, fn.attr, lib))
+                    lib = owned_aliases[node.value.id]
+                    if node.attr in caps:
+                        direct.append((where, node.attr, lib))
                     else:
-                        reaches.append((where, f"{fn.value.id}.{fn.attr}", lib))
-                elif isinstance(fn, ast.Name) and fn.id in owned_aliases:
-                    # `from divoom_lib.weather_provider import _resolve_location`
-                    # then `_resolve_location(...)` — no attribute to match on.
-                    reaches.append((f"{rel}:{node.lineno}", fn.id,
-                                    owned_aliases[fn.id]))
+                        reaches.append((where, f"{node.value.id}.{node.attr}", lib))
+                elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                        and node.func.id in owned_aliases:
+                    # `from divoom_lib.weather_provider import resolve_location`
+                    # then `resolve_location(...)` — no attribute to match on.
+                    key = (f"{rel}:{node.lineno}", node.func.id)
+                    if key not in seen_here:
+                        seen_here.add(key)
+                        reaches.append((key[0], node.func.id,
+                                        owned_aliases[node.func.id]))
 
             # WRAPPED: def <capability>(...) whose body reaches into divoom_lib
             for fn in ast.walk(tree):
