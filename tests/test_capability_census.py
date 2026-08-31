@@ -185,17 +185,21 @@ def test_a_new_duplicate_would_be_caught(tmp_path, monkeypatch):
     assert reaches == [], reaches
 
 
-def test_reaches_catches_F4_the_weather_resolver():
+def test_reaches_catches_a_bare_imported_call_into_an_owned_module():
     """The category exists because the name-based rules could not see this.
 
-    `_resolve_location` is not a daemon command name and it is bare-imported,
-    so DIRECT and WRAPPED both miss it -- while it is unmistakably weather
-    resolution, which the daemon owns. A census that reported clean with this
-    standing would be measuring its own rules, not the invariant.
+    The weather resolver is not a daemon command name and it is bare-imported,
+    so DIRECT and WRAPPED both miss it. A census that reported clean while a
+    call into an owned module stood would be measuring its own rules rather
+    than the invariant.
+
+    Keyed on the MODULE, not the function name. The first version asserted
+    `_resolve_location` and went red the moment P2.1 made that name public --
+    a test that breaks when the code improves is pinning the wrong thing.
     """
     _d, _w, reaches = census.scan_python(census.daemon_capabilities())
-    hits = [w for w, n, _lib in reaches if n == "_resolve_location"]
-    assert hits, "F4 not caught by REACHES"
+    hits = [w for w, _n, lib in reaches if "weather_provider" in lib]
+    assert hits, "no call into weather_provider caught by REACHES"
     assert any("media_sync.py" in w for w in hits), hits
 
 
