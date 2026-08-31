@@ -148,10 +148,22 @@ fn merge_divoom_section(existing: &str, email: &str, password: &str) -> String {
 /// "credentials get erased from time to time". Not reintroduced here.
 pub fn save_config(email: &str, password: &str) -> Result<(), String> {
     let path = config_file_path().ok_or("cannot find config directory")?;
+    save_config_at(&path, email, password)
+}
+
+/// The body of `save_config`, against an explicit path so it is testable.
+///
+/// The split exists because of a gap the tests THEMSELVES revealed: sabotaging
+/// `save_config` to bypass `merge_divoom_section` left all seven merge tests
+/// green, because they exercise the helper directly and nothing pinned that
+/// the caller uses it. A unit test on a helper says nothing about the function
+/// that is supposed to call it.
+pub(crate) fn save_config_at(path: &std::path::Path, email: &str, password: &str)
+    -> Result<(), String> {
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    let existing = std::fs::read_to_string(&path).unwrap_or_default();
+    let existing = std::fs::read_to_string(path).unwrap_or_default();
     let data = merge_divoom_section(&existing, email.trim(), password);
     let temp_path = path.with_extension("ini.tmp");
     std::fs::write(&temp_path, data).map_err(|e| e.to_string())?;
@@ -260,7 +272,7 @@ pub(crate) fn save_virtual_device(
 
 #[cfg(test)]
 mod merge_tests {
-    use super::merge_divoom_section;
+    use super::{merge_divoom_section, save_config_at};
 
     // These guard a DATA-LOSS path. The version this replaced wrote the whole
     // file as "[divoom]\nemail=..\npassword=..\n", so every other section went
@@ -335,5 +347,55 @@ mod merge_tests {
         let after = merge_divoom_section("[divoom]\nemail = a@b.com\n", "b@c.com", "");
         assert!(after.ends_with('\n'), "{after:?}");
         assert!(!after.ends_with("\n\n"), "{after:?}");
+    }
+}
+
+#[cfg(test)]
+mod save_config_tests {
+    use super::save_config_at;
+
+    /// Closes the gap the merge tests could not see.
+    ///
+    /// Sabotaging `save_config` to write the whole file again left all seven
+    /// merge tests GREEN, because they call the helper directly. A helper can
+    /// be perfect while its caller ignores it, so this drives the real
+    /// read-modify-write against a real file.
+    fn tmp(name: &str) -> std::path::PathBuf {
+        let mut p = std::env::temp_dir();
+        p.push(format!("divoomd_cfg_test_{name}.ini"));
+        let _ = std::fs::remove_file(&p);
+        p
+    }
+
+    #[test]
+    fn save_config_at_preserves_other_sections_on_disk() {
+        let p = tmp("preserve");
+        std::fs::write(&p, "[gui]\ntimeout = 120\n\n[divoom]\nemail = a@b.com\npassword = secret\n")
+            .unwrap();
+        save_config_at(&p, "new@x.com", "pw2").unwrap();
+        let after = std::fs::read_to_string(&p).unwrap();
+        assert!(after.contains("[gui]"), "{after}");
+        assert!(after.contains("timeout = 120"), "settings destroyed: {after}");
+        assert!(after.contains("email = new@x.com"), "{after}");
+        assert!(after.contains("password = pw2"), "{after}");
+        let _ = std::fs::remove_file(&p);
+    }
+
+    #[test]
+    fn save_config_at_keeps_the_password_when_given_a_blank_one() {
+        let p = tmp("blankpw");
+        std::fs::write(&p, "[divoom]\nemail = a@b.com\npassword = secret\n").unwrap();
+        save_config_at(&p, "new@x.com", "").unwrap();
+        let after = std::fs::read_to_string(&p).unwrap();
+        assert!(after.contains("password = secret"), "credential erased: {after}");
+        let _ = std::fs::remove_file(&p);
+    }
+
+    #[test]
+    fn save_config_at_leaves_no_temp_file_behind() {
+        let p = tmp("notemp");
+        save_config_at(&p, "a@b.com", "pw").unwrap();
+        assert!(!p.with_extension("ini.tmp").exists(), "temp file left behind");
+        let _ = std::fs::remove_file(&p);
     }
 }
