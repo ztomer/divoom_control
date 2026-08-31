@@ -415,7 +415,7 @@ its proof has been SEEN, and for anything testable that means seen RED first.
 | P0.3 wall-clock stated | **DONE** | **full 9m22s** (18 steps, warm) / **fast 1m50s** (17 steps) on this machine, so `py_ci.sh` alone is **~7.5 min — 80% of the gate**. Default stays FULL; `DIVOOM_GATE_FAST=1` is the only hatch and announces itself. See "P0.3 measurement" below |
 | P0.4 CI-coverage decided | TODO | `.gatesrc` comment states the decision; item deleted from Open threads |
 | P0.5 stray daemons reaped | **DONE (premise corrected)** | Stray PID 21632 killed, production daemon on `/tmp/divoom.sock` untouched. The harness does NOT leak: `IsolatedStack` uses per-stack `divoomd_e2e_*` sockets and kills its own PIDs; the stray was hand-started on a path referenced nowhere in the tree. No gate added, on purpose — it would fire on the documented BLE-debug workflow |
-| P1.0 gate sees 3 buckets | TODO | JS / Python-only / unreachable; prove-red both ways |
+| P1.0 gate sees 3 buckets | **DONE** | AST scan, delegation excluded. **4 python-only / 16 no-caller** (a naive scan said 13/7 — `probe_lan` forwarding to `self.connection.probe_lan()` counted as its own caller). 7 tests, 6 sabotages red. Also found: allowlist REASONS are unverified — `batch_sync_artwork`'s "called from Python (gallery_sync)" was a docstring hit; it has no production caller, only tests |
 | P1.1 preset + settings pairs | TODO | git history checked for a lost caller; wired or deleted |
 | P1.2 status-getters | TODO | surviving sibling proven to cover the caller |
 | P1.3 device commands | TODO | decided on device evidence from P2.5 |
