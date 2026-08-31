@@ -174,14 +174,19 @@ class TestToolsApiCoverage(unittest.TestCase):
     # ---- set_low_power (on/off coercion through DeviceSettings) --------
 
     def test_set_low_power_on_and_off(self):
+        """R72 P1.3: routed to the daemon, and on `device.` not `system.`.
+
+        The daemon accepts device./bare for set_low_power but NOT system., so
+        the path is the part worth asserting -- a wrong prefix would fail at
+        runtime with a generic "unknown method" that names nothing.
+        """
         dev = MagicMock()
+        dev.device.set_low_power = AsyncMock(return_value=True)
         self.api.current_divoom = dev
-        with patch("divoom_lib.system.device_settings.DeviceSettings") as DS:
-            DS.return_value.set_low_power_switch = AsyncMock(return_value=True)
-            self.assertTrue(self.api.tools.set_low_power(True))
-            DS.return_value.set_low_power_switch.assert_called_with(1)
-            self.assertTrue(self.api.tools.set_low_power("off"))
-            DS.return_value.set_low_power_switch.assert_called_with(0)
+        self.assertTrue(self.api.tools.set_low_power(True))
+        dev.device.set_low_power.assert_called_with(1)
+        self.assertTrue(self.api.tools.set_low_power("off"))
+        dev.device.set_low_power.assert_called_with(0)
 
     # ---- factory_reset: ToolsApi's OWN confirm-token guard (defense in
     # depth vs. the GuiApi wrapper's identical pre-check) ------------------

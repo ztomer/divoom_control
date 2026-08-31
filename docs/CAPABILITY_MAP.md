@@ -72,9 +72,9 @@ by deleting the dead `get_transport_status`.)
 
 | Capability | Site | Verdict | Closed by |
 |---|---|---|---|
-| `sync_time` | `divoom_gui/api/tools.py:156` | `duplicate` | P1.2 |
-| `set_auto_power_off` | `divoom_gui/api/tools.py:174` | `duplicate` | P1.3 |
-| `set_low_power` | `divoom_gui/api/tools.py:178` | `duplicate` | P1.3 |
+| ~~`sync_time`~~ | `api/tools.py:156` | **CLOSED** — daemon `system.set_date_time`, calendar values passed explicitly | P1.2 |
+| ~~`set_auto_power_off`~~ | `api/tools.py:174` | **CLOSED** — daemon `device.set_auto_power_off` | P1.3 |
+| ~~`set_low_power`~~ | `api/tools.py:178` | **CLOSED** — daemon `device.set_low_power` | P1.3 |
 | ~~`save_credentials`~~ | `presets_manager.py:28` | **CLOSED** — one call to the daemon; both hard-won rules moved into `cloud_store::save_config` | P1.1 |
 
 **F2 is a duplicate that is also a defect.** `divoom_lib/system/date_time.py:36`
@@ -99,8 +99,8 @@ invariant is about the WORK.
 
 | What | Sites | Verdict | Closed by |
 |---|---|---|---|
-| `DateTimeCommand(...)` | `api/tools.py:158` | `duplicate` (F2's construction site) | P1.2 |
-| `DeviceSettings(...)` | `api/tools.py:176`, `:180` | `duplicate` (F3's) | P1.3 |
+| ~~`DateTimeCommand(...)`~~ | `api/tools.py:158` | **CLOSED** with P1.2 | P1.2 |
+| ~~`DeviceSettings(...)`~~ | `api/tools.py:176`, `:180` | **CLOSED** with P1.3 | P1.3 |
 | `_resolve_location(...)` | `api/widgets.py:42`, `media_sync.py:299` | `duplicate` | P2.1 |
 | `saved_location()` | `weather_city.py:82` | `client-local` | — |
 | `hotchannel_config.*` | `gallery_hot_api.py:74`, `gallery_sync.py` ×7 | `shared-state` | P2.4 |

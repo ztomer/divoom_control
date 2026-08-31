@@ -141,18 +141,30 @@ class TestGuiApiCoreBasics(GuiApiTestBase):
         self.api.set_timeplan(1, True, 7, 30, 0b0011111, 0)
         dev.timeplan.set_time_manage_info.assert_called_with(1, 7, 30, 31, 0, 0, 0, 10, 0)
 
-    def test_r8_sync_time_and_auto_off_instantiated(self):
-        """R8: time-sync + auto-power-off use the un-faceted helper classes."""
+    def test_r72_sync_time_and_auto_off_go_to_the_daemon(self):
+        """R72 P1.2/P1.3: these used to build packets through divoom_lib.
+
+        The old version patched `divoom_lib.system.date_time.DateTimeCommand`
+        and `...device_settings.DeviceSettings` -- i.e. it pinned the duplicate
+        implementation in place. Both now travel to the daemon through the
+        device proxy, so the assertion is about the METHOD PATH, which is the
+        thing that can silently be wrong: the daemon accepts
+        `device.set_auto_power_off` but a wrong prefix falls through to a
+        generic "unknown method".
+        """
         dev = MagicMock()
+        dev.system.set_date_time = AsyncMock(return_value=True)
+        dev.device.set_auto_power_off = AsyncMock(return_value=True)
         self.api.current_divoom = dev
-        with patch("divoom_lib.system.date_time.DateTimeCommand") as DT:
-            DT.return_value.update_date_time = AsyncMock(return_value=True)
-            self.assertTrue(self.api.sync_time())
-            DT.assert_called_once_with(dev)
-        with patch("divoom_lib.system.device_settings.DeviceSettings") as DS:
-            DS.return_value.set_auto_power_off = AsyncMock(return_value=True)
-            self.assertTrue(self.api.set_auto_power_off(60))
-            DS.return_value.set_auto_power_off.assert_called_with(60)
+
+        self.assertTrue(self.api.sync_time())
+        kwargs = dev.system.set_date_time.call_args.kwargs
+        assert set(kwargs) == {"year", "month", "day", "hour", "minute", "second"}, kwargs
+        # A real clock, not the daemon's 2000-01-01 default.
+        assert kwargs["year"] >= 2024, kwargs
+
+        self.assertTrue(self.api.set_auto_power_off(60))
+        dev.device.set_auto_power_off.assert_called_with(60)
 
     def test_r8_no_device(self):
         self.api.current_divoom = None

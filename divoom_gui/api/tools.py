@@ -154,8 +154,31 @@ class ToolsApi(ApiBase):
         return self._tool_call(lambda d: d.device.set_temp_type(1 if self._as_bool(fahrenheit) else 0), "temp unit")
 
     def sync_time(self) -> bool:
-        from divoom_lib.system.date_time import DateTimeCommand
-        return self._tool_call(lambda d: DateTimeCommand(d).update_date_time(), "time sync")
+        """Set the device clock to this machine's local time.
+
+        R72 P1.2. This used to build the packet through
+        `divoom_lib.system.date_time.DateTimeCommand` -- a duplicate of the
+        daemon's `set_date_time`, and a BROKEN one: that module's own comment
+        records an `AttributeError` "swallowed by the GUI tool wrapper into a
+        silent False, so Sync Time never worked".
+
+        The calendar values are passed explicitly and that is deliberate. The
+        daemon owns the PACKET; the client owns "what time is it where the user
+        is", which needs a timezone the daemon would have to pull in a whole
+        tz database to answer. Passing six integers is not a second
+        implementation of anything.
+
+        Note the daemon REFUSES an argument-less call now (R72 P1.2): its
+        defaults are 2000-01-01, so `sync_time` with no arguments used to set
+        the device to the year 2000 and report success.
+        """
+        import datetime
+        now = datetime.datetime.now()
+        return self._tool_call(
+            lambda d: d.system.set_date_time(
+                year=now.year, month=now.month, day=now.day,
+                hour=now.hour, minute=now.minute, second=now.second),
+            "time sync")
 
     def set_device_name(self, name: str) -> bool:
         return self._tool_call(lambda d: d.device.set_device_name(str(name)), "device name")
@@ -172,12 +195,17 @@ class ToolsApi(ApiBase):
             return None
 
     def set_auto_power_off(self, minutes: int) -> bool:
-        from divoom_lib.system.device_settings import DeviceSettings
-        return self._tool_call(lambda d: DeviceSettings(d).set_auto_power_off(int(minutes)), "auto power off")
+        # R72 P1.3: `device.` and not `system.` -- the daemon accepts
+        # system./device./sound./bare for THIS command but only device./bare for
+        # set_low_power below, and a path it does not accept falls through to a
+        # generic "unknown method" that says nothing about the typo.
+        return self._tool_call(
+            lambda d: d.device.set_auto_power_off(int(minutes)), "auto power off")
 
     def set_low_power(self, on) -> bool:
-        from divoom_lib.system.device_settings import DeviceSettings
-        return self._tool_call(lambda d: DeviceSettings(d).set_low_power_switch(1 if self._as_bool(on) else 0), "low power")
+        return self._tool_call(
+            lambda d: d.device.set_low_power(1 if self._as_bool(on) else 0),
+            "low power")
 
     def set_fm_frequency(self, freq_x10: int) -> bool:
         return self._tool_call(lambda d: d.radio.set_radio_frequency(int(freq_x10)), "fm")

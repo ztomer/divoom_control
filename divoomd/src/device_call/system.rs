@@ -33,6 +33,33 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     .or_else(|| kw.and_then(|v| v.get(k)).and_then(|v| v.as_i64()))
                     .unwrap_or(d)
             };
+            // R72 P1.2: refuse a call that supplies no time at all.
+            //
+            // The defaults below are 2000-01-01 00:00:00, and one of this
+            // command's aliases is `sync_time` -- so `sync_time` with no
+            // arguments silently set the device clock to the year 2000 while
+            // reporting success. A command that cannot do what its name says
+            // must refuse, not quietly do something else.
+            //
+            // The daemon does NOT read the wall clock itself: converting epoch
+            // seconds to local calendar time needs a timezone database, and
+            // pulling in chrono to avoid passing six integers would be the
+            // expensive way to fix a non-problem. The client owns the calendar
+            // values (they are user intent, in the user's timezone); the daemon
+            // owns the PACKET, which is what the duplicate was really about.
+            let supplied = !args.is_empty()
+                || kw.map(|m| {
+                    ["year", "month", "day", "hour", "minute", "second"]
+                        .iter()
+                        .any(|k| m.contains_key(*k))
+                })
+                .unwrap_or(false);
+            if !supplied {
+                return err_reply(
+                    "set_date_time needs the time: pass year/month/day/hour/minute/second \
+                     (with none supplied this would set the device to 2000-01-01)",
+                );
+            }
             let year = g(0, "year", 2000);
             let month = g(1, "month", 1);
             let day = g(2, "day", 1);
