@@ -423,8 +423,8 @@ its proof has been SEEN, and for anything testable that means seen RED first.
 | P1.5 remainder | **DONE** | `get_transport_status` deleted (consuming UI removed in R32's "connectivity indicator pill"; `get_connection_state` feeds the dots now) — **this also removes one of R72's F1 auth-bypass sites**. `get_scoreboard_state` deleted (UI only writes via `set_scoreboard`; the daemon read-back `lan.get_scoreboard` stays — that decision lives daemon-side). `batch_sync_artwork` deleted with its private `_sync_artwork_detailed`, a CLOSED dead pair. `load_cached_gallery` made private (live via `fetch_gallery`). Allowlist 12 -> 8, zero python-only |
 | P1.6 tests + floor rebaseline | TODO | dead tests deleted; before/after counts and coverage delta stated. **Owed: the floor was dropped 89.5 -> 89.0 as a working margin for the deletion phase and MUST be re-baselined UP to the final measured value here.** A ratchet that only goes down is not a ratchet |
 | P1.7 allowlist EMPTY | TODO | 20 → 0; `unreviewed` rejected as a reason string |
-| P2.0 hardware packet built | TODO | `scripts/hw_verify.py`; refuses to spawn its own daemon |
-| P2.1 packet can fail | TODO | disconnected device → ✗, not a silent pass |
+| P2.0 hardware packet built | **DONE** | `scripts/hw_verify.py`, 9 checks, each tagged to its plan step. Refuses to spawn a daemon (TCC) and refuses to invent verdicts: no tty -> UNKNOWN never PASS; no device -> FAIL never SKIP. 9 tests |
+| P2.1 packet can fail | **PARTIAL** | `--self-test` against the live daemon. No-device branch PROVEN (device checks record FAIL). Invalid-method branch NOT: with no device the daemon refuses at the precondition before reading the method name, so it exits **3 = partial calibration** rather than claiming green. Owed: one `--self-test` with a device connected |
 | P2.2 sysmon on a matrix | TODO | user report + capture |
 | P2.3 R12 visual pass | TODO | album cover, custom art, weather; real scale, both surrounds |
 | P2.4 `pic_scan_ctrl` 0x35 | TODO | observable effect, or marked unsupported |
