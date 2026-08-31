@@ -316,6 +316,57 @@ hardware — it is to make the product honest about it (rule #9).
 - **"Accepted without error" is not verification.** It is what `pic_scan_ctrl`
   has had since 2026-07-13.
 
+**P0.2 found a defect it was not looking for: the Python coverage floor passes
+by ROUNDING, and is sitting exactly on the boundary.**
+
+Measured on a clean tree: **89.50%** over `divoom_gui + divoom_client`, with the
+floor set to 90. It passes. Verified against the installed coverage.py 7.14.1
+rather than assumed -- `should_fail_under` is `round(total, precision) < fail_under`
+with precision 0, so:
+
+| total | floor | precision | result |
+|-------|-------|-----------|--------|
+| 89.50 | 90 | 0 (default) | **passes** |
+| 89.49 | 90 | 0 | fails |
+| 89.50 | 90 | 2 | fails |
+
+So the floor this repo calls 90 is really **">= 89.5"**, and today's coverage is
+89.50 -- a **0.01 point** margin. The R70 stanza that says "coverage 89% -> 90%,
+floor raised to match" is describing a number the gate never actually enforced.
+
+**This is the same class as the finding that created P0 in the first place**: a
+gate that is believed to be stricter than it is. There it was a hook that never
+ran the checks; here it is a threshold that rounds its way to green. Settled in
+P0.4, which is where coverage policy is decided -- not left as a note, because a
+recorded-but-unfixed threshold is how the first one survived.
+
+**P0.3 measurement (2026-08-31, this machine, warm cache).**
+
+| Run | Steps | Wall-clock |
+|-----|-------|------------|
+| `ci_local.sh` (full) | 18 | **9m22s** |
+| `pre-push` with `DIVOOM_GATE_FAST=1` | 17 | **1m50s** |
+
+**`py_ci.sh` is ~7.5 min of the 9m22s — roughly 80% of the gate.** Everything
+else together costs under two minutes.
+
+**The default stays FULL, and that is a deliberate trade.** Nine minutes in
+front of every push is real friction, and friction is how a gate turns into
+`--no-verify` — which would recreate exactly the hole P0 closed, only with the
+bypass now invisible in the reflog instead of in a commented-out line. The
+mitigation is NOT to make skipping easy; it is that the hatch announces itself
+every single time, so a fast run can never be mistaken for a full one.
+
+**The real lever is that the Python suite is serial, and that is a fix, not a
+skip.** ~3000 tests plus 15 camoufox e2e suites run one after another. Making
+them parallel would attack the cost instead of the coverage, and is the right
+next move if nine minutes proves intolerable in practice. **Not attempted here,
+and it is not free:** this suite spawns daemons on fixed socket paths under
+`/tmp/divoom_*`, so parallel workers would collide unless each gets its own
+socket namespace — the same shared-state problem `IsolatedStack` already solves
+for the e2e suites. Recorded as a candidate with its known obstacle rather than
+as an easy win.
+
 ### R71 test plan — the holes, and which phase closes each
 
 R70 closed four holes (A-D). This round's items survived those, so naming the
@@ -349,8 +400,8 @@ its proof has been SEEN, and for anything testable that means seen RED first.
 | Step | State | Proof required |
 |------|-------|----------------|
 | P0.1 pre-push runs local CI | **DONE** | `tools/repo_gates.sh` -> `ci_local.sh`; `gate.sh --full` layer 3 uncommented. `tests/test_repo_gates.py`, 7 tests, **5 sabotages each seen RED**: layer-3 line commented out, guard disabled, fast-mode announcing a skip it did not perform, `--staged` widened to layer 3, and a silent `DIVOOM_GATE_SKIP` bypass. Wiring is probed via the recursion guard, so it costs ms, not a CI run |
-| P0.2 prove it bites | TODO | **Distinct from P0.1's proof, and not yet done.** P0.1 proved the WIRING TESTS bite; P0.2 must prove the GATES bite THROUGH the hook: a clippy error, a failing Rust test, a failing Python test, a coverage-floor breach and a `check_*.py` violation each REFUSING a push, then a clean push accepted |
-| P0.3 wall-clock stated | TODO | measured number in the CHANGELOG; any skip prints what it skipped |
+| P0.2 prove it bites | **DONE** | All 5 classes seen RED through the REAL `.githooks/pre-push`. Four at once in one 9m11s pass (`local_ci.sh` never stops on a failure): `check_no_allow` (3), clippy (11), Rust test (13+15), Python test (18), plus `rust_coverage` (17) as collateral -> **HOOK_EXIT=1**. Coverage floor proven separately at `DIVOOM_PY_COV_MIN=99` (3003 passed, failed on the FLOOR alone, exit 1). Clean tree accepted: exit 0 |
+| P0.3 wall-clock stated | **DONE** | **full 9m22s** (18 steps, warm) / **fast 1m50s** (17 steps) on this machine, so `py_ci.sh` alone is **~7.5 min — 80% of the gate**. Default stays FULL; `DIVOOM_GATE_FAST=1` is the only hatch and announces itself. See "P0.3 measurement" below |
 | P0.4 CI-coverage decided | TODO | `.gatesrc` comment states the decision; item deleted from Open threads |
 | P0.5 stray daemons reaped | TODO | suite leaves no `divoomd` on a `/tmp/divoom_*` test socket |
 | P1.0 gate sees 3 buckets | TODO | JS / Python-only / unreachable; prove-red both ways |
