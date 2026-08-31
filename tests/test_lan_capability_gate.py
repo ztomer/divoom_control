@@ -22,6 +22,10 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+import pytest
+
+from divoom_gui.api.lighting import LightingApi
+
 REPO = Path(__file__).resolve().parent.parent
 LIGHTING = REPO / "divoom_gui" / "api" / "lighting.py"
 
@@ -96,3 +100,82 @@ def test_a_bypassing_method_would_be_caught():
     offenders = [n for n, fn in _lan_methods(bad).items()
                  if not _uses_funnel(fn) and not _branches_on_lan(fn)]
     assert offenders == ["push_thing"]
+
+
+# ── behaviour, not just structure ─────────────────────────────────────────────
+#
+# The AST test above proves each surface ROUTES through the funnel. These prove
+# the three surfaces actually answer with a usable cause, because "calls
+# _lan_action" and "reports something a user can act on" are different claims.
+
+class _FakeLan:
+    def __init__(self, rec):
+        self._rec = rec
+
+    def __getattr__(self, name):
+        def call(*a, **kw):
+            self._rec.append((name, a, kw))
+            return True
+        return call
+
+
+class _FakeTarget:
+    def __init__(self, rec):
+        self.lan = _FakeLan(rec)
+
+
+@pytest.fixture
+def api(monkeypatch):
+    calls: list = []
+    state = {"current_target_mode": "single"}
+    obj = LightingApi.__new__(LightingApi)
+    obj._state_getter = lambda: state
+    monkeypatch.setattr(obj, "_target", lambda: _FakeTarget(calls), raising=False)
+    monkeypatch.setattr(obj, "_run_async", lambda coro, **kw: coro, raising=False)
+    monkeypatch.setattr(obj, "_stop_live_widgets", lambda: None, raising=False)
+    obj._calls = calls
+    obj._state = state
+    return obj
+
+
+@pytest.mark.parametrize("method,arg,verb", [
+    ("play_album", 7, "play the album"),
+    ("push_playlist", 3, "push the playlist"),
+])
+def test_success_reports_ok(api, method, arg, verb):
+    reply = getattr(api, method)(arg)
+    assert reply["ok"] is True, reply
+    assert api._calls, "the device was never called"
+
+
+@pytest.mark.parametrize("method,arg", [("play_album", 7), ("push_playlist", 3)])
+def test_no_lan_capability_reaches_the_caller(api, monkeypatch, method, arg):
+    """The point of the round: a BLE-only device says so, on every surface."""
+    from divoom_client.daemon_proxy import _DeviceCallError
+
+    def refuse(_coro, **_kw):
+        raise _DeviceCallError(
+            "this device is connected over Bluetooth, which has no LAN API",
+            "no_lan_capability")
+
+    monkeypatch.setattr(api, "_run_async", refuse, raising=False)
+    reply = getattr(api, method)(arg)
+    assert reply["ok"] is False
+    assert reply["cause"] == "no_lan_capability", reply
+    assert "Bluetooth" in reply["error"]
+
+
+@pytest.mark.parametrize("method,arg", [("play_album", 7), ("push_playlist", 3)])
+def test_wall_mode_is_refused_with_its_own_cause(api, method, arg):
+    api._state["current_target_mode"] = "wall"
+    reply = getattr(api, method)(arg)
+    assert reply["ok"] is False and reply["cause"] == "wall"
+    assert api._calls == []
+
+
+@pytest.mark.parametrize("method", ["play_album", "push_playlist"])
+def test_a_non_numeric_id_is_input_not_a_device_failure(api, method):
+    """Bad input must not masquerade as the device refusing."""
+    reply = getattr(api, method)("not-a-number")
+    assert reply["ok"] is False and reply["cause"] == "input"
+    assert api._calls == []

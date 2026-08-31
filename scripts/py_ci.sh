@@ -76,7 +76,7 @@ fi
 # far narrower than the resolution this suite can actually produce, and
 # the advertised number is the one being enforced. Raise the floor
 # deliberately when coverage earns it, and say the number out loud.
-# WORKING FLOOR FOR R71's DELETION PHASE, 2026-08-31. Coverage is 89.41%.
+# R71 FINAL, 2026-08-31. Coverage is 89.48%; floor 89.4 (0.08 margin).
 #
 # P1.1 deleted 35 statements and the miss count did not move (402 before, 402
 # after) -- i.e. every deleted statement was COVERED. That is what dead code
@@ -84,12 +84,26 @@ fi
 # Deleting it improved the codebase and lowered the ratio by 0.09 points, which
 # is the metric being perverse, not the code getting worse.
 #
-# R71 removes more of the same, so a floor pinned to today's number would
-# redden on every honest deletion. 89.0 is a deliberate working margin for the
-# rest of the phase. **P1.6 re-baselines it UP to the final measured value** --
-# a ratchet that only ever goes down is not a ratchet, and this comment is the
-# reminder that the trip back up is owed.
-COV_MIN="${DIVOOM_PY_COV_MIN:-89.0}"
+# The round dropped this to 89.0 as a working margin while deleting, and P1.6
+# owed the trip back up. Paid here: 89.0 -> 89.4.
+#
+# The full arc, out loud, because a floor that moves quietly stops meaning
+# anything:
+#
+#   start of R71   89.50%   floor 89.5 (really ">= 89.5" -- see the rounding
+#                           note above, which is what P0.4 fixed)
+#   after P1.1     89.41%   deleting well-covered dead code lowers a ratio
+#   after P1-P3    88.99%   ~290 more statements gone
+#   final          89.48%   after covering play_album / push_playlist, whose
+#                           migration into the LAN funnel had left them tested
+#                           only through e2e
+#
+# So the round ends 0.02 points BELOW where it started, having deleted ~430
+# statements of dead code. That is the metric behaving as designed, not decay:
+# removing code that was 100% covered and reachable by nothing moves the ratio
+# down and the codebase up. The floor is 89.4 rather than 89.48 so routine work
+# is not blocked by hundredths; raise it deliberately when coverage earns it.
+COV_MIN="${DIVOOM_PY_COV_MIN:-89.4}"
 COV_PRECISION=2
 
 if [ "$have_camoufox" -eq 1 ]; then
