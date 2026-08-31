@@ -246,3 +246,76 @@ def test_cloud_calls_use_the_cloud_timeout_not_the_2s_default(stub):
     finally:
         DaemonClient.send_command = original
     assert seen["read_timeout"] == cfg.cloud_timeout
+
+
+# ── credentials: the wrappers R72 P1.1 added ─────────────────────────────────
+#
+# The GUI stopped calling divoom_lib.divoom_auth and now goes through these.
+# They were shipped with zero coverage, which the pre-push floor caught.
+
+def test_get_credentials_returns_a_value_object(stub):
+    s, client = stub({"success": True, "token": 42, "user_id": 7,
+                      "email": "a@b.com", "utc": 123})
+    creds = client.get_credentials()
+    assert creds.token == 42 and creds.user_id == 7
+    assert creds.email == "a@b.com" and creds.utc == 123
+    assert creds.is_valid()
+    assert s.requests[-1]["command"] == "get_credentials"
+
+
+def test_get_credentials_forwards_force_refresh(stub):
+    """The flag decides whether the daemon re-logs in; dropping it silently
+    would turn a deliberate refresh into a cache read."""
+    s, client = stub({"success": True, "token": 1, "user_id": 1})
+    client.get_credentials(force_refresh=True)
+    assert s.requests[-1]["args"]["force_refresh"] is True
+    client.get_credentials()
+    assert s.requests[-1]["args"]["force_refresh"] is False
+
+
+def test_get_credentials_raises_cloud_unavailable_on_failure(stub):
+    from divoom_client.daemon_cloud import CloudUnavailable
+
+    _s, client = stub({"success": False, "error": "UserNewGuest RC=10"})
+    with pytest.raises(CloudUnavailable) as exc:
+        client.get_credentials()
+    assert "RC=10" in str(exc.value)
+
+
+def test_save_credentials_sends_both_fields(stub):
+    s, client = stub({"success": True, "token": 5, "user_id": 6, "email": "x@y.z"})
+    creds = client.save_credentials("x@y.z", "hunter2")
+    assert creds.is_valid() and creds.email == "x@y.z"
+    args = s.requests[-1]["args"]
+    assert args == {"email": "x@y.z", "password": "hunter2"}
+
+
+def test_save_credentials_passes_a_blank_password_through(stub):
+    """An empty password is MEANINGFUL: the daemon reads it as "keep the
+    stored one". A wrapper that filtered it would make the email-only save
+    unreachable -- see cloud_store::save_config."""
+    s, client = stub({"success": True, "token": 5, "user_id": 6})
+    client.save_credentials("x@y.z", "")
+    assert s.requests[-1]["args"]["password"] == ""
+
+
+def test_save_credentials_raises_on_failure(stub):
+    from divoom_client.daemon_cloud import CloudUnavailable
+
+    _s, client = stub({"success": False, "error": "saved, but login failed"})
+    with pytest.raises(CloudUnavailable):
+        client.save_credentials("x@y.z", "pw")
+
+
+def test_credentials_value_object_semantics():
+    """`is_valid` is token AND user_id non-zero -- the same predicate
+    divoom_lib.DivoomCredentials used. It is not an expiry check."""
+    from divoom_client.daemon_cloud import DaemonCredentials
+
+    assert DaemonCredentials.from_reply(None) is None
+    assert DaemonCredentials.from_reply({}).is_valid() is False
+    assert DaemonCredentials.from_reply({"token": 1, "user_id": 0}).is_valid() is False
+    assert DaemonCredentials.from_reply({"token": 0, "user_id": 1}).is_valid() is False
+    assert DaemonCredentials.from_reply({"token": 1, "user_id": 1}).is_valid() is True
+    # Missing/garbage fields must not raise -- a daemon mid-upgrade can omit them.
+    assert DaemonCredentials.from_reply({"token": None, "email": None}).token == 0
