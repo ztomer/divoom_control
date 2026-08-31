@@ -38,11 +38,20 @@ pub async fn handle(command: &str, req: &Request) -> Value {
                 .get("password")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            if email.is_empty() || password.is_empty() {
-                return err_reply("save_credentials requires 'email' and 'password'");
+            if email.is_empty() {
+                return err_reply("save_credentials requires 'email'");
             }
+            // An empty password means "keep the stored one" (see
+            // cloud_store::save_config). Requiring one here made the daemon
+            // unable to express an email-only save, which is the common case:
+            // the settings form never re-populates the password field.
+            //
+            // And only FORCE a re-login when a new password was actually
+            // supplied. Force-refreshing without one falls back to a guest
+            // token, which is how the account silently downgraded before.
+            let force = !password.is_empty();
             match crate::cloud_store::save_config(email, password) {
-                Ok(()) => match crate::cloud::get_credentials(true).await {
+                Ok(()) => match crate::cloud::get_credentials(force).await {
                     // R72 P1.1: return the FULL credential, same shape as
                     // `get_credentials`. It used to answer with email +
                     // user_id only, so a client building a credential value

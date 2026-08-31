@@ -55,12 +55,104 @@ pub(crate) fn load_config() -> (String, String) {
 
 /// Write `[divoom]` email/password into config.ini (0600). The Rust daemon only
 /// reads `[divoom]`, so a `[divoom]`-only write is safe. Mirrors the Python GUI.
+/// Rewrite only the `email`/`password` keys of `[divoom]`, line by line.
+///
+/// Hand-rolled to match `load_config` above, which is also hand-rolled: adding
+/// an ini crate for the writer while the reader stays bespoke would give one
+/// file two parsers with different ideas about it, which is the shape R72
+/// exists to remove.
+fn merge_divoom_section(existing: &str, email: &str, password: &str) -> String {
+    let keep_password = password.is_empty();
+    let mut out: Vec<String> = Vec::new();
+    let mut in_divoom = false;
+    let mut saw_section = false;
+    let mut wrote_email = false;
+    let mut wrote_password = false;
+
+    for line in existing.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            if in_divoom {
+                if !wrote_email {
+                    out.push(format!("email = {email}"));
+                    wrote_email = true;
+                }
+                if !wrote_password && !keep_password {
+                    out.push(format!("password = {password}"));
+                    wrote_password = true;
+                }
+            }
+            in_divoom = trimmed[1..trimmed.len() - 1].eq_ignore_ascii_case("divoom");
+            saw_section |= in_divoom;
+            out.push(line.to_string());
+            continue;
+        }
+        if in_divoom {
+            let key = trimmed.split('=').next().unwrap_or("").trim().to_ascii_lowercase();
+            if key == "email" {
+                out.push(format!("email = {email}"));
+                wrote_email = true;
+                continue;
+            }
+            if key == "password" {
+                if keep_password {
+                    out.push(line.to_string());
+                } else {
+                    out.push(format!("password = {password}"));
+                }
+                wrote_password = true;
+                continue;
+            }
+        }
+        out.push(line.to_string());
+    }
+
+    if in_divoom {
+        if !wrote_email {
+            out.push(format!("email = {email}"));
+        }
+        if !wrote_password && !keep_password {
+            out.push(format!("password = {password}"));
+        }
+    } else if !saw_section {
+        if !out.is_empty() && !out.last().map(|l| l.is_empty()).unwrap_or(false) {
+            out.push(String::new());
+        }
+        out.push("[divoom]".to_string());
+        out.push(format!("email = {email}"));
+        if !keep_password {
+            out.push(format!("password = {password}"));
+        }
+    }
+
+    let mut joined = out.join("\n");
+    joined.push('\n');
+    joined
+}
+
+/// Update `[divoom]` in config.ini, PRESERVING every other section.
+///
+/// R72 P1.1. This used to write the whole file as
+/// `"[divoom]\nemail=..\npassword=..\n"`, destroying `[gui]`, `[gallery]`
+/// and the weather settings that share it. Nothing had noticed because no
+/// client called it -- the GUI did its own read-modify-write through
+/// configparser -- so the daemon's version was a second implementation that
+/// had never run in anger. Routing the GUI here, which the capability map
+/// called for, would have eaten the user's settings on the first save.
+///
+/// An EMPTY password means "keep the stored one", the second thing the Python
+/// side knew and this did not. The settings form never re-populates the
+/// password field, so a plain re-save submits `password=""`; overwriting with
+/// that erased the credential and the next token expiry silently degraded the
+/// account to a guest login -- described in `presets_manager.py` as
+/// "credentials get erased from time to time". Not reintroduced here.
 pub fn save_config(email: &str, password: &str) -> Result<(), String> {
     let path = config_file_path().ok_or("cannot find config directory")?;
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    let data = format!("[divoom]\nemail={}\npassword={}\n", email.trim(), password);
+    let existing = std::fs::read_to_string(&path).unwrap_or_default();
+    let data = merge_divoom_section(&existing, email.trim(), password);
     let temp_path = path.with_extension("ini.tmp");
     std::fs::write(&temp_path, data).map_err(|e| e.to_string())?;
     #[cfg(unix)]
@@ -164,4 +256,84 @@ pub(crate) fn save_virtual_device(
     }
     std::fs::rename(temp_path, path).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[cfg(test)]
+mod merge_tests {
+    use super::merge_divoom_section;
+
+    // These guard a DATA-LOSS path. The version this replaced wrote the whole
+    // file as "[divoom]\nemail=..\npassword=..\n", so every other section went
+    // with it. Nothing had noticed because no client called it -- the GUI did
+    // its own read-modify-write -- and the capability map's verdict was to
+    // route the GUI here, which would have eaten the user's settings on the
+    // first save.
+
+    #[test]
+    fn other_sections_survive() {
+        let before = "[gui]\ntimeout = 120\nlimit = 4\n\n\
+                      [divoom]\nemail = old@x.com\npassword = secret\n\n\
+                      [gallery]\ngallery_sort = 1\n";
+        let after = merge_divoom_section(before, "new@x.com", "hunter2");
+        assert!(after.contains("[gui]"), "{after}");
+        assert!(after.contains("timeout = 120"), "{after}");
+        assert!(after.contains("[gallery]"), "{after}");
+        assert!(after.contains("gallery_sort = 1"), "{after}");
+        assert!(after.contains("email = new@x.com"), "{after}");
+        assert!(after.contains("password = hunter2"), "{after}");
+    }
+
+    #[test]
+    fn an_empty_password_keeps_the_stored_one() {
+        // The settings form never re-populates the password field, so a plain
+        // re-save submits "". Overwriting with that erased the credential and
+        // the next token expiry degraded the account to a guest login.
+        let before = "[divoom]\nemail = old@x.com\npassword = secret\n";
+        let after = merge_divoom_section(before, "new@x.com", "");
+        assert!(after.contains("password = secret"), "password was wiped: {after}");
+        assert!(after.contains("email = new@x.com"), "{after}");
+        assert!(!after.contains("old@x.com"), "{after}");
+    }
+
+    #[test]
+    fn a_missing_divoom_section_is_appended_without_touching_the_rest() {
+        let before = "[gui]\ntimeout = 120\n";
+        let after = merge_divoom_section(before, "a@b.com", "pw");
+        assert!(after.contains("[gui]"), "{after}");
+        assert!(after.contains("timeout = 120"), "{after}");
+        assert!(after.contains("[divoom]"), "{after}");
+        assert!(after.contains("email = a@b.com"), "{after}");
+    }
+
+    #[test]
+    fn an_empty_file_gets_a_whole_section() {
+        let after = merge_divoom_section("", "a@b.com", "pw");
+        assert!(after.contains("[divoom]"), "{after}");
+        assert!(after.contains("email = a@b.com"), "{after}");
+        assert!(after.contains("password = pw"), "{after}");
+    }
+
+    #[test]
+    fn a_divoom_section_missing_a_key_gains_it() {
+        let before = "[divoom]\nemail = a@b.com\n\n[gui]\ntimeout = 5\n";
+        let after = merge_divoom_section(before, "a@b.com", "pw");
+        assert!(after.contains("password = pw"), "{after}");
+        assert!(after.contains("[gui]"), "section order broken: {after}");
+        assert!(after.contains("timeout = 5"), "{after}");
+    }
+
+    #[test]
+    fn keys_outside_divoom_are_never_rewritten() {
+        let before = "[other]\nemail = do-not-touch\n\n[divoom]\nemail = a@b.com\n";
+        let after = merge_divoom_section(before, "new@x.com", "");
+        assert!(after.contains("email = do-not-touch"), "{after}");
+        assert!(after.contains("email = new@x.com"), "{after}");
+    }
+
+    #[test]
+    fn the_file_ends_with_exactly_one_newline() {
+        let after = merge_divoom_section("[divoom]\nemail = a@b.com\n", "b@c.com", "");
+        assert!(after.ends_with('\n'), "{after:?}");
+        assert!(!after.ends_with("\n\n"), "{after:?}");
+    }
 }
