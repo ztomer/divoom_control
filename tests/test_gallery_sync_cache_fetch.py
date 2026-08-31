@@ -2,13 +2,13 @@
 worker (split from test_gallery_sync_coverage.py)."""
 import json
 import logging
-import urllib.request
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from tests.support.gallery_sync_common import (  # noqa: F401
+    FakeDaemonClient,
     _Host,
     _wait_for_fetch_thread,
 )
@@ -108,367 +108,166 @@ def test_get_cached_gallery_files_encode_failure_is_warned_not_raised(tmp_path, 
     assert out == []  # the one file failed to encode -> excluded, no crash
 
 
+
 # ────────────────────────────── fetch_gallery ───────────────────────────────
-
-def _fake_urlopen_factory(*, rc=0, return_message="", file_list=None, dl_bytes_map=None,
-                           dl_raises_for=None, list_raises_first_n=0, captured_bodies=None):
-    """Build a urlopen side_effect answering both the auth/list POST to
-    appin.divoom-gz.com and the per-item GET to fin.divoom-gz.com.
-
-    `list_raises_first_n` lets a test simulate N transient failures on the
-    list endpoint before it starts succeeding (retry-path coverage).
-    """
-    file_list = file_list if file_list is not None else []
-    dl_bytes_map = dl_bytes_map or {}
-    dl_raises_for = dl_raises_for or set()
-    state = {"list_calls": 0}
-
-    def _urlopen(req, timeout=10):
-        url = req.full_url if hasattr(req, "full_url") else str(req)
-        cm = MagicMock()
-        if "GetCategoryFileListV2" in url:
-            if captured_bodies is not None:
-                captured_bodies.append(json.loads(req.data.decode("utf-8")))
-            state["list_calls"] += 1
-            if state["list_calls"] <= list_raises_first_n:
-                raise RuntimeError("transient network blip")
-            body = json.dumps({
-                "ReturnCode": rc,
-                "ReturnMessage": return_message,
-                "FileList": file_list,
-            }).encode("utf-8")
-            cm.__enter__.return_value.read.return_value = body
-        else:
-            file_id = url.rsplit("/", 1)[-1]
-            if file_id in dl_raises_for:
-                raise RuntimeError(f"download failed for {file_id}")
-            cm.__enter__.return_value.read.return_value = dl_bytes_map.get(file_id, b"\x00\x00")
-        return cm
-
-    return _urlopen
+#
+# R70 P2.2. These used to drive a fake `urllib.request.urlopen` answering both
+# the GetCategoryFileListV2 POST and the per-item CDN GET, because the GUI made
+# both calls itself. It makes neither now: the seam is two named daemon
+# commands, and the tests say so.
+#
+# The behaviours worth keeping were kept — an auth failure marks the banner
+# expired, a per-item failure does not empty the gallery, broadcast and
+# cache-write failures are warned not raised. What went with the implementation
+# went deliberately: container-magic sniffing and `.bin` corruption recovery
+# were the GUI decoder's problems, and the GUI has no decoder.
 
 
-def test_fetch_gallery_success_full_pipeline(tmp_path, monkeypatch):
-    """Happy path: cached creds present, one item needs full download+decode
-    (magic-43 extraction), one already has a cached preview (skips download
-    and decode), one has no FileId at all. Window is present so progressive
-    streaming + the final broadcast both fire, and the JSON cache persists."""
+def _daemon_host(tmp_path, monkeypatch, client, window=True):
     monkeypatch.setenv("HOME", str(tmp_path))
     m = _Host()
-    m.window = MagicMock()
-    m.cached_creds = MagicMock(token="tok", user_id=42)
-    m.device_pw = "secretpw"  # exercise the DevicePassword-in-body branch
+    m.window = MagicMock() if window else None
+    m._daemon_client = client
+    return m
 
-    cache_dir = tmp_path / ".config" / "divoom-control" / "cache_gallery"
-    cache_dir.mkdir(parents=True)
-    (cache_dir / "already_cached.png").write_bytes(b"\x89PNG\r\n\x1a\n")
 
-    file_list = [
-        {"FileId": "needs_download", "FileName": "New", "LikeCnt": 3, "FileType": 5},
-        {"FileId": "already_cached", "FileName": "Old", "LikeCnt": 1, "FileType": 5},
-        {"FileName": "NoFileId"},  # no FileId -> download_item early-returns
-    ]
-    captured_bodies = []
-    urlopen_fn = _fake_urlopen_factory(
-        rc=0, file_list=file_list,
-        dl_bytes_map={"needs_download": b"rawbytes"},
-        captured_bodies=captured_bodies,
+def test_fetch_gallery_asks_the_daemon_and_streams_every_item(tmp_path, monkeypatch):
+    """Happy path: the list comes from `fetch_gallery`, each preview from
+    `get_animated_preview`, and every item is streamed progressively."""
+    client = FakeDaemonClient(
+        file_list=[
+            {"FileId": "aaa", "FileName": "New", "LikeCnt": 3, "FileType": 5},
+            {"FileId": "bbb", "FileName": "Old", "LikeCnt": 1, "FileType": 5},
+            {"FileName": "NoFileId"},
+        ],
+        previews={"aaa": "data:image/gif;base64,R0lGODlhAQABAAAAACw=",
+                  "bbb": "data:image/png;base64,iVBORw0KGgo="},
     )
+    m = _daemon_host(tmp_path, monkeypatch, client)
+    assert m.fetch_gallery(classify=18, target_size=16) == "[]"
+    _wait_for_fetch_thread()
 
-    with patch("urllib.request.urlopen", side_effect=urlopen_fn), \
-         patch("divoom_gui.gallery_download.media_decoder.extract_image_from_magic_43",
-               return_value=(b"decodedpng", ".png")), \
-         patch("divoom_gui.gallery_download.media_decoder.is_black_image",
-               return_value=False):
-        out = m.fetch_gallery(classify=18, target_size=16)
-        assert out == "[]"  # no pre-existing gallery_cache.json -> cached_data empty
-        _wait_for_fetch_thread()
+    assert client.fetch_calls == [
+        {"classify": 18, "limit": 30, "file_sort": 1, "file_size": 1}]
+    assert set(client.preview_calls) == {"aaa", "bbb"}
 
-    assert (cache_dir / "needs_download.png").read_bytes() == b"decodedpng"
-    assert captured_bodies[0]["DevicePassword"] == "secretpw"
-
-    cache_file = tmp_path / ".config" / "divoom-control" / "gallery_cache.json"
-    saved = json.loads(cache_file.read_text())
-    assert len(saved) == 3
-    assert {item["name"] for item in saved} == {"New", "Old", "NoFileId"}
-
-    assert m.window.evaluate_js.call_count >= 4  # 3 progressive + 1 final broadcast
+    saved = json.loads(
+        (tmp_path / ".config" / "divoom-control" / "gallery_cache.json").read_text())
+    assert {i["name"] for i in saved} == {"New", "Old", "NoFileId"}
+    assert saved[0]["preview_url"].startswith("data:image/gif;base64,")
+    assert m.window.evaluate_js.call_count >= 4  # 3 progressive + 1 final
 
 
 def test_fetch_gallery_file_size_bitmask_explicit_vs_lookup(tmp_path, monkeypatch):
-    """file_size>0 is used directly; file_size=0 falls back to
-    FILE_SIZE_BITMASK.get(target_size, 1), defaulting to 1 for an unknown
-    target_size — both arms of that branch."""
-    monkeypatch.setenv("HOME", str(tmp_path))
-    m = _Host()
-    m.cached_creds = MagicMock(token="tok", user_id=1)
+    """file_size>0 is passed through; 0 falls back to the size lookup."""
+    client = FakeDaemonClient(file_list=[])
+    m = _daemon_host(tmp_path, monkeypatch, client)
+    m.fetch_gallery(classify=1, target_size=16, file_size=32)
+    _wait_for_fetch_thread()
+    assert client.fetch_calls[-1]["file_size"] == 32
 
-    bodies_explicit, bodies_lookup = [], []
-    with patch("urllib.request.urlopen",
-               side_effect=_fake_urlopen_factory(file_list=[], captured_bodies=bodies_explicit)):
-        m.fetch_gallery(classify=1, target_size=16, file_size=64)
-        _wait_for_fetch_thread()
-    assert bodies_explicit[0]["FileSize"] == 64
+    client.fetch_calls.clear()
+    m.fetch_gallery(classify=1, target_size=64, file_size=0)
+    _wait_for_fetch_thread()
+    assert client.fetch_calls[-1]["file_size"] == 4  # FILE_SIZE_BITMASK[64]
 
-    with patch("urllib.request.urlopen",
-               side_effect=_fake_urlopen_factory(file_list=[], captured_bodies=bodies_lookup)):
-        m.fetch_gallery(classify=1, target_size=99999, file_size=0)  # unknown size
-        _wait_for_fetch_thread()
-    assert bodies_lookup[0]["FileSize"] == 1  # FILE_SIZE_BITMASK.get(99999, 1)
+    client.fetch_calls.clear()
+    m.fetch_gallery(classify=1, target_size=999, file_size=0)
+    _wait_for_fetch_thread()
+    assert client.fetch_calls[-1]["file_size"] == 1  # unknown size -> default
 
 
-def test_fetch_gallery_retries_and_refreshes_credentials_on_transient_failure(tmp_path, monkeypatch):
-    """First attempt fails -> credentials reset -> second attempt refetches
-    creds with force_refresh=True and succeeds. Covers both `force_refresh`
-    arms (retries<1 false then true) and the config.ini credential path."""
-    monkeypatch.setenv("HOME", str(tmp_path))
-    m = _Host()  # cached_creds starts None -> forces the config.ini path
+def test_an_auth_failure_marks_the_banner_expired(tmp_path, monkeypatch):
+    """The expired-credentials banner is driven by the daemon's `cause` flag.
 
-    cfg_dir = tmp_path / ".config" / "divoom-control"
-    cfg_dir.mkdir(parents=True)
-    (cfg_dir / "config.ini").write_text("[divoom]\nemail = a@b.com\npassword = pw\n")
+    It used to be decided by searching the error TEXT for "expired"/"token"/
+    "credentials not configured" — so an upstream rewording silently changed
+    which banner the user saw.
+    """
+    from divoom_client.daemon_cloud import CloudUnavailable
 
-    fake_creds = MagicMock(token="tok", user_id=7)
-    with patch("urllib.request.urlopen",
-               side_effect=_fake_urlopen_factory(file_list=[], list_raises_first_n=1)), \
-         patch("divoom_gui.gallery_sync.divoom_auth.get_credentials",
-               return_value=fake_creds) as mock_get_creds:
-        m.fetch_gallery(classify=1)
-        _wait_for_fetch_thread()
+    client = FakeDaemonClient(
+        fetch_error=CloudUnavailable("UserNewGuest failed (RC=10)", "auth"))
+    m = _daemon_host(tmp_path, monkeypatch, client)
+    m.fetch_gallery(classify=1, target_size=16)
+    _wait_for_fetch_thread()
 
-    assert mock_get_creds.call_count == 2
-    assert mock_get_creds.call_args_list[0].kwargs["force_refresh"] is False
-    assert mock_get_creds.call_args_list[1].kwargs["force_refresh"] is True
+    calls = [c.args[0] for c in m.window.evaluate_js.call_args_list]
+    err = [c for c in calls if "onGalleryFetchError" in c]
+    assert err and ", true," in err[0], err
 
 
-def test_fetch_gallery_credentials_not_configured_reports_error(tmp_path, monkeypatch, caplog):
-    """No cached creds and no config.ini -> permanent failure; the error is
-    classified as an auth issue (is_expired) and broadcast if a window
-    exists, or silently skipped (no crash) if it doesn't."""
-    monkeypatch.setenv("HOME", str(tmp_path))
+def test_a_cloud_failure_is_reported_but_not_as_expired(tmp_path, monkeypatch):
+    from divoom_client.daemon_cloud import CloudUnavailable
 
-    with caplog.at_level(logging.WARNING, logger="divoom_gui"):
-        # No window: covers the `if self.window` false arm in the error handler.
-        m_no_window = _Host()
-        with patch("urllib.request.urlopen", side_effect=AssertionError("must not be called")):
-            m_no_window.fetch_gallery(classify=1)
-            _wait_for_fetch_thread()
-        assert not (tmp_path / ".config" / "divoom-control" / "gallery_cache.json").exists()
+    client = FakeDaemonClient(
+        fetch_error=CloudUnavailable("Divoom said no (RC=5)", "cloud"))
+    m = _daemon_host(tmp_path, monkeypatch, client)
+    m.fetch_gallery(classify=1, target_size=16)
+    _wait_for_fetch_thread()
 
-        # With window: the error broadcast fires and reports is_expired=true.
-        m_window = _Host()
-        m_window.window = MagicMock()
-        with patch("urllib.request.urlopen", side_effect=AssertionError("must not be called")):
-            m_window.fetch_gallery(classify=1)
-            _wait_for_fetch_thread()
-
-    m_window.window.evaluate_js.assert_called_once()
-    js_code = m_window.window.evaluate_js.call_args[0][0]
-    assert "onGalleryFetchError" in js_code
-    assert ", true," in js_code  # is_expired_val
-    assert "Background gallery fetch failed permanently" in caplog.text
+    calls = [c.args[0] for c in m.window.evaluate_js.call_args_list]
+    err = [c for c in calls if "onGalleryFetchError" in c]
+    assert err and ", false," in err[0], err
+    assert "RC=5" in err[0]
 
 
-def test_fetch_gallery_token_expired_return_code_marks_expired(tmp_path, monkeypatch):
-    """ReturnCode in [9, 10, 11] means the cloud rejected the token. Both
-    retry attempts must be able to re-fetch credentials (config.ini present
-    + get_credentials mocked) so the final error is really the ReturnCode
-    failure, not an unrelated "credentials not configured"."""
-    monkeypatch.setenv("HOME", str(tmp_path))
-    m = _Host()
-    m.window = MagicMock()
-    m.cached_creds = MagicMock(token="tok", user_id=1)
+def test_an_absent_daemon_reports_rather_than_hanging(tmp_path, monkeypatch):
+    m = _daemon_host(tmp_path, monkeypatch, None)
+    m.fetch_gallery(classify=1, target_size=16)
+    _wait_for_fetch_thread()
+    calls = [c.args[0] for c in m.window.evaluate_js.call_args_list]
+    assert any("onGalleryFetchError" in c and "background service" in c for c in calls)
 
-    cfg_dir = tmp_path / ".config" / "divoom-control"
-    cfg_dir.mkdir(parents=True)
-    (cfg_dir / "config.ini").write_text("[divoom]\nemail = a@b.com\npassword = pw\n")
 
-    with patch("urllib.request.urlopen", side_effect=_fake_urlopen_factory(rc=10)), \
-         patch("divoom_gui.gallery_sync.divoom_auth.get_credentials",
-               return_value=MagicMock(token="tok2", user_id=1)):
-        m.fetch_gallery(classify=1)
+def test_one_undecodable_item_does_not_empty_the_gallery(tmp_path, monkeypatch, caplog):
+    """A per-item failure is not a gallery failure.
+
+    The distinction the whole round is about: "this one asset could not be
+    decoded" and "the cloud could not be reached" are different states and must
+    not collapse into one empty grid.
+    """
+    from divoom_client.daemon_cloud import CloudUnavailable
+
+    client = FakeDaemonClient(
+        file_list=[{"FileId": "good", "FileName": "Good"},
+                   {"FileId": "bad", "FileName": "Bad"}],
+        previews={"good": "data:image/gif;base64,R0lGODlhAQABAAAAACw="},
+        preview_errors={"bad": CloudUnavailable("unrecognized container magic", "cloud")},
+    )
+    m = _daemon_host(tmp_path, monkeypatch, client)
+    with caplog.at_level(logging.WARNING):
+        m.fetch_gallery(classify=1, target_size=16)
         _wait_for_fetch_thread()
 
-    js_code = m.window.evaluate_js.call_args[0][0]
-    assert "onGalleryFetchError" in js_code
-    assert ", true," in js_code
-    assert "Token expired" in js_code
+    saved = json.loads(
+        (tmp_path / ".config" / "divoom-control" / "gallery_cache.json").read_text())
+    assert len(saved) == 2
+    by_name = {i["name"]: i for i in saved}
+    assert by_name["Good"]["preview_url"].startswith("data:")
+    assert by_name["Bad"]["preview_url"] == ""
+    assert "unrecognized container magic" in caplog.text
 
 
-def test_fetch_gallery_api_error_return_code_not_expired(tmp_path, monkeypatch):
-    """A non-auth ReturnCode error is reported but NOT flagged as expired."""
-    monkeypatch.setenv("HOME", str(tmp_path))
-    m = _Host()
-    m.window = MagicMock()
-    m.cached_creds = MagicMock(token="tok", user_id=1)
-
-    cfg_dir = tmp_path / ".config" / "divoom-control"
-    cfg_dir.mkdir(parents=True)
-    (cfg_dir / "config.ini").write_text("[divoom]\nemail = a@b.com\npassword = pw\n")
-
-    with patch("urllib.request.urlopen",
-               side_effect=_fake_urlopen_factory(rc=5, return_message="server exploded")), \
-         patch("divoom_gui.gallery_sync.divoom_auth.get_credentials",
-               return_value=MagicMock(token="tok2", user_id=1)):
-        m.fetch_gallery(classify=1)
+def test_broadcast_failures_are_warned_not_raised(tmp_path, monkeypatch, caplog):
+    client = FakeDaemonClient(
+        file_list=[{"FileId": "aaa", "FileName": "A"}],
+        previews={"aaa": "data:image/gif;base64,R0lGODlhAQABAAAAACw="})
+    m = _daemon_host(tmp_path, monkeypatch, client)
+    m.window.evaluate_js.side_effect = RuntimeError("webview gone")
+    with caplog.at_level(logging.WARNING):
+        m.fetch_gallery(classify=1, target_size=16)
         _wait_for_fetch_thread()
-
-    js_code = m.window.evaluate_js.call_args[0][0]
-    assert "onGalleryFetchError" in js_code
-    assert ", false," in js_code
-    assert "server exploded" in js_code
-
-
-def test_fetch_gallery_download_failure_continues_pipeline(tmp_path, monkeypatch, caplog):
-    """A per-item download failure is warned but does not abort the whole
-    fetch — the item still appears in results with an empty preview_url."""
-    monkeypatch.setenv("HOME", str(tmp_path))
-    m = _Host()
-    m.cached_creds = MagicMock(token="tok", user_id=1)
-
-    file_list = [{"FileId": "flaky", "FileName": "Flaky", "LikeCnt": 0, "FileType": 5}]
-    with caplog.at_level(logging.WARNING, logger="divoom_gui"):
-        with patch("urllib.request.urlopen",
-                   side_effect=_fake_urlopen_factory(file_list=file_list, dl_raises_for={"flaky"})):
-            m.fetch_gallery(classify=1)
-            _wait_for_fetch_thread()
-
-    assert "Gallery download failed for flaky" in caplog.text
-    cache_dir = tmp_path / ".config" / "divoom-control" / "cache_gallery"
-    assert not (cache_dir / "flaky.bin").exists()
-
-    cache_file = tmp_path / ".config" / "divoom-control" / "gallery_cache.json"
-    saved = json.loads(cache_file.read_text())
-    assert saved[0]["preview_url"] == ""
-
-
-def test_fetch_gallery_decode_signature_branches(tmp_path, monkeypatch):
-    """With magic-43 extraction returning nothing, raw bytes are classified
-    by file signature (GIF/PNG/JPEG), falling back to decode_and_save_preview
-    for anything unrecognized."""
-    monkeypatch.setenv("HOME", str(tmp_path))
-    m = _Host()
-    m.cached_creds = MagicMock(token="tok", user_id=1)
-
-    file_list = [
-        {"FileId": "is_gif", "FileName": "G", "FileType": 5},
-        {"FileId": "is_png", "FileName": "P", "FileType": 5},
-        {"FileId": "is_jpg", "FileName": "J", "FileType": 5},
-        {"FileId": "is_other", "FileName": "O", "FileType": 5},
-    ]
-    dl_bytes_map = {
-        "is_gif": b"GIF89a" + b"\x00" * 10,
-        "is_png": b"\x89PNG\r\n\x1a\n" + b"\x00" * 10,
-        "is_jpg": b"\xff\xd8" + b"\x00" * 10,
-        "is_other": b"unrecognized bytes",
-    }
-
-    fallback_calls = []
-
-    def fake_decode_and_save_preview(raw_bytes, out_path):
-        fallback_calls.append((raw_bytes, out_path))
-        out_path.write_bytes(b"fallback-png")
-        return True
-
-    with patch("urllib.request.urlopen",
-               side_effect=_fake_urlopen_factory(file_list=file_list, dl_bytes_map=dl_bytes_map)), \
-         patch("divoom_gui.gallery_download.media_decoder.extract_image_from_magic_43", return_value=None), \
-         patch("divoom_gui.gallery_download.media_decoder.decode_and_save_preview",
-               side_effect=fake_decode_and_save_preview):
-        m.fetch_gallery(classify=1)
-        _wait_for_fetch_thread()
-
-    cache_dir = tmp_path / ".config" / "divoom-control" / "cache_gallery"
-    assert (cache_dir / "is_gif.gif").exists()
-    assert (cache_dir / "is_png.png").exists()
-    assert (cache_dir / "is_jpg.jpg").exists()
-    assert len(fallback_calls) == 1
-    assert (cache_dir / "is_other.png").read_bytes() == b"fallback-png"
-
-
-def test_fetch_gallery_corrupt_bin_is_deleted_so_next_fetch_redownloads(tmp_path, monkeypatch):
-    """Regression (user report: 'most images don't render'): a truncated /
-    undecodable download used to cache the bad `.bin` forever — every later
-    fetch re-decoded the same corrupt bytes and failed again, permanently.
-    Decode failure must now delete the `.bin` so the NEXT fetch re-downloads
-    fresh bytes instead of retrying the same corrupt cache entry forever."""
-    monkeypatch.setenv("HOME", str(tmp_path))
-    m = _Host()
-    m.cached_creds = MagicMock(token="tok", user_id=1)
-    file_list = [{"FileId": "corrupt", "FileName": "C", "FileType": 5}]
-    cache_dir = tmp_path / ".config" / "divoom-control" / "cache_gallery"
-
-    # Round 1: download succeeds, decode fails (simulates a truncated
-    # AES-CBC payload) — the .bin must NOT survive the run.
-    with patch("urllib.request.urlopen",
-               side_effect=_fake_urlopen_factory(file_list=file_list,
-                                                  dl_bytes_map={"corrupt": b"not a real container"})), \
-         patch("divoom_gui.gallery_download.media_decoder.extract_image_from_magic_43", return_value=None), \
-         patch("divoom_gui.gallery_download.media_decoder.decode_and_save_preview", return_value=False):
-        m.fetch_gallery(classify=1)
-        _wait_for_fetch_thread()
-
-    assert not (cache_dir / "corrupt.bin").exists()
-    assert not (cache_dir / "corrupt.png").exists()
-    cache_file = tmp_path / ".config" / "divoom-control" / "gallery_cache.json"
-    assert json.loads(cache_file.read_text())[0]["preview_url"] == ""
-
-    # Round 2: same file_id, decode now succeeds — because the bad .bin was
-    # deleted, this fetch re-downloads (not re-decodes stale bytes) and the
-    # item ends up with a real preview.
-    def fake_decode_ok(raw_bytes, out_path):
-        out_path.write_bytes(b"decoded-png")
-        return True
-
-    with patch("urllib.request.urlopen",
-               side_effect=_fake_urlopen_factory(file_list=file_list,
-                                                  dl_bytes_map={"corrupt": b"a real container this time"})), \
-         patch("divoom_gui.gallery_download.media_decoder.extract_image_from_magic_43", return_value=None), \
-         patch("divoom_gui.gallery_download.media_decoder.decode_and_save_preview",
-               side_effect=fake_decode_ok):
-        m.fetch_gallery(classify=1)
-        _wait_for_fetch_thread()
-
-    assert (cache_dir / "corrupt.png").read_bytes() == b"decoded-png"
-    saved = json.loads(cache_file.read_text())
-    assert saved[0]["preview_url"].startswith("data:image/png;base64,")
-
-
-def test_fetch_gallery_progressive_and_error_broadcast_exceptions_are_caught(tmp_path, monkeypatch, caplog):
-    """If window.evaluate_js itself always raises, the per-item progressive
-    send is warned and skipped, the (un-guarded) final broadcast raising
-    propagates into the outer handler, and THAT handler's own attempt to
-    report the error also fails safely and is warned."""
-    monkeypatch.setenv("HOME", str(tmp_path))
-    m = _Host()
-    m.cached_creds = MagicMock(token="tok", user_id=1)
-    m.window = MagicMock()
-    m.window.evaluate_js.side_effect = RuntimeError("js boom")
-
-    file_list = [{"FileId": "x", "FileName": "X", "FileType": 5}]
-    with caplog.at_level(logging.WARNING, logger="divoom_gui"):
-        with patch("urllib.request.urlopen", side_effect=_fake_urlopen_factory(file_list=file_list)):
-            m.fetch_gallery(classify=1)
-            _wait_for_fetch_thread()
-
     assert "Failed to send progressive gallery item" in caplog.text
-    assert "Background gallery fetch failed permanently" in caplog.text
-    assert "Failed to send gallery fetch error" in caplog.text
-    # The cache write happens before the final broadcast attempt, so it must
-    # still have succeeded despite every evaluate_js call blowing up.
-    cache_file = tmp_path / ".config" / "divoom-control" / "gallery_cache.json"
-    assert json.loads(cache_file.read_text())[0]["name"] == "X"
 
 
-def test_fetch_gallery_cache_save_failure_is_warned(tmp_path, monkeypatch, caplog):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    m = _Host()
-    m.cached_creds = MagicMock(token="tok", user_id=1)
-
-    with caplog.at_level(logging.WARNING, logger="divoom_gui"):
-        with patch("urllib.request.urlopen", side_effect=_fake_urlopen_factory(file_list=[])), \
-             patch("divoom_gui.gallery_sync.atomic_write_text", side_effect=OSError("disk full")):
-            m.fetch_gallery(classify=1)
+def test_cache_save_failure_is_warned(tmp_path, monkeypatch, caplog):
+    client = FakeDaemonClient(file_list=[{"FileId": "aaa", "FileName": "A"}],
+                              previews={"aaa": "data:image/png;base64,iVBORw0KGgo="})
+    m = _daemon_host(tmp_path, monkeypatch, client)
+    with patch("divoom_gui.gallery_sync.atomic_write_text",
+               side_effect=OSError("disk full")):
+        with caplog.at_level(logging.WARNING):
+            m.fetch_gallery(classify=1, target_size=16)
             _wait_for_fetch_thread()
-
     assert "Failed to save gallery cache" in caplog.text

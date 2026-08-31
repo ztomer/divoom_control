@@ -3,11 +3,9 @@
 import json
 import logging
 import base64
-import urllib.request
 import threading
 from pathlib import Path
-from divoom_lib import divoom_auth
-from divoom_lib import media_decoder
+from divoom_gui import gallery_assets
 from divoom_lib.utils.atomic_io import atomic_write_config, atomic_write_text
 
 logger = logging.getLogger("divoom_gui")
@@ -99,16 +97,6 @@ class GallerySyncMixin(GalleryHotApiMixin):
 
     FILE_SIZE_BITMASK: dict[int, int] = {16: 1, 32: 2, 64: 4, 128: 16, 256: 32}
 
-    @staticmethod
-    def _fetch_gallery_asset(cache_dir: Path, file_id: str) -> bool:
-        """Download + decode one cloud gallery asset (see gallery_download.py).
-
-        A cached ``.bin`` that fails to decode is dropped and re-downloaded in
-        the SAME call, so a single ``fetch_gallery`` pass recovers the preview
-        instead of leaving an empty (black) gallery tile until reopened."""
-        from divoom_gui.gallery_download import fetch_gallery_asset
-        return fetch_gallery_asset(cache_dir, file_id)
-
     def fetch_gallery(self, classify: int, target_size: int = 16,
                       file_sort: int = 1, file_size: int = 0) -> str:
         """Fetch gallery items. file_size=0 means auto-detect from target_size."""
@@ -121,126 +109,52 @@ class GallerySyncMixin(GalleryHotApiMixin):
 
         def background_fetch_worker():
             try:
-                retries = 1
-                file_list = []
-                while retries >= 0:
-                    try:
-                        if not self.cached_creds:
-                            import configparser
-                            config_file = Path.home() / ".config" / "divoom-control" / "config.ini"
-                            email, password = "", ""
-                            if config_file.exists():
-                                cfg = configparser.ConfigParser()
-                                cfg.read(config_file)
-                                email = cfg.get("divoom", "email", fallback="")
-                                password = cfg.get("divoom", "password", fallback="")
-                            
-                            if not email or not password:
-                                logger.warning("Background fetch: credentials not configured.")
-                                raise RuntimeError("Credentials not configured in config.ini")
+                client = self._client()
+                if client is None:
+                    raise RuntimeError("the background service is not running")
 
-                            force_refresh = (retries < 1)
-                            self.cached_creds = divoom_auth.get_credentials(force_refresh=force_refresh)
-                            
-                        if file_size > 0:
-                            file_size_bitmask = file_size
-                        else:
-                            file_size_bitmask = self.FILE_SIZE_BITMASK.get(target_size, 1)
-                            
-                        body = {
-                            "Command": "GetCategoryFileListV2",
-                            "Token": self.cached_creds.token,
-                            "UserId": self.cached_creds.user_id,
-                            "DeviceId": self.device_id,
-                            "Classify": classify,
-                            "FileSort": file_sort,
-                            "FileType": 5,
-                            "FileSize": file_size_bitmask,
-                            "Version": 19,
-                            "StartNum": 1,
-                            "EndNum": 30,
-                            "RefreshIndex": 0
-                        }
-                        if self.device_pw:
-                            body["DevicePassword"] = self.device_pw
+                # R70 P2.2: this used to POST GetCategoryFileListV2 to
+                # appin.divoom-gz.com from the GUI process, with its own
+                # credential cache, its own config.ini read, its own RC
+                # 9/10/11 refresh-and-retry and its own okhttp User-Agent.
+                # The daemon has done all of that correctly the whole time —
+                # including the auth retry, which is why none of it survives
+                # here.
+                file_size_bitmask = (file_size if file_size > 0
+                                     else self.FILE_SIZE_BITMASK.get(target_size, 1))
+                file_list = client.fetch_gallery(
+                    classify, limit=30, file_sort=file_sort,
+                    file_size=file_size_bitmask) or []
+                if isinstance(file_list, dict):
+                    file_list = file_list.get("FileList", []) or []
 
-                        url = "https://appin.divoom-gz.com/GetCategoryFileListV2"
-                        payload = json.dumps(body).encode("utf-8")
-                        req = urllib.request.Request(
-                            url,
-                            data=payload,
-                            headers={
-                                "Content-Type": "application/json; charset=utf-8",
-                                "User-Agent": "okhttp/4.12.0",
-                            },
-                            method="POST"
-                        )
-                        
-                        with urllib.request.urlopen(req, timeout=10) as resp:
-                            data = json.loads(resp.read().decode("utf-8"))
-                            rc = data.get("ReturnCode", -1)
-                            if rc in [9, 10, 11]:
-                                raise RuntimeError(f"Token expired or mismatch (ReturnCode={rc})")
-                            elif rc != 0:
-                                raise RuntimeError(f"API Error (ReturnCode={rc}): {data.get('ReturnMessage')}")
-                            
-                            file_list = data.get("FileList", [])
-                            break # success, break out of retry loop
-                    except Exception as e:
-                        logger.warning(f"Fetch attempt failed (retries left={retries}): {e}")
-                        self.cached_creds = None
-                        retries -= 1
-                        if retries < 0:
-                            raise # propagate to outer try-except
+                cache_dir = gallery_assets.ensure_cache_dir(
+                    Path.home() / ".config" / "divoom-control" / "cache_gallery")
 
-                cache_dir = Path.home() / ".config" / "divoom-control" / "cache_gallery"
-                cache_dir.mkdir(parents=True, exist_ok=True)
-                
-                # ── Parallel download and decode of missing .bin assets ──
+                # Previews are downloaded AND decoded by the daemon; this only
+                # caches what it returns. Kept parallel because each miss is a
+                # round trip, and a 30-item gallery served serially is a visibly
+                # slow panel.
                 from concurrent.futures import ThreadPoolExecutor
 
-                def download_item(item):
-                    # Delegate to the module-level helper so a corrupt/stale
-                    # .bin is re-downloaded and decoded in a single pass
-                    # (see _fetch_gallery_asset for the recovery contract).
-                    file_id = item.get("FileId")
-                    if file_id:
-                        GallerySyncMixin._fetch_gallery_asset(cache_dir, file_id)
+                def preview_of(item):
+                    return gallery_assets.preview_for(
+                        client, cache_dir, item.get("FileId") or "")
 
                 with ThreadPoolExecutor(max_workers=10) as executor:
-                    list(executor.map(download_item, file_list))
-                
-                # ── Sequential base64 encoding and progressive streaming ──
+                    previews = list(executor.map(preview_of, file_list))
+
                 results = []
-                for idx, item in enumerate(file_list):
-                    file_id = item.get("FileId")
-                    preview_url = ""
-                    
-                    if file_id:
-                        safe_filename = file_id.replace("/", "_")
-                        cache_file_item = cache_dir / safe_filename
-                        
-                        for ext in [".gif", ".png", ".jpg", ".jpeg"]:
-                            possible_file = cache_file_item.with_suffix(ext)
-                            if possible_file.exists():
-                                try:
-                                    mime_type = "image/gif" if ext == ".gif" else ("image/jpeg" if ext in [".jpg", ".jpeg"] else "image/png")
-                                    img_data = possible_file.read_bytes()
-                                    b64_str = base64.b64encode(img_data).decode("utf-8")
-                                    preview_url = f"data:{mime_type};base64,{b64_str}"
-                                except Exception as b64_err:
-                                    logger.warning(f"Failed to base64 encode {possible_file.name}: {b64_err}")
-                                break
-                    
+                for idx, (item, preview_url) in enumerate(zip(file_list, previews)):
                     art_item = {
                         "name": item.get("FileName", "unnamed"),
-                        "file_id": file_id,
+                        "file_id": item.get("FileId"),
                         "likes": item.get("LikeCnt", 0),
                         "magic": item.get("FileType", 3),
-                        "preview_url": preview_url
+                        "preview_url": preview_url,
                     }
                     results.append(art_item)
-                    
+
                     if self.window:
                         try:
                             item_json = json.dumps(art_item)
@@ -249,7 +163,7 @@ class GallerySyncMixin(GalleryHotApiMixin):
                             self.window.evaluate_js(js_code)
                         except Exception as js_err:
                             logger.warning(f"Failed to send progressive gallery item: {js_err}")
-                
+
                 cache_file = Path.home() / ".config" / "divoom-control" / "gallery_cache.json"
                 try:
                     # Atomic (temp+fsync+rename): a crash/disk-full mid-write must
@@ -259,15 +173,21 @@ class GallerySyncMixin(GalleryHotApiMixin):
                     logger.info(f"Gallery Cache: Successfully saved {len(results)} gallery items offline.")
                 except Exception as cache_err:
                     logger.warning(f"Failed to save gallery cache: {cache_err}")
-                    
+
                 if self.window:
                     js_data = json.dumps(results)
                     b64_js_data = base64.b64encode(js_data.encode("utf-8")).decode("utf-8")
                     js_code = f"if (window.onGalleryBackgroundFetched) {{ window.onGalleryBackgroundFetched({classify}, {target_size}, '{b64_js_data}', {file_sort}, {file_size}); }}"
                     self.window.evaluate_js(js_code)
             except Exception as e:
+                from divoom_client.daemon_cloud import CloudUnavailable
+
                 err_msg = str(e)
-                is_expired = "expired" in err_msg.lower() or "token" in err_msg.lower() or "credentials not configured" in err_msg.lower()
+                # `cause` is the daemon's own flag, not a guess from the text.
+                # The old code matched on "expired"/"token"/"credentials not
+                # configured" substrings — an error reworded upstream silently
+                # changed which banner the user saw.
+                is_expired = (isinstance(e, CloudUnavailable) and e.cause == "auth")
                 logger.error(f"Background gallery fetch failed permanently: {e}")
                 if self.window:
                     try:
