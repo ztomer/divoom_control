@@ -348,8 +348,8 @@ its proof has been SEEN, and for anything testable that means seen RED first.
 
 | Step | State | Proof required |
 |------|-------|----------------|
-| P0.1 pre-push runs local CI | TODO | `tools/repo_gates.sh` wired; a push executes the 17 steps + py_ci |
-| P0.2 prove it bites | TODO | 5 sabotage classes, 5 refused pushes, then a clean push |
+| P0.1 pre-push runs local CI | **DONE** | `tools/repo_gates.sh` -> `ci_local.sh`; `gate.sh --full` layer 3 uncommented. `tests/test_repo_gates.py`, 7 tests, **5 sabotages each seen RED**: layer-3 line commented out, guard disabled, fast-mode announcing a skip it did not perform, `--staged` widened to layer 3, and a silent `DIVOOM_GATE_SKIP` bypass. Wiring is probed via the recursion guard, so it costs ms, not a CI run |
+| P0.2 prove it bites | TODO | **Distinct from P0.1's proof, and not yet done.** P0.1 proved the WIRING TESTS bite; P0.2 must prove the GATES bite THROUGH the hook: a clippy error, a failing Rust test, a failing Python test, a coverage-floor breach and a `check_*.py` violation each REFUSING a push, then a clean push accepted |
 | P0.3 wall-clock stated | TODO | measured number in the CHANGELOG; any skip prints what it skipped |
 | P0.4 CI-coverage decided | TODO | `.gatesrc` comment states the decision; item deleted from Open threads |
 | P0.5 stray daemons reaped | TODO | suite leaves no `divoomd` on a `/tmp/divoom_*` test socket |
