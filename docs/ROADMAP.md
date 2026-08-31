@@ -106,12 +106,33 @@ are not restated.
 
 _Actual state as of 2026-08-30, after R67._
 
-**The Python layer is OBSOLETE and kept for REFERENCE ONLY.** `divoomd` (Rust)
-is the shipping implementation; `divoom_lib/` is the protocol ground truth the
-port was derived from, not a live second path. This matters for how findings are
-read: "X exists in both Python and Rust" is NOT automatically drift to unify —
-the Rust one is the product and the Python one is documentation. Two things are
-still true and not contradicted by it:
+**`divoom_lib` is the protocol reference AND a live runtime dependency. Both.**
+_(Rewritten R72 P4. The previous wording — "OBSOLETE and kept for REFERENCE
+ONLY" — was false, and falsely reassuring: it is the sentence that let F1-F6
+sit unexamined, because it told every reader that Python/Rust overlap was
+documentation rather than something to check.)_
+
+`divoomd` (Rust) is the shipping implementation of every DEVICE, CLOUD and HOST
+capability. `divoom_lib` is the protocol ground truth the port was derived from.
+It is ALSO imported at runtime by **21 files** in the shipped Python surface,
+and after R72 every one of those falls into a category that is legitimate:
+
+| Category | Modules | Why it is not a duplicate |
+|---|---|---|
+| Client-local utilities | `utils.atomic_io` (7), `lifecycle_config` (7), `utils.converters`, `utils.media_players` | atomic writes and GUI preferences the client alone reads |
+| Shared protocol vocabulary | `models` (5) | constants (`WeatherType`, `STI_CTRL_FLAG_*`) — names, not an implementation |
+| Client-local preference resolution | `weather_provider` (3) | `resolve_location`/`saved_location` are pure: env vars and a saved city, no network |
+| The daemon's own arm | `bt_spp_transport` via `divoom_client/spp_bridge.py` | **`divoomd/src/spp.rs` SPAWNS it** — macOS IOBluetooth Classic SPP is not reachable from Rust, so the daemon delegates to a co-process. The daemon still owns the device |
+| Dev tooling | `native` in `scripts/codegen/` | generates test vectors; not shipped |
+
+**So the rule that replaces "reference-only" is:** a `divoom_lib` import is a
+defect when it performs a job the daemon owns — device I/O, cloud HTTP, host
+data, rendering, device-facing persistence — and is fine when it supplies a
+constant, a pure helper, or a client preference. `tools/capability_census.py`
+enforces exactly that distinction, and its confident set (DIRECT + WRAPPED) is
+**zero** as of R72.
+
+Two things remain true and are not contradicted by any of it:
 
 * where the **GUI executes** Python that duplicates a daemon job, that IS a real
   defect (the GUI must be a client, not a second implementation) — this is what
@@ -646,8 +667,8 @@ testable that means seen RED first.
 | P3.1 scope widened | F6 (class) | TODO | census covers the whole shipped Python surface, permanently |
 | P3.2 `control_server` decided | **F5** | TODO | kept as a stated test harness, or removed; auth story stated either way |
 | P3.3 menubar audited | — | TODO | checked against the same invariant |
-| P4.1 imports listed | F7 | TODO | each of the 35 sites is client-local with a reason, or gone |
-| P4.2 doctrine rewritten | **F7** | TODO | the sentence matches the code, both halves intact |
+| P4.1 imports listed | **DONE** | All 21 runtime `divoom_lib` importers classified into five categories in the roadmap's doctrine section. The one that looked worst is legitimate: `bt_spp_transport` reaches the client only through `spp_bridge.py`, which **`divoomd/src/spp.rs` spawns** — macOS IOBluetooth SPP is unreachable from Rust, so the daemon delegates to a co-process and still owns the device |
+| P4.2 doctrine rewritten | **DONE** | "OBSOLETE and kept for REFERENCE ONLY" is gone. Replaced by the rule that actually holds: a `divoom_lib` import is a defect when it does a job the daemon owns, and fine when it supplies a constant, a pure helper or a client preference — which is precisely what the census enforces |
 | P5.1 census is the gate | — | TODO | wired into `.gatesrc`; denylist demoted to fast-path |
 | P5.2 prove it bites | F1-F7 | TODO | 7 reintroduced, 7 reds — F3 and F5 included, not skipped |
 | P6 close | all | TODO | every F-row closed under BOTH witnesses; CHANGELOG, release, map current |
