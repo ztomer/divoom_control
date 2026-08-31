@@ -505,10 +505,10 @@ correct.
 | P2.3 hot manifest | **DONE** | new `hot_manifest` command; preview 86 → 25 lines. **Found a u128 shift-overflow panic in `art_codec.rs` that also breaks the shipped hot-channel PUSH** — fixed, 13-width regression test |
 | P2.4 failures say why | **DONE** (with P2.1) | three causes → three texts, pinned; e2e asserts the reason reaches the SCREEN. Closes the Deferred item |
 | P2.5 live round-trip + RC=3 | **PARTIAL** | 8 cloud commands verified live on a configured account (P1.1); hot manifest + previews verified (P2.3). Still open: the `get_photo_albums` RC=3 and `search_weather_city` RC=1 daemon-side gaps |
-| P3.1 stocks | TODO | covered by P3.4 |
-| P3.2 album art | TODO | hard-edged checkerboard fixture; ends LANCZOS/NEAREST drift |
+| P3.1 stocks | **DONE** | one call feeds preview and push; its test had started hitting the LIVE Yahoo API |
+| P3.2 album art | **DONE** | verified live: preview now byte-identical to the device frame, and no longer equal to the old LANCZOS one. The false docstring is true |
 | P3.3 text | TODO | covered by P3.4 |
-| P3.4 class-level drift test | TODO | kinds enumerated from the daemon; flip a filter daemon-side → red |
+| P3.4 class-level drift test | **DONE** | kinds read from `render_widget::KINDS`; a new daemon kind was auto-covered by 2 tests with no test edit; a resample turns 7/9 red |
 | P4.1 reproduce in bundle | TODO | the real `.app` + its mcp-server.log, before any fix |
 | P4.2 spawn `divoomd mcp` | TODO | `initialize` + `tools/list` = 13 tools through the controller |
 | P4.3 both shapes tested | TODO | bundle and dev parametrized; missing binary → honest error, not "running" |
