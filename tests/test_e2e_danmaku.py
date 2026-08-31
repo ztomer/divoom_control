@@ -23,7 +23,7 @@ INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.htm
 
 _MOCK_API = """
 window.__calls = [];
-window.__result = true;
+window.__result = { ok: true, error: '', cause: '' };
 window.__api = {
     send_danmaku_text: (text, color) => {
         window.__calls.push(["danmaku", text, color]);
@@ -176,5 +176,48 @@ async def test_the_unverified_caveat_is_visible_next_to_the_button():
             text = await eval_js(
                 page, "() => document.getElementById('danmaku-hint').textContent")
             assert "Not yet verified on real hardware" in text
+        finally:
+            await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_a_missing_capability_says_so_on_the_screen():
+    """R71 P3.1 — the reason has to reach the USER, not just the return value.
+
+    Unit tests pin that `send_danmaku_text` returns cause='no_lan_capability'.
+    That is not the same claim as "a person sees why". R70 learned this on the
+    cloud side: the daemon had carried the reason the whole time and the GUI
+    discarded it at an `except`, and the fix was only real once an e2e asserted
+    the text on screen.
+
+    A Bluetooth-only device must not read as a broken feature.
+    """
+    require_browser()
+    from playwright.async_api import async_playwright
+
+    async with async_playwright() as p:
+        browser, page = await _open(p)
+        try:
+            await eval_js(page, "() => { window.__result = { ok: false, "
+                                "error: 'Could not send the overlay: this device is "
+                                "connected over Bluetooth, which has no LAN API', "
+                                "cause: 'no_lan_capability' }; }")
+            await eval_js(page, "() => { window.__toasts = []; "
+                                "const o = window.showToast; "
+                                "window.showToast = (m, k) => { "
+                                "window.__toasts.push([m, k]); return o && o(m, k); }; }")
+            await page.fill("#text-content-input", "hello")
+            await page.click("#send-danmaku-btn")
+            await wait_js(page, "() => (window.__toasts || []).length > 0")
+
+            message = (await eval_js(page, "() => window.__toasts[0]"))[0]
+            # The REASON, in the user's words, not a generic failure.
+            assert "Bluetooth" in message, message
+            assert "no LAN API" in message, message
+            # ...and what to do about it, from the shared HINTS table.
+            assert "WiFi-capable" in message, message
+            # The old generic text must be gone: it is what made a missing
+            # capability indistinguishable from a bug.
+            assert message != "Failed to send overlay", message
         finally:
             await browser.close()
