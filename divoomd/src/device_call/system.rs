@@ -48,12 +48,13 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             // values (they are user intent, in the user's timezone); the daemon
             // owns the PACKET, which is what the duplicate was really about.
             let supplied = !args.is_empty()
-                || kw.map(|m| {
-                    ["year", "month", "day", "hour", "minute", "second"]
-                        .iter()
-                        .any(|k| m.contains_key(*k))
-                })
-                .unwrap_or(false);
+                || kw
+                    .map(|m| {
+                        ["year", "month", "day", "hour", "minute", "second"]
+                            .iter()
+                            .any(|k| m.contains_key(*k))
+                    })
+                    .unwrap_or(false);
             if !supplied {
                 return err_reply(
                     "set_date_time needs the time: pass year/month/day/hour/minute/second \

@@ -120,17 +120,30 @@ def test_the_live_tree_no_longer_has_F1(tmp_path, monkeypatch):
     assert gui_auth == [], f"the auth bypass is back in the GUI: {gui_auth}"
 
 
-def test_the_census_finds_more_than_its_seed():
-    """A census returning exactly what it was seeded with was transcribed.
+def test_the_scan_covers_scripts_not_just_the_packages(tmp_path, monkeypatch):
+    """The scope widening is real, and stays real after the round cleans up.
 
-    R72's plan says this explicitly. The scan found `get_credentials` in
-    `scripts/` -- a directory R70's gate never looked at -- so the scope
-    widening is doing work rather than being decorative.
+    THIRD time this round a test has been written against a defect's PRESENCE
+    rather than an instrument's PROPERTY. This one asserted the census finds
+    something in `scripts/` -- true only while `verify_gallery_render.py` still
+    had its own auth and decoder, and red the moment P3.1 fixed that. The
+    durable property is that `scripts/` is SCANNED, so it is checked two ways:
+    the directory is in the surface, and a synthetic offender placed there is
+    found.
     """
-    direct, wrapped, reaches = census.scan_python(census.daemon_capabilities())
-    where = {w.split(":")[0] for w, _, _ in direct + wrapped + reaches}
-    assert any(p.startswith("scripts/") for p in where), (
-        f"nothing found outside divoom_gui/divoom_client: {sorted(where)}")
+    assert any(p.name == "scripts" for p in census.PY_SURFACE), (
+        f"scripts/ dropped from the scanned surface: {census.PY_SURFACE}")
+
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    (scripts / "tool.py").write_text(
+        "from divoom_lib import divoom_auth\n"
+        "def go():\n"
+        "    return divoom_auth.get_credentials()\n")
+    monkeypatch.setattr(census, "PY_SURFACE", (scripts,))
+    monkeypatch.setattr(census, "REPO", tmp_path)
+    direct, _w, _r = census.scan_python({"get_credentials"})
+    assert [n for _w2, n, _l in direct] == ["get_credentials"], direct
 
 
 # ── the other direction: it must not flag everything ─────────────────────────

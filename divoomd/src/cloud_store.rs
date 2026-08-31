@@ -88,7 +88,12 @@ fn merge_divoom_section(existing: &str, email: &str, password: &str) -> String {
             continue;
         }
         if in_divoom {
-            let key = trimmed.split('=').next().unwrap_or("").trim().to_ascii_lowercase();
+            let key = trimmed
+                .split('=')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_ascii_lowercase();
             if key == "email" {
                 out.push(format!("email = {email}"));
                 wrote_email = true;
@@ -158,8 +163,11 @@ pub fn save_config(email: &str, password: &str) -> Result<(), String> {
 /// green, because they exercise the helper directly and nothing pinned that
 /// the caller uses it. A unit test on a helper says nothing about the function
 /// that is supposed to call it.
-pub(crate) fn save_config_at(path: &std::path::Path, email: &str, password: &str)
-    -> Result<(), String> {
+pub(crate) fn save_config_at(
+    path: &std::path::Path,
+    email: &str,
+    password: &str,
+) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
@@ -272,7 +280,7 @@ pub(crate) fn save_virtual_device(
 
 #[cfg(test)]
 mod merge_tests {
-    use super::{merge_divoom_section, save_config_at};
+    use super::merge_divoom_section;
 
     // These guard a DATA-LOSS path. The version this replaced wrote the whole
     // file as "[divoom]\nemail=..\npassword=..\n", so every other section went
@@ -302,7 +310,10 @@ mod merge_tests {
         // the next token expiry degraded the account to a guest login.
         let before = "[divoom]\nemail = old@x.com\npassword = secret\n";
         let after = merge_divoom_section(before, "new@x.com", "");
-        assert!(after.contains("password = secret"), "password was wiped: {after}");
+        assert!(
+            after.contains("password = secret"),
+            "password was wiped: {after}"
+        );
         assert!(after.contains("email = new@x.com"), "{after}");
         assert!(!after.contains("old@x.com"), "{after}");
     }
@@ -370,12 +381,18 @@ mod save_config_tests {
     #[test]
     fn save_config_at_preserves_other_sections_on_disk() {
         let p = tmp("preserve");
-        std::fs::write(&p, "[gui]\ntimeout = 120\n\n[divoom]\nemail = a@b.com\npassword = secret\n")
-            .unwrap();
+        std::fs::write(
+            &p,
+            "[gui]\ntimeout = 120\n\n[divoom]\nemail = a@b.com\npassword = secret\n",
+        )
+        .unwrap();
         save_config_at(&p, "new@x.com", "pw2").unwrap();
         let after = std::fs::read_to_string(&p).unwrap();
         assert!(after.contains("[gui]"), "{after}");
-        assert!(after.contains("timeout = 120"), "settings destroyed: {after}");
+        assert!(
+            after.contains("timeout = 120"),
+            "settings destroyed: {after}"
+        );
         assert!(after.contains("email = new@x.com"), "{after}");
         assert!(after.contains("password = pw2"), "{after}");
         let _ = std::fs::remove_file(&p);
@@ -387,7 +404,10 @@ mod save_config_tests {
         std::fs::write(&p, "[divoom]\nemail = a@b.com\npassword = secret\n").unwrap();
         save_config_at(&p, "new@x.com", "").unwrap();
         let after = std::fs::read_to_string(&p).unwrap();
-        assert!(after.contains("password = secret"), "credential erased: {after}");
+        assert!(
+            after.contains("password = secret"),
+            "credential erased: {after}"
+        );
         let _ = std::fs::remove_file(&p);
     }
 
@@ -395,7 +415,10 @@ mod save_config_tests {
     fn save_config_at_leaves_no_temp_file_behind() {
         let p = tmp("notemp");
         save_config_at(&p, "a@b.com", "pw").unwrap();
-        assert!(!p.with_extension("ini.tmp").exists(), "temp file left behind");
+        assert!(
+            !p.with_extension("ini.tmp").exists(),
+            "temp file left behind"
+        );
         let _ = std::fs::remove_file(&p);
     }
 }
