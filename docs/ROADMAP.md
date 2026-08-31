@@ -9,6 +9,14 @@ forward-looking one. Recover a round plan with
 
 ## Shipped
 
+- **v0.29.0 — R70**: the GUI is a client, not a second implementation. Twelve
+  findings moved to `divoomd` and the class closed structurally — the
+  `check_gui_is_a_client.py` allowlist went from 27 violations across twelve
+  files to EMPTY. Found five defects on the way that nobody was looking for: a
+  `u128` overflow that panicked the daemon and silently broke the shipped
+  hot-channel push, an app that killed its own healthy daemon on every launch,
+  an MCP button that launched a second GUI, an album-art preview differing from
+  the device on 100% of pixels, and gallery containers that never decoded.
 - **v0.28.3 — R69**: version parity made structural. Binary selection goes by
   VERSION rather than by location or mtime, `divoomd --version` answers without
   starting a daemon (it used to start one), both binaries refuse unknown
@@ -528,7 +536,7 @@ correct.
 | P5.6 bleak out of the bundle | **DONE** | out of `divoom.spec`; the frozen entry point loads ZERO bleak modules (verified). Also dropped CI's `brew install portaudio` |
 | P6.1 allowlist empty | **DONE** | 27 violations across 12 files → **0, with no exemptions** |
 | P6.2 user-POV pass | **DONE** | `gui_pov.py`, no mocks in the chain: stocks/sysmon/album art all live, album art visibly NEAREST now. Killing the daemon still SAYS so. Found a stuttering error hint no assertion could see |
-| P6.3 CHANGELOG + release | TODO | |
+| P6.3 CHANGELOG + release | **IN PROGRESS** | v0.29.0 stanza written, version bumped; awaiting green CI before the tag |
 
 ### Cloud HTTP — 533/533 endpoints cataloged
 

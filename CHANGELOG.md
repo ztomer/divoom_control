@@ -4,6 +4,95 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## v0.29.0 — R70: the GUI is a client, not a second implementation (2026-08-30)
+
+The audit question was "is anything left in the Python GUI that should live in
+the daemon". The answer was twelve things, and all twelve had passed a
+2935-test suite. This round moved them and made the class impossible to recur.
+
+**The completion criterion was mechanical, not a judgement call.**
+`tools/check_gui_is_a_client.py` shipped in P0 with an allowlist seeded to
+exactly the 27 violations then present across twelve files. Each phase deleted
+the entries it earned. **It is now empty**, and the gate fails any new one.
+
+### What moved
+
+* **Cloud browse, five panels.** `clock_faces`, `playlists`, `aid_sleep`,
+  `photo_albums` and the weather city search each built a Python `CloudClient`
+  in the GUI process. The daemon had routed every one of those commands since
+  the retired native-UI experiment — that UI took the only client with it, so
+  each panel independently found `import CloudClient` easier than adding a
+  wrapper that did not exist. The missing seam WAS the defect.
+* **The gallery**, which hand-rolled the `GetCategoryFileListV2` POST with its
+  own credential cache, config.ini read, RC 9/10/11 retry and okhttp UA.
+* **Hot-channel manifest and previews.**
+* **Stocks and album art**, each drawn twice — once by PIL in the GUI, once by
+  the daemon for the device.
+* **Text**, which was a second reader of the same font blob.
+* **The MCP server**, which is `divoomd mcp` now.
+
+### Failures say why
+
+Every cloud panel ended in `except Exception: return []`, so "nothing found"
+covered an empty catalog, an unreachable daemon, an unauthenticated account and
+a cloud error equally. The daemon has always answered with the real reason —
+`Photo/GetAlbumList failed (RC=3): Request data is incomplete` — and the GUI
+discarded it. Three causes now produce three distinguishable messages, on
+screen. This closes the "cloud browse cannot say WHY it is empty" item.
+
+### Defects found by doing the work, not by looking for them
+
+* **A daemon-killing panic in the hot-file decoder.** `art_codec.rs` folded the
+  packed pixel map into a `u128` and shifted by `i * 8` — a faithful-looking
+  port of Python's `int.from_bytes()`, except Python's integers are arbitrary
+  precision and a u128 holds SIXTEEN bytes. The map is 32 to 256 bytes. It
+  overflowed for every palette with more than one colour. Debug builds panic
+  and kill the worker mid-request; release builds mask the shift and report
+  real files as undecodable. **This also broke the shipped hot-channel push**,
+  which runs the same decoder.
+* **The installed app killed its own healthy daemon on every launch.** With no
+  pyproject inside the bundle, `expected_daemon_version()` fell through to
+  installed metadata and read a stale `divoom_control.egg-info` at 0.22.21. The
+  v0.28.3 app expected 0.22.21, declared its correct 0.28.3 daemon stale, and
+  restarted it — dropping the BLE connection — every single time.
+* **"Start MCP Server" launched a second GUI.** `sys.executable` inside the app
+  is the GUI binary, and `gui_main` reads argv with `parse_known_args()`. It
+  spawned a whole second window, another daemon and another menubar agent,
+  served no JSON-RPC, and `is_running()` reported success.
+* **The album-art preview was a different picture from the device**, not a
+  drifted one: 100% of pixels differed on hard-edged input, because the GUI
+  resized LANCZOS and the device pipeline uses NEAREST — under a docstring
+  asserting they shared a renderer.
+* **Gallery items in AES and LZO containers never decoded.** The GUI's decoder
+  handled magic-43 and raw images; the daemon's handles magic 9/18/26 and 0xAA
+  too. Routing to it fixed blank tiles rather than just relocating them.
+
+### Deleted
+
+`audio_visualizer.py` (150 lines of pyaudio + numpy at 100% coverage that no JS
+could start — and CI ran `brew install portaudio` on every macOS job to build a
+dependency that was never in requirements.txt), `push_weather`,
+`trigger_notification`, 22 lines of unreachable code, and the `bleak` import
+from the one process that must never own the radio. `bleak` is out of the
+bundle: the frozen entry point now loads zero bleak modules.
+
+### Gates added
+
+* `check_gui_is_a_client.py` — transports and pixel CONSTRUCTION are refused in
+  `divoom_gui/`, while `Image.frombytes` over daemon bytes stays legal.
+* `check_gui_api_reachable.py` — every public API method needs a caller. Its
+  first run found **24 unreachable methods, not the 4 the audit had verified**;
+  the other twenty are recorded as `unreviewed`, which is an honest state and a
+  decision still owed.
+* A Python coverage floor that is actually enforced. The repo credited itself
+  with 95% from R61; the real number was 89% and nothing was checking it,
+  because `GOH_PY_COV_MIN`'s consumer is commented out in `tools/gate.sh`.
+
+### Suite
+
+Python 2996 passed / 94 skipped (was 2935/94). Rust 188. Python coverage
+89% -> 90%, floor raised to match.
+
 ## v0.28.3 — Version parity made structural (2026-08-30)
 
 **SHIPPED.** Tag `1a4a273` on a green CI (all five checks), GitHub release with
