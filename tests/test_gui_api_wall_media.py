@@ -148,35 +148,6 @@ class TestGuiApiWallMedia(GuiApiTestBase):
         stub.render_widget.return_value = reply
         return stub
 
-    def test_system_stats_comes_from_the_daemon_not_a_second_renderer(self):
-        """Area 7 / R67-C2: the GUI is a CLIENT for sysmon, not a renderer.
-
-        The seam mocked here is the daemon call. It used to be
-        `media_source.get_system_stats` + `render_system_stats_frame`, run in
-        the GUI process — a second implementation of the widget the device gets
-        from `live_jobs/render.rs`.
-        """
-        client = self._sysmon_client(size=32)
-        with patch.object(type(self.api), "_client", lambda self: client), \
-             patch.object(type(self.api), "_frame_to_data_url",
-                          staticmethod(lambda p: "data:image/png;base64,BBB")):
-            prev = json.loads(self.api.get_system_stats_preview(32))
-            self.assertTrue(prev["ok"], prev)
-            self.assertEqual(prev["stats"]["cpu"], 12)
-            self.assertEqual(prev["stats"]["mem"], 43)
-            self.assertEqual(prev["stats"]["battery"], 80)
-            self.assertTrue(prev["preview"].startswith("data:image/png;base64,"))
-            client.render_widget.assert_called_once_with(
-                "sysmon", size=32, params={})
-
-            # apply with no device → clear failure, but the stats still report
-            self.api.current_divoom = None
-            self.api.wall_slots = {}
-            res = json.loads(self.api.apply_system_stats())
-            self.assertFalse(res["success"])
-            self.assertEqual(res["error"], "No device connected")
-            self.assertEqual(res["stats"]["cpu"], 12)
-
     def test_system_stats_refuses_a_short_frame_instead_of_drawing_it(self):
         """A truncated buffer must not be shown as if it were the device's frame."""
         client = self._sysmon_client(size=32, frame_rgb_b64="AAAA")

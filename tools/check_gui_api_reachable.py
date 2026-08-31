@@ -57,9 +57,6 @@ ALLOWLIST: dict[str, str] = {
     # These are NOT claims of deadness. Each needs someone to decide whether the
     # UI lost its wiring, the method is a leftover, or it is reached some way
     # this gate cannot see.
-    "apply_system_stats": "unreviewed — sysmon one-shot push; the panel may use live_job_start",
-    "custom_art_query_page": "unreviewed — daemon round-trip, possibly UI-less",
-    "display_custom_art": "unreviewed",
     "probe_lan": "unreviewed — LAN discovery",
     "save_lan_config": "unreviewed — LAN device config",
     "set_clock_rich": "unreviewed — richer clock variant",

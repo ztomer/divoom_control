@@ -288,11 +288,3 @@ class LightingApi(ApiBase, WidgetFrameMixin):
             logger.error(f"AidSleep play failed: {e}")
             return False
 
-    def display_custom_art(self, file_path: str) -> bool:
-        logger.info(f"GUI Action: Pushing custom art {file_path!r}...")
-        try:
-            return self._dispatch(lambda t: t.show_image(file_path)
-                                if t is self._wall_instance else t.display.show_image(file_path))
-        except Exception as e:
-            logger.error(f"Failed to display custom art: {e}")
-            return False

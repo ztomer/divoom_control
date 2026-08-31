@@ -79,15 +79,3 @@ class TestGuiApiHotAndCustomArt(GuiApiTestBase):
         assert out == {"success": True}
         fake.custom_art_push.assert_called_once_with(["f1", "f2"], 1, 5)
 
-    def test_custom_art_query_page_no_daemon(self):
-        with patch.object(self.api, "_client", return_value=None):
-            out = json.loads(self.api.custom_art_query_page(2))
-        assert out == {"success": False, "error": "no daemon available"}
-
-    def test_custom_art_query_page_delegates(self):
-        fake = MagicMock()
-        fake.custom_art_query_page.return_value = {"success": True, "slots": [1, 0, 1]}
-        with patch.object(self.api, "_client", return_value=fake):
-            out = json.loads(self.api.custom_art_query_page(2))
-        assert out == {"success": True, "slots": [1, 0, 1]}
-        fake.custom_art_query_page.assert_called_once_with(2)

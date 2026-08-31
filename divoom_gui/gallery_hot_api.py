@@ -32,14 +32,6 @@ class GalleryHotApiMixin:
             return json.dumps(client.custom_art_push([], int(page), slots=payload))
         return json.dumps(client.custom_art_push(payload, int(page), slot))
 
-    def custom_art_query_page(self, page: int = 0) -> str:
-        """Query device for filled slot IDs on a custom art page. JSON summary."""
-        logger.info(f"GUI Action: Custom art query page={page}")
-        client = self._client()
-        if client is None:
-            return json.dumps({"success": False, "error": "no daemon available"})
-        return json.dumps(client.custom_art_query_page(page))
-
     def hot_channel_update(self) -> str:
         """Start HOT channel update in background on daemon. Returns immediately."""
         logger.info("GUI Action: Hot channel update (start)...")

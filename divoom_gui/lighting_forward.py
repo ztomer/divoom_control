@@ -9,9 +9,6 @@ class LightingForwardMixin:
     def display_wall_image(self, file_path: str, cell_size: int) -> bool:
         return self.lighting.display_wall_image(file_path, cell_size)
 
-    def display_custom_art(self, file_path: str) -> bool:
-        return self.lighting.display_custom_art(file_path)
-
     def push_playlist(self, play_id: int) -> bool:
         return self.lighting.push_playlist(play_id)
 

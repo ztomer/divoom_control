@@ -17,7 +17,7 @@ class TestLightingApiCoverage(unittest.TestCase):
     (divoom_gui/api/lighting.py) exception handlers, the text-render
     scaling branches, and the getter/dispatch methods (set_brightness,
     set_volume, display_wall_image, set_temperature_channel, set_clock_rich,
-    display_custom_art) not exercised by the main suite above."""
+    not exercised by the main suite above."""
 
     def setUp(self):
         self.presets_patcher = patch("pathlib.Path.exists", return_value=False)
@@ -251,28 +251,3 @@ class TestLightingApiCoverage(unittest.TestCase):
 
     # ---- display_custom_art: success, exception, no-target --------------
 
-    def test_display_custom_art_success(self):
-        dev = MagicMock()
-        dev.display.show_image = AsyncMock(return_value=True)
-        self.api.current_divoom = dev
-        self.assertTrue(self.api.lighting.display_custom_art("/tmp/art.png"))
-        dev.display.show_image.assert_awaited_once_with("/tmp/art.png")
-
-    def test_display_custom_art_exception(self):
-        dev = MagicMock()
-        dev.display.show_image = MagicMock(side_effect=RuntimeError("boom"))
-        self.api.current_divoom = dev
-        self.assertFalse(self.api.lighting.display_custom_art("/tmp/art.png"))
-
-    def test_display_custom_art_no_target(self):
-        self.api.current_divoom = None
-        self.assertFalse(self.api.lighting.display_custom_art("/tmp/art.png"))
-
-
-# ── R61 planning item 1 coverage push: ConnectionApi
-# (divoom_gui/api/connection.py) was 24% covered — none of its scan /
-# capabilities / probe-lan / lan-config / transport-status / window methods
-# were exercised. DivoomGuiAPI's own wrappers route scan_devices through
-# ScannerMixin and window controls through WindowApi, leaving ConnectionApi's
-# identically-named methods dead from the top-level API's perspective. These
-# tests call self.api.connection.<method>() directly instead. ──────────────

@@ -104,8 +104,6 @@ class TestGuiApiTopLevelCoverage(unittest.TestCase):
         self.api.lighting.display_wall_image.return_value = True
         self.assertTrue(self.api.display_wall_image("/tmp/a.png", 16))
 
-        self.api.lighting.display_custom_art.return_value = True
-        self.assertTrue(self.api.display_custom_art("/tmp/b.png"))
 
         self.api.lighting.set_brightness.return_value = True
         self.assertTrue(self.api.set_brightness(80))

@@ -91,18 +91,3 @@ class SysmonWidgetMixin(WidgetFrameMixin):
             logger.error(f"get_system_stats_preview failed: {e}")
             return json.dumps({"ok": False, "error": str(e)})
 
-    def apply_system_stats(self) -> str:
-        try:
-            size = self._active_device_size()
-            stats, frame_path = self._sysmon_frame(size)
-            if not self._has_push_target():
-                return json.dumps({"success": False, "error": "No device connected",
-                                   "stats": stats})
-            res = self._push_frame(frame_path, size)
-            return json.dumps({
-                "success": res, "stats": stats,
-                "preview": self._frame_to_data_url(frame_path),
-            })
-        except Exception as e:
-            logger.error(f"apply_system_stats failed: {e}")
-            return json.dumps({"success": False, "error": str(e)})
