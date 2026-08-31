@@ -21,6 +21,72 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-08-31 — R71 IN PROGRESS. P0, P1 (bar P1.7), P2.0/P2.1, P3 and P4 are
+  DONE. Everything still open is blocked on the user + a device.** Nothing is
+  half-finished; the remaining rows have a named blocker, not a TODO.
+
+  **The allowlist went 20 -> 3.** Seventeen API methods resolved, every one on
+  verified evidence rather than the allowlist's own annotations — **three of
+  which turned out to be false** (`batch_sync_artwork`'s "called from Python"
+  was a docstring hit; "MCP card may use mcp_status" names a method that does
+  not exist; "JS polls hot_update_progress" names a DaemonClient method, not an
+  API one). Treat the remaining reasons as unverified claims.
+
+  **The three left are not dead — they are UNEXPOSED**, and only a device can
+  settle them: `set_clock_rich` (the wired `set_clock` cannot do humidity /
+  weather / date overlays), `set_temperature_channel` (daemon implements it,
+  the UI never offers that channel), `set_timeplan` (no UI reference in any
+  commit). They are checks in `scripts/hw_verify.py`, tagged P2.5.
+
+  **What to run when you want it** — start the GUI (it owns the Bluetooth
+  grant), connect a device, then:
+
+      python3 scripts/hw_verify.py --self-test        # calibrate first
+      python3 scripts/hw_verify.py --out report.json  # the packet
+
+  `--self-test` currently exits **3 = PARTIAL**: the no-device branch is proven,
+  the invalid-method branch is not, because with nothing connected the daemon
+  refuses at the precondition before it reads the method name. Connecting a
+  device closes that.
+
+  **The gate found two false positives in ITSELF this round**, both the same
+  class fixed only halfway in P1.0: a `//` comment in `app_globals.js` was
+  crediting `live_job_start` as reachable, and `python_callers` counted
+  `client.X()` — DaemonClient MIRRORS the bridge's names by design — as a caller
+  of the bridge method. Both `live_job` wrappers were dead behind that.
+
+  **`save_lan_config` wrote to a store nothing reads.** It wrote
+  `config.ini [lan]`; the only references to that section in the tree are its own
+  three write lines. The live path is `presets.json -> lan_devices`. Wiring it up
+  — the obvious fix for an unreachable method — would have written config no code
+  consumes.
+
+  **LAN now says WHY, and the fix is three layers deep** because the reason was
+  dying in transit: the daemon names a `cause`, `_DeviceCallError` PRESERVES it
+  (it used to flatten every failure to a string), and `_lan_action` wraps it in
+  R70's existing `{ok, error, cause}` shape. P3.4 found the class was wider than
+  danmaku — `play_album` and `push_playlist` had no gate at all.
+  `tests/test_lan_capability_gate.py` walks the LAN call sites so surface #4
+  fails on the day it is written.
+
+  **Coverage arc, stated because a floor that moves quietly stops meaning
+  anything:** 89.50 start -> 89.41 (P1.1) -> 88.99 (P1-P3) -> **89.48** final.
+  Floor 89.5 -> 89.0 (working margin while deleting) -> **89.4**. The round ends
+  0.02 BELOW where it started having deleted ~430 statements of dead code — the
+  ratio behaving as designed, not decay.
+
+  **Two process failures worth not repeating.** P1.5 left three broken tests in a
+  file I did not run, because I verified with a targeted subset and said "green";
+  the full suite found them. And a `cargo build --no-default-features` left a
+  BLE-free `target/debug/divoomd`, which failed an SPP test that had nothing to
+  do with the change — rebuilt with default features, passed unchanged. Diagnose
+  before assuming your diff caused it.
+
+  **`Cloud/ToDevice` is CLOSED WONTFIX and deliberately NOT probed.** The catalog
+  already had it as dead code in the vendor's own app, and the response carries
+  only a ReturnCode — RC=0 on a no-op is indistinguishable from RC=0 on a real
+  action, so a live call would have taught nothing while reading as evidence.
+
 - **2026-08-31 — R71 P0 COMPLETE (all five steps), validated through the real
   `pre-push` hook: 18/18 green, HOOK_EXIT=0, 9m39s.** Nothing else in R71 is
   started yet; P1.0 is next.
