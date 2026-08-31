@@ -43,9 +43,20 @@ pub async fn handle(command: &str, req: &Request) -> Value {
             }
             match crate::cloud_store::save_config(email, password) {
                 Ok(()) => match crate::cloud::get_credentials(true).await {
-                    Ok(creds) => {
-                        json!({ "success": true, "email": creds.email, "user_id": creds.user_id })
-                    }
+                    // R72 P1.1: return the FULL credential, same shape as
+                    // `get_credentials`. It used to answer with email +
+                    // user_id only, so a client building a credential value
+                    // from this reply got token=0 -- i.e. "invalid" -- on a
+                    // SUCCESSFUL save. Three commands returning three shapes of
+                    // one value is how a caller ends up special-casing which
+                    // one it happened to call.
+                    Ok(creds) => json!({
+                        "success": true,
+                        "token": creds.token,
+                        "user_id": creds.user_id,
+                        "email": creds.email,
+                        "utc": creds.utc,
+                    }),
                     Err(e) => err_reply(&format!("saved, but login failed: {e}")),
                 },
                 Err(e) => err_reply(&e),

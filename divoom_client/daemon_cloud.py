@@ -26,7 +26,43 @@ into one generic sentence, which would be no better than ``[]``.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from typing import Any
+
+
+@dataclass(frozen=True)
+class DaemonCredentials:
+    """The daemon's login, as a value the GUI can ask questions of.
+
+    Mirrors `divoom_lib.divoom_auth.DivoomCredentials` field-for-field on
+    purpose: the call sites this replaces do `creds.is_valid()` and
+    `creds.email`, and changing their SHAPE at the same time as their SOURCE
+    would make a routing change indistinguishable from a behaviour change if
+    anything broke.
+
+    `is_valid` is the same predicate the Python side used -- token and user_id
+    both non-zero. It is not an expiry check and never was.
+    """
+
+    token: int = 0
+    user_id: int = 0
+    email: str = ""
+    utc: int = 0
+
+    def is_valid(self) -> bool:
+        return self.token != 0 and self.user_id != 0
+
+    @classmethod
+    def from_reply(cls, data) -> "DaemonCredentials | None":
+        if not isinstance(data, dict):
+            return None
+        return cls(
+            token=int(data.get("token") or 0),
+            user_id=int(data.get("user_id") or 0),
+            email=str(data.get("email") or ""),
+            utc=int(data.get("utc") or 0),
+        )
 
 
 class CloudUnavailable(RuntimeError):
@@ -169,8 +205,14 @@ class CloudDataMixin:
         return self.cloud_call("get_category_file_list", args)
 
     # ── credentials ──────────────────────────────────────────────────────────
-    def get_cached_credentials(self) -> dict | None:
-        """The daemon's cached login, without forcing a round trip to Divoom."""
+    def get_cached_credentials(self) -> "DaemonCredentials | None":
+        """The daemon's cached login, without forcing a round trip to Divoom.
+
+        Returns the same shape as `get_credentials` even though the daemon does
+        not: `get_cached_credentials` nests the fields under "credentials" and
+        `get_credentials` returns them at the top level. Two shapes for one
+        value is how a caller ends up special-casing which command it used.
+        """
         from divoom_client.daemon_config import load_daemon_config
         reply = self.send_command(
             "get_cached_credentials", {},
@@ -179,7 +221,37 @@ class CloudDataMixin:
             raise CloudUnavailable(
                 str((reply or {}).get("error") or "credentials unavailable"),
                 _classify(reply if isinstance(reply, dict) else {}))
-        return reply.get("credentials")
+        return DaemonCredentials.from_reply(reply.get("credentials"))
+
+    def get_credentials(self, force_refresh: bool = False) -> "DaemonCredentials | None":
+        """Log in if needed. **This one can go to the network** — never call it
+        on a status poll or at startup; that is what the cached read is for."""
+        from divoom_client.daemon_config import load_daemon_config
+        reply = self.send_command(
+            "get_credentials", {"force_refresh": bool(force_refresh)},
+            read_timeout=load_daemon_config().cloud_timeout)
+        if not isinstance(reply, dict) or not reply.get("success"):
+            raise CloudUnavailable(
+                str((reply or {}).get("error") or "login failed"),
+                _classify(reply if isinstance(reply, dict) else {}))
+        return DaemonCredentials.from_reply(reply)
+
+    def save_credentials(self, email: str, password: str) -> "DaemonCredentials":
+        """Store the account with the DAEMON, which owns the credential store.
+
+        The GUI used to write `config.ini` itself. Beyond being a duplicate,
+        that put the account password in plaintext in a file the GUI manages;
+        the daemon-side store is where that gets fixed once, for every client.
+        """
+        from divoom_client.daemon_config import load_daemon_config
+        reply = self.send_command(
+            "save_credentials", {"email": email, "password": password},
+            read_timeout=load_daemon_config().cloud_timeout)
+        if not isinstance(reply, dict) or not reply.get("success"):
+            raise CloudUnavailable(
+                str((reply or {}).get("error") or "could not save credentials"),
+                _classify(reply if isinstance(reply, dict) else {}))
+        return DaemonCredentials.from_reply(reply)
 
     def hot_manifest(self, device_size: int = 16) -> list:
         """What the hot channel currently holds, WITHOUT downloading it.

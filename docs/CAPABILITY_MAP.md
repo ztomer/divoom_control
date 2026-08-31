@@ -52,11 +52,21 @@ socket. `divoom_client/daemon_cloud.py:172` ALREADY wraps the cached read. The
 GUI sites take the Python path anyway, which is R70's defect in its exact
 original shape: seam present, panel bypasses it.
 
-**Careful in P1.1:** `gui_api.py:59` and the deleted `connection.py` site were
-deliberately CACHE-ONLY, so that a status poll never blocks on a cloud login.
-The daemon wrapper must preserve that. Trading a duplicate for a hang is not a
-fix. (R71 P1.5 already removed one of these sites for free, by deleting the dead
-`get_transport_status`.)
+**Careful in P1.1 — and it is worse than the first draft of this note said.**
+`gui_api.py:59` is deliberately CACHE-ONLY so a status poll never blocks on a
+cloud login, and the daemon wrapper preserves that (`get_cached_credentials` is
+the read that cannot go to the network). But the routing has a SECOND hazard the
+verdict alone does not show: `self._client()` calls `ensure_daemon()`, which
+**spawns the daemon**, and nothing spawns it during `DivoomGuiAPI()`
+construction today. Routing the startup read through it would put a daemon spawn
+inside GUI construction — the same startup path that produced v0.28.1's
+daemon-killing crash.
+
+So this site is not a straight substitution. Either the read becomes LAZY (first
+use, not `__init__`), or it uses an accessor that returns an already-running
+client and `None` otherwise. Attempted and reverted once already; do not
+re-attempt it as a one-line swap. (R71 P1.5 removed one of these sites for free
+by deleting the dead `get_transport_status`.)
 
 ## WRAPPED — a daemon capability reimplemented over `divoom_lib`
 
