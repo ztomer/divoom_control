@@ -21,6 +21,54 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-08-31 — R71 P0 COMPLETE (all five steps), validated through the real
+  `pre-push` hook: 18/18 green, HOOK_EXIT=0, 9m39s.** Nothing else in R71 is
+  started yet; P1.0 is next.
+
+  **`pre-push` now runs the real CI.** `tools/repo_gates.sh` -> `ci_local.sh`,
+  wired as layer 3 in `tools/gate.sh --full`. Before this it ran four
+  structural checks and the 18-step list ran only when somebody typed the
+  command.
+
+  **All five gate classes are proven to REFUSE a push** (P0.2), not merely to
+  fail in isolation: `check_no_allow`, clippy, Rust test, Python test and the
+  coverage floor. Four fit in one 9m11s pass because `local_ci.sh` is
+  fail-accumulating; the floor needed its own run, since a failing Python test
+  masks it.
+
+  **Cost: 9m22s full, 1m50s with `DIVOOM_GATE_FAST=1`.** `py_ci.sh` is ~7.5 min
+  of that — about 80% of the gate. Default stays FULL on purpose; the hatch
+  announces itself every time and there is no skip-everything variable, because
+  `git push --no-verify` already exists and at least leaves a trace in muscle
+  memory. **Parallelising the Python suite is the real lever if 9 minutes
+  proves intolerable**, and its obstacle is recorded: fixed `/tmp/divoom_*`
+  socket paths would collide across workers.
+
+  **Two findings nobody was looking for:**
+
+  * **The Python coverage floor was passing by ROUNDING.** It advertised 90 and
+    enforced ">= 89.5" — coverage.py's `should_fail_under` is
+    `round(total, precision) < fail_under` with precision 0. Real coverage is
+    **89.50%**, so the gate was green on a 0.01-point margin. Now precision 2
+    with a floor of 89.5, the number it actually enforces. **The first draft of
+    that fix claimed it was "behaviourally identical" and that was wrong** — at
+    89.499 the old config fails and the new one passes. The slack shrinks 100x
+    (0.5 points -> 0.005); no precision abolishes it. Checked against the
+    installed coverage.py rather than asserted, which is the only reason the
+    error surfaced.
+  * **P0.5's premise was false.** The stray R70 daemon was real and is reaped,
+    but the harness does not leak: `IsolatedStack` uses per-stack
+    `divoomd_e2e_<pid>_<seq>_<uuid>.sock` and kills only its own PIDs. The
+    stray sat on a path referenced NOWHERE in the tree, hand-started from the
+    repo root. **No gate was added on purpose** — failing on "a divoomd is
+    alive" would redden the project's own BLE-debug workflow, and this class is
+    a human artifact, not something the code does.
+
+  **The CI-coverage question is CLOSED as a decision** (P0.4), not carried:
+  no GitHub macOS coverage job, because a Linux job would measure a different
+  denominator (`nowplaying` is macOS-only) and produce two disagreeing numbers
+  both called "coverage".
+
 - **2026-08-31 — R72 PLANNED (added after R71, same day). "Does everything
   that belongs in the daemon live in the daemon?" Plan in `docs/ROADMAP.md`
   under "R72 plan"; 19 steps, all TODO.**
