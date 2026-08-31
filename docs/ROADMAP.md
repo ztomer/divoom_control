@@ -483,7 +483,39 @@ device-facing state. Clients own presentation, user intent, and their own local
 preferences. **Each capability has exactly one implementation, and it lives
 where its resource lives.**
 
-#### R72 findings — F1-F7, each owned by a step
+#### OPEN — the browser e2e suite is LOAD-SENSITIVE, and it undermines the gate
+
+**Found 2026-08-31 while validating R72.** Two consecutive full-suite runs on
+the same commit failed **different, non-overlapping sets** of tests:
+
+| Run | Failures | Tests |
+|-----|----------|-------|
+| 1 | 4 | `e2e_gui_daemon_connect_disconnect` x2, `e2e_hot_channel_sync_button`, `e2e_sync_now` |
+| 2 | 5 | `e2e_device_status_dot`, `e2e_photo_albums`, `e2e_ux_feedback`, `gui_wall_canvas_drag` x2 |
+
+**Overlap: zero.** Every one of the nine is a camoufox/browser test, and every
+one passes in isolation. Machine load average during the runs was **9.19** —
+this session had full suites, `gate.sh --full` (which now runs the whole CI) and
+cargo rebuilds overlapping, after the incremental cache was cleared.
+
+**Why this is not just "flaky tests".** R71 P0 made `pre-push` run the full
+local CI, which was the right call and is already earning its keep. But a gate
+that fails randomly is a gate people learn to bypass, and `--no-verify` is
+exactly the invisible escape hatch P0 was written to avoid. A ~0.15% random
+failure rate across ~3000 tests is enough to redden most pushes.
+
+**The likely mechanism**, not yet confirmed: these tests `wait_js` on a
+condition with a fixed timeout while a real daemon and a real browser start.
+Under load, startup crosses the timeout. That is a threshold chosen on an idle
+machine, which is the classic `measure-one-thing` failure.
+
+**Not fixed here** — it is a suite-wide timing property, not an R72 finding, and
+diagnosing it properly means measuring browser+daemon startup under controlled
+load rather than guessing at a bigger number. Recorded with its evidence so the
+next session does not rediscover it, or worse, "fix" it by loosening a threshold
+without measuring.
+
+### R72 findings — F1-F7, each owned by a step
 
 **All seven were verified against source while writing this plan** (line numbers
 current at `8a49301`), and **none of them is visible to the R70 gate**. They are
