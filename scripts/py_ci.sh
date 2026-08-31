@@ -54,13 +54,37 @@ fi
 # cloud panels (38-50%) and media_sync (31%) shrank far more. Stated out
 # loud because a floor moved quietly is a floor that stops meaning
 # anything.
-COV_MIN="${DIVOOM_PY_COV_MIN:-90}"
+#
+# ...and then R71 P0.4 found that "90" never meant 90. coverage.py's
+# should_fail_under is `round(total, precision) < fail_under`, and
+# precision defaults to 0 -- so a total of 89.50 ROUNDS UP to 90 and
+# passes, while 89.49 fails. Measured coverage on a clean tree is exactly
+# 89.50%, i.e. the gate has been green on a 0.01-point margin against a
+# floor it advertised as a full point higher.
+#
+# Fixed by stating the real number instead of one that rounds to it.
+# NOT identical, and the first draft of this comment claimed it was --
+# checked against coverage.py rather than asserted, which is the only
+# reason the difference was found:
+#
+#   precision 0, floor 90     -> everything in [89.5, 90) passes  (0.5 slack)
+#   precision 2, floor 89.5   -> everything in [89.495, 89.5) does (0.005)
+#
+# So this shrinks the undeserved slack by 100x; it does not abolish it.
+# No precision can: `round(total, p) < floor` always lets a sliver just
+# below the floor round up onto it. What changes is that the sliver is now
+# far narrower than the resolution this suite can actually produce, and
+# the advertised number is the one being enforced. Raise the floor
+# deliberately when coverage earns it, and say the number out loud.
+COV_MIN="${DIVOOM_PY_COV_MIN:-89.5}"
+COV_PRECISION=2
 
 if [ "$have_camoufox" -eq 1 ]; then
     info "pytest (coverage floor ${COV_MIN}% over divoom_gui + divoom_client)"
     python3 -m pytest -q \
         --cov=divoom_gui --cov=divoom_client \
         --cov-report=term-missing:skip-covered \
+        --cov-precision="$COV_PRECISION" \
         --cov-fail-under="$COV_MIN"
 else
     warn "coverage floor NOT enforced — needs camoufox for a comparable number"
