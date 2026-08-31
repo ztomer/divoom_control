@@ -11,7 +11,6 @@ use base64::Engine;
 
 use crate::render_widget::{cmd_render_widget, Quote};
 
-
 fn frame_bytes(reply: &Value) -> Vec<u8> {
     base64::engine::general_purpose::STANDARD
         .decode(reply["frame_rgb_b64"].as_str().unwrap())
