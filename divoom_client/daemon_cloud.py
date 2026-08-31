@@ -181,6 +181,20 @@ class CloudDataMixin:
                 _classify(reply if isinstance(reply, dict) else {}))
         return reply.get("credentials")
 
+    def hot_manifest(self, device_size: int = 16) -> list:
+        """What the hot channel currently holds, WITHOUT downloading it.
+
+        The GUI's "Update Hot Channel" preview called the Python
+        `divoom_lib.tools.hot_update.fetch_hot_manifest` in its own process,
+        against the same endpoint `art_hot.rs` has always used — two clients of
+        one API, and the GUI's could not see the manifest cache the daemon
+        keeps.
+
+        Identities only (file_id, version, vendor_id, sha1): rendering a grid
+        of names must not cost what a real sync costs.
+        """
+        return self.cloud_call("hot_manifest", {"device_size": int(device_size)}) or []
+
     # ── one decoded preview (CDN download + magic-43/0xAA decode) ────────────
     def get_animated_preview(self, file_id: str) -> str:
         """A ``data:image/...;base64,`` URL for one gallery or hot-channel file.

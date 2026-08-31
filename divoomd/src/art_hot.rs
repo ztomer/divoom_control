@@ -97,6 +97,53 @@ fn parse_hot_manifest(data: &Value) -> Vec<HotFile> {
     files
 }
 
+/// `hot_manifest {device_size}` — WHAT the hot channel currently holds, without
+/// downloading any of it.
+///
+/// R70 P2.3. The GUI's "Update Hot Channel" preview used to call the Python
+/// `divoom_lib.tools.hot_update.fetch_hot_manifest` in its own process, against
+/// the same endpoint this file has always used. Two clients of one API, and the
+/// GUI's could not see the cache this module keeps.
+///
+/// Bodies are deliberately NOT fetched: `parse_hot_manifest` leaves them empty
+/// and the preview only needs identities. Downloading ~30 files to render a
+/// grid of names would make opening a panel as expensive as a real sync.
+pub async fn cmd_hot_manifest(args: &Value) -> Value {
+    let size = args
+        .get("device_size")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(16) as u32;
+    let device_type = device_type_for_size(size);
+    let client = match reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => return crate::protocol::err_reply(&format!("hot_manifest: {e}")),
+    };
+    match fetch_hot_manifest(&client, device_type).await {
+        Ok(files) => {
+            let items: Vec<Value> = files
+                .iter()
+                .map(|f| {
+                    serde_json::json!({
+                        "file_id": f.file_id,
+                        "version": f.version,
+                        "vendor_id": f.vendor_id,
+                        "sha1": f.sha1,
+                    })
+                })
+                .collect();
+            serde_json::json!({
+                "success": true,
+                "device_type": device_type,
+                "result": items,
+            })
+        }
+        Err(e) => crate::protocol::err_reply(&format!("hot_manifest: {e}")),
+    }
+}
+
 async fn fetch_hot_manifest(
     client: &reqwest::Client,
     device_type: u32,

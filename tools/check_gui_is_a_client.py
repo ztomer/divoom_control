@@ -98,12 +98,8 @@ FORBIDDEN_MODULE_ATTRS = {"ImageDraw", "ImageFont"}
 # `kind` is "import" or "call".
 ALLOWLIST: list[tuple[str, str, str, str]] = [
     # R70 P2 — cloud browse moves to the daemon.
-    #   (P2.1 done: the five CloudClient panels are gone.)
-    ("gallery_hot_api.py", "import", "urllib.request", "R70 P2.2"),
-    ("gallery_hot_api.py", "import", "divoom_lib.media_decoder", "R70 P2.2"),
-    ("gallery_hot_api.py", "import", "divoom_lib.tools.hot_update", "R70 P2.3"),
-    ("gallery_hot_api.py", "call", "Image.open", "R70 P2.3"),
-    ("gallery_hot_api.py", "call", "resize", "R70 P2.3"),
+    #   (P2 DONE: the five CloudClient panels, the gallery HTTP and the
+    #    hot-channel manifest+preview are all daemon calls now.)
     # R70 P3 — the renderers move to the daemon.
     ("media_sync.py", "import", "divoom_lib.utils.media_source", "R70 P3.1"),
     ("media_sync.py", "call", "Image.open", "R70 P3.2"),

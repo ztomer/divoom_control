@@ -7,10 +7,8 @@ import logging
 import base64
 import threading
 import time
-import urllib.request
 from pathlib import Path
 
-from divoom_lib import media_decoder
 
 logger = logging.getLogger("divoom_gui")
 
@@ -156,11 +154,16 @@ class GalleryHotApiMixin:
     def hot_update_preview(self) -> str:
         """Fetch the hot channel manifest from Divoom's cloud and cross-reference
         with the cached gallery to show what would be pushed."""
-        from divoom_lib.tools.hot_update import fetch_hot_manifest, DEVICE_TYPE_BY_SIZE
         try:
+            client = self._client()
+            if client is None:
+                raise RuntimeError("the background service is not running")
             size = self._active_device_size() if hasattr(self, "_active_device_size") else 16
-            device_type = DEVICE_TYPE_BY_SIZE.get(int(size), 1)
-            files = fetch_hot_manifest(device_type)
+            # R70 P2.3: the manifest comes from the daemon, which owns the
+            # size -> DeviceType mapping and the manifest cache. The GUI used
+            # to hit the same endpoint itself, with a second copy of the
+            # mapping and no visibility of that cache.
+            files = client.hot_manifest(int(size))
 
             cache_file = Path.home() / ".config" / "divoom-control" / "gallery_cache.json"
             name_map = {}
@@ -180,18 +183,19 @@ class GalleryHotApiMixin:
 
             items = []
             for f in files:
-                meta = name_map.get(f.file_id, {})
+                file_id = f.get("file_id", "")
+                meta = name_map.get(file_id, {})
                 # Don't send raw CDN URL as preview — it's a binary container the
                 # browser can't render. Animated previews are loaded lazily via
                 # get_animated_preview() which handles download+decode.
                 items.append({
-                    "file_id": f.file_id,
-                    "version": f.version,
-                    "vendor_id": f.vendor_id,
-                    "name": meta.get("name") or f.file_id.rsplit("/", 1)[-1],
+                    "file_id": file_id,
+                    "version": f.get("version", 0),
+                    "vendor_id": f.get("vendor_id", 0),
+                    "name": meta.get("name") or file_id.rsplit("/", 1)[-1],
                     "likes": meta.get("likes", 0),
                     "preview_url": meta.get("preview_url", ""),
-                    "has_cache": f.file_id in name_map,
+                    "has_cache": file_id in name_map,
                 })
 
             # Show newest-first deterministically. The hot API's list order is
@@ -207,90 +211,29 @@ class GalleryHotApiMixin:
             return json.dumps({"success": False, "error": str(e)})
 
     def get_animated_preview(self, file_id: str) -> str:
-        """Return base64-encoded animated preview, downloading + decoding from
-        CDN if not already cached. Works for both gallery and hot channel items."""
+        """A `data:` URL for one gallery or hot-channel asset.
+
+        R70 P2.3. This was ~90 lines of download-and-decode in the GUI process:
+        urllib to the CDN, magic-43 extraction, raw GIF/PNG/JPEG sniffing, a
+        cloud-container decoder, a PIL resize of every frame into an animated
+        GIF, and a PIL catch-all. `divoomd` has answered the identical command
+        the whole time — `sync_artwork.rs` names THIS METHOD as the thing it was
+        written for parity with — and nothing ever called it, so both halves
+        lived side by side.
+
+        The daemon's decoder is the larger one: magic 9 (AES), 18/26 (AES+LZO,
+        tiled) and 0xAA hot files, plus everything the copy here handled.
+        """
+        from divoom_gui import gallery_assets
+
         logger.info(f"GUI Action: Fetching animated preview for {file_id}")
-        try:
-            safe_filename = file_id.replace("/", "_")
-            cache_dir = Path.home() / ".config" / "divoom-control" / "cache_gallery"
-            cache_dir.mkdir(parents=True, exist_ok=True)
-            cache_file_gif = cache_dir / f"{safe_filename}.gif"
-            cache_file_png = cache_dir / f"{safe_filename}.png"
-            cache_file_jpg = cache_dir / f"{safe_filename}.jpg"
-
-            # Check for any existing decoded preview
-            for ext, mime in [(".gif", "image/gif"), (".png", "image/png"), (".jpg", "image/jpeg")]:
-                cached = cache_dir / f"{safe_filename}{ext}"
-                if cached.exists():
-                    img_data = cached.read_bytes()
-                    b64_str = base64.b64encode(img_data).decode("utf-8")
-                    return f"data:{mime};base64,{b64_str}"
-
-            # Not cached — download raw file from CDN
-            from divoom_lib.tools.hot_update import HOT_FILE_BASE
-            dl_url = HOT_FILE_BASE + file_id
-            req = urllib.request.Request(dl_url, headers={"User-Agent": "okhttp/4.12.0"})
-            with urllib.request.urlopen(req, timeout=8) as resp:
-                raw_bytes = resp.read()
-
-            # Try magic-43 decode first
-            extracted = media_decoder.extract_image_from_magic_43(raw_bytes)
-            if extracted:
-                img_bytes, ext = extracted
-                out_path = cache_dir / f"{safe_filename}{ext}"
-                out_path.write_bytes(img_bytes)
-                b64_str = base64.b64encode(img_bytes).decode("utf-8")
-                mime = "image/gif" if ext == ".gif" else ("image/jpeg" if ext in (".jpg", ".jpeg") else "image/png")
-                return f"data:{mime};base64,{b64_str}"
-
-            # Hot channel format (magic 0xAA): raw sequential 16×16 RGB frames
-            if media_decoder.decode_hot_file_to_gif(raw_bytes, cache_file_gif):
-                b64_str = base64.b64encode(cache_file_gif.read_bytes()).decode("utf-8")
-                return f"data:image/gif;base64,{b64_str}"
-
-            # Raw GIF/PNG/JPEG
-            if raw_bytes.startswith(b"GIF89a") or raw_bytes.startswith(b"GIF87a"):
-                cache_file_gif.write_bytes(raw_bytes)
-                b64_str = base64.b64encode(raw_bytes).decode("utf-8")
-                return f"data:image/gif;base64,{b64_str}"
-            if raw_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
-                cache_file_png.write_bytes(raw_bytes)
-                b64_str = base64.b64encode(raw_bytes).decode("utf-8")
-                return f"data:image/png;base64,{b64_str}"
-            if raw_bytes.startswith(b"\xff\xd8"):
-                cache_file_jpg.write_bytes(raw_bytes)
-                b64_str = base64.b64encode(raw_bytes).decode("utf-8")
-                return f"data:image/jpeg;base64,{b64_str}"
-
-            # Fallback 1: cloud container decoder (magic 9/18/26) → animated GIF
-            frames, duration = media_decoder.decode_cloud_frames(raw_bytes)
-            if frames:
-                from PIL import Image
-                previews = [f.resize((128, 128), Image.Resampling.NEAREST) for f in frames]
-                if len(previews) > 1:
-                    previews[0].save(cache_file_gif, save_all=True,
-                                     append_images=previews[1:], duration=duration, loop=0)
-                    b64_str = base64.b64encode(cache_file_gif.read_bytes()).decode("utf-8")
-                    return f"data:image/gif;base64,{b64_str}"
-                else:
-                    previews[0].save(cache_file_png)
-                    b64_str = base64.b64encode(cache_file_png.read_bytes()).decode("utf-8")
-                    return f"data:image/png;base64,{b64_str}"
-
-            # Fallback 2: PIL catch-all (handles any format PIL can open)
-            try:
-                from PIL import Image
-                import io
-                pil_img = Image.open(io.BytesIO(raw_bytes))
-                pil_img.save(cache_file_png)
-                b64_str = base64.b64encode(cache_file_png.read_bytes()).decode("utf-8")
-                return f"data:image/png;base64,{b64_str}"
-            except Exception:
-                logger.warning(f"No decoder could handle {file_id} (magic={raw_bytes[0] if raw_bytes else 0}, {len(raw_bytes)}B)")
-
-        except Exception as e:
-            logger.warning(f"get_animated_preview failed for {file_id}: {e}")
-        return ""
+        client = self._client()
+        if client is None:
+            logger.warning("no daemon: cannot fetch preview for %s", file_id)
+            return ""
+        cache_dir = gallery_assets.ensure_cache_dir(
+            Path.home() / ".config" / "divoom-control" / "cache_gallery")
+        return gallery_assets.preview_for(client, cache_dir, file_id)
 
     @staticmethod
     def _coerce_list(args, kwargs, key) -> list:

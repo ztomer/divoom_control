@@ -220,13 +220,30 @@ pub(crate) fn decode_hot_file(data: &[u8]) -> Option<Vec<(Vec<u8>, u32)>> {
             if pos + n_bytes > data.len() {
                 break;
             }
-            let packed = data[pos..pos + n_bytes]
-                .iter()
-                .enumerate()
-                .fold(0u128, |a, (i, &b)| a | ((b as u128) << (i * 8)));
-            let mask = (1usize << bpp) - 1;
+            // Read each index bit by bit, LSB-first, straight out of the bytes.
+            //
+            // This used to fold the whole pixel map into a single `u128` and
+            // shift within it — a faithful-looking port of Python's
+            // `int.from_bytes(...)`, except Python's integers are arbitrary
+            // precision and a u128 holds SIXTEEN BYTES. The map is
+            // `256 * bpp / 8` bytes: 32 at bpp=1, up to 256 at bpp=8. So the
+            // fold shifted by `i * 8` for i up to 255 and overflowed for every
+            // palette with more than one colour — i.e. essentially every real
+            // hot file.
+            //
+            // In a debug build that panics, which is how it was found (R70
+            // P2.3, a live 0xAA file killed the daemon's worker thread and the
+            // client saw "no reply"). In a RELEASE build `<<` masks the shift
+            // amount instead, so it silently produced wrong indices, tripped
+            // the `i >= palette.len()` guard below, and reported the file as
+            // undecodable. Both `sync_artwork`/`get_animated_preview` and the
+            // hot-channel PUSH (`art.rs`) run through here.
+            let bit_at = |b: usize| -> usize { ((data[pos + b / 8] >> (b % 8)) & 1) as usize };
             (0..256)
-                .map(|i| (packed >> (i * bpp)) as usize & mask)
+                .map(|i| {
+                    let base = i * bpp;
+                    (0..bpp).fold(0usize, |v, k| v | (bit_at(base + k) << k))
+                })
                 .collect()
         };
         if indices.iter().any(|&i| i >= palette.len()) {
@@ -308,6 +325,86 @@ mod parity_tests {
                 unhex(e.as_str().unwrap()),
                 "magic18 frame {i} bytes differ from Python"
             );
+        }
+    }
+
+    /// Build a minimal 0xAA hot frame: header, palette, then a packed 256-index
+    /// pixel map at `bpp` bits per pixel, LSB-first.
+    fn hot_frame(palette: &[[u8; 3]], indices: &[usize; 256]) -> Vec<u8> {
+        let bpp = {
+            let x = palette.len() - 1;
+            if x == 0 {
+                0
+            } else {
+                (usize::BITS - x.leading_zeros()) as usize
+            }
+        };
+        let mut body = vec![0u8; 2]; // flag, n_colors
+        body[0] = 0; // reset palette
+        body[1] = palette.len() as u8;
+        for c in palette {
+            body.extend_from_slice(c);
+        }
+        if bpp > 0 {
+            let n_bytes = (256 * bpp).div_ceil(8);
+            let mut packed = vec![0u8; n_bytes];
+            for (i, &idx) in indices.iter().enumerate() {
+                for k in 0..bpp {
+                    if (idx >> k) & 1 != 0 {
+                        let b = i * bpp + k;
+                        packed[b / 8] |= 1 << (b % 8);
+                    }
+                }
+            }
+            body.extend_from_slice(&packed);
+        }
+        let mut out = vec![0xAAu8];
+        out.extend_from_slice(&((body.len() + 5) as u16).to_le_bytes());
+        out.extend_from_slice(&100u16.to_le_bytes());
+        out.extend_from_slice(&body);
+        out
+    }
+
+    /// R70 P2.3. The pixel map is `256 * bpp / 8` bytes — 32 at bpp=1, up to
+    /// 256 at bpp=8 — and the old implementation folded all of it into a
+    /// `u128`, shifting by `i * 8` for i up to 255. That overflows for every
+    /// palette with more than one colour: a debug build panicked (killing the
+    /// daemon's worker thread mid-request), a release build silently masked the
+    /// shift and reported real files as undecodable.
+    ///
+    /// Parameterised over bpp on purpose: a single-palette-size test would have
+    /// passed on the old code at bpp=0 and proved nothing. This is the CLASS —
+    /// every palette width a real file can use.
+    #[test]
+    fn hot_frames_decode_at_every_palette_width() {
+        for n_colors in [1usize, 2, 3, 4, 5, 8, 9, 16, 17, 32, 100, 255, 256] {
+            let palette: Vec<[u8; 3]> = (0..n_colors)
+                .map(|i| {
+                    [
+                        (i % 256) as u8,
+                        ((i * 7) % 256) as u8,
+                        ((i * 13) % 256) as u8,
+                    ]
+                })
+                .collect();
+            let mut indices = [0usize; 256];
+            for (i, slot) in indices.iter_mut().enumerate() {
+                *slot = i % n_colors;
+            }
+            let data = hot_frame(&palette, &indices);
+
+            let frames = decode_hot_file(&data)
+                .unwrap_or_else(|| panic!("{n_colors}-colour hot frame failed to decode"));
+            assert_eq!(frames.len(), 1, "{n_colors} colours: frame count");
+            let (rgb, _dur) = &frames[0];
+            assert_eq!(rgb.len(), 256 * 3, "{n_colors} colours: frame size");
+            for (i, &idx) in indices.iter().enumerate() {
+                assert_eq!(
+                    &rgb[i * 3..i * 3 + 3],
+                    &palette[idx][..],
+                    "{n_colors} colours: pixel {i} decoded to the wrong palette entry"
+                );
+            }
         }
     }
 }

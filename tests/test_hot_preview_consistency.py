@@ -1,66 +1,100 @@
 """R52: the hot-channel PREVIEW must show what the UPDATE actually sends.
 
-Both paths derive the file set from `fetch_hot_manifest(device_type)`, where
-`device_type = DEVICE_TYPE_BY_SIZE[active_device_size]`:
+The danger is the preview resolving a DIFFERENT manifest than the send — e.g.
+always the 16px one while a 64px Pixoo gets the 64px one (the ghost-default bug
+already fixed once for the community gallery). These tests pin the invariant:
+the preview asks at the ACTIVE device size, and identical sizes yield identical
+file sets.
 
-  - send:    HotUpdate.update(device_size=...) (divoom_lib/tools/hot_update.py)
-  - preview: GalleryHotApiMixin.hot_update_preview()  (this module)
+**R70 P2.3 made the invariant structural rather than watched.** Both paths now
+go through `divoomd`, which owns the size -> DeviceType mapping
+(`art::device_type_for_size`) and the manifest cache. The GUI used to call the
+Python `fetch_hot_manifest` against the same endpoint with its OWN copy of that
+mapping — two clients of one API, kept in step by a test rather than by there
+being one of them.
 
-The danger is the preview silently fetching a DIFFERENT manifest than the send —
-e.g. always the 16px manifest while a 64px Pixoo gets the 64px one (the same
-ghost-default bug we fixed for the community gallery). These tests pin the
-invariant: the preview fetches at the active device size, and identical sizes
-yield identical file sets.
+The `TestGetAnimatedPreview` class that used to live here went with the code it
+covered: ~90 lines of in-GUI download and decode (magic-43, raw GIF/PNG/JPEG,
+cloud containers, a PIL catch-all) replaced by one daemon call whose decoder
+handles strictly more. `tests/test_gallery_assets.py` covers what remains.
 """
 from __future__ import annotations
 
-import base64
 import json
 
-import divoom_lib.tools.hot_update as hot
-from divoom_lib.tools.hot_update import HotFile, DEVICE_TYPE_BY_SIZE
-from divoom_gui import gallery_hot_api
 from divoom_gui.gallery_hot_api import GalleryHotApiMixin
+
+#: What `art::device_type_for_size` answers. Duplicated here ON PURPOSE: this
+#: must fail if the daemon's mapping changes without anyone noticing, which it
+#: could not do if it imported the value under test.
+DEVICE_TYPE_BY_SIZE = {16: 1, 32: 0, 64: 2, 128: 3, 256: 4}
+
+
+class _FakeClient:
+    """Records the device_size the preview asks for."""
+
+    def __init__(self, items=None, error=None):
+        self.items = items if items is not None else [
+            {"file_id": "g/abc", "version": 3, "vendor_id": 1, "sha1": "x"}]
+        self.error = error
+        self.sizes = []
+
+    def hot_manifest(self, device_size=16):
+        self.sizes.append(device_size)
+        if self.error is not None:
+            raise self.error
+        return self.items
 
 
 class _Api(GalleryHotApiMixin):
     """Minimal host for the mixin with a controllable active device size."""
-    def __init__(self, size):
+
+    def __init__(self, size, client=None):
         self._size = size
+        self._fake = client if client is not None else _FakeClient()
 
     def _active_device_size(self, default: int = 16) -> int:
         return self._size
 
+    def _client(self):
+        return self._fake
+
 
 def _patch_manifest(monkeypatch, tmp_path):
-    """Record the device_type the preview fetches the manifest for, and keep the
-    gallery-cache lookup out of the real home dir."""
-    seen = {}
-
-    def fake_fetch(device_type):
-        seen["device_type"] = device_type
-        return [HotFile(vendor_id=1, file_id="g/abc", version=3, sha1="x")]
-
-    monkeypatch.setattr(hot, "fetch_hot_manifest", fake_fetch)
-    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)  # no gallery cache
-    return seen
+    """Keep the gallery-cache lookup out of the real home dir."""
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    return {}
 
 
-def test_preview_fetches_manifest_at_active_device_size(monkeypatch, tmp_path):
-    seen = _patch_manifest(monkeypatch, tmp_path)
-    out = json.loads(_Api(64).hot_update_preview())
+def test_preview_asks_at_the_active_device_size(monkeypatch, tmp_path):
+    _patch_manifest(monkeypatch, tmp_path)
+    api = _Api(64)
+    out = json.loads(api.hot_update_preview())
     assert out["success"] is True
-    # 64px Pixoo → device_type 2, NOT the 16px default (1).
-    assert seen["device_type"] == DEVICE_TYPE_BY_SIZE[64] == 2
+    # A 64px Pixoo must not silently get the 16px manifest.
+    assert api._fake.sizes == [64]
     assert [i["file_id"] for i in out["items"]] == ["g/abc"]
 
 
-def test_preview_device_type_tracks_size(monkeypatch, tmp_path):
-    seen = _patch_manifest(monkeypatch, tmp_path)
+def test_preview_size_tracks_the_device_at_every_size(monkeypatch, tmp_path):
+    _patch_manifest(monkeypatch, tmp_path)
     for size in (16, 32, 64, 128, 256):
-        _Api(size).hot_update_preview()
-        assert seen["device_type"] == DEVICE_TYPE_BY_SIZE[size], (
-            f"preview at size {size} fetched the wrong manifest")
+        api = _Api(size)
+        api.hot_update_preview()
+        assert api._fake.sizes == [size], (
+            f"preview at size {size} asked for the wrong manifest")
+
+
+def test_the_daemon_maps_every_size_this_gui_can_report(monkeypatch, tmp_path):
+    """The mapping moved INTO the daemon, so pin that it still covers the sizes
+    the GUI can ask about — a size the daemon silently defaults to 16 would
+    reproduce the ghost-default bug one layer down."""
+    from pathlib import Path as _P
+    src = (_P(__file__).resolve().parent.parent
+           / "divoomd" / "src" / "art.rs").read_text()
+    for size, device_type in DEVICE_TYPE_BY_SIZE.items():
+        assert f"{size} => {device_type}," in src, (
+            f"art.rs no longer maps {size}px to DeviceType {device_type}")
 
 
 def test_preview_uses_gallery_cache_names_and_marks_has_cache(monkeypatch, tmp_path):
@@ -110,257 +144,46 @@ def test_preview_survives_corrupt_gallery_cache(monkeypatch, tmp_path):
 
 
 def test_preview_reports_manifest_fetch_failure(monkeypatch, tmp_path):
-    """If fetch_hot_manifest raises (network/daemon trouble), the preview
-    reports a structured failure instead of propagating the exception."""
+    """A manifest that cannot be fetched is a structured failure carrying the
+    daemon's reason, not an exception and not an empty grid."""
+    from divoom_client.daemon_cloud import CloudUnavailable
+
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    api = _Api(16, _FakeClient(error=CloudUnavailable("hot_manifest: timed out", "cloud")))
+    out = json.loads(api.hot_update_preview())
+    assert out["success"] is False
+    assert "timed out" in out["error"]
+
+
+def test_preview_without_a_daemon_says_so(monkeypatch, tmp_path):
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
 
-    def boom(device_type):
-        raise RuntimeError("cloud unreachable")
+    class _NoDaemon(_Api):
+        def _client(self):
+            return None
 
-    monkeypatch.setattr(hot, "fetch_hot_manifest", boom)
-    out = json.loads(_Api(16).hot_update_preview())
-    assert out == {"success": False, "error": "cloud unreachable"}
+    out = json.loads(_NoDaemon(16).hot_update_preview())
+    assert out["success"] is False
+    assert "background service" in out["error"]
 
 
 def test_preview_and_send_share_one_manifest_source():
-    """Guard: both the preview and the send resolve device_type through the same
-    DEVICE_TYPE_BY_SIZE map + fetch_hot_manifest — if someone forks one path,
-    this is the seam that breaks. (Static reference, not a runtime call.) The
-    send now funnels the fetch through _load_hot_files (device_type-keyed cache),
-    so pin that indirection too rather than weakening the invariant."""
+    """Both the preview and the send resolve the manifest through the DAEMON.
+
+    This used to pin that two Python call sites referenced the same
+    `DEVICE_TYPE_BY_SIZE` map and the same `fetch_hot_manifest`. There is only
+    one implementation now, so the guard is that the GUI has no second one:
+    the preview asks `hot_manifest`, the send asks `hot_update`, and neither
+    imports the Python manifest fetcher.
+    """
     import inspect
-    preview_src = inspect.getsource(GalleryHotApiMixin.hot_update_preview)
-    update_src = inspect.getsource(hot.HotUpdate.update)
-    loader_src = inspect.getsource(hot._load_hot_files)
-    # Both paths key off pixel size via the same map.
-    assert "DEVICE_TYPE_BY_SIZE" in preview_src
-    assert "DEVICE_TYPE_BY_SIZE" in update_src
-    # Preview fetches the manifest directly; the send funnels through
-    # _load_hot_files, the one place that calls fetch_hot_manifest.
-    assert "fetch_hot_manifest" in preview_src
-    assert "_load_hot_files" in update_src
-    assert "fetch_hot_manifest" in loader_src
+    from divoom_gui.gallery_hot_api import GalleryHotApiMixin as _M
 
+    preview_src = inspect.getsource(_M.hot_update_preview)
+    assert "hot_manifest" in preview_src
+    assert "fetch_hot_manifest" not in preview_src, (
+        "the preview must not fetch the manifest itself")
 
-# ── get_animated_preview: download/decode fan-out ───────────────────────────
-# Covers divoom_gui/gallery_hot_api.py lines 131-212. No real network: the
-# CDN fetch is mocked at urllib.request.urlopen (the boundary), and the
-# gallery cache dir is redirected via Path.home() like the tests above.
-
-class _FakeResp:
-    """Minimal context-manager stand-in for urllib's HTTPResponse."""
-    def __init__(self, data: bytes):
-        self._data = data
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *a):
-        return False
-
-    def read(self):
-        return self._data
-
-
-def _mock_download(monkeypatch, raw_bytes: bytes | None = None, *, raises: Exception | None = None):
-    def fake_urlopen(req, timeout=8):
-        if raises is not None:
-            raise raises
-        return _FakeResp(raw_bytes)
-    monkeypatch.setattr(gallery_hot_api.urllib.request, "urlopen", fake_urlopen)
-
-
-class TestGetAnimatedPreview:
-    def test_returns_precached_gif_without_downloading(self, monkeypatch, tmp_path):
-        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
-        cache_dir = tmp_path / ".config" / "divoom-control" / "cache_gallery"
-        cache_dir.mkdir(parents=True)
-        (cache_dir / "g_abc.gif").write_bytes(b"already-cached-gif-bytes")
-        # No urlopen mock installed — a real network call here would fail the
-        # test outright, proving the cache short-circuits it.
-        out = _Api(16).get_animated_preview("g/abc")
-        assert out.startswith("data:image/gif;base64,")
-        assert base64.b64decode(out.split(",", 1)[1]) == b"already-cached-gif-bytes"
-
-    def test_magic43_decode_success(self, monkeypatch, tmp_path):
-        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
-        _mock_download(monkeypatch, b"raw-magic43-container")
-        monkeypatch.setattr(gallery_hot_api.media_decoder, "extract_image_from_magic_43",
-                             lambda data: (b"pngbytes", ".png"), raising=False)
-        out = _Api(16).get_animated_preview("g/xyz")
-        assert out.startswith("data:image/png;base64,")
-        assert base64.b64decode(out.split(",", 1)[1]) == b"pngbytes"
-        # Decoded output was cached to disk for next time.
-        cache_dir = tmp_path / ".config" / "divoom-control" / "cache_gallery"
-        assert (cache_dir / "g_xyz.png").read_bytes() == b"pngbytes"
-
-    def test_hot_channel_format_decode_success(self, monkeypatch, tmp_path):
-        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
-        _mock_download(monkeypatch, b"\xaa-hot-channel-raw-frames")
-        monkeypatch.setattr(gallery_hot_api.media_decoder, "extract_image_from_magic_43", lambda data: None, raising=False)
-
-        def fake_decode_hot(raw, out_path, max_frames=60):
-            out_path.write_bytes(b"GIF89a-decoded-hot")
-            return True
-        monkeypatch.setattr(gallery_hot_api.media_decoder, "decode_hot_file_to_gif", fake_decode_hot, raising=False)
-
-        out = _Api(16).get_animated_preview("hot/1")
-        assert out.startswith("data:image/gif;base64,")
-        assert base64.b64decode(out.split(",", 1)[1]) == b"GIF89a-decoded-hot"
-
-    def test_raw_gif_passthrough(self, monkeypatch, tmp_path):
-        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
-        raw = b"GIF89a" + b"\x00" * 20
-        _mock_download(monkeypatch, raw)
-        monkeypatch.setattr(gallery_hot_api.media_decoder, "extract_image_from_magic_43", lambda data: None, raising=False)
-        monkeypatch.setattr(gallery_hot_api.media_decoder, "decode_hot_file_to_gif", lambda *a, **k: False, raising=False)
-        out = _Api(16).get_animated_preview("g/raw-gif")
-        assert out.startswith("data:image/gif;base64,")
-        assert base64.b64decode(out.split(",", 1)[1]) == raw
-
-    def test_raw_png_passthrough(self, monkeypatch, tmp_path):
-        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
-        raw = b"\x89PNG\r\n\x1a\n" + b"\x00" * 20
-        _mock_download(monkeypatch, raw)
-        monkeypatch.setattr(gallery_hot_api.media_decoder, "extract_image_from_magic_43", lambda data: None, raising=False)
-        monkeypatch.setattr(gallery_hot_api.media_decoder, "decode_hot_file_to_gif", lambda *a, **k: False, raising=False)
-        out = _Api(16).get_animated_preview("g/raw-png")
-        assert out.startswith("data:image/png;base64,")
-        assert base64.b64decode(out.split(",", 1)[1]) == raw
-
-    def test_raw_jpeg_passthrough(self, monkeypatch, tmp_path):
-        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
-        raw = b"\xff\xd8" + b"\x00" * 20
-        _mock_download(monkeypatch, raw)
-        monkeypatch.setattr(gallery_hot_api.media_decoder, "extract_image_from_magic_43", lambda data: None, raising=False)
-        monkeypatch.setattr(gallery_hot_api.media_decoder, "decode_hot_file_to_gif", lambda *a, **k: False, raising=False)
-        out = _Api(16).get_animated_preview("g/raw-jpg")
-        assert out.startswith("data:image/jpeg;base64,")
-        assert base64.b64decode(out.split(",", 1)[1]) == raw
-
-    def test_cloud_frames_multi_frame_becomes_gif(self, monkeypatch, tmp_path):
-        from PIL import Image
-        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
-        # Not GIF/PNG/JPEG magic — forces the cloud-frames fallback branch.
-        _mock_download(monkeypatch, b"\x09unrecognized-container")
-        monkeypatch.setattr(gallery_hot_api.media_decoder, "extract_image_from_magic_43", lambda data: None, raising=False)
-        monkeypatch.setattr(gallery_hot_api.media_decoder, "decode_hot_file_to_gif", lambda *a, **k: False, raising=False)
-        frames = [Image.new("RGB", (16, 16), c) for c in [(255, 0, 0), (0, 255, 0)]]
-        monkeypatch.setattr(gallery_hot_api.media_decoder, "decode_cloud_frames", lambda raw: (frames, 100), raising=False)
-
-        out = _Api(16).get_animated_preview("cloud/multi")
-        assert out.startswith("data:image/gif;base64,")
-
-    def test_cloud_frames_single_frame_becomes_png(self, monkeypatch, tmp_path):
-        from PIL import Image
-        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
-        _mock_download(monkeypatch, b"\x09unrecognized-container")
-        monkeypatch.setattr(gallery_hot_api.media_decoder, "extract_image_from_magic_43", lambda data: None, raising=False)
-        monkeypatch.setattr(gallery_hot_api.media_decoder, "decode_hot_file_to_gif", lambda *a, **k: False, raising=False)
-        frames = [Image.new("RGB", (16, 16), (10, 20, 30))]
-        monkeypatch.setattr(gallery_hot_api.media_decoder, "decode_cloud_frames", lambda raw: (frames, 0), raising=False)
-
-        out = _Api(16).get_animated_preview("cloud/single")
-        assert out.startswith("data:image/png;base64,")
-
-    def test_pil_catch_all_fallback_success(self, monkeypatch, tmp_path):
-        """A format with no dedicated decoder (e.g. BMP) still renders via the
-        PIL catch-all — real PIL-encoded bytes, not a mock of PIL itself."""
-        from PIL import Image
-        import io as _io
-        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
-        buf = _io.BytesIO()
-        Image.new("RGB", (4, 4), (1, 2, 3)).save(buf, format="BMP")
-        bmp_bytes = buf.getvalue()
-        assert bmp_bytes[:2] == b"BM"  # doesn't match the gif/png/jpeg magic checks
-        _mock_download(monkeypatch, bmp_bytes)
-        monkeypatch.setattr(gallery_hot_api.media_decoder, "extract_image_from_magic_43", lambda data: None, raising=False)
-        monkeypatch.setattr(gallery_hot_api.media_decoder, "decode_hot_file_to_gif", lambda *a, **k: False, raising=False)
-        monkeypatch.setattr(gallery_hot_api.media_decoder, "decode_cloud_frames", lambda raw: (None, 0), raising=False)
-
-        out = _Api(16).get_animated_preview("misc/bmp")
-        assert out.startswith("data:image/png;base64,")
-
-    def test_no_decoder_handles_returns_empty_string(self, monkeypatch, tmp_path):
-        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
-        _mock_download(monkeypatch, b"totally-unrecognizable-junk")
-        monkeypatch.setattr(gallery_hot_api.media_decoder, "extract_image_from_magic_43", lambda data: None, raising=False)
-        monkeypatch.setattr(gallery_hot_api.media_decoder, "decode_hot_file_to_gif", lambda *a, **k: False, raising=False)
-        monkeypatch.setattr(gallery_hot_api.media_decoder, "decode_cloud_frames", lambda raw: (None, 0), raising=False)
-
-        out = _Api(16).get_animated_preview("misc/junk")
-        assert out == ""
-
-    def test_download_failure_returns_empty_string(self, monkeypatch, tmp_path):
-        """Network trouble (timeout, DNS, 404 raised as URLError) must degrade
-        to an empty string, not propagate — the GUI just shows no preview."""
-        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
-        _mock_download(monkeypatch, raises=OSError("connection refused"))
-        out = _Api(16).get_animated_preview("g/unreachable")
-        assert out == ""
-
-
-# ── _coerce_list / _coerce_dict: pywebview varargs normalization ────────────
-# Called as `self._coerce_list(*args_tuple, kwargs, key)` from callers like
-# MediaSyncMixin.set_tickers — pywebview may hand these either a single JSON
-# string, a single Python list, multiple positional args, or kwargs.
-
-class TestCoerceList:
-    def test_single_json_list_string(self):
-        assert GalleryHotApiMixin._coerce_list(('["a", "b"]',), {}, "tickers") == ["a", "b"]
-
-    def test_single_json_object_string_wraps_in_list(self):
-        assert GalleryHotApiMixin._coerce_list(('{"a": 1}',), {}, "tickers") == [{"a": 1}]
-
-    def test_single_non_json_string_falls_back_to_one_item_list(self):
-        assert GalleryHotApiMixin._coerce_list(("AAPL",), {}, "tickers") == ["AAPL"]
-
-    def test_single_list_arg_passthrough(self):
-        assert GalleryHotApiMixin._coerce_list((["x", "y"],), {}, "tickers") == ["x", "y"]
-
-    def test_single_tuple_arg_becomes_list(self):
-        assert GalleryHotApiMixin._coerce_list((("x", "y"),), {}, "tickers") == ["x", "y"]
-
-    def test_single_non_iterable_arg_wraps_in_list(self):
-        assert GalleryHotApiMixin._coerce_list((5,), {}, "tickers") == [5]
-
-    def test_multiple_positional_args(self):
-        assert GalleryHotApiMixin._coerce_list(("a", "b", "c"), {}, "tickers") == ["a", "b", "c"]
-
-    def test_kwargs_list_fallback(self):
-        assert GalleryHotApiMixin._coerce_list((), {"tickers": ["z"]}, "tickers") == ["z"]
-
-    def test_kwargs_non_list_value_ignored(self):
-        assert GalleryHotApiMixin._coerce_list((), {"tickers": "not-a-list"}, "tickers") == []
-
-    def test_no_args_no_kwargs_returns_empty(self):
-        assert GalleryHotApiMixin._coerce_list((), {}, "tickers") == []
-
-
-class TestCoerceDict:
-    def test_single_json_dict_string(self):
-        assert GalleryHotApiMixin._coerce_dict(('{"enabled": true}',), {}) == {"enabled": True}
-
-    def test_single_non_json_string_returns_empty(self):
-        assert GalleryHotApiMixin._coerce_dict(("not json",), {}) == {}
-
-    def test_single_json_list_string_returns_empty(self):
-        assert GalleryHotApiMixin._coerce_dict(('["a"]',), {}) == {}
-
-    def test_single_dict_arg_passthrough(self):
-        assert GalleryHotApiMixin._coerce_dict(({"enabled": True},), {}) == {"enabled": True}
-
-    def test_single_non_dict_arg_returns_empty(self):
-        assert GalleryHotApiMixin._coerce_dict((5,), {}) == {}
-
-    def test_kwargs_allowed_keys_filtered(self):
-        out = GalleryHotApiMixin._coerce_dict(
-            (), {"enabled": True, "interval": 5, "bogus": "x"})
-        assert out == {"enabled": True, "interval": 5}
-
-    def test_no_args_no_kwargs_returns_empty(self):
-        assert GalleryHotApiMixin._coerce_dict((), {}) == {}
-
-    def test_multiple_positional_args_uses_kwargs_branch(self):
-        out = GalleryHotApiMixin._coerce_dict(("a", "b"), {"classify": True})
-        assert out == {"classify": True}
+    send_src = inspect.getsource(_M.hot_channel_update)
+    assert "hot_update" in send_src
+    assert "fetch_hot_manifest" not in send_src
