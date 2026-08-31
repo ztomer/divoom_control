@@ -49,19 +49,6 @@ class TestGuiApiHotAndCustomArt(GuiApiTestBase):
             out = json.loads(self.api.hot_channel_update())
         assert out == {"success": False, "error": "no daemon available"}
 
-    def test_hot_update_status_no_daemon(self):
-        with patch.object(self.api, "_client", return_value=None):
-            out = json.loads(self.api.hot_update_status())
-        assert out == {"phase": "error", "error": "no daemon"}
-
-    def test_hot_update_status_delegates_to_daemon(self):
-        fake = MagicMock()
-        fake.hot_update_progress.return_value = {"phase": "downloading", "pct": 42}
-        with patch.object(self.api, "_client", return_value=fake):
-            out = json.loads(self.api.hot_update_status())
-        assert out == {"phase": "downloading", "pct": 42}
-        fake.hot_update_progress.assert_called_once()
-
     def test_custom_art_push_no_daemon(self):
         with patch.object(self.api, "_client", return_value=None):
             out = json.loads(self.api.custom_art_push("[1,2,3]", 0))

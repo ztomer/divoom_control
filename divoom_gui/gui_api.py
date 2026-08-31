@@ -303,12 +303,6 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
         reply = client.stop_notifications()
         return {"running": self._daemon_state_running(reply)}
 
-    def is_notification_listener_running(self) -> bool:
-        client = self._client()
-        if client is None:
-            return False
-        return self._daemon_state_running(client.notification_status())
-
     def get_notification_listener_status(self) -> dict:
         """Rich status snapshot for the Settings → Devices card.
 
@@ -473,11 +467,6 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
         from divoom_gui.mcp_control import MCPController, status_to_dict
         ctl = MCPController.instance()
         return status_to_dict(ctl.stop())
-
-    def is_mcp_server_running(self) -> bool:
-        """True if the subprocess is alive."""
-        from divoom_gui.mcp_control import MCPController
-        return MCPController.instance().is_running()
 
     def mcp_server_status(self) -> dict:
         """Snapshot of the subprocess state (JSON-friendly)."""

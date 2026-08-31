@@ -132,14 +132,6 @@ class GalleryHotApiMixin:
         threading.Thread(target=worker, name="DivoomSyncNow", daemon=True).start()
         return json.dumps({"success": True})
 
-    def hot_update_status(self) -> str:
-        """Query daemon for current hot update progress."""
-        logger.debug("GUI Action: Hot update status poll...")
-        client = self._client()
-        if client is None:
-            return json.dumps({"phase": "error", "error": "no daemon"})
-        return json.dumps(client.hot_update_progress())
-
     def hot_get_check(self, address: str = "") -> str:
         """R53: the daemon-recorded last hot-channel check for a device (or
         ``{}``). Reads the shared ``hot_update_state.json`` the daemon writes.

@@ -26,9 +26,8 @@ class TestGuiApiNotifications(GuiApiTestBase):
         return c
 
     def test_notification_listener_initial_state(self):
-        """No daemon → not running; stop is a safe no-op."""
+        """No daemon → stop is a safe no-op."""
         with patch.object(self.api, "_client", return_value=None):
-            self.assertFalse(self.api.is_notification_listener_running())
             self.assertFalse(self.api.stop_notification_listener()["running"])
 
     @patch("sys.platform", new="darwin")
@@ -82,7 +81,6 @@ class TestGuiApiNotifications(GuiApiTestBase):
              patch("divoom_client.macos_notifications.load_routing_table", return_value=[]):
             self.api.start_notification_listener()
             self.api.stop_notification_listener()
-            self.api.is_notification_listener_running()
             self.api.get_notification_listener_status()
         mock_cls.assert_not_called()
 

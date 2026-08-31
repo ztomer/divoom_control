@@ -259,13 +259,11 @@ class TestGuiApiTopLevelCoverage(unittest.TestCase):
         with patch.object(MCPController, "instance", return_value=fake_ctl):
             start_result = self.api.start_mcp_server(mac="AA:BB")
             stop_result = self.api.stop_mcp_server()
-            running = self.api.is_mcp_server_running()
             status = self.api.mcp_server_status()
         self.assertTrue(start_result["running"])
         self.assertEqual(start_result["pid"], 123)
         fake_ctl.start.assert_called_with(mac="AA:BB")
         self.assertFalse(stop_result["running"])
-        self.assertTrue(running)
         self.assertTrue(status["running"])
 
     def test_start_mcp_server_empty_mac_passes_none(self):
