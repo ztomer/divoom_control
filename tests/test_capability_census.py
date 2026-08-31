@@ -66,15 +66,14 @@ def test_multi_line_match_arms_are_all_captured(tmp_path, monkeypatch):
 # ── calibration: the two findings that predate the instrument ────────────────
 
 def test_the_census_rediscovers_F1_the_auth_bypass():
-    _, _ = None, None
-    direct, _wrapped = census.scan_python(census.daemon_capabilities())
+    direct, _wrapped, _reaches = census.scan_python(census.daemon_capabilities())
     hits = [(w, n) for w, n, _lib in direct if n.endswith("credentials")]
     assert hits, "F1 not rediscovered — the census cannot see the auth bypass"
     assert any("gui_api.py" in w for w, _ in hits), hits
 
 
 def test_the_census_rediscovers_F2_the_sync_time_duplicate():
-    _direct, wrapped = census.scan_python(census.daemon_capabilities())
+    _direct, wrapped, _reaches = census.scan_python(census.daemon_capabilities())
     hits = [(w, n) for w, n, _libs in wrapped if n == "sync_time"]
     assert hits, "F2 not rediscovered — the census cannot see a reimplementation"
     assert any("tools.py" in w for w, _ in hits), hits
@@ -87,8 +86,8 @@ def test_the_census_finds_more_than_its_seed():
     `scripts/` -- a directory R70's gate never looked at -- so the scope
     widening is doing work rather than being decorative.
     """
-    direct, wrapped = census.scan_python(census.daemon_capabilities())
-    where = {w.split(":")[0] for w, _, _ in direct + wrapped}
+    direct, wrapped, reaches = census.scan_python(census.daemon_capabilities())
+    where = {w.split(":")[0] for w, _, _ in direct + wrapped + reaches}
     assert any(p.startswith("scripts/") for p in where), (
         f"nothing found outside divoom_gui/divoom_client: {sorted(where)}")
 
@@ -105,13 +104,13 @@ def _scan_one(tmp_path, monkeypatch, body: str, caps: set[str]):
 
 
 def test_clean_client_code_produces_no_findings(tmp_path, monkeypatch):
-    direct, wrapped = _scan_one(
+    direct, wrapped, reaches = _scan_one(
         tmp_path, monkeypatch,
         "from divoom_client.daemon_protocol import DaemonClient\n"
         "def sync_time(self):\n"
         "    return DaemonClient().send_command('sync_time')\n",
         {"sync_time"})
-    assert direct == [] and wrapped == [], (direct, wrapped)
+    assert direct == [] and wrapped == [] and reaches == [], (direct, wrapped, reaches)
 
 
 def test_client_owned_helpers_are_deliberately_not_flagged(tmp_path, monkeypatch):
@@ -120,7 +119,7 @@ def test_client_owned_helpers_are_deliberately_not_flagged(tmp_path, monkeypatch
     Flagging them would bury the real findings under noise, which is how a
     report stops being read.
     """
-    direct, wrapped = _scan_one(
+    direct, wrapped, reaches = _scan_one(
         tmp_path, monkeypatch,
         "from divoom_lib.utils.atomic_io import atomic_write_config\n"
         "from divoom_lib.lifecycle_config import get_keep_daemon_alive\n"
@@ -130,14 +129,41 @@ def test_client_owned_helpers_are_deliberately_not_flagged(tmp_path, monkeypatch
         {"sync_time"})
     assert wrapped == [], wrapped
     assert direct == [], direct
+    assert reaches == [], reaches
 
 
 def test_a_new_duplicate_would_be_caught(tmp_path, monkeypatch):
     """Prove it bites without waiting for someone to write the bug."""
-    direct, wrapped = _scan_one(
+    direct, wrapped, reaches = _scan_one(
         tmp_path, monkeypatch,
         "from divoom_lib import divoom_auth\n"
         "def whatever():\n"
         "    return divoom_auth.get_credentials()\n",
         {"get_credentials"})
     assert [n for _w, n, _l in direct] == ["get_credentials"], direct
+    assert reaches == [], reaches
+
+
+def test_reaches_catches_F4_the_weather_resolver():
+    """The category exists because the name-based rules could not see this.
+
+    `_resolve_location` is not a daemon command name and it is bare-imported,
+    so DIRECT and WRAPPED both miss it -- while it is unmistakably weather
+    resolution, which the daemon owns. A census that reported clean with this
+    standing would be measuring its own rules, not the invariant.
+    """
+    _d, _w, reaches = census.scan_python(census.daemon_capabilities())
+    hits = [w for w, n, _lib in reaches if n == "_resolve_location"]
+    assert hits, "F4 not caught by REACHES"
+    assert any("media_sync.py" in w for w in hits), hits
+
+
+def test_reaches_catches_the_shared_hotchannel_config():
+    """Two parsers for one file is a duplication even without a command name.
+
+    `divoomd/src/monthly_best.rs` reads hotchannel.json in Rust; the GUI reads
+    and WRITES it through divoom_lib in Python. That is shared state with two
+    independent implementations, which is the drift shape this round is about.
+    """
+    _d, _w, reaches = census.scan_python(census.daemon_capabilities())
+    assert any(n.startswith("hotchannel_config.") for _w2, n, _l in reaches), reaches
