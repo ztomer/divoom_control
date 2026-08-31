@@ -98,11 +98,7 @@ FORBIDDEN_MODULE_ATTRS = {"ImageDraw", "ImageFont"}
 # `kind` is "import" or "call".
 ALLOWLIST: list[tuple[str, str, str, str]] = [
     # R70 P2 — cloud browse moves to the daemon.
-    ("clock_faces.py", "import", "divoom_lib.cloud", "R70 P2.1"),
-    ("playlists.py", "import", "divoom_lib.cloud", "R70 P2.1"),
-    ("aid_sleep.py", "import", "divoom_lib.cloud", "R70 P2.1"),
-    ("photo_albums.py", "import", "divoom_lib.cloud", "R70 P2.1"),
-    ("weather_city.py", "import", "divoom_lib.cloud", "R70 P2.1"),
+    #   (P2.1 done: the five CloudClient panels are gone.)
     ("gallery_sync.py", "import", "urllib.request", "R70 P2.2"),
     ("gallery_download.py", "import", "urllib.request", "R70 P2.2"),
     ("gallery_download.py", "import", "divoom_lib.media_decoder", "R70 P2.2"),

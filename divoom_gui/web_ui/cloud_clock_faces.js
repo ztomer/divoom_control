@@ -24,8 +24,10 @@ document.addEventListener("DOMContentLoaded", () => {
     function loadCloudClockList(dialType) {
         if (!window.pywebview?.api?.get_dial_list) return;
         listEl.innerHTML = `<div class="empty-list">Loading…</div>`;
-        window.pywebview.api.get_dial_list(dialType).then(faces => {
-            renderClockList(faces || []);
+        window.pywebview.api.get_dial_list(dialType).then(reply => {
+            const faces = window.DivoomCloud.unwrap(reply, listEl, "No clock faces.");
+            if (faces === null) return;   // the reason is on screen
+            renderClockList(faces);
         }).catch(() => {
             listEl.innerHTML = `<div class="empty-list">Failed to load clock faces.</div>`;
         });
@@ -35,8 +37,16 @@ document.addEventListener("DOMContentLoaded", () => {
         if (window.DivoomState.cloudClockTypesLoaded) return;
         if (!window.pywebview?.api?.get_dial_types) return;
         window.DivoomState.cloudClockTypesLoaded = true;
-        window.pywebview.api.get_dial_types().then(types => {
-            if (!types || types.length === 0) return;
+        window.pywebview.api.get_dial_types().then(reply => {
+            const types = window.DivoomCloud.unwrap(reply, listEl,
+                                                    "No clock face categories.");
+            if (types === null) {
+                // Allow a retry: the category list failing is usually the
+                // service being down, which the user can fix and come back.
+                window.DivoomState.cloudClockTypesLoaded = false;
+                return;
+            }
+            if (types.length === 0) return;
             typeSelect.innerHTML = types.map(t => `<option value="${t}">${t}</option>`).join("");
             loadCloudClockList(types[0]);
         }).catch(() => {

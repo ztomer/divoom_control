@@ -23,8 +23,10 @@ document.addEventListener("DOMContentLoaded", () => {
     function loadPhotoAlbums() {
         if (!window.pywebview?.api?.get_photo_albums) return;
         listEl.innerHTML = `<div class="empty-list">Loading…</div>`;
-        window.pywebview.api.get_photo_albums().then(albums => {
-            renderAlbumList(albums || []);
+        window.pywebview.api.get_photo_albums().then(reply => {
+            const albums = window.DivoomCloud.unwrap(reply, listEl, "No photo albums.");
+            if (albums === null) return;
+            renderAlbumList(albums);
         }).catch(() => {
             listEl.innerHTML = `<div class="empty-list">Failed to load photo albums.</div>`;
         });

@@ -3,14 +3,14 @@
 import logging
 from pathlib import Path
 
-from divoom_lib.cloud import CloudClient
+from divoom_gui.cloud_panels import CloudPanelMixin
 from divoom_lib.utils.atomic_io import atomic_write_config
 from divoom_lib.weather_provider import WEATHER_CONFIG_SECTION, saved_location
 
 logger = logging.getLogger("divoom_gui")
 
 
-class WeatherCityMixin:
+class WeatherCityMixin(CloudPanelMixin):
     """Manual weather-location override, backed by `Weather/SearchCity`.
 
     Weather normally geolocates by the caller's IP, which is right almost
@@ -35,21 +35,30 @@ class WeatherCityMixin:
     def _weather_config_path() -> Path:
         return Path.home() / ".config" / "divoom-control" / "config.ini"
 
-    def search_weather_city(self, keyword: str) -> list[dict]:
-        """Cities matching `keyword`, or [] on any failure.
+    def search_weather_city(self, keyword: str) -> dict:
+        """Cities matching `keyword`, asked of the DAEMON.
 
-        Returns [] rather than raising for the same reason every other cloud
-        browse in this GUI does: a search that errors should show "no results",
-        not break the panel it lives in.
+        R70 P2.1/P2.4. This used to run the cloud call in the GUI process and
+        return [] on any failure, explaining itself: "Returns [] rather than
+        raising for the same reason every other cloud browse in this GUI does:
+        a search that errors should show 'no results', not break the panel it
+        lives in."
+
+        The premise was false. A panel that says "the background service is not
+        running" is not broken, it is honest — and the daemon answers
+        `Weather/SearchCity failed (RC=1): Failed` where this returned nothing
+        at all. Stated as care, that rationale spread to five panels before
+        anyone noticed it was hiding four different failures behind one empty
+        list.
+
+        An empty keyword is still an empty result, not an error: there is
+        nothing to report and nothing went wrong.
         """
         keyword = (keyword or "").strip()
         if not keyword:
-            return []
-        try:
-            return CloudClient().search_weather_city(keyword)
-        except Exception as e:
-            logger.error(f"search_weather_city({keyword!r}) failed: {e}")
-            return []
+            return {"ok": True, "items": [], "error": "", "cause": ""}
+        return self._cloud_list(
+            "city search results", lambda c: c.search_weather_city(keyword))
 
     def get_weather_city(self) -> dict:
         """The saved override, as `{"location": ..., "name": ...}`.

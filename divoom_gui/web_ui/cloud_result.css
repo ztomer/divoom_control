@@ -1,0 +1,24 @@
+/* cloud_result.css — a FAILED cloud browse, styled so it cannot be mistaken
+   for an empty one.
+
+   R70 P2.4. Five panels rendered "nothing found" whether the catalog was
+   empty, the background service was down, the account was not signed in, or
+   Divoom errored. Giving the failure its own look is half the fix; the other
+   half is that it now carries the daemon's actual reason. Lives beside
+   cloud_result.js rather than in style_extra.css, which is at 495 of the
+   house 500-line cap. */
+
+.cloud-problem {
+    text-align: left;
+    line-height: 1.45;
+}
+
+.cloud-problem-reason {
+    color: var(--text-primary);
+}
+
+.cloud-problem-hint {
+    color: var(--text-secondary);
+    font-size: 0.85em;
+    margin-top: 0.25rem;
+}

@@ -123,37 +123,57 @@ def test_a_corrupt_config_falls_through_to_ip_geolocation(gui, tmp_path):
 
 # ── search ────────────────────────────────────────────────────────────────────
 
-def test_search_forwards_to_the_cloud_client(gui, monkeypatch):
+def test_search_forwards_to_the_daemon(gui, monkeypatch):
+    """R70 P2.1: the seam is the DAEMON now, not a CloudClient built here."""
     seen = {}
 
-    class _Fake:
+    class _Client:
         def search_weather_city(self, keyword):
             seen["keyword"] = keyword
             return [{"CityName": "Berlin", "Lat": 52.52, "Lon": 13.405}]
 
-    monkeypatch.setattr("divoom_gui.weather_city.CloudClient", lambda: _Fake())
-    assert gui.search_weather_city("  berlin  ") == [
-        {"CityName": "Berlin", "Lat": 52.52, "Lon": 13.405}]
+    monkeypatch.setattr(type(gui), "_client", lambda self: _Client(), raising=False)
+    result = gui.search_weather_city("  berlin  ")
+    assert result["ok"] is True
+    assert result["items"] == [{"CityName": "Berlin", "Lat": 52.52, "Lon": 13.405}]
     assert seen["keyword"] == "berlin", "the keyword must be trimmed"
 
 
-def test_an_empty_keyword_never_reaches_the_network(gui, monkeypatch):
-    def _boom():
-        raise AssertionError("CloudClient must not be constructed")
-
-    monkeypatch.setattr("divoom_gui.weather_city.CloudClient", _boom)
-    assert gui.search_weather_city("   ") == []
-
-
-def test_a_failing_search_reads_as_no_results(gui, monkeypatch):
-    """A search that errors should show "no results", not break the panel it
-    lives in — the same contract every other cloud browse in this GUI has."""
+def test_an_empty_keyword_never_reaches_the_daemon(gui, monkeypatch):
     class _Boom:
         def search_weather_city(self, keyword):
-            raise RuntimeError("cloud down")
+            raise AssertionError("an empty keyword must not be sent")
 
-    monkeypatch.setattr("divoom_gui.weather_city.CloudClient", lambda: _Boom())
-    assert gui.search_weather_city("berlin") == []
+    monkeypatch.setattr(type(gui), "_client", lambda self: _Boom(), raising=False)
+    result = gui.search_weather_city("   ")
+    assert result["ok"] is True and result["items"] == []
+
+
+def test_a_failing_search_says_WHY_rather_than_reading_as_no_results(gui, monkeypatch):
+    """This test used to assert the opposite, and its name said so.
+
+    It read: "A search that errors should show 'no results', not break the
+    panel it lives in — the same contract every other cloud browse in this GUI
+    has." That contract was the R70 defect: four different failures (empty,
+    unreachable, unauthenticated, cloud error) rendered as one blank list, and
+    the rationale being written down as care is how it spread to five panels.
+
+    A panel that names the failure is not broken. It is the only version a user
+    can act on. (House rule #8: a test pinning a wrong behaviour is part of the
+    defect, not coverage to protect.)
+    """
+    from divoom_client.daemon_cloud import CloudUnavailable
+
+    class _Boom:
+        def search_weather_city(self, keyword):
+            raise CloudUnavailable("Weather/SearchCity failed (RC=1): Failed", "cloud")
+
+    monkeypatch.setattr(type(gui), "_client", lambda self: _Boom(), raising=False)
+    result = gui.search_weather_city("berlin")
+    assert result["ok"] is False
+    assert result["items"] == []
+    assert "RC=1" in result["error"]
+    assert result["cause"] == "cloud"
 
 
 def test_the_methods_are_reachable_on_the_real_gui_api():

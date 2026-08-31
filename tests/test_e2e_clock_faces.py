@@ -139,3 +139,61 @@ async def test_apply_with_a_device_calls_set_clock_with_the_real_clock_id():
                 "() => document.getElementById('toast')?.textContent.includes('Clock face applied')")
         finally:
             await browser.close()
+
+
+# ── R70 P2.4: a failed browse must SAY WHY, on screen ────────────────────────
+
+_MOCK_API_UNREACHABLE = """
+window.__api = {
+    get_dial_types: () => ({ok: false, items: [],
+        error: "Could not load clock face categories: the background service is not running",
+        cause: "unreachable"}),
+    get_dial_list: () => ({ok: false, items: [],
+        error: "Could not load clock faces: the background service is not running",
+        cause: "unreachable"}),
+};
+window.pywebview = { api: new Proxy({}, { get: (_t, name) => (...args) => {
+    if (window.__api && typeof window.__api[name] === 'function')
+        return Promise.resolve(window.__api[name](...args));
+    return Promise.resolve(String(name).startsWith('get_') ? '{}' : true);
+}})};
+"""
+
+
+async def _open_with(p, mock):
+    browser = await launch_browser(p)
+    page = await browser.new_page()
+    await add_init_js(page, mock)
+    await page.goto(f"file://{INDEX_HTML}")
+    await page.wait_for_load_state("domcontentloaded")
+    await wait_js(page, "() => !!window.DivoomState && !!window.renderDeviceDots")
+    return browser, page
+
+
+@pytest.mark.asyncio
+async def test_an_unreachable_daemon_names_the_reason_instead_of_showing_nothing():
+    """The user-visible half of R70 P2.4.
+
+    Before this, a browse that could not run rendered the same "nothing found"
+    as an empty catalog. The daemon knew the reason the whole time; the GUI
+    discarded it at an `except`. This asserts the reason reaches the SCREEN,
+    which is the only place it matters — the Python-level test can pass while
+    the panel still renders a blank list.
+    """
+    require_browser()
+    from playwright.async_api import async_playwright
+
+    async with async_playwright() as p:
+        browser, page = await _open_with(p, _MOCK_API_UNREACHABLE)
+        try:
+            await wait_js(page, """() => {
+                const el = document.querySelector('.cloud-problem-reason');
+                return !!el && el.textContent.includes('background service');
+            }""")
+            hint = await eval_js(page, """() => {
+                const el = document.querySelector('.cloud-problem-hint');
+                return el ? el.textContent : '';
+            }""")
+            assert "not running" in hint, hint
+        finally:
+            await browser.close()

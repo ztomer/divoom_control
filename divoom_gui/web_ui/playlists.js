@@ -23,8 +23,10 @@ document.addEventListener("DOMContentLoaded", () => {
     function loadPlaylists() {
         if (!window.pywebview?.api?.get_my_playlists) return;
         listEl.innerHTML = `<div class="empty-list">Loading…</div>`;
-        window.pywebview.api.get_my_playlists().then(playlists => {
-            renderPlaylistList(playlists || []);
+        window.pywebview.api.get_my_playlists().then(reply => {
+            const playlists = window.DivoomCloud.unwrap(reply, listEl, "No playlists.");
+            if (playlists === null) return;
+            renderPlaylistList(playlists);
         }).catch(() => {
             listEl.innerHTML = `<div class="empty-list">Failed to load playlists.</div>`;
         });

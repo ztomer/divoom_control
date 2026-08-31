@@ -50,11 +50,18 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!a || typeof a.search_weather_city !== "function") return;
         const seq = ++searchSeq;
         setStatus("Searching…");
-        Promise.resolve(a.search_weather_city(keyword)).then(cities => {
+        Promise.resolve(a.search_weather_city(keyword)).then(reply => {
             // A reply from a superseded keystroke would otherwise replace the
             // results for the text now in the box.
             if (seq !== searchSeq) return;
-            renderResults(cities);
+            if (Array.isArray(reply)) { renderResults(reply); return; }
+            if (!reply || !reply.ok) {
+                // The daemon's own words, not "no results" — a search that
+                // could not run is not a search that found nothing.
+                setStatus((reply && reply.error) || "Search failed.");
+                return;
+            }
+            renderResults(reply.items || []);
         }).catch(() => {
             if (seq !== searchSeq) return;
             setStatus("Search failed.");

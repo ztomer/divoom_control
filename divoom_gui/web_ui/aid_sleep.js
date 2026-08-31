@@ -26,8 +26,10 @@ document.addEventListener("DOMContentLoaded", () => {
     function loadAidSleepList() {
         if (!window.pywebview?.api?.get_aid_sleep_list) return;
         listEl.innerHTML = `<div class="empty-list">Loading…</div>`;
-        window.pywebview.api.get_aid_sleep_list(currentType).then(sounds => {
-            renderSleepList(sounds || []);
+        window.pywebview.api.get_aid_sleep_list(currentType).then(reply => {
+            const sounds = window.DivoomCloud.unwrap(reply, listEl, "No sleep sounds.");
+            if (sounds === null) return;
+            renderSleepList(sounds);
         }).catch(() => {
             listEl.innerHTML = `<div class="empty-list">Failed to load sleep sounds.</div>`;
         });
