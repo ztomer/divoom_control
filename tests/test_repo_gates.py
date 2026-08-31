@@ -26,6 +26,7 @@ what it skipped and actually skip it.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -133,9 +134,12 @@ def test_no_env_var_can_skip_the_gate_entirely():
     typing it knows they bypassed. This pins the absence of a quieter one:
     guessable names must not turn the gate into a no-op.
     """
+    baseline = _run(REPO_GATES, "--dry-run").stdout
+    steps = re.search(r"(\d+) step\(s\)", baseline)
+    assert steps, f"could not read the step count:\n{baseline}"
+
     for name in ("DIVOOM_GATE_SKIP", "DIVOOM_SKIP_GATE", "SKIP_GATE", "NO_GATE"):
         r = _run(REPO_GATES, "--dry-run", **{name: "1"})
-        assert "18 step(s)" in r.stdout, (
+        assert f"{steps.group(1)} step(s)" in r.stdout, (
             f"{name}=1 changed the step list; a silent full-bypass variable is "
-            f"exactly the hole R71 P0 closed.\n{r.stdout}"
-        )
+            f"exactly the hole R71 P0 closed.\n{r.stdout}")
