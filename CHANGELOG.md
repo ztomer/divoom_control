@@ -4,6 +4,67 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## Unreleased — R71 + R72 (2026-08-31)
+
+Two rounds, not yet released: R71's last three items need a device, and the
+release waits on them. Full local CI is green (20/20).
+
+### R71 — close every open item
+
+* **The pre-push gate ran four checks and looked like it ran eighteen.**
+  `tools/gate.sh --full` executed `structural.sh` and nothing else; the rust and
+  python layers were commented out, so the 17-step list and both coverage floors
+  ran only when a human typed `./scripts/ci_local.sh`. Layer 3 is wired now, and
+  all five gate classes are proven to REFUSE a push. Cost: 9m22s full, 1m50s
+  with `DIVOOM_GATE_FAST=1`, which announces itself every time.
+* **The Python coverage floor passed by rounding.** It advertised 90% and
+  enforced ">= 89.5" — coverage.py compares `round(total, 0) < fail_under`.
+  Actual coverage was 89.50%, i.e. green on a 0.01-point margin.
+* **The API allowlist went 20 -> 3**, and three of its stated reasons were
+  false. Seventeen methods resolved on verified evidence; the three left are
+  UNEXPOSED features (`set_clock_rich`, `set_temperature_channel`,
+  `set_timeplan`) that only a device can settle.
+* **`save_lan_config` wrote to a store nothing reads.** The live path is
+  `presets.json`; wiring it up would have written config no code consumes.
+* **LAN failures now say WHY.** A Bluetooth-only device reports "this device is
+  connected over Bluetooth, which has no LAN API" instead of a bare failure —
+  the daemon names a cause, the proxy preserves it, and three surfaces share one
+  shape. `tests/test_lan_capability_gate.py` catches a fourth.
+* `scripts/hw_verify.py` — the hardware packet, which refuses to spawn its own
+  daemon and records UNKNOWN rather than PASS when nobody is watching.
+
+### R72 — does everything the daemon owns live in the daemon
+
+* **`tools/capability_census.py`**, machine-generated on both halves: 443 daemon
+  command names from the Rust match arms against an AST walk of the whole
+  shipped Python surface. It found 26 sites, rediscovered the round's own seed
+  findings unprompted, and turned up rows nobody had listed.
+* **The daemon's credential store would have eaten the user's settings.**
+  `save_config` rewrote the whole of `config.ini`, destroying `[gui]`,
+  `[gallery]` and weather settings, and required a non-empty password so an
+  email-only save was impossible — reintroducing a bug the Python side had
+  fixed. Both repaired before anything was routed to it.
+* **`sync_time` with no arguments set the device clock to the year 2000** and
+  reported success. It refuses now.
+* **292 lines of dead notification polling** removed from `divoom_client`
+  against a working `macos_notifications.rs`.
+* **The control server's TCP surface was unauthenticated** — it
+  reflection-dispatches every GUI API method, and `_authorized()` returned True
+  with no token. It now requires one; the unix socket is 0600.
+* **`verify_gallery_render.py` verified a path the product no longer takes**,
+  with its own auth, HTTP and decoder. Rewritten against the daemon.
+* The "reference-only" doctrine is replaced by the rule the census enforces.
+  Two new gates: `check_hotchannel_parity.py` and the census itself.
+
+### Known open
+
+* **The browser e2e suite is load-sensitive.** Two full runs on one commit
+  failed different, non-overlapping sets; all pass in isolation. It reddens a
+  push during ordinary work, which undermines the gate above. Needs measurement,
+  not a bigger timeout.
+* Three unexposed API methods and the R12 visual checks need a device:
+  `python3 scripts/hw_verify.py --self-test` then `--out report.json`.
+
 ## v0.29.0 — R70: the GUI is a client, not a second implementation (2026-08-30)
 
 The audit question was "is anything left in the Python GUI that should live in

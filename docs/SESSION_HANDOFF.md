@@ -21,6 +21,69 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-08-31 — R71 (bar hardware) and R72 (complete) DONE. Full local CI
+  green: 20/20, GATE_EXIT=0.** Not released; the release waits on the three
+  device checks below.
+
+  **Read this first if you are picking the work up:** the two rounds' durable
+  records are `docs/CAPABILITY_MAP.md` (26 census rows, every one with a
+  verdict, plus the F1-F7 closure table) and the CHANGELOG's Unreleased stanza.
+  The ledgers in `docs/ROADMAP.md` are current.
+
+  **The single most useful lesson, earned repeatedly:** the machine-generated
+  half kept being right and the hand-written half kept being wrong. Three
+  allowlist reasons were false. Two of R72's seven findings were misdescribed —
+  F4 was not a duplicate at all (I had cited a docstring recording a FIX as
+  evidence of the defect it repaired), and F5's real problem was an
+  unauthenticated surface that the finding never mentioned. Trust the census;
+  re-read any verdict written by hand.
+
+  **Three defects found that nobody was looking for, each worse than the finding
+  that led to it:**
+
+  * `cloud_store::save_config` rewrote the WHOLE of `config.ini`, destroying
+    `[gui]`, `[gallery]` and weather settings — and required a non-empty
+    password, so an email-only save was impossible, reintroducing a bug the
+    Python side had already fixed. The capability map said "duplicate, move it";
+    following that literally would have caused data loss on the first save.
+  * `sync_time` with no arguments set the device clock to **2000-01-01** and
+    reported success.
+  * The control server's TCP surface was **unauthenticated** —
+    `_authorized()` returned True with no token, handing every GUI API method to
+    any local process. "Bound to 127.0.0.1" was doing the work of an
+    authorisation boundary.
+
+  **A pattern that cost three separate fixes, worth not repeating:** a
+  calibration test that asserts a defect still EXISTS passes only while the work
+  is unfinished. Three of them went red the moment the round succeeded.
+  Calibrate against synthetic reproductions; assert the live tree's cleanliness
+  in a separate test.
+
+  **What is left, and all of it needs you:**
+
+  1. **Three unexposed API methods** — `set_clock_rich`,
+     `set_temperature_channel`, `set_timeplan`. Not dead, not superseded: the
+     daemon implements them and the UI never offers them. Wire-or-delete needs
+     to know whether the hardware renders them.
+  2. **The R12 visual checks** and `pic_scan_ctrl` 0x35.
+
+     Start the GUI (it owns the Bluetooth grant), connect a device, then:
+
+         python3 scripts/hw_verify.py --self-test        # exits 3 = PARTIAL
+         python3 scripts/hw_verify.py --out report.json
+
+     `--self-test` is PARTIAL by design until a device is connected: with none
+     attached the daemon refuses at the precondition before reading the method
+     name, so the invalid-method branch is untested.
+  3. **The browser e2e suite is load-sensitive** and this is the one that should
+     worry you. Two full runs on the same commit failed different,
+     non-overlapping sets of camoufox tests; all pass in isolation. It happens at
+     the machine's NORMAL load, not under artificial stress. R71 P0 made
+     pre-push run the whole CI, so a randomly-red gate teaches `--no-verify`,
+     which is exactly what P0 existed to prevent. Fixing it means measuring
+     browser and daemon startup under controlled load — not raising a timeout by
+     guess.
+
 - **2026-08-31 — R71 IN PROGRESS. P0, P1 (bar P1.7), P2.0/P2.1, P3 and P4 are
   DONE. Everything still open is blocked on the user + a device.** Nothing is
   half-finished; the remaining rows have a named blocker, not a TODO.
