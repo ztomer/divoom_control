@@ -500,10 +500,10 @@ correct.
 | P1.2 `render_widget` | **DONE** | kinds sysmon/stocks/album_art; 12 Rust tests. First parity test was BLIND (compared lengths, passed under sabotage) — rewritten to re-render the reply's own stats and compare bytes |
 | P1.3 `_widget_frame` funnel | **DONE** | `widget_frames.py`; sysmon migrated first; 11 tests. Pixel test verified against a REAL pixel change — a 16→16 resize is a no-op and would have looked green |
 | P1.4 parity fixtures | **DONE** | album art: GUI LANCZOS vs device NEAREST differ on **100% of pixels**; daemon proven byte-identical to PIL NEAREST. Flipping the Rust filter turns both tests red |
-| P2.1 five panels | TODO | command on the socket AND no HTTP left the process; revert one panel → red |
+| P2.1 five panels | **DONE** | `cloud_panels.py` funnel; 17 tests incl. a no-HTTP guard; half-migrated panel → red. Allowlist 26 → 21 |
 | P2.2 gallery fetch+assets | TODO | same, plus `gallery_download.py` gone |
 | P2.3 hot manifest | TODO | same |
-| P2.4 failures say why | TODO | three causes → three DISTINGUISHABLE texts. Closes a Deferred item |
+| P2.4 failures say why | **DONE** (with P2.1) | three causes → three texts, pinned; e2e asserts the reason reaches the SCREEN. Closes the Deferred item |
 | P2.5 live round-trip + RC=3 | TODO | real backend, CONFIGURED account (not a throwaway HOME) |
 | P3.1 stocks | TODO | covered by P3.4 |
 | P3.2 album art | TODO | hard-edged checkerboard fixture; ends LANCZOS/NEAREST drift |
@@ -555,15 +555,13 @@ Bonus fix: device-selector "not in range" badge now counts consecutive scan miss
 
 ### Deferred
 
-- **Cloud browse cannot say WHY it is empty** (found 2026-08-30 exercising the
-  real backend). `search_weather_city`, `get_dial_list`, `get_my_playlists`,
-  `get_aid_sleep_list` and the photo-album browse all catch their exception and
-  return `[]`, so every panel shows "nothing found" whether the result is
-  genuinely empty, the cloud is unreachable, or the account is unauthenticated.
-  A failed state must say why. **R70 found the reason already exists** — the
-  daemon returns it and the GUI never asks (see R70 #1); this item is subsumed
-  by that fix, not separate work. Fix as a CLASS in the shared shape — five
-  features and their tests — not one panel at a time.
+- ~~**Cloud browse cannot say WHY it is empty**~~ — **CLOSED by R70 P2.1/P2.4**
+  (2026-08-30). Fixed as a class, in one shared shape each side:
+  `divoom_gui/cloud_panels.py::_cloud_list` produces `{ok, items, error, cause}`
+  and `web_ui/cloud_result.js` unwraps it. The reason had existed the whole
+  time — the daemon answers `Photo/GetAlbumList failed (RC=3): ...` — and the
+  GUI discarded it at an `except`. Three causes now yield three distinguishable
+  messages, pinned by tests, with an e2e asserting the text reaches the screen.
 - **`search_weather_city` success path unverified.** The pre-release check ran
   under a throwaway HOME, so it exercised the no-credentials branch
   (`UserNewGuest RC=10`) and proved only the error path. Needs one manual search
