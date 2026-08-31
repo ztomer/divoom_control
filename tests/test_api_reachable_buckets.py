@@ -146,10 +146,18 @@ def test_url_double_slash_does_not_eat_the_rest_of_the_line():
 
 
 def test_known_live_callers_all_survive_the_real_scan():
-    """Calibration against the real tree, not a synthetic string.
+    """Smoke test against the real tree, not a synthetic string.
 
-    If stripping ever gets too aggressive, these five go missing and the gate
-    starts reporting live features as dead.
+    HONEST SCOPE, established by sabotage rather than assumed: dropping the
+    URL guard from `strip_comments` does NOT make this fail. None of these five
+    happens to sit after an `https://` on its own line, so the test is blind to
+    exactly the over-stripping case its first docstring claimed to catch.
+    `test_url_double_slash_does_not_eat_the_rest_of_the_line` is what actually
+    bites there.
+
+    What this DOES catch is catastrophic over-stripping -- a regex that eats
+    whole files or whole lines unconditionally -- which is worth a cheap guard
+    on the real blob. Kept for that, described for what it is.
     """
     blob = gate.web_ui_blob()
     for name in ("custom_art_push", "hot_update_preview", "mcp_server_status",
