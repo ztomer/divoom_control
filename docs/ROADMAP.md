@@ -497,7 +497,7 @@ correct.
 | P0.3 wire local+CI | **DONE** | same position in `.gatesrc` and `tests.yml`; verified in the no-`GOH_DIR` CI shape |
 | P0.4 Python cov floor ON | **DONE** | 89% measured (not the 95% claimed); floor 99 fails / floor 1 passes |
 | P1.1 cloud wrappers | **DONE** | `daemon_cloud.py`, 14 wrappers, 22 wire tests; 3 sabotages → 3 red signatures; all 8 round-tripped live on a configured account |
-| P1.2 `render_widget` | **DONE** | kinds sysmon/stocks/album_art; 12 Rust tests. First parity test was BLIND (compared lengths, passed under sabotage) — rewritten to re-render the reply's own stats and compare bytes |
+| P1.2 `render_widget` | **DONE** | kinds sysmon/stocks/album_art/text. First parity test was BLIND (compared lengths, passed under sabotage). **The rewrite did not reach the tree until P3.3** — a `git checkout` after the second sabotage reverted the uncommitted fix. Restored and re-proven red |
 | P1.3 `_widget_frame` funnel | **DONE** | `widget_frames.py`; sysmon migrated first; 11 tests. Pixel test verified against a REAL pixel change — a 16→16 resize is a no-op and would have looked green |
 | P1.4 parity fixtures | **DONE** | album art: GUI LANCZOS vs device NEAREST differ on **100% of pixels**; daemon proven byte-identical to PIL NEAREST. Flipping the Rust filter turns both tests red |
 | P2.1 five panels | **DONE** | `cloud_panels.py` funnel; 17 tests incl. a no-HTTP guard; half-migrated panel → red. Allowlist 26 → 21 |
@@ -507,7 +507,7 @@ correct.
 | P2.5 live round-trip + RC=3 | **PARTIAL** | 8 cloud commands verified live on a configured account (P1.1); hot manifest + previews verified (P2.3). Still open: the `get_photo_albums` RC=3 and `search_weather_city` RC=1 daemon-side gaps |
 | P3.1 stocks | **DONE** | one call feeds preview and push; its test had started hitting the LIVE Yahoo API |
 | P3.2 album art | **DONE** | verified live: preview now byte-identical to the device frame, and no longer equal to the old LANCZOS one. The false docstring is true |
-| P3.3 text | TODO | covered by P3.4 |
+| P3.3 text | **DONE** | one bitmap font in the product, not two. Deferred decision settled on rendered evidence: scaling turned "HELLO WORLD" into two rows of noise, clipping keeps glyphs intact. Text is vertically centred now |
 | P3.4 class-level drift test | **DONE** | kinds read from `render_widget::KINDS`; a new daemon kind was auto-covered by 2 tests with no test edit; a resample turns 7/9 red |
 | P4.1 reproduce in bundle | TODO | the real `.app` + its mcp-server.log, before any fix |
 | P4.2 spawn `divoomd mcp` | TODO | `initialize` + `tools/list` = 13 tools through the controller |
