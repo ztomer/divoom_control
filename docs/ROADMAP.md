@@ -519,9 +519,9 @@ correct.
 | P3.3 text | **DONE** | one bitmap font in the product, not two. Deferred decision settled on rendered evidence: scaling turned "HELLO WORLD" into two rows of noise, clipping keeps glyphs intact. Text is vertically centred now |
 | P3.4 class-level drift test | **DONE** | kinds read from `render_widget::KINDS`; a new daemon kind was auto-covered by 2 tests with no test edit; a resample turns 7/9 red |
 | P4.1 reproduce in bundle | **DONE** | WORSE than predicted: it does not exit, it launches a SECOND GUI + daemon + menubar and never answers JSON-RPC, so `is_running()` reports success. Also surfaced the every-launch daemon kill (fixed) |
-| P4.2 spawn `divoomd mcp` | TODO | `initialize` + `tools/list` = 13 tools through the controller |
-| P4.3 both shapes tested | TODO | bundle and dev parametrized; missing binary → honest error, not "running" |
-| P4.4 Python MCP → reference | TODO | `test_mcp_control.py:84` rewritten — it pins the defect today |
+| P4.2 spawn `divoomd mcp` | **DONE** | verified in the BUNDLE shape: resolves to `Contents/Frameworks/bin/divoomd`, answers initialize + 13 tools |
+| P4.3 both shapes tested | **DONE** | resolution goes through `binary_resolver` (one resolver, R69 class); unresolvable → honest error, never "running" |
+| P4.4 Python MCP → reference | **DONE** | `test_start_uses_sys_executable_by_default` pinned the defect and passed in dev forever — Hole C exactly. Rewritten + 5 new tests |
 | P5.0 reachability check | TODO | flags all four dead methods on today's tree; allowlist entries carry REASONS |
 | P5.1-P5.4 deletions | TODO | suite green with the pinning tests removed |
 | P5.5 tests + floor rebaseline | TODO | before/after counts and coverage delta stated out loud |
