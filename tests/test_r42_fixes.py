@@ -49,15 +49,6 @@ def test_nc_db_discovery_includes_macos26_group_container(tmp_path, monkeypatch)
     assert mn.find_notification_db_path() == db
 
 
-def test_nc_db_unreadable_raises_actionable_permission_error(tmp_path):
-    from divoom_client.macos_notifications import MacNotificationMonitor
-    import sqlite3 as _sq
-    db = tmp_path / "db"
-    db.write_bytes(b"not-a-db")
-    m = MacNotificationMonitor(db_path=db)
-    with patch.object(_sq, "connect", side_effect=_sq.OperationalError("unable to open database file")):
-        with pytest.raises(PermissionError, match="FULL DISK ACCESS"):
-            m.start(lambda *a: None)
 
 
 # ── §5 presets robustness ─────────────────────────────────────────────────

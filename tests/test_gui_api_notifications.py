@@ -71,18 +71,28 @@ class TestGuiApiNotifications(GuiApiTestBase):
         self.assertFalse(result["running"])
         client.stop_notifications.assert_called_once()
 
-    def test_gui_does_not_instantiate_local_monitor(self):
-        """Regression for the §1.2 double-route fix: the GUI must never build
-        its own MacNotificationMonitor — that is the daemon's job."""
-        with patch("divoom_client.macos_notifications.MacNotificationMonitor") as mock_cls, \
-             patch.object(self.api, "_client", return_value=self._fake_client(state="active")), \
-             patch("sys.platform", new="darwin"), \
-             patch("divoom_client.macos_notifications.find_notification_db_path", return_value=None), \
-             patch("divoom_client.macos_notifications.load_routing_table", return_value=[]):
-            self.api.start_notification_listener()
-            self.api.stop_notification_listener()
-            self.api.get_notification_listener_status()
-        mock_cls.assert_not_called()
+    def test_the_client_package_has_no_local_monitor_to_instantiate(self):
+        """R72 P2.3 made this structural instead of behavioural.
+
+        It used to patch `MacNotificationMonitor` and assert the GUI never
+        called it -- a real guard, but one that only held for the three methods
+        it happened to drive. The class is now DELETED: ~250 lines of SQLite
+        polling in the client package with no production caller, against a
+        working `macos_notifications.rs`.
+
+        So the assertion moves from "this code path did not build one" to
+        "there is nothing to build", which no future code path can violate.
+        """
+        import divoom_client.macos_notifications as mn
+
+        assert not hasattr(mn, "MacNotificationMonitor"), (
+            "the local notification monitor is back; the daemon owns polling")
+        assert not hasattr(mn, "parse_notification_record"), (
+            "the local record parser is back; divoomd/src/notification_db.rs "
+            "owns it")
+        # ...and the presentation helpers the Settings card needs are still here.
+        assert hasattr(mn, "find_notification_db_path")
+        assert hasattr(mn, "load_routing_table")
 
     # ── status snapshot + routing save (Settings card) ────────────────
 

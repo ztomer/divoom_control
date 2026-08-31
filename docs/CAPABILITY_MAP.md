@@ -187,11 +187,11 @@ audit's F5, F6 and F7, and none of them has the shape the census detects:
   implementation — it is ~250 lines of dead polling machinery shipped inside
   the client package, against a working `macos_notifications.rs`.
 
-  **Not deleted in this pass, deliberately.** It is ~250 lines plus roughly 900
-  lines of tests across four files, and this round has already twice paid for
-  hasty test triage (an orphaned `@patch` decorator silently re-decorating the
-  next test; a hand-built file list that missed one). It gets its own focused
-  change rather than a tired one.
+  **DELETED (P2.3).** `macos_notifications.py` went 404 -> 112 lines. The
+  polling half, the record parser, the CLI and the orphaned test-support module
+  are gone; the presentation helpers stayed. The GUI's guard test changed from
+  "this code path did not build a monitor" to "there is nothing to build",
+  which no future code path can violate.
 
   It also stays outside the census's reach by construction: it is
   `divoom_client`, not `divoom_lib`, so no rule here matches it. That is the

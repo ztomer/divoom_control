@@ -223,7 +223,7 @@ def test_env_var_overrides_default_path(
     custom.write_text(json.dumps([["custom", NOTIFICATION_APPS["WHATSAPP"]]]))
     monkeypatch.setenv("DIVOOM_CONTROL_ROUTING", str(custom))
     # The module-level constant is bound at import, but the
-    # MacNotificationMonitor constructor reads the env var
+    # the routing loader reads the env var
     # indirectly via MacAppRouter.from_file(); we exercise the
     # underlying mechanism here.
     # Re-import to pick up the new env var? No — the public API
