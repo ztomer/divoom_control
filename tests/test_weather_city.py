@@ -60,7 +60,7 @@ def test_clearing_restores_ip_geolocation(gui):
     assert gui.set_weather_city("", "", "") is True
 
     assert gui.get_weather_city() == {"location": "", "name": ""}
-    assert weather_provider._resolve_location(None) == ""
+    assert weather_provider.resolve_location(None) == ""
 
 
 def test_non_numeric_coordinates_are_refused(gui):
@@ -89,12 +89,12 @@ def test_saving_preserves_other_config_sections(gui, tmp_path):
 
 def test_a_saved_city_is_used_when_no_env_override_is_set(gui):
     gui.set_weather_city("48.85", "2.35", "Paris")
-    assert weather_provider._resolve_location(None) == "48.85,2.35"
+    assert weather_provider.resolve_location(None) == "48.85,2.35"
 
 
 def test_an_explicit_argument_still_wins(gui):
     gui.set_weather_city("48.85", "2.35", "Paris")
-    assert weather_provider._resolve_location("Reykjavik") == "Reykjavik"
+    assert weather_provider.resolve_location("Reykjavik") == "Reykjavik"
 
 
 def test_env_vars_outrank_the_saved_city(gui, monkeypatch):
@@ -103,11 +103,11 @@ def test_env_vars_outrank_the_saved_city(gui, monkeypatch):
     must not silently outrank a deliberate one."""
     gui.set_weather_city("48.85", "2.35", "Paris")
     monkeypatch.setenv("DIVOOM_CONTROL_WEATHER_LOCATION", "Oslo")
-    assert weather_provider._resolve_location(None) == "Oslo"
+    assert weather_provider.resolve_location(None) == "Oslo"
 
     monkeypatch.setenv("DIVOOM_CONTROL_WEATHER_LAT", "1.5")
     monkeypatch.setenv("DIVOOM_CONTROL_WEATHER_LON", "2.5")
-    assert weather_provider._resolve_location(None) == "1.5,2.5"
+    assert weather_provider.resolve_location(None) == "1.5,2.5"
 
 
 def test_a_corrupt_config_falls_through_to_ip_geolocation(gui, tmp_path):
@@ -118,7 +118,7 @@ def test_a_corrupt_config_falls_through_to_ip_geolocation(gui, tmp_path):
     path.write_text("this is not ini [[[\n")
 
     assert weather_provider.saved_location() == ""
-    assert weather_provider._resolve_location(None) == ""
+    assert weather_provider.resolve_location(None) == ""
 
 
 # ── search ────────────────────────────────────────────────────────────────────

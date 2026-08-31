@@ -27,7 +27,7 @@ class WeatherCityMixin(CloudPanelMixin):
 
     The daemon needs no change for this: `MediaSyncMixin._get_live_params`
     already resolves the location and sends it as `params["location"]` (R67/C2),
-    and `_resolve_location` now consults the saved value. One resolver, one
+    and `resolve_location` now consults the saved value. One resolver, one
     answer, sent over the wire — which was the whole point of R67/C2.
     """
 
