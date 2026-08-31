@@ -16,11 +16,6 @@
 //!
 //! **What is NOT here, deliberately.**
 //!
-//! * `text` lands in R70 P3.3, with the parity decision it needs. The GUI
-//!   rasterises at native size and NEAREST-scales the bitmap down to fit, which
-//!   mangles glyphs on a 16px matrix; drawing with the device font and clipping
-//!   is arguably better but is a change users can see. That choice belongs with
-//!   the migration, not ahead of it.
 //! * `notification` is not built at all. Its only caller is
 //!   `media_sync.trigger_notification`, which no JS calls and which R70 P5.4
 //!   deletes — building a daemon kind for a caller being removed is work for
@@ -36,14 +31,14 @@ use base64::Engine;
 use serde_json::{json, Value};
 use std::time::Duration;
 
-use crate::live_jobs::render::render_stock;
+use crate::live_jobs::render::{render_stock, render_text};
 use crate::live_jobs::sysmon::{clamp_size, sample_once};
 use crate::protocol::err_reply;
 
 /// Widget kinds this command can render. The GUI enumerates these rather than
 /// hardcoding a list, so a kind added here is covered by the drift test without
 /// anyone remembering to add a case.
-pub const KINDS: &[&str] = &["sysmon", "stocks", "album_art"];
+pub const KINDS: &[&str] = &["sysmon", "stocks", "album_art", "text"];
 
 /// One quote, as the stock widget needs it.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -107,6 +102,24 @@ pub async fn fetch_quote(client: &reqwest::Client, symbol: &str) -> Result<Quote
         prev_close,
         change: price - prev_close,
     })
+}
+
+/// `#RRGGBB` (or bare `RRGGBB`) to RGB; white for anything unparseable.
+///
+/// White rather than black on a bad value: a mistyped colour should show the
+/// text, not a blank matrix that looks like the feature is broken.
+fn parse_color(raw: Option<&str>) -> (u8, u8, u8) {
+    let s = raw.unwrap_or("").trim().trim_start_matches('#');
+    if s.len() == 6 {
+        if let (Ok(r), Ok(g), Ok(b)) = (
+            u8::from_str_radix(&s[0..2], 16),
+            u8::from_str_radix(&s[2..4], 16),
+            u8::from_str_radix(&s[4..6], 16),
+        ) {
+            return (r, g, b);
+        }
+    }
+    (255, 255, 255)
 }
 
 fn frame_reply(kind: &str, size: u32, rgb: &[u8], extra: Value) -> Value {
@@ -205,161 +218,32 @@ pub async fn cmd_render_widget(args: &Value) -> Value {
             }
         }
 
+        "text" => {
+            let text = params.get("text").and_then(|v| v.as_str()).unwrap_or("");
+            if text.trim().is_empty() {
+                return err_reply("text requires params.text");
+            }
+            // `font_size <= 1` selects the half-size glyphs, and so does any
+            // 16px matrix — the same rule the GUI applied, kept so the choice
+            // does not silently change for existing callers.
+            let font_size = params
+                .get("font_size")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(1);
+            let full_font = font_size > 1 && size > 16;
+            let color = parse_color(params.get("color").and_then(|v| v.as_str()));
+            let rgb = render_text(text, color, size, full_font);
+            frame_reply(
+                kind,
+                size,
+                &rgb,
+                json!({"text": text, "full_font": full_font}),
+            )
+        }
+
         other => err_reply(&format!(
             "render_widget: unknown kind '{other}' (known: {})",
             KINDS.join(", ")
         )),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn frame_len(reply: &Value) -> usize {
-        let b64 = reply["frame_rgb_b64"].as_str().unwrap();
-        base64::engine::general_purpose::STANDARD
-            .decode(b64)
-            .unwrap()
-            .len()
-    }
-
-    #[tokio::test]
-    async fn sysmon_returns_a_full_frame_and_its_stats() {
-        let r = cmd_render_widget(&json!({"kind": "sysmon", "size": 16})).await;
-        assert_eq!(r["success"], json!(true));
-        assert_eq!(r["kind"], json!("sysmon"));
-        assert_eq!(r["size"], json!(16));
-        assert_eq!(frame_len(&r), 16 * 16 * 3);
-        for key in ["cpu", "mem", "battery"] {
-            assert!(r.get(key).is_some(), "missing {key}");
-        }
-    }
-
-    #[tokio::test]
-    async fn size_is_clamped_the_same_way_cmd_sysmon_clamps_it() {
-        // `size: 0` reached the renderer as a 0-byte buffer before clamp_size
-        // existed. Sharing the function rather than re-deriving the bounds is
-        // the point: two clamps would drift.
-        let r = cmd_render_widget(&json!({"kind": "sysmon", "size": 0})).await;
-        assert_eq!(r["size"], json!(8));
-        assert_eq!(frame_len(&r), 8 * 8 * 3);
-    }
-
-    #[tokio::test]
-    async fn an_unknown_kind_says_what_it_knows() {
-        let r = cmd_render_widget(&json!({"kind": "nope", "size": 16})).await;
-        assert_eq!(r["success"], json!(false));
-        let err = r["error"].as_str().unwrap();
-        assert!(err.contains("nope"), "{err}");
-        assert!(err.contains("sysmon"), "must name the known kinds: {err}");
-    }
-
-    #[tokio::test]
-    async fn a_missing_kind_is_an_error_not_a_default() {
-        let r = cmd_render_widget(&json!({"size": 16})).await;
-        assert_eq!(r["success"], json!(false));
-    }
-
-    #[tokio::test]
-    async fn album_art_renders_a_decoded_image_to_the_device_size() {
-        // A 2x2 PNG, built here so the test needs no fixture file.
-        let png = {
-            let mut buf = std::io::Cursor::new(Vec::new());
-            let img = image::RgbImage::from_fn(2, 2, |x, y| {
-                if (x + y) % 2 == 0 {
-                    image::Rgb([255, 255, 255])
-                } else {
-                    image::Rgb([0, 0, 0])
-                }
-            });
-            image::DynamicImage::ImageRgb8(img)
-                .write_to(&mut buf, image::ImageFormat::Png)
-                .unwrap();
-            buf.into_inner()
-        };
-        let b64 = base64::engine::general_purpose::STANDARD.encode(&png);
-        let r = cmd_render_widget(
-            &json!({"kind": "album_art", "size": 16, "params": {"image_b64": b64}}),
-        )
-        .await;
-        assert_eq!(r["success"], json!(true), "{r}");
-        assert_eq!(frame_len(&r), 16 * 16 * 3);
-    }
-
-    #[tokio::test]
-    async fn album_art_without_an_image_says_so() {
-        let r = cmd_render_widget(&json!({"kind": "album_art", "size": 16})).await;
-        assert_eq!(r["success"], json!(false));
-        assert!(r["error"].as_str().unwrap().contains("image_b64"));
-    }
-
-    #[tokio::test]
-    async fn album_art_rejects_bytes_that_are_not_an_image() {
-        let b64 = base64::engine::general_purpose::STANDARD.encode(b"not an image");
-        let r = cmd_render_widget(
-            &json!({"kind": "album_art", "size": 16, "params": {"image_b64": b64}}),
-        )
-        .await;
-        assert_eq!(r["success"], json!(false));
-    }
-
-    #[tokio::test]
-    async fn stocks_without_a_symbol_fails_rather_than_rendering_an_empty_tile() {
-        let r = cmd_render_widget(&json!({"kind": "stocks", "size": 16})).await;
-        assert_eq!(r["success"], json!(false));
-        assert!(r["error"].as_str().unwrap().contains("symbol"));
-    }
-
-    #[tokio::test]
-    async fn sysmon_through_render_widget_is_byte_identical_to_cmd_sysmon() {
-        // The named regression risk of generalizing: sysmon is the ONE preview
-        // path that already works (R67/C2), and a refactor that quietly changed
-        // its pixels would break the thing this command exists to protect.
-        //
-        // The stats are sampled independently on each side and CPU load moves
-        // between the two calls, so the frames are compared for the property
-        // that must hold — same size, same byte count, same renderer — and the
-        // renderer itself is pinned directly below on fixed inputs.
-        let a = cmd_render_widget(&json!({"kind": "sysmon", "size": 32})).await;
-        let b = crate::live_jobs::sysmon::cmd_sysmon(&json!({"size": 32})).await;
-        assert_eq!(a["size"], b["size"]);
-        assert_eq!(frame_len(&a), frame_len(&b));
-        assert_eq!(frame_len(&a), 32 * 32 * 3);
-    }
-
-    #[test]
-    fn both_paths_call_one_renderer_on_fixed_input() {
-        // Deterministic half of the check above: identical inputs must give
-        // identical bytes, which is only true while there is a single
-        // render_sysmon. Two renderers would pass the shape assertions and
-        // fail this one.
-        use crate::live_jobs::render::render_sysmon;
-        for size in [8u32, 16, 32, 64] {
-            let one = render_sysmon(37, 61, 88, size);
-            let two = render_sysmon(37, 61, 88, size);
-            assert_eq!(one, two);
-            assert_eq!(one.len(), (size * size * 3) as usize);
-        }
-    }
-
-    #[test]
-    fn pct_change_of_a_zero_previous_close_is_zero_not_infinity() {
-        let q = Quote {
-            price: 10.0,
-            prev_close: 0.0,
-            change: 10.0,
-        };
-        assert_eq!(q.pct_change(), 0.0);
-    }
-
-    #[test]
-    fn pct_change_is_relative_to_the_previous_close() {
-        let q = Quote {
-            price: 110.0,
-            prev_close: 100.0,
-            change: 10.0,
-        };
-        assert!((q.pct_change() - 10.0).abs() < 1e-9);
     }
 }

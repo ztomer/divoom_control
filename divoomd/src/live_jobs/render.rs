@@ -12,6 +12,13 @@ const FALLBACK_CP: u32 = 0x3F; // '?'
 const FONT_BYTES: &[u8] =
     include_bytes!("../../../divoom_lib/fonts/divoom_fond16_default_half.bin");
 
+/// The full-size (~9px) glyphs. The half-size set above is what device-bound
+/// text uses at 16/32px — at that scale the full glyphs fill the screen — but
+/// `push_text` offers the larger one for bigger matrices, so both blobs have to
+/// be here for the daemon to answer the same question the GUI used to.
+const FONT_BYTES_FULL: &[u8] =
+    include_bytes!("../../../divoom_lib/fonts/divoom_fond16_default_ascii.bin");
+
 struct BitmapFont {
     blob: &'static [u8],
     space_width: i32,
@@ -85,6 +92,46 @@ impl BitmapFont {
             (c1 - c0 + 1) as i32
         } else {
             self.space_width
+        }
+    }
+
+    /// Width `draw_text` would advance for `text`, unclipped.
+    ///
+    /// Deliberately built from `_char_width` and the same `gap` rule
+    /// `draw_text` uses rather than re-deriving glyph advances: two
+    /// measurements of one layout is the drift this module exists to avoid, one
+    /// level down. `measure_matches_draw_text` pins them together.
+    fn measure_width(&self, text: &str, gap: i32) -> i32 {
+        text.chars()
+            .enumerate()
+            .map(|(i, ch)| if i > 0 { gap } else { 0 } + self._char_width(ch))
+            .sum()
+    }
+
+    /// Topmost and bottommost glyph rows that have ink, or `None` for blank
+    /// text. Used to centre vertically: the half-size glyphs sit in the top of
+    /// a 16-row cell, so drawing at y=0 hangs text off the top edge.
+    fn ink_rows(&self, text: &str) -> Option<(usize, usize)> {
+        let mut top: Option<usize> = None;
+        let mut bottom: Option<usize> = None;
+        for ch in text.chars() {
+            if ch == ' ' {
+                continue;
+            }
+            for (r, &v) in self.rows(ch).iter().enumerate().take(CELL) {
+                if v != 0 {
+                    if top.is_none_or(|t| r < t) {
+                        top = Some(r);
+                    }
+                    if bottom.is_none_or(|b| r > b) {
+                        bottom = Some(r);
+                    }
+                }
+            }
+        }
+        match (top, bottom) {
+            (Some(t), Some(b)) => Some((t, b)),
+            _ => None,
         }
     }
 
@@ -263,6 +310,59 @@ fn draw_triangle_32(buf: &mut [u8], size: i32, is_up: bool, color: (u8, u8, u8))
     }
 }
 
+/// Render `text` to a `size`x`size` RGB frame, centred, clipped to the matrix.
+///
+/// R70 P3.3. The GUI did this with a SECOND reader of the same font blob
+/// (`divoom_lib/fonts/bitmap_font.py` over `divoom_fond16_default_half.bin`),
+/// and then NEAREST-scaled the finished bitmap down to fit.
+///
+/// **Scaling a bitmap font destroys it, and the numbers are not close.** At
+/// 16px with the half-size glyphs, "HELLO" already scales to 0.84x and loses
+/// strokes; "HELLO WORLD" scales to 0.34x and renders as two rows of noise —
+/// not hard to read, unreadable. Drawing at native size and CLIPPING shows
+/// fewer characters and shows them intact, which is the version a person can
+/// actually act on. (Scrolling is the real answer for long strings and is a
+/// separate feature; the GUI's own docstring has said so since R32.)
+///
+/// Vertical centring is new and comes free: the glyphs occupy the top rows of
+/// a 16-row cell, so the old path drew text hanging off the top edge.
+pub(crate) fn render_text(text: &str, color: (u8, u8, u8), size: u32, full_font: bool) -> Vec<u8> {
+    let mut buf = vec![0u8; (size * size * 3) as usize];
+    let font = BitmapFont::new(if full_font {
+        FONT_BYTES_FULL
+    } else {
+        FONT_BYTES
+    });
+    const GAP: i32 = 1;
+
+    let width = font.measure_width(text, GAP);
+    let x0 = if width < size as i32 {
+        (size as i32 - width) / 2
+    } else {
+        0
+    };
+    // Centre on the INK, not on the 16-row cell: the half-size glyphs sit in
+    // the top of their cell, so cell-centring would still look top-heavy.
+    let y0 = match font.ink_rows(text) {
+        Some((top, bottom)) => {
+            let ink_h = (bottom - top + 1) as i32;
+            ((size as i32 - ink_h) / 2 - top as i32).max(0)
+        }
+        None => 0,
+    };
+    font.draw_text(
+        &mut buf,
+        size as i32,
+        x0,
+        y0,
+        text,
+        color,
+        GAP,
+        Some(size as i32 - x0),
+    );
+    buf
+}
+
 pub(crate) fn render_stock(symbol: &str, price: f64, change: f64, size: u32) -> Vec<u8> {
     let mut buf = vec![0u8; (size * size * 3) as usize];
     for i in 0..(size * size) as usize {
@@ -335,4 +435,54 @@ pub(crate) fn get_battery_percent() -> Option<u8> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The layout arithmetic must not fork.
+    ///
+    /// `measure_width` exists so `render_text` can centre, and it advances by
+    /// the same rule `draw_text` does. Two measurements of one layout is the
+    /// drift this whole round is removing, one level down — so they are pinned
+    /// against each other rather than trusted to stay in step.
+    #[test]
+    fn measure_matches_draw_text() {
+        let font = BitmapFont::new(FONT_BYTES);
+        let mut buf = vec![0u8; 256 * 256 * 3];
+        for text in ["A", "HI", "HELLO", "A B", "  ", "12:34", "!@#"] {
+            let drawn = font.draw_text(&mut buf, 256, 0, 0, text, (255, 255, 255), 1, None);
+            assert_eq!(
+                font.measure_width(text, 1),
+                drawn,
+                "measure_width disagrees with draw_text for {text:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn ink_rows_finds_the_glyph_band() {
+        let font = BitmapFont::new(FONT_BYTES);
+        let (top, bottom) = font.ink_rows("HI").expect("HI has ink");
+        assert!(top <= bottom);
+        assert!(bottom < CELL, "ink cannot fall outside the cell");
+        assert!(font.ink_rows("   ").is_none(), "spaces have no ink");
+    }
+
+    #[test]
+    fn text_is_vertically_centred_rather_than_hanging_off_the_top() {
+        // The half-size glyphs sit in the TOP of a 16-row cell, so drawing at
+        // y=0 (what the GUI did) put text against the top edge.
+        let rgb = render_text("HI", (255, 255, 255), 16, false);
+        let lit_rows: Vec<usize> = (0..16)
+            .filter(|&y| (0..16).any(|x| rgb[(y * 16 + x) * 3] > 0))
+            .collect();
+        assert!(!lit_rows.is_empty(), "nothing drawn");
+        assert!(lit_rows[0] > 0, "text still starts at row 0");
+        assert!(
+            *lit_rows.last().unwrap() < 15,
+            "text runs to the bottom edge"
+        );
+    }
 }

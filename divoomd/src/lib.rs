@@ -61,6 +61,8 @@ mod packets_tests;
 pub mod paths;
 pub mod protocol;
 pub mod render_widget;
+#[cfg(test)]
+mod render_widget_tests;
 pub mod response;
 pub mod socket_bind;
 pub mod socket_owner;

@@ -6,11 +6,12 @@ from __future__ import annotations
 
 import logging
 from divoom_gui.api import ApiBase
+from divoom_gui.widget_frames import WidgetFrameMixin
 
 logger = logging.getLogger("divoom_gui.api.lighting")
 
 
-class LightingApi(ApiBase):
+class LightingApi(ApiBase, WidgetFrameMixin):
     def __init__(self, loop_thread, daemon_client_getter, state_getter):
         super().__init__(loop_thread, daemon_client_getter, state_getter)
 
@@ -78,88 +79,37 @@ class LightingApi(ApiBase):
 
     def push_text(self, text: str, color: str = "#FFFFFF", font_size: int = 1,
                   speed: int = 50, effect_style: int = 1) -> bool:
-        """Render the text to a device-sized bitmap and push it as an image.
+        """Render the text on the DAEMON and push it as an image.
 
-        R32 §D: the old path used the 0x87 "set light phone word attr" (LPWA)
-        sequence, which does NOT render on the Pixoo-class LED matrices these
-        devices are — so nothing appeared. The known-working reference
-        (hass-divoom) and futpib both render text into image frames and push
-        them via the normal image path; we do the same here with our own
-        no-AA bitmap font. ``speed``/``effect_style`` are accepted for call
-        compatibility but unused for now (static image); scrolling frames are
-        a follow-up. ``font_size`` selects the small vs. full glyph set."""
+        R32 §D: the 0x87 "set light phone word attr" sequence does NOT render on
+        the Pixoo-class LED matrices these devices are, so nothing appeared. The
+        known-working references (hass-divoom, futpib) rasterise text into image
+        frames and push them through the normal image path; so do we.
+
+        R70 P3.3: the rasterising moved to `divoomd`. It was a SECOND reader of
+        the same font blob — `divoom_lib/fonts/bitmap_font.py` and
+        `live_jobs/render.rs` both over `divoom_fond16_default_half.bin` — and
+        the copy here then NEAREST-scaled the finished bitmap down to fit, which
+        destroys a bitmap font: at 16px "HELLO WORLD" came out as two rows of
+        noise. The daemon draws at native size and clips, so fewer characters
+        appear and they are intact.
+
+        ``speed``/``effect_style`` are accepted for call compatibility and
+        unused (static image); scrolling frames remain the real answer for long
+        strings, and remain a follow-up.
+        """
         try:
             if not text or not str(text).strip():
                 return False
             size = self._device_size()
-            png_path = self._render_text_png(str(text), color, int(size), int(font_size))
-            try:
-                return self._dispatch(lambda t: t.show_image(png_path)
-                                    if t is self._wall_instance else t.display.show_image(png_path))
-            finally:
-                try:
-                    import os
-                    os.unlink(png_path)
-                except OSError:
-                    pass
+            _extras, png_path = self._widget_frame(
+                "text", size,
+                {"text": str(text), "color": color, "font_size": int(font_size)})
+            return self._dispatch(lambda t: t.show_image(str(png_path))
+                                if t is self._wall_instance else t.display.show_image(str(png_path)))
         except Exception as e:
             logger.error(f"push_text failed: {e}")
             return False
-
-    def _device_size(self) -> int:
-        getter = self._state_getter().get("_active_device_size")
-        try:
-            return int(getter() if callable(getter) else (getter or 16))
-        except Exception:
-            return 16
-
-    @staticmethod
-    def _render_text_png(text: str, color: str, size: int, font_size: int) -> str:
-        """Render ``text`` centered on a ``size``×``size`` black canvas using the
-        device bitmap font, scaling down to fit when it overflows. Returns a
-        temp PNG path (caller deletes it)."""
-        import os
-        import tempfile
-        from PIL import Image
-        from divoom_lib.fonts.bitmap_font import get_default_font, get_small_font
-        from divoom_lib.utils.converters import color_to_rgb_list
-
-        rgb_list = color_to_rgb_list(color) or [255, 255, 255]
-        rgb = tuple(rgb_list[:3]) if len(rgb_list) >= 3 else (255, 255, 255)
-        # Small glyphs fit more characters on the narrow 16px matrix; the full
-        # set is used when the caller asks for the larger font or on bigger
-        # screens where it stays legible.
-        font = get_small_font() if (font_size <= 1 or size <= 16) else get_default_font()
-        text_img = font.render(text, fill=rgb, bg=(0, 0, 0), mode="RGB")
-
-        sz = max(1, int(size))
-        tw, th = text_img.size
-        scale = 1.0
-        if tw > sz:
-            scale = sz / tw
-        if th * scale > sz:
-            scale = min(scale, sz / th)
-        if scale < 1.0:
-            text_img = text_img.resize(
-                (max(1, int(tw * scale)), max(1, int(th * scale))), Image.NEAREST)
-            tw, th = text_img.size
-
-        canvas = Image.new("RGB", (sz, sz), (0, 0, 0))
-        canvas.paste(text_img, (max(0, (sz - tw) // 2), max(0, (sz - th) // 2)))
-        fd, path = tempfile.mkstemp(prefix="divoom_text_", suffix=".png")
-        os.close(fd)
-        # If the save fails (PIL encode error, disk full), the mkstemp'd file
-        # already exists but push_text's caller-side `finally: unlink(png_path)`
-        # never runs (png_path is never bound), leaking the orphan. Clean it here.
-        try:
-            canvas.save(path)
-        except Exception:
-            try:
-                os.unlink(path)
-            except OSError:
-                pass
-            raise
-        return path
 
     def set_brightness(self, brightness: int) -> bool:
         logger.info(f"GUI Action: Setting brightness to {brightness}...")
