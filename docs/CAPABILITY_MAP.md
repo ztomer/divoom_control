@@ -168,10 +168,34 @@ audit's F5, F6 and F7, and none of them has the shape the census detects:
   process (`socket` + `socketserver` + `http.server`), exposing every public
   bridge method alongside the daemon socket and `divoomd mcp`. That is an
   ownership question about a whole surface, not a call into `divoom_lib`.
-* **F6 — the notification stack.** `divoom_client/macos_notifications.py` (404
-  lines) + `notification_router.py` (177) against `macos_notifications.rs` (361).
-  Host-data access through `divoom_client`, not `divoom_lib`, so no rule here
-  matches it.
+* **F6 — the notification stack. INVESTIGATED (P2.3); the split is now
+  evidence-backed, and the deletion is the remaining work.**
+
+  `divoom_client/macos_notifications.py` divides cleanly in two, and only one
+  half is a duplicate:
+
+  | Half | What | Verdict |
+  |---|---|---|
+  | `find_notification_db_path`, `load_routing_table`, `ROUTING_PATH` | the GUI shows the user which DB was found and which rules apply | `presentation` — keep |
+  | `MacNotificationMonitor` (~250 lines) + `parse_notification_record` | polls the Notification Center SQLite DB on a thread | `duplicate` — delete |
+
+  **The polling half has NO production caller.** `MacNotificationMonitor` is
+  instantiated only in tests; the GUI asks the daemon
+  (`client.stop_notifications()`, `gui_api.py:289`), and
+  `test_gui_api_notifications.py:76` asserts outright that the GUI must not
+  start one because "that is the daemon's job". So this is not a live second
+  implementation — it is ~250 lines of dead polling machinery shipped inside
+  the client package, against a working `macos_notifications.rs`.
+
+  **Not deleted in this pass, deliberately.** It is ~250 lines plus roughly 900
+  lines of tests across four files, and this round has already twice paid for
+  hasty test triage (an orphaned `@patch` decorator silently re-decorating the
+  next test; a hand-built file list that missed one). It gets its own focused
+  change rather than a tired one.
+
+  It also stays outside the census's reach by construction: it is
+  `divoom_client`, not `divoom_lib`, so no rule here matches it. That is the
+  blind spot, not an oversight.
 * **F7 — the doctrine.** "`divoom_lib` is reference-only" is false: 35 runtime
   import statements across 13 files. That is a claim in prose, which no AST scan
   can check.
