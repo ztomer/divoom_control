@@ -32,7 +32,6 @@ import os
 import shutil
 import signal
 import subprocess
-import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -102,22 +101,43 @@ class MCPController:
         return True
 
     def start(self, mac: Optional[str] = None, *, python: Optional[str] = None) -> MCPStatus:
-        """Start the MCP server subprocess.
+        """Start the MCP server subprocess: `divoomd mcp`.
 
         ``mac`` is optional: since R28 the MCP server routes through the daemon
-        (the sole device owner), so it does not need a MAC. When provided it's
-        only passed through to target a specific device if the daemon has to be
-        spawned. Returns a status dict. If a server is already running, the call
-        is a no-op and the existing status is returned."""
+        (the sole device owner), so it does not need a MAC. Returns a status
+        dict. If a server is already running, the call is a no-op and the
+        existing status is returned.
+
+        **R70 P4.2. This used to spawn `[sys.executable, "-m",
+        "divoom_lib.cli", "mcp-server"]`, and inside the packaged app
+        `sys.executable` is the GUI binary.** Reproduced on the shipped v0.28.3
+        (P4.1): the spawned process did not fail — `gui_main.main()` reads its
+        arguments with `parse_known_args()`, ignored them, and launched a whole
+        SECOND Divoom window, another daemon and another menubar agent, while
+        answering no JSON-RPC at all. Worse, `is_running()` then reported the
+        MCP server as UP, because a process was genuinely alive.
+
+        `divoomd mcp` is the same server, ported (`divoomd/src/mcp.rs`), and it
+        ships in the bundle two directories from where the old command looked.
+        Resolution goes through `divoom_client.binary_resolver`, never a second
+        path-walk of its own: picking a binary by location instead of by version
+        is the R69 defect, and a second resolver is how it would come back.
+
+        ``python`` is still accepted so a caller can force an interpreter, but
+        it now names the DAEMON binary to run.
+        """
         if self.is_running():
             return self.status()
-        exe = python or sys.executable
-        # Use ``-m divoom_lib.cli mcp-server`` so we don't depend on
-        # the package being on PATH (works inside editable installs
-        # and zipapps alike).
-        cmd = [exe, "-m", "divoom_lib.cli", "mcp-server"]
-        if mac:
-            cmd += ["--mac", mac]
+
+        from divoom_client import binary_resolver
+
+        exe = python or binary_resolver.resolve("divoomd")
+        if not exe:
+            return MCPStatus(
+                running=False,
+                error="no usable divoomd found — rebuild it (scripts/build.sh) "
+                      "or reinstall the app")
+        cmd = [str(exe), "mcp"]
         self._log_path.parent.mkdir(parents=True, exist_ok=True)
         # Truncate ("wb"), not append: each start gets a self-contained log so
         # the GUI card never mixes a fresh run with a stale crash from a prior
@@ -136,7 +156,7 @@ class MCPController:
                 start_new_session=True,
             )
         except FileNotFoundError as exc:
-            return MCPStatus(running=False, error=f"python executable not found: {exc}")
+            return MCPStatus(running=False, error=f"divoomd not found: {exc}")
         except OSError as exc:
             return MCPStatus(running=False, error=f"failed to spawn MCP server: {exc}")
         self._started_at = time.time()
