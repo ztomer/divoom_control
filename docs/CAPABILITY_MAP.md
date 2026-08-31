@@ -187,6 +187,29 @@ whether to leave the daemon running on exit and the menubar decides whether to
 kill it. `tests/test_keep_daemon_alive_parity.py` pins the agreement, written
 while the two still match.
 
+## F1-F7 closure (R72 P6)
+
+A finding is closed under **two** witnesses: its owning step is done, AND
+`tools/capability_census.py` reports it clean without being told to look. One
+witness alone is the mistake this round was written to avoid.
+
+| # | What it was | How it closed | Census |
+|---|---|---|---|
+| F1 | auth bypassed the existing seam at 4 sites | routed to `daemon_cloud`; the startup read DELETED rather than routed, because `_client()` spawns the daemon | 0 DIRECT |
+| F2 | `sync_time` rebuilt over `divoom_lib`, and broken | routed to `system.set_date_time`; the daemon now refuses an argument-less call that used to set the device to 2000-01-01 | 0 WRAPPED |
+| F3 | `DeviceSettings` hybrid | `device.set_auto_power_off` / `device.set_low_power` | 0 WRAPPED |
+| F4 | "weather duplicate" | **verdict was WRONG** — pure preference resolution, made public | allowlisted `client-local` |
+| F5 | a third control surface | declared test tooling; its **unauthenticated TCP** surface now requires a token, unix socket 0600 | n/a (not a `divoom_lib` call) |
+| F6 | notification stack twice | 292 lines deleted; presentation kept | n/a (`divoom_client`, outside the scan) |
+| F7 | "reference-only" doctrine was false | rewritten to the rule the census enforces | n/a (prose) |
+
+**Two of the seven were not what the audit called them**, and that is the
+round's most useful result. F4 was not a duplicate at all — I had cited a
+docstring recording a FIX as evidence of the defect it repaired. F5's ownership
+question was easy (it is off by default) while its real problem, an
+unauthenticated surface exposing the whole GUI API to any local process, was not
+in the finding at all.
+
 ## Known blind spots — what this census does NOT see
 
 Stated so that a clean run is never mistaken for a closed class. These are the

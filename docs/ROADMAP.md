@@ -693,21 +693,21 @@ testable that means seen RED first.
 | P0.1 owned-capability list | **DONE** | 443 command names from the socket-dispatch and `device_call` match arms, read out of the Rust. Multi-line arms handled — catching only the `=>` form drops every alias but the last, which would have made the census quieter |
 | P0.2 python execution list | **DONE** | AST over `divoom_gui` + `divoom_client` + `scripts`. Three categories: DIRECT and WRAPPED match on NAME, REACHES catches owned WORK whose name is not a command — added after F4 proved the name-based rules were measuring their own logic |
 | P0.3 `CAPABILITY_MAP.md` | **DONE** | 26 rows, every one with a verdict, none `unknown`. Vocabulary excludes `unreviewed` on purpose. Blind spots stated (F5/F6/F7 have shapes no AST scan sees) so a clean run is never mistaken for a closed class |
-| P0.4 census calibrated | F1, F2 | TODO | rediscovers both WITHOUT being told to look |
-| P1.1 auth through the seam | **F1** | TODO | cache-only startup behaviour preserved and pinned (a blocking call trades a duplicate for a hang) |
-| P1.2 `sync_time` via daemon | **F2** | TODO | verified on hardware — the device's clock actually changes, not "returns True" |
-| P1.3 `DeviceSettings` | **F3** | TODO | per method, against `system.rs` |
-| P1.4 delete + rebaseline | F1-F3 | TODO | dead Python and its tests gone; coverage delta stated |
-| P2.1 weather duplicate decided | **F4** | TODO | parity gate justified as an oracle, or retired with the duplicate |
-| P2.2 double-fetch killed | F4 | TODO | one fetch, whichever side wins |
-| P2.3 notifications split | **F6** | TODO | presentation stays, host-data access moves |
-| P3.1 scope widened | F6 (class) | TODO | census covers the whole shipped Python surface, permanently |
-| P3.2 `control_server` decided | **F5** | TODO | kept as a stated test harness, or removed; auth story stated either way |
-| P3.3 menubar audited | — | TODO | checked against the same invariant |
+| P0.4 census calibrated | F1, F2 | **DONE** | Rediscovered both unprompted. Calibration is against SYNTHETIC reproductions, not the live tree — the first version asserted F1 was still present and went red the moment P1.1 fixed it |
+| P1.1 auth through the seam | **F1** | **DONE** | All 4 sites. The startup read was DELETED not routed (`_client()` spawns the daemon; that would put a spawn in GUI construction). Found on the way: the daemon's `save_config` destroyed every other config.ini section, and its reply omitted `token` so a successful save looked invalid |
+| P1.2 `sync_time` via daemon | **F2** | **DONE (device check owed)** | Routed to `system.set_date_time`. Found: `sync_time` with no args set the device to **2000-01-01** and reported success — it now refuses. Hardware confirmation is R71's P2 packet |
+| P1.3 `DeviceSettings` | **F3** | **DONE** | `device.set_auto_power_off` / `device.set_low_power`. The alias lists differ per command and a wrong prefix fails generically, so the tests assert the PATH |
+| P1.4 delete + rebaseline | F1-F3 | **DONE** | WRAPPED reached 0. Coverage arc stated in `py_ci.sh`; floor 89.4 -> 89.2 |
+| P2.1 weather duplicate decided | **F4** | **DONE — verdict CORRECTED** | Not a duplicate: `resolve_location` is pure (env + saved city, no network). My map had cited `widgets.py:24` as documenting a double-fetch; that docstring documents the FIX. Made public so the GUI stops reaching into a private |
+| P2.2 double-fetch killed | F4 | **DONE (already was)** | R67/C2 killed it; the census row was a misread of the docstring recording that |
+| P2.3 notifications split | **F6** | **DONE** | 292 lines out of `divoom_client`: the polling monitor, the record parser and the CLI. Presentation helpers stayed. The GUI's guard test now asserts the class does not EXIST |
+| P3.1 scope widened | F6 (class) | **DONE** | `scripts/` permanently in scope, and `verify_gallery_render.py` rewritten against the daemon — it had its own auth, HTTP and decoder, and verified a path R70 P2.3 retired |
+| P3.2 `control_server` decided | **F5** | **DONE** | Kept as declared test tooling (off unless env-enabled). Its TCP surface was UNAUTHENTICATED — `_authorized()` returned True with no token — and now refuses to start without one; the unix socket is 0600 |
+| P3.3 menubar audited | — | **DONE** | Clean, and structurally so: its dependency list has no transport/device/HTTP/image crate. Found config.ini's THIRD parser (`keep_daemon_alive`); parity pinned |
 | P4.1 imports listed | **DONE** | All 21 runtime `divoom_lib` importers classified into five categories in the roadmap's doctrine section. The one that looked worst is legitimate: `bt_spp_transport` reaches the client only through `spp_bridge.py`, which **`divoomd/src/spp.rs` spawns** — macOS IOBluetooth SPP is unreachable from Rust, so the daemon delegates to a co-process and still owns the device |
 | P4.2 doctrine rewritten | **DONE** | "OBSOLETE and kept for REFERENCE ONLY" is gone. Replaced by the rule that actually holds: a `divoom_lib` import is a defect when it does a job the daemon owns, and fine when it supplies a constant, a pure helper or a client preference — which is precisely what the census enforces |
-| P5.1 census is the gate | — | TODO | wired into `.gatesrc`; denylist demoted to fast-path |
-| P5.2 prove it bites | F1-F7 | TODO | 7 reintroduced, 7 reds — F3 and F5 included, not skipped |
+| P5.1 census is the gate | — | **DONE** | Wired into `.gatesrc` and `tests.yml`. DIRECT/WRAPPED have no allowlist; REACHES is a ratchet where a new call AND a stale entry both fail |
+| P5.2 prove it bites | F1-F7 | **DONE** | 4 sabotages; the fourth found a GAP — a bound reference (`_cb = divoom_auth.get_cached_credentials`) walked past a Call-only scan. Now walks attributes |
 | P6 close | all | TODO | every F-row closed under BOTH witnesses; CHANGELOG, release, map current |
 
 ### Earlier shipped workstreams — pruned to git history
