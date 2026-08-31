@@ -494,9 +494,14 @@ the same commit failed **different, non-overlapping sets** of tests:
 | 2 | 5 | `e2e_device_status_dot`, `e2e_photo_albums`, `e2e_ux_feedback`, `gui_wall_canvas_drag` x2 |
 
 **Overlap: zero.** Every one of the nine is a camoufox/browser test, and every
-one passes in isolation. Machine load average during the runs was **9.19** —
-this session had full suites, `gate.sh --full` (which now runs the whole CI) and
-cargo rebuilds overlapping, after the incremental cache was cleared.
+one passes in isolation — re-run together afterwards, 28 passed in 6m03s.
+
+**And the load is NOT an artefact of this session, which makes it worse.** The
+first reading was 9.19 while full suites, `gate.sh --full` and cargo rebuilds
+overlapped. But with all of that finished the machine still sits at **6.85**,
+entirely from the developer's own processes (an MCP server, a TUI under test).
+That is the NORMAL condition this suite runs in. The flakiness is not something
+you have to provoke; it is the default on a working machine.
 
 **Why this is not just "flaky tests".** R71 P0 made `pre-push` run the full
 local CI, which was the right call and is already earning its keep. But a gate
