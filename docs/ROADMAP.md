@@ -522,11 +522,11 @@ correct.
 | P4.2 spawn `divoomd mcp` | **DONE** | verified in the BUNDLE shape: resolves to `Contents/Frameworks/bin/divoomd`, answers initialize + 13 tools |
 | P4.3 both shapes tested | **DONE** | resolution goes through `binary_resolver` (one resolver, R69 class); unresolvable → honest error, never "running" |
 | P4.4 Python MCP → reference | **DONE** | `test_start_uses_sys_executable_by_default` pinned the defect and passed in dev forever — Hole C exactly. Rewritten + 5 new tests |
-| P5.0 reachability check | TODO | flags all four dead methods on today's tree; allowlist entries carry REASONS |
-| P5.1-P5.4 deletions | TODO | suite green with the pinning tests removed |
-| P5.5 tests + floor rebaseline | TODO | before/after counts and coverage delta stated out loud |
-| P5.6 bleak out of the bundle | TODO | verified IN the built `.app`: launch, connect, push |
-| P6.1 allowlist empty | TODO | the completion criterion — same command that returned 12 returns 0 |
+| P5.0 reachability check | **DONE** | `check_gui_api_reachable.py`. Found **24, not 4** — the other 20 are allowlisted `unreviewed`, an honest state and a decision still owed |
+| P5.1-P5.4 deletions | **DONE** | bleak/Divoom/DivoomWall imports, audio_visualizer.py, push_weather, trigger_notification, 22 unreachable lines |
+| P5.5 tests + floor rebaseline | **DONE** | 2996 passed / 94 skipped; coverage 89% → **90%**, floor raised to match |
+| P5.6 bleak out of the bundle | **DONE** | out of `divoom.spec`; the frozen entry point loads ZERO bleak modules (verified). Also dropped CI's `brew install portaudio` |
+| P6.1 allowlist empty | **DONE** | 27 violations across 12 files → **0, with no exemptions** |
 | P6.2 user-POV pass | TODO | real app, every touched panel, light AND dark |
 | P6.3 CHANGELOG + release | TODO | |
 
