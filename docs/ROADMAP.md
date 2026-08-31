@@ -426,6 +426,15 @@ P2.5 is not a unit test: a recorded real-backend run on a CONFIGURED account.
 The v0.28.3 check ran under a throwaway HOME and proved only the error path;
 repeating that would repeat the gap, not close it.
 
+**P1.2 already produced one instance of the failure P3 is about**, and it is worth
+reading before writing P3.4: the first `render_widget` sysmon parity test compared
+the two REPLIES to each other. CPU load moves between the calls, so the only
+assertions that survived were size and byte-count, and the test passed with the
+renderer sabotaged to emit a solid block of 7s. The fix was to stop comparing two
+outputs and instead close the loop — re-render the reply's OWN reported stats with
+the canonical renderer and require byte equality. Prefer that shape in P3.4 wherever
+the two sides cannot be held identical by construction.
+
 **P3 — the drift test, with a fixture that can actually show drift.**
 P3.4 parameterizes over the daemon's OWN list of kinds, so a new widget kind is
 covered without anyone remembering to add a case. Prove-red is mandatory and
@@ -479,7 +488,7 @@ correct.
 | P0.3 wire local+CI | **DONE** | same position in `.gatesrc` and `tests.yml`; verified in the no-`GOH_DIR` CI shape |
 | P0.4 Python cov floor ON | **DONE** | 89% measured (not the 95% claimed); floor 99 fails / floor 1 passes |
 | P1.1 cloud wrappers | **DONE** | `daemon_cloud.py`, 14 wrappers, 22 wire tests; 3 sabotages → 3 red signatures; all 8 round-tripped live on a configured account |
-| P1.2 `render_widget` | TODO | sysmon bytes pinned before the refactor, identical after |
+| P1.2 `render_widget` | **DONE** | kinds sysmon/stocks/album_art; 12 Rust tests. First parity test was BLIND (compared lengths, passed under sabotage) — rewritten to re-render the reply's own stats and compare bytes |
 | P1.3 `_widget_frame` funnel | TODO | every panel reaches frames through it — no second path |
 | P1.4 parity fixtures | TODO | per-kind bytes vs the Python renderer; disagreements DECIDED, not defaulted |
 | P2.1 five panels | TODO | command on the socket AND no HTTP left the process; revert one panel → red |
