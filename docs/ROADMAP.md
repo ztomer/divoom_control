@@ -378,6 +378,223 @@ its proof has been SEEN, and for anything testable that means seen RED first.
 | P5.2 user-POV pass | TODO | `gui_pov.py` + real app over touched panels |
 | P5.3 release | TODO | CHANGELOG, tag, DMG verified from INSIDE the DMG |
 
+### R72 plan — does everything that belongs in the daemon live in the daemon
+
+**R70 answered a narrower question than its empty allowlist suggests.** It
+asked *"does the GUI contain a second implementation?"* and closed it with
+`check_gui_is_a_client.py`: a DENYLIST of five module names
+(`divoom_lib.cloud`, `bleak`, `urllib.request`, `pyaudio`, `psutil`) plus four
+PIL construction patterns, scoped to `divoom_gui/`. That allowlist is EMPTY,
+and the class is **not** closed. A denylist enumerates forbidden MEANS; the
+invariant is about ownership of ENDS, and it cannot catch a duplicate that
+arrives through a module nobody thought to ban.
+
+R72 asks the inverse and larger question: **is everything that belongs to the
+daemon actually in the daemon?**
+
+**The invariant, stated once so it can be enforced rather than remembered.**
+`divoomd` owns every RESOURCE: device I/O (BLE/SPP/LAN), cloud HTTP and
+credentials, host data (the notification database, now-playing, system stats,
+the wall clock), rendering to device frames, and the persistence of
+device-facing state. Clients own presentation, user intent, and their own local
+preferences. **Each capability has exactly one implementation, and it lives
+where its resource lives.**
+
+**Seven findings, all verified against source while writing this plan, none of
+which the R70 gate can see.** They are the seed of P0.3's inventory, not the
+whole of it — the point of the census is that a hand-written list is exactly
+what has failed twice now.
+
+1. **Cloud auth is a live second implementation, and the seam already exists.**
+   The daemon has full auth in `cloud.rs` — `login_email`, `login_guest`,
+   md5/hmac-md5, credential cache with cooldown — and answers `get_credentials`,
+   `get_cached_credentials` and `save_credentials` over the socket.
+   `divoom_client/daemon_cloud.py` ALREADY wraps `get_cached_credentials`.
+   Three GUI sites bypass all of it and call `divoom_lib.divoom_auth` directly:
+   `gui_api.py:59`, `api/connection.py:97`, `presets_manager.py:59`. This is the
+   R70 defect in its exact original shape — seam present, panel takes the Python
+   path anyway — surviving because the ban list names `divoom_lib.cloud` and not
+   `divoom_lib.divoom_auth`.
+2. **`sync_time` is reimplemented in Python, and the Python one was BROKEN.**
+   The daemon has `sync_time` and `system.set_date_time`. `api/tools.py:157`
+   calls `DateTimeCommand(d).update_date_time()`, which builds the payload byte
+   by byte in `divoom_lib/system/date_time.py` — whose own comment records that
+   it raised `AttributeError` at runtime, "swallowed by the GUI tool wrapper
+   into a silent False, so Sync Time never worked". A duplicate that is also a
+   defect, in a feature the daemon implements correctly.
+3. **`DeviceSettings` has the same hybrid shape.** `set_auto_power_off` and
+   `set_low_power` construct a `divoom_lib` class over the daemon proxy, so the
+   LOGIC is Python and only the transport is the daemon. Check each against the
+   daemon's `system.rs` equivalents.
+4. **Weather is a TOLERATED duplicate, maintained by a gate.**
+   `check_weather_parity.py` exists to keep the Python and Rust implementations
+   in step, and `api/widgets.py:24` documents a known double-fetch (the GUI
+   resolves the location, the daemon fetches it again). Two GUI sites call
+   `divoom_lib.weather_provider._resolve_location` — a PRIVATE function of the
+   library the docs call reference-only.
+5. **A third control surface lives inside the GUI process.**
+   `control_server.py` runs `socket` + `socketserver` + `http.server` and
+   reflection-dispatches every public bridge method over HTTP, alongside the
+   daemon socket and `divoomd mcp`. Note `http.client` is not on the R70 ban
+   list while `urllib.request` is — the same blind spot as finding 1.
+6. **The notification stack exists twice, and the Python half is outside the
+   gate's scope entirely.** `divoomd/src/macos_notifications.rs` polls the
+   Notification Center SQLite DB, parses binary plists and routes to slots over
+   ANCS `0x50`. `divoom_client/macos_notifications.py` (16.5K) +
+   `notification_router.py` (6.9K) are imported live by `gui_api.py` at three
+   sites. Some of that is legitimate client presentation (showing the user the
+   routing table); some is host-data access the daemon owns. Separate them.
+7. **The doctrine is false as written.** AGENTS.md, this file and the project's
+   working memory all say `divoom_lib` is REFERENCE-ONLY. `divoom_gui` imports
+   it at 30+ runtime sites — `divoom_auth`, `weather_provider`,
+   `lifecycle_config`, `utils.atomic_io`, `models`, `system.date_time`,
+   `system.device_settings`, `media_decoder`, `hotchannel_config`,
+   `hot_update_state`. This is `stated-vs-implemented` at the level of project
+   doctrine, and it is load-bearing: "Python is reference-only, so Python/Rust
+   duplication is not automatically drift" is the sentence that would suppress
+   every finding above.
+
+**Completion criterion, mechanical.** Not "we looked and it seems fine":
+
+1. The **capability census** (P0) runs as a gate. Every capability the daemon
+   owns is either absent from the Python surface, or carries an entry naming
+   WHY the client-side code is presentation rather than a second
+   implementation. `unreviewed` is illegal from day one — R71 earns that word's
+   retirement and R72 does not get to re-borrow it.
+2. `divoom_lib` is reference-only **or the sentence is deleted**. If the GUI
+   still imports it at runtime when the round ends, the docs say so plainly and
+   name each surviving import and its reason.
+
+**P0 — the census, and proof that it can find a duplicate.**
+
+The two previous attempts at this class used hand-written lists and both missed
+things a machine would not. The deliverable is an instrument, not an audit.
+
+- **P0.1** Machine-generate the OWNED list: every socket command from the
+  daemon's dispatch plus every `device_call` method path, read out of the Rust
+  source. Never hand-maintained — it goes stale the first week.
+- **P0.2** Machine-generate the PYTHON EXECUTION list: every runtime site in
+  `divoom_gui/`, `divoom_client/`, `scripts/` and the packaged entry points that
+  touches an owned resource. **Scope is the whole shipped Python surface**, not
+  `divoom_gui/` — finding 6 is invisible from R70's scope.
+- **P0.3** Join them into `docs/CAPABILITY_MAP.md`: capability → daemon impl →
+  Python impl → verdict (duplicate / presentation / client-local / unknown).
+  Seed with the seven findings; the census must produce the rest.
+- **P0.4** **Calibrate it** (`calibrate-the-instrument`). The census must
+  independently rediscover `sync_time` and `divoom_auth`, both known BEFORE it
+  runs. A census that cannot find the duplicates you already have is not
+  measuring what you think it is measuring, and its silence about everything
+  else means nothing.
+
+**P1 — the confirmed duplicates.** Findings 1, 2, 3.
+
+- **P1.1** Auth through `daemon_cloud`; `divoom_lib.divoom_auth` loses its GUI
+  callers. Careful: `gui_api.py:59` and `connection.py:97` are deliberately
+  CACHE-ONLY so a status poll never blocks on a cloud login — the daemon wrapper
+  must preserve that, and a test must pin it. Re-routing it into a blocking call
+  would trade a duplicate for a hang.
+- **P1.2** `sync_time` through the daemon. **Verify it works on hardware first**
+  (R71's P2 packet) — this is a feature that has been silently returning False,
+  so "it now returns True" is not evidence the device's clock changed.
+- **P1.3** `DeviceSettings` per method, against `system.rs`.
+- **P1.4** Delete the Python paths and the tests pinning them; state the
+  coverage delta.
+
+**P2 — the tolerated duplicates.** Findings 4 and 6, and the category matters
+more than the two instances: a duplicate kept in step by a parity gate is a
+DECISION, and it needs to be re-made deliberately rather than inherited.
+
+- **P2.1** Weather: decide whether `check_weather_parity.py` is buying
+  something (a reference oracle for the port) or is maintenance debt for a
+  second implementation. R67's "Python was right every time" is about WIRE
+  FORMATS and is not a reason to keep executing Python in the GUI.
+- **P2.2** Kill the double-fetch documented at `api/widgets.py:24` either way.
+- **P2.3** Notifications: separate presentation (the routing table the user
+  edits) from host-data access (the SQLite DB, plist parsing). The first is a
+  client job; the second is the daemon's and already exists there.
+
+**P3 — the unscoped surfaces.**
+
+- **P3.1** Bring `divoom_client/`, `scripts/` and the packaged entry points into
+  the census's scope permanently. This is `polyglot-gate-parity`: a second
+  package inherits none of the first one's gates and the suite still reports
+  green because it never claimed to cover it.
+- **P3.2** `control_server.py`: decide whether headless drive belongs in the GUI
+  process at all, given the daemon socket and `divoomd mcp` already exist. If it
+  stays, it is a test harness and says so; if it goes, the e2e harness moves to
+  the daemon surface. Either way its auth story gets stated, not left optional.
+- **P3.3** The Rust menubar is a client too. Check it against the same
+  invariant — it is small (1155 LOC) and was never audited for this.
+
+**P4 — make the doctrine true, or delete it.** Finding 7.
+
+- **P4.1** Every surviving `divoom_lib` runtime import is listed with its reason
+  in AGENTS.md. Config/atomic-write helpers are plausibly client-local; protocol
+  builders and transports are not.
+- **P4.2** Rewrite the "reference-only" claim to match the code. A doctrine that
+  is false in the direction of "stop looking" is worse than none, because it is
+  precisely what would have suppressed findings 1-6.
+
+**P5 — replace the denylist with the invariant.**
+
+- **P5.1** The census becomes the gate; `check_gui_is_a_client.py` folds into it
+  or stays as a cheap fast-path pre-check, but it is no longer the thing that
+  claims the class is closed.
+- **P5.2** Prove it bites: reintroduce each of the seven findings one at a time
+  and watch the census go red on each. Seven sabotages, seven reds.
+
+**P6 — close.** Census clean, `CAPABILITY_MAP.md` current, CHANGELOG, release.
+
+**Traps, named up front.**
+
+- **An empty allowlist is not a closed class.** It is a closed class *with
+  respect to the rule that was written down*. R70's gate is correct and its
+  allowlist is honestly empty; the rule was narrower than the invariant. Do not
+  read this round as a criticism of that gate — read it as the reason a
+  denylist can never be the last gate for an ownership invariant.
+- **"Reference-only" is the sentence that hides this class.** It is TRUE as a
+  caution against false positives (a Python module that merely exists alongside
+  a Rust one is not drift) and FALSE as currently written (the GUI executes it).
+  Both halves must survive the rewrite or P4 will just invert the error.
+- **The proxy makes duplicates look like clients.** `current_divoom` is a
+  `DaemonDeviceProxy`, so `d.timer.set_timer(flag)` really does travel to the
+  daemon and is FINE. But `DateTimeCommand(d)` wraps that same proxy in Python
+  logic, and reads almost identically at the call site. The census must
+  distinguish *transport through the daemon* from *logic in the client*, or it
+  will drown P1 in false positives and miss finding 2.
+- **Routing to the daemon can expose a weaker port** (R70's trap, still live).
+  Verify live before deleting any Python path; a gap found that way is a port
+  bug to fix, never a reason to keep the second implementation.
+- **Do not re-borrow `unreviewed`.** R71 makes it an illegal reason string. A
+  census that ships with 40 unreviewed rows has recreated the thing R71 spent a
+  phase retiring.
+
+**Step ledger** — each step updates its own row in the commit that does the
+work. A row goes DONE only once its proof has been SEEN, and for anything
+testable that means seen RED first.
+
+| Step | State | Proof required |
+|------|-------|----------------|
+| P0.1 owned-capability list | TODO | generated from Rust dispatch, not hand-written |
+| P0.2 python execution list | TODO | scope covers `divoom_gui` + `divoom_client` + `scripts` + entry points |
+| P0.3 `CAPABILITY_MAP.md` | TODO | every capability has a verdict; no `unreviewed` |
+| P0.4 census calibrated | TODO | independently rediscovers `sync_time` and `divoom_auth` |
+| P1.1 auth through the seam | TODO | cache-only startup behaviour preserved and pinned |
+| P1.2 `sync_time` via daemon | TODO | verified on hardware — the device's clock actually changes |
+| P1.3 `DeviceSettings` | TODO | per method, against `system.rs` |
+| P1.4 delete + rebaseline | TODO | dead Python and its tests gone; coverage delta stated |
+| P2.1 weather duplicate decided | TODO | parity gate justified as an oracle, or retired with the duplicate |
+| P2.2 double-fetch killed | TODO | one fetch, whichever side wins |
+| P2.3 notifications split | TODO | presentation stays, host-data access moves |
+| P3.1 scope widened | TODO | census covers the whole shipped Python surface |
+| P3.2 `control_server` decided | TODO | kept as a stated test harness, or removed |
+| P3.3 menubar audited | TODO | checked against the same invariant |
+| P4.1 imports listed | TODO | every surviving `divoom_lib` import has a reason in AGENTS.md |
+| P4.2 doctrine rewritten | TODO | the sentence matches the code, both halves intact |
+| P5.1 census is the gate | TODO | wired into `.gatesrc`; denylist demoted to fast-path |
+| P5.2 prove it bites | TODO | 7 findings reintroduced, 7 reds |
+| P6 close | TODO | CHANGELOG, release, map current |
+
 ### Earlier shipped workstreams — pruned to git history
 
 The camoufox pin raised to latest (R68), the GUI e2e migration off Playwright

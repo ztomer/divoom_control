@@ -21,6 +21,57 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-08-31 — R72 PLANNED (added after R71, same day). "Does everything
+  that belongs in the daemon live in the daemon?" Plan in `docs/ROADMAP.md`
+  under "R72 plan"; 19 steps, all TODO.**
+
+  **R70 answered a narrower question than its empty allowlist suggests.** It
+  asked "does the GUI contain a second implementation?" and closed it with a
+  DENYLIST — five module names plus four PIL patterns, scoped to `divoom_gui/`.
+  The allowlist is honestly empty and the CLASS IS NOT CLOSED. A denylist
+  enumerates forbidden means; the invariant is about ownership of ends.
+
+  **Seven findings, all verified against source while writing the plan:**
+
+  * **Cloud auth is a live second implementation with the seam already built.**
+    `cloud.rs` has `login_email`/`login_guest`/md5+hmac/credential cooldown and
+    answers `get_credentials`/`get_cached_credentials`/`save_credentials`;
+    `divoom_client/daemon_cloud.py` ALREADY wraps the cached read. Three GUI
+    sites call `divoom_lib.divoom_auth` anyway (`gui_api.py:59`,
+    `api/connection.py:97`, `presets_manager.py:59`). The gate misses it because
+    it bans `divoom_lib.cloud`, not `divoom_lib.divoom_auth`.
+  * **`sync_time` is reimplemented in Python and the Python one was BROKEN** —
+    `divoom_lib/system/date_time.py`'s own comment records an `AttributeError`
+    swallowed into a silent `False`, so Sync Time never worked. The daemon has
+    `sync_time` and `system.set_date_time` and implements it correctly.
+  * `DeviceSettings` (`set_auto_power_off`, `set_low_power`) has the same
+    hybrid shape: Python logic over the daemon proxy.
+  * **Weather is a TOLERATED duplicate maintained by `check_weather_parity.py`**,
+    with a double-fetch documented at `api/widgets.py:24` and two GUI callers of
+    a PRIVATE `weather_provider._resolve_location`.
+  * **A third control surface runs inside the GUI process** —
+    `control_server.py` (`socket`/`socketserver`/`http.server`) reflection-
+    dispatches every bridge method over HTTP. `http.client` is not on the ban
+    list; `urllib.request` is. Same blind spot as the auth finding.
+  * **The notification stack exists twice and the Python half is out of scope
+    entirely** — `divoomd/src/macos_notifications.rs` vs
+    `divoom_client/macos_notifications.py` + `notification_router.py` (23K),
+    imported live by `gui_api.py` at three sites.
+  * **The doctrine is false as written.** "divoom_lib is reference-only" —
+    `divoom_gui` imports it at 30+ RUNTIME sites. That sentence is exactly what
+    would suppress all six findings above, so P4 makes it true or deletes it.
+
+  **The trap that will generate false positives if it is not held in mind:**
+  `current_divoom` is a `DaemonDeviceProxy`, so `d.timer.set_timer(x)` DOES
+  travel to the daemon and is correct. `DateTimeCommand(d)` wraps that same
+  proxy in Python logic and reads almost identically at the call site. The
+  census must separate transport-through-the-daemon from logic-in-the-client.
+
+  **Order relative to R71:** independent. R71's P0 (make local CI structural) is
+  still the first thing to do in the repo, because R72 reports its results
+  through the same gates. R72's P1.2 wants R71's P2 hardware packet, since
+  "sync_time now returns True" is not evidence the device's clock changed.
+
 - **2026-08-31 — R71 PLANNED, nothing implemented. The plan is in
   `docs/ROADMAP.md` under "R71 plan"; all 29 steps are TODO. Start at P0.1.**
 
