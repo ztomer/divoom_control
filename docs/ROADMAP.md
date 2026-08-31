@@ -298,7 +298,10 @@ just re-run the decision that caused it.
 
 - **P3.1** Stocks → `render_widget`; delete the GUI's Yahoo fetch and PIL draw.
 - **P3.2** Album art → `render_widget`; the LANCZOS/NEAREST drift ends. The
-  false docstring is fixed by making it TRUE.
+  false docstring is fixed by making it TRUE. **P1.4 measured the change this
+  makes: 100% of pixels**, on hard-edged input — the preview has not been a
+  drifted version of the device frame, it has been a different picture. Ship
+  that as a stated change, not a silent one.
 - **P3.3** Text → `render_widget` over `render.rs`'s `BitmapFont`; delete
   `_render_text_png`. One bitmap font in the product, not two.
 - **P3.4** A CLASS-level regression test: for EVERY widget kind, the preview
@@ -351,6 +354,12 @@ just re-run the decision that caused it.
 - **Routing to the daemon can expose a WEAKER port.** Verify live before
   deleting any Python twin; a gap found that way is a port bug to fix, never a
   reason to keep the second implementation.
+- **When two renderers disagree, the DEVICE-FACING one wins** (P1.4). Not the
+  newer one and not the more convenient one: the invariant being restored is
+  preview == device, so whatever actually pushes pixels is correct by
+  definition. This does NOT reverse R67's "Python was right every time" —
+  that finding is about WIRE FORMATS and still holds. Rendered CONTENT has a
+  different authority from protocol bytes.
 - **Deleting code moves coverage.** Say the number out loud; a floor lowered
   quietly is a floor that stops meaning anything.
 - **The bundle and the dev tree behave differently.** Every spawn/resolve change
@@ -490,7 +499,7 @@ correct.
 | P1.1 cloud wrappers | **DONE** | `daemon_cloud.py`, 14 wrappers, 22 wire tests; 3 sabotages → 3 red signatures; all 8 round-tripped live on a configured account |
 | P1.2 `render_widget` | **DONE** | kinds sysmon/stocks/album_art; 12 Rust tests. First parity test was BLIND (compared lengths, passed under sabotage) — rewritten to re-render the reply's own stats and compare bytes |
 | P1.3 `_widget_frame` funnel | **DONE** | `widget_frames.py`; sysmon migrated first; 11 tests. Pixel test verified against a REAL pixel change — a 16→16 resize is a no-op and would have looked green |
-| P1.4 parity fixtures | TODO | per-kind bytes vs the Python renderer; disagreements DECIDED, not defaulted |
+| P1.4 parity fixtures | **DONE** | album art: GUI LANCZOS vs device NEAREST differ on **100% of pixels**; daemon proven byte-identical to PIL NEAREST. Flipping the Rust filter turns both tests red |
 | P2.1 five panels | TODO | command on the socket AND no HTTP left the process; revert one panel → red |
 | P2.2 gallery fetch+assets | TODO | same, plus `gallery_download.py` gone |
 | P2.3 hot manifest | TODO | same |
