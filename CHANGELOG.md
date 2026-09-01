@@ -4,7 +4,7 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
-## R73 — three unexposed methods met the hardware; two were broken
+## v0.31.0 — R73: three unexposed methods met the hardware (2026-08-31)
 
 Verified against four real devices, driven through the running daemon.
 

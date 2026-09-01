@@ -127,26 +127,6 @@ def build_checks() -> list[Check]:
             look="the weather face with a plausible temperature for your city",
             method="display.show_weather", args=[],
         ),
-        CallCheck(
-            id="pic_scan", tags=["P2.4"],
-            title="pic_scan_ctrl 0x35 — UNVERIFIED since 2026-07-13",
-            look="ANY change on the panel. The BLE stack has always accepted "
-                 "this command without error and nobody has ever seen it do "
-                 "something. If nothing happens, answer n — that is the finding, "
-                 "and it gets marked unsupported rather than shipped as working",
-            method="drawing.pic_scan_ctrl", args=[0],
-        ),
-        CallCheck(
-            id="clock_rich", tags=["P2.5", "P1.3"],
-            title="set_clock_rich — humidity + weather + date overlays",
-            # R73 hardware: CONFIRMED working, but not as described here. The
-            # device does not draw one combined face -- it CYCLES separate
-            # panels (weather, date, temperature, clock). Text corrected so the
-            # next run is not told to look for the wrong thing and answer n.
-            look="the panel start CYCLING between separate weather, date, "
-                 "temperature and clock screens. Not one combined face",
-            method="display.set_clock_rich", args=[0, True, True, True, True, "#ffffff"],
-        ),
         CommandCheck(
             id="weather_city", tags=["P2.6"],
             title="search_weather_city on the CONFIGURED account",
@@ -194,6 +174,12 @@ def require_daemon(socket_path: str) -> DaemonClient:
         info("no grant and dies on its first scan with SIGABRT and an EMPTY")
         info("stderr — which reads as a product crash and is not one.")
         info("Launch the GUI (it owns the grant), then re-run this.")
+        info("To drive a LOCALLY BUILT daemon, install it into the bundle:")
+        info("  cp target/debug/divoomd \\")
+        info("     dist/Divoom.app/Contents/Resources/bin/divoomd")
+        info("  codesign --force --deep --sign - dist/Divoom.app")
+        info("  open dist/Divoom.app")
+        info("The grant follows com.divoom.control, not the binary (R73).")
         raise SystemExit(2)
     return client
 

@@ -8,41 +8,6 @@ own conversation stores. THIS FILE + git history + CHANGELOG + ROADMAP are the
 shared memory. Read this on entry and **update it at the end of every round**
 (see the core rule in `AGENTS.md`).
 
-## R73 — hardware verdicts on the three unexposed methods (2026-08-31)
-
-Driven through the user's running (TCC-granted) daemon on `/tmp/divoom.sock`
-against four real devices. **Claude cannot start the daemon** — a shell-launched
-one has no Bluetooth grant; the user starts it, Claude drives the socket.
-
-- `set_clock_rich` **works** → wire into the UI. It CYCLES weather/date/
-  temperature/clock panels; it does not draw one combined face.
-- `set_temperature_channel` **deleted** — 0x01 is the Lighting channel, not a
-  temperature channel. Colour bytes shifted by one; white→cyan, red→green,
-  predicted then confirmed.
-- `set_timeplan` **deleted** (GUI only) — fabricated `index` and `channel`
-  parameters, empty animation, `week=0` = never.
-
-`docs/CHANNEL_ARCHITECTURE.md` was corrected: it had asserted the wrong layout
-as CONFIRMED and dismissed a prior sighting of the same cyan screen.
-
-### Scrolling text (R73)
-
-Fully decoded from the APK and implemented in the daemon as
-`text.show_scrolling_text`; NOT wired to the GUI, because the Tivoo-Max does
-not implement the command set (it acks 0x45 and returns nothing for
-0x6E/0x7C/0x86 -- controlled A/B in one `DIVOOMD_BLE_DEBUG` window). The other
-three devices are the same 16x16 class but were not tested; if one of them acks
-0x7C, wiring a button is a small job on top of what is already there.
-
-### Open threads
-
-- **Wire `set_clock_rich` into the UI** — the last allowlist entry.
-- Remaining hardware checks: R12 visual pass, `pic_scan_ctrl` 0x35,
-  `search_weather_city`. Devices left to enumerate: Timoo-light-4
-  (Ditoo-light-2 was out of range).
-- Unchanged from R72: the browser e2e suite fails randomly at normal machine
-  load, which reddens `pre-push` during ordinary work.
-
 ## How to resume
 
 - **opencode**: `opencode -s ses_184471307ffeCUHgzv9w51O0oA` (or `opencode export <id>`).
@@ -56,82 +21,63 @@ three devices are the same 16x16 class but were not tested; if one of them acks
 
 ## Current state — _update this section each round_
 
-- **2026-08-31 — v0.30.0 SHIPPED (R71 + R72).** Tag `a47378e` on a green CI
-  (all five jobs), GitHub release + `Divoom-v0.30.0.dmg`
-  (sha256 `495ac60a...`), cask bumped and verified to carry that exact sha.
-  Verified INSIDE the DMG, not the source tree: both binaries report 0.30.0,
-  the `BUNDLE_VERSION` stamp is present in Resources and Frameworks, no `bleak`
-  ships, no APK/`references` leak, and `divoomd mcp` serves 13 tools.
+- **2026-08-31 — v0.31.0 CUT (R73).** Version bumped across `pyproject.toml`
+  and both crates; CHANGELOG stanza and `docs/release_notes_v0.31.0.md`
+  written. **Not yet tagged or published** — that is the next action, and it is
+  deliberately a separate decision.
 
-  **Released with the three hardware checks still open, deliberately and not
-  quietly.** They verify EXISTING behaviour rather than gate new code, and the
-  CHANGELOG stanza and release notes both say so. `RELEASING.md` step 3 asks for
-  a hardware pass; that debt is named rather than skipped.
+  **The round in one line: three API methods that nothing had ever called were
+  taken to real hardware, and two of them were broken.** The allowlist that
+  excused them is now EMPTY — all 114 shipped API methods have a real caller.
 
-  **Read this first if you are picking the work up:** the two rounds' durable
-  records are `docs/CAPABILITY_MAP.md` (26 census rows, every one with a
-  verdict, plus the F1-F7 closure table) and the CHANGELOG's Unreleased stanza.
-  The ledgers in `docs/ROADMAP.md` are current.
+  * `set_temperature_channel` DELETED. There is no temperature channel; `0x01`
+    is Lighting, so `temp_type` was eaten as the red byte. White rendered cyan,
+    red rendered bright green — both predicted from the layout before testing.
+    `docs/CHANNEL_ARCHITECTURE.md` had recorded that exact cyan screen years
+    earlier and explained it away as device state. It now carries the rule that
+    cost: **a decode is confirmed by the panel, not by concordance between
+    documents.**
+  * `set_timeplan` DELETED (GUI only; the daemon's 0x56/0x57 are faithful
+    ports). It fabricated an `index` the packet has no field for, put `channel`
+    in the `mode` byte, and defaulted `week` to 0 = never.
+  * `set_clock_rich` WORKS and is wired in. It CYCLES separate panels rather
+    than drawing one combined face — `hw_verify.py` had been telling testers to
+    look for the wrong thing.
+  * `sync_time` confirmed: the clock moved 18:41 -> 21:42.
 
-  **The single most useful lesson, earned repeatedly:** the machine-generated
-  half kept being right and the hand-written half kept being wrong. Three
-  allowlist reasons were false. Two of R72's seven findings were misdescribed —
-  F4 was not a duplicate at all (I had cited a docstring recording a FIX as
-  evidence of the defect it repaired), and F5's real problem was an
-  unauthenticated surface that the finding never mentioned. Trust the census;
-  re-read any verdict written by hand.
+  **Two long-standing documents were wrong and are corrected.** The R12 audit
+  said 0x35 had no APK entry; it is `SPP_SCROLL(53)`, and the audit file making
+  the claim had been pruned to git history, so the code cited something nobody
+  could open. And R32's "device-side text is impossible" was the wrong command,
+  not a missing feature — scrolling text is now fully decoded and implemented
+  (see below).
 
-  **Three defects found that nobody was looking for, each worse than the finding
-  that led to it:**
+  **I corrupted `docs/ROADMAP.md` this round and committed it** (373 lines ->
+  370,588). `s[s.index(A):s.index(B)]` with A after B yields `""`, and
+  `str.replace("", new)` inserts between every character. Restored, and gated:
+  `tests/test_no_runaway_file_growth.py` puts a 15,000-line ceiling on all
+  tracked text, because the 500-line structural cap excludes `docs/`.
 
-  * `cloud_store::save_config` rewrote the WHOLE of `config.ini`, destroying
-    `[gui]`, `[gallery]` and weather settings — and required a non-empty
-    password, so an email-only save was impossible, reintroducing a bug the
-    Python side had already fixed. The capability map said "duplicate, move it";
-    following that literally would have caused data loss on the first save.
-  * `sync_time` with no arguments set the device clock to **2000-01-01** and
-    reported success.
-  * The control server's TCP surface was **unauthenticated** —
-    `_authorized()` returned True with no token, handing every GUI API method to
-    any local process. "Bound to 127.0.0.1" was doing the work of an
-    authorisation boundary.
+### Scrolling text — decoded, implemented, daemon-only
 
-  **A pattern that cost three separate fixes, worth not repeating:** a
-  calibration test that asserts a defect still EXISTS passes only while the work
-  is unfinished. Three of them went red the moment the round succeeded.
-  Calibrate against synthetic reproductions; assert the live tree's cleanliness
-  in a separate test.
+`text.show_scrolling_text` ports the APK's full marquee sequence: 0x6E start
+(FIRST — the order is load-bearing), 0x7C glyph packets of 5 characters
+(`[cp_lo, cp_hi, glyph[32]]`), 0x86 string, 0x86 rate. The glyphs come from the
+`divoom_fond16_*` blob the daemon already embeds at 32 bytes each.
 
-  **What is left, and all of it needs you:**
-
-  1. **Three unexposed API methods** — `set_clock_rich`,
-     `set_temperature_channel`, `set_timeplan`. Not dead, not superseded: the
-     daemon implements them and the UI never offers them. Wire-or-delete needs
-     to know whether the hardware renders them.
-  2. **The R12 visual checks** and `pic_scan_ctrl` 0x35.
-
-     Start the GUI (it owns the Bluetooth grant), connect a device, then:
-
-         python3 scripts/hw_verify.py --self-test        # exits 3 = PARTIAL
-         python3 scripts/hw_verify.py --out report.json
-
-     `--self-test` is PARTIAL by design until a device is connected: with none
-     attached the daemon refuses at the precondition before reading the method
-     name, so the invalid-method branch is untested.
-  3. **The browser e2e suite is load-sensitive** and this is the one that should
-     worry you. Two full runs on the same commit failed different,
-     non-overlapping sets of camoufox tests; all pass in isolation. It happens at
-     the machine's NORMAL load, not under artificial stress. R71 P0 made
-     pre-push run the whole CI, so a randomly-red gate teaches `--no-verify`,
-     which is exactly what P0 existed to prevent. Fixing it means measuring
-     browser and daemon startup under controlled load — not raising a timeout by
-     guess.
+**The Tivoo-Max does not implement it.** Controlled A/B in one
+`DIVOOMD_BLE_DEBUG` window: it acked `0x45` and returned nothing for
+`0x6E`/`0x7C`/`0x86`, while the same trace confirmed our bytes were correct —
+a firmware gap, not an encoding bug. No GUI surface, deliberately. The other
+three devices are the same 16x16 class but untested; if one acks `0x7C`,
+wiring a button is small work on top of what exists.
 
 ## Open threads / next up
 
 Three things, and the first two need you at a keyboard with a device.
 
-**1. The hardware packet — six checks, one command.**
+**1. The hardware packet — five checks, one command** (R73 closed and removed
+the `pic_scan` and `clock_rich` entries).
 
     python3 scripts/hw_verify.py --self-test        # calibrate FIRST
     python3 scripts/hw_verify.py --out report.json
@@ -197,6 +143,30 @@ differential: a BLE-linked build dies on the GUI's `scan_devices`, a
 
 `scripts/gui_pov.py` warns when the binary it picked links CoreBluetooth, and
 names TCC as the likely cause if the daemon aborts silently after a scan.
+
+**To drive a LOCALLY BUILT daemon on hardware (verified R73):** the grant
+follows the app bundle (`com.divoom.control`), not the binary, so install into
+the bundle and let the app be the responsible process. Back up the original
+binary first — adhoc signing is deterministic over content, so restoring the
+exact bytes restores the old cdhash and its grant.
+
+```bash
+cargo build --manifest-path divoomd/Cargo.toml
+cp target/debug/divoomd dist/Divoom.app/Contents/Resources/bin/divoomd
+cp target/debug/divoomd dist/Divoom.app/Contents/Frameworks/bin/divoomd
+codesign --force --deep --sign - dist/Divoom.app
+pkill -f Divoom.app; rm -f /tmp/divoom.sock; open dist/Divoom.app
+```
+
+Then drive `/tmp/divoom.sock`. `connect_device(mac=...)` works directly; `scan`
+often reports "already in progress" because the GUI is scanning. For a wire
+trace, `launchctl setenv DIVOOMD_BLE_DEBUG 1` BEFORE `open` (the env has to
+reach a GUI-launched app); the daemon logs to `/private/tmp/divoom_client.log`.
+
+**Reading that trace:** a device ECHOES `basic frame cmd=0xNN` for opcodes its
+firmware implements. A silence proves nothing on its own — an idle window looks
+identical — so always send a known-good command (0x45) first in the SAME window
+and compare.
 
 Watch out: `cargo test` rebuilds `target/debug/divoomd` WITH default features,
 so a BLE-free build does not stay BLE-free across a test run.

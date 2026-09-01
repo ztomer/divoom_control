@@ -525,7 +525,7 @@ dependencies = [
 
 [[package]]
 name = "divoom-menubar"
-version = "0.30.0"
+version = "0.31.0"
 dependencies = [
  "objc2-core-foundation",
  "serde_json",
@@ -535,7 +535,7 @@ dependencies = [
 
 [[package]]
 name = "divoomd"
-version = "0.30.0"
+version = "0.31.0"
 dependencies = [
  "base64 0.23.1",
  "btleplug",
