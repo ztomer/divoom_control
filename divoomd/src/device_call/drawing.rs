@@ -2,14 +2,13 @@
 //! `divoom_lib/display/drawing.py`. Low-level; not used by the GUI/MCP/CLI, ported
 //! verbatim for device_call dispatch parity. Byte orders match Python exactly.
 //!
-//! NOTE: `pic_scan_ctrl` (0x35) has no entry in the decompiled APK's command
-//! table (see docs/PLANNING_ROUND12_D_AUDIT.md); ported to match the Python
-//! lib, which may itself be wrong. Hardware-tested 2026-07-13 on a real
-//! Pixoo-1: both control=0 and control=1 GATT writes ACK cleanly (no
-//! rejection/disconnect), device stays responsive after. Transport-level
-//! confirmation only — ACK != device-confirmed semantic handling (a firmware
-//! can silently ACK-and-drop an unrecognized opcode); no visual on-device
-//! effect was confirmed. List args (offset_list/data/pic_data/image_data)
+//! NOTE (corrected R73): 0x35 DOES have an APK entry — `SPP_SCROLL(53)` in
+//! `SppProc$CMD_TYPE.java`. The earlier note here, inherited from the R12
+//! audit, said it had none; that audit was wrong, and it cited
+//! `docs/PLANNING_ROUND12_D_AUDIT.md`, which no longer exists (pruned to git
+//! history in b64c144 — a dangling citation nobody could check). The command
+//! is real, its sole builder is `CmdManager.b3(mode, speed)`, and our bytes
+//! match it exactly. See the `set_scroll` arm below. List args (offset_list/data/pic_data/image_data)
 //! arrive as JSON arrays in kwargs (or blobs[0] for the big chunk).
 
 use serde_json::{json, Map, Value};
@@ -159,23 +158,50 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
             send(dev, 0x34, &p, "sand_paint_ctrl").await
         }
-        // pic_scan_ctrl (0x35, UNVERIFIED): [control] + MODE_SPEED[mode, speed LE16] / IMAGE_DATA[total_length LE16, pic_id, *data].
-        "drawing.pic_scan_ctrl" | "pic_scan_ctrl" => {
-            let control = i("control", 0);
-            let mut p = vec![control as u8];
-            match control {
-                0 => {
-                    p.push(i("mode", 0) as u8);
-                    p.extend_from_slice(&le16(i("speed", 0)));
+        // 0x35 is SPP_SCROLL(53) in the APK's command table, NOT the missing
+        // opcode the R12 audit reported. Its only builder is CmdManager.b3:
+        //
+        //     b3(int mode, int speed) -> SPP_SCROLL,
+        //         { 0, (byte) mode, (byte)(speed & 255), (byte)((speed >> 8) & 255) }
+        //
+        // Our control=0 arm reproduces those four bytes exactly (control IS the
+        // leading constant 0). Verified on a Tivoo-Max, R73: accepted, no
+        // visible change -- expected, because this SETS THE SCROLL MODE for
+        // content the device is already scrolling, and nothing in this app ever
+        // puts a device into a scrolling state (`push_text` rasterises a STATIC
+        // image; see its docstring). It is not dead and it is not broken; it
+        // has nothing to steer yet. Wire it when scrolling frames land.
+        //
+        // `control=1` ("image data") has NO counterpart anywhere in the APK --
+        // b3 is the only SPP_SCROLL builder. It was invented by the Python lib
+        // along with the `pic_scan_ctrl` name, and is removed here rather than
+        // shipped as a second guess at a command we now have ground truth for.
+        "drawing.set_scroll" | "set_scroll" | "drawing.pic_scan_ctrl" | "pic_scan_ctrl" => {
+            // Refuse an under-specified call instead of defaulting to zeros.
+            // `speed` defaulted to 0 is a no-op packet that still reported
+            // success -- the same dishonesty as the sync_time year-2000 bug
+            // R72 fixed, and it cost two invalid hardware runs this round
+            // before anyone noticed the zeros.
+            let (mode, speed) = match (kw_i64(kw, "mode"), kw_i64(kw, "speed")) {
+                (Some(m), Some(s)) => (m, s),
+                _ => {
+                    return err_reply(
+                        "set_scroll requires both `mode` and `speed`; refusing to \
+                         send a zero-speed no-op and report it as success",
+                    )
                 }
-                1 => {
-                    p.extend_from_slice(&le16(i("total_length", 0)));
-                    p.push(i("pic_id", 0) as u8);
-                    p.extend_from_slice(&data("data"));
+            };
+            if let Some(c) = kw_i64(kw, "control") {
+                if c != 0 {
+                    return err_reply(&format!(
+                        "set_scroll: control={c} has no counterpart in the APK \
+                         (CmdManager.b3 is the only SPP_SCROLL builder); only 0 is real"
+                    ));
                 }
-                _ => return err_reply(&format!("pic_scan_ctrl: unknown control {control}")),
             }
-            send(dev, 0x35, &p, "pic_scan_ctrl").await
+            let mut p = vec![0u8, mode as u8];
+            p.extend_from_slice(&le16(speed));
+            send(dev, 0x35, &p, "set_scroll").await
         }
         _ => err_reply("unimplemented drawing command"),
     }

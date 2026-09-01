@@ -436,6 +436,8 @@ pub async fn handle_device_call(
                 | "drawing_mul_encode_movie_play"
                 | "drawing.sand_paint_ctrl"
                 | "sand_paint_ctrl"
+                | "drawing.set_scroll"
+                | "set_scroll"
                 | "drawing.pic_scan_ctrl"
                 | "pic_scan_ctrl" => drawing::handle(method, ctx).await,
 
