@@ -73,7 +73,11 @@ def test_rejected_command_is_FAIL_even_with_a_device():
     client = FakeClient(status={"connected": True, "mac": "AA:BB"},
                         call_reply={"success": False, "error": "unknown method"})
     results = []
-    checks = [c for c in hw.build_checks() if c.id == "pic_scan"]
+    # Any device-bound check exercises this path. Selected by PROPERTY, not
+    # by id: R73 pruned the two checks these named, and a hardcoded id turns
+    # "the packet shrank" into an IndexError three tests away from the edit.
+    checks = [c for c in hw.build_checks() if c.needs_device][:1]
+    assert checks, "no device-bound checks left in the packet"
     hw.run_packet(client, checks, interactive=False, results=results)
     assert results[0].verdict == hw.FAIL
     assert "unknown method" in results[0].detail
@@ -86,7 +90,11 @@ def test_a_raising_call_is_FAIL_not_a_crash():
 
     client = Boom(status={"connected": True, "mac": "AA:BB"})
     results = []
-    checks = [c for c in hw.build_checks() if c.id == "pic_scan"]
+    # Any device-bound check exercises this path. Selected by PROPERTY, not
+    # by id: R73 pruned the two checks these named, and a hardcoded id turns
+    # "the packet shrank" into an IndexError three tests away from the edit.
+    checks = [c for c in hw.build_checks() if c.needs_device][:1]
+    assert checks, "no device-bound checks left in the packet"
     hw.run_packet(client, checks, interactive=False, results=results)
     assert results[0].verdict == hw.FAIL
     assert "socket closed" in results[0].detail
