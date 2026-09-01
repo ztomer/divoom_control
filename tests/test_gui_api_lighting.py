@@ -16,8 +16,8 @@ class TestLightingApiCoverage(unittest.TestCase):
     """R61 planning item 1 coverage push: LightingApi
     (divoom_gui/api/lighting.py) exception handlers, the text-render
     scaling branches, and the getter/dispatch methods (set_brightness,
-    set_volume, display_wall_image, set_temperature_channel, set_clock_rich,
-    not exercised by the main suite above."""
+    set_volume, display_wall_image, set_clock_rich) not exercised by the
+    main suite above."""
 
     def setUp(self):
         self.presets_patcher = patch("pathlib.Path.exists", return_value=False)
@@ -206,25 +206,6 @@ class TestLightingApiCoverage(unittest.TestCase):
         self.assertFalse(result["success"])
         self.assertIn("error", result)
         self.assertEqual(result["previews"], {})
-
-    # ---- set_temperature_channel: success, exception, no-target --------
-
-    def test_set_temperature_channel_success(self):
-        dev = MagicMock()
-        dev.display.set_temperature_channel = AsyncMock(return_value=True)
-        self.api.current_divoom = dev
-        self.assertTrue(self.api.lighting.set_temperature_channel(celsius=False, color="#00ff00"))
-        dev.display.set_temperature_channel.assert_called_with(celsius=False, color="#00ff00")
-
-    def test_set_temperature_channel_exception(self):
-        dev = MagicMock()
-        dev.display.set_temperature_channel = MagicMock(side_effect=RuntimeError("boom"))
-        self.api.current_divoom = dev
-        self.assertFalse(self.api.lighting.set_temperature_channel())
-
-    def test_set_temperature_channel_no_target(self):
-        self.api.current_divoom = None
-        self.assertFalse(self.api.lighting.set_temperature_channel())
 
     # ---- set_clock_rich: success, exception, no-target ------------------
 

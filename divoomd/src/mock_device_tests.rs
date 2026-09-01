@@ -307,8 +307,6 @@ mod tests {
                 .as_bool()
                 .unwrap()
         );
-        // set_temperature_channel(celsius=false, #ff0000) -> 0x45 [0x01,1,ff,00,00,00]
-        assert!(call(json!({"method":"display.set_temperature_channel","kwargs":{"celsius":false,"color":"#ff0000"}})).await["success"].as_bool().unwrap());
         // switch_channel("design") -> 0x45 [0x05, 0×9]
         assert!(
             call(json!({"method":"display.switch_channel","args":["design"]})).await["success"]
@@ -321,12 +319,15 @@ mod tests {
             panic!("expected Mock")
         };
         let cmds = mock.sent_commands.lock().unwrap();
-        assert_eq!(cmds.len(), 5);
+        // R73: was 5 — the set_temperature_channel frame that used to sit at
+        // index 3 sent `[0x01, temp_type, R, G, B, 0x00]`, which the device
+        // parses as the LIGHTING channel (0x01) with temp_type eaten as red.
+        // Disproven on hardware; command removed. See docs/CHANNEL_ARCHITECTURE.md.
+        assert_eq!(cmds.len(), 4);
         assert_eq!(cmds[0], (0x45, vec![0x03, 0x03, 0, 0, 0, 0, 0, 0, 0, 0]));
         assert_eq!(cmds[1], (0x45, vec![0x04, 0x01, 0, 0, 0, 0, 0, 0, 0, 0]));
         assert_eq!(cmds[2], (0x45, vec![0x06, 0, 0, 0, 0, 0, 0, 0, 0, 0]));
-        assert_eq!(cmds[3], (0x45, vec![0x01, 0x01, 0xFF, 0x00, 0x00, 0x00]));
-        assert_eq!(cmds[4], (0x45, vec![0x05, 0, 0, 0, 0, 0, 0, 0, 0, 0]));
+        assert_eq!(cmds[3], (0x45, vec![0x05, 0, 0, 0, 0, 0, 0, 0, 0, 0]));
     }
 
     /// Animation upload primitives — verify exact wire bytes incl. LE/BE orders

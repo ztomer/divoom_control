@@ -200,12 +200,6 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
         return self.tools.set_low_power(on)
 
 
-    def set_temperature_channel(self, celsius: bool = True, color: str = "#ffffff") -> bool:
-        # Route to LightingApi: it honors `color` and is wall-aware via _dispatch.
-        # The old WidgetsApi version hard-coded white (dropped the user's color) and
-        # only ever targeted the single active device.
-        return self.lighting.set_temperature_channel(celsius, color)
-
     def set_clock_rich(self, style: int = 0, twentyfour: bool = True,
                        humidity: bool = False, weather: bool = False,
                        date: bool = False, color: str = "#ffffff") -> bool:
@@ -219,9 +213,6 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
 
     def set_memorial(self, index, enabled, month, day, hour, minute, title="") -> bool:
         return self.tools.set_memorial(index, enabled, month, day, hour, minute, title)
-
-    def set_timeplan(self, index, enabled, hour, minute, week=0, channel=0) -> bool:
-        return self.tools.set_timeplan(index, enabled, hour, minute, week, channel)
 
     def set_screen_dir(self, direction) -> bool:
         return self.tools.set_screen_dir(direction)

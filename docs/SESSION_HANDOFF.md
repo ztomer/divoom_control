@@ -8,6 +8,32 @@ own conversation stores. THIS FILE + git history + CHANGELOG + ROADMAP are the
 shared memory. Read this on entry and **update it at the end of every round**
 (see the core rule in `AGENTS.md`).
 
+## R73 — hardware verdicts on the three unexposed methods (2026-08-31)
+
+Driven through the user's running (TCC-granted) daemon on `/tmp/divoom.sock`
+against four real devices. **Claude cannot start the daemon** — a shell-launched
+one has no Bluetooth grant; the user starts it, Claude drives the socket.
+
+- `set_clock_rich` **works** → wire into the UI. It CYCLES weather/date/
+  temperature/clock panels; it does not draw one combined face.
+- `set_temperature_channel` **deleted** — 0x01 is the Lighting channel, not a
+  temperature channel. Colour bytes shifted by one; white→cyan, red→green,
+  predicted then confirmed.
+- `set_timeplan` **deleted** (GUI only) — fabricated `index` and `channel`
+  parameters, empty animation, `week=0` = never.
+
+`docs/CHANNEL_ARCHITECTURE.md` was corrected: it had asserted the wrong layout
+as CONFIRMED and dismissed a prior sighting of the same cyan screen.
+
+### Open threads
+
+- **Wire `set_clock_rich` into the UI** — the last allowlist entry.
+- Remaining hardware checks: R12 visual pass, `pic_scan_ctrl` 0x35,
+  `search_weather_city`. Devices left to enumerate: Timoo-light-4
+  (Ditoo-light-2 was out of range).
+- Unchanged from R72: the browser e2e suite fails randomly at normal machine
+  load, which reddens `pre-push` during ordinary work.
+
 ## How to resume
 
 - **opencode**: `opencode -s ses_184471307ffeCUHgzv9w51O0oA` (or `opencode export <id>`).

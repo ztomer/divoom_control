@@ -34,7 +34,7 @@ The first byte of the `0x45` payload selects the channel:
 | ID | APK | hass-divoom | futpib¹ |
 |----|-----|-------------|---------|
 | `0x00` | CLOCK | clock | — |
-| `0x01` | TEMPRETURE | light/temp | Light |
+| `0x01` | ~~TEMPRETURE~~ **LIGHTING** | light | Light — the APK's "TEMPRETURE" name for this byte is wrong for our devices; see the 0x01 section |
 | `0x02` | COLOR_LIGHT | light (TBM/Aurabox) | Hot |
 | `0x03` | SPECIAL_LIGHT | effects | Special |
 | `0x04` | SOUND_LIGHT | visualization | Music |
@@ -115,32 +115,64 @@ Both **hass-divoom** (`divoom.py:533-561`) and **our library** (`divoom_lib/disp
 
 ---
 
-## TEMPRETURE channel — CONFIRMED (APK + hass-divoom agree)
+## TEMPRETURE channel — DISPROVEN ON HARDWARE (R73, 2026-08-31)
 
-The payload is `[0x01, unit, R, G, B, 0x00]`.
+**There is no temperature channel at 0x45/0x01. Byte 0x01 is the LIGHTING
+channel**, and this repo's own `Channel::Lighting = 0x01`
+(`divoomd/src/packets.rs`) says so. The 6-byte payload below was sent to two
+real devices and both parsed it as a lighting command, exactly as that enum
+predicts.
 
-| Offset | APK field | hass-divoom field | Meaning |
-|--------|-----------|-------------------|---------|
-| 0 | `0x01` | `0x01` | TEMPRETURE mode |
-| 1 | `temp_type` | `0x00/0x01` | 0 = Celsius, 1 = Fahrenheit |
-| 2 | `temp_r` | R | Display color Red |
-| 3 | `temp_g` | G | Display color Green |
-| 4 | `temp_b` | B | Display color Blue |
-| 5 | `0x00` | `0x00` | Padding |
+The old text is kept below the evidence because the *way* it was wrong is the
+lesson.
 
-**Confirmed by:**
-- APK: `t2(TEMPRETURE, d, p, q, r)` → `{0x01, d, p, q, r, 0}` (`CmdManager.java:1721`)
-- hass-divoom: `TimeboxMini.show_temperature()` → `[0x01, unit, R, G, B, 0x00]` (`timeboxmini.py:143-152`)
-- hass-divoom: `Aurabox.show_temperature()` → `[0x01]` + separate `set temp unit` (`aurabox.py:176-188`)
-- futpib: `Light{ sub_mode: 1, color, brightness, on }` → `[0x01, sub_mode(0-6), R, G, B, brightness, on, 0, 0, 0]` — **10-byte variant** with brightness/on. Different from APK's 6-byte format.
+### What the devices actually did
 
-**Device variation:** Aurabox/TimeboxMini use `[0x01]` bare (no color/unit). The base Divoom class delegates to `show_clock()` + `set temp type` (0x2B). futpib uses a **10-byte** format with brightness/on bytes.
+`set_temperature_channel` sent `[0x01, temp_type, R, G, B, 0x00]`. The lighting
+parser expects the colour to start at offset 1, so `temp_type` is eaten as RED
+and every following byte shifts down one:
 
-For our Pixoo/Pixoo Max target, the APK's 6-byte `[0x01, unit, R, G, B, 0x00]` is the correct format. The 10-byte variant (from futpib) may also work — try the 6-byte first since it's what the APK uses.
+| Request | Bytes sent | Parsed as lighting | Observed |
+|---------|-----------|--------------------|----------|
+| white, Celsius | `01 00 FF FF FF 00` | r=`00` g=`FF` b=`FF` | **cyan** |
+| red, Fahrenheit | `01 01 FF 00 00 00` | r=`01` g=`FF` b=`00` | **bright green** |
 
-> **Divergence in our library:** `show_temperature()` does **not exist** in `divoom_lib/display/`. Our `Weather.set()` sends 0x5F data only — there is no 0x45 channel switch to TEMPRETURE mode.
-> 
-> **R26 will fix this.** The daemon `api_channels.py` will implement `set_temperature_channel()` using the APK-canonical byte layout: `[0x01, temp_type, R, G, B, 0x00]`. The earlier "cyan screen" with this format was a device-state issue (missing 0x5F data after switch), not a byte-order problem. The APK is ground truth.
+Both predictions were made from the byte layout *before* the test and both
+matched on the panel. A third device went **dark** instead — also predicted, by
+the other documented variant: under futpib's `[0x01, sub_mode, R, G, B,
+brightness, on, ...]` the same shift puts `0x00` in the *brightness* byte.
+
+No temperature is displayed in any case. The command was removed in R73 from
+the GUI, the daemon and `divoom_lib`.
+
+### Why it survived three releases
+
+This section previously read "CONFIRMED (APK + hass-divoom agree)" and closed
+with *"The earlier 'cyan screen' with this format was a device-state issue
+(missing 0x5F data after switch), not a byte-order problem. The APK is ground
+truth."*
+
+**Someone had already seen this exact cyan screen and explained it away.** The
+symptom was recorded, attributed to device state, and the byte order was
+declared correct on the authority of the APK. Two independent sources agreeing
+(APK + hass-divoom) was treated as confirmation — but both describe *other
+device families*: hass-divoom's `show_temperature()` is TimeboxMini/Aurabox,
+which the same section notes use a bare `[0x01]` and a separate 0x2B unit
+command. Agreement between two sources about a different model is not evidence
+about this one.
+
+The rule this earns: **a decode is confirmed by the panel, not by concordance
+between documents.** "CONFIRMED" in this file now requires an observation.
+
+### The class
+
+`set_temperature_channel` and `set_timeplan` (removed in the same round) share
+one failure mode: **a method whose parameters do not correspond to the fields of
+the packet it sends.** Temperature inserted a byte the wire has no room for;
+`set_timeplan` accepted an `index` the 0x56 packet does not carry and put
+`channel` into the `mode` byte. Both were reachable-but-never-called code, and
+both were wrong. Of the three never-called methods audited in R73, two were
+broken — being unexercised was the shared property, not a coincidence.
 
 ---
 
@@ -284,7 +316,7 @@ Our code intentionally deviates from the APK in several places. Each is document
 | # | Area | Our library | APK (canonical) | Impact |
 |---|------|-------------|-----------------|--------|
 | 1 | **CLOCK 10-byte format** | hass-divoom layout: `[0x00, 24h, style, 1, weather, temp, calendar, R, G, B]` | C2() layout: `[0x00, time_type, time_show_mode, ?, humidity, weather, date, R, G, B]` | Different overlays at bytes 4-6. Our format is proven on Pixoo; APK format is canonical for future code. |
-| 2 | **TEMPRETURE channel switch** | **Not implemented.** `Weather.set()` sends 0x5F data only. No 0x45/0x01 channel switch exists. | `t2(TEMPRETURE, temp_type, R, G, B)` → `[0x01, temp_type, R, G, B, 0x00]` (6 bytes, 0x45) | Cannot switch to standalone temperature display mode. R26 will implement using APK canonical format. |
+| 2 | **TEMPRETURE channel switch** | **Correctly absent.** `Weather.set()` sends 0x5F data only. | `[0x01, temp_type, R, G, B, 0x00]` — **disproven on hardware, R73** | Not a divergence. 0x01 is the LIGHTING channel; the APK's layout renders a shifted colour and no temperature. R26 implemented it, R73 removed it. |
 | 3 | **Weather codes** | `WeatherType` enum: {1, 3, 5, 6, 8, 9} — 6-code subset from `node-divoom-timebox-evo`. | `WeatherUtils.returnType()`: 1-18, full OpenWeatherMap mapping with day/night variants. | Our 6 codes should map correctly on target; codes 2, 4, 7, 10-18 are valid but unmapped. |
 | 4 | **Channel constant names** | `CHANNEL_ID_TIME`, `LIGHTNING`, `CLOUD`, `VJ_EFFECTS`, `VISUALIZATION`, `ANIMATION`, `SCOREBOARD` | `CLOCK`, `TEMPRETURE`, `COLOR_LIGHT`, `SPECIAL_LIGHT`, `SOUND_LIGHT`, `SOUND_USER`, `MUSIC` | **Cosmetic only** — byte values (0x00-0x06) are identical. APK names should be preferred in new code for clarity. |
 | 5 | **Command naming** | `"set light mode"` (0x45), `"set temp"` (0x5F) | `SPP_SET_BOX_MODE` (0x45), `SPP_SEND_CUR_NET_TEMP` (0x5F) | **Cosmetic only** — wire bytes are identical. Command names are library-internal. |
@@ -340,7 +372,8 @@ chunk no longer means a permanently failed upload.
 The recommendations below were made when this doc was written and have since shipped:
 
 - **Channel-switch helpers** — `set_clock_rich()` (APK C2() 10-byte format) and
-  `set_temperature_channel()` (6-byte APK format) implemented in daemon RPC (R26).
+  `set_temperature_channel()` (6-byte APK format) was implemented in daemon RPC
+  (R26) and **removed in R73** after hardware disproved the layout.
 - **Command queue** — ring-buffer command queue, since ported to `divoomd/src/command_queue.rs` (R27).
 - **Weather push** — confirmed 0x5F only, channel switch is separate (R26 revert).
 - **`show_clock()` legacy format preserved** — APK C2() added as `set_clock_rich()`;

@@ -134,12 +134,9 @@ class TestGuiApiCoreBasics(GuiApiTestBase):
         """R8: memorial + timeplan pass through with status/have-flag derivation."""
         dev = MagicMock()
         dev.alarm.set_memorial_time = AsyncMock(return_value=True)
-        dev.timeplan.set_time_manage_info = AsyncMock(return_value=True)
         self.api.current_divoom = dev
         self.api.set_memorial(0, True, 12, 25, 9, 0, "Xmas")
         dev.alarm.set_memorial_time.assert_called_with(0, 1, 12, 25, 9, 0, 1, "Xmas")
-        self.api.set_timeplan(1, True, 7, 30, 0b0011111, 0)
-        dev.timeplan.set_time_manage_info.assert_called_with(1, 7, 30, 31, 0, 0, 0, 10, 0)
 
     def test_r72_sync_time_and_auto_off_go_to_the_daemon(self):
         """R72 P1.2/P1.3: these used to build packets through divoom_lib.

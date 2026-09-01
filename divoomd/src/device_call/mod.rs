@@ -187,8 +187,6 @@ pub async fn handle_device_call(
                 | "show_visualization"
                 | "display.show_scoreboard"
                 | "show_scoreboard"
-                | "display.set_temperature_channel"
-                | "set_temperature_channel"
                 | "display.switch_channel"
                 | "switch_channel"
                 | "hot_update.show_hot_channel"

@@ -218,13 +218,6 @@ class ToolsApi(ApiBase):
                                                 int(hour), int(minute), have, str(title)),
             "memorial")
 
-    def set_timeplan(self, index, enabled, hour, minute, week=0, channel=0) -> bool:
-        status = 1 if self._as_bool(enabled) else 0
-        return self._tool_call(
-            lambda d: d.timeplan.set_time_manage_info(status, int(hour), int(minute),
-                                                      int(week), int(channel), 0, 0, 10, 0),
-            "timeplan")
-
     # ── Display orientation + factory reset ──────────────────────────
 
     def set_screen_dir(self, direction) -> bool:

@@ -211,27 +211,6 @@ async def test_weather_set_rejects_out_of_range():
 
 
 @pytest.mark.asyncio
-@pytest.mark.asyncio
-async def test_temperature_channel_switch_apk_format():
-    """R26: Display.set_temperature_channel() sends APK-canonical 0x45."""
-    dev, mock = await _connected_divoom()
-    await dev.display.set_temperature_channel(celsius=True, color="#ffffff")
-    frames = _decoded_frames(mock)
-    cmd = next(f for f in frames if f["command_id"] == models.COMMANDS["set light mode"])
-    assert list(cmd["payload"]) == [0x01, 0x00, 0xFF, 0xFF, 0xFF, 0x00]
-
-
-@pytest.mark.asyncio
-async def test_temperature_channel_fahrenheit_red():
-    """R26: Fahrenheit + red produce correct bytes."""
-    dev, mock = await _connected_divoom()
-    await dev.display.set_temperature_channel(celsius=False, color="#FF0000")
-    frames = _decoded_frames(mock)
-    cmd = next(f for f in frames if f["command_id"] == models.COMMANDS["set light mode"])
-    assert list(cmd["payload"]) == [0x01, 0x01, 0xFF, 0x00, 0x00, 0x00]
-
-
-@pytest.mark.asyncio
 async def test_clock_rich_apk_format():
     """R26: Display.set_clock_rich() sends APK C2() 0x45."""
     dev, mock = await _connected_divoom()

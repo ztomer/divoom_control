@@ -89,10 +89,6 @@ class TestGuiApiTopLevelCoverage(unittest.TestCase):
         self.assertTrue(self.api.switch_channel("clock"))
         self.api.lighting.switch_channel.assert_called_with("clock")
 
-        self.api.lighting.set_temperature_channel.return_value = True
-        self.assertTrue(self.api.set_temperature_channel(celsius=False, color="#ABCDEF"))
-        self.api.lighting.set_temperature_channel.assert_called_with(False, "#ABCDEF")
-
         self.api.lighting.set_clock_rich.return_value = True
         self.assertTrue(self.api.set_clock_rich(style=1))
 

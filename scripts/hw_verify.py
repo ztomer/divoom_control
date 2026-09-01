@@ -139,24 +139,13 @@ def build_checks() -> list[Check]:
         CallCheck(
             id="clock_rich", tags=["P2.5", "P1.3"],
             title="set_clock_rich — humidity + weather + date overlays",
-            look="a clock face that ALSO shows humidity, weather and the date. "
-                 "The wired set_clock cannot do this; if the device ignores the "
-                 "extras, the method is worth deleting rather than wiring",
+            # R73 hardware: CONFIRMED working, but not as described here. The
+            # device does not draw one combined face -- it CYCLES separate
+            # panels (weather, date, temperature, clock). Text corrected so the
+            # next run is not told to look for the wrong thing and answer n.
+            look="the panel start CYCLING between separate weather, date, "
+                 "temperature and clock screens. Not one combined face",
             method="display.set_clock_rich", args=[0, True, True, True, True, "#ffffff"],
-        ),
-        CallCheck(
-            id="temp_channel", tags=["P2.5", "P1.3"],
-            title="set_temperature_channel — a channel the UI never offers",
-            look="the device switching to its temperature display, in Celsius",
-            method="display.set_temperature_channel", args=[True, "#ffffff"],
-        ),
-        CallCheck(
-            id="timeplan", tags=["P2.5", "P1.3"],
-            title="set_timeplan — scheduled channel switch",
-            look="nothing immediately. Set it a minute ahead and confirm the "
-                 "device switches channel ON ITS OWN when that minute arrives",
-            method="timeplan.set_time_manage_info", args=[1, 0, 0, 0, 0, 0, 0, 10, 0],
-            settle=2.0,
         ),
         CommandCheck(
             id="weather_city", tags=["P2.6"],

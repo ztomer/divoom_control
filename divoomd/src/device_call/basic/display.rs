@@ -238,25 +238,6 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 Err(e) => err_reply(&format!("display.show_scoreboard failed: {e}")),
             }
         }
-        // Temperature channel: 0x45 [0x01, temp_type, r, g, b, 0x00] (Python set_temperature_channel).
-        "display.set_temperature_channel" | "set_temperature_channel" => {
-            let celsius = kw
-                .and_then(|v| v.get("celsius"))
-                .and_then(|v| v.as_bool())
-                .unwrap_or(true);
-            let [r, g, b] = kw
-                .and_then(|v| v.get("color"))
-                .and_then(|v| v.as_str())
-                .and_then(parse_hex_color)
-                .or_else(|| color_from_arg(raw_args, kw))
-                .unwrap_or([0xFF, 0xFF, 0xFF]);
-            let temp_type = if celsius { 0u8 } else { 1u8 };
-            let payload = [0x01u8, temp_type, r, g, b, 0x00];
-            match dev.send_command(0x45, &payload, true).await {
-                Ok(()) => json!({"success": true, "result": true}),
-                Err(e) => err_reply(&format!("display.set_temperature_channel failed: {e}")),
-            }
-        }
         // Channel switch by name → the matching 0x45 channel payload (Python switch_channel).
         "display.switch_channel" | "switch_channel" => {
             let channel = raw_args

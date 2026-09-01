@@ -274,12 +274,29 @@ Closed entries pruned to git history (`Cloud browse cannot say WHY it is empty`,
 closed by R70; `Cloud/ToDevice`, closed WONTFIX by R71 P4). What is left is
 exactly the work `scripts/hw_verify.py` was written to collect:
 
-- **Three UNEXPOSED API methods** — `set_clock_rich` (the wired `set_clock`
-  cannot do humidity / weather / date overlays), `set_temperature_channel` (the
-  daemon implements it, the UI never offers that channel), `set_timeplan` (no UI
-  reference in any commit). Not dead and not superseded; wire-or-delete depends
-  on whether the hardware renders them. They are the last three entries in
-  `check_gui_api_reachable.py`'s allowlist.
+- **~~Three UNEXPOSED API methods~~ — RESOLVED on hardware, R73 (2026-08-31).**
+  Two of the three were broken; being never-called was the shared property, not
+  a coincidence.
+  - `set_clock_rich` — **WORKS. Wire it.** It does not draw one combined face
+    as assumed: it makes the panel CYCLE separate weather / date / temperature /
+    clock screens. Still the only allowlist entry left.
+  - `set_temperature_channel` — **DELETED.** There is no temperature channel;
+    `0x01` is LIGHTING (this repo's own `Channel::Lighting`). The payload put
+    `temp_type` in the red byte, shifting the colour: white rendered cyan, red
+    rendered bright green, both predicted from the layout before the test and
+    both confirmed on the panel. `docs/CHANNEL_ARCHITECTURE.md` had recorded
+    this exact cyan screen years earlier and explained it away as "a
+    device-state issue... the APK is ground truth". Doc corrected.
+  - `set_timeplan` — **DELETED.** Four defects: `index` accepted and silently
+    discarded (the 0x56 packet carries no index), `channel` written into the
+    `mode` byte (no channel field exists), `type` hardcoded to 0 = Animation
+    with an empty animation, and `week=0` meaning no days. Never fired on
+    hardware. The daemon primitives 0x56/0x57 are faithful ports of the
+    reference and were kept.
+
+  **Class:** *a method whose parameters do not correspond to the fields of the
+  packet it sends.* Both instances were reachable-but-uncalled code.
+
 - **`sync_time` on hardware.** R72 routed it to the daemon and the Python path
   it replaced was BROKEN — an `AttributeError` swallowed into a silent `False`.
   "It returns True now" proves nothing; the device's clock has to be seen to
@@ -292,7 +309,7 @@ exactly the work `scripts/hw_verify.py` was written to collect:
 - **`search_weather_city` success path** — the pre-release check ran under a
   throwaway HOME and proved only the `UserNewGuest RC=10` error branch.
 
-All six are checks in the packet:
+The remaining four are checks in the packet:
 
     python3 scripts/hw_verify.py --self-test        # calibrate first
     python3 scripts/hw_verify.py --out report.json

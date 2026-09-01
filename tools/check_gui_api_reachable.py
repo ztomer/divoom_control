@@ -58,8 +58,6 @@ ALLOWLIST: dict[str, str] = {
     # UI lost its wiring, the method is a leftover, or it is reached some way
     # this gate cannot see.
     "set_clock_rich": "unreviewed — richer clock variant",
-    "set_temperature_channel": "unreviewed — channel switch",
-    "set_timeplan": "unreviewed — time-plan tool",
 }
 
 

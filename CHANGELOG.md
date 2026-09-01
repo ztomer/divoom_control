@@ -4,6 +4,65 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## R73 — three unexposed methods met the hardware; two were broken
+
+Verified against four real devices, driven through the running daemon.
+
+### Removed
+
+- **`set_temperature_channel`** (GUI, daemon, `divoom_lib`, and the two tests
+  that pinned its payload). There is no temperature channel: `0x45`/`0x01` is
+  the **Lighting** channel, as this repo's own `Channel::Lighting = 0x01`
+  states. The 6-byte APK layout `[0x01, temp_type, R, G, B, 0x00]` puts
+  `temp_type` where the parser expects RED, shifting every colour byte down
+  one. Predicted before testing, confirmed on the panel:
+
+  | Requested | Sent | Parsed as | Seen |
+  |---|---|---|---|
+  | white, Celsius | `01 00 FF FF FF 00` | r=00 g=FF b=FF | cyan |
+  | red, Fahrenheit | `01 01 FF 00 00 00` | r=01 g=FF b=00 | bright green |
+
+  A third device went dark — also predicted, by the other documented variant
+  (futpib's), where the same shift lands `0x00` in the brightness byte.
+
+- **`set_timeplan`** (GUI only; the daemon's 0x56/0x57 primitives are faithful
+  ports and were kept). Four defects: `index` accepted and discarded (the
+  packet has no index field), `channel` written into the `mode` byte, `type`
+  hardcoded to Animation with an empty animation, and a `week=0` default
+  meaning "no days". It never fired.
+
+### Fixed
+
+- **`docs/CHANNEL_ARCHITECTURE.md` asserted the wrong layout as CONFIRMED.**
+  It closed with *"The earlier 'cyan screen' with this format was a
+  device-state issue... The APK is ground truth."* Someone had already seen
+  this exact symptom and explained it away. Two sources "agreeing" (APK +
+  hass-divoom) were treated as confirmation, but hass-divoom's
+  `show_temperature()` describes TimeboxMini/Aurabox — agreement about a
+  different device family is not evidence about this one.
+
+  The rule this earns, now written into that file: **a decode is confirmed by
+  the panel, not by concordance between documents.**
+
+- `hw_verify.py`'s `set_clock_rich` instruction described one combined face.
+  The device actually CYCLES separate weather / date / temperature / clock
+  panels — a run following the old text would have answered "no" to a working
+  command.
+
+### Confirmed working
+
+- **`set_clock_rich`** — cycles the four panels. Now the only entry left in
+  `check_gui_api_reachable.py`'s allowlist; it needs UI wiring, not deletion.
+- **`sync_time`** — the device clock moved 18:41 → 21:42. R72 routed this to
+  the daemon over a Python path that was silently returning False.
+
+### The class
+
+*A method whose parameters do not correspond to the fields of the packet it
+sends.* Both broken methods were reachable-but-never-called; of the three
+uncalled methods audited, two were wrong. Being unexercised was the shared
+property.
+
 ## v0.30.0 — R71 + R72: the gates got real (2026-08-31)
 
 Two rounds in one release. Full local CI green (20/20). **The three
