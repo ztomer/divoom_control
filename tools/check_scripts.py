@@ -125,11 +125,52 @@ def check_module_refs(failures: list[str]) -> None:
                         f"exist in this repo")
 
 
+def check_api_method_refs(failures: list[str]) -> None:
+    """A script that drives the GUI API BY NAME must name methods that exist.
+
+    R72 close-out found `scripts/validate_devices.py` still calling
+    `apply_system_stats`, which R71 deleted. The script dispatches by string, so
+    a removed method is not an import error or a syntax error -- it is a
+    guaranteed runtime failure that nothing notices until somebody runs the
+    script against real hardware, which is the most expensive place to find it.
+
+    HONEST SCOPE: this understands ONE dispatch shape, `step(label, "method",
+    ...)`, because that is the only by-name driver in `scripts/` today. It is
+    not a general "does this string name an API method" check -- there is no way
+    to write that without guessing at every string in the tree. A second
+    by-name driver would need its own pattern here.
+    """
+    try:
+        sys.path.insert(0, str(REPO))
+        from divoom_gui.gui_api import DivoomGuiAPI
+    except Exception:
+        return  # GUI deps absent (the dependency-free CI job); nothing to say
+    have = {m for m in dir(DivoomGuiAPI) if not m.startswith("_")}
+    for path in tracked_scripts():
+        if path.suffix != ".py":
+            continue
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8", errors="ignore"))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                    and node.func.id == "step" and len(node.args) >= 2
+                    and isinstance(node.args[1], ast.Constant)
+                    and isinstance(node.args[1].value, str)):
+                name = node.args[1].value
+                if name not in have:
+                    failures.append(
+                        f"{path.relative_to(REPO)}:{node.lineno}: drives "
+                        f"DivoomGuiAPI.{name}(), which does not exist")
+
+
 def main() -> int:
     failures: list[str] = []
     check_shell(failures)
     check_python(failures)
     check_module_refs(failures)
+    check_api_method_refs(failures)
 
     n = len(tracked_scripts())
     if failures:
@@ -137,7 +178,7 @@ def main() -> int:
         for f in failures:
             info(f)
         return 1
-    ok(f"[scripts] OK — {n} scripts parse, lint, and reference live modules")
+    ok(f"[scripts] OK — {n} scripts parse, lint, and reference live modules and API methods")
     return 0
 
 

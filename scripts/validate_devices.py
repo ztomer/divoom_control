@@ -254,7 +254,14 @@ async def validate_via_server(address, name, dwell, quick, conn):
     for n in (range(0, 16, 2) if quick else range(16)):
         step(f"viz {n}", "set_visualization", n); time.sleep(dwell)
     step("image: ticker", "apply_stock_ticker", "BTC-USD"); time.sleep(dwell + 1)
-    step("image: sysmon", "apply_system_stats"); time.sleep(dwell + 1)
+    # R71 deleted `apply_system_stats` -- the one-shot sysmon push lost its JS
+    # caller in R40 and the live job superseded it. This script dispatches BY
+    # NAME, so the call had become a guaranteed runtime failure that nothing
+    # would catch until someone ran it against real hardware. Toggle the live
+    # job on, let it draw, toggle it off.
+    step("image: sysmon (live, on)", "toggle_sysmon_sync", True)
+    time.sleep(dwell + 1)
+    step("image: sysmon (live, off)", "toggle_sysmon_sync", False)
     return entry
 
 
