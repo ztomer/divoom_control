@@ -5,6 +5,7 @@ use std::time::Duration;
 use crate::daemon::{Daemon, DeviceTransport};
 
 mod coordinator;
+pub mod font;
 mod health;
 /// macOS-only: it reads now-playing through the `nowplaying` crate, which is
 /// itself a macOS-only dependency of this crate (MediaRemote does not exist

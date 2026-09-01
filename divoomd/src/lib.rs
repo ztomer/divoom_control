@@ -47,6 +47,7 @@ pub mod mcp_tools;
 pub mod media;
 pub mod mock_device_tests;
 pub mod mock_scroll_tests;
+pub mod mock_scrolling_text_tests;
 pub mod mock_transport;
 pub mod models;
 pub mod monthly_best;

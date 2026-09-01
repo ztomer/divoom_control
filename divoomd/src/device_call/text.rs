@@ -2,7 +2,111 @@ use super::CallCtx;
 use crate::protocol::err_reply;
 use serde_json::{json, Value};
 
+/// Scrolling marquee text, ported from the APK's own sequence.
+///
+/// **R73.** The device has no font for arbitrary strings, which is why
+/// `push_text` rasterises a static PNG instead: 0x87
+/// (`SPP_LIEGHT_PHONE_GIF32_WORD_ATTR`) never rendered on these panels, and the
+/// conclusion drawn at the time was that device-side text was a dead end. It
+/// was not — it just needs the glyphs uploaded first. `CmdManager` does four
+/// things, in this order:
+///
+/// 1. `SPP_LED_UPDATE_FONT_INFO` (0x7C), one packet per **5 characters**:
+///    `[total_chars, start_index, count]` then per char
+///    `[cp_lo, cp_hi, glyph[32]]` — the UTF-16LE code unit followed by its
+///    raw 16x16 1bpp bitmap.
+/// 2. `SPP_SEND_LED_WORD_CMD` (0x86) sub 1: `[1, char_count, UTF-16LE bytes]`.
+/// 3. `SPP_SEND_LED_WORD_CMD` (0x86) sub 0: `[0, rate]`.
+/// 4. `SPP_DRAWING_CTRL_MOVIE_PLAY` (0x6E): `[1]` to start it.
+///
+/// The glyphs come from the same `divoom_fond16_*` blob family the APK ships
+/// and this daemon already embeds, so the bytes are reused verbatim.
+async fn scrolling_text(ctx: &CallCtx<'_>) -> Value {
+    use crate::live_jobs::render::device_glyph_bytes;
+
+    let dev = ctx.dev;
+    let kw = ctx.kwargs;
+    let text = match kw
+        .and_then(|v| v.get("text"))
+        .and_then(|v| v.as_str())
+        .filter(|t| !t.trim().is_empty())
+    {
+        Some(t) => t,
+        None => return err_reply("show_scrolling_text requires a non-empty `text`"),
+    };
+
+    // UTF-16LE code units, which is both what the device is sent and what the
+    // glyph table is keyed by. Chars outside the BMP would need surrogate
+    // handling the APK does not do either, so they are refused rather than
+    // silently mangled into two bogus glyphs.
+    let units: Vec<u16> = text.encode_utf16().collect();
+    if text.chars().any(|c| (c as u32) > 0xFFFF) {
+        return err_reply("show_scrolling_text: characters outside the BMP are not supported");
+    }
+    if units.len() > 255 {
+        return err_reply(&format!(
+            "show_scrolling_text: {} characters exceeds the 255 the length byte can carry",
+            units.len()
+        ));
+    }
+    let rate = kw
+        .and_then(|v| v.get("rate"))
+        .and_then(|v| v.as_i64())
+        .unwrap_or(50)
+        .clamp(1, 255) as u8;
+
+    // 1. glyph upload, 5 characters per packet
+    let total = units.len() as u8;
+    for (chunk_idx, chunk) in units.chunks(5).enumerate() {
+        let mut p = Vec::with_capacity(3 + chunk.len() * 34);
+        p.push(total);
+        p.push((chunk_idx * 5) as u8);
+        p.push(chunk.len() as u8);
+        for &u in chunk {
+            p.push((u & 0xFF) as u8);
+            p.push((u >> 8) as u8);
+            match device_glyph_bytes(u as u32) {
+                Some(g) => p.extend_from_slice(g),
+                None => return err_reply("show_scrolling_text: the font blob has no usable glyph"),
+            }
+        }
+        if let Err(e) = dev.send_command(0x7C, &p, true).await {
+            return err_reply(&format!("show_scrolling_text: glyph upload failed: {e}"));
+        }
+    }
+
+    // 2. the string itself
+    let mut p = Vec::with_capacity(2 + units.len() * 2);
+    p.push(1u8);
+    p.push(total);
+    for &u in &units {
+        p.push((u & 0xFF) as u8);
+        p.push((u >> 8) as u8);
+    }
+    if let Err(e) = dev.send_command(0x86, &p, true).await {
+        return err_reply(&format!(
+            "show_scrolling_text: sending the text failed: {e}"
+        ));
+    }
+
+    // 3. rate, then 4. start
+    if let Err(e) = dev.send_command(0x86, &[0u8, rate], true).await {
+        return err_reply(&format!(
+            "show_scrolling_text: setting the rate failed: {e}"
+        ));
+    }
+    if let Err(e) = dev.send_command(0x6E, &[1u8], true).await {
+        return err_reply(&format!(
+            "show_scrolling_text: starting playback failed: {e}"
+        ));
+    }
+    json!({"success": true, "result": true, "characters": units.len(), "rate": rate})
+}
+
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
+    if method.ends_with("show_scrolling_text") || method.ends_with("scrolling_text") {
+        return scrolling_text(&ctx).await;
+    }
     let dev = ctx.dev;
     let args = ctx.args;
     let raw_args = ctx.raw_args;
