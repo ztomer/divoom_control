@@ -25,6 +25,15 @@ one has no Bluetooth grant; the user starts it, Claude drives the socket.
 `docs/CHANNEL_ARCHITECTURE.md` was corrected: it had asserted the wrong layout
 as CONFIRMED and dismissed a prior sighting of the same cyan screen.
 
+### Scrolling text (R73)
+
+Fully decoded from the APK and implemented in the daemon as
+`text.show_scrolling_text`; NOT wired to the GUI, because the Tivoo-Max does
+not implement the command set (it acks 0x45 and returns nothing for
+0x6E/0x7C/0x86 -- controlled A/B in one `DIVOOMD_BLE_DEBUG` window). The other
+three devices are the same 16x16 class but were not tested; if one of them acks
+0x7C, wiring a button is a small job on top of what is already there.
+
 ### Open threads
 
 - **Wire `set_clock_rich` into the UI** — the last allowlist entry.

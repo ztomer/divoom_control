@@ -92,6 +92,37 @@ builder), and the handler no longer defaults `mode`/`speed` to 0 and reports
 success -- a zero-speed no-op that cost two invalid hardware runs before the
 zeros were noticed.
 
+### Scrolling text: decoded, implemented, and not supported by the hardware
+
+The APK does have it, and 0x87 -- the command R32 tried before concluding
+device-side text was impossible -- was simply the wrong one. The device has no
+font, so `CmdManager` uploads the glyphs first: start (0x6E), glyphs (0x7C, 5
+characters per packet, each `[cp_lo, cp_hi, glyph[32]]`), the string (0x86 sub
+1), then the rate (0x86 sub 0). The order is not the intuitive one and the
+start must come FIRST.
+
+The daemon implements the whole sequence and the bytes were verified correct on
+the wire. The Tivoo-Max does not implement it. A controlled A/B against a
+known-good command, in one window:
+
+    tx cmd=0x45 (show_light)  ->  basic frame cmd=0x45     <- device acks
+    tx cmd=0x6e               ->  (nothing)
+    tx cmd=0x7c               ->  (nothing)
+    tx cmd=0x86  x2           ->  (nothing)
+
+**Two wrong answers were nearly recorded before that trace.** The first was
+mine: I read an obfuscated APK gate (`w2()`, true when a canvas dimension is 1)
+as "this feature is only for 1xN strip displays" and was ready to delete the
+work on that basis. The user pointed out you cannot render a font on a
+one-pixel strip, which is obviously right and killed the reading. The second
+was the bare absence of replies -- a window with no traffic at all looks
+identical, so absence only means something placed next to a reply that DID
+arrive.
+
+Kept in the daemon with tests and no GUI surface: the decode is complete and
+another model may implement it, but only the Tivoo-Max was reachable. Shipping
+a button for it would be exactly the dead control this round exists to remove.
+
 ### The class
 
 *A method whose parameters do not correspond to the fields of the packet it

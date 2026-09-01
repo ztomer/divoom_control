@@ -69,25 +69,6 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // R73 — scroll the text ON the device (marquee), as opposed to the button
-    // above which uploads a static bitmap. This is the only one of the two for
-    // which the Speed slider does anything, so the label says so.
-    const scrollTextBtn = document.getElementById("scroll-text-btn");
-    if (scrollTextBtn) {
-        scrollTextBtn.addEventListener("click", () => {
-            const text = (document.getElementById("text-content-input")?.value || "").trim();
-            if (!text) { window.showToast("Enter some text first", "error"); return; }
-            if (!window.requireDevice()) return;
-            const speed = parseInt(document.getElementById("text-speed-input")?.value) || 50;
-            if (!window.pywebview?.api?.show_scrolling_text) return;
-            window.pywebview.api.show_scrolling_text(text, speed).then(res => {
-                window.showToast(res ? "Scrolling on device" : "Failed to start scrolling text",
-                                 res ? "success" : "error", " BLE");
-                if (res && window.setDeviceActivity) window.setDeviceActivity(window._activeDeviceMac(), "text");
-            });
-        });
-    }
-
     // P2.4 — Danmaku overlay. Reuses the text + colour inputs above rather than
     // growing a second set: it is a different DELIVERY mechanism (the device's
     // own overlay layer, drawn over whatever channel is showing) for the same

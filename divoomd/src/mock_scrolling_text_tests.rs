@@ -47,8 +47,12 @@ mod tests {
         assert_eq!(res["characters"].as_i64().unwrap(), 7);
 
         let cmds = sent(&d).await;
-        // 7 chars -> two glyph packets (5 + 2), then text, rate, start.
+        // start, then two glyph packets (5 + 2), then text, then rate.
+        // The ORDER is load-bearing: CmdManager.G() sends f1(true) BEFORE the
+        // content, and sending it last renders nothing on real hardware.
         assert_eq!(cmds.len(), 5, "{cmds:?}");
+        assert_eq!(cmds[0], (0x6E, vec![1]), "playback must start FIRST");
+        let cmds = cmds[1..].to_vec();
 
         // -- packet 1: [total=7, start=0, count=5] + 5 * 34 bytes
         let (id, ref p) = cmds[0];
@@ -73,9 +77,8 @@ mod tests {
         assert_eq!(&p[2..6], &[0x41, 0x00, 0x42, 0x00]); // "AB"
         assert_eq!(p.len(), 2 + 7 * 2);
 
-        // -- rate, then start
+        // -- rate last
         assert_eq!(cmds[3], (0x86, vec![0, 40]));
-        assert_eq!(cmds[4], (0x6E, vec![1]));
     }
 
     #[tokio::test]

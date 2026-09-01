@@ -108,22 +108,3 @@ def test_the_gate_would_catch_a_renamed_id():
     assert "clock-rich-weather" in have
     assert "clock-rich-weatherr" not in have, "typo-id unexpectedly defined"
 
-
-def test_the_scrolling_text_button_is_wired_end_to_end():
-    """R73's marquee path, pinned like the clock-rich controls above.
-
-    `push_text` and `show_scrolling_text` are genuinely different mechanisms --
-    a static uploaded bitmap versus glyphs the device animates itself -- and the
-    Speed slider only means anything for the second. If the button or its
-    handler is dropped, the slider silently goes back to being decorative, with
-    no error anywhere.
-    """
-    html = (UI / "index.html").read_text(encoding="utf-8")
-    js = (UI / "channels_core.js").read_text(encoding="utf-8")
-
-    assert 'id="scroll-text-btn"' in html, "the Scroll on Device button is gone"
-    assert "scroll-text-btn" in js, "nothing reads the Scroll on Device button"
-    assert "show_scrolling_text(" in js, "the marquee API call is gone"
-    assert "text-speed-input" in js, (
-        "the scroll handler no longer reads Speed -- that slider is only "
-        "meaningful for this path")

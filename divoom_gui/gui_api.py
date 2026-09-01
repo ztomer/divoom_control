@@ -152,9 +152,6 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
     def set_visualization(self, number: int) -> bool:
         return self.lighting.set_visualization(number)
 
-    def show_scrolling_text(self, text: str, rate: int = 50) -> bool:
-        return self.lighting.show_scrolling_text(text, rate)
-
     def push_text(self, text: str, color: str = "#FFFFFF", font_size: int = 1,
                   speed: int = 50, effect_style: int = 1) -> bool:
         return self.lighting.push_text(text, color, font_size, speed, effect_style)

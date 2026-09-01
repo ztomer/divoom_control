@@ -77,29 +77,6 @@ class LightingApi(ApiBase, WidgetFrameMixin):
             logger.error(f"Visualizer failed: {e}")
             return False
 
-    def show_scrolling_text(self, text: str, rate: int = 50) -> bool:
-        """Scroll the text ON the device, via the APK's own marquee sequence.
-
-        R73. Distinct from `push_text`, which rasterises a STATIC image: this
-        uploads the glyphs the panel needs (it has no font of its own) and then
-        hands it the string, so the device animates it and long strings are no
-        longer clipped to whatever fits one frame.
-
-        The daemon owns the whole four-command sequence; see
-        `divoomd/src/device_call/text.rs`. R32 concluded device-side text was
-        impossible after 0x87 rendered nothing — it was the wrong command, not
-        an unsupported feature.
-        """
-        logger.info(f"GUI Action: scrolling text on device (rate={rate})...")
-        try:
-            if not text or not str(text).strip():
-                return False
-            return self._dispatch(
-                lambda t: t.text.show_scrolling_text(text=str(text), rate=int(rate)))
-        except Exception as e:
-            logger.error(f"Scrolling text failed: {e}")
-            return False
-
     def push_text(self, text: str, color: str = "#FFFFFF", font_size: int = 1,
                   speed: int = 50, effect_style: int = 1) -> bool:
         """Render the text on the DAEMON and push it as an image.

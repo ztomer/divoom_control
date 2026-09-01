@@ -419,15 +419,6 @@
                                         </div>
                                     </div>
                                     <button id="push-text-btn" class="glow-btn" style="margin-top:16px; width:100%;">Push to Device</button>
-                                    <!-- R73: the marquee path. "Push to Device" renders a STATIC
-                                         bitmap and uploads it, so the Speed slider above does
-                                         nothing for it and long strings are clipped to one frame.
-                                         This one uploads the glyphs the panel needs (it has no
-                                         font of its own) and lets the DEVICE animate the string,
-                                         which is what makes Speed mean something. Ported from the
-                                         APK's own four-command sequence; see
-                                         divoomd/src/device_call/text.rs. -->
-                                    <button id="scroll-text-btn" class="glow-btn" style="margin-top:8px; width:100%;">Scroll on Device <span style="opacity:.65; font-weight:400;">(honours Speed)</span></button>
                                     <!-- P2.4: Danmaku is the device's OWN overlay layer, drawn
                                          over whatever channel is showing — a different mechanism
                                          from the button above, which renders a bitmap and uploads

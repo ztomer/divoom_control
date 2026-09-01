@@ -11,13 +11,44 @@ use serde_json::{json, Value};
 /// was not — it just needs the glyphs uploaded first. `CmdManager` does four
 /// things, in this order:
 ///
+/// 0. `SPP_DRAWING_CTRL_MOVIE_PLAY` (0x6E): `[1]` — start playback.
 /// 1. `SPP_LED_UPDATE_FONT_INFO` (0x7C), one packet per **5 characters**:
 ///    `[total_chars, start_index, count]` then per char
 ///    `[cp_lo, cp_hi, glyph[32]]` — the UTF-16LE code unit followed by its
 ///    raw 16x16 1bpp bitmap.
 /// 2. `SPP_SEND_LED_WORD_CMD` (0x86) sub 1: `[1, char_count, UTF-16LE bytes]`.
-/// 3. `SPP_SEND_LED_WORD_CMD` (0x86) sub 0: `[0, rate]`.
-/// 4. `SPP_DRAWING_CTRL_MOVIE_PLAY` (0x6E): `[1]` to start it.
+/// 4. `SPP_SEND_LED_WORD_CMD` (0x86) sub 0: `[0, rate]`.
+///
+/// **The order is load-bearing and not the intuitive one.** `f1(true)` (0x6E,
+/// `SPP_DRAWING_CTRL_MOVIE_PLAY`) goes FIRST, before any content, and the rate
+/// goes LAST. This shipped the readable way round -- content, then rate, then
+/// start -- and a real Tivoo-Max displayed nothing at all: the panel enters
+/// marquee mode after the string it was handed has already been consumed.
+///
+/// **Not supported by the Tivoo-Max, proven on the wire (R73).** Encoded
+/// exactly as above and sent to a real device with `DIVOOMD_BLE_DEBUG`, in one
+/// controlled window against a known-good command:
+///
+/// ```text
+/// tx cmd=0x45 (show_light)  ->  basic frame cmd=0x45     <- device acks
+/// tx cmd=0x6e               ->  (nothing)
+/// tx cmd=0x7c               ->  (nothing)
+/// tx cmd=0x86  x2           ->  (nothing)
+/// ```
+///
+/// The panel acks a command it implements and returns NOTHING for these, so
+/// its firmware does not carry the LED-word command set. The A/B matters: an
+/// earlier run showed no RX either, but so did a window with no traffic at all
+/// -- absence of a reply only means something next to a reply that did arrive.
+///
+/// The bytes on the wire were verified correct in that same trace (`0x7c` =
+/// `02 00 02` then `48 00` for 'H' and its glyph; `0x86` = `01 02 48 00 49 00`
+/// for "HI"), so this is a firmware gap, not an encoding bug.
+///
+/// Kept, with no GUI surface, because the decode is complete and correct and
+/// another model may well implement it -- only the Tivoo-Max was reachable.
+/// Do NOT wire a button to it without retesting: a control that does nothing
+/// is what R73 spent its length removing.
 ///
 /// The glyphs come from the same `divoom_fond16_*` blob family the APK ships
 /// and this daemon already embeds, so the bytes are reused verbatim.
@@ -55,6 +86,17 @@ async fn scrolling_text(ctx: &CallCtx<'_>) -> Value {
         .unwrap_or(50)
         .clamp(1, 255) as u8;
 
+    // 0. start playback FIRST. CmdManager.G() is explicit about the order:
+    //    f1(true) -> z1(text) [glyphs, then the string] -> B1(rate). Sending
+    //    the start LAST reads more naturally and is what this first shipped
+    //    with; on a real Tivoo-Max it rendered nothing, because the device
+    //    enters marquee mode after the content it was given is already gone.
+    if let Err(e) = dev.send_command(0x6E, &[1u8], true).await {
+        return err_reply(&format!(
+            "show_scrolling_text: starting playback failed: {e}"
+        ));
+    }
+
     // 1. glyph upload, 5 characters per packet
     let total = units.len() as u8;
     for (chunk_idx, chunk) in units.chunks(5).enumerate() {
@@ -89,15 +131,10 @@ async fn scrolling_text(ctx: &CallCtx<'_>) -> Value {
         ));
     }
 
-    // 3. rate, then 4. start
+    // 3. rate LAST, matching B1(rate) at the end of CmdManager.G().
     if let Err(e) = dev.send_command(0x86, &[0u8, rate], true).await {
         return err_reply(&format!(
             "show_scrolling_text: setting the rate failed: {e}"
-        ));
-    }
-    if let Err(e) = dev.send_command(0x6E, &[1u8], true).await {
-        return err_reply(&format!(
-            "show_scrolling_text: starting playback failed: {e}"
         ));
     }
     json!({"success": true, "result": true, "characters": units.len(), "rate": rate})
