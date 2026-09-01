@@ -297,19 +297,37 @@ exactly the work `scripts/hw_verify.py` was written to collect:
   **Class:** *a method whose parameters do not correspond to the fields of the
   packet it sends.* Both instances were reachable-but-uncalled code.
 
-- **`sync_time` on hardware.** R72 routed it to the daemon and the Python path
-  it replaced was BROKEN — an `AttributeError` swallowed into a silent `False`.
-  "It returns True now" proves nothing; the device's clock has to be seen to
-  change.
+- **~~`sync_time` on hardware~~ — DONE, R73.** The device clock moved
+  18:41 -> 21:42 on command. The Python path R72 replaced had been swallowing
+  an `AttributeError` into a silent `False`.
+
 - **R12 visual pass** — album cover, custom art, weather on a real device, at
   real scale, light and dark surroundings.
 - **`pic_scan_ctrl` 0x35** — accepted by the BLE stack since 2026-07-13 with no
   visual confirmation. If the packet shows no observable effect, that IS the
   finding: mark it unsupported rather than ship it as working.
-- **`search_weather_city` success path** — the pre-release check ran under a
-  throwaway HOME and proved only the `UserNewGuest RC=10` error branch.
+- **`search_weather_city` — the success path is DISPROVEN, not just unproven
+  (R73).** Run against the real, logged-in account it returns
+  `Weather/SearchCity failed (RC=1): Failed` for every keyword tried.
 
-The remaining four are checks in the packet:
+  This is no longer the "we only ever saw the RC=10 guest branch" problem. The
+  session is valid and the transport is fine, isolated by elimination on the
+  same daemon, same credentials, same HTTP client, in the same minute:
+
+  | Call | URL shape | Result |
+  |---|---|---|
+  | `GetCategoryFileListV2` | `{BASE}/GetCategoryFileListV2` | 6 items |
+  | `Channel/GetDialType` | `{BASE}/Channel/GetDialType` | full type list |
+  | `Weather/SearchCity` | `{BASE}/Weather/SearchCity` | **RC=1 Failed** |
+
+  So the server rejects this one endpoint. Either it has been retired, or it
+  wants a field we do not send (our body is `Command/Token/UserId/DeviceId/
+  KeyWord`). **Do not guess at field names** -- the next step is a capture of
+  the official app issuing a city search, or dropping the feature. The GUI
+  already surfaces the failure honestly ("no results" WITH the reason), so
+  nothing is silently broken for the user meanwhile.
+
+The remaining two need a person watching the panel:
 
     python3 scripts/hw_verify.py --self-test        # calibrate first
     python3 scripts/hw_verify.py --out report.json

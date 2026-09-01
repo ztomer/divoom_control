@@ -56,6 +56,23 @@ Verified against four real devices, driven through the running daemon.
 - **`sync_time`** — the device clock moved 18:41 → 21:42. R72 routed this to
   the daemon over a Python path that was silently returning False.
 
+### Two more checks run against the live daemon
+
+- **`sync_time` confirmed** — the device clock moved 18:41 -> 21:42.
+- **`search_weather_city` DISPROVEN.** The roadmap had this as "we only ever
+  proved the RC=10 guest-login branch". Run against the real logged-in account
+  it returns `Weather/SearchCity failed (RC=1): Failed` for every keyword.
+  Isolated by elimination in the same minute, on the same daemon, credentials
+  and HTTP client: `GetCategoryFileListV2` returned 6 items and
+  `Channel/GetDialType` returned its full list, both using the identical URL
+  shape. Session valid, transport fine, this one endpoint rejected.
+
+  Recorded rather than "fixed": our body sends `Command/Token/UserId/DeviceId/
+  KeyWord`, and guessing at which field Divoom now wants would be inventing a
+  protocol. The next step is a capture of the official app, or dropping the
+  feature. The GUI already names the failure to the user instead of showing an
+  empty list, so nothing is silently broken meanwhile.
+
 ### The class
 
 *A method whose parameters do not correspond to the fields of the packet it
