@@ -27,18 +27,44 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>`
     };
 
+    // R73: the "Extra Panels" checkboxes. Confirmed on hardware -- the device
+    // does not overlay these on the clock face, it CYCLES separate weather /
+    // date / temperature / clock screens. With none ticked we stay on the
+    // plain set_clock() path, so the default behaviour is unchanged.
+    const richBox = (id) => document.getElementById(id)?.checked || false;
+    function clockExtras() {
+        return {
+            humidity: richBox("clock-rich-humidity"),
+            weather:  richBox("clock-rich-weather"),
+            date:     richBox("clock-rich-date"),
+            twentyfour: document.getElementById("clock-rich-24h")?.checked !== false,
+        };
+    }
+
     function applyClockStyle(style) {
         if (!window.requireDevice()) return;
         const color = document.getElementById("clock-color-input")?.value || "#ffffff";
-        if (window.pywebview && window.pywebview.api) {
-            window.pywebview.api.set_clock(style, color).then(res => {
-                window.showToast(res ? "Clock style applied" : "Failed to apply clock", res ? "success" : " BLE");
-                // R50: reflect the SPECIFIC face + color on the device preview.
-                if (res && window.setDeviceActivity)
-                    window.setDeviceActivity(window._activeDeviceMac(), "clock", { style, color });
-            });
-        }
+        if (!(window.pywebview && window.pywebview.api)) return;
+        const x = clockExtras();
+        const rich = x.humidity || x.weather || x.date;
+        const call = rich
+            ? window.pywebview.api.set_clock_rich(style, x.twentyfour, x.humidity, x.weather, x.date, color)
+            : window.pywebview.api.set_clock(style, color);
+        call.then(res => {
+            const what = rich ? "Clock + extra panels applied" : "Clock style applied";
+            window.showToast(res ? what : "Failed to apply clock", res ? "success" : " BLE");
+            // R50: reflect the SPECIFIC face + color on the device preview.
+            if (res && window.setDeviceActivity)
+                window.setDeviceActivity(window._activeDeviceMac(), "clock", { style, color });
+        });
     }
+
+    // Re-apply when an extra is toggled, so the checkbox is not dead until the
+    // user re-picks a face.
+    ["clock-rich-humidity", "clock-rich-weather", "clock-rich-date", "clock-rich-24h"]
+        .forEach(id => document.getElementById(id)?.addEventListener("change", () => {
+            applyClockStyle(window.DivoomState.selectedClockStyle ?? 0);
+        }));
 
     window.DivoomState.selectedClockStyle = 0;
     window.buildSelectorGrid("clock-faces-grid", CLOCK_FACES, (v) => {

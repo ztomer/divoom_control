@@ -288,6 +288,30 @@
                                         <label class="form-label" style="margin-bottom: 0; font-size: 12px; font-weight: 600; color: var(--text-muted);">Clock Color:</label>
                                         <input type="color" id="clock-color-input" value="#ffffff" style="background: none; border: none; width: 44px; height: 28px; cursor: pointer; padding: 0;">
                                     </div>
+                                    <!-- R73: set_clock_rich, confirmed on hardware. Ticking any of
+                                         the three extras switches the apply path from set_clock() to
+                                         set_clock_rich(). The device does NOT draw one combined face:
+                                         it CYCLES between separate panels, which is what the caption
+                                         says so nobody reports it as a bug. -->
+                                    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-color);">
+                                        <div class="label-caption mb-12">Extra Panels
+                                            <span class="text-12" style="color: var(--text-muted); font-weight: 400;">(the device cycles between these and the clock)</span>
+                                        </div>
+                                        <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center;">
+                                            <label class="text-12" style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                                <input type="checkbox" id="clock-rich-weather"> Weather
+                                            </label>
+                                            <label class="text-12" style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                                <input type="checkbox" id="clock-rich-date"> Date
+                                            </label>
+                                            <label class="text-12" style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                                <input type="checkbox" id="clock-rich-humidity"> Humidity
+                                            </label>
+                                            <label class="text-12" style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                                <input type="checkbox" id="clock-rich-24h" checked> 24-hour
+                                            </label>
+                                        </div>
+                                    </div>
                                     <!-- Cloud clock-face store (Channel/GetDialType + GetDialList) — browse
                                          Divoom's public catalog and apply an id via the same set_clock() path
                                          used above. Requires the device to be on LAN (WiFi); over BLE-only the

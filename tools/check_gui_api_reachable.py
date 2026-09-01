@@ -53,11 +53,13 @@ ALLOWLIST: dict[str, str] = {
     # The four the R70 audit confirmed dead were DELETED in P5.1-P5.4, so their
     # entries are gone with them — this gate fails on a stale entry, which is
     # what forces that.
-    # ── flagged by P5.0, not yet reviewed ───────────────────────────────────
-    # These are NOT claims of deadness. Each needs someone to decide whether the
-    # UI lost its wiring, the method is a leftover, or it is reached some way
-    # this gate cannot see.
-    "set_clock_rich": "unreviewed — richer clock variant",
+    # ── R73: the last three were taken to real hardware ─────────────────────
+    # set_temperature_channel and set_timeplan were DELETED (both sent packets
+    # whose fields did not match their parameters); set_clock_rich WORKS and is
+    # now wired into the clock panel's "Extra Panels" checkboxes. That empties
+    # this allowlist. Keep it empty: an entry here is an admission that a
+    # shipped method has no caller, and the two that sat here longest were both
+    # broken. Never-called code was wrong 2 times out of 3.
 }
 
 
