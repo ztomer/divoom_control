@@ -73,6 +73,25 @@ Verified against four real devices, driven through the running daemon.
   feature. The GUI already names the failure to the user instead of showing an
   empty list, so nothing is silently broken meanwhile.
 
+### 0x35 is SPP_SCROLL — a four-year-old audit error
+
+Asked to read the APK for `pic_scan_ctrl`, and it contradicted the repo's
+standing belief. R12 concluded the opcode had no APK entry and was probably
+invented by the Python lib. `SppProc$CMD_TYPE.java` has it:
+`SPP_SAND_PAINT_CTRL(52)`, `SPP_SCROLL(53)`. The audit file making the claim
+had itself been pruned to git history, so the daemon comment cited something
+unopenable.
+
+Our encoding was never wrong -- `CmdManager.b3(mode, speed)` emits
+`{0, mode, speed_lo, speed_hi}` and the `control=0` arm produced those four
+bytes exactly. It shows nothing because it steers content the device is
+already scrolling, and this app has no scrolling-content path.
+
+Fixed alongside: the invented `control=1` branch removed (b3 is the APK's only
+builder), and the handler no longer defaults `mode`/`speed` to 0 and reports
+success -- a zero-speed no-op that cost two invalid hardware runs before the
+zeros were noticed.
+
 ### The class
 
 *A method whose parameters do not correspond to the fields of the packet it
