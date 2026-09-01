@@ -31,12 +31,11 @@ document.addEventListener("DOMContentLoaded", () => {
     // does not overlay these on the clock face, it CYCLES separate weather /
     // date / temperature / clock screens. With none ticked we stay on the
     // plain set_clock() path, so the default behaviour is unchanged.
-    const richBox = (id) => document.getElementById(id)?.checked || false;
     function clockExtras() {
         return {
-            humidity: richBox("clock-rich-humidity"),
-            weather:  richBox("clock-rich-weather"),
-            date:     richBox("clock-rich-date"),
+            humidity:   document.getElementById("clock-rich-humidity")?.checked || false,
+            weather:    document.getElementById("clock-rich-weather")?.checked || false,
+            date:       document.getElementById("clock-rich-date")?.checked || false,
             twentyfour: document.getElementById("clock-rich-24h")?.checked !== false,
         };
     }
