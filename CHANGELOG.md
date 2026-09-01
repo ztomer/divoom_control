@@ -4,10 +4,12 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
-## Unreleased — R71 + R72 (2026-08-31)
+## v0.30.0 — R71 + R72: the gates got real (2026-08-31)
 
-Two rounds, not yet released: R71's last three items need a device, and the
-release waits on them. Full local CI is green (20/20).
+Two rounds in one release. Full local CI green (20/20). **The three
+hardware checks R71 left open are still open** — they verify existing
+behaviour rather than gate new code, and `scripts/hw_verify.py` collects
+them in one command.
 
 ### R71 — close every open item
 

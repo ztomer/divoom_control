@@ -25,7 +25,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "divoom-control"
-version = "0.29.0"
+version = "0.30.0"
 description = "macOS control surface for Divoom pixel displays (Pixoo / Tivoo / Ditoo / Timoo)"
 readme = "README.md"
 license = { text = "MIT" }
