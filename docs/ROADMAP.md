@@ -111,10 +111,21 @@ are not restated.
 
 ## Current debt & quality
 
-- **500-LOC rule**: fully enforced, ALLOWLIST empty (R23).
-- **Font**: APK bitmap font extracted (ASCII + CJK via `from_apk_asset()`), half-size variant with majority-rule downsampling.
-- **Tests**: hardware tests gated/skip by default; 60 native-downscaler parity tests; alarms editor JS guard; 18 E2E mock-device.
-- **C module**: `libdivoom` (LANCZOS downsampler) compiled via `build_libdivoom.sh`; normalize-then-quantize kernel matches PIL byte-for-byte (60/60 parity tests).
+- **Gates**: 20 steps, run by `pre-push` since R71 P0 — they used to run only
+  when someone typed the command. Local and CI are kept identical on purpose.
+- **500-LOC rule**: enforced, allowlist empty (R23).
+- **Coverage**: Python floor 89.2 (measured 89.30), and it now enforces the
+  number it advertises — it was claiming 90 and enforcing ">= 89.5", because
+  coverage.py rounds. Rust floor in `scripts/rust_coverage.sh`.
+- **Duplication**: `tools/capability_census.py` reports 0 DIRECT, 0 WRAPPED
+  against 443 daemon commands, and fails the build on a new one. Parity gates
+  hold the two files that legitimately have two readers
+  (`check_weather_parity.py`, `check_hotchannel_parity.py`).
+- **Tests**: ~3000 Python, 198 Rust; hardware tests gated/skip by default; 60
+  native-downscaler parity tests. **The browser e2e subset is flaky under normal
+  load — see the OPEN item below.**
+- **C module**: `libdivoom` (LANCZOS downsampler) via `build_libdivoom.sh`;
+  normalize-then-quantize matches PIL byte-for-byte (60/60 parity tests).
 
 ---
 
