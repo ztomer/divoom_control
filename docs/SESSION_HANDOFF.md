@@ -21,9 +21,17 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
-- **2026-08-31 — R71 (bar hardware) and R72 (complete) DONE. Full local CI
-  green: 20/20, GATE_EXIT=0.** Not released; the release waits on the three
-  device checks below.
+- **2026-08-31 — v0.30.0 SHIPPED (R71 + R72).** Tag `a47378e` on a green CI
+  (all five jobs), GitHub release + `Divoom-v0.30.0.dmg`
+  (sha256 `495ac60a...`), cask bumped and verified to carry that exact sha.
+  Verified INSIDE the DMG, not the source tree: both binaries report 0.30.0,
+  the `BUNDLE_VERSION` stamp is present in Resources and Frameworks, no `bleak`
+  ships, no APK/`references` leak, and `divoomd mcp` serves 13 tools.
+
+  **Released with the three hardware checks still open, deliberately and not
+  quietly.** They verify EXISTING behaviour rather than gate new code, and the
+  CHANGELOG stanza and release notes both say so. `RELEASING.md` step 3 asks for
+  a hardware pass; that debt is named rather than skipped.
 
   **Read this first if you are picking the work up:** the two rounds' durable
   records are `docs/CAPABILITY_MAP.md` (26 census rows, every one with a
