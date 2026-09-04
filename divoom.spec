@@ -1,0 +1,131 @@
+# -*- mode: python ; coding: utf-8 -*-
+"""PyInstaller spec for Divoom Control (macOS .app).
+
+pywebview's py2app bundle showed a blank WKWebView (file:// loads are blocked in
+that context); PyInstaller is pywebview's officially-supported packager and renders
+correctly. This builds a windowed onedir .app bundling the Python GUI + deps +
+web_ui, the native encoder dylib, and the Rust daemon + menubar binaries.
+
+    .buildvenv/bin/pyinstaller --noconfirm divoom.spec   # -> dist/Divoom.app
+"""
+import os
+import tomllib
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+
+ROOT = os.path.abspath(os.getcwd())
+
+
+def _ex(p):
+    return os.path.join(ROOT, p)
+
+
+def _version():
+    env = os.environ.get("DIVOOM_BUILD_VERSION")
+    if env:
+        return env
+    with open(_ex("pyproject.toml"), "rb") as f:
+        return tomllib.load(f)["project"]["version"]
+
+
+VERSION = _version()
+BT_DESC = "Divoom Control uses Bluetooth to discover and control your Divoom pixel display."
+AE_DESC = "Divoom Control reads the now-playing track from Music and Spotify to show album art."
+
+# --- data files -------------------------------------------------------------
+# The product version, as a file the RUNTIME can read.
+#
+# R70 P4.1 found the app killing a healthy daemon on every launch. Inside the
+# bundle there is no pyproject.toml, so `expected_daemon_version()` fell through
+# to `importlib.metadata`, which read the `divoom_control.egg-info` PyInstaller
+# collects from the source tree — stale at 0.22.21 from some old editable
+# install. The installed v0.28.3 app therefore expected 0.22.21, declared the
+# correct 0.28.3 daemon stale, and restarted it (dropping its BLE connection)
+# every single time it started. VERSION is already computed correctly above for
+# CFBundleShortVersionString; it just was not reachable at runtime.
+_VERSION_STAMP = _ex("build/BUNDLE_VERSION")
+os.makedirs(os.path.dirname(_VERSION_STAMP), exist_ok=True)
+with open(_VERSION_STAMP, "w", encoding="utf-8") as _f:
+    _f.write(VERSION + "\n")
+
+datas = [(_VERSION_STAMP, ".")]
+datas += collect_data_files("divoom_gui")          # web_ui/** (frontend)
+datas += collect_data_files("divoom_lib")          # fonts/*.bin + the native dylib
+datas += collect_data_files("divoom_client")       # any packaged data
+# Rust binaries the GUI spawns — bundled under bin/ (resolved via sys._MEIPASS).
+# The now-playing helper ships ALONGSIDE the daemon: nowplaying's resolver looks
+# next to the executable and in a sibling bin/, so both halves must land in the
+# same place or the daemon reports "helper not installed" at runtime.
+for _src in ("target/release/divoomd",
+             "target/release/divoom-menubar",
+             "nowplaying/native/libnp_helper.dylib",
+             "nowplaying/native/np_load.pl"):
+    if os.path.exists(_ex(_src)):
+        datas += [(_ex(_src), "bin")]
+
+# --- hidden imports ---------------------------------------------------------
+hiddenimports = [
+    "divoom_lib.cli",                      # spawned via -m
+    "objc", "Foundation", "AppKit", "WebKit", "CoreBluetooth", "Quartz",
+    "psutil",                             # system-stats widget
+]
+# R70 P5.1/P5.6: `bleak` is NOT bundled any more. The GUI process must never
+# own the radio — divoomd does — and after the dead `from bleak import
+# BleakScanner` came out of gui_main.py, importing the frozen entry point
+# loads zero bleak modules (verified, not assumed). `divoom_lib`'s BLE
+# transport still imports it, but that layer is reference-only and no GUI
+# path reaches it. Collecting it shipped a Bluetooth stack, and its macOS
+# TCC surface, into the one process that must not have either.
+hiddenimports += collect_submodules("aiohttp")
+hiddenimports += collect_submodules("webview")
+# Cloud-container gallery decode (media_decoder) needs these; they are
+# imported lazily inside functions, so force-collect to guarantee the
+# DMG bundles them (a clean install with no system Crypto would
+# otherwise render ZERO cloud gallery items). R64.
+hiddenimports += collect_submodules("Crypto")
+hiddenimports += collect_submodules("lzallright")
+
+a = Analysis(
+    ["divoom_gui/gui_main.py"],
+    pathex=[ROOT],
+    binaries=[],
+    datas=datas,
+    hiddenimports=hiddenimports,
+    hookspath=[],
+    runtime_hooks=[],
+    excludes=["references", "tests", "scripts", "examples", "docs",
+              "py2app", "pytest", "_pytest"],
+    noarchive=False,
+)
+pyz = PYZ(a.pure)
+
+exe = EXE(
+    pyz, a.scripts, [], exclude_binaries=True,
+    name="Divoom", debug=False, bootloader_ignore_signals=False,
+    strip=False, upx=False, console=False, argv_emulation=False,
+    target_arch=None, codesign_identity=None, entitlements_file=None,
+)
+coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name="Divoom")
+
+# App icon: PyInstaller copies this into Contents/Resources/ and sets
+# CFBundleIconFile automatically. Regenerate from source via scripts/make_icns.sh.
+_ICON = _ex("packaging/Divoom.icns")
+
+app = BUNDLE(
+    coll,
+    name="Divoom.app",
+    icon=_ICON if os.path.exists(_ICON) else None,
+    bundle_identifier="com.divoom.control",
+    version=VERSION,
+    info_plist={
+        "CFBundleName": "Divoom",
+        "CFBundleDisplayName": "Divoom Control",
+        "CFBundleShortVersionString": VERSION,
+        "CFBundleVersion": VERSION,
+        "LSMinimumSystemVersion": "11.0",
+        "NSHighResolutionCapable": True,
+        "LSUIElement": False,
+        "NSBluetoothAlwaysUsageDescription": BT_DESC,
+        "NSBluetoothPeripheralUsageDescription": BT_DESC,
+        "NSAppleEventsUsageDescription": AE_DESC,
+    },
+)

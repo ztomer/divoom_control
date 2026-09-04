@@ -1,0 +1,55 @@
+[package]
+name = "divoomd"
+version = "0.31.0"
+edition = "2021"
+description = "Native (Rust) port of the Divoom daemon — built in parallel to the Python daemon, which stays ground truth."
+publish = false
+
+[lib]
+name = "divoomd"
+path = "src/lib.rs"
+
+[[bin]]
+name = "divoomd"
+path = "src/main.rs"
+
+[features]
+default = ["ble"]
+# `ble` pulls the platform BLE stack (btleplug). The protocol/transport core +
+# its tests build and run WITHOUT it (`--no-default-features`), keeping the tested
+# core hardware- and platform-free.
+ble = ["dep:btleplug", "dep:futures", "dep:uuid"]
+
+[dependencies]
+libc = "0.2"
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync", "time", "macros", "net", "io-util", "io-std", "signal", "process"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+libloading = "0.9"
+base64 = "0.23"
+# `tiff` is required, not optional: macOS MediaRemote returns TIFF cover art
+# (while declaring image/jpeg — see nowplaying/src/artwork.rs). Without it
+# every real album cover fails to decode.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "tiff"] }
+btleplug = { version = "0.12", optional = true }
+futures = { version = "0.3", optional = true }
+uuid = { version = "1", optional = true }
+reqwest = { version = "0.13", features = ["json", "rustls", "webpki-roots", "query", "charset"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
+plist = "1"
+sysinfo = "0.30"
+md-5 = "0.10"
+hmac = "0.12"
+# LZO1X decompression for magic 18/26 cloud containers (parity with the Python
+# daemon's lzallright/liblzo2). Pure Rust port of minilzo.
+minilzo-rs = "0.6"
+
+# Now-playing + album artwork as real bytes (macOS MediaRemote via an
+# entitled perl host). Replaces the AppleScript + iTunes-Search guessing.
+[target.'cfg(target_os = "macos")'.dependencies]
+nowplaying = { path = "../nowplaying" }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "test-util"] }
+tempfile = "3"
+lazy_static = "1.4"

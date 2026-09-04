@@ -1,0 +1,68 @@
+# gates_of_heck configuration. All keys optional; delete what you don't use.
+# GOH_EXCLUDE='vendor/|\.generated\.'   # shared vendor/generated exemption
+GOH_MAX_LINES=500                 # file-length cap; unset disables the check
+# Exported because GOH_CI_STEPS below interpolates it in a child shell.
+export GOH_EXCLUDE='docs/divoom_docs/'   # captured Divoom API responses + sample gallery data (third-party)
+# GOH_LINE_EXCLUDE='third_party/'       # length-only alias
+# GOH_PY_COV_MIN=95   # NOT USED HERE - see scripts/py_ci.sh (R70 P0.4).
+#   tools/gate.sh leaves the house py_gate.sh commented out, so this key is
+#   read by nothing. That is the mechanical reason the coverage floor this
+#   repo credited to R61 was enforced by nobody. The real floor lives in
+#   scripts/py_ci.sh, scoped to divoom_gui + divoom_client, overridable
+#   with DIVOOM_PY_COV_MIN.
+# GOH_SWIFT_MODE=xcode            # or spm
+# GOH_SWIFT_SCHEME=MyAppTests
+# GOH_SWIFT_COV_MIN=95
+# GOH_MAX_SCRATCH_GB=25           # disk-hygiene ceiling (full runs only)
+
+# Length-only exemption: captured third-party API data (not hand-written code).
+GOH_LINE_EXCLUDE='docs/divoom_docs/'
+
+# ── Local CI steps (consumed by $GOH/gates/local_ci.sh via ci_local.sh) ────
+# Mirrors .github/workflows/tests.yml job-for-job.
+#
+# WHAT MACOS-LOCAL CANNOT SEE: this machine is macOS. CI's rust-core and
+# rust-ble-linux jobs run on Ubuntu, so a Linux-only failure (missing GTK
+# toolchain, BlueZ/D-Bus headers) is invisible here — v0.23.0 shipped with a
+# red rust-core exactly that way.
+#
+# NARROWED (R67): scripts/check_linux_build.sh now cross-compiles divoomd for
+# Linux with zig, so the commonest Linux break — a macOS-only symbol (the
+# MediaRemote-backed `nowplaying` crate) referenced from shared code — is
+# caught HERE. R67 shipped that same break twice because no local instrument
+# could see it. Still NOT covered: anything behind `--all-features`, since the
+# `ble` feature needs Linux dbus headers zig cannot supply. A green run means "the macOS-reachable jobs
+# pass", never "CI would be green". release.sh's ci_gate checks the REAL CI
+# result for the commit being tagged; this list passing is a precondition for
+# that, not a replacement.
+#
+# check_built_binaries.py runs LAST, and the position is load-bearing: it reads
+# the compiled artifacts in target/, so running it before the cargo steps would
+# find nothing built and pass vacuously — a gate that reports green on the
+# absence of its own subject.
+#
+# The Python suite lives in scripts/py_ci.sh (the slow, divoom-specific job;
+# ci_local.sh --fast skips it).
+#
+# scripts/rust_coverage.sh is IN the step list below as of 2026-08-30. It was
+# not before — it lived only in this comment, so the Rust coverage floor was
+# enforced by nobody and drifted 14 points stale (29% pinned, 43% actual)
+# without anything noticing. That is house rule #3 exactly: a gate you have to
+# remember to run is not a gate. It costs ~3 minutes; that is the price of the
+# floor meaning something.
+#
+# NOT in CI, and that is now a DECISION rather than an open question
+# (R71 P0.4, 2026-08-31): .github/workflows gets no coverage job. A CI coverage
+# job would have to run on macOS to measure the same scope — `nowplaying` is
+# macOS-only and counts toward the percentage — so a Linux job would enforce a
+# different floor against a different denominator, which is worse than no job
+# at all: two numbers both called "coverage", disagreeing, neither wrong.
+#
+# The direction is safe (the dangerous one is a local gate WEAKER than CI,
+# which lets you push red), and as of R71 P0.1 it is no longer merely local: the
+# pre-push hook runs this list via tools/repo_gates.sh, so the floor binds
+# before anything leaves the machine instead of when somebody remembers.
+# Carried as an "open question" for two rounds; closed here so it stops being
+# re-litigated.
+export GOH="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
+GOH_CI_STEPS='./scripts/house_emoji_gate.sh:python3 tools/check_file_size.py:python3 tools/check_no_allow.py:python3 tools/check_scripts.py:python3 tools/check_version_consistency.py:python3 tools/check_positional_args.py:python3 tools/check_weather_parity.py:python3 tools/check_hotchannel_parity.py:python3 tools/capability_census.py:python3 tools/check_gui_is_a_client.py:python3 tools/check_gui_api_reachable.py:cargo fmt --all -- --check:cargo clippy --all-targets --all-features -- -D warnings:cargo build -p divoomd --no-default-features --locked:cargo test -p divoomd --no-default-features --locked:./scripts/check_linux_build.sh:cargo test --locked:python3 tools/check_built_binaries.py:./scripts/rust_coverage.sh'

@@ -1,0 +1,71 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Stale agent/session planning files
+progress.md
+set_hot_pick.py
+GEMINI.md
+plan.md
+todo.md
+
+# Runtime temp / scratch output (rendered frames, downloaded media) & debug scripts
+scratch/
+debug/
+
+# Local validation launchers / sockets
+*.command
+*.sock
+
+# Credentials / secrets — never commit
+config.ini
+api_scraper/divoom_docs/guest_token.json
+
+# APK reverse engineering artifacts — large binaries, do not commit
+apk/*.apk
+apk/decompiled_src/
+apk/smali_src/
+
+# Test reports, logs, and coverage files
+test_reports/
+.coverage
+*.log
+
+# Caches and editor settings
+.pytest_cache/
+.mypy_cache/
+.claude/
+mock_cache_dir/
+.DS_Store
+.divoom_last_working_char.json
+# pip / setuptools build artifacts
+*.egg-info/
+build/
+dist/
+
+Divoom.app/
+# release build (scripts/build_release.sh)
+.buildvenv/
+.pyproject.toml.hidden
+*.dmg
+
+# local-only reference material (reverse-engineered APK + third-party refs) — never track/publish
+references/
+
+# Native (Rust/egui) app bundle artifact (scripts/build_native_app.sh)
+dist-native/
+
+# Rust native crate build artifacts
+# Cargo build output. Since R66 the repo pins a single repo-local target/
+# (.cargo/config.toml). Unanchored so it also catches any stale per-crate
+# target/ left behind by the pre-workspace layout — a root-anchored rule
+# let divoom-menubar/target/ (2214 files) get committed once already.
+target/
+
+# Runtime state written by the daemon/CLI — never belongs in git.
+.divoom_last_working_char.json
+
+# opencode session state (local agent scratch, never shared)
+.opencode/

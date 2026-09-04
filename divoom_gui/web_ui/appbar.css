@@ -1,0 +1,237 @@
+/* appbar.css — Custom frameless window titlebar styling */
+
+.integrated-appbar {
+    height: 48px;
+    display: flex;
+    align-items: center;
+    background: var(--win-appbar-bg);
+    border-bottom: 1px solid var(--border-color);
+    padding: 0 15px;
+    z-index: 1000;
+    position: relative;
+    user-select: none;
+    -webkit-app-region: no-drag; /* Custom JS event dragging handles window moving */
+}
+
+.appbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    -webkit-app-region: no-drag;
+}
+
+/* Active device selector moved to sidebar (see sidebar.css .sidebar-device-select) */
+
+/* R52: moved out of the appbar to an unobtrusive lower-right corner dot. */
+#global-status-dot {
+    position: fixed;
+    bottom: 12px;
+    right: 14px;
+    z-index: 200;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    transition: background 0.3s, box-shadow 0.3s;
+    background-color: #6b7280;
+    box-shadow: none;
+    flex-shrink: 0;
+    -webkit-app-region: no-drag;
+    pointer-events: none;
+}
+/* These ID+class selectors (specificity 1,1,0 / 1,2,0) already out-rank the
+   base `#global-status-dot` rule and the `.transport-dot.*` rules in
+   settings.css (0,2,0, which don't set colour anyway). The JS also clears any
+   inline style (`removeAttribute("style")`), so no `!important` is needed to
+   win the cascade — see REVIEW_2026-06 §2.3. */
+#global-status-dot.active.ble { background-color: var(--transport-ble, #3b82f6); color: var(--transport-ble, #3b82f6); box-shadow: 0 0 8px var(--transport-ble, #3b82f6); opacity: 1; }
+#global-status-dot.active.lan { background-color: var(--transport-lan, #22c55e); color: var(--transport-lan, #22c55e); box-shadow: 0 0 8px var(--transport-lan, #22c55e); opacity: 1; }
+#global-status-dot.active.wall { background-color: #8b5cf6; color: #8b5cf6; box-shadow: 0 0 8px #8b5cf6; opacity: 1; }
+#global-status-dot.connecting { background-color: #f59e0b; color: #f59e0b; box-shadow: 0 0 8px #f59e0b; opacity: 1; animation: dot-pulse 1s ease-in-out infinite; }
+#global-status-dot.inactive { background-color: #6b7280; color: #6b7280; opacity: 0.3; box-shadow: none; }
+/* BLE Hardening P6: DEGRADED — connected per the OS but a write/drop just
+   failed. Amber with a SLOW pulse, distinct from the faster "connecting" pulse.
+   No transport sub-class is set in this state, so this (1,1,0) rule wins. */
+#global-status-dot.degraded { background-color: #f59e0b; color: #f59e0b; box-shadow: 0 0 8px #f59e0b; opacity: 1; animation: dot-pulse 2s ease-in-out infinite; }
+
+/* "Connecting" state — pulses in the device's own accent color.
+   JS sets --dot-pulse-color inline so each device dot pulses in its
+   assigned hue; the global appbar dot defaults to amber fallback. */
+.transport-dot.connecting {
+    background: var(--dot-pulse-color, #f59e0b) !important;
+    color: var(--dot-pulse-color, #f59e0b) !important;
+    opacity: 1;
+    animation: dot-pulse 1s ease-in-out infinite;
+}
+
+@keyframes dot-pulse {
+    0%, 100% { box-shadow: 0 0 2px currentColor; opacity: 0.6; }
+    50% { box-shadow: 0 0 8px currentColor; opacity: 1; }
+}
+
+.appbar-logo {
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+    border-radius: 4px;
+}
+
+.appbar-title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--text-main);
+    letter-spacing: 0.2px;
+}
+
+.appbar-drag-spacer {
+    flex: 1;
+    height: 100%;
+}
+
+.appbar-window-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    -webkit-app-region: no-drag; /* Excludes control buttons from window drags */
+}
+
+.win-btn {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    font-size: 0; /* Hide text, style as macOS traffic lights */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    color: transparent;
+    font-weight: 700;
+}
+
+.win-btn.close { background-color: #ff5f56; }
+.win-btn.min { background-color: #ffbd2e; }
+.win-btn.max { background-color: #27c93f; }
+
+.win-btn:hover {
+    font-size: 9px;
+    color: rgba(0, 0, 0, 0.75);
+}
+
+.win-btn.close:hover { background-color: #ff4a40; }
+.win-btn.min:hover { background-color: #ffaa14; }
+.win-btn.max:hover { background-color: #1cc033; }
+
+.win-btn.max:hover::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border: 1px solid rgba(0, 0, 0, 0.75);
+}
+
+/* R32: the bottom-right connectivity indicator pill + its dot and tooltip
+   styles were removed. The sidebar device dots have their own styles (in
+   sidebar.css). */
+
+/* Appbar Global Brightness Slider styling */
+.appbar-brightness {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 20px;
+    padding: 3px 10px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 20px;
+    border: 1px solid var(--border-color);
+    -webkit-app-region: no-drag;
+}
+
+.appbar-brightness .kare-icon {
+    width: 12px;
+    height: 12px;
+    color: var(--text-muted);
+}
+
+/* R32: round glass gear pill (Settings) — same chrome as the slider pills,
+   just circular. Sits to the right of the brightness/volume bars. */
+.appbar-gear {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    margin-left: 12px;
+    padding: 0;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    color: var(--text-muted);
+    cursor: pointer;
+    -webkit-app-region: no-drag;
+    transition: color 0.2s, border-color 0.2s, background-color 0.2s, transform 0.2s;
+}
+.appbar-gear .kare-icon {
+    width: 14px;
+    height: 14px;
+}
+.appbar-gear:hover {
+    color: var(--text-main);
+    border-color: var(--primary);
+    background: rgba(255, 90, 31, 0.06);
+    transform: rotate(30deg);
+}
+.appbar-gear.active {
+    color: var(--primary);
+    border-color: var(--primary);
+    box-shadow: 0 0 8px var(--primary-glow);
+}
+
+.appbar-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 90px;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+}
+
+.appbar-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--primary);
+    box-shadow: 0 0 4px var(--primary-glow);
+    transition: transform 0.1s ease;
+}
+
+.appbar-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+}
+
+/* R11 4a: the volume value uses the exact same type as the brightness value. */
+#global-brightness-value,
+#appbar-volume-value {
+    font-size: 10px;
+    font-family: var(--font-sans);
+    color: var(--text-muted);
+    min-width: 28px;
+    text-align: right;
+}
+
+/* R11 4e: the brightness slider thumb tracks the value it controls — white at
+   full brightness, darkening toward black as it drops — with a contrasting
+   border so it stays visible. (--thumb-color is set per-value from app.js.)
+   The volume slider stays plain per Rams: volume has no honest colour mapping. */
+#global-brightness-slider::-webkit-slider-thumb {
+    background: var(--thumb-color, #ffffff);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 0 3px rgba(0, 0, 0, 0.5);
+}
+body.theme-light #global-brightness-slider::-webkit-slider-thumb {
+    border-color: rgba(0, 0, 0, 0.85);
+}

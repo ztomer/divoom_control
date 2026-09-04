@@ -1,0 +1,146 @@
+/* custom_art.css — Custom Art channel: fixed header (page tabs + slot
+   grid), scrolling library, drag-and-drop states. Split from
+   channels.css (500-LOC rule). */
+
+/* Fixed header: tabs + slots + hint — does not scroll with the library */
+.custom-art-fixed {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.custom-art-tabs { display: flex; gap: 6px; }
+.custom-art-tabs .page-tab { flex: 1; }
+.page-tab.active {
+    background: var(--accent) !important;
+    color: #fff !important;
+}
+
+/* Slot grid and library share the same tile size so slots read as
+   "places the art goes" (Kare: the metaphor is visible, not explained).
+   Slots sit in ONE row of 12 so the library below keeps most of the
+   height; the library wraps at the same ~tile width. */
+.custom-art-slots,
+#custom-art-cache-grid {
+    display: grid;
+    gap: 8px;
+}
+.custom-art-slots { grid-template-columns: repeat(12, 1fr); }
+#custom-art-cache-grid {
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+}
+@media (max-width: 900px) {
+    .custom-art-slots { grid-template-columns: repeat(6, 1fr); }
+}
+.custom-art-slots {
+    padding: 8px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+}
+.custom-art-slot {
+    aspect-ratio: 1;
+    background: rgba(0, 0, 0, 0.3);
+    border: 2px dashed rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.35);
+    transition: border-color 0.15s, background 0.15s;
+    position: relative;
+    overflow: hidden;
+}
+.custom-art-slot.filled { border-style: solid; color: transparent; }
+.custom-art-slot:hover {
+    border-color: var(--accent);
+    background: rgba(255, 255, 255, 0.08);
+}
+.custom-art-slot.selected {
+    border-color: var(--primary);
+    border-style: solid;
+    background: rgba(255, 90, 31, 0.12);
+}
+.custom-art-slot.drag-over {
+    border-color: var(--accent); border-style: solid;
+    background: rgba(0, 204, 102, 0.15);
+}
+.custom-art-slot img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    image-rendering: pixelated;
+}
+.custom-art-slot .slot-clear {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 16px;
+    height: 16px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.65);
+    color: #fff;
+    font-size: 11px;
+    line-height: 16px;
+    text-align: center;
+    cursor: pointer;
+    padding: 0;
+    display: none;
+    z-index: 1;
+}
+.custom-art-slot.filled:hover .slot-clear { display: block; }
+.custom-art-hint { margin: 0; }
+
+/* Scrolling library below the fixed header */
+.custom-art-library {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 10px;
+}
+.custom-art-library .text-input { font-size: 12px; flex-shrink: 0; }
+#custom-art-cache-grid {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    align-content: start;
+    padding: 8px;
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.cache-thumb-item.assigned {
+    border-color: var(--accent) !important;
+    opacity: 0.65;
+}
+
+/* R40: the Pixel Art sub-tab panels must form a bounded flex-height chain so
+   inner scrollers (gallery grid, hot preview list) actually scroll instead of
+   growing the whole card. #pixel-art is a flex column (.tab-content.active);
+   the active sub-tab fills it and clamps its own children. */
+#pixel-art > .pixel-subtab-content { display: none; }
+#pixel-art > .pixel-subtab-content.active {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+#pixel-art.tab-content.active {
+    height: 100%;
+    min-height: 0;
+}
+
+/* Single-column fill layout for Custom Art */
+.custom-art-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    flex: 1;
+    min-height: 0;
+    align-items: stretch;
+}

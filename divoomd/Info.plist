@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key><string>Divoom Daemon (rs)</string>
+  <key>CFBundleDisplayName</key><string>Divoom Daemon (rs)</string>
+  <key>CFBundleIdentifier</key><string>com.divoom.divoomd</string>
+  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleShortVersionString</key><string>0.1</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleExecutable</key><string>run</string>
+  <!-- the grant the device layer needs; without it macOS kills the process on the
+       first CoreBluetooth touch (the same TCC gate the Python daemon needs). -->
+  <key>NSBluetoothAlwaysUsageDescription</key>
+  <string>Divoom Daemon connects to Divoom pixel displays over Bluetooth.</string>
+  <key>LSUIElement</key><true/>
+</dict>
+</plist>

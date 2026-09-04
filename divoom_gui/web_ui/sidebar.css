@@ -1,0 +1,494 @@
+/* sidebar.css — Sidebar navigation menu and basic structural grids */
+
+.app-container {
+    display: flex;
+    height: calc(100vh - 48px);
+    width: 100vw;
+    backdrop-filter: blur(8px);
+    -webkit-app-region: no-drag;
+}
+
+.sidebar {
+    width: var(--sidebar-width);
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    padding: 20px 12px;
+    z-index: 10;
+}
+
+.logo-area {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 45px;
+}
+
+.logo-icon {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    border-radius: 8px;
+    box-shadow: 0 0 15px var(--primary-glow);
+    position: relative;
+}
+
+.logo-area h2 {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: var(--text-main);
+}
+
+/* Susan Kare Retro Icon Elements */
+.kare-icon {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+  vertical-align: middle;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.btn-icon .kare-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.nav-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex: 1;
+}
+
+.nav-btn[data-tab="settings"] {
+    margin-top: auto;
+}
+
+.nav-btn {
+    width: 100%;
+    padding: 10px 12px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+    font-weight: 500;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.nav-btn:hover {
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.05);
+}
+
+.nav-btn.active {
+    color: var(--primary);
+    background: rgba(255, 90, 31, 0.08);
+    border-color: rgba(255, 90, 31, 0.3);
+    box-shadow: none;
+}
+
+.connection-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    padding-top: 15px;
+    border-top: 1px solid var(--border-color);
+}
+
+.status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.status-indicator.disconnected {
+    background-color: #ef4444;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.6);
+}
+
+.status-indicator.connected {
+    background-color: var(--primary);
+    box-shadow: 0 0 10px var(--primary-glow);
+}
+
+.status-indicator.connecting {
+    background-color: var(--accent);
+    box-shadow: 0 0 10px rgba(255, 158, 0, 0.6);
+    animation: pulse 1.5s infinite alternate;
+}
+
+@keyframes pulse {
+    0% { transform: scale(0.9); opacity: 0.6; }
+    100% { transform: scale(1.1); opacity: 1; }
+}
+
+.spinner {
+    display: none;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top: 2px solid #ffffff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.main-content {
+    flex: 1;
+    padding: 30px;
+    overflow-y: auto;
+    width: calc(100% - var(--sidebar-width));
+    display: flex;
+    flex-direction: column;
+}
+
+.tab-content {
+    display: none;
+    animation: fadeIn 0.4s ease;
+}
+
+.tab-content.active {
+    display: flex;
+    flex-direction: column;
+    gap: var(--panel-gap);
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    scrollbar-gutter: stable;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.header-section h1 {
+    font-family: var(--font-display);
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    margin-bottom: 6px;
+}
+
+.header-section p {
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+/* ── Sidebar Connected Device Panel ─────────────────────────────────── */
+.sidebar-device-panel {
+    /* R32: Settings left the sidebar (now an appbar gear), so the device panel
+       is pinned to the bottom — taking the spot the Settings button vacated.
+       R51: this is a transparent layout container only — the bezel below is the
+       single framed element (the old card around it was a redundant second box). */
+    margin-top: auto;
+    margin-bottom: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* R49/R51: flat face-on screen — a neutral bezel around a square screen that
+   shows the live frame straight (no 3/4 product photo, no per-model rect). R51:
+   fills the sidebar column (was a small 104px box inside a second card) so the
+   preview is as large as the space allows. */
+.sidebar-device-preview {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    margin: 0 auto 8px auto;
+    padding: 8px;
+    box-sizing: border-box;
+    background: #202026;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04),
+                0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* The screen itself — square, dark, shows the last pushed frame full-bleed and
+   pixelated. Empty state (no .has-frame) shows a subtle off-screen placeholder. */
+.device-screen {
+    width: 100%;
+    height: 100%;
+    border-radius: 5px;
+    background-color: #0a0b0e;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    image-rendering: pixelated;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6);
+    /* Empty state: faint pixel-grid hint so it reads as "a screen, off". */
+    background-image:
+        linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    background-position: 0 0, 0 0;
+    background-size: 12.5% 12.5%, 12.5% 12.5%;
+}
+.device-screen.has-frame {
+    /* live frame replaces the placeholder grid */
+    background-size: cover;
+    background-position: center;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6),
+                inset 0 0 10px rgba(94, 222, 145, 0.12);
+}
+
+/* R49/R50: empty-state hint below the screen (hidden when a device is active —
+   the active chip carries the name, so repeating it here was redundant). */
+.device-name-label {
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-align: center;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-bottom: 8px;
+}
+.device-name-label[hidden] { display: none; }
+
+/* R48: device selector chips — named, self-labeling, click to switch.
+   Replaces the unlabeled colored dots (Rams R4/R7; Kare affordance).
+   R33: sits outside the glass panel, below it in the sidebar. */
+.device-chips {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    /* 4px + .device-chip's own 8px = 12px, matching .nav-btn's 12px padding
+       above so chip labels and nav-item labels sit on the same left edge. */
+    padding: 0 4px;
+    margin: 4px 0 8px 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+.device-chips:empty { display: none; }
+
+.device-chip {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 8px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    user-select: none;
+    text-align: left;
+    width: 100%;
+    box-sizing: border-box;
+}
+.device-chip:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-main);
+}
+.device-chip.chip-active {
+    border-color: rgba(94, 222, 145, 0.40);
+    background: rgba(94, 222, 145, 0.07);
+    color: var(--text-main);
+}
+/* R34 §2: pulse the chip border while connecting (matches the old dot pulse). */
+.device-chip.connecting {
+    border-color: rgba(255, 200, 80, 0.5);
+    animation: chipConnecting 0.9s ease-in-out infinite alternate;
+}
+@keyframes chipConnecting {
+    from { border-color: rgba(255, 200, 80, 0.2); }
+    to   { border-color: rgba(255, 200, 80, 0.9); }
+}
+
+/* 8 px color dot — same hue as before; currentColor drives the ring animation. */
+.device-chip-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex: none;
+}
+.device-chip.chip-active .device-chip-dot {
+    box-shadow: 0 0 4px currentColor;
+}
+/* R47: streaming ring on the small color dot — "busy, click to take over". */
+.device-chip.chip-streaming {
+    border-color: rgba(255, 255, 255, 0.15);
+    color: var(--text-main);
+}
+.device-chip.chip-streaming .device-chip-dot {
+    animation: chipDotRing 2.4s ease-in-out infinite;
+}
+@keyframes chipDotRing {
+    0%, 100% { box-shadow: 0 0 0 0 transparent; }
+    50%       { box-shadow: 0 0 0 3px currentColor; }
+}
+/* G5: degraded = amber override on the dot so it reads "reconnecting". */
+.device-chip.chip-degraded .device-chip-dot {
+    background: #ffc864 !important;
+    color: #ffc864;
+    animation: chipDotRing 1.1s ease-in-out infinite;
+}
+.device-chip-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* Right-aligned state text — only rendered when non-idle (streaming / degraded). */
+.device-chip-state {
+    font-size: 10px;
+    font-weight: 500;
+    flex: none;
+    opacity: 0.65;
+    max-width: 64px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.device-chip.chip-degraded .device-chip-state { color: #ffc864; opacity: 1; }
+
+/* Known-but-undetected: a device seen in a previous scan/session that the
+   current scan didn't find. Faded to distinguish it from reachable devices
+   while keeping it selectable (maybe it's just asleep / out of range). */
+.device-chip.chip-known {
+    border-color: rgba(255, 255, 255, 0.06);
+    color: var(--text-muted);
+    opacity: 0.55;
+}
+.device-chip.chip-known .device-chip-dot {
+    opacity: 0.35;
+    box-shadow: none;
+}
+.device-chip.chip-known:hover {
+    opacity: 0.85;
+    background: rgba(255, 255, 255, 0.04);
+}
+/* Explicit "not in range" text badge — opacity alone (chip-known above) reads
+   too subtly as "not connectable right now"; say it, don't just fade it. */
+.device-chip-state-known {
+    font-style: italic;
+}
+
+/* Virtual Wall — same chip vocabulary as devices but dashed border to mark it
+   as a composite (not a single screen). "Joined panels" glyph (bounding rect +
+   vertical divider) is deliberately distinct from the 2×2 filled-rects of the
+   Pixel Art nav tab. Count is folded into the label ("Wall (3)"), not a badge. */
+.wall-button-row {
+    margin: 0 0 8px 0;
+    width: 100%;
+}
+.wall-button-row[hidden] { display: none; }
+.wall-button {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 8px;
+    border-radius: 6px;
+    border: 1px dashed var(--border-color);
+    background: transparent;
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    width: 100%;
+    box-sizing: border-box;
+    text-align: left;
+}
+.wall-button:hover {
+    border-color: rgba(94, 222, 145, 0.5);
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.03);
+}
+.wall-button.active {
+    border-style: solid;
+    border-color: rgba(94, 222, 145, 0.40);
+    background: rgba(94, 222, 145, 0.07);
+    color: var(--text-main);
+}
+.wall-button-glyph { flex: none; }
+
+/* R47/R52: scan-in-progress indicator, pinned at the very bottom of the sidebar.
+   The row height is ALWAYS reserved — `hidden` toggles visibility, not display —
+   so starting/stopping a scan never reflows the preview + chips above it. */
+.scan-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 18px;
+    font-size: 11px;
+    color: var(--text-muted, rgba(255,255,255,0.6));
+    margin: 0 auto;
+}
+.scan-indicator[hidden] { visibility: hidden; }
+.scan-indicator .spinner {
+    width: 12px;
+    height: 12px;
+    border-width: 2px;
+}
+
+
+.sidebar-device-select {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    outline: none;
+    box-sizing: border-box;
+    margin-bottom: 8px;
+    text-align: center;
+    transition: border-color 0.2s, background-color 0.2s;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.6)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 12px;
+    padding-right: 24px;
+}
+.sidebar-device-select:hover {
+    border-color: var(--primary);
+    background-color: rgba(255, 90, 31, 0.05);
+}
+.sidebar-device-select option {
+    background-color: #1a1b20;
+    color: var(--text-main);
+    text-align: left;
+}
+
+.sidebar-device-name {
+    display: none;
+}
+
+/* Speaker + Resolution moved to Settings → Devices tables.
+   Status row no longer rendered in the sidebar. */

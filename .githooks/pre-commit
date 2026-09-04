@@ -1,0 +1,20 @@
+#!/bin/bash
+# pre-commit — layer-1 structural gate, STAGED scope.
+# Installed by gates_of_heck/install.sh. Delegates to the shared checkout;
+# there is exactly ONE copy of every checker (this hook vendors nothing).
+set -euo pipefail
+
+GOH="${GOH_DIR:-${GOH:-$HOME/Projects/gates_of_heck}}"
+root="$(git rev-parse --show-toplevel)"
+structural="$GOH/gates/structural.sh"
+
+if [ ! -f "$structural" ] && [ -f "$root/checks/check_no_emoji.py" ]; then
+    structural="$root/gates/structural.sh"   # self-hosted: this IS gates_of_heck
+fi
+if [ ! -f "$structural" ]; then
+    echo "✗ pre-commit: cannot find gates_of_heck at $GOH" \
+        "(set GOH_DIR or run its install.sh)" >&2
+    exit 1
+fi
+
+exec "$structural" --staged

@@ -1,0 +1,163 @@
+/* wall.css — Display Wall Canvas Arranger styling */
+
+.arranger-card {
+    border-color: rgba(157, 78, 221, 0.15);
+    width: 100%;
+}
+
+.arranger-workspace-free {
+    position: relative;
+    width: 100%;
+    height: 380px;
+    background: rgba(0, 0, 0, 0.35);
+    background-image: 
+        linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    background-size: 20px 20px;
+    border: 1px dashed rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    overflow: hidden;
+    backdrop-filter: blur(10px);
+}
+
+.arranger-workspace-free:empty::before {
+    content: "No devices placed on canvas. Click 'Add Screen' to arrange your grid.";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 12px;
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+    text-align: center;
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+/* Drag node representing Divoom screen proportional scaled sizes */
+.arranger-node {
+    position: absolute;
+    background: rgba(157, 78, 221, 0.1);
+    border: 2px solid var(--secondary);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: move;
+    user-select: none;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    transition: border-color 0.2s, box-shadow 0.2s;
+    overflow: hidden;
+}
+
+.arranger-node:hover {
+    border-color: var(--primary);
+    box-shadow: 0 0 15px rgba(0, 255, 204, 0.25);
+}
+
+.arranger-node.dragging {
+    opacity: 0.75;
+    border-color: var(--primary);
+    box-shadow: 0 0 25px var(--primary-glow);
+    z-index: 100;
+}
+
+/* Legacy text labels hidden to declutter screen */
+.arranger-node-label,
+.arranger-node-mac {
+    display: none;
+}
+
+/* Color chip: the device's identity color (color-coding) */
+.arranger-node-chip {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px rgba(0,0,0,0.35);
+    z-index: 3;
+}
+
+/* Front-facing schematic screen: always faces the viewer so preview aligns */
+.arranger-node-screen {
+    width: 70%;
+    height: 70%;
+    background: #0a0a0a;
+    border: 2px solid var(--node-accent, var(--secondary));
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.8);
+    z-index: 1;
+}
+
+/* Live preview rendered into the device's screen region (pixelated, 1:1) */
+.arranger-node-preview {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    image-rendering: pixelated;
+    z-index: 2;
+}
+
+.arranger-node-remove {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 16px;
+    height: 16px;
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: 50%;
+    color: #ffffff;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 3;
+    transition: background 0.2s;
+}
+
+.arranger-node-remove:hover {
+    background: #ef4444;
+}
+
+.mini-canvas-view {
+    width: 80px;
+    height: 80px;
+    background: #05060c;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-mono);
+    position: relative;
+}
+
+/* easy_drag exclusion regions */
+.arranger-workspace-free,
+.arranger-node {
+    -webkit-app-region: no-drag !important;
+}
+
+.arranger-popup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 25px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.25);
+    z-index: 2000;
+    min-width: 320px;
+    backdrop-filter: blur(15px);
+}

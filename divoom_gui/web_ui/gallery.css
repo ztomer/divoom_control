@@ -1,0 +1,483 @@
+/* gallery.css — Cloud Community Gallery and Monthly Best layouts */
+
+/* Gallery grid lists */
+/* R15 §2: cap the box at 168px (was 1fr) so a wide Monthly Best panel
+ * doesn't grow the tiles past 168px each — keeping the preview tile
+ * aspect-ratio legible. 110px floor is the smallest preview + name we
+ * can fit comfortably. */
+.gallery-grid {
+    display: grid;
+    /* R40 §3: cap cell width so gallery tiles render at the same scale as the
+       hot-channel thumbnails (112px image + tile chrome ≈ 128px). */
+    grid-template-columns: repeat(auto-fill, minmax(110px, 128px));
+    gap: 12px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 5px;
+}
+
+.gallery-item {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.25s ease;
+}
+
+.gallery-item:hover {
+    border-color: rgba(157, 78, 221, 0.3);
+    background: rgba(157, 78, 221, 0.02);
+}
+
+.gallery-item.active,
+.gallery-item.selected {
+    border-color: var(--primary);
+    background: rgba(255, 90, 31, 0.06);
+}
+
+.gallery-item-name {
+    font-size: 13px;
+    font-weight: 600;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gallery-item-preview-box {
+    width: 100%;
+    height: 0;
+    padding-bottom: 100%;
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid var(--border-color);
+}
+
+.gallery-item-preview {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+/* Honest placeholders: "still loading" must look different from "no preview
+   available" — both used to show the same static Pixoo logo, which read as
+   a broken gallery. */
+.gallery-item-preview.is-loading {
+    opacity: 0.35;
+    animation: gallery-item-pulse 1.4s ease-in-out infinite;
+}
+
+.gallery-item-preview.is-unavailable {
+    opacity: 0.25;
+    filter: grayscale(1);
+}
+
+@keyframes gallery-item-pulse {
+    0%, 100% { opacity: 0.2; }
+    50% { opacity: 0.45; }
+}
+
+.gallery-item-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+    display: flex;
+    justify-content: space-between;
+}
+
+.gallery-item-magic {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    background: rgba(255,255,255,0.05);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+/* ── Sticky Flex Hot Channel & Gallery ──────────────────────────────── */
+#hot-channel.active,
+#gallery.active {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+
+#pixel-hot-channel .card.glass-card,
+#pixel-gallery .card.glass-card,
+#hot-channel .card.glass-card,
+#gallery .card.glass-card {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+}
+
+#pixel-hot-channel .card-body,
+#pixel-gallery .card-body,
+#hot-channel .card-body,
+#gallery .card-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+}
+
+/* R40: the gallery moved into the Pixel Art section (#pixel-gallery); this
+   override lets the grid FILL the card and scroll internally instead of being
+   clamped at the base .gallery-grid max-height:400px. The old #gallery selector
+   no longer matched after the move, which stranded the grid at 400px. */
+#pixel-gallery .gallery-grid,
+#gallery .gallery-grid {
+    flex: 1;
+    max-height: none;
+    overflow-y: auto;
+    min-height: 0;
+    margin-bottom: 0;
+    padding-bottom: 20px;
+}
+
+/* ── Hot-channel: target multi-select + schedule (area 4) ──────────── */
+.hot-channel {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.hc-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.hc-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+/* ── Hot channel preview ─────────────────────────────────────────────── */
+.hot-preview-area {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.03);
+    animation: fadeSlideIn 0.25s ease;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+.hot-preview-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+    gap: 8px;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 4px;
+    align-content: start;
+}
+.hot-preview-empty {
+    font-size: 12px;
+    color: var(--text-muted);
+    padding: 8px 0;
+    grid-column: 1 / -1;
+}
+.hot-preview-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 6px;
+    border-radius: 6px;
+    font-size: 11px;
+    transition: background 0.15s;
+    cursor: default;
+}
+.hot-preview-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+.hot-preview-thumb {
+    width: 112px;
+    height: 112px;
+    object-fit: contain;
+    image-rendering: pixelated;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+}
+
+@keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.sync-targets-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    /* R52: the Auto-Sync tab has plenty of vertical room — show all known
+       devices without scrolling (cap high enough for ~12, still scrolls past). */
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.target-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    -webkit-app-region: no-drag;
+}
+
+.target-row:hover { background: rgba(130, 131, 138, 0.08); }
+
+.target-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-main);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    max-width: 100%;
+}
+
+.hc-actions { display: flex; gap: 10px; }
+
+.hc-schedule {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 12px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.hc-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-main);
+    cursor: pointer;
+}
+
+/* ── Sync Target Info Elements ─────────────────────────────────────── */
+.sync-target-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.sync-target-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.sync-target-list {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* ── Gallery side-by-side layout ──────────────────────────────────────── */
+.gallery-split-card {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+.gallery-split-layout {
+    display: grid;
+    grid-template-columns: 112px 1fr;
+    gap: 0;
+    flex: 1;
+    min-height: 0;
+    height: 100%;
+}
+.gallery-sidebar {
+    display: flex; flex-direction: column;
+    gap: 2px; padding: 10px 8px;
+    border-right: 1px solid var(--border-color);
+    overflow-y: auto; min-height: 0;
+}
+.gallery-sidebar-title {
+    font-size: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-muted); margin-bottom: 6px; flex-shrink: 0;
+}
+.gallery-category-list {
+    display: flex; flex-direction: column;
+    gap: 1px; flex: 1; min-height: 0;
+    overflow-y: auto;
+}
+.cat-btn {
+    display: block; width: 100%; text-align: left;
+    padding: 6px 10px; border: none; border-radius: 4px;
+    background: transparent; color: var(--text-main);
+    font-size: 12px; font-weight: 500; cursor: pointer;
+    transition: all 0.15s; font-family: var(--font-sans);
+}
+.cat-btn:hover { background: rgba(255, 255, 255, 0.05); }
+.cat-btn.active { background: var(--primary); color: #fff; font-weight: 600; }
+.gallery-main {
+    display: flex; flex-direction: column;
+    padding: 10px; min-height: 0; overflow: hidden;
+}
+
+/* ── Gallery controls row (sort + size) ──────────────────────────────── */
+.gallery-controls-row {
+    flex-shrink: 0;
+}
+
+/* ── Hot Channel / Gallery — single-column fill layouts ─────────────── */
+.hot-channel-layout,
+.gallery-full-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+    flex: 1;
+    min-height: 0;
+    align-items: stretch;
+}
+
+/* R53: per-device "Last checked <when>" stamp under the Update button. Empty
+   (and collapsed) when the device has never been checked. Amber when >2 weeks
+   old so an undated "up to date" can't quietly mislead. */
+.hot-last-checked {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+    margin-top: 6px;
+    min-height: 14px;
+}
+.hot-last-checked:empty { margin-top: 0; }
+.hot-last-checked.stale { color: #f59e0b; }
+
+/* ── Gallery Card Item Info and Ellipsis ────────────────────────────── */
+.gallery-item-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+.gallery-item-info h5 {
+    font-size: 11px;
+    font-weight: 600;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-main);
+}
+.gallery-item-info span {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    display: block;
+}
+
+/* ── Custom Target Checkbox Styling ─────────────────────────────────── */
+.target-checkbox {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border: 1px solid var(--input-border);
+    border-radius: 3px;
+    background: var(--input-bg);
+    outline: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    margin: 0;
+    flex-shrink: 0;
+}
+.target-checkbox:checked {
+    background: var(--primary);
+    border-color: var(--primary);
+}
+/* ── Hot-channel update — in-button progress bar ──────────────────────*/
+#hot-update-btn {
+    position: relative;
+    overflow: hidden;
+    transition: opacity 0.3s, box-shadow 0.3s;
+}
+#hot-update-btn.progress-active {
+    pointer-events: none;
+    cursor: default;
+    opacity: 0.85;
+    box-shadow: none;
+}
+#hot-update-btn.progress-ok {
+    border-color: #22c55e;
+    box-shadow: 0 0 12px rgba(34, 197, 94, 0.35);
+}
+#hot-update-btn.progress-fail {
+    border-color: #ef4444;
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.35);
+}
+.hot-progress-wrap {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: inherit;
+}
+.hot-progress-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 0%;
+    background: linear-gradient(90deg, #2563eb, #3b82f6);
+    transition: width 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    border-radius: inherit;
+}
+.hot-progress-text {
+    position: relative;
+    z-index: 1;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: var(--font-display);
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+}
+
+.target-checkbox:checked::after {
+    content: "";
+    width: 8px;
+    height: 8px;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M1 3h1v1H1zm1 1h1v1H2zm1 1h1v1H3zm1-1h1v1H4zm1-1h1v1H5zm1-1h1v1H6zm1-1h1v1H7z' fill='%23ffffff'/%3E%3C/svg%3E");
+    background-size: 8px 8px;
+    background-repeat: no-repeat;
+    display: block;
+}

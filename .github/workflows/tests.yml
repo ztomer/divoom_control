@@ -1,0 +1,233 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  no-emoji:
+    # House style gate: emoji are a failure state — only the Kare icon set is
+    # permitted (the canonical checker in gates_of_heck: checks/check_no_emoji.py,
+    # consumed via GOH_DIR). Fast, no build needed.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Canonical house gates live in the public gates_of_heck repo.
+      - name: Check out gates_of_heck
+        uses: actions/checkout@v7
+        with:
+          repository: ztomer/gates_of_heck
+          path: goh
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - name: Check for disallowed emoji
+        # R67: CI used to invoke the goh checker DIRECTLY while the local gate
+        # went through scripts/house_emoji_gate.sh, which passes the repo's
+        # GOH_EXCLUDE from .gatesrc. So CI scanned docs/divoom_docs/ — captured
+        # third-party Divoom API responses full of emoji — and local did not.
+        # The local gate was WEAKER than CI's, which is the house trap in its
+        # documented direction, and it is why this job had been red since
+        # 2026-08-23 while every local run said green.
+        #
+        # Both sides now run the SAME wrapper with the SAME config. A gate whose
+        # two invocations disagree is not one gate.
+        run: GOH_DIR="$GITHUB_WORKSPACE/goh" ./scripts/house_emoji_gate.sh
+      - name: Check source files within 500-line house limit
+        run: python3 tools/check_file_size.py
+      # R67: these ran ONLY in the local gate list, so local and CI disagreed
+      # about what "green" means — the same divergence the house rules name,
+      # pointing the other way. They resolve the TUI via tools/_tui.py, which
+      # finds the goh checkout above and degrades to plain text if absent.
+      - name: Scripts parse, lint, and reference live modules
+        run: python3 tools/check_scripts.py
+      - name: Positional args are not read from the compacted list
+        run: python3 tools/check_positional_args.py
+      - name: Rust and Python weather maps agree
+        run: python3 tools/check_weather_parity.py
+      - name: hotchannel.json's two parsers agree (R72)
+        run: python3 tools/check_hotchannel_parity.py
+      - name: Everything the daemon owns lives in the daemon (R72)
+        run: python3 tools/capability_census.py
+      - name: The GUI is a client, not a second implementation (R70)
+        run: python3 tools/check_gui_is_a_client.py
+      - name: Version is consistent across pyproject, CHANGELOG, tags and crates
+        run: python3 tools/check_version_consistency.py
+
+  test:
+    # macOS so clang builds the dylib and the native (C) encoder tests actually run.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      # R70 P5.2: the `brew install portaudio` step that used to sit here is
+      # gone with the audio visualizer. pyaudio has no macOS-arm64 wheel, so
+      # every macOS CI run built it from Homebrew sources — for a 150-line
+      # worker that no JS could start, and that was never in requirements.txt
+      # at all.
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt || true
+          # Pinned for reproducibility. NOTE: this pin is not the one that
+          # decides whether the e2e suite passes -- the BROWSER BUILD is (see
+          # the fetch step below). camoufox accepts any build in [alpha.1, 1),
+          # so pinning the package alone still lets `fetch` take the newest.
+          pip install pytest pillow playwright 'camoufox==0.5.5'
+
+      - name: Install the camoufox browser
+        # The GUI e2e suites (15 modules) drive headless camoufox via
+        # tests/support/browser.py. Without the binary they genuinely SKIP
+        # (tests/test_e2e_browser_guard.py pins that) — before R66 the
+        # importorskip guard only checked the Python module, so a missing
+        # browser produced 69 failures that looked like real regressions.
+        #
+        # `camoufox fetch` EXITS 0 WHEN IT INSTALLS NOTHING. Run 32654312489
+        # hit GitHub's unauthenticated API rate limit (60/hr, shared across
+        # every Actions runner on that egress IP), printed three 403s and
+        # "Synced 0 versions from 0 repos.", and still reported this step
+        # green. The damage surfaced later, in pytest, looking like a test
+        # regression. Two independent fixes, because either alone still lies:
+        #   1. GITHUB_TOKEN removes the CAUSE — camoufox reads it (pkgman.py)
+        #      and it lifts the limit to 1000/hr/repo.
+        #   2. The verify step removes the SILENCE — a step that cannot fail
+        #      is not a gate, so we check the artifact, not the exit code.
+        #
+        # The BROWSER BUILD is pinned, and pinning the pip package is NOT
+        # enough: camoufox accepts any build in [alpha.1, 1), so a bare `fetch`
+        # takes the newest. The pin is now beta.29 — the current latest on the
+        # official/stable channel — and the suite reaches the page's main world
+        # explicitly through tests/support/browser.py rather than relying on a
+        # build where the two worlds happened to be the same one. The pin stays
+        # because "latest" is still a moving target: it is what makes a red run
+        # mean a code change, and it is verified below rather than assumed.
+        # tests/support/browser.py documents what reaching the main world takes.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          # The retry LOOPS ON THE VERIFICATION, not on the exit code. Looping on
+          # the exit code would never retry the failure we actually saw, because
+          # that failure exits 0 -- the loop would break on attempt 1 every time.
+          for attempt in 1 2 3; do
+            # `fetch <spec>` also SYNCS the repo list; `set` alone fails on a
+            # clean runner with "No repo cache found. Run 'camoufox sync'
+            # first." -- and there is no `sync` subcommand, so that advice is
+            # unfollowable. Fetching only the pinned build makes it the active
+            # one; `set` afterwards is belt-and-braces if anything else exists.
+            python -m camoufox fetch official/152.0.4-beta.29 || true
+            python -m camoufox set official/stable/152.0.4-beta.29 || true
+            if python3 tools/check_camoufox_installed.py; then
+              exit 0
+            fi
+            echo "attempt ${attempt}: no browser installed; retrying in $((attempt * 15))s"
+            sleep $((attempt * 15))
+          done
+          python3 tools/check_camoufox_installed.py  # emit the failure and exit non-zero
+          exit 1
+
+      # R70 P5.0. This gate imports DivoomGuiAPI to enumerate the REAL class —
+      # an AST approximation could disagree with the actual MRO, and the whole
+      # point is what exists at runtime. So it runs HERE, where the GUI's
+      # dependencies are installed, not in the dependency-free checks job:
+      # placed there it died with `ModuleNotFoundError: No module named
+      # 'webview'` before checking anything, which is exactly the trap
+      # tools/_tui.py was written for.
+      - name: Every GUI API method has a caller (R70)
+        run: python3 tools/check_gui_api_reachable.py
+
+      - name: Build native dylib
+        run: bash scripts/build_libdivoom.sh
+
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build native divoomd (ble) for the Rust-daemon parity suite
+        # Without this, tests/test_rust_daemon_parity.py skips (no binary) so the
+        # Rust↔Python parity tests never run in CI. Default features include `ble`.
+        run: cargo build -p divoomd --locked
+
+      - name: Run tests (C + Python parity + Rust-daemon parity + GUI e2e)
+        run: python3 -m pytest -q
+
+  rust-core:
+    # The hardware-/platform-free gate for the native daemon. Builds + tests the
+    # protocol/transport core WITHOUT the `ble` feature (no btleplug), on Linux —
+    # this is what regressed unnoticed in e4bd424 because no CI ran cargo.
+    #
+    # R66: runs from the WORKSPACE ROOT, not `working-directory: divoomd`. The
+    # old scoping meant divoom-menubar was never formatted, linted, built, or
+    # tested by any gate — it had never once been through cargo fmt. fmt/clippy
+    # cover every member; --no-default-features stays pinned to `-p divoomd`
+    # because the no-BLE core gate is about that crate specifically.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: No #[allow] in tracked Rust source (house gate)
+        run: python3 tools/check_no_allow.py
+      - name: Install D-Bus headers
+        # clippy --all-features enables `ble` → btleplug → dbus → libdbus-sys,
+        # which needs the system dbus-1.pc. Without this the clippy step fails
+        # on Ubuntu even though the job is otherwise the no-BLE core gate.
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+      - name: cargo fmt --check (whole workspace — no system deps needed)
+        run: cargo fmt --all -- --check
+      - name: cargo clippy (divoomd, all targets/features, deny warnings)
+        # Scoped to divoomd deliberately: this is the LINUX job, and a
+        # workspace-wide clippy pulls in divoom-menubar, whose tao/tray-icon
+        # deps need GTK/glib. That crate is macOS-only and never ships on
+        # Linux, so installing a GTK toolchain here would be buying a
+        # dependency to lint a binary this platform does not build.
+        # The macOS rust-ble job lints the whole workspace instead.
+        run: cargo clippy -p divoomd --all-targets --all-features -- -D warnings
+      - name: Build core without BLE
+        run: cargo build -p divoomd --no-default-features --locked
+      - name: Test core without BLE
+        run: cargo test -p divoomd --no-default-features --locked
+      - name: Built binaries report the app version (house gate)
+        # AFTER the build on purpose: this gate reads target/, so running it
+        # earlier would find nothing built and pass on the absence of its
+        # subject. See tools/check_built_binaries.py.
+        run: python3 tools/check_built_binaries.py
+
+  rust-ble:
+    # Full native daemon build with the `ble` feature (btleplug against
+    # CoreBluetooth). macOS so clang builds the libdivoom dylib and the FFI
+    # encoder-parity test runs instead of skipping.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build native dylib (FFI encoder parity test dependency)
+        run: bash scripts/build_libdivoom.sh
+      - name: cargo clippy (whole workspace, all targets/features, deny warnings)
+        # macOS owns the workspace-wide lint: it is the only platform where
+        # divoom-menubar (tao/tray-icon) builds without extra system packages.
+        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Build + test with BLE (whole workspace)
+        # Workspace root: this also builds and runs divoom-menubar's tests,
+        # which no CI job reached before R66.
+        run: cargo test --locked
+      - name: Built binaries report the app version (house gate)
+        # The only job that builds BOTH product binaries, so the only one where
+        # divoom-menubar's stamp is checked. Runs after the build for the same
+        # reason as in rust-core.
+        run: python3 tools/check_built_binaries.py
+
+  rust-ble-linux:
+    # Best-effort: prove the btleplug BlueZ backend COMPILES on Linux. No device,
+    # no runtime claim (maintainer has no Linux hardware). Non-blocking.
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install BlueZ/D-Bus headers (btleplug build dep)
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+      - name: Build with BLE (compile-only)
+        run: cargo build -p divoomd --features ble --locked

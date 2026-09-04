@@ -1,0 +1,13 @@
+bleak
+aiohttp
+pillow
+pycryptodome
+lzallright
+pywebview; sys_platform == "darwin"   # desktop Control Center GUI (gui/ui_main.py)
+tomli; python_version < "3.11"
+tomli-w
+# test deps
+pytest
+pytest-asyncio
+numpy
+psutil

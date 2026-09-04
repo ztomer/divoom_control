@@ -1,0 +1,24 @@
+# Repo-local target dir — overrides the machine-wide shared target-dir in
+# ~/.cargo/config.toml.
+#
+# This app's build output must be repo-local and predictable: setup_app.py and
+# divoom.spec collect divoomd + divoom-menubar into the shipped .app/DMG by
+# path, gui_main.py and daemon_client.py resolve the binaries at runtime, and
+# five test modules spawn them. Building into a machine-wide shared dir would
+# leave all of those pointing at whatever stale binary was last built in-tree —
+# silently shipping a stale daemon rather than failing loudly.
+#
+# This override is still LOAD-BEARING. A previous version of this comment claimed
+# R66 Phase 3 had replaced the hardcoded "<crate>/target/..." literals with
+# `cargo metadata`-derived resolution, "so the paths stay correct even if this
+# override is ever removed". That is not true of the tree: setup_app.py:62,65 and
+# divoom.spec:40,41 still name target/release/divoomd and
+# target/release/divoom-menubar literally, and nothing in the repo calls
+# `cargo metadata`. Removing the override on the strength of that sentence would
+# have packaged whatever stale binary was last built in-tree — silently, which is
+# the exact failure the paragraph above warns about.
+#
+# Reclaiming the ~8.5G this dir costs therefore means doing the metadata work
+# FIRST, not deleting this file.
+[build]
+target-dir = "target"

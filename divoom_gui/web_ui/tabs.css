@@ -1,0 +1,138 @@
+/* tabs.css — single source of truth for the tab chrome used in
+   Channels, Tools, Settings, and any future sub-tab row. (R15 §1+§7.)
+
+   Design rationale (Rams + Kare):
+   - Rams: "less but better" — one chrome, one state model, no
+     competing visual treatments across panels.
+   - Kare: icons earn their place when they carry identity (the
+     7 channel icons). Tools/Settings sub-tabs are text-only; the
+     channel row is `[icon] Label`. The optional icon prefix slot
+     keeps the row's visual rhythm identical across panels.
+   - Active state is `--primary` bg + `#ffffff` text, everywhere.
+     The focus indicator is the fill, not a border — no border
+     competes with the fill.
+
+   Selector contract:
+   - The row wrapper is `.tabs-row`.
+   - Each tab is `.tab-btn` with `data-tab="<id>"`.
+   - Active state is `.tab-btn.active`.
+   - Optional icon prefix: `<svg class="tab-icon">` or `<img class="tab-icon">`.
+   - Tooltips: `title` attribute.
+*/
+/* R24 r2 / R28: every tab row sits on its OWN glass panel — the same treatment
+   in Channels, Tools, and Settings (previously only Channels had a glass panel
+   and Tools/Settings had bare tabs on a transparent strip). Tokens mirror
+   settings.css `.glass-card` so the three read identically.
+
+   R28: the pane's vertical padding and its gap to the content cards below are
+   driven entirely by the `--tab-pane-*` tokens in style.css `:root` — the single
+   place to tune tab spacing. `margin-bottom` is the universal gap mechanism
+   (works whether the parent is a grid like Channels or a block like
+   Tools/Settings); the Channels grid's own `gap` is zeroed so it doesn't
+   double-space (see `#control-panel .grid-layout` in style_extra.css). */
+.tabs-section {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: var(--tab-pane-pad-y) var(--tab-pane-pad-x);
+  /* The gap to the content below is owned by the parent context, not a fixed
+     margin here, because the parents differ: Channels nests the pane in a CSS
+     grid, while Tools/Settings make it a direct flex child of .tab-content.
+     - Channels (grid): #control-panel .grid-layout sets row-gap (style_extra.css).
+     - Tools/Settings (flex): the rule just below cancels the .tab-content flex
+       `--panel-gap` and re-adds `--tab-pane-gap` so the net gap is identical. */
+  margin: 0;
+  box-sizing: border-box;
+}
+
+/* R28 r2: in a flex .tab-content (Tools, Settings) the pane is a direct child,
+   so it inherits the panel's `--panel-gap` flex gap. Cancel it and substitute
+   `--tab-pane-gap` so the pane→content gap matches the grid (Channels) context.
+   Does NOT match Channels: there the pane is nested inside .grid-layout, not a
+   direct child of .tab-content. */
+.tab-content > .tabs-section {
+  margin-bottom: calc(var(--tab-pane-gap) - var(--panel-gap));
+}
+
+/* R40 §5: keep the Settings sub-tab row visible while the panel scrolls
+   (the scroll container is .main-content; the pane is a normal-flow child, so
+   sticky pins it to the top). The pane already has an opaque var(--card-bg). */
+#settings > .tabs-section {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.tabs-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 2px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  width: fit-content;
+  /* Centered; scrollbar-gutter:stable on .tab-content.active prevents
+     horizontal shift when the vertical scrollbar appears/disappears. */
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.tabs-row .tab-btn {
+  flex: 0 0 auto;
+  height: 30px;
+  padding: 0 14px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.tabs-row .tab-btn:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* Matches .nav-btn.active's translucent-tint pattern (sidebar.css) — a solid
+   saturated fill here read as a different, heavier "selected" language than
+   the rest of the app uses for the same state. */
+.tabs-row .tab-btn.active {
+  background: rgba(255, 90, 31, 0.12);
+  color: var(--primary);
+  border-color: rgba(255, 90, 31, 0.3);
+}
+
+.tabs-row .tab-btn.active .tab-icon {
+  /* Slight lift so the icon stays visible against the primary fill. */
+  opacity: 1;
+}
+
+.tabs-row .tab-icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  color: currentColor;
+  opacity: 0.85;
+}
+
+/* Theme overrides — the segmented-pill must read in both dark and light. */
+body.theme-light .tabs-row {
+  background: rgba(0, 0, 0, 0.04);
+}
+body.theme-light .tabs-row .tab-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+body.theme-system .tabs-row {
+  background: rgba(0, 0, 0, 0.04);
+}
+body.theme-system .tabs-row .tab-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+}

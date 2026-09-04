@@ -1,0 +1,24 @@
+#!/usr/bin/env python3
+"""
+Thin wrapper: `divoom-control` → `python -m divoom_lib.cli`.
+Symlink this into your PATH, or call directly:
+    ./divoom-control scan
+    sudo ln -sf "$(pwd)/divoom-control" /usr/local/bin/divoom-control
+
+For a real installable entry point, see the discussion in
+`docs/PLANNING_ROUND13.md` §2 about adding a `pyproject.toml`
++ `[project.scripts] divoom-control`.
+"""
+import os
+import sys
+
+# Insert the repo root (the dir containing this script) onto sys.path so
+# `divoom_lib` is importable regardless of where the user calls from.
+HERE = os.path.dirname(os.path.abspath(__file__))
+if HERE not in sys.path:
+    sys.path.insert(0, HERE)
+
+from divoom_lib.cli import main
+
+if __name__ == "__main__":
+    sys.exit(main())

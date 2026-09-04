@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Embedded into the divoomd Mach-O via build.rs (-sectcreate __TEXT
+       __info_plist). A loose helper binary needs its OWN usage description for
+       macOS TCC to attribute/prompt a Bluetooth grant when spawned by the GUI
+       .app — without this the bundled daemon's CoreBluetooth access is silently
+       denied (no prompt). This is the documented mechanism for command-line /
+       helper tools that request privacy-gated access. -->
+  <key>CFBundleIdentifier</key>
+  <string>com.divoom.divoomd</string>
+  <key>CFBundleName</key>
+  <string>divoomd</string>
+  <key>NSBluetoothAlwaysUsageDescription</key>
+  <string>Divoom Control connects to your Divoom pixel displays over Bluetooth.</string>
+</dict>
+</plist>

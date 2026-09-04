@@ -1,0 +1,47 @@
+# Message/MessageGroup/Forum API
+
+Divoom's in-app social layer: private DMs and group chat (both riding on the
+RongCloud IM SDK — `io.rong.imkit`/`io.rong.imlib` — for the actual message
+transport, with Divoom's own HTTP API used only for conversation bookkeeping,
+notification config, and the moderation/report side-channel), plus the
+community forum (posts, comments, likes, tags). None of this touches device
+control; it's account/social scaffolding for the mobile app's community
+features. A web search for a public Divoom+RongCloud integration doc turned
+up nothing — RongCloud is a generic Chinese IM-as-a-service vendor with its
+own public docs, but Divoom's use of it is undocumented/internal, as
+expected for this domain.
+
+All commands below were found declared in `http/HttpCommand.java` and cross-checked
+against real callers in `view/fragment/**` and `**/model/*.java`, except where noted.
+
+| Command | Purpose | Request fields | Response fields | Relevance | Confidence |
+|---|---|---|---|---|---|
+| `Message/DeleteConversation` | Delete a DM conversation (thread) with another user. | Unknown — no request class or caller found anywhere in the decompiled sources; only the `HttpCommand.MessageDeleteConversation = "Message/DeleteConversation"` constant exists. | Unknown | account/social | name-only |
+| `Message/GetCommentList` | Fetch the "someone commented on your work" notification list (despite the name, the response class reuses the Like-list shape). | `CountryISOCode`, `Language`, `StartNum`, `EndNum` (`MessageGetCommentListRequest`) | `LikeList` (list of `LikeListItem`: `CommentId`, `Comment`, `CommentType`, `GalleryId`/`GalleryFileId`/`GalleryName`, `ClockId`, `PixelAmbId`/`PixelAmbName`, `ForumId`, `UserId`/`NickName`/`HeadId`/`Level`, `IsFollow`, `Relation`, `Date`, `CountryISOCode`, `RegionId`, `AckUserId`, `LikeType`), `UnReadCnt` (`MessageGetCommentListResponse`) | account/social | decompiled |
+| `Message/GetConversationList` | Fetch the server-side snapshot of DM conversations (used to backfill/merge into the local RongCloud conversation list). | Empty (`new BaseRequestJson()` — auth fields only) | `ConversationList`: list of `{Message, SendTime, TargetUserId}` (`MessageGetConversationListResponse`) | account/social | decompiled |
+| `Message/GetCustomInfo` | Resolve the caller's "custom" numeric user id (used as a fallback/legacy account id for messaging). | `CountryISOCode` (`MessageGetCustomInfoRequest`) | `CustomUserId` (int) (`MessageGetCustomInfoResponse`) | account/social | decompiled |
+| `Message/GetFansList` | Fetch the "new follower" notification list. | `CountryISOCode`, `Language`, `StartNum`, `EndNum` (`MessageGetFansListRequest`) | `LikeList` (list of `LikeListItem`, same shape as GetCommentList), `UnReadCnt` (`MessageGetFansListResponse`) | account/social | decompiled |
+| `Message/GetLikeList` | Fetch the "someone liked your work" notification list. | `CountryISOCode`, `Language`, `StartNum`, `EndNum` (`MessageGetLikeListRequest`) | `LikeList` (list of `LikeListItem`, same shape), `UnReadCnt` (`MessageGetLikeListResponse`) | account/social | decompiled |
+| `Message/GetNotifyConfig` | Fetch the user's push-notification toggles for likes/comments/fans. | Empty (`new BaseRequestJson()`) | `LikeConfig`, `CommentConfig`, `FansConfig` (ints) (`MessageGetNotifyConfigResponse`) | account/social | decompiled |
+| `Message/GetUnReadCnt` | Fetch unread counters for likes/comments/fans (badges the message-center icon, combined with RongCloud's own unread count). | Empty (`new BaseRequestJson()`) | `LikeUnReadCnt`, `CommentUnReadCnt`, `FansUnReadCnt` (ints) (`MessageUnReadResponse`) | account/social | decompiled |
+| `Message/SetConversation` | Push a local DM's latest-message snapshot up to the server (mirrors RongCloud conversation state into Divoom's own conversation list). | `Message` (String), `SendTime` (long), `TargetUserId` (int) (`MessageSetConversationRequest`) | Base result only (`BaseResponseJson`) | account/social | decompiled |
+| `Message/SetNotifyConfig` | Update the user's push-notification toggles for likes/comments/fans. | `LikeConfig`, `CommentConfig`, `FansConfig` (ints) (`MessageSetNotifyConfigRequest`) | Base result only (`BaseResponseJson`) | account/social | decompiled |
+| `MessageGroup/GetGroupList` | Fetch the catalog of joinable/joined group-chat rooms, organized by classify/category. | Empty (`new BaseRequestJson()`) | `ClassifyList`: list of `{ClassifyName, GroupList: [{GroupId, GroupName, ChannelId, ClassifyName, GroupExplain, GroupPixelFileId, Joined, MessageType, PictureInterval, PixelInterval, TextInterval, VideoInterval, unread}]}` (`MessageGetGroupListResponse`) | account/social | decompiled |
+| `MessageGroup/JoinGroup` | Join a group-chat room by id. | `GroupId` (String) (`MessageGroupJoinGroupRequest`) | Base result only (`BaseResponseJson`) | account/social | decompiled |
+| `MessageGroup/MemberExist` | Check whether the current user is already a member of a given group. | `GroupId` (String) — reuses `MessageGroupJoinGroupRequest` | `Exist` (int, boolean-ish) (`MessageGroupMemberExistResponse`) | account/social | decompiled |
+| `MessageGroup/QuitGroup` | Leave a group-chat room by id. | `GroupId` (String) — reuses `MessageGroupJoinGroupRequest` | Base result only (`BaseResponseJson`) | account/social | decompiled |
+| `MessageGroup/Report` | Report an abusive message inside a group chat (or a group itself) to moderators. | `SentTime` (long), `MessageImageUrl`, `MessagePixelFileId`, `ReportText`, `MessageText`, `MessageVideoUrl`, `TargetUserId` (int), `MessageUID`, `TargetId`, `BusChannel`, `ReportType` (int) (`MessageGroupReportRequest`) | Base result only (`BaseResponseJson`) | internal/moderation | decompiled |
+| `MessageGroup/WatchGroup` | Mark a group as "watched"/viewed (likely clears its unread badge server-side). | `GroupId` (String) — reuses `MessageGroupJoinGroupRequest` | Base result only (`BaseResponseJson`) | account/social | decompiled |
+| `MessageGroup/recallMessage` | Recall (delete-for-everyone) a previously sent group message, mirroring RongCloud's client-side recall into Divoom's own record. | `busChannel`, `messageUID`, `sentTime` (long), `targetId` (`MessageGroupRecallMessageRequest`, plain fields not `@JSONField`-annotated) | Base result only (`BaseResponseJson`) | account/social | decompiled |
+| `Forum/CommentLike` | Like/unlike a comment on a forum post. | `CommentId` (int), `IsLike` (int, 0/1) (`ForumCommentLikeRequest`) | Base result only (`BaseResponseJson`) | account/social | decompiled |
+| `Forum/GetCommentListV2` | Fetch the comment list for a forum post (paginated). | `ForumId` (int), `MessageId` (int), `Language`, `StartNum`/`EndNum` (String, despite the name) (`GetForumCommentRequest`) | `CommentList` (list of `CommentListItem`), `CommentListNum`, `CurListNum` (`GetForumCommentResponse`) | account/social | decompiled |
+| `Forum/GetForumUrl` | Resolve a single forum post's metadata/share-link info by id. | `CountryISOCode`, `ForumId` (int), `ForumType` (int), `Language` (`GetForumUrlRequest`) | `ForumId`, `Title`, `NickName`, `UserId`, `HeadId`, `PixelAmbId`/`PixelAmbName`, `CountryISOCode`, `Level`, `IsFollow`, `IsLike`, `LikeCnt`, `CommentCnt`, `WatchCnt`, `Date`, `ImageId`, `LinkUrlNoComment`, `LinkUrlWithComment` (`GetForumUrlResponse`, does not extend `BaseResponseJson`) | account/social | decompiled |
+| `Forum/GetList` | Fetch the forum post feed (paginated, filterable by tag/region). | `StartNum`/`EndNum` (int), `Language`, `RegionId` (int), `Tag` (int) (`CloudForumListRequest`) | `ForumList` (list of `ForumListBean`: `ForumId`, `Title`, `NickName`, `UserId`, `HeadId`, `PixelAmbId`/`PixelAmbName`, `CountryISOCode`, `Level`, `IsFollow`, `IsLike`, `LikeCnt`, `CommentCnt`, `WatchCnt`, `Date`, `ImageId`, `LinkUrlNoComment`, `LinkUrlWithComment`), `HeaderNum`, `TotalNum` (`CloudForumListResponse`) | account/social | decompiled |
+| `Forum/GetTag` | Fetch the list of forum category tags (for feed filtering). | `CountryISOCode`, `Language` (`CloudForumTagRequest`) | `TagList`: list of `{TagName, TagValue}` (`CloudForumTagResponse`) | account/social | decompiled |
+| `Forum/Like` | Like/unlike a forum post. | `ForumId` (int), `IsLike` (int, 0/1) (`CloudForumLikeRequest`) | Base result only (`BaseResponseJson`) | account/social | decompiled |
+| `Forum/ReportComment` | Post a new comment on a forum post (name is misleading — this is the "add comment" call, not moderation reporting; the actual comment-abuse-report call is `Comment/ReportCommentV2`, a sibling command outside this batch). | `Comment` (String), `ForumId` (int) (`ForumCommentRequest`) | Base result only (`BaseResponseJson`) | account/social | decompiled |
+| `Comment/GetCommentListV3` | Fetch the comment list for a forum post/gallery item (v3, adds `GalleryId`/`MessageId` scoping over v2). | `GalleryId` (int), `MessageId` (int), `Language`, `StartNum`/`EndNum` (int) (`GetCommentListV3Request`) | `CommentList` (list of `CommentListItem`), `CommentListNum`, `CurListNum` (`GetCommentListV3Response`) | account/social | decompiled |
+
+## Unknown / no signal
+
+- `Message/DeleteConversation` — the command constant exists in `HttpCommand.java`, but no request/response class or call site was found anywhere in the decompiled sources. It may be dead/unused in this app version, or invoked via a code path this search missed (e.g. reflection or a generic conversation-delete helper).

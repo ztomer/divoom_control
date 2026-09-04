@@ -1,0 +1,22 @@
+{
+  "9": {
+    "file": "group1/M00/EC/D9/eEwpPWEhaG-ECSodAAAAAIeji308213335",
+    "bytes": 36868,
+    "n_frames": 24,
+    "size": [
+      16,
+      16
+    ],
+    "dur": 50
+  },
+  "18": {
+    "file": "group1/M00/0E/22/rBAAM2h6AyKEcqpBAAAAAD14x_E5596929",
+    "bytes": 4086,
+    "n_frames": 6,
+    "size": [
+      32,
+      32
+    ],
+    "dur": 100
+  }
+}

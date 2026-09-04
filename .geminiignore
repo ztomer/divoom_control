@@ -1,0 +1,33 @@
+# Ignore common build and dependency directories
+
+*.pyc
+*.pyo
+*.pyd
+.venv/
+env/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Ignore editor and IDE-specific files
+
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ignore operating system generated files
+
+.DS_Store
+Thumbs.db
+
+# Ignore logs and temporary files
+
+*.tmp
+tmp/
+
+# Ignore Gemini-specific files that are not part of the project's core codebase
+
+.gemini/
+progress.md

@@ -1,0 +1,459 @@
+/* settings.css — Settings sub-tabs, Braun borderless tables, connectivity legends */
+
+/* ── Transport Layer Badges ─────────────────────────────────────────── */
+.transport-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 20px;
+  opacity: 0.9;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.transport-badge.ble   { background: rgba(59,130,246,0.15); color: var(--transport-ble);   border: 1px solid rgba(59,130,246,0.3); }
+.transport-badge.lan   { background: rgba(34,197,94,0.15);  color: var(--transport-lan);   border: 1px solid rgba(34,197,94,0.3); }
+.transport-badge.cloud { background: rgba(245,158,11,0.15); color: var(--transport-cloud); border: 1px solid rgba(245,158,11,0.3); }
+.transport-badge.ext   { background: rgba(239,68,68,0.15);  color: var(--transport-ext);   border: 1px solid rgba(239,68,68,0.3); }
+
+/* ── Transport Status Panel (replaces single dot) ───────────────────── */
+.transport-status-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.06);
+  margin-top: 8px;
+}
+
+.transport-status-panel .panel-title {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.35);
+  margin-bottom: 2px;
+}
+
+.transport-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  cursor: default;
+}
+
+.transport-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: box-shadow 0.3s;
+}
+
+.transport-dot.active {
+  box-shadow: 0 0 6px currentColor;
+}
+
+.transport-dot.inactive {
+  opacity: 0.25;
+}
+
+.transport-row-label {
+  color: rgba(255,255,255,0.7);
+  font-weight: 500;
+  flex: 1;
+}
+
+.transport-row-detail {
+  font-size: 9px;
+  color: rgba(255,255,255,0.35);
+  text-align: right;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Card transport badge ── */
+.card-transport-badge {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 2;
+}
+
+.glass-card {
+    position: relative;
+    background: var(--card-bg) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 6px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    backdrop-filter: none !important;
+}
+
+/* R32 §E: the Connectivity & Privacy legend styles were removed along with
+   the explainer markup — the corner transport dots convey state on their own. */
+
+/* ── LAN config section ─────────────────────────────────────────────── */
+.lan-config-section {
+  margin-top: 20px;
+  padding: 16px;
+  background: rgba(34,197,94,0.05);
+  border-radius: 6px;
+  border: 1px solid rgba(34,197,94,0.15);
+}
+
+.lan-config-section h4 {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--transport-lan);
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.lan-probe-result {
+  margin-top: 10px;
+  font-size: 11px;
+  color: rgba(255,255,255,0.55);
+  min-height: 16px;
+}
+
+.lan-probe-result.success { color: var(--transport-lan); }
+.lan-probe-result.error   { color: var(--transport-ext); }
+
+/* ── Theme Mode Selector (Braun Edition) ───────────────────────────── */
+.theme-selector-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  margin-top: 20px;
+}
+
+.theme-selector-panel .panel-title {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.theme-buttons {
+  /* R18 item b: hug the three options instead of stretching full width. */
+  display: inline-flex;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.theme-mode-btn {
+  flex: 0 0 auto;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 0;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.theme-mode-btn:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.theme-mode-btn.active {
+  background: var(--primary);
+  color: #ffffff;
+}
+
+body.theme-light .theme-mode-btn.active {
+  color: #ffffff;
+}
+
+/* ── Settings Sub-Tabs Navigation (Braun Design) ───────────────────── */
+.settings-tabs-nav {
+  display: flex;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  padding: 4px;
+  gap: 4px;
+  margin-bottom: 24px;
+  max-width: 480px;
+}
+
+/* R15 §1+§7: tab chrome is now in tabs.css (single source of truth).
+   The legacy class names are aliased to .tab-btn / .tabs-row so
+   older markup that still references them keeps rendering. */
+.settings-tab-btn,
+.tools-subtab-btn,
+.theme-mode-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 16px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.settings-tab-btn:hover,
+.tools-subtab-btn:hover,
+.theme-mode-btn:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.settings-tab-btn.active,
+.tools-subtab-btn.active,
+.theme-mode-btn.active {
+  background: var(--primary);
+  color: #ffffff;
+}
+
+body.theme-light .settings-tab-btn.active,
+body.theme-light .tools-subtab-btn.active,
+body.theme-light .theme-mode-btn.active {
+  color: #ffffff;
+}
+
+.settings-tab-content,
+.tools-subtab-content,
+.routines-subtab-content {
+  display: none;
+}
+
+.settings-tab-content.active,
+.tools-subtab-content.active,
+.routines-subtab-content.active {
+  display: block;
+}
+
+/* Round 12 — Pill wrapper for segmented sub-tab nav. Applied to the
+   .settings-tabs-nav / .tools-tabs-nav containers so the children
+   visually merge into a single segmented control. */
+.settings-tabs-nav,
+.tools-tabs-nav {
+  display: flex;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  padding: 2px;
+  gap: 0;
+  margin-bottom: 16px;
+  max-width: 480px;
+}
+
+/* Round 8 — Tools sub-tabs: each consumer uses its own data-* attribute
+   so the JS nav handlers don't collide. Class names are aliased to the
+   shared segmented-pill rules above. */
+.settings-tabs-nav { /* alias kept for backward compat with markup */ }
+
+/* R15 §4: The "Danger zone" card uses a red border so the user knows
+   it contains destructive actions. The old `.danger-zone` sub-block
+   inside the Display card was extracted; the styling now lives on
+   the card itself via a marker class. */
+.card.glass-card.danger-card {
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.03);
+}
+.card.glass-card.danger-card > .card-header h3 {
+  color: var(--transport-ext);
+}
+
+/* Legacy .danger-zone (sub-block inside a card). Kept for any callers
+   that still reference it from elsewhere. */
+.danger-zone {
+  margin-top: 6px;
+  padding: 12px;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.05);
+}
+.glow-btn.danger {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: var(--transport-ext);
+}
+.glow-btn.danger:hover {
+  background: rgba(239, 68, 68, 0.28);
+  color: #ffffff;
+}
+
+/* Braun Tabular Data lists */
+.braun-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    font-family: var(--font-sans);
+    color: var(--text-main);
+    margin-top: 8px;
+    background: rgba(255, 255, 255, 0.01);
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+}
+
+.braun-table th, .braun-table td {
+    padding: 8px 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.braun-table th {
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.braun-table tbody tr {
+    transition: background 0.15s ease;
+}
+
+.braun-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.braun-table .device-row {
+    cursor: pointer;
+}
+
+.braun-table td.device-mac {
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    font-size: 10.5px;
+}
+
+.device-accent-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+/* ── Light Mode Status Panel Text Overrides ──────────────── */
+body.theme-light .transport-status-panel {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+body.theme-light .transport-status-panel .panel-title {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+body.theme-light .transport-row-label {
+  color: rgba(0, 0, 0, 0.8) !important;
+}
+
+body.theme-light .transport-row-detail {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+body.theme-light #gallery-device-select,
+body.theme-light #widget-device-select {
+  background: rgba(0, 0, 0, 0.05) !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  color: #1c1d21 !important;
+}
+
+@media (prefers-color-scheme: light) {
+    body.theme-system .transport-status-panel {
+      background: rgba(0, 0, 0, 0.04) !important;
+      border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    }
+    body.theme-system .transport-status-panel .panel-title {
+      color: rgba(0, 0, 0, 0.45) !important;
+    }
+    body.theme-system .transport-row-label {
+      color: rgba(0, 0, 0, 0.8) !important;
+    }
+    body.theme-system .transport-row-detail {
+      color: rgba(0, 0, 0, 0.5) !important;
+    }
+    body.theme-system #gallery-device-select,
+    body.theme-system #widget-device-select {
+      background: rgba(0, 0, 0, 0.05) !important;
+      border: 1px solid rgba(0, 0, 0, 0.1) !important;
+      color: #1c1d21 !important;
+    }
+}
+
+/* R14 §3 — macOS notification mirroring card.
+   The status pill lives in the card header; the rules editor lives
+   in a <details> body (collapsed by default to keep the card tidy). */
+.card-header { display: flex; align-items: center; justify-content: space-between; }
+.status-pill {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.7);
+}
+.status-pill[data-state="running"] {
+  border-color: rgba(94, 222, 145, 0.55);
+  color: #5ede91;
+  background: rgba(94, 222, 145, 0.10);
+}
+.status-pill[data-state="stopped"] {
+  border-color: rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.55);
+}
+.status-pill[data-state="error"] {
+  border-color: rgba(232, 92, 92, 0.55);
+  color: #e85c5c;
+  background: rgba(232, 92, 92, 0.10);
+}
+.status-pill[data-state="unsupported"] {
+  border-color: rgba(255, 200, 100, 0.55);
+  color: #ffc864;
+  background: rgba(255, 200, 100, 0.08);
+}
+#macnotif-detail {
+  white-space: pre;
+  line-height: 1.5;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  overflow-x: auto;
+}
+#macnotif-rules-msg[data-state="ok"]    { color: #5ede91; }
+#macnotif-rules-msg[data-state="warn"]  { color: #ffc864; }
+#macnotif-rules-msg[data-state="error"] { color: #e85c5c; }
+details > summary { list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+details[open] > summary { color: var(--text-muted); }
+

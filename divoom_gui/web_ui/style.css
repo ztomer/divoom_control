@@ -1,0 +1,273 @@
+/*
+   Divoom Wall Dashboard Stylings
+   Designed with premium Glassmorphism, Cyberpunk Slate, and neon highlights.
+
+   ──────────────────────────────────────────────────────────────────────
+   FONT POLICY  (enforced by tests/test_fonts.py)
+   ──────────────────────────────────────────────────────────────────────
+   This file is the SINGLE SOURCE OF TRUTH for all fonts in the GUI.
+   Three families are defined here as CSS variables; every other CSS
+   file (and every JS inline style) MUST reference one of them:
+
+       --font-display  →  Outfit        headings, titles, big numbers
+       --font-sans     →  Inter         body text, buttons, labels
+       --font-mono     →  Inter Mono    MAC addresses, technical strings
+
+   The names below mirror the Google Fonts request in index.html.
+   If you add a font, add it here AND to the index.html <link> AND
+   add a regression test in tests/test_fonts.py.
+   ──────────────────────────────────────────────────────────────────────
+*/
+
+@import url('appbar.css');
+@import url('sidebar.css');
+@import url('channels.css');
+@import url('custom_art.css');
+@import url('wall.css');
+@import url('widgets_base.css');
+@import url('widgets_extra.css');
+@import url('settings.css');
+@import url('gallery.css');
+@import url("style_extra.css");
+
+:root {
+    --bg-base: #121316;
+    --card-bg: #1e1f24;
+    --sidebar-bg: #18191d;
+    --legend-bg: #18191d;
+    --input-bg: #18191d;
+    --input-border: #4e505a;
+    --win-appbar-bg: rgba(10, 12, 22, 0.95);
+
+    --border-color: #2b2c32;
+    --border-hover: #ff5a1f;
+
+    --primary: #ff5a1f; /* Braun Tuner Orange Accent */
+    --primary-glow: rgba(255, 90, 31, 0.2);
+    --secondary: #6e6f76; /* Braun Matte Gray Accent */
+    --secondary-glow: rgba(110, 111, 118, 0.2);
+    --accent: #00cc66; /* Braun Indicator Green */
+    --warn: #ffcc00;   /* status: warning (amber) */
+    --error: #ff4444;  /* status: error (red) */
+
+    --text-main: #e8e9eb;
+    --text-muted: #82838a;
+    --sidebar-width: 168px;
+    --header-height: 80px;
+
+    /* ── FONT FAMILIES — single source of truth (see header comment) ── */
+    --font-display: 'Outfit', sans-serif;
+    --font-sans:    'Inter', sans-serif;
+    --font-mono:    'Inter Mono', ui-monospace, monospace;
+
+    /* ── TAB CHROME SPACING — single source of truth (R28) ──────────────
+       Every tab area (Channels, Tools, Settings) sits on its own glass
+       pane (.tabs-section). These three tokens are the ONLY place the tab
+       spacing is defined, so the panels read identically:
+         [--tab-pane-pad-y]
+         [   tab row       ]
+         [--tab-pane-pad-y]
+       then the content cards begin --tab-pane-gap below the pane. */
+    --tab-pane-pad-y: 2px;   /* glass-pane vertical padding (above + below the row) */
+    --tab-pane-pad-x: 12px;  /* glass-pane horizontal padding */
+    --tab-pane-gap:   1px;    /* gap from the pane to the cards below it */
+    --panel-gap:      12px;  /* general spacing between blocks inside a .tab-content */
+}
+
+/* ── Light Mode Redefinitions ── */
+body.theme-light {
+    --bg-base: #f4f4f6;
+    --card-bg: #ffffff;
+    --sidebar-bg: #e8e9eb;
+    --legend-bg: #e8e9eb;
+    --input-bg: #fdfdfe;
+    --input-border: #8b909a;
+    --win-appbar-bg: rgba(240, 241, 245, 0.95);
+    
+    --border-color: #d8dae0;
+    --border-hover: #e04e17;
+    
+    --primary: #ff5a1f;
+    --primary-glow: rgba(255, 90, 31, 0.12);
+    --secondary: #82838a;
+    --secondary-glow: rgba(130, 131, 138, 0.12);
+    --accent: #00a854;
+    
+    --text-main: #1c1d21;
+    --text-muted: #62636a;
+}
+
+/* ── System Auto Mode Mapping ── */
+@media (prefers-color-scheme: light) {
+    body.theme-system {
+        --bg-base: #f4f4f6;
+        --card-bg: #ffffff;
+        --sidebar-bg: #e8e9eb;
+        --legend-bg: #e8e9eb;
+        --input-bg: #fdfdfe;
+        --input-border: #8b909a;
+        --win-appbar-bg: rgba(240, 241, 245, 0.95);
+        
+        --border-color: #d8dae0;
+        --border-hover: #e04e17;
+        
+        --primary: #ff5a1f;
+        --primary-glow: rgba(255, 90, 31, 0.12);
+        --secondary: #82838a;
+        --secondary-glow: rgba(130, 131, 138, 0.12);
+        --accent: #00a854;
+        
+        --text-main: #1c1d21;
+        --text-muted: #62636a;
+    }
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-base);
+    color: var(--text-main);
+    font-family: var(--font-sans);
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    -webkit-app-region: no-drag;
+}
+
+/* R11 item 7 — font sweep: form controls do NOT inherit font-family by default
+   (browsers force their own UI font on input/select/textarea/button), which is
+   why some controls rendered in the wrong font. Inherit it from <body> so the
+   whole app uses --font-sans from one source of truth. */
+input,
+select,
+textarea,
+button {
+    font-family: inherit;
+}
+
+/* Matte Minimal Background */
+.glass-bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: -1;
+    overflow: hidden;
+    background: var(--bg-base);
+}
+
+/* Grid Card layout */
+.grid-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.grid-layout.vertical {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 100%;
+}
+
+/* Matte Card Stylings */
+.card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transition: border-color 0.2s ease;
+}
+
+.card:hover {
+    border-color: #3b3c43;
+}
+
+.card-header {
+    margin-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding-bottom: 10px;
+}
+
+.card-header h3 {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.card-header.flex-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.header-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+/* Buttons */
+.glow-btn {
+    width: 100%;
+    padding: 12px 18px;
+    background: var(--primary);
+    border: 1px solid #e04e17;
+    border-radius: 4px;
+    color: #ffffff;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.2s;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+}
+
+.glow-btn:hover {
+    background: #e04e17;
+}
+
+.glow-btn.compact {
+    width: auto;
+    padding: 8px 14px;
+    font-size: 12px;
+    display: inline-flex;
+    background: #2e2f36;
+    border: 1px solid #3e3f46;
+    color: #e8e9eb;
+}
+
+.glow-btn.compact:hover {
+    background: #3d3e46;
+}
+
+.glow-btn.pulse-glow {
+    background: var(--primary);
+    border: 1px solid #e04e17;
+    color: #ffffff;
+}
+
+.glow-btn.pulse-glow:hover {
+    background: #e04e17;
+}
+
+.glow-btn.secondary {
+    background: transparent;
+    border: 1px solid var(--input-border);
+    color: var(--text-main);
+    box-shadow: none;
+}
+
+.glow-btn.secondary:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+

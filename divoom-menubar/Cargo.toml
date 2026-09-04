@@ -1,0 +1,23 @@
+[package]
+name = "divoom-menubar"
+version = "0.31.0"
+edition = "2021"
+description = "Native (Rust) menubar/tray agent for divoom-control. Talks to divoomd over the NDJSON socket, shows status + active devices, and launches the Python pywebview GUI. Replaced the pyobjc menubar, which was removed in R66 (2026-08-17)."
+publish = false
+
+[[bin]]
+name = "divoom-menubar"
+path = "src/main.rs"
+
+# tray-icon + tao are MIT/Apache (Tauri ecosystem). tao gives the cross-platform
+# event loop tray-icon needs on the main thread (winit alternative; tao keeps the
+# classic run() closure, simpler for a windowless agent).
+[dependencies]
+tray-icon = "0.24"
+tao = "0.37"
+serde_json = "1"
+
+# macOS: wake the main CFRunLoop so the status item shows up on first paint, and
+# (via tao) run as an Accessory app (no Dock icon — it's a menubar agent).
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-core-foundation = { version = "0.3", features = ["CFRunLoop"] }

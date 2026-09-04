@@ -1,0 +1,420 @@
+/* channels.css — Control Center channels layout and swatch elements */
+
+.color-swatch {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.color-swatch:hover {
+    transform: scale(1.15);
+}
+
+.color-swatch.active {
+    border-color: #ffffff;
+    box-shadow: 0 0 12px rgba(255, 255, 255, 0.4);
+}
+
+.color-swatch.red { background-color: #ff3b30; }
+.color-swatch.orange { background-color: #ff9500; }
+.color-swatch.yellow { background-color: #ffcc00; }
+.color-swatch.green { background-color: #34c759; }
+.color-swatch.cyan { background-color: #5ac8fa; }
+.color-swatch.blue { background-color: #007aff; }
+.color-swatch.purple { background-color: #af52de; }
+.color-swatch.pink { background-color: #ff2d55; }
+
+.custom-color-container {
+    position: relative;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+}
+
+.custom-color-container input[type="color"] {
+    position: absolute;
+    top: -5px;
+    left: -5px;
+    width: 44px;
+    height: 44px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+}
+
+/* R15 §1+§7: tab chrome (`.tabs-row` + `.tab-btn`) is owned by tabs.css.
+   Keep only the per-channel icon sizing here — the chrome is unified
+   across Channels / Tools / Settings. The `.channel-icon` class is
+   retained for callers that still reference it (e.g. the channel
+   header strip), but the tab-row buttons use `.tab-icon` from
+   tabs.css. */
+.channel-icon {
+    font-size: 20px;
+    display: inline-flex;
+    align-items: center;
+    margin-bottom: 0;
+    flex-shrink: 0;
+}
+
+.channel-panel {
+    display: none;
+}
+
+.channel-panel.active {
+    display: block;
+}
+
+/* R11 item 1a: the Custom Art panel is a flex column so its scroll area
+   (.custom-art-scroll-container, flex:1) takes the slack and the Push-to-Device
+   button (flex-shrink:0) stays pinned at the bottom of the window instead of
+   scrolling away — same pattern as the Monthly Best batch-sync bar. */
+#panel-design.active {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+}
+#push-custom-art-btn {
+    margin: 12px 0 0;
+    width: 100%;
+    flex-shrink: 0;
+}
+
+
+/* R11 5b: scoreboard — large, centred, two stacked team rows (blue over red),
+   styled to read like the device's own scoreboard panel. */
+.scoreboard-display {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-width: 360px;
+    margin: 4px auto 0;
+}
+.scoreboard-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 20px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+.scoreboard-row.blue { background: rgba(59, 130, 246, 0.12); border-color: rgba(59, 130, 246, 0.45); }
+.scoreboard-row.red  { background: rgba(239, 68, 68, 0.12);  border-color: rgba(239, 68, 68, 0.45); }
+.scoreboard-team {
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+}
+.scoreboard-row.blue .scoreboard-team { color: #3b82f6; }
+.scoreboard-row.red  .scoreboard-team { color: #ef4444; }
+.scoreboard-score {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 110px;
+    background: transparent;
+    border: none;
+    outline: none;
+    text-align: right;
+    font-family: var(--font-display);
+    font-size: 40px;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+/* R11 item 6: unified Virtual Wall toolbar (icons + labels). */
+.wall-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    flex-wrap: wrap;
+}
+.wall-toolbar-group { display: flex; gap: 8px; }
+.wall-preset-name { flex: 1; min-width: 100px; }
+.wall-tool-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: transparent;
+    border: 1px solid var(--secondary);
+    color: var(--text-main);
+    box-shadow: none;
+}
+.wall-tool-btn .kare-icon { width: 12px; height: 12px; }
+
+.panel-title {
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-main);
+    margin-bottom: 12px;
+}
+
+.panel-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
+}
+
+.selector-grid {
+    display: grid;
+    /* R45 #4: one consistent, larger cell size across every channel grid
+       (clock / EQ / VJ) so the panels read uniform and fill their space —
+       replaces the per-grid 96px/140px split + the centering experiment. */
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+}
+
+.selector-cell {
+    padding: 10px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: rgba(130, 131, 138, 0.06);
+    color: var(--text-main);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: center;
+    transition: border-color 0.15s, background 0.15s;
+    -webkit-app-region: no-drag;
+}
+
+.selector-cell:hover {
+    border-color: var(--secondary);
+}
+
+.selector-cell.active {
+    border-color: var(--primary);
+    background: rgba(0, 255, 204, 0.12);
+    color: var(--primary);
+}
+
+.ambient-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    align-items: flex-start;
+}
+
+.color-input-large {
+    width: 100%;
+    height: 48px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: transparent;
+    cursor: pointer;
+}
+
+.slider-label {
+    width: 100%;
+    font-size: 12px;
+    color: var(--text-muted);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* Clock mode presets and preview screens */
+.clock-preview-box {
+    width: 120px;
+    height: 90px;
+    background: #050608;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 22px;
+    color: #e8e9eb;
+    margin: 0 auto 8px auto;
+    position: relative;
+    overflow: hidden;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+}
+
+.clock-preview-box.digital-rainbow {
+    background: linear-gradient(135deg, #101114, #050608);
+    color: #ff5a1f;
+    text-shadow: 0 0 6px rgba(255,90,31,0.8);
+}
+
+.clock-preview-box.digital-box span {
+    border: 2px solid var(--primary);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 18px;
+}
+
+.clock-preview-box.digital-neg {
+    background: #a4b39e;
+    color: #1a2318;
+    border-color: #7d8b77;
+    background-image: radial-gradient(rgba(0, 0, 0, 0.18) 1px, transparent 1px);
+    background-size: 3px 3px;
+    box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.3);
+    text-shadow: 1px 1px 0px rgba(255, 255, 255, 0.2);
+}
+
+.mini-clock-svg {
+    width: 64px;
+    height: 64px;
+    color: var(--text-main);
+}
+
+.clock-preview-box.digital-neg .mini-clock-svg {
+    color: #1a2318;
+}
+
+.cell-label {
+    font-size: 11px;
+    font-weight: 500;
+    margin-top: 4px;
+    color: var(--text-muted);
+}
+
+.selector-cell.active .cell-label {
+    color: var(--primary);
+}
+
+/* APK EQ and VJ icons styling — R45 #4: sized to match the clock-face preview
+   (90px) so every channel grid cell has the same visual weight. */
+.apk-preview-container {
+    width: 100%;
+    height: 90px;
+    margin: 2px auto 6px auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.apk-preview-img {
+    width: 90px;
+    height: 90px;
+    object-fit: contain;
+    image-rendering: pixelated;
+    transition: transform 0.15s ease;
+}
+
+.selector-cell:hover .apk-preview-img {
+    transform: scale(1.1);
+}
+
+.apk-preview-img.active-img {
+    display: none;
+}
+
+.selector-cell.active .apk-preview-img.active-img,
+.selector-cell:hover .apk-preview-img.active-img {
+    display: block;
+}
+
+.selector-cell.active .apk-preview-img.inactive-img,
+.selector-cell:hover .apk-preview-img.inactive-img {
+    display: none;
+}
+
+/* Custom Art Gallery Cache Selector */
+.cache-thumb-item {
+    transition: all 0.2s ease;
+}
+.cache-thumb-item:hover {
+    border-color: var(--primary) !important;
+    transform: scale(1.05);
+    background-color: rgba(255, 90, 31, 0.05) !important;
+}
+.cache-thumb-item:active {
+    transform: scale(0.95);
+}
+
+/* Ambient swatches layout and active markers */
+.ambient-swatches-grid {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+.ambient-swatch {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+    position: relative;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.ambient-swatch:hover {
+    transform: scale(1.1);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.ambient-swatch.active {
+    border-color: #ffffff;
+    box-shadow: 0 0 8px currentColor;
+    transform: scale(1.1);
+}
+
+.ambient-swatch.active::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 6px;
+    height: 6px;
+    background-color: #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Horizontal Channel Tabs ────────────────────────────────────────── */
+/* R15 §1+§7: the horizontal tab row uses `.tabs-row` + `.tab-btn`
+   (defined in tabs.css) — the .channel-tabs / .channel-card chrome
+   was removed; the wrapper and button classes are now in templates.js. */
+
+/* R67: honest ambient previews.
+   Four of the five ambient modes are generated by the DEVICE from a fixed
+   internal palette we do not have. The tiles used to show invented colour
+   blocks for them, which is why a completely dead feature looked merely wrong
+   ("the rest are green/magenta") instead of dead. These say what they are. */
+.ambient-preview.device-effect {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    background: repeating-linear-gradient(
+        45deg,
+        var(--surface-2, #1b1f24),
+        var(--surface-2, #1b1f24) 6px,
+        var(--surface-3, #22272e) 6px,
+        var(--surface-3, #22272e) 12px);
+    border: 1px solid var(--border, #2d333b);
+}
+.ambient-preview-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text, #e6edf3);
+}
+.ambient-preview-note {
+    font-size: 10px;
+    color: var(--text-muted, #8b949e);
+}
+/* The mode the DEVICE confirmed, not the one that was clicked. */
+.ambient-mode-active {
+    outline: 2px solid var(--secondary, #2ea043);
+    outline-offset: 2px;
+}

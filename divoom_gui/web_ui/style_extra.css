@@ -1,0 +1,494 @@
+/* style_extra.css — Inputs, form groups, grid refinements, Kare dither, ambient, art grid */
+/* Inputs & Form Groups */
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+.form-group.compact {
+    margin-bottom: 0;
+}
+
+.custom-select {
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 4px;
+    padding: 8px 32px 8px 12px;
+    color: var(--text-main);
+    outline: none;
+    font-family: var(--font-sans);
+    cursor: pointer;
+    min-width: 140px;
+    font-size: 13px;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6' viewBox='0 0 9 6'%3E%3Cpath d='M0 0h9v1H0zm1 1h7v1H1zm1 1h5v1H2zm1 1h3v1H3zm1 1h1v1H4z' fill='%2382838a'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 9px 6px;
+}
+
+.custom-select option {
+    background-color: var(--bg-base);
+}
+
+.custom-select.small {
+    padding: 6px 24px 6px 10px;
+    font-size: 12px;
+    background-position: right 8px center;
+    background-size: 11px 11px;
+}
+
+.num-input {
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 4px;
+    padding: 8px;
+    color: var(--text-main);
+    outline: none;
+    width: 80px;
+    text-align: center;
+}
+
+.text-input {
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 4px;
+    padding: 10px 14px;
+    color: var(--text-main);
+    outline: none;
+    width: 100%;
+    font-family: var(--font-sans);
+    font-size: 13px;
+}
+
+.text-input:focus,
+.custom-select:focus {
+    border-color: var(--primary);
+}
+
+.flex-row {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+/* ── Layout + typography utilities (REVIEW_2026-06 §2.1 batch 1) ──────────
+   A small token layer to replace repeated inline styles in templates_*.js.
+   Pure addition — no template references them yet; the per-file batches
+   (docs/archive/superseded/PLANNING_inline_styles.md) migrate the markup.
+   `.flex-row` above predates
+   this and stays (gap:15px); the `.row`/`.gap-*` split below is the
+   composable replacement for the many ad-hoc `display:flex` strings. */
+.flex       { display: flex; }
+.row        { display: flex; align-items: center; }
+.row-top    { display: flex; align-items: flex-start; }
+.row-between{ display: flex; align-items: center; justify-content: space-between; }
+.col        { display: flex; flex-direction: column; }
+.wrap       { flex-wrap: wrap; }
+.gap-6  { gap: 6px; }
+.gap-8  { gap: 8px; }
+.gap-10 { gap: 10px; }
+.gap-12 { gap: 12px; }
+.gap-14 { gap: 14px; }
+.mb-12 { margin-bottom: 12px; }
+.mb-18 { margin-bottom: 18px; }
+.mt-6  { margin-top: 6px; }
+
+/* Batch 4 (templates_widgets.js): the recurring "flex child that must be
+   allowed to shrink below its content size" composition — min-width:0 pairs
+   with overflow:hidden on the widget card + card-body wrappers so narrow
+   grid columns don't force the card to overflow (Rams #5 unobtrusive). */
+.clip-shrink { min-width: 0; overflow: hidden; }
+
+/* Typography: the recurring label/caption shapes from the templates. */
+.label-sm {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    display: block;
+    margin-bottom: 6px;
+}
+.label-xs {
+    font-size: 10px;
+    display: block;
+    margin-bottom: 4px;
+}
+.text-sm      { font-size: 13px; color: var(--text-main); }
+.text-mono-sm { font-family: var(--font-mono); font-size: 11px; }
+/* Settings table captions ("Discovered Bluetooth Screens" etc.) — the muted,
+   translucent-white caption above a braun-table (batch 5, templates_settings.js). */
+.label-caption {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.45);
+    margin-bottom: 8px;
+    display: block;
+}
+.text-12      { font-size: 12px; }
+
+/* Semantic status colours (tokens defined in style.css :root). */
+.text-warn  { color: var(--warn); }
+.text-error { color: var(--error); }
+
+.file-uploader {
+    flex-grow: 1;
+}
+
+/* Align grid cards to top to prevent vertical stretching */
+.grid-layout {
+    align-items: start;
+}
+/* Channels grid column sizes: narrower left side, wider right side */
+#control-panel .grid-layout {
+    grid-template-columns: 1fr;
+}
+
+/* --- Responsive Widget Grid Layout --- */
+.grid-layout.three-cols {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    align-items: stretch;
+}
+
+/* Single-column narrow settings forms (Divoom/Connectivity/Appearance tabs).
+   The max-width varies with content so it stays inline (batch 5). */
+.grid-layout.single-col {
+    grid-template-columns: 1fr;
+}
+
+/* Align scanner and Wi-Fi card heights to stretch in Settings tab */
+#settings-devices .grid-layout {
+    align-items: stretch;
+}
+
+/* ── Susan Kare Retro monochrome dither filter overrides ─────────────── */
+.banner-preview img,
+.arranger-node-image {
+    image-rendering: pixelated;
+    filter: grayscale(100%) contrast(300%) brightness(110%);
+}
+
+body.theme-light .banner-preview img,
+body.theme-light .arranger-node-image {
+    filter: grayscale(100%) contrast(300%) brightness(95%) !important;
+}
+
+@media (prefers-color-scheme: light) {
+    body.theme-system .banner-preview img,
+    body.theme-system .arranger-node-image {
+        filter: grayscale(100%) contrast(300%) brightness(95%) !important;
+    }
+}
+
+/* ── Ambient Mode Grid Previews ── */
+.ambient-preview {
+    transition: background-color 0.3s;
+}
+
+@keyframes heartbeat {
+    0% { transform: scale(1); filter: brightness(1); }
+    14% { transform: scale(1.15); filter: brightness(1.2); }
+    28% { transform: scale(1); filter: brightness(1); }
+    42% { transform: scale(1.15); filter: brightness(1.2); }
+    70% { transform: scale(1); filter: brightness(1); }
+}
+
+@keyframes breathe {
+    0% { opacity: 0.35; filter: brightness(0.7); }
+    50% { opacity: 1; filter: brightness(1.3); }
+    100% { opacity: 0.35; filter: brightness(0.7); }
+}
+
+@keyframes sleeping-fade {
+    0% { filter: brightness(0.15); }
+    50% { filter: brightness(1.4); }
+    100% { filter: brightness(0.15); }
+}
+
+@keyframes repeller-strobe {
+    0% { opacity: 0.4; filter: brightness(0.7); }
+    100% { opacity: 1; filter: brightness(1.3); }
+}
+
+@keyframes hue-shift {
+    0%   { background-position: 0%   50%; }
+    100% { background-position: 200% 50%; }
+}
+
+@keyframes love-color-cycle {
+    /* The Divoom "Love" ambient channel: the entire screen is a single solid
+       color, transitioning smoothly through a sequence (blue → purple → red
+       → orange → pink → back). User-described as "the whole screen is one
+       color that transitions to the next color" — i.e. NOT a rainbow
+       gradient, NOT a pulse, just one solid block fading between colors. */
+    0%   { background-color: #4d79ff; }  /* blue */
+    20%  { background-color: #9d4edd; }  /* purple */
+    40%  { background-color: #ff4d6d; }  /* red */
+    60%  { background-color: #ff7a3d; }  /* orange */
+    80%  { background-color: #ff85b3; }  /* pink */
+    100% { background-color: #4d79ff; }  /* back to blue */
+}
+
+/* ── Channels Tab: Full Height Custom Art Grid ─────────────────────── */
+#control-panel.tab-content.active {
+    height: 100%;
+    min-height: 0;
+}
+
+#control-panel .grid-layout {
+    height: 100%;
+    min-height: 0;
+    align-items: stretch;
+    /* R28 r2: the Channels tab area is a grid (tab pane + content card). Pin the
+       first row to its content height and let the card take the rest — otherwise
+       the grid's default `align-content` stretches BOTH auto rows, ballooning the
+       tab pane into a giant empty glass box. The row-gap is the single source of
+       the pane→content spacing (matches the flex Tools/Settings via the
+       --tab-pane-gap token in style.css). */
+    grid-template-rows: auto 1fr;
+    row-gap: var(--tab-pane-gap);
+    column-gap: 0;
+}
+
+#control-panel .card {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+#control-panel .card-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+/* The .channel-panels wrapper must pass the bounded height down, or the
+   custom-art panel's height:100% resolves against an auto-height block and
+   its fixed header / pinned push button scroll away with the card body. */
+#control-panel .channel-panels {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+#panel-design {
+    display: none;
+    height: 100%;
+    flex-direction: column;
+    min-height: 0;
+}
+
+#panel-design.active {
+    display: flex;
+}
+
+#panel-design .custom-art-upload-section {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    gap: 12px;
+}
+
+#panel-design .gallery-cache-selector {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    margin-top: 4px;
+}
+
+#panel-design #custom-art-cache-grid {
+    flex: 1;
+    max-height: none !important;
+    overflow-y: auto;
+}
+
+
+/* ── R34 §4: Alarms weekday table ─────────────────────────────────────
+   One header row carries the weekday names; each alarm row is a grid of
+   [enable | time | 7 day-cells | remove]. Day cells are click-toggles. */
+.alarms-table { display: flex; flex-direction: column; }
+.alarms-table-row {
+    display: grid;
+    grid-template-columns: 44px 112px repeat(7, 1fr) 28px;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+/* Compact On/Off switch for alarm rows (reuses .switch/.slider-round) */
+.alarm-switch { width: 36px; height: 18px; justify-self: start; }
+.alarm-switch .slider-round:before { height: 12px; width: 12px; left: 2px; bottom: 2px; }
+.alarm-switch input:checked + .slider-round:before { transform: translateX(18px); }
+.alarms-table-head {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    text-align: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.alarms-table-head span:nth-child(-n+2) { text-align: left; }
+.alarms-table-row .alarm-enabled { justify-self: start; margin: 0; }
+.alarm-time { display: flex; align-items: center; gap: 2px; }
+.alarm-time .text-input { width: 44px; text-align: center; padding: 4px 2px; }
+.alarm-day-cell {
+    width: 20px;
+    height: 20px;
+    margin: 0 auto;
+    padding: 0;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    background: transparent;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+.alarm-day-cell:hover { background: rgba(255, 255, 255, 0.08); }
+.alarm-day-cell.active { background: var(--primary); border-color: var(--primary); }
+.alarm-remove {
+    background: transparent;
+    border: 0;
+    color: var(--text-muted);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    justify-self: center;
+}
+.alarm-remove:hover { color: var(--error); }
+
+/* ── Segmented pills in Device Settings (equalized width and centered text) ── */
+#hour24-seg, #tempf-seg, #lowpower-seg {
+    display: flex;
+    width: 180px;
+}
+#hour24-seg .tab-btn, #tempf-seg .tab-btn, #lowpower-seg .tab-btn {
+    flex: 1;
+    justify-content: center;
+    text-align: center;
+}
+
+/* ── Cloud clock-face list (Channel/GetDialType + GetDialList browser) ── */
+.cloud-clock-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 220px;
+    overflow-y: auto;
+}
+.cloud-clock-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+}
+.cloud-clock-name {
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.cloud-clock-apply-btn {
+    flex-shrink: 0;
+    padding: 4px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-primary, inherit);
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+.cloud-clock-apply-btn:hover { border-color: var(--primary); color: var(--primary); }
+.cloud-clock-apply-btn:disabled { opacity: 0.5; cursor: default; }
+
+/* ── P3.1b: weather city override ────────────────────────────────────────────
+   The location line in the Weather card IS the control — clicking it opens the
+   search — so these styles keep it looking like the text it replaced until it
+   is hovered. The card carries no extra chrome for a control most users will
+   never need. */
+.weather-location-btn {
+    background: none;
+    border: none;
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: var(--text-muted);
+    font: inherit;
+    cursor: pointer;
+}
+.weather-location-btn:hover {
+    color: var(--text-primary);
+    border-bottom: 1px dotted var(--border-hover);
+}
+/* `display: flex` on an author rule beats the UA stylesheet's
+   `[hidden] { display: none }`, so the panel rendered while its `hidden`
+   property was true. The e2e test asserted `.hidden === true` — the DOM
+   PROPERTY — and passed the whole time the panel was visible on screen. Caught
+   by looking at a screenshot, not by any assertion. `.weather-city-search[hidden]`
+   is (0,2,0) against the base rule's (0,1,0), so it wins without !important. */
+.weather-city-search[hidden] {
+    display: none;
+}
+.weather-city-search {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+    max-width: 260px;
+}
+/* The input reuses .text-input (style_extra.css:60) rather than restyling a
+   box from scratch: that class already carries the app's --primary focus
+   border, and a bespoke rule here inherited the BROWSER's default blue focus
+   ring instead — visibly wrong next to an orange-accented UI. Caught by
+   screenshotting the panel rather than by any assertion. */
+.weather-city-search input {
+    padding: 6px 10px;
+}
+.weather-city-results {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 160px;
+    overflow-y: auto;
+}
+.weather-city-row {
+    text-align: left;
+    padding: 5px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    background: none;
+    color: var(--text-primary);
+    font-size: 13px;
+    cursor: pointer;
+}
+.weather-city-row:hover {
+    border-color: var(--border-hover);
+}
+#weather-city-auto {
+    padding: 5px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    background: none;
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+}
+#weather-city-auto:hover {
+    color: var(--text-primary);
+    border-color: var(--border-hover);
+}

@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <script>
+        // Debug harness: capture JS errors early (before other scripts) and forward
+        // them to the Python api (js_log -> /tmp/divoom-gui-js.log) so failures are
+        // visible even in the packaged app, with no inspector. Buffer until the
+        // pywebview bridge is ready, then flush.
+        window.__js_errors = [];
+        function __divoomFlush() {
+            try {
+                if (window.pywebview && window.pywebview.api && window.pywebview.api.js_log) {
+                    while (window.__js_errors.length) {
+                        var e = window.__js_errors.shift();
+                        window.pywebview.api.js_log(
+                            "ERR: " + e.message + " @ " + (e.source || "") + ":" + (e.line || "") +
+                            (e.stack ? "\n" + e.stack : ""));
+                    }
+                }
+            } catch (_) { /* bridge not ready yet */ }
+        }
+        window.onerror = function(message, source, lineno, colno, error) {
+            window.__js_errors.push({message: message, source: source, line: lineno, col: colno, stack: error ? error.stack : ""});
+            __divoomFlush();
+            return false;
+        };
+        window.addEventListener("unhandledrejection", function(ev) {
+            window.__js_errors.push({message: "unhandledrejection: " + ((ev.reason && ev.reason.message) || ev.reason), source: "", line: 0, col: 0, stack: ev.reason && ev.reason.stack});
+            __divoomFlush();
+        });
+        window.addEventListener("pywebviewready", __divoomFlush);
+        setInterval(__divoomFlush, 1000);
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Divoom Desktop Controller & Wall Dashboard</title>
+    <!--
+      Fonts loaded here MUST match the --font-* declarations in
+      gui/web_ui/style.css. See the FONT POLICY header in style.css
+      and the guard test in tests/test_fonts.py.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Mono:wght@400;500&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <!-- R15 §1+§7: shared tab chrome (Channels / Tools / Settings sub-tabs). -->
+    <link rel="stylesheet" href="tabs.css">
+    <!-- R70 P2.4: a failed cloud browse must not look like an empty one. -->
+    <link rel="stylesheet" href="cloud_result.css">
+</head>
+<body>
+    <div class="glass-bg"></div>
+    
+    <!-- 1. PREMIUM CUSTOM INTEGRATED WINDOW APPBAR -->
+    <header class="integrated-appbar pywebview-drag-region">
+        <div class="appbar-window-controls">
+            <button id="win-close" class="win-btn close" title="CloseApp">×</button>
+            <button id="win-min" class="win-btn min" title="MinimizeWindow">—</button>
+            <button id="win-max" class="win-btn max" title="ToggleFullscreen"></button>
+        </div>
+
+        <!-- R11 4c: spacer first, so the sliders are pushed to the right side. -->
+        <div class="appbar-drag-spacer"></div>
+
+        <!-- Global Brightness + Volume in Appbar (Round 6) -->
+        <div class="appbar-brightness">
+            <svg class="kare-icon" viewBox="0 0 16 16" title="Brightness">
+                <circle cx="8" cy="8" r="3" fill="currentColor"/>
+                <path d="M8,1 L8,3 M8,13 L8,15 M1,8 L3,8 M13,8 L15,8 M3,3 L4.5,4.5 M11.5,11.5 L13,13 M3,13 L4.5,11.5 M11.5,4.5 L13,3" stroke="currentColor" stroke-width="2"/>
+            </svg>
+            <input type="range" id="global-brightness-slider" min="0" max="100" value="80" class="appbar-slider" title="Global Brightness">
+            <span id="global-brightness-value">80%</span>
+        </div>
+
+        <!-- Volume Slider (Round 6 — new functionality exposure).
+             Protocol range is 0-15 (divoom.music.set_volume), so the
+             input is constrained to 15 in app.js. Kare: pixel-perfect
+             clarity — display the raw 0-15 value, not a percentage
+             (no magic conversion). -->
+        <div class="appbar-brightness">
+            <svg class="kare-icon" viewBox="0 0 16 16" title="Volume">
+                <path d="M2,6 L2,10 L5,10 L9,14 L9,2 L5,6 Z" fill="currentColor"/>
+                <path d="M11,5 C12.5,6 12.5,10 11,11" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M13,3 C15.5,5 15.5,11 13,13" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            </svg>
+            <input type="range" id="appbar-volume-slider" min="0" max="15" value="7" class="appbar-slider" title="Device Volume">
+            <span id="appbar-volume-value">7/15</span>
+        </div>
+
+        <!-- R32: Settings moved out of the sidebar into a round glass pill here,
+             to the right of the brightness + volume bars. Opens the Settings tab. -->
+        <button id="appbar-settings-btn" class="appbar-gear" data-tab="settings" title="Settings" aria-label="Open settings">
+            <svg class="kare-icon" viewBox="0 0 16 16">
+                <path d="M8,6 C6.9,6 6,6.9 6,8 C6,9.1 6.9,10 8,10 C9.1,10 10,9.1 10,8 C10,6.9 9.1,6 8,6 Z M8,0 L6,3 L10,3 Z M8,16 L10,13 L6,13 Z M0,8 L3,6 L3,10 Z M16,8 L13,10 L13,6 Z"/>
+            </svg>
+        </button>
+
+    </header>
+
+    <!-- R32: the bottom-right connectivity indicator pill was removed — the
+         per-device dots below the preview convey device/transport state now. -->
+
+    <div class="app-container">
+        
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <nav class="nav-menu">
+                <button class="nav-btn active" data-tab="control-panel">
+                    <span class="btn-icon">
+                        <svg class="kare-icon" viewBox="0 0 16 16">
+                            <rect x="1" y="4" width="14" height="8" rx="2"/>
+                            <rect x="4" y="7" width="3" height="1"/>
+                            <rect x="5" y="6" width="1" height="3"/>
+                            <circle cx="10" cy="8" r="1"/>
+                            <circle cx="12" cy="8" r="1"/>
+                        </svg>
+                    </span> Channels
+                </button>
+                <button class="nav-btn" data-tab="data-sources">
+                    <span class="btn-icon">
+                        <svg class="kare-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="1" y1="15" x2="15" y2="15"/>
+                            <line x1="1" y1="1" x2="1" y2="15"/>
+                            <path d="M2,12 L6,8 L10,10 L14,3"/>
+                        </svg>
+                    </span> Live Widgets
+                </button>
+                <button class="nav-btn" data-tab="pixel-art">
+                    <span class="btn-icon">
+                        <svg class="kare-icon" viewBox="0 0 16 16">
+                            <rect x="1" y="1" width="6" height="6" rx="1"/>
+                            <rect x="9" y="1" width="6" height="6" rx="1"/>
+                            <rect x="1" y="9" width="6" height="6" rx="1"/>
+                            <rect x="9" y="9" width="6" height="6" rx="1"/>
+                        </svg>
+                    </span> Pixel Art
+                </button>
+                <button class="nav-btn" data-tab="display-wall">
+                    <span class="btn-icon">
+                        <svg class="kare-icon" viewBox="0 0 16 16">
+                            <rect x="1" y="1" width="14" height="11" rx="1"/>
+                            <rect x="3" y="3" width="10" height="7" fill="none" stroke="currentColor" stroke-width="1"/>
+                            <rect x="6" y="12" width="4" height="2"/>
+                            <rect x="4" y="14" width="8" height="1"/>
+                        </svg>
+                    </span> Virtual Wall
+                </button>
+                <!-- R45 #5: "Routines" renamed to "Schedule" (Auto-Sync + Time).
+                     data-tab="routines" kept to avoid churning the JS wiring. -->
+                <button class="nav-btn" data-tab="routines">
+                    <span class="btn-icon">
+                        <svg class="kare-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="2" width="12" height="12" rx="2"/>
+                            <path d="M5,8 L8,11 L12,5"/>
+                        </svg>
+                    </span> Schedule
+                </button>
+                <!-- R40 §8: Device Settings (clock/temp/power/display/danger). -->
+                <button class="nav-btn" data-tab="device-settings">
+                    <span class="btn-icon">
+                        <svg class="kare-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="8" cy="8" r="2.5"/>
+                            <path d="M8,1 L8,3 M8,13 L8,15 M1,8 L3,8 M13,8 L15,8 M3.2,3.2 L4.6,4.6 M11.4,11.4 L12.8,12.8 M3.2,12.8 L4.6,11.4 M11.4,4.6 L12.8,3.2"/>
+                        </svg>
+                    </span> Device Settings
+                </button>
+            </nav>
+            
+            <!-- Connected Device Panel (Moved from channels).
+                 R32 §C2: the preview shows the last image this app pushed to
+                 the active device (falls back to the product icon).
+                 R32 §C3: the dropdown is replaced by per-device dots overlaid
+                 on the preview — color-coded, tooltipped, click to switch.
+                 The <select> is kept hidden as the canonical selection state. -->
+            <div class="sidebar-device-panel" id="connected-device-banner">
+                <!-- R49: a flat, face-on screen panel. The product photos are 3/4
+                     perspective renders, so a live frame composited onto them
+                     landed crooked. Instead we show the live frame straight in a
+                     neutral bezel — what's actually on the screen, aligned, for
+                     any model. The device name sits below. -->
+                <div class="sidebar-device-preview">
+                    <div id="banner-device-screen" class="device-screen" aria-hidden="true"></div>
+                </div>
+                <div id="banner-device-label" class="device-name-label">No screen connected</div>
+                <select id="sidebar-device-select" class="sidebar-device-select" hidden>
+                    <option value="">Select Screen…</option>
+                </select>
+                <!-- Canonical selection state (hidden data holders read across the
+                     UI — gallery resolution, active-mac checks). -->
+                <span id="banner-device-name" style="display: none;">No Connected Screen</span>
+                <span id="banner-device-mac" style="display: none;">-</span>
+            </div>
+            <!-- R48: named device chips live outside the glass panel, below it. -->
+            <div id="device-dots" class="device-chips" role="tablist" aria-label="Switch device"></div>
+            <!-- The Virtual Wall is a composite of screens, not a device — its own
+                 distinct button sits in a row below the device dots. -->
+            <div id="wall-button" class="wall-button-row" hidden></div>
+            <!-- R52: scan-in-progress indicator pinned at the very bottom. Its row
+                 height is always reserved (visibility toggles, not display) so
+                 starting/stopping a scan never reflows the preview above it. -->
+            <div id="scan-indicator" class="scan-indicator" hidden aria-live="polite">
+                <span class="spinner"></span> Scanning for screens…
+            </div>
+            <!-- R32: the Settings nav button was removed from the sidebar — it
+                 now lives as a gear pill in the appbar. The device panel above
+                 is pinned to the bottom (margin-top:auto) so it occupies the
+                 spot the Settings button used to. -->
+        </aside>
+        
+        <main class="main-content">
+            
+            <!-- TAB 1: CONTROL CENTER -->
+            <section id="control-panel" class="tab-content active">
+                <div class="grid-layout">
+                    <!-- R24 r2: tabs on their OWN glass strip (.tabs-section), identical to
+                         Tools + Settings; the content card follows below. Kare icons remain
+                         as a prefix on the channel tabs. -->
+                    <div class="tabs-section">
+                            <div class="tabs-row" role="tablist" aria-label="Channel">
+                                <button class="tab-btn active" data-tab="clock" data-channel="clock" role="tab" aria-selected="true">
+                                    <svg class="kare-icon tab-icon" viewBox="0 0 16 16" aria-hidden="true">
+                                        <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2"/>
+                                        <path d="M8,4 L8,8 L11,8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                    </svg>
+                                    <span>Clock</span>
+                                </button>
+                                <button class="tab-btn" data-tab="visualizer" data-channel="visualizer" role="tab" aria-selected="false">
+                                    <svg class="kare-icon tab-icon" viewBox="0 0 16 16" aria-hidden="true">
+                                        <rect x="2" y="10" width="2" height="6"/>
+                                        <rect x="6" y="4" width="2" height="12"/>
+                                        <rect x="10" y="7" width="2" height="9"/>
+                                        <rect x="14" y="2" width="2" height="14"/>
+                                    </svg>
+                                    <span>EQ Visualizer</span>
+                                </button>
+                                <button class="tab-btn" data-tab="vj" data-channel="vj" role="tab" aria-selected="false">
+                                    <svg class="kare-icon tab-icon" viewBox="0 0 16 16" aria-hidden="true">
+                                        <rect x="1" y="1" width="14" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>
+                                        <rect x="4" y="4" width="8" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="2"/>
+                                        <rect x="7" y="7" width="2" height="2" fill="currentColor"/>
+                                    </svg>
+                                    <span>VJ Effects</span>
+                                </button>
+
+                                <button class="tab-btn" data-tab="ambient" data-channel="ambient" role="tab" aria-selected="false">
+                                    <svg class="kare-icon tab-icon" viewBox="0 0 16 16" aria-hidden="true">
+                                        <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2"/>
+                                        <circle cx="8" cy="8" r="2" fill="currentColor"/>
+                                    </svg>
+                                    <span>Ambient</span>
+                                </button>
+                                <!-- Round 6 — Scoreboard channel. -->
+                                <button class="tab-btn" data-tab="scoreboard" data-channel="scoreboard" role="tab" aria-selected="false">
+                                    <svg class="kare-icon tab-icon" viewBox="0 0 16 16" aria-hidden="true">
+                                        <rect x="1" y="3" width="14" height="10" rx="1" fill="none" stroke="currentColor" stroke-width="2"/>
+                                        <line x1="1" y1="6" x2="15" y2="6" stroke="currentColor" stroke-width="1"/>
+                                        <text x="5" y="12" font-size="6" font-weight="700" fill="currentColor">10</text>
+                                        <text x="10" y="12" font-size="6" font-weight="700" fill="currentColor">20</text>
+                                    </svg>
+                                    <span>Scoreboard</span>
+                                </button>
+                                <button class="tab-btn" data-tab="text" data-channel="text" role="tab" aria-selected="false">
+                                    <svg class="kare-icon tab-icon" viewBox="0 0 16 16" aria-hidden="true">
+                                        <path d="M2,3 L14,3" stroke="currentColor" stroke-width="2" fill="none"/>
+                                        <path d="M8,3 L8,13" stroke="currentColor" stroke-width="2" fill="none"/>
+                                        <path d="M5,13 L11,13" stroke="currentColor" stroke-width="2" fill="none"/>
+                                    </svg>
+                                    <span>Text</span>
+                                </button>
+                                <!-- R33: Sessions moved from Tools -->
+                                <button class="tab-btn" data-tab="sessions" data-channel="sessions" role="tab" aria-selected="false">
+                                    <svg class="kare-icon tab-icon" viewBox="0 0 16 16" aria-hidden="true">
+                                        <circle cx="8" cy="9" r="5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                                        <path d="M8 9V6M6.5 2.5h3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                    </svg>
+                                    <span>Sessions</span>
+                                </button>
+                            </div>
+                    </div>
+                    <div class="card glass-card">
+                        <div class="card-body">
+                            <div class="channel-panels">
+                                <!-- Clock faces (real built-in dial types) -->
+                                <div class="channel-panel active" id="panel-clock">
+                                    <div class="selector-grid" id="clock-faces-grid"></div>
+                                    <!-- Clock Color Picker -->
+                                    <div style="margin-top: 16px; display: flex; align-items: center; gap: 10px;">
+                                        <label class="form-label" style="margin-bottom: 0; font-size: 12px; font-weight: 600; color: var(--text-muted);">Clock Color:</label>
+                                        <input type="color" id="clock-color-input" value="#ffffff" style="background: none; border: none; width: 44px; height: 28px; cursor: pointer; padding: 0;">
+                                    </div>
+                                    <!-- R73: set_clock_rich, confirmed on hardware. Ticking any of
+                                         the three extras switches the apply path from set_clock() to
+                                         set_clock_rich(). The device does NOT draw one combined face:
+                                         it CYCLES between separate panels, which is what the caption
+                                         says so nobody reports it as a bug. -->
+                                    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-color);">
+                                        <div class="label-caption mb-12">Extra Panels
+                                            <span class="text-12" style="color: var(--text-muted); font-weight: 400;">(the device cycles between these and the clock)</span>
+                                        </div>
+                                        <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center;">
+                                            <label class="text-12" style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                                <input type="checkbox" id="clock-rich-weather"> Weather
+                                            </label>
+                                            <label class="text-12" style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                                <input type="checkbox" id="clock-rich-date"> Date
+                                            </label>
+                                            <label class="text-12" style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                                <input type="checkbox" id="clock-rich-humidity"> Humidity
+                                            </label>
+                                            <label class="text-12" style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                                <input type="checkbox" id="clock-rich-24h" checked> 24-hour
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <!-- Cloud clock-face store (Channel/GetDialType + GetDialList) — browse
+                                         Divoom's public catalog and apply an id via the same set_clock() path
+                                         used above. Requires the device to be on LAN (WiFi); over BLE-only the
+                                         device silently ignores an id outside its 16 built-in styles. -->
+                                    <div class="mt-6" style="padding-top: 16px; border-top: 1px solid var(--border-color);">
+                                        <div class="label-caption mb-12">Cloud Clock Faces <span class="text-12" style="color: var(--text-muted); font-weight: 400;">(requires device on WiFi)</span></div>
+                                        <select id="cloud-clock-type-select" class="custom-select small mb-12"></select>
+                                        <div id="cloud-clock-list" class="cloud-clock-list"></div>
+                                    </div>
+                                </div>
+                                <!-- Music EQ / visualizer patterns -->
+                                <div class="channel-panel" id="panel-visualizer">
+                                    <div class="selector-grid" id="eq-visualizer-grid"></div>
+                                </div>
+                                <!-- VJ effects -->
+                                <div class="channel-panel" id="panel-vj">
+                                    <div class="selector-grid" id="vj-effects-grid"></div>
+                                </div>
+                                <!-- Custom art (panel moved to Pixel Art section; channel tab
+                                     button kept for device mode switching. -->
+
+                                <!-- Ambient light (now a channel selection) -->
+                                <div class="channel-panel" id="panel-ambient">
+                                    <div class="ambient-controls">
+                                        <div style="display: flex; flex-direction: column; gap: 12px; width: 100%;">
+                                            <div class="form-group" style="margin-top: 4px; margin-bottom: 4px; width: 100%;">
+                                                <label class="form-label" style="font-size:12px; font-weight:600; color:var(--text-muted); margin-bottom: 6px;">Ambient Effect Mode:</label>
+                                                <div class="selector-grid" id="ambient-mode-grid" style="display:grid; grid-template-columns: repeat(5, 1fr); gap:8px; width: 100%;"></div>
+                                            </div>
+
+                                            <!-- Color Picker and Swatches Grid — only relevant to the
+                                                 "Plain Color" mode; hidden for the fixed-palette effects (R11 item 3a). -->
+                                            <div class="ambient-swatches-grid" id="ambient-color-controls" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px;">
+                                                <label class="color-picker-wrapper" style="position:relative; width:36px; height:36px; border-radius:50%; overflow:hidden; border:2px dashed rgba(255,255,255,0.35); cursor:pointer; flex-shrink:0; display:inline-block; background:repeating-linear-gradient(45deg, rgba(255,255,255,0.04) 0 4px, transparent 4px 8px);" title="Pick a custom color">
+                                                    <input type="color" id="ambient-color-input" value="#00ffcc" style="position:absolute; top:-4px; left:-4px; width:44px; height:44px; border:none; background:none; cursor:pointer; padding:0; opacity:0;">
+                                                    <svg viewBox="0 0 16 16" width="14" height="14" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); pointer-events:none;">
+                                                        <rect x="6" y="2" width="4" height="12" fill="rgba(255,255,255,0.9)"/>
+                                                        <rect x="2" y="6" width="12" height="4" fill="rgba(255,255,255,0.9)"/>
+                                                    </svg>
+                                                </label>
+                                                <button class="ambient-swatch" style="background:#ff0000;" data-color="#ff0000" title="Red"></button>
+                                                <button class="ambient-swatch" style="background:#00ff00;" data-color="#00ff00" title="Green"></button>
+                                                <button class="ambient-swatch" style="background:#0000ff;" data-color="#0000ff" title="Blue"></button>
+                                                <button class="ambient-swatch" style="background:#ffff00;" data-color="#ffff00" title="Yellow"></button>
+                                                <button class="ambient-swatch" style="background:#ff7700;" data-color="#ff7700" title="Orange"></button>
+                                                <button class="ambient-swatch" style="background:#00ffcc;" data-color="#00ffcc" title="Cyan"></button>
+                                                <button class="ambient-swatch" style="background:#ff00ff;" data-color="#ff00ff" title="Magenta"></button>
+                                                <button class="ambient-swatch" style="background:#ffffff;" data-color="#ffffff" title="White"></button>
+                                            </div>
+
+                                            <!-- 10 last-selected favorites (user override of Rams #10) -->
+                                            <div class="ambient-favorites-grid" id="ambient-favorites-grid" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:6px; min-height:36px;">
+                                                <span style="font-size:10px; color:var(--text-muted); margin-right:2px;">Favorites:</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Round 6 — Scoreboard panel. Same shape as the other
+                                     channels: 2 number inputs, no Apply/Hide/Enabled buttons.
+                                     Clicking the scoreboard tab switches the device to the
+                                     scoreboard channel (0x06). Editing a number auto-pushes
+                                     the new score via the 0x72 set tool. Kare: matches the
+                                     ambient / clock-face / VJ-cell pattern (auto-apply on
+                                     change, no separate Show button). -->
+                                <div class="channel-panel" id="panel-scoreboard">
+                                    <p class="panel-hint" style="margin-top: 0;">Display a two-team score counter on the device's Scoreboard tool. Click the card to switch the device to the scoreboard channel; edit a number to update the score.</p>
+                                    <!-- R11 5b: stacked, centred, large — mirrors the device's
+                                         two-row scoreboard display (blue above red). -->
+                                    <div class="scoreboard-display">
+                                        <div class="scoreboard-row blue">
+                                            <span class="scoreboard-team">BLUE</span>
+                                            <input type="number" id="scoreboard-blue" min="0" max="999" value="0" class="scoreboard-score">
+                                        </div>
+                                        <div class="scoreboard-row red">
+                                            <span class="scoreboard-team">RED</span>
+                                            <input type="number" id="scoreboard-red" min="0" max="999" value="0" class="scoreboard-score">
+                                        </div>
+                                    </div>
+                                    <button id="scoreboard-reset-btn" class="glow-btn compact" style="margin-top:16px;">Reset to 0 – 0</button>
+                                </div>
+                                <!-- Text channel (type & push scrolling text) -->
+                                <div class="channel-panel" id="panel-text">
+                                    <p class="panel-hint" style="margin-top: 0;">Type a message and push it to the device as scrolling text.</p>
+                                    <div class="form-group" style="width:100%;">
+                                        <input type="text" id="text-content-input" placeholder="Enter text…" class="text-input" maxlength="64" style="width:100%;">
+                                    </div>
+                                    <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; margin-top:10px;">
+                                        <div class="form-group" style="margin:0;">
+                                            <label class="form-label" style="font-size:11px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:4px;">Color</label>
+                                            <input type="color" id="text-color-input" value="#00ffcc" style="background:none; border:none; width:44px; height:28px; cursor:pointer; padding:0;">
+                                        </div>
+                                        <div class="form-group" style="margin:0;">
+                                            <label class="form-label" style="font-size:11px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:4px;">Effect</label>
+                                            <select id="text-effect-select" class="custom-select small">
+                                                <option value="1">Scroll left</option>
+                                                <option value="0">Static</option>
+                                                <option value="2">Scroll up</option>
+                                                <option value="3">Hold</option>
+                                                <option value="4">Marquee</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group" style="margin:0; flex:1; min-width:140px;">
+                                            <label class="form-label" style="font-size:11px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:4px;">Speed <span id="text-speed-val">50</span></label>
+                                            <input type="range" id="text-speed-input" min="1" max="100" value="50" style="width:100%;">
+                                        </div>
+                                    </div>
+                                    <button id="push-text-btn" class="glow-btn" style="margin-top:16px; width:100%;">Push to Device</button>
+                                    <!-- P2.4: Danmaku is the device's OWN overlay layer, drawn
+                                         over whatever channel is showing — a different mechanism
+                                         from the button above, which renders a bitmap and uploads
+                                         it. It reuses the text and colour inputs rather than
+                                         growing a second set.
+
+                                         The "not verified" line is not hedging. This command ACKs
+                                         cleanly and nobody has watched it draw on a matrix here;
+                                         R32 §D is the case where exactly that combination rendered
+                                         nothing. Saying so is what makes the button honest, and it
+                                         tells the user what to report back on. -->
+                                    <button id="send-danmaku-btn" class="glow-btn secondary" style="margin-top:8px; width:100%;">Send as overlay (Danmaku)</button>
+                                    <p class="panel-hint" id="danmaku-hint" style="margin-top:6px; font-size:11px;">Overlay draws on top of the current channel. Not yet verified on real hardware — tell us if it works.</p>
+                                </div>
+                                <!-- R33: Sessions panel (ex-Tools → Sessions) -->
+                                <div class="channel-panel" id="panel-sessions">
+                                    <div class="grid-layout" style="grid-template-columns: 1fr; max-width: 600px;">
+                                        <div class="card glass-card">
+                                            <div class="card-header"><h3>Sleep Aid</h3></div>
+                                            <div class="card-body" id="sleep-aid-body" style="overflow:visible;">
+                                                <p class="panel-hint" style="margin-top:0;">Fade the screen to a color over a sleep timer.</p>
+                                                <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
+                                                    <div class="form-group" style="margin:0;">
+                                                        <label class="form-label" style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:4px;">Minutes</label>
+                                                        <input type="number" id="sleep-minutes" min="0" max="120" value="30" class="text-input" style="width:90px;">
+                                                    </div>
+                                                    <div class="form-group" style="margin:0;">
+                                                        <label class="form-label" style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:4px;">Color</label>
+                                                        <input type="color" id="sleep-color" value="#2040ff" style="background:none; border:none; width:44px; height:28px; cursor:pointer; padding:0;">
+                                                    </div>
+                                                    <div class="form-group" style="margin:0; flex:1; min-width:120px;">
+                                                        <label class="form-label" style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:4px;">Volume <span id="sleep-vol-val">10</span></label>
+                                                        <input type="range" id="sleep-volume" min="0" max="16" value="10" style="width:100%;">
+                                                    </div>
+                                                </div>
+                                                <div style="display:flex; gap:10px; margin-top:14px;">
+                                                    <button id="sleep-start-btn" class="glow-btn" style="flex:1;">Start Sleep</button>
+                                                    <button id="sleep-stop-btn" class="glow-btn secondary" style="flex:1;">Stop</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="card glass-card">
+                                            <div class="card-header"><h3>Tools</h3></div>
+                                            <div class="card-body" id="tools-body" style="display:flex; flex-direction:column; gap:14px; overflow:visible;">
+                                                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                                                    <span class="form-label" style="font-size:12px; font-weight:600; min-width:80px;">Stopwatch</span>
+                                                    <button class="glow-btn compact tool-timer-btn" data-action="start">Start</button>
+                                                    <button class="glow-btn compact secondary tool-timer-btn" data-action="stop">Stop</button>
+                                                    <button class="glow-btn compact secondary tool-timer-btn" data-action="reset">Reset</button>
+                                                </div>
+                                                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                                                    <span class="form-label" style="font-size:12px; font-weight:600; min-width:80px;">Countdown</span>
+                                                    <input type="number" id="countdown-min" min="0" max="99" value="5" class="text-input" style="width:60px;" title="minutes">
+                                                    <span>:</span>
+                                                    <input type="number" id="countdown-sec" min="0" max="59" value="0" class="text-input" style="width:60px;" title="seconds">
+                                                    <button id="countdown-start-btn" class="glow-btn compact">Start</button>
+                                                    <button id="countdown-stop-btn" class="glow-btn compact secondary">Stop</button>
+                                                </div>
+                                                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                                                    <span class="form-label" style="font-size:12px; font-weight:600; min-width:80px;">Noise meter</span>
+                                                    <button id="noise-start-btn" class="glow-btn compact">Start</button>
+                                                    <button id="noise-stop-btn" class="glow-btn compact secondary">Stop</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="card glass-card" id="fm-radio-card" style="display:none;">
+                                            <div class="card-header"><h3>FM Radio</h3></div>
+                                            <div class="card-body" style="display:flex; flex-direction:column; gap:14px;">
+                                                <p class="panel-hint" style="margin-top:0;">Tune the device's FM radio (FM-capable models only — Tivoo / Ditoo).</p>
+                                                <div style="display:flex; gap:10px; align-items:center;">
+                                                    <input type="number" id="fm-freq" class="text-input" min="87.5" max="108.0" step="0.1" value="101.5" style="width:100px;">
+                                                    <span style="font-size:12px; color:var(--text-muted);">MHz</span>
+                                                    <button id="fm-tune-btn" class="glow-btn compact">Tune</button>
+                                                </div>
+                                                <div id="fm-presets" style="display:flex; gap:8px; flex-wrap:wrap;">
+                                                    <button class="glow-btn compact secondary fm-preset" data-freq="88.1">88.1</button>
+                                                    <button class="glow-btn compact secondary fm-preset" data-freq="95.5">95.5</button>
+                                                    <button class="glow-btn compact secondary fm-preset" data-freq="101.5">101.5</button>
+                                                    <button class="glow-btn compact secondary fm-preset" data-freq="104.3">104.3</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 2: VIRTUAL DISPLAY WALL (Free-Form Arranger) -->
+            <section id="display-wall" class="tab-content">
+                
+                <div class="grid-layout vertical">
+                    <!-- R11 item 6: one unified Virtual Wall toolbar (icons + labels);
+                         "Canvas"/"Layout & Presets" headings dropped, presets merged in.
+                         [ + Add screen | Clear | …flex… | preset name | …flex… | Save | Load ] -->
+                    <div class="card glass-card arranger-card">
+                        <div class="card-header wall-toolbar">
+                            <div class="wall-toolbar-group">
+                                <button id="add-arranger-screen-btn" class="glow-btn compact wall-tool-btn" title="Add a screen">
+                                    <svg class="kare-icon" viewBox="0 0 16 16"><path d="M8,2 L8,14 M2,8 L14,8" stroke="currentColor" stroke-width="2"/></svg>
+                                    Add screen
+                                </button>
+                                <button id="clear-arranger-btn" class="glow-btn compact wall-tool-btn" title="Clear all screens">
+                                    <svg class="kare-icon" viewBox="0 0 16 16"><path d="M3,4 L13,4 M6,4 L6,2 L10,2 L10,4 M4,4 L5,14 L11,14 L12,4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+                                    Clear
+                                </button>
+                            </div>
+                            <input type="text" id="preset-name-input" class="text-input wall-preset-name" maxlength="40" placeholder="Preset name…" title="Name this layout to save it">
+                            <div class="wall-toolbar-group">
+                                <button id="save-preset-btn" class="glow-btn compact wall-tool-btn" title="Save preset">
+                                    <svg class="kare-icon" viewBox="0 0 16 16"><path d="M2,2 L11,2 L14,5 L14,14 L2,14 Z" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="5" y="2" width="5" height="4" fill="none" stroke="currentColor" stroke-width="1"/><rect x="4" y="9" width="8" height="5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+                                    Save
+                                </button>
+                                <select id="presets-select" class="custom-select small" title="Load preset">
+                                    <option value=""> Load preset…</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="card-body container-body" style="padding: 0;">
+                            <div class="arranger-workspace-free" id="arranger-canvas"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Asset Push -->
+                    <div class="card glass-card" style="width: 100%; box-sizing: border-box;">
+                        <div class="card-header">
+                            <h3>Split &amp; Sync GIF</h3>
+                        </div>
+                        <div class="card-body" style="display:flex; flex-direction:column; gap:12px; width:100%; box-sizing:border-box;">
+                            <div style="display:flex; gap:10px; width:100%; align-items:center;">
+                                <button id="browse-wall-art-btn" class="glow-btn compact" style="margin:0; white-space:nowrap;">Browse...</button>
+                                <div class="file-uploader" style="flex:1;">
+                                    <input type="text" id="file-path-input" placeholder="No file selected" class="text-input" style="width:100%; box-sizing:border-box;" readonly>
+                                </div>
+                                <button id="apply-wall-art" class="glow-btn" style="margin:0; white-space:nowrap;">Split &amp; Push</button>
+                            </div>
+                            <div id="file-preview-container" style="display:none; align-items:center; justify-content:center; padding:10px; background:rgba(0,0,0,0.2); border-radius:6px; border:1px solid rgba(255,255,255,0.05); text-align:center;">
+                                <img id="file-preview-img" src="" alt="Local Preview" style="max-width:120px; max-height:120px; border-radius:4px; object-fit:contain; border:1px solid rgba(255,255,255,0.1);">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- TAB 3: ROUTINES (Schedule + Time) -->
+            <section id="routines" class="tab-content"></section>
+
+            <!-- TAB 4: PIXEL ART (Custom Art + Gallery + Hot Channel) -->
+            <section id="pixel-art" class="tab-content"></section>
+
+            <!-- R40 §8: Device Settings (injected from templates_device_settings.js) -->
+            <section id="device-settings" class="tab-content"></section>
+            
+            <!-- TAB 5: ADVANCED MEDIA & DATA SOURCES (EQ Animation Previews) -->
+            <section id="data-sources" class="tab-content"></section>
+
+            <!-- TAB 6: CREDENTIALS & BLE CONFIG SETTINGS -->
+            <section id="settings" class="tab-content"></section>
+            
+        </main>
+    </div>
+    
+    <!-- R52: active-link connection state (connecting / active / degraded /
+         dropped) as an unobtrusive dot in the lower-right corner. The
+         connection_state heartbeat reports the ACTIVE link's honest state here,
+         so a mid-session drop or DEGRADED link is always visible without
+         crowding the appbar. Updated by connectDevice + refreshConnectionState. -->
+    <span id="global-status-dot" class="transport-dot inactive"
+          title="Disconnected" role="img" aria-label="Connection status"></span>
+
+    <!-- R53: daemon-down banner. The background service owns the device over the
+         socket and is killed on quit (keep-alive off), so it must respawn on the
+         next launch. If it's ever unreachable the app can do NOTHING, so surface
+         it: the health heartbeat auto-reconnects silently first, and only shows
+         this banner (with a manual Reconnect) when that fails. -->
+    <div id="daemon-banner" class="daemon-banner" role="alert" hidden>
+        <span class="daemon-banner-msg">Background service isn't running &mdash; the app can't reach your devices.</span>
+        <button id="daemon-reconnect-btn" class="daemon-banner-btn" type="button">Reconnect</button>
+    </div>
+
+    <!-- Notification Overlay -->
+    <div id="toast" class="toast"></div>
+    
+    <script src="templates_tools.js"></script>
+    <script src="templates_routines.js"></script>
+    <script src="templates_pixel_art.js"></script>
+    <script src="templates_widgets.js"></script>
+    <script src="templates_settings.js"></script>
+    <script src="templates_device_settings.js"></script>
+    <script src="app_globals.js"></script>
+    <script src="cloud_result.js"></script>
+    <script src="connection_events.js"></script>
+    <script src="channel_preview.js"></script>
+    <script src="device_selector.js"></script>
+    <script src="app_init.js"></script>
+    <script src="channels_core.js"></script>
+    <script src="channels_grids.js"></script>
+    <script src="cloud_clock_faces.js"></script>
+    <script src="playlists.js"></script>
+    <script src="aid_sleep.js"></script>
+    <script src="photo_albums.js"></script>
+    <script src="widgets.js"></script>
+    <script src="widgets_music.js"></script>
+    <script src="widgets_sysmon.js"></script>
+    <script src="widgets_tickers.js"></script>
+    <script src="weather_city.js"></script>
+    <script src="settings_hardware.js"></script>
+    <script src="settings_features.js"></script>
+    <script src="settings_notifications.js"></script>
+    <script src="alarms_editor.js"></script>
+    <script src="gallery.js"></script>
+    <script src="gallery_hot.js"></script>
+    <script src="sync_now.js"></script>
+    <script src="custom_art.js"></script>
+</body>
+</html>

@@ -1,0 +1,145 @@
+# pyproject.toml — divoom-control
+#
+# R14 §4 — first time this repo has a packaging file. Replaces the
+# need to keep requirements.txt in sync with install instructions.
+# Verifies that `pip install -e .` actually works, and exposes the
+# `divoom-control` CLI as a real entry point.
+#
+# Build backend: setuptools (most common, no extra deps).
+# Python: 3.10+ (we use PEP 604 unions `X | Y` in type hints).
+#
+# Optional extras:
+#   pip install -e ".[gui]"        # pywebview (macOS GUI)
+#   pip install -e ".[test]"       # pytest + pytest-asyncio
+#   pip install -e ".[dev]"        # both
+#
+# Entry points:
+#   divoom-control  → divoom_lib.cli:main
+#
+# The legacy `./divoom-control` shell wrapper is kept for in-tree
+# development — it works without installing the package.
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "divoom-control"
+version = "0.31.0"
+description = "macOS control surface for Divoom pixel displays (Pixoo / Tivoo / Ditoo / Timoo)"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [
+    { name = "Zach Tomer" },
+]
+keywords = ["divoom", "pixoo", "tivoo", "ditoo", "timoo", "ble", "bluetooth", "pixel-display"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: MacOS X",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS :: MacOS X",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Home Automation",
+    "Topic :: Multimedia :: Graphics",
+]
+
+# Core deps (no GUI; pure lib + CLI). The GUI extras live below.
+dependencies = [
+    "bleak",
+    "aiohttp",
+    "pillow",
+    "pycryptodome",
+    "lzallright",
+    "tomli; python_version < '3.11'",
+    "tomli-w",
+]
+
+[project.optional-dependencies]
+# macOS-only Control Center (pywebview + native menu bar).
+gui = [
+    "pywebview; sys_platform == 'darwin'",
+    "pyobjc-framework-Cocoa; sys_platform == 'darwin'",
+]
+test = [
+    "pytest",
+    "pytest-asyncio",
+]
+dev = [
+    "divoom-control[gui,test]",
+]
+
+[project.scripts]
+# `divoom-control` → `python -m divoom_lib.cli` (the CLI main).
+divoom-control = "divoom_lib.cli:main"
+
+[project.urls]
+# Update these once the repo has a public home.
+"Source" = "https://github.com/ztomer/divoom_control"
+"Issues" = "https://github.com/ztomer/divoom_control/issues"
+
+# ── setuptools: package discovery + data files ───────────────────────
+
+[tool.setuptools]
+# The lib packages + the GUI package (macOS only). Native dylibs and
+# the web_ui/ directory are shipped as package data.
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["divoom_lib*", "divoom_client*", "divoom_gui*"]
+exclude = ["tests*", "examples*", "references*", "scripts*", "docs*"]
+
+[tool.setuptools.package-data]
+# R17: the native lib ships with `divoom_lib` (its true home — it bundles
+# divoom_lib/native_src/*.c). The web UI ships with the `divoom_gui` package.
+# R20: per-platform extensions — .dylib (macOS), .so (Linux), .dll (Windows).
+divoom_lib = [
+    "*.dylib",
+    "*.so",
+    "*.dll",
+    # R28: bundled bitmap font for device-bound text (APK-derived, see
+    # divoom_lib/fonts/ + scripts/extract_apk_font.py).
+    "fonts/*.bin",
+]
+divoom_gui = [
+    "web_ui/*",
+]
+
+# ── pytest ────────────────────────────────────────────────────────────
+
+[tool.pytest.ini_options]
+# Match the existing pytest.ini; kept here so `pip install -e .[test]`
+# gives a working test runner with no extra config files.
+minversion = "8.0"
+addopts = "-ra --strict-markers"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+# Hardware tests are gated behind env vars / markers; see conftest.py.
+markers = [
+    "hardware: requires a real BLE device (skipped on CI)",
+    "e2e: end-to-end test (slow; skip on CI)",
+]
+
+[tool.coverage.run]
+# Reproducible baseline so `coverage run -m pytest` measures the same tree
+# every time (see REVIEW_2026-06 §0.3 — the prior review quoted a coverage
+# table that did not match reality). Real TOTAL was 62% on 2026-06-09.
+source = ["divoom_lib", "divoom_gui", "divoom_client"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]

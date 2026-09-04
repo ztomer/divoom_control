@@ -1,0 +1,270 @@
+/* widgets_extra.css — Toast, macOS music, winamp, indicators, weather */
+/* Toast popup notifications */
+.toast {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 16px 24px;
+    color: var(--text-main);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    z-index: 1000;
+    backdrop-filter: blur(10px);
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.toast.show {
+    transform: translateY(0);
+    opacity: 1;
+}
+
+.toast.success { border-color: var(--primary); }
+.toast.error { border-color: #ef4444; }
+
+.toast-transport {
+  font-size: 10px;
+  opacity: 0.75;
+  margin-left: 6px;
+}
+
+/* R53: daemon-down banner — a top-center alert shown only when the background
+   service is unreachable and auto-reconnect has failed. Amber = "needs
+   attention", distinct from the toast (transient) and the status dot (device
+   link). Sits above everything and clears the frameless-appbar drag region. */
+.daemon-banner {
+    position: fixed;
+    top: 44px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: rgba(48, 33, 8, 0.96);
+    border: 1px solid #f59e0b;
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: var(--text-main);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+    z-index: 1100;
+    font-size: 13px;
+    font-weight: 500;
+    max-width: min(90vw, 620px);
+}
+
+.daemon-banner[hidden] { display: none; }
+
+.daemon-banner-msg { flex: 1; }
+
+.daemon-banner-btn {
+    flex-shrink: 0;
+    background: #f59e0b;
+    color: #1a1205;
+    border: none;
+    border-radius: 7px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: filter 0.15s ease;
+}
+
+.daemon-banner-btn:hover { filter: brightness(1.1); }
+.daemon-banner-btn:disabled { opacity: 0.6; cursor: default; }
+
+/* macOS Music widget side-by-side previews */
+.music-previews-container {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 15px;
+}
+
+.music-previews-container .music-cover-preview {
+    width: 128px;
+    height: 128px;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.music-previews-container .music-cover-preview img {
+    border-radius: 6px;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+}
+
+.music-device-preview-wrap {
+    width: 128px;
+    height: 128px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    position: relative;
+    overflow: hidden;
+}
+
+.music-device-preview-wrap .device-preview-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    image-rendering: pixelated;
+    background: transparent;
+    border: none;
+    margin: 0;
+    border-radius: 6px;
+}
+
+.music-device-preview-wrap .hc-label {
+    position: absolute;
+    bottom: 4px;
+    font-size: 8px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 1px 4px;
+    border-radius: 2px;
+}
+
+/* ── Winamp Retro Pixelated Visualizer ───────────────────────────────── */
+.winamp-visualizer {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    width: 100%;
+    height: 32px;
+    background: #000000;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    padding: 3px 6px;
+    box-sizing: border-box;
+    margin-top: 12px;
+    opacity: 0.15;
+    transition: opacity 0.3s ease;
+}
+
+.widget-active .winamp-visualizer {
+    opacity: 0.95;
+}
+
+.winamp-bar {
+    width: 8%;
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+}
+
+.winamp-fill {
+    width: 100%;
+    background: linear-gradient(to top, 
+        #00ff66 0%, #00ff66 50%, 
+        #ffcc00 50%, #ffcc00 80%, 
+        #ff3333 80%, #ff3333 100%
+    );
+    background-size: 100% 4px; /* retro pixel segments! */
+    height: 0%;
+    border-radius: 1px;
+    transition: height 0.05s ease;
+}
+
+/* ── Active Widget Card Indicator (Braun & Kare inspired) ───────────── */
+.card.widget-active {
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 15px var(--primary-glow), inset 0 0 8px var(--primary-glow) !important;
+    position: relative;
+}
+
+.active-indicator {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    user-select: none;
+}
+
+.card.widget-active .active-indicator {
+    display: inline-flex;
+}
+
+.active-indicator::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    background-color: var(--accent);
+    border-radius: 50%;
+    box-shadow: 0 0 6px var(--accent);
+    animation: activePulse 1.2s ease-in-out infinite;
+}
+
+@keyframes activePulse {
+    0%, 100% { opacity: 0.35; transform: scale(0.9); }
+    50% { opacity: 1; transform: scale(1.1); }
+}
+
+/* Larger stocks and system monitor previews */
+.device-preview-wrap.large {
+    width: 128px;
+    height: 128px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    position: relative;
+    overflow: hidden;
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.device-preview-wrap.large .device-preview-img {
+    width: 100%;
+    height: 100%;
+    border: none;
+    border-radius: 6px;
+}
+
+/* ── R15 §3: Weather preview (icon + temperature) ──
+ *
+ * The .device-preview-wrap is the 128×128 dark box. We layer:
+ *   - the SVG icon (32×32, centered) for the weather type
+ *   - the temperature (pixel-art 7-segment style, top-right corner)
+ * Both are absolutely positioned inside the box; the box itself is
+ * flex-centered so the icon stays put if the temperature is long.
+ */
+.weather-preview-icon {
+    width: 64px;
+    height: 64px;
+    color: var(--text-main);
+    flex-shrink: 0;
+}
+.weather-preview-temp {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    font-family: var(--font-mono);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-main);
+    letter-spacing: -0.02em;
+    pointer-events: none;
+}
+
