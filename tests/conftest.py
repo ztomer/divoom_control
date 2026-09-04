@@ -17,6 +17,7 @@ import os
 import subprocess
 import sys
 import threading
+import pathlib
 from pathlib import Path
 
 import pytest
@@ -96,6 +97,15 @@ def pytest_addoption(parser):
         help="Run integration tests that require a physically connected Divoom device.",
     )
     parser.addoption(
+        "--run-browser",
+        action="store_true",
+        default=False,
+        help="Run tests that launch a real browser (Playwright/camoufox). "
+             "Excluded by default: they need the camoufox binary present and "
+             "are process-contention sensitive -- one of them fails under the "
+             "full suite and passes alone (TargetClosedError, kill EPERM).",
+    )
+    parser.addoption(
         "--run-cloud",
         action="store_true",
         default=False,
@@ -104,15 +114,45 @@ def pytest_addoption(parser):
     )
 
 
+def _launches_a_browser(path):
+    """Whether a test module drives a real browser.
+
+    Read from the module's SOURCE rather than kept in a list beside
+    HARDWARE_TEST_MODULES. A hand-maintained set is a set that drifts: the next
+    browser test to be added would join the default suite silently, which is
+    precisely the failure this exclusion exists to prevent. The import sits
+    inside the test bodies (`from playwright.async_api import async_playwright`),
+    so it is not visible on the module object -- the text is.
+    """
+    try:
+        return "playwright" in path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+
+
 def pytest_collection_modifyitems(config, items):
-    if config.getoption("--run-hardware"):
+    run_hw = config.getoption("--run-hardware")
+    run_browser = config.getoption("--run-browser")
+    if run_hw and run_browser:
         return
     skip_hw = pytest.mark.skip(
         reason="requires a physical Divoom device; run with --run-hardware"
     )
+    skip_browser = pytest.mark.skip(
+        reason="launches a real browser; run with --run-browser"
+    )
+    browser_cache = {}
     for item in items:
-        if item.module.__name__.split(".")[-1] in HARDWARE_TEST_MODULES:
+        if not run_hw and item.module.__name__.split(".")[-1] in HARDWARE_TEST_MODULES:
             item.add_marker(skip_hw)
+            continue
+        if run_browser:
+            continue
+        path = pathlib.Path(str(getattr(item, "fspath", "")))
+        if path not in browser_cache:
+            browser_cache[path] = _launches_a_browser(path)
+        if browser_cache[path]:
+            item.add_marker(skip_browser)
 
 
 # R61: harness gate for a suspected cross-test hazard (a reproducible-only-under

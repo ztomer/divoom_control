@@ -114,18 +114,15 @@ divoom_gui = [
 
 # ── pytest ────────────────────────────────────────────────────────────
 
-[tool.pytest.ini_options]
-# Match the existing pytest.ini; kept here so `pip install -e .[test]`
-# gives a working test runner with no extra config files.
-minversion = "8.0"
-addopts = "-ra --strict-markers"
-testpaths = ["tests"]
-asyncio_mode = "auto"
-# Hardware tests are gated behind env vars / markers; see conftest.py.
-markers = [
-    "hardware: requires a real BLE device (skipped on CI)",
-    "e2e: end-to-end test (slow; skip on CI)",
-]
+# pytest is configured ENTIRELY in pytest.ini. There was a
+# [tool.pytest.ini_options] block here and pytest ignored all of it -- an ini
+# file always wins, and pytest prints a warning saying so on every run. It is
+# not duplicated here on purpose: two config files where only one is read is
+# how settings get "changed" with no effect.
+#
+# Environment-dependent tests are gated by conftest.py opt-in flags
+# (--run-hardware, --run-browser, --run-cloud), not by markers.
+
 
 [tool.coverage.run]
 # Reproducible baseline so `coverage run -m pytest` measures the same tree
