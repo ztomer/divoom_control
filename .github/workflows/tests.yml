@@ -207,6 +207,11 @@ jobs:
       # 21 warnings while the default build sat at zero. Same blind spot closed
       # in monitor (b2c41d7) -- a crate with cfg(feature) halves needs every
       # shipped configuration linted or one half drifts.
+      # `[lints.cargo] unused_dependencies` is an UNUSED MANIFEST KEY on stable
+      # cargo -- it needs -Zcargo-lints on nightly, so a repo that declares it
+      # has never once had it enforced. cargo-machete does the job on stable.
+      - name: No unused dependencies
+        run: cargo install cargo-machete --locked && cargo machete
       - name: Lint core without BLE
         run: cargo clippy -p divoomd --no-default-features --all-targets --locked -- -D warnings
       - name: Build core without BLE
