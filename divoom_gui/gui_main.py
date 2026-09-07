@@ -119,25 +119,14 @@ def _resolve_bundled_binary(name: str) -> "str | None":
     return None
 
 
-_GUI_LOCK_FH = None  # kept open for the process lifetime to hold the lock
-
-
-def _ensure_single_instance() -> bool:
-    """True if we got the single-instance lock; False if a Control Center is
-    already running (R24 #1 — prevents the menubar 'Launch Dashboard' →
-    dashboard → menubar runaway)."""
-    global _GUI_LOCK_FH
-    try:
-        import fcntl
-        import tempfile
-        fh = open(os.path.join(tempfile.gettempdir(), "divoom_gui.lock"), "w")
-        fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        fh.write(str(os.getpid()))
-        fh.flush()
-        _GUI_LOCK_FH = fh
-        return True
-    except (OSError, BlockingIOError):
-        return False
+# The lock + "focus the incumbent" pair lives in divoom_gui.single_instance;
+# re-exported under the historical private names so this module's callers (and
+# the monkeypatching in tests/test_gui_main_main.py) keep addressing gui_main.
+from divoom_gui.single_instance import (  # noqa: E402
+    ensure_single_instance as _ensure_single_instance,
+    focus_running_gui as _focus_running_gui,
+    running_gui_pid as _running_gui_pid,
+)
 
 
 def main():
@@ -151,12 +140,7 @@ def main():
 
     if sys.platform == "darwin" and not _ensure_single_instance():
         logger.info("A Divoom Control Center is already running; focusing it and exiting.")
-        try:
-            import subprocess
-            subprocess.run(["osascript", "-e", 'tell application "Python" to activate'],
-                           check=False, capture_output=True)
-        except Exception:
-            pass
+        _focus_running_gui(_running_gui_pid())
         return
 
     api = DivoomGuiAPI()

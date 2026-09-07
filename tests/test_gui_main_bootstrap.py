@@ -32,6 +32,7 @@ if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
 from divoom_gui import gui_main  # noqa: E402
+from divoom_gui import single_instance  # noqa: E402  (gui_main re-exports these)
 
 
 # ───────────────────────── module-level locale bootstrap ────────────────────
@@ -224,17 +225,17 @@ def test_resolve_bundled_binary_none_found(tmp_path, monkeypatch):
 # ───────────────────────────── _ensure_single_instance ───────────────────────
 
 def test_ensure_single_instance_acquires_lock(tmp_path, monkeypatch):
-    monkeypatch.setattr(gui_main, "_GUI_LOCK_FH", None)
-    # `_ensure_single_instance` imports `tempfile` locally; patch the shared module.
+    monkeypatch.setattr(single_instance, "_GUI_LOCK_FH", None)
+    # `lock_path` imports `tempfile` locally; patch the shared module.
     import tempfile as real_tempfile
     monkeypatch.setattr(real_tempfile, "gettempdir", lambda: str(tmp_path))
 
     assert gui_main._ensure_single_instance() is True
-    assert gui_main._GUI_LOCK_FH is not None
+    assert single_instance._GUI_LOCK_FH is not None
 
 
 def test_ensure_single_instance_false_when_locked(tmp_path, monkeypatch):
-    monkeypatch.setattr(gui_main, "_GUI_LOCK_FH", None)
+    monkeypatch.setattr(single_instance, "_GUI_LOCK_FH", None)
     import fcntl as real_fcntl
 
     def raiser(fd, flags):

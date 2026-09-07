@@ -1,6 +1,7 @@
 """gui_main.main() lifecycle coverage (split from
 test_gui_main_bootstrap.py)."""
 
+import re
 import subprocess
 import sys
 import threading
@@ -121,10 +122,20 @@ def _patch_main_common(monkeypatch, tmp_path, *, fire_closing=True):
     )
 
 
-def test_main_darwin_already_running_returns_early(monkeypatch):
+def test_main_darwin_already_running_focuses_the_incumbent_by_pid(monkeypatch):
+    """The focus path must address the incumbent by the pid in the lock file.
+
+    It used to run `tell application "Python" to activate`, which asked
+    LaunchServices to resolve the NAME "Python" and LAUNCH whatever answered:
+    on 2026-09-07 that was TeX Live Utility's embedded Python 3.9.10 bundle,
+    app-translocated into $TMPDIR and SIGABRTing in dyld. Four crash reports,
+    and the window it meant to focus never moved. Pinned at the script level
+    because the app-name form is the whole defect.
+    """
     monkeypatch.setattr(gui_main.sys, "platform", "darwin")
     monkeypatch.setattr(sys, "argv", ["gui_main.py"])
     monkeypatch.setattr(gui_main, "_ensure_single_instance", lambda: False)
+    monkeypatch.setattr(gui_main, "_running_gui_pid", lambda: 4242)
     osascript_calls = []
     monkeypatch.setattr(subprocess, "run", lambda *a, **kw: osascript_calls.append(a) or types.SimpleNamespace())
     monkeypatch.setattr(gui_main.webview, "create_window",
@@ -134,12 +145,32 @@ def test_main_darwin_already_running_returns_early(monkeypatch):
 
     assert result is None
     assert osascript_calls, "expected the 'focus existing instance' osascript call"
+    script = osascript_calls[0][0][2]
+    assert "unix id is 4242" in script
+    assert "System Events" in script
+    # Pinned as the CLASS, not as the one name that bit us: no application may
+    # be addressed by name except the faceless System Events bridge, because a
+    # name is resolved by LaunchServices and can start an arbitrary bundle.
+    assert not re.search(r'application\s+(?:id\s+)?"(?!System Events")', script), script
+
+
+def test_main_darwin_already_running_without_a_pid_launches_nothing(monkeypatch):
+    """No pid recorded -> do nothing. There is no safe name-based fallback."""
+    monkeypatch.setattr(gui_main.sys, "platform", "darwin")
+    monkeypatch.setattr(sys, "argv", ["gui_main.py"])
+    monkeypatch.setattr(gui_main, "_ensure_single_instance", lambda: False)
+    monkeypatch.setattr(gui_main, "_running_gui_pid", lambda: None)
+    monkeypatch.setattr(subprocess, "run",
+                        lambda *a, **kw: pytest.fail("must not shell out without a pid"))
+
+    assert gui_main.main() is None
 
 
 def test_main_darwin_already_running_swallows_osascript_failure(monkeypatch):
     monkeypatch.setattr(gui_main.sys, "platform", "darwin")
     monkeypatch.setattr(sys, "argv", ["gui_main.py"])
     monkeypatch.setattr(gui_main, "_ensure_single_instance", lambda: False)
+    monkeypatch.setattr(gui_main, "_running_gui_pid", lambda: 4242)
     monkeypatch.setattr(subprocess, "run", lambda *a, **kw: (_ for _ in ()).throw(OSError("no osascript")))
 
     assert gui_main.main() is None  # must not raise
