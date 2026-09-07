@@ -97,7 +97,7 @@ fn clears_a_stale_socket() {
 fn refuses_a_live_divoomd_without_deleting_it() {
     let p = tmp_path("live");
     cleanup(&p);
-    let _fake = Fake::start(&p, Some("{\"type\":\"status\",\"connected\":false}\n"));
+    let fake = Fake::start(&p, Some("{\"type\":\"status\",\"connected\":false}\n"));
 
     match acquire(&p) {
         Err(BindFailure::LiveInstance) => {}
@@ -107,7 +107,7 @@ fn refuses_a_live_divoomd_without_deleting_it() {
         std::path::Path::new(&p).exists(),
         "a live daemon's socket must survive our refusal"
     );
-    drop(_fake);
+    drop(fake);
     cleanup(&p);
 }
 
@@ -117,14 +117,14 @@ fn refuses_a_foreign_listener_instead_of_stealing_it() {
     // any successful connect as "a healthy divoomd" and exited claiming so.
     let p = tmp_path("foreign");
     cleanup(&p);
-    let _fake = Fake::start(&p, Some("SSH-2.0-OpenSSH_9.0\n")); // speaks, but not ours
+    let fake = Fake::start(&p, Some("SSH-2.0-OpenSSH_9.0\n")); // speaks, but not ours
 
     match acquire(&p) {
         Err(BindFailure::ForeignListener) => {}
         other => panic!("expected ForeignListener, got {other:?}"),
     }
     assert!(std::path::Path::new(&p).exists(), "must not be removed");
-    drop(_fake);
+    drop(fake);
     cleanup(&p);
 }
 
@@ -143,14 +143,14 @@ fn a_silent_listener_is_unresponsive_not_foreign() {
     // someone else's program alone -- so they must not share a variant.
     let p = tmp_path("silent");
     cleanup(&p);
-    let _fake = Fake::start(&p, None); // accepts, says nothing
+    let fake = Fake::start(&p, None); // accepts, says nothing
 
     match acquire(&p) {
         Err(BindFailure::UnresponsiveListener) => {}
         other => panic!("expected UnresponsiveListener, got {other:?}"),
     }
     assert!(std::path::Path::new(&p).exists(), "must not be removed");
-    drop(_fake);
+    drop(fake);
     cleanup(&p);
 }
 

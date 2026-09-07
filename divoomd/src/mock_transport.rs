@@ -47,6 +47,16 @@ impl MockTransport {
     /// characteristic is missing, or the write times out. A timeout is reported
     /// as unreachable rather than as a protocol error, because that is what it
     /// means here.
+    #[expect(
+        clippy::unused_async,
+        clippy::unused_async_trait_impl,
+        reason = "the signature mirrors the real transport, which does await. A \
+              double that does not is still required to have the same type"
+    )]
+    /// # Panics
+    ///
+    /// If a mutex guarding the shared state is poisoned -- another thread
+    /// panicked while holding it.
     pub async fn send_command(
         &self,
         command_id: u8,
@@ -62,6 +72,12 @@ impl MockTransport {
     ///
     /// If the mutex guarding this value is poisoned -- another thread panicked
     /// while holding it, so the value cannot be trusted.
+    #[expect(
+        clippy::unused_async,
+        clippy::unused_async_trait_impl,
+        reason = "the signature mirrors the real transport, which does await. A \
+              double that does not is still required to have the same type"
+    )]
     pub async fn wait_for_response(&self, command_id: u8, _timeout: Duration) -> Option<Vec<u8>> {
         let resp = self.simulated_responses.lock().unwrap();
         resp.get(&command_id).cloned()
@@ -81,6 +97,16 @@ impl MockTransport {
     ///
     /// When any chunk of the transfer fails to write, or the device stops
     /// acknowledging mid-stream.
+    #[expect(
+        clippy::unused_async,
+        clippy::unused_async_trait_impl,
+        reason = "the signature mirrors the real transport, which does await. A \
+              double that does not is still required to have the same type"
+    )]
+    /// # Panics
+    ///
+    /// If a mutex guarding the shared state is poisoned -- another thread
+    /// panicked while holding it.
     pub async fn stream_animation_8b(&self, blob: &[u8]) -> BleResult<bool> {
         let mut cmd = self.sent_commands.lock().unwrap();
         cmd.push((0x8bu8, blob.to_vec()));

@@ -208,6 +208,11 @@ pub fn get_cached_credentials() -> Option<DivoomCredentials> {
 /// authentication failure is still inside its back-off window -- the message
 /// names the remaining wait, because retrying sooner just burns another
 /// rejection.
+///
+/// # Panics
+///
+/// If a mutex guarding the shared state is poisoned -- another thread
+/// panicked while holding it.
 pub async fn get_credentials(force_refresh: bool) -> Result<DivoomCredentials, String> {
     if !force_refresh {
         if let Some(cached) = load_cache() {

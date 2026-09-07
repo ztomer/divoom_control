@@ -96,6 +96,13 @@ impl Registry {
 
         // Set when a victim is displaced, and notified AFTER the lock is
         // released -- see the drop below.
+        #[expect(
+            clippy::useless_let_if_seq,
+            reason = "deliberate: the victim is computed UNDER the lock and \
+                      notified after it is dropped, so the binding has to \
+                      outlive the `if` that sets it. Collapsing it into the \
+                      branch is what would put a notify under the mutex."
+        )]
         let mut displaced: Option<Arc<Notify>> = None;
 
         if st.entries.len() >= self.capacity {

@@ -36,10 +36,10 @@ use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 pub(crate) use args::{pos_bool, pos_i64};
 
 pub async fn handle_device_call(
-    _daemon: &Daemon,
+    daemon: &Daemon,
     dev: &DeviceTransport,
     req: &Request,
-    _timeout: Duration,
+    timeout: Duration,
 ) -> Value {
     let Some(method) = req.args.get("method").and_then(|v| v.as_str()) else {
         return crate::protocol::err_reply("device_call requires 'method'");
@@ -143,13 +143,13 @@ pub async fn handle_device_call(
         } else {
             let kwargs = req.args.get("kwargs").and_then(|v| v.as_object());
             let ctx = CallCtx {
-                daemon: _daemon,
+                daemon: daemon,
                 dev,
                 args: &args,
                 raw_args: &raw_args,
                 kwargs,
                 blob_map: &blob_map,
-                timeout: _timeout,
+                timeout: timeout,
             };
 
             routing::route(method, ctx).await

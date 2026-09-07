@@ -21,8 +21,8 @@ pub(super) async fn connect(central: &BleCentral, id: &str) -> BleResult<BleTran
     // land inside the window) — most visibly on RECONNECT after a disconnect.
     // Poll the discovered set until the target appears or a deadline passes,
     // mirroring the Python daemon's reconnect-scan retries.
-    let _dbg = std::env::var("DIVOOMD_BLE_DEBUG").is_ok();
-    if _dbg {
+    let dbg_on = std::env::var("DIVOOMD_BLE_DEBUG").is_ok();
+    if dbg_on {
         eprintln!("[ble][connect] start_scan");
     }
     // EVERY central await below is bounded by a timeout. On a dead
@@ -73,7 +73,7 @@ pub(super) async fn connect(central: &BleCentral, id: &str) -> BleResult<BleTran
     }
     let _ = tokio::time::timeout(Duration::from_secs(3), central.stop_scan()).await;
     let peripheral = found.ok_or_else(|| "device not found in scan".to_string())?;
-    if _dbg {
+    if dbg_on {
         eprintln!("[ble][connect] found peripheral, connecting");
     }
 
@@ -87,14 +87,14 @@ pub(super) async fn connect(central: &BleCentral, id: &str) -> BleResult<BleTran
     // on Linux today; connect does not.
     match tokio::time::timeout(CONNECT_TIMEOUT, peripheral.connect()).await {
         Ok(r) => {
-            if _dbg {
+            if dbg_on {
                 eprintln!("[ble][connect] connect returned");
             }
             r?;
         }
         Err(_) => return Err("BLE connect timed out".into()),
     }
-    if _dbg {
+    if dbg_on {
         eprintln!("[ble][connect] discover_services");
     }
     match tokio::time::timeout(CONNECT_TIMEOUT, peripheral.discover_services()).await {

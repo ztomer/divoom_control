@@ -282,6 +282,8 @@ mod tests {
 
     #[test]
     fn connection_state_reads_the_field_from_device_status() {
+        // Bound only to keep the fake daemon ALIVE for the test; its Drop
+        // shuts it down.
         let _daemon = FakeDaemon::start(
             json!({"success": true, "connected": true, "connection_state": "degraded"}),
             vec![],

@@ -23,6 +23,11 @@ impl SppTransport {
     ///
     /// From the BLE stack below: the adapter is gone, the peripheral is not
     /// connected, or the write did not complete.
+    ///
+    /// # Panics
+    ///
+    /// If the bridge path is not valid UTF-8, which on the platforms this
+    /// builds for it always is.
     pub async fn connect(
         mac: &str,
         device_name: Option<&str>,
@@ -160,6 +165,11 @@ impl SppTransport {
     /// characteristic is missing, or the write times out. A timeout is reported
     /// as unreachable rather than as a protocol error, because that is what it
     /// means here.
+    ///
+    /// # Panics
+    ///
+    /// If a mutex guarding the shared state is poisoned -- another thread
+    /// panicked while holding it.
     pub async fn send_command(
         &self,
         command_id: u8,

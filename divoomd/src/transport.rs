@@ -25,13 +25,13 @@ impl DeviceTransport {
         }
     }
 
-    pub fn set_cached_device_name(&self, _name: String) {
+    pub fn set_cached_device_name(&self, name: String) {
         match self {
             #[cfg(feature = "ble")]
-            Self::Ble(b) => b.set_cached_device_name(_name),
-            Self::Spp(s) => s.set_cached_device_name(_name),
+            Self::Ble(b) => b.set_cached_device_name(name),
+            Self::Spp(s) => s.set_cached_device_name(name),
             Self::Lan(_) => {}
-            Self::Mock(m) => m.set_cached_device_name(_name),
+            Self::Mock(m) => m.set_cached_device_name(name),
         }
     }
 

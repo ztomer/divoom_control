@@ -169,6 +169,11 @@ impl CommandQueue {
     /// `HeldByAnother` when a different token owns the exclusive slot. Neither
     /// is a failure of this call -- they are the two states a caller has to
     /// handle.
+    ///
+    /// # Panics
+    ///
+    /// If a mutex guarding the shared state is poisoned -- another thread
+    /// panicked while holding it.
     pub fn acquire_now(&self, token: &str) -> Result<(), AcquireError> {
         let mut g = self.inner.lock().unwrap();
         if g.stopped {
@@ -224,6 +229,11 @@ impl CommandQueue {
     ///
     /// As [`Self::acquire_now`]: the queue is stopped, or the slot is held by a
     /// different token.
+    ///
+    /// # Panics
+    ///
+    /// If a mutex guarding the shared state is poisoned -- another thread
+    /// panicked while holding it.
     pub fn check_allowed(&self, token: Option<&str>) -> Result<(), AcquireError> {
         let g = self.inner.lock().unwrap();
         if g.stopped {
