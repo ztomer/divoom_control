@@ -278,71 +278,79 @@ async fn subscribers_cannot_starve_request_handling() {
     let _ = std::fs::remove_file(&path);
 }
 
-/// A subscription is torn down after a bounded lifetime EVEN WHILE EVENTS FLOW,
-/// and the client is told to reconnect.
+/// A quiet subscription's slot is reclaimed for a newcomer, and the client is
+/// told to reconnect — while a subscription whose client has SPOKEN is left
+/// alone. Nothing is disturbed until a slot is actually needed.
 ///
-/// This is the answer to "why were there 64 subscribers?". There was already a
-/// watchdog, and it reset its deadline on every event the daemon DELIVERED — on
-/// the daemon's own output. It could therefore only ever reap a subscriber on a
-/// silent channel; a subscription carrying traffic lived forever, and nothing
-/// else bounded it. A cap that only fires when nothing is happening is not a
-/// lifetime.
+/// This replaced a blanket max-age that renegotiated every subscription on a
+/// timer: churn charged to healthy clients to solve a problem caused by dead
+/// ones. It also replaced the original watchdog, which reset on every event the
+/// daemon DELIVERED — a broadcast, so it moved every subscriber's clock in
+/// lockstep and could never tell a live client from a dead one.
 #[tokio::test]
-async fn a_busy_subscription_still_expires_and_asks_the_client_to_renegotiate() {
-    let path = temp_sock("subttl");
+async fn a_quiet_subscription_yields_its_slot_and_an_active_one_keeps_it() {
+    let path = temp_sock("lru");
     let listener = UnixListener::bind(&path).unwrap();
     let (tx, _rx) = broadcast::channel::<Value>(16);
-    let feed = tx.clone();
-    // idle 200ms → max age 200ms * SUBSCRIPTION_MAX_AGE_FACTOR.
+    // max_connections 4 → subscription budget 2. Long idle so only the LRU
+    // policy can end anything here.
     tokio::spawn(serve(
         Arc::new(listener),
         Arc::new(SilentSubStub { tx }),
-        8,
-        Duration::from_millis(200),
+        4,
+        Duration::from_secs(120),
     ));
 
-    let mut client = UnixStream::connect(&path).await.unwrap();
-    client
+    async fn subscribe(path: &std::path::Path) -> UnixStream {
+        let mut s = UnixStream::connect(path).await.unwrap();
+        s.write_all(encode_message(&json!({ "command": "subscribe" })).as_slice())
+            .await
+            .unwrap();
+        let mut buf = [0u8; 512];
+        let n = tokio::time::timeout(Duration::from_secs(2), s.read(&mut buf))
+            .await
+            .expect("initial status")
+            .unwrap();
+        let v: Value = serde_json::from_slice(&buf[..n]).unwrap();
+        assert_eq!(v["type"], json!("status"));
+        s
+    }
+
+    let mut quiet = subscribe(&path).await;
+    let mut busy = subscribe(&path).await;
+
+    // The busy client proves it is there. The quiet one never says a word.
+    busy.write_all(b"{\"command\":\"ping\"}\n").await.unwrap();
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // A third client needs a slot. RENEGOTIATE_AFTER is 10 minutes in
+    // production, so nothing is stale yet: the newcomer must be REFUSED rather
+    // than allowed to evict a live client.
+    let mut third = UnixStream::connect(&path).await.unwrap();
+    third
         .write_all(encode_message(&json!({ "command": "subscribe" })).as_slice())
         .await
         .unwrap();
-
-    // Keep the channel BUSY the whole time. Under the old watchdog this alone
-    // kept the subscription alive indefinitely, because each delivery pushed the
-    // deadline out again.
-    tokio::spawn(async move {
-        for i in 0..200 {
-            let _ = feed.send(json!({ "type": "tick", "i": i }));
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
-    });
-
-    // Read until the daemon tells us to reconnect, then closes.
-    let mut acc = String::new();
-    let mut buf = [0u8; 2048];
-    let saw_notice = tokio::time::timeout(Duration::from_secs(10), async {
-        loop {
-            let n = match client.read(&mut buf).await {
-                Ok(0) | Err(_) => return false, // closed without a notice
-                Ok(n) => n,
-            };
-            acc.push_str(&String::from_utf8_lossy(&buf[..n]));
-            if acc.contains("\"resubscribe\"") {
-                return true;
-            }
-        }
-    })
-    .await
-    .expect("a busy subscription must still expire — it used to live forever");
-
+    let mut buf = [0u8; 512];
+    let n = tokio::time::timeout(Duration::from_secs(2), third.read(&mut buf))
+        .await
+        .expect("the newcomer must be answered, not hung")
+        .unwrap();
+    let v: Value = serde_json::from_slice(&buf[..n]).unwrap();
+    assert_eq!(v["success"], json!(false), "{v}");
     assert!(
-        saw_notice,
-        "the daemon must announce the renegotiation before closing, not just drop: {acc}"
+        v["error"].as_str().unwrap_or("").contains("subscriptions"),
+        "refusal must name what ran out: {v}"
     );
-    assert!(
-        acc.contains("\"type\":\"tick\""),
-        "sanity: the channel really was busy throughout, so only the absolute \
-         cap could have ended this: {acc}"
-    );
+
+    // And neither incumbent was disturbed: no resubscribe notice, no close.
+    for (name, s) in [("quiet", &mut quiet), ("busy", &mut busy)] {
+        assert!(
+            tokio::time::timeout(Duration::from_millis(200), s.read(&mut buf))
+                .await
+                .is_err(),
+            "{name} subscriber must be left alone while slots are not stale"
+        );
+    }
     let _ = std::fs::remove_file(&path);
 }

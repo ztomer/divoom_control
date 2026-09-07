@@ -17,6 +17,8 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixListener;
 use tokio::sync::Semaphore;
 
+use crate::subscriptions::{Registry, RENEGOTIATE_AFTER};
+
 use crate::protocol::{encode_message, err_reply, iter_messages, Request, MAX_REPLY_BYTES};
 
 /// Max concurrent client connections. Connection 65 onward is back-pressured
@@ -34,25 +36,6 @@ use crate::protocol::{encode_message, err_reply, iter_messages, Request, MAX_REP
 /// the accept loop, so the daemon answered nobody at all, not just the 65th
 /// client. It now stays reachable and refuses the overflow explicitly.
 pub const MAX_CONNECTIONS: usize = 64;
-
-/// A subscription is torn down after `idle_timeout * this`, whatever it is
-/// doing, so the client renegotiates. With the 300s default that is 30 minutes.
-///
-/// WHY AN ABSOLUTE CAP EXISTS AT ALL. The subscriber watchdog beside it resets
-/// its deadline every time we DELIVER AN EVENT — that is, on our own output. It
-/// was written to answer "is this client still there?" and instead answers "have
-/// we written to it recently?", so on a stream that carries events at all it can
-/// never fire. It reaps a subscriber on a QUIET channel and nothing else, which
-/// is not the case anyone needed bounded.
-///
-/// A cap that only fires when nothing is happening is not a lifetime. This one
-/// cannot be reset by anything the daemon does, so server-held subscription
-/// state is bounded no matter what: dead peers holding an inherited fd, clients
-/// that reconnect without closing, or simply more subscribers than anyone
-/// intended. The menu bar and GUI already re-subscribe on drop
-/// (`divoom-menubar/src/resubscribe.rs` exists precisely for that), so the
-/// teardown is a renegotiation, not an outage — and it is announced.
-pub const SUBSCRIPTION_MAX_AGE_FACTOR: u32 = 6;
 
 /// Most concurrent SUBSCRIPTIONS, as a share of the connection budget.
 ///
@@ -135,7 +118,7 @@ pub async fn serve_connection<S, H>(
     require_auth: bool,
     token: Option<String>,
     idle_timeout: Duration,
-    subscriptions: Arc<Semaphore>,
+    subscriptions: Arc<Registry>,
 ) -> std::io::Result<()>
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
@@ -191,35 +174,38 @@ where
                     // and scarcer: see MAX_SUBSCRIPTIONS. Refusing here keeps
                     // request capacity available no matter how many subscribers
                     // pile up, and tells the client why instead of hanging.
-                    let _sub_permit = match subscriptions.clone().try_acquire_owned() {
-                        Ok(p) => p,
-                        Err(_) => {
+                    let lease = match subscriptions.admit() {
+                        Some(l) => l,
+                        None => {
                             let reply = err_reply(
-                                "too many active subscriptions; this daemon is already \
-                                 streaming to its maximum number of clients",
+                                "too many active subscriptions; every slot is held by a \
+                                 client that is demonstrably still active",
                             );
                             stream.write_all(&encode_message(&reply)).await?;
                             continue;
                         }
                     };
+                    let evict = lease.evict.clone();
+                    let lease_id = lease.id;
                     let initial = handler.initial_status();
                     stream.write_all(&encode_message(&initial)).await?;
                     // Idle watchdog: a subscriber that receives no events for
                     // `idle_timeout` is dropped (releasing its permit), so a silent
                     // client can't pin a slot forever. Any delivered event resets it.
                     let mut deadline = tokio::time::Instant::now() + idle_timeout;
-                    // Nothing below may reset this one — see
-                    // SUBSCRIPTION_MAX_AGE_FACTOR for why `deadline` alone is
-                    // not a lifetime.
-                    let expiry =
-                        tokio::time::Instant::now() + idle_timeout * SUBSCRIPTION_MAX_AGE_FACTOR;
                     loop {
                         tokio::select! {
                             n = stream.read(&mut tmp) => {
                                 match n {
                                     Ok(0) => break, // EOF
                                     Err(_) => break, // error
-                                    Ok(_) => {}, // ignore client input after subscribe
+                                    // Any byte from the client is liveness
+                                    // evidence, and the only kind there is:
+                                    // deliveries are a broadcast, so they move
+                                    // every subscriber's clock together and
+                                    // separate nobody. The payload is still
+                                    // ignored; only the fact of it counts.
+                                    Ok(_) => subscriptions.touch(lease_id),
                                 }
                             }
                             msg = rx.recv() => {
@@ -235,12 +221,13 @@ where
                                 }
                             }
                             _ = tokio::time::sleep_until(deadline) => break, // quiet channel: drop
-                            _ = tokio::time::sleep_until(expiry) => {
-                                // Say why, so the client treats this as a
-                                // renegotiation rather than a daemon fault.
+                            _ = evict.notified() => {
+                                // Our slot was reclaimed for a newcomer because
+                                // this client had gone quiet. Say why, so it
+                                // reads as a renegotiation and not a fault.
                                 let notice = serde_json::json!({
                                     "type": "resubscribe",
-                                    "reason": "subscription reached its maximum age; reconnect to continue",
+                                    "reason": "subscription slot reclaimed after inactivity; reconnect to continue",
                                 });
                                 let _ = stream.write_all(&encode_message(&notice)).await;
                                 break;
@@ -320,7 +307,7 @@ pub async fn serve<H: Handler>(
     idle_timeout: Duration,
 ) {
     let sem = Arc::new(Semaphore::new(max_connections.max(1)));
-    let subs = Arc::new(Semaphore::new(subscription_budget(max_connections)));
+    let subs = Registry::new(subscription_budget(max_connections), RENEGOTIATE_AFTER);
     loop {
         // ALWAYS accept. Nothing below this line may stop the loop.
         let (stream, _addr) = match listener.accept().await {
@@ -357,7 +344,7 @@ pub async fn serve_tcp<H: Handler>(
     idle_timeout: Duration,
 ) {
     let sem = Arc::new(Semaphore::new(max_connections.max(1)));
-    let subs = Arc::new(Semaphore::new(subscription_budget(max_connections)));
+    let subs = Registry::new(subscription_budget(max_connections), RENEGOTIATE_AFTER);
     loop {
         // Accept unconditionally, shed the overflow — see the note in `serve`.
         let (stream, _addr) = match listener.accept().await {

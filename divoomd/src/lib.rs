@@ -71,6 +71,7 @@ pub mod socket_bind;
 pub mod socket_owner;
 pub mod socket_server;
 pub mod spp;
+pub mod subscriptions;
 pub mod sync_artwork;
 pub mod transport;
 pub mod wall;
