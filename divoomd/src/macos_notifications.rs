@@ -73,9 +73,7 @@ pub async fn start_monitor(daemon: Arc<Daemon>) {
     }
 
     // Probe database existence and accessibility
-    let db_path = if let Some(p) = find_notification_db_path() {
-        p
-    } else {
+    let Some(db_path) = find_notification_db_path() else {
         guard.last_db_error = Some("macOS Notification Center DB not found".to_string());
         guard.db_error_streak = 5;
         let _ = daemon.tx.send(notif_status_event(&guard));
@@ -184,9 +182,8 @@ pub async fn notification_status() -> Value {
 }
 
 pub async fn set_routing(args: &Value) -> Value {
-    let rules_val = match args.get("rules") {
-        Some(v) => v,
-        None => return json!({"success": false, "error": "set_routing requires 'rules'"}),
+    let Some(rules_val) = args.get("rules") else {
+        return json!({"success": false, "error": "set_routing requires 'rules'"});
     };
     let mut new_rules = Vec::new();
     if let Some(arr) = rules_val.as_array() {
@@ -247,17 +244,13 @@ async fn monitor_loop(
                     }
                     guard.seen_count += 1;
 
-                    let parsed = if let Some(p) = parse_notification_record(&raw) {
-                        p
-                    } else {
+                    let Some(parsed) = parse_notification_record(&raw) else {
                         guard.dropped_count += 1;
                         continue;
                     };
 
                     let (app, title, body) = parsed;
-                    let app_type = if let Some(t) = route_app(&app, &rules) {
-                        t
-                    } else {
+                    let Some(app_type) = route_app(&app, &rules) else {
                         guard.dropped_count += 1;
                         continue;
                     };

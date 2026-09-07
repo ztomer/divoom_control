@@ -119,9 +119,7 @@ pub async fn sync_artwork(daemon: &Daemon, args: &Value) -> Value {
         }
     };
 
-    let img = if let Some(b) = resolve_to_gif(&file_bytes) {
-        b
-    } else {
+    let Some(img) = resolve_to_gif(&file_bytes) else {
         let _ = daemon
             .tx
             .send(json!({"type":"hot_progress","progress":100,"phase":"error"}));

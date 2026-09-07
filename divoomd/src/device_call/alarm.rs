@@ -169,7 +169,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .or_else(|| kw.and_then(|v| v.get("data")).and_then(|v| v.as_array()))
                 .map(|a| {
                     a.iter()
-                        .filter_map(|x| x.as_u64().map(|n| n as u8))
+                        .filter_map(|x| x.as_u64().map(super::super::wire::WireNarrow::byte))
                         .collect()
                 })
                 .unwrap_or_default();
@@ -343,7 +343,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .or_else(|| kw.and_then(|v| v.get("data")).and_then(|v| v.as_array()))
                 .map(|a| {
                     a.iter()
-                        .filter_map(|x| x.as_u64().map(|n| n as u8))
+                        .filter_map(|x| x.as_u64().map(super::super::wire::WireNarrow::byte))
                         .collect()
                 })
                 .unwrap_or_default();

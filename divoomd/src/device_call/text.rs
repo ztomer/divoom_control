@@ -58,13 +58,12 @@ async fn scrolling_text(ctx: &CallCtx<'_>) -> Value {
 
     let dev = ctx.dev;
     let kw = ctx.kwargs;
-    let text = match kw
+    let Some(text) = kw
         .and_then(|v| v.get("text"))
         .and_then(|v| v.as_str())
         .filter(|t| !t.trim().is_empty())
-    {
-        Some(t) => t,
-        None => return err_reply("show_scrolling_text requires a non-empty `text`"),
+    else {
+        return err_reply("show_scrolling_text requires a non-empty `text`");
     };
 
     // UTF-16LE code units, which is both what the device is sent and what the
@@ -287,7 +286,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 if let Some(arr) = cv.as_array() {
                     let ns: Vec<u8> = arr
                         .iter()
-                        .filter_map(|x| x.as_u64().map(|n| n as u8))
+                        .filter_map(|x| x.as_u64().map(super::super::wire::WireNarrow::byte))
                         .collect();
                     if ns.len() >= 3 {
                         [ns[0], ns[1], ns[2]]

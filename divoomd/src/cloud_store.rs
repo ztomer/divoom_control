@@ -21,16 +21,14 @@ pub(crate) fn cache_file_path() -> Option<PathBuf> {
 
 /// Read the `[divoom]` email/password from config.ini. Returns ("","") if absent.
 pub(crate) fn load_config() -> (String, String) {
-    let path = match config_file_path() {
-        Some(p) => p,
-        None => return (String::new(), String::new()),
+    let Some(path) = config_file_path() else {
+        return (String::new(), String::new());
     };
     if !path.exists() {
         return (String::new(), String::new());
     }
-    let content = match std::fs::read_to_string(path) {
-        Ok(c) => c,
-        Err(_) => return (String::new(), String::new()),
+    let Ok(content) = std::fs::read_to_string(path) else {
+        return (String::new(), String::new());
     };
     let mut email = String::new();
     let mut password = String::new();

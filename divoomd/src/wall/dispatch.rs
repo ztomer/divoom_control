@@ -20,9 +20,8 @@ use serde_json::{json, Value};
 
 impl Daemon {
     pub(crate) async fn wall_device_call(&self, req: &Request) -> Value {
-        let method = match req.args.get("method").and_then(|v| v.as_str()) {
-            Some(m) => m,
-            None => return err_reply("device_call requires 'method'"),
+        let Some(method) = req.args.get("method").and_then(|v| v.as_str()) else {
+            return err_reply("device_call requires 'method'");
         };
         let args = req
             .args
@@ -33,9 +32,8 @@ impl Daemon {
         let kw = req.args.get("kwargs").and_then(|v| v.as_object());
 
         let guard = self.wall.lock().await;
-        let wall = match guard.as_ref() {
-            Some(w) => w,
-            None => return err_reply("no wall configured"),
+        let Some(wall) = guard.as_ref() else {
+            return err_reply("no wall configured");
         };
 
         // Read a positional-or-keyword integer, by TRUE position (R67/C7).
@@ -58,18 +56,17 @@ impl Daemon {
         let strip = |m: &str| m.rsplit('.').next().unwrap_or(m).to_string();
         let ok = match strip(method).as_str() {
             "show_image" | "display_image" => {
-                let path = match text(0, "file_path").or_else(|| text(0, "path")) {
-                    Some(p) => p,
-                    None => return err_reply("wall show_image requires a path"),
+                let Some(path) = text(0, "file_path").or_else(|| text(0, "path")) else {
+                    return err_reply("wall show_image requires a path");
                 };
                 let img_data = match std::fs::read(&path) {
                     Ok(d) => d,
                     Err(e) => return err_reply(&format!("wall show_image: read {path}: {e}")),
                 };
                 let time_ms = num(1, "time", 100) as u16;
-                let daemon_arc = match self.self_weak.get().and_then(std::sync::Weak::upgrade) {
-                    Some(d) => d,
-                    None => return err_reply("daemon self reference unavailable"),
+                let Some(daemon_arc) = self.self_weak.get().and_then(std::sync::Weak::upgrade)
+                else {
+                    return err_reply("daemon self reference unavailable");
                 };
                 wall.show_image(daemon_arc, &img_data, time_ms).await
             }

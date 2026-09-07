@@ -272,7 +272,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 match kw.and_then(|m| m.get("blob")).and_then(|v| v.as_array()) {
                     Some(a) => a
                         .iter()
-                        .filter_map(|x| x.as_u64().map(|n| n as u8))
+                        .filter_map(|x| x.as_u64().map(super::super::wire::WireNarrow::byte))
                         .collect(),
                     None => return err_reply("animation.stream_animation_8b requires 'blob'"),
                 }

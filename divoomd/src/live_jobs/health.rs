@@ -105,9 +105,8 @@ impl JobHealth {
     /// last one. Returns true when an event was emitted.
     pub fn report(&self, state: JobState) -> bool {
         {
-            let mut guard = match self.last.lock() {
-                Ok(g) => g,
-                Err(_) => return false,
+            let Ok(mut guard) = self.last.lock() else {
+                return false;
             };
             if guard.as_ref() == Some(&state) {
                 return false;

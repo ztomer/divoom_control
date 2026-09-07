@@ -43,16 +43,13 @@ pub fn find_notification_db_path() -> Option<std::path::PathBuf> {
 
 #[must_use]
 pub fn initial_max_delivered_date(db_path: &std::path::Path) -> f64 {
-    let conn = match rusqlite::Connection::open_with_flags(
-        db_path,
-        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
-    ) {
-        Ok(c) => c,
-        Err(_) => return 0.0,
+    let Ok(conn) =
+        rusqlite::Connection::open_with_flags(db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+    else {
+        return 0.0;
     };
-    let mut stmt = match conn.prepare("SELECT MAX(delivered_date) FROM record") {
-        Ok(s) => s,
-        Err(_) => return 0.0,
+    let Ok(mut stmt) = conn.prepare("SELECT MAX(delivered_date) FROM record") else {
+        return 0.0;
     };
     let res: Result<f64, _> = stmt.query_row([], |row| row.get(0));
     res.unwrap_or(0.0)

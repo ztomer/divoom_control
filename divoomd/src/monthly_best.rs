@@ -35,17 +35,15 @@ const fn default_classify() -> i64 {
 
 #[must_use]
 pub fn load_hotchannel_config() -> HotchannelConfig {
-    let mut path = match crate::cloud::config_dir() {
-        Some(p) => p,
-        None => return default_config(),
+    let Some(mut path) = crate::cloud::config_dir() else {
+        return default_config();
     };
     path.push("hotchannel.json");
     if !path.exists() {
         return default_config();
     }
-    let content = match std::fs::read_to_string(&path) {
-        Ok(c) => c,
-        Err(_) => return default_config(),
+    let Ok(content) = std::fs::read_to_string(&path) else {
+        return default_config();
     };
     let mut cfg: HotchannelConfig = match serde_json::from_str(&content) {
         Ok(c) => c,
@@ -189,9 +187,8 @@ async fn sync_files_to_device(
         .map_err(|e| e.to_string())?;
 
     for (idx, item) in files.iter().enumerate() {
-        let file_id = match item.get("FileId").and_then(|v| v.as_str()) {
-            Some(f) => f,
-            None => continue,
+        let Some(file_id) = item.get("FileId").and_then(|v| v.as_str()) else {
+            continue;
         };
         let file_name = item
             .get("FileName")

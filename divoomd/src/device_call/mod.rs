@@ -41,9 +41,8 @@ pub async fn handle_device_call(
     req: &Request,
     _timeout: Duration,
 ) -> Value {
-    let method = match req.args.get("method").and_then(|v| v.as_str()) {
-        Some(m) => m,
-        None => return crate::protocol::err_reply("device_call requires 'method'"),
+    let Some(method) = req.args.get("method").and_then(|v| v.as_str()) else {
+        return crate::protocol::err_reply("device_call requires 'method'");
     };
 
     // Numeric positional args (for brightness, clock, etc.).
@@ -83,11 +82,8 @@ pub async fn handle_device_call(
                     return crate::protocol::err_reply(&format!("blobs: bad index key '{idx_str}'"))
                 }
             };
-            let b64 = match b64val.as_str() {
-                Some(s) => s,
-                None => {
-                    return crate::protocol::err_reply(&format!("blobs[{idx_str}]: not a string"))
-                }
+            let Some(b64) = b64val.as_str() else {
+                return crate::protocol::err_reply(&format!("blobs[{idx_str}]: not a string"));
             };
             match B64.decode(b64) {
                 Ok(data) => {

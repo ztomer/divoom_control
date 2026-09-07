@@ -133,9 +133,8 @@ async fn run_sysmon(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
     let normal_interval = Duration::from_secs(5);
 
     loop {
-        let daemon = match daemon_weak.upgrade() {
-            Some(d) => d,
-            None => break,
+        let Some(daemon) = daemon_weak.upgrade() else {
+            break;
         };
         let connected = get_device_transport(&daemon, &mac).await.is_some();
         report_health(
@@ -214,9 +213,8 @@ async fn run_stocks(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
     let normal_interval = Duration::from_secs(15);
 
     loop {
-        let daemon = match daemon_weak.upgrade() {
-            Some(d) => d,
-            None => break,
+        let Some(daemon) = daemon_weak.upgrade() else {
+            break;
         };
         let connected = get_device_transport(&daemon, &mac).await.is_some();
         report_health(
@@ -290,9 +288,8 @@ async fn run_weather(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
     let normal_interval = Duration::from_mins(15);
 
     loop {
-        let daemon = match daemon_weak.upgrade() {
-            Some(d) => d,
-            None => break,
+        let Some(daemon) = daemon_weak.upgrade() else {
+            break;
         };
         let connected = get_device_transport(&daemon, &mac).await.is_some();
         report_health(

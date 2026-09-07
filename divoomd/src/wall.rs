@@ -254,9 +254,8 @@ impl DivoomWall {
                 .await
                 .map_err(|e| e.to_string())??;
 
-                let enc = match daemon_clone.encoder() {
-                    Some(e) => e,
-                    None => return Err("encoder not available".to_string()),
+                let Some(enc) = daemon_clone.encoder() else {
+                    return Err("encoder not available".to_string());
                 };
 
                 let mut blob = Vec::new();

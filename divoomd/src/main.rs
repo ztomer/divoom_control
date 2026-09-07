@@ -111,9 +111,7 @@ async fn main() {
     let mut tcp_listener = None;
     let mut tcp_token = None;
     if let Some(host) = args.host {
-        let port = if let Some(p) = args.port {
-            p
-        } else {
+        let Some(port) = args.port else {
             eprintln!("divoomd: TCP port is required when host is specified");
             std::process::exit(1);
         };

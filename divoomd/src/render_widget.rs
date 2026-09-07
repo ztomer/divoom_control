@@ -137,9 +137,8 @@ fn frame_reply(kind: &str, size: u32, rgb: &[u8], extra: Value) -> Value {
 
 /// `render_widget {kind, size, params}` — the frame the device would be given.
 pub async fn cmd_render_widget(args: &Value) -> Value {
-    let kind = match args.get("kind").and_then(|v| v.as_str()) {
-        Some(k) => k,
-        None => return err_reply("render_widget requires 'kind'"),
+    let Some(kind) = args.get("kind").and_then(|v| v.as_str()) else {
+        return err_reply("render_widget requires 'kind'");
     };
     let size = clamp_size(
         args.get("size")
@@ -192,9 +191,8 @@ pub async fn cmd_render_widget(args: &Value) -> Value {
         }
 
         "album_art" => {
-            let b64 = match params.get("image_b64").and_then(|v| v.as_str()) {
-                Some(s) => s,
-                None => return err_reply("album_art requires params.image_b64"),
+            let Some(b64) = params.get("image_b64").and_then(|v| v.as_str()) else {
+                return err_reply("album_art requires params.image_b64");
             };
             let raw = match base64::engine::general_purpose::STANDARD.decode(b64) {
                 Ok(r) => r,

@@ -47,14 +47,11 @@ pub fn load_routing_rules() -> Vec<(String, u8)> {
             .map(|(s, t)| (s.to_string(), *t))
             .collect();
     }
-    let data = match std::fs::read_to_string(&p) {
-        Ok(s) => s,
-        Err(_) => {
-            return DEFAULT_ROUTING
-                .iter()
-                .map(|(s, t)| (s.to_string(), *t))
-                .collect()
-        }
+    let Ok(data) = std::fs::read_to_string(&p) else {
+        return DEFAULT_ROUTING
+            .iter()
+            .map(|(s, t)| (s.to_string(), *t))
+            .collect();
     };
     let raw: Result<Vec<Vec<serde_json::Value>>, _> = serde_json::from_str(&data);
     match raw {

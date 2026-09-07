@@ -13,6 +13,7 @@
 //! match it exactly. See the `set_scroll` arm below. List args (`offset_list/data/pic_data/image_data`)
 //! arrive as JSON arrays in kwargs (or blobs[0] for the big chunk).
 
+use crate::wire::WireNarrow as _;
 use serde_json::{json, Map, Value};
 
 use super::CallCtx;
@@ -28,7 +29,7 @@ fn kw_bytes(kw: Option<&Map<String, Value>>, name: &str) -> Vec<u8> {
         .and_then(|v| v.as_array())
         .map(|a| {
             a.iter()
-                .filter_map(|x| x.as_u64().map(|n| n as u8))
+                .filter_map(|x| x.as_u64().map(super::super::wire::WireNarrow::byte))
                 .collect()
         })
         .unwrap_or_default()
@@ -72,7 +73,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             send(
                 dev,
                 0x6e,
-                &[i("control_command", 0) as u8],
+                &[i("control_command", 0).byte()],
                 "drawing_ctrl_movie_play",
             )
             .await
@@ -81,54 +82,54 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             send(
                 dev,
                 0x6f,
-                &[i("r", 0) as u8, i("g", 0) as u8, i("b", 0) as u8],
+                &[i("r", 0).byte(), i("g", 0).byte(), i("b", 0).byte()],
                 "drawing_mul_pad_enter",
             )
             .await
         }
         "drawing.drawing_pad_ctrl" | "drawing_pad_ctrl" => {
             let mut p = vec![
-                i("r", 0) as u8,
-                i("g", 0) as u8,
-                i("b", 0) as u8,
-                i("num_points", 0) as u8,
+                i("r", 0).byte(),
+                i("g", 0).byte(),
+                i("b", 0).byte(),
+                i("num_points", 0).byte(),
             ];
             p.extend_from_slice(&kw_bytes(kw, "offset_list"));
             send(dev, 0x58, &p, "drawing_pad_ctrl").await
         }
         "drawing.drawing_mul_pad_ctrl" | "drawing_mul_pad_ctrl" => {
             let mut p = vec![
-                i("screen_id", 0) as u8,
-                i("r", 0) as u8,
-                i("g", 0) as u8,
-                i("b", 0) as u8,
-                i("num_points", 0) as u8,
+                i("screen_id", 0).byte(),
+                i("r", 0).byte(),
+                i("g", 0).byte(),
+                i("b", 0).byte(),
+                i("num_points", 0).byte(),
             ];
             p.extend_from_slice(&kw_bytes(kw, "offset_list"));
             send(dev, 0x3a, &p, "drawing_mul_pad_ctrl").await
         }
         "drawing.drawing_big_pad_ctrl" | "drawing_big_pad_ctrl" => {
             let mut p = vec![
-                i("canvas_width", 0) as u8,
-                i("screen_id", 0) as u8,
-                i("r", 0) as u8,
-                i("g", 0) as u8,
-                i("b", 0) as u8,
-                i("num_points", 0) as u8,
+                i("canvas_width", 0).byte(),
+                i("screen_id", 0).byte(),
+                i("r", 0).byte(),
+                i("g", 0).byte(),
+                i("b", 0).byte(),
+                i("num_points", 0).byte(),
             ];
             p.extend_from_slice(&kw_bytes(kw, "offset_list"));
             send(dev, 0x3b, &p, "drawing_big_pad_ctrl").await
         }
         "drawing.drawing_mul_encode_single_pic" | "drawing_mul_encode_single_pic" => {
-            let mut p = vec![i("screen_id", 0) as u8];
+            let mut p = vec![i("screen_id", 0).byte()];
             p.extend_from_slice(&le16(i("data_length", 0)));
             p.extend_from_slice(&data("data"));
             send(dev, 0x5b, &p, "drawing_mul_encode_single_pic").await
         }
         "drawing.drawing_mul_encode_pic" | "drawing_mul_encode_pic" => {
-            let mut p = vec![i("screen_id", 0) as u8];
+            let mut p = vec![i("screen_id", 0).byte()];
             p.extend_from_slice(&le16(i("total_length", 0)));
-            p.push(i("pic_id", 0) as u8);
+            p.push(i("pic_id", 0).byte());
             p.extend_from_slice(&data("pic_data"));
             send(dev, 0x5c, &p, "drawing_mul_encode_pic").await
         }
@@ -140,7 +141,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             send(dev, 0x6c, &p, "drawing_encode_movie_play").await
         }
         "drawing.drawing_mul_encode_movie_play" | "drawing_mul_encode_movie_play" => {
-            let mut p = vec![i("screen_id", 0) as u8];
+            let mut p = vec![i("screen_id", 0).byte()];
             p.extend_from_slice(&le16(i("frame_id", 0)));
             p.extend_from_slice(&le16(i("data_length", 0)));
             p.extend_from_slice(&data("data"));
@@ -152,7 +153,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let mut p = vec![control as u8];
             match control {
                 0 => {
-                    p.push(i("device_id", 0) as u8);
+                    p.push(i("device_id", 0).byte());
                     p.extend_from_slice(&le16(i("image_length", 0)));
                     p.extend_from_slice(&data("image_data"));
                 }
@@ -185,14 +186,11 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             // success -- the same dishonesty as the sync_time year-2000 bug
             // R72 fixed, and it cost two invalid hardware runs this round
             // before anyone noticed the zeros.
-            let (mode, speed) = match (kw_i64(kw, "mode"), kw_i64(kw, "speed")) {
-                (Some(m), Some(s)) => (m, s),
-                _ => {
-                    return err_reply(
-                        "set_scroll requires both `mode` and `speed`; refusing to \
+            let (Some(mode), Some(speed)) = (kw_i64(kw, "mode"), kw_i64(kw, "speed")) else {
+                return err_reply(
+                    "set_scroll requires both `mode` and `speed`; refusing to \
                          send a zero-speed no-op and report it as success",
-                    )
-                }
+                );
             };
             if let Some(c) = kw_i64(kw, "control") {
                 if c != 0 {

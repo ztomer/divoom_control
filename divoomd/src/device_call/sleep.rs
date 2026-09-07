@@ -32,7 +32,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 if let Some(arr) = cv.as_array() {
                     let ns: Vec<u8> = arr
                         .iter()
-                        .filter_map(|x| x.as_u64().map(|n| n as u8))
+                        .filter_map(|x| x.as_u64().map(super::super::wire::WireNarrow::byte))
                         .collect();
                     if ns.len() >= 3 {
                         [ns[0], ns[1], ns[2]]
@@ -138,7 +138,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 if let Some(arr) = cv.as_array() {
                     let ns: Vec<u8> = arr
                         .iter()
-                        .filter_map(|x| x.as_u64().map(|n| n as u8))
+                        .filter_map(|x| x.as_u64().map(super::super::wire::WireNarrow::byte))
                         .collect();
                     if ns.len() >= 3 {
                         [ns[0], ns[1], ns[2]]
@@ -189,7 +189,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     || vec![0, 0],
                     |a| {
                         a.iter()
-                            .filter_map(|x| x.as_u64().map(|n| n as u8))
+                            .filter_map(|x| x.as_u64().map(super::super::wire::WireNarrow::byte))
                             .collect()
                     },
                 );
@@ -204,7 +204,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 if let Some(arr) = cv.as_array() {
                     let ns: Vec<u8> = arr
                         .iter()
-                        .filter_map(|x| x.as_u64().map(|n| n as u8))
+                        .filter_map(|x| x.as_u64().map(super::super::wire::WireNarrow::byte))
                         .collect();
                     if ns.len() >= 3 {
                         [ns[0], ns[1], ns[2]]

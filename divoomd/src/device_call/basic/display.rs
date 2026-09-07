@@ -36,7 +36,7 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let rgb: Vec<u8> = match kw.and_then(|m| m.get("rgb")).and_then(|v| v.as_array()) {
                 Some(a) => a
                     .iter()
-                    .filter_map(|x| x.as_u64().map(|n| n as u8))
+                    .filter_map(|x| x.as_u64().map(crate::wire::WireNarrow::byte))
                     .collect(),
                 None => return err_reply("show_image requires 'rgb' (array of u8)"),
             };
@@ -47,13 +47,11 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     rgb.len()
                 ));
             }
-            let enc = match ctx.daemon.encoder() {
-                Some(e) => e,
-                None => return err_reply("encoder not available"),
+            let Some(enc) = ctx.daemon.encoder() else {
+                return err_reply("encoder not available");
             };
-            let blob = match enc.encode_animation_frame(&rgb, w, h, time_ms) {
-                Some(b) => b,
-                None => return err_reply("encode_animation_frame failed"),
+            let Some(blob) = enc.encode_animation_frame(&rgb, w, h, time_ms) else {
+                return err_reply("encode_animation_frame failed");
             };
             match dev.stream_animation_8b(&blob).await {
                 Ok(true) => json!({"success": true, "result": true}),
@@ -76,9 +74,8 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let img_data: Vec<u8> = if let Some(data) = ctx.blob_map.lock().unwrap().remove(&0) {
                 data
             } else {
-                let path = match raw_args.first().and_then(|v| v.as_str()) {
-                    Some(p) => p,
-                    None => return err_reply("display.show_image requires a path or blob[0]"),
+                let Some(path) = raw_args.first().and_then(|v| v.as_str()) else {
+                    return err_reply("display.show_image requires a path or blob[0]");
                 };
                 match std::fs::read(path) {
                     Ok(d) => d,
@@ -107,9 +104,8 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 Err(e) => return err_reply(&format!("image decode task: {e}")),
             };
 
-            let enc = match ctx.daemon.encoder() {
-                Some(e) => e,
-                None => return err_reply("encoder not available (DIVOOMD_ENCODER_LIB)"),
+            let Some(enc) = ctx.daemon.encoder() else {
+                return err_reply("encoder not available (DIVOOMD_ENCODER_LIB)");
             };
             let mut blob = Vec::new();
             for (rgb, w, h, t) in &frames {
@@ -364,7 +360,7 @@ fn color_from_arg(
     if let Some(arr) = color_val.as_array() {
         let ns: Vec<u8> = arr
             .iter()
-            .filter_map(|x| x.as_u64().map(|n| n as u8))
+            .filter_map(|x| x.as_u64().map(crate::wire::WireNarrow::byte))
             .collect();
         if ns.len() >= 3 {
             return Some([ns[0], ns[1], ns[2]]);

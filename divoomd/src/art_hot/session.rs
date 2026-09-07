@@ -110,9 +110,7 @@ pub(super) async fn run_hot_session(
             return Err("file info (0x9D) write failed".into());
         }
         // Wait for 0x9D ack
-        let ack = if let Some(a) = ble.wait_for_any_response(&[cmd_9d, cmd_f7], idle_to).await {
-            a
-        } else {
+        let Some(ack) = ble.wait_for_any_response(&[cmd_9d, cmd_f7], idle_to).await else {
             if dbg {
                 eprintln!("[hot] no 0x9D ack (timeout) -> break");
             }

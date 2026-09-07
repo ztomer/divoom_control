@@ -132,10 +132,7 @@ pub fn parse_basic_protocol_frames(buf: &mut Vec<u8>) -> Vec<BasicMessage> {
     let mut messages = Vec::new();
 
     while buf.len() >= 7 {
-        let start_index = if let Some(i) = buf.iter().position(|&b| b == models::MESSAGE_START_BYTE)
-        {
-            i
-        } else {
+        let Some(start_index) = buf.iter().position(|&b| b == models::MESSAGE_START_BYTE) else {
             buf.clear();
             break;
         };

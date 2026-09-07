@@ -101,13 +101,11 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
         }
 
         "live_job_stop" => {
-            let mac = match req.args.get("mac").and_then(|v| v.as_str()) {
-                Some(m) => m,
-                None => return err_reply("live_job_stop requires 'mac'"),
+            let Some(mac) = req.args.get("mac").and_then(|v| v.as_str()) else {
+                return err_reply("live_job_stop requires 'mac'");
             };
-            let kind = match req.args.get("kind").and_then(|v| v.as_str()) {
-                Some(k) => k,
-                None => return err_reply("live_job_stop requires 'kind'"),
+            let Some(kind) = req.args.get("kind").and_then(|v| v.as_str()) else {
+                return err_reply("live_job_stop requires 'kind'");
             };
             let stopped = daemon.live_jobs.stop(daemon, mac, kind).await;
             json!({"success": true, "stopped": stopped})
@@ -125,9 +123,8 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
                 let guard = daemon.device_id.try_lock().ok();
                 guard.and_then(|g| g.clone())
             };
-            let mac = match mac_str.or(mac_owner.as_deref()) {
-                Some(m) => m,
-                None => return err_reply("live_jobs_stop_for requires 'mac' or connected device"),
+            let Some(mac) = mac_str.or(mac_owner.as_deref()) else {
+                return err_reply("live_jobs_stop_for requires 'mac' or connected device");
             };
             let count = daemon.live_jobs.stop_all_for_device(daemon, mac).await;
             json!({"success": true, "count": count})
@@ -167,9 +164,8 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
                 Some(w) => w.clone(),
                 None => return err_reply("Daemon self_weak not initialized"),
             };
-            let daemon_arc = match self_weak.upgrade() {
-                Some(d) => d,
-                None => return err_reply("Daemon was dropped"),
+            let Some(daemon_arc) = self_weak.upgrade() else {
+                return err_reply("Daemon was dropped");
             };
             crate::art::cmd_custom_art_push(daemon_arc, &req.args).await
         }
@@ -179,9 +175,8 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
                 Some(w) => w.clone(),
                 None => return err_reply("Daemon self_weak not initialized"),
             };
-            let daemon_arc = match self_weak.upgrade() {
-                Some(d) => d,
-                None => return err_reply("Daemon was dropped"),
+            let Some(daemon_arc) = self_weak.upgrade() else {
+                return err_reply("Daemon was dropped");
             };
             crate::art::cmd_custom_art_query_page(daemon_arc, &req.args).await
         }
@@ -191,9 +186,8 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
                 Some(w) => w.clone(),
                 None => return err_reply("Daemon self_weak not initialized"),
             };
-            let daemon_arc = match self_weak.upgrade() {
-                Some(d) => d,
-                None => return err_reply("Daemon was dropped"),
+            let Some(daemon_arc) = self_weak.upgrade() else {
+                return err_reply("Daemon was dropped");
             };
             let progress = daemon.hot_progress.clone();
             crate::art::cmd_hot_update(daemon_arc, &req.args, progress).await

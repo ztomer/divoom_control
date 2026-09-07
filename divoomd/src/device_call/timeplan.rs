@@ -117,7 +117,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     })
                     .map(|a| {
                         a.iter()
-                            .filter_map(|x| x.as_u64().map(|n| n as u8))
+                            .filter_map(|x| x.as_u64().map(super::super::wire::WireNarrow::byte))
                             .collect()
                     })
                     .unwrap_or_default();

@@ -38,9 +38,8 @@ pub(super) async fn run_music(daemon_weak: Weak<Daemon>, mac: String, params: Va
     let normal_interval = Duration::from_millis(1500);
 
     loop {
-        let daemon = match daemon_weak.upgrade() {
-            Some(d) => d,
-            None => break,
+        let Some(daemon) = daemon_weak.upgrade() else {
+            break;
         };
         let connected = get_device_transport(&daemon, &mac).await.is_some();
         report_health(

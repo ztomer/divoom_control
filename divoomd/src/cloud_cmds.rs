@@ -12,9 +12,9 @@ use crate::protocol::{err_reply, Request};
 pub async fn handle(command: &str, req: &Request) -> Value {
     match command {
         "fetch_gallery" => {
-            let classify = match req.args.get("classify").and_then(serde_json::Value::as_i64) {
-                Some(c) => c,
-                None => return err_reply("fetch_gallery requires 'classify'"),
+            let Some(classify) = req.args.get("classify").and_then(serde_json::Value::as_i64)
+            else {
+                return err_reply("fetch_gallery requires 'classify'");
             };
             let limit = req
                 .args
@@ -177,13 +177,12 @@ pub async fn handle(command: &str, req: &Request) -> Value {
         }
 
         "get_aid_sleep_list" | "get_my_aid_sleep_list" => {
-            let sleep_type = match req
+            let Some(sleep_type) = req
                 .args
                 .get("sleep_type")
                 .and_then(serde_json::Value::as_i64)
-            {
-                Some(t) => t,
-                None => return err_reply(&format!("{command} requires 'sleep_type'")),
+            else {
+                return err_reply(&format!("{command} requires 'sleep_type'"));
             };
             let limit = req
                 .args
@@ -224,9 +223,8 @@ pub async fn handle(command: &str, req: &Request) -> Value {
         }
 
         "get_playlist_images" => {
-            let play_id = match req.args.get("play_id").and_then(serde_json::Value::as_i64) {
-                Some(id) => id,
-                None => return err_reply("get_playlist_images requires 'play_id'"),
+            let Some(play_id) = req.args.get("play_id").and_then(serde_json::Value::as_i64) else {
+                return err_reply("get_playlist_images requires 'play_id'");
             };
             let limit = req
                 .args

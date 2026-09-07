@@ -163,9 +163,8 @@ async fn fetch_hot_manifest(
 
 async fn download_hot_file(client: &reqwest::Client, f: &mut HotFile) -> bool {
     let url = format!("{HOT_FILE_BASE}{}", f.file_id);
-    let resp = match client.get(&url).send().await {
-        Ok(r) => r,
-        Err(_) => return false,
+    let Ok(resp) = client.get(&url).send().await else {
+        return false;
     };
     let body = match resp.bytes().await {
         Ok(b) => b.to_vec(),

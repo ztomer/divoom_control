@@ -197,9 +197,7 @@ where
                     continue;
                 }
             };
-            let req = if let Ok(req) = serde_json::from_value::<Request>(msg) {
-                req
-            } else {
+            let Ok(req) = serde_json::from_value::<Request>(msg) else {
                 let reply = err_reply("bad request: expected an object with a 'command' string");
                 stream.write_all(&encode_message(&reply)).await?;
                 continue;
@@ -219,9 +217,7 @@ where
                     // and scarcer: see MAX_SUBSCRIPTIONS. Refusing here keeps
                     // request capacity available no matter how many subscribers
                     // pile up, and tells the client why instead of hanging.
-                    let lease = if let Some(l) = subscriptions.admit() {
-                        l
-                    } else {
+                    let Some(lease) = subscriptions.admit() else {
                         let reply = err_reply(
                             "too many active subscriptions; every slot is held by a \
                              client that is demonstrably still active",
@@ -414,9 +410,8 @@ pub async fn serve<H: Handler>(
     let subs = Registry::new(subscription_budget(max_connections), RENEGOTIATE_AFTER);
     loop {
         // ALWAYS accept. Nothing below this line may stop the loop.
-        let (stream, _addr) = match listener.accept().await {
-            Ok(v) => v,
-            Err(_) => continue,
+        let Ok((stream, _addr)) = listener.accept().await else {
+            continue;
         };
         if let Ok(permit) = sem.clone().try_acquire_owned() {
             let h = handler.clone();
@@ -448,9 +443,8 @@ pub async fn serve_tcp<H: Handler>(
     let subs = Registry::new(subscription_budget(max_connections), RENEGOTIATE_AFTER);
     loop {
         // Accept unconditionally, shed the overflow — see the note in `serve`.
-        let (stream, _addr) = match listener.accept().await {
-            Ok(v) => v,
-            Err(_) => continue,
+        let Ok((stream, _addr)) = listener.accept().await else {
+            continue;
         };
         match sem.clone().try_acquire_owned() {
             Ok(permit) => {

@@ -75,10 +75,7 @@ impl BitmapFont {
         if off.is_none() {
             off = self.find_glyph_offset(FALLBACK_CP);
         }
-        let off = match off {
-            Some(o) => o,
-            None => return [0; 16],
-        };
+        let Some(off) = off else { return [0; 16] };
         let g = &self.blob[off..off + GLYPH_BYTES];
         let mut r = [0u16; 16];
         for i in 0..16 {

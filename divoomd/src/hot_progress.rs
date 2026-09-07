@@ -77,9 +77,8 @@ impl HotProgress {
     #[must_use]
     pub fn try_begin(&self) -> bool {
         {
-            let mut g = match self.inner.lock() {
-                Ok(g) => g,
-                Err(_) => return false,
+            let Ok(mut g) = self.inner.lock() else {
+                return false;
             };
             let phase = g.get("phase").and_then(|v| v.as_str()).unwrap_or("idle");
             if matches!(

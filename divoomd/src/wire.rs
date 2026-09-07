@@ -32,25 +32,25 @@ pub trait WireNarrow {
 
 impl WireNarrow for i64 {
     fn byte(self) -> u8 {
-        u8::try_from(self.clamp(0, i64::from(u8::MAX))).unwrap_or(u8::MAX)
+        u8::try_from(self.clamp(0, Self::from(u8::MAX))).unwrap_or(u8::MAX)
     }
     fn word(self) -> u16 {
-        u16::try_from(self.clamp(0, i64::from(u16::MAX))).unwrap_or(u16::MAX)
+        u16::try_from(self.clamp(0, Self::from(u16::MAX))).unwrap_or(u16::MAX)
     }
     fn dword(self) -> u32 {
-        u32::try_from(self.clamp(0, i64::from(u32::MAX))).unwrap_or(u32::MAX)
+        u32::try_from(self.clamp(0, Self::from(u32::MAX))).unwrap_or(u32::MAX)
     }
 }
 
 impl WireNarrow for u64 {
     fn byte(self) -> u8 {
-        u8::try_from(self.min(u64::from(u8::MAX))).unwrap_or(u8::MAX)
+        u8::try_from(self.min(Self::from(u8::MAX))).unwrap_or(u8::MAX)
     }
     fn word(self) -> u16 {
-        u16::try_from(self.min(u64::from(u16::MAX))).unwrap_or(u16::MAX)
+        u16::try_from(self.min(Self::from(u16::MAX))).unwrap_or(u16::MAX)
     }
     fn dword(self) -> u32 {
-        u32::try_from(self.min(u64::from(u32::MAX))).unwrap_or(u32::MAX)
+        u32::try_from(self.min(Self::from(u32::MAX))).unwrap_or(u32::MAX)
     }
 }
 

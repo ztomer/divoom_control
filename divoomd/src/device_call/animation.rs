@@ -24,7 +24,7 @@ fn kw_bytes(kw: Option<&Map<String, Value>>, name: &str) -> Vec<u8> {
         .and_then(|v| v.as_array())
         .map(|a| {
             a.iter()
-                .filter_map(|x| x.as_u64().map(|n| n as u8))
+                .filter_map(|x| x.as_u64().map(super::super::wire::WireNarrow::byte))
                 .collect()
         })
         .unwrap_or_default()
@@ -142,17 +142,12 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                         }
                         3 => {
                             // Scroll animation: [type, mode, speed LE16, len LE16]
-                            let (mode, speed, len_val) = match (
+                            let (Some(mode), Some(speed), Some(len_val)) = (
                                 kw_i64(kw, "mode"),
                                 kw_i64(kw, "speed"),
                                 kw_i64(kw, "len_val"),
-                            ) {
-                                (Some(m), Some(s), Some(l)) => (m, s, l),
-                                _ => {
-                                    return err_reply(
-                                        "set_user_gif: scroll needs mode+speed+len_val",
-                                    )
-                                }
+                            ) else {
+                                return err_reply("set_user_gif: scroll needs mode+speed+len_val");
                             };
                             p.push(mode as u8);
                             p.extend_from_slice(&le16(speed));

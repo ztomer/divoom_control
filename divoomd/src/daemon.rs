@@ -175,9 +175,8 @@ impl Daemon {
         }
 
         let guard = self.device.lock().await;
-        let dev = match guard.as_ref() {
-            Some(d) => d,
-            None => return err_reply("no device connected"),
+        let Some(dev) = guard.as_ref() else {
+            return err_reply("no device connected");
         };
 
         // Honor a caller-requested timeout (clamped so a huge value can't wedge the
