@@ -323,6 +323,15 @@ async fn monitor_loop(
 
 // ── forward one notification to the device ────────────────────────────────
 
+// Stays `async` in both configurations: it is awaited by the notification
+// watcher's loop, and a non-async twin would fork that loop in two.
+#[cfg_attr(
+    not(feature = "ble"),
+    expect(
+        clippy::unused_async,
+        reason = "the only await is the ble-gated write to the device"
+    )
+)]
 async fn forward_notification(daemon: &Daemon, app_type: u8, text: &str) -> bool {
     let mut payload = Vec::new();
     if text.is_empty() {

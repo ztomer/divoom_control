@@ -91,8 +91,8 @@ pub async fn cmd_wall_configure(daemon: &Daemon, req: &Request) -> Value {
     if let Some(old_wall) = old_wall_guard.as_ref() {
         for slot in &old_wall.devices {
             if !existing_by_mac.contains_key(&slot.mac) {
+                #[cfg(feature = "ble")]
                 if let Some(ref d) = slot.device {
-                    #[cfg(feature = "ble")]
                     if let DeviceTransport::Ble(ref b) = **d {
                         let _ = b.disconnect().await;
                     }

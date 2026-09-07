@@ -3,6 +3,7 @@
 
 use serde_json::{json, Value};
 use std::sync::Arc;
+#[cfg(feature = "ble")]
 use std::time::{Duration, Instant};
 
 /// Minimum gap between BLE scans; a scan arriving sooner reuses the last result

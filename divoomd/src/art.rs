@@ -26,8 +26,10 @@ pub use crate::hot_progress::HotProgress;
 const CDN_BASE: &str = "https://fin.divoom-gz.com/";
 
 /// 256-byte chunks — matches APK `n().q(256)`.
+#[cfg(feature = "ble")]
 const CHUNK_SIZE: usize = 256;
 /// 40 ms inter-chunk sleep — APK old-mode `q.s().I(true)` sleeps 40 ms.
+#[cfg(feature = "ble")]
 const INTER_CHUNK_MS: u64 = 40;
 /// 15 s HTTP timeout.
 const HTTP_TIMEOUT_SECS: u64 = 15;
@@ -49,6 +51,19 @@ pub(crate) const fn device_type_for_size(size: u32) -> u32 {
 
 use crate::art_codec::{decode_cloud_magic9, decode_hot_file, decode_magic43};
 
+// With `ble` off there is no encoder to reach, so the body is a bare `None`:
+// every parameter goes unread and clippy asks for a `const fn`. Both are true
+// of the stub and false of the real function, so the annotation is conditional
+// -- an unconditional one would be UNFULFILLED in the default build, which is
+// itself an error under `-D warnings`.
+#[cfg_attr(
+    not(feature = "ble"),
+    expect(
+        unused_variables,
+        clippy::missing_const_for_fn,
+        reason = "the no-BLE build has no encoder, so this is a `None` stub"
+    )
+)]
 fn encode_frame(daemon: &Daemon, rgb: &[u8], w: i32, h: i32, time_ms: u16) -> Option<Vec<u8>> {
     #[cfg(feature = "ble")]
     {
@@ -61,7 +76,6 @@ fn encode_frame(daemon: &Daemon, rgb: &[u8], w: i32, h: i32, time_ms: u16) -> Op
     }
     #[cfg(not(feature = "ble"))]
     {
-        let _ = (daemon, rgb, w, h, time_ms);
         None
     }
 }
@@ -136,8 +150,11 @@ pub(crate) fn decode_image_to_rgb(data: &[u8], w: u32, h: u32) -> Option<Vec<u8>
 
 // ── custom art protocol helpers (APK LightMakeNewModel.java) ─────────────
 
-/// Command ids from commands.rs
+/// Command ids from commands.rs. Both are written onto the wire by the
+/// BLE/SPP push path only; with `ble` off there is no transport to send them.
+#[cfg(feature = "ble")]
 const CMD_OLD: u8 = 0xB1; // set user gif
+#[cfg(feature = "ble")]
 const CMD_QUERY: u8 = 0x8E; // app get user define info
 
 #[cfg(feature = "ble")]
@@ -184,6 +201,12 @@ async fn push_custom_art_page(
     reason = "a page index and a frame count from a caller's JSON, bounded by the device's own page count"
 )]
 pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
+    // Parsed in both configurations because the no-BLE build still validates
+    // and answers the request; only the transport that would USE it is absent.
+    #[cfg_attr(
+        not(feature = "ble"),
+        expect(unused_variables, reason = "consumed by the ble-gated push below")
+    )]
     let page = args
         .get("page")
         .and_then(serde_json::Value::as_u64)
@@ -254,6 +277,17 @@ pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
 }
 
 /// Handle `custom_art_query_page` command.
+///
+/// Stays `async` in both configurations: it is stored in the dispatch table
+/// beside every other handler, and a non-async twin would need its own arm.
+#[cfg_attr(
+    not(feature = "ble"),
+    expect(
+        unused_variables,
+        clippy::unused_async,
+        reason = "no transport to await without BLE; the signature is the dispatch table's"
+    )
+)]
 pub async fn cmd_custom_art_query_page(daemon: Arc<Daemon>, args: &Value) -> Value {
     let page = args
         .get("page")

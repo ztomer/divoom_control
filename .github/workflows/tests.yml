@@ -202,6 +202,13 @@ jobs:
         # dependency to lint a binary this platform does not build.
         # The macOS rust-ble job lints the whole workspace instead.
         run: cargo clippy -p divoomd --all-targets --all-features -- -D warnings
+      # Clippy reports only on the cfg it COMPILED for and is silent about
+      # every other, so the no-BLE half was built and tested but never linted:
+      # 21 warnings while the default build sat at zero. Same blind spot closed
+      # in monitor (b2c41d7) -- a crate with cfg(feature) halves needs every
+      # shipped configuration linted or one half drifts.
+      - name: Lint core without BLE
+        run: cargo clippy -p divoomd --no-default-features --all-targets --locked -- -D warnings
       - name: Build core without BLE
         run: cargo build -p divoomd --no-default-features --locked
       - name: Test core without BLE

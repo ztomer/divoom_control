@@ -53,6 +53,13 @@ impl DivoomWall {
         clippy::option_if_let_else,
         reason = "the `Some` arm is a multi-line body, not an expression -- it decodes a reply, or builds a payload, before it decides. Hoisting it into a closure argument puts the substance of the function inside a call"
     )]
+    #[cfg_attr(
+        not(feature = "ble"),
+        expect(
+            unused_variables,
+            reason = "`daemon` is the handle to the radio; without `ble` the wall still lays out its grid and reports that it cannot reach any panel"
+        )
+    )]
     pub async fn connect(
         daemon: &Daemon,
         configs: &[WallConfig],
