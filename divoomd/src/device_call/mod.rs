@@ -143,13 +143,13 @@ pub async fn handle_device_call(
         } else {
             let kwargs = req.args.get("kwargs").and_then(|v| v.as_object());
             let ctx = CallCtx {
-                daemon: daemon,
+                daemon,
                 dev,
                 args: &args,
                 raw_args: &raw_args,
                 kwargs,
                 blob_map: &blob_map,
-                timeout: timeout,
+                timeout,
             };
 
             routing::route(method, ctx).await

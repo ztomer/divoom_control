@@ -61,7 +61,7 @@ impl HotProgress {
 
     /// Store the new phase AND tell every subscriber. There is deliberately no
     /// store-only variant — that split is what broke the UI.
-    pub fn set(&self, val: Value) {
+    pub fn set(&self, val: &Value) {
         if let Ok(mut g) = self.inner.lock() {
             *g = val.clone();
         }
@@ -143,10 +143,10 @@ mod hot_progress_tests {
         let (tx, mut rx) = tokio::sync::broadcast::channel(32);
         let p = HotProgress::with_events(tx);
 
-        p.set(json!({"phase": "fetching_manifest"}));
-        p.set(json!({"phase": "downloading", "current": 1, "total": 3}));
-        p.set(json!({"phase": "uploading", "current": 2, "total": 3}));
-        p.set(json!({"phase": "done", "result": {"served": []}}));
+        p.set(&json!({"phase": "fetching_manifest"}));
+        p.set(&json!({"phase": "downloading", "current": 1, "total": 3}));
+        p.set(&json!({"phase": "uploading", "current": 2, "total": 3}));
+        p.set(&json!({"phase": "done", "result": {"served": []}}));
 
         let events = drain(&mut rx);
         let phases: Vec<&str> = events
@@ -166,7 +166,7 @@ mod hot_progress_tests {
         // dropped on the floor before it reaches window.Divoom.onHotProgress.
         let (tx, mut rx) = tokio::sync::broadcast::channel(8);
         let p = HotProgress::with_events(tx);
-        p.set(json!({"phase": "downloading", "current": 1, "total": 2}));
+        p.set(&json!({"phase": "downloading", "current": 1, "total": 2}));
         let events = drain(&mut rx);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0]["type"], json!("hot_progress"));
@@ -218,7 +218,7 @@ mod hot_progress_tests {
     fn clear_stuck_starting_is_a_no_op_when_not_stuck() {
         let (tx, mut rx) = tokio::sync::broadcast::channel(8);
         let p = HotProgress::with_events(tx);
-        p.set(json!({"phase": "done"}));
+        p.set(&json!({"phase": "done"}));
         drain(&mut rx);
         p.clear_stuck_starting();
         assert!(drain(&mut rx).is_empty());
@@ -230,7 +230,7 @@ mod hot_progress_tests {
         // hot_update_progress (the resync path) must agree with the stream.
         let (tx, mut rx) = tokio::sync::broadcast::channel(8);
         let p = HotProgress::with_events(tx);
-        p.set(json!({"phase": "uploading", "current": 7, "total": 9}));
+        p.set(&json!({"phase": "uploading", "current": 7, "total": 9}));
         let events = drain(&mut rx);
         assert_eq!(p.get()["phase"], events[0]["phase"]);
         assert_eq!(p.get()["current"], events[0]["current"]);
@@ -242,7 +242,7 @@ mod hot_progress_tests {
         let (tx, rx) = tokio::sync::broadcast::channel(4);
         drop(rx);
         let p = HotProgress::with_events(tx);
-        p.set(json!({"phase": "done"}));
+        p.set(&json!({"phase": "done"}));
         assert_eq!(p.get()["phase"], json!("done"));
     }
 }

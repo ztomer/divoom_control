@@ -61,7 +61,7 @@ impl BitmapFont {
         }
     }
 
-    pub(crate) fn find_glyph_offset(&self, cp: u32) -> Option<usize> {
+    pub(crate) fn find_glyph_offset(cp: u32) -> Option<usize> {
         if (FIRST_CP..=LAST_CP).contains(&cp) {
             Some(((cp - FIRST_CP) as usize) * GLYPH_BYTES)
         } else {
@@ -71,9 +71,9 @@ impl BitmapFont {
 
     pub(crate) fn rows(&self, ch: char) -> [u16; 16] {
         let cp = ch as u32;
-        let mut off = self.find_glyph_offset(cp);
+        let mut off = Self::find_glyph_offset(cp);
         if off.is_none() {
-            off = self.find_glyph_offset(FALLBACK_CP);
+            off = Self::find_glyph_offset(FALLBACK_CP);
         }
         let Some(off) = off else { return [0; 16] };
         let g = &self.blob[off..off + GLYPH_BYTES];
@@ -114,7 +114,7 @@ impl BitmapFont {
         clippy::cast_possible_wrap,
         reason = "a glyph width in pixels, from two column indices within one 8-or-16-wide bitmap"
     )]
-    pub(crate) fn _char_width(&self, ch: char) -> i32 {
+    pub(crate) fn char_width(&self, ch: char) -> i32 {
         if ch == ' ' {
             return self.space_width;
         }
@@ -128,14 +128,14 @@ impl BitmapFont {
 
     /// Width `draw_text` would advance for `text`, unclipped.
     ///
-    /// Deliberately built from `_char_width` and the same `gap` rule
+    /// Deliberately built from `char_width` and the same `gap` rule
     /// `draw_text` uses rather than re-deriving glyph advances: two
     /// measurements of one layout is the drift this module exists to avoid, one
     /// level down. `measure_matches_draw_text` pins them together.
     pub(crate) fn measure_width(&self, text: &str, gap: i32) -> i32 {
         text.chars()
             .enumerate()
-            .map(|(i, ch)| if i > 0 { gap } else { 0 } + self._char_width(ch))
+            .map(|(i, ch)| if i > 0 { gap } else { 0 } + self.char_width(ch))
             .sum()
     }
 

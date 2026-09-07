@@ -126,7 +126,7 @@ fn parse_color(raw: Option<&str>) -> (u8, u8, u8) {
     (255, 255, 255)
 }
 
-fn frame_reply(kind: &str, size: u32, rgb: &[u8], extra: Value) -> Value {
+fn frame_reply(kind: &str, size: u32, rgb: &[u8], extra: &Value) -> Value {
     let mut out = json!({
         "success": true,
         "kind": kind,
@@ -161,7 +161,7 @@ pub async fn cmd_render_widget(args: &Value) -> Value {
                 kind,
                 size,
                 &rgb,
-                json!({"cpu": s.cpu, "mem": s.mem, "battery": s.battery}),
+                &json!({"cpu": s.cpu, "mem": s.mem, "battery": s.battery}),
             )
         }
 
@@ -187,7 +187,7 @@ pub async fn cmd_render_widget(args: &Value) -> Value {
                 kind,
                 size,
                 &rgb,
-                json!({
+                &json!({
                     "symbol": symbol.to_uppercase(),
                     "price": quote.price,
                     "change": quote.change,
@@ -218,7 +218,7 @@ pub async fn cmd_render_widget(args: &Value) -> Value {
             };
             match frames.first() {
                 Some((rgb, _, _, _)) => {
-                    frame_reply(kind, size, rgb, json!({"frames": frames.len()}))
+                    frame_reply(kind, size, rgb, &json!({"frames": frames.len()}))
                 }
                 None => err_reply("album_art: image decoded to no frames"),
             }
@@ -243,7 +243,7 @@ pub async fn cmd_render_widget(args: &Value) -> Value {
                 kind,
                 size,
                 &rgb,
-                json!({"text": text, "full_font": full_font}),
+                &json!({"text": text, "full_font": full_font}),
             )
         }
 

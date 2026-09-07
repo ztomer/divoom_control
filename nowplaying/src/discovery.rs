@@ -73,8 +73,7 @@ pub fn parse_players(line: &str) -> Result<Vec<Player>, String> {
     for entry in v
         .get("players")
         .and_then(|p| p.as_array())
-        .map(Vec::as_slice)
-        .unwrap_or(&[])
+        .map_or(&[][..], Vec::as_slice)
     {
         let id = entry
             .get("bundle_id")

@@ -181,6 +181,14 @@ async fn download_hot_file(client: &reqwest::Client, f: &mut HotFile) -> bool {
     true
 }
 
+#[expect(
+    clippy::many_single_char_names,
+    clippy::tuple_array_conversions,
+    reason = "`a`..`e` and `h[0..5]` are RFC 3174's own names for the SHA-1 \
+              working variables. Renaming them to something descriptive would \
+              make this harder to check against the specification, which is \
+              the only way anyone verifies a hash implementation."
+)]
 fn sha1_digest(data: &[u8]) -> String {
     // Minimal SHA-1 (RFC 3174) — avoids a dep for a 20-byte output.
     let mut h: [u32; 5] = [
@@ -303,14 +311,14 @@ async fn load_hot_files(
         return Err("empty hot manifest".into());
     }
     let total = files.len();
-    progress.set(json!({"phase": "downloading", "current": 0, "total": total}));
+    progress.set(&json!({"phase": "downloading", "current": 0, "total": total}));
     let mut ok_dl = 0usize;
     for (i, f) in files.iter_mut().enumerate() {
         if download_hot_file(client, f).await {
             ok_dl += 1;
         }
         progress
-            .set(json!({"phase":"downloading","current":i+1,"total":total,"file_id":&f.file_id}));
+            .set(&json!({"phase":"downloading","current":i+1,"total":total,"file_id":&f.file_id}));
     }
     if ok_dl == 0 {
         return Err("no hot files downloadable".into());
@@ -339,14 +347,14 @@ pub(crate) async fn run_hot_update(
     // 1+2. Manifest + bodies, cached per device_type so N same-size devices
     // don't each re-hit the CDN (load_hot_files emits the "downloading" progress
     // on a miss; a hit returns instantly).
-    progress.set(json!({"phase": "fetching_manifest"}));
+    progress.set(&json!({"phase": "fetching_manifest"}));
     let device_type = device_type_for_size(device_size);
     let (files, ok_dl, from_cache) = load_hot_files(&client, device_type, &progress).await?;
     if from_cache {
         // Nothing was re-fetched — jump the download bar to full so the UI moves
         // straight to the upload phase instead of sitting at "fetching".
         let n = files.len();
-        progress.set(json!({"phase": "downloading", "current": n, "total": n, "cached": true}));
+        progress.set(&json!({"phase": "downloading", "current": n, "total": n, "cached": true}));
     }
 
     // 3. BLE session

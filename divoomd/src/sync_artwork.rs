@@ -74,9 +74,11 @@ pub fn resolve_preview_data_url(raw: &[u8]) -> Option<String> {
     Some(format!("data:{mime};base64,{b64}"))
 }
 
-/// `get_animated_preview` command — download a gallery/hot file by `file_id`,
-/// decode it daemon-side, and return a base64 data-url for the UI to render
-/// (parity with the Python GUI's `gallery_hot_api.get_animated_preview`).
+/// The `get_animated_preview` command.
+///
+/// Downloads a gallery/hot file by `file_id`, decodes it daemon-side, and
+/// returns a base64 data-url for the UI to render -- parity with the Python
+/// GUI's `gallery_hot_api.get_animated_preview`.
 ///
 /// Only the small data-url crosses the socket; the raw binary never does.
 #[expect(

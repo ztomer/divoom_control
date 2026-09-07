@@ -37,35 +37,35 @@ pub fn catalog() -> Value {
     let int = |lo: i64, hi: i64| json!({ "type": "integer", "minimum": lo, "maximum": hi });
     json!([
         tool("set_volume", "Set the device's speaker volume (0-15).",
-            json!({"type":"object","properties":{"level":int(0,15)},"required":["level"]})),
+            &json!({"type":"object","properties":{"level":int(0,15)},"required":["level"]})),
         tool("set_brightness", "Set the device's display brightness (0-100).",
-            json!({"type":"object","properties":{"level":int(0,100)},"required":["level"]})),
+            &json!({"type":"object","properties":{"level":int(0,100)},"required":["level"]})),
         tool("set_light_mode", "Switch the active channel (clock, lightning, cloud, vj, visualizer, design, scoreboard, animation).",
-            json!({"type":"object","properties":{"mode":{"type":"string","enum":LIGHT_MODES.iter().map(|(n,_)|*n).collect::<Vec<_>>()}},"required":["mode"]})),
+            &json!({"type":"object","properties":{"mode":{"type":"string","enum":LIGHT_MODES.iter().map(|(n,_)|*n).collect::<Vec<_>>()}},"required":["mode"]})),
         tool("set_weather", "Push a temperature + weather icon to the device's built-in weather widget.",
-            json!({"type":"object","properties":{"temperature_c":int(-127,128),"weather":{"type":"string","enum":WEATHER_TYPES.iter().map(|(n,_)|*n).collect::<Vec<_>>()}},"required":["temperature_c","weather"]})),
+            &json!({"type":"object","properties":{"temperature_c":int(-127,128),"weather":{"type":"string","enum":WEATHER_TYPES.iter().map(|(n,_)|*n).collect::<Vec<_>>()}},"required":["temperature_c","weather"]})),
         tool("set_alarm", "Set or disable one of the device's 10 alarms.",
-            json!({"type":"object","properties":{"index":int(0,9),"hour":int(0,23),"minute":int(0,59),"weekday_mask":int(0,127),"enabled":{"type":"boolean"}},"required":["index","hour","minute"]})),
+            &json!({"type":"object","properties":{"index":int(0,9),"hour":int(0,23),"minute":int(0,59),"weekday_mask":int(0,127),"enabled":{"type":"boolean"}},"required":["index","hour","minute"]})),
         tool("set_radio", "Tune the FM radio (freq_x10 = MHz x 10, e.g. 875 = 87.5).",
-            json!({"type":"object","properties":{"freq_x10":int(875,1080)},"required":["freq_x10"]})),
+            &json!({"type":"object","properties":{"freq_x10":int(875,1080)},"required":["freq_x10"]})),
         tool("set_low_power", "Enable or disable the device's low-power mode.",
-            json!({"type":"object","properties":{"enabled":{"type":"boolean"}},"required":["enabled"]})),
+            &json!({"type":"object","properties":{"enabled":{"type":"boolean"}},"required":["enabled"]})),
         tool("set_screen_orientation", "Rotate the device's display 0/90/180/270 degrees; optionally mirror/flip.",
-            json!({"type":"object","properties":{"degrees":{"type":"integer","enum":[0,90,180,270]},"mirror":{"type":"boolean"}},"required":["degrees"]})),
+            &json!({"type":"object","properties":{"degrees":{"type":"integer","enum":[0,90,180,270]},"mirror":{"type":"boolean"}},"required":["degrees"]})),
         tool("show_image", "Push a local image file to the device.",
-            json!({"type":"object","properties":{"file":{"type":"string","description":"Local filesystem path to the image."}},"required":["file"]})),
+            &json!({"type":"object","properties":{"file":{"type":"string","description":"Local filesystem path to the image."}},"required":["file"]})),
         tool("push_animation", "Push a GIF/animation to the device. Provide 'file' (path) or 'data' (base64). First frame for now.",
-            json!({"type":"object","properties":{"file":{"type":"string"},"data":{"type":"string"}},"oneOf":[{"required":["file"]},{"required":["data"]}]})),
+            &json!({"type":"object","properties":{"file":{"type":"string"},"data":{"type":"string"}},"oneOf":[{"required":["file"]},{"required":["data"]}]})),
         tool("play_sound", "Beep the device (best-effort; some firmware no-ops).",
-            json!({"type":"object","properties":{"duration_ms":int(100,3000)},"required":["duration_ms"]})),
+            &json!({"type":"object","properties":{"duration_ms":int(100,3000)},"required":["duration_ms"]})),
         tool("get_capabilities", "Read the device's static capabilities / connection state.",
-            json!({"type":"object","properties":{},"additionalProperties":false})),
+            &json!({"type":"object","properties":{},"additionalProperties":false})),
         tool("get_device_state", "Read the device's current volume, brightness, channel, orientation, mirror.",
-            json!({"type":"object","properties":{},"additionalProperties":false})),
+            &json!({"type":"object","properties":{},"additionalProperties":false})),
     ])
 }
 
-fn tool(name: &str, desc: &str, schema: Value) -> Value {
+fn tool(name: &str, desc: &str, schema: &Value) -> Value {
     json!({ "name": name, "description": desc, "inputSchema": schema })
 }
 

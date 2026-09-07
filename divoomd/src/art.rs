@@ -350,9 +350,9 @@ pub async fn cmd_hot_update(
                 if let Err(e) = crate::hot_state::record_check(&address, &summary) {
                     eprintln!("[ Wrn ] hot_state record_check failed: {e}");
                 }
-                progress_arc.set(json!({"phase": "done", "result": summary}));
+                progress_arc.set(&json!({"phase": "done", "result": summary}));
             }
-            Err(e) => progress_arc.set(json!({"phase": "error", "error": e})),
+            Err(e) => progress_arc.set(&json!({"phase": "error", "error": e})),
         }
     });
 

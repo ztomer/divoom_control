@@ -5,7 +5,8 @@
 
 use crate::models;
 
-/// Encode a payload in the Basic protocol framing:
+/// Encode a payload in the Basic protocol framing.
+///
 /// `[0x01][len_lo][len_hi][body...][cksum_lo][cksum_hi][0x02]`, where `len`
 /// counts the body plus the 2 checksum bytes, and the checksum is
 /// `sum(len_lo..body) & 0xFFFF`.
@@ -51,7 +52,8 @@ pub fn encode_basic_payload(payload: &[u8], escape: bool) -> Vec<u8> {
     out
 }
 
-/// Encode a payload (command id is `payload[0]`) in the iOS-LE framing:
+/// Encode a payload in the iOS-LE framing. The command id is `payload[0]`.
+///
 /// `[FE EF AA 55][len_lo][len_hi][pkt][cmd][data...][cksum_lo][cksum_hi][0x02]`,
 /// where `len = total - 7`, only the low byte of `packet_number` is transmitted,
 /// and the checksum is `sum(bytes[4..len-3]) & 0xFFFF`.

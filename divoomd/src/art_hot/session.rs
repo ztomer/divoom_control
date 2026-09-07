@@ -42,8 +42,8 @@ pub(super) async fn run_hot_session(
 
     let cmd_f7: u8 = 0xF7;
     let cmd_9d: u8 = 0x9D;
-    let cmd_9e: u8 = 0x9E;
-    let cmd_9f: u8 = 0x9F;
+    let cmd_manifest_ack: u8 = 0x9E;
+    let cmd_done: u8 = 0x9F;
     let idle_to = Duration::from_secs_f64(IDLE_DONE_TIMEOUT_SECS);
     let mut served: Vec<Value> = Vec::new();
     let mut pending_request: Option<Vec<u8>> = None;
@@ -60,7 +60,10 @@ pub(super) async fn run_hot_session(
         let (cmd, payload) = if let Some(p) = pending_request.take() {
             (cmd_f7, p)
         } else {
-            match ble.wait_for_any_response(&[cmd_f7, cmd_9f], idle_to).await {
+            match ble
+                .wait_for_any_response(&[cmd_f7, cmd_done], idle_to)
+                .await
+            {
                 Some((c, p)) => (c, p),
                 None => {
                     if dbg {
@@ -70,7 +73,7 @@ pub(super) async fn run_hot_session(
                 } // device quiet — up to date
             }
         };
-        if cmd == cmd_9f {
+        if cmd == cmd_done {
             if dbg {
                 eprintln!("[hot] got 0x9F (pause) -> break");
             }
@@ -150,14 +153,21 @@ pub(super) async fn run_hot_session(
             let mut pkt_payload = Vec::new();
             pkt_payload.extend_from_slice(&(idx.word()).to_le_bytes());
             pkt_payload.extend_from_slice(&f.packet(idx));
-            if ble.send_command(cmd_9e, &pkt_payload, true).await.is_err() {
+            if ble
+                .send_command(cmd_manifest_ack, &pkt_payload, true)
+                .await
+                .is_err()
+            {
                 break;
             }
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
         // Post-stream: serve resends until device declares done
         loop {
-            match ble.wait_for_any_response(&[cmd_9e, cmd_f7], idle_to).await {
+            match ble
+                .wait_for_any_response(&[cmd_manifest_ack, cmd_f7], idle_to)
+                .await
+            {
                 None => break, // IDLE_DONE_TIMEOUT — unconfirmed
                 Some((c, p)) if c == cmd_f7 => {
                     pending_request = Some(p);
@@ -173,7 +183,7 @@ pub(super) async fn run_hot_session(
                     let mut rp = Vec::new();
                     rp.extend_from_slice(&(ridx.word()).to_le_bytes());
                     rp.extend_from_slice(&f.packet(ridx));
-                    let _ = ble.send_command(cmd_9e, &rp, true).await;
+                    let _ = ble.send_command(cmd_manifest_ack, &rp, true).await;
                 }
                 _ => {}
             }
@@ -181,7 +191,7 @@ pub(super) async fn run_hot_session(
         served.push(json!({"file_id": &f.file_id, "version": f.version, "confirmed": confirmed}));
         let n_served = served.len();
         progress.set(
-            json!({"phase":"uploading","current":n_served,"total":ok_dl,"file_id":&f.file_id}),
+            &json!({"phase":"uploading","current":n_served,"total":ok_dl,"file_id":&f.file_id}),
         );
     }
 

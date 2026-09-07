@@ -241,7 +241,7 @@ impl LiveJobCoordinator {
         preview: Option<String>,
     ) {
         let mut act = self.activity.lock().await;
-        let entry = act.entry(mac).or_insert(ActivityEntry {
+        let entry = act.entry(mac).or_insert_with(|| ActivityEntry {
             name: name.clone().unwrap_or_else(|| "Divoom".to_string()),
             kind: kind.clone(),
             preview: None,

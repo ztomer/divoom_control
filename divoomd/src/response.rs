@@ -61,10 +61,12 @@ pub fn route_notification(cmd: u8, expected: Option<u8>, listen: &[u8]) -> Handl
     }
 }
 
-/// Wait for the response to `command_id`: resolve on the exact command id;
-/// treat a generic-ACK (0x33, when `command_id` is a generic-ACK command) as an
-/// intermediate ack and KEEP waiting; discard anything else; return `None` on
-/// timeout or a closed channel.
+/// Wait for the response to `command_id`.
+///
+/// Resolves on the exact command id; treats a generic-ACK (0x33, when
+/// `command_id` is a generic-ACK command) as an intermediate ack and KEEPS
+/// waiting; discards anything else; returns `None` on timeout or a closed
+/// channel.
 ///
 /// Mirrors `wait_for_response`.
 pub async fn wait_for_response(
