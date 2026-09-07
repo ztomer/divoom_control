@@ -76,8 +76,17 @@ def rust_side() -> tuple[set[str], dict, tuple[int, int]]:
     for field in fields:
         defaults.setdefault(field, None)
 
-    clamp = re.search(r"\.clamp\((\d+),\s*(\d+)\)", src)
-    bounds = (int(clamp.group(1)), int(clamp.group(2))) if clamp else (None, None)
+    # Rust literals may carry `_` separators, and `clippy::unreadable_literal`
+    # ADDS them -- adopting pedantic rewrote `2592000` to `2_592_000` and this
+    # gate reported a clamp divergence that did not exist, because it reads
+    # source TEXT and a linter had legitimately changed the text. An instrument
+    # that greps source has to accept every spelling the toolchain may produce.
+    clamp = re.search(r"\.clamp\(([\d_]+),\s*([\d_]+)\)", src)
+    bounds = (
+        (int(clamp.group(1).replace("_", "")), int(clamp.group(2).replace("_", "")))
+        if clamp
+        else (None, None)
+    )
     return fields, defaults, bounds
 
 
