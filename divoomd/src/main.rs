@@ -32,6 +32,14 @@ fn env_duration(key: &str, default: Duration) -> Duration {
     })
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "the daemon's startup sequence: parse arguments, bind the socket, take the startup lock, optionally open a TCP listener, then serve. Every step can refuse to continue and each one's failure message is specific to where it happened"
+)]
+#[expect(
+    clippy::similar_names,
+    reason = "`args` and `argv` are the parsed form and the raw form of the same thing, which is why they read alike"
+)]
 #[tokio::main]
 async fn main() {
     let argv: Vec<String> = std::env::args().skip(1).collect();
@@ -105,6 +113,10 @@ async fn main() {
     eprintln!("divoomd listening on {socket_path}");
 
     let mut tcp_listener = None;
+    #[expect(
+        clippy::useless_let_if_seq,
+        reason = "both bindings are set together inside the `if let` and read together after it; splitting one out would separate a pair that is only ever used as one"
+    )]
     let mut tcp_token = None;
     if let Some(host) = args.host {
         let Some(port) = args.port else {

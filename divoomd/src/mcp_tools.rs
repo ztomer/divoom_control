@@ -69,6 +69,10 @@ fn tool(name: &str, desc: &str, schema: &Value) -> Value {
     json!({ "name": name, "description": desc, "inputSchema": schema })
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "a device command dispatch table: one arm per protocol method and its aliases, each a few lines of argument shuffling before it builds a frame. The length is the number of COMMANDS the device answers, not complexity in any one of them, and splitting it puts a layer between a method name and the code that implements it -- which is the one thing a reader opens these files to find"
+)]
 /// Dispatch a tools/call. Returns the tool's result dict, or Err(message) for a
 /// validation / device error (the caller marks it isError).
 ///

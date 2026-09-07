@@ -17,6 +17,10 @@ use super::{
 };
 use crate::daemon::Daemon;
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one live job, start to finish: poll the player, diff against what is on screen, render, push. Each step's result decides whether the next runs"
+)]
 pub(super) async fn run_music(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
     const JOB_KIND: &str = "music";
     let size = params

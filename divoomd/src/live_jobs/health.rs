@@ -103,6 +103,10 @@ impl JobHealth {
 
     /// Record the current state; emit `live_job_state` if it differs from the
     /// last one. Returns true when an event was emitted.
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "a small enum the caller constructs for this call and nothing else"
+    )]
     pub fn report(&self, state: JobState) -> bool {
         {
             let Ok(mut guard) = self.last.lock() else {

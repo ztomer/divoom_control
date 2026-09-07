@@ -131,6 +131,10 @@ async fn device_name_commands_route_to_device_call() {
     );
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one end-to-end scenario: start a daemon, drive every ported command over the socket, assert each reply. Split up it would either start a daemon per test or share one across tests that then cannot run in any order"
+)]
 #[tokio::test]
 async fn ported_commands_route_to_device_call() {
     let d = Daemon::new();

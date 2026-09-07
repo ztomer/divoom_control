@@ -65,7 +65,7 @@ impl HotProgress {
         if let Ok(mut g) = self.inner.lock() {
             *g = val.clone();
         }
-        self.broadcast(&val);
+        self.broadcast(val);
     }
 
     #[must_use]

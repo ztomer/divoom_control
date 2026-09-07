@@ -308,6 +308,12 @@ pub async fn cmd_custom_art_query_page(daemon: Arc<Daemon>, args: &Value) -> Val
 }
 
 /// Handle `hot_update` command — starts a background task, returns immediately.
+#[expect(
+    clippy::unused_async,
+    reason = "one arm of an `async` dispatch table: every command handler has \
+              this signature and the caller awaits them uniformly. Making this \
+              one sync would need a branch at the call site for no gain."
+)]
 pub async fn cmd_hot_update(
     daemon: Arc<Daemon>,
     args: &Value,

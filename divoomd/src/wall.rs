@@ -46,6 +46,10 @@ impl DivoomWall {
     /// From the BLE stack below: the adapter is gone, the peripheral is not
     /// connected, or the write did not complete.
     #[expect(
+        clippy::too_many_lines,
+        reason = "a protocol sequence, run start to finish: each step's result decides whether and how the next one runs, and the shared state between them is the point. Extracting steps means threading that state through several signatures to make one linear exchange look like several"
+    )]
+    #[expect(
         clippy::option_if_let_else,
         reason = "the `Some` arm is a multi-line body, not an expression -- it decodes a reply, or builds a payload, before it decides. Hoisting it into a closure argument puts the substance of the function inside a call"
     )]
@@ -74,19 +78,19 @@ impl DivoomWall {
             total_height = max_y - min_y;
             grid_unit_size = configs.first().map_or(16, |c| c.size);
         } else {
-            let mut max_x_slot = 0;
-            let mut max_y_slot = 0;
+            let mut slots_across = 0;
+            let mut slots_down = 0;
             for cfg in configs {
-                if cfg.x + 1 > max_x_slot {
-                    max_x_slot = cfg.x + 1;
+                if cfg.x + 1 > slots_across {
+                    slots_across = cfg.x + 1;
                 }
-                if cfg.y + 1 > max_y_slot {
-                    max_y_slot = cfg.y + 1;
+                if cfg.y + 1 > slots_down {
+                    slots_down = cfg.y + 1;
                 }
             }
             grid_unit_size = configs.first().map_or(16, |c| c.size);
-            total_width = max_x_slot * grid_unit_size;
-            total_height = max_y_slot * grid_unit_size;
+            total_width = slots_across * grid_unit_size;
+            total_height = slots_down * grid_unit_size;
             min_x = 0;
             min_y = 0;
         }

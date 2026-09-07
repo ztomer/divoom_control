@@ -153,13 +153,14 @@ fn draw_triangle_32(buf: &mut [u8], size: i32, is_up: bool, color: (u8, u8, u8))
     reason = "text placement on a fixed-size panel"
 )]
 pub(crate) fn render_text(text: &str, color: (u8, u8, u8), size: u32, full_font: bool) -> Vec<u8> {
+    const GAP: i32 = 1;
+
     let mut buf = vec![0u8; (size * size * 3) as usize];
     let font = BitmapFont::new(if full_font {
         FONT_BYTES_FULL
     } else {
         FONT_BYTES
     });
-    const GAP: i32 = 1;
 
     let width = font.measure_width(text, GAP);
     let x0 = if width < size as i32 {

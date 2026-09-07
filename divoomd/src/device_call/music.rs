@@ -17,6 +17,10 @@ fn kw_i64(kw: Option<&Map<String, Value>>, name: &str) -> Option<i64> {
 }
 
 #[expect(
+    clippy::too_many_lines,
+    reason = "a device command dispatch table: one arm per protocol method and its aliases, each a few lines of argument shuffling before it builds a frame. The length is the number of COMMANDS the device answers, not complexity in any one of them, and splitting it puts a layer between a method name and the code that implements it -- which is the one thing a reader opens these files to find"
+)]
+#[expect(
     clippy::option_if_let_else,
     reason = "a command dispatch table: every arm is missing-argument outside and result-or-reason inside. As `map_or_else` each verb becomes two closures and the table stops looking like a table"
 )]
@@ -25,7 +29,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     let args = ctx.args;
     let kw = ctx.kwargs;
     let to = ctx.timeout;
-    let arg0 = |name: &str| args.first().copied().or_else(|| kw_i64(kw, name));
+    let first_arg = |name: &str| args.first().copied().or_else(|| kw_i64(kw, name));
 
     let ok = |r: Result<(), String>, label: &str| match r {
         Ok(()) => json!({"success": true, "result": true}),
@@ -47,7 +51,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             "send_sd_list_over",
         ),
         "music.set_play_status" | "set_play_status" => {
-            let s = arg0("status").unwrap_or(0).byte();
+            let s = first_arg("status").unwrap_or(0).byte();
             ok(
                 dev.send_command(0x0a, &[s], true)
                     .await
@@ -56,7 +60,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             )
         }
         "music.set_sd_last_next" | "set_sd_last_next" => {
-            let a = arg0("action").unwrap_or(0).byte();
+            let a = first_arg("action").unwrap_or(0).byte();
             ok(
                 dev.send_command(0x12, &[a], true)
                     .await
@@ -65,7 +69,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             )
         }
         "music.set_sd_music_play_mode" | "set_sd_music_play_mode" => {
-            let pm = arg0("play_mode").unwrap_or(0).byte();
+            let pm = first_arg("play_mode").unwrap_or(0).byte();
             ok(
                 dev.send_command(0xb9, &[pm], true)
                     .await
@@ -74,7 +78,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             )
         }
         "music.set_sd_music_position" | "set_sd_music_position" => {
-            let pos = arg0("position").unwrap_or(0);
+            let pos = first_arg("position").unwrap_or(0);
             ok(
                 dev.send_command(0xb8, &le16(pos), true)
                     .await
@@ -83,7 +87,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             )
         }
         "music.set_sd_play_music_id" | "set_sd_play_music_id" => {
-            let id = arg0("music_id").unwrap_or(0);
+            let id = first_arg("music_id").unwrap_or(0);
             ok(
                 dev.send_command(0x11, &le16(id), true)
                     .await

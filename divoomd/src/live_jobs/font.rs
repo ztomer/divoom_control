@@ -84,7 +84,7 @@ impl BitmapFont {
         r
     }
 
-    pub(crate) fn col_bbox(&self, rows: &[u16; 16]) -> Option<(usize, usize)> {
+    pub(crate) fn col_bbox(rows: &[u16; 16]) -> Option<(usize, usize)> {
         let mut min_col = None;
         let mut max_col = None;
         for x in 0..CELL {
@@ -119,7 +119,7 @@ impl BitmapFont {
             return self.space_width;
         }
         let rows = self.rows(ch);
-        if let Some((c0, c1)) = self.col_bbox(&rows) {
+        if let Some((c0, c1)) = Self::col_bbox(&rows) {
             (c1 - c0 + 1) as i32
         } else {
             self.space_width
@@ -198,7 +198,7 @@ impl BitmapFont {
                 continue;
             }
             let rows = self.rows(ch);
-            let bb = self.col_bbox(&rows);
+            let bb = Self::col_bbox(&rows);
             if bb.is_none() {
                 x += advance + self.space_width;
                 continue;

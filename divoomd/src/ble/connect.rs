@@ -12,6 +12,10 @@ use crate::framing;
 use crate::models::IOS_LE_HEADER;
 use crate::response::Frame;
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "a protocol sequence, run start to finish: each step's result decides whether and how the next one runs, and the shared state between them is the point. Extracting steps means threading that state through several signatures to make one linear exchange look like several"
+)]
 /// Connect to the device whose `id` matches a prior `scan()` result. Discovers
 /// services, subscribes to notifications, spawns the frame-parsing task, and
 /// runs the autoprobe to pick the framing.

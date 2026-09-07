@@ -27,6 +27,10 @@ pub trait Prober {
 /// Detect the device's framing: try iOS-LE, then Basic, default Basic. Mirrors
 /// `autoprobe_protocol` (iOS-LE is attempted first; Basic is the fallback and the
 /// default when neither answers).
+#[expect(
+    clippy::future_not_send,
+    reason = "the future is driven on the daemon's own task and never sent across threads; requiring Send of every Prober would bound the test doubles for a property this code does not use"
+)]
 pub async fn autoprobe<P: Prober>(prober: &P) -> Protocol {
     if prober.probe(Protocol::IosLe).await {
         return Protocol::IosLe;

@@ -11,6 +11,10 @@ use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "a protocol sequence, run start to finish: each step's result decides whether and how the next one runs, and the shared state between them is the point. Extracting steps means threading that state through several signatures to make one linear exchange look like several"
+)]
 pub(super) async fn run_hot_session(
     ble: &crate::daemon::DeviceTransport,
     files: &[HotFile],

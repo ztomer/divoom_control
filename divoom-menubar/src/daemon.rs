@@ -15,6 +15,10 @@ pub fn socket_path() -> String {
 /// One request → one reply. `None` if the daemon is unreachable or the reply
 /// doesn't parse (the caller treats unreachable as "daemon offline").
 #[cfg(unix)]
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "the value is serialised into the request and never wanted again; borrowing puts an & on every call site to save a move of something the caller has finished with"
+)]
 pub fn request(command: &str, args: Value) -> Option<Value> {
     use std::io::{BufRead, BufReader, Write};
     use std::os::unix::net::UnixStream;

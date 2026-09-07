@@ -142,23 +142,26 @@ pub async fn monthly_best_loop_task(daemon: Arc<Daemon>) {
     }
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "a scripted sequence -- connect, upload each file, verify, disconnect -- where every step's failure is reported against the step it happened in"
+)]
 async fn sync_files_to_device(
     daemon: &Daemon,
     target: &str,
     files: &[Value],
 ) -> Result<(), String> {
     // 1. Connect
-    let mut connect_args = json!({});
-    if let Some(ip) = target.strip_prefix("LAN:") {
-        connect_args = json!({
+    let connect_args = if let Some(ip) = target.strip_prefix("LAN:") {
+        json!({
             "lan_ip": ip
-        });
+        })
     } else {
-        connect_args = json!({
+        json!({
             "mac": target,
             "use_ios_le_protocol": true
-        });
-    }
+        })
+    };
 
     let req_connect = Request {
         command: "connect".to_string(),
@@ -250,8 +253,8 @@ async fn sync_files_to_device(
                 }),
                 token: None,
             };
-            let res_show = daemon.dispatch(req_show).await;
-            res_show
+            let show_reply = daemon.dispatch(req_show).await;
+            show_reply
                 .get("success")
                 .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false)

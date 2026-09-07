@@ -124,6 +124,10 @@ async fn connect_disconnect_reconnect_loop_stays_responsive() {
 // mock op must complete well within that and leave the lock free for the next
 // call (no false-fire, no wedge). Verifying the timeout *fires* on a genuinely
 // hung op needs real hardware (or a network-blocked LAN target) — see plan.
+#[expect(
+    clippy::similar_names,
+    reason = "a test that issues two numbered requests and compares their two numbered replies"
+)]
 #[tokio::test]
 async fn device_call_timeout_enforced_but_not_false_firing() {
     let daemon = Daemon::new();

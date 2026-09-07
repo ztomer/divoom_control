@@ -5,6 +5,11 @@
 //! pin `render_widget` against the crate-internal renderers it must not fork
 //! from, which an integration test could not reach.
 
+#![expect(
+    clippy::float_cmp,
+    reason = "0.0 and 1.0 are exact in binary floating point"
+)]
+
 use serde_json::{json, Value};
 
 use base64::Engine;

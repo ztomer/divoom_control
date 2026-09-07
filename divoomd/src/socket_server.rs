@@ -153,6 +153,10 @@ fn constant_time_eq(a: &str, b: &str) -> bool {
     result == 0
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one connection, start to finish: read a request, dispatch it, write the reply, and handle subscribe as a long-lived stream instead. The subscription arm shares the socket and the loop state with the request arm, which is exactly what makes it one function"
+)]
 /// Serve a single connection: accumulate bytes, split into NDJSON requests,
 /// dispatch each, and write back one reply line per request.
 ///
@@ -322,7 +326,8 @@ where
                         }
                     }
                     return Ok(());
-                } else {
+                }
+                {
                     let reply = err_reply("subscriptions not supported");
                     stream.write_all(&encode_message(&reply)).await?;
                     continue;

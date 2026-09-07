@@ -79,6 +79,10 @@ impl LightingType {
 ///
 /// Wire: `[env, twentyfour, style, active, humidity, weather, date, R, G, B]`
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "the packet's own layout: each bool is one documented on/off field of the device's clock frame. An enum would model as exclusive what the protocol sends together"
+)]
 pub struct ClockPacket {
     /// Environment/clock selector; 0 selects the clock channel.
     pub env: u8,

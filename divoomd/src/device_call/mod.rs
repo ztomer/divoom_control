@@ -103,7 +103,8 @@ pub async fn handle_device_call(
         if let Some(lan_dev) = dev.lan() {
             let kwargs = req.args.get("kwargs").and_then(|v| v.as_object());
             return lan::handle_lan_call(lan_dev, method, &args, kwargs).await;
-        } else {
+        }
+        {
             // R71 P3.1: say WHY, with a machine-readable cause.
             //
             // "device is not connected via LAN" was accurate and useless: the

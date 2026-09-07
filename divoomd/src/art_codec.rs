@@ -89,6 +89,10 @@ pub(crate) fn decode_cloud_magic9(data: &[u8]) -> Option<(Vec<Vec<u8>>, u32)> {
     clippy::cast_possible_truncation,
     reason = "image dimensions rebuilt from a tile count. The frame's own header bounds the counts, and 16 pixels per tile puts the product far inside u32"
 )]
+#[expect(
+    clippy::large_stack_frames,
+    reason = "a frame decoder holding one image's worth of fixed-size buffers. The frames are panel-sized -- at most 64x64 -- so this is large by the lint's threshold and small in absolute terms"
+)]
 pub(crate) fn decode_cloud_magic18_26(data: &[u8]) -> Option<(Vec<Vec<u8>>, u32, u32, u32)> {
     if data.len() < 6 {
         return None;

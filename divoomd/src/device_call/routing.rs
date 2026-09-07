@@ -12,6 +12,10 @@ use super::{
     timeplan, tools, CallCtx, Value,
 };
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "a device command dispatch table: one arm per protocol method and its aliases. Its length is the number of commands the device answers"
+)]
 pub(super) async fn route(method: &str, ctx: CallCtx<'_>) -> Value {
     match method {
         // basic.rs commands:

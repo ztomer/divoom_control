@@ -17,6 +17,10 @@ pub fn aes_cbc_decrypt(data: &[u8]) -> Option<Vec<u8>> {
     aes128cbc_decrypt_impl(data, b"78hrey23y28ogs89", b"1234567890123456")
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "the AES-128-CBC inverse cipher. Its shape is FIPS-197's: key expansion, then rounds of InvShiftRows / InvSubBytes / AddRoundKey / InvMixColumns. Splitting the rounds into helpers makes it harder to check against the specification, which is the only way anyone verifies a cipher"
+)]
 // Minimal AES-128-CBC decrypt — single-purpose, no padding strip needed (we
 // read only the plaintext portion we know the size of).
 fn aes128cbc_decrypt_impl(ct: &[u8], key: &[u8; 16], iv: &[u8; 16]) -> Option<Vec<u8>> {

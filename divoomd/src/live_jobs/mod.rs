@@ -40,6 +40,10 @@ use render::{render_stock, render_sysmon};
 /// starts sees nothing. `live_job_list` answers that, but only if the state is
 /// stored — and storing it at each call site separately is how the two would
 /// drift. One helper does both halves.
+#[expect(
+    clippy::ref_option,
+    reason = "the caller holds an Option<JobHealth> and reports through it when there is one. Option<&JobHealth> pushes an as_ref() to five call sites"
+)]
 async fn report_health(
     daemon: &Daemon,
     health: &Option<health::JobHealth>,

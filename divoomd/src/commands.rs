@@ -2,6 +2,10 @@
 //! Do not edit by hand; regenerate via `scripts/codegen/gen_commands.py`.
 
 /// Resolve a command NAME to its protocol id, or `None` if unknown.
+#[expect(
+    clippy::too_many_lines,
+    reason = "a name-to-opcode table: one arm per protocol command and its aliases. It is data written as a match, and its length is the size of the protocol"
+)]
 #[must_use]
 pub fn command_id(name: &str) -> Option<u8> {
     match name {
