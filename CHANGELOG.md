@@ -8,6 +8,23 @@ shipped milestone (per the project planning docs).
 
 ### Fixed — the daemon could go completely deaf, and blamed another program
 
+- **The no-BLE configuration was built and tested but never linted**, so it had
+  21 clippy warnings while the default build sat at zero. Clippy reports only on
+  the cfg it compiled for and is silent about every other, so no gate could see
+  it. BLE-only items are feature-gated; items shared by both configurations but
+  used only on the BLE path carry `#[cfg_attr(not(feature = "ble"), expect(...))]`.
+  `cargo clippy -p divoomd --no-default-features --all-targets -- -D warnings` is
+  now a step in `.gatesrc` and CI, calibrated: an item reachable only from the
+  BLE half fails it while the `--all-features` step stays green.
+- **Unused dependencies are checked** (`cargo machete`, in `.gatesrc` and CI).
+  `[lints.cargo] unused_dependencies` reads like this gate and enforces nothing
+  on stable. `md-5` is recorded as a false positive with its reason: the package
+  is `md-5`, its lib is `md5`, and an ident scan cannot see the difference.
+- **The line-cap exemption now carries a stated waiver.** `docs/divoom_docs/` is
+  captured vendor API data, exempt from the 500-line cap and correctly carrying
+  no ceiling; that is now `GOH_LINE_UNBOUNDED` with the reason rather than an
+  unbounded exemption nothing checks.
+
 - **Only two of twelve client writes were bounded, and the eviction notice was
   not one of them.** The write deadline that ends a stalled subscriber had been
   applied by hand to the two `write_all` calls inside the subscriber `select!`,

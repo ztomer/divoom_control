@@ -32,6 +32,16 @@ shared memory. Read this on entry and **update it at the end of every round**
   activity), the AppleScript app-name crash + its repo-wide gate, and the
   empty-scope guard that unblocked `pre-push` for the first time in weeks.
 
+- **2026-09-07 (later still) — Estate-wide gate work; three findings here.**
+  The no-BLE build had never been linted (21 warnings, default build at zero) —
+  clippy only reports on the cfg it compiled for. Fixed and wired into `.gatesrc`
+  + CI, calibrated both directions. `cargo machete` added for unused
+  dependencies (`md-5` recorded as a false positive: package `md-5`, lib `md5`).
+  `GOH_LINE_UNBOUNDED` states why `docs/divoom_docs/` needs no ceiling.
+
+  **Open threads unchanged:** D5 (connection census in `get_status`) and D6
+  (heartbeat + self-watchdog). The running daemon is still installed v0.31.0.
+
 - **2026-09-07 (later) — The write deadline covered 2 of 12 writes.** A post-fix
   audit of the daemon (D1-D6 in `docs/ROADMAP.md`) found D1-D3 already fixed in
   the tree and **D4 live**: `WRITE_TIMEOUT` had been applied by hand to the two
