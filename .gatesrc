@@ -16,7 +16,14 @@ export GOH_EXCLUDE='docs/divoom_docs/'   # captured Divoom API responses + sampl
 # GOH_MAX_SCRATCH_GB=25           # disk-hygiene ceiling (full runs only)
 
 # Length-only exemption: captured third-party API data (not hand-written code).
+# It stays emoji- and secret-scanned, which is why it is LINE_EXCLUDE and not
+# GOH_EXCLUDE.
 GOH_LINE_EXCLUDE='docs/divoom_docs/'
+GOH_LINE_BASELINE=.gates_loc_baseline.txt
+# ...and it correctly carries no ceiling: these files grow when Divoom's API
+# grows, so ratcheting their length would be churn against a document we do not
+# author. Every OTHER length exemption added here must be paired with a ceiling.
+GOH_LINE_UNBOUNDED='docs/divoom_docs/'
 
 # ── Local CI steps (consumed by $GOH/gates/local_ci.sh via ci_local.sh) ────
 # Mirrors .github/workflows/tests.yml job-for-job.

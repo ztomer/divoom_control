@@ -1,0 +1,12 @@
+# Ceilings for files exempted from the 500-line cap by .gatesrc's
+# GOH_LINE_EXCLUDE. Empty of real entries on purpose: this repo's only length
+# exemption is captured vendor API data, waived via GOH_LINE_UNBOUNDED because
+# its size is not ours to ratchet.
+#
+# The file exists so the pairing check RUNS. Without GOH_LINE_BASELINE the gate
+# only warns, and a repo that adds an exemption for its own over-long code would
+# get no ceiling and no failure -- which is the hole this whole mechanism was
+# added to close (monitor, 2026-09-07).
+#
+# lines path
+0 __under_cap_sentinel__
