@@ -6,6 +6,72 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+### Fixed — the daemon could go completely deaf, and blamed another program
+
+- **A full connection cap took the whole daemon off the air.** `serve()` waited
+  for a semaphore permit around `accept()`, so once all 64 slots were held the
+  accept loop stopped. `connect()` still succeeded (the kernel queues onto the
+  listen backlog) and then nothing ever came back — for any command, including
+  `get_status`. A daemon sat in that state for five days.
+
+  Measured, not inferred: the socket accepted in 0.0ms and sent nothing in 8s;
+  opening three more connections did not change the process's fd count, so
+  `accept()` was no longer being called. The count is the arithmetic tell — 66
+  fds on the socket = 1 listener + 64 permits + 1 connection the loop had taken
+  off the backlog and stranded (it acquired its permit AFTER accepting).
+
+  The loop now accepts unconditionally and refuses the overflow in one reply
+  line. **A cap must bound work, never reachability.** The refusal carries
+  `daemon_version`, because `socket_bind`'s prober identifies the owner from
+  that marker — a refusal without it would only move the misdiagnosis.
+
+- **There was a subscription TTL and it could not fire.** The subscriber watchdog
+  reset its deadline every time the daemon DELIVERED AN EVENT — on its own
+  output. Written to answer "is this client still there?", it answers "have we
+  written to it recently?", so on a channel carrying any traffic the deadline is
+  pushed out forever. It reaps a subscriber on a SILENT stream and in no other
+  case, which is not the case anyone needed bounded.
+
+  Request/reply connections were never the problem: the Python client closes
+  each one (`with s:`), so they EOF at once. Only subscriptions could pile up,
+  and only subscriptions had a watchdog that could not bite. They now expire on
+  an absolute deadline nothing can reset (`idle_timeout * 6`, 30 minutes at the
+  default) and the daemon sends `{"type":"resubscribe"}` before closing. The
+  menu bar and GUI already re-subscribe on drop, so it is a renegotiation.
+
+- **Subscriptions now have their own budget** — at most half the connection
+  budget, and at most `MAX_SUBSCRIPTIONS`. With one shared budget, enough
+  subscribers starved every request. A first cut used
+  `min(max_connections, MAX_SUBSCRIPTIONS)`, which reserves nothing when the
+  connection budget is 8 or smaller; the test written to prove requests survive
+  saturation failed on exactly that. A fraction holds at every budget.
+
+- **`probe()` no longer calls silence "another program".** A listener that
+  accepts and says nothing is `UnresponsiveListener` (almost always our own
+  wedged daemon — stop that pid); one that answers in a foreign protocol stays
+  `ForeignListener` (leave it alone, move our socket). Opposite remedies, so
+  they must not share a variant. `acquire()`'s StartupInProgress arm already
+  refused to make this mistake for the mid-startup case, in a comment saying
+  such a message "would send the user hunting for a program that does not
+  exist"; that reasoning stopped one case short.
+
+- `BindFailure` moved to `divoomd/src/bind_failure.rs` (socket_bind.rs hit the
+  500-line cap); `socket_bind` re-exports it, so every path still resolves.
+
+### Tests
+
+- `max_connections_backpressures_extra` asserted that the extra client gets NO
+  reply within 300ms — it pinned the silence as the specification, which is why
+  it stayed green throughout a five-day outage. Replaced by
+  `at_capacity_the_daemon_answers_instead_of_going_silent`, which asserts the
+  opposite, plus `subscribers_cannot_starve_request_handling` and
+  `a_busy_subscription_still_expires_and_asks_the_client_to_renegotiate` (which
+  holds the event channel busy so only the unresettable cap can end it).
+- `refuses_a_foreign_listener_instead_of_stealing_it` encoded the same
+  conflation in its FIXTURE: it drove a listener that accepts and says nothing
+  and asserted "foreign". Split into the two real cases plus a calibration test
+  that the two messages make opposite claims.
+
 ### Fixed — the GUI's "focus the existing window" path crashed a stranger's Python
 
 - **`gui_main.main()` addressed an application by LaunchServices NAME.** On

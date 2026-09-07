@@ -21,6 +21,40 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-07 — The daemon could go completely deaf; fixed at the design level.**
+  A divoomd ran five days holding 64 connections and answering nobody. Every
+  attempt to start a replacement said `/tmp/divoom.sock is in use by another
+  program`. There was no other program.
+
+  Two independent defects, both design-level rather than local:
+
+  1. **The connection cap and reachability were the same resource.** `serve()`
+     waited for a semaphore permit around `accept()`, so a full cap stopped the
+     accept loop and the daemon answered nothing at all — not even `get_status`.
+     It now accepts unconditionally and refuses the overflow in one reply line
+     (carrying `daemon_version`, so a busy daemon is still identifiable). A cap
+     must bound WORK, never REACHABILITY.
+  2. **The subscription TTL was reset by the daemon's own output.** The watchdog
+     pushed its deadline out on every event DELIVERED, so it could only ever
+     reap a subscriber on a silent channel. Subscriptions are the only
+     connections that accumulate (request clients close immediately), so nothing
+     bounded the one thing that grows. They now expire on an absolute deadline
+     nothing can reset, announced with `{"type":"resubscribe"}`, and have their
+     own budget capped at half the connection budget.
+
+  **The instrument that hid it for five days:** the back-pressure test asserted
+  that an over-cap client gets NO REPLY within 300ms. That reading is identical
+  for correct back-pressure and for a daemon that will never answer again, so
+  the suite stayed green throughout. Its replacement asserts the opposite.
+  The `ForeignListener` test had the same shape in its FIXTURE: it drove a
+  silent listener and called it foreign, so silence was the only case ever
+  exercised and it was labelled with the wrong remedy.
+
+  **Live state:** the wedged pid was terminated and a fresh daemon answers in
+  0ms with 3 fds instead of 66. NOTE the running daemon is
+  `/Applications/Divoom.app/Contents/Frameworks/bin/divoomd` (installed v0.31.0)
+  and does NOT contain these fixes — reinstall to pick them up.
+
 - **2026-09-07 — Crash fix: the GUI focused itself by LaunchServices app name.**
   A user crash report (`org.python.python` 3.9.10, `EXC_CRASH`/DYLD "Library not
   loaded: @rpath/Versions/3.9/Python") was OURS. `gui_main.main()`, on finding

@@ -186,6 +186,22 @@ source. Detail in the v0.27.0 CHANGELOG stanza.
 
 **Open: nothing in this workstream.** Both items closed in R68.
 
+### OPEN — why did 64 subscriptions accumulate in the first place?
+
+The 2026-09-07 wedge is now structurally impossible (subscriptions expire on an
+unresettable deadline and cannot take more than half the connection budget), but
+the ORIGINAL accumulation was never explained, and killing the daemon destroyed
+the evidence. Request/reply clients close immediately, so the 64 were
+subscriptions; what is not known is whether they were live clients, peers whose
+fd outlived them, or connections parked in `handler.handle().await` — which has
+no timeout and does not read the socket while it runs, so a peer closing is
+invisible to it.
+
+Worth knowing, because the fix bounds the symptom rather than the cause. The
+cheap next step is a connection census in `get_status` (count by kind, with
+ages), so the next occurrence identifies itself instead of needing `lsof` and a
+`sample`.
+
 ### OPEN — `test_gate_full_reaches_layer_three` fails on an EMPTY-SCOPE rule
 
 Pre-existing, and confirmed pre-existing by re-running it against clean HEAD
