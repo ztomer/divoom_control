@@ -88,13 +88,32 @@ def test_preview_size_tracks_the_device_at_every_size(monkeypatch, tmp_path):
 def test_the_daemon_maps_every_size_this_gui_can_report(monkeypatch, tmp_path):
     """The mapping moved INTO the daemon, so pin that it still covers the sizes
     the GUI can ask about — a size the daemon silently defaults to 16 would
-    reproduce the ghost-default bug one layer down."""
+    reproduce the ghost-default bug one layer down.
+
+    READS THE MAPPING, NOT ITS SPELLING. This used to substring-match each arm
+    (`f"{size} => {device_type},"`), which broke the day `clippy::match_same_arms`
+    deleted the redundant `16 => 1,` arm because it duplicated the `_ => 1`
+    wildcard. The behaviour was identical and the test failed anyway: an
+    instrument that greps source text is measuring the formatter as much as the
+    code. Parse the arms and the fallback, then compare the FUNCTION.
+    """
+    import re
     from pathlib import Path as _P
     src = (_P(__file__).resolve().parent.parent
            / "divoomd" / "src" / "art.rs").read_text()
+    body = re.search(r"fn device_type_for_size\(size: u32\) -> u32 \{(.*?)\n\}",
+                     src, re.S)
+    assert body, "device_type_for_size is gone from art.rs — fix this test's scope"
+    arms = {int(k): int(v) for k, v in
+            re.findall(r"(\d+)\s*=>\s*(\d+),", body.group(1))}
+    fallback = re.search(r"_\s*=>\s*(\d+)", body.group(1))
+    assert fallback, "no wildcard arm — an unlisted size would not compile"
+    default = int(fallback.group(1))
+
     for size, device_type in DEVICE_TYPE_BY_SIZE.items():
-        assert f"{size} => {device_type}," in src, (
-            f"art.rs no longer maps {size}px to DeviceType {device_type}")
+        got = arms.get(size, default)
+        assert got == device_type, (
+            f"art.rs maps {size}px to DeviceType {got}, expected {device_type}")
 
 
 def test_preview_uses_gallery_cache_names_and_marks_has_cache(monkeypatch, tmp_path):
