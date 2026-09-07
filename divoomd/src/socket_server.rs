@@ -65,6 +65,15 @@ pub fn subscription_budget(max_connections: usize) -> usize {
     (max_connections / 2).clamp(1, MAX_SUBSCRIPTIONS)
 }
 
+/// Upper bound on the backoff we ask a refused client to randomise within.
+///
+/// Connections here are held for a connection's lifetime, not a request's, so a
+/// slot frees when a client finishes — sub-second in normal use. This is a cap
+/// for the client's Full-Jitter backoff (Brooker, AWS 2015), never a sleep
+/// instruction: a refused burst that all slept the same interval would return in
+/// lockstep and re-refuse itself.
+pub const RETRY_AFTER_MS: u32 = 1_000;
+
 /// Give up on a write that a peer will not drain within this long, and close.
 ///
 /// A subscriber whose client stops READING is the case nothing else catches. It
@@ -337,6 +346,16 @@ where
     let mut reply = err_reply(&format!(
         "daemon is at its connection cap ({max_connections}); try again shortly"
     ));
+    // A refusal a client can ACT on, not prose it has to string-match. Every
+    // mature protocol pairs a machine-distinguishable transient class with
+    // server-supplied retry timing: HTTP 503 + `Retry-After` (RFC 9110), gRPC
+    // RESOURCE_EXHAUSTED plus `grpc-retry-pushback-ms` (gRFC A6), and — the
+    // closest precedent for a line protocol — SMTP's 4yz transient class and
+    // 421 "one-line refusal, then close" (RFC 5321 4.2.1).
+    //
+    // `retry_after_ms` is the CAP on the client's own Full-Jitter backoff, not a
+    // sleep instruction: the client still randomises below it, or a refused
+    // burst returns in lockstep and re-refuses itself.
     // Carry the identity marker even in a refusal. `socket_bind::probe` decides
     // what owns the socket from `daemon_version` (or a status event), so a
     // refusal without it would just move the misdiagnosis: a busy daemon would
@@ -344,6 +363,14 @@ where
     // and a second daemon would refuse to start against a perfectly healthy one.
     // Being at capacity is a fact about load, never about identity.
     if let Some(obj) = reply.as_object_mut() {
+        obj.insert(
+            "code".into(),
+            Value::String("resource_exhausted".to_string()),
+        );
+        obj.insert(
+            "retry_after_ms".into(),
+            Value::Number(RETRY_AFTER_MS.into()),
+        );
         obj.insert(
             "daemon_version".into(),
             Value::String(env!("CARGO_PKG_VERSION").to_string()),

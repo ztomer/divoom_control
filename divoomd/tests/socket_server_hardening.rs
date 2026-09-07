@@ -149,6 +149,15 @@ async fn at_capacity_the_daemon_answers_instead_of_going_silent() {
         "a refusal must still carry the daemon identity marker: {reply}"
     );
 
+    // A client must be able to branch on the refusal without string-matching
+    // English prose, and must be told how long to bound its backoff. HTTP 503 +
+    // Retry-After, gRPC RESOURCE_EXHAUSTED + grpc-retry-pushback-ms, SMTP 4yz.
+    assert_eq!(reply["code"], json!("resource_exhausted"), "{reply}");
+    assert!(
+        reply["retry_after_ms"].as_u64().is_some_and(|ms| ms > 0),
+        "a transient refusal must carry a positive retry bound: {reply}"
+    );
+
     // Once A goes away the cap clears and service is normal again.
     drop(a);
     let mut c = UnixStream::connect(&path).await.unwrap();
