@@ -153,6 +153,35 @@ fn constant_time_eq(a: &str, b: &str) -> bool {
     result == 0
 }
 
+/// Write one NDJSON line to a client, bounded by [`WRITE_TIMEOUT`].
+///
+/// EVERY write to a client socket in this module goes through here, and
+/// `tools/check_bounded_writes.py` fails the build if a bare `write_all`
+/// appears outside it. That gate is the point: bounding the two writes in the
+/// subscriber loop by hand left ten unbounded ones, including the eviction
+/// notice -- which is written to the one client we have already concluded is
+/// not draining its socket, so it was the likeliest of the ten to block
+/// forever. A per-site fix leaves the class alive; a seam every write must pass
+/// through cannot be forgotten by the next edit.
+///
+/// A timeout surfaces as [`std::io::ErrorKind::TimedOut`] so a caller that
+/// wants to drop the peer rather than propagate can tell the two apart.
+async fn write_line<S>(stream: &mut S, msg: &Value) -> std::io::Result<()>
+where
+    S: tokio::io::AsyncWrite + Unpin,
+{
+    match tokio::time::timeout(WRITE_TIMEOUT, stream.write_all(&encode_message(msg))).await {
+        Ok(r) => r,
+        Err(_) => Err(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            format!(
+                "peer did not drain a write within {}s",
+                WRITE_TIMEOUT.as_secs()
+            ),
+        )),
+    }
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "one connection, start to finish: read a request, dispatch it, write the reply, and handle subscribe as a long-lived stream instead. The subscription arm shares the socket and the loop state with the request arm, which is exactly what makes it one function"
@@ -202,13 +231,13 @@ where
                 Ok(v) => v,
                 Err(reason) => {
                     let reply = err_reply(&format!("bad request: {reason}"));
-                    stream.write_all(&encode_message(&reply)).await?;
+                    write_line(&mut stream, &reply).await?;
                     continue;
                 }
             };
             let Ok(req) = serde_json::from_value::<Request>(msg) else {
                 let reply = err_reply("bad request: expected an object with a 'command' string");
-                stream.write_all(&encode_message(&reply)).await?;
+                write_line(&mut stream, &reply).await?;
                 continue;
             };
             if require_auth {
@@ -216,7 +245,7 @@ where
                 let server_token = token.as_deref().unwrap_or("");
                 if server_token.is_empty() || !constant_time_eq(supplied, server_token) {
                     let reply = err_reply("unauthorized");
-                    stream.write_all(&encode_message(&reply)).await?;
+                    write_line(&mut stream, &reply).await?;
                     continue;
                 }
             }
@@ -231,13 +260,13 @@ where
                             "too many active subscriptions; every slot is held by a \
                              client that is demonstrably still active",
                         );
-                        stream.write_all(&encode_message(&reply)).await?;
+                        write_line(&mut stream, &reply).await?;
                         continue;
                     };
                     let evict = lease.evict.clone();
                     let lease_id = lease.id;
                     let initial = handler.initial_status();
-                    stream.write_all(&encode_message(&initial)).await?;
+                    write_line(&mut stream, &initial).await?;
                     // Idle watchdog: a subscriber that receives no events for
                     // `idle_timeout` is dropped (releasing its permit), so a silent
                     // client can't pin a slot forever. Any delivered event resets it.
@@ -264,15 +293,12 @@ where
                                         // Bounded: a peer that stops reading is
                                         // disconnected, never allowed to stall
                                         // this task (see WRITE_TIMEOUT).
-                                        match tokio::time::timeout(
-                                            WRITE_TIMEOUT,
-                                            stream.write_all(&encode_message(&event)),
-                                        )
-                                        .await
-                                        {
-                                            Ok(Ok(())) => {}
-                                            Ok(Err(e)) => return Err(e),
-                                            Err(_) => {
+                                        match write_line(&mut stream, &event).await {
+                                            Ok(()) => {}
+                                            Err(e)
+                                                if e.kind()
+                                                    == std::io::ErrorKind::TimedOut =>
+                                            {
                                                 eprintln!(
                                                     "divoomd: subscriber did not drain a write \
                                                      within {}s; dropping it",
@@ -280,6 +306,7 @@ where
                                                 );
                                                 break;
                                             }
+                                            Err(e) => return Err(e),
                                         }
                                         deadline = tokio::time::Instant::now() + idle_timeout;
                                     }
@@ -293,11 +320,7 @@ where
                                             "dropped": n,
                                             "dropped_total": dropped,
                                         });
-                                        let _ = tokio::time::timeout(
-                                            WRITE_TIMEOUT,
-                                            stream.write_all(&encode_message(&gap)),
-                                        )
-                                        .await;
+                                        let _ = write_line(&mut stream, &gap).await;
                                         if dropped > LAG_BUDGET {
                                             eprintln!(
                                                 "divoomd: subscriber lost {dropped} events \
@@ -320,7 +343,7 @@ where
                                     "type": "resubscribe",
                                     "reason": "subscription slot reclaimed after inactivity; reconnect to continue",
                                 });
-                                let _ = stream.write_all(&encode_message(&notice)).await;
+                                let _ = write_line(&mut stream, &notice).await;
                                 break;
                             }
                         }
@@ -329,12 +352,12 @@ where
                 }
                 {
                     let reply = err_reply("subscriptions not supported");
-                    stream.write_all(&encode_message(&reply)).await?;
+                    write_line(&mut stream, &reply).await?;
                     continue;
                 }
             }
             let reply = handler.handle(req).await;
-            stream.write_all(&encode_message(&reply)).await?;
+            write_line(&mut stream, &reply).await?;
         }
     }
 }
@@ -389,7 +412,7 @@ where
             Value::String(env!("CARGO_PKG_VERSION").to_string()),
         );
     }
-    let _ = stream.write_all(&encode_message(&reply)).await;
+    let _ = write_line(&mut stream, &reply).await;
     let _ = stream.shutdown().await;
 }
 
