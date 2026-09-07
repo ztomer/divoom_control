@@ -1,0 +1,45 @@
+# cargo-audit configuration.
+#
+# THE IGNORE LIST IS A RATCHET, NOT A RUG. Every entry below is one of exactly
+# the advisories present when the gate was introduced (2026-09-07), each with the
+# reason it may stand. Anything NEW fails the build. An entry whose advisory no
+# longer fires should be DELETED, not left to rot -- a stale exemption is a hole
+# held open for the next real finding to fall through.
+#
+# ALL ELEVEN ARE THE SAME SUBTREE, and it is never compiled.
+#
+#   tray-icon 0.24.2 -> libappindicator / muda -> gtk 0.18 -> glib -> proc-macro-error
+#
+# `tray-icon` is a direct dependency of `divoom-menubar` and pulls GTK3 only on
+# Linux; on macOS it uses Cocoa. And divoom-menubar is never built for Linux --
+# every Linux job is scoped `-p divoomd` (.github/workflows/tests.yml, and
+# scripts/check_linux_build.sh cross-compiles divoomd alone). So these crates
+# enter Cargo.lock for a target/member combination that is not built on any
+# platform this project ships. Verified, not assumed: `cargo tree -i gtk` prints
+# "nothing to print" on macOS.
+#
+# None is a vulnerability; all are "no longer maintained" notices. tray-icon
+# 0.24.2 IS the latest release, so there is no version to move to -- upstream has
+# not migrated to GTK4. When it does, delete this whole block.
+[output]
+# Any advisory at all fails, including the informational ones. Without this,
+# cargo-audit exits 0 on "unmaintained"/"unsound" (they are warnings by default),
+# so the gate would pass over exactly the class it was added to police and the
+# ignore list below would be decorative. Found by calibration, not by reading.
+quiet = false
+deny = ["warnings", "unmaintained", "unsound", "yanked"]
+
+[advisories]
+ignore = [
+    "RUSTSEC-2024-0370",   # proc-macro-error unmaintained (via glib-macros)
+    "RUSTSEC-2024-0411",   # gdkwayland-sys  - gtk-rs GTK3 bindings unmaintained
+    "RUSTSEC-2024-0412",   # gdk
+    "RUSTSEC-2024-0413",   # atk
+    "RUSTSEC-2024-0414",   # gdkx11-sys
+    "RUSTSEC-2024-0415",   # gtk
+    "RUSTSEC-2024-0416",   # atk-sys
+    "RUSTSEC-2024-0418",   # gdk-sys
+    "RUSTSEC-2024-0419",   # gtk3-macros
+    "RUSTSEC-2024-0420",   # gtk-sys
+    "RUSTSEC-2024-0429",   # glib (unsoundness, GTK3 subtree)
+]
