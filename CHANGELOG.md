@@ -8,6 +8,21 @@ shipped milestone (per the project planning docs).
 
 ### Fixed — the daemon could go completely deaf, and blamed another program
 
+- **Only two of twelve client writes were bounded, and the eviction notice was
+  not one of them.** The write deadline that ends a stalled subscriber had been
+  applied by hand to the two `write_all` calls inside the subscriber `select!`,
+  leaving the whole request/reply path unbounded. A client that pipelines
+  requests and never reads the replies fills the socket buffer, the reply write
+  blocks forever, and the connection holds its permit for the life of the
+  process — the same total-deafness failure the connection budget exists to
+  prevent, reached one stuck client at a time. The sharpest of the ten was the
+  eviction notice: it is written to the one client we have already concluded is
+  not draining its socket, inside the very path that exists to reclaim a stalled
+  client. Every write now goes through one `write_line` seam that applies
+  `WRITE_TIMEOUT`, and `tools/check_bounded_writes.py` fails the build on any
+  `write_all` added beside it — a test and a counter can only observe the paths
+  that go THROUGH a seam, which is exactly what a bypass does not.
+
 - **A full connection cap took the whole daemon off the air.** `serve()` waited
   for a semaphore permit around `accept()`, so once all 64 slots were held the
   accept loop stopped. `connect()` still succeeded (the kernel queues onto the
@@ -80,6 +95,14 @@ shipped milestone (per the project planning docs).
   500-line cap); `socket_bind` re-exports it, so every path still resolves.
 
 ### Tests
+
+- `a_request_client_that_stops_reading_frees_its_connection_slot` — the
+  request/reply sibling of the subscriber slow-consumer test. It asserts the
+  REFUSAL first (a newcomer gets `resource_exhausted` while the deaf client
+  holds the only permit), so a pass cannot mean the deaf client was simply never
+  admitted. Proven red: removing the deadline from the seam fails both
+  slow-consumer tests with "never released its slot" / "never released its
+  connection slot".
 
 - `max_connections_backpressures_extra` asserted that the extra client gets NO
   reply within 300ms — it pinned the silence as the specification, which is why

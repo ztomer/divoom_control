@@ -188,8 +188,9 @@ source. Detail in the v0.27.0 CHANGELOG stanza.
 
 ### OPEN — why did 64 subscriptions accumulate in the first place?
 
-The 2026-09-07 wedge is now structurally impossible (subscriptions expire on an
-unresettable deadline and cannot take more than half the connection budget), but
+The 2026-09-07 wedge is now structurally impossible (a bounded, self-cleaning
+subscription registry reclaims the least-recently-active slot, and subscriptions
+cannot take more than half the connection budget), but
 the ORIGINAL accumulation was never explained, and killing the daemon destroyed
 the evidence. Request/reply clients close immediately, so the 64 were
 subscriptions; what is not known is whether they were live clients, peers whose
@@ -201,6 +202,34 @@ Worth knowing, because the fix bounds the symptom rather than the cause. The
 cheap next step is a connection census in `get_status` (count by kind, with
 ages), so the next occurrence identifies itself instead of needing `lsof` and a
 `sample`.
+
+### Daemon audit residuals (D1-D6, surveyed 2026-09-07)
+
+A post-fix read of the daemon against the four failure classes it had just been
+hardened against. Shipped: **D1** (a `write_all` inside the `rx.recv()` select
+arm made the evict / idle / read arms unreachable), **D2** (`Lagged(n)` silently
+dropped events; the client is now told and disconnected past a budget), **D3**
+(`evict.notify_one()` ran under the registry `MutexGuard`), and **D4** (only two
+of twelve client writes were bounded — now one `write_line` seam plus
+`tools/check_bounded_writes.py`).
+
+Still open:
+
+- **D5 — no connection census in `get_status`.** The next occurrence still needs
+  `lsof` and `sample` to identify itself. Same item as the OPEN section above;
+  count by kind, with ages.
+- **D6 — no client heartbeat in the protocol, and no self-watchdog.** launchd has
+  no watchdog (verified as an absence), so on macOS a wedge detector has to be
+  in-process and pinged from INSIDE the serving loop — a side-channel self-check
+  is exactly the differential observability Gray Failure names. Nothing currently
+  notices that the daemon has stopped serving.
+
+Two design findings from the same survey that are worth acting on and are not
+bugs: identity-keyed takeover should run BEFORE staleness eviction (MQTT 5.0
+reason 0x8E), since a client that crashed and reconnected must replace its OWN
+entry immediately; and conflation rather than a lossy ring is the method of
+record for status fan-out (a lagging subscriber wants the CURRENT truth, not a
+hole).
 
 ### OPEN — the browser e2e suite is LOAD-SENSITIVE, and it undermines the gate
 

@@ -32,6 +32,21 @@ shared memory. Read this on entry and **update it at the end of every round**
   activity), the AppleScript app-name crash + its repo-wide gate, and the
   empty-scope guard that unblocked `pre-push` for the first time in weeks.
 
+- **2026-09-07 (later) — The write deadline covered 2 of 12 writes.** A post-fix
+  audit of the daemon (D1-D6 in `docs/ROADMAP.md`) found D1-D3 already fixed in
+  the tree and **D4 live**: `WRITE_TIMEOUT` had been applied by hand to the two
+  `write_all` calls inside the subscriber `select!`, leaving the request/reply
+  path and the eviction notice unbounded. A request client that pipelines and
+  never reads pinned its connection permit forever — the deafness class again,
+  one client at a time. Every write now goes through a `write_line` seam;
+  `tools/check_bounded_writes.py` (in `.gatesrc` + CI) fails the build on any
+  `write_all` beside it. Proven red both ways. Full `cargo test --locked` green.
+
+  **Open threads:** D5 (connection census in `get_status`) and D6 (client
+  heartbeat + in-process self-watchdog) are unstarted — see the new "Daemon
+  audit residuals" section in `docs/ROADMAP.md`. The running daemon is still the
+  installed v0.31.0 and contains none of this; reinstall to pick it up.
+
 - **2026-09-07 — The daemon could go completely deaf; fixed at the design level.**
   A divoomd ran five days holding 64 connections and answering nobody. Every
   attempt to start a replacement said `/tmp/divoom.sock is in use by another
