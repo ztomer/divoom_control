@@ -93,6 +93,10 @@ impl Registry {
         let now = Instant::now();
         let mut st = self.state.lock().ok()?;
 
+        // Set when a victim is displaced, and notified AFTER the lock is
+        // released -- see the drop below.
+        let mut displaced: Option<Arc<Notify>> = None;
+
         if st.entries.len() >= self.capacity {
             // Least-recently-active occupant. `min_by_key` returns the FIRST
             // minimum, so equal timestamps break toward the oldest entry, which
@@ -108,9 +112,7 @@ impl Registry {
                 return None; // everyone here is demonstrably in use
             }
             st.entries.remove(idx);
-            // Wake the evicted task AFTER removing it, so the slot is already
-            // free and its own Lease drop is a no-op.
-            evict.notify_one();
+            displaced = Some(evict);
         }
 
         let id = st.next_id;
@@ -121,6 +123,25 @@ impl Registry {
             last_active: now,
             evict: evict.clone(),
         });
+
+        // COMPUTE THE VICTIM UNDER THE LOCK, DROP THE LOCK, THEN NOTIFY.
+        //
+        // Never signal, await, or run a caller's code while the registry mutex
+        // is held. Guava documents the hazard for cache removal listeners: they
+        // run synchronously by default, and their exceptions are "logged ... and
+        // swallowed" -- so a notification that blocks or fails takes the whole
+        // registry's latency with it, or leaks a slot silently. `notify_one` is
+        // cheap and non-blocking today, which is exactly why this was easy to
+        // get wrong; the rule is about what the next edit will put here.
+        //
+        // Ordering is still safe: the victim was removed from `entries` above,
+        // so the slot is already free and the evicted task's own `Lease` drop
+        // is a no-op (removal is by monotonic id, never by position).
+        drop(st);
+        if let Some(evict) = displaced {
+            evict.notify_one();
+        }
+
         Some(Lease {
             registry: self.clone(),
             id,

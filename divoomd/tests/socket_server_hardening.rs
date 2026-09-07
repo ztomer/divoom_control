@@ -354,3 +354,84 @@ async fn a_quiet_subscription_yields_its_slot_and_an_active_one_keeps_it() {
     }
     let _ = std::fs::remove_file(&path);
 }
+
+/// A subscriber that stops READING is disconnected, and cannot pin its slot.
+///
+/// This is the residual half of the 2026-09-07 wedge, found by a literature
+/// survey after the registry shipped. A non-reading peer is not idle (we have
+/// events for it) and has not closed (no EOF); its socket buffer absorbs writes
+/// until it fills, after which `write_all` blocks forever. Because the body of a
+/// chosen `select!` arm runs to completion, that stall makes the eviction arm,
+/// the idle deadline and the read arm all unreachable — so the subscriber holds
+/// its registry slot permanently and cannot be reclaimed.
+///
+/// The fix is a write deadline then disconnect, which is what NATS and Redis
+/// both do with a slow consumer. The test proves the SLOT comes back, which is
+/// the property that failed, not merely that the write returned.
+#[tokio::test]
+async fn a_subscriber_that_stops_reading_is_dropped_and_frees_its_slot() {
+    let path = temp_sock("noread");
+    let listener = UnixListener::bind(&path).unwrap();
+    let (tx, _rx) = broadcast::channel::<Value>(4);
+    let feed = tx.clone();
+    // Capacity 2 -> subscription budget 1, so the stalled subscriber holds the
+    // ONLY slot: if it is never reclaimed, nobody else can ever subscribe.
+    tokio::spawn(serve(
+        Arc::new(listener),
+        Arc::new(SilentSubStub { tx }),
+        2,
+        Duration::from_secs(120),
+    ));
+
+    let mut deaf = UnixStream::connect(&path).await.unwrap();
+    deaf.write_all(encode_message(&json!({ "command": "subscribe" })).as_slice())
+        .await
+        .unwrap();
+    // Read ONLY the initial status, then never again.
+    let mut buf = [0u8; 256];
+    let n = tokio::time::timeout(Duration::from_secs(2), deaf.read(&mut buf))
+        .await
+        .expect("initial status")
+        .unwrap();
+    assert!(n > 0);
+
+    // Push enough traffic to fill the socket buffer and stall the write.
+    tokio::spawn(async move {
+        let payload = "x".repeat(4096);
+        for i in 0..20_000 {
+            if feed
+                .send(json!({ "type": "tick", "i": i, "pad": payload }))
+                .is_err()
+            {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    });
+
+    // The slot must come back: a fresh client can subscribe. Under the old code
+    // the stalled task held it forever and this timed out.
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+    loop {
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "the stalled subscriber never released its slot"
+        );
+        let mut fresh = UnixStream::connect(&path).await.unwrap();
+        fresh
+            .write_all(encode_message(&json!({ "command": "subscribe" })).as_slice())
+            .await
+            .unwrap();
+        let n = match tokio::time::timeout(Duration::from_secs(2), fresh.read(&mut buf)).await {
+            Ok(Ok(n)) if n > 0 => n,
+            _ => continue,
+        };
+        let v: Value = serde_json::from_slice(&buf[..n]).unwrap();
+        if v["type"] == json!("status") {
+            break; // slot reclaimed, we are subscribed
+        }
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+    let _ = std::fs::remove_file(&path);
+    drop(deaf);
+}

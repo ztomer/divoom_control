@@ -65,6 +65,34 @@ pub fn subscription_budget(max_connections: usize) -> usize {
     (max_connections / 2).clamp(1, MAX_SUBSCRIPTIONS)
 }
 
+/// Give up on a write that a peer will not drain within this long, and close.
+///
+/// A subscriber whose client stops READING is the case nothing else catches. It
+/// is not idle (we have events for it), it has not closed (no EOF), and its
+/// socket buffer absorbs writes until it fills -- after which `write_all` blocks
+/// forever. That stall is not confined to the write: once the `rx.recv()` arm of
+/// the subscriber `select!` is chosen, its body runs to completion, so the
+/// eviction arm, the idle deadline and the read arm all become UNREACHABLE. The
+/// subscriber pins its registry slot permanently and cannot be reclaimed -- the
+/// same class of bug the registry was built to end, surviving inside the fix.
+///
+/// The method of record is a write deadline followed by disconnection, not an
+/// ever-growing buffer: NATS's server "gives up on that client and closes the
+/// whole connection"; Redis disconnects a pubsub client on
+/// `client-output-buffer-limit`. Reactive Streams states the invariant the other
+/// way round -- backpressure exists "to allow the queues which mediate between
+/// threads to be bounded".
+pub const WRITE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// How many dropped events a subscriber may accumulate before it is dropped.
+///
+/// `tokio::sync::broadcast` overwrites the oldest value and hands the receiver
+/// `Lagged(n)`; it deliberately does NOT disconnect, leaving the caller to
+/// decide. Ignoring it is the one policy the field does not have: a subscriber
+/// that cannot tell it has a hole in its state will act on stale truth. So we
+/// count, tell the client so it can resync, and disconnect past this budget.
+pub const LAG_BUDGET: u64 = 64;
+
 /// Drop a connection that sends nothing for this long (no newline-terminated
 /// request). Closes the "connect and hold the socket open silently" wedge where a
 /// dead client pins a permit + the device lock forever. Tunable via
@@ -193,6 +221,7 @@ where
                     // `idle_timeout` is dropped (releasing its permit), so a silent
                     // client can't pin a slot forever. Any delivered event resets it.
                     let mut deadline = tokio::time::Instant::now() + idle_timeout;
+                    let mut dropped: u64 = 0;
                     loop {
                         tokio::select! {
                             n = stream.read(&mut tmp) => {
@@ -211,10 +240,51 @@ where
                             msg = rx.recv() => {
                                 match msg {
                                     Ok(event) => {
-                                        stream.write_all(&encode_message(&event)).await?;
+                                        // Bounded: a peer that stops reading is
+                                        // disconnected, never allowed to stall
+                                        // this task (see WRITE_TIMEOUT).
+                                        match tokio::time::timeout(
+                                            WRITE_TIMEOUT,
+                                            stream.write_all(&encode_message(&event)),
+                                        )
+                                        .await
+                                        {
+                                            Ok(Ok(())) => {}
+                                            Ok(Err(e)) => return Err(e),
+                                            Err(_) => {
+                                                eprintln!(
+                                                    "divoomd: subscriber did not drain a write \
+                                                     within {}s; dropping it",
+                                                    WRITE_TIMEOUT.as_secs()
+                                                );
+                                                break;
+                                            }
+                                        }
                                         deadline = tokio::time::Instant::now() + idle_timeout;
                                     }
-                                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
+                                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                                        // Tell the client it has a GAP, so it can
+                                        // resync instead of trusting stale state,
+                                        // and drop it once it is hopeless.
+                                        dropped = dropped.saturating_add(n);
+                                        let gap = serde_json::json!({
+                                            "type": "lagged",
+                                            "dropped": n,
+                                            "dropped_total": dropped,
+                                        });
+                                        let _ = tokio::time::timeout(
+                                            WRITE_TIMEOUT,
+                                            stream.write_all(&encode_message(&gap)),
+                                        )
+                                        .await;
+                                        if dropped > LAG_BUDGET {
+                                            eprintln!(
+                                                "divoomd: subscriber lost {dropped} events \
+                                                 (budget {LAG_BUDGET}); dropping it"
+                                            );
+                                            break;
+                                        }
+                                    }
                                     Err(tokio::sync::broadcast::error::RecvError::Closed) => {
                                         break;
                                     }
