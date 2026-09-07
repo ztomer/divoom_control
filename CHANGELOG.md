@@ -4,9 +4,28 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
-## v0.32.0 — R74: a daemon that cannot be reached cannot be fixed (2026-09-07)
+## v0.33.0 — the residuals the last release's own fix left behind (2026-09-07)
 
-### Fixed — the daemon could go completely deaf, and blamed another program
+### Fixed — only two of twelve client writes were bounded
+
+- **The write deadline that ends a stalled subscriber had been applied by hand**
+  to the two `write_all` calls inside the subscriber `select!`, leaving ten
+  unbounded — the whole request/reply path, plus the eviction notice. A client
+  that pipelines requests and never reads the replies fills the socket buffer,
+  the reply write blocks forever, and the connection holds its permit for the
+  life of the process: the same total-deafness failure v0.32.0 was cut to fix,
+  reached one stuck client at a time.
+
+  The sharpest of the ten was the **eviction notice**, written to the one client
+  the daemon has already concluded is not draining its socket — inside the very
+  path that exists to reclaim a stalled client.
+
+  Every write now goes through one `write_line` seam that applies
+  `WRITE_TIMEOUT` and reports a timeout as `ErrorKind::TimedOut`, so the
+  subscriber loop can drop the peer while the request path propagates.
+  `tools/check_bounded_writes.py` fails the build on any `write_all` added
+  beside it: a test and a counter can only observe the paths that go THROUGH a
+  seam, which is exactly what a bypass does not.
 
 - **The no-BLE configuration was built and tested but never linted**, so it had
   21 clippy warnings while the default build sat at zero. Clippy reports only on
@@ -16,29 +35,35 @@ shipped milestone (per the project planning docs).
   `cargo clippy -p divoomd --no-default-features --all-targets -- -D warnings` is
   now a step in `.gatesrc` and CI, calibrated: an item reachable only from the
   BLE half fails it while the `--all-features` step stays green.
+
+### Added
+
 - **Unused dependencies are checked** (`cargo machete`, in `.gatesrc` and CI).
-  `[lints.cargo] unused_dependencies` reads like this gate and enforces nothing
+  `[lints.cargo] unused_dependencies` reads like that gate and enforces nothing
   on stable. `md-5` is recorded as a false positive with its reason: the package
-  is `md-5`, its lib is `md5`, and an ident scan cannot see the difference.
-- **The line-cap exemption now carries a stated waiver.** `docs/divoom_docs/` is
+  is `md-5`, its lib is `md5`, and an ident scan cannot tell the difference.
+- **The line-cap exemption carries a stated waiver.** `docs/divoom_docs/` is
   captured vendor API data, exempt from the 500-line cap and correctly carrying
   no ceiling; that is now `GOH_LINE_UNBOUNDED` with the reason rather than an
   unbounded exemption nothing checks.
 
-- **Only two of twelve client writes were bounded, and the eviction notice was
-  not one of them.** The write deadline that ends a stalled subscriber had been
-  applied by hand to the two `write_all` calls inside the subscriber `select!`,
-  leaving the whole request/reply path unbounded. A client that pipelines
-  requests and never reads the replies fills the socket buffer, the reply write
-  blocks forever, and the connection holds its permit for the life of the
-  process — the same total-deafness failure the connection budget exists to
-  prevent, reached one stuck client at a time. The sharpest of the ten was the
-  eviction notice: it is written to the one client we have already concluded is
-  not draining its socket, inside the very path that exists to reclaim a stalled
-  client. Every write now goes through one `write_line` seam that applies
-  `WRITE_TIMEOUT`, and `tools/check_bounded_writes.py` fails the build on any
-  `write_all` added beside it — a test and a counter can only observe the paths
-  that go THROUGH a seam, which is exactly what a bypass does not.
+### Tests
+
+- `a_request_client_that_stops_reading_frees_its_connection_slot` — the
+  request/reply sibling of the subscriber slow-consumer test. It asserts the
+  REFUSAL first (a newcomer gets `resource_exhausted` while the deaf client
+  holds the only permit), so a pass cannot mean the deaf client was simply never
+  admitted. Proven red: removing the deadline from the seam fails both
+  slow-consumer tests.
+
+### Known
+
+D5 (a connection census in `get_status`) and D6 (a client heartbeat and an
+in-process self-watchdog) from the same audit remain open; see `docs/ROADMAP.md`.
+
+## v0.32.0 — R74: a daemon that cannot be reached cannot be fixed (2026-09-07)
+
+### Fixed — the daemon could go completely deaf, and blamed another program
 
 - **A full connection cap took the whole daemon off the air.** `serve()` waited
   for a semaphore permit around `accept()`, so once all 64 slots were held the
@@ -112,14 +137,6 @@ shipped milestone (per the project planning docs).
   500-line cap); `socket_bind` re-exports it, so every path still resolves.
 
 ### Tests
-
-- `a_request_client_that_stops_reading_frees_its_connection_slot` — the
-  request/reply sibling of the subscriber slow-consumer test. It asserts the
-  REFUSAL first (a newcomer gets `resource_exhausted` while the deaf client
-  holds the only permit), so a pass cannot mean the deaf client was simply never
-  admitted. Proven red: removing the deadline from the seam fails both
-  slow-consumer tests with "never released its slot" / "never released its
-  connection slot".
 
 - `max_connections_backpressures_extra` asserted that the extra client gets NO
   reply within 300ms — it pinned the silence as the specification, which is why
