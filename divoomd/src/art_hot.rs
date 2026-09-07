@@ -332,6 +332,10 @@ async fn load_hot_files(
     Ok((arc, ok_dl, false))
 }
 
+#[expect(
+    clippy::significant_drop_tightening,
+    reason = "the guarded value is read by everything after this line; the explicit drops that could be added were placed where they helped and the borrow checker refused the rest"
+)]
 pub(crate) async fn run_hot_update(
     daemon: Arc<Daemon>,
     device_size: u32,

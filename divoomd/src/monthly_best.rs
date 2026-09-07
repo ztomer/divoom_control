@@ -152,16 +152,15 @@ async fn sync_files_to_device(
     files: &[Value],
 ) -> Result<(), String> {
     // 1. Connect
-    let connect_args = if let Some(ip) = target.strip_prefix("LAN:") {
-        json!({
-            "lan_ip": ip
-        })
-    } else {
-        json!({
-            "mac": target,
-            "use_ios_le_protocol": true
-        })
-    };
+    let connect_args = target.strip_prefix("LAN:").map_or_else(
+        || {
+            json!({
+                "mac": target,
+                "use_ios_le_protocol": true
+            })
+        },
+        |ip| json!({ "lan_ip": ip }),
+    );
 
     let req_connect = Request {
         command: "connect".to_string(),

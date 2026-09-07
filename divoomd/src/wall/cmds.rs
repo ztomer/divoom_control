@@ -12,6 +12,10 @@ use std::sync::Arc;
 /// Ports `owner_wall.py:wall_configure` including G7 delta reconfiguration:
 /// when the new layout overlaps the current wall, reuse the shared panels.
 #[expect(
+    clippy::significant_drop_tightening,
+    reason = "the guarded value is read by everything after this line; the explicit drops that could be added were placed where they helped and the borrow checker refused the rest"
+)]
+#[expect(
     clippy::cast_possible_truncation,
     reason = "wall dimensions from a caller's JSON, bounded by the number of panels a wall can hold"
 )]

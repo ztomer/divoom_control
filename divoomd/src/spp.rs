@@ -151,6 +151,10 @@ impl SppTransport {
     ///
     /// From the BLE stack below: the adapter is gone, the peripheral is not
     /// connected, or the write did not complete.
+    #[expect(
+        clippy::significant_drop_tightening,
+        reason = "the guard makes the write and the flush ATOMIC on the bridge's stdin. Releasing between them lets another command interleave halfway through a frame"
+    )]
     pub async fn disconnect(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let msg = json!({"command": "disconnect"});
         let mut stdin = self.child_stdin.lock().await;
@@ -170,6 +174,10 @@ impl SppTransport {
     ///
     /// If a mutex guarding the shared state is poisoned -- another thread
     /// panicked while holding it.
+    #[expect(
+        clippy::significant_drop_tightening,
+        reason = "the guard makes the write and the flush ATOMIC on the bridge's stdin. Releasing between them lets another command interleave halfway through a frame"
+    )]
     pub async fn send_command(
         &self,
         command_id: u8,

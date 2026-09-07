@@ -31,6 +31,10 @@ mod tests {
         d
     }
 
+    #[expect(
+        clippy::significant_drop_tightening,
+        reason = "a test that reads the recorded commands directly through the guard. Taking the lock once is what makes the assertions a single consistent observation, and a second `lock()` while this one is alive deadlocks the non-reentrant mutex"
+    )]
     async fn sent(method: &str, args: serde_json::Value) -> (u8, Vec<u8>) {
         let d = setup_mock_daemon().await;
         let res = d
@@ -137,6 +141,10 @@ mod switch_channel_tests {
     use crate::socket_server::Handler;
     use serde_json::json;
 
+    #[expect(
+        clippy::significant_drop_tightening,
+        reason = "a test that reads the recorded commands directly through the guard. Taking the lock once is what makes the assertions a single consistent observation, and a second `lock()` while this one is alive deadlocks the non-reentrant mutex"
+    )]
     async fn sent(channel: &str) -> (u8, Vec<u8>) {
         let d = Daemon::new();
         let conn = d

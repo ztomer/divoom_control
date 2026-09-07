@@ -148,6 +148,10 @@ impl Daemon {
     /// `device_call` routes a method string to a protocol op. A small set is ported
     /// first to prove op-level parity (the read-back + a write); unported methods
     /// return an honest error. The device mutex serializes device access.
+    #[expect(
+        clippy::significant_drop_tightening,
+        reason = "the guarded value is read by everything after this line; the explicit drops that could be added were placed where they helped and the borrow checker refused the rest"
+    )]
     pub(crate) async fn cmd_device_call(&self, req: &Request) -> Value {
         // The per-op token gates exclusive mode: if another session holds exclusive,
         // device_call is rejected immediately (Python parity: _cmd_queue.run(token)).

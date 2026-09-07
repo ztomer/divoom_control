@@ -66,6 +66,10 @@ fn state() -> Arc<Mutex<MonitorState>> {
 // ── public API ────────────────────────────────────────────────────────────
 
 /// Start the background notification monitor.
+#[expect(
+    clippy::significant_drop_tightening,
+    reason = "the guarded value is read by everything after this line; the explicit drops that could be added were placed where they helped and the borrow checker refused the rest"
+)]
 pub async fn start_monitor(daemon: Arc<Daemon>) {
     let st = state();
     let mut guard = st.lock().await;
@@ -186,6 +190,10 @@ pub async fn notification_status() -> Value {
     res
 }
 
+#[expect(
+    clippy::significant_drop_tightening,
+    reason = "the guarded value is read by everything after this line; the explicit drops that could be added were placed where they helped and the borrow checker refused the rest"
+)]
 pub async fn set_routing(args: &Value) -> Value {
     let Some(rules_val) = args.get("rules") else {
         return json!({"success": false, "error": "set_routing requires 'rules'"});
@@ -218,6 +226,10 @@ pub async fn set_routing(args: &Value) -> Value {
 
 const POLL_INTERVAL_MS: u64 = 1000;
 
+#[expect(
+    clippy::significant_drop_tightening,
+    reason = "the guarded value is read by everything after this line; the explicit drops that could be added were placed where they helped and the borrow checker refused the rest"
+)]
 async fn monitor_loop(
     daemon: Arc<Daemon>,
     st: Arc<Mutex<MonitorState>>,

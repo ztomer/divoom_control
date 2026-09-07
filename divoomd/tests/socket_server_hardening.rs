@@ -317,6 +317,10 @@ async fn a_quiet_subscription_yields_its_slot_and_an_active_one_keeps_it() {
         Duration::from_secs(120),
     ));
 
+    #[expect(
+        clippy::items_after_statements,
+        reason = "a helper defined beside the setup it belongs to, in a test that reads top to bottom"
+    )]
     async fn subscribe(path: &std::path::Path) -> UnixStream {
         let mut s = UnixStream::connect(path).await.unwrap();
         s.write_all(encode_message(&json!({ "command": "subscribe" })).as_slice())

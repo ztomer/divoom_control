@@ -162,6 +162,10 @@ impl LiveJobCoordinator {
         }
     }
 
+    #[expect(
+        clippy::significant_drop_tightening,
+        reason = "the guarded value is read by everything after this line; the explicit drops that could be added were placed where they helped and the borrow checker refused the rest"
+    )]
     pub async fn stop_all(&self, _daemon: &Daemon) {
         let mut tasks = self.tasks.lock().await;
         for (_, handle) in tasks.drain() {
@@ -187,6 +191,10 @@ impl LiveJobCoordinator {
         count
     }
 
+    #[expect(
+        clippy::significant_drop_tightening,
+        reason = "the guarded value is read by everything after this line; the explicit drops that could be added were placed where they helped and the borrow checker refused the rest"
+    )]
     pub async fn list(&self, mac: Option<&str>) -> Vec<Value> {
         let tasks = self.tasks.lock().await;
         let health = self.health.lock().await;
@@ -233,6 +241,10 @@ impl LiveJobCoordinator {
         })
     }
 
+    #[expect(
+        clippy::significant_drop_tightening,
+        reason = "the guarded value is read by everything after this line; the explicit drops that could be added were placed where they helped and the borrow checker refused the rest"
+    )]
     pub async fn set_device_activity(
         &self,
         mac: String,

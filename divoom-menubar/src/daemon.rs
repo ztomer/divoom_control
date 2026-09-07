@@ -304,6 +304,10 @@ mod tests {
         assert_eq!(connection_state(), None);
     }
 
+    #[expect(
+        clippy::significant_drop_tightening,
+        reason = "an RAII fixture, not a lock: dropping it early shuts the fake daemon down before the subscriber connects, which the ordering assertion below then fails on"
+    )]
     #[test]
     fn subscribe_delivers_every_broadcast_event_in_order() {
         let events = vec![

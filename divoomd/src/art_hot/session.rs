@@ -64,6 +64,10 @@ pub(super) async fn run_hot_session(
         let (cmd, payload) = if let Some(p) = pending_request.take() {
             (cmd_f7, p)
         } else {
+            #[expect(
+                clippy::single_match_else,
+                reason = "the None arm logs and BREAKS the transfer loop, which map_or_else cannot express: a closure cannot break its caller's loop"
+            )]
             match ble
                 .wait_for_any_response(&[cmd_f7, cmd_done], idle_to)
                 .await
