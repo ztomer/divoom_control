@@ -12,12 +12,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # Canonical house gates live in the public gates_of_heck repo.
+      # Canonical house gates live in the gates_of_heck repo, consumed via
+      # GOH_DIR. Never vendored here — a copy of a checker is a copy that rots
+      # (CLAUDE.md, standing rule).
+      #
+      # THE REPO IS PRIVATE, and that is why this job was red from 2026-09-04:
+      # `actions/checkout`'s default GITHUB_TOKEN is scoped to THIS repository
+      # only, so a second private repo comes back "Not Found — get-a-repository"
+      # rather than "access denied". The comment here used to say "public",
+      # which is precisely the kind of stale premise that sends the reader
+      # looking for a network fault instead of a permission.
+      #
+      # Either remedy makes this green, and both are the repo owner's call:
+      #   * add a PAT with `repo` scope as the GOH_TOKEN secret, or
+      #   * make ztomer/gates_of_heck public again.
+      # The fallback keeps the default behaviour when no secret is set.
       - name: Check out gates_of_heck
         uses: actions/checkout@v7
         with:
           repository: ztomer/gates_of_heck
           path: goh
+          token: ${{ secrets.GOH_TOKEN || github.token }}
       - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
