@@ -50,6 +50,10 @@ pub enum Reach {
 ///
 /// Split from the process handling so the wire format is testable without
 /// macOS, perl, or a running player.
+///
+/// # Errors
+///
+/// When the helper's output line is an error rather than a player list.
 pub fn parse_players(line: &str) -> Result<Vec<Player>, String> {
     let v: serde_json::Value =
         serde_json::from_str(line.trim()).map_err(|e| format!("helper emitted non-JSON: {e}"))?;

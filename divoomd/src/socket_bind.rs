@@ -126,6 +126,10 @@ impl Acquired {
     /// runtime wants. It happens INSIDE this call so the lock, the listener and
     /// the recorded identity are never three loose values a caller could drop,
     /// reorder or forget one of.
+    ///
+    /// # Errors
+    ///
+    /// From the bind itself; see [`acquire`] for the cases.
     pub fn into_held<L>(
         self,
         wrap: impl FnOnce(UnixListener) -> std::io::Result<L>,
@@ -292,6 +296,12 @@ fn ensure_parent(socket_path: &str) -> Result<(), BindFailure> {
 ///
 /// Everything after the lock is taken is serialized against other divoomd
 /// startups, so the inspect-then-bind sequence is atomic.
+///
+/// # Errors
+///
+/// When the socket path is too long for `sockaddr_un`, when another instance is
+/// mid-startup, and when the path is held by a live incumbent. The variants are
+/// distinct on purpose: a stale file is reclaimed, a live owner is not.
 pub fn acquire(socket_path: &str) -> Result<Acquired, BindFailure> {
     let len = socket_path.len();
     if len > MAX_SOCKET_PATH {

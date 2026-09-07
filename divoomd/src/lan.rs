@@ -81,6 +81,10 @@ impl LanTransport {
     }
 
     /// POST a JSON command to the device's local HTTP API.
+    /// # Errors
+    ///
+    /// `NetworkError` when the device cannot be reached or the body cannot be read,
+    /// and whatever [`validate_response`] returns for an answer that arrived.
     pub async fn post(&self, command: &str, extra: Option<Value>) -> Result<Value, LanError> {
         let body = self.build_body(command, extra);
         let client = reqwest::Client::new();
@@ -131,6 +135,13 @@ impl LanTransport {
 /// Python's ordering), then reject a non-200 status, then reject a present,
 /// non-null, non-zero `error_code`. A missing/null/zero `error_code` (or a
 /// non-object body) is tolerated as success.
+///
+/// # Errors
+///
+/// `BadStatus` for a non-2xx answer and `Rejected` when the device answers 200
+/// with a non-zero error code in the body. They are separate variants because
+/// they call for different responses: one is a transport problem, the other is
+/// the device refusing the command.
 pub fn validate_response(status: u16, text: &str, command: &str) -> Result<Value, LanError> {
     let result: Value = serde_json::from_str(text).map_err(|_| LanError::NonJson {
         command: command.to_string(),

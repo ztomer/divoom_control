@@ -116,6 +116,11 @@ impl CommandQueue {
 
     /// Submit a device op. Returns a receiver for its result; a dropped/rejected
     /// item resolves the receiver to `Err(RecvError)`.
+    ///
+    /// # Panics
+    ///
+    /// If the mutex guarding this value is poisoned -- another thread panicked
+    /// while holding it, so the value cannot be trusted.
     pub fn submit<F, T>(&self, token: Option<String>, fut: F) -> oneshot::Receiver<T>
     where
         F: Future<Output = T> + Send + 'static,
@@ -157,6 +162,13 @@ impl CommandQueue {
     /// the idle deadline). This is the steal-reject fix: routing acquire through the
     /// gated queue would block a competing session for the whole idle window and
     /// then let it silently steal.
+    ///
+    /// # Errors
+    ///
+    /// `AcquireError::Stopped` once the queue is shutting down, and
+    /// `HeldByAnother` when a different token owns the exclusive slot. Neither
+    /// is a failure of this call -- they are the two states a caller has to
+    /// handle.
     pub fn acquire_now(&self, token: &str) -> Result<(), AcquireError> {
         let mut g = self.inner.lock().unwrap();
         if g.stopped {
@@ -175,6 +187,11 @@ impl CommandQueue {
     }
 
     /// Release the exclusive slot if `token` owns it.
+    ///
+    /// # Panics
+    ///
+    /// If the mutex guarding this value is poisoned -- another thread panicked
+    /// while holding it, so the value cannot be trusted.
     pub fn release(&self, token: &str) {
         let mut g = self.inner.lock().unwrap();
         if g.owner.as_deref() == Some(token) {
@@ -187,6 +204,10 @@ impl CommandQueue {
 
     /// Current exclusive owner (test/observability helper).
     #[must_use]
+    /// # Panics
+    ///
+    /// If the mutex guarding this value is poisoned -- another thread panicked
+    /// while holding it, so the value cannot be trusted.
     pub fn owner(&self) -> Option<String> {
         self.inner.lock().unwrap().owner.clone()
     }
@@ -198,6 +219,11 @@ impl CommandQueue {
     ///
     /// Called by `device_call` dispatch BEFORE acquiring the device transport lock,
     /// mirroring Python's `_cmd_queue.run(token, ...)` gate.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::acquire_now`]: the queue is stopped, or the slot is held by a
+    /// different token.
     pub fn check_allowed(&self, token: Option<&str>) -> Result<(), AcquireError> {
         let g = self.inner.lock().unwrap();
         if g.stopped {
@@ -211,6 +237,11 @@ impl CommandQueue {
     }
 
     /// Stop the worker; pending items are dropped (their receivers error).
+    ///
+    /// # Panics
+    ///
+    /// If the mutex guarding this value is poisoned -- another thread panicked
+    /// while holding it, so the value cannot be trusted.
     pub fn stop(&self) {
         {
             let mut g = self.inner.lock().unwrap();

@@ -159,6 +159,11 @@ fn constant_time_eq(a: &str, b: &str) -> bool {
 /// Returns when the peer closes (EOF) or on an I/O error. A peer that never
 /// sends a newline can't grow the buffer past `MAX_REPLY_BYTES` (the connection
 /// is dropped instead).
+///
+/// # Errors
+///
+/// When the connection cannot be read from or written to. A peer that simply
+/// closes is `Ok(())`, not an error -- EOF is how a client says it is done.
 pub async fn serve_connection<S, H>(
     mut stream: S,
     handler: Arc<H>,

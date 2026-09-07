@@ -55,6 +55,11 @@ pub fn initial_max_delivered_date(db_path: &std::path::Path) -> f64 {
     res.unwrap_or(0.0)
 }
 
+/// # Errors
+///
+/// When the notification database cannot be opened or queried. On macOS that
+/// most often means Full Disk Access has not been granted, which is a state the
+/// caller reports rather than retries.
 pub fn fetch_new_records(
     db_path: &std::path::Path,
     last_seen: f64,

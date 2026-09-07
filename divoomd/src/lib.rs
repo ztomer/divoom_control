@@ -23,6 +23,7 @@ pub mod cli_args;
 pub mod cloud;
 mod cloud_category;
 pub mod cloud_cmds;
+mod cloud_dials;
 mod cloud_photo;
 mod cloud_playlist;
 pub mod cloud_store;

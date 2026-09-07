@@ -7,6 +7,14 @@
 //! auth-retry pattern as `Playlist/GetMyList`. Applying a selected album
 //! (`Photo/PlayAlbum`) is a separate, LAN-only device call — see
 //! `device_call::mod::handle_lan_call`'s `lan.play_album`.
+//!
+//! # Cloud errors
+//!
+//! Every call here fails the same two ways, and the `# Errors` sections point
+//! at this rather than repeating it: the HTTP request cannot be sent or its
+//! body is not the JSON shape expected, or the API answers a non-zero return
+//! code. The message carries the RC and the server's own text -- these are
+//! Divoom's codes, and quoting them beats paraphrasing.
 
 use serde_json::{json, Value};
 use std::time::Duration;
@@ -16,6 +24,10 @@ use crate::cloud::{
 };
 
 /// List the photo albums ("clocks") configured for the active device.
+///
+/// # Errors
+///
+/// See the module note on cloud errors.
 pub async fn get_photo_albums() -> Result<Value, String> {
     let mut creds = get_credentials(false).await?;
     let (device_id, device_pw, _, _) = load_virtual_device();

@@ -9,6 +9,10 @@ use serde_json::{json, Value};
     clippy::cast_sign_loss,
     reason = "a device command dispatcher: every value here comes from a caller's JSON and is written into a protocol field of fixed width. The ones that could be out of range go through `wire::WireNarrow`; these are indices, enum discriminants and already-bounded counts"
 )]
+/// # Panics
+///
+/// If the mutex guarding this value is poisoned -- another thread panicked
+/// while holding it, so the value cannot be trusted.
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let args = ctx.args;

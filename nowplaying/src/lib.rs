@@ -68,6 +68,11 @@ pub use track::Track;
 /// showing what is cued up beats showing nothing — but it never wins over live
 /// playback elsewhere.
 #[cfg(target_os = "macos")]
+/// # Errors
+///
+/// When the media helper cannot be located or run, and when it reports a reason
+/// of its own -- which includes the platform refusing access. `Ok(None)` means
+/// nothing is playing, which is not an error.
 pub fn current_track() -> Result<Option<Track>, String> {
     let from_media_remote = media_remote::current_track();
 

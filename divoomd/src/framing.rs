@@ -59,6 +59,9 @@ pub fn encode_basic_payload(payload: &[u8], escape: bool) -> Vec<u8> {
     clippy::cast_possible_truncation,
     reason = "a frame length minus its header, written as the four-byte length field. A BLE frame is bounded by the MTU-chunked transfer above"
 )]
+/// # Errors
+///
+/// When the payload is empty -- every frame must carry at least a command id.
 pub fn encode_ios_le_payload(payload: &[u8], packet_number: u32) -> Result<Vec<u8>, &'static str> {
     if payload.is_empty() {
         return Err("payload must contain at least the command id");
@@ -99,6 +102,10 @@ pub struct IosLeNotification {
 /// (The checksum is reported, not enforced — matching the Python reference,
 /// which leaves RX checksum verification to a higher layer.)
 #[must_use]
+/// # Panics
+///
+/// If the mutex guarding this value is poisoned -- another thread panicked
+/// while holding it, so the value cannot be trusted.
 pub fn parse_ios_le_notification(data: &[u8]) -> Option<IosLeNotification> {
     if data.len() < models::IOS_LE_MIN_DATA_LENGTH {
         return None;
@@ -136,6 +143,11 @@ pub struct BasicMessage {
 /// incomplete trailing frame, or empty). Mirrors `parse_basic_protocol_frames`:
 /// resync on the start byte, drop frames with a corrupt over-long length, and
 /// discard frames whose end byte or checksum don't validate.
+///
+/// # Panics
+///
+/// Never: the `last()` is reached only inside a branch that has already
+/// established the frame is non-empty.
 pub fn parse_basic_protocol_frames(buf: &mut Vec<u8>) -> Vec<BasicMessage> {
     let mut messages = Vec::new();
 

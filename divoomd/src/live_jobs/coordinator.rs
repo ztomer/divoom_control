@@ -78,6 +78,11 @@ impl LiveJobCoordinator {
             .as_secs()
     }
 
+    /// # Errors
+    ///
+    /// When the live-job kind is unknown, and when a job needs a platform
+    /// facility that is absent -- the music job needs macOS MediaRemote and
+    /// says so rather than starting and rendering nothing.
     pub async fn start(
         &self,
         daemon: Arc<Daemon>,

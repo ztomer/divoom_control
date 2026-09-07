@@ -20,6 +20,11 @@ pub enum BleCentral {
 impl BleCentral {
     /// Begin a scan. On `Faulty` this never resolves (a wedged `CoreBluetooth`
     /// session) so callers MUST wrap it in `tokio::time::timeout`.
+    ///
+    /// # Errors
+    ///
+    /// From the BLE stack below: the adapter is gone, the peripheral is not
+    /// connected, or the write did not complete.
     pub async fn start_scan(&self, filter: btleplug::api::ScanFilter) -> BleResult<()> {
         match self {
             Self::Real(a) => a.start_scan(filter).await.map_err(std::convert::Into::into),
@@ -29,6 +34,11 @@ impl BleCentral {
     }
 
     /// Enumerate discovered peripherals. Same wedge contract as `start_scan`.
+    ///
+    /// # Errors
+    ///
+    /// From the BLE stack below: the adapter is gone, the peripheral is not
+    /// connected, or the write did not complete.
     pub async fn peripherals(&self) -> BleResult<Vec<Peripheral>> {
         match self {
             Self::Real(a) => a.peripherals().await.map_err(std::convert::Into::into),
@@ -38,6 +48,11 @@ impl BleCentral {
     }
 
     /// Stop a scan (best-effort; the caller ignores a wedged stop).
+    ///
+    /// # Errors
+    ///
+    /// From the BLE stack below: the adapter is gone, the peripheral is not
+    /// connected, or the write did not complete.
     pub async fn stop_scan(&self) -> BleResult<()> {
         match self {
             Self::Real(a) => a.stop_scan().await.map_err(std::convert::Into::into),

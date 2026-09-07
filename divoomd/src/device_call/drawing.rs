@@ -43,6 +43,10 @@ async fn send(dev: &DeviceTransport, cmd: u8, p: &[u8], label: &str) -> Value {
     }
 }
 
+/// # Panics
+///
+/// If the mutex guarding this value is poisoned -- another thread panicked
+/// while holding it, so the value cannot be trusted.
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let kw = ctx.kwargs;

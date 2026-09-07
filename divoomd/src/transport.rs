@@ -35,6 +35,12 @@ impl DeviceTransport {
         }
     }
 
+    /// # Errors
+    ///
+    /// When the write cannot be completed: the peripheral is gone, the
+    /// characteristic is missing, or the write times out. A timeout is reported
+    /// as unreachable rather than as a protocol error, because that is what it
+    /// means here.
     pub async fn send_command(
         &self,
         command_id: u8,
@@ -82,6 +88,10 @@ impl DeviceTransport {
         }
     }
 
+    /// # Errors
+    ///
+    /// When any chunk of the transfer fails to write, or the device stops
+    /// acknowledging mid-stream.
     pub async fn stream_animation_8b(&self, blob: &[u8]) -> BleResult<bool> {
         match self {
             #[cfg(feature = "ble")]

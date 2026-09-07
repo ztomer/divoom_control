@@ -81,6 +81,9 @@ pub fn load_routing_rules() -> Vec<(String, u8)> {
     }
 }
 
+/// # Errors
+///
+/// When the rules file cannot be written.
 pub fn save_routing_rules(rules: &[(String, u8)]) -> Result<(), String> {
     let p = get_routing_path();
     if let Some(parent) = p.parent() {

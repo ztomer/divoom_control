@@ -125,6 +125,11 @@ pub fn parse_wttr(body: &serde_json::Value) -> Option<WeatherInfo> {
 }
 
 /// Fetch the current weather. Empty `location` lets wttr.in geolocate by IP.
+///
+/// # Errors
+///
+/// When the weather service cannot be reached, returns a non-2xx status, or
+/// answers a body with no current condition in it.
 pub async fn fetch(client: &reqwest::Client, location: &str) -> Result<WeatherInfo, String> {
     let mut url = "https://wttr.in/".to_string();
     url.push_str(location);

@@ -1,6 +1,14 @@
 //! Divoom cloud playlist endpoints.
 //! Split out of `cloud_category.rs` to keep files under the 500-line house
 //! limit. Ported from `divoom_lib/cloud.py`.
+//!
+//! # Cloud errors
+//!
+//! Every call here fails the same two ways, and the `# Errors` sections point
+//! at this rather than repeating it: the HTTP request cannot be sent or its
+//! body is not the JSON shape expected, or the API answers a non-zero return
+//! code. The message carries the RC and the server's own text -- these are
+//! Divoom's codes, and quoting them beats paraphrasing.
 
 use serde_json::{json, Value};
 use std::time::Duration;
@@ -17,6 +25,10 @@ use crate::cloud::{
 // directly to the device's own LAN IP, same mechanism as `lan.set_clock`).
 
 /// List the current user's cloud-hosted playlists (`PlayId`/`Name`/`Count`/…).
+///
+/// # Errors
+///
+/// See the module note on cloud errors.
 pub async fn get_my_playlists(limit: i64, page: i64) -> Result<Value, String> {
     let mut creds = get_credentials(false).await?;
     let (device_id, device_pw, _, _) = load_virtual_device();
@@ -90,6 +102,10 @@ pub async fn get_my_playlists(limit: i64, page: i64) -> Result<Value, String> {
 }
 
 /// List the images/animations inside one of the user's own playlists.
+///
+/// # Errors
+///
+/// See the module note on cloud errors.
 pub async fn get_playlist_images(play_id: i64, limit: i64, page: i64) -> Result<Value, String> {
     let mut creds = get_credentials(false).await?;
     let (device_id, device_pw, _, _) = load_virtual_device();

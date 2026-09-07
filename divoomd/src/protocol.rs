@@ -21,6 +21,10 @@ pub const MAX_REPLY_BYTES: usize = 16 * 1024 * 1024;
 /// One NDJSON line: compact JSON + `\n`. (`serde_json` is compact by default,
 /// matching Python's `json.dumps(separators=(",", ":"))`.)
 #[must_use]
+/// # Panics
+///
+/// Never in practice: the argument is already a `serde_json::Value`, and
+/// serialising one cannot fail. The `expect` says so rather than swallowing it.
 pub fn encode_message(obj: &Value) -> Vec<u8> {
     let mut v = serde_json::to_vec(obj).expect("a serde_json::Value always serializes");
     v.push(b'\n');

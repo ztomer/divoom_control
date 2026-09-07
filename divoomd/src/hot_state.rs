@@ -41,6 +41,11 @@ fn load_map(path: &Path) -> serde_json::Map<String, Value> {
 ///
 /// `summary` is `run_hot_update`'s result dict. No-op on a blank address; never
 /// panics.
+///
+/// # Errors
+///
+/// When no config directory can be located, or the state file cannot be
+/// written.
 pub fn record_check(address: &str, summary: &Value) -> Result<(), String> {
     match state_path() {
         Some(path) => record_check_at(&path, address, summary),

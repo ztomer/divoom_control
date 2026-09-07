@@ -19,6 +19,10 @@ pub struct SppTransport {
 }
 
 impl SppTransport {
+    /// # Errors
+    ///
+    /// From the BLE stack below: the adapter is gone, the peripheral is not
+    /// connected, or the write did not complete.
     pub async fn connect(
         mac: &str,
         device_name: Option<&str>,
@@ -122,14 +126,26 @@ impl SppTransport {
         Ok(transport)
     }
 
+    /// # Panics
+    ///
+    /// If the mutex guarding this value is poisoned -- another thread panicked
+    /// while holding it, so the value cannot be trusted.
     pub fn device_name(&self) -> Option<String> {
         self.device_name.lock().unwrap().clone()
     }
 
+    /// # Panics
+    ///
+    /// If the mutex guarding this value is poisoned -- another thread panicked
+    /// while holding it, so the value cannot be trusted.
     pub fn set_cached_device_name(&self, name: String) {
         *self.device_name.lock().unwrap() = Some(name);
     }
 
+    /// # Errors
+    ///
+    /// From the BLE stack below: the adapter is gone, the peripheral is not
+    /// connected, or the write did not complete.
     pub async fn disconnect(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let msg = json!({"command": "disconnect"});
         let mut stdin = self.child_stdin.lock().await;
@@ -138,6 +154,12 @@ impl SppTransport {
         Ok(())
     }
 
+    /// # Errors
+    ///
+    /// When the write cannot be completed: the peripheral is gone, the
+    /// characteristic is missing, or the write times out. A timeout is reported
+    /// as unreachable rather than as a protocol error, because that is what it
+    /// means here.
     pub async fn send_command(
         &self,
         command_id: u8,
@@ -215,6 +237,10 @@ impl SppTransport {
         clippy::cast_sign_loss,
         reason = "a chunk index written as the two-byte packet index. The transfer is chunked by MTU and a frame has thousands of chunks at most"
     )]
+    /// # Errors
+    ///
+    /// When any chunk of the transfer fails to write, or the device stops
+    /// acknowledging mid-stream.
     pub async fn stream_animation_8b(
         &self,
         blob: &[u8],

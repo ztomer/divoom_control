@@ -14,6 +14,10 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 const PROTOCOL_VERSION: &str = "2024-11-05";
 
+/// # Errors
+///
+/// From the transport it serves on: stdin closed, or a reply could not be
+/// written.
 pub async fn run() -> std::io::Result<()> {
     let sock = std::env::var("DIVOOM_SOCKET").unwrap_or_else(|_| "/tmp/divoom.sock".to_string());
     let mut reader = BufReader::new(tokio::io::stdin());

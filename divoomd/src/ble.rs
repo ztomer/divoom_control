@@ -63,6 +63,11 @@ pub struct Discovered {
 }
 
 /// Create the platform adapter. The caller must keep it alive (see [`Adapter`]).
+///
+/// # Errors
+///
+/// When no Bluetooth adapter is present, or the platform's BLE manager cannot
+/// be created. A machine with Bluetooth turned off reaches this.
 pub async fn make_central() -> BleResult<BleCentral> {
     let manager = Manager::new().await?;
     let adapter =
@@ -85,6 +90,12 @@ const SCAN_TIMEOUT_CAP: Duration = Duration::from_secs(90);
 /// only once the scan has stopped. A long user-configured timeout is capped at
 /// `SCAN_TIMEOUT_CAP` (mirrors the Python daemon's `_SCAN_RESULT_TIMEOUT`) so a
 /// stray large value can't run the adapter for minutes.
+///
+/// # Errors
+///
+/// When the scan cannot be started, and when it times out -- which usually
+/// means the central is stale rather than that nothing is nearby, and the
+/// message says so.
 pub async fn scan(central: &BleCentral, timeout: Duration) -> BleResult<Vec<Discovered>> {
     let dur = timeout.min(SCAN_TIMEOUT_CAP);
     // Guard the whole scan in a timeout. A dead CoreBluetooth session (after a
@@ -134,14 +145,27 @@ impl BleTransport {
     /// Connect to the device whose `id` matches a prior `scan()` result. Discovers
     /// services, subscribes to notifications, spawns the frame-parsing task, and
     /// runs the autoprobe to pick the framing.
+    ///
+    /// # Errors
+    ///
+    /// From the BLE stack below: the adapter is gone, the peripheral is not
+    /// connected, or the write did not complete.
     pub async fn connect(central: &BleCentral, id: &str) -> BleResult<Self> {
         connect::connect(central, id).await
     }
 
+    /// # Panics
+    ///
+    /// If the mutex guarding this value is poisoned -- another thread panicked
+    /// while holding it, so the value cannot be trusted.
     pub fn device_name(&self) -> Option<String> {
         self.device_name.lock().unwrap().clone()
     }
 
+    /// # Panics
+    ///
+    /// If the mutex guarding this value is poisoned -- another thread panicked
+    /// while holding it, so the value cannot be trusted.
     pub fn set_cached_device_name(&self, name: String) {
         *self.device_name.lock().unwrap() = Some(name);
     }
@@ -168,6 +192,13 @@ impl BleTransport {
     }
 
     /// Encode `[command_id, args...]` in the active framing and write it.
+    ///
+    /// # Errors
+    ///
+    /// When the write cannot be completed: the peripheral is gone, the
+    /// characteristic is missing, or the write times out. A timeout is reported
+    /// as unreachable rather than as a protocol error, because that is what it
+    /// means here.
     pub async fn send_command(
         &self,
         command_id: u8,
@@ -256,6 +287,11 @@ impl BleTransport {
     ///             Stop when device is quiet for 1 s (normal end state).
     ///
     /// No TERMINATE (CW=2) packet — verified correct on 4 hardware devices.
+    ///
+    /// # Errors
+    ///
+    /// When any chunk of the transfer fails to write, or the device stops
+    /// acknowledging mid-stream.
     pub async fn stream_animation_8b(&self, blob: &[u8]) -> BleResult<bool> {
         const CMD: u8 = 0x8B;
         const CHUNK_SIZE: usize = 256;
@@ -375,6 +411,10 @@ impl BleTransport {
         }
     }
 
+    /// # Errors
+    ///
+    /// From the BLE stack below: the adapter is gone, the peripheral is not
+    /// connected, or the write did not complete.
     pub async fn disconnect(&self) -> BleResult<()> {
         self.peripheral.disconnect().await?;
         Ok(())

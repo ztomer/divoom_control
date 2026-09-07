@@ -19,6 +19,12 @@ pub type Frame = (Vec<u8>, i32, i32, u16);
 /// `default_time_ms` is used for static images and GIF frames with no delay.
 ///
 /// CPU-bound — callers should invoke via `tokio::task::spawn_blocking`.
+///
+/// # Errors
+///
+/// When the bytes are not an image this decoder recognises, or a GIF frame
+/// cannot be read. A file that decodes but is the wrong size is resized rather
+/// than refused.
 pub fn process_image_bytes(
     data: Vec<u8>,
     size: u32,

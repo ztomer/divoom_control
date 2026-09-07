@@ -71,6 +71,15 @@ fn tool(name: &str, desc: &str, schema: Value) -> Value {
 
 /// Dispatch a tools/call. Returns the tool's result dict, or Err(message) for a
 /// validation / device error (the caller marks it isError).
+///
+/// # Errors
+///
+/// When a required argument is missing or has the wrong type -- each message
+/// names the argument -- and from the daemon call the tool delegates to.
+///
+/// # Panics
+///
+/// If a mutex guarding shared tool state is poisoned.
 pub async fn call_tool(name: &str, a: &Value, sock: &str) -> Result<Value, String> {
     match name {
         "set_volume" => {

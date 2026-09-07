@@ -41,6 +41,10 @@ pub struct DivoomWall {
 }
 
 impl DivoomWall {
+    /// # Errors
+    ///
+    /// From the BLE stack below: the adapter is gone, the peripheral is not
+    /// connected, or the write did not complete.
     pub async fn connect(
         daemon: &Daemon,
         configs: &[WallConfig],

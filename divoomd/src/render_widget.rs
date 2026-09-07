@@ -65,6 +65,12 @@ impl Quote {
 /// one-shot preview cannot fetch differently. Two callers of one fact is
 /// exactly the shape this whole workstream is removing; leaving the job's copy
 /// in place while adding a second here would have re-created it in Rust.
+///
+/// # Errors
+///
+/// When the symbol is empty, when the quote service cannot be reached, and when
+/// it returns no quote for that symbol -- an unknown ticker is an error rather
+/// than an empty result, because the caller is about to render it.
 pub async fn fetch_quote(client: &reqwest::Client, symbol: &str) -> Result<Quote, String> {
     if symbol.trim().is_empty() {
         return Err("stocks: empty symbol".to_string());

@@ -24,15 +24,29 @@ impl MockTransport {
     }
 
     #[must_use]
+    /// # Panics
+    ///
+    /// If the mutex guarding this value is poisoned -- another thread panicked
+    /// while holding it, so the value cannot be trusted.
     pub fn device_name(&self) -> Option<String> {
         self.device_name.lock().unwrap().clone()
     }
 
+    /// # Panics
+    ///
+    /// If the mutex guarding this value is poisoned -- another thread panicked
+    /// while holding it, so the value cannot be trusted.
     pub fn set_cached_device_name(&self, name: String) {
         let mut n = self.device_name.lock().unwrap();
         *n = Some(name);
     }
 
+    /// # Errors
+    ///
+    /// When the write cannot be completed: the peripheral is gone, the
+    /// characteristic is missing, or the write times out. A timeout is reported
+    /// as unreachable rather than as a protocol error, because that is what it
+    /// means here.
     pub async fn send_command(
         &self,
         command_id: u8,
@@ -44,6 +58,10 @@ impl MockTransport {
         Ok(())
     }
 
+    /// # Panics
+    ///
+    /// If the mutex guarding this value is poisoned -- another thread panicked
+    /// while holding it, so the value cannot be trusted.
     pub async fn wait_for_response(&self, command_id: u8, _timeout: Duration) -> Option<Vec<u8>> {
         let resp = self.simulated_responses.lock().unwrap();
         resp.get(&command_id).cloned()
@@ -59,6 +77,10 @@ impl MockTransport {
         self.wait_for_response(command_id, timeout).await
     }
 
+    /// # Errors
+    ///
+    /// When any chunk of the transfer fails to write, or the device stops
+    /// acknowledging mid-stream.
     pub async fn stream_animation_8b(&self, blob: &[u8]) -> BleResult<bool> {
         let mut cmd = self.sent_commands.lock().unwrap();
         cmd.push((0x8bu8, blob.to_vec()));

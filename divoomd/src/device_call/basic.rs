@@ -5,6 +5,10 @@ use serde_json::{json, Value};
 
 mod display;
 
+/// # Panics
+///
+/// If the mutex guarding this value is poisoned -- another thread panicked
+/// while holding it, so the value cannot be trusted.
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     // The `display.*`/`show_*` (0x45 channel payloads + image streaming) family
     // lives in `display.rs`; keep this dispatcher for the rest.

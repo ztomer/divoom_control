@@ -151,6 +151,10 @@ fn merge_divoom_section(existing: &str, email: &str, password: &str) -> String {
 /// that erased the credential and the next token expiry silently degraded the
 /// account to a guest login -- described in `presets_manager.py` as
 /// "credentials get erased from time to time". Not reintroduced here.
+///
+/// # Errors
+///
+/// When no config directory can be located, or the file cannot be written.
 pub fn save_config(email: &str, password: &str) -> Result<(), String> {
     let path = config_file_path().ok_or("cannot find config directory")?;
     save_config_at(&path, email, password)

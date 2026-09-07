@@ -46,6 +46,11 @@ pub struct NativeEncoder {
 impl NativeEncoder {
     /// Load the dylib by path. Returns an error if it can't be opened (the caller
     /// then uses the pure-Rust / Python-parity path instead).
+    ///
+    /// # Errors
+    ///
+    /// When the shared library cannot be opened, or does not export the symbols
+    /// this wrapper needs.
     pub fn load<P: AsRef<std::path::Path>>(path: P) -> Result<Self, libloading::Error> {
         // SAFETY: loading a trusted, in-repo dylib we built; no init side effects.
         let lib = unsafe { Library::new(path.as_ref())? };

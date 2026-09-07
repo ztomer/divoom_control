@@ -23,6 +23,12 @@ use crate::protocol::{err_reply, Request};
 
 /// Download a cloud artwork by `file_id` from the Divoom CDN (okhttp UA, 15s
 /// timeout). Shared by `sync_artwork` (push) and `get_animated_preview` (display).
+///
+/// # Errors
+///
+/// When the download returns a non-2xx status, or the body is too small to be a
+/// real file -- a truncated download that still parsed would be written to the
+/// device as artwork.
 pub async fn download_cloud_file(file_id: &str) -> Result<Vec<u8>, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(15))

@@ -49,7 +49,6 @@ use crate::cloud_store::{load_cache, load_config, save_cache};
 // keep this file under the 500-line house limit.
 pub use crate::cloud_category::{
     fetch_aid_sleep_list, fetch_gallery, fetch_my_aid_sleep_list, get_category_file_list,
-    get_dial_list, get_dial_types, get_my_playlists, get_playlist_images, list_clock_faces,
     search_weather_city, DEFAULT_GALLERY_CLASSIFY,
 };
 pub use crate::cloud_photo::get_photo_albums;
@@ -72,7 +71,10 @@ fn hmac_md5_hex(message: &str) -> String {
         .collect()
 }
 
-async fn post_cloud(path: &str, body: &Value) -> Result<Value, String> {
+pub(crate) use crate::cloud_dials::{get_dial_list, get_dial_types, list_clock_faces};
+pub(crate) use crate::cloud_playlist::{get_my_playlists, get_playlist_images};
+
+pub(crate) async fn post_cloud(path: &str, body: &Value) -> Result<Value, String> {
     let client = reqwest::Client::new();
     let url = format!("{BASE_URL}/{path}");
     let res = client
@@ -204,6 +206,12 @@ pub fn get_cached_credentials() -> Option<DivoomCredentials> {
     load_cache()
 }
 
+/// # Errors
+///
+/// When the stored credentials are missing or rejected, and when a recent
+/// authentication failure is still inside its back-off window -- the message
+/// names the remaining wait, because retrying sooner just burns another
+/// rejection.
 pub async fn get_credentials(force_refresh: bool) -> Result<DivoomCredentials, String> {
     if !force_refresh {
         if let Some(cached) = load_cache() {
