@@ -4,6 +4,68 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## Unreleased
+
+### Fixed — the GUI's "focus the existing window" path crashed a stranger's Python
+
+- **`gui_main.main()` addressed an application by LaunchServices NAME.** On
+  finding another Control Center already running it ran
+  `osascript -e 'tell application "Python" to activate'`. AppleScript resolves
+  that name through LaunchServices and LAUNCHES whichever registered bundle
+  answers to it — nothing about the running GUI was ever consulted. On a machine
+  with TeX Live Utility installed the winner is its embedded
+  `Python.framework/Versions/3.9/Resources/Python.app` (`org.python.python`
+  3.9.10, arm64 UUID `2F680C80-9E16-3EBC-AC16-ECDFA43B8835`, matched against the
+  user's crash report). Gatekeeper app-translocates that nested bundle into
+  `$TMPDIR`, which breaks its `@rpath/Versions/3.9/Python`, so it SIGABRTs in
+  dyld before `main`.
+
+  Confirmed in the unified log rather than inferred: `osascript` asks CSUI to
+  launch, `lsd` translocates `Python.app` 96ms later, `launchd` reports
+  `OS_REASON_DYLD`. Four crash reports on 2026-09-07 (01:05:11, 01:05:19,
+  01:07:11, 01:07:19) — the shape of a user clicking the menu bar's "Launch
+  Dashboard" twice, twice — and the window it meant to focus never moved.
+
+  Focus is now `tell application "System Events"` with
+  `every process whose unix id is <pid>`: it can only front a process that
+  already exists, so it cannot launch anything. With no pid recorded we do
+  nothing — there is no safe name-based fallback.
+
+- **The single-instance lock truncated the pid it was supposed to publish.**
+  The lock file was opened `"w"`, which truncates IMMEDIATELY, before `flock`
+  has decided anything — so the process that LOST the race erased the
+  incumbent's pid on its way out. Nothing had noticed because nothing read the
+  pid back yet; fixing the focus without this would have shipped a focus path
+  that silently never focused. Now `O_CREAT|O_RDWR`, truncated only once the
+  lock is held.
+
+- The lock and focus pair moved to **`divoom_gui/single_instance.py`**;
+  `gui_main.py` sat exactly at the 500-line cap and the two halves are one
+  concern. `gui_main` re-exports the historical private names.
+
+### Added
+
+- **`tools/check_applescript_launch.py`** (in `GOH_CI_STEPS`) fails any tracked
+  `.py`/`.rs`/`.sh` that addresses an application by name in AppleScript without
+  an `application "X" is running` guard. `System Events` is the one allowed
+  target. Comments and docstrings are excluded (it matched
+  `divoom_lib/utils/media_players.py`'s own prose on its first run), a concrete
+  name must appear within ONE string literal (joining every literal in a file
+  made the gate's own f-string diagnostic read as a violation), and it refuses
+  to pass over an empty scope.
+
+  Two limits are stated in the file rather than papered over: guard scope is
+  per file, and computed app names are invisible. A first cut at the latter
+  could not distinguish AppleScript from a log line, and passed the gate's own
+  file only because its help text happens to contain
+  `application "X" is running` — an instrument that reads identically for a
+  violation and for prose is not measuring the property, so it was removed.
+  The one dynamic caller, `divoom_gui/permissions.py`, stays covered by
+  `tests/test_permissions.py`.
+
+- `tests/test_single_instance.py` and `tests/test_applescript_launch_gate.py`.
+  Both defects were proven red before the fixes were trusted green.
+
 ## v0.31.0 — R73: three unexposed methods met the hardware (2026-08-31)
 
 Verified against four real devices, driven through the running daemon.

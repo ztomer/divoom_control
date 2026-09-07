@@ -21,6 +21,40 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-07 — Crash fix: the GUI focused itself by LaunchServices app name.**
+  A user crash report (`org.python.python` 3.9.10, `EXC_CRASH`/DYLD "Library not
+  loaded: @rpath/Versions/3.9/Python") was OURS. `gui_main.main()`, on finding
+  another Control Center already running, ran
+  `osascript -e 'tell application "Python" to activate'`. That does not address
+  our GUI — it asks LaunchServices to resolve the NAME "Python" and LAUNCH
+  whatever answers. On this machine that is TeX Live Utility's embedded
+  `Python.framework/.../Resources/Python.app` (UUID matched against the crash
+  report). Gatekeeper app-translocates that nested bundle into `$TMPDIR`, which
+  breaks its `@rpath`, so it SIGABRTs in dyld before `main`. Four crash reports
+  on 2026-09-07 (01:05:11/19, 01:07:11/19 — a user clicking the menu bar's
+  Launch Dashboard while an instance was up), and the window never came forward.
+
+  Chased in the unified log, not guessed: `osascript` asks CSUI to launch, `lsd`
+  translocates 96ms later, `launchd` reports `OS_REASON_DYLD`.
+
+  Focus now goes through System Events addressed by `unix id` — it can only
+  front an existing process and cannot launch anything. With no pid we do
+  nothing; there is no safe name-based fallback. The pid comes from the
+  single-instance lock, which had a second defect: opened `"w"`, it truncated
+  BEFORE `flock` decided anything, so the losing contender erased the
+  incumbent's pid. Fixing the focus alone would have produced a focus path that
+  silently never focused. Both are in the new `divoom_gui/single_instance.py`
+  (`gui_main.py` was exactly at the 500-line cap).
+
+  **Class closed, not the instance:** `tools/check_applescript_launch.py` fails
+  any tracked source addressing an app by name in AppleScript without an
+  `is running` guard; System Events is the one allowed target. It is in
+  `GOH_CI_STEPS`. Its limits are documented rather than papered over: per-file
+  guard scope, and computed app names — a first cut there could not tell
+  AppleScript from a log line (it tripped on the gate's own diagnostic, then
+  passed again only because the help text contains the words it looks for), so
+  that rule was removed instead of shipped.
+
 - **2026-09-01 — v0.31.0 SHIPPED (R73).** Tag `1ebe3b9` on a green CI (all five
   jobs: test, rust-core, rust-ble, rust-ble-linux, no-emoji), GitHub release +
   `Divoom-v0.31.0.dmg`, cask bumped and verified by DOWNLOADING the published

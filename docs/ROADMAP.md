@@ -111,8 +111,13 @@ are not restated.
 
 ## Current debt & quality
 
-- **Gates**: 20 steps, run by `pre-push` since R71 P0 — they used to run only
+- **Gates**: 21 steps, run by `pre-push` since R71 P0 — they used to run only
   when someone typed the command. Local and CI are kept identical on purpose.
+  `check_applescript_launch.py` joined the list on 2026-09-07: no source may
+  address an application by LaunchServices NAME in AppleScript without an
+  `is running` guard. It exists because `tell application "Python" to activate`
+  in the GUI's focus path launched a stranger's Python.app and crashed it in
+  dyld, four times, for a user.
 - **500-LOC rule**: enforced, allowlist empty (R23).
 - **Coverage**: Python floor 89.2 (measured 89.30), and it now enforces the
   number it advertises — it was claiming 90 and enforcing ">= 89.5", because
@@ -180,6 +185,25 @@ by user decision, so `nowplaying/src/feishin.rs` (Subsonic) remains its weaker
 source. Detail in the v0.27.0 CHANGELOG stanza.
 
 **Open: nothing in this workstream.** Both items closed in R68.
+
+### OPEN — `test_gate_full_reaches_layer_three` fails on an EMPTY-SCOPE rule
+
+Pre-existing, and confirmed pre-existing by re-running it against clean HEAD
+(stash, run, restore) rather than assumed. `gates_of_heck/checks/check_empty_scope.py`
+now fails any checker that reports success having inspected zero files — a
+renamed directory retires such a gate in silence, and a ratchet reads a
+population of zero as every ceiling being met. Seven of ours do it:
+
+    check_camoufox_installed.py   check_file_size.py     check_gui_is_a_client.py
+    check_no_allow.py             check_positional_args.py   check_scripts.py
+
+(`check_applescript_launch.py` was the seventh and is FIXED — it exits 1 on an
+empty scope, with `--staged` exempt, since a commit touching no `.py`/`.rs`/`.sh`
+legitimately has nothing to inspect. Copy that shape.)
+
+Each needs the same guard, or an entry in `tools/empty_scope_allow.json` (which
+does not exist yet) stating why it may legitimately pass on nothing. Until then
+`pre-push` is blocked by a message about the gate rather than about the code.
 
 ### OPEN — the browser e2e suite is LOAD-SENSITIVE, and it undermines the gate
 
