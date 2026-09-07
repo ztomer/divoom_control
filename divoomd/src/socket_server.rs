@@ -170,16 +170,17 @@ async fn write_line<S>(stream: &mut S, msg: &Value) -> std::io::Result<()>
 where
     S: tokio::io::AsyncWrite + Unpin,
 {
-    match tokio::time::timeout(WRITE_TIMEOUT, stream.write_all(&encode_message(msg))).await {
-        Ok(r) => r,
-        Err(_) => Err(std::io::Error::new(
-            std::io::ErrorKind::TimedOut,
-            format!(
-                "peer did not drain a write within {}s",
-                WRITE_TIMEOUT.as_secs()
-            ),
-        )),
-    }
+    tokio::time::timeout(WRITE_TIMEOUT, stream.write_all(&encode_message(msg)))
+        .await
+        .unwrap_or_else(|_| {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                format!(
+                    "peer did not drain a write within {}s",
+                    WRITE_TIMEOUT.as_secs()
+                ),
+            ))
+        })
 }
 
 #[expect(

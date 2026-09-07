@@ -134,10 +134,10 @@ async fn read_line(stream: &mut UnixStream, limit: Duration) -> Option<Value> {
     let deadline = tokio::time::Instant::now() + limit;
     loop {
         let left = deadline.checked_duration_since(tokio::time::Instant::now())?;
+        // EOF, read error and deadline are all "no line is coming".
         let n = match tokio::time::timeout(left, stream.read(&mut chunk)).await {
-            Ok(Ok(0)) | Err(_) => return None,
-            Ok(Ok(n)) => n,
-            Ok(Err(_)) => return None,
+            Ok(Ok(n)) if n > 0 => n,
+            _ => return None,
         };
         acc.extend_from_slice(&chunk[..n]);
         if let Some(i) = acc.iter().position(|b| *b == b'\n') {
