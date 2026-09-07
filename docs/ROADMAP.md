@@ -231,6 +231,26 @@ entry immediately; and conflation rather than a lossy ring is the method of
 record for status fan-out (a lagging subscriber wants the CURRENT truth, not a
 hole).
 
+### OPEN — estate-wide, carried here from the 2026-09-07 campaign scratchpad
+
+This repo shares its gate layer with routines, ztools, monitor and app_updates,
+so these outlive any one repo's plan file. Recorded here because the campaign's
+own planning file is scratch and will not survive the session.
+
+- **Restriction lints are adopted NOWHERE.** `unwrap_used`, `expect_used` and
+  `panic` are `clippy::restriction`, not `pedantic`; routines alone has 931
+  unwraps. That is a correctness campaign with its own review, not a switch to
+  flip, and each repo's `Cargo.toml` says so in a comment rather than leaving
+  the absence implicit.
+- **No repo has been released since the campaign.** Per repo: bump, CHANGELOG +
+  release notes, full local CI, push, wait for green CI, tag, install. This
+  repo's `release.sh` gates on GitHub CI being green for the tagged commit;
+  routines and ZoneTilerWM have their own `release.sh`/`bump.sh` to read first.
+  **The daemon running on this machine is still the installed v0.31.0 and
+  contains none of the 2026-09-07 daemon work.**
+- **`routines` needs a self-watchdog too**, for the same reason divoom does
+  (D6): launchd has no watchdog, so detection must be in-process.
+
 ### OPEN — the browser e2e suite is LOAD-SENSITIVE, and it undermines the gate
 
 **Found 2026-08-31 while validating R72.** Two consecutive full-suite runs on
