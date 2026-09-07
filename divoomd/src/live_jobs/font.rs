@@ -6,7 +6,6 @@
 //! device-bound scrolling text, which uploads these same 32-byte glyphs to a
 //! panel that has no font of its own.
 
-use crate::wire::WireNarrow as _;
 // --- Bitmap Font ---
 
 pub(crate) const FIRST_CP: u32 = 0x20;

@@ -39,6 +39,7 @@ impl Daemon {
 
         let guard = self.wall.lock().await;
         let Some(wall) = guard.as_ref() else {
+            drop(guard);
             return err_reply("no wall configured");
         };
 

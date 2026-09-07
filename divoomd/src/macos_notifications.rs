@@ -125,6 +125,7 @@ pub async fn stop_monitor() {
     let mut guard = st.lock().await;
     guard.running = false;
     if let Some(h) = guard.task.take() {
+        drop(guard);
         h.abort();
     }
     eprintln!("[macos_notifications] monitor stopped");
@@ -176,8 +177,11 @@ pub async fn status_event() -> Value {
 
 pub async fn notification_status() -> Value {
     let st = state();
-    let guard = st.lock().await;
-    let mut res = status_event_payload(&guard);
+    // Scoped to reading the payload out; the `success` field does not need it.
+    let mut res = {
+        let guard = st.lock().await;
+        status_event_payload(&guard)
+    };
     res["success"] = json!(true);
     res
 }

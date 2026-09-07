@@ -215,8 +215,10 @@ impl LiveJobCoordinator {
     }
 
     pub async fn get_device_activity(&self) -> Value {
-        let activity = self.activity.lock().await;
-        let snap: HashMap<String, ActivityEntry> = activity.clone();
+        // Scoped to the clone: the JSON below is built from the snapshot, so
+        // holding the lock while `json!` allocates would block every writer for
+        // no reason.
+        let snap: HashMap<String, ActivityEntry> = self.activity.lock().await.clone();
         json!({
             "success": true,
             "activity": snap,

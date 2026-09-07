@@ -316,6 +316,7 @@ mod tests {
 
         let device_lock = d.device.lock().await;
         let DeviceTransport::Mock(ref mock) = **device_lock.as_ref().unwrap() else {
+            drop(device_lock);
             panic!("expected Mock")
         };
         let cmds = mock.sent_commands.lock().unwrap();
@@ -350,6 +351,7 @@ mod tests {
 
         let device_lock = d.device.lock().await;
         let DeviceTransport::Mock(ref mock) = **device_lock.as_ref().unwrap() else {
+            drop(device_lock);
             panic!()
         };
         let cmds = mock.sent_commands.lock().unwrap();
@@ -383,6 +385,7 @@ mod tests {
         assert!(call(json!({"method":"music.set_sd_music_info","kwargs":{"current_time":60,"music_id":1,"volume":10,"status":1,"play_mode":2}})).await["success"].as_bool().unwrap());
         let device_lock = d.device.lock().await;
         let DeviceTransport::Mock(ref mock) = **device_lock.as_ref().unwrap() else {
+            drop(device_lock);
             panic!()
         };
         let cmds = mock.sent_commands.lock().unwrap();

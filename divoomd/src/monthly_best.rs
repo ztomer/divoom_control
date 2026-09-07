@@ -1,7 +1,6 @@
 //! Monthly Best sync background service.
 //! Ports `divoom_lib/monthly_best_daemon.py`.
 
-use crate::wire::WireNarrow as _;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -290,6 +289,7 @@ async fn sync_files_to_device(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::wire::WireNarrow as _;
     use std::fs;
     use tempfile::TempDir;
 

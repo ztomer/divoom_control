@@ -239,6 +239,7 @@ pub async fn get_credentials(force_refresh: bool) -> Result<DivoomCredentials, S
         let remaining = {
             let guard = last_auth_fail_at().lock().unwrap();
             let elapsed = guard.unwrap().elapsed().unwrap_or_default().as_secs();
+            drop(guard);
             AUTH_FAIL_COOLDOWN_SECS.saturating_sub(elapsed)
         };
         return Err(format!(

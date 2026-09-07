@@ -2,7 +2,6 @@
 //! image rescaling, SHA-1 hash. These are pure functions; split from
 //! art.rs to keep both files under the 500-LOC ground rule.
 
-use crate::wire::WireNarrow as _;
 use minilzo_rs::LZO;
 
 mod aes;

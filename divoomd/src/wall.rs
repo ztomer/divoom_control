@@ -1,7 +1,6 @@
 //! Multi-device display wall coordinator — ported from `divoom_lib/wall.py`.
 //! Coordinates multiple screens arranged in a 2D grid as a unified display.
 
-use crate::wire::WireNarrow as _;
 use image::imageops::FilterType;
 use std::collections::HashMap;
 use std::sync::Arc;

@@ -74,6 +74,7 @@ mod tests {
 
         let device_lock = d.device.lock().await;
         let DeviceTransport::Mock(ref mock) = **device_lock.as_ref().unwrap() else {
+            drop(device_lock);
             panic!("expected Mock")
         };
         let cmds = mock.sent_commands.lock().unwrap();

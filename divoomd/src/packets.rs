@@ -28,7 +28,6 @@
 //! Canonical layouts are pinned by `divoom_lib/display/__init__.py`, which in
 //! turn cites the Divoom APK's `C2()`. Do not reorder without a wire trace.
 
-use crate::wire::WireNarrow as _;
 /// The `set light mode` command id every channel packet below is sent under.
 pub const CMD_SET_LIGHT_MODE: u8 = 0x45;
 

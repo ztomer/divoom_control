@@ -69,6 +69,7 @@ pub async fn cmd_wall_configure(daemon: &Daemon, req: &Request) -> Value {
         if let Some(ref old_wall) = *old_wall_guard {
             let old_slots_guard = daemon.wall_slots.lock().await;
             let old_macs: std::collections::HashSet<_> = old_slots_guard.keys().cloned().collect();
+            drop(old_slots_guard);
             let new_macs: std::collections::HashSet<_> = slots.keys().cloned().collect();
             if old_macs.is_disjoint(&new_macs) {
                 HashMap::new()
