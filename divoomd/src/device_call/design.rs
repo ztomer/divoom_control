@@ -1,5 +1,6 @@
 use super::CallCtx;
 use crate::protocol::err_reply;
+use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
@@ -38,7 +39,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("lang"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             match dev.send_command(0xbd, &[0x26, lang], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("set_language failed: {e}")),
@@ -52,7 +54,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("hour"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let minute = args
                 .get(1)
                 .copied()
@@ -60,7 +63,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("minute"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let second = args
                 .get(2)
                 .copied()
@@ -68,7 +72,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("second"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             match dev
                 .send_command(0xbd, &[0x14, hour, minute, second], true)
                 .await
@@ -106,7 +111,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("direction"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             match dev.send_command(0xbd, &[0x23, direction], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("set_screen_dir failed: {e}")),
@@ -141,7 +147,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("page"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             match dev.send_command(0xbd, &[0x17, page], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("use_user_define_index failed: {e}")),
@@ -155,7 +162,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("page"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             match dev.send_command(0xbd, &[0x16, page], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("clear_user_define_index failed: {e}")),

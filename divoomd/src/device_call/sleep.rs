@@ -1,5 +1,6 @@
 use super::CallCtx;
 use crate::protocol::err_reply;
+use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
@@ -91,7 +92,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("on_off"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let mode = args
                 .get(1)
                 .copied()
@@ -99,7 +101,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("mode"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let volume = args
                 .get(2)
                 .copied()
@@ -107,7 +110,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("volume"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             match dev.send_command(0xa3, &[on_off, mode, volume], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("set_sleep_scene_listen failed: {e}")),
@@ -121,7 +125,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("volume"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             match dev.send_command(0xa4, &[volume], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("set_scene_volume failed: {e}")),
@@ -161,7 +166,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("light"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             match dev.send_command(0xae, &[light], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("set_sleep_light failed: {e}")),

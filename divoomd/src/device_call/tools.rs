@@ -1,5 +1,6 @@
 use super::CallCtx;
 use crate::protocol::err_reply;
+use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
@@ -17,7 +18,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("on_off"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let red_score = args
                 .get(1)
                 .copied()
@@ -67,7 +69,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("ctrl_flag"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let payload = [0u8, ctrl_flag]; // TOOL_TYPE_TIMER = 0
             match dev.send_command(0x72, &payload, true).await {
                 Ok(()) => json!({"success": true, "result": true}),
@@ -93,7 +96,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("ctrl_flag"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let minutes = args
                 .get(1)
                 .copied()
@@ -101,7 +105,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("minutes"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let seconds = args
                 .get(2)
                 .copied()
@@ -109,7 +114,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("seconds"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let payload = [3u8, ctrl_flag, minutes, seconds]; // TOOL_TYPE_COUNTDOWN = 3
             match dev.send_command(0x72, &payload, true).await {
                 Ok(()) => json!({"success": true, "result": true}),
@@ -137,7 +143,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("ctrl_flag"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let payload = [2u8, ctrl_flag]; // TOOL_TYPE_NOISE = 2
             match dev.send_command(0x72, &payload, true).await {
                 Ok(()) => json!({"success": true, "result": true}),
@@ -163,7 +170,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("app_type"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(1) as u8;
+                .unwrap_or(1)
+                .byte();
             let wire = if app_type >= 8 {
                 app_type + 1
             } else {
@@ -184,7 +192,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("app_type"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(1) as u8;
+                .unwrap_or(1)
+                .byte();
             let text = raw_args
                 .get(1)
                 .and_then(|v| v.as_str())
@@ -263,9 +272,9 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     Some(on_off) => {
                         payload.push(on_off as u8);
                         payload
-                            .extend_from_slice(&(g("red_score").unwrap_or(0) as u16).to_le_bytes());
+                            .extend_from_slice(&(g("red_score").unwrap_or(0).word()).to_le_bytes());
                         payload.extend_from_slice(
-                            &(g("blue_score").unwrap_or(0) as u16).to_le_bytes(),
+                            &(g("blue_score").unwrap_or(0).word()).to_le_bytes(),
                         );
                     }
                     None => return err_reply("set_tool_info: score needs 'on_off'"),

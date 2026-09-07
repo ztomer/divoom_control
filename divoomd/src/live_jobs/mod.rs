@@ -1,3 +1,4 @@
+use crate::wire::WireNarrow as _;
 use serde_json::Value;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
@@ -119,7 +120,8 @@ async fn run_sysmon(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
     let size = params
         .get("size")
         .and_then(serde_json::Value::as_u64)
-        .unwrap_or(16) as u32;
+        .unwrap_or(16)
+        .dword();
     let mut sys = sysinfo::System::new_all();
 
     // R67/C4: a job with no device used to push nothing, say nothing, and
@@ -196,7 +198,8 @@ async fn run_stocks(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
     let size = params
         .get("size")
         .and_then(serde_json::Value::as_u64)
-        .unwrap_or(16) as u32;
+        .unwrap_or(16)
+        .dword();
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
         .build()

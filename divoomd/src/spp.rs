@@ -1,6 +1,7 @@
 //! SPP transport — connects to classic Divoom Bluetooth devices (e.g. Tivoo-Max, older Ditoo)
 //! via the `spp_bridge.py` python/IOBluetooth co-process.
 
+use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 use std::sync::Arc;
 use std::time::Duration;
@@ -79,7 +80,8 @@ impl SppTransport {
                         let cmd_id = val
                             .get("command_id")
                             .and_then(serde_json::Value::as_u64)
-                            .unwrap_or(0) as u8;
+                            .unwrap_or(0)
+                            .byte();
                         let payload: Vec<u8> = val
                             .get("payload")
                             .and_then(|v| serde_json::from_value(v.clone()).ok())

@@ -1,5 +1,6 @@
 use super::CallCtx;
 use crate::protocol::err_reply;
+use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
 mod display;
@@ -200,7 +201,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("freq_x10"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(875) as u16;
+                .unwrap_or(875)
+                .word();
             let payload = freq.to_le_bytes();
             match dev.send_command(0x61, &payload, true).await {
                 Ok(()) => json!({"success": true, "result": true}),
@@ -245,7 +247,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("minutes"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u16;
+                .unwrap_or(0)
+                .word();
             let payload = minutes.to_le_bytes();
             match dev.send_command(0xab, &payload, true).await {
                 Ok(()) => json!({"success": true, "result": true}),

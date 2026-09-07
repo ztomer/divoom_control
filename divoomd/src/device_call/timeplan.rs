@@ -1,5 +1,6 @@
 use super::CallCtx;
 use crate::protocol::err_reply;
+use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
@@ -14,47 +15,56 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .and_then(|v| v.get("status"))
                 .and_then(serde_json::Value::as_i64)
                 .or_else(|| args.first().copied())
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let hour = kw
                 .and_then(|v| v.get("hour"))
                 .and_then(serde_json::Value::as_i64)
                 .or_else(|| args.get(1).copied())
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let minute = kw
                 .and_then(|v| v.get("minute"))
                 .and_then(serde_json::Value::as_i64)
                 .or_else(|| args.get(2).copied())
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let week = kw
                 .and_then(|v| v.get("week"))
                 .and_then(serde_json::Value::as_i64)
                 .or_else(|| args.get(3).copied())
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let mode = kw
                 .and_then(|v| v.get("mode"))
                 .and_then(serde_json::Value::as_i64)
                 .or_else(|| args.get(4).copied())
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let trigger_mode = kw
                 .and_then(|v| v.get("trigger_mode"))
                 .and_then(serde_json::Value::as_i64)
                 .or_else(|| args.get(5).copied())
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let fm_freq = kw
                 .and_then(|v| v.get("fm_freq"))
                 .and_then(serde_json::Value::as_i64)
                 .or_else(|| args.get(6).copied())
-                .unwrap_or(0) as u16;
+                .unwrap_or(0)
+                .word();
             let volume = kw
                 .and_then(|v| v.get("volume"))
                 .and_then(serde_json::Value::as_i64)
                 .or_else(|| args.get(7).copied())
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let tp_type = kw
                 .and_then(|v| v.get("type"))
                 .and_then(serde_json::Value::as_i64)
                 .or_else(|| args.get(8).copied())
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
 
             let mut payload = Vec::with_capacity(10);
             payload.push(status);
@@ -72,27 +82,32 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     .and_then(|v| v.get("animation_id"))
                     .and_then(serde_json::Value::as_i64)
                     .or_else(|| args.get(9).copied())
-                    .unwrap_or(0) as u8;
+                    .unwrap_or(0)
+                    .byte();
                 let animation_speed = kw
                     .and_then(|v| v.get("animation_speed"))
                     .and_then(serde_json::Value::as_i64)
                     .or_else(|| args.get(10).copied())
-                    .unwrap_or(0) as u8;
+                    .unwrap_or(0)
+                    .byte();
                 let animation_direction = kw
                     .and_then(|v| v.get("animation_direction"))
                     .and_then(serde_json::Value::as_i64)
                     .or_else(|| args.get(11).copied())
-                    .unwrap_or(0) as u8;
+                    .unwrap_or(0)
+                    .byte();
                 let animation_frame_count = kw
                     .and_then(|v| v.get("animation_frame_count"))
                     .and_then(serde_json::Value::as_i64)
                     .or_else(|| args.get(12).copied())
-                    .unwrap_or(0) as u8;
+                    .unwrap_or(0)
+                    .byte();
                 let animation_frame_delay = kw
                     .and_then(|v| v.get("animation_frame_delay"))
                     .and_then(serde_json::Value::as_i64)
                     .or_else(|| args.get(13).copied())
-                    .unwrap_or(0) as u8;
+                    .unwrap_or(0)
+                    .byte();
                 let animation_frame_data: Vec<u8> = raw_args
                     .get(14)
                     .and_then(|v| v.as_array())
@@ -128,7 +143,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("status"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let index = args
                 .get(1)
                 .copied()
@@ -136,7 +152,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("index"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             match dev.send_command(0x57, &[status, index], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("set_time_manage_ctrl failed: {e}")),

@@ -6,6 +6,7 @@
 //! Data arrays (`gif_data` / `file_data` / data) arrive over `device_call` as JSON
 //! arrays of u8 in `kwargs` (or positional `args`/`blobs[0]` for the big chunk).
 
+use crate::wire::WireNarrow as _;
 use serde_json::{json, Map, Value};
 
 use super::CallCtx;
@@ -180,7 +181,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             match cw {
                 0 => {
                     p.extend_from_slice(&le32(kw_i64(kw, "file_size").unwrap_or(0)));
-                    p.push(kw_i64(kw, "index").unwrap_or(0) as u8);
+                    p.push(kw_i64(kw, "index").unwrap_or(0).byte());
                 }
                 1 => {
                     p.extend_from_slice(&le32(kw_i64(kw, "file_size").unwrap_or(0)));
@@ -199,7 +200,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             match cw {
                 0 => {
                     p.extend_from_slice(&le32(kw_i64(kw, "file_size").unwrap_or(0)));
-                    p.push(kw_i64(kw, "index").unwrap_or(0) as u8);
+                    p.push(kw_i64(kw, "index").unwrap_or(0).byte());
                     p.extend_from_slice(&be32(kw_i64(kw, "file_id").unwrap_or(0)));
                 }
                 1 => {
@@ -211,9 +212,9 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 3 | 4 => {
                     // DELETE / PLAY_ARTWORK: [file_id BE32, index]
                     p.extend_from_slice(&be32(kw_i64(kw, "file_id").unwrap_or(0)));
-                    p.push(kw_i64(kw, "index").unwrap_or(0) as u8);
+                    p.push(kw_i64(kw, "index").unwrap_or(0).byte());
                 }
-                5 => p.push(kw_i64(kw, "index").unwrap_or(0) as u8), // DELETE_ALL_BY_INDEX
+                5 => p.push(kw_i64(kw, "index").unwrap_or(0).byte()), // DELETE_ALL_BY_INDEX
                 _ => {
                     return err_reply(&format!("app_big64_user_define: unknown control word {cw}"))
                 }

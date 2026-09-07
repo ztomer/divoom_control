@@ -4,6 +4,7 @@
 //! Setters + read-backs; command ids + response offsets taken verbatim from the
 //! Python source.
 
+use crate::wire::WireNarrow as _;
 use serde_json::{json, Map, Value};
 
 use super::CallCtx;
@@ -44,7 +45,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             "send_sd_list_over",
         ),
         "music.set_play_status" | "set_play_status" => {
-            let s = arg0("status").unwrap_or(0) as u8;
+            let s = arg0("status").unwrap_or(0).byte();
             ok(
                 dev.send_command(0x0a, &[s], true)
                     .await
@@ -53,7 +54,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             )
         }
         "music.set_sd_last_next" | "set_sd_last_next" => {
-            let a = arg0("action").unwrap_or(0) as u8;
+            let a = arg0("action").unwrap_or(0).byte();
             ok(
                 dev.send_command(0x12, &[a], true)
                     .await
@@ -62,7 +63,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             )
         }
         "music.set_sd_music_play_mode" | "set_sd_music_play_mode" => {
-            let pm = arg0("play_mode").unwrap_or(0) as u8;
+            let pm = arg0("play_mode").unwrap_or(0).byte();
             ok(
                 dev.send_command(0xb9, &[pm], true)
                     .await
@@ -97,13 +98,16 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .unwrap_or(0);
             let vol = kw_i64(kw, "volume")
                 .or_else(|| args.get(2).copied())
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let st = kw_i64(kw, "status")
                 .or_else(|| args.get(3).copied())
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let pm = kw_i64(kw, "play_mode")
                 .or_else(|| args.get(4).copied())
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let mut p = Vec::new();
             p.extend_from_slice(&le16(cur));
             p.extend_from_slice(&le16(mid));

@@ -11,6 +11,7 @@
 //!   - Custom art: B1 (old) / 8C (new) header + data chunks + K0 end signal.
 //!   - Hot update:  9B manifest → device drives F7 requests → 9D info → 9E chunks.
 
+use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
@@ -186,7 +187,8 @@ pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
     let page = args
         .get("page")
         .and_then(serde_json::Value::as_u64)
-        .unwrap_or(0) as u8;
+        .unwrap_or(0)
+        .byte();
 
     // Build slot_map: {slot_index -> file_id}
     let mut slot_map: Vec<(usize, String)> = Vec::new();
@@ -256,7 +258,8 @@ pub async fn cmd_custom_art_query_page(daemon: Arc<Daemon>, args: &Value) -> Val
     let page = args
         .get("page")
         .and_then(serde_json::Value::as_u64)
-        .unwrap_or(0) as u8;
+        .unwrap_or(0)
+        .byte();
     #[cfg(feature = "ble")]
     {
         let guard = daemon.device.lock().await;
@@ -313,7 +316,8 @@ pub async fn cmd_hot_update(
     let device_size = args
         .get("device_size")
         .and_then(serde_json::Value::as_u64)
-        .unwrap_or(16) as u32;
+        .unwrap_or(16)
+        .dword();
     let show_after = args
         .get("show")
         .and_then(serde_json::Value::as_bool)

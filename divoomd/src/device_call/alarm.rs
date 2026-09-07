@@ -1,5 +1,6 @@
 use super::CallCtx;
 use crate::protocol::err_reply;
+use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
@@ -43,7 +44,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("alarm_index"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let status = args
                 .get(1)
                 .copied()
@@ -51,7 +53,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("status"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let hour = args
                 .get(2)
                 .copied()
@@ -59,7 +62,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("hour"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let minute = args
                 .get(3)
                 .copied()
@@ -67,7 +71,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("minute"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let week = args
                 .get(4)
                 .copied()
@@ -75,7 +80,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("week"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let mode = args
                 .get(5)
                 .copied()
@@ -83,7 +89,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("mode"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let trigger_mode = args
                 .get(6)
                 .copied()
@@ -91,7 +98,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("trigger_mode"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let fm_freq = args
                 .get(7)
                 .copied()
@@ -99,7 +107,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("fm_freq"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u16;
+                .unwrap_or(0)
+                .word();
             let volume = args
                 .get(8)
                 .copied()
@@ -107,7 +116,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("volume"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
 
             let mut payload = Vec::with_capacity(10);
             payload.push(alarm_index);
@@ -133,7 +143,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("alarm_index"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let total_length = args
                 .get(1)
                 .copied()
@@ -141,7 +152,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("total_length"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u16;
+                .unwrap_or(0)
+                .word();
             let gif_id = args
                 .get(2)
                 .copied()
@@ -149,7 +161,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("gif_id"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let data: Vec<u8> = raw_args
                 .get(3)
                 .and_then(|v| v.as_array())
@@ -208,7 +221,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("dialy_id"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let on_off = args
                 .get(1)
                 .copied()
@@ -216,7 +230,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("on_off"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let month = args
                 .get(2)
                 .copied()
@@ -224,7 +239,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("month"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let day = args
                 .get(3)
                 .copied()
@@ -232,7 +248,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("day"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let hour = args
                 .get(4)
                 .copied()
@@ -240,7 +257,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("hour"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let minute = args
                 .get(5)
                 .copied()
@@ -248,7 +266,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("minute"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let have_flag = args
                 .get(6)
                 .copied()
@@ -256,7 +275,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("have_flag"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let title_name = raw_args
                 .get(7)
                 .and_then(|v| v.as_str())
@@ -297,7 +317,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("memorial_index"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let total_length = args
                 .get(1)
                 .copied()
@@ -305,7 +326,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("total_length"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u16;
+                .unwrap_or(0)
+                .word();
             let gif_id = args
                 .get(2)
                 .copied()
@@ -313,7 +335,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("gif_id"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let data: Vec<u8> = raw_args
                 .get(3)
                 .and_then(|v| v.as_array())
@@ -344,7 +367,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("on_off"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let mode = args
                 .get(1)
                 .copied()
@@ -352,7 +376,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("mode"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let volume = args
                 .get(2)
                 .copied()
@@ -360,7 +385,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("volume"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             match dev.send_command(0xa5, &[on_off, mode, volume], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("set_alarm_listen failed: {e}")),
@@ -374,7 +400,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("volume"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             match dev.send_command(0xa6, &[volume], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("set_alarm_volume failed: {e}")),
@@ -388,7 +415,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("control"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let index = args
                 .get(1)
                 .copied()
@@ -396,7 +424,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("index"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             match dev.send_command(0x82, &[control, index], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("set_alarm_volume_control failed: {e}")),

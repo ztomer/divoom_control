@@ -5,6 +5,7 @@
 use super::CallCtx;
 use crate::packets::{ClockPacket, LightPacket, LightingType, CMD_SET_LIGHT_MODE};
 use crate::protocol::err_reply;
+use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
 pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
@@ -64,11 +65,13 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let size = kw
                 .and_then(|v| v.get("size"))
                 .and_then(serde_json::Value::as_u64)
-                .unwrap_or(16) as u32;
+                .unwrap_or(16)
+                .dword();
             let default_time_ms = raw_args
                 .get(1)
                 .and_then(serde_json::Value::as_u64)
-                .unwrap_or(100) as u16;
+                .unwrap_or(100)
+                .word();
 
             let img_data: Vec<u8> = if let Some(data) = ctx.blob_map.lock().unwrap().remove(&0) {
                 data

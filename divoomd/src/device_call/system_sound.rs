@@ -7,6 +7,7 @@
 
 use super::CallCtx;
 use crate::protocol::err_reply;
+use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
 /// Handle one `sound.*` method, or `None` when it is not one of ours.
@@ -32,7 +33,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Option<Value> {
                     kw.and_then(|v| v.get("control"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             match dev.send_command(0x83, &[control], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("set_song_display_control failed: {e}")),
@@ -49,7 +51,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Option<Value> {
                     kw.and_then(|v| v.get("control"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let volume = args
                 .get(1)
                 .copied()
@@ -57,7 +60,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Option<Value> {
                     kw.and_then(|v| v.get("volume"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let payload = if control == 1 {
                 vec![control, volume]
             } else {
@@ -76,7 +80,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Option<Value> {
                     kw.and_then(|v| v.get("control"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let channel_id = args
                 .get(1)
                 .copied()
@@ -84,7 +89,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Option<Value> {
                     kw.and_then(|v| v.get("channel_id"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let payload = if control == 1 {
                 vec![control, channel_id]
             } else {
@@ -103,7 +109,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Option<Value> {
                     kw.and_then(|v| v.get("on_off"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let total_length = args
                 .get(1)
                 .copied()
@@ -111,7 +118,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Option<Value> {
                     kw.and_then(|v| v.get("total_length"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u16;
+                .unwrap_or(0)
+                .word();
             let gif_id = args
                 .get(2)
                 .copied()
@@ -119,7 +127,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Option<Value> {
                     kw.and_then(|v| v.get("gif_id"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let data: Vec<u8> = raw_args
                 .get(3)
                 .and_then(|v| v.as_array())
@@ -153,7 +162,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Option<Value> {
                     kw.and_then(|v| v.get("enable"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             match dev.send_command(0xa7, &[enable], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("set_sound_control failed: {e}")),

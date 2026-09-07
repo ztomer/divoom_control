@@ -1,5 +1,6 @@
 use super::CallCtx;
 use crate::protocol::err_reply;
+use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
@@ -18,7 +19,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("hour_type"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             match dev.send_command(0x2c, &[hour_type], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("set_hour_type failed: {e}")),
@@ -96,7 +98,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("control"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let password = raw_args
                 .get(1)
                 .and_then(|v| v.as_str())
@@ -134,7 +137,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("mode"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             match dev.send_command(0x05, &[mode], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("set_work_mode failed: {e}")),
@@ -153,7 +157,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("channel"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             match dev.send_command(0x45, &[channel_id], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("set_channel failed: {e}")),
@@ -179,7 +184,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("key"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             match dev.send_command(0x23, &[key], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("set_keyboard failed: {e}")),
@@ -193,7 +199,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("status"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             match dev.send_command(0x15, &[status], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("send_sd_status failed: {e}")),
@@ -219,7 +226,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("year"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(2026) as u16;
+                .unwrap_or(2026)
+                .word();
             let month = args
                 .get(1)
                 .copied()
@@ -227,7 +235,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("month"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(1) as u8;
+                .unwrap_or(1)
+                .byte();
             let day = args
                 .get(2)
                 .copied()
@@ -235,7 +244,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("day"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(1) as u8;
+                .unwrap_or(1)
+                .byte();
             let hour = args
                 .get(3)
                 .copied()
@@ -243,7 +253,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("hour"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let minute = args
                 .get(4)
                 .copied()
@@ -251,7 +262,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("minute"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let num = args
                 .get(5)
                 .copied()
@@ -259,7 +271,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("num"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
 
             let mut payload = Vec::new();
             payload.extend_from_slice(&year.to_le_bytes());
@@ -279,7 +292,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     if let Some(pair) = item.as_array() {
                         if pair.len() >= 2 {
                             let temp_val = pair[0].as_i64().unwrap_or(0) as i8;
-                            let weather_type = pair[1].as_i64().unwrap_or(0) as u8;
+                            let weather_type = pair[1].as_i64().unwrap_or(0).byte();
                             payload.push(temp_val as u8);
                             payload.push(weather_type);
                         }
@@ -368,7 +381,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("weather_type"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             match dev.send_command(0x5f, &[temp as u8, weather], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("send_current_temp failed: {e}")),
@@ -382,7 +396,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("temp_type"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             match dev.send_command(0x2b, &[temp_type], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("set_temp_type failed: {e}")),

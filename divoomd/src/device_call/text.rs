@@ -1,5 +1,6 @@
 use super::CallCtx;
 use crate::protocol::err_reply;
+use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
 /// Scrolling marquee text, ported from the APK's own sequence.
@@ -159,7 +160,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 kw.and_then(|v| v.get("control"))
                     .and_then(serde_json::Value::as_i64)
             })
-            .unwrap_or(6) as u8
+            .unwrap_or(6)
+            .byte()
     };
 
     let mut payload = Vec::new();
@@ -175,7 +177,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("speed"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u16;
+                .unwrap_or(0)
+                .word();
             let text_box_id = args
                 .get(2)
                 .copied()
@@ -183,7 +186,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("text_box_id"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             payload.extend_from_slice(&speed.to_le_bytes());
             payload.push(text_box_id);
         }
@@ -196,7 +200,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("effect_style"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             payload.push(effect_style);
         }
         3 => {
@@ -208,7 +213,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("x"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let y = args
                 .get(2)
                 .copied()
@@ -216,7 +222,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("y"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let width = args
                 .get(3)
                 .copied()
@@ -224,7 +231,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("width"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let height = args
                 .get(4)
                 .copied()
@@ -232,7 +240,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("height"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let text_box_id = args
                 .get(5)
                 .copied()
@@ -240,7 +249,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("text_box_id"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             payload.push(x);
             payload.push(y);
             payload.push(width);
@@ -256,7 +266,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("font_size"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let text_box_id = args
                 .get(2)
                 .copied()
@@ -264,7 +275,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("text_box_id"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             payload.push(font_size);
             payload.push(text_box_id);
         }
@@ -297,7 +309,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("text_box_id"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             payload.push(r);
             payload.push(g);
             payload.push(b);
@@ -324,7 +337,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                         kw.and_then(|v| v.get("text_box_id"))
                             .and_then(serde_json::Value::as_i64)
                     })
-                    .unwrap_or(0) as u8
+                    .unwrap_or(0)
+                    .byte()
             } else {
                 args.get(2)
                     .copied()
@@ -332,7 +346,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                         kw.and_then(|v| v.get("text_box_id"))
                             .and_then(serde_json::Value::as_i64)
                     })
-                    .unwrap_or(0) as u8
+                    .unwrap_or(0)
+                    .byte()
             };
             let content_bytes = content.as_bytes();
             let len = content_bytes.len() as u16;
@@ -349,7 +364,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("effect_style"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             let text_box_id = args
                 .get(2)
                 .copied()
@@ -357,7 +373,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("text_box_id"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as u8;
+                .unwrap_or(0)
+                .byte();
             payload.push(effect_style);
             payload.push(text_box_id);
         }

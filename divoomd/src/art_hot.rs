@@ -1,6 +1,7 @@
 //! Hot-channel update session: manifest fetch, file download, BLE streaming.
 //! Split from art.rs to keep both files under the 500-LOC ground rule.
 
+use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
@@ -52,7 +53,7 @@ impl HotFile {
 /// `int(f["Version"])`, which accepts both.
 fn json_u32(v: Option<&Value>) -> u32 {
     match v {
-        Some(Value::Number(n)) => n.as_u64().unwrap_or(0) as u32,
+        Some(Value::Number(n)) => n.as_u64().unwrap_or(0).dword(),
         Some(Value::String(s)) => s.trim().parse::<u32>().unwrap_or(0),
         _ => 0,
     }
@@ -112,7 +113,8 @@ pub async fn cmd_hot_manifest(args: &Value) -> Value {
     let size = args
         .get("device_size")
         .and_then(serde_json::Value::as_u64)
-        .unwrap_or(16) as u32;
+        .unwrap_or(16)
+        .dword();
     let device_type = device_type_for_size(size);
     let client = match reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(15))

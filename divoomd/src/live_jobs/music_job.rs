@@ -7,6 +7,7 @@
 //! non-album content and needs a network round trip in order to fail. It now
 //! pushes the exact image the player is displaying, via the `nowplaying` crate.
 
+use crate::wire::WireNarrow as _;
 use serde_json::Value;
 use std::sync::Weak;
 use std::time::Duration;
@@ -21,7 +22,8 @@ pub(super) async fn run_music(daemon_weak: Weak<Daemon>, mac: String, params: Va
     let size = params
         .get("size")
         .and_then(serde_json::Value::as_u64)
-        .unwrap_or(16) as u32;
+        .unwrap_or(16)
+        .dword();
 
     // Keyed on the track's identity (artist/title/album), which deliberately
     // EXCLUDES artwork bytes so the same song does not re-push every tick.
