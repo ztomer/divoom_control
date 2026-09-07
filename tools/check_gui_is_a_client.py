@@ -49,6 +49,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _tui import err, info, ok  # noqa: E402
+from _empty_scope import scope_is_empty  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 GUI_DIR = REPO / "divoom_gui"
@@ -200,6 +201,9 @@ def main() -> int:
                 used.add(key)
                 continue
             offenders.append(f"divoom_gui/{rel} — {kind} `{symbol}` — {detail}")
+
+    if scope_is_empty("gui-client", scanned, unit="GUI Python files"):
+        return 1
 
     # A fixed violation must take its allowlist entry with it. An entry that
     # matches nothing is a hole standing open for the next violation to fall

@@ -37,6 +37,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _tui import err, info, ok  # noqa: E402
+from _empty_scope import scope_is_empty  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 SCRIPTS = REPO / "scripts"
@@ -173,6 +174,8 @@ def main() -> int:
     check_api_method_refs(failures)
 
     n = len(tracked_scripts())
+    if scope_is_empty("scripts", n, unit="scripts"):
+        return 1
     if failures:
         err(f"[scripts] {len(failures)} problem(s) in {n} scripts")
         for f in failures:

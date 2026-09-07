@@ -32,6 +32,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _srcscan import strip_rust_comments  # noqa: E402
 from _tui import err, info, ok  # noqa: E402
+from _empty_scope import scope_is_empty  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 RUST_DIR = REPO / "divoomd" / "src" / "device_call"
@@ -161,6 +162,8 @@ def main() -> int:
         err(f"[positional] {len(offenders)} handler(s) index the COMPACTED args list")
         for o in offenders:
             info(o)
+        return 1
+    if scope_is_empty("positional", checked, unit="cross-language handlers"):
         return 1
     ok(f"[positional] OK — {checked} handlers read positional args safely")
     return 0

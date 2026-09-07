@@ -1,0 +1,11 @@
+{
+  "_": "Gates excused from gates_of_heck's empty-scope rule. TWO sections on purpose: `legitimate` is a gate that SHOULD pass over an empty tree and always will; `known_blind` is a defect with a name on it, awaiting a guard, and may only ever SHRINK. Collapsing them is how a burn-down list becomes permanent permission.",
+
+  "legitimate": {
+    "check_camoufox_installed.py": "Inspects an INSTALLED BROWSER, not the source tree, so its population is not a function of the repo's contents at all. It reports the camoufox version it found; over an empty tree it finds the same browser and says the same thing, which is correct rather than blind. Nothing about a rename or a changed file convention can silently retire it -- the failure mode it guards (camoufox missing) is unrelated to how many files exist."
+  },
+
+  "known_blind": {
+    "_": "EMPTY, and it should stay that way. The six gates listed here on 2026-09-07 were all fixed the same day with tools/_empty_scope.py rather than excused: check_file_size, check_gui_is_a_client, check_no_allow, check_positional_args, check_scripts, and check_applescript_launch. Use the shared helper; do not add an entry here to make a red run green."
+  }
+}

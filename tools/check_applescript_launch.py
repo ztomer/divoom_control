@@ -77,6 +77,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _srcscan import strip_rust_comments  # noqa: E402
+from _empty_scope import scope_is_empty  # noqa: E402
 
 # Faceless scripting bridges that are always present and are the sanctioned way
 # to address a process by identity. Keep this list at exactly what is needed.
@@ -187,12 +188,7 @@ def main() -> None:
     staged = "--staged" in sys.argv
     root = Path.cwd()
     files = [p for p in _files(root, staged) if p.exists()]
-    # A gate that inspected nothing has not passed, it has abstained -- a rename
-    # or a changed layout would retire it in silence (gates_of_heck's
-    # check_empty_scope.py polices exactly this). `--staged` is exempt: a commit
-    # touching no .py/.rs/.sh legitimately has an empty scope.
-    if not staged and not files:
-        print("✗ [applescript_launch] inspected 0 files — the scope is gone, not clean")
+    if scope_is_empty("applescript_launch", len(files), staged=staged):
         sys.exit(1)
     hits = []
     for p in files:

@@ -35,6 +35,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _srcscan import strip_rust_comments  # noqa: E402
+from _empty_scope import scope_is_empty  # noqa: E402
 
 _GENERATED_MARKER = "@generated"
 _ALLOW_PATTERN = re.compile(r"#!?\[allow\(")
@@ -106,6 +107,8 @@ def main():
     staged = "--staged" in sys.argv
     root = Path.cwd()
     files = _staged_files(root) if staged else _tracked_files(root)
+    if scope_is_empty('no_allow', len(files), staged=staged, unit='Rust source files'):
+        sys.exit(1)
     hits = _scan(files)
     if hits:
         scope = "staged" if staged else "tracked"

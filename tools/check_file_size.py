@@ -15,6 +15,9 @@ EXCLUDE_PREFIXES / EXEMPT) — the limit is about authored production source.
 """
 import os, subprocess, sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _empty_scope import scope_is_empty  # noqa: E402
+
 MAX_LINES = 500
 
 # Source extensions the rule applies to.
@@ -61,6 +64,8 @@ def main() -> int:
     if not root:
         print("[file_size] not a git repo — skipping"); return 0
     files = _files(root, staged)
+    if scope_is_empty('file_size', len(files), staged=staged, unit='source files'):
+        return 1
     bad = []
     for f in files:
         try:
