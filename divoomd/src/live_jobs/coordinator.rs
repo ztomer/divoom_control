@@ -81,7 +81,7 @@ impl LiveJobCoordinator {
     /// # Errors
     ///
     /// When the live-job kind is unknown, and when a job needs a platform
-    /// facility that is absent -- the music job needs macOS MediaRemote and
+    /// facility that is absent -- the music job needs macOS `MediaRemote` and
     /// says so rather than starting and rendering nothing.
     pub async fn start(
         &self,
@@ -204,7 +204,10 @@ impl LiveJobCoordinator {
                 // the current state from here instead of guessing.
                 match health.get(&(m.clone(), k.clone())) {
                     Some(state) => {
-                        entry["state"] = state.get("state").cloned().unwrap_or(json!("running"));
+                        entry["state"] = state
+                            .get("state")
+                            .cloned()
+                            .unwrap_or_else(|| json!("running"));
                         if let Some(detail) = state.get("detail") {
                             entry["detail"] = detail.clone();
                         }

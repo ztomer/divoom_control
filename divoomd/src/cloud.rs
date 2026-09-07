@@ -57,18 +57,14 @@ fn md5_hex(s: &str) -> String {
     let mut hasher = Md5::new();
     hasher.update(s.as_bytes());
     let result = hasher.finalize();
-    result.iter().map(|b| format!("{b:02x}")).collect()
+    crate::wire::hex(&result)
 }
 
 fn hmac_md5_hex(message: &str) -> String {
     let mut mac = HmacMd5::new_from_slice(HMAC_KEY).expect("HMAC can take key of any size");
     mac.update(message.as_bytes());
     let result = mac.finalize();
-    result
-        .into_bytes()
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect()
+    crate::wire::hex(&result.into_bytes())
 }
 
 pub(crate) use crate::cloud_dials::{get_dial_list, get_dial_types, list_clock_faces};

@@ -90,7 +90,7 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
                 Some(k) => k.to_string(),
                 None => return err_reply("live_job_start requires 'kind'"),
             };
-            let params = req.args.get("params").cloned().unwrap_or(json!({}));
+            let params = req.args.get("params").cloned().unwrap_or_else(|| json!({}));
             match self_weak.upgrade() {
                 Some(d) => match daemon.live_jobs.start(d, mac, kind, params).await {
                     Ok(()) => json!({"success": true}),

@@ -238,6 +238,13 @@ async fn subscribers_cannot_starve_request_handling() {
     ));
 
     // Fill the subscription budget.
+    // NOT dead, though nothing reads it: it holds the two streams OPEN, which
+    // is what keeps their subscriptions occupying the budget. Drop it and the
+    // third subscribe below succeeds and the test asserts nothing.
+    #[expect(
+        clippy::collection_is_never_read,
+        reason = "an RAII holder: the connections must outlive the assertions"
+    )]
     let mut subs = Vec::new();
     let mut buf = [0u8; 512];
     for i in 0..2 {

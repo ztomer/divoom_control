@@ -242,7 +242,7 @@ mod tests {
                     if reader.read_line(&mut line).unwrap_or(0) == 0 {
                         continue;
                     }
-                    let req: Value = serde_json::from_str(&line).unwrap_or(json!({}));
+                    let req: Value = serde_json::from_str(&line).unwrap_or_else(|_| json!({}));
                     if req.get("command").and_then(|c| c.as_str()) == Some("subscribe") {
                         for ev in &subscribe_events {
                             let mut out = serde_json::to_vec(ev).unwrap();

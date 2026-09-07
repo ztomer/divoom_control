@@ -207,7 +207,7 @@ impl BleTransport {
     ) -> BleResult<()> {
         if std::env::var("DIVOOMD_BLE_DEBUG").is_ok() {
             let n = args.len().min(12);
-            let hx: String = args[..n].iter().map(|b| format!("{b:02x}")).collect();
+            let hx = crate::wire::hex(&args[..n]);
             eprintln!(
                 "[ble] tx cmd=0x{command_id:02x} ({} args){}",
                 args.len(),

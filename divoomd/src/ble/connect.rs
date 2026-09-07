@@ -127,7 +127,7 @@ pub(super) async fn connect(central: &BleCentral, id: &str) -> BleResult<BleTran
         while let Some(n) = notifications.next().await {
             let data = n.value;
             if std::env::var("DIVOOMD_BLE_DEBUG").is_ok() {
-                let hx: String = data.iter().map(|b| format!("{b:02x}")).collect();
+                let hx = crate::wire::hex(&data);
                 eprintln!("[ble] rx {} bytes: {hx}", data.len());
             }
             if data.len() >= 4 && data[0..4] == IOS_LE_HEADER {

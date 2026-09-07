@@ -56,13 +56,13 @@ impl WireNarrow for u64 {
 
 impl WireNarrow for usize {
     fn byte(self) -> u8 {
-        u8::try_from(self.min(u8::MAX as usize)).unwrap_or(u8::MAX)
+        u8::try_from(self.min(u8::MAX as Self)).unwrap_or(u8::MAX)
     }
     fn word(self) -> u16 {
-        u16::try_from(self.min(u16::MAX as usize)).unwrap_or(u16::MAX)
+        u16::try_from(self.min(u16::MAX as Self)).unwrap_or(u16::MAX)
     }
     fn dword(self) -> u32 {
-        u32::try_from(self.min(u32::MAX as usize)).unwrap_or(u32::MAX)
+        u32::try_from(self.min(u32::MAX as Self)).unwrap_or(u32::MAX)
     }
 }
 
@@ -96,6 +96,23 @@ pub fn be32(v: i64) -> [u8; 4] {
 #[must_use]
 pub fn le16_len(v: usize) -> [u8; 2] {
     v.word().to_le_bytes()
+}
+
+/// Lowercase hex, for logs and oracle comparisons.
+///
+/// This was `iter().map(|b| format!("{b:02x}")).collect()` at five sites --
+/// which allocates a two-character `String` per byte and throws each away.
+/// `clippy::format_collect` is right that it is wasteful; the reason to have
+/// one function is that five copies of a formatting decision drift.
+#[must_use]
+pub fn hex(bytes: &[u8]) -> String {
+    use std::fmt::Write as _;
+    bytes
+        .iter()
+        .fold(String::with_capacity(bytes.len() * 2), |mut s, b| {
+            let _ = write!(s, "{b:02x}");
+            s
+        })
 }
 
 #[cfg(test)]

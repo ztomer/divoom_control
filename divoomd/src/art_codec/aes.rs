@@ -63,13 +63,6 @@ fn aes128cbc_decrypt_impl(ct: &[u8], key: &[u8; 16], iv: &[u8; 16]) -> Option<Ve
         0x7d,
     ];
 
-    const fn xtime(a: u8) -> u8 {
-        if a & 0x80 != 0 {
-            (a << 1) ^ 0x1b
-        } else {
-            a << 1
-        }
-    }
     fn gmul(mut a: u8, mut b: u8) -> u8 {
         let mut p = 0u8;
         for _ in 0..8 {
@@ -128,9 +121,12 @@ fn aes128cbc_decrypt_impl(ct: &[u8], key: &[u8; 16], iv: &[u8; 16]) -> Option<Ve
             state[9] = state[5];
             state[5] = state[1];
             state[1] = t;
-            let _t = state[10];
+            // Rows 2 and 3 rotate by TWO, which for four elements is a pair
+            // of swaps -- no temporary needed. The `let _t = state[10]` that
+            // used to sit here was left over from a temp-based rotation and had
+            // had no reader since; `clippy::no_effect_underscore_binding`
+            // found it.
             state.swap(10, 2);
-            let _t = state[14];
             state.swap(14, 6);
             let t = state[3];
             state[3] = state[7];
@@ -159,7 +155,6 @@ fn aes128cbc_decrypt_impl(ct: &[u8], key: &[u8; 16], iv: &[u8; 16]) -> Option<Ve
                 state[col * 4 + 3] =
                     gmul(s0, 0x0b) ^ gmul(s1, 0x0d) ^ gmul(s2, 0x09) ^ gmul(s3, 0x0e);
             }
-            let _ = (xtime(0),); // silence unused fn warning
         }
         // Final round (no InvMixColumns)
         let t = state[13];
@@ -167,9 +162,7 @@ fn aes128cbc_decrypt_impl(ct: &[u8], key: &[u8; 16], iv: &[u8; 16]) -> Option<Ve
         state[9] = state[5];
         state[5] = state[1];
         state[1] = t;
-        let _t = state[10];
         state.swap(10, 2);
-        let _t = state[14];
         state.swap(14, 6);
         let t = state[3];
         state[3] = state[7];

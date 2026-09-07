@@ -26,7 +26,7 @@ fn hex_to_bytes(s: &str) -> Vec<u8> {
 }
 
 fn to_hex(b: &[u8]) -> String {
-    b.iter().map(|x| format!("{x:02x}")).collect()
+    divoomd::wire::hex(b)
 }
 
 #[expect(
