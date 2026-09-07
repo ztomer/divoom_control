@@ -28,16 +28,37 @@ shipped milestone (per the project planning docs).
 - **There was a subscription TTL and it could not fire.** The subscriber watchdog
   reset its deadline every time the daemon DELIVERED AN EVENT — on its own
   output. Written to answer "is this client still there?", it answers "have we
-  written to it recently?", so on a channel carrying any traffic the deadline is
-  pushed out forever. It reaps a subscriber on a SILENT stream and in no other
-  case, which is not the case anyone needed bounded.
+  written to it recently?"; and since events are a BROADCAST, deliveries move
+  every subscriber's deadline in lockstep and can never separate a live
+  subscriber from a dead one. It could only ever reap a subscriber on a SILENT
+  channel, which is not the case anyone needed bounded.
 
   Request/reply connections were never the problem: the Python client closes
   each one (`with s:`), so they EOF at once. Only subscriptions could pile up,
-  and only subscriptions had a watchdog that could not bite. They now expire on
-  an absolute deadline nothing can reset (`idle_timeout * 6`, 30 minutes at the
-  default) and the daemon sends `{"type":"resubscribe"}` before closing. The
-  menu bar and GUI already re-subscribe on drop, so it is a renegotiation.
+  and only subscriptions had a watchdog that could not bite.
+
+- **Subscriptions are now a bounded, self-cleaning registry** (LRU admission,
+  `divoomd/src/subscriptions.rs`) rather than a blanket lifetime. An interim fix
+  gave every subscription an absolute max age, which renegotiated healthy
+  clients on a timer to solve a problem caused by dead ones. Instead:
+
+  * room to spare -> admit, disturb nobody;
+  * full -> reclaim the LEAST-RECENTLY-ACTIVE slot, and only if it has been
+    quiet for at least `RENEGOTIATE_AFTER` (10 min). The evicted connection is
+    notified and sends `{"type":"resubscribe"}` before closing, so the client
+    treats it as a renegotiation — the menu bar and GUI already re-subscribe on
+    drop;
+  * full of demonstrably ACTIVE subscriptions -> refuse the newcomer with a
+    reason. Without that floor a burst of new clients would evict each other in
+    a loop.
+
+  **Activity means bytes FROM the client, and nothing else** — for the same
+  reason the old watchdog failed. A client that never speaks is never "active",
+  so it ages from admission and is displaced first; any byte it sends defends
+  its slot. Registry policy is unit-tested directly on tokio's paused clock
+  (capacity, lease release, evict-only-when-stale, refuse-when-all-active, and
+  the case that matters: two subscriptions age together, one client speaks, and
+  the SILENT one is the one renegotiated).
 
 - **Subscriptions now have their own budget** — at most half the connection
   budget, and at most `MAX_SUBSCRIPTIONS`. With one shared budget, enough

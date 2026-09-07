@@ -38,9 +38,13 @@ shared memory. Read this on entry and **update it at the end of every round**
      pushed its deadline out on every event DELIVERED, so it could only ever
      reap a subscriber on a silent channel. Subscriptions are the only
      connections that accumulate (request clients close immediately), so nothing
-     bounded the one thing that grows. They now expire on an absolute deadline
-     nothing can reset, announced with `{"type":"resubscribe"}`, and have their
-     own budget capped at half the connection budget.
+     bounded the one thing that grows. Subscriptions are now a bounded,
+     self-cleaning LRU registry (`divoomd/src/subscriptions.rs`): nothing is
+     disturbed until a slot is needed, then the least-recently-active one is
+     reclaimed — and only if quiet for 10 minutes — with a
+     `{"type":"resubscribe"}` notice. Activity means bytes FROM the client,
+     because deliveries are a broadcast and separate nobody. Their budget is
+     capped at half the connection budget so they can never starve requests.
 
   **The instrument that hid it for five days:** the back-pressure test asserted
   that an over-cap client gets NO REPLY within 300ms. That reading is identical
