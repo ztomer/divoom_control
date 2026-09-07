@@ -4,7 +4,7 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
-## Unreleased
+## v0.32.0 — R74: a daemon that cannot be reached cannot be fixed (2026-09-07)
 
 ### Fixed — the daemon could go completely deaf, and blamed another program
 
@@ -1519,7 +1519,13 @@ files, gated only `divoomd`, and runs no tests. **The workflow YAML changes in
 this round are unverified**; the YAML parses and every command was proven
 locally, but the workflow itself has not executed. Re-check when billing returns.
 
-## Unreleased
+### Release process (folded into v0.23.0 above — it shipped there)
+
+<!-- This was a stray second `## Unreleased` heading, stranded mid-file
+     between v0.23.0 and v0.22.21. Its content shipped: `ci_gate` is in
+     scripts/release.sh today. Demoted to a subsection so the file has
+     exactly one Unreleased heading and check_version_consistency.py
+     reads the right stanza. -->
 
 - **release rule:** cutting a release is only allowed when GitHub CI is green for
   the commit being tagged. `scripts/release.sh` now runs a preflight `ci_gate`

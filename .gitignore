@@ -69,3 +69,7 @@ target/
 
 # opencode session state (local agent scratch, never shared)
 .opencode/
+
+# Coverage instrumentation output (llvm-cov / cargo-llvm-cov)
+*.profraw
+*.profdata

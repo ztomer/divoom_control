@@ -193,8 +193,13 @@ def test_gate_refuses_to_pass_over_an_empty_scope(tmp_path):
     .py/.rs/.sh really does have an empty scope."""
     subprocess.run(["git", "init", "-q", "."], cwd=tmp_path, check=True)
     (tmp_path / "tools").mkdir()
-    for name in ("check_applescript_launch.py", "_srcscan.py"):
-        (tmp_path / "tools" / name).write_bytes((REPO / "tools" / name).read_bytes())
+    # Copy the gate plus EVERY shared `tools/_*.py` helper, not a hardcoded
+    # pair. Naming them individually broke the moment the gate started importing
+    # `_empty_scope`: the copy raised ModuleNotFoundError, exited non-zero, and
+    # the "refuses an empty scope" assertion passed for entirely the wrong
+    # reason until it checked stdout.
+    for src in [REPO / "tools" / "check_applescript_launch.py", *sorted((REPO / "tools").glob("_*.py"))]:
+        (tmp_path / "tools" / src.name).write_bytes(src.read_bytes())
     gate_py = "tools/check_applescript_launch.py"
 
     full = subprocess.run([sys.executable, gate_py], cwd=tmp_path, capture_output=True, text=True)

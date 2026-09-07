@@ -111,7 +111,7 @@ are not restated.
 
 ## Current debt & quality
 
-- **Gates**: 21 steps, run by `pre-push` since R71 P0 — they used to run only
+- **Gates**: 22 steps, run by `pre-push` since R71 P0 — they used to run only
   when someone typed the command. Local and CI are kept identical on purpose.
   `check_applescript_launch.py` joined the list on 2026-09-07: no source may
   address an application by LaunchServices NAME in AppleScript without an
@@ -201,25 +201,6 @@ Worth knowing, because the fix bounds the symptom rather than the cause. The
 cheap next step is a connection census in `get_status` (count by kind, with
 ages), so the next occurrence identifies itself instead of needing `lsof` and a
 `sample`.
-
-### OPEN — `test_gate_full_reaches_layer_three` fails on an EMPTY-SCOPE rule
-
-Pre-existing, and confirmed pre-existing by re-running it against clean HEAD
-(stash, run, restore) rather than assumed. `gates_of_heck/checks/check_empty_scope.py`
-now fails any checker that reports success having inspected zero files — a
-renamed directory retires such a gate in silence, and a ratchet reads a
-population of zero as every ceiling being met. Seven of ours do it:
-
-    check_camoufox_installed.py   check_file_size.py     check_gui_is_a_client.py
-    check_no_allow.py             check_positional_args.py   check_scripts.py
-
-(`check_applescript_launch.py` was the seventh and is FIXED — it exits 1 on an
-empty scope, with `--staged` exempt, since a commit touching no `.py`/`.rs`/`.sh`
-legitimately has nothing to inspect. Copy that shape.)
-
-Each needs the same guard, or an entry in `tools/empty_scope_allow.json` (which
-does not exist yet) stating why it may legitimately pass on nothing. Until then
-`pre-push` is blocked by a message about the gate rather than about the code.
 
 ### OPEN — the browser e2e suite is LOAD-SENSITIVE, and it undermines the gate
 

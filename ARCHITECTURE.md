@@ -61,6 +61,26 @@ graph LR
   (local, trusted) and, optionally, TCP (`--host`/`--port`/`--token`, R19).
   Binary device data (images/GIFs) is shipped via base64 `blobs` only when the
   client is remote; locally, file paths are passed (shared filesystem).
+- **Socket-server liveness rules** (`divoomd/src/socket_server.rs`,
+  `divoomd/src/subscriptions.rs`). Three invariants, each earned by a daemon
+  that went deaf for five days and reported itself as "another program":
+  - **The accept loop never stops.** `MAX_CONNECTIONS` (64) bounds fds and
+    tasks, not reachability: at the cap the daemon still accepts and refuses in
+    one reply line, carrying `daemon_version` so a busy daemon stays
+    identifiable to `socket_bind`'s prober. A cap that pauses `accept()` makes
+    `connect()` succeed onto the kernel backlog and answer nothing, for every
+    command, including `get_status`.
+  - **Liveness comes from the peer.** Subscriber activity is measured by bytes
+    RECEIVED. The old watchdog reset on every event DELIVERED — the daemon's own
+    output — and since events are a broadcast, that moved every subscriber's
+    deadline together and ranked nobody.
+  - **Subscriptions are a bounded, self-cleaning LRU registry**, budgeted at
+    half the connection budget so they can never starve requests. Nothing is
+    disturbed until a slot is needed; then the least-recently-active one is
+    reclaimed, only if quiet past `RENEGOTIATE_AFTER`, and told to reconnect
+    with `{"type":"resubscribe"}`. If every slot is demonstrably active the
+    newcomer is refused instead — without that floor, newcomers evict each
+    other in a loop.
 - **Device-bound text** (tickers, sysmon, notifications) is rasterised with the
   crisp 1-bit bitmap font in `divoom_lib/fonts/` (extracted from the Divoom APK,
   R28) — never an anti-aliased TrueType font, which is unreadable at 16/32/64px.

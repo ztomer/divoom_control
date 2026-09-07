@@ -21,6 +21,17 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-07 — v0.32.0 (R74) CUT.** Two user-reported failures, both ours,
+  both the same shape: a system that could not describe its own state, and
+  instruments that read identically for "fine" and "broken". Full detail in the
+  CHANGELOG stanza and `docs/release_notes_v0.32.0.md`; the durable lessons are
+  in the new `daemon-liveness-design` skill.
+
+  Round contents: the deaf-daemon redesign (accept always, shed with an
+  identifiable refusal, LRU subscription registry keyed on client-produced
+  activity), the AppleScript app-name crash + its repo-wide gate, and the
+  empty-scope guard that unblocked `pre-push` for the first time in weeks.
+
 - **2026-09-07 — The daemon could go completely deaf; fixed at the design level.**
   A divoomd ran five days holding 64 connections and answering nobody. Every
   attempt to start a replacement said `/tmp/divoom.sock is in use by another
