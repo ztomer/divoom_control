@@ -43,6 +43,10 @@ fn get_arg_str(kw: Option<&serde_json::Map<String, Value>>, name: &str, default:
         .to_string()
 }
 
+#[expect(
+    clippy::option_if_let_else,
+    reason = "a command dispatch table: every arm is missing-argument outside and result-or-reason inside. As `map_or_else` each verb becomes two closures and the table stops looking like a table"
+)]
 pub(super) async fn handle_lan_call(
     lan: &crate::lan::LanTransport,
     method: &str,

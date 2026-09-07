@@ -121,10 +121,9 @@ impl Artwork {
     /// Worth logging once: it means the source cannot be trusted for typing.
     #[must_use]
     pub fn mime_is_a_lie(&self) -> bool {
-        match &self.declared_mime {
-            Some(d) => !d.eq_ignore_ascii_case(self.format.mime()),
-            None => false,
-        }
+        self.declared_mime
+            .as_ref()
+            .is_some_and(|d| !d.eq_ignore_ascii_case(self.format.mime()))
     }
 }
 

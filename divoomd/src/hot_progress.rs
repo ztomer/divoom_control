@@ -95,6 +95,10 @@ impl HotProgress {
     }
 
     /// Reset a stuck "starting" state (queue-expired before task ran).
+    #[expect(
+        clippy::option_if_let_else,
+        reason = "the `Some` arm is a multi-line body, not an expression -- it decodes a reply, or builds a payload, before it decides. Hoisting it into a closure argument puts the substance of the function inside a call"
+    )]
     pub fn clear_stuck_starting(&self) {
         let stuck = {
             match self.inner.lock() {

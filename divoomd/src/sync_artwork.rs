@@ -79,6 +79,10 @@ pub fn resolve_preview_data_url(raw: &[u8]) -> Option<String> {
 /// (parity with the Python GUI's `gallery_hot_api.get_animated_preview`).
 ///
 /// Only the small data-url crosses the socket; the raw binary never does.
+#[expect(
+    clippy::option_if_let_else,
+    reason = "the `Some` arm is a multi-line body, not an expression -- it decodes a reply, or builds a payload, before it decides. Hoisting it into a closure argument puts the substance of the function inside a call"
+)]
 pub async fn get_animated_preview(args: &Value) -> Value {
     let file_id = match args.get("file_id").and_then(|v| v.as_str()) {
         Some(f) if !f.is_empty() => f.to_string(),

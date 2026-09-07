@@ -16,6 +16,10 @@ fn kw_i64(kw: Option<&Map<String, Value>>, name: &str) -> Option<i64> {
         .and_then(serde_json::Value::as_i64)
 }
 
+#[expect(
+    clippy::option_if_let_else,
+    reason = "a command dispatch table: every arm is missing-argument outside and result-or-reason inside. As `map_or_else` each verb becomes two closures and the table stops looking like a table"
+)]
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let args = ctx.args;

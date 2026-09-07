@@ -251,6 +251,10 @@ impl CommandQueue {
         self.notify.notify_one();
     }
 
+    #[expect(
+        clippy::option_if_let_else,
+        reason = "the `Some` arm mutates the queue state before deciding what the caller should do next"
+    )]
     fn next_step(&self) -> Step {
         let mut g = self.inner.lock().unwrap();
         if g.stopped {

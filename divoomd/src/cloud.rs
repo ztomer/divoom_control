@@ -218,11 +218,9 @@ pub async fn get_credentials(force_refresh: bool) -> Result<DivoomCredentials, S
     let (email, password) = load_config();
     let cooldown_expired = {
         let guard = last_auth_fail_at().lock().unwrap();
-        if let Some(t) = *guard {
+        guard.is_none_or(|t| {
             t.elapsed().unwrap_or_default() > Duration::from_secs(AUTH_FAIL_COOLDOWN_SECS)
-        } else {
-            true
-        }
+        })
     };
 
     if !email.is_empty() && !password.is_empty() && (force_refresh || cooldown_expired) {

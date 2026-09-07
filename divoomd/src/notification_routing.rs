@@ -26,6 +26,10 @@ pub const DEFAULT_ROUTING: &[(&str, u8)] = &[
 ];
 
 #[must_use]
+#[expect(
+    clippy::option_if_let_else,
+    reason = "an ordered chain of environment lookups, not one optional value. The `else if` is the next place to look"
+)]
 pub fn get_routing_path() -> std::path::PathBuf {
     if let Ok(p) = std::env::var("DIVOOM_CONTROL_ROUTING") {
         std::path::PathBuf::from(p)
@@ -40,6 +44,10 @@ pub fn get_routing_path() -> std::path::PathBuf {
 }
 
 #[must_use]
+#[expect(
+    clippy::option_if_let_else,
+    reason = "the `Some` arm is a multi-line body, not an expression -- it decodes a reply, or builds a payload, before it decides. Hoisting it into a closure argument puts the substance of the function inside a call"
+)]
 pub fn load_routing_rules() -> Vec<(String, u8)> {
     let p = get_routing_path();
     if !p.exists() {

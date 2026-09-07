@@ -52,6 +52,10 @@ pub enum Status {
     Active,
 }
 
+#[expect(
+    clippy::option_if_let_else,
+    reason = "a two-level lookup: the daemon answering at all, then what it said. `map_or_else` nests a closure in a closure to save one `match`"
+)]
 pub fn status() -> Status {
     match request("get_status", json!({})) {
         None => Status::Offline,

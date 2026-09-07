@@ -145,6 +145,10 @@ async fn scrolling_text(ctx: &CallCtx<'_>) -> Value {
     json!({"success": true, "result": true, "characters": units.len(), "rate": rate})
 }
 
+#[expect(
+    clippy::option_if_let_else,
+    reason = "a command dispatch table: every arm is missing-argument outside and result-or-reason inside. As `map_or_else` each verb becomes two closures and the table stops looking like a table"
+)]
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     if method.ends_with("show_scrolling_text") || method.ends_with("scrolling_text") {
         return scrolling_text(&ctx).await;

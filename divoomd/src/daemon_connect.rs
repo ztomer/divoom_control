@@ -52,6 +52,10 @@ pub(crate) fn status_payload(
 /// pushes the set on connect/disconnect instead of the UI polling
 /// `get_device_activity` every 4s. `devices` mirrors `get_device_activity`'s
 /// per-mac shape (`address`/`name`/`kind`/`state`) so the UI can reuse its merge.
+#[expect(
+    clippy::option_if_let_else,
+    reason = "the `Some` arm is a multi-line body, not an expression -- it decodes a reply, or builds a payload, before it decides. Hoisting it into a closure argument puts the substance of the function inside a call"
+)]
 pub(crate) fn owned_devices_payload(device_id: Option<&str>) -> Value {
     let devices = match device_id {
         Some(id) => vec![json!({

@@ -23,17 +23,13 @@ use tokio::net::UnixListener;
 use divoomd::socket_server::{serve, serve_tcp, CONNECTION_IDLE_TIMEOUT, MAX_CONNECTIONS};
 
 fn env_usize(key: &str, default: usize) -> usize {
-    match std::env::var(key) {
-        Ok(v) => v.parse().unwrap_or(default),
-        Err(_) => default,
-    }
+    std::env::var(key).map_or(default, |v| v.parse().unwrap_or(default))
 }
 
 fn env_duration(key: &str, default: Duration) -> Duration {
-    match std::env::var(key) {
-        Ok(v) => v.parse::<u64>().map_or(default, Duration::from_secs),
-        Err(_) => default,
-    }
+    std::env::var(key).map_or(default, |v| {
+        v.parse::<u64>().map_or(default, Duration::from_secs)
+    })
 }
 
 #[tokio::main]

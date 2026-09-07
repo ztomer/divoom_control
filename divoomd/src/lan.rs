@@ -121,6 +121,10 @@ impl LanTransport {
     }
 
     /// Check whether the device is reachable on the LAN.
+    #[expect(
+        clippy::option_if_let_else,
+        reason = "the `Some` arm is a multi-line body, not an expression -- it decodes a reply, or builds a payload, before it decides. Hoisting it into a closure argument puts the substance of the function inside a call"
+    )]
     pub async fn probe(&self) -> bool {
         match self.post("Channel/GetIndex", None).await {
             Ok(val) => val.is_object(),

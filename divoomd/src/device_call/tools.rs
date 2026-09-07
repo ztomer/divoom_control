@@ -3,6 +3,10 @@ use crate::protocol::err_reply;
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
+#[expect(
+    clippy::option_if_let_else,
+    reason = "a command dispatch table: every arm is missing-argument outside and result-or-reason inside. As `map_or_else` each verb becomes two closures and the table stops looking like a table"
+)]
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let args = ctx.args;

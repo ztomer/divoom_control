@@ -5,6 +5,10 @@ use crate::daemon::Daemon;
 use crate::protocol::{err_reply, Request};
 use serde_json::{json, Value};
 
+#[expect(
+    clippy::option_if_let_else,
+    reason = "a command dispatch table: every arm is missing-argument outside and result-or-reason inside. As `map_or_else` each verb becomes two closures and the table stops looking like a table"
+)]
 pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
     match req.command.as_str() {
         "ping" => json!({"success": true, "pong": true}),

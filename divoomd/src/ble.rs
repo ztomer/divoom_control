@@ -124,10 +124,9 @@ pub async fn scan(central: &BleCentral, timeout: Duration) -> BleResult<Vec<Disc
         }
         Ok(out)
     };
-    match tokio::time::timeout(dur + Duration::from_secs(10), work).await {
-        Ok(r) => r,
-        Err(_) => Err("scan timed out: central may be stale (Channel closed)".into()),
-    }
+    tokio::time::timeout(dur + Duration::from_secs(10), work)
+        .await
+        .unwrap_or_else(|_| Err("scan timed out: central may be stale (Channel closed)".into()))
 }
 
 /// An owned connection to one device: serialized writes + a parsed-frame channel.

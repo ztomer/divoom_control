@@ -45,6 +45,10 @@ impl DivoomWall {
     ///
     /// From the BLE stack below: the adapter is gone, the peripheral is not
     /// connected, or the write did not complete.
+    #[expect(
+        clippy::option_if_let_else,
+        reason = "the `Some` arm is a multi-line body, not an expression -- it decodes a reply, or builds a payload, before it decides. Hoisting it into a closure argument puts the substance of the function inside a call"
+    )]
     pub async fn connect(
         daemon: &Daemon,
         configs: &[WallConfig],

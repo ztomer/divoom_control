@@ -46,6 +46,10 @@ fn load_map(path: &Path) -> serde_json::Map<String, Value> {
 ///
 /// When no config directory can be located, or the state file cannot be
 /// written.
+#[expect(
+    clippy::option_if_let_else,
+    reason = "the `Some` arm is a multi-line body, not an expression -- it decodes a reply, or builds a payload, before it decides. Hoisting it into a closure argument puts the substance of the function inside a call"
+)]
 pub fn record_check(address: &str, summary: &Value) -> Result<(), String> {
     match state_path() {
         Some(path) => record_check_at(&path, address, summary),

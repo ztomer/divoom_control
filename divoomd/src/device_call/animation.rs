@@ -46,6 +46,10 @@ async fn send(dev: &DeviceTransport, cmd: u8, payload: &[u8], label: &str) -> Va
 ///
 /// If the mutex guarding this value is poisoned -- another thread panicked
 /// while holding it, so the value cannot be trusted.
+#[expect(
+    clippy::option_if_let_else,
+    reason = "a command dispatch table: every arm is missing-argument outside and result-or-reason inside. As `map_or_else` each verb becomes two closures and the table stops looking like a table"
+)]
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let args = ctx.args;

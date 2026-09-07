@@ -9,6 +9,10 @@ mod display;
 ///
 /// If the mutex guarding this value is poisoned -- another thread panicked
 /// while holding it, so the value cannot be trusted.
+#[expect(
+    clippy::option_if_let_else,
+    reason = "a command dispatch table: every arm is missing-argument outside and result-or-reason inside. As `map_or_else` each verb becomes two closures and the table stops looking like a table"
+)]
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     // The `display.*`/`show_*` (0x45 channel payloads + image streaming) family
     // lives in `display.rs`; keep this dispatcher for the rest.
