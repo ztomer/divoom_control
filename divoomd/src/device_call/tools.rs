@@ -226,7 +226,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 })
                 .unwrap_or(0);
             match dev
-                .send_command_and_wait(0x71, &[tool_type as u8], ctx.timeout)
+                .send_command_and_wait(0x71, &[tool_type.byte()], ctx.timeout)
                 .await
             {
                 Some(r) => {
@@ -264,15 +264,15 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 kw.and_then(|v| v.get(n))
                     .and_then(serde_json::Value::as_i64)
             };
-            let mut payload = vec![gmi as u8];
+            let mut payload = vec![gmi.byte()];
             match gmi {
                 0 | 2 => match g("ctrl_flag") {
-                    Some(c) => payload.push(c as u8),
+                    Some(c) => payload.push(c.byte()),
                     None => return err_reply("set_tool_info: timer/noise need 'ctrl_flag'"),
                 },
                 1 => match g("on_off") {
                     Some(on_off) => {
-                        payload.push(on_off as u8);
+                        payload.push(on_off.byte());
                         payload
                             .extend_from_slice(&(g("red_score").unwrap_or(0).word()).to_le_bytes());
                         payload.extend_from_slice(
@@ -283,9 +283,9 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 },
                 3 => match (g("ctrl_flag"), g("minutes"), g("seconds")) {
                     (Some(c), Some(m), Some(s)) => {
-                        payload.push(c as u8);
-                        payload.push(m as u8);
-                        payload.push(s as u8);
+                        payload.push(c.byte());
+                        payload.push(m.byte());
+                        payload.push(s.byte());
                     }
                     _ => {
                         return err_reply(

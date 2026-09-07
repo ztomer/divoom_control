@@ -115,6 +115,10 @@ async fn get_device_transport(daemon: &Daemon, mac: &str) -> Option<Arc<DeviceTr
 
 // --- Live Widgets Loops ---
 
+#[expect(
+    clippy::cast_possible_wrap,
+    reason = "system percentages and byte rates rendered onto a panel, converted for the drawing arithmetic below"
+)]
 async fn run_sysmon(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
     const JOB_KIND: &str = "sysmon";
     let size = params
@@ -184,6 +188,10 @@ async fn run_sysmon(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
     }
 }
 
+#[expect(
+    clippy::cast_possible_wrap,
+    reason = "a price and a percentage change rendered onto a panel"
+)]
 async fn run_stocks(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
     const JOB_KIND: &str = "stocks";
     let symbol = params

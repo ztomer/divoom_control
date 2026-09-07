@@ -35,6 +35,10 @@ fn to_hex(b: &[u8]) -> String {
 }
 
 #[test]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "oracle fixture dimensions and durations from a JSON file this test ships"
+)]
 fn ffi_image_encoders_match_python() {
     let path = dylib_path();
     if path.is_empty() {

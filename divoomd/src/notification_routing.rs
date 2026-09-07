@@ -5,6 +5,7 @@
 //! is self-contained and independently testable, no macOS-specific I/O beyond
 //! plain file read/write.
 
+use crate::wire::WireNarrow as _;
 pub const DEFAULT_ROUTING: &[(&str, u8)] = &[
     ("whatsapp", 6),
     ("facebook", 4),
@@ -60,7 +61,7 @@ pub fn load_routing_rules() -> Vec<(String, u8)> {
             for entry in entries {
                 if entry.len() == 2 {
                     if let (Some(s), Some(t)) = (entry[0].as_str(), entry[1].as_u64()) {
-                        rules.push((s.to_lowercase(), t as u8));
+                        rules.push((s.to_lowercase(), t.byte()));
                     }
                 }
             }

@@ -55,10 +55,20 @@ impl NativeEncoder {
     /// Worst-case output buffer: header + 256*3 palette + 1 byte/pixel (8 bits/px).
     /// MUST match the C's conservative `worst_size` check (the under-allocation bug
     /// this session fixed: the buffer has to be `w*h`, not `(w*h+7)/8`).
+    #[expect(
+        clippy::cast_sign_loss,
+        reason = "an output buffer length handed to the C encoder, which takes it as a signed int"
+    )]
     fn out_buf(w: i32, h: i32, header: usize) -> Vec<u8> {
         vec![0u8; header + 256 * 3 + (w as usize) * (h as usize)]
     }
 
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap,
+        clippy::cast_sign_loss,
+        reason = "frame dimensions and duration handed to the C encoder across an FFI boundary whose signature fixes the widths"
+    )]
     fn call_frame(
         &self,
         sym: &[u8],
@@ -109,6 +119,12 @@ impl NativeEncoder {
 
     /// `divoom_encode_static_image` — single-image 0x44 body (7-byte header).
     #[must_use]
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap,
+        clippy::cast_sign_loss,
+        reason = "image dimensions handed to the C encoder, bounded by the panel edge"
+    )]
     pub fn encode_static_image(&self, rgb: &[u8], w: i32, h: i32) -> Option<Vec<u8>> {
         let mut out = Self::out_buf(w, h, 7);
         let n = out.len() as i32;

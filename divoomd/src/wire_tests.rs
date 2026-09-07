@@ -11,6 +11,10 @@ fn in_range_values_pass_through_unchanged() {
 }
 
 #[test]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "the test asserts what the BARE CAST does, next to what the helper does, so the difference is legible where it matters"
+)]
 fn an_over_range_value_saturates_instead_of_wrapping() {
     // THE POINT. `300 as u8` is 44 -- a real, wrong value that goes to the
     // hardware with nothing to say it was not what was asked for.
@@ -22,6 +26,11 @@ fn an_over_range_value_saturates_instead_of_wrapping() {
 }
 
 #[test]
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "as above: `-1 as u8` is 255, and the test says so out loud"
+)]
 fn a_negative_value_saturates_to_zero_rather_than_a_large_one() {
     // `-1 as u8` is 255: the maximum, from a caller who asked for less than the
     // minimum. That inversion is the worst reading of the two.

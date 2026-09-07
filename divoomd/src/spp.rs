@@ -210,6 +210,11 @@ impl SppTransport {
         self.wait_for_response(command_id, timeout).await
     }
 
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a chunk index written as the two-byte packet index. The transfer is chunked by MTU and a frame has thousands of chunks at most"
+    )]
     pub async fn stream_animation_8b(
         &self,
         blob: &[u8],

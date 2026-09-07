@@ -6,6 +6,7 @@
 //! device-bound scrolling text, which uploads these same 32-byte glyphs to a
 //! panel that has no font of its own.
 
+use crate::wire::WireNarrow as _;
 // --- Bitmap Font ---
 
 pub(crate) const FIRST_CP: u32 = 0x20;
@@ -109,6 +110,11 @@ impl BitmapFont {
         }
     }
 
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap,
+        reason = "a glyph width in pixels, from two column indices within one 8-or-16-wide bitmap"
+    )]
     pub(crate) fn _char_width(&self, ch: char) -> i32 {
         if ch == ' ' {
             return self.space_width;
@@ -162,6 +168,12 @@ impl BitmapFont {
     }
 
     #[expect(clippy::too_many_arguments)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap,
+        clippy::cast_sign_loss,
+        reason = "glyph and pixel coordinates within one panel: rows, columns and an index into a `size * size * 3` buffer, all bounded by the panel edge"
+    )]
     pub(crate) fn draw_text(
         &self,
         buf: &mut [u8],

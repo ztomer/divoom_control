@@ -147,7 +147,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     .and_then(serde_json::Value::as_i64)
             });
             if let Some(p) = page {
-                match dev.send_command(0x85, &[1, p as u8], true).await {
+                match dev.send_command(0x85, &[1, p.byte()], true).await {
                     Ok(()) => json!({"success": true, "result": true}),
                     Err(e) => err_reply(&format!("show_hot_channel: 0x85 failed: {e}")),
                 }

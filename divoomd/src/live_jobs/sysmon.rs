@@ -32,6 +32,12 @@ pub struct SysmonSample {
 /// one-shot request's instance (refreshed twice around a short sleep) both have
 /// to own their own. What they must not own is a second copy of this arithmetic.
 #[must_use]
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    reason = "system counters -- CPU percentage, memory and network totals -- converted for display arithmetic. The percentages are 0..=100 and the totals are far below 2^53"
+)]
 pub fn sample(sys: &System) -> SysmonSample {
     let total_mem = sys.total_memory();
     let used_mem = sys.used_memory();

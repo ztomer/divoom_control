@@ -3,6 +3,12 @@ use crate::protocol::err_reply;
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "a device command dispatcher: every value here comes from a caller's JSON and is written into a protocol field of fixed width. The ones that could be out of range go through `wire::WireNarrow`; these are indices, enum discriminants and already-bounded counts"
+)]
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let args = ctx.args;
@@ -76,11 +82,11 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let payload = [
                 (year % 100) as u8,
                 (year / 100) as u8,
-                month as u8,
-                day as u8,
-                hour as u8,
-                minute as u8,
-                second as u8,
+                month.byte(),
+                day.byte(),
+                hour.byte(),
+                minute.byte(),
+                second.byte(),
                 0x00,
             ];
             match dev.send_command(0x18, &payload, true).await {

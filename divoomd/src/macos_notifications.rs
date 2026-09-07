@@ -192,7 +192,7 @@ pub async fn set_routing(args: &Value) -> Value {
             if let Some(pair) = entry.as_array() {
                 if pair.len() == 2 {
                     if let (Some(s), Some(t)) = (pair[0].as_str(), pair[1].as_u64()) {
-                        new_rules.push((s.to_lowercase(), t as u8));
+                        new_rules.push((s.to_lowercase(), t.byte()));
                     }
                 }
             }

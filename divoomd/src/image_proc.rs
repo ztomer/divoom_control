@@ -31,6 +31,10 @@ pub fn process_image_bytes(
     }
 }
 
+#[expect(
+    clippy::cast_possible_wrap,
+    reason = "an image edge length as the signed dimension the encoder takes. Device panels are 16, 32 or 64 pixels"
+)]
 fn process_static(data: &[u8], size: u32, time_ms: u16) -> Result<Vec<Frame>, String> {
     let img = image::load_from_memory(data).map_err(|e| format!("image load: {e}"))?;
     let img = img.resize_exact(size, size, FilterType::Nearest);
@@ -38,6 +42,11 @@ fn process_static(data: &[u8], size: u32, time_ms: u16) -> Result<Vec<Frame>, St
     Ok(vec![(rgb, size as i32, size as i32, time_ms)])
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    reason = "a GIF frame delay in milliseconds, floored at 50, and panel edge lengths of 16 to 64"
+)]
 fn process_gif(data: Vec<u8>, size: u32, default_time_ms: u16) -> Result<Vec<Frame>, String> {
     use image::codecs::gif::GifDecoder;
     let decoder =

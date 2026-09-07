@@ -38,6 +38,10 @@ async fn send(dev: &DeviceTransport, cmd: u8, payload: &[u8], label: &str) -> Va
     }
 }
 
+#[expect(
+    clippy::cast_possible_wrap,
+    reason = "a device command dispatcher: every value here comes from a caller's JSON and is written into a protocol field of fixed width. The ones that could be out of range go through `wire::WireNarrow`; these are indices, enum discriminants and already-bounded counts"
+)]
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let args = ctx.args;
@@ -76,7 +80,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .unwrap_or(0);
             let mut p = Vec::new();
             p.extend_from_slice(&le16(total_len));
-            p.push(gif_id as u8);
+            p.push(gif_id.byte());
             p.extend_from_slice(&kw_bytes(kw, "gif_data"));
             send(dev, 0x49, &p, "set_light_phone_gif").await
         }
@@ -90,7 +94,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         // SENDING_DATA[file_size LE32, offset LE16, *file_data] / TERMINATE[].
         "animation.app_new_send_gif_cmd" | "app_new_send_gif_cmd" => {
             let cw = cw();
-            let mut p = vec![cw as u8];
+            let mut p = vec![cw.byte()];
             match cw {
                 0 => p.extend_from_slice(&le32(kw_i64(kw, "file_size").unwrap_or(0))),
                 1 => {
@@ -106,7 +110,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         // set_user_gif (0xb1): [cw] + SUG handlers.
         "animation.set_user_gif" | "set_user_gif" => {
             let cw = cw();
-            let mut p = vec![cw as u8];
+            let mut p = vec![cw.byte()];
             match cw {
                 0 | 2 => {
                     // START_SAVING / TRANSMISSION_END: data[0] selects sub-format.
@@ -127,8 +131,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                                     )
                                 }
                             };
-                            p.push(speed as u8);
-                            p.push(tl as u8);
+                            p.push(speed.byte());
+                            p.push(tl.byte());
                             p.extend_from_slice(&data[3..]);
                         }
                         3 => {
@@ -140,7 +144,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                             ) else {
                                 return err_reply("set_user_gif: scroll needs mode+speed+len_val");
                             };
-                            p.push(mode as u8);
+                            p.push(mode.byte());
                             p.extend_from_slice(&le16(speed));
                             p.extend_from_slice(&le16(len_val));
                         }
@@ -163,7 +167,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         // app_new_user_define (0x8c): [cw] + ANUD handlers.
         "animation.app_new_user_define" | "app_new_user_define" => {
             let cw = cw();
-            let mut p = vec![cw as u8];
+            let mut p = vec![cw.byte()];
             match cw {
                 0 => {
                     p.extend_from_slice(&le32(kw_i64(kw, "file_size").unwrap_or(0)));
@@ -182,7 +186,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         // app_big64_user_define (0x8d): [cw] + ABUD handlers.
         "animation.app_big64_user_define" | "app_big64_user_define" => {
             let cw = cw();
-            let mut p = vec![cw as u8];
+            let mut p = vec![cw.byte()];
             match cw {
                 0 => {
                     p.extend_from_slice(&le32(kw_i64(kw, "file_size").unwrap_or(0)));
@@ -215,7 +219,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .or_else(|| kw_i64(kw, "data"))
                 .unwrap_or(0);
             match dev
-                .send_command_and_wait(0xb6, &[data as u8], ctx.timeout)
+                .send_command_and_wait(0xb6, &[data.byte()], ctx.timeout)
                 .await
             {
                 Some(r) if !r.is_empty() => json!({"success": true, "result": i64::from(r[0])}),
@@ -242,7 +246,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .or_else(|| kw_i64(kw, "user_index"))
                 .unwrap_or(0);
             match dev
-                .send_command_and_wait(0x8e, &[idx as u8], ctx.timeout)
+                .send_command_and_wait(0x8e, &[idx.byte()], ctx.timeout)
                 .await
             {
                 Some(r) if !r.is_empty() => {
@@ -267,9 +271,9 @@ fn rhythm_payload(args: &[i64], kw: Option<&Map<String, Value>>) -> Vec<u8> {
     let gif_id = kw_i64(kw, "gif_id")
         .or_else(|| args.get(2).copied())
         .unwrap_or(0);
-    let mut p = vec![pos as u8];
+    let mut p = vec![pos.byte()];
     p.extend_from_slice(&le16(total_length));
-    p.push(gif_id as u8);
+    p.push(gif_id.byte());
     p.extend_from_slice(&kw_bytes(kw, "data"));
     p
 }

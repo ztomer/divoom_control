@@ -11,6 +11,10 @@ use std::sync::Arc;
 /// Handle `wall_configure` socket command.
 /// Ports `owner_wall.py:wall_configure` including G7 delta reconfiguration:
 /// when the new layout overlaps the current wall, reuse the shared panels.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "wall dimensions from a caller's JSON, bounded by the number of panels a wall can hold"
+)]
 pub async fn cmd_wall_configure(daemon: &Daemon, req: &Request) -> Value {
     let raw_slots = if let Some(m) = req.args.get("slots").and_then(|v| v.as_object()) {
         m.clone()

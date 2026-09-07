@@ -175,6 +175,12 @@ impl Tray {
 /// the interior. Replaces the earlier bland filled square — user feedback
 /// (2026-07-13) found a plain colored square too unrecognizable to read at a
 /// glance; a named-letter silhouette is legible even before checking color.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    reason = "supersampled tray-icon rasterisation. `N` and `SUBSAMPLES` are compile-time constants of a few tens, and the coverage is 0.0..=1.0 scaled by 255 and rounded before it narrows"
+)]
 fn make_icon(rgb: [u8; 3]) -> tray_icon::Icon {
     const N: usize = 22;
     const MARGIN: f32 = 3.0;

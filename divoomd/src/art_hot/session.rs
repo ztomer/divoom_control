@@ -148,7 +148,7 @@ pub(super) async fn run_hot_session(
         let mut confirmed = false;
         for idx in start_pkt..total {
             let mut pkt_payload = Vec::new();
-            pkt_payload.extend_from_slice(&(idx as u16).to_le_bytes());
+            pkt_payload.extend_from_slice(&(idx.word()).to_le_bytes());
             pkt_payload.extend_from_slice(&f.packet(idx));
             if ble.send_command(cmd_9e, &pkt_payload, true).await.is_err() {
                 break;
@@ -171,7 +171,7 @@ pub(super) async fn run_hot_session(
                 Some((_, p)) if p.len() >= 3 && p[0] == 0 => {
                     let ridx = u16::from_le_bytes([p[1], p[2]]) as usize;
                     let mut rp = Vec::new();
-                    rp.extend_from_slice(&(ridx as u16).to_le_bytes());
+                    rp.extend_from_slice(&(ridx.word()).to_le_bytes());
                     rp.extend_from_slice(&f.packet(ridx));
                     let _ = ble.send_command(cmd_9e, &rp, true).await;
                 }

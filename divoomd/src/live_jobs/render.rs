@@ -6,6 +6,13 @@ pub use super::font::*;
 
 // --- Renderers ---
 
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    reason = "gauge geometry on a fixed-size panel: percentages scaled to a bar length in pixels, bounded by the panel edge"
+)]
 pub(crate) fn render_sysmon(cpu: u8, mem: u8, battery: u8, size: u32) -> Vec<u8> {
     let mut buf = vec![0u8; (size * size * 3) as usize];
     for i in 0..(size * size) as usize {
@@ -58,6 +65,12 @@ pub(crate) fn render_sysmon(cpu: u8, mem: u8, battery: u8, size: u32) -> Vec<u8>
     buf
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "triangle vertices on a 16-pixel panel"
+)]
 fn draw_triangle(buf: &mut [u8], size: i32, is_up: bool, color: (u8, u8, u8)) {
     if is_up {
         let rows = [(8, 8), (7, 9), (6, 10), (5, 11), (5, 11)];
@@ -82,6 +95,10 @@ fn draw_triangle(buf: &mut [u8], size: i32, is_up: bool, color: (u8, u8, u8)) {
     }
 }
 
+#[expect(
+    clippy::cast_sign_loss,
+    reason = "triangle vertices on a 32-pixel panel"
+)]
 fn draw_triangle_32(buf: &mut [u8], size: i32, is_up: bool, color: (u8, u8, u8)) {
     let y_range = if is_up {
         vec![
@@ -130,6 +147,11 @@ fn draw_triangle_32(buf: &mut [u8], size: i32, is_up: bool, color: (u8, u8, u8))
 ///
 /// Vertical centring is new and comes free: the glyphs occupy the top rows of
 /// a 16-row cell, so the old path drew text hanging off the top edge.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    reason = "text placement on a fixed-size panel"
+)]
 pub(crate) fn render_text(text: &str, color: (u8, u8, u8), size: u32, full_font: bool) -> Vec<u8> {
     let mut buf = vec![0u8; (size * size * 3) as usize];
     let font = BitmapFont::new(if full_font {
@@ -167,6 +189,10 @@ pub(crate) fn render_text(text: &str, color: (u8, u8, u8), size: u32, full_font:
     buf
 }
 
+#[expect(
+    clippy::cast_possible_wrap,
+    reason = "gauge and text geometry on a fixed-size panel"
+)]
 pub(crate) fn render_stock(symbol: &str, price: f64, change: f64, size: u32) -> Vec<u8> {
     let mut buf = vec![0u8; (size * size * 3) as usize];
     for i in 0..(size * size) as usize {

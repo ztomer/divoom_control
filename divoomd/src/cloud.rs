@@ -135,6 +135,10 @@ async fn login_email(email: &str, pwhash: &str) -> Result<DivoomCredentials, Str
     })
 }
 
+#[expect(
+    clippy::cast_possible_wrap,
+    reason = "a Unix timestamp as the signed seconds the protocol carries. It goes negative in 2038 only if the field were 32-bit, and it is 64"
+)]
 async fn get_server_utc() -> i64 {
     let body = json!({"Command": "APP/GetServerUTC"});
     if let Ok(data) = post_cloud("APP/GetServerUTC", &body).await {

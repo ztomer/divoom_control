@@ -337,7 +337,7 @@ impl BleTransport {
                     let mut args = Vec::with_capacity(7 + chunk.len());
                     args.push(1u8);
                     args.extend_from_slice(&file_size.to_le_bytes());
-                    args.extend_from_slice(&(idx as u16).to_le_bytes());
+                    args.extend_from_slice(&(idx.word()).to_le_bytes());
                     args.extend_from_slice(chunk);
                     self.send_command(CMD, &args, true).await?;
                 }

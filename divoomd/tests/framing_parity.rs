@@ -29,6 +29,10 @@ fn to_hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "an oracle fixture's byte array, read from a JSON file this test ships"
+)]
 fn as_u8_vec(v: &Value) -> Vec<u8> {
     v.as_array()
         .unwrap()
@@ -52,6 +56,10 @@ fn encode_basic_matches_python() {
 }
 
 #[test]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "an oracle fixture's packet number from a JSON file this test ships"
+)]
 fn encode_ios_le_matches_python() {
     for c in vectors()["encode_ios_le"].as_array().unwrap() {
         let payload = as_u8_vec(&c["payload"]);

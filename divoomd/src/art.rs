@@ -179,6 +179,10 @@ async fn push_custom_art_page(
 // ── public handlers (called from daemon.rs dispatch) ─────────────────────
 
 /// Handle `custom_art_push` command.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a page index and a frame count from a caller's JSON, bounded by the device's own page count"
+)]
 pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
     let page = args
         .get("page")

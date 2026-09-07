@@ -28,6 +28,7 @@
 //! Canonical layouts are pinned by `divoom_lib/display/__init__.py`, which in
 //! turn cites the Divoom APK's `C2()`. Do not reorder without a wire trace.
 
+use crate::wire::WireNarrow as _;
 /// The `set light mode` command id every channel packet below is sent under.
 pub const CMD_SET_LIGHT_MODE: u8 = 0x45;
 
@@ -215,6 +216,10 @@ impl WeatherType {
 /// of step that looks obviously right and is silently wrong for half its input
 /// range — the negative half, which nobody tests in July.
 #[must_use]
+#[expect(
+    clippy::cast_sign_loss,
+    reason = "a temperature in Celsius as the signed byte the protocol carries, having been range-checked above"
+)]
 pub const fn encode_temperature(celsius: i8) -> u8 {
     celsius as u8
 }

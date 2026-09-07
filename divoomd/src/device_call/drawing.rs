@@ -148,7 +148,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         // sand_paint_ctrl (0x34): [control] + INITIALIZE[device_id, image_length LE16, *image_data] / RESET[].
         "drawing.sand_paint_ctrl" | "sand_paint_ctrl" => {
             let control = i("control", 0);
-            let mut p = vec![control as u8];
+            let mut p = vec![control.byte()];
             match control {
                 0 => {
                     p.push(i("device_id", 0).byte());
@@ -198,7 +198,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     ));
                 }
             }
-            let mut p = vec![0u8, mode as u8];
+            let mut p = vec![0u8, mode.byte()];
             p.extend_from_slice(&le16(speed));
             send(dev, 0x35, &p, "set_scroll").await
         }

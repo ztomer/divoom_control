@@ -111,6 +111,10 @@ async fn stocks_without_a_symbol_fails_rather_than_rendering_an_empty_tile() {
 }
 
 #[tokio::test]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "test fixture arithmetic building a synthetic sample"
+)]
 async fn sysmon_through_render_widget_is_byte_identical_to_cmd_sysmon() {
     // The named regression risk of generalizing: sysmon is the ONE preview
     // path that already works (R67/C2), and a refactor that quietly changed

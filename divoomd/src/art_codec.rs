@@ -86,6 +86,10 @@ pub(crate) fn decode_cloud_magic9(data: &[u8]) -> Option<(Vec<Vec<u8>>, u32)> {
 /// to `row*col*768` bytes, reassembled via `compact_tiles`. Returns
 /// `(frames, width, height, duration_ms)` — each frame is `width*height*3` RGB.
 /// Mirrors Python `media_decoder.decode_cloud_frames` (magic 18/26).
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "image dimensions rebuilt from a tile count. The frame's own header bounds the counts, and 16 pixels per tile puts the product far inside u32"
+)]
 pub(crate) fn decode_cloud_magic18_26(data: &[u8]) -> Option<(Vec<Vec<u8>>, u32, u32, u32)> {
     if data.len() < 6 {
         return None;
@@ -294,6 +298,10 @@ mod parity_tests {
     }
 
     #[test]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "an oracle fixture's duration, compared against ours. The value comes from a JSON file this test ships"
+    )]
     fn magic9_matches_python_oracle() {
         let (frames, dur) = decode_cloud_magic9(&raw("magic9.bin")).expect("magic9 decode");
         let o = oracle("magic9.json");
@@ -310,6 +318,10 @@ mod parity_tests {
     }
 
     #[test]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "oracle fixture dimensions and duration from a JSON file this test ships"
+    )]
     fn magic18_matches_python_oracle() {
         let (frames, w, h, dur) =
             decode_cloud_magic18_26(&raw("magic18.bin")).expect("magic18 decode");
@@ -331,6 +343,10 @@ mod parity_tests {
 
     /// Build a minimal 0xAA hot frame: header, palette, then a packed 256-index
     /// pixel map at `bpp` bits per pixel, LSB-first.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a frame body length written into a two-byte header. The frame is built here and is a few kilobytes at most"
+    )]
     fn hot_frame(palette: &[[u8; 3]], indices: &[usize; 256]) -> Vec<u8> {
         let bpp = {
             let x = palette.len() - 1;
@@ -389,6 +405,10 @@ mod parity_tests {
     /// passed on the old code at bpp=0 and proved nothing. This is the CLASS —
     /// every palette width a real file can use.
     #[test]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "test fixture colours built as `i % 256`, which is by construction a byte"
+    )]
     fn hot_frames_decode_at_every_palette_width() {
         for n_colors in [1usize, 2, 3, 4, 5, 8, 9, 16, 17, 32, 100, 255, 256] {
             let palette: Vec<[u8; 3]> = (0..n_colors)

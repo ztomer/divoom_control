@@ -1,6 +1,7 @@
 //! Multi-device display wall coordinator — ported from `divoom_lib/wall.py`.
 //! Coordinates multiple screens arranged in a 2D grid as a unified display.
 
+use crate::wire::WireNarrow as _;
 use image::imageops::FilterType;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -406,6 +407,11 @@ impl DivoomWall {
 }
 
 #[expect(clippy::too_many_arguments)]
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "wall tile geometry: a tile count and pixel offsets within a wall whose dimensions the caller configured"
+)]
 fn process_wall_image(
     data: &[u8],
     is_gif: bool,

@@ -20,6 +20,11 @@ use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
 impl Daemon {
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "wall coordinates and panel indices from a caller's JSON"
+    )]
     pub(crate) async fn wall_device_call(&self, req: &Request) -> Value {
         let Some(method) = req.args.get("method").and_then(|v| v.as_str()) else {
             return err_reply("device_call requires 'method'");

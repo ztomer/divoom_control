@@ -13,6 +13,10 @@ use crate::models;
 /// With `escape`, body bytes 0x01/0x02/0x03 expand to their 2-byte escape
 /// sequences.
 #[must_use]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a length field split into two bytes by masking. `& 0xFF` makes each half a byte by construction"
+)]
 pub fn encode_basic_payload(payload: &[u8], escape: bool) -> Vec<u8> {
     let mut body: Vec<u8> = Vec::with_capacity(if escape {
         payload.len() * 2
@@ -51,6 +55,10 @@ pub fn encode_basic_payload(payload: &[u8], escape: bool) -> Vec<u8> {
 /// `[FE EF AA 55][len_lo][len_hi][pkt][cmd][data...][cksum_lo][cksum_hi][0x02]`,
 /// where `len = total - 7`, only the low byte of `packet_number` is transmitted,
 /// and the checksum is `sum(bytes[4..len-3]) & 0xFFFF`.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a frame length minus its header, written as the four-byte length field. A BLE frame is bounded by the MTU-chunked transfer above"
+)]
 pub fn encode_ios_le_payload(payload: &[u8], packet_number: u32) -> Result<Vec<u8>, &'static str> {
     if payload.is_empty() {
         return Err("payload must contain at least the command id");

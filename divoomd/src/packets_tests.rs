@@ -206,6 +206,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::cast_sign_loss,
+        reason = "the test sweeps the whole byte range on purpose, comparing our formula against the Python one it replaced"
+    )]
     fn the_python_formula_and_this_one_agree_across_the_whole_range() {
         // (256 + c) & 0xFF for c < 0, else c & 0xFF — every representable input.
         for c in i8::MIN..=i8::MAX {
