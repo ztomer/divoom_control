@@ -276,7 +276,10 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             _ => json!({"success": true, "result": Value::Null}),
         },
         "animation.stream_animation_8b" => {
-            let blob: Vec<u8> = if let Some(data) = ctx.blob_map.lock().unwrap().remove(&0) {
+            // Pull the blob out before the branch: the fallback below parses
+            // JSON, and there is no reason to hold the map's lock for it.
+            let staged = ctx.blob_map.lock().unwrap().remove(&0);
+            let blob: Vec<u8> = if let Some(data) = staged {
                 data
             } else {
                 match kw.and_then(|m| m.get("blob")).and_then(|v| v.as_array()) {

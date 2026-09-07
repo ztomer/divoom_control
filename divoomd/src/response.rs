@@ -85,11 +85,12 @@ pub async fn wait_for_response(
                 if frame.command_id == command_id {
                     return Some(frame.payload);
                 }
-                let is_generic_ack = frame.command_id == GENERIC_ACK_COMMAND_ID
-                    && GENERIC_ACK_COMMANDS.contains(&command_id);
-                // generic-ack -> keep waiting for the data frame; anything else -> discard.
-                let _ = is_generic_ack;
-                continue;
+                // A generic ACK means "keep waiting for the data frame" and
+                // anything else means "discard"; inside this loop those are the
+                // same act, so there is no branch to write. The computed
+                // `is_generic_ack` that used to sit here was discarded with a
+                // `let _ =`, which read like an unfinished branch rather than
+                // like a distinction that makes no difference.
             }
         }
     }
@@ -118,7 +119,7 @@ pub async fn wait_for_any_response(
                 if wanted.contains(&frame.command_id) {
                     return Some((frame.command_id, frame.payload));
                 }
-                continue;
+                // anything else: drop it and keep waiting.
             }
         }
     }

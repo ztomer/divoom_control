@@ -117,6 +117,12 @@ async fn two_pipelined_requests_get_two_replies() {
     // read until we have two newline-terminated lines
     let mut buf = Vec::new();
     let mut tmp = [0u8; 1024];
+    // `clippy::naive_bytecount` wants the `bytecount` crate here. Counting at
+    // most a few hundred bytes twice in one test is not worth a dependency.
+    #[expect(
+        clippy::naive_bytecount,
+        reason = "a test loop over a few hundred bytes"
+    )]
     while buf.iter().filter(|&&b| b == b'\n').count() < 2 {
         let n = client.read(&mut tmp).await.unwrap();
         if n == 0 {

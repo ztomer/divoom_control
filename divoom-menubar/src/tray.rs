@@ -32,7 +32,7 @@ impl Tray {
             .with_icon(make_icon(IconState::Offline.color()))
             .build()
             .ok()?;
-        let mut tray = Self {
+        let tray = Self {
             icon,
             launch_id: MenuId::new("launch"),
             notif_open_id: MenuId::new("notif_open"),
@@ -49,7 +49,7 @@ impl Tray {
 
     /// Build + install the whole menu: active-device rows (disabled, informational)
     /// then the fixed actions.
-    fn rebuild(&mut self, devices: &[(String, String)], notif_running: bool) {
+    fn rebuild(&self, devices: &[(String, String)], notif_running: bool) {
         let menu = Menu::new();
         if devices.is_empty() {
             let _ = menu.append(&MenuItem::new("No active devices", false, None));
@@ -201,6 +201,13 @@ fn make_icon(rgb: [u8; 3]) -> tray_icon::Icon {
         let in_rect = fx >= left && fx <= mid && fy >= top && fy <= bottom;
         let dx = fx - mid;
         let dy = fy - cy;
+        // Two independent tests ANDed: below the rim (a half-plane) and
+        // inside the circle. Clippy reads the shape as a typo and suggests
+        // `fx * radius`, which is not a quantity this has.
+        #[expect(
+            clippy::suspicious_operation_groupings,
+            reason = "a half-plane test and a circle test, not one expression"
+        )]
         let in_bowl = fx >= mid && (dx * dx + dy * dy) <= radius * radius;
         in_rect || in_bowl
     };

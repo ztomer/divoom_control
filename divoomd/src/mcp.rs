@@ -41,22 +41,22 @@ pub async fn run() -> std::io::Result<()> {
     Ok(())
 }
 
-fn ok(id: Value, result: Value) -> Value {
+fn ok(id: &Value, result: Value) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "result": result })
 }
 
-fn err(id: Value, code: i64, message: &str) -> Value {
+fn err(id: &Value, code: i64, message: &str) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
 }
 
 async fn handle_line(line: &str, sock: &str) -> Option<Value> {
     let req: Value = match serde_json::from_str(line) {
         Ok(v) => v,
-        Err(e) => return Some(err(Value::Null, -32700, &format!("parse error: {e}"))),
+        Err(e) => return Some(err(&Value::Null, -32700, &format!("parse error: {e}"))),
     };
     if req.get("jsonrpc").and_then(|v| v.as_str()) != Some("2.0") {
         return Some(err(
-            req.get("id").cloned().unwrap_or(Value::Null),
+            &req.get("id").cloned().unwrap_or(Value::Null),
             -32600,
             "jsonrpc must be '2.0'",
         ));
@@ -96,8 +96,8 @@ async fn handle_line(line: &str, sock: &str) -> Option<Value> {
         return None;
     }
     Some(match result {
-        Ok(r) => ok(id, r),
-        Err((code, msg)) => err(id, code, &msg),
+        Ok(r) => ok(&id, r),
+        Err((code, msg)) => err(&id, code, &msg),
     })
 }
 

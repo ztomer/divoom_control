@@ -151,7 +151,7 @@ pub async fn cmd_render_widget(args: &Value) -> Value {
             .and_then(serde_json::Value::as_u64)
             .unwrap_or(16),
     );
-    let params = args.get("params").cloned().unwrap_or(json!({}));
+    let params = args.get("params").cloned().unwrap_or_else(|| json!({}));
 
     match kind {
         "sysmon" => {

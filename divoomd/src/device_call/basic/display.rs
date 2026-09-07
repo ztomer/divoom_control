@@ -76,7 +76,11 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .unwrap_or(100)
                 .word();
 
-            let img_data: Vec<u8> = if let Some(data) = ctx.blob_map.lock().unwrap().remove(&0) {
+            // Pull the blob out before the branch: the fallback below reads a
+            // FILE from disk, and holding the map's lock across that stalls
+            // every other command that wants to stage a blob.
+            let staged = ctx.blob_map.lock().unwrap().remove(&0);
+            let img_data: Vec<u8> = if let Some(data) = staged {
                 data
             } else {
                 let Some(path) = raw_args.first().and_then(|v| v.as_str()) else {

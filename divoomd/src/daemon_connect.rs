@@ -307,7 +307,11 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
 
 /// Handle `disconnect` command.
 pub(crate) async fn cmd_disconnect(daemon: &Daemon) -> Value {
-    if let Some(t) = daemon.device.lock().await.take() {
+    // Take the transport OUT of the mutex first, so the guard is dropped
+    // before the disconnect below. Held across the `if let`, this blocks every
+    // other task wanting the device for the length of a BLE disconnect.
+    let taken = daemon.device.lock().await.take();
+    if let Some(t) = taken {
         match &*t {
             #[cfg(feature = "ble")]
             DeviceTransport::Ble(b) => {

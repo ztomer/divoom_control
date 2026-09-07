@@ -52,7 +52,7 @@ pub async fn cmd_wall_configure(daemon: &Daemon, req: &Request) -> Value {
             size: s
                 .get("size")
                 .and_then(serde_json::Value::as_i64)
-                .unwrap_or(i64::from(cell_size)) as i32,
+                .unwrap_or_else(|| i64::from(cell_size)) as i32,
             width: s
                 .get("width")
                 .and_then(serde_json::Value::as_i64)

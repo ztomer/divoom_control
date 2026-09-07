@@ -10,7 +10,7 @@
 
 use super::*;
 
-mod tests {
+mod parsing {
     use super::*;
     use crate::artwork::ImageFormat;
 
