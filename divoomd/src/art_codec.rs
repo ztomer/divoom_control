@@ -2,6 +2,7 @@
 //! image rescaling, SHA-1 hash. These are pure functions; split from
 //! art.rs to keep both files under the 500-LOC ground rule.
 
+use crate::wire::WireNarrow as _;
 use minilzo_rs::LZO;
 
 mod aes;
@@ -341,7 +342,19 @@ mod parity_tests {
         };
         let mut body = vec![0u8; 2]; // flag, n_colors
         body[0] = 0; // reset palette
-        body[1] = palette.len() as u8;
+                     // THE TRUNCATION IS THE ENCODING. A 256-colour palette is written as
+                     // n_colors = 0, and the decoder above reads it back as
+                     // `if n_colors_raw == 0 { 256 }`. Clamping to 255 here silently emits a
+                     // 255-colour frame for a 256-colour palette; the parity test at the
+                     // bottom of this file catches it, which is how this was found.
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "256 wrapping to 0 is the protocol's own encoding of a \
+                      full palette, not an accident -- see the decoder's \
+                      `if n_colors_raw == 0 { 256 }`"
+        )]
+        let n_colors = palette.len() as u8;
+        body[1] = n_colors;
         for c in palette {
             body.extend_from_slice(c);
         }

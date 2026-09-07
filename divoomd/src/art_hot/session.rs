@@ -7,6 +7,7 @@
 
 use super::{pick_file, HotFile, IDLE_DONE_TIMEOUT_SECS};
 use crate::art::HotProgress;
+use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
@@ -26,7 +27,7 @@ pub(super) async fn run_hot_session(
             *e = f.version;
         }
     }
-    let mut manifest_payload = vec![vendors.len() as u8];
+    let mut manifest_payload = vec![vendors.len().byte()];
     for (vid, newest) in &vendors {
         manifest_payload.extend_from_slice(&vid.to_le_bytes());
         manifest_payload.extend_from_slice(&newest.to_le_bytes());
@@ -103,7 +104,7 @@ pub(super) async fn run_hot_session(
         // Send 0x9D file info
         let mut info = Vec::new();
         info.extend_from_slice(&f.vendor_id.to_le_bytes());
-        info.extend_from_slice(&(f.body.len() as u32).to_le_bytes());
+        info.extend_from_slice(&(f.body.len().dword()).to_le_bytes());
         info.extend_from_slice(&f.checksum().to_le_bytes());
         info.extend_from_slice(&f.version.to_le_bytes());
         if ble.send_command(cmd_9d, &info, true).await.is_err() {

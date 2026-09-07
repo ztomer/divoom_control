@@ -217,7 +217,7 @@ impl SppTransport {
         const CMD: u8 = 0x8B;
         const CHUNK_SIZE: usize = 256;
 
-        let file_size = blob.len() as u32;
+        let file_size = blob.len().dword();
         if file_size == 0 {
             return Ok(false);
         }

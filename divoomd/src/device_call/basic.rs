@@ -77,7 +77,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 name_bytes.truncate(16);
             }
             let mut payload = Vec::with_capacity(1 + name_bytes.len());
-            payload.push(name_bytes.len() as u8);
+            payload.push(name_bytes.len().byte());
             payload.extend_from_slice(&name_bytes);
             match dev.send_command(0x75, &payload, true).await {
                 Ok(()) => {
@@ -129,7 +129,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                         .and_then(serde_json::Value::as_i64)
                 })
                 .unwrap_or(0)
-                .clamp(0, 100) as u8;
+                .clamp(0, 100)
+                .byte();
             match dev.send_command(0x74, &[val], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("set_brightness failed: {e}")),
@@ -177,7 +178,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                         .and_then(serde_json::Value::as_i64)
                 })
                 .unwrap_or(0)
-                .clamp(0, 15) as u8;
+                .clamp(0, 15)
+                .byte();
             match dev.send_command(0x08, &[val], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("set_volume failed: {e}")),
@@ -220,8 +222,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .or_else(|| kw.and_then(|v| v.get("enabled")));
             let on_off = match on_off_val {
                 Some(Value::Bool(b)) => u8::from(*b),
-                Some(Value::Number(n)) => n.as_i64().unwrap_or(0).clamp(0, 1) as u8,
-                _ => args.first().copied().unwrap_or(0).clamp(0, 1) as u8,
+                Some(Value::Number(n)) => n.as_i64().unwrap_or(0).clamp(0, 1).byte(),
+                _ => args.first().copied().unwrap_or(0).clamp(0, 1).byte(),
             };
             match dev.send_command(0xb2, &[on_off], true).await {
                 Ok(()) => json!({"success": true, "result": true}),

@@ -7,6 +7,7 @@
 //! arrays of u8 in `kwargs` (or positional `args`/`blobs[0]` for the big chunk).
 
 use crate::wire::WireNarrow as _;
+use crate::wire::{be32, le16, le32};
 use serde_json::{json, Map, Value};
 
 use super::CallCtx;
@@ -28,16 +29,6 @@ fn kw_bytes(kw: Option<&Map<String, Value>>, name: &str) -> Vec<u8> {
                 .collect()
         })
         .unwrap_or_default()
-}
-
-const fn le16(v: i64) -> [u8; 2] {
-    (v as u16).to_le_bytes()
-}
-const fn le32(v: i64) -> [u8; 4] {
-    (v as u32).to_le_bytes()
-}
-const fn be32(v: i64) -> [u8; 4] {
-    (v as u32).to_be_bytes()
 }
 
 async fn send(dev: &DeviceTransport, cmd: u8, payload: &[u8], label: &str) -> Value {

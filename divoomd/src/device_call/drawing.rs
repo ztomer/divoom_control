@@ -13,6 +13,7 @@
 //! match it exactly. See the `set_scroll` arm below. List args (`offset_list/data/pic_data/image_data`)
 //! arrive as JSON arrays in kwargs (or blobs[0] for the big chunk).
 
+use crate::wire::le16;
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Map, Value};
 
@@ -33,9 +34,6 @@ fn kw_bytes(kw: Option<&Map<String, Value>>, name: &str) -> Vec<u8> {
                 .collect()
         })
         .unwrap_or_default()
-}
-const fn le16(v: i64) -> [u8; 2] {
-    (v as u16).to_le_bytes()
 }
 
 async fn send(dev: &DeviceTransport, cmd: u8, p: &[u8], label: &str) -> Value {

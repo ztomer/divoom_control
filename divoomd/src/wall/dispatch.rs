@@ -16,6 +16,7 @@
 
 use crate::daemon::Daemon;
 use crate::protocol::{err_reply, Request};
+use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
 impl Daemon {
@@ -73,25 +74,28 @@ impl Daemon {
             "show_light" | "set_light" => {
                 let color = text(0, "color").unwrap_or_else(|| "#FFFFFF".to_string());
                 let rgb = crate::packets::parse_hex_color(&color).unwrap_or([0xFF, 0xFF, 0xFF]);
-                let brightness = num(1, "brightness", 100).clamp(0, 100) as u8;
+                let brightness = num(1, "brightness", 100).clamp(0, 100).byte();
                 let kind = crate::packets::LightingType::from_i64(num(3, "lightning_type", 0));
                 wall.set_light(rgb, brightness, kind).await
             }
-            "show_clock" => wall.show_clock(num(0, "clock", 0).clamp(0, 15) as u8).await,
+            "show_clock" => {
+                wall.show_clock(num(0, "clock", 0).clamp(0, 15).byte())
+                    .await
+            }
             "show_effects" => {
-                wall.show_effects(num(0, "number", 0).clamp(0, 255) as u8)
+                wall.show_effects(num(0, "number", 0).clamp(0, 255).byte())
                     .await
             }
             "show_visualization" => {
-                wall.show_visualization(num(0, "number", 0).clamp(0, 255) as u8)
+                wall.show_visualization(num(0, "number", 0).clamp(0, 255).byte())
                     .await
             }
             "set_brightness" => {
-                wall.set_brightness(num(0, "brightness", 100).clamp(0, 100) as u8)
+                wall.set_brightness(num(0, "brightness", 100).clamp(0, 100).byte())
                     .await
             }
             "set_volume" => {
-                wall.set_volume(num(0, "volume", 8).clamp(0, 15) as u8)
+                wall.set_volume(num(0, "volume", 8).clamp(0, 15).byte())
                     .await
             }
             "switch_channel" => {

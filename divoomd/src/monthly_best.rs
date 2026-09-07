@@ -1,6 +1,7 @@
 //! Monthly Best sync background service.
 //! Ports `divoom_lib/monthly_best_daemon.py`.
 
+use crate::wire::WireNarrow as _;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -298,9 +299,9 @@ mod tests {
         let text_content = b"my metadata text content";
         let gif_content = b"GIF89a_my_awesome_gif_data_here";
         let mut data = vec![43u8, 0, 0, 0, 0, 0];
-        data.extend_from_slice(&(text_content.len() as u32).to_le_bytes());
+        data.extend_from_slice(&(text_content.len().dword()).to_le_bytes());
         data.extend_from_slice(text_content);
-        data.extend_from_slice(&(gif_content.len() as u32).to_le_bytes());
+        data.extend_from_slice(&(gif_content.len().dword()).to_le_bytes());
         data.extend_from_slice(gif_content);
 
         let extracted = extract_gif_from_magic_43(&data).unwrap();

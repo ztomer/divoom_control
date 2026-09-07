@@ -84,7 +84,8 @@ async fn scrolling_text(ctx: &CallCtx<'_>) -> Value {
         .and_then(|v| v.get("rate"))
         .and_then(serde_json::Value::as_i64)
         .unwrap_or(50)
-        .clamp(1, 255) as u8;
+        .clamp(1, 255)
+        .byte();
 
     // 0. start playback FIRST. CmdManager.G() is explicit about the order:
     //    f1(true) -> z1(text) [glyphs, then the string] -> B1(rate). Sending
@@ -98,12 +99,12 @@ async fn scrolling_text(ctx: &CallCtx<'_>) -> Value {
     }
 
     // 1. glyph upload, 5 characters per packet
-    let total = units.len() as u8;
+    let total = units.len().byte();
     for (chunk_idx, chunk) in units.chunks(5).enumerate() {
         let mut p = Vec::with_capacity(3 + chunk.len() * 34);
         p.push(total);
         p.push((chunk_idx * 5) as u8);
-        p.push(chunk.len() as u8);
+        p.push(chunk.len().byte());
         for &u in chunk {
             p.push((u & 0xFF) as u8);
             p.push((u >> 8) as u8);
@@ -349,7 +350,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     .byte()
             };
             let content_bytes = content.as_bytes();
-            let len = content_bytes.len() as u16;
+            let len = content_bytes.len().word();
             payload.extend_from_slice(&len.to_le_bytes());
             payload.extend_from_slice(content_bytes);
             payload.push(text_box_id);

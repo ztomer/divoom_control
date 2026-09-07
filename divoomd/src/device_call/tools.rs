@@ -28,7 +28,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                         .and_then(serde_json::Value::as_i64)
                 })
                 .unwrap_or(0)
-                .clamp(0, 999) as u16;
+                .clamp(0, 999)
+                .word();
             let blue_score = args
                 .get(2)
                 .copied()
@@ -37,7 +38,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                         .and_then(serde_json::Value::as_i64)
                 })
                 .unwrap_or(0)
-                .clamp(0, 999) as u16;
+                .clamp(0, 999)
+                .word();
             let mut payload = Vec::with_capacity(6);
             payload.push(1u8); // TOOL_TYPE_SCORE
             payload.push(on_off);
@@ -205,7 +207,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
             let mut payload = Vec::with_capacity(2 + text_bytes.len());
             payload.push(app_type);
-            payload.push(text_bytes.len() as u8);
+            payload.push(text_bytes.len().byte());
             payload.extend_from_slice(&text_bytes);
             match dev.send_command(0x50, &payload, true).await {
                 Ok(()) => json!({"success": true, "result": true}),

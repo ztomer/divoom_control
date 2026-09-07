@@ -314,7 +314,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             // so args[1] was past the end and a positional time_minutes was
             // always lost. It sits at true position 1.
             let time_minutes =
-                crate::device_call::pos_i64(raw_args, 1, kw, "time_minutes", 0) as u16;
+                crate::device_call::pos_i64(raw_args, 1, kw, "time_minutes", 0).word();
 
             let mut payload = Vec::new();
             if let Some(arr) = display_modes {

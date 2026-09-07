@@ -32,7 +32,7 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         "device.show_image" | "show_image" => {
             let w = get_kwarg_i64(kw, "w", 16) as i32;
             let h = get_kwarg_i64(kw, "h", 16) as i32;
-            let time_ms = get_kwarg_i64(kw, "time_ms", 100) as u16;
+            let time_ms = get_kwarg_i64(kw, "time_ms", 100).word();
             let rgb: Vec<u8> = match kw.and_then(|m| m.get("rgb")).and_then(|v| v.as_array()) {
                 Some(a) => a
                     .iter()
@@ -180,8 +180,9 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             // sent the mode number instead (mode 0 meant brightness 0). Found
             // by the wire trace on real hardware; no test could see it.
             let rgb = color_from_arg(raw_args, kw).unwrap_or([0xFF, 0xFF, 0xFF]);
-            let brightness =
-                crate::device_call::pos_i64(raw_args, 1, kw, "brightness", 100).clamp(0, 100) as u8;
+            let brightness = crate::device_call::pos_i64(raw_args, 1, kw, "brightness", 100)
+                .clamp(0, 100)
+                .byte();
             let power = crate::device_call::pos_bool(raw_args, 2, kw, "power", true);
             let kind = LightingType::from_i64(
                 raw_args
@@ -219,7 +220,7 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                         .and_then(serde_json::Value::as_i64)
                 })
                 .unwrap_or(0);
-            let payload = crate::packets::vj_effect(number.clamp(0, 254) as u8);
+            let payload = crate::packets::vj_effect(number.clamp(0, 254).byte());
             match dev.send_command(0x45, &payload, true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("display.show_effects failed: {e}")),
@@ -235,7 +236,7 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                         .and_then(serde_json::Value::as_i64)
                 })
                 .unwrap_or(0);
-            let payload = crate::packets::visualization(number.clamp(0, 255) as u8);
+            let payload = crate::packets::visualization(number.clamp(0, 255).byte());
             match dev.send_command(0x45, &payload, true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("display.show_visualization failed: {e}")),
@@ -308,7 +309,8 @@ fn clock_packet_from_call(
         })
         .or_else(|| args.first().copied())
         .unwrap_or(0)
-        .clamp(0, 15) as u8;
+        .clamp(0, 15)
+        .byte();
     let rgb = kw
         .and_then(|v| v.get("color"))
         .and_then(|v| v.as_str())

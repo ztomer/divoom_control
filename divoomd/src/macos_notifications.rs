@@ -10,6 +10,7 @@
 //! `notification_routing.rs` (both split out to stay under the 500-LOC house
 //! limit) — this file keeps the monitor state/loop and device-forwarding.
 
+use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -321,7 +322,7 @@ async fn forward_notification(daemon: &Daemon, app_type: u8, text: &str) -> bool
             text_bytes.truncate(128);
         }
         payload.push(app_type);
-        payload.push(text_bytes.len() as u8);
+        payload.push(text_bytes.len().byte());
         payload.extend_from_slice(&text_bytes);
     }
 

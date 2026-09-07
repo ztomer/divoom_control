@@ -4,6 +4,7 @@
 //! Setters + read-backs; command ids + response offsets taken verbatim from the
 //! Python source.
 
+use crate::wire::le16;
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Map, Value};
 
@@ -13,9 +14,6 @@ use crate::protocol::err_reply;
 fn kw_i64(kw: Option<&Map<String, Value>>, name: &str) -> Option<i64> {
     kw.and_then(|m| m.get(name))
         .and_then(serde_json::Value::as_i64)
-}
-const fn le16(v: i64) -> [u8; 2] {
-    (v as u16).to_le_bytes()
 }
 
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {

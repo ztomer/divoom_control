@@ -54,6 +54,50 @@ impl WireNarrow for u64 {
     }
 }
 
+impl WireNarrow for usize {
+    fn byte(self) -> u8 {
+        u8::try_from(self.min(u8::MAX as usize)).unwrap_or(u8::MAX)
+    }
+    fn word(self) -> u16 {
+        u16::try_from(self.min(u16::MAX as usize)).unwrap_or(u16::MAX)
+    }
+    fn dword(self) -> u32 {
+        u32::try_from(self.min(u32::MAX as usize)).unwrap_or(u32::MAX)
+    }
+}
+
+/// A little-endian two-byte field.
+///
+/// This existed three times over -- identical `const fn le16(v: i64)` bodies in
+/// `device_call::{animation, drawing, music}` -- each wrapping on its own. One
+/// definition, one behaviour.
+#[must_use]
+pub fn le16(v: i64) -> [u8; 2] {
+    v.word().to_le_bytes()
+}
+
+/// A little-endian four-byte field.
+#[must_use]
+pub fn le32(v: i64) -> [u8; 4] {
+    v.dword().to_le_bytes()
+}
+
+/// A big-endian four-byte field.
+#[must_use]
+pub fn be32(v: i64) -> [u8; 4] {
+    v.dword().to_be_bytes()
+}
+
+/// A little-endian two-byte LENGTH field.
+///
+/// Separate from [`le16`] only in the type it accepts: lengths arrive as
+/// `usize` and never as a signed JSON argument, and keeping them apart means
+/// neither call site has to cast on the way in.
+#[must_use]
+pub fn le16_len(v: usize) -> [u8; 2] {
+    v.word().to_le_bytes()
+}
+
 #[cfg(test)]
 #[path = "wire_tests.rs"]
 mod tests;

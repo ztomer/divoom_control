@@ -8,6 +8,7 @@
 //! module can't be unit-tested (it needs a device); its verification is over the
 //! socket against a real Pixoo/Ditoo once the daemon `.app` holds the BT grant.
 
+use crate::wire::WireNarrow as _;
 use std::time::Duration;
 
 use btleplug::api::{
@@ -259,7 +260,7 @@ impl BleTransport {
         const CMD: u8 = 0x8B;
         const CHUNK_SIZE: usize = 256;
 
-        let file_size = blob.len() as u32;
+        let file_size = blob.len().dword();
         if file_size == 0 {
             return Ok(false);
         }

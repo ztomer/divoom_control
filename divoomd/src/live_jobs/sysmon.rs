@@ -10,6 +10,7 @@
 //!
 //! Two implementations of one question always drift; R67 found three that had.
 
+use crate::wire::WireNarrow as _;
 use base64::Engine;
 use serde_json::{json, Value};
 use sysinfo::System;
@@ -68,7 +69,7 @@ pub async fn sample_once() -> SysmonSample {
 /// matrix; anything past it is a caller mistake, not a device.
 #[must_use]
 pub fn clamp_size(requested: u64) -> u32 {
-    requested.clamp(8, 64) as u32
+    requested.clamp(8, 64).dword()
 }
 
 /// `sysmon` -- the stats AND the exact frame the device would be given.

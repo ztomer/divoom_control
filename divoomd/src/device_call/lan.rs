@@ -3,6 +3,7 @@
 //! `handle_device_call` when `method.starts_with("lan.")` and the device is
 //! LAN-connected.
 
+use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
 pub(super) fn get_arg_i64(
@@ -83,9 +84,9 @@ pub(super) async fn handle_lan_call(
             let color = if let Some(c) = kw.and_then(|m| m.get("Color")).and_then(|v| v.as_str()) {
                 c.to_string()
             } else {
-                let r = get_arg_i64(args, kw, 1, "r", 0) as u8;
-                let g = get_arg_i64(args, kw, 2, "g", 0) as u8;
-                let b = get_arg_i64(args, kw, 3, "b", 0) as u8;
+                let r = get_arg_i64(args, kw, 1, "r", 0).byte();
+                let g = get_arg_i64(args, kw, 2, "g", 0).byte();
+                let b = get_arg_i64(args, kw, 3, "b", 0).byte();
                 format!("#{r:02X}{g:02X}{b:02X}")
             };
             let power = get_arg_i64(args, kw, 4, "Power", 1);
@@ -106,9 +107,9 @@ pub(super) async fn handle_lan_call(
             {
                 c.to_string()
             } else {
-                let r = get_arg_i64(args, kw, 2, "r", 0) as u8;
-                let g = get_arg_i64(args, kw, 3, "g", 0) as u8;
-                let b = get_arg_i64(args, kw, 4, "b", 0) as u8;
+                let r = get_arg_i64(args, kw, 2, "r", 0).byte();
+                let g = get_arg_i64(args, kw, 3, "g", 0).byte();
+                let b = get_arg_i64(args, kw, 4, "b", 0).byte();
                 format!("#{r:02X}{g:02X}{b:02X}")
             };
             lan.post(

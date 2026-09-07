@@ -136,10 +136,6 @@ pub(crate) fn decode_image_to_rgb(data: &[u8], w: u32, h: u32) -> Option<Vec<u8>
 
 // ── custom art protocol helpers (APK LightMakeNewModel.java) ─────────────
 
-const fn le16(v: usize) -> [u8; 2] {
-    [(v & 0xFF) as u8, ((v >> 8) & 0xFF) as u8]
-}
-
 /// Command ids from commands.rs
 const CMD_OLD: u8 = 0xB1; // set user gif
 const CMD_QUERY: u8 = 0x8E; // app get user define info
@@ -166,7 +162,7 @@ async fn push_custom_art_page(
         let chunk = &encoded_blob[offset..(offset + CHUNK_SIZE).min(encoded_blob.len())];
         let chunk_size = chunk.len();
         let mut pkt = vec![0x01u8];
-        pkt.extend_from_slice(&le16(chunk_size));
+        pkt.extend_from_slice(&crate::wire::le16_len(chunk_size));
         pkt.extend_from_slice(chunk);
         if dev.send_command(CMD_OLD, &pkt, true).await.is_err() {
             return false;
