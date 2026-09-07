@@ -56,3 +56,10 @@ lazy_static = "1.4"
 
 [lints]
 workspace = true
+
+# cargo-machete scans for the crate's IDENT and `md-5`'s lib is `md5`, so it
+# reads as unused while `cloud.rs` uses it for the Divoom cloud API's signature
+# (`Md5::new()`, and `Hmac<Md5>`). A package whose lib name differs from its
+# package name is the tool's documented blind spot.
+[package.metadata.cargo-machete]
+ignored = ["md-5"]
