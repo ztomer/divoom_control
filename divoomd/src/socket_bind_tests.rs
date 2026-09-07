@@ -51,7 +51,7 @@ impl Fake {
                 }
             }
         });
-        Fake {
+        Self {
             stop,
             handle: Some(handle),
         }
@@ -259,7 +259,7 @@ fn second_startup_is_refused_while_the_lock_is_held() {
     match acquire(&p) {
         // Either answer is correct and both are actionable: the lock may be
         // seen first, or the first daemon's live socket may be.
-        Err(BindFailure::StartupInProgress) | Err(BindFailure::LiveInstance) => {}
+        Err(BindFailure::StartupInProgress | BindFailure::LiveInstance) => {}
         other => panic!("second startup must be refused, got {other:?}"),
     }
     drop(first);

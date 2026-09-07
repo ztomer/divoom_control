@@ -53,3 +53,6 @@ nowplaying = { path = "../nowplaying" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "test-util"] }
 tempfile = "3"
 lazy_static = "1.4"
+
+[lints]
+workspace = true

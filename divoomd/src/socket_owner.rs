@@ -14,7 +14,7 @@
 //!    longer that daemon's file.
 //! 4. The survivor keeps running with an unlinked listening socket: reachable by
 //!    nobody, invisible to every UI, and still holding the single-owner
-//!    CoreBluetooth central. The GUI sees no daemon and spawns another. Repeat.
+//!    `CoreBluetooth` central. The GUI sees no daemon and spawns another. Repeat.
 //!
 //! This was not theoretical. On the dev machine an orphan from step 4 had been
 //! up for 34 hours while the GUI talked to a different daemon, and killing it
@@ -78,6 +78,7 @@ impl SocketOwnership {
     ///
     /// `None` when the path does not exist or cannot be stat'ed — in which case
     /// we never claim ownership, so we never unlink.
+    #[must_use]
     pub fn of(path: &str) -> Option<Self> {
         use std::os::unix::fs::MetadataExt;
         let md = std::fs::metadata(path).ok()?;
@@ -90,6 +91,7 @@ impl SocketOwnership {
     /// True only when `path` still names the exact file this identity describes.
     ///
     /// A replaced path (different inode) or a vanished one is NOT ours.
+    #[must_use]
     pub fn still_owns(&self, path: &str) -> bool {
         Self::of(path).is_some_and(|now| now == *self)
     }
@@ -101,6 +103,7 @@ impl SocketOwnership {
 /// staying silent: a daemon discovering that its socket was replaced is the
 /// visible symptom of a duplicate-instance problem, and silence is how the
 /// original bug survived.
+#[must_use]
 pub fn release_socket(socket_path: &str, owned: Option<SocketOwnership>) -> bool {
     match owned {
         Some(o) if o.still_owns(socket_path) => {
@@ -162,6 +165,7 @@ impl<L> HeldSocket<L> {
     }
 
     /// The socket path this owns.
+    #[must_use]
     pub fn path(&self) -> &str {
         &self.path
     }
@@ -171,6 +175,7 @@ impl<L> HeldSocket<L> {
     /// The clone keeps the socket open independently of this value, which is
     /// harmless: what must not happen is the socket closing EARLY, and an extra
     /// reference can only delay that.
+    #[must_use]
     pub fn listener(&self) -> Arc<L> {
         self.listener.clone()
     }
@@ -180,6 +185,7 @@ impl<L> HeldSocket<L> {
     /// Returns whether the file was removed. Calling this is optional — `Drop`
     /// does the same thing — but an explicit call at the end of `main` says the
     /// shutdown is deliberate rather than incidental.
+    #[must_use]
     pub fn release(mut self) -> bool {
         self.release_now()
     }

@@ -46,6 +46,7 @@ pub enum BindFailure {
 
 impl BindFailure {
     /// One line saying what is wrong.
+    #[must_use]
     pub fn reason(&self, path: &str) -> String {
         match self {
             Self::LiveInstance => format!("another divoomd is already listening on {path}"),
@@ -78,7 +79,8 @@ impl BindFailure {
     }
 
     /// What the user should actually do about it.
-    pub fn remedy(&self) -> &'static str {
+    #[must_use]
+    pub const fn remedy(&self) -> &'static str {
         match self {
             Self::LiveInstance => {
                 "Nothing to do — the running daemon is healthy. Stop it first if you \
@@ -118,7 +120,8 @@ impl BindFailure {
     }
 
     /// True when a second attempt could plausibly succeed on its own.
-    pub fn is_transient(&self) -> bool {
+    #[must_use]
+    pub const fn is_transient(&self) -> bool {
         matches!(self, Self::StartupInProgress)
     }
 
@@ -138,13 +141,15 @@ impl BindFailure {
     /// lost to it. The variant's own doc comment already said it is "not an
     /// error condition so much as the single-instance guard doing its job" —
     /// the code just filed it as one anyway.
-    pub fn describes_the_socket(&self) -> bool {
+    #[must_use]
+    pub const fn describes_the_socket(&self) -> bool {
         !matches!(self, Self::LiveInstance)
     }
 
     /// Exit code. Distinct so a supervisor can tell "already running" (a benign
     /// no-op) from a real configuration problem without parsing text.
-    pub fn exit_code(&self) -> i32 {
+    #[must_use]
+    pub const fn exit_code(&self) -> i32 {
         match self {
             Self::LiveInstance => 3,
             Self::StartupInProgress => 4,

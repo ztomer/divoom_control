@@ -1,6 +1,8 @@
 //! Divoom credential persistence — config.ini (`[divoom]` email/password) + the
-//! auth-token cache (auth_token.json). Split out of `cloud.rs` to keep it under
-//! the 500-line house limit. Used by `cloud::get_credentials` / `save_credentials`.
+//! auth-token cache (`auth_token.json`).
+//!
+//! Split out of `cloud.rs` to keep it under the 500-line house limit. Used by
+//! `cloud::get_credentials` / `save_credentials`.
 
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -120,7 +122,7 @@ fn merge_divoom_section(existing: &str, email: &str, password: &str) -> String {
             out.push(format!("password = {password}"));
         }
     } else if !saw_section {
-        if !out.is_empty() && !out.last().map(|l| l.is_empty()).unwrap_or(false) {
+        if !out.is_empty() && !out.last().is_some_and(std::string::String::is_empty) {
             out.push(String::new());
         }
         out.push("[divoom]".to_string());
@@ -235,7 +237,10 @@ pub(crate) fn load_cache() -> Option<DivoomCredentials> {
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string(),
-        utc: val.get("utc").and_then(|v| v.as_i64()).unwrap_or(0),
+        utc: val
+            .get("utc")
+            .and_then(serde_json::Value::as_i64)
+            .unwrap_or(0),
     };
     if creds.is_valid() {
         Some(creds)

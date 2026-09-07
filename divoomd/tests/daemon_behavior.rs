@@ -92,8 +92,7 @@ async fn device_commands_are_honestly_unimplemented() {
         err.contains("no device connected")
             || err.contains("not implemented")
             || err.contains("not ported"),
-        "Unexpected error: {}",
-        err
+        "Unexpected error: {err}"
     );
 }
 
@@ -113,8 +112,7 @@ async fn device_name_commands_route_to_device_call() {
     let err1 = r1["error"].as_str().unwrap();
     assert!(
         err1.contains("no device connected") || err1.contains("not implemented"),
-        "Unexpected error: {}",
-        err1
+        "Unexpected error: {err1}"
     );
 
     // set_device_name returns "no device connected"
@@ -129,8 +127,7 @@ async fn device_name_commands_route_to_device_call() {
     let err2 = r2["error"].as_str().unwrap();
     assert!(
         err2.contains("no device connected") || err2.contains("not implemented"),
-        "Unexpected error: {}",
-        err2
+        "Unexpected error: {err2}"
     );
 }
 
@@ -342,15 +339,13 @@ async fn ported_commands_route_to_device_call() {
                 None,
             ))
             .await;
-        assert_eq!(r["success"], json!(false), "method {} should fail", method);
+        assert_eq!(r["success"], json!(false), "method {method} should fail");
         let err = r["error"].as_str().unwrap();
         assert!(
             err.contains("no device connected")
                 || err.contains("not implemented")
                 || err.contains("not ported"),
-            "Method {} returned unexpected error: {}",
-            method,
-            err
+            "Method {method} returned unexpected error: {err}"
         );
     }
 }

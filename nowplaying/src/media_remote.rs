@@ -1,4 +1,4 @@
-//! The MediaRemote provider: perl-hosted helper, artwork as bytes.
+//! The `MediaRemote` provider: perl-hosted helper, artwork as bytes.
 //!
 //! See `native/np_helper.m` for why this runs through `/usr/bin/perl`. In short:
 //! since macOS 15.4 the read API is entitlement-gated, perl carries that
@@ -36,6 +36,7 @@ const ARCH_PATH: &str = "/usr/bin/arch";
 /// This mirrors how the repo already resolves `libdivoom_compact`: search for a
 /// marker rather than counting parent directories, because a fixed parent count
 /// silently broke when the build layout changed (see `divoomd/src/paths.rs`).
+#[must_use]
 pub fn locate_helper() -> Option<(PathBuf, PathBuf)> {
     let candidates = helper_search_dirs();
     for dir in candidates {
@@ -75,6 +76,7 @@ fn helper_search_dirs() -> Vec<PathBuf> {
 }
 
 /// Why this provider cannot run right now, or `None` if it can.
+#[must_use]
 pub fn unavailable() -> Option<Unavailable> {
     let helper = locate_helper().map(|(dylib, _)| dylib);
     evaluate(
@@ -94,14 +96,22 @@ pub fn parse_helper_output(line: &str) -> Result<Option<Track>, String> {
     let v: serde_json::Value =
         serde_json::from_str(line.trim()).map_err(|e| format!("helper emitted non-JSON: {e}"))?;
 
-    if !v.get("ok").and_then(|b| b.as_bool()).unwrap_or(false) {
+    if !v
+        .get("ok")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+    {
         let err = v
             .get("error")
             .and_then(|s| s.as_str())
             .unwrap_or("unknown helper error");
         return Err(err.to_string());
     }
-    if !v.get("playing").and_then(|b| b.as_bool()).unwrap_or(false) {
+    if !v
+        .get("playing")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+    {
         return Ok(None);
     }
 
@@ -124,10 +134,8 @@ pub fn parse_helper_output(line: &str) -> Result<Option<Track>, String> {
     // art for something nobody is listening to.
     let is_playing = v
         .get("playback_rate")
-        .and_then(|r| r.as_f64())
-        .map(|r| r > 0.0)
-        // Absent rate: assume playing rather than silently showing nothing.
-        .unwrap_or(true);
+        .and_then(serde_json::Value::as_f64)
+        .is_none_or(|r| r > 0.0);
 
     Ok(Some(Track {
         title: text("title"),
@@ -164,18 +172,18 @@ pub fn current_track() -> Result<Option<Track>, String> {
 
 /// Build the command that runs the helper, pinned to arm64.
 ///
-/// `/usr/bin/perl` is a UNIVERSAL binary (x86_64 + arm64e) and the slice macOS
+/// `/usr/bin/perl` is a UNIVERSAL binary (`x86_64` + arm64e) and the slice macOS
 /// picks depends on the launching process's architecture preference, which is
 /// inherited and not obviously controllable. Running the same command from a
 /// shell selected arm64, while the daemon — itself a native arm64 binary,
-/// launched through LaunchServices — selected **x86_64**, and perl then refused
+/// launched through `LaunchServices` — selected **`x86_64`**, and perl then refused
 /// our arm64 dylib with "incompatible architecture (have 'arm64', need
-/// 'x86_64')". Nothing about the daemon says "run me under Rosetta"; the
+/// '`x86_64`')". Nothing about the daemon says "run me under Rosetta"; the
 /// preference simply travelled.
 ///
 /// So the architecture is stated rather than inherited. The alternative — a fat
 /// dylib — is against house policy: macOS is Apple silicon only here, and
-/// shipping an x86_64 slice nobody builds for or tests is exactly the
+/// shipping an `x86_64` slice nobody builds for or tests is exactly the
 /// silently-untested-binary shape that policy exists to prevent.
 ///
 /// If `/usr/bin/arch` is missing we fall back to invoking perl directly; that is

@@ -20,7 +20,7 @@ pub(crate) fn render_sysmon(cpu: u8, mem: u8, battery: u8, size: u32) -> Vec<u8>
 
     let draw_gauge =
         |buf: &mut [u8], x: i32, y: i32, w_max: i32, h: i32, val: u8, color: (u8, u8, u8)| {
-            let frac = val as f32 / 100.0;
+            let frac = f32::from(val) / 100.0;
             let w_fill = ((w_max as f32 * frac).round() as i32).clamp(1, w_max);
             for yy in y..y + h {
                 if yy >= 0 && yy < size as i32 {
@@ -208,7 +208,7 @@ pub(crate) fn render_stock(symbol: &str, price: f64, change: f64, size: u32) -> 
             size as i32,
             2,
             16,
-            &format!("${:.2}", price),
+            &format!("${price:.2}"),
             text_color,
             1,
             Some(size as i32 - 2),

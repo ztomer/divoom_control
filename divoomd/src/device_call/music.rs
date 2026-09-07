@@ -1,6 +1,8 @@
-//! SD-card music control — parity port of `divoom_lib/media/music.py` (the SD/play
-//! methods not already in basic.rs). Setters + read-backs; command ids + response
-//! offsets taken verbatim from the Python source.
+//! SD-card music control — parity port of `divoom_lib/media/music.py` (the
+//! SD/play methods not already in basic.rs).
+//!
+//! Setters + read-backs; command ids + response offsets taken verbatim from the
+//! Python source.
 
 use serde_json::{json, Map, Value};
 
@@ -8,9 +10,10 @@ use super::CallCtx;
 use crate::protocol::err_reply;
 
 fn kw_i64(kw: Option<&Map<String, Value>>, name: &str) -> Option<i64> {
-    kw.and_then(|m| m.get(name)).and_then(|v| v.as_i64())
+    kw.and_then(|m| m.get(name))
+        .and_then(serde_json::Value::as_i64)
 }
-fn le16(v: i64) -> [u8; 2] {
+const fn le16(v: i64) -> [u8; 2] {
     (v as u16).to_le_bytes()
 }
 
@@ -118,14 +121,14 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         // ── read-backs ─────────────────────────────────────────────────────
         "music.get_play_status" | "get_play_status" => {
             match dev.send_command_and_wait(0x0b, &[], to).await {
-                Some(r) if !r.is_empty() => json!({"success": true, "result": r[0] as i64}),
+                Some(r) if !r.is_empty() => json!({"success": true, "result": i64::from(r[0])}),
                 _ => json!({"success": true, "result": Value::Null}),
             }
         }
         "music.get_sd_music_list_total_num" | "get_sd_music_list_total_num" => {
             match dev.send_command_and_wait(0x7d, &[], to).await {
                 Some(r) if r.len() >= 2 => {
-                    json!({"success": true, "result": u16::from_le_bytes([r[0], r[1]]) as i64})
+                    json!({"success": true, "result": i64::from(u16::from_le_bytes([r[0], r[1]]))})
                 }
                 _ => json!({"success": true, "result": Value::Null}),
             }

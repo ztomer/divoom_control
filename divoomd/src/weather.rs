@@ -83,12 +83,12 @@ pub const WEATHER_CODE_TO_DIVOOM: &[(i32, WeatherType)] = &[
 /// Unknown codes fall back to `Clear`: it is the neutral icon, and showing a
 /// thunderstorm for a code we do not recognise would be worse than showing
 /// nothing interesting.
+#[must_use]
 pub fn code_to_type(code: i32) -> WeatherType {
     WEATHER_CODE_TO_DIVOOM
         .iter()
         .find(|(c, _)| *c == code)
-        .map(|(_, t)| *t)
-        .unwrap_or(WeatherType::Clear)
+        .map_or(WeatherType::Clear, |(_, t)| *t)
 }
 
 /// A weather reading.
@@ -102,6 +102,7 @@ pub struct WeatherInfo {
 ///
 /// Split from the HTTP call so the response shape is testable without a
 /// network — including the detail that wttr returns its numbers as STRINGS.
+#[must_use]
 pub fn parse_wttr(body: &serde_json::Value) -> Option<WeatherInfo> {
     let current = body
         .get("current_condition")

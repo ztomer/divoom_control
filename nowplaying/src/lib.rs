@@ -4,9 +4,9 @@
 //!
 //! divoom-control used to answer "what is playing?" twice: once in Python for
 //! the GUI's preview card and once in Rust for the daemon's device push. Both
-//! copies drove AppleScript at each player in turn, and when a player gave a
+//! copies drove `AppleScript` at each player in turn, and when a player gave a
 //! title but no cover they guessed a URL from the **iTunes Search API**. That
-//! guess cannot resolve non-album content — YouTube Music, podcasts, live sets
+//! guess cannot resolve non-album content — `YouTube` Music, podcasts, live sets
 //! — and needs a network round trip in order to fail.
 //!
 //! It also cost a TCC prompt per player. Reaching a player over Apple Events
@@ -16,7 +16,7 @@
 //! addressed by both implementations and primed by neither, which is precisely
 //! why its album art never reached the device.
 //!
-//! MediaRemote replaces all of it. One system-wide source, every player that
+//! `MediaRemote` replaces all of it. One system-wide source, every player that
 //! publishes to Now Playing, the exact image the player is displaying, and no
 //! per-app grant.
 //!
@@ -31,7 +31,7 @@
 //!
 //! Two consequences worth stating up front:
 //!
-//! * **The declared MIME lies.** MediaRemote reports `image/jpeg` while handing
+//! * **The declared MIME lies.** `MediaRemote` reports `image/jpeg` while handing
 //!   back TIFF bytes. Everything here sniffs the magic number instead.
 //! * **Availability must be honest.** Apple can withdraw this at any release,
 //!   so [`availability`] probes each prerequisite and names the one that failed
@@ -57,14 +57,14 @@ pub use track::Track;
 ///
 /// # Provider order, and why the fallthrough is conditional
 ///
-/// MediaRemote first: it covers every player that publishes to the system Now
+/// `MediaRemote` first: it covers every player that publishes to the system Now
 /// Playing source, and it returns the exact artwork the player is displaying.
 ///
-/// Feishin second, and ONLY when MediaRemote has nothing actively playing.
-/// The subtlety that makes the condition necessary: MediaRemote keeps reporting
+/// Feishin second, and ONLY when `MediaRemote` has nothing actively playing.
+/// The subtlety that makes the condition necessary: `MediaRemote` keeps reporting
 /// a session's track after it is PAUSED (measured on macOS 26.6.2), so a paused
 /// player would otherwise mask a different app that really is playing. A paused
-/// MediaRemote track is still returned when no other provider has anything —
+/// `MediaRemote` track is still returned when no other provider has anything —
 /// showing what is cued up beats showing nothing — but it never wins over live
 /// playback elsewhere.
 #[cfg(target_os = "macos")]
@@ -94,9 +94,10 @@ pub fn current_track() -> Result<Option<Track>, String> {
 /// Combines the apps registered with macOS Now Playing (which get metadata and
 /// artwork for free) with the ones reachable only by their own provider. That
 /// distinction matters: an app absent from the Now Playing registry can never
-/// appear in `current_track()`'s MediaRemote answer no matter how loudly it is
+/// appear in `current_track()`'s `MediaRemote` answer no matter how loudly it is
 /// playing — measured on macOS 26.6.2, Feishin is exactly such an app.
 #[cfg(target_os = "macos")]
+#[must_use]
 pub fn players() -> Vec<discovery::Player> {
     let mut found = media_remote::registered_players().unwrap_or_default();
 
@@ -125,6 +126,7 @@ pub fn players() -> Vec<()> {
 }
 
 /// Why now-playing cannot work here, or `None` if it can.
+#[must_use]
 pub fn unavailable() -> Option<Unavailable> {
     #[cfg(target_os = "macos")]
     {

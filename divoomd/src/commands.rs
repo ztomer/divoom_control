@@ -1,7 +1,8 @@
-//! Command name -> protocol id, GENERATED from divoom_lib.models.COMMANDS.
-//! Do not edit by hand; regenerate via scripts/codegen/gen_commands.py.
+//! Command name -> protocol id, GENERATED from `divoom_lib.models.COMMANDS`.
+//! Do not edit by hand; regenerate via `scripts/codegen/gen_commands.py`.
 
 /// Resolve a command NAME to its protocol id, or `None` if unknown.
+#[must_use]
 pub fn command_id(name: &str) -> Option<u8> {
     match name {
         "set volume" => Some(0x08),
@@ -31,14 +32,11 @@ pub fn command_id(name: &str) -> Option<u8> {
         "set sleep scene" => Some(0x41),
         "get alarm time" => Some(0x42),
         "set alarm" => Some(0x43),
-        "set light pic" => Some(0x44),
-        "set image" => Some(0x44),
-        "set animation frame" => Some(0x49),
-        "set light mode" => Some(0x45),
-        "set channel light" => Some(0x45),
+        "set light pic" | "set image" => Some(0x44),
+        "set animation frame" | "set light phone gif" => Some(0x49),
+        "set light mode" | "set channel light" => Some(0x45),
         "get light mode" => Some(0x46),
         "app need get music list" => Some(0x47),
-        "set light phone gif" => Some(0x49),
         "set alarm gif" => Some(0x51),
         "set temp unit" => Some(0x4c),
         "set android ancs" => Some(0x50),
@@ -55,8 +53,7 @@ pub fn command_id(name: &str) -> Option<u8> {
         "drawing mul encode pic" => Some(0x5c),
         "send net temp" => Some(0x5d),
         "send net temp disp" => Some(0x5e),
-        "set temp" => Some(0x5f),
-        "send current temp" => Some(0x5f),
+        "set temp" | "send current temp" => Some(0x5f),
         "set radio frequency" => Some(0x61),
         "drawing mul encode gif play" => Some(0x6b),
         "drawing encode movie play" => Some(0x6c),

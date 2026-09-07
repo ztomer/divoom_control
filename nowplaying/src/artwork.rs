@@ -2,7 +2,7 @@
 //!
 //! # Never trust the declared MIME
 //!
-//! MediaRemote reports `kMRMediaRemoteNowPlayingInfoArtworkMIMEType`, and on
+//! `MediaRemote` reports `kMRMediaRemoteNowPlayingInfoArtworkMIMEType`, and on
 //! macOS 26.6.2 that field says `image/jpeg` while the bytes it hands back
 //! begin `4d 4d 00 2a` — big-endian TIFF. Measured on a live track
 //! (2026-08-29), 1,187,190 bytes.
@@ -28,6 +28,7 @@ pub enum ImageFormat {
 
 impl ImageFormat {
     /// Identify a format from the leading magic bytes.
+    #[must_use]
     pub fn sniff(bytes: &[u8]) -> Self {
         const SIGS: &[(&[u8], ImageFormat)] = &[
             (&[0xFF, 0xD8, 0xFF], ImageFormat::Jpeg),
@@ -45,13 +46,14 @@ impl ImageFormat {
         }
         // RIFF....WEBP — the marker is at offset 8, not 0.
         if bytes.len() >= 12 && bytes.starts_with(b"RIFF") && &bytes[8..12] == b"WEBP" {
-            return ImageFormat::Webp;
+            return Self::Webp;
         }
-        ImageFormat::Unknown
+        Self::Unknown
     }
 
     /// The MIME type this format ACTUALLY is.
-    pub fn mime(self) -> &'static str {
+    #[must_use]
+    pub const fn mime(self) -> &'static str {
         match self {
             Self::Jpeg => "image/jpeg",
             Self::Png => "image/png",
@@ -64,7 +66,8 @@ impl ImageFormat {
     }
 
     /// The conventional extension, for writing artwork to a temp file.
-    pub fn extension(self) -> &'static str {
+    #[must_use]
+    pub const fn extension(self) -> &'static str {
         match self {
             Self::Jpeg => "jpg",
             Self::Png => "png",
@@ -81,8 +84,8 @@ impl ImageFormat {
 ///
 /// The whole point of this crate: the old path guessed an artwork URL from the
 /// track name via the iTunes Search API, which cannot resolve non-album content
-/// (YouTube Music, podcasts, live sets) and needs a network round trip to fail.
-/// MediaRemote hands over the exact image the player is displaying.
+/// (`YouTube` Music, podcasts, live sets) and needs a network round trip to fail.
+/// `MediaRemote` hands over the exact image the player is displaying.
 #[derive(Debug, Clone)]
 pub struct Artwork {
     pub bytes: Vec<u8>,
@@ -94,6 +97,7 @@ pub struct Artwork {
 }
 
 impl Artwork {
+    #[must_use]
     pub fn new(bytes: Vec<u8>, declared_mime: Option<String>) -> Self {
         let format = ImageFormat::sniff(&bytes);
         Self {
@@ -103,16 +107,19 @@ impl Artwork {
         }
     }
 
-    pub fn len(&self) -> usize {
+    #[must_use]
+    pub const fn len(&self) -> usize {
         self.bytes.len()
     }
 
-    pub fn is_empty(&self) -> bool {
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
         self.bytes.is_empty()
     }
 
     /// True when the source's declared MIME disagrees with the real bytes.
     /// Worth logging once: it means the source cannot be trusted for typing.
+    #[must_use]
     pub fn mime_is_a_lie(&self) -> bool {
         match &self.declared_mime {
             Some(d) => !d.eq_ignore_ascii_case(self.format.mime()),

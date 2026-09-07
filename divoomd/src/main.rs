@@ -31,7 +31,7 @@ fn env_usize(key: &str, default: usize) -> usize {
 
 fn env_duration(key: &str, default: Duration) -> Duration {
     match std::env::var(key) {
-        Ok(v) => v.parse::<u64>().map(Duration::from_secs).unwrap_or(default),
+        Ok(v) => v.parse::<u64>().map_or(default, Duration::from_secs),
         Err(_) => default,
     }
 }
@@ -111,12 +111,11 @@ async fn main() {
     let mut tcp_listener = None;
     let mut tcp_token = None;
     if let Some(host) = args.host {
-        let port = match args.port {
-            Some(p) => p,
-            None => {
-                eprintln!("divoomd: TCP port is required when host is specified");
-                std::process::exit(1);
-            }
+        let port = if let Some(p) = args.port {
+            p
+        } else {
+            eprintln!("divoomd: TCP port is required when host is specified");
+            std::process::exit(1);
         };
         let token = match args.token {
             Some(ref t) if !t.is_empty() => t.clone(),
@@ -147,7 +146,7 @@ async fn main() {
     // DIVOOMD_MONTHLY_BEST=1.
     if matches!(
         std::env::var("DIVOOMD_MONTHLY_BEST").as_deref(),
-        Ok("1") | Ok("true") | Ok("yes")
+        Ok("1" | "true" | "yes")
     ) {
         eprintln!("divoomd: monthly-best background sync enabled");
         tokio::spawn(divoomd::monthly_best::monthly_best_loop_task(
@@ -175,12 +174,12 @@ async fn main() {
     if let (Some(l), Some(t)) = (tcp_listener, tcp_token) {
         let tcp_fut = serve_tcp(l, daemon.clone(), t, max_connections, idle_timeout);
         tokio::select! {
-            _ = unix_fut => {}
-            _ = tcp_fut => {}
+            () = unix_fut => {}
+            () = tcp_fut => {}
             sig = shutdown_signal() => {
                 eprintln!("divoomd: {sig} — shutting down");
             }
-            _ = shutdown.notified() => {
+            () = shutdown.notified() => {
                 eprintln!("divoomd: shutdown command — shutting down");
                 // brief grace so the command's reply flushes to the client
                 tokio::time::sleep(std::time::Duration::from_millis(150)).await;
@@ -188,11 +187,11 @@ async fn main() {
         }
     } else {
         tokio::select! {
-            _ = unix_fut => {}
+            () = unix_fut => {}
             sig = shutdown_signal() => {
                 eprintln!("divoomd: {sig} — shutting down");
             }
-            _ = shutdown.notified() => {
+            () = shutdown.notified() => {
                 eprintln!("divoomd: shutdown command — shutting down");
                 tokio::time::sleep(std::time::Duration::from_millis(150)).await;
             }
@@ -208,7 +207,10 @@ async fn main() {
     // dropped), then releases the startup lock. Explicit here because this
     // shutdown is deliberate; a panic or an early `exit` path gets the same
     // treatment from `Drop`.
-    held.release();
+    // The bool says whether the socket file was still ours. Nothing to do with
+    // it here: `release` already PRINTS when it was not, which is the visible
+    // symptom of a duplicate instance and the whole reason it is not silent.
+    let _was_ours = held.release();
 }
 
 /// Resolve when SIGINT or SIGTERM arrives, so the socket is unlinked on a clean

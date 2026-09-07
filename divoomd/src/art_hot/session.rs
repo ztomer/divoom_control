@@ -1,5 +1,5 @@
 //! Device-driven BLE upload session for the hot channel. Pulled out of
-//! art_hot.rs to keep both files under the 500-LOC ground rule.
+//! `art_hot.rs` to keep both files under the 500-LOC ground rule.
 //!
 //! Session flow: send the 0x9B manifest, then loop on the device's 0xF7/0x9F
 //! file requests — answer each with 0x9D file info, stream 0x9E packets, and
@@ -86,22 +86,19 @@ pub(super) async fn run_hot_session(
         }
         let vendor_id = u32::from_le_bytes(payload[0..4].try_into().unwrap_or([0; 4]));
         let version = u32::from_le_bytes(payload[4..8].try_into().unwrap_or([0; 4]));
-        let f = match pick_file(files, vendor_id, version) {
-            Some(f) => {
-                if dbg {
-                    eprintln!(
-                        "[hot] request vendor={vendor_id} v{version} -> pick_file MATCH {} v{}",
-                        f.file_id, f.version
-                    );
-                }
-                f
+        let f = if let Some(f) = pick_file(files, vendor_id, version) {
+            if dbg {
+                eprintln!(
+                    "[hot] request vendor={vendor_id} v{version} -> pick_file MATCH {} v{}",
+                    f.file_id, f.version
+                );
             }
-            None => {
-                if dbg {
-                    eprintln!("[hot] request vendor={vendor_id} v{version} -> pick_file NONE -> break (nothing to serve)");
-                }
-                break;
+            f
+        } else {
+            if dbg {
+                eprintln!("[hot] request vendor={vendor_id} v{version} -> pick_file NONE -> break (nothing to serve)");
             }
+            break;
         };
         // Send 0x9D file info
         let mut info = Vec::new();
@@ -113,14 +110,13 @@ pub(super) async fn run_hot_session(
             return Err("file info (0x9D) write failed".into());
         }
         // Wait for 0x9D ack
-        let ack = match ble.wait_for_any_response(&[cmd_9d, cmd_f7], idle_to).await {
-            Some(a) => a,
-            None => {
-                if dbg {
-                    eprintln!("[hot] no 0x9D ack (timeout) -> break");
-                }
-                break;
+        let ack = if let Some(a) = ble.wait_for_any_response(&[cmd_9d, cmd_f7], idle_to).await {
+            a
+        } else {
+            if dbg {
+                eprintln!("[hot] no 0x9D ack (timeout) -> break");
             }
+            break;
         };
         if ack.0 == cmd_f7 {
             if dbg {
@@ -132,7 +128,7 @@ pub(super) async fn run_hot_session(
         let p2 = &ack.1;
         if p2.is_empty() || p2[0] != 0 {
             if dbg {
-                eprintln!("[hot] 0x9D ack declined (payload {:02x?}) -> skip file", p2);
+                eprintln!("[hot] 0x9D ack declined (payload {p2:02x?}) -> skip file");
             }
             continue;
         }
@@ -194,7 +190,7 @@ pub(super) async fn run_hot_session(
         .iter()
         .filter(|s| {
             s.get("confirmed")
-                .and_then(|v| v.as_bool())
+                .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false)
         })
         .count();

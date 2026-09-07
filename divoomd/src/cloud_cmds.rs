@@ -1,6 +1,8 @@
-//! Top-level daemon cloud commands (gallery + credentials). Split out of
-//! `daemon.rs` to keep it under the 500-line house limit. These don't touch the
-//! device — they call `crate::cloud` / `crate::cloud_store` directly.
+//! Top-level daemon cloud commands (gallery + credentials).
+//!
+//! Split out of `daemon.rs` to keep it under the 500-line house limit. These
+//! don't touch the device — they call `crate::cloud` / `crate::cloud_store`
+//! directly.
 
 use serde_json::{json, Value};
 
@@ -10,20 +12,24 @@ use crate::protocol::{err_reply, Request};
 pub async fn handle(command: &str, req: &Request) -> Value {
     match command {
         "fetch_gallery" => {
-            let classify = match req.args.get("classify").and_then(|v| v.as_i64()) {
+            let classify = match req.args.get("classify").and_then(serde_json::Value::as_i64) {
                 Some(c) => c,
                 None => return err_reply("fetch_gallery requires 'classify'"),
             };
-            let limit = req.args.get("limit").and_then(|v| v.as_i64()).unwrap_or(30);
+            let limit = req
+                .args
+                .get("limit")
+                .and_then(serde_json::Value::as_i64)
+                .unwrap_or(30);
             let file_sort = req
                 .args
                 .get("file_sort")
-                .and_then(|v| v.as_i64())
+                .and_then(serde_json::Value::as_i64)
                 .unwrap_or(1);
             let file_size = req
                 .args
                 .get("file_size")
-                .and_then(|v| v.as_i64())
+                .and_then(serde_json::Value::as_i64)
                 .unwrap_or(127);
             match crate::cloud::fetch_gallery(classify, limit, file_sort, file_size).await {
                 Ok(res) => json!({ "success": true, "result": res }),
@@ -76,7 +82,7 @@ pub async fn handle(command: &str, req: &Request) -> Value {
             let force = req
                 .args
                 .get("force_refresh")
-                .and_then(|v| v.as_bool())
+                .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false);
             match crate::cloud::get_credentials(force).await {
                 Ok(creds) => json!({
@@ -107,9 +113,13 @@ pub async fn handle(command: &str, req: &Request) -> Value {
             let classify = req
                 .args
                 .get("classify")
-                .and_then(|v| v.as_i64())
+                .and_then(serde_json::Value::as_i64)
                 .unwrap_or(crate::cloud::DEFAULT_GALLERY_CLASSIFY);
-            let limit = req.args.get("limit").and_then(|v| v.as_i64()).unwrap_or(20);
+            let limit = req
+                .args
+                .get("limit")
+                .and_then(serde_json::Value::as_i64)
+                .unwrap_or(20);
             match crate::cloud::get_category_file_list(classify, limit).await {
                 Ok(res) => json!({ "success": true, "result": res }),
                 Err(e) => err_reply(&e),
@@ -126,7 +136,11 @@ pub async fn handle(command: &str, req: &Request) -> Value {
                 Some(t) => t.to_string(),
                 None => return err_reply("get_dial_list requires 'dial_type'"),
             };
-            let page = req.args.get("page").and_then(|v| v.as_i64()).unwrap_or(1);
+            let page = req
+                .args
+                .get("page")
+                .and_then(serde_json::Value::as_i64)
+                .unwrap_or(1);
             match crate::cloud::get_dial_list(&dial_type, page).await {
                 Ok(res) => json!({ "success": true, "result": res }),
                 Err(e) => err_reply(&e),
@@ -138,8 +152,12 @@ pub async fn handle(command: &str, req: &Request) -> Value {
                 .args
                 .get("dial_type")
                 .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
-            let page = req.args.get("page").and_then(|v| v.as_i64()).unwrap_or(1);
+                .map(std::string::ToString::to_string);
+            let page = req
+                .args
+                .get("page")
+                .and_then(serde_json::Value::as_i64)
+                .unwrap_or(1);
             match crate::cloud::list_clock_faces(dial_type, page).await {
                 Ok(res) => json!({ "success": true, "result": res }),
                 Err(e) => err_reply(&e),
@@ -159,12 +177,24 @@ pub async fn handle(command: &str, req: &Request) -> Value {
         }
 
         "get_aid_sleep_list" | "get_my_aid_sleep_list" => {
-            let sleep_type = match req.args.get("sleep_type").and_then(|v| v.as_i64()) {
+            let sleep_type = match req
+                .args
+                .get("sleep_type")
+                .and_then(serde_json::Value::as_i64)
+            {
                 Some(t) => t,
                 None => return err_reply(&format!("{command} requires 'sleep_type'")),
             };
-            let limit = req.args.get("limit").and_then(|v| v.as_i64()).unwrap_or(30);
-            let page = req.args.get("page").and_then(|v| v.as_i64()).unwrap_or(1);
+            let limit = req
+                .args
+                .get("limit")
+                .and_then(serde_json::Value::as_i64)
+                .unwrap_or(30);
+            let page = req
+                .args
+                .get("page")
+                .and_then(serde_json::Value::as_i64)
+                .unwrap_or(1);
             let result = if command == "get_aid_sleep_list" {
                 crate::cloud::fetch_aid_sleep_list(sleep_type, limit, page).await
             } else {
@@ -177,8 +207,16 @@ pub async fn handle(command: &str, req: &Request) -> Value {
         }
 
         "get_my_playlists" => {
-            let limit = req.args.get("limit").and_then(|v| v.as_i64()).unwrap_or(30);
-            let page = req.args.get("page").and_then(|v| v.as_i64()).unwrap_or(1);
+            let limit = req
+                .args
+                .get("limit")
+                .and_then(serde_json::Value::as_i64)
+                .unwrap_or(30);
+            let page = req
+                .args
+                .get("page")
+                .and_then(serde_json::Value::as_i64)
+                .unwrap_or(1);
             match crate::cloud::get_my_playlists(limit, page).await {
                 Ok(res) => json!({ "success": true, "result": res }),
                 Err(e) => err_reply(&e),
@@ -186,12 +224,20 @@ pub async fn handle(command: &str, req: &Request) -> Value {
         }
 
         "get_playlist_images" => {
-            let play_id = match req.args.get("play_id").and_then(|v| v.as_i64()) {
+            let play_id = match req.args.get("play_id").and_then(serde_json::Value::as_i64) {
                 Some(id) => id,
                 None => return err_reply("get_playlist_images requires 'play_id'"),
             };
-            let limit = req.args.get("limit").and_then(|v| v.as_i64()).unwrap_or(30);
-            let page = req.args.get("page").and_then(|v| v.as_i64()).unwrap_or(1);
+            let limit = req
+                .args
+                .get("limit")
+                .and_then(serde_json::Value::as_i64)
+                .unwrap_or(30);
+            let page = req
+                .args
+                .get("page")
+                .and_then(serde_json::Value::as_i64)
+                .unwrap_or(1);
             match crate::cloud::get_playlist_images(play_id, limit, page).await {
                 Ok(res) => json!({ "success": true, "result": res }),
                 Err(e) => err_reply(&e),

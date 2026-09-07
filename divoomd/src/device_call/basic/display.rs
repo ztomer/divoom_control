@@ -1,4 +1,4 @@
-//! `display.*`/`show_*` device_call family (0x45 channel payloads + image
+//! `display.*`/`show_*` `device_call` family (0x45 channel payloads + image
 //! streaming). Pulled out of basic.rs to keep both files under the 500-LOC
 //! ground rule.
 
@@ -63,9 +63,12 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         "display.show_image" | "display.display_image" => {
             let size = kw
                 .and_then(|v| v.get("size"))
-                .and_then(|v| v.as_u64())
+                .and_then(serde_json::Value::as_u64)
                 .unwrap_or(16) as u32;
-            let default_time_ms = raw_args.get(1).and_then(|v| v.as_u64()).unwrap_or(100) as u16;
+            let default_time_ms = raw_args
+                .get(1)
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(100) as u16;
 
             let img_data: Vec<u8> = if let Some(data) = ctx.blob_map.lock().unwrap().remove(&0) {
                 data
@@ -184,12 +187,15 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let kind = LightingType::from_i64(
                 raw_args
                     .get(3)
-                    .and_then(|v| v.as_i64())
+                    .and_then(serde_json::Value::as_i64)
                     .or_else(|| {
                         kw.and_then(|v| v.get("lightning_type"))
-                            .and_then(|v| v.as_i64())
+                            .and_then(serde_json::Value::as_i64)
                     })
-                    .or_else(|| kw.and_then(|v| v.get("mode_type")).and_then(|v| v.as_i64()))
+                    .or_else(|| {
+                        kw.and_then(|v| v.get("mode_type"))
+                            .and_then(serde_json::Value::as_i64)
+                    })
                     .unwrap_or(0),
             );
             let payload = LightPacket {
@@ -209,7 +215,10 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let number = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("number")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("number"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0);
             let payload = crate::packets::vj_effect(number.clamp(0, 254) as u8);
             match dev.send_command(0x45, &payload, true).await {
@@ -222,7 +231,10 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let number = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("number")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("number"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0);
             let payload = crate::packets::visualization(number.clamp(0, 255) as u8);
             match dev.send_command(0x45, &payload, true).await {
@@ -269,7 +281,7 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     }
 }
 
-/// Build a `ClockPacket` from a device_call's positional + keyword arguments.
+/// Build a `ClockPacket` from a `device_call`'s positional + keyword arguments.
 ///
 /// R67/C1: three arms used to parse these fields independently, with different
 /// kwarg names and different slot assignments. One parser, one packet, one
@@ -285,13 +297,16 @@ fn clock_packet_from_call(
 ) -> ClockPacket {
     let kwb = |name: &str, default: bool| -> bool {
         kw.and_then(|v| v.get(name))
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(default)
     };
     let style = kw
         .and_then(|v| v.get("clock"))
-        .and_then(|v| v.as_i64())
-        .or_else(|| kw.and_then(|v| v.get("style")).and_then(|v| v.as_i64()))
+        .and_then(serde_json::Value::as_i64)
+        .or_else(|| {
+            kw.and_then(|v| v.get("style"))
+                .and_then(serde_json::Value::as_i64)
+        })
         .or_else(|| args.first().copied())
         .unwrap_or(0)
         .clamp(0, 15) as u8;
@@ -320,7 +335,7 @@ fn clock_packet_from_call(
 
 fn get_kwarg_i64(kw: Option<&serde_json::Map<String, Value>>, name: &str, default: i64) -> i64 {
     kw.and_then(|m| m.get(name))
-        .and_then(|v| v.as_i64())
+        .and_then(serde_json::Value::as_i64)
         .unwrap_or(default)
 }
 

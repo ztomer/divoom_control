@@ -7,7 +7,10 @@
 //! cap. Keeping it alone means `mod.rs` stays about argument decoding and
 //! preconditions, which is the part worth reading.
 
-use super::*;
+use super::{
+    aid_sleep, alarm, animation, basic, design, drawing, game, music, sleep, system, text,
+    timeplan, tools, CallCtx, Value,
+};
 
 pub(super) async fn route(method: &str, ctx: CallCtx<'_>) -> Value {
     match method {

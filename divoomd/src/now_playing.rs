@@ -1,7 +1,7 @@
 //! The `now_playing` command — one source of truth for what is playing.
 //!
 //! R67/C2: the GUI used to answer this question itself, in Python, by driving
-//! AppleScript at each player in turn and then guessing a cover-art URL from the
+//! `AppleScript` at each player in turn and then guessing a cover-art URL from the
 //! iTunes Search API. The daemon answered it a second time, in Rust, the same
 //! way. Two implementations of one question, drifting apart, and the Python one
 //! ran inside the GUI process — which is why the GUI was the thing asking for
@@ -65,7 +65,7 @@ pub async fn cmd_weather(args: &Value) -> Value {
 /// So the daemon did not merely fail the request — it DIED, leaving its socket
 /// file behind, and every subsequent client call got `Connection refused`.
 /// Reproduced by opening the GUI: it asks `now_playing` on load, and the
-/// Feishin path is taken whenever MediaRemote reports nothing playing or only
+/// Feishin path is taken whenever `MediaRemote` reports nothing playing or only
 /// something paused, which is the ordinary idle case.
 ///
 /// `live_jobs` already called this family through `spawn_blocking`; these two
@@ -147,7 +147,7 @@ fn players_blocking() -> Value {
 pub async fn cmd_now_playing(args: &Value) -> Value {
     let include_artwork = args
         .get("include_artwork")
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::Value::as_bool)
         .unwrap_or(false);
     // OFFLOADED -- see `blocking_now_playing`.
     blocking_now_playing(move || now_playing_blocking(include_artwork)).await

@@ -1,7 +1,9 @@
-//! The daemon's request Handler — dispatches NDJSON commands to replies. Owns the
-//! [`CommandQueue`] (exclusive mode / steal-reject) and, when built with the `ble`
-//! feature, the connected device. Replies match the Python daemon's shapes so the
-//! existing Python clients (and the conformance suite) drive this unchanged.
+//! The daemon's request Handler — dispatches NDJSON commands to replies.
+//!
+//! Owns the [`CommandQueue`] (exclusive mode / steal-reject) and, when built
+//! with the `ble` feature, the connected device. Replies match the Python
+//! daemon's shapes so the existing Python clients (and the conformance suite)
+//! drive this unchanged.
 //!
 //! Device commands are honest: when `ble` is built they hit the real transport;
 //! otherwise (and for not-yet-ported commands) they return a clear error rather
@@ -43,7 +45,7 @@ pub struct Daemon {
     pub(crate) central: Mutex<Option<BleCentral>>,
     /// True while a scan is running. A scan drives the one shared adapter's
     /// start/stop; two overlapping scans would clobber each other (one's
-    /// stop_scan ends the other early → truncated results), so cmd_scan rejects
+    /// `stop_scan` ends the other early → truncated results), so `cmd_scan` rejects
     /// a concurrent scan. Mirrors the Python daemon's single-scan model.
     #[cfg(feature = "ble")]
     pub(crate) scanning: std::sync::atomic::AtomicBool,
@@ -54,7 +56,7 @@ pub struct Daemon {
     pub(crate) connecting: std::sync::atomic::AtomicBool,
     /// Last scan's completion time + result. A scan within `MIN_RESCAN_INTERVAL`
     /// of the last returns this cached list instead of hitting the radio —
-    /// back-to-back scans trip CoreBluetooth's scan-frequency throttle (which
+    /// back-to-back scans trip `CoreBluetooth`'s scan-frequency throttle (which
     /// silently returns 0 devices until it resets).
     #[cfg(feature = "ble")]
     pub(crate) last_scan: Mutex<Option<(Instant, Vec<Value>)>>,
@@ -62,7 +64,7 @@ pub struct Daemon {
     encoder: OnceLock<Option<NativeEncoder>>,
     pub(crate) tx: tokio::sync::broadcast::Sender<Value>,
     pub live_jobs: Arc<crate::live_jobs::LiveJobCoordinator>,
-    pub(crate) self_weak: OnceLock<Weak<Daemon>>,
+    pub(crate) self_weak: OnceLock<Weak<Self>>,
     /// Shared progress state for the background hot-update task.
     pub hot_progress: Arc<crate::art::HotProgress>,
     /// Current wall coordinator (None when no wall is active).
@@ -81,14 +83,16 @@ impl Default for Daemon {
 }
 
 impl Daemon {
+    #[must_use]
     pub fn new() -> Self {
         Self::new_with_mac(None)
     }
 
+    #[must_use]
     pub fn new_with_mac(default_mac: Option<String>) -> Self {
         let (tx, _) = tokio::sync::broadcast::channel(32);
         let tx_for_hot = tx.clone();
-        Daemon {
+        Self {
             queue: CommandQueue::new(Some(EXCLUSIVE_TIMEOUT), Some(ITEM_TIMEOUT)),
             started: Instant::now(),
             device: Mutex::new(None),
@@ -115,7 +119,7 @@ impl Daemon {
         }
     }
 
-    /// Get (or lazy-init) the cached NativeEncoder. Returns None if the dylib is absent.
+    /// Get (or lazy-init) the cached `NativeEncoder`. Returns None if the dylib is absent.
     pub(crate) fn encoder(&self) -> Option<&NativeEncoder> {
         self.encoder
             .get_or_init(|| {
@@ -124,7 +128,7 @@ impl Daemon {
             .as_ref()
     }
 
-    pub fn initialize_self_weak(&self, weak: Weak<Daemon>) {
+    pub fn initialize_self_weak(&self, weak: Weak<Self>) {
         let _ = self.self_weak.set(weak);
     }
 
@@ -141,7 +145,7 @@ impl Daemon {
         crate::daemon_connect::cmd_connect(self, req).await
     }
 
-    /// device_call routes a method string to a protocol op. A small set is ported
+    /// `device_call` routes a method string to a protocol op. A small set is ported
     /// first to prove op-level parity (the read-back + a write); unported methods
     /// return an honest error. The device mutex serializes device access.
     pub(crate) async fn cmd_device_call(&self, req: &Request) -> Value {
@@ -188,47 +192,45 @@ impl Daemon {
         let req_timeout = req
             .args
             .get("timeout")
-            .and_then(|v| v.as_f64())
+            .and_then(serde_json::Value::as_f64)
             .unwrap_or(30.0)
             .clamp(1.0, 120.0);
         let timeout = Duration::from_secs_f64(req_timeout);
 
-        match tokio::time::timeout(
+        if let Ok(reply) = tokio::time::timeout(
             timeout,
             crate::device_call::handle_device_call(self, dev, req, timeout),
         )
         .await
         {
-            Ok(reply) => {
-                // R59/event-driven link health: a failed mid-session op (or a
-                // timeout) means the link is unhealthy → push a `degraded` status
-                // so the UI flips the dot amber immediately instead of waiting for
-                // a poll. A successful op recovers it to `active`. The device is
-                // still owned (`guard` holds the lock), so connected stays true.
-                if guard.is_some() {
-                    let id = self.device_id.lock().await.clone();
-                    let degraded = reply.get("success").and_then(|v| v.as_bool()) != Some(true);
-                    let st = if degraded { "degraded" } else { "active" };
-                    let _ = self.tx.send(crate::daemon_connect::status_payload(
-                        true,
-                        id.as_deref(),
-                        Some(st),
-                    ));
-                }
-                reply
+            // R59/event-driven link health: a failed mid-session op (or a
+            // timeout) means the link is unhealthy → push a `degraded` status
+            // so the UI flips the dot amber immediately instead of waiting for
+            // a poll. A successful op recovers it to `active`. The device is
+            // still owned (`guard` holds the lock), so connected stays true.
+            if guard.is_some() {
+                let id = self.device_id.lock().await.clone();
+                let degraded =
+                    reply.get("success").and_then(serde_json::Value::as_bool) != Some(true);
+                let st = if degraded { "degraded" } else { "active" };
+                let _ = self.tx.send(crate::daemon_connect::status_payload(
+                    true,
+                    id.as_deref(),
+                    Some(st),
+                ));
             }
-            Err(_) => {
-                let msg = format!("device op timed out after {req_timeout:.0}s");
-                if guard.is_some() {
-                    let id = self.device_id.lock().await.clone();
-                    let _ = self.tx.send(crate::daemon_connect::status_payload(
-                        true,
-                        id.as_deref(),
-                        Some("degraded"),
-                    ));
-                }
-                err_reply(&msg)
+            reply
+        } else {
+            let msg = format!("device op timed out after {req_timeout:.0}s");
+            if guard.is_some() {
+                let id = self.device_id.lock().await.clone();
+                let _ = self.tx.send(crate::daemon_connect::status_payload(
+                    true,
+                    id.as_deref(),
+                    Some("degraded"),
+                ));
             }
+            err_reply(&msg)
         }
     }
 
@@ -252,7 +254,7 @@ impl Handler for Daemon {
     fn initial_status(&self) -> Value {
         #[cfg(feature = "ble")]
         let (connected, id) = {
-            let dev = self.device.try_lock().map(|g| g.is_some()).unwrap_or(false);
+            let dev = self.device.try_lock().is_ok_and(|g| g.is_some());
             let id = self.device_id.try_lock().ok().and_then(|g| g.clone());
             (dev, id)
         };

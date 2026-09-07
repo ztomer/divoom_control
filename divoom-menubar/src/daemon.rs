@@ -176,7 +176,7 @@ pub fn notifications_running() -> bool {
         return false;
     };
     v.get("running")
-        .and_then(|r| r.as_bool())
+        .and_then(serde_json::Value::as_bool)
         .or_else(|| {
             v.get("state")
                 .and_then(|s| s.as_str())
@@ -221,8 +221,10 @@ mod tests {
     }
 
     impl FakeDaemon {
-        fn start(reply: Value, subscribe_events: Vec<Value>) -> FakeDaemon {
-            let guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        fn start(reply: Value, subscribe_events: Vec<Value>) -> Self {
+            let guard = ENV_LOCK
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             let path = format!(
                 "/tmp/divoom_menubar_test_{}_{:?}.sock",
                 std::process::id(),
@@ -261,7 +263,7 @@ mod tests {
                 }
             });
 
-            FakeDaemon {
+            Self {
                 socket_path: path,
                 _guard: guard,
             }
@@ -285,7 +287,9 @@ mod tests {
 
     #[test]
     fn connection_state_is_none_when_daemon_unreachable() {
-        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = ENV_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         std::env::set_var("DIVOOM_SOCKET", "/tmp/divoom_menubar_test_nonexistent.sock");
         assert_eq!(connection_state(), None);
     }

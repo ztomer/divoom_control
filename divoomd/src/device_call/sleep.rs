@@ -69,15 +69,15 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 Some(p) if p.len() >= 10 => json!({
                     "success": true,
                     "result": {
-                        "time": p[0] as i64,
-                        "mode": p[1] as i64,
-                        "on": p[2] as i64,
-                        "fm_freq": u16::from_le_bytes([p[3], p[4]]) as i64,
-                        "volume": p[5] as i64,
-                        "color_r": p[6] as i64,
-                        "color_g": p[7] as i64,
-                        "color_b": p[8] as i64,
-                        "light": p[9] as i64,
+                        "time": i64::from(p[0]),
+                        "mode": i64::from(p[1]),
+                        "on": i64::from(p[2]),
+                        "fm_freq": i64::from(u16::from_le_bytes([p[3], p[4]])),
+                        "volume": i64::from(p[5]),
+                        "color_r": i64::from(p[6]),
+                        "color_g": i64::from(p[7]),
+                        "color_b": i64::from(p[8]),
+                        "light": i64::from(p[9]),
                     }
                 }),
                 _ => json!({"success": true, "result": Value::Null}),
@@ -87,17 +87,26 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let on_off = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("on_off")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("on_off"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let mode = args
                 .get(1)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("mode")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("mode"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let volume = args
                 .get(2)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("volume")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("volume"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             match dev.send_command(0xa3, &[on_off, mode, volume], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
@@ -108,7 +117,10 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let volume = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("volume")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("volume"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             match dev.send_command(0xa4, &[volume], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
@@ -145,7 +157,10 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let light = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("light")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("light"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             match dev.send_command(0xae, &[light], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
@@ -164,12 +179,14 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .get(2)
                 .and_then(|v| v.as_array())
                 .or_else(|| kw.and_then(|v| v.get("fm_freq")).and_then(|v| v.as_array()))
-                .map(|a| {
-                    a.iter()
-                        .filter_map(|x| x.as_u64().map(|n| n as u8))
-                        .collect()
-                })
-                .unwrap_or_else(|| vec![0, 0]);
+                .map_or_else(
+                    || vec![0, 0],
+                    |a| {
+                        a.iter()
+                            .filter_map(|x| x.as_u64().map(|n| n as u8))
+                            .collect()
+                    },
+                );
             let fm_freq = if fm_freq.len() >= 2 {
                 fm_freq
             } else {

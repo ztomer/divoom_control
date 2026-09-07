@@ -1,21 +1,21 @@
 //! Feishin (Navidrome / Subsonic) provider.
 //!
-//! # Why this exists alongside MediaRemote
+//! # Why this exists alongside `MediaRemote`
 //!
-//! MediaRemote covers every player that publishes to the macOS Now Playing
+//! `MediaRemote` covers every player that publishes to the macOS Now Playing
 //! source. Feishin is an Electron app and may or may not — which is exactly the
 //! kind of thing that should not be assumed, so this provider is chained AFTER
-//! MediaRemote: if MediaRemote reports the track, this never runs; if it does
+//! `MediaRemote`: if `MediaRemote` reports the track, this never runs; if it does
 //! not, a Feishin track still reaches the device.
 //!
 //! It reaches Feishin by a genuinely different mechanism, which is why it could
 //! not simply be deleted along with the rest of the duplicate implementation:
 //! it scrapes Feishin's cached Navidrome credentials out of its Electron
-//! LevelDB store and asks the SERVER what is playing, over Subsonic.
+//! `LevelDB` store and asks the SERVER what is playing, over Subsonic.
 //!
 //! # This is fragile, and says so
 //!
-//! Reading another app's LevelDB by byte-scanning for `"credential":"` is not a
+//! Reading another app's `LevelDB` by byte-scanning for `"credential":"` is not a
 //! supported interface. Feishin can change its storage shape at any release and
 //! this stops working. It therefore fails QUIETLY to `None` (no track) rather
 //! than erroring — a broken scrape must not take down the whole now-playing
@@ -44,6 +44,7 @@ pub enum FeishinUnavailable {
 }
 
 impl FeishinUnavailable {
+    #[must_use]
     pub fn reason(&self) -> String {
         match self {
             Self::NotRunning => "Feishin is not running".into(),
@@ -67,12 +68,12 @@ fn config_path() -> Option<PathBuf> {
 ///
 /// Feishin publishes to macOS Now Playing only when its `mediaSession` setting
 /// is ON. With it OFF, Feishin never registers as a Now Playing client — it is
-/// invisible to MediaRemote no matter how loudly it is playing, which is
+/// invisible to `MediaRemote` no matter how loudly it is playing, which is
 /// exactly what made it look unreachable (verified 2026-08-29: the client
 /// registry listed Kaset twice and Feishin not at all, and Feishin's config
 /// read `"mediaSession": false`).
 ///
-/// Turning it ON is strictly better than everything this module does: MediaRemote
+/// Turning it ON is strictly better than everything this module does: `MediaRemote`
 /// then supplies the track AND the real cover-art bytes, with no credential
 /// scraping and no dependency on the server's scrobble state. So when Feishin is
 /// running with the setting off, that is worth SAYING rather than silently
@@ -80,14 +81,16 @@ fn config_path() -> Option<PathBuf> {
 ///
 /// `None` when the config cannot be read — absence of evidence, not evidence of
 /// absence.
+#[must_use]
 pub fn media_session_enabled() -> Option<bool> {
     let text = std::fs::read_to_string(config_path()?).ok()?;
     let cfg: serde_json::Value = serde_json::from_str(&text).ok()?;
-    cfg.get("mediaSession").and_then(|v| v.as_bool())
+    cfg.get("mediaSession").and_then(serde_json::Value::as_bool)
 }
 
 /// A one-line, ACTIONABLE hint when Feishin is running but cannot be seen
 /// through Now Playing. `None` when there is nothing useful to say.
+#[must_use]
 pub fn hint() -> Option<String> {
     if !is_running() {
         return None;
@@ -119,9 +122,7 @@ fn is_running() -> bool {
         .arg("-q")
         .arg("Feishin")
         .status()
-        .ok()
-        .map(|s| s.success())
-        .unwrap_or(false)
+        .is_ok_and(|s| s.success())
 }
 
 fn find_subsequence(haystack: &[u8], needle: &[u8]) -> Option<usize> {
@@ -130,10 +131,10 @@ fn find_subsequence(haystack: &[u8], needle: &[u8]) -> Option<usize> {
         .position(|window| window == needle)
 }
 
-/// Scrape `(server_url, auth_query_string)` out of Feishin's LevelDB files.
+/// Scrape `(server_url, auth_query_string)` out of Feishin's `LevelDB` files.
 ///
-/// LevelDB is not parsed — the values are found by scanning for their JSON keys
-/// in the raw `.ldb`/`.log` bytes. Crude, and deliberately so: a real LevelDB
+/// `LevelDB` is not parsed — the values are found by scanning for their JSON keys
+/// in the raw `.ldb`/`.log` bytes. Crude, and deliberately so: a real `LevelDB`
 /// reader would be a dependency and a lock-contention problem against a running
 /// app, for a value that is a plain string.
 fn find_credentials() -> Result<(String, String), FeishinUnavailable> {
@@ -189,6 +190,7 @@ fn find_credentials() -> Result<(String, String), FeishinUnavailable> {
     }
 }
 
+#[must_use]
 pub fn unavailable() -> Option<FeishinUnavailable> {
     if !is_running() {
         return Some(FeishinUnavailable::NotRunning);
@@ -228,6 +230,7 @@ pub fn parse_now_playing(
 }
 
 /// The current Feishin track, or `None` when nothing is playing / unavailable.
+#[must_use]
 pub fn current_track() -> Option<Track> {
     if unavailable().is_some() {
         return None;

@@ -1,8 +1,10 @@
 //! `sync_artwork` command — Python-daemon parity (`device_owner.sync_artwork` +
-//! `media_decoder.resolve_to_gif`). Download a cloud artwork by `file_id`, resolve
-//! it to a renderable image, and show it on the connected device via
-//! `display.show_image` (which resizes NEAREST to the device size and 0x8B-streams,
-//! matching the Python resize-then-show path).
+//! `media_decoder.resolve_to_gif`).
+//!
+//! Download a cloud artwork by `file_id`, resolve it to a renderable image, and
+//! show it on the connected device via `display.show_image` (which resizes
+//! NEAREST to the device size and 0x8B-streams, matching the Python
+//! resize-then-show path).
 //!
 //! PARITY NOTE: Python's `media_decoder.resolve_to_gif` decodes AES cloud
 //! containers (magic 9/18/26, with LZO for 18/26) and 0xAA hot files. The native
@@ -48,8 +50,11 @@ pub async fn download_cloud_file(file_id: &str) -> Result<Vec<u8>, String> {
 }
 
 /// Resolve a downloaded cloud payload to a `data:<mime>;base64,` preview URL
-/// (mime sniffed from the resolved bytes' magic). `None` for undecodable payloads.
-/// Mirrors Python `gallery_hot_api.get_animated_preview`'s decode + data-url wrap.
+/// (mime sniffed from the resolved bytes' magic).
+///
+/// `None` for undecodable payloads. Mirrors Python
+/// `gallery_hot_api.get_animated_preview`'s decode + data-url wrap.
+#[must_use]
 pub fn resolve_preview_data_url(raw: &[u8]) -> Option<String> {
     let img = resolve_to_gif(raw)?;
     let mime = if img.starts_with(b"GIF8") {
@@ -65,8 +70,9 @@ pub fn resolve_preview_data_url(raw: &[u8]) -> Option<String> {
 
 /// `get_animated_preview` command — download a gallery/hot file by `file_id`,
 /// decode it daemon-side, and return a base64 data-url for the UI to render
-/// (parity with the Python GUI's `gallery_hot_api.get_animated_preview`). Only the
-/// small data-url crosses the socket; the raw binary never does.
+/// (parity with the Python GUI's `gallery_hot_api.get_animated_preview`).
+///
+/// Only the small data-url crosses the socket; the raw binary never does.
 pub async fn get_animated_preview(args: &Value) -> Value {
     let file_id = match args.get("file_id").and_then(|v| v.as_str()) {
         Some(f) if !f.is_empty() => f.to_string(),
@@ -100,7 +106,7 @@ pub async fn sync_artwork(daemon: &Daemon, args: &Value) -> Value {
     };
     let size = args
         .get("default_size")
-        .and_then(|v| v.as_u64())
+        .and_then(serde_json::Value::as_u64)
         .unwrap_or(16);
 
     let file_bytes = match download_cloud_file(&file_id).await {
@@ -113,18 +119,17 @@ pub async fn sync_artwork(daemon: &Daemon, args: &Value) -> Value {
         }
     };
 
-    let img = match resolve_to_gif(&file_bytes) {
-        Some(b) => b,
-        None => {
-            let _ = daemon
-                .tx
-                .send(json!({"type":"hot_progress","progress":100,"phase":"error"}));
-            return err_reply(&format!(
-                "sync_artwork: unrecognized container magic {} (could not resolve to an image; \
-                 never raw-streamed to avoid sticking the device).",
-                file_bytes[0]
-            ));
-        }
+    let img = if let Some(b) = resolve_to_gif(&file_bytes) {
+        b
+    } else {
+        let _ = daemon
+            .tx
+            .send(json!({"type":"hot_progress","progress":100,"phase":"error"}));
+        return err_reply(&format!(
+            "sync_artwork: unrecognized container magic {} (could not resolve to an image; \
+             never raw-streamed to avoid sticking the device).",
+            file_bytes[0]
+        ));
     };
 
     // display.show_image resizes (NEAREST) to `size` and 0x8B-streams. Box the
@@ -141,7 +146,7 @@ pub async fn sync_artwork(daemon: &Daemon, args: &Value) -> Value {
     .await;
     let ok = res
         .get("success")
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::Value::as_bool)
         .unwrap_or(false);
     let _ = daemon.tx.send(json!({"type":"hot_progress","progress":100,"phase":if ok {"done"} else {"error"}, "result":{"success":ok}}));
     json!({"success": ok})

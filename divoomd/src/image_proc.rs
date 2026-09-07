@@ -1,6 +1,8 @@
 //! Image loading and resizing — port of `divoom_lib/utils/image_processing.py`
-//! `process_image()`. Takes raw file bytes, returns per-frame `(rgb, w, h, time_ms)`
-//! tuples ready to be encoded by `NativeEncoder` and streamed via 0x8B.
+//! `process_image()`.
+//!
+//! Takes raw file bytes, returns per-frame `(rgb, w, h, time_ms)` tuples ready
+//! to be encoded by `NativeEncoder` and streamed via 0x8B.
 //!
 //! NEAREST resampling matches the Python `Image.Resampling.NEAREST` used there;
 //! keeping the same filter keeps pixel art crisp and avoids blurring on upscale.
@@ -10,7 +12,7 @@
 
 use image::{imageops::FilterType, AnimationDecoder, DynamicImage};
 
-/// One decoded frame: (rgb_bytes, w, h, time_ms).
+/// One decoded frame: (`rgb_bytes`, w, h, `time_ms`).
 pub type Frame = (Vec<u8>, i32, i32, u16);
 
 /// Load image bytes (PNG, JPEG, or GIF) and resize each frame to `size × size`.

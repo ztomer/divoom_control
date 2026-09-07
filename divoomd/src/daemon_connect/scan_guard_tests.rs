@@ -1,5 +1,5 @@
 //! Scan/connect guard + connect/disconnect unit tests, split out of
-//! daemon_connect.rs to stay under the 500-LOC ground rule.
+//! `daemon_connect.rs` to stay under the 500-LOC ground rule.
 
 use super::{cmd_connect, cmd_disconnect, cmd_scan, is_dead_central, ScanGuard};
 use crate::daemon::Daemon;

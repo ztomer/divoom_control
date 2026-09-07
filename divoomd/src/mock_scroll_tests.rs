@@ -1,4 +1,4 @@
-//! SPP_SCROLL (0x35) wire parity with the APK.
+//! `SPP_SCROLL` (0x35) wire parity with the APK.
 //!
 //! Split out of `mock_device_tests.rs` in R73: that file hit the repo's
 //! 500-line cap, and scroll is a self-contained subject with its own ground
@@ -20,7 +20,7 @@ mod tests {
         d
     }
 
-    /// 0x35 = SPP_SCROLL(53). The APK's only builder is
+    /// 0x35 = `SPP_SCROLL(53)`. The APK's only builder is
     /// `CmdManager.b3(mode, speed)`:
     ///
     /// ```text

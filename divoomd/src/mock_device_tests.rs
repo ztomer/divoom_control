@@ -178,7 +178,7 @@ mod tests {
     /// Phase 4 Tier A: exclusive-mode gating end-to-end through the real daemon
     /// dispatch, hardware-free (mock transport). Mirrors the Python R53 steal-reject
     /// teeth tests: a second session's acquire is rejected IMMEDIATELY (no hang, no
-    /// steal), foreign-token device_calls are denied while held, and the slot frees
+    /// steal), foreign-token `device_calls` are denied while held, and the slot frees
     /// on release.
     #[tokio::test]
     async fn test_mock_exclusive_mode_gating() {
@@ -331,7 +331,7 @@ mod tests {
     }
 
     /// Animation upload primitives — verify exact wire bytes incl. LE/BE orders
-    /// (parity with divoom_lib/display/animation*.py).
+    /// (parity with `divoom_lib/display/animation`*.py).
     #[tokio::test]
     async fn test_mock_animation_payloads() {
         let d = setup_mock_daemon().await;
@@ -346,7 +346,7 @@ mod tests {
         );
         assert!(call(json!({"method":"animation.set_rhythm_gif","kwargs":{"pos":1,"total_length":512,"gif_id":2,"data":[170,187]}})).await["success"].as_bool().unwrap());
         assert!(call(json!({"method":"animation.app_new_send_gif_cmd","kwargs":{"control_word":0,"file_size":300}})).await["success"].as_bool().unwrap());
-        assert!(call(json!({"method":"animation.app_big64_user_define","kwargs":{"control_word":0,"file_size":10,"index":2,"file_id":16909060}})).await["success"].as_bool().unwrap());
+        assert!(call(json!({"method":"animation.app_big64_user_define","kwargs":{"control_word":0,"file_size":10,"index":2,"file_id":16_909_060}})).await["success"].as_bool().unwrap());
 
         let device_lock = d.device.lock().await;
         let DeviceTransport::Mock(ref mock) = **device_lock.as_ref().unwrap() else {
@@ -362,7 +362,7 @@ mod tests {
         ); // file_size LE32, idx, file_id BE32
     }
 
-    /// SD-card music setters — wire-byte parity with divoom_lib/media/music.py.
+    /// SD-card music setters — wire-byte parity with `divoom_lib/media/music.py`.
     #[tokio::test]
     async fn test_mock_music_sd_payloads() {
         let d = setup_mock_daemon().await;
@@ -427,7 +427,7 @@ mod tests {
     /// R67/C7: positional args must be read by their TRUE index.
     ///
     /// `show_light(color, brightness, power, lightning_type)` is forwarded
-    /// positionally by DaemonDeviceProxy. The handler used to index the
+    /// positionally by `DaemonDeviceProxy`. The handler used to index the
     /// COMPACTED numeric list, which drops the colour string and the bool — so
     /// for ("#00FFCC", 80, true, 2) it was [80, 2] and index 1 gave the MODE.
     /// The ambient brightness slider therefore transmitted the mode number, and

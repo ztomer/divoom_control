@@ -1,10 +1,10 @@
 //! AES-128-CBC decrypt (Divoom cloud container key/IV). Pulled out of
-//! art_codec.rs to keep both files under the 500-LOC ground rule.
+//! `art_codec.rs` to keep both files under the 500-LOC ground rule.
 
 // ── AES-CBC cloud container decoder (magic 9/18/26) ──────────────────────
 
 /// AES-CBC decrypt with the Divoom cloud key/IV.
-pub(crate) fn aes_cbc_decrypt(data: &[u8]) -> Option<Vec<u8>> {
+pub fn aes_cbc_decrypt(data: &[u8]) -> Option<Vec<u8>> {
     // Use openssl-like manual PKCS#7-unpadded AES via the `aes` + `cbc` crates, or
     // fall back to a pure-Rust implementation. Because those crates aren't listed in
     // Cargo.toml (and adding them causes a large dep tree), we implement AES-128-CBC
@@ -63,7 +63,7 @@ fn aes128cbc_decrypt_impl(ct: &[u8], key: &[u8; 16], iv: &[u8; 16]) -> Option<Ve
         0x7d,
     ];
 
-    fn xtime(a: u8) -> u8 {
+    const fn xtime(a: u8) -> u8 {
         if a & 0x80 != 0 {
             (a << 1) ^ 0x1b
         } else {
@@ -138,7 +138,7 @@ fn aes128cbc_decrypt_impl(ct: &[u8], key: &[u8; 16], iv: &[u8; 16]) -> Option<Ve
             state[11] = state[15];
             state[15] = t;
             // InvSubBytes
-            for b in state.iter_mut() {
+            for b in &mut state {
                 *b = ISBOX[*b as usize];
             }
             // AddRoundKey
@@ -176,7 +176,7 @@ fn aes128cbc_decrypt_impl(ct: &[u8], key: &[u8; 16], iv: &[u8; 16]) -> Option<Ve
         state[7] = state[11];
         state[11] = state[15];
         state[15] = t;
-        for b in state.iter_mut() {
+        for b in &mut state {
             *b = ISBOX[*b as usize];
         }
         for i in 0..16 {

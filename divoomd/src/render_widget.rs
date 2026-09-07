@@ -49,6 +49,7 @@ pub struct Quote {
 }
 
 impl Quote {
+    #[must_use]
     pub fn pct_change(&self) -> f64 {
         if self.prev_close == 0.0 {
             0.0
@@ -68,10 +69,7 @@ pub async fn fetch_quote(client: &reqwest::Client, symbol: &str) -> Result<Quote
     if symbol.trim().is_empty() {
         return Err("stocks: empty symbol".to_string());
     }
-    let url = format!(
-        "https://query1.finance.yahoo.com/v8/finance/chart/{}",
-        symbol
-    );
+    let url = format!("https://query1.finance.yahoo.com/v8/finance/chart/{symbol}");
     let resp = client
         .get(&url)
         .timeout(Duration::from_secs(5))
@@ -91,11 +89,11 @@ pub async fn fetch_quote(client: &reqwest::Client, symbol: &str) -> Result<Quote
         .ok_or_else(|| format!("stocks: no quote for {symbol}"))?;
     let price = meta
         .get("regularMarketPrice")
-        .and_then(|v| v.as_f64())
+        .and_then(serde_json::Value::as_f64)
         .unwrap_or(0.0);
     let prev_close = meta
         .get("chartPreviousClose")
-        .and_then(|v| v.as_f64())
+        .and_then(serde_json::Value::as_f64)
         .unwrap_or(0.0);
     Ok(Quote {
         price,
@@ -143,7 +141,11 @@ pub async fn cmd_render_widget(args: &Value) -> Value {
         Some(k) => k,
         None => return err_reply("render_widget requires 'kind'"),
     };
-    let size = clamp_size(args.get("size").and_then(|v| v.as_u64()).unwrap_or(16));
+    let size = clamp_size(
+        args.get("size")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(16),
+    );
     let params = args.get("params").cloned().unwrap_or(json!({}));
 
     match kind {
@@ -228,7 +230,7 @@ pub async fn cmd_render_widget(args: &Value) -> Value {
             // does not silently change for existing callers.
             let font_size = params
                 .get("font_size")
-                .and_then(|v| v.as_i64())
+                .and_then(serde_json::Value::as_i64)
                 .unwrap_or(1);
             let full_font = font_size > 1 && size > 16;
             let color = parse_color(params.get("color").and_then(|v| v.as_str()));

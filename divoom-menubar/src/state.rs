@@ -31,12 +31,12 @@ pub const RED: [u8; 3] = [0xff, 0x44, 0x44];
 pub const AMBER: [u8; 3] = [0xff, 0xcc, 0x00];
 
 impl IconState {
-    pub fn color(self) -> [u8; 3] {
+    pub const fn color(self) -> [u8; 3] {
         match self {
-            IconState::Offline => RED,
-            IconState::Idle => ORANGE,
-            IconState::Connected => GREEN,
-            IconState::Degraded => AMBER,
+            Self::Offline => RED,
+            Self::Idle => ORANGE,
+            Self::Connected => GREEN,
+            Self::Degraded => AMBER,
         }
     }
 }
@@ -50,12 +50,7 @@ pub fn resolve_icon_state(
     connection_state: Option<&str>,
     notif_active: bool,
 ) -> (IconState, String) {
-    let (state, mut tooltip) = if !daemon_reachable {
-        (
-            IconState::Offline,
-            "Divoom Control — daemon offline".to_string(),
-        )
-    } else {
+    let (state, mut tooltip) = if daemon_reachable {
         match connection_state {
             Some("connected") => (
                 IconState::Connected,
@@ -70,6 +65,11 @@ pub fn resolve_icon_state(
                 "Divoom Control — no device connected".to_string(),
             ),
         }
+    } else {
+        (
+            IconState::Offline,
+            "Divoom Control — daemon offline".to_string(),
+        )
     };
     if daemon_reachable && notif_active {
         tooltip.push_str(" · notifications routing");

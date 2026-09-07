@@ -1,4 +1,4 @@
-//! LAN-transport device_call dispatch (`lan.*` methods) — split out of
+//! LAN-transport `device_call` dispatch (`lan.*` methods) — split out of
 //! `mod.rs` to keep it under the 500-line house limit. Routed here from
 //! `handle_device_call` when `method.starts_with("lan.")` and the device is
 //! LAN-connected.
@@ -31,7 +31,7 @@ pub(super) fn get_arg_i64(
 fn get_arg_i64_array(kw: Option<&serde_json::Map<String, Value>>, name: &str) -> Vec<i64> {
     kw.and_then(|m| m.get(name))
         .and_then(|v| v.as_array())
-        .map(|arr| arr.iter().filter_map(|x| x.as_i64()).collect())
+        .map(|arr| arr.iter().filter_map(serde_json::Value::as_i64).collect())
         .unwrap_or_default()
 }
 
@@ -86,7 +86,7 @@ pub(super) async fn handle_lan_call(
                 let r = get_arg_i64(args, kw, 1, "r", 0) as u8;
                 let g = get_arg_i64(args, kw, 2, "g", 0) as u8;
                 let b = get_arg_i64(args, kw, 3, "b", 0) as u8;
-                format!("#{:02X}{:02X}{:02X}", r, g, b)
+                format!("#{r:02X}{g:02X}{b:02X}")
             };
             let power = get_arg_i64(args, kw, 4, "Power", 1);
             lan.post(
@@ -109,7 +109,7 @@ pub(super) async fn handle_lan_call(
                 let r = get_arg_i64(args, kw, 2, "r", 0) as u8;
                 let g = get_arg_i64(args, kw, 3, "g", 0) as u8;
                 let b = get_arg_i64(args, kw, 4, "b", 0) as u8;
-                format!("#{:02X}{:02X}{:02X}", r, g, b)
+                format!("#{r:02X}{g:02X}{b:02X}")
             };
             lan.post(
                 "Channel/SetRGBInfo",

@@ -1,6 +1,8 @@
-//! `resolve_to_gif` — port of Python `media_decoder.resolve_to_gif`. Turns any
-//! known cloud download into image bytes the unified `display.show_image` path can
-//! render (which then resizes NEAREST to the device size and 0x8B-streams):
+//! `resolve_to_gif` — port of Python `media_decoder.resolve_to_gif`.
+//!
+//! Turns any known cloud download into image bytes the unified
+//! `display.show_image` path can render (which then resizes NEAREST to the
+//! device size and 0x8B-streams):
 //!
 //! - plain GIF / PNG / JPG, and magic-43 embeds → handed back as-is
 //! - magic 9 / 18 / 26 (AES; 18/26 also LZO + tiled) → decoded frames → GIF
@@ -44,6 +46,7 @@ fn encode_frames_to_gif(frames: &[(Vec<u8>, u32)], w: u32, h: u32) -> Option<Vec
 }
 
 /// Resolve a downloaded cloud payload to renderable image bytes (GIF/PNG/JPG).
+#[must_use]
 pub fn resolve_to_gif(raw: &[u8]) -> Option<Vec<u8>> {
     if raw.len() < 4 {
         return None;

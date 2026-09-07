@@ -25,7 +25,8 @@ pub struct DivoomCredentials {
 }
 
 impl DivoomCredentials {
-    pub fn is_valid(&self) -> bool {
+    #[must_use]
+    pub const fn is_valid(&self) -> bool {
         self.token != 0 && self.user_id != 0
     }
 }
@@ -57,7 +58,7 @@ fn md5_hex(s: &str) -> String {
     let mut hasher = Md5::new();
     hasher.update(s.as_bytes());
     let result = hasher.finalize();
-    result.iter().map(|b| format!("{:02x}", b)).collect()
+    result.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 fn hmac_md5_hex(message: &str) -> String {
@@ -67,13 +68,13 @@ fn hmac_md5_hex(message: &str) -> String {
     result
         .into_bytes()
         .iter()
-        .map(|b| format!("{:02x}", b))
+        .map(|b| format!("{b:02x}"))
         .collect()
 }
 
 async fn post_cloud(path: &str, body: &Value) -> Result<Value, String> {
     let client = reqwest::Client::new();
-    let url = format!("{}/{}", BASE_URL, path);
+    let url = format!("{BASE_URL}/{path}");
     let res = client
         .post(&url)
         .header("Content-Type", "application/json; charset=utf-8")
@@ -104,7 +105,7 @@ async fn login_email(email: &str, pwhash: &str) -> Result<DivoomCredentials, Str
     let data = post_cloud("UserLogin", &body).await?;
     let rc = data
         .get("ReturnCode")
-        .and_then(|v| v.as_i64())
+        .and_then(serde_json::Value::as_i64)
         .unwrap_or(-1);
     if rc == 4 {
         return Err(format!("Email not registered: {email}"));
@@ -118,8 +119,14 @@ async fn login_email(email: &str, pwhash: &str) -> Result<DivoomCredentials, Str
             data.get("ReturnMessage")
         ));
     }
-    let token = data.get("Token").and_then(|v| v.as_i64()).unwrap_or(0);
-    let user_id = data.get("UserId").and_then(|v| v.as_i64()).unwrap_or(0);
+    let token = data
+        .get("Token")
+        .and_then(serde_json::Value::as_i64)
+        .unwrap_or(0);
+    let user_id = data
+        .get("UserId")
+        .and_then(serde_json::Value::as_i64)
+        .unwrap_or(0);
     Ok(DivoomCredentials {
         token,
         user_id,
@@ -131,7 +138,7 @@ async fn login_email(email: &str, pwhash: &str) -> Result<DivoomCredentials, Str
 async fn get_server_utc() -> i64 {
     let body = json!({"Command": "APP/GetServerUTC"});
     if let Ok(data) = post_cloud("APP/GetServerUTC", &body).await {
-        if let Some(utc) = data.get("UTC").and_then(|v| v.as_i64()) {
+        if let Some(utc) = data.get("UTC").and_then(serde_json::Value::as_i64) {
             return utc;
         }
     }
@@ -164,7 +171,7 @@ async fn login_guest() -> Result<DivoomCredentials, String> {
     let data = post_cloud("User/NewGuest", &body).await?;
     let rc = data
         .get("ReturnCode")
-        .and_then(|v| v.as_i64())
+        .and_then(serde_json::Value::as_i64)
         .unwrap_or(-1);
     if rc != 0 {
         return Err(format!(
@@ -172,8 +179,14 @@ async fn login_guest() -> Result<DivoomCredentials, String> {
             data.get("ReturnMessage")
         ));
     }
-    let token = data.get("Token").and_then(|v| v.as_i64()).unwrap_or(0);
-    let user_id = data.get("UserId").and_then(|v| v.as_i64()).unwrap_or(0);
+    let token = data
+        .get("Token")
+        .and_then(serde_json::Value::as_i64)
+        .unwrap_or(0);
+    let user_id = data
+        .get("UserId")
+        .and_then(serde_json::Value::as_i64)
+        .unwrap_or(0);
     Ok(DivoomCredentials {
         token,
         user_id,
@@ -182,6 +195,7 @@ async fn login_guest() -> Result<DivoomCredentials, String> {
     })
 }
 
+#[must_use]
 pub fn get_cached_credentials() -> Option<DivoomCredentials> {
     load_cache()
 }
@@ -212,7 +226,7 @@ pub async fn get_credentials(force_refresh: bool) -> Result<DivoomCredentials, S
             }
             Err(e) => {
                 // fall back to guest
-                eprintln!("[Wrn] Email login failed: {} — falling back to guest", e);
+                eprintln!("[Wrn] Email login failed: {e} — falling back to guest");
             }
         }
     }
@@ -243,10 +257,10 @@ pub async fn get_credentials(force_refresh: bool) -> Result<DivoomCredentials, S
 /// Register a new virtual Bluetooth device identity with the cloud
 /// (`BlueDevice/NewDevice`) and persist it to `virtual_device.json`, or
 /// return the existing one if already registered. This is the 2026-07-14
-/// fix for AidSleep/GetAllList's RC=3 mystery (see cloud_category.rs's
-/// `get_aid_sleep_list` — full writeup in divoom_lib/cloud.py, Python
+/// fix for AidSleep/GetAllList's RC=3 mystery (see `cloud_category.rs`'s
+/// `get_aid_sleep_list` — full writeup in `divoom_lib/cloud.py`, Python
 /// counterpart of this function is `divoom_auth.ensure_virtual_device`):
-/// device-scoped cloud calls need a BluetoothDeviceId the server actually
+/// device-scoped cloud calls need a `BluetoothDeviceId` the server actually
 /// issued, not a client-side placeholder. One-time cost per machine/account.
 pub(crate) async fn ensure_virtual_device() -> Result<(i64, i64), String> {
     let (device_id, device_pw, _, _) = load_virtual_device();
@@ -271,7 +285,7 @@ pub(crate) async fn ensure_virtual_device() -> Result<(i64, i64), String> {
     let data = post_cloud("BlueDevice/NewDevice", &body).await?;
     let rc = data
         .get("ReturnCode")
-        .and_then(|v| v.as_i64())
+        .and_then(serde_json::Value::as_i64)
         .unwrap_or(-1);
     if rc != 0 {
         return Err(format!(
@@ -281,11 +295,11 @@ pub(crate) async fn ensure_virtual_device() -> Result<(i64, i64), String> {
     }
     let new_device_id = data
         .get("BluetoothDeviceId")
-        .and_then(|v| v.as_i64())
+        .and_then(serde_json::Value::as_i64)
         .unwrap_or(0);
     let new_device_pw = data
         .get("DevicePassword")
-        .and_then(|v| v.as_i64())
+        .and_then(serde_json::Value::as_i64)
         .unwrap_or(0);
     let _ = crate::cloud_store::save_virtual_device(new_device_id, new_device_pw, type_, subtype);
     Ok((new_device_id, new_device_pw))
@@ -303,14 +317,20 @@ pub(crate) fn load_virtual_device() -> (i64, i64, i64, i64) {
                 if let Ok(val) = serde_json::from_str::<Value>(&content) {
                     device_id = val
                         .get("BluetoothDeviceId")
-                        .and_then(|v| v.as_i64())
+                        .and_then(serde_json::Value::as_i64)
                         .unwrap_or(0);
                     device_pw = val
                         .get("DevicePassword")
-                        .and_then(|v| v.as_i64())
+                        .and_then(serde_json::Value::as_i64)
                         .unwrap_or(0);
-                    dev_type = val.get("Type").and_then(|v| v.as_i64()).unwrap_or(0);
-                    dev_subtype = val.get("SubType").and_then(|v| v.as_i64()).unwrap_or(0);
+                    dev_type = val
+                        .get("Type")
+                        .and_then(serde_json::Value::as_i64)
+                        .unwrap_or(0);
+                    dev_subtype = val
+                        .get("SubType")
+                        .and_then(serde_json::Value::as_i64)
+                        .unwrap_or(0);
                 }
             }
         }
@@ -379,7 +399,7 @@ mod tests {
             token: 98765,
             user_id: 4321,
             email: "test_cache@divoom.com".to_string(),
-            utc: 1234567,
+            utc: 1_234_567,
         };
 
         assert!(save_cache(&creds).is_ok());
@@ -388,7 +408,7 @@ mod tests {
         assert_eq!(cached.token, 98765);
         assert_eq!(cached.user_id, 4321);
         assert_eq!(cached.email, "test_cache@divoom.com");
-        assert_eq!(cached.utc, 1234567);
+        assert_eq!(cached.utc, 1_234_567);
 
         #[cfg(unix)]
         {

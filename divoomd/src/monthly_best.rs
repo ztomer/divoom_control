@@ -26,13 +26,14 @@ pub struct HotchannelConfig {
     pub device_galleries: HashMap<String, Value>,
 }
 
-fn default_interval() -> u64 {
+const fn default_interval() -> u64 {
     3600
 }
-fn default_classify() -> i64 {
+const fn default_classify() -> i64 {
     18
 }
 
+#[must_use]
 pub fn load_hotchannel_config() -> HotchannelConfig {
     let mut path = match crate::cloud::config_dir() {
         Some(p) => p,
@@ -52,7 +53,7 @@ pub fn load_hotchannel_config() -> HotchannelConfig {
     };
 
     // Normalize values
-    cfg.interval = cfg.interval.clamp(60, 2592000); // 60s to 30 days
+    cfg.interval = cfg.interval.clamp(60, 2_592_000); // 60s to 30 days
     if cfg.classify <= 0 {
         cfg.classify = 18;
     }
@@ -69,6 +70,7 @@ fn default_config() -> HotchannelConfig {
     }
 }
 
+#[must_use]
 pub fn extract_gif_from_magic_43(data: &[u8]) -> Option<Vec<u8>> {
     if data.len() < 10 || data[0] != 43 {
         return None;
@@ -113,10 +115,7 @@ pub async fn monthly_best_loop_task(daemon: Arc<Daemon>) {
                 }
             }
 
-            println!(
-                "[ ==> ] Fetching gallery for target {} (classify={})...",
-                target, classify
-            );
+            println!("[ ==> ] Fetching gallery for target {target} (classify={classify})...");
             // Limit to 5 items to match python daemon default limit
             match crate::cloud::fetch_gallery(classify, 5, 1, 127).await {
                 Ok(resp_val) => {
@@ -129,21 +128,18 @@ pub async fn monthly_best_loop_task(daemon: Arc<Daemon>) {
                                 target
                             );
                             if let Err(e) = sync_files_to_device(&daemon, target, files).await {
-                                eprintln!("[ Err ] Failed to sync to {}: {}", target, e);
+                                eprintln!("[ Err ] Failed to sync to {target}: {e}");
                             }
                         }
                     }
                 }
                 Err(e) => {
-                    eprintln!("[ Err ] Failed to fetch gallery for {}: {}", target, e);
+                    eprintln!("[ Err ] Failed to fetch gallery for {target}: {e}");
                 }
             }
         }
 
-        println!(
-            "[ ==> ] Sleeping for {} seconds until next monthly best cycle...",
-            interval_secs
-        );
+        println!("[ ==> ] Sleeping for {interval_secs} seconds until next monthly best cycle...");
         sleep(Duration::from_secs(interval_secs)).await;
     }
 }
@@ -175,14 +171,14 @@ async fn sync_files_to_device(
     let res = daemon.dispatch(req_connect).await;
     if !res
         .get("success")
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::Value::as_bool)
         .unwrap_or(false)
     {
         let err = res
             .get("error")
             .and_then(|v| v.as_str())
             .unwrap_or("unknown connection error");
-        return Err(format!("Connection to {} failed: {}", target, err));
+        return Err(format!("Connection to {target} failed: {err}"));
     }
 
     // 2. Download and stream each file
@@ -209,12 +205,12 @@ async fn sync_files_to_device(
             file_name,
             file_id
         );
-        let dl_url = format!("https://fin.divoom-gz.com/{}", file_id);
+        let dl_url = format!("https://fin.divoom-gz.com/{file_id}");
 
         let resp = match client.get(&dl_url).send().await {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("[ Wrn ] Failed to download {}: {}", file_name, e);
+                eprintln!("[ Wrn ] Failed to download {file_name}: {e}");
                 continue;
             }
         };
@@ -231,7 +227,7 @@ async fn sync_files_to_device(
         let file_bytes = match resp.bytes().await {
             Ok(b) => b.to_vec(),
             Err(e) => {
-                eprintln!("[ Wrn ] Failed to read bytes for {}: {}", file_name, e);
+                eprintln!("[ Wrn ] Failed to read bytes for {file_name}: {e}");
                 continue;
             }
         };
@@ -245,38 +241,35 @@ async fn sync_files_to_device(
         // AES+LZO, 0xAA) by re-encoding them to an animated GIF the device can
         // render. The only honest-error path is a truly unrecognized container,
         // which would otherwise stick the device in its loading animation.
-        let success = match crate::media::resolve_to_gif(&file_bytes) {
-            Some(img) => {
-                let req_show = Request {
-                    command: "device_call".to_string(),
-                    args: json!({
-                        "method": "display.show_image",
-                        "kwargs": {"size": 16},
-                        "blobs": {
-                            "0": base64::engine::general_purpose::STANDARD.encode(&img)
-                        }
-                    }),
-                    token: None,
-                };
-                let res_show = daemon.dispatch(req_show).await;
-                res_show
-                    .get("success")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false)
-            }
-            None => {
-                eprintln!(
-                    "[ Wrn ] {} (magic {}) not decodable in native daemon; skipping (no raw-stream)",
-                    file_name, file_bytes[0]
-                );
-                false
-            }
+        let success = if let Some(img) = crate::media::resolve_to_gif(&file_bytes) {
+            let req_show = Request {
+                command: "device_call".to_string(),
+                args: json!({
+                    "method": "display.show_image",
+                    "kwargs": {"size": 16},
+                    "blobs": {
+                        "0": base64::engine::general_purpose::STANDARD.encode(&img)
+                    }
+                }),
+                token: None,
+            };
+            let res_show = daemon.dispatch(req_show).await;
+            res_show
+                .get("success")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false)
+        } else {
+            eprintln!(
+                "[ Wrn ] {} (magic {}) not decodable in native daemon; skipping (no raw-stream)",
+                file_name, file_bytes[0]
+            );
+            false
         };
 
         if success {
-            println!("[ Ok  ] Successfully pushed {}", file_name);
+            println!("[ Ok  ] Successfully pushed {file_name}");
         } else {
-            eprintln!("[ Err ] Failed to push {}", file_name);
+            eprintln!("[ Err ] Failed to push {file_name}");
         }
 
         if idx < files.len() - 1 {
@@ -291,7 +284,7 @@ async fn sync_files_to_device(
         token: None,
     };
     daemon.dispatch(req_disconnect).await;
-    println!("[ ==> ] Sync completed for target {}", target);
+    println!("[ ==> ] Sync completed for target {target}");
 
     Ok(())
 }

@@ -1,7 +1,9 @@
 //! FFI to the existing C image encoders in `libdivoom_compact` — the plan's
-//! "reuse the C encoders via FFI initially, port to native Rust later". Loaded
-//! dynamically at runtime (like Python's `ctypes.CDLL`), so there's no link-time
-//! dependency and a missing dylib degrades gracefully (the caller can fall back).
+//! "reuse the C encoders via FFI initially, port to native Rust later".
+//!
+//! Loaded dynamically at runtime (like Python's `ctypes.CDLL`), so there's no
+//! link-time dependency and a missing dylib degrades gracefully (the caller can
+//! fall back).
 //!
 //! These call the SAME C functions the Python daemon uses (the palette encoder
 //! fixed this session), so byte-parity against the Python output is the contract
@@ -9,8 +11,9 @@
 
 use libloading::{Library, Symbol};
 
-/// Find the libdivoom_compact dylib: `DIVOOMD_ENCODER_LIB` env override, else
+/// Find the `libdivoom_compact` dylib: `DIVOOMD_ENCODER_LIB` env override, else
 /// relative to the running binary (project-root `divoom_lib/`).
+#[must_use]
 pub fn find_encoder_lib() -> Option<std::path::PathBuf> {
     if let Ok(p) = std::env::var("DIVOOMD_ENCODER_LIB") {
         let pb = std::path::PathBuf::from(&p);
@@ -81,6 +84,7 @@ impl NativeEncoder {
     }
 
     /// `divoom_encode_animation_frame` — one 0x49 frame body (7-byte header).
+    #[must_use]
     pub fn encode_animation_frame(
         &self,
         rgb: &[u8],
@@ -92,6 +96,7 @@ impl NativeEncoder {
     }
 
     /// `divoom_encode_animation_frame_32` — the 32x32 encoder (8-byte header).
+    #[must_use]
     pub fn encode_animation_frame_32(
         &self,
         rgb: &[u8],
@@ -103,6 +108,7 @@ impl NativeEncoder {
     }
 
     /// `divoom_encode_static_image` — single-image 0x44 body (7-byte header).
+    #[must_use]
     pub fn encode_static_image(&self, rgb: &[u8], w: i32, h: i32) -> Option<Vec<u8>> {
         let mut out = Self::out_buf(w, h, 7);
         let n = out.len() as i32;

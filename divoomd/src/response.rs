@@ -1,7 +1,9 @@
 //! Notify/response correlation — the layer above framing that matches a device
-//! reply to a sent command. Ported from `divoom_lib/ble_notify.py`
-//! (`BleNotifyMixin`): the inbound-frame routing decision and the
-//! `wait_for_response` / `wait_for_any_response` semantics.
+//! reply to a sent command.
+//!
+//! Ported from `divoom_lib/ble_notify.py` (`BleNotifyMixin`): the inbound-frame
+//! routing decision and the `wait_for_response` / `wait_for_any_response`
+//! semantics.
 //!
 //! Two subtleties here are load-bearing and were the subject of this session's
 //! hardware fixes, so they're pinned by tests:
@@ -43,6 +45,7 @@ pub enum HandlerAction {
 ///   * the exact expected command, or a generic-ACK (0x33) when the expected
 ///     command is a generic-ACK command, is queued AND clears the scalar;
 ///   * anything else is dropped.
+#[must_use]
 pub fn route_notification(cmd: u8, expected: Option<u8>, listen: &[u8]) -> HandlerAction {
     if listen.contains(&cmd) {
         return HandlerAction::Queue;
@@ -50,9 +53,7 @@ pub fn route_notification(cmd: u8, expected: Option<u8>, listen: &[u8]) -> Handl
     let is_expected = expected == Some(cmd);
     let is_generic_ack = expected.is_some()
         && cmd == GENERIC_ACK_COMMAND_ID
-        && expected
-            .map(|e| GENERIC_ACK_COMMANDS.contains(&e))
-            .unwrap_or(false);
+        && expected.is_some_and(|e| GENERIC_ACK_COMMANDS.contains(&e));
     if is_expected || is_generic_ack {
         HandlerAction::QueueAndClear
     } else {
@@ -60,10 +61,12 @@ pub fn route_notification(cmd: u8, expected: Option<u8>, listen: &[u8]) -> Handl
     }
 }
 
-/// Wait for the response to `command_id`: resolve on the exact command id; treat a
-/// generic-ACK (0x33, when `command_id` is a generic-ACK command) as an
+/// Wait for the response to `command_id`: resolve on the exact command id;
+/// treat a generic-ACK (0x33, when `command_id` is a generic-ACK command) as an
 /// intermediate ack and KEEP waiting; discard anything else; return `None` on
-/// timeout or a closed channel. Mirrors `wait_for_response`.
+/// timeout or a closed channel.
+///
+/// Mirrors `wait_for_response`.
 pub async fn wait_for_response(
     rx: &mut mpsc::Receiver<Frame>,
     command_id: u8,
@@ -76,8 +79,8 @@ pub async fn wait_for_response(
             return None;
         }
         match tokio::time::timeout(remaining, rx.recv()).await {
-            Err(_) => return None,   // overall timeout
-            Ok(None) => return None, // channel closed
+            // overall timeout
+            Err(_) | Ok(None) => return None, // channel closed
             Ok(Some(frame)) => {
                 if frame.command_id == command_id {
                     return Some(frame.payload);
@@ -93,9 +96,11 @@ pub async fn wait_for_response(
 }
 
 /// Wait for the first frame whose command id is in `wanted` (device-driven
-/// protocols where several different commands may arrive next, e.g. the hot-update
-/// 0xF7/0x9E exchange). Returns `(command_id, payload)` or `None` on timeout.
-/// Mirrors `wait_for_any_response`.
+/// protocols where several different commands may arrive next, e.g. the
+/// hot-update 0xF7/0x9E exchange).
+///
+/// Returns `(command_id, payload)` or `None` on timeout. Mirrors
+/// `wait_for_any_response`.
 pub async fn wait_for_any_response(
     rx: &mut mpsc::Receiver<Frame>,
     wanted: &[u8],
@@ -108,8 +113,7 @@ pub async fn wait_for_any_response(
             return None;
         }
         match tokio::time::timeout(remaining, rx.recv()).await {
-            Err(_) => return None,
-            Ok(None) => return None,
+            Err(_) | Ok(None) => return None,
             Ok(Some(frame)) => {
                 if wanted.contains(&frame.command_id) {
                     return Some((frame.command_id, frame.payload));

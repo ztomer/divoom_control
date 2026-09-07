@@ -26,6 +26,7 @@ pub mod music;
 pub mod routing;
 pub mod sleep;
 pub mod system;
+mod system_sound;
 pub mod text;
 pub mod timeplan;
 pub mod tools;
@@ -60,7 +61,7 @@ pub async fn handle_device_call(
         .args
         .get("args")
         .and_then(|v| v.as_array())
-        .map(|a| a.iter().filter_map(|x| x.as_i64()).collect())
+        .map(|a| a.iter().filter_map(serde_json::Value::as_i64).collect())
         .unwrap_or_default();
 
     // Raw positional args as Values (for string paths in display.show_image)
@@ -141,7 +142,9 @@ pub async fn handle_device_call(
     // LAN devices are handled above; everything else (BLE / SPP / Mock) routes
     // through the build-agnostic DeviceTransport method layer.
     {
-        if !matches!(dev, DeviceTransport::Lan(_)) {
+        if matches!(dev, DeviceTransport::Lan(_)) {
+            crate::protocol::err_reply("method only supported on a BLE/SPP device")
+        } else {
             let kwargs = req.args.get("kwargs").and_then(|v| v.as_object());
             let ctx = CallCtx {
                 daemon: _daemon,
@@ -154,8 +157,6 @@ pub async fn handle_device_call(
             };
 
             routing::route(method, ctx).await
-        } else {
-            crate::protocol::err_reply("method only supported on a BLE/SPP device")
         }
     }
 }

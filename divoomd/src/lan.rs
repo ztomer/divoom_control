@@ -36,16 +36,16 @@ pub enum LanError {
 impl std::fmt::Display for LanError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LanError::BadStatus { status, command } => {
+            Self::BadStatus { status, command } => {
                 write!(f, "device returned HTTP {status} for {command}")
             }
-            LanError::NonJson { command, snippet } => {
+            Self::NonJson { command, snippet } => {
                 write!(f, "device returned non-JSON for {command}: {snippet:?}")
             }
-            LanError::Rejected { code, command } => {
+            Self::Rejected { code, command } => {
                 write!(f, "device rejected {command}: error_code={code}")
             }
-            LanError::NetworkError { message, command } => {
+            Self::NetworkError { message, command } => {
                 write!(f, "LAN request failed for {command}: {message}")
             }
         }
@@ -54,18 +54,20 @@ impl std::fmt::Display for LanError {
 
 impl LanTransport {
     pub fn new(device_ip: impl Into<String>, local_token: i64) -> Self {
-        LanTransport {
+        Self {
             device_ip: device_ip.into(),
             local_token,
         }
     }
 
+    #[must_use]
     pub fn base_url(&self) -> String {
         format!("http://{}:{}{}", self.device_ip, PORT, PATH)
     }
 
     /// Build the POST body: `{"Command": cmd, "LocalToken": token, ...extra}`.
     /// Extra fields are merged in (command-specific args like `SelectIndex`).
+    #[must_use]
     pub fn build_body(&self, command: &str, extra: Option<Value>) -> Value {
         let mut map = Map::new();
         map.insert("Command".into(), Value::String(command.to_string()));
@@ -123,10 +125,12 @@ impl LanTransport {
     }
 }
 
-/// Validate a Divoom local-API HTTP response. Parse JSON FIRST (so a non-200 with
-/// an HTML body reports non-JSON, matching Python's ordering), then reject a
-/// non-200 status, then reject a present, non-null, non-zero `error_code`. A
-/// missing/null/zero `error_code` (or a non-object body) is tolerated as success.
+/// Validate a Divoom local-API HTTP response.
+///
+/// Parse JSON FIRST (so a non-200 with an HTML body reports non-JSON, matching
+/// Python's ordering), then reject a non-200 status, then reject a present,
+/// non-null, non-zero `error_code`. A missing/null/zero `error_code` (or a
+/// non-object body) is tolerated as success.
 pub fn validate_response(status: u16, text: &str, command: &str) -> Result<Value, LanError> {
     let result: Value = serde_json::from_str(text).map_err(|_| LanError::NonJson {
         command: command.to_string(),

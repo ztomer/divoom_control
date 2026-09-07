@@ -24,6 +24,7 @@ pub const DEFAULT_ROUTING: &[(&str, u8)] = &[
     ("com.apple.mail", 7),
 ];
 
+#[must_use]
 pub fn get_routing_path() -> std::path::PathBuf {
     if let Ok(p) = std::env::var("DIVOOM_CONTROL_ROUTING") {
         std::path::PathBuf::from(p)
@@ -37,6 +38,7 @@ pub fn get_routing_path() -> std::path::PathBuf {
     }
 }
 
+#[must_use]
 pub fn load_routing_rules() -> Vec<(String, u8)> {
     let p = get_routing_path();
     if !p.exists() {
@@ -100,6 +102,7 @@ pub fn save_routing_rules(rules: &[(String, u8)]) -> Result<(), String> {
     Ok(())
 }
 
+#[must_use]
 pub fn route_app(app_id: &str, rules: &[(String, u8)]) -> Option<u8> {
     if app_id.is_empty() {
         return None;

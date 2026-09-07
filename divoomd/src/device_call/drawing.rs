@@ -1,6 +1,8 @@
 //! Drawing-pad / sand-paint / movie / scan subsystem — parity port of
-//! `divoom_lib/display/drawing.py`. Low-level; not used by the GUI/MCP/CLI, ported
-//! verbatim for device_call dispatch parity. Byte orders match Python exactly.
+//! `divoom_lib/display/drawing.py`.
+//!
+//! Low-level; not used by the GUI/MCP/CLI, ported verbatim for `device_call`
+//! dispatch parity. Byte orders match Python exactly.
 //!
 //! NOTE (corrected R73): 0x35 DOES have an APK entry — `SPP_SCROLL(53)` in
 //! `SppProc$CMD_TYPE.java`. The earlier note here, inherited from the R12
@@ -8,7 +10,7 @@
 //! `docs/PLANNING_ROUND12_D_AUDIT.md`, which no longer exists (pruned to git
 //! history in b64c144 — a dangling citation nobody could check). The command
 //! is real, its sole builder is `CmdManager.b3(mode, speed)`, and our bytes
-//! match it exactly. See the `set_scroll` arm below. List args (offset_list/data/pic_data/image_data)
+//! match it exactly. See the `set_scroll` arm below. List args (`offset_list/data/pic_data/image_data`)
 //! arrive as JSON arrays in kwargs (or blobs[0] for the big chunk).
 
 use serde_json::{json, Map, Value};
@@ -18,7 +20,8 @@ use crate::daemon::DeviceTransport;
 use crate::protocol::err_reply;
 
 fn kw_i64(kw: Option<&Map<String, Value>>, name: &str) -> Option<i64> {
-    kw.and_then(|m| m.get(name)).and_then(|v| v.as_i64())
+    kw.and_then(|m| m.get(name))
+        .and_then(serde_json::Value::as_i64)
 }
 fn kw_bytes(kw: Option<&Map<String, Value>>, name: &str) -> Vec<u8> {
     kw.and_then(|m| m.get(name))
@@ -30,7 +33,7 @@ fn kw_bytes(kw: Option<&Map<String, Value>>, name: &str) -> Vec<u8> {
         })
         .unwrap_or_default()
 }
-fn le16(v: i64) -> [u8; 2] {
+const fn le16(v: i64) -> [u8; 2] {
     (v as u16).to_le_bytes()
 }
 

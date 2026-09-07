@@ -58,14 +58,14 @@ pub(crate) fn decode_magic43(data: &[u8]) -> Option<Vec<u8>> {
 }
 
 /// Decode a cloud container (magic 9 → AES-CBC 16x16 RGB) into raw 768-byte frames.
-/// Returns (frames, duration_ms). Magic 18/26 (AES + LZO) are handled by
+/// Returns (frames, `duration_ms`). Magic 18/26 (AES + LZO) are handled by
 /// `decode_cloud_magic18_26` (the LZO dependency is `minilzo_rs`).
 pub(crate) fn decode_cloud_magic9(data: &[u8]) -> Option<(Vec<Vec<u8>>, u32)> {
     if data.len() < 5 || data[0] != 9 {
         return None;
     }
     let total_frames = data[1] as usize;
-    let speed = u16::from_be_bytes([data[2], data[3]]) as u32;
+    let speed = u32::from(u16::from_be_bytes([data[2], data[3]]));
     let decrypted = aes_cbc_decrypt(&data[4..])?;
     let mut frames = Vec::new();
     for i in 0..total_frames.min(24) {
@@ -94,7 +94,7 @@ pub(crate) fn decode_cloud_magic18_26(data: &[u8]) -> Option<(Vec<Vec<u8>>, u32,
         return None;
     }
     let total_frames = data[1] as usize;
-    let speed = u16::from_be_bytes([data[2], data[3]]) as u32;
+    let speed = u32::from(u16::from_be_bytes([data[2], data[3]]));
     let row_count = data[4] as usize;
     let column_count = data[5] as usize;
     if row_count == 0 || column_count == 0 {
@@ -173,7 +173,7 @@ pub(crate) fn decode_hot_file(data: &[u8]) -> Option<Vec<(Vec<u8>, u32)>> {
             break;
         }
         let frame_len = u16::from_le_bytes([data[off + 1], data[off + 2]]) as usize;
-        let duration = u16::from_le_bytes([data[off + 3], data[off + 4]]) as u32;
+        let duration = u32::from(u16::from_le_bytes([data[off + 3], data[off + 4]]));
         let flag = data[off + 5];
         let n_colors_raw = data[off + 6] as usize;
         if frame_len < 7 || off + frame_len > data.len() {

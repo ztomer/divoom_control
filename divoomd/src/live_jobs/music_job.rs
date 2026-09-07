@@ -18,7 +18,10 @@ use crate::daemon::Daemon;
 
 pub(super) async fn run_music(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
     const JOB_KIND: &str = "music";
-    let size = params.get("size").and_then(|v| v.as_u64()).unwrap_or(16) as u32;
+    let size = params
+        .get("size")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(16) as u32;
 
     // Keyed on the track's identity (artist/title/album), which deliberately
     // EXCLUDES artwork bytes so the same song does not re-push every tick.

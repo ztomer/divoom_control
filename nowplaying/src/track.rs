@@ -5,7 +5,7 @@ use crate::artwork::Artwork;
 /// What is playing, and the cover art as bytes.
 ///
 /// Every field except `source` is optional because real sources are partial:
-/// a YouTube Music track may have no album, a podcast no artist, a stream
+/// a `YouTube` Music track may have no album, a podcast no artist, a stream
 /// nothing but a title. A consumer must render what it has rather than
 /// requiring a full record.
 #[derive(Debug, Clone, PartialEq)]
@@ -19,8 +19,8 @@ pub struct Track {
     pub artwork: Option<Artwork>,
     /// Is it actually PLAYING, as opposed to paused?
     ///
-    /// MediaRemote keeps reporting the last session's track after it is paused
-    /// (PlaybackRate 0, measured on macOS 26.6.2). A paused track is still worth
+    /// `MediaRemote` keeps reporting the last session's track after it is paused
+    /// (`PlaybackRate` 0, measured on macOS 26.6.2). A paused track is still worth
     /// showing in a UI, but pushing it to a device — or treating it as proof
     /// that nothing else is playing — is wrong.
     pub is_playing: bool,
@@ -36,11 +36,13 @@ impl PartialEq for Artwork {
 impl Track {
     /// A track with nothing identifiable in it is not worth reporting — it
     /// would render as an empty card that looks like a bug.
-    pub fn is_empty(&self) -> bool {
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
         self.title.is_none() && self.artist.is_none() && self.album.is_none()
     }
 
     /// "Artist — Title", or whichever half exists.
+    #[must_use]
     pub fn display(&self) -> String {
         match (&self.artist, &self.title) {
             (Some(a), Some(t)) => format!("{a} — {t}"),
@@ -53,6 +55,7 @@ impl Track {
     /// Stable identity for change detection: has the TRACK changed, ignoring
     /// artwork bytes and elapsed time? A live widget re-pushes on this, so it
     /// must not churn on every poll of the same song.
+    #[must_use]
     pub fn identity(&self) -> String {
         format!(
             "{}\u{1}{}\u{1}{}",

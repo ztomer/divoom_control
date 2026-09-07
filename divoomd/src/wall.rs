@@ -64,7 +64,7 @@ impl DivoomWall {
                 .unwrap_or(0);
             total_width = max_x - min_x;
             total_height = max_y - min_y;
-            grid_unit_size = configs.first().map(|c| c.size).unwrap_or(16);
+            grid_unit_size = configs.first().map_or(16, |c| c.size);
         } else {
             let mut max_x_slot = 0;
             let mut max_y_slot = 0;
@@ -76,7 +76,7 @@ impl DivoomWall {
                     max_y_slot = cfg.y + 1;
                 }
             }
-            grid_unit_size = configs.first().map(|c| c.size).unwrap_or(16);
+            grid_unit_size = configs.first().map_or(16, |c| c.size);
             total_width = max_x_slot * grid_unit_size;
             total_height = max_y_slot * grid_unit_size;
             min_x = 0;
@@ -145,7 +145,7 @@ impl DivoomWall {
             return Err("All wall slots failed to connect".to_string());
         }
 
-        Ok(DivoomWall {
+        Ok(Self {
             devices,
             total_width,
             total_height,
@@ -181,10 +181,12 @@ impl DivoomWall {
         }
     }
 
+    #[must_use]
     pub fn is_connected(&self) -> bool {
         self.devices.iter().all(|s| s.device.is_some())
     }
 
+    #[must_use]
     pub fn degraded_slots(&self) -> Vec<String> {
         self.devices
             .iter()
@@ -271,18 +273,15 @@ impl DivoomWall {
                     }
                 }
 
-                match &*dev {
-                    DeviceTransport::Lan(_) => {
-                        Err("LAN not supported for wall show_image".to_string())
-                    }
-                    _ => {
-                        let _ = dev
-                            .send_command(0x45, &[0x05, 0, 0, 0, 0, 0, 0, 0, 0, 0], false)
-                            .await;
-                        dev.stream_animation_8b(&blob)
-                            .await
-                            .map_err(|e| e.to_string())
-                    }
+                if let DeviceTransport::Lan(_) = &*dev {
+                    Err("LAN not supported for wall show_image".to_string())
+                } else {
+                    let _ = dev
+                        .send_command(0x45, &[0x05, 0, 0, 0, 0, 0, 0, 0, 0, 0], false)
+                        .await;
+                    dev.stream_animation_8b(&blob)
+                        .await
+                        .map_err(|e| e.to_string())
                 }
             }));
         }

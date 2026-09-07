@@ -24,7 +24,7 @@ struct Echo {
 impl Echo {
     fn new() -> Self {
         let (tx, _) = tokio::sync::broadcast::channel(10);
-        Echo { tx }
+        Self { tx }
     }
 }
 impl Handler for Echo {

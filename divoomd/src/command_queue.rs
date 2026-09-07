@@ -43,10 +43,10 @@ pub enum AcquireError {
 impl std::fmt::Display for AcquireError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AcquireError::HeldByAnother => {
+            Self::HeldByAnother => {
                 write!(f, "device is exclusively held by another session")
             }
-            AcquireError::Stopped => write!(f, "queue is stopped"),
+            Self::Stopped => write!(f, "queue is stopped"),
         }
     }
 }
@@ -96,8 +96,9 @@ pub struct CommandQueue {
 impl CommandQueue {
     /// Create + start the queue. `exclusive_timeout` is the G3 idle-release window;
     /// `item_timeout` rejects an item that waits longer than this before dispatch.
+    #[must_use]
     pub fn new(exclusive_timeout: Option<Duration>, item_timeout: Option<Duration>) -> Self {
-        let q = CommandQueue {
+        let q = Self {
             inner: Arc::new(Mutex::new(Inner {
                 pending: VecDeque::new(),
                 owner: None,
@@ -185,6 +186,7 @@ impl CommandQueue {
     }
 
     /// Current exclusive owner (test/observability helper).
+    #[must_use]
     pub fn owner(&self) -> Option<String> {
         self.inner.lock().unwrap().owner.clone()
     }
@@ -192,9 +194,9 @@ impl CommandQueue {
     /// Return whether a device op with the given token is allowed to proceed:
     ///   - no exclusive owner → any token allowed
     ///   - exclusive owner matches token → allowed
-    ///   - exclusive owner exists and token doesn't match → HeldByAnother
+    ///   - exclusive owner exists and token doesn't match → `HeldByAnother`
     ///
-    /// Called by device_call dispatch BEFORE acquiring the device transport lock,
+    /// Called by `device_call` dispatch BEFORE acquiring the device transport lock,
     /// mirroring Python's `_cmd_queue.run(token, ...)` gate.
     pub fn check_allowed(&self, token: Option<&str>) -> Result<(), AcquireError> {
         let g = self.inner.lock().unwrap();
@@ -229,8 +231,7 @@ impl CommandQueue {
         while let Some(front) = g.pending.front() {
             let expired = front
                 .timeout
-                .map(|t| now.duration_since(front.enqueued) >= t)
-                .unwrap_or(false);
+                .is_some_and(|t| now.duration_since(front.enqueued) >= t);
             if expired {
                 g.pending.pop_front();
             } else {
@@ -276,8 +277,8 @@ impl CommandQueue {
                 Step::Wait(None) => self.notify.notified().await,
                 Step::Wait(Some(rem)) => {
                     tokio::select! {
-                        _ = self.notify.notified() => {}
-                        _ = tokio::time::sleep(rem) => {}
+                        () = self.notify.notified() => {}
+                        () = tokio::time::sleep(rem) => {}
                     }
                 }
                 Step::Run(job) => {

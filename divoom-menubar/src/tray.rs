@@ -26,13 +26,13 @@ pub struct Tray {
 }
 
 impl Tray {
-    pub fn build() -> Option<Tray> {
+    pub fn build() -> Option<Self> {
         let icon = TrayIconBuilder::new()
             .with_tooltip("Divoom Control")
             .with_icon(make_icon(IconState::Offline.color()))
             .build()
             .ok()?;
-        let mut tray = Tray {
+        let mut tray = Self {
             icon,
             launch_id: MenuId::new("launch"),
             notif_open_id: MenuId::new("notif_open"),
@@ -203,7 +203,7 @@ fn make_icon(rgb: [u8; 3]) -> tray_icon::Icon {
     let is_border = |fx: f32, fy: f32| -> bool {
         let dx = fx - mid;
         let dy = fy - cy;
-        let dist_from_arc = radius - (dx * dx + dy * dy).sqrt();
+        let dist_from_arc = radius - dx.hypot(dy);
         let near_left =
             fx <= mid && (fx - left).abs() <= STROKE && fy >= top - STROKE && fy <= bottom + STROKE;
         let near_top = fx <= mid && (fy - top).abs() <= STROKE;

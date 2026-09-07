@@ -31,6 +31,7 @@ pub enum Unavailable {
 
 impl Unavailable {
     /// A sentence fit to show a user.
+    #[must_use]
     pub fn reason(&self) -> String {
         match self {
             Self::NotMacOS => "now-playing metadata is only available on macOS".into(),
@@ -52,6 +53,7 @@ impl Unavailable {
 
 /// The pure decision, separated from the probing so both directions are
 /// testable on one machine (the accept path as well as each reject path).
+#[must_use]
 pub fn evaluate(
     is_macos: bool,
     framework_loads: bool,
@@ -82,6 +84,7 @@ pub fn evaluate(
 /// process gets a successful dlopen and a NULL result. Entitlement is exactly
 /// what the perl host provides, so it is not probed here.
 #[cfg(target_os = "macos")]
+#[must_use]
 pub fn framework_loads() -> bool {
     use std::ffi::CString;
     extern "C" {
@@ -138,7 +141,7 @@ mod tests {
     fn a_missing_helper_reports_the_path_it_looked_for() {
         let absent = PathBuf::from("/nonexistent/np_helper.dylib");
         let got = evaluate(true, true, true, Some(&absent));
-        assert_eq!(got, Some(Unavailable::HelperMissing(absent.clone())));
+        assert_eq!(got, Some(Unavailable::HelperMissing(absent)));
         assert!(
             got.unwrap()
                 .reason()

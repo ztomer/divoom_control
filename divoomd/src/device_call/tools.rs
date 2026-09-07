@@ -13,12 +13,18 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let on_off = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("on_off")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("on_off"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let red_score = args
                 .get(1)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("red_score")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("red_score"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0)
                 .clamp(0, 999) as u16;
             let blue_score = args
@@ -26,7 +32,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .copied()
                 .or_else(|| {
                     kw.and_then(|v| v.get("blue_score"))
-                        .and_then(|v| v.as_i64())
+                        .and_then(serde_json::Value::as_i64)
                 })
                 .unwrap_or(0)
                 .clamp(0, 999) as u16;
@@ -45,9 +51,9 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 Some(p) if p.len() >= 5 => json!({
                     "success": true,
                     "result": {
-                        "on_off": p[0] as i64,
-                        "red_score": u16::from_le_bytes([p[1], p[2]]) as i64,
-                        "blue_score": u16::from_le_bytes([p[3], p[4]]) as i64,
+                        "on_off": i64::from(p[0]),
+                        "red_score": i64::from(u16::from_le_bytes([p[1], p[2]])),
+                        "blue_score": i64::from(u16::from_le_bytes([p[3], p[4]])),
                     }
                 }),
                 _ => json!({"success": true, "result": Value::Null}),
@@ -57,7 +63,10 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let ctrl_flag = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("ctrl_flag")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("ctrl_flag"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let payload = [0u8, ctrl_flag]; // TOOL_TYPE_TIMER = 0
             match dev.send_command(0x72, &payload, true).await {
@@ -70,7 +79,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 Some(p) if !p.is_empty() => json!({
                     "success": true,
                     "result": {
-                        "status": p[0] as i64,
+                        "status": i64::from(p[0]),
                     }
                 }),
                 _ => json!({"success": true, "result": Value::Null}),
@@ -80,17 +89,26 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let ctrl_flag = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("ctrl_flag")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("ctrl_flag"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let minutes = args
                 .get(1)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("minutes")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("minutes"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let seconds = args
                 .get(2)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("seconds")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("seconds"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let payload = [3u8, ctrl_flag, minutes, seconds]; // TOOL_TYPE_COUNTDOWN = 3
             match dev.send_command(0x72, &payload, true).await {
@@ -103,9 +121,9 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 Some(p) if p.len() >= 3 => json!({
                     "success": true,
                     "result": {
-                        "status": p[0] as i64,
-                        "minutes": p[1] as i64,
-                        "seconds": p[2] as i64,
+                        "status": i64::from(p[0]),
+                        "minutes": i64::from(p[1]),
+                        "seconds": i64::from(p[2]),
                     }
                 }),
                 _ => json!({"success": true, "result": Value::Null}),
@@ -115,7 +133,10 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let ctrl_flag = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("ctrl_flag")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("ctrl_flag"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let payload = [2u8, ctrl_flag]; // TOOL_TYPE_NOISE = 2
             match dev.send_command(0x72, &payload, true).await {
@@ -128,7 +149,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 Some(p) if !p.is_empty() => json!({
                     "success": true,
                     "result": {
-                        "status": p[0] as i64,
+                        "status": i64::from(p[0]),
                     }
                 }),
                 _ => json!({"success": true, "result": Value::Null}),
@@ -138,7 +159,10 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let app_type = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("app_type")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("app_type"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(1) as u8;
             let wire = if app_type >= 8 {
                 app_type + 1
@@ -156,7 +180,10 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let app_type = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("app_type")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("app_type"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(1) as u8;
             let text = raw_args
                 .get(1)
@@ -182,7 +209,10 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let tool_type = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("tool_type")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("tool_type"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0);
             match dev
                 .send_command_and_wait(0x71, &[tool_type as u8], ctx.timeout)
@@ -190,15 +220,14 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             {
                 Some(r) => {
                     let result = match tool_type {
-                        0 if !r.is_empty() => json!({"status": r[0] as i64}),
                         1 if r.len() >= 5 => json!({
-                            "on_off": r[0] as i64,
-                            "red_score": u16::from_le_bytes([r[1], r[2]]) as i64,
-                            "blue_score": u16::from_le_bytes([r[3], r[4]]) as i64,
+                            "on_off": i64::from(r[0]),
+                            "red_score": i64::from(u16::from_le_bytes([r[1], r[2]])),
+                            "blue_score": i64::from(u16::from_le_bytes([r[3], r[4]])),
                         }),
-                        2 if !r.is_empty() => json!({"status": r[0] as i64}),
+                        0 | 2 if !r.is_empty() => json!({"status": i64::from(r[0])}),
                         3 if r.len() >= 3 => json!({
-                            "status": r[0] as i64, "minutes": r[1] as i64, "seconds": r[2] as i64,
+                            "status": i64::from(r[0]), "minutes": i64::from(r[1]), "seconds": i64::from(r[2]),
                         }),
                         255 => json!({"status": "not in game mode"}),
                         _ => Value::Null,
@@ -217,10 +246,13 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .copied()
                 .or_else(|| {
                     kw.and_then(|v| v.get("game_mode_index"))
-                        .and_then(|v| v.as_i64())
+                        .and_then(serde_json::Value::as_i64)
                 })
                 .unwrap_or(0);
-            let g = |n: &str| kw.and_then(|v| v.get(n)).and_then(|v| v.as_i64());
+            let g = |n: &str| {
+                kw.and_then(|v| v.get(n))
+                    .and_then(serde_json::Value::as_i64)
+            };
             let mut payload = vec![gmi as u8];
             match gmi {
                 0 | 2 => match g("ctrl_flag") {

@@ -1,5 +1,5 @@
 //! Behavioral parity for the command queue, mirroring the archived Python daemon's
-//! tests/test_command_queue.py (+ the R53.x acquire_now steal-reject test).
+//! `tests/test_command_queue.py` (+ the R53.x `acquire_now` steal-reject test).
 
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};

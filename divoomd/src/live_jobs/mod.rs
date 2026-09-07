@@ -28,10 +28,10 @@ use render::{render_stock, render_sysmon};
 /// has a single seam and the job body stays readable.
 ///
 /// R67/C2: this replaces `music::get_current_playing_track` +
-/// `music::fetch_album_art_url` — an AppleScript sweep over each player
+/// `music::fetch_album_art_url` — an `AppleScript` sweep over each player
 /// followed by an iTunes Search URL guessed from the track name. The guess
-/// could not resolve non-album content (YouTube Music, podcasts, live sets) and
-/// needed a network round trip in order to fail. MediaRemote returns the exact
+/// could not resolve non-album content (`YouTube` Music, podcasts, live sets) and
+/// needed a network round trip in order to fail. `MediaRemote` returns the exact
 /// image the player is displaying, as bytes.
 /// Report a job's state on the bus AND into the coordinator's resync store.
 ///
@@ -116,7 +116,10 @@ async fn get_device_transport(daemon: &Daemon, mac: &str) -> Option<Arc<DeviceTr
 
 async fn run_sysmon(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
     const JOB_KIND: &str = "sysmon";
-    let size = params.get("size").and_then(|v| v.as_u64()).unwrap_or(16) as u32;
+    let size = params
+        .get("size")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(16) as u32;
     let mut sys = sysinfo::System::new_all();
 
     // R67/C4: a job with no device used to push nothing, say nothing, and
@@ -190,7 +193,10 @@ async fn run_stocks(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
     if symbol.is_empty() {
         return;
     }
-    let size = params.get("size").and_then(|v| v.as_u64()).unwrap_or(16) as u32;
+    let size = params
+        .get("size")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(16) as u32;
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
         .build()
@@ -278,7 +284,7 @@ async fn run_weather(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
     let health = daemon_weak
         .upgrade()
         .map(|d| health::JobHealth::new("weather", &mac, d.tx.clone()));
-    let normal_interval = Duration::from_secs(15 * 60);
+    let normal_interval = Duration::from_mins(15);
 
     loop {
         let daemon = match daemon_weak.upgrade() {

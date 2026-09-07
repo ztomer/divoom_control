@@ -30,6 +30,7 @@ pub struct SysmonSample {
 /// refreshes, so the long-running job's instance (refreshed every 5s) and the
 /// one-shot request's instance (refreshed twice around a short sleep) both have
 /// to own their own. What they must not own is a second copy of this arithmetic.
+#[must_use]
 pub fn sample(sys: &System) -> SysmonSample {
     let total_mem = sys.total_memory();
     let used_mem = sys.used_memory();
@@ -65,6 +66,7 @@ pub async fn sample_once() -> SysmonSample {
 /// The renderer indexes a `size * size * 3` buffer, so a zero or absurd size is
 /// not a rendering question but an allocation one. 64 is the largest Divoom
 /// matrix; anything past it is a caller mistake, not a device.
+#[must_use]
 pub fn clamp_size(requested: u64) -> u32 {
     requested.clamp(8, 64) as u32
 }
@@ -75,7 +77,11 @@ pub fn clamp_size(requested: u64) -> u32 {
 /// than an encoded image: the daemon has no image encoder, the caller already
 /// has one, and raw pixels cannot disagree with themselves about a colour space.
 pub async fn cmd_sysmon(args: &Value) -> Value {
-    let size = clamp_size(args.get("size").and_then(|v| v.as_u64()).unwrap_or(16));
+    let size = clamp_size(
+        args.get("size")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(16),
+    );
     let s = sample_once().await;
     let rgb = render_sysmon(s.cpu, s.mem, s.battery, size);
     json!({

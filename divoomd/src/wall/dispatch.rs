@@ -41,8 +41,11 @@ impl Daemon {
         // Read a positional-or-keyword integer, by TRUE position (R67/C7).
         let num = |idx: usize, name: &str, default: i64| -> i64 {
             args.get(idx)
-                .and_then(|v| v.as_i64())
-                .or_else(|| kw.and_then(|m| m.get(name)).and_then(|v| v.as_i64()))
+                .and_then(serde_json::Value::as_i64)
+                .or_else(|| {
+                    kw.and_then(|m| m.get(name))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(default)
         };
         let text = |idx: usize, name: &str| -> Option<String> {
@@ -64,7 +67,7 @@ impl Daemon {
                     Err(e) => return err_reply(&format!("wall show_image: read {path}: {e}")),
                 };
                 let time_ms = num(1, "time", 100) as u16;
-                let daemon_arc = match self.self_weak.get().and_then(|w| w.upgrade()) {
+                let daemon_arc = match self.self_weak.get().and_then(std::sync::Weak::upgrade) {
                     Some(d) => d,
                     None => return err_reply("daemon self reference unavailable"),
                 };

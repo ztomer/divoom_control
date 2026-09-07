@@ -1,8 +1,10 @@
-//! Native MCP server — stdio JSON-RPC bridge to the running daemon. Ported from
-//! `divoom_lib/mcp_server.py` + `mcp_tools.py`. Run as `divoomd mcp`: it does NOT
-//! own the device; it connects to the daemon's unix socket (DIVOOM_SOCKET, default
-//! /tmp/divoom.sock) and forwards each `tools/call` as a `device_call`/command —
-//! the same daemon-routed model as the Python R28 MCP-via-daemon.
+//! Native MCP server — stdio JSON-RPC bridge to the running daemon.
+//!
+//! Ported from `divoom_lib/mcp_server.py` + `mcp_tools.py`. Run as `divoomd
+//! mcp`: it does NOT own the device; it connects to the daemon's unix socket
+//! (`DIVOOM_SOCKET`, default /tmp/divoom.sock) and forwards each `tools/call`
+//! as a `device_call`/command — the same daemon-routed model as the Python R28
+//! MCP-via-daemon.
 //!
 //! Protocol: line-delimited JSON-RPC 2.0 on stdin/stdout. Methods: initialize,
 //! tools/list, tools/call, ping. Tool catalog + dispatch live in `mcp_tools`.

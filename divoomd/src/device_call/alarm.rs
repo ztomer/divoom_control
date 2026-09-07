@@ -20,14 +20,14 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                         let start = i * record_len;
                         let block = &p[start..start + record_len];
                         alarms.push(json!({
-                            "status": block[1] as i64,
-                            "hour": block[2] as i64,
-                            "minute": block[3] as i64,
-                            "week": block[4] as i64,
-                            "mode": block[5] as i64,
-                            "trigger_mode": block[6] as i64,
-                            "fm_freq": u16::from_le_bytes([block[7], block[8]]) as i64,
-                            "volume": block[9] as i64,
+                            "status": i64::from(block[1]),
+                            "hour": i64::from(block[2]),
+                            "minute": i64::from(block[3]),
+                            "week": i64::from(block[4]),
+                            "mode": i64::from(block[5]),
+                            "trigger_mode": i64::from(block[6]),
+                            "fm_freq": i64::from(u16::from_le_bytes([block[7], block[8]])),
+                            "volume": i64::from(block[9]),
                         }));
                     }
                     json!({"success": true, "result": alarms})
@@ -41,51 +41,72 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .copied()
                 .or_else(|| {
                     kw.and_then(|v| v.get("alarm_index"))
-                        .and_then(|v| v.as_i64())
+                        .and_then(serde_json::Value::as_i64)
                 })
                 .unwrap_or(0) as u8;
             let status = args
                 .get(1)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("status")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("status"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let hour = args
                 .get(2)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("hour")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("hour"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let minute = args
                 .get(3)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("minute")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("minute"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let week = args
                 .get(4)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("week")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("week"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let mode = args
                 .get(5)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("mode")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("mode"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let trigger_mode = args
                 .get(6)
                 .copied()
                 .or_else(|| {
                     kw.and_then(|v| v.get("trigger_mode"))
-                        .and_then(|v| v.as_i64())
+                        .and_then(serde_json::Value::as_i64)
                 })
                 .unwrap_or(0) as u8;
             let fm_freq = args
                 .get(7)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("fm_freq")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("fm_freq"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u16;
             let volume = args
                 .get(8)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("volume")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("volume"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
 
             let mut payload = Vec::with_capacity(10);
@@ -110,7 +131,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .copied()
                 .or_else(|| {
                     kw.and_then(|v| v.get("alarm_index"))
-                        .and_then(|v| v.as_i64())
+                        .and_then(serde_json::Value::as_i64)
                 })
                 .unwrap_or(0) as u8;
             let total_length = args
@@ -118,13 +139,16 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .copied()
                 .or_else(|| {
                     kw.and_then(|v| v.get("total_length"))
-                        .and_then(|v| v.as_i64())
+                        .and_then(serde_json::Value::as_i64)
                 })
                 .unwrap_or(0) as u16;
             let gif_id = args
                 .get(2)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("gif_id")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("gif_id"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let data: Vec<u8> = raw_args
                 .get(3)
@@ -161,13 +185,13 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                             .trim_end_matches('\0')
                             .to_string();
                         memorials.push(json!({
-                            "dialy_id": block[0] as i64,
-                            "on_off": block[1] as i64,
-                            "month": block[2] as i64,
-                            "day": block[3] as i64,
-                            "hour": block[4] as i64,
-                            "minute": block[5] as i64,
-                            "have_flag": block[6] as i64,
+                            "dialy_id": i64::from(block[0]),
+                            "on_off": i64::from(block[1]),
+                            "month": i64::from(block[2]),
+                            "day": i64::from(block[3]),
+                            "hour": i64::from(block[4]),
+                            "minute": i64::from(block[5]),
+                            "have_flag": i64::from(block[6]),
                             "title_name": title,
                         }));
                     }
@@ -180,37 +204,58 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let dialy_id = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("dialy_id")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("dialy_id"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let on_off = args
                 .get(1)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("on_off")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("on_off"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let month = args
                 .get(2)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("month")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("month"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let day = args
                 .get(3)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("day")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("day"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let hour = args
                 .get(4)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("hour")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("hour"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let minute = args
                 .get(5)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("minute")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("minute"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let have_flag = args
                 .get(6)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("have_flag")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("have_flag"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let title_name = raw_args
                 .get(7)
@@ -250,7 +295,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .copied()
                 .or_else(|| {
                     kw.and_then(|v| v.get("memorial_index"))
-                        .and_then(|v| v.as_i64())
+                        .and_then(serde_json::Value::as_i64)
                 })
                 .unwrap_or(0) as u8;
             let total_length = args
@@ -258,13 +303,16 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .copied()
                 .or_else(|| {
                     kw.and_then(|v| v.get("total_length"))
-                        .and_then(|v| v.as_i64())
+                        .and_then(serde_json::Value::as_i64)
                 })
                 .unwrap_or(0) as u16;
             let gif_id = args
                 .get(2)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("gif_id")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("gif_id"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let data: Vec<u8> = raw_args
                 .get(3)
@@ -292,17 +340,26 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let on_off = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("on_off")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("on_off"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let mode = args
                 .get(1)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("mode")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("mode"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let volume = args
                 .get(2)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("volume")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("volume"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             match dev.send_command(0xa5, &[on_off, mode, volume], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
@@ -313,7 +370,10 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let volume = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("volume")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("volume"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             match dev.send_command(0xa6, &[volume], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
@@ -324,12 +384,18 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let control = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("control")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("control"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let index = args
                 .get(1)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("index")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("index"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             match dev.send_command(0x82, &[control, index], true).await {
                 Ok(()) => json!({"success": true, "result": true}),

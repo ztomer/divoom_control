@@ -1,6 +1,8 @@
-//! MCP tool catalog + dispatch. Ported from `divoom_lib/mcp_tools.py`. Each tool
-//! forwards to the daemon over the unix socket as a `device_call` (or top-level
-//! command); file-based tools decode locally (the `image` crate) and push rgb.
+//! MCP tool catalog + dispatch.
+//!
+//! Ported from `divoom_lib/mcp_tools.py`. Each tool forwards to the daemon over
+//! the unix socket as a `device_call` (or top-level command); file-based tools
+//! decode locally (the `image` crate) and push rgb.
 
 use base64::Engine;
 use serde_json::{json, Value};
@@ -30,6 +32,7 @@ const WEATHER_TYPES: [(&str, i64); 6] = [
 
 /// The `tools/list` descriptors (name + description + inputSchema), matching the
 /// Python `_SCHEMAS`/`_DESCRIPTIONS`.
+#[must_use]
 pub fn catalog() -> Value {
     let int = |lo: i64, hi: i64| json!({ "type": "integer", "minimum": lo, "maximum": hi });
     json!([
@@ -122,8 +125,11 @@ pub async fn call_tool(name: &str, a: &Value, sock: &str) -> Result<Value, Strin
             let hour = need_int(a, "hour", 0, 23)?;
             let minute = need_int(a, "minute", 0, 59)?;
             let week = opt_int(a, "weekday_mask", 0, 127, 0)?;
-            let enabled = a.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true);
-            let status = if enabled { 1 } else { 0 };
+            let enabled = a
+                .get("enabled")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(true);
+            let status = i32::from(enabled);
             // set_alarm(index, status, hour, minute, week, mode=0, trigger_mode=1)
             dc(
                 sock,
@@ -143,12 +149,12 @@ pub async fn call_tool(name: &str, a: &Value, sock: &str) -> Result<Value, Strin
         "set_low_power" => {
             let enabled = a
                 .get("enabled")
-                .and_then(|v| v.as_bool())
+                .and_then(serde_json::Value::as_bool)
                 .ok_or("enabled must be a boolean")?;
             dc(
                 sock,
                 "device.set_low_power_switch",
-                json!([if enabled { 1 } else { 0 }]),
+                json!([i32::from(enabled)]),
             )
             .await?;
             Ok(json!({ "ok": true, "enabled": enabled }))
@@ -162,7 +168,10 @@ pub async fn call_tool(name: &str, a: &Value, sock: &str) -> Result<Value, Strin
                 270 => 3,
                 _ => return Err("degrees must be 0, 90, 180, or 270".into()),
             };
-            let mirror = a.get("mirror").and_then(|v| v.as_bool()).unwrap_or(false);
+            let mirror = a
+                .get("mirror")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false);
             dc(sock, "design.set_screen_dir", json!([dir])).await?;
             dc(sock, "design.set_screen_mirror", json!([mirror])).await?;
             Ok(json!({ "ok": true, "degrees": degrees, "mirror": mirror }))
@@ -227,7 +236,7 @@ pub async fn call_tool(name: &str, a: &Value, sock: &str) -> Result<Value, Strin
 fn need_int(a: &Value, key: &str, lo: i64, hi: i64) -> Result<i64, String> {
     let v = a
         .get(key)
-        .and_then(|v| v.as_i64())
+        .and_then(serde_json::Value::as_i64)
         .ok_or_else(|| format!("{key} must be an integer"))?;
     if v < lo || v > hi {
         return Err(format!("{key} must be in [{lo}..{hi}] (got {v})"));
@@ -259,7 +268,7 @@ async fn push_image_bytes(sock: &str, bytes: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-/// device_call with positional args; errors if the daemon reports failure.
+/// `device_call` with positional args; errors if the daemon reports failure.
 async fn dc(sock: &str, method: &str, args: Value) -> Result<Value, String> {
     let reply = cmd(
         sock,
@@ -280,7 +289,7 @@ async fn dc_kw(sock: &str, method: &str, kwargs: Value) -> Result<Value, String>
     check(reply)
 }
 
-/// device_call returning the `result` value (None on failure) — for read tools.
+/// `device_call` returning the `result` value (None on failure) — for read tools.
 async fn dc_result(sock: &str, method: &str, args: Value) -> Value {
     match cmd(
         sock,
@@ -289,7 +298,7 @@ async fn dc_result(sock: &str, method: &str, args: Value) -> Value {
     )
     .await
     {
-        Ok(v) if v.get("success").and_then(|s| s.as_bool()) == Some(true) => {
+        Ok(v) if v.get("success").and_then(serde_json::Value::as_bool) == Some(true) => {
             v.get("result").cloned().unwrap_or(Value::Null)
         }
         _ => Value::Null,
@@ -297,7 +306,7 @@ async fn dc_result(sock: &str, method: &str, args: Value) -> Value {
 }
 
 fn check(reply: Value) -> Result<Value, String> {
-    if reply.get("success").and_then(|s| s.as_bool()) == Some(true) {
+    if reply.get("success").and_then(serde_json::Value::as_bool) == Some(true) {
         Ok(reply)
     } else {
         Err(reply

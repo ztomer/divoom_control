@@ -1,9 +1,11 @@
-//! AidSleep BLE commands (play/add/delete/exit) — SPP_JSON over BLE, no
-//! cloud call needed (see divoom_lib/tools/aid_sleep.py, the Python
-//! counterpart this mirrors). Confirmed wire-framing match to the decompiled
-//! APK's `bluetooth.q#B()`: command_id=1, JSON-serialized command object as
-//! the payload. Browsing the catalog (AidSleep/GetAllList — cloud, RC=3 fix
-//! documented in cloud_category.rs) is a separate, already-implemented path.
+//! `AidSleep` BLE commands (play/add/delete/exit) — `SPP_JSON` over BLE, no
+//! cloud call needed (see `divoom_lib/tools/aid_sleep.py`, the Python
+//! counterpart this mirrors).
+//!
+//! Confirmed wire-framing match to the decompiled APK's `bluetooth.q#B()`:
+//! `command_id=1`, JSON-serialized command object as the payload. Browsing the
+//! catalog (AidSleep/GetAllList — cloud, RC=3 fix documented in
+//! `cloud_category.rs`) is a separate, already-implemented path.
 
 use super::CallCtx;
 use crate::protocol::err_reply;
@@ -37,7 +39,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     let kw = ctx.kwargs;
     let get_i64 = |name: &str, idx: usize, default: i64| -> i64 {
         kw.and_then(|v| v.get(name))
-            .and_then(|v| v.as_i64())
+            .and_then(serde_json::Value::as_i64)
             .or_else(|| args.get(idx).copied())
             .unwrap_or(default)
     };

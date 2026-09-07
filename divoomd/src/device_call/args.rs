@@ -14,7 +14,7 @@ use serde_json::Value;
 /// number. A leading string (a colour, a path, a text body) shifts everything
 /// after it, so the handler reads a neighbouring argument's value with total
 /// confidence. `raw_args` preserves real positions; this reads from there.
-pub(crate) fn pos_i64(
+pub fn pos_i64(
     raw_args: &[Value],
     idx: usize,
     kw: Option<&serde_json::Map<String, Value>>,
@@ -23,13 +23,16 @@ pub(crate) fn pos_i64(
 ) -> i64 {
     raw_args
         .get(idx)
-        .and_then(|v| v.as_i64())
-        .or_else(|| kw.and_then(|m| m.get(name)).and_then(|v| v.as_i64()))
+        .and_then(serde_json::Value::as_i64)
+        .or_else(|| {
+            kw.and_then(|m| m.get(name))
+                .and_then(serde_json::Value::as_i64)
+        })
         .unwrap_or(default)
 }
 
 /// Positional boolean argument by true index, falling back to a keyword.
-pub(crate) fn pos_bool(
+pub fn pos_bool(
     raw_args: &[Value],
     idx: usize,
     kw: Option<&serde_json::Map<String, Value>>,

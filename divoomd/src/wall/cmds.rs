@@ -11,17 +11,16 @@ use std::sync::Arc;
 /// Handle `wall_configure` socket command.
 /// Ports `owner_wall.py:wall_configure` including G7 delta reconfiguration:
 /// when the new layout overlaps the current wall, reuse the shared panels.
-pub(crate) async fn cmd_wall_configure(daemon: &Daemon, req: &Request) -> Value {
-    let raw_slots = match req.args.get("slots").and_then(|v| v.as_object()) {
-        Some(m) => m.clone(),
-        None => {
-            let mut wall_guard = daemon.wall.lock().await;
-            if let Some(old_wall) = wall_guard.take() {
-                old_wall.disconnect().await;
-            }
-            *daemon.wall_slots.lock().await = serde_json::Map::new();
-            return json!({"success": true, "wall": false});
+pub async fn cmd_wall_configure(daemon: &Daemon, req: &Request) -> Value {
+    let raw_slots = if let Some(m) = req.args.get("slots").and_then(|v| v.as_object()) {
+        m.clone()
+    } else {
+        let mut wall_guard = daemon.wall.lock().await;
+        if let Some(old_wall) = wall_guard.take() {
+            old_wall.disconnect().await;
         }
+        *daemon.wall_slots.lock().await = serde_json::Map::new();
+        return json!({"success": true, "wall": false});
     };
     let mut slots: serde_json::Map<String, Value> = serde_json::Map::new();
     for (k, v) in &raw_slots {
@@ -38,20 +37,26 @@ pub(crate) async fn cmd_wall_configure(daemon: &Daemon, req: &Request) -> Value 
     let cell_size = req
         .args
         .get("cell_size")
-        .and_then(|v| v.as_i64())
+        .and_then(serde_json::Value::as_i64)
         .unwrap_or(16) as i32;
     let configs: Vec<WallConfig> = slots
         .iter()
         .map(|(mac, s)| WallConfig {
             mac: mac.clone(),
-            x: s.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
-            y: s.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
+            x: s.get("x").and_then(serde_json::Value::as_i64).unwrap_or(0) as i32,
+            y: s.get("y").and_then(serde_json::Value::as_i64).unwrap_or(0) as i32,
             size: s
                 .get("size")
-                .and_then(|v| v.as_i64())
-                .unwrap_or(cell_size as i64) as i32,
-            width: s.get("width").and_then(|v| v.as_i64()).map(|v| v as i32),
-            height: s.get("height").and_then(|v| v.as_i64()).map(|v| v as i32),
+                .and_then(serde_json::Value::as_i64)
+                .unwrap_or(i64::from(cell_size)) as i32,
+            width: s
+                .get("width")
+                .and_then(serde_json::Value::as_i64)
+                .map(|v| v as i32),
+            height: s
+                .get("height")
+                .and_then(serde_json::Value::as_i64)
+                .map(|v| v as i32),
         })
         .collect();
     // G7: delta reconfiguration.
@@ -61,14 +66,14 @@ pub(crate) async fn cmd_wall_configure(daemon: &Daemon, req: &Request) -> Value 
             let old_slots_guard = daemon.wall_slots.lock().await;
             let old_macs: std::collections::HashSet<_> = old_slots_guard.keys().cloned().collect();
             let new_macs: std::collections::HashSet<_> = slots.keys().cloned().collect();
-            if !old_macs.is_disjoint(&new_macs) {
+            if old_macs.is_disjoint(&new_macs) {
+                HashMap::new()
+            } else {
                 old_wall
                     .devices
                     .iter()
                     .filter_map(|s| s.device.as_ref().map(|d| (s.mac.clone(), d.clone())))
                     .collect()
-            } else {
-                HashMap::new()
             }
         } else {
             HashMap::new()

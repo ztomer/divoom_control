@@ -210,9 +210,9 @@ mod tests {
         // (256 + c) & 0xFF for c < 0, else c & 0xFF — every representable input.
         for c in i8::MIN..=i8::MAX {
             let python = if c < 0 {
-                ((256 + c as i32) & 0xFF) as u8
+                ((256 + i32::from(c)) & 0xFF) as u8
             } else {
-                (c as i32 & 0xFF) as u8
+                (i32::from(c) & 0xFF) as u8
             };
             assert_eq!(encode_temperature(c), python, "disagreement at {c}C");
         }

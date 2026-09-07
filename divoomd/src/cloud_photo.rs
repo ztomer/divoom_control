@@ -3,7 +3,7 @@
 //! `divoom_lib/cloud.py`'s `get_photo_albums`.
 //!
 //! Not in `HttpCommand.DeviceAndServerCmd`/`ForceDeviceHttp` (see
-//! docs/cloud_api/photo_discover.md), so this is a plain cloud call, same
+//! `docs/cloud_api/photo_discover.md`), so this is a plain cloud call, same
 //! auth-retry pattern as `Playlist/GetMyList`. Applying a selected album
 //! (`Photo/PlayAlbum`) is a separate, LAN-only device call — see
 //! `device_call::mod::handle_lan_call`'s `lan.play_album`.
@@ -41,7 +41,7 @@ pub async fn get_photo_albums() -> Result<Value, String> {
         body
     };
 
-    let url = format!("{}/Photo/GetAlbumList", BASE_URL);
+    let url = format!("{BASE_URL}/Photo/GetAlbumList");
     let mut req_body = make_request(&creds);
     let mut resp = client
         .post(&url)
@@ -52,7 +52,7 @@ pub async fn get_photo_albums() -> Result<Value, String> {
     let mut data: Value = resp.json().await.map_err(|e| e.to_string())?;
     let mut rc = data
         .get("ReturnCode")
-        .and_then(|v| v.as_i64())
+        .and_then(serde_json::Value::as_i64)
         .unwrap_or(-1);
 
     if rc == 9 || rc == 10 || rc == 11 {
@@ -67,7 +67,7 @@ pub async fn get_photo_albums() -> Result<Value, String> {
         data = resp.json().await.map_err(|e| e.to_string())?;
         rc = data
             .get("ReturnCode")
-            .and_then(|v| v.as_i64())
+            .and_then(serde_json::Value::as_i64)
             .unwrap_or(-1);
     }
 

@@ -26,7 +26,7 @@ struct HotFile {
 
 impl HotFile {
     fn checksum(&self) -> u32 {
-        self.body.iter().map(|&b| b as u32).sum::<u32>()
+        self.body.iter().map(|&b| u32::from(b)).sum::<u32>()
     }
     fn packet(&self, idx: usize) -> Vec<u8> {
         let start = idx * CHUNK_SIZE;
@@ -39,7 +39,7 @@ impl HotFile {
         p.resize(CHUNK_SIZE, 0);
         p
     }
-    fn packet_count(&self) -> usize {
+    const fn packet_count(&self) -> usize {
         self.body.len().div_ceil(CHUNK_SIZE)
     }
 }
@@ -58,7 +58,7 @@ fn json_u32(v: Option<&Value>) -> u32 {
     }
 }
 
-/// Pure parse of the hot-API response body into HotFile entries (no bodies yet).
+/// Pure parse of the hot-API response body into `HotFile` entries (no bodies yet).
 /// Split from the HTTP call so it can be unit-tested against the real response
 /// shape (string `Version`, numeric `VendorId`).
 fn parse_hot_manifest(data: &Value) -> Vec<HotFile> {
@@ -111,7 +111,7 @@ fn parse_hot_manifest(data: &Value) -> Vec<HotFile> {
 pub async fn cmd_hot_manifest(args: &Value) -> Value {
     let size = args
         .get("device_size")
-        .and_then(|v| v.as_u64())
+        .and_then(serde_json::Value::as_u64)
         .unwrap_or(16) as u32;
     let device_type = device_type_for_size(size);
     let client = match reqwest::Client::builder()
@@ -182,7 +182,13 @@ async fn download_hot_file(client: &reqwest::Client, f: &mut HotFile) -> bool {
 
 fn sha1_digest(data: &[u8]) -> String {
     // Minimal SHA-1 (RFC 3174) — avoids a dep for a 20-byte output.
-    let mut h: [u32; 5] = [0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476, 0xC3D2E1F0];
+    let mut h: [u32; 5] = [
+        0x6745_2301,
+        0xEFCD_AB89,
+        0x98BA_DCFE,
+        0x1032_5476,
+        0xC3D2_E1F0,
+    ];
     let bit_len = (data.len() as u64) * 8;
     let mut padded = data.to_vec();
     padded.push(0x80);
@@ -201,10 +207,10 @@ fn sha1_digest(data: &[u8]) -> String {
         let (mut a, mut b, mut c, mut d, mut e) = (h[0], h[1], h[2], h[3], h[4]);
         for (i, wi) in w.iter().enumerate() {
             let (f_val, k) = match i {
-                0..=19 => ((b & c) | (!b & d), 0x5A827999u32),
-                20..=39 => (b ^ c ^ d, 0x6ED9EBA1),
-                40..=59 => ((b & c) | (b & d) | (c & d), 0x8F1BBCDC),
-                _ => (b ^ c ^ d, 0xCA62C1D6),
+                0..=19 => ((b & c) | (!b & d), 0x5A82_7999_u32),
+                20..=39 => (b ^ c ^ d, 0x6ED9_EBA1),
+                40..=59 => ((b & c) | (b & d) | (c & d), 0x8F1B_BCDC),
+                _ => (b ^ c ^ d, 0xCA62_C1D6),
             };
             let temp = a
                 .rotate_left(5)
@@ -399,7 +405,7 @@ mod tests {
     fn parse_manifest_reads_string_versions() {
         let data = json!({
             "VendorList": [{
-                "VendorId": 40005454,
+                "VendorId": 40_005_454,
                 "FileList": [
                     {"FileId": "a.bin", "Version": "1103", "Sha1": "aa"},
                     {"FileId": "b.bin", "Version": "1112", "Sha1": "bb"},
@@ -408,7 +414,7 @@ mod tests {
         });
         let files = parse_hot_manifest(&data);
         assert_eq!(files.len(), 2);
-        assert_eq!(files[0].vendor_id, 40005454);
+        assert_eq!(files[0].vendor_id, 40_005_454);
         assert_eq!(
             files[0].version, 1103,
             "string Version must parse, not zero"
@@ -420,7 +426,7 @@ mod tests {
         for f in &mut with_bodies {
             f.body = vec![0u8; 4];
         }
-        let picked = pick_file(&with_bodies, 40005454, 1103);
+        let picked = pick_file(&with_bodies, 40_005_454, 1103);
         assert!(picked.is_some(), "pick_file must match a held version");
         assert_eq!(picked.unwrap().version, 1103);
     }

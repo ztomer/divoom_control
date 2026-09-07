@@ -10,7 +10,7 @@
 //!
 //! Worse, the session says nothing about apps that never register with Now
 //! Playing at all. Measured on macOS 26.6.2: Kaset registers (twice — the app
-//! and its WebKit GPU helper); **Feishin does not appear at all**. So no amount
+//! and its `WebKit` GPU helper); **Feishin does not appear at all**. So no amount
 //! of reading the session would ever surface a Feishin track, and the only way
 //! to know that was to enumerate.
 //!
@@ -28,7 +28,7 @@ use crate::track::Track;
 /// One player we know about.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Player {
-    /// Bundle id where known (MediaRemote clients), else a provider name.
+    /// Bundle id where known (`MediaRemote` clients), else a provider name.
     pub id: String,
     pub name: String,
     /// How we can reach it.
@@ -53,7 +53,11 @@ pub enum Reach {
 pub fn parse_players(line: &str) -> Result<Vec<Player>, String> {
     let v: serde_json::Value =
         serde_json::from_str(line.trim()).map_err(|e| format!("helper emitted non-JSON: {e}"))?;
-    if !v.get("ok").and_then(|b| b.as_bool()).unwrap_or(false) {
+    if !v
+        .get("ok")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+    {
         return Err(v
             .get("error")
             .and_then(|s| s.as_str())

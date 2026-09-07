@@ -4,8 +4,8 @@
 //! 2026-08-17); the desktop UI stays Python and the daemon stays Rust.
 //!
 //! Built on tao (event loop) + tray-icon. tray-icon needs an event loop on the
-//! main thread; tao gives the classic run() closure. We poll the daemon on a
-//! WaitUntil timer and forward tray/menu events through the loop proxy.
+//! main thread; tao gives the classic `run()` closure. We poll the daemon on a
+//! `WaitUntil` timer and forward tray/menu events through the loop proxy.
 
 mod daemon;
 mod launch;
@@ -24,12 +24,12 @@ use tray_icon::menu::MenuEvent;
 
 use tray::{Tray, TrayAction};
 
-/// Menu clicks forwarded into the loop so it wakes on interaction; DaemonEvent
-/// wakes it EARLY (before the next POLL tick) on a live status/owned_devices
+/// Menu clicks forwarded into the loop so it wakes on interaction; `DaemonEvent`
+/// wakes it EARLY (before the next POLL tick) on a live `status/owned_devices`
 /// broadcast, so a connect/disconnect/degraded transition shows up promptly
-/// instead of waiting up to POLL seconds. poll_daemon() still does the actual
+/// instead of waiting up to POLL seconds. `poll_daemon()` still does the actual
 /// state fetch + icon update on the main thread either way — this is purely
-/// a wake-up signal, never touches the TrayIcon itself off-thread.
+/// a wake-up signal, never touches the `TrayIcon` itself off-thread.
 enum UserEvent {
     Menu(MenuEvent),
     DaemonEvent,
@@ -166,7 +166,8 @@ fn main() {
                 *control_flow = ControlFlow::WaitUntil(Instant::now() + POLL);
             }
             // Timer tick → refresh status/devices.
-            Event::NewEvents(StartCause::ResumeTimeReached { .. }) => {
+            Event::NewEvents(StartCause::ResumeTimeReached { .. })
+            | Event::UserEvent(UserEvent::DaemonEvent) => {
                 if let Some(t) = tray.as_mut() {
                     t.poll_daemon();
                 }
@@ -174,18 +175,11 @@ fn main() {
             }
             // A live daemon broadcast arrived — refresh now instead of
             // waiting for the next POLL tick.
-            Event::UserEvent(UserEvent::DaemonEvent) => {
-                if let Some(t) = tray.as_mut() {
-                    t.poll_daemon();
-                }
-                *control_flow = ControlFlow::WaitUntil(Instant::now() + POLL);
-            }
             Event::UserEvent(UserEvent::Menu(ev)) => {
                 let quit = tray
                     .as_mut()
                     .and_then(|t| t.on_menu(&ev))
-                    .map(|a| matches!(a, TrayAction::Quit))
-                    .unwrap_or(false);
+                    .is_some_and(|a| matches!(a, TrayAction::Quit));
                 if quit {
                     tray.take(); // drop the status item before exiting
                     quitting.store(true, Ordering::Relaxed); // let the subscribe thread exit
@@ -216,7 +210,7 @@ mod cli_tests {
     use super::*;
 
     fn argv(items: &[&str]) -> Vec<String> {
-        items.iter().map(|s| s.to_string()).collect()
+        items.iter().map(std::string::ToString::to_string).collect()
     }
 
     #[test]

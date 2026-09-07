@@ -6,7 +6,8 @@
 //! and device-forwarding.
 
 /// Locate the macOS Notification Center SQLite DB (varies by macOS version /
-/// sandbox layout — try DARWIN_USER_DIR, then the Group Containers path).
+/// sandbox layout — try `DARWIN_USER_DIR`, then the Group Containers path).
+#[must_use]
 pub fn find_notification_db_path() -> Option<std::path::PathBuf> {
     let home = std::env::var("HOME").ok()?;
     let home_path = std::path::PathBuf::from(&home);
@@ -40,6 +41,7 @@ pub fn find_notification_db_path() -> Option<std::path::PathBuf> {
     None
 }
 
+#[must_use]
 pub fn initial_max_delivered_date(db_path: &std::path::Path) -> f64 {
     let conn = match rusqlite::Connection::open_with_flags(
         db_path,
@@ -81,6 +83,7 @@ pub fn fetch_new_records(
     Ok(res)
 }
 
+#[must_use]
 pub fn parse_notification_record(raw: &[u8]) -> Option<(String, String, String)> {
     let val: plist::Value = plist::from_bytes(raw).ok()?;
     let dict = val.as_dictionary()?;

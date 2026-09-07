@@ -8,7 +8,7 @@
 //!
 //! | builder                          | byte 4   | byte 5  | byte 6   | parameterized |
 //! |----------------------------------|----------|---------|----------|---------------|
-//! | Python (canonical, from APK C2()) | humidity | weather | date     | all           |
+//! | Python (canonical, from APK `C2()`) | humidity | weather | date     | all           |
 //! | `display.set_clock_rich`          | humidity | weather | date     | all           |
 //! | `display.show_clock`              | weather  | temp    | calendar | all           |
 //! | `device.show_clock`               | 0        | 0       | 0        | style only    |
@@ -63,7 +63,8 @@ impl LightingType {
     /// Map a wire/RPC integer to a mode. Out-of-range falls back to `PlainColor`
     /// — the device ignores unknown types, and guessing a different effect would
     /// be worse than the documented default.
-    pub fn from_i64(v: i64) -> Self {
+    #[must_use]
+    pub const fn from_i64(v: i64) -> Self {
         match v {
             1 => Self::Love,
             2 => Self::Plants,
@@ -108,15 +109,16 @@ impl Default for ClockPacket {
 
 impl ClockPacket {
     /// The ONLY place a clock packet becomes bytes.
+    #[must_use]
     pub fn to_bytes(self) -> [u8; 10] {
         [
             self.env,
-            self.twentyfour as u8,
+            u8::from(self.twentyfour),
             self.style.min(15),
-            self.active as u8,
-            self.humidity as u8,
-            self.weather as u8,
-            self.date as u8,
+            u8::from(self.active),
+            u8::from(self.humidity),
+            u8::from(self.weather),
+            u8::from(self.date),
             self.rgb[0],
             self.rgb[1],
             self.rgb[2],
@@ -149,6 +151,7 @@ impl Default for LightPacket {
 
 impl LightPacket {
     /// The ONLY place a lighting packet becomes bytes.
+    #[must_use]
     pub fn to_bytes(self) -> [u8; 10] {
         [
             Channel::Lighting as u8,
@@ -157,7 +160,7 @@ impl LightPacket {
             self.rgb[2],
             self.brightness.min(100),
             self.kind as u8,
-            self.power as u8,
+            u8::from(self.power),
             0,
             0,
             0,
@@ -189,7 +192,8 @@ impl WeatherType {
     ///
     /// Clear is the neutral icon: an unknown code should show something
     /// innocuous rather than, say, a thunderstorm.
-    pub fn from_i64(v: i64) -> Self {
+    #[must_use]
+    pub const fn from_i64(v: i64) -> Self {
         match v {
             3 => Self::CloudySky,
             5 => Self::Thunderstorm,
@@ -210,7 +214,8 @@ impl WeatherType {
 /// This exists as a named function because "cast it to u8" is exactly the kind
 /// of step that looks obviously right and is silently wrong for half its input
 /// range — the negative half, which nobody tests in July.
-pub fn encode_temperature(celsius: i8) -> u8 {
+#[must_use]
+pub const fn encode_temperature(celsius: i8) -> u8 {
     celsius as u8
 }
 
@@ -225,7 +230,8 @@ pub struct WeatherPacket {
 
 impl WeatherPacket {
     /// The ONLY place a weather packet becomes bytes.
-    pub fn to_bytes(self) -> [u8; 2] {
+    #[must_use]
+    pub const fn to_bytes(self) -> [u8; 2] {
         [encode_temperature(self.temperature_c), self.weather as u8]
     }
 }
@@ -235,6 +241,7 @@ impl WeatherPacket {
 /// R67: this existed in THREE copies — display.rs, text.rs and sleep.rs. A
 /// helper duplicated per file is one that eventually differs per file, which is
 /// the same class as the packet builders this module exists to unify.
+#[must_use]
 pub fn parse_hex_color(s: &str) -> Option<[u8; 3]> {
     let s = s.trim().trim_start_matches('#');
     if s.len() != 6 {
@@ -251,13 +258,15 @@ pub fn parse_hex_color(s: &str) -> Option<[u8; 3]> {
 ///
 /// The device needs the full 10 bytes to switch reliably; a short packet is
 /// silently ignored (see the padding notes in `divoom_lib/display/__init__.py`).
-pub fn channel_switch(channel: Channel) -> [u8; 10] {
+#[must_use]
+pub const fn channel_switch(channel: Channel) -> [u8; 10] {
     [channel as u8, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 }
 
 /// A VJ-effect packet: `[Vj, number + 1, 0 x 8]`. VJ effects are 1-indexed on
 /// BLE hardware, so the caller passes the 0-indexed number the UI shows.
-pub fn vj_effect(number: u8) -> [u8; 10] {
+#[must_use]
+pub const fn vj_effect(number: u8) -> [u8; 10] {
     [
         Channel::Vj as u8,
         number.saturating_add(1),
@@ -273,6 +282,7 @@ pub fn vj_effect(number: u8) -> [u8; 10] {
 }
 
 /// A visualizer packet: `[Visualization, number, 0 x 8]`.
-pub fn visualization(number: u8) -> [u8; 10] {
+#[must_use]
+pub const fn visualization(number: u8) -> [u8; 10] {
     [Channel::Visualization as u8, number, 0, 0, 0, 0, 0, 0, 0, 0]
 }

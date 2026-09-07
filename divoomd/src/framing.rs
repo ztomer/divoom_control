@@ -1,14 +1,18 @@
 //! Basic + iOS-LE wire framing, ported byte-for-byte from `divoom_lib/framing.py`.
+//!
 //! Parity is enforced by `tests/framing_parity.rs` against vectors generated from
 //! the Python implementation (`scripts/codegen/gen_framing_vectors.py`).
 
 use crate::models;
 
 /// Encode a payload in the Basic protocol framing:
-/// `[0x01][len_lo][len_hi][body...][cksum_lo][cksum_hi][0x02]`, where `len` counts
-/// the body plus the 2 checksum bytes, and the checksum is `sum(len_lo..body) &
-/// 0xFFFF`. With `escape`, body bytes 0x01/0x02/0x03 expand to their 2-byte escape
+/// `[0x01][len_lo][len_hi][body...][cksum_lo][cksum_hi][0x02]`, where `len`
+/// counts the body plus the 2 checksum bytes, and the checksum is
+/// `sum(len_lo..body) & 0xFFFF`.
+///
+/// With `escape`, body bytes 0x01/0x02/0x03 expand to their 2-byte escape
 /// sequences.
+#[must_use]
 pub fn encode_basic_payload(payload: &[u8], escape: bool) -> Vec<u8> {
     let mut body: Vec<u8> = Vec::with_capacity(if escape {
         payload.len() * 2
@@ -36,7 +40,7 @@ pub fn encode_basic_payload(payload: &[u8], escape: bool) -> Vec<u8> {
     out.extend_from_slice(&body);
 
     // checksum over everything after the start byte so far: [len_lo, len_hi, body...]
-    let checksum: u32 = out[1..].iter().map(|&b| b as u32).sum::<u32>() & 0xFFFF;
+    let checksum: u32 = out[1..].iter().map(|&b| u32::from(b)).sum::<u32>() & 0xFFFF;
     out.push((checksum & 0xFF) as u8);
     out.push(((checksum >> 8) & 0xFF) as u8);
     out.push(models::MESSAGE_END_BYTE);
@@ -65,7 +69,7 @@ pub fn encode_ios_le_payload(payload: &[u8], packet_number: u32) -> Result<Vec<u
         out[8..8 + n - 1].copy_from_slice(&payload[1..]);
     }
 
-    let checksum: u32 = out[4..n + 7].iter().map(|&b| b as u32).sum::<u32>() & 0xFFFF;
+    let checksum: u32 = out[4..n + 7].iter().map(|&b| u32::from(b)).sum::<u32>() & 0xFFFF;
     let idx = n + 7;
     out[idx] = (checksum & 0xFF) as u8;
     out[idx + 1] = ((checksum >> 8) & 0xFF) as u8;
@@ -81,9 +85,12 @@ pub struct IosLeNotification {
     pub checksum: u16,
 }
 
-/// Parse an iOS-LE notification. Returns `None` on a short buffer, a bad header,
-/// or a missing end marker. (The checksum is reported, not enforced — matching the
-/// Python reference, which leaves RX checksum verification to a higher layer.)
+/// Parse an iOS-LE notification.
+///
+/// Returns `None` on a short buffer, a bad header, or a missing end marker.
+/// (The checksum is reported, not enforced — matching the Python reference,
+/// which leaves RX checksum verification to a higher layer.)
+#[must_use]
 pub fn parse_ios_le_notification(data: &[u8]) -> Option<IosLeNotification> {
     if data.len() < models::IOS_LE_MIN_DATA_LENGTH {
         return None;
@@ -98,8 +105,8 @@ pub fn parse_ios_le_notification(data: &[u8]) -> Option<IosLeNotification> {
     let packet_number = data[models::IOS_LE_PACKET_NUMBER];
     let end = data.len() - models::IOS_LE_CHECKSUM_LENGTH - 1; // == len - 3
     let payload = data[models::IOS_LE_DATA_OFFSET..end].to_vec();
-    let lo = data[data.len() - 3] as u16;
-    let hi = data[data.len() - 2] as u16;
+    let lo = u16::from(data[data.len() - 3]);
+    let hi = u16::from(data[data.len() - 2]);
     Some(IosLeNotification {
         command_id,
         payload,
@@ -115,7 +122,9 @@ pub struct BasicMessage {
 }
 
 /// Parse zero or more Basic-protocol frames from `buf`, draining the consumed
-/// bytes. Whatever remains in `buf` after the call is the unconsumed remainder (an
+/// bytes.
+///
+/// Whatever remains in `buf` after the call is the unconsumed remainder (an
 /// incomplete trailing frame, or empty). Mirrors `parse_basic_protocol_frames`:
 /// resync on the start byte, drop frames with a corrupt over-long length, and
 /// discard frames whose end byte or checksum don't validate.
@@ -123,12 +132,12 @@ pub fn parse_basic_protocol_frames(buf: &mut Vec<u8>) -> Vec<BasicMessage> {
     let mut messages = Vec::new();
 
     while buf.len() >= 7 {
-        let start_index = match buf.iter().position(|&b| b == models::MESSAGE_START_BYTE) {
-            Some(i) => i,
-            None => {
-                buf.clear();
-                break;
-            }
+        let start_index = if let Some(i) = buf.iter().position(|&b| b == models::MESSAGE_START_BYTE)
+        {
+            i
+        } else {
+            buf.clear();
+            break;
         };
         if start_index > 0 {
             buf.drain(0..start_index);
@@ -166,11 +175,11 @@ pub fn parse_basic_protocol_frames(buf: &mut Vec<u8>) -> Vec<BasicMessage> {
 
         let calculated: u32 = message[1..message.len() - 3]
             .iter()
-            .map(|&b| b as u32)
+            .map(|&b| u32::from(b))
             .sum::<u32>()
             & 0xFFFF;
         let received =
-            (message[message.len() - 3] as u32) | ((message[message.len() - 2] as u32) << 8);
+            u32::from(message[message.len() - 3]) | (u32::from(message[message.len() - 2]) << 8);
         if received != calculated {
             continue;
         }

@@ -82,7 +82,7 @@ async fn scrolling_text(ctx: &CallCtx<'_>) -> Value {
     }
     let rate = kw
         .and_then(|v| v.get("rate"))
-        .and_then(|v| v.as_i64())
+        .and_then(serde_json::Value::as_i64)
         .unwrap_or(50)
         .clamp(1, 255) as u8;
 
@@ -107,7 +107,7 @@ async fn scrolling_text(ctx: &CallCtx<'_>) -> Value {
         for &u in chunk {
             p.push((u & 0xFF) as u8);
             p.push((u >> 8) as u8);
-            match device_glyph_bytes(u as u32) {
+            match device_glyph_bytes(u32::from(u)) {
                 Some(g) => p.extend_from_slice(g),
                 None => return err_reply("show_scrolling_text: the font blob has no usable glyph"),
             }
@@ -155,7 +155,10 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     } else {
         args.first()
             .copied()
-            .or_else(|| kw.and_then(|v| v.get("control")).and_then(|v| v.as_i64()))
+            .or_else(|| {
+                kw.and_then(|v| v.get("control"))
+                    .and_then(serde_json::Value::as_i64)
+            })
             .unwrap_or(6) as u8
     };
 
@@ -168,14 +171,17 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let speed = args
                 .get(1)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("speed")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("speed"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u16;
             let text_box_id = args
                 .get(2)
                 .copied()
                 .or_else(|| {
                     kw.and_then(|v| v.get("text_box_id"))
-                        .and_then(|v| v.as_i64())
+                        .and_then(serde_json::Value::as_i64)
                 })
                 .unwrap_or(0) as u8;
             payload.extend_from_slice(&speed.to_le_bytes());
@@ -188,7 +194,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .copied()
                 .or_else(|| {
                     kw.and_then(|v| v.get("effect_style"))
-                        .and_then(|v| v.as_i64())
+                        .and_then(serde_json::Value::as_i64)
                 })
                 .unwrap_or(0) as u8;
             payload.push(effect_style);
@@ -198,29 +204,41 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let x = args
                 .get(1)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("x")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("x"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let y = args
                 .get(2)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("y")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("y"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let width = args
                 .get(3)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("width")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("width"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let height = args
                 .get(4)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("height")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("height"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let text_box_id = args
                 .get(5)
                 .copied()
                 .or_else(|| {
                     kw.and_then(|v| v.get("text_box_id"))
-                        .and_then(|v| v.as_i64())
+                        .and_then(serde_json::Value::as_i64)
                 })
                 .unwrap_or(0) as u8;
             payload.push(x);
@@ -234,14 +252,17 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let font_size = args
                 .get(1)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("font_size")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("font_size"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let text_box_id = args
                 .get(2)
                 .copied()
                 .or_else(|| {
                     kw.and_then(|v| v.get("text_box_id"))
-                        .and_then(|v| v.as_i64())
+                        .and_then(serde_json::Value::as_i64)
                 })
                 .unwrap_or(0) as u8;
             payload.push(font_size);
@@ -274,7 +295,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .copied()
                 .or_else(|| {
                     kw.and_then(|v| v.get("text_box_id"))
-                        .and_then(|v| v.as_i64())
+                        .and_then(serde_json::Value::as_i64)
                 })
                 .unwrap_or(0) as u8;
             payload.push(r);
@@ -301,7 +322,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     .copied()
                     .or_else(|| {
                         kw.and_then(|v| v.get("text_box_id"))
-                            .and_then(|v| v.as_i64())
+                            .and_then(serde_json::Value::as_i64)
                     })
                     .unwrap_or(0) as u8
             } else {
@@ -309,7 +330,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     .copied()
                     .or_else(|| {
                         kw.and_then(|v| v.get("text_box_id"))
-                            .and_then(|v| v.as_i64())
+                            .and_then(serde_json::Value::as_i64)
                     })
                     .unwrap_or(0) as u8
             };
@@ -326,7 +347,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .copied()
                 .or_else(|| {
                     kw.and_then(|v| v.get("effect_style"))
-                        .and_then(|v| v.as_i64())
+                        .and_then(serde_json::Value::as_i64)
                 })
                 .unwrap_or(0) as u8;
             let text_box_id = args
@@ -334,7 +355,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .copied()
                 .or_else(|| {
                     kw.and_then(|v| v.get("text_box_id"))
-                        .and_then(|v| v.as_i64())
+                        .and_then(serde_json::Value::as_i64)
                 })
                 .unwrap_or(0) as u8;
             payload.push(effect_style);

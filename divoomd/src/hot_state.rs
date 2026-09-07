@@ -36,9 +36,11 @@ fn load_map(path: &Path) -> serde_json::Map<String, Value> {
         .unwrap_or_default()
 }
 
-/// Record the outcome of a hot-channel check for `address`, keyed as-is (the GUI
-/// reads by the same address string it passed in). `summary` is
-/// `run_hot_update`'s result dict. No-op on a blank address; never panics.
+/// Record the outcome of a hot-channel check for `address`, keyed as-is (the
+/// GUI reads by the same address string it passed in).
+///
+/// `summary` is `run_hot_update`'s result dict. No-op on a blank address; never
+/// panics.
 pub fn record_check(address: &str, summary: &Value) -> Result<(), String> {
     match state_path() {
         Some(path) => record_check_at(&path, address, summary),
@@ -61,11 +63,15 @@ fn record_check_at(path: &Path, address: &str, summary: &Value) -> Result<(), St
         Some(v) => v.as_u64().unwrap_or(0),
         None => 0,
     };
-    let get_u = |k: &str| summary.get(k).and_then(|v| v.as_u64()).unwrap_or(0);
+    let get_u = |k: &str| {
+        summary
+            .get(k)
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0)
+    };
     let checked_at = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
+        .map_or(0, |d| d.as_secs());
 
     let mut map = load_map(path);
     map.insert(

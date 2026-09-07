@@ -50,7 +50,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 Some(p) if !p.is_empty() => {
                     let name_len = p[0] as usize;
                     if p.len() > name_len {
-                        let name_bytes = &p[1..1 + name_len];
+                        let name_bytes = &p[1..=name_len];
                         match std::str::from_utf8(name_bytes) {
                             Ok(name) => {
                                 dev.set_cached_device_name(name.to_string());
@@ -92,7 +92,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         | "device.get_brightness"
         | "get_brightness"
         | "display.get_brightness" => match dev.send_command_and_wait(0x46, &[], timeout).await {
-            Some(p) if p.len() >= 7 => json!({"success": true, "result": p[6] as i64}),
+            Some(p) if p.len() >= 7 => json!({"success": true, "result": i64::from(p[6])}),
             _ => json!({"success": true, "result": Value::Null}),
         },
         // Full 0x46 light-mode read-back (Python Light.get_light_mode; GLM offsets).
@@ -125,7 +125,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .copied()
                 .or_else(|| {
                     kw.and_then(|v| v.get("brightness"))
-                        .and_then(|v| v.as_i64())
+                        .and_then(serde_json::Value::as_i64)
                 })
                 .unwrap_or(0)
                 .clamp(0, 100) as u8;
@@ -140,10 +140,10 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             if let Err(e) = dev.send_command(0x45, &[0x02], true).await {
                 return err_reply(&format!("show_hot_channel: 0x45 failed: {e}"));
             }
-            let page = args
-                .first()
-                .copied()
-                .or_else(|| kw.and_then(|v| v.get("page")).and_then(|v| v.as_i64()));
+            let page = args.first().copied().or_else(|| {
+                kw.and_then(|v| v.get("page"))
+                    .and_then(serde_json::Value::as_i64)
+            });
             if let Some(p) = page {
                 match dev.send_command(0x85, &[1, p as u8], true).await {
                     Ok(()) => json!({"success": true, "result": true}),
@@ -158,7 +158,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         "hot_update.update" => {
             let device_size = kw
                 .and_then(|v| v.get("device_size"))
-                .and_then(|v| v.as_i64())
+                .and_then(serde_json::Value::as_i64)
                 .unwrap_or(16);
             let req = crate::protocol::Request {
                 command: "hot_update".to_string(),
@@ -171,7 +171,10 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let val = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("volume")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("volume"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0)
                 .clamp(0, 15) as u8;
             match dev.send_command(0x08, &[val], true).await {
@@ -181,7 +184,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         }
         "music.get_volume" | "get_volume" => {
             match dev.send_command_and_wait(0x09, &[], timeout).await {
-                Some(p) if !p.is_empty() => json!({"success": true, "result": p[0] as i64}),
+                Some(p) if !p.is_empty() => json!({"success": true, "result": i64::from(p[0])}),
                 _ => json!({"success": true, "result": Value::Null}),
             }
         }
@@ -189,8 +192,14 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let freq = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("frequency")).and_then(|v| v.as_i64()))
-                .or_else(|| kw.and_then(|v| v.get("freq_x10")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("frequency"))
+                        .and_then(serde_json::Value::as_i64)
+                })
+                .or_else(|| {
+                    kw.and_then(|v| v.get("freq_x10"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(875) as u16;
             let payload = freq.to_le_bytes();
             match dev.send_command(0x61, &payload, true).await {
@@ -208,13 +217,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .or_else(|| kw.and_then(|v| v.get("on_off")))
                 .or_else(|| kw.and_then(|v| v.get("enabled")));
             let on_off = match on_off_val {
-                Some(Value::Bool(b)) => {
-                    if *b {
-                        1
-                    } else {
-                        0
-                    }
-                }
+                Some(Value::Bool(b)) => u8::from(*b),
                 Some(Value::Number(n)) => n.as_i64().unwrap_or(0).clamp(0, 1) as u8,
                 _ => args.first().copied().unwrap_or(0).clamp(0, 1) as u8,
             };
@@ -228,7 +231,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         | "get_low_power_switch"
         | "device.get_low_power"
         | "get_low_power" => match dev.send_command_and_wait(0xb3, &[], timeout).await {
-            Some(p) if !p.is_empty() => json!({"success": true, "result": p[0] as i64}),
+            Some(p) if !p.is_empty() => json!({"success": true, "result": i64::from(p[0])}),
             _ => json!({"success": true, "result": Value::Null}),
         },
         "system.set_auto_power_off"
@@ -238,7 +241,10 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let minutes = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("minutes")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("minutes"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u16;
             let payload = minutes.to_le_bytes();
             match dev.send_command(0xab, &payload, true).await {
@@ -251,7 +257,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         | "get_auto_power_off"
         | "sound.get_auto_power_off" => match dev.send_command_and_wait(0xac, &[], timeout).await {
             Some(p) if p.len() >= 2 => {
-                let minutes = u16::from_le_bytes([p[0], p[1]]) as i64;
+                let minutes = i64::from(u16::from_le_bytes([p[0], p[1]]));
                 json!({"success": true, "result": minutes})
             }
             _ => json!({"success": true, "result": Value::Null}),

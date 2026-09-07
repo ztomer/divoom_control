@@ -14,6 +14,7 @@ pub struct MockTransport {
 type SentCommands = Arc<Mutex<Vec<(u8, Vec<u8>)>>>;
 
 impl MockTransport {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             device_name: Arc::new(Mutex::new(Some("MockDitoo".to_string()))),
@@ -22,6 +23,7 @@ impl MockTransport {
         }
     }
 
+    #[must_use]
     pub fn device_name(&self) -> Option<String> {
         self.device_name.lock().unwrap().clone()
     }

@@ -1,4 +1,4 @@
-//! Mock-transport-only command handlers. Split from daemon_connect.rs to keep
+//! Mock-transport-only command handlers. Split from `daemon_connect.rs` to keep
 //! that file under the 500-LOC ground rule (R61 follow-up).
 
 use serde_json::{json, Value};

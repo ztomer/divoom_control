@@ -39,7 +39,7 @@ struct MonitorState {
 
 impl MonitorState {
     fn new() -> Self {
-        MonitorState {
+        Self {
             running: false,
             seen_ids: HashSet::new(),
             task: None,
@@ -73,14 +73,13 @@ pub async fn start_monitor(daemon: Arc<Daemon>) {
     }
 
     // Probe database existence and accessibility
-    let db_path = match find_notification_db_path() {
-        Some(p) => p,
-        None => {
-            guard.last_db_error = Some("macOS Notification Center DB not found".to_string());
-            guard.db_error_streak = 5;
-            let _ = daemon.tx.send(notif_status_event(&guard));
-            return;
-        }
+    let db_path = if let Some(p) = find_notification_db_path() {
+        p
+    } else {
+        guard.last_db_error = Some("macOS Notification Center DB not found".to_string());
+        guard.db_error_streak = 5;
+        let _ = daemon.tx.send(notif_status_event(&guard));
+        return;
     };
 
     // Test if we can open and read
@@ -248,24 +247,22 @@ async fn monitor_loop(
                     }
                     guard.seen_count += 1;
 
-                    let parsed = match parse_notification_record(&raw) {
-                        Some(p) => p,
-                        None => {
-                            guard.dropped_count += 1;
-                            continue;
-                        }
+                    let parsed = if let Some(p) = parse_notification_record(&raw) {
+                        p
+                    } else {
+                        guard.dropped_count += 1;
+                        continue;
                     };
 
                     let (app, title, body) = parsed;
-                    let app_type = match route_app(&app, &rules) {
-                        Some(t) => t,
-                        None => {
-                            guard.dropped_count += 1;
-                            continue;
-                        }
+                    let app_type = if let Some(t) = route_app(&app, &rules) {
+                        t
+                    } else {
+                        guard.dropped_count += 1;
+                        continue;
                     };
 
-                    let dup_key = format!("{}:{}:{}", delivered, app, title);
+                    let dup_key = format!("{delivered}:{app}:{title}");
                     if guard.seen_ids.contains(&dup_key) {
                         guard.dropped_count += 1;
                         continue;
@@ -277,7 +274,7 @@ async fn monitor_loop(
                     } else if !body.is_empty() {
                         body.split('\n').next().unwrap_or("").trim().to_string()
                     } else {
-                        "".to_string()
+                        String::new()
                     };
 
                     let routed = forward_notification(&daemon, app_type, &text).await;
@@ -289,7 +286,7 @@ async fn monitor_loop(
 
                     let notif_ev = json!({
                         "type": "notification",
-                        "app_type": app_type as u64,
+                        "app_type": u64::from(app_type),
                         "title": title,
                         "body": body,
                         "routed": routed

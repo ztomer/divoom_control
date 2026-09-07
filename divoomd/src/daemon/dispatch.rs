@@ -146,12 +146,12 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
                 .args
                 .get("name")
                 .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
+                .map(std::string::ToString::to_string);
             let preview = req
                 .args
                 .get("preview")
                 .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
+                .map(std::string::ToString::to_string);
             daemon
                 .live_jobs
                 .set_device_activity(mac, kind, name, preview)
@@ -229,7 +229,7 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
         "start_notifications" => {
             #[cfg(target_os = "macos")]
             {
-                if let Some(w) = daemon.self_weak.get().and_then(|w| w.upgrade()) {
+                if let Some(w) = daemon.self_weak.get().and_then(std::sync::Weak::upgrade) {
                     crate::macos_notifications::start_monitor(w).await;
                     let mut status = crate::macos_notifications::status_event().await;
                     status["success"] = json!(true);

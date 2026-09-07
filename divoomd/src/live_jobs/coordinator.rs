@@ -10,7 +10,7 @@ use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
 /// Shared map of running job handles, keyed by (mac, job kind). Factor of the
-/// struct field type to keep clippy::type_complexity quiet on the field.
+/// struct field type to keep `clippy::type_complexity` quiet on the field.
 type JobTasks = Arc<Mutex<HashMap<(String, String), JoinHandle<()>>>>;
 
 #[derive(serde::Serialize, Clone)]
@@ -44,6 +44,7 @@ impl Default for LiveJobCoordinator {
 }
 
 impl LiveJobCoordinator {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             tasks: Arc::new(Mutex::new(HashMap::new())),
@@ -104,7 +105,7 @@ impl LiveJobCoordinator {
                             now-playing and album art"
                     .to_string())
             }
-            _ => return Err(format!("unknown live job kind: {}", kind)),
+            _ => return Err(format!("unknown live job kind: {kind}")),
         };
 
         self.tasks

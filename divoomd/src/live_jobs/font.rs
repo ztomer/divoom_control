@@ -35,6 +35,7 @@ pub(crate) const FONT_BYTES_FULL: &[u8] =
 ///
 /// Falls back to '?' for anything outside the blob's ASCII range, matching
 /// `BitmapFont::rows`. Returns None only if even the fallback is missing.
+#[must_use]
 pub fn device_glyph_bytes(cp: u32) -> Option<&'static [u8]> {
     let off = |c: u32| -> Option<usize> {
         if (FIRST_CP..=LAST_CP).contains(&c) {
@@ -53,7 +54,7 @@ pub(crate) struct BitmapFont {
 }
 
 impl BitmapFont {
-    pub(crate) fn new(blob: &'static [u8]) -> Self {
+    pub(crate) const fn new(blob: &'static [u8]) -> Self {
         Self {
             blob,
             space_width: 3,
@@ -81,7 +82,7 @@ impl BitmapFont {
         let g = &self.blob[off..off + GLYPH_BYTES];
         let mut r = [0u16; 16];
         for i in 0..16 {
-            r[i] = ((g[i * 2] as u16) << 8) | (g[i * 2 + 1] as u16);
+            r[i] = (u16::from(g[i * 2]) << 8) | u16::from(g[i * 2 + 1]);
         }
         r
     }

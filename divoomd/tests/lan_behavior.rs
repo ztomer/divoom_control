@@ -1,5 +1,5 @@
 //! LAN transport body-building + response-validation parity (the ACK != success
-//! honesty), mirroring divoom_lib/lan_transport.py's _validate_lan_response.
+//! honesty), mirroring `divoom_lib/lan_transport.py`'s _`validate_lan_response`.
 
 use divoomd::lan::{validate_response, LanError, LanTransport};
 use serde_json::json;

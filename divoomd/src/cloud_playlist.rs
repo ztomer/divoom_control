@@ -46,7 +46,7 @@ pub async fn get_my_playlists(limit: i64, page: i64) -> Result<Value, String> {
         body
     };
 
-    let url = format!("{}/Playlist/GetMyList", BASE_URL);
+    let url = format!("{BASE_URL}/Playlist/GetMyList");
     let mut req_body = make_request(&creds);
     let mut resp = client
         .post(&url)
@@ -57,7 +57,7 @@ pub async fn get_my_playlists(limit: i64, page: i64) -> Result<Value, String> {
     let mut data: Value = resp.json().await.map_err(|e| e.to_string())?;
     let mut rc = data
         .get("ReturnCode")
-        .and_then(|v| v.as_i64())
+        .and_then(serde_json::Value::as_i64)
         .unwrap_or(-1);
 
     if rc == 9 || rc == 10 || rc == 11 {
@@ -72,7 +72,7 @@ pub async fn get_my_playlists(limit: i64, page: i64) -> Result<Value, String> {
         data = resp.json().await.map_err(|e| e.to_string())?;
         rc = data
             .get("ReturnCode")
-            .and_then(|v| v.as_i64())
+            .and_then(serde_json::Value::as_i64)
             .unwrap_or(-1);
     }
 
@@ -125,7 +125,7 @@ pub async fn get_playlist_images(play_id: i64, limit: i64, page: i64) -> Result<
         body
     };
 
-    let url = format!("{}/Playlist/GetMyImageList", BASE_URL);
+    let url = format!("{BASE_URL}/Playlist/GetMyImageList");
     let mut req_body = make_request(&creds);
     let mut resp = client
         .post(&url)
@@ -136,7 +136,7 @@ pub async fn get_playlist_images(play_id: i64, limit: i64, page: i64) -> Result<
     let mut data: Value = resp.json().await.map_err(|e| e.to_string())?;
     let mut rc = data
         .get("ReturnCode")
-        .and_then(|v| v.as_i64())
+        .and_then(serde_json::Value::as_i64)
         .unwrap_or(-1);
 
     if rc == 9 || rc == 10 || rc == 11 {
@@ -151,7 +151,7 @@ pub async fn get_playlist_images(play_id: i64, limit: i64, page: i64) -> Result<
         data = resp.json().await.map_err(|e| e.to_string())?;
         rc = data
             .get("ReturnCode")
-            .and_then(|v| v.as_i64())
+            .and_then(serde_json::Value::as_i64)
             .unwrap_or(-1);
     }
 

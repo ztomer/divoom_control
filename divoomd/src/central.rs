@@ -18,31 +18,31 @@ pub enum BleCentral {
 }
 
 impl BleCentral {
-    /// Begin a scan. On `Faulty` this never resolves (a wedged CoreBluetooth
+    /// Begin a scan. On `Faulty` this never resolves (a wedged `CoreBluetooth`
     /// session) so callers MUST wrap it in `tokio::time::timeout`.
     pub async fn start_scan(&self, filter: btleplug::api::ScanFilter) -> BleResult<()> {
         match self {
-            BleCentral::Real(a) => a.start_scan(filter).await.map_err(|e| e.into()),
+            Self::Real(a) => a.start_scan(filter).await.map_err(std::convert::Into::into),
             #[cfg(test)]
-            BleCentral::Faulty => std::future::pending().await,
+            Self::Faulty => std::future::pending().await,
         }
     }
 
     /// Enumerate discovered peripherals. Same wedge contract as `start_scan`.
     pub async fn peripherals(&self) -> BleResult<Vec<Peripheral>> {
         match self {
-            BleCentral::Real(a) => a.peripherals().await.map_err(|e| e.into()),
+            Self::Real(a) => a.peripherals().await.map_err(std::convert::Into::into),
             #[cfg(test)]
-            BleCentral::Faulty => std::future::pending().await,
+            Self::Faulty => std::future::pending().await,
         }
     }
 
     /// Stop a scan (best-effort; the caller ignores a wedged stop).
     pub async fn stop_scan(&self) -> BleResult<()> {
         match self {
-            BleCentral::Real(a) => a.stop_scan().await.map_err(|e| e.into()),
+            Self::Real(a) => a.stop_scan().await.map_err(std::convert::Into::into),
             #[cfg(test)]
-            BleCentral::Faulty => std::future::pending().await,
+            Self::Faulty => std::future::pending().await,
         }
     }
 }

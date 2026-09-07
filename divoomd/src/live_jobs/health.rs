@@ -41,7 +41,7 @@ pub enum JobState {
 }
 
 impl JobState {
-    fn tag(&self) -> &'static str {
+    const fn tag(&self) -> &'static str {
         match self {
             Self::Running => "running",
             Self::WaitingForDevice => "waiting_for_device",
@@ -68,6 +68,7 @@ pub struct JobHealth {
 }
 
 impl JobHealth {
+    #[must_use]
     pub fn new(kind: &str, mac: &str, tx: tokio::sync::broadcast::Sender<Value>) -> Self {
         Self {
             kind: kind.to_string(),
@@ -122,7 +123,7 @@ impl JobHealth {
         self.report(JobState::Running)
     }
 
-    /// Convenience: report WaitingForDevice.
+    /// Convenience: report `WaitingForDevice`.
     pub fn waiting(&self) -> bool {
         self.report(JobState::WaitingForDevice)
     }
@@ -229,7 +230,7 @@ mod tests {
     fn waiting_poll_never_exceeds_the_jobs_own_interval() {
         // weather's 15-minute cycle must not become a 15-minute blind spot.
         assert_eq!(
-            wait_interval(Duration::from_secs(900)),
+            wait_interval(Duration::from_mins(15)),
             Duration::from_secs(5)
         );
         assert_eq!(

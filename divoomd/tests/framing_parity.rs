@@ -74,7 +74,7 @@ fn parse_ios_le_matches_python() {
             (None, Value::Null) => {}
             (Some(n), expected) if !expected.is_null() => {
                 assert_eq!(
-                    n.command_id as u64,
+                    u64::from(n.command_id),
                     expected["command_id"].as_u64().unwrap(),
                     "cmd for {}",
                     c["in"]
@@ -86,13 +86,13 @@ fn parse_ios_le_matches_python() {
                     c["in"]
                 );
                 assert_eq!(
-                    n.packet_number as u64,
+                    u64::from(n.packet_number),
                     expected["packet_number"].as_u64().unwrap(),
                     "pkt for {}",
                     c["in"]
                 );
                 assert_eq!(
-                    n.checksum as u64,
+                    u64::from(n.checksum),
                     expected["checksum"].as_u64().unwrap(),
                     "cksum for {}",
                     c["in"]
@@ -116,7 +116,7 @@ fn parse_basic_matches_python() {
         assert_eq!(msgs.len(), expected.len(), "message count for {}", c["in"]);
         for (got, exp) in msgs.iter().zip(expected) {
             assert_eq!(
-                got.command_id as u64,
+                u64::from(got.command_id),
                 exp["command_id"].as_u64().unwrap(),
                 "cmd for {}",
                 c["in"]

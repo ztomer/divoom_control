@@ -14,7 +14,10 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let hour_type = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("hour_type")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("hour_type"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             match dev.send_command(0x2c, &[hour_type], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
@@ -30,7 +33,10 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let g = |i: usize, k: &str, d: i64| {
                 args.get(i)
                     .copied()
-                    .or_else(|| kw.and_then(|v| v.get(k)).and_then(|v| v.as_i64()))
+                    .or_else(|| {
+                        kw.and_then(|v| v.get(k))
+                            .and_then(serde_json::Value::as_i64)
+                    })
                     .unwrap_or(d)
             };
             // R72 P1.2: refuse a call that supplies no time at all.
@@ -48,13 +54,11 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             // values (they are user intent, in the user's timezone); the daemon
             // owns the PACKET, which is what the duplicate was really about.
             let supplied = !args.is_empty()
-                || kw
-                    .map(|m| {
-                        ["year", "month", "day", "hour", "minute", "second"]
-                            .iter()
-                            .any(|k| m.contains_key(*k))
-                    })
-                    .unwrap_or(false);
+                || kw.is_some_and(|m| {
+                    ["year", "month", "day", "hour", "minute", "second"]
+                        .iter()
+                        .any(|k| m.contains_key(*k))
+                });
             if !supplied {
                 return err_reply(
                     "set_date_time needs the time: pass year/month/day/hour/minute/second \
@@ -88,7 +92,10 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let control = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("control")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("control"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let password = raw_args
                 .get(1)
@@ -115,7 +122,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         }
         "device.get_work_mode" | "system.get_work_mode" | "get_work_mode" => {
             match dev.send_command_and_wait(0x13, &[], timeout).await {
-                Some(p) if !p.is_empty() => json!({"success": true, "result": p[0] as i64}),
+                Some(p) if !p.is_empty() => json!({"success": true, "result": i64::from(p[0])}),
                 _ => json!({"success": true, "result": Value::Null}),
             }
         }
@@ -123,7 +130,10 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let mode = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("mode")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("mode"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             match dev.send_command(0x05, &[mode], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
@@ -137,9 +147,12 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .copied()
                 .or_else(|| {
                     kw.and_then(|v| v.get("channel_id"))
-                        .and_then(|v| v.as_i64())
+                        .and_then(serde_json::Value::as_i64)
                 })
-                .or_else(|| kw.and_then(|v| v.get("channel")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("channel"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             match dev.send_command(0x45, &[channel_id], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
@@ -152,7 +165,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             // i64 — so a positional set_hot(True) produced an EMPTY list, fell
             // through to a missing kwarg, and sent FALSE. Read the true index.
             let enabled = crate::device_call::pos_bool(raw_args, 0, kw, "enabled", false);
-            match dev.send_command(0x26, &[enabled as u8], true).await {
+            match dev.send_command(0x26, &[u8::from(enabled)], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("set_hot failed: {e}")),
             }
@@ -162,7 +175,10 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let key = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("key")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("key"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             match dev.send_command(0x23, &[key], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
@@ -173,7 +189,10 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let status = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("status")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("status"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             match dev.send_command(0x15, &[status], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
@@ -185,8 +204,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 Some(p) if p.len() >= 2 => json!({
                     "success": true,
                     "result": {
-                        "format": p[0] as i64,
-                        "value": p[1] as i8 as i64,
+                        "format": i64::from(p[0]),
+                        "value": i64::from(p[1] as i8),
                     }
                 }),
                 _ => json!({"success": true, "result": Value::Null}),
@@ -196,32 +215,50 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let year = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("year")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("year"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(2026) as u16;
             let month = args
                 .get(1)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("month")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("month"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(1) as u8;
             let day = args
                 .get(2)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("day")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("day"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(1) as u8;
             let hour = args
                 .get(3)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("hour")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("hour"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let minute = args
                 .get(4)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("minute")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("minute"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let num = args
                 .get(5)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("num")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("num"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
 
             let mut payload = Vec::new();
@@ -270,13 +307,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             if let Some(arr) = display_modes {
                 for mode_val in arr.iter().take(5) {
                     let mode_byte = match mode_val {
-                        Value::Bool(b) => {
-                            if *b {
-                                1
-                            } else {
-                                0
-                            }
-                        }
+                        Value::Bool(b) => u8::from(*b),
                         Value::Number(n) if n.as_i64().unwrap_or(0) != 0 => 1,
                         _ => 0,
                     };
@@ -298,8 +329,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 Some(p) if p.len() >= 7 => json!({
                     "success": true,
                     "result": {
-                        "display_modes": [p[0] as i64, p[1] as i64, p[2] as i64, p[3] as i64, p[4] as i64],
-                        "time_minutes": u16::from_le_bytes([p[5], p[6]]) as i64,
+                        "display_modes": [i64::from(p[0]), i64::from(p[1]), i64::from(p[2]), i64::from(p[3]), i64::from(p[4])],
+                        "time_minutes": i64::from(u16::from_le_bytes([p[5], p[6]])),
                     }
                 }),
                 _ => json!({"success": true, "result": Value::Null}),
@@ -317,19 +348,25 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let temp = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("temp")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("temp"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .or_else(|| {
                     kw.and_then(|v| v.get("temperature"))
-                        .and_then(|v| v.as_i64())
+                        .and_then(serde_json::Value::as_i64)
                 })
                 .unwrap_or(0) as i8;
             let weather = args
                 .get(1)
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("weather")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("weather"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .or_else(|| {
                     kw.and_then(|v| v.get("weather_type"))
-                        .and_then(|v| v.as_i64())
+                        .and_then(serde_json::Value::as_i64)
                 })
                 .unwrap_or(0) as u8;
             match dev.send_command(0x5f, &[temp as u8, weather], true).await {
@@ -341,137 +378,23 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let temp_type = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("temp_type")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("temp_type"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             match dev.send_command(0x2b, &[temp_type], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("set_temp_type failed: {e}")),
             }
         }
-        "sound.set_song_display_control"
-        | "system.set_song_display_control"
-        | "set_song_display_control"
-        | "device.set_song_display_control" => {
-            let control = args
-                .first()
-                .copied()
-                .or_else(|| kw.and_then(|v| v.get("control")).and_then(|v| v.as_i64()))
-                .unwrap_or(0) as u8;
-            match dev.send_command(0x83, &[control], true).await {
-                Ok(()) => json!({"success": true, "result": true}),
-                Err(e) => err_reply(&format!("set_song_display_control failed: {e}")),
+        _ => {
+            // `sound.*` lives in its own module; anything it does not
+            // claim falls through to the one unimplemented answer.
+            if let Some(v) = super::system_sound::handle(method, ctx).await {
+                return v;
             }
+            err_reply("unimplemented system command")
         }
-        "sound.set_power_on_voice_volume"
-        | "system.set_power_on_voice_volume"
-        | "set_power_on_voice_volume"
-        | "device.set_power_on_voice_volume" => {
-            let control = args
-                .first()
-                .copied()
-                .or_else(|| kw.and_then(|v| v.get("control")).and_then(|v| v.as_i64()))
-                .unwrap_or(0) as u8;
-            let volume = args
-                .get(1)
-                .copied()
-                .or_else(|| kw.and_then(|v| v.get("volume")).and_then(|v| v.as_i64()))
-                .unwrap_or(0) as u8;
-            let payload = if control == 1 {
-                vec![control, volume]
-            } else {
-                vec![control]
-            };
-            match dev.send_command(0xbb, &payload, true).await {
-                Ok(()) => json!({"success": true, "result": true}),
-                Err(e) => err_reply(&format!("set_power_on_voice_volume failed: {e}")),
-            }
-        }
-        "system.set_power_on_channel" | "device.set_power_on_channel" => {
-            let control = args
-                .first()
-                .copied()
-                .or_else(|| kw.and_then(|v| v.get("control")).and_then(|v| v.as_i64()))
-                .unwrap_or(0) as u8;
-            let channel_id = args
-                .get(1)
-                .copied()
-                .or_else(|| {
-                    kw.and_then(|v| v.get("channel_id"))
-                        .and_then(|v| v.as_i64())
-                })
-                .unwrap_or(0) as u8;
-            let payload = if control == 1 {
-                vec![control, channel_id]
-            } else {
-                vec![control]
-            };
-            match dev.send_command(0x8a, &payload, true).await {
-                Ok(()) => json!({"success": true, "result": true}),
-                Err(e) => err_reply(&format!("set_power_on_channel failed: {e}")),
-            }
-        }
-        "system.set_boot_gif" | "device.set_boot_gif" => {
-            let on_off = args
-                .first()
-                .copied()
-                .or_else(|| kw.and_then(|v| v.get("on_off")).and_then(|v| v.as_i64()))
-                .unwrap_or(0) as u8;
-            let total_length = args
-                .get(1)
-                .copied()
-                .or_else(|| {
-                    kw.and_then(|v| v.get("total_length"))
-                        .and_then(|v| v.as_i64())
-                })
-                .unwrap_or(0) as u16;
-            let gif_id = args
-                .get(2)
-                .copied()
-                .or_else(|| kw.and_then(|v| v.get("gif_id")).and_then(|v| v.as_i64()))
-                .unwrap_or(0) as u8;
-            let data: Vec<u8> = raw_args
-                .get(3)
-                .and_then(|v| v.as_array())
-                .or_else(|| kw.and_then(|v| v.get("data")).and_then(|v| v.as_array()))
-                .map(|a| {
-                    a.iter()
-                        .filter_map(|x| x.as_u64().map(|n| n as u8))
-                        .collect()
-                })
-                .unwrap_or_default();
-
-            let mut payload = Vec::with_capacity(4 + data.len());
-            payload.push(on_off);
-            payload.extend_from_slice(&total_length.to_le_bytes());
-            payload.push(gif_id);
-            payload.extend_from_slice(&data);
-
-            match dev.send_command(0x52, &payload, true).await {
-                Ok(()) => json!({"success": true, "result": true}),
-                Err(e) => err_reply(&format!("set_boot_gif failed: {e}")),
-            }
-        }
-        "sound.set_sound_control"
-        | "system.set_sound_control"
-        | "set_sound_control"
-        | "device.set_sound_control" => {
-            let enable = args
-                .first()
-                .copied()
-                .or_else(|| kw.and_then(|v| v.get("enable")).and_then(|v| v.as_i64()))
-                .unwrap_or(0) as u8;
-            match dev.send_command(0xa7, &[enable], true).await {
-                Ok(()) => json!({"success": true, "result": true}),
-                Err(e) => err_reply(&format!("set_sound_control failed: {e}")),
-            }
-        }
-        "sound.get_sound_control"
-        | "system.get_sound_control"
-        | "get_sound_control"
-        | "device.get_sound_control" => match dev.send_command_and_wait(0xa8, &[], timeout).await {
-            Some(p) if !p.is_empty() => json!({"success": true, "result": p[0] as i64}),
-            _ => json!({"success": true, "result": Value::Null}),
-        },
-        _ => err_reply("unimplemented system command"),
     }
 }

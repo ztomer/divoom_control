@@ -75,6 +75,7 @@ impl Drop for Lease {
 }
 
 impl Registry {
+    #[must_use]
     pub fn new(capacity: usize, renegotiate_after: Duration) -> Arc<Self> {
         Arc::new(Self {
             capacity: capacity.max(1),
@@ -166,14 +167,14 @@ impl Registry {
     }
 
     pub fn len(&self) -> usize {
-        self.state.lock().map(|s| s.entries.len()).unwrap_or(0)
+        self.state.lock().map_or(0, |s| s.entries.len())
     }
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
-    pub fn capacity(&self) -> usize {
+    pub const fn capacity(&self) -> usize {
         self.capacity
     }
 }

@@ -1,7 +1,9 @@
-//! Unix-socket NDJSON server — the request/reply transport, ported from
-//! the archived Python socket_server.py. This is the conformance seam: a client (the
-//! Python GUI/menubar/CLI, or the Python test suite as an oracle) connects, sends
-//! one `{"command","args","token"?}` line, and reads one reply line.
+//! Unix-socket NDJSON server — the request/reply transport, ported from the
+//! archived Python `socket_server.py`.
+//!
+//! This is the conformance seam: a client (the Python GUI/menubar/CLI, or the
+//! Python test suite as an oracle) connects, sends one
+//! `{"command","args","token"?}` line, and reads one reply line.
 //!
 //! The device/command logic is injected through the [`Handler`] trait so this
 //! transport is fully testable without hardware: the real daemon plugs in the
@@ -21,10 +23,11 @@ use crate::subscriptions::{Registry, RENEGOTIATE_AFTER};
 
 use crate::protocol::{encode_message, err_reply, iter_messages, Request, MAX_REPLY_BYTES};
 
-/// Max concurrent client connections. Connection 65 onward is back-pressured
-/// (the accept loop waits for a free permit) rather than unbounded — a runaway
-/// or hostile client can't exhaust fds/tasks. Tunable via
-/// `DIVOOMD_MAX_CONNECTIONS`.
+/// Max concurrent client connections.
+///
+/// Connection 65 onward is back-pressured (the accept loop waits for a free
+/// permit) rather than unbounded — a runaway or hostile client can't exhaust
+/// fds/tasks. Tunable via `DIVOOMD_MAX_CONNECTIONS`.
 ///
 /// The doc said "a 6th+ connection" while the constant was 64, left over from an
 /// earlier value. Harmless as prose, but it is the number a reader uses to judge
@@ -61,6 +64,7 @@ pub const MAX_SUBSCRIPTIONS: usize = 8;
 /// and the test written to prove requests survive saturation failed on exactly
 /// that. Reserving a fraction, rather than a constant, keeps the guarantee true
 /// at every budget.
+#[must_use]
 pub fn subscription_budget(max_connections: usize) -> usize {
     (max_connections / 2).clamp(1, MAX_SUBSCRIPTIONS)
 }
@@ -103,14 +107,18 @@ pub const WRITE_TIMEOUT: Duration = Duration::from_secs(10);
 pub const LAG_BUDGET: u64 = 64;
 
 /// Drop a connection that sends nothing for this long (no newline-terminated
-/// request). Closes the "connect and hold the socket open silently" wedge where a
-/// dead client pins a permit + the device lock forever. Tunable via
+/// request).
+///
+/// Closes the "connect and hold the socket open silently" wedge where a dead
+/// client pins a permit + the device lock forever. Tunable via
 /// `DIVOOMD_IDLE_TIMEOUT_SECS`.
 pub const CONNECTION_IDLE_TIMEOUT: Duration = Duration::from_secs(300);
 
-/// Dispatches a parsed request to a reply. Object-safe + Send-explicit so each
-/// connection can be served on its own task. The real implementation routes to the
-/// device owner / command queue; tests use a stub.
+/// Dispatches a parsed request to a reply.
+///
+/// Object-safe + Send-explicit so each connection can be served on its own
+/// task. The real implementation routes to the device owner / command queue;
+/// tests use a stub.
 pub trait Handler: Send + Sync + 'static {
     fn handle<'a>(&'a self, req: Request) -> Pin<Box<dyn Future<Output = Value> + Send + 'a>>;
     /// Get a receiver for the broadcast event stream.
@@ -146,9 +154,11 @@ fn constant_time_eq(a: &str, b: &str) -> bool {
 }
 
 /// Serve a single connection: accumulate bytes, split into NDJSON requests,
-/// dispatch each, and write back one reply line per request. Returns when the peer
-/// closes (EOF) or on an I/O error. A peer that never sends a newline can't grow
-/// the buffer past `MAX_REPLY_BYTES` (the connection is dropped instead).
+/// dispatch each, and write back one reply line per request.
+///
+/// Returns when the peer closes (EOF) or on an I/O error. A peer that never
+/// sends a newline can't grow the buffer past `MAX_REPLY_BYTES` (the connection
+/// is dropped instead).
 pub async fn serve_connection<S, H>(
     mut stream: S,
     handler: Arc<H>,
@@ -165,10 +175,10 @@ where
     let mut tmp = [0u8; 4096];
     loop {
         let n = match tokio::time::timeout(idle_timeout, stream.read(&mut tmp)).await {
-            Ok(Ok(0)) => return Ok(()), // EOF — peer closed
+            Ok(Ok(0)) | Err(_) => return Ok(()), // EOF — peer closed
             Ok(Ok(k)) => k,
             Ok(Err(e)) => return Err(e),
-            Err(_) => return Ok(()), // idle: dead/silent peer, drop
+            // idle: dead/silent peer, drop
         };
         buf.extend_from_slice(&tmp[..n]);
         if buf.len() > MAX_REPLY_BYTES {
@@ -187,14 +197,12 @@ where
                     continue;
                 }
             };
-            let req = match serde_json::from_value::<Request>(msg) {
-                Ok(req) => req,
-                Err(_) => {
-                    let reply =
-                        err_reply("bad request: expected an object with a 'command' string");
-                    stream.write_all(&encode_message(&reply)).await?;
-                    continue;
-                }
+            let req = if let Ok(req) = serde_json::from_value::<Request>(msg) {
+                req
+            } else {
+                let reply = err_reply("bad request: expected an object with a 'command' string");
+                stream.write_all(&encode_message(&reply)).await?;
+                continue;
             };
             if require_auth {
                 let supplied = req.token.as_deref().unwrap_or("");
@@ -211,16 +219,15 @@ where
                     // and scarcer: see MAX_SUBSCRIPTIONS. Refusing here keeps
                     // request capacity available no matter how many subscribers
                     // pile up, and tells the client why instead of hanging.
-                    let lease = match subscriptions.admit() {
-                        Some(l) => l,
-                        None => {
-                            let reply = err_reply(
-                                "too many active subscriptions; every slot is held by a \
-                                 client that is demonstrably still active",
-                            );
-                            stream.write_all(&encode_message(&reply)).await?;
-                            continue;
-                        }
+                    let lease = if let Some(l) = subscriptions.admit() {
+                        l
+                    } else {
+                        let reply = err_reply(
+                            "too many active subscriptions; every slot is held by a \
+                             client that is demonstrably still active",
+                        );
+                        stream.write_all(&encode_message(&reply)).await?;
+                        continue;
                     };
                     let evict = lease.evict.clone();
                     let lease_id = lease.id;
@@ -235,8 +242,8 @@ where
                         tokio::select! {
                             n = stream.read(&mut tmp) => {
                                 match n {
-                                    Ok(0) => break, // EOF
-                                    Err(_) => break, // error
+                                    // EOF
+                                    Ok(0) | Err(_) => break, // error
                                     // Any byte from the client is liveness
                                     // evidence, and the only kind there is:
                                     // deliveries are a broadcast, so they move
@@ -299,8 +306,8 @@ where
                                     }
                                 }
                             }
-                            _ = tokio::time::sleep_until(deadline) => break, // quiet channel: drop
-                            _ = evict.notified() => {
+                            () = tokio::time::sleep_until(deadline) => break, // quiet channel: drop
+                            () = evict.notified() => {
                                 // Our slot was reclaimed for a newcomer because
                                 // this client had gone quiet. Say why, so it
                                 // reads as a renegotiation and not a fault.
@@ -411,23 +418,20 @@ pub async fn serve<H: Handler>(
             Ok(v) => v,
             Err(_) => continue,
         };
-        match sem.clone().try_acquire_owned() {
-            Ok(permit) => {
-                let h = handler.clone();
-                let s = subs.clone();
-                tokio::spawn(async move {
-                    let _permit = permit; // held for the connection's lifetime
-                    let _ = serve_connection(stream, h, false, None, idle_timeout, s).await;
-                });
-            }
-            Err(_) => {
-                eprintln!(
-                    "divoomd: at the connection cap ({max_connections}); refusing a client. \
-                     Something is holding connections open — check `lsof` on the socket. \
-                     Raise DIVOOMD_MAX_CONNECTIONS if the cap is genuinely too low."
-                );
-                tokio::spawn(refuse_at_capacity(stream, max_connections));
-            }
+        if let Ok(permit) = sem.clone().try_acquire_owned() {
+            let h = handler.clone();
+            let s = subs.clone();
+            tokio::spawn(async move {
+                let _permit = permit; // held for the connection's lifetime
+                let _ = serve_connection(stream, h, false, None, idle_timeout, s).await;
+            });
+        } else {
+            eprintln!(
+                "divoomd: at the connection cap ({max_connections}); refusing a client. \
+                 Something is holding connections open — check `lsof` on the socket. \
+                 Raise DIVOOMD_MAX_CONNECTIONS if the cap is genuinely too low."
+            );
+            tokio::spawn(refuse_at_capacity(stream, max_connections));
         }
     }
 }

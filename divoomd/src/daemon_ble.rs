@@ -1,6 +1,6 @@
 //! BLE central lifecycle for the daemon (split out of `daemon.rs` for the
 //! 500-LOC house rule). Owns lazy (re)creation + reset of the shared
-//! CoreBluetooth central and scan cleanup on shutdown.
+//! `CoreBluetooth` central and scan cleanup on shutdown.
 use btleplug::api::Central;
 
 use crate::ble;
@@ -8,7 +8,7 @@ use crate::central::BleCentral;
 use crate::daemon::Daemon;
 
 impl Daemon {
-    /// Get (creating + caching once) the shared CoreBluetooth central.
+    /// Get (creating + caching once) the shared `CoreBluetooth` central.
     #[cfg(feature = "ble")]
     pub(crate) async fn central(&self) -> Result<BleCentral, String> {
         let mut g = self.central.lock().await;
@@ -19,7 +19,7 @@ impl Daemon {
     }
 
     /// Drop the cached central so the next `central()` recreates it. btleplug
-    /// reports a dead CoreBluetooth session as "Channel closed" (the session ends
+    /// reports a dead `CoreBluetooth` session as "Channel closed" (the session ends
     /// after a device disconnect or a Bluetooth toggle); the stale Adapter can't
     /// recover, so every scan/connect fails until it's rebuilt. This lets the
     /// daemon self-heal without a restart.

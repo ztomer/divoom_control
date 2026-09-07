@@ -1,8 +1,8 @@
 //! Build script: on macOS, embed `daemon_info.plist` into the binary as a
 //! `__TEXT,__info_plist` section. A loose helper binary needs its own embedded
-//! Info.plist (with NSBluetoothAlwaysUsageDescription) for macOS TCC to
+//! Info.plist (with `NSBluetoothAlwaysUsageDescription`) for macOS TCC to
 //! attribute/prompt a Bluetooth grant when the GUI .app spawns it — otherwise
-//! CoreBluetooth is silently denied (no prompt). No-op on Linux/Windows.
+//! `CoreBluetooth` is silently denied (no prompt). No-op on Linux/Windows.
 
 fn main() {
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {

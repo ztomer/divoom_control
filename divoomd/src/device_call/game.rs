@@ -14,7 +14,10 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let value = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("value")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("value"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             let payload = if value > 0 {
                 [0x01, value]
@@ -36,7 +39,10 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let key = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("key")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("key"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             match dev.send_command(0x17, &[key], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
@@ -47,7 +53,10 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let key = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("key")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("key"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             match dev.send_command(0x21, &[key], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
@@ -58,7 +67,10 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let answer = args
                 .first()
                 .copied()
-                .or_else(|| kw.and_then(|v| v.get("answer")).and_then(|v| v.as_i64()))
+                .or_else(|| {
+                    kw.and_then(|v| v.get("answer"))
+                        .and_then(serde_json::Value::as_i64)
+                })
                 .unwrap_or(0) as u8;
             match dev.send_command(0x88, &[answer], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
@@ -69,9 +81,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let value_arg = raw_args.first().or_else(|| kw.and_then(|v| v.get("value")));
 
             let control_value = match value_arg {
-                None => 0,
                 Some(Value::String(s)) => match s.to_lowercase().as_str() {
-                    "go" => 0,
                     "left" => 1,
                     "right" => 2,
                     "up" => 3,

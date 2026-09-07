@@ -9,7 +9,7 @@
 //! pointed at a file that did not exist.
 //!
 //! Searching UP for a known marker directory is immune to that whole class. It
-//! also handles layouts a fixed count never could -- a shared CARGO_TARGET_DIR,
+//! also handles layouts a fixed count never could -- a shared `CARGO_TARGET_DIR`,
 //! `cargo run`, or an installed .app bundle.
 
 use std::path::{Path, PathBuf};
@@ -20,6 +20,7 @@ const MAX_DEPTH: usize = 8;
 
 /// Walk up from `start` looking for a directory that contains `marker`.
 /// Returns that containing directory (the repo root), not the marker itself.
+#[must_use]
 pub fn find_root_containing_from(start: &Path, marker: &str) -> Option<PathBuf> {
     let mut dir = start;
     for _ in 0..MAX_DEPTH {
@@ -33,6 +34,7 @@ pub fn find_root_containing_from(start: &Path, marker: &str) -> Option<PathBuf> 
 }
 
 /// Same, anchored at the running executable.
+#[must_use]
 pub fn find_root_containing(marker: &str) -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     find_root_containing_from(&exe, marker)

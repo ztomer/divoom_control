@@ -1,6 +1,6 @@
 //! NDJSON socket-protocol behavior + COMMANDS map parity. Mirrors the framing
-//! semantics of divoom_client/daemon_protocol.py (iter_messages / encode_message /
-//! make_request) and pins a few command ids against divoom_lib.models.COMMANDS.
+//! semantics of `divoom_client/daemon_protocol.py` (`iter_messages` / `encode_message` /
+//! `make_request`) and pins a few command ids against `divoom_lib.models.COMMANDS`.
 
 use divoomd::commands::{command_id, COMMAND_COUNT};
 use divoomd::protocol::{

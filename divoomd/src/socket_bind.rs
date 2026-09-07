@@ -27,7 +27,7 @@
 //! * **The check and the bind were not atomic.** Two daemons starting together
 //!   both saw "nothing listening", both unlinked, and both bound. The loser's
 //!   listener stayed open on an unlinked inode: reachable by nobody, invisible
-//!   to every UI, still holding the single-owner CoreBluetooth central. That is
+//!   to every UI, still holding the single-owner `CoreBluetooth` central. That is
 //!   the 34-hour orphan described in [`crate::socket_owner`], and it is created
 //!   *here*, at startup — the ownership check only limits the damage at exit.
 //! * **The user never saw the reason.** The daemon is spawned detached by the
@@ -114,7 +114,7 @@ impl StartupLock {
     /// Crate-visible rather than private so [`crate::socket_owner`]'s tests can
     /// build a `HeldSocket` without going through a real `acquire`; taking the
     /// lock is `acquire`'s job and stays here.
-    pub(crate) fn hold(file: std::fs::File) -> Self {
+    pub(crate) const fn hold(file: std::fs::File) -> Self {
         Self { _file: file }
     }
 }
@@ -141,11 +141,13 @@ impl Acquired {
 }
 
 /// The path of the sidecar lock for a socket.
+#[must_use]
 pub fn lock_path(socket_path: &str) -> String {
     format!("{socket_path}.lock")
 }
 
 /// The path of the sidecar failure report for a socket.
+#[must_use]
 pub fn failure_path(socket_path: &str) -> String {
     format!("{socket_path}.failure")
 }
@@ -174,7 +176,6 @@ fn probe(path: &str) -> Occupant {
         Err(e) => {
             return match e.kind() {
                 // Nobody is accepting: the file outlived its process.
-                ErrorKind::ConnectionRefused => Occupant::StaleSocket,
                 ErrorKind::PermissionDenied => Occupant::Denied(e.to_string()),
                 ErrorKind::NotFound => Occupant::Nothing,
                 _ => Occupant::StaleSocket,

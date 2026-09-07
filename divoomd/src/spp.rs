@@ -76,8 +76,10 @@ impl SppTransport {
                         conn_clone.notify_one();
                         break;
                     } else if ty == "notification" {
-                        let cmd_id =
-                            val.get("command_id").and_then(|v| v.as_u64()).unwrap_or(0) as u8;
+                        let cmd_id = val
+                            .get("command_id")
+                            .and_then(serde_json::Value::as_u64)
+                            .unwrap_or(0) as u8;
                         let payload: Vec<u8> = val
                             .get("payload")
                             .and_then(|v| serde_json::from_value(v.clone()).ok())
@@ -95,8 +97,8 @@ impl SppTransport {
 
         // Wait for connection callback
         tokio::select! {
-            _ = connected_notify.notified() => {}
-            _ = tokio::time::sleep(Duration::from_secs(12)) => {
+            () = connected_notify.notified() => {}
+            () = tokio::time::sleep(Duration::from_secs(12)) => {
                 let _ = child.kill().await;
                 return Err("SPP connection timeout".into());
             }
@@ -111,7 +113,7 @@ impl SppTransport {
         let transport = Self {
             child_stdin: Arc::new(Mutex::new(stdin)),
             rx: Arc::new(Mutex::new(rx)),
-            device_name: std::sync::Mutex::new(device_name.map(|s| s.to_string())),
+            device_name: std::sync::Mutex::new(device_name.map(std::string::ToString::to_string)),
             protocol: std::sync::Mutex::new(Protocol::Basic),
         };
 
@@ -129,7 +131,7 @@ impl SppTransport {
     pub async fn disconnect(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let msg = json!({"command": "disconnect"});
         let mut stdin = self.child_stdin.lock().await;
-        let _ = stdin.write_all(format!("{}\n", msg).as_bytes()).await;
+        let _ = stdin.write_all(format!("{msg}\n").as_bytes()).await;
         let _ = stdin.flush().await;
         Ok(())
     }
@@ -157,7 +159,7 @@ impl SppTransport {
         });
 
         let mut stdin = self.child_stdin.lock().await;
-        stdin.write_all(format!("{}\n", msg).as_bytes()).await?;
+        stdin.write_all(format!("{msg}\n").as_bytes()).await?;
         stdin.flush().await?;
         Ok(())
     }
@@ -268,7 +270,7 @@ impl SppTransport {
         }
 
         // Phase 3: Retransmit listen
-        let loop_deadline = std::time::Instant::now() + Duration::from_millis(15000);
+        let loop_deadline = std::time::Instant::now() + Duration::from_secs(15);
         loop {
             let remaining = loop_deadline.saturating_duration_since(std::time::Instant::now());
             if remaining.is_zero() {
@@ -277,7 +279,7 @@ impl SppTransport {
             match tokio::time::timeout(Duration::from_millis(1000), rx.recv()).await {
                 Ok(Some(frame)) if frame.command_id == CMD => {
                     if frame.payload.len() >= 3 && frame.payload[0] == 1 {
-                        let idx = ((frame.payload[2] as u16) << 8) | (frame.payload[1] as u16);
+                        let idx = (u16::from(frame.payload[2]) << 8) | u16::from(frame.payload[1]);
                         let offset = idx as usize * CHUNK_SIZE;
                         if offset < blob.len() {
                             let chunk_len = std::cmp::min(CHUNK_SIZE, blob.len() - offset);

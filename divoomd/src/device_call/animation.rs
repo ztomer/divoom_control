@@ -1,9 +1,9 @@
 //! Animation upload primitives — parity port of `divoom_lib/display/animation.py`
 //! + `animation_user.py`. These are low-level gif/user-define chunk commands
-//!   (the daemon's normal animation path is 0x8B streaming via show_image); ported
-//!   verbatim for device_call dispatch parity. Byte orders match Python exactly.
+//!   (the daemon's normal animation path is 0x8B streaming via `show_image`); ported
+//!   verbatim for `device_call` dispatch parity. Byte orders match Python exactly.
 //!
-//! Data arrays (gif_data / file_data / data) arrive over device_call as JSON
+//! Data arrays (`gif_data` / `file_data` / data) arrive over `device_call` as JSON
 //! arrays of u8 in `kwargs` (or positional `args`/`blobs[0]` for the big chunk).
 
 use serde_json::{json, Map, Value};
@@ -13,7 +13,8 @@ use crate::daemon::DeviceTransport;
 use crate::protocol::err_reply;
 
 fn kw_i64(kw: Option<&Map<String, Value>>, name: &str) -> Option<i64> {
-    kw.and_then(|m| m.get(name)).and_then(|v| v.as_i64())
+    kw.and_then(|m| m.get(name))
+        .and_then(serde_json::Value::as_i64)
 }
 
 /// Bytes from a kwarg: JSON array of u8, else empty.
@@ -28,13 +29,13 @@ fn kw_bytes(kw: Option<&Map<String, Value>>, name: &str) -> Vec<u8> {
         .unwrap_or_default()
 }
 
-fn le16(v: i64) -> [u8; 2] {
+const fn le16(v: i64) -> [u8; 2] {
     (v as u16).to_le_bytes()
 }
-fn le32(v: i64) -> [u8; 4] {
+const fn le32(v: i64) -> [u8; 4] {
     (v as u32).to_le_bytes()
 }
-fn be32(v: i64) -> [u8; 4] {
+const fn be32(v: i64) -> [u8; 4] {
     (v as u32).to_be_bytes()
 }
 
@@ -230,7 +231,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .send_command_and_wait(0xb6, &[data as u8], ctx.timeout)
                 .await
             {
-                Some(r) if !r.is_empty() => json!({"success": true, "result": r[0] as i64}),
+                Some(r) if !r.is_empty() => json!({"success": true, "result": i64::from(r[0])}),
                 _ => json!({"success": true, "result": Value::Null}),
             }
         }
@@ -267,8 +268,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     }
 }
 
-/// pos(1 BE) + total_length(2 LE) + gif_id(1 BE) + *data — shared by set_rhythm_gif
-/// (0xb7) and app_send_eq_gif (0x1b).
+/// pos(1 BE) + `total_length(2` LE) + `gif_id(1` BE) + *data — shared by `set_rhythm_gif`
+/// (0xb7) and `app_send_eq_gif` (0x1b).
 fn rhythm_payload(args: &[i64], kw: Option<&Map<String, Value>>) -> Vec<u8> {
     let pos = kw_i64(kw, "pos")
         .or_else(|| args.first().copied())
@@ -294,7 +295,12 @@ fn parse_user_define_info(r: &[u8]) -> Value {
         for i in 0..num {
             let s = 8 + i * 4;
             if r.len() >= s + 4 {
-                file_ids.push(u32::from_be_bytes([r[s], r[s + 1], r[s + 2], r[s + 3]]) as i64);
+                file_ids.push(i64::from(u32::from_be_bytes([
+                    r[s],
+                    r[s + 1],
+                    r[s + 2],
+                    r[s + 3],
+                ])));
             }
         }
         json!({

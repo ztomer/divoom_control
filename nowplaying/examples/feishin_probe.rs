@@ -7,7 +7,7 @@ fn main() {
         Some(t) => println!(
             "feishin track: {} (artwork {:?} bytes)",
             t.display(),
-            t.artwork.as_ref().map(|a| a.len())
+            t.artwork.as_ref().map(nowplaying::Artwork::len)
         ),
         None => println!("feishin: getNowPlaying returned no entry"),
     }

@@ -1,7 +1,9 @@
 //! Daemon socket protocol — newline-delimited JSON ("NDJSON"), ported from
-//! `divoom_client/daemon_protocol.py`. This is the language-agnostic seam: the
-//! Python GUI/menubar/CLI clients talk to either daemon over it unchanged, and the
-//! Python test suite becomes the conformance oracle for the Rust server.
+//! `divoom_client/daemon_protocol.py`.
+//!
+//! This is the language-agnostic seam: the Python GUI/menubar/CLI clients talk
+//! to either daemon over it unchanged, and the Python test suite becomes the
+//! conformance oracle for the Rust server.
 //!
 //! JSON is order-independent, so messages are matched semantically (not byte-for-
 //! byte on key order); the Python client parses, it does not byte-compare.
@@ -18,6 +20,7 @@ pub const MAX_REPLY_BYTES: usize = 16 * 1024 * 1024;
 
 /// One NDJSON line: compact JSON + `\n`. (`serde_json` is compact by default,
 /// matching Python's `json.dumps(separators=(",", ":"))`.)
+#[must_use]
 pub fn encode_message(obj: &Value) -> Vec<u8> {
     let mut v = serde_json::to_vec(obj).expect("a serde_json::Value always serializes");
     v.push(b'\n');
@@ -25,9 +28,11 @@ pub fn encode_message(obj: &Value) -> Vec<u8> {
 }
 
 /// Split a byte buffer into complete JSON messages + the trailing remainder.
+///
 /// Blank lines are skipped; a malformed line is skipped (not an error) so one bad
 /// frame can't wedge the stream. Mirrors `iter_messages`: `*lines, remainder =
 /// buffer.split(b"\n")`.
+#[must_use]
 pub fn iter_messages(buffer: &[u8]) -> (Vec<Result<Value, String>>, Vec<u8>) {
     let mut parts: Vec<&[u8]> = buffer.split(|&b| b == b'\n').collect();
     // split always yields >= 1 element; the last is the bytes after the final '\n'.
@@ -73,6 +78,7 @@ pub const PROTOCOL_VERSION: &str = "1.1";
 /// A client that wants a feature can ASK instead of calling and interpreting an
 /// error string — error text is not an API, and matching on it is how clients
 /// break when a message is reworded.
+#[must_use]
 pub fn protocol_capabilities() -> Vec<&'static str> {
     vec![
         "device_call",
@@ -88,7 +94,7 @@ pub fn protocol_capabilities() -> Vec<&'static str> {
 }
 
 /// A client request: `{"command": ..., "args": {...}, "token"?: ...}`.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Request {
     pub command: String,
     #[serde(default)]
@@ -97,7 +103,8 @@ pub struct Request {
     pub token: Option<String>,
 }
 
-/// Build a request (args defaults to an empty object, like Python's make_request).
+/// Build a request (args defaults to an empty object, like Python's `make_request`).
+#[must_use]
 pub fn make_request(command: &str, args: Option<Value>, token: Option<String>) -> Request {
     Request {
         command: command.to_string(),
@@ -107,11 +114,13 @@ pub fn make_request(command: &str, args: Option<Value>, token: Option<String>) -
 }
 
 /// A successful reply `{"success": true, ...extra}`.
+#[must_use]
 pub fn ok_reply(extra: Value) -> Value {
     merge_success(true, extra, None)
 }
 
 /// An error reply `{"success": false, "error": msg}`.
+#[must_use]
 pub fn err_reply(msg: &str) -> Value {
     merge_success(false, Value::Object(serde_json::Map::new()), Some(msg))
 }

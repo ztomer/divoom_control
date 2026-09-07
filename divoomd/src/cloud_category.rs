@@ -11,9 +11,10 @@ use crate::cloud::{
 
 /// Default "Classify" for `GetCategoryFileListV2` (the pixel-art / monthly-best
 /// gallery) — matches the app's own default tab (`divoom_gui/web_ui/gallery.js`
-/// falls back to 18 when no tab is selected). NOT related to the clock-face
-/// store, which is a different endpoint pair — see `get_dial_types`/
-/// `get_dial_list` below.
+/// falls back to 18 when no tab is selected).
+///
+/// NOT related to the clock-face store, which is a different endpoint pair —
+/// see `get_dial_types`/ `get_dial_list` below.
 pub const DEFAULT_GALLERY_CLASSIFY: i64 = 18;
 
 pub async fn fetch_gallery(
@@ -54,7 +55,7 @@ pub async fn fetch_gallery(
         body
     };
 
-    let url = format!("{}/GetCategoryFileListV2", BASE_URL);
+    let url = format!("{BASE_URL}/GetCategoryFileListV2");
     let mut req_body = make_request(&creds);
     let mut resp = client
         .post(&url)
@@ -66,7 +67,7 @@ pub async fn fetch_gallery(
     let mut data: Value = resp.json().await.map_err(|e| e.to_string())?;
     let mut rc = data
         .get("ReturnCode")
-        .and_then(|v| v.as_i64())
+        .and_then(serde_json::Value::as_i64)
         .unwrap_or(-1);
 
     if rc == 9 || rc == 10 || rc == 11 {
@@ -81,7 +82,7 @@ pub async fn fetch_gallery(
         data = resp.json().await.map_err(|e| e.to_string())?;
         rc = data
             .get("ReturnCode")
-            .and_then(|v| v.as_i64())
+            .and_then(serde_json::Value::as_i64)
             .unwrap_or(-1);
     }
 
@@ -132,7 +133,7 @@ pub async fn get_category_file_list(classify: i64, limit: i64) -> Result<Value, 
         body
     };
 
-    let url = format!("{}/GetCategoryFileListV2", BASE_URL);
+    let url = format!("{BASE_URL}/GetCategoryFileListV2");
     let mut req_body = make_request(&creds);
     let mut resp = client
         .post(&url)
@@ -143,7 +144,7 @@ pub async fn get_category_file_list(classify: i64, limit: i64) -> Result<Value, 
     let mut data: Value = resp.json().await.map_err(|e| e.to_string())?;
     let mut rc = data
         .get("ReturnCode")
-        .and_then(|v| v.as_i64())
+        .and_then(serde_json::Value::as_i64)
         .unwrap_or(-1);
 
     if rc == 9 || rc == 10 || rc == 11 {
@@ -158,7 +159,7 @@ pub async fn get_category_file_list(classify: i64, limit: i64) -> Result<Value, 
         data = resp.json().await.map_err(|e| e.to_string())?;
         rc = data
             .get("ReturnCode")
-            .and_then(|v| v.as_i64())
+            .and_then(serde_json::Value::as_i64)
             .unwrap_or(-1);
     }
 
@@ -204,7 +205,7 @@ pub async fn search_weather_city(keyword: &str) -> Result<Value, String> {
         body
     };
 
-    let url = format!("{}/Weather/SearchCity", BASE_URL);
+    let url = format!("{BASE_URL}/Weather/SearchCity");
     let mut req_body = make_request(&creds);
     let mut resp = client
         .post(&url)
@@ -215,7 +216,7 @@ pub async fn search_weather_city(keyword: &str) -> Result<Value, String> {
     let mut data: Value = resp.json().await.map_err(|e| e.to_string())?;
     let mut rc = data
         .get("ReturnCode")
-        .and_then(|v| v.as_i64())
+        .and_then(serde_json::Value::as_i64)
         .unwrap_or(-1);
 
     // Same expired-token family (RC 9/10/11) that fetch_gallery/get_category_file_list
@@ -232,7 +233,7 @@ pub async fn search_weather_city(keyword: &str) -> Result<Value, String> {
         data = resp.json().await.map_err(|e| e.to_string())?;
         rc = data
             .get("ReturnCode")
-            .and_then(|v| v.as_i64())
+            .and_then(serde_json::Value::as_i64)
             .unwrap_or(-1);
     }
 
@@ -331,7 +332,7 @@ async fn get_aid_sleep_list(
         body
     };
 
-    let url = format!("{}/{}", BASE_URL, cmd);
+    let url = format!("{BASE_URL}/{cmd}");
     let mut req_body = make_request(&creds);
     let mut resp = client
         .post(&url)
@@ -342,7 +343,7 @@ async fn get_aid_sleep_list(
     let mut data: Value = resp.json().await.map_err(|e| e.to_string())?;
     let mut rc = data
         .get("ReturnCode")
-        .and_then(|v| v.as_i64())
+        .and_then(serde_json::Value::as_i64)
         .unwrap_or(-1);
 
     if rc == 9 || rc == 10 || rc == 11 {
@@ -357,7 +358,7 @@ async fn get_aid_sleep_list(
         data = resp.json().await.map_err(|e| e.to_string())?;
         rc = data
             .get("ReturnCode")
-            .and_then(|v| v.as_i64())
+            .and_then(serde_json::Value::as_i64)
             .unwrap_or(-1);
     }
 
@@ -374,7 +375,7 @@ async fn get_aid_sleep_list(
         .unwrap_or(Value::Array(vec![])))
 }
 
-/// Browse Divoom's full cloud AidSleep catalog. `sleep_type`: 0=Natural
+/// Browse Divoom's full cloud `AidSleep` catalog. `sleep_type`: 0=Natural
 /// Sound, 1=White Noise, 2=Music.
 pub async fn fetch_aid_sleep_list(sleep_type: i64, limit: i64, page: i64) -> Result<Value, String> {
     get_aid_sleep_list("AidSleep/GetAllList", sleep_type, limit, page).await
@@ -398,7 +399,7 @@ pub async fn get_dial_types() -> Result<Value, String> {
         .build()
         .map_err(|e| e.to_string())?;
 
-    let url = format!("{}/Channel/GetDialType", BASE_URL);
+    let url = format!("{BASE_URL}/Channel/GetDialType");
     let resp = client
         .post(&url)
         .json(&json!({}))
@@ -408,7 +409,7 @@ pub async fn get_dial_types() -> Result<Value, String> {
     let data: Value = resp.json().await.map_err(|e| e.to_string())?;
     let rc = data
         .get("ReturnCode")
-        .and_then(|v| v.as_i64())
+        .and_then(serde_json::Value::as_i64)
         .unwrap_or(-1);
 
     if rc != 0 {
@@ -432,7 +433,7 @@ pub async fn get_dial_list(dial_type: &str, page: i64) -> Result<Value, String> 
         .build()
         .map_err(|e| e.to_string())?;
 
-    let url = format!("{}/Channel/GetDialList", BASE_URL);
+    let url = format!("{BASE_URL}/Channel/GetDialList");
     let body = json!({ "DialType": dial_type, "Page": page });
     let resp = client
         .post(&url)
@@ -443,7 +444,7 @@ pub async fn get_dial_list(dial_type: &str, page: i64) -> Result<Value, String> 
     let data: Value = resp.json().await.map_err(|e| e.to_string())?;
     let rc = data
         .get("ReturnCode")
-        .and_then(|v| v.as_i64())
+        .and_then(serde_json::Value::as_i64)
         .unwrap_or(-1);
 
     if rc != 0 {
@@ -462,18 +463,17 @@ pub async fn get_dial_list(dial_type: &str, page: i64) -> Result<Value, String> 
 /// Browse the cloud clock-face store. With no `dial_type`, use the first
 /// category from `get_dial_types`.
 pub async fn list_clock_faces(dial_type: Option<String>, page: i64) -> Result<Value, String> {
-    let dial_type = match dial_type {
-        Some(t) => t,
-        None => {
-            let types = get_dial_types().await?;
-            match types
-                .as_array()
-                .and_then(|a| a.first())
-                .and_then(|v| v.as_str())
-            {
-                Some(first) => first.to_string(),
-                None => return Ok(Value::Array(vec![])),
-            }
+    let dial_type = if let Some(t) = dial_type {
+        t
+    } else {
+        let types = get_dial_types().await?;
+        match types
+            .as_array()
+            .and_then(|a| a.first())
+            .and_then(|v| v.as_str())
+        {
+            Some(first) => first.to_string(),
+            None => return Ok(Value::Array(vec![])),
         }
     };
     get_dial_list(&dial_type, page).await

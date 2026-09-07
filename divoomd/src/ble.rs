@@ -1,6 +1,8 @@
-//! BLE transport (btleplug) — connect / notify / write against a real Divoom, on
-//! the foundation the TCC spike proved. Wires the hardware-free ported modules
-//! (`framing`, `response`, `autoprobe`) to a `Peripheral`.
+//! BLE transport (btleplug) — connect / notify / write against a real Divoom,
+//! on the foundation the TCC spike proved.
+//!
+//! Wires the hardware-free ported modules (`framing`, `response`, `autoprobe`)
+//! to a `Peripheral`.
 //!
 //! Feature-gated (`ble`) so the protocol core + its tests stay btleplug-free. This
 //! module can't be unit-tested (it needs a device); its verification is over the
@@ -15,7 +17,7 @@ use btleplug::platform::{Manager, Peripheral};
 
 use crate::central::BleCentral;
 
-/// The platform BLE adapter. On macOS the CoreBluetooth central manager it wraps
+/// The platform BLE adapter. On macOS the `CoreBluetooth` central manager it wraps
 /// MUST stay alive for the duration of a connection — dropping it silently stops
 /// notification delivery — so callers hold it (the daemon caches one; each
 /// `BleTransport` keeps a clone).
@@ -38,13 +40,13 @@ const DEVICE_NAME_HINTS: &[&str] = &["Pixoo", "Divoom", "Tivoo", "Timoo", "Ditoo
 /// Upper bound on a single BLE write. A write to a peripheral that vanished
 /// (device powered off, out of range, or Bluetooth toggled mid-operation) can
 /// otherwise hang forever — and since the write runs while the caller holds the
-/// daemon's `device` lock, that wedges ALL device ops (and the device_status
+/// daemon's `device` lock, that wedges ALL device ops (and the `device_status`
 /// liveness probe, which then falsely reports the daemon down). Bounding it lets
 /// the op fail, release the lock, and the daemon self-recover.
 const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Upper bound on each GATT setup step (connect / discover / subscribe).
-/// CoreBluetooth's `connect()` waits INDEFINITELY for an unresponsive device
+/// `CoreBluetooth`'s `connect()` waits INDEFINITELY for an unresponsive device
 /// (off, out of range, or already connected elsewhere) — and the connect runs
 /// while the daemon holds the `device` lock, so an unbounded hang wedges the
 /// whole device path. Bounded so a bad connect fails and the caller can retry.
@@ -156,11 +158,11 @@ impl BleTransport {
         self.protocol = Protocol::Basic;
     }
 
-    pub fn protocol(&self) -> Protocol {
+    pub const fn protocol(&self) -> Protocol {
         self.protocol
     }
 
-    pub fn set_protocol(&mut self, protocol: Protocol) {
+    pub const fn set_protocol(&mut self, protocol: Protocol) {
         self.protocol = protocol;
     }
 
@@ -244,12 +246,12 @@ impl BleTransport {
     /// Stream a pre-encoded animation blob via the 0x8B 3-phase protocol.
     /// Mirrors `stream_animation_8b` in `divoom_lib/display/animation.py`:
     ///
-    ///   Phase 1 — START (CW=0): [0x00, file_size:4 LE]
+    ///   Phase 1 — START (CW=0): [0x00, `file_size:4` LE]
     ///             wait for device "ready" reply (payload[0]==0); fall back to 0.5s sleep.
-    ///   Phase 2 — DATA (CW=1):  [0x01, file_size:4 LE, offset_id:2 LE, chunk...]
+    ///   Phase 2 — DATA (CW=1):  [0x01, `file_size:4` LE, `offset_id:2` LE, chunk...]
     ///             256-byte chunks; MUST be 256 (APK/futpib hardcoded, device places
     ///             chunk N at byte N*256 — smaller chunks leave permanent gaps).
-    ///   Phase 3 — RETRANSMIT:   device sends 0x8B [1, idx_lo, idx_hi]; re-send that chunk.
+    ///   Phase 3 — RETRANSMIT:   device sends 0x8B [1, `idx_lo`, `idx_hi`]; re-send that chunk.
     ///             Stop when device is quiet for 1 s (normal end state).
     ///
     /// No TERMINATE (CW=2) packet — verified correct on 4 hardware devices.
@@ -345,7 +347,7 @@ impl BleTransport {
         Ok(true)
     }
 
-    /// Wait until a frame arrives whose command_id is one of `command_ids`.
+    /// Wait until a frame arrives whose `command_id` is one of `command_ids`.
     /// Returns `Some((command_id, payload))` or `None` on timeout.
     /// Frames with non-matching IDs are dropped (they were unsolicited broadcast frames).
     pub async fn wait_for_any_response(

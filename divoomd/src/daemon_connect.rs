@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 /// Minimum gap between BLE scans; a scan arriving sooner reuses the last result
 /// instead of hitting the radio, so nothing (a retry, a script, a test) can
-/// hammer the adapter into CoreBluetooth's scan-frequency throttle.
+/// hammer the adapter into `CoreBluetooth`'s scan-frequency throttle.
 #[cfg(feature = "ble")]
 const MIN_RESCAN_INTERVAL: Duration = Duration::from_secs(3);
 
@@ -28,9 +28,10 @@ pub(crate) fn status_payload(
     device_id: Option<&str>,
     state: Option<&str>,
 ) -> Value {
-    let state = state
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| if connected { "active" } else { "idle" }.to_string());
+    let state = state.map_or_else(
+        || if connected { "active" } else { "idle" }.to_string(),
+        std::string::ToString::to_string,
+    );
     let mut m = serde_json::Map::new();
     m.insert("type".into(), json!("status"));
     m.insert("state".into(), json!(state));
@@ -64,7 +65,7 @@ pub(crate) fn owned_devices_payload(device_id: Option<&str>) -> Value {
     json!({ "type": "owned_devices", "devices": devices })
 }
 
-/// btleplug surfaces a dead CoreBluetooth central (its session ended after a
+/// btleplug surfaces a dead `CoreBluetooth` central (its session ended after a
 /// device disconnect or a Bluetooth toggle) as "Channel closed". The cached
 /// Adapter can't recover, so we drop it and retry once with a fresh one.
 #[cfg(feature = "ble")]
@@ -171,7 +172,7 @@ pub(crate) async fn cmd_scan(daemon: &Daemon, req: &Request) -> Value {
     let timeout = req
         .args
         .get("timeout")
-        .and_then(|v| v.as_f64())
+        .and_then(serde_json::Value::as_f64)
         .unwrap_or(8.0);
     // `limit` is accepted but intentionally NOT used to truncate results: capping
     // could hide a real device (the "found 2 of 3" class of bug). ble::scan caps
@@ -219,7 +220,7 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
     let mock = req
         .args
         .get("mock")
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::Value::as_bool)
         .unwrap_or(false);
     if mock {
         let mock_transport = crate::mock_transport::MockTransport::new();
@@ -235,7 +236,7 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
         let token = req
             .args
             .get("lan_token")
-            .and_then(|v| v.as_i64())
+            .and_then(serde_json::Value::as_i64)
             .unwrap_or(0);
         let lan = crate::lan::LanTransport::new(ip, token);
         if !lan.probe().await {
@@ -265,7 +266,7 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
         let use_ios_le = req
             .args
             .get("use_ios_le_protocol")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(true);
         if !use_ios_le {
             match crate::spp::SppTransport::connect(&id, None, None).await {

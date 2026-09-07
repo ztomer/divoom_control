@@ -33,10 +33,9 @@ const HTTP_TIMEOUT_SECS: u64 = 15;
 
 const SLOTS_PER_PAGE: usize = 12;
 
-/// DeviceType for the hot manifest API keyed by pixel size.
-pub(crate) fn device_type_for_size(size: u32) -> u32 {
+/// `DeviceType` for the hot manifest API keyed by pixel size.
+pub(crate) const fn device_type_for_size(size: u32) -> u32 {
     match size {
-        16 => 1,
         32 => 0,
         64 => 2,
         128 => 3,
@@ -136,7 +135,7 @@ pub(crate) fn decode_image_to_rgb(data: &[u8], w: u32, h: u32) -> Option<Vec<u8>
 
 // ── custom art protocol helpers (APK LightMakeNewModel.java) ─────────────
 
-fn le16(v: usize) -> [u8; 2] {
+const fn le16(v: usize) -> [u8; 2] {
     [(v & 0xFF) as u8, ((v >> 8) & 0xFF) as u8]
 }
 
@@ -184,7 +183,10 @@ async fn push_custom_art_page(
 
 /// Handle `custom_art_push` command.
 pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
-    let page = args.get("page").and_then(|v| v.as_u64()).unwrap_or(0) as u8;
+    let page = args
+        .get("page")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(0) as u8;
 
     // Build slot_map: {slot_index -> file_id}
     let mut slot_map: Vec<(usize, String)> = Vec::new();
@@ -197,7 +199,10 @@ pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
             }
         }
     } else if let Some(file_ids) = args.get("file_ids").and_then(|v| v.as_array()) {
-        let base = args.get("slot").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        let base = args
+            .get("slot")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0) as usize;
         for (i, fid_val) in file_ids.iter().enumerate() {
             if let Some(fid) = fid_val.as_str() {
                 if base + i < SLOTS_PER_PAGE {
@@ -248,7 +253,10 @@ pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
 
 /// Handle `custom_art_query_page` command.
 pub async fn cmd_custom_art_query_page(daemon: Arc<Daemon>, args: &Value) -> Value {
-    let page = args.get("page").and_then(|v| v.as_u64()).unwrap_or(0) as u8;
+    let page = args
+        .get("page")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(0) as u8;
     #[cfg(feature = "ble")]
     {
         let guard = daemon.device.lock().await;
@@ -304,9 +312,12 @@ pub async fn cmd_hot_update(
 ) -> Value {
     let device_size = args
         .get("device_size")
-        .and_then(|v| v.as_u64())
+        .and_then(serde_json::Value::as_u64)
         .unwrap_or(16) as u32;
-    let show_after = args.get("show").and_then(|v| v.as_bool()).unwrap_or(true);
+    let show_after = args
+        .get("show")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(true);
     // R53: the GUI passes the device address it displays; we stamp the outcome
     // under it so "Last checked <when>" is dated and daemon-owned.
     let address = args
@@ -319,8 +330,8 @@ pub async fn cmd_hot_update(
         return json!({"success": false, "error": "hot update already in progress"});
     }
 
-    let daemon_arc = daemon.clone();
-    let progress_arc = progress.clone();
+    let daemon_arc = daemon;
+    let progress_arc = progress;
     tokio::spawn(async move {
         let result = crate::art_hot::run_hot_update(
             daemon_arc.clone(),
@@ -333,7 +344,7 @@ pub async fn cmd_hot_update(
             Ok(summary) => {
                 // Stamp the per-device last-checked state before publishing done.
                 if let Err(e) = crate::hot_state::record_check(&address, &summary) {
-                    eprintln!("[ Wrn ] hot_state record_check failed: {}", e);
+                    eprintln!("[ Wrn ] hot_state record_check failed: {e}");
                 }
                 progress_arc.set(json!({"phase": "done", "result": summary}));
             }
@@ -348,9 +359,10 @@ pub async fn cmd_hot_update(
 ///
 /// R67: this returned the bare progress object, with NO `success` key — the
 /// only reply in the whole protocol without one. A client that branches on
-/// `reply["success"]` (which every other reply supports) got a KeyError or a
+/// `reply["success"]` (which every other reply supports) got a `KeyError` or a
 /// silent falsy. Measured across every read-only command; this was the sole
 /// offender.
+#[must_use]
 pub fn cmd_hot_update_progress(progress: &HotProgress) -> Value {
     let mut out = progress.get();
     if let Some(obj) = out.as_object_mut() {

@@ -37,6 +37,7 @@ impl Default for HotProgress {
 
 impl HotProgress {
     /// Build a progress cell wired to the daemon's event bus.
+    #[must_use]
     pub fn with_events(tx: tokio::sync::broadcast::Sender<Value>) -> Self {
         Self {
             inner: Arc::new(Mutex::new(json!({"phase": "idle"}))),
@@ -67,14 +68,13 @@ impl HotProgress {
         self.broadcast(&val);
     }
 
+    #[must_use]
     pub fn get(&self) -> Value {
-        self.inner
-            .lock()
-            .map(|g| g.clone())
-            .unwrap_or_else(|_| json!({}))
+        self.inner.lock().map_or_else(|_| json!({}), |g| g.clone())
     }
 
     /// Atomically claim the slot; returns false if an update is already running.
+    #[must_use]
     pub fn try_begin(&self) -> bool {
         {
             let mut g = match self.inner.lock() {
