@@ -242,12 +242,38 @@ own planning file is scratch and will not survive the session.
   unwraps. That is a correctness campaign with its own review, not a switch to
   flip, and each repo's `Cargo.toml` says so in a comment rather than leaving
   the absence implicit.
-- **No repo has been released since the campaign.** Per repo: bump, CHANGELOG +
-  release notes, full local CI, push, wait for green CI, tag, install. This
-  repo's `release.sh` gates on GitHub CI being green for the tagged commit;
-  routines and ZoneTilerWM have their own `release.sh`/`bump.sh` to read first.
-  **The daemon running on this machine is still the installed v0.31.0 and
-  contains none of the 2026-09-07 daemon work.**
+- **~~No repo has been released since the campaign.~~ DONE 2026-09-07.** All
+  six released and installed: divoom-control v0.33.0, routines v0.41.0, monitor
+  v0.47.0, ztools v2.3.0, app_updates v1.32.0 (first tag the repo has ever
+  had), gates_of_heck v0.10.0. Four of the six had a changelog that did not
+  describe what shipped, and two had no changelog at all; each now has one, and
+  the release-kit requires a stanza matching the version so the two cannot
+  disagree again.
+
+  **Installing revealed the class that matters more than the releases**: an
+  installer reports what it WROTE, PATH decides what RUNS, and nothing compared
+  them. `ztools` had three copies with the OLDEST winning; `routines` resolves
+  through a `.zshrc` entry that puts a checkout's `target/release` ahead of
+  everything, so the tool is whatever that build directory happens to hold. See
+  the note below.
+- **OPEN — PATH decides which build of a tool actually runs, and no installer
+  checks.** Found while installing everything on 2026-09-07. Every installer
+  copied the right binary into `/opt/homebrew/bin` and said so truthfully; then
+  `command -v ztools` ran `~/.cargo/bin/ztools` at 2.1.15, and removing that
+  revealed a third copy at `~/bin/ztools` (2.1.8). Worse, `~/.zshrc` line 265
+  puts `$HOME/Projects/routines/target/release` ahead of everything on PATH, so
+  `routines` is whatever that CHECKOUT'S build directory currently holds — a
+  debug build, an abandoned branch, or nothing after a `cargo clean`. It reads
+  as correct today only because the same version was just built there.
+
+  The stale `~/.cargo/bin` copies were moved aside (`.shadowed-<date>`), so they
+  are recoverable. **The `.zshrc` PATH entry is deliberately NOT changed — that
+  is the user's shell config, not this repo's.** The durable fix is the one
+  `app_updates/install.sh` now demonstrates: after copying, ask each installed
+  binary its identity AND check that `command -v` resolves to the copy just
+  written, warning by name when it does not. Worth adding to the other four
+  installers.
+
 - **`routines` needs a self-watchdog too**, for the same reason divoom does
   (D6): launchd has no watchdog, so detection must be in-process.
 

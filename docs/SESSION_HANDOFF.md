@@ -32,6 +32,25 @@ shared memory. Read this on entry and **update it at the end of every round**
   activity), the AppleScript app-name crash + its repo-wide gate, and the
   empty-scope guard that unblocked `pre-push` for the first time in weeks.
 
+- **2026-09-07 (end of session) — v0.33.0 released and INSTALLED.** All six
+  repos in the estate were released and installed locally: divoom-control
+  v0.33.0, routines v0.41.0, monitor v0.47.0, ztools v2.3.0, app_updates
+  v1.32.0 (its first tag ever), gates_of_heck v0.10.0.
+
+  **The stale-daemon note below is now resolved**: `/Applications/Divoom.app`
+  carries divoomd 0.33.0, so the running daemon finally contains the R74 wedge
+  fixes and today's write-seam work.
+
+  Two instruments broke during the release and neither was a code defect —
+  `check_hotchannel_parity.py` and `test_the_daemon_maps_every_size...` both
+  grep Rust SOURCE, and `clippy::unreadable_literal` / `match_same_arms`
+  legitimately rewrote the text they matched. Both now read the VALUE rather
+  than the spelling, and both are calibrated. The pattern is written up in
+  `calibrate-the-instrument/references/gate-discipline.md`.
+
+  **Open threads are unchanged:** D5 (connection census in `get_status`) and D6
+  (client heartbeat + in-process self-watchdog).
+
 - **2026-09-07 (later still) — Estate-wide gate work; three findings here.**
   The no-BLE build had never been linted (21 warnings, default build at zero) —
   clippy only reports on the cfg it compiled for. Fixed and wired into `.gatesrc`
@@ -53,9 +72,9 @@ shared memory. Read this on entry and **update it at the end of every round**
   `write_all` beside it. Proven red both ways. Full `cargo test --locked` green.
 
   **Open threads:** D5 (connection census in `get_status`) and D6 (client
-  heartbeat + in-process self-watchdog) are unstarted — see the new "Daemon
-  audit residuals" section in `docs/ROADMAP.md`. The running daemon is still the
-  installed v0.31.0 and contains none of this; reinstall to pick it up.
+  heartbeat + in-process self-watchdog) are unstarted — see the "Daemon audit
+  residuals" section in `docs/ROADMAP.md`. (The stale-installed-daemon warning
+  that stood here is resolved: v0.33.0 is installed.)
 
 - **2026-09-07 — The daemon could go completely deaf; fixed at the design level.**
   A divoomd ran five days holding 64 connections and answering nobody. Every
