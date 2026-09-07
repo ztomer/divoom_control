@@ -374,9 +374,11 @@ exactly the work `scripts/hw_verify.py` was written to collect:
 - **~~Three UNEXPOSED API methods~~ — RESOLVED on hardware, R73 (2026-08-31).**
   Two of the three were broken; being never-called was the shared property, not
   a coincidence.
-  - `set_clock_rich` — **WORKS. Wire it.** It does not draw one combined face
-    as assumed: it makes the panel CYCLE separate weather / date / temperature /
-    clock screens. Still the only allowlist entry left.
+  - `set_clock_rich` — **WORKS, and is WIRED (R73).** It does not draw one
+    combined face as assumed: it makes the panel CYCLE separate weather / date /
+    temperature / clock screens, which is what the clock panel's "Extra Panels"
+    checkboxes now drive. `check_gui_api_reachable.py`'s allowlist is EMPTY as a
+    result — nothing here is outstanding.
   - `set_temperature_channel` — **DELETED.** There is no temperature channel;
     `0x01` is LIGHTING (this repo's own `Channel::Lighting`). The payload put
     `temp_type` in the red byte, shifting the colour: white rendered cyan, red

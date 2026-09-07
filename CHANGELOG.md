@@ -4,6 +4,32 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## Unreleased
+
+### Fixed — two docs told a hardware run something the code had already disproven
+
+- **`docs/ROADMAP.md` still asked for `set_clock_rich` to be wired**, calling it
+  "the only allowlist entry left", six lines under a heading that says the item
+  was RESOLVED in R73. It has been wired since R73 (`gui_api.py`, `api/lighting.py`,
+  the clock panel's "Extra Panels" checkboxes), and
+  `tools/check_gui_api_reachable.py` reports **0 allowlisted** — the gate and the
+  roadmap disagreed, and the gate was right. Read cold, that bullet sends the next
+  session to do work that is already shipped.
+
+- **`hw_verify.py`'s `search_weather_city` instruction described the OLD
+  finding** — that the endpoint had only ever been seen failing on the RC=10
+  guest-login path under a throwaway HOME. R73 superseded that: on the real
+  logged-in account it returns `RC=1 Failed`, isolated by elimination against two
+  sibling endpoints that succeeded on the same daemon, credentials and minute. An
+  operator following the old text would read the expected failure as a finding.
+  Reworded so the check states its expected outcome and is honest about what it
+  now is: a **canary** for the endpoint returning, where a non-empty list is the
+  surprise and a guest-login RC=10 means the harness moved rather than the server.
+
+  Class: *a checklist item that carries the state of the investigation at the time
+  it was written.* Both entries were written accurate and were falsified by later
+  work that updated the code and the CHANGELOG but not the instruction.
+
 ## v0.33.0 — the residuals the last release's own fix left behind (2026-09-07)
 
 ### Fixed — only two of twelve client writes were bounded

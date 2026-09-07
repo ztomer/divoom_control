@@ -130,9 +130,14 @@ def build_checks() -> list[Check]:
         CommandCheck(
             id="weather_city", tags=["P2.6"],
             title="search_weather_city on the CONFIGURED account",
-            look="a non-empty list of cities. The pre-release check ran under a "
-                 "throwaway HOME and only ever proved the RC=10 guest-login "
-                 "error path",
+            look="EXPECTED TO FAIL with `RC=1 Failed` — R73 disproved the "
+                 "success path on the real, logged-in account, isolated by "
+                 "elimination (GetCategoryFileListV2 and Channel/GetDialType "
+                 "succeeded on the same daemon, credentials and minute). This "
+                 "check is now a CANARY: a non-empty list means the server "
+                 "changed and the feature can be revived. Anything else — a "
+                 "guest-login RC=10, a transport error — means the harness "
+                 "moved, not the endpoint",
             command="search_weather_city", cargs={"keyword": "London"},
         ),
     ]
