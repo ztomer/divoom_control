@@ -60,6 +60,10 @@ use std::time::Duration;
 
 use crate::socket_owner::{HeldSocket, SocketOwnership};
 
+// Re-exported so `socket_bind::BindFailure` keeps resolving for every caller
+// and test; the type simply lives in its own file now.
+pub use crate::bind_failure::BindFailure;
+
 /// Longest usable `sockaddr_un.sun_path`, minus the NUL terminator.
 ///
 /// macOS is 104 and Linux 108. Checked up front because the kernel's own
@@ -72,128 +76,6 @@ pub const MAX_SOCKET_PATH: usize = 107;
 
 /// How long to wait for a listener to identify itself as divoomd.
 const PROBE_TIMEOUT: Duration = Duration::from_millis(750);
-
-/// Why the socket could not be taken.
-#[derive(Debug)]
-pub enum BindFailure {
-    /// A healthy divoomd already owns the path. Not an error condition so much
-    /// as the single-instance guard doing its job.
-    LiveInstance,
-    /// Something is listening but does not answer like divoomd. Removing it
-    /// would break whatever program it belongs to, so we refuse instead.
-    ForeignListener,
-    /// A regular file or directory occupies the path. Never auto-removed.
-    NotASocket { kind: &'static str },
-    /// Another divoomd holds the startup lock right now.
-    StartupInProgress,
-    /// The parent directory is missing and could not be created.
-    ParentMissing { parent: String, err: String },
-    /// The path (or its lock) is not ours to touch.
-    PermissionDenied { err: String },
-    /// Longer than the platform's `sun_path`.
-    PathTooLong { len: usize, max: usize },
-    /// Anything else, kept verbatim rather than guessed at.
-    Io { err: String },
-}
-
-impl BindFailure {
-    /// One line saying what is wrong.
-    pub fn reason(&self, path: &str) -> String {
-        match self {
-            Self::LiveInstance => format!("another divoomd is already listening on {path}"),
-            Self::ForeignListener => format!(
-                "{path} is in use by another program (it is listening but does not \
-                 answer as divoomd)"
-            ),
-            Self::NotASocket { kind } => {
-                format!("{path} is a {kind}, not a socket")
-            }
-            Self::StartupInProgress => {
-                format!("another divoomd is starting up and holds the lock for {path}")
-            }
-            Self::ParentMissing { parent, err } => {
-                format!("the directory {parent} does not exist and could not be created: {err}")
-            }
-            Self::PermissionDenied { err } => {
-                format!("permission denied for {path}: {err}")
-            }
-            Self::PathTooLong { len, max } => {
-                format!("the socket path is {len} characters; this platform allows {max}")
-            }
-            Self::Io { err } => format!("cannot bind {path}: {err}"),
-        }
-    }
-
-    /// What the user should actually do about it.
-    pub fn remedy(&self) -> &'static str {
-        match self {
-            Self::LiveInstance => {
-                "Nothing to do — the running daemon is healthy. Stop it first if you \
-                 meant to replace it."
-            }
-            Self::ForeignListener => {
-                "Point divoomd at a different socket with --socket, or stop the other \
-                 program. Use `lsof` on the path to see who owns it."
-            }
-            Self::NotASocket { .. } => {
-                "Move or delete that file yourself, then start the daemon again. It is \
-                 not removed automatically because it may be data you care about."
-            }
-            Self::StartupInProgress => {
-                "Wait a moment and try again; if it persists, no daemon is actually \
-                 starting and the lock file can be deleted."
-            }
-            Self::ParentMissing { .. } => {
-                "Create the directory (or choose an existing one with --socket)."
-            }
-            Self::PermissionDenied { .. } => {
-                "The socket belongs to another user. Delete it as that user, or pass \
-                 --socket with a path you own."
-            }
-            Self::PathTooLong { .. } => {
-                "Choose a shorter --socket path; Unix sockets are limited by the \
-                 kernel, not by divoomd."
-            }
-            Self::Io { .. } => "Check the path and permissions, then try again.",
-        }
-        .trim_ascii()
-    }
-
-    /// True when a second attempt could plausibly succeed on its own.
-    pub fn is_transient(&self) -> bool {
-        matches!(self, Self::StartupInProgress)
-    }
-
-    /// Does this failure describe the SOCKET's state, or only this process's?
-    ///
-    /// The sidecar exists to answer one client question: "why can I not reach a
-    /// daemon?" Most failures answer it — nothing is listening, a file is in the
-    /// way, permissions are wrong. `LiveInstance` answers the opposite: a
-    /// healthy daemon owns the path and the caller simply lost the
-    /// single-instance race. Writing that to the shared file made it report
-    /// "another divoomd is already listening ... Nothing to do — the running
-    /// daemon is healthy" as the reason a client was seeing an error, which is
-    /// the loser's outcome dressed up as a fact about the socket.
-    ///
-    /// Found on 2026-08-30: a healthy daemon was serving `/tmp/divoom.sock`
-    /// while `/tmp/divoom.sock.failure` still described a bind attempt that had
-    /// lost to it. The variant's own doc comment already said it is "not an
-    /// error condition so much as the single-instance guard doing its job" —
-    /// the code just filed it as one anyway.
-    pub fn describes_the_socket(&self) -> bool {
-        !matches!(self, Self::LiveInstance)
-    }
-
-    /// Exit code. Distinct so a supervisor can tell "already running" (a benign
-    /// no-op) from a real configuration problem without parsing text.
-    pub fn exit_code(&self) -> i32 {
-        match self {
-            Self::LiveInstance => 3,
-            Self::StartupInProgress => 4,
-            _ => 1,
-        }
-    }
-}
 
 /// A freshly bound socket, before it is handed to a runtime.
 ///
@@ -273,7 +155,10 @@ enum Occupant {
     Nothing,
     StaleSocket,
     LiveDivoomd,
+    /// Accepted us and then SPOKE, but not as divoomd.
     Foreign,
+    /// Accepted us and said nothing at all within `PROBE_TIMEOUT`.
+    Unresponsive,
     NotASocket(&'static str),
     Denied(String),
 }
@@ -303,19 +188,34 @@ fn probe(path: &str) -> Occupant {
     // divoomd pushes a `{"type":"status"}` event on connect and answers
     // get_status with a `daemon_version`. Either marker identifies it. Read a
     // few lines: the greeting may arrive before the reply.
+    //
+    // SILENCE IS ITS OWN ANSWER. Reporting "not divoomd" for a listener that
+    // said NOTHING conflated two states with opposite remedies: a foreign
+    // program (stop it, or move our socket) and a divoomd that has stopped
+    // serving (stop THAT pid and restart). Observed 2026-09-07: a divoomd whose
+    // 64 connection permits were all pinned by handlers that never returned had
+    // stopped calling `accept()` entirely, so every connect completed into the
+    // kernel backlog and got total silence -- and this probe told the user for
+    // days that another program owned the path.
     let mut reader = BufReader::new(stream);
+    let mut heard_anything = false;
     for _ in 0..4 {
         let mut line = String::new();
         match reader.read_line(&mut line) {
             Ok(0) | Err(_) => break,
             Ok(_) => {
+                heard_anything = true;
                 if line.contains("daemon_version") || line.contains("\"type\":\"status\"") {
                     return Occupant::LiveDivoomd;
                 }
             }
         }
     }
-    Occupant::Foreign
+    if heard_anything {
+        Occupant::Foreign
+    } else {
+        Occupant::Unresponsive
+    }
 }
 
 /// Classify the path without touching it.
@@ -427,6 +327,14 @@ pub fn acquire(socket_path: &str) -> Result<Acquired, BindFailure> {
     match inspect(socket_path) {
         Occupant::LiveDivoomd => return Err(BindFailure::LiveInstance),
         Occupant::Foreign => return Err(BindFailure::ForeignListener),
+        // Same reasoning as the StartupInProgress arm above, which already
+        // refused to call a silent-but-listening socket "another program": a
+        // listener that accepts and says nothing is far more likely to be our
+        // own daemon than a stranger's. That arm covered the mid-startup case
+        // and stopped there; this one covers the wedged-after-hours case, which
+        // is what actually reached a user (2026-09-07, a divoomd deaf for five
+        // days because all 64 connection permits were pinned).
+        Occupant::Unresponsive => return Err(BindFailure::UnresponsiveListener),
         Occupant::NotASocket(kind) => return Err(BindFailure::NotASocket { kind }),
         Occupant::Denied(err) => return Err(BindFailure::PermissionDenied { err }),
         Occupant::StaleSocket => {

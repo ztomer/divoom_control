@@ -12,6 +12,7 @@ pub mod art;
 pub mod art_codec;
 pub mod art_hot;
 pub mod autoprobe;
+pub mod bind_failure;
 #[cfg(feature = "ble")]
 pub mod ble;
 #[cfg(test)]

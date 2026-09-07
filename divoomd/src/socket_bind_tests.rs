@@ -113,11 +113,11 @@ fn refuses_a_live_divoomd_without_deleting_it() {
 
 #[test]
 fn refuses_a_foreign_listener_instead_of_stealing_it() {
-    // Something is listening but is not divoomd. The old code treated any
-    // successful connect as "a healthy divoomd" and exited claiming so.
+    // Something is listening, ANSWERS, and is not divoomd. The old code treated
+    // any successful connect as "a healthy divoomd" and exited claiming so.
     let p = tmp_path("foreign");
     cleanup(&p);
-    let _fake = Fake::start(&p, None); // accepts, says nothing
+    let _fake = Fake::start(&p, Some("SSH-2.0-OpenSSH_9.0\n")); // speaks, but not ours
 
     match acquire(&p) {
         Err(BindFailure::ForeignListener) => {}
@@ -126,6 +126,65 @@ fn refuses_a_foreign_listener_instead_of_stealing_it() {
     assert!(std::path::Path::new(&p).exists(), "must not be removed");
     drop(_fake);
     cleanup(&p);
+}
+
+#[test]
+fn a_silent_listener_is_unresponsive_not_foreign() {
+    // THE CASE THIS SUITE USED TO MISLABEL. Until 2026-09-07 the "foreign
+    // listener" test above was driven by `Fake::start(&p, None)` -- a listener
+    // that accepts and says NOTHING -- so the only shape ever exercised was
+    // silence, and the suite asserted that silence means "another program".
+    //
+    // It does not. A divoomd whose connection permits are all pinned by handlers
+    // that never return stops calling `accept()`: every connect completes into
+    // the kernel backlog and gets total silence. That is what a user actually
+    // hit, and for five days the daemon told them another program owned the
+    // path. The two states have opposite remedies -- stop OUR pid, versus leave
+    // someone else's program alone -- so they must not share a variant.
+    let p = tmp_path("silent");
+    cleanup(&p);
+    let _fake = Fake::start(&p, None); // accepts, says nothing
+
+    match acquire(&p) {
+        Err(BindFailure::UnresponsiveListener) => {}
+        other => panic!("expected UnresponsiveListener, got {other:?}"),
+    }
+    assert!(std::path::Path::new(&p).exists(), "must not be removed");
+    drop(_fake);
+    cleanup(&p);
+}
+
+#[test]
+fn the_two_listener_failures_say_opposite_things() {
+    // Calibration: the split is only worth having if the messages differ where
+    // it matters. One must not blame another program; the other must.
+    let unresponsive = BindFailure::UnresponsiveListener;
+    let foreign = BindFailure::ForeignListener;
+    let u = unresponsive.reason("/tmp/s.sock");
+    let f = foreign.reason("/tmp/s.sock");
+    // Match the CLAIM, not the words. A first draft asserted `!u.contains(
+    // "another program")` and failed on the phrase "not what another program
+    // looks like" -- the negation contains the thing it negates.
+    assert!(
+        !u.contains("is in use by another program"),
+        "a silent listener must not be asserted to belong to another program: {u}"
+    );
+    assert!(
+        u.contains("divoomd"),
+        "the silent case must point at our own daemon: {u}"
+    );
+    assert!(
+        f.contains("is in use by another program"),
+        "a listener that speaks a foreign protocol IS another program: {f}"
+    );
+    assert!(
+        unresponsive.remedy().contains("lsof"),
+        "the remedy must tell the user how to find the pid holding the socket"
+    );
+    assert!(
+        unresponsive.describes_the_socket(),
+        "an unresponsive listener is a fact about the socket, worth writing to the sidecar"
+    );
 }
 
 #[test]

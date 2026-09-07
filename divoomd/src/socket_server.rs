@@ -19,10 +19,68 @@ use tokio::sync::Semaphore;
 
 use crate::protocol::{encode_message, err_reply, iter_messages, Request, MAX_REPLY_BYTES};
 
-/// Max concurrent client connections. A 6th+ connection is back-pressured (the
-/// accept loop waits for a free permit) rather than unbounded — a runaway or
-/// hostile client can't exhaust fds/tasks. Tunable via `DIVOOMD_MAX_CONNECTIONS`.
+/// Max concurrent client connections. Connection 65 onward is back-pressured
+/// (the accept loop waits for a free permit) rather than unbounded — a runaway
+/// or hostile client can't exhaust fds/tasks. Tunable via
+/// `DIVOOMD_MAX_CONNECTIONS`.
+///
+/// The doc said "a 6th+ connection" while the constant was 64, left over from an
+/// earlier value. Harmless as prose, but it is the number a reader uses to judge
+/// whether saturation is plausible — and saturation is exactly what took a
+/// daemon down for five days — back when reaching the cap stopped the accept
+/// loop entirely instead of shedding (see [`refuse_at_capacity`]).
+///
+/// Saturation used to be TOTAL rather than partial: a full semaphore stopped
+/// the accept loop, so the daemon answered nobody at all, not just the 65th
+/// client. It now stays reachable and refuses the overflow explicitly.
 pub const MAX_CONNECTIONS: usize = 64;
+
+/// A subscription is torn down after `idle_timeout * this`, whatever it is
+/// doing, so the client renegotiates. With the 300s default that is 30 minutes.
+///
+/// WHY AN ABSOLUTE CAP EXISTS AT ALL. The subscriber watchdog beside it resets
+/// its deadline every time we DELIVER AN EVENT — that is, on our own output. It
+/// was written to answer "is this client still there?" and instead answers "have
+/// we written to it recently?", so on a stream that carries events at all it can
+/// never fire. It reaps a subscriber on a QUIET channel and nothing else, which
+/// is not the case anyone needed bounded.
+///
+/// A cap that only fires when nothing is happening is not a lifetime. This one
+/// cannot be reset by anything the daemon does, so server-held subscription
+/// state is bounded no matter what: dead peers holding an inherited fd, clients
+/// that reconnect without closing, or simply more subscribers than anyone
+/// intended. The menu bar and GUI already re-subscribe on drop
+/// (`divoom-menubar/src/resubscribe.rs` exists precisely for that), so the
+/// teardown is a renegotiation, not an outage — and it is announced.
+pub const SUBSCRIPTION_MAX_AGE_FACTOR: u32 = 6;
+
+/// Most concurrent SUBSCRIPTIONS, as a share of the connection budget.
+///
+/// Subscriptions are the one connection kind that is long-lived BY DESIGN: a
+/// subscriber holds its slot for as long as it is subscribed, while a
+/// request/reply client closes as soon as it has its answer (the Python client
+/// does exactly that — `with s:`). So the only connections that can pile up are
+/// subscriptions, and with one shared budget enough of them starve every
+/// request. That is how a daemon reached 64 held connections and stopped being
+/// able to answer `get_status`.
+///
+/// Giving subscriptions their own smaller budget makes that impossible: however
+/// many subscribers accumulate, request slots remain. A subscriber over the
+/// budget is told so, which is a far better failure than a silent daemon.
+pub const MAX_SUBSCRIPTIONS: usize = 8;
+
+/// The subscription budget for a given connection budget.
+///
+/// At most HALF the connection budget, and never more than [`MAX_SUBSCRIPTIONS`].
+/// The half matters as much as the cap: a first cut used
+/// `min(max_connections, MAX_SUBSCRIPTIONS)`, which reserves nothing whenever the
+/// connection budget is 8 or smaller — subscribers could still take every slot,
+/// and the test written to prove requests survive saturation failed on exactly
+/// that. Reserving a fraction, rather than a constant, keeps the guarantee true
+/// at every budget.
+pub fn subscription_budget(max_connections: usize) -> usize {
+    (max_connections / 2).clamp(1, MAX_SUBSCRIPTIONS)
+}
 
 /// Drop a connection that sends nothing for this long (no newline-terminated
 /// request). Closes the "connect and hold the socket open silently" wedge where a
@@ -77,6 +135,7 @@ pub async fn serve_connection<S, H>(
     require_auth: bool,
     token: Option<String>,
     idle_timeout: Duration,
+    subscriptions: Arc<Semaphore>,
 ) -> std::io::Result<()>
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
@@ -128,12 +187,32 @@ where
             }
             if req.command == "subscribe" {
                 if let Some(mut rx) = handler.subscribe() {
+                    // A subscription slot is separate from the connection slot,
+                    // and scarcer: see MAX_SUBSCRIPTIONS. Refusing here keeps
+                    // request capacity available no matter how many subscribers
+                    // pile up, and tells the client why instead of hanging.
+                    let _sub_permit = match subscriptions.clone().try_acquire_owned() {
+                        Ok(p) => p,
+                        Err(_) => {
+                            let reply = err_reply(
+                                "too many active subscriptions; this daemon is already \
+                                 streaming to its maximum number of clients",
+                            );
+                            stream.write_all(&encode_message(&reply)).await?;
+                            continue;
+                        }
+                    };
                     let initial = handler.initial_status();
                     stream.write_all(&encode_message(&initial)).await?;
                     // Idle watchdog: a subscriber that receives no events for
                     // `idle_timeout` is dropped (releasing its permit), so a silent
                     // client can't pin a slot forever. Any delivered event resets it.
                     let mut deadline = tokio::time::Instant::now() + idle_timeout;
+                    // Nothing below may reset this one — see
+                    // SUBSCRIPTION_MAX_AGE_FACTOR for why `deadline` alone is
+                    // not a lifetime.
+                    let expiry =
+                        tokio::time::Instant::now() + idle_timeout * SUBSCRIPTION_MAX_AGE_FACTOR;
                     loop {
                         tokio::select! {
                             n = stream.read(&mut tmp) => {
@@ -155,7 +234,17 @@ where
                                     }
                                 }
                             }
-                            _ = tokio::time::sleep_until(deadline) => break, // idle: drop
+                            _ = tokio::time::sleep_until(deadline) => break, // quiet channel: drop
+                            _ = tokio::time::sleep_until(expiry) => {
+                                // Say why, so the client treats this as a
+                                // renegotiation rather than a daemon fault.
+                                let notice = serde_json::json!({
+                                    "type": "resubscribe",
+                                    "reason": "subscription reached its maximum age; reconnect to continue",
+                                });
+                                let _ = stream.write_all(&encode_message(&notice)).await;
+                                break;
+                            }
                         }
                     }
                     return Ok(());
@@ -171,9 +260,53 @@ where
     }
 }
 
-/// Accept connections forever on Unix socket, serving each on its own task. Runs until the
-/// listener errors unrecoverably (callers normally `tokio::spawn` this). Concurrent connections
-/// are capped by `max_connections` (back-pressure: the accept loop waits for a free permit).
+/// Refuse one connection at capacity: say so in a reply line, then close.
+///
+/// Shedding beats back-pressure here, and the difference is not academic. The
+/// previous design stopped calling `accept()` when the cap was reached, so the
+/// daemon became unreachable IN FULL: `connect()` still succeeded (the kernel
+/// queues onto the listen backlog) and then nothing ever came back, for any
+/// command, including `get_status`. A daemon sat in that state for five days
+/// (2026-09-07) while every client and every diagnostic saw only silence, and
+/// `socket_bind`'s prober concluded another program owned the socket.
+///
+/// A cap must bound WORK, never REACHABILITY. Answering "busy" costs one task
+/// and one line, keeps the daemon identifiable and diagnosable at all times, and
+/// gives the client something it can retry or show. Silence gives it nothing.
+async fn refuse_at_capacity<S>(mut stream: S, max_connections: usize)
+where
+    S: tokio::io::AsyncWrite + Unpin,
+{
+    let mut reply = err_reply(&format!(
+        "daemon is at its connection cap ({max_connections}); try again shortly"
+    ));
+    // Carry the identity marker even in a refusal. `socket_bind::probe` decides
+    // what owns the socket from `daemon_version` (or a status event), so a
+    // refusal without it would just move the misdiagnosis: a busy daemon would
+    // read as "listening, but answers as something else" — a foreign program —
+    // and a second daemon would refuse to start against a perfectly healthy one.
+    // Being at capacity is a fact about load, never about identity.
+    if let Some(obj) = reply.as_object_mut() {
+        obj.insert(
+            "daemon_version".into(),
+            Value::String(env!("CARGO_PKG_VERSION").to_string()),
+        );
+    }
+    let _ = stream.write_all(&encode_message(&reply)).await;
+    let _ = stream.shutdown().await;
+}
+
+/// Accept connections forever on a Unix socket, serving each on its own task.
+/// Runs until the listener errors unrecoverably (callers normally
+/// `tokio::spawn` this).
+///
+/// `max_connections` bounds concurrent connections. It is a guard against fd and
+/// task exhaustion by a runaway client — NOT a concurrency policy for device
+/// work, which is serialised by the command queue behind the [`Handler`]. That
+/// distinction is why the loop accepts unconditionally and sheds the overflow
+/// (see [`refuse_at_capacity`]) instead of pausing: rationing connections was
+/// rationing the wrong resource, and doing it by refusing to accept took the
+/// whole daemon off the air.
 ///
 /// Takes an `Arc` rather than the listener itself: the socket must outlive this
 /// future so the daemon can still identify its own socket file at shutdown (see
@@ -187,20 +320,30 @@ pub async fn serve<H: Handler>(
     idle_timeout: Duration,
 ) {
     let sem = Arc::new(Semaphore::new(max_connections.max(1)));
+    let subs = Arc::new(Semaphore::new(subscription_budget(max_connections)));
     loop {
-        match listener.accept().await {
-            Ok((stream, _addr)) => {
-                let permit = match sem.clone().acquire_owned().await {
-                    Ok(p) => p,
-                    Err(_) => return, // semaphore closed
-                };
+        // ALWAYS accept. Nothing below this line may stop the loop.
+        let (stream, _addr) = match listener.accept().await {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        match sem.clone().try_acquire_owned() {
+            Ok(permit) => {
                 let h = handler.clone();
+                let s = subs.clone();
                 tokio::spawn(async move {
                     let _permit = permit; // held for the connection's lifetime
-                    let _ = serve_connection(stream, h, false, None, idle_timeout).await;
+                    let _ = serve_connection(stream, h, false, None, idle_timeout, s).await;
                 });
             }
-            Err(_) => continue,
+            Err(_) => {
+                eprintln!(
+                    "divoomd: at the connection cap ({max_connections}); refusing a client. \
+                     Something is holding connections open — check `lsof` on the socket. \
+                     Raise DIVOOMD_MAX_CONNECTIONS if the cap is genuinely too low."
+                );
+                tokio::spawn(refuse_at_capacity(stream, max_connections));
+            }
         }
     }
 }
@@ -214,21 +357,26 @@ pub async fn serve_tcp<H: Handler>(
     idle_timeout: Duration,
 ) {
     let sem = Arc::new(Semaphore::new(max_connections.max(1)));
+    let subs = Arc::new(Semaphore::new(subscription_budget(max_connections)));
     loop {
-        match listener.accept().await {
-            Ok((stream, _addr)) => {
-                let permit = match sem.clone().acquire_owned().await {
-                    Ok(p) => p,
-                    Err(_) => return,
-                };
+        // Accept unconditionally, shed the overflow — see the note in `serve`.
+        let (stream, _addr) = match listener.accept().await {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        match sem.clone().try_acquire_owned() {
+            Ok(permit) => {
                 let h = handler.clone();
                 let t = token.clone();
+                let s = subs.clone();
                 tokio::spawn(async move {
                     let _permit = permit;
-                    let _ = serve_connection(stream, h, true, Some(t), idle_timeout).await;
+                    let _ = serve_connection(stream, h, true, Some(t), idle_timeout, s).await;
                 });
             }
-            Err(_) => continue,
+            Err(_) => {
+                tokio::spawn(refuse_at_capacity(stream, max_connections));
+            }
         }
     }
 }
