@@ -73,3 +73,9 @@ target/
 # Coverage instrumentation output (llvm-cov / cargo-llvm-cov)
 *.profraw
 *.profdata
+
+# hw_verify run artifacts. A verdict file is evidence about ONE run on ONE
+# machine at ONE moment, and it was accidentally committed five times on
+# 2026-09-07 by `git add -A` -- leaving a two-entry file in the tree that reads
+# as though the packet has two checks. The durable record is the CHANGELOG.
+report.json

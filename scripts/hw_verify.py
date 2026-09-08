@@ -374,7 +374,9 @@ def main() -> int:
     ap.add_argument("--list", action="store_true", help="list checks and exit")
     ap.add_argument("--self-test", action="store_true",
                     help="prove the packet can report FAILURE, then exit")
-    ap.add_argument("--out", default="", help="write a JSON report here")
+    ap.add_argument("--out", default="",
+                    help="write a JSON report here (gitignored: a verdict file "
+                         "is evidence about one run on one machine)")
     ap.add_argument("--image", default=str(DEFAULT_IMAGE),
                     help="image for the custom_art check")
     ap.add_argument("--size", type=int, default=0,
