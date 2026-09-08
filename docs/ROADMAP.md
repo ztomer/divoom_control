@@ -111,7 +111,7 @@ are not restated.
 
 ## Current debt & quality
 
-- **Gates**: 22 steps, run by `pre-push` since R71 P0 — they used to run only
+- **Gates**: 25 steps, run by `pre-push` since R71 P0 — they used to run only
   when someone typed the command. Local and CI are kept identical on purpose.
   `check_applescript_launch.py` joined the list on 2026-09-07: no source may
   address an application by LaunchServices NAME in AppleScript without an
@@ -401,7 +401,14 @@ exactly the work `scripts/hw_verify.py` was written to collect:
   an `AttributeError` into a silent `False`.
 
 - **R12 visual pass** — album cover, custom art, weather on a real device, at
-  real scale, light and dark surroundings.
+  real scale, light and dark surroundings. **Still open, but it was never
+  blocked on hardware**: run against a connected device on 2026-09-07 the packet
+  failed 5/5, and three of those never reached the panel — it named
+  `live_jobs.start`, `media.push_album_art` and `display.show_weather`, which
+  the daemon has never answered. The widget jobs are `live_job_start` with kinds
+  `sysmon`/`stocks`/`weather`/`music`. Packet rewritten against the daemon's
+  match arms and held there by `tools/check_hw_verify_methods.py`; the pass
+  itself still needs a person watching the panel.
 - **~~`pic_scan_ctrl` 0x35~~ — RESOLVED, R73. It is `SPP_SCROLL`, and the R12
   audit that called it a missing opcode was wrong.** `SppProc$CMD_TYPE.java`
   has `SPP_SAND_PAINT_CTRL(52)` then `SPP_SCROLL(53)` = 0x35. That audit's own
@@ -445,6 +452,10 @@ exactly the work `scripts/hw_verify.py` was written to collect:
   the official app issuing a city search, or dropping the feature. The GUI
   already surfaces the failure honestly ("no results" WITH the reason), so
   nothing is silently broken for the user meanwhile.
+
+`album_art` needs something PLAYING before it is run — with no track the music
+job has nothing to push, and a dark panel then means "nothing playing", not
+"broken".
 
 The remaining two need a person watching the panel:
 

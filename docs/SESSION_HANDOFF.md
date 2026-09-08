@@ -222,10 +222,11 @@ repo defect, but both will recur.
   `debug/incremental` and `llvm-cov-target` are the safe things to clear.
 
 
-Three things, and the first two need you at a keyboard with a device.
+Three things, and only the FIRST needs you at a keyboard with a device — the other two are desk work.
 
 **1. The hardware packet — five checks, one command** (R73 closed and removed
-the `pic_scan` and `clock_rich` entries).
+the `pic_scan` and `clock_rich` entries; 2026-09-07 rewrote the surviving five
+against the daemon's real API — see below).
 
     python3 scripts/hw_verify.py --self-test        # calibrate FIRST
     python3 scripts/hw_verify.py --out report.json
@@ -237,18 +238,33 @@ is connected, which is honest rather than broken: with nothing attached the
 daemon refuses at the no-device precondition before it ever reads the method
 name, so the invalid-method branch stays untested.
 
-What the packet decides:
+What the packet decides — **all five entries, as of 2026-09-07**:
 
-* **Three UNEXPOSED methods** — `set_clock_rich`, `set_temperature_channel`,
-  `set_timeplan`. The last three entries in `check_gui_api_reachable.py`'s
-  allowlist. Not dead, not superseded: the daemon implements them and the UI
-  never offers them, so wire-or-delete depends on whether the device renders
-  them.
-* **`sync_time`** — R72 routed it to the daemon and the Python path it replaced
-  was BROKEN (an `AttributeError` swallowed into a silent `False`). "It returns
-  True now" proves nothing; the clock has to be seen to change.
-* **R12 visual pass**, **`pic_scan_ctrl` 0x35**, **`search_weather_city`** on a
-  configured account.
+* **R12 visual pass** — `sysmon`, `album_art`, `weather`, `custom_art`. These
+  are the four live-widget jobs plus one image push, and they are the whole
+  reason a person has to be holding the device.
+* **`search_weather_city`** — kept as a **canary**, not a test. R73 disproved
+  its success path on the real account (`RC=1 Failed`), so it is EXPECTED to
+  fail; a non-empty list would mean the server changed.
+
+**Read this before running it: the packet was BROKEN until 2026-09-07 and the
+breakage looked exactly like a hardware fault.** Run against a connected device
+it failed 5/5, and three of those never reached the panel — it named
+`live_jobs.start`, `media.push_album_art` and `display.show_weather`, none of
+which the daemon has ever answered. They were pre-port Python spellings; the
+widget jobs are the `live_job_start` socket command with kinds
+`sysmon`/`stocks`/`weather`/`music` (`music` is album art). The R12 pass was
+therefore never blocked on hardware — it would have failed identically with
+nothing attached.
+
+`--self-test` did not catch it and could not: it proves the packet reports
+FAILURE for a bogus method, which is a claim about error handling, not about
+whether the packet's own names exist. **`tools/check_hw_verify_methods.py`** is
+now a gate (`GOH_CI_STEPS`) that compares the packet to the daemon's match arms
+with no hardware, so this class fails a push instead of a device session.
+
+**Play something before running `album_art`** — with no track the music job has
+nothing to push, and a dark panel then means "nothing playing", not "broken".
 
 **2. The browser e2e suite fails randomly at NORMAL machine load.** Two full
 runs on one commit failed different, non-overlapping sets of camoufox tests; all

@@ -94,9 +94,9 @@ def main() -> int:
                        f"gate cannot vouch for it")
 
     if bad:
-        err(f"[hw-verify-methods] {len(bad)} packet entr"
-            f"{'y' if len(bad) == 1 else 'ies'} name something the daemon does "
-            f"not answer")
+        one = len(bad) == 1
+        err(f"[hw-verify-methods] {len(bad)} packet entr{'y' if one else 'ies'} "
+            f"name{'s' if one else ''} something the daemon does not answer")
         for b in bad:
             print(f"  ✗ {b}", flush=True)
         info("  These fail at the socket, before any pixel is drawn, and read")
