@@ -138,7 +138,9 @@ be part of any install-then-verify loop here.
 
 ### Found on hardware — the weather live job never brings the weather face forward
 
-- **R12 visual pass: 3 PASS, 1 FAIL, 1 XFAIL (2026-09-07, on a live device).**
+- **First run of the R12 packet: 3 PASS, 1 FAIL, 1 XFAIL (2026-09-07, on a
+  live device).** _(The pass finished 4/4 after the fixes below — see the
+  R12 section above.)_
   `sysmon`, `album_art` and `custom_art` all verified on the panel by eye.
   `weather` FAILED with the operator's note **"still seeing album art"** while
   the daemon replied `{"success": true}` — a job that reports success at START
@@ -182,8 +184,11 @@ be part of any install-then-verify loop here.
   `[0x01, 0x00, 0xFF, 0xFF, 0xFF, 0x00]` has the shape of a 0x45 LIGHTING packet
   (`Channel::Lighting`, white RGB), not of a brightness argument. That is the
   shape of the class R73 deleted two methods for — parameters that do not
-  correspond to the fields of the packet they are sent in. **Not changed here:
-  it wants a wire trace, not a guess.**
+  correspond to the fields of the packet they are sent in. It was left alone at
+  this point in the round, deliberately: changing an unexplained send in the same
+  edit that adds a channel switch would have confounded the hardware test of the
+  switch. **It was REMOVED later in the same round** once a probe with a control
+  had eliminated every other variable — see the R12 section above.
 
 ## v0.33.0 — the residuals the last release's own fix left behind (2026-09-07)
 
