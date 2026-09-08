@@ -239,7 +239,9 @@ The three things named in the request, and where they already live:
 
 - **Relative positions** — `wall.rs` already has `DeviceSlot { mac, x, y, size,
   width, height }` and `DivoomWall { total_width, total_height, min_x, min_y,
-  grid_unit_size, is_free_form }`. This is internal; it needs to be QUERYABLE.
+  grid_unit_size, is_free_form }`. This is internal; it needs to be QUERYABLE,
+  as metadata the caller reads and reasons about — see item 6 on why the daemon
+  must not turn it into an implicit composition.
 - **Available image size** — per device, not global. `get_capabilities` exists
   and should carry the panel size and device class rather than a caller
   assuming 16x16.
@@ -270,14 +272,31 @@ The three things named in the request, and where they already live:
 5. **Honest failure.** A push to a disconnected device must say so. The device
    is frequently absent and a silent success would leave callers rendering into
    nothing.
-6. **The wall as ONE canvas.** The most valuable thing here and the least
-   obvious: `DivoomWall` already models a composite surface, so a caller should
-   be able to push a single image to the WALL and have the daemon slice it
-   across devices by their slots. That is the feature that makes "relative
-   positions" worth exposing at all — otherwise every caller reimplements the
-   slicing.
+6. **Targeting is the caller's choice, and the virtual wall is NOT the
+   default.** _(Settled 2026-09-07.)_ A caller addresses **one screen, several,
+   or all of them**, and picks. The geometry and per-screen size are exposed as
+   DESCRIPTIVE metadata — here is what exists, here is where each one sits
+   relative to the others, here is how big each is — so a caller that wants to
+   spread content across screens can compute that itself.
+
+   The daemon does **not** slice a single image across the wall by default, and
+   an external caller does not inherit the wall layout the GUI happens to have
+   configured. Composite-canvas mode, if it is ever built, is an explicit opt-in
+   and is out of scope for the first version: the wall is a GUI concept the user
+   arranges for themselves, and silently applying it to somebody else's push
+   would make the same image behave differently on two machines for reasons the
+   caller cannot see.
+
+   So "relative positions" is worth exposing as INFORMATION, not as an implicit
+   composition. Broadcast-to-all is the simple case and should be one call.
 7. **Text without rasterizing.** `font.rs` and the `text` widget kind already
    exist; callers will want "show this string" rather than shipping pixels.
+
+**The shape that follows from all of the above**, as a sketch rather than a
+spec: a `list_screens` returning one entry per device (id, size, position
+relative to the others, connected or not, what it is currently showing), and a
+push that takes a target of one id, a list of ids, or all — plus the resize
+policy and the frame. Geometry in, targeting explicit, no implicit composition.
 
 **Sequencing:** the render-the-weather-widget item above is the natural first
 consumer — do it first and the custom-image path gets a real user inside the
