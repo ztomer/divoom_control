@@ -262,12 +262,34 @@ pub fn parse_hex_color(s: &str) -> Option<[u8; 3]> {
     ])
 }
 
+/// A channel whose 0x45 payload is genuinely BARE — the nine bytes after the
+/// selector mean nothing to the device.
+///
+/// This type exists because `Channel` alone let a caller ask for a bare switch
+/// to a channel whose payload bytes ARE its configuration. On 2026-09-07
+/// `channel_switch(Channel::Clock)` reached a panel as ten zero bytes: an
+/// inactive clock face drawn in black, i.e. a blank screen. Clock, Vj and
+/// Visualization each have a real builder (`ClockPacket`, [`vj_effect`],
+/// [`visualization`]); they are absent here so that reaching for the bare
+/// helper instead of the builder does not compile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum BareChannel {
+    Lighting = Channel::Lighting as u8,
+    Cloud = Channel::Cloud as u8,
+    Design = Channel::Design as u8,
+    Scoreboard = Channel::Scoreboard as u8,
+}
+
 /// A bare channel-switch packet: `[channel, 0 x 9]`.
 ///
 /// The device needs the full 10 bytes to switch reliably; a short packet is
 /// silently ignored (see the padding notes in `divoom_lib/display/__init__.py`).
+///
+/// Only [`BareChannel`] is accepted: a channel that carries configuration in
+/// those nine bytes must be built by its own builder, never zero-filled here.
 #[must_use]
-pub const fn channel_switch(channel: Channel) -> [u8; 10] {
+pub const fn channel_switch(channel: BareChannel) -> [u8; 10] {
     [channel as u8, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 }
 

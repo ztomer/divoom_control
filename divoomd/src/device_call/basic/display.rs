@@ -99,7 +99,7 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             if let Err(e) = dev
                 .send_command(
                     CMD_SET_LIGHT_MODE,
-                    &crate::packets::channel_switch(crate::packets::Channel::Design),
+                    &crate::packets::channel_switch(crate::packets::BareChannel::Design),
                     false,
                 )
                 .await
@@ -170,7 +170,7 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             match dev
                 .send_command(
                     CMD_SET_LIGHT_MODE,
-                    &crate::packets::channel_switch(crate::packets::Channel::Design),
+                    &crate::packets::channel_switch(crate::packets::BareChannel::Design),
                     false,
                 )
                 .await
@@ -257,7 +257,7 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         }
         // Scoreboard channel: 0x45 [0x06, 0×9] (Python show_scoreboard).
         "display.show_scoreboard" | "show_scoreboard" => {
-            let payload = crate::packets::channel_switch(crate::packets::Channel::Scoreboard);
+            let payload = crate::packets::channel_switch(crate::packets::BareChannel::Scoreboard);
             match dev.send_command(0x45, &payload, true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("display.show_scoreboard failed: {e}")),
@@ -281,8 +281,10 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 // VJ effects are 1-indexed on the wire; vj_effect(0) sends 1,
                 // which is what the hand-rolled array did.
                 "vj" => crate::packets::vj_effect(0),
-                "design" => crate::packets::channel_switch(crate::packets::Channel::Design),
-                "scoreboard" => crate::packets::channel_switch(crate::packets::Channel::Scoreboard),
+                "design" => crate::packets::channel_switch(crate::packets::BareChannel::Design),
+                "scoreboard" => {
+                    crate::packets::channel_switch(crate::packets::BareChannel::Scoreboard)
+                }
                 other => return err_reply(&format!("switch_channel: unknown channel '{other}'")),
             };
             match dev.send_command(CMD_SET_LIGHT_MODE, &payload, true).await {

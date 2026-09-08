@@ -251,11 +251,11 @@ mod tests {
     fn channel_switches_are_padded_to_ten_bytes() {
         // Short packets are silently ignored by the device.
         assert_eq!(
-            channel_switch(Channel::Design),
+            channel_switch(BareChannel::Design),
             [5, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         );
         assert_eq!(
-            channel_switch(Channel::Scoreboard),
+            channel_switch(BareChannel::Scoreboard),
             [6, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         );
     }
