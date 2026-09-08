@@ -43,6 +43,12 @@ from _tui import err, hr, info, ok, section, warn  # noqa: E402
 from divoom_client.daemon_protocol import DEFAULT_SOCKET_PATH, DaemonClient  # noqa: E402
 
 PASS, FAIL, SKIP, UNKNOWN = "PASS", "FAIL", "SKIP", "UNKNOWN"
+# A check that is EXPECTED to fail. XFAIL is the expected outcome and carries no
+# news; XPASS means the world changed under us and is the loud one. Without this
+# distinction the weather_city canary would redden every future run, and a gate
+# that is always red is a gate people stop reading -- the same argument that
+# makes a randomly-failing e2e suite dangerous.
+XFAIL, XPASS = "XFAIL", "XPASS"
 
 # Deliberately a big asset: the check is that the daemon's downscale lands a
 # real image on a 16x16 panel intact, which a pre-shrunk 16x16 fixture would
@@ -64,6 +70,7 @@ class Check:
     title: str
     look: str                     # what the operator should SEE
     needs_device: bool = True
+    expect_fail: str = ""         # why this check is EXPECTED to fail
     tags: list[str] = field(default_factory=list)
 
     def drive(self, client: DaemonClient, ctx: dict) -> tuple[bool, str]:
@@ -189,6 +196,9 @@ def build_checks() -> list[Check]:
                  "guest-login RC=10, a transport error — means the harness "
                  "moved, not the endpoint",
             command="search_weather_city", cargs={"keyword": "London"},
+            expect_fail="R73 disproved the success path on the real account "
+                        "(RC=1). A FAILURE here is the known state and no news; "
+                        "a SUCCESS means the server changed.",
         ),
     ]
 
@@ -282,8 +292,21 @@ def run_packet(client, checks, interactive, results, ctx=None):
             results.append(Result(c.id, FAIL, f"raised: {exc}"))
             continue
         if not fired:
-            err(f"command rejected: {detail}")
-            results.append(Result(c.id, FAIL, detail))
+            if c.expect_fail:
+                warn(f"failed as expected — {detail}")
+                info(f"  {c.expect_fail}")
+                results.append(Result(c.id, XFAIL, detail, c.expect_fail))
+            else:
+                err(f"command rejected: {detail}")
+                results.append(Result(c.id, FAIL, detail))
+            continue
+        if c.expect_fail:
+            # The canary sang. This is the only result in the packet that is
+            # more interesting when it SUCCEEDS.
+            ok(f"UNEXPECTED SUCCESS — {detail}")
+            info(f"  Expected to fail because: {c.expect_fail}")
+            info("  That premise no longer holds. Re-check the feature.")
+            results.append(Result(c.id, XPASS, detail, c.expect_fail))
             continue
         info(f"sent OK — {detail}")
         info("LOOK AT THE DEVICE:")
@@ -388,7 +411,8 @@ def main() -> int:
     for r in results:
         tally[r.verdict] = tally.get(r.verdict, 0) + 1
         line = f"{r.verdict:<8} {r.check}"
-        (ok if r.verdict == PASS else err if r.verdict == FAIL else warn)(line)
+        (ok if r.verdict in (PASS, XPASS) else err if r.verdict == FAIL
+         else warn)(line)
         if r.note:
             info(f"         {r.note}")
     hr()

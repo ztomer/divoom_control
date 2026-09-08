@@ -144,3 +144,33 @@ def test_every_check_states_what_to_look_at():
     for c in hw.build_checks():
         assert c.look and len(c.look) > 30, f"{c.id} has no usable LOOK text"
         assert c.tags, f"{c.id} is not traceable to a plan step"
+
+
+def test_an_expected_failure_is_XFAIL_and_does_not_redden_the_run():
+    """The weather_city canary fails every run by design.
+
+    Recording that as FAIL would make `hw_verify` permanently red, and a check
+    that is always red is one people stop reading — the same reason a randomly
+    failing e2e gate teaches `--no-verify`.
+    """
+    client = FakeClient(status={"connected": True, "mac": "AA:BB"},
+                        call_reply={"success": False, "error": "RC=1 Failed"})
+    check = hw.CommandCheck(id="canary", title="t", look="l",
+                            command="search_weather_city",
+                            expect_fail="known dead server-side")
+    results = []
+    hw.run_packet(client, [check], interactive=False, results=results)
+    assert results[0].verdict == hw.XFAIL
+    assert results[0].verdict != hw.FAIL
+
+
+def test_an_expected_failure_that_SUCCEEDS_is_surfaced_as_XPASS():
+    """The canary singing is the whole point of keeping it in the packet."""
+    client = FakeClient(status={"connected": True, "mac": "AA:BB"},
+                        call_reply={"success": True, "cities": ["London"]})
+    check = hw.CommandCheck(id="canary", title="t", look="l",
+                            command="search_weather_city",
+                            expect_fail="known dead server-side")
+    results = []
+    hw.run_packet(client, [check], interactive=False, results=results)
+    assert results[0].verdict == hw.XPASS, "a revived endpoint must not read as a pass"
