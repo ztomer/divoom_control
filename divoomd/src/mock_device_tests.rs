@@ -75,6 +75,57 @@ pub mod tests {
         }
     }
 
+    /// R12/hardware, 2026-09-07: the weather job set data for a face it never
+    /// selected.
+    ///
+    /// `0x5F` updates the temperature and icon ON the weather face; it does not
+    /// bring that face forward. With the panel left in the Design channel by the
+    /// album-art job, the daemon answered `{"success": true}` and the operator
+    /// kept seeing album art. Every other live widget pushes frames into the
+    /// channel it selects and is self-sufficient; weather is the only one whose
+    /// output is owned by a DIFFERENT channel.
+    ///
+    /// So the ORDER is the property: the channel switch must precede the data.
+    #[expect(clippy::significant_drop_tightening, reason = "see the module note")]
+    #[tokio::test]
+    async fn test_mock_weather_selects_the_clock_face_before_sending_data() {
+        use crate::packets::WeatherType;
+        use crate::weather::WeatherInfo;
+
+        let d = setup_mock_daemon().await;
+        let transport = d.device.lock().await.clone().expect("a mock device");
+        crate::live_jobs::push_weather(
+            &transport,
+            WeatherInfo { temperature_c: 21, weather: WeatherType::Clear },
+            true,
+        )
+        .await;
+
+        let device_lock = d.device.lock().await;
+        if let Some(ref transport_arc) = &*device_lock {
+            if let DeviceTransport::Mock(ref mock) = **transport_arc {
+                let cmds = mock.sent_commands.lock().unwrap();
+                let switch = cmds
+                    .iter()
+                    .position(|(id, p)| *id == 0x45 && p.first() == Some(&0x00))
+                    .expect("a 0x45 switch to the Clock channel (0x00)");
+                let data = cmds
+                    .iter()
+                    .position(|(id, _)| *id == 0x5F)
+                    .expect("the 0x5F weather packet");
+                assert!(
+                    switch < data,
+                    "the channel switch must come BEFORE the weather data, \
+                     or the data lands on a face the device is not showing"
+                );
+            } else {
+                panic!("Expected Mock transport");
+            }
+        } else {
+            panic!("Expected connected device");
+        }
+    }
+
     #[expect(clippy::significant_drop_tightening, reason = "see the module note")]
     #[tokio::test]
     async fn test_mock_display_show_clock() {

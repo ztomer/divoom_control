@@ -282,6 +282,49 @@ async fn run_stocks(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
     }
 }
 
+/// The weather job's device sequence, extracted so a test can watch it.
+///
+/// It lives apart from `run_weather` because that function fetches from
+/// wttr.in, and a test that has to reach the network to check a byte sequence
+/// is a test nobody trusts. This is the half worth pinning.
+pub(crate) async fn push_weather(dev_t: &Arc<DeviceTransport>, info: crate::weather::WeatherInfo, select_face: bool) {
+    // UNEXPLAINED (2026-09-07). The only 0x32 in the daemon, a bare literal
+    // with no test and no note. `divoom_lib` calls that opcode `set lightness`,
+    // yet this payload has the shape of a 0x45 LIGHTING packet
+    // (Channel::Lighting, white RGB) -- the class R73 deleted two methods for.
+    // Left in place deliberately: removing it in the same change that adds the
+    // channel switch would confound the hardware test of the switch. It wants a
+    // wire trace, not a guess.
+    let _ = dev_t
+        .send_command(0x32, &[0x01, 0x00, 0xFF, 0xFF, 0xFF, 0x00], false)
+        .await;
+
+    // 0x5F updates the temperature and icon ON the weather face; it does not
+    // bring that face forward. Sent AFTER the 0x32 so that whatever that does
+    // to the channel, this wins.
+    if select_face {
+        let _ = dev_t
+            .send_command(
+                crate::packets::CMD_SET_LIGHT_MODE,
+                &crate::packets::channel_switch(crate::packets::Channel::Clock),
+                false,
+            )
+            .await;
+    }
+
+    let packet = crate::packets::WeatherPacket {
+        temperature_c: info.temperature_c,
+        weather: info.weather,
+    };
+    let _ = dev_t
+        .send_command(
+            crate::packets::CMD_SET_TEMP_WEATHER,
+            &packet.to_bytes(),
+            true,
+        )
+        .await;
+}
+
 async fn run_weather(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
     const JOB_KIND: &str = "weather";
     let location = params
@@ -299,11 +342,32 @@ async fn run_weather(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
         .map(|d| health::JobHealth::new("weather", &mac, d.tx.clone()));
     let normal_interval = Duration::from_mins(15);
 
+    // Has this job selected the face its data is drawn on?
+    //
+    // 0x5F updates the temperature and icon ON the weather face; it does not
+    // bring that face forward. Every other live widget pushes frames into the
+    // channel it selects and is therefore self-sufficient — weather is the only
+    // one whose output is owned by a DIFFERENT channel, and it used to assume
+    // the device was already showing it. Verified on hardware 2026-09-07: with
+    // the panel left in Design by the album-art job, weather reported
+    // `{"success": true}` and the operator kept seeing album art.
+    //
+    // Asserted when the job starts and again whenever it re-acquires the device
+    // after a disconnect, but NOT on every 15-minute refresh: re-selecting the
+    // channel under someone who deliberately switched away would be the job
+    // fighting its user.
+    let mut face_selected = false;
+
     loop {
         let Some(daemon) = daemon_weak.upgrade() else {
             break;
         };
         let connected = get_device_transport(&daemon, &mac).await.is_some();
+        if !connected {
+            // The next successful push is a fresh acquisition, and the device
+            // may well have come back on a different channel.
+            face_selected = false;
+        }
         report_health(
             &daemon,
             &health,
@@ -335,33 +399,21 @@ async fn run_weather(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
                 if get_device_transport(&daemon, &mac).await.is_some() {
                     let d_weak = daemon_weak.clone();
                     let mac_clone = mac.clone();
+                    let select_face = !face_selected;
                     let _ = daemon
                         .queue
                         .run(None, async move {
                             if let Some(d) = d_weak.upgrade() {
                                 if let Some(dev_t) = get_device_transport(&d, &mac_clone).await {
-                                    let _ = dev_t
-                                        .send_command(
-                                            0x32,
-                                            &[0x01, 0x00, 0xFF, 0xFF, 0xFF, 0x00],
-                                            false,
-                                        )
-                                        .await;
-                                    let packet = crate::packets::WeatherPacket {
-                                        temperature_c: info.temperature_c,
-                                        weather: info.weather,
-                                    };
-                                    let _ = dev_t
-                                        .send_command(
-                                            crate::packets::CMD_SET_TEMP_WEATHER,
-                                            &packet.to_bytes(),
-                                            true,
-                                        )
-                                        .await;
+                                    push_weather(&dev_t, info, select_face).await;
                                 }
                             }
                         })
                         .await;
+                    // The face is selected for as long as this job keeps the
+                    // device. It is re-asserted only after a disconnect, not on
+                    // every refresh -- see the note on `face_selected`.
+                    face_selected = true;
                 }
             }
         }
