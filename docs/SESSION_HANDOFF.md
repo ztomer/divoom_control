@@ -59,14 +59,18 @@ shared memory. Read this on entry and **update it at the end of every round**
   measurement was taken against the previous build and recorded as a disproven
   hypothesis before the inode check caught it.
 
+  **`/Applications/Divoom.app` carries divoomd 0.34.0**, installed and verified
+  by that script (running-image inode matched the file it wrote), and the device
+  confirmed the weather fix against it.
+
 - **2026-09-07 (end of session) — v0.33.0 released and INSTALLED.** All six
   repos in the estate were released and installed locally: divoom-control
   v0.33.0, routines v0.41.0, monitor v0.47.0, ztools v2.3.0, app_updates
   v1.32.0 (its first tag ever), gates_of_heck v0.10.0.
 
   **The stale-daemon note below is now resolved**: `/Applications/Divoom.app`
-  carries divoomd 0.33.0, so the running daemon finally contains the R74 wedge
-  fixes and today's write-seam work.
+  was brought up to date here, and to 0.34.0 later the same day via
+  `scripts/install_local.sh`.
 
   **Open threads are unchanged:** D5 (connection census in `get_status`) and D6
   (client heartbeat + in-process self-watchdog).
@@ -130,9 +134,9 @@ shared memory. Read this on entry and **update it at the end of every round**
   exercised and it was labelled with the wrong remedy.
 
   **Live state:** the wedged pid was terminated and a fresh daemon answers in
-  0ms with 3 fds instead of 66. NOTE the running daemon is
-  `/Applications/Divoom.app/Contents/Frameworks/bin/divoomd` (installed v0.31.0)
-  and does NOT contain these fixes — reinstall to pick them up.
+  0ms with 3 fds instead of 66. (The "installed daemon is v0.31.0, reinstall to
+  pick these up" note that stood here is long superseded — see Current state for
+  what `/Applications` carries now.)
 
 - **2026-09-07 — Crash fix: the GUI focused itself by LaunchServices app name.**
   A user crash report (`org.python.python` 3.9.10, `EXC_CRASH`/DYLD "Library not
