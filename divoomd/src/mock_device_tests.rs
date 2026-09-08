@@ -129,6 +129,14 @@ pub mod tests {
                     .iter()
                     .position(|(id, _)| *id == 0x5F)
                     .expect("the 0x5F weather packet");
+                // 0x32 is GONE and must stay gone. It was a dead opcode on
+                // both sides of the port, it dimmed the screen 80 -> 66 on
+                // every run, and it was the last variable standing between a
+                // sequence that cycles and one that sits on a static clock.
+                assert!(
+                    !cmds.iter().any(|(id, _)| *id == 0x32),
+                    "the unexplained 0x32 must not come back"
+                );
                 assert!(
                     switch < data,
                     "the channel switch must come BEFORE the weather data, \

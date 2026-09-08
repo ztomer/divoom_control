@@ -292,17 +292,19 @@ pub(crate) async fn push_weather(
     info: crate::weather::WeatherInfo,
     select_face: bool,
 ) {
-    // UNEXPLAINED (2026-09-07). The only 0x32 in the daemon, a bare literal
-    // with no test and no note. `divoom_lib` calls that opcode `set lightness`,
-    // yet this payload has the shape of a 0x45 LIGHTING packet
-    // (Channel::Lighting, white RGB) -- the class R73 deleted two methods for.
-    // Left in place deliberately: removing it in the same change that adds the
-    // channel switch would confound the hardware test of the switch. It wants a
-    // wire trace, not a guess.
-    let _ = dev_t
-        .send_command(0x32, &[0x01, 0x00, 0xFF, 0xFF, 0xFF, 0x00], false)
-        .await;
-
+    // The 0x32 that used to open this sequence is GONE (2026-09-07).
+    //
+    // It was the only 0x32 in the daemon, a bare literal with no test and no
+    // note, sending `[01 00 FF FF FF 00]`. The opcode is a DEAD ENTRY on both
+    // sides of the port -- `divoom_lib/models/commands.py` and this crate's own
+    // `commands.rs` both map "set lightness" to 0x32 and neither map has a
+    // caller -- so nothing here had ever verified what it does.
+    //
+    // What the hardware showed: the clock packet below CYCLES clock ->
+    // temperature when sent on its own, and kept cycling when the 0x5F data was
+    // sent before it, after it, and with the panel dimmed. Every variable was
+    // eliminated except this send, which also dropped screen brightness 80 -> 66
+    // on every run while the music job left brightness alone.
     // 0x5F updates the temperature and icon ON the weather face; it does not
     // bring that face forward. Sent AFTER the 0x32 so that whatever that does
     // to the channel, this wins.

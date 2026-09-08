@@ -1,14 +1,8 @@
 [
   {
-    "check": "album_art",
-    "verdict": "PASS",
-    "detail": "{\"success\": true}",
-    "note": "perfect"
-  },
-  {
     "check": "weather",
     "verdict": "FAIL",
     "detail": "{\"success\": true}",
-    "note": "blank screen"
+    "note": "white clock face, but with lower brigthness"
   }
 ]
