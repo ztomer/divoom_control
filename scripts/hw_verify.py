@@ -44,6 +44,11 @@ from divoom_client.daemon_protocol import DEFAULT_SOCKET_PATH, DaemonClient  # n
 
 PASS, FAIL, SKIP, UNKNOWN = "PASS", "FAIL", "SKIP", "UNKNOWN"
 
+# Deliberately a big asset: the check is that the daemon's downscale lands a
+# real image on a 16x16 panel intact, which a pre-shrunk 16x16 fixture would
+# not exercise at all.
+DEFAULT_IMAGE = REPO / "divoom_gui" / "web_ui" / "assets" / "app_icon.png"
+
 
 @dataclass
 class Result:
@@ -61,7 +66,8 @@ class Check:
     needs_device: bool = True
     tags: list[str] = field(default_factory=list)
 
-    def drive(self, client: DaemonClient) -> tuple[bool, str]:
+    def drive(self, client: DaemonClient, ctx: dict) -> tuple[bool, str]:
+        """`ctx` carries what only the live daemon knows: `mac`, `size`, `image`."""
         raise NotImplementedError
 
 
@@ -72,8 +78,10 @@ class CallCheck(Check):
     args: list = field(default_factory=list)
     settle: float = 1.5
 
-    def drive(self, client):
-        reply = client.device_call(self.method, self.args)
+    def drive(self, client, ctx):
+        args = [ctx[a[1:]] if isinstance(a, str) and a.startswith("$") else a
+                for a in self.args]
+        reply = client.device_call(self.method, args)
         time.sleep(self.settle)
         if not isinstance(reply, dict):
             return False, f"non-dict reply: {reply!r}"
@@ -89,8 +97,10 @@ class CommandCheck(Check):
     cargs: dict = field(default_factory=dict)
     needs_device: bool = False
 
-    def drive(self, client):
-        reply = client.send_command(self.command, self.cargs)
+    def drive(self, client, ctx):
+        cargs = {k: (ctx[v[1:]] if isinstance(v, str) and v.startswith("$") else v)
+                 for k, v in self.cargs.items()}
+        reply = client.send_command(self.command, cargs)
         if not isinstance(reply, dict):
             return False, f"non-dict reply: {reply!r}"
         if reply.get("success") is False:
@@ -98,34 +108,74 @@ class CommandCheck(Check):
         return True, json.dumps(reply)[:200]
 
 
+@dataclass
+class LiveJobCheck(Check):
+    """Start one live widget job and watch the panel.
+
+    The four widget checks are `live_job_start`, NOT `device_call`. That is the
+    whole reason this packet failed five for five on 2026-09-07: it named
+    `live_jobs.start` / `media.push_album_art` / `display.show_weather`, none of
+    which the daemon has ever answered, and the R12 visual pass sat in the
+    roadmap as "needs a device" when it would have failed identically with no
+    device attached. The names now come from the daemon's own match arms and are
+    held there by `tools/check_hw_verify_methods.py`.
+    """
+    kind: str = ""
+    params: dict = field(default_factory=dict)
+    settle: float = 8.0
+
+    def drive(self, client, ctx):
+        # Clear whatever the previous check left running: the jobs share one
+        # panel, so a music job still pushing album art would sit on top of the
+        # weather face and the operator would grade the wrong widget.
+        client.send_command("live_jobs_stop_for", {"mac": ctx["mac"]})
+        params = dict(self.params)
+        params.setdefault("size", ctx["size"])
+        reply = client.send_command(
+            "live_job_start",
+            {"mac": ctx["mac"], "kind": self.kind, "params": params})
+        if not isinstance(reply, dict):
+            return False, f"non-dict reply: {reply!r}"
+        if reply.get("success") is False:
+            return False, str(reply.get("error") or reply)
+        time.sleep(self.settle)
+        return True, json.dumps(reply)[:200]
+
+
 def build_checks() -> list[Check]:
     """The packet. Each entry names what a person must SEE, not what returned 0."""
     return [
-        CallCheck(
+        LiveJobCheck(
             id="sysmon", tags=["P2.2"],
             title="System-monitor gauges on a matrix",
             look="CPU / RAM bars on the device, and the values MOVING over ~10s "
                  "(a frozen plausible number looks identical to a working one)",
-            method="live_jobs.start", args=["sysmon"], settle=10.0,
+            kind="sysmon", settle=12.0,
         ),
-        CallCheck(
+        LiveJobCheck(
             id="album_art", tags=["P2.3", "R12"],
             title="Album cover on the device",
             look="the current track's cover art, NEAREST-scaled (blocky, not "
-                 "smoothed) and matching the GUI preview pixel for pixel",
-            method="media.push_album_art", args=[],
+                 "smoothed) and matching the GUI preview pixel for pixel. "
+                 "PLAY SOMETHING FIRST — with no track this job has nothing to "
+                 "push, and a dark panel then means 'nothing playing', not "
+                 "'broken'",
+            kind="music", settle=10.0,
+        ),
+        LiveJobCheck(
+            id="weather", tags=["P2.3", "R12"],
+            title="Weather widget on the device",
+            look="the weather face with a plausible temperature for your city",
+            kind="weather", settle=10.0,
         ),
         CallCheck(
             id="custom_art", tags=["P2.3", "R12"],
             title="Custom art (local image) on the device",
-            look="the image you picked, right way up, filling the panel",
-            method="display.show_image", args=[],
-        ),
-        CallCheck(
-            id="weather", tags=["P2.3", "R12"],
-            title="Weather widget on the device",
-            look="the weather face with a plausible temperature for your city",
-            method="display.show_weather", args=[],
+            look="the image at --image, right way up, filling the panel. The "
+                 "default is a 1024x1024 asset, so the point of the check is "
+                 "that the daemon's downscale lands it on the panel intact — "
+                 "recognisable, not a smear and not a crop",
+            method="display.show_image", args=["$image"], settle=3.0,
         ),
         CommandCheck(
             id="weather_city", tags=["P2.6"],
@@ -189,19 +239,29 @@ def require_daemon(socket_path: str) -> DaemonClient:
     return client
 
 
-def device_connected(client: DaemonClient) -> tuple[bool, str]:
+def device_connected(client: DaemonClient) -> tuple[bool, str, dict]:
+    """Connected? plus the status line, plus what the checks need FROM it.
+
+    The third value exists because the live-widget jobs are addressed by `mac`.
+    A packet that only knew "connected: true" could not start one, which is how
+    the old device_call-shaped checks avoided ever learning the real API.
+    """
     try:
         st = client.device_status()
     except Exception as exc:
-        return False, str(exc)
+        return False, str(exc), {}
     if not isinstance(st, dict):
-        return False, f"unexpected status: {st!r}"
+        return False, f"unexpected status: {st!r}", {}
     mac = st.get("mac")
-    return bool(st.get("connected")), f"mac={mac} connected={st.get('connected')}"
+    return (bool(st.get("connected")),
+            f"mac={mac} connected={st.get('connected')}",
+            {"mac": mac, "size": st.get("size")})
 
 
-def run_packet(client, checks, interactive, results):
-    connected, detail = device_connected(client)
+def run_packet(client, checks, interactive, results, ctx=None):
+    connected, detail, dev = device_connected(client)
+    ctx = {**(ctx or {}), **{k: v for k, v in dev.items() if v is not None}}
+    ctx.setdefault("size", 16)
     if connected:
         ok(f"device connected — {detail}")
     else:
@@ -216,7 +276,7 @@ def run_packet(client, checks, interactive, results):
             results.append(Result(c.id, FAIL, "no device connected"))
             continue
         try:
-            fired, detail = c.drive(client)
+            fired, detail = c.drive(client, ctx)
         except Exception as exc:
             err(f"call raised: {exc}")
             results.append(Result(c.id, FAIL, f"raised: {exc}"))
@@ -240,7 +300,7 @@ def self_test(client) -> int:
     section("self-test: can this packet report FAILURE?")
     probe = CallCheck(id="_probe", title="deliberately invalid device call",
                       look="n/a", method="definitely.not.a.real.method", args=[])
-    fired, detail = probe.drive(client)
+    fired, detail = probe.drive(client, {})
     if fired:
         err("an invalid device_call was reported as SUCCESS")
         info(f"  reply: {detail}")
@@ -248,7 +308,7 @@ def self_test(client) -> int:
         info("  one, so none of its PASS verdicts mean anything. Fix this")
         info("  before trusting a single result.")
         return 1
-    connected, cdetail = device_connected(client)
+    connected, cdetail, _dev = device_connected(client)
     # WHY it failed matters as much as THAT it failed. With no device attached
     # the daemon refuses at the precondition before it ever looks at the method
     # name -- so a green line here would be reporting the wrong property, which
@@ -284,6 +344,10 @@ def main() -> int:
     ap.add_argument("--self-test", action="store_true",
                     help="prove the packet can report FAILURE, then exit")
     ap.add_argument("--out", default="", help="write a JSON report here")
+    ap.add_argument("--image", default=str(DEFAULT_IMAGE),
+                    help="image for the custom_art check")
+    ap.add_argument("--size", type=int, default=0,
+                    help="panel size; 0 asks the daemon, falling back to 16")
     args = ap.parse_args()
 
     checks = build_checks()
@@ -309,8 +373,15 @@ def main() -> int:
         warn("stdin is not a terminal — every LOOK will be recorded UNKNOWN.")
         warn("  Nothing here can PASS without a person; that is the point.")
 
+    ctx: dict = {"image": args.image}
+    if args.size:
+        ctx["size"] = args.size
+    if not Path(args.image).is_file():
+        err(f"--image does not exist: {args.image}")
+        return 2
+
     results: list[Result] = []
-    run_packet(client, checks, interactive, results)
+    run_packet(client, checks, interactive, results, ctx)
 
     section("summary")
     tally: dict[str, int] = {}

@@ -85,7 +85,14 @@ def test_rejected_command_is_FAIL_even_with_a_device():
 
 def test_a_raising_call_is_FAIL_not_a_crash():
     class Boom(FakeClient):
+        # BOTH transports, because the packet uses both: the widget checks are
+        # `live_job_start` socket commands and only custom_art is a device_call.
+        # Raising from device_call alone made this test silently stop covering
+        # the first check in the packet the moment that check changed transport.
         def device_call(self, method, args=None):
+            raise RuntimeError("socket closed")
+
+        def send_command(self, command, args=None):
             raise RuntimeError("socket closed")
 
     client = Boom(status={"connected": True, "mac": "AA:BB"})

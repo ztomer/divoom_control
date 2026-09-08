@@ -1,0 +1,32 @@
+[
+  {
+    "check": "sysmon",
+    "verdict": "FAIL",
+    "detail": "device_call method not ported yet: live_jobs.start",
+    "note": ""
+  },
+  {
+    "check": "album_art",
+    "verdict": "FAIL",
+    "detail": "device_call method not ported yet: media.push_album_art",
+    "note": ""
+  },
+  {
+    "check": "custom_art",
+    "verdict": "FAIL",
+    "detail": "display.show_image requires a path or blob[0]",
+    "note": ""
+  },
+  {
+    "check": "weather",
+    "verdict": "FAIL",
+    "detail": "device_call method not ported yet: display.show_weather",
+    "note": ""
+  },
+  {
+    "check": "weather_city",
+    "verdict": "FAIL",
+    "detail": "Weather/SearchCity failed (RC=1): Failed",
+    "note": ""
+  }
+]

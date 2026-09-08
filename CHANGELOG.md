@@ -30,6 +30,48 @@ shipped milestone (per the project planning docs).
   it was written.* Both entries were written accurate and were falsified by later
   work that updated the code and the CHANGELOG but not the instruction.
 
+### Fixed — the hardware packet named an API the daemon has never had
+
+- **`hw_verify.py` failed 5/5 against a connected device, and three of the five
+  never reached the panel.** The daemon answered `method not ported yet` to
+  `live_jobs.start`, `media.push_album_art` and `display.show_weather`. None of
+  them exist. They are pre-port Python spellings, left behind when the widget
+  jobs moved into `divoomd`, where they are the **`live_job_start` socket
+  command** taking `{mac, kind, params}` with kinds `sysmon` / `stocks` /
+  `weather` / `music` (`music` is the album-art path). A fourth, `custom_art`,
+  named a real method and passed it no argument.
+
+  So the **R12 visual pass has been unrunnable for rounds** while the roadmap
+  filed it under "needs a device": it would have failed identically with nothing
+  attached. The packet is rewritten against the daemon's own match arms — a new
+  `LiveJobCheck` starts each widget job, stopping whatever the previous check
+  left running so the operator grades the widget they were asked about.
+
+- **`--self-test` could not have caught this, and that is the real finding.** It
+  proves the packet reports FAILURE for a deliberately bogus method — a claim
+  about the packet's error handling, not about whether its OWN names exist. Both
+  read as "the harness is calibrated"; only one was true. An instrument that is
+  structurally blind to the property being measured reads correctly and about
+  the wrong dimension.
+
+  Closed structurally by **`tools/check_hw_verify_methods.py`** (now in
+  `GOH_CI_STEPS`): it reads the daemon's match arms and the packet, and fails
+  when the packet names something the daemon does not answer — with **no
+  hardware**, so a moved API reddens a push instead of appearing as a hardware
+  fault in front of someone holding a device. It carries its own calibration
+  floor: below 100 commands or 2 live-job kinds the extractor is not reading
+  what it thinks it is, and comparing against a near-empty set would report
+  compliance over nothing, so that is a failure rather than a pass.
+
+  Class: *a harness that verifies its failure path and assumes its success
+  path.* Proving a check can go red says nothing about whether it is wired to
+  the thing it claims to measure.
+
+- `tests/test_hw_verify.py`'s raising-client test now raises from **both**
+  transports. It made the client raise from `device_call` only, and selected its
+  subject as "the first device-bound check" — so the moment that check became a
+  socket command, the test quietly stopped covering it while still passing.
+
 ## v0.33.0 — the residuals the last release's own fix left behind (2026-09-07)
 
 ### Fixed — only two of twelve client writes were bounded
