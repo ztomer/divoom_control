@@ -72,6 +72,55 @@ shipped milestone (per the project planning docs).
   subject as "the first device-bound check" — so the moment that check became a
   socket command, the test quietly stopped covering it while still passing.
 
+### Found on hardware — the weather live job never brings the weather face forward
+
+- **R12 visual pass: 3 PASS, 1 FAIL, 1 XFAIL (2026-09-07, on a live device).**
+  `sysmon`, `album_art` and `custom_art` all verified on the panel by eye.
+  `weather` FAILED with the operator's note **"still seeing album art"** while
+  the daemon replied `{"success": true}` — a job that reports success at START
+  and then produces nothing visible.
+
+- **Mechanism (static, plus two competing causes ruled out).** `run_weather`
+  sends `0x32` then `CMD_SET_TEMP_WEATHER` (0x5F) and **never sends
+  `CMD_SET_LIGHT_MODE` (0x45)**. 0x5F updates the temperature and icon *on* the
+  weather face; it does not bring that face to the front. `display.show_image`
+  does switch (`channel_switch(Channel::Design)`), which is exactly why
+  `custom_art` passed. So once `album_art` has put the panel in the Design
+  channel, weather data lands on something nobody is looking at and the previous
+  frame stays lit.
+
+  The two rival explanations were checked, not assumed: `wttr.in` with an empty
+  location geolocates by IP and returned a parseable reading (24C, code 122), so
+  the fetch is not failing; and `stop_all_for_device` does abort the tasks for a
+  mac, so the music job is not still pushing. What is NOT yet proven on the wire
+  is that the 0x5F left the daemon — that needs a `DIVOOMD_BLE_DEBUG` trace.
+
+- **The GUI has the identical gap.** `media_sync.toggle_weather_sync` is
+  `live_job_start(mac, "weather")` and nothing else — no channel switch anywhere
+  near it. This is not a harness artefact: a user toggling weather on while the
+  panel shows album art gets the same silence.
+
+  **Class:** *a job that sets DATA for a face without ensuring the face is
+  shown.* `sysmon`, `album_art` and `custom_art` are self-sufficient because
+  they push frames into the Design channel they select. `weather` is the only
+  widget whose output is owned by a DIFFERENT channel, and it is the only one
+  that assumed the device was already showing it. It would have passed every
+  test run that happened to start from a clock face, which is how it survived.
+
+- **`check_weather_parity.py` is blind to this by construction** — it compares
+  the Rust and Python WMO code MAPS, a property both sides share, and says
+  nothing about the send SEQUENCE. A comparison cannot see a defect present on
+  both sides of it.
+
+- **The single `0x32` send is unexplained and undocumented.** It is the only
+  occurrence in the daemon, written as a bare literal; the reference calls that
+  opcode `set lightness` (`divoom_lib/models/commands.py`), and the payload
+  `[0x01, 0x00, 0xFF, 0xFF, 0xFF, 0x00]` has the shape of a 0x45 LIGHTING packet
+  (`Channel::Lighting`, white RGB), not of a brightness argument. That is the
+  shape of the class R73 deleted two methods for — parameters that do not
+  correspond to the fields of the packet they are sent in. **Not changed here:
+  it wants a wire trace, not a guess.**
+
 ## v0.33.0 — the residuals the last release's own fix left behind (2026-09-07)
 
 ### Fixed — only two of twelve client writes were bounded

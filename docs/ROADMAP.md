@@ -400,9 +400,18 @@ exactly the work `scripts/hw_verify.py` was written to collect:
   18:41 -> 21:42 on command. The Python path R72 replaced had been swallowing
   an `AttributeError` into a silent `False`.
 
-- **R12 visual pass** — album cover, custom art, weather on a real device, at
-  real scale, light and dark surroundings. **Still open, but it was never
-  blocked on hardware**: run against a connected device on 2026-09-07 the packet
+- **R12 visual pass — RUN 2026-09-07: 3 PASS, 1 FAIL, 1 XFAIL.** `sysmon`,
+  `album_art` and `custom_art` verified on the panel by eye. **`weather` FAILED
+  — "still seeing album art" against a `{"success": true}` reply.** `run_weather`
+  never sends `CMD_SET_LIGHT_MODE`, so 0x5F updates a face the device is not
+  showing once another job has selected the Design channel; the GUI's
+  `toggle_weather_sync` has the identical gap. Detail and the ruled-out rival
+  causes in the CHANGELOG. **This is the open item now**, and it needs a fix
+  plus a rebuild-and-reinstall cycle, not more looking.
+
+  What is left of the original pass: re-run `weather` after the fix, and the
+  light/dark-surroundings judgement for the three that passed. It was never
+  blocked on hardware: run against a connected device on 2026-09-07 the packet
   failed 5/5, and three of those never reached the panel — it named
   `live_jobs.start`, `media.push_album_art` and `display.show_weather`, which
   the daemon has never answered. The widget jobs are `live_job_start` with kinds
