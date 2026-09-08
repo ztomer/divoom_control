@@ -201,6 +201,88 @@ source. Detail in the v0.27.0 CHANGELOG stanza.
 
 **Open: nothing in this workstream.** Both items closed in R68.
 
+### OPEN — the weather widget should RENDER, not drive the device's own face
+
+_Raised 2026-09-07, immediately after the hardware round that fixed it._
+
+`run_weather` sends 0x5F weather data and a `ClockPacket`, i.e. it configures
+the DEVICE's built-in clock face and lets the firmware draw and cycle it. That
+is why it was the only widget that broke: `sysmon`, `album_art`, `stocks` and
+`custom_art` all RENDER pixels here and push frames into the Design channel, so
+they own what appears. Weather borrows a face it does not control, and inherits
+its behaviour — the cycling, the panel semantics (`weather` draws TEMPERATURE,
+`humidity` draws the icon face), and whatever the firmware decides to do next.
+
+**It should be a rendered widget like the others**: a `weather` kind in
+`render_widget::KINDS`, drawing the current condition and temperature into a
+frame the daemon composes, with a layout this project controls and an update
+cadence it chooses. `crate::weather::fetch` already returns the reading, and
+`live_jobs/render.rs` + `font.rs` already do this job for sysmon and text.
+
+Two things this buys beyond consistency: the widget stops being at the mercy of
+a firmware face nobody here specified, and it becomes the first consumer of the
+custom-image path the MCP item below wants to expose — so the two are one piece
+of work, not two.
+
+### OPEN — expose the custom-image surface over MCP, so any app can draw on the panels
+
+_Raised 2026-09-07. The intent: every app the user runs should be able to put
+its own information on a Divoom panel, with the daemon owning the device._
+
+**It makes sense, and most of the machinery exists.** MCP already exposes
+`show_image` and `push_animation`; `render_widget` already composes frames;
+`image_proc::process_image_bytes` already sniffs the container (macOS reports
+`image/jpeg` for TIFF bytes, so the declared MIME may never be trusted) and
+scales NEAREST. What is missing is everything AROUND the pixels.
+
+The three things named in the request, and where they already live:
+
+- **Relative positions** — `wall.rs` already has `DeviceSlot { mac, x, y, size,
+  width, height }` and `DivoomWall { total_width, total_height, min_x, min_y,
+  grid_unit_size, is_free_form }`. This is internal; it needs to be QUERYABLE.
+- **Available image size** — per device, not global. `get_capabilities` exists
+  and should carry the panel size and device class rather than a caller
+  assuming 16x16.
+- **Whether to resize** — a policy the caller states (`fit` / `fill` / `none`,
+  and reject-vs-scale when the image does not match), because the daemon
+  scaling silently is how a caller ships a smeared panel and never learns.
+
+**What the request does not yet cover, and needs:**
+
+1. **Arbitration.** The daemon's live jobs already overwrite each other — the
+   hardware harness has to call `live_jobs_stop_for` between checks or album art
+   bleeds into the next widget. Add N external apps and "who owns this panel"
+   becomes the whole problem. There is a seam already: `exclusive_start` /
+   `exclusive_end` with a token. Needs a lease model with an owner, a priority,
+   and a defined loser.
+2. **A lease EXPIRY, and what the panel shows when a client dies.** Today the
+   last frame stays lit forever; that is exactly the "still seeing album art"
+   symptom from this round. A crashed app must not own a panel indefinitely.
+3. **Rate limiting by conflation, not queueing.** BLE is slow and two apps at
+   10fps will saturate it. Keep the LATEST frame per device and drop the
+   intermediates — the same conclusion the status fan-out reached (a lagging
+   consumer wants the CURRENT truth, not a backlog).
+4. **Authentication is a DECISION, not a default.** R72 found an
+   unauthenticated control surface handing every GUI API method to any local
+   process. "Any app can draw on the panel" is that surface again, deliberately.
+   Whether it is unauthenticated, token-gated, or allowlisted must be chosen and
+   written down, not inherited.
+5. **Honest failure.** A push to a disconnected device must say so. The device
+   is frequently absent and a silent success would leave callers rendering into
+   nothing.
+6. **The wall as ONE canvas.** The most valuable thing here and the least
+   obvious: `DivoomWall` already models a composite surface, so a caller should
+   be able to push a single image to the WALL and have the daemon slice it
+   across devices by their slots. That is the feature that makes "relative
+   positions" worth exposing at all — otherwise every caller reimplements the
+   slicing.
+7. **Text without rasterizing.** `font.rs` and the `text` widget kind already
+   exist; callers will want "show this string" rather than shipping pixels.
+
+**Sequencing:** the render-the-weather-widget item above is the natural first
+consumer — do it first and the custom-image path gets a real user inside the
+daemon before any external app depends on it.
+
 ### OPEN — why did 64 subscriptions accumulate in the first place?
 
 The 2026-09-07 wedge is now structurally impossible (a bounded, self-cleaning
