@@ -96,7 +96,10 @@ pub mod tests {
         let transport = d.device.lock().await.clone().expect("a mock device");
         crate::live_jobs::push_weather(
             &transport,
-            WeatherInfo { temperature_c: 21, weather: WeatherType::Clear },
+            WeatherInfo {
+                temperature_c: 21,
+                weather: WeatherType::Clear,
+            },
             true,
         )
         .await;
@@ -105,10 +108,23 @@ pub mod tests {
         if let Some(ref transport_arc) = &*device_lock {
             if let DeviceTransport::Mock(ref mock) = **transport_arc {
                 let cmds = mock.sent_commands.lock().unwrap();
+                // NOT just "a 0x45 starting with 0x00". The first version of
+                // this test asserted exactly that, and PASSED while the code
+                // sent `channel_switch(Channel::Clock)` -- ten zero bytes, an
+                // INACTIVE clock face in BLACK, which reached the panel as a
+                // blank screen. A test that only checks the channel byte cannot
+                // see a malformed packet for that channel, so it must assert
+                // the fields that make the face visible.
                 let switch = cmds
                     .iter()
-                    .position(|(id, p)| *id == 0x45 && p.first() == Some(&0x00))
-                    .expect("a 0x45 switch to the Clock channel (0x00)");
+                    .position(|(id, p)| {
+                        *id == 0x45
+                            && p.first() == Some(&0x00)      // Clock channel
+                            && p.get(3) == Some(&0x01)       // active
+                            && p.get(5) == Some(&0x01)       // the weather panel
+                            && p[7..10] != [0x00, 0x00, 0x00] // not drawn in black
+                    })
+                    .expect("an ACTIVE clock face with the weather panel on, in a visible colour");
                 let data = cmds
                     .iter()
                     .position(|(id, _)| *id == 0x5F)

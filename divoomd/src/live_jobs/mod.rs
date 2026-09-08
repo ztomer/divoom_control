@@ -287,7 +287,11 @@ async fn run_stocks(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
 /// It lives apart from `run_weather` because that function fetches from
 /// wttr.in, and a test that has to reach the network to check a byte sequence
 /// is a test nobody trusts. This is the half worth pinning.
-pub(crate) async fn push_weather(dev_t: &Arc<DeviceTransport>, info: crate::weather::WeatherInfo, select_face: bool) {
+pub(crate) async fn push_weather(
+    dev_t: &Arc<DeviceTransport>,
+    info: crate::weather::WeatherInfo,
+    select_face: bool,
+) {
     // UNEXPLAINED (2026-09-07). The only 0x32 in the daemon, a bare literal
     // with no test and no note. `divoom_lib` calls that opcode `set lightness`,
     // yet this payload has the shape of a 0x45 LIGHTING packet
@@ -303,12 +307,22 @@ pub(crate) async fn push_weather(dev_t: &Arc<DeviceTransport>, info: crate::weat
     // bring that face forward. Sent AFTER the 0x32 so that whatever that does
     // to the channel, this wins.
     if select_face {
+        // A ClockPacket, NOT `channel_switch(Channel::Clock)`. The bare helper
+        // is `[channel, 0 x 9]`, which for the clock means active=0 and an RGB
+        // of BLACK -- an inactive clock face drawn in black. Sent on hardware
+        // 2026-09-07 it turned "still seeing album art" into a blank screen,
+        // which is a different bug, not a fix. `switch_channel("clock")` had
+        // used the packet builder for exactly this reason; this send did not.
+        //
+        // `weather: true` is the point of the job: R73 established on hardware
+        // that the clock face's extra panels are what put weather on the
+        // screen. Selecting the channel alone would show a clock.
+        let face = crate::packets::ClockPacket {
+            weather: true,
+            ..Default::default()
+        };
         let _ = dev_t
-            .send_command(
-                crate::packets::CMD_SET_LIGHT_MODE,
-                &crate::packets::channel_switch(crate::packets::Channel::Clock),
-                false,
-            )
+            .send_command(crate::packets::CMD_SET_LIGHT_MODE, &face.to_bytes(), false)
             .await;
     }
 

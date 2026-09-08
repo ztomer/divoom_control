@@ -1,32 +1,14 @@
 [
   {
-    "check": "sysmon",
-    "verdict": "PASS",
-    "detail": "{\"success\": true}",
-    "note": "works great"
-  },
-  {
     "check": "album_art",
     "verdict": "PASS",
     "detail": "{\"success\": true}",
-    "note": "works great"
+    "note": "perfect"
   },
   {
     "check": "weather",
     "verdict": "FAIL",
     "detail": "{\"success\": true}",
-    "note": "still seeing album art"
-  },
-  {
-    "check": "custom_art",
-    "verdict": "PASS",
-    "detail": "{\"result\": true, \"success\": true}",
-    "note": "nice"
-  },
-  {
-    "check": "weather_city",
-    "verdict": "FAIL",
-    "detail": "Weather/SearchCity failed (RC=1): Failed",
-    "note": ""
+    "note": "blank screen"
   }
 ]
