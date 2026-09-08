@@ -172,14 +172,15 @@ def build_checks() -> list[Check]:
         LiveJobCheck(
             id="weather", tags=["P2.3", "R12"],
             title="Weather widget on the device",
-            look="the device CYCLES between the clock and the weather panel — "
-                 "it does NOT draw one combined face. WATCH IT for ~30s. A "
-                 "white digital clock is the CLOCK PHASE of that cycle and is "
-                 "not a failure; you are waiting for the temperature/weather "
-                 "screen to come round. Answer n only if the cycle never "
-                 "reaches weather. (R73 established the cycling on hardware, "
-                 "and this instruction claimed a single weather face until "
-                 "2026-09-07, when a working command was graded FAIL twice)",
+            look="the device CYCLES; it does NOT draw one combined face. WATCH "
+                 "IT for ~30s. You are waiting for a TEMPERATURE screen to "
+                 "alternate with the clock — measured on hardware 2026-09-07, "
+                 "the `weather` flag drives a temperature panel, and it is the "
+                 "`humidity` flag that draws the icon face people call "
+                 "'weather'. A white digital clock is the CLOCK PHASE and is "
+                 "not a failure. Answer n only if the cycle never leaves the "
+                 "clock. (This instruction claimed a single weather face, then "
+                 "a weather panel; both graded a working command FAIL.)",
             kind="weather", settle=12.0,
         ),
         CallCheck(
