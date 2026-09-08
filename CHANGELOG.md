@@ -4,7 +4,14 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
-## Unreleased
+## v0.34.0 — the weather widget was invisible, and the harness could not have found it (2026-09-07)
+
+A hardware round. The R12 visual pass — open since R12 and filed for rounds as
+"needs a device" — was run, found a real defect, and closed 4/4 on real pixels.
+It also established that the packet had been **unrunnable the whole time**: it
+named a pre-port API the daemon has never answered, so it would have failed
+identically with nothing attached. Three of the defects fixed here are the
+reviewer's own, made while fixing the first two.
 
 ### Fixed — two docs told a hardware run something the code had already disproven
 
