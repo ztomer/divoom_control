@@ -96,6 +96,28 @@ pub struct ClockPacket {
     pub rgb: [u8; 3],
 }
 
+// What these three flags actually DRAW, measured on a Tivoo-Max 2026-09-07 by
+// sending each combination and watching the panel. The names are the APK's and
+// they mislead:
+//
+//   weather  -> a TEMPERATURE screen
+//   humidity -> the weather ICON face (what a person calls "the weather")
+//   date     -> a date screen
+//
+// The device CYCLES between the clock and whichever of these are set; it never
+// draws one combined face. A control run with `weather: false, humidity: true,
+// date: true` showed "clock, weather, date" -- the icon face appearing with the
+// weather flag OFF is what pins the mapping. Two hardware runs graded a working
+// command FAIL because an instruction said to look for a "weather face".
+//
+// Note what this means for the table at the top of this file: the DISCARDED
+// `display.show_clock` builder labelled bytes 4/5/6 `weather / temp / calendar`,
+// which is what they actually DRAW. Its bug was never the labels -- it was that
+// it wrote a caller's `weather=` into byte 4. The names kept here are the APK's;
+// they describe the fields, not the screens. Keep them (they are the wire
+// contract and the parity gate's vocabulary) and read this comment before
+// writing anything a person will be asked to look for.
+
 impl Default for ClockPacket {
     fn default() -> Self {
         Self {
