@@ -9,6 +9,21 @@ forward-looking one. Recover a round plan with
 
 ## Shipped
 
+- **v0.34.0 — the hardware round (2026-09-07)**: the R12 visual pass, open
+  since R12, closed **4/4 on real pixels**. It found one real defect —
+  `run_weather` set weather DATA and never selected the face that draws it, so
+  after any job that took the Design channel it updated something invisible, and
+  the GUI's own weather toggle had the same gap. On the way it established that
+  `hw_verify` had been **unrunnable for rounds**, naming a pre-port API
+  (`live_jobs.start`, `media.push_album_art`, `display.show_weather`) the daemon
+  has never answered — so the pass would have failed identically with no device
+  attached. `--self-test` could not have caught that: it proves the packet
+  reports FAILURE for a bogus method, which says nothing about whether its own
+  names exist. Three further defects were the reviewer's own, made while fixing
+  the first two. New gates: `check_hw_verify_methods.py`, a `BareChannel` type
+  that makes the bad clock switch uncompilable, and `scripts/install_local.sh`,
+  which proves the daemon that comes back is the binary it just wrote.
+
 - **v0.30.0 — R71 + R72 (2026-08-31)**: the gates got real, and the daemon got
   its jobs back. **R71**: `pre-push` ran four structural checks while appearing
   to run eighteen — the rust and python layers were commented out, so the whole
@@ -365,107 +380,58 @@ All 4 clusters implemented:
 Bonus fix: device-selector "not in range" badge now counts consecutive scan misses
 (downgrades after 2), not a one-shot startup flag. 5 new e2e tests.
 
-### Deferred — all of it now needs a device
+### Deferred — what is left, and what each one is waiting on
 
-Closed entries pruned to git history (`Cloud browse cannot say WHY it is empty`,
-closed by R70; `Cloud/ToDevice`, closed WONTFIX by R71 P4). What is left is
-exactly the work `scripts/hw_verify.py` was written to collect:
+Everything R73 and the 2026-09-07 hardware round CLOSED is pruned to git
+history: the three unexposed API methods, `sync_time`, `pic_scan_ctrl` 0x35 and
+the R12 visual pass. Recover any of them with `git log -p -- docs/ROADMAP.md`;
+the reasoning lives in the CHANGELOG stanzas that shipped them.
 
-- **~~Three UNEXPOSED API methods~~ — RESOLVED on hardware, R73 (2026-08-31).**
-  Two of the three were broken; being never-called was the shared property, not
-  a coincidence.
-  - `set_clock_rich` — **WORKS, and is WIRED (R73).** It does not draw one
-    combined face as assumed: it makes the panel CYCLE separate weather / date /
-    temperature / clock screens, which is what the clock panel's "Extra Panels"
-    checkboxes now drive. `check_gui_api_reachable.py`'s allowlist is EMPTY as a
-    result — nothing here is outstanding.
-  - `set_temperature_channel` — **DELETED.** There is no temperature channel;
-    `0x01` is LIGHTING (this repo's own `Channel::Lighting`). The payload put
-    `temp_type` in the red byte, shifting the colour: white rendered cyan, red
-    rendered bright green, both predicted from the layout before the test and
-    both confirmed on the panel. `docs/CHANNEL_ARCHITECTURE.md` had recorded
-    this exact cyan screen years earlier and explained it away as "a
-    device-state issue... the APK is ground truth". Doc corrected.
-  - `set_timeplan` — **DELETED.** Four defects: `index` accepted and silently
-    discarded (the 0x56 packet carries no index), `channel` written into the
-    `mode` byte (no channel field exists), `type` hardcoded to 0 = Animation
-    with an empty animation, and `week=0` meaning no days. Never fired on
-    hardware. The daemon primitives 0x56/0x57 are faithful ports of the
-    reference and were kept.
+- **R12 light/dark surroundings** — the only residue of the visual pass. The
+  four widgets are verified on the panel; what was never done is judging them
+  against a light AND a dark backdrop. That is a photograph, not a code change.
 
-  **Class:** *a method whose parameters do not correspond to the fields of the
-  packet it sends.* Both instances were reachable-but-uncalled code.
+- **Scrolling text — implemented, daemon-only, unsupported by THIS device.** The
+  APK marquee sequence is fully ported as `text.show_scrolling_text` (0x6E start,
+  0x7C glyph upload, 0x86 string, 0x86 rate). In a `DIVOOMD_BLE_DEBUG` window the
+  Tivoo-Max acked `0x45` and returned nothing for `0x6E`/`0x7C`/`0x86`, while the
+  same trace showed our bytes were correct. No GUI surface, deliberately. The
+  other three devices are the same 16x16 class and untested — **if one acks
+  `0x7C`, wiring a button is small work on top of what exists.**
 
-- **~~`sync_time` on hardware~~ — DONE, R73.** The device clock moved
-  18:41 -> 21:42 on command. The Python path R72 replaced had been swallowing
-  an `AttributeError` into a silent `False`.
+- **`search_weather_city` — the success path is DISPROVEN, not unproven.**
+  Against the real, logged-in account it returns `Weather/SearchCity failed
+  (RC=1): Failed` for every keyword. Isolated by elimination on the same daemon,
+  credentials and HTTP client, in the same minute:
 
-- **~~R12 visual pass~~ — DONE 2026-09-07. 4/4 on real pixels.** `sysmon`,
-  `album_art`, `custom_art` and `weather` ("digital clock, temp, cycles"), with
-  the `search_weather_city` canary recording XFAIL by design. It found one real
-  defect -- `run_weather` set weather DATA without ever selecting a face, so it
-  was invisible after any job that took the Design channel -- and, in fixing it,
-  three of the reviewer's own: the bare `channel_switch` builder (an inactive
-  black clock), a regression test that passed against ten zero bytes, and an
-  operator instruction that named the wrong screen twice. The unexplained `0x32`
-  was removed on evidence and the brightness clobber went with it. Detail in the
-  CHANGELOG.
+  | Call | Result |
+  |---|---|
+  | `GetCategoryFileListV2` | 6 items |
+  | `Channel/GetDialType` | full type list |
+  | `Weather/SearchCity` | **RC=1 Failed** |
 
-  **Left over from it:** the light/dark-surroundings judgement for the three that
-  passed, which is a photograph rather than a code change.
+  So the server rejects this one endpoint: retired, or it wants a field we do not
+  send (our body is `Command/Token/UserId/DeviceId/KeyWord`). **Do not guess at
+  field names** — the next step is a capture of the official app issuing a city
+  search, or dropping the feature. The GUI already surfaces the failure with its
+  reason, and `hw_verify` carries it as an XFAIL canary that will report XPASS if
+  the server ever starts answering.
 
-- **~~`pic_scan_ctrl` 0x35~~ — RESOLVED, R73. It is `SPP_SCROLL`, and the R12
-  audit that called it a missing opcode was wrong.** `SppProc$CMD_TYPE.java`
-  has `SPP_SAND_PAINT_CTRL(52)` then `SPP_SCROLL(53)` = 0x35. That audit's own
-  citation had been pruned to git history (`b64c144`), so the daemon comment
-  pointed at a file nobody could open to check it.
+- **The device does not always reconnect after a daemon restart.** Seen
+  repeatedly on 2026-09-07: `scan` times out while `connect` with the saved
+  identifier succeeds immediately. Unexplained, and a nuisance for any hardware
+  round. Nothing is known about whether it affects normal use, where the daemon
+  is not being restarted every few minutes.
 
-  Ground truth is `CmdManager.b3(mode, speed)`, the APK's only SPP_SCROLL
-  builder, and our bytes already matched it exactly. It shows nothing because
-  it sets the scroll mode for content the device is ALREADY scrolling.
-  **Not unsupported; unwireable until scrolling frames exist.** Renamed
-  `set_scroll`; the invented `control=1` branch was removed, and
-  under-specified calls now refuse instead of sending a zero-speed no-op and
-  reporting success.
-
-- **Scrolling text — decoded and implemented, daemon-only (R73).** The APK's
-  marquee sequence is fully ported as `text.show_scrolling_text` (0x6E start,
-  0x7C glyph upload, 0x86 string, 0x86 rate). **The Tivoo-Max does not
-  implement it**: in one `DIVOOMD_BLE_DEBUG` window it acked `0x45` and
-  returned nothing for `0x6E`/`0x7C`/`0x86`, while the same trace showed our
-  bytes were correct. No GUI surface, deliberately. The user's other three
-  devices are the same 16x16 class but untested — if one acks `0x7C`, wiring a
-  button is small work on top of what exists.
-
-- **`search_weather_city` — the success path is DISPROVEN, not just unproven
-  (R73).** Run against the real, logged-in account it returns
-  `Weather/SearchCity failed (RC=1): Failed` for every keyword tried.
-
-  This is no longer the "we only ever saw the RC=10 guest branch" problem. The
-  session is valid and the transport is fine, isolated by elimination on the
-  same daemon, same credentials, same HTTP client, in the same minute:
-
-  | Call | URL shape | Result |
-  |---|---|---|
-  | `GetCategoryFileListV2` | `{BASE}/GetCategoryFileListV2` | 6 items |
-  | `Channel/GetDialType` | `{BASE}/Channel/GetDialType` | full type list |
-  | `Weather/SearchCity` | `{BASE}/Weather/SearchCity` | **RC=1 Failed** |
-
-  So the server rejects this one endpoint. Either it has been retired, or it
-  wants a field we do not send (our body is `Command/Token/UserId/DeviceId/
-  KeyWord`). **Do not guess at field names** -- the next step is a capture of
-  the official app issuing a city search, or dropping the feature. The GUI
-  already surfaces the failure honestly ("no results" WITH the reason), so
-  nothing is silently broken for the user meanwhile.
-
-`album_art` needs something PLAYING before it is run — with no track the music
-job has nothing to push, and a dark panel then means "nothing playing", not
-"broken".
-
-The remaining two need a person watching the panel:
+Running the packet:
 
     python3 scripts/hw_verify.py --self-test        # calibrate first
     python3 scripts/hw_verify.py --out report.json
+
+`album_art` needs something PLAYING — with no track the music job has nothing to
+push, and a dark panel then means "nothing playing", not "broken". Rebuilding the
+daemon between runs: use `scripts/install_local.sh`, which refuses to install
+over a running bundle and proves the daemon that comes back is the one it wrote.
 
 ---
 

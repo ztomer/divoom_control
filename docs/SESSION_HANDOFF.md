@@ -21,16 +21,43 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
-- **2026-09-07 — v0.32.0 (R74) CUT.** Two user-reported failures, both ours,
-  both the same shape: a system that could not describe its own state, and
-  instruments that read identically for "fine" and "broken". Full detail in the
-  CHANGELOG stanza and `docs/release_notes_v0.32.0.md`; the durable lessons are
-  in the new `daemon-liveness-design` skill.
+- **2026-09-07 (final session) — v0.34.0 CUT: the hardware round.** The **R12
+  visual pass is CLOSED, 4/4 on real pixels** (`sysmon`, `album_art`,
+  `custom_art`, `weather`), with `search_weather_city` recording XFAIL by
+  design. It had been filed for rounds as "needs a device".
 
-  Round contents: the deaf-daemon redesign (accept always, shed with an
-  identifiable refusal, LRU subscription registry keyed on client-produced
-  activity), the AppleScript app-name crash + its repo-wide gate, and the
-  empty-scope guard that unblocked `pre-push` for the first time in weeks.
+  **The defect it existed to find**: `run_weather` sent the 0x5F weather data
+  and never selected the face that draws it, so after any job that took the
+  Design channel it updated something invisible. The GUI's `toggle_weather_sync`
+  had the identical gap. Fixed by sending a `ClockPacket` at job start and on
+  re-acquisition, not on every refresh.
+
+  **The bigger finding**: `hw_verify` had been UNRUNNABLE for rounds — it named
+  `live_jobs.start`, `media.push_album_art` and `display.show_weather`, none of
+  which the daemon has ever answered. The pass would have failed identically
+  with no device attached. `--self-test` could not catch it, because proving a
+  packet reports FAILURE for a bogus method says nothing about whether its own
+  names exist. `tools/check_hw_verify_methods.py` now compares the packet to the
+  daemon's match arms with no hardware.
+
+  **Three of the round's defects were the reviewer's own**, all made while
+  fixing the first two, and each got a structural fix rather than a patch:
+  `channel_switch(Channel::Clock)` sent an inactive black clock (now
+  uncompilable — `channel_switch` takes `BareChannel`); the regression test
+  passed against ten zero bytes (now asserts active + panel + non-black); and
+  the operator instruction named the wrong screen twice (hardware says
+  `weather=1` drives a TEMPERATURE panel, `humidity` draws the icon face).
+
+  **The `0x32` is gone on evidence.** A four-step probe with a control
+  eliminated every variable except that send. It was a dead opcode on both sides
+  of the port and its only effect was dropping brightness 80 -> 66 on every
+  weather push. Pinned by a test.
+
+  **`scripts/install_local.sh` is new and should be used for every hardware
+  round.** Installing by hand failed silently twice today: the GUI respawns the
+  daemon before the copy lands, and `open` on a running app only activates it. A
+  measurement was taken against the previous build and recorded as a disproven
+  hypothesis before the inode check caught it.
 
 - **2026-09-07 (end of session) — v0.33.0 released and INSTALLED.** All six
   repos in the estate were released and installed locally: divoom-control
@@ -40,13 +67,6 @@ shared memory. Read this on entry and **update it at the end of every round**
   **The stale-daemon note below is now resolved**: `/Applications/Divoom.app`
   carries divoomd 0.33.0, so the running daemon finally contains the R74 wedge
   fixes and today's write-seam work.
-
-  Two instruments broke during the release and neither was a code defect —
-  `check_hotchannel_parity.py` and `test_the_daemon_maps_every_size...` both
-  grep Rust SOURCE, and `clippy::unreadable_literal` / `match_same_arms`
-  legitimately rewrote the text they matched. Both now read the VALUE rather
-  than the spelling, and both are calibrated. The pattern is written up in
-  `calibrate-the-instrument/references/gate-discipline.md`.
 
   **Open threads are unchanged:** D5 (connection census in `get_status`) and D6
   (client heartbeat + in-process self-watchdog).
