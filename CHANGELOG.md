@@ -72,6 +72,63 @@ shipped milestone (per the project planning docs).
   subject as "the first device-bound check" — so the moment that check became a
   socket command, the test quietly stopped covering it while still passing.
 
+### R12 visual pass — COMPLETE, and the weather widget works (2026-09-07)
+
+**4/4 verified on real pixels**: `sysmon`, `album_art`, `custom_art` and finally
+`weather` ("digital clock, temp, cycles"), plus the `search_weather_city` canary
+recording XFAIL as designed. The roadmap item that had been open since R12, and
+filed for rounds as "needs a device", is closed.
+
+Getting there took four hardware runs and turned up **one defect of yours and
+three of mine**, which is worth writing down in that proportion:
+
+1. **Real, and the one the packet existed to find.** `run_weather` sent the 0x5F
+   weather data and never selected a face, so once the album-art job had put the
+   panel in Design the data landed on something nobody was looking at. Fixed by
+   sending a `ClockPacket`, asserted at job start and on re-acquisition but not
+   on every refresh.
+
+2. **Mine: the wrong builder.** The first fix used
+   `channel_switch(Channel::Clock)`, whose `[channel, 0 x 9]` means active=0 and
+   RGB black for the clock -- an inactive black face, i.e. a blank panel.
+   `channel_switch` now takes a `BareChannel` with no Clock, Vj or Visualization
+   variant, so reaching past a real builder does not compile.
+
+3. **Mine: the regression test could not see it.** It asserted "a 0x45 whose
+   first byte is 0x00" and PASSED against ten zero bytes. It tested that a
+   switch happened, not that the packet described a visible face. It now asserts
+   active, the panel flag and a non-black colour.
+
+4. **Mine, twice: the operator instruction.** It asked for a "weather face",
+   then a "weather panel". Hardware says `weather=1` drives a **temperature**
+   screen and the icon face people call weather is what **`humidity`** draws --
+   the control config with `weather=0` showed "Clock, weather, date". A working
+   command was graded FAIL twice on my text. R73 had already fixed this exact
+   class on the old `set_clock_rich` entry and the CHANGELOG says so; it was
+   reintroduced on the neighbouring check.
+
+**The 0x32 is gone, and the evidence is worth keeping.** A four-step probe with
+a control established that the clock packet cycles on its own, and kept cycling
+with the 0x5F sent before it, after it, and with the panel dimmed -- eliminating
+every variable except that one send. It was a dead opcode on BOTH sides of the
+port (`divoom_lib/models/commands.py` and this crate's `commands.rs` both map
+"set lightness" to 0x32; neither map has a caller), and its only observable
+effect was dropping screen brightness 80 -> 66 on every weather push while the
+music job left it alone. Removed, and pinned by a test asserting it stays gone.
+
+**The measurement that nearly buried it.** Immediately after removing the 0x32,
+brightness still read 66 and that was recorded as "hypothesis wrong". It was not:
+the GUI respawns the daemon the instant one shuts down, so it had restarted from
+the OLD binary before the new one was copied, and `open` on an already-running
+app merely activates it. Running image inode 521606172 against on-disk 521820150.
+With the app fully quit first, brightness holds at 80.
+
+That is the **third instance in one session** of the class already on the roadmap
+as an estate-wide item: an installer reports what it WROTE, something else decides
+what RUNS, and nothing compares them. The cheap check is
+`lsof -p <pid>` for the text inode against `stat -f %i` on the file, and it should
+be part of any install-then-verify loop here.
+
 ### Found on hardware — the weather live job never brings the weather face forward
 
 - **R12 visual pass: 3 PASS, 1 FAIL, 1 XFAIL (2026-09-07, on a live device).**

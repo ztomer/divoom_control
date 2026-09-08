@@ -400,24 +400,20 @@ exactly the work `scripts/hw_verify.py` was written to collect:
   18:41 -> 21:42 on command. The Python path R72 replaced had been swallowing
   an `AttributeError` into a silent `False`.
 
-- **R12 visual pass — RUN 2026-09-07: 3 PASS, 1 FAIL, 1 XFAIL.** `sysmon`,
-  `album_art` and `custom_art` verified on the panel by eye. **`weather` FAILED
-  — "still seeing album art" against a `{"success": true}` reply.** `run_weather`
-  never sends `CMD_SET_LIGHT_MODE`, so 0x5F updates a face the device is not
-  showing once another job has selected the Design channel; the GUI's
-  `toggle_weather_sync` has the identical gap. Detail and the ruled-out rival
-  causes in the CHANGELOG. **This is the open item now**, and it needs a fix
-  plus a rebuild-and-reinstall cycle, not more looking.
+- **~~R12 visual pass~~ — DONE 2026-09-07. 4/4 on real pixels.** `sysmon`,
+  `album_art`, `custom_art` and `weather` ("digital clock, temp, cycles"), with
+  the `search_weather_city` canary recording XFAIL by design. It found one real
+  defect -- `run_weather` set weather DATA without ever selecting a face, so it
+  was invisible after any job that took the Design channel -- and, in fixing it,
+  three of the reviewer's own: the bare `channel_switch` builder (an inactive
+  black clock), a regression test that passed against ten zero bytes, and an
+  operator instruction that named the wrong screen twice. The unexplained `0x32`
+  was removed on evidence and the brightness clobber went with it. Detail in the
+  CHANGELOG.
 
-  What is left of the original pass: re-run `weather` after the fix, and the
-  light/dark-surroundings judgement for the three that passed. It was never
-  blocked on hardware: run against a connected device on 2026-09-07 the packet
-  failed 5/5, and three of those never reached the panel — it named
-  `live_jobs.start`, `media.push_album_art` and `display.show_weather`, which
-  the daemon has never answered. The widget jobs are `live_job_start` with kinds
-  `sysmon`/`stocks`/`weather`/`music`. Packet rewritten against the daemon's
-  match arms and held there by `tools/check_hw_verify_methods.py`; the pass
-  itself still needs a person watching the panel.
+  **Left over from it:** the light/dark-surroundings judgement for the three that
+  passed, which is a photograph rather than a code change.
+
 - **~~`pic_scan_ctrl` 0x35~~ — RESOLVED, R73. It is `SPP_SCROLL`, and the R12
   audit that called it a missing opcode was wrong.** `SppProc$CMD_TYPE.java`
   has `SPP_SAND_PAINT_CTRL(52)` then `SPP_SCROLL(53)` = 0x35. That audit's own

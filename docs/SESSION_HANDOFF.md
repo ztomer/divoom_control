@@ -240,9 +240,10 @@ name, so the invalid-method branch stays untested.
 
 What the packet decides — **all five entries, as of 2026-09-07**:
 
-* **R12 visual pass** — `sysmon`, `album_art`, `weather`, `custom_art`. These
-  are the four live-widget jobs plus one image push, and they are the whole
-  reason a person has to be holding the device.
+* **R12 visual pass — DONE 2026-09-07, 4/4 on real pixels.** `sysmon`,
+  `album_art`, `custom_art`, `weather`. Re-run it after any change to the live
+  widgets; what is left of the original item is a light/dark-surroundings
+  photograph, not a code change.
 * **`search_weather_city`** — kept as a **canary**, not a test. R73 disproved
   its success path on the real account (`RC=1 Failed`), so it is EXPECTED to
   fail; a non-empty list would mean the server changed.
@@ -265,6 +266,27 @@ with no hardware, so this class fails a push instead of a device session.
 
 **Play something before running `album_art`** — with no track the music job has
 nothing to push, and a dark panel then means "nothing playing", not "broken".
+
+**Rebuilding the daemon for a hardware run: QUIT THE GUI FIRST, then verify the
+inode.** The GUI respawns the daemon the instant one shuts down, so the sequence
+"shutdown daemon, copy binary, `open`" restarts it from the OLD binary before
+the copy lands, and `open` on an already-running app only activates it. This
+cost a wrong conclusion on 2026-09-07 ("removed the 0x32, brightness still
+drops" -- it did not, that was the previous build). The check that catches it:
+
+    osascript -e 'tell application id "com.divoom.control" to quit'
+    pkill -f 'dist/Divoom.app'; sleep 2      # nothing left
+    cp target/release/divoomd dist/Divoom.app/Contents/Frameworks/bin/divoomd
+    codesign --force --deep --sign - dist/Divoom.app
+    open dist/Divoom.app
+    # then PROVE it is the one running:
+    PID=$(pgrep -f 'dist/Divoom.app/.*divoomd' | head -1)
+    lsof -p "$PID" | awk '$4=="txt" && $NF ~ /divoomd/ {print $(NF-1)}'
+    stat -f '%i' dist/Divoom.app/Contents/Frameworks/bin/divoomd
+    # the two inodes MUST match
+
+The device also does not always come back on its own after a daemon restart:
+`scan` times out, while `connect` with the saved identifier succeeds.
 
 **2. The browser e2e suite fails randomly at NORMAL machine load.** Two full
 runs on one commit failed different, non-overlapping sets of camoufox tests; all
