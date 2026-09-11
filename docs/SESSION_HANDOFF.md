@@ -307,6 +307,16 @@ wiring a button is small work on top of what exists.
    - Fixed by calling `window.selectedWidgetIs("sysmon")` and immediately triggering `window.refreshSysmonPreview()` on widget card selection.
    - *Verification*: Verify clicking System Monitor card immediately replaces the previous stock/BTC frame with live CPU/memory stats on both `#banner-device-screen` and `#stage-canvas-${mac}`.
 
+5. **Phase E: Gallery Selection to Device Hardware Push**:
+   - User report: Selecting gallery art in the Cloud/Community gallery does not show up on the physical screen.
+   - Action: Audit `.gallery-item` click handler in `gallery_ui.js` / `gallery.js` to ensure selecting an art tile immediately dispatches `pywebview.api.display_image` or `play_gif` to the active device, and updates the device preview frame.
+   - *Verification*: E2E test verifying gallery item click dispatches wire frames to MockBleakClient and updates `devicePreviews`.
+
+6. **Phase F: Custom Art Channel Cache Restoration**:
+   - User report: Custom art channel is empty again in runtime use.
+   - Action: Audit `loadCustomArtCacheGrid` in `channels_grids.js` and `get_cached_gallery_files` in `gallery_sync.py`. Ensure the 145 files in `~/.config/divoom-control/cache_gallery/` populate into the custom art grid robustly without depending on fragile remote network metadata.
+   - *Verification*: Test asserting that with cached files present on disk, `get_cached_gallery_files()` returns all items and the custom art cache grid renders non-empty.
+
 **0. Two environment problems that cost this release ~an hour.** Neither is a
 repo defect, but both will recur.
 

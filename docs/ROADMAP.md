@@ -310,6 +310,14 @@ _Shipped in v0.35.0: Full-width top Spatial Preview Bench, physical millimeter p
 - **Root Cause & Fix**: `widgets_sysmon.js` threw a silent `ReferenceError` on `selectedWidget` (scoped to `widgets.js`). Fixed to use `window.selectedWidgetIs("sysmon")` and immediate preview refresh on widget selection.
 - **Plan**: Ensure all streaming widgets (Sysmon, Music, Stocks, Weather) actively push their frames to `window.markActiveDeviceFrame(frame)` and update both the Spatial Stage node and flat appbar preview.
 
+#### 5. Gallery Art Selection to Device Hardware Push
+- **Finding**: Selecting gallery art in the Cloud/Community Gallery does not push or display the selected art on the physical device screen.
+- **Plan**: Audit and wire the click/selection handler on `.gallery-item` in `gallery_ui.js` / `gallery.js` so clicking a gallery tile immediately pushes the animated GIF/frame to the active device via `window.pywebview.api.display_image` or `window.pywebview.api.play_gif`, and updates the device preview.
+
+#### 6. Custom Art Channel Cache Restoration
+- **Finding**: Custom art channel appears empty again in runtime usage.
+- **Plan**: Investigate the custom art cache loader in `channels_grids.js` (`loadCustomArtCacheGrid`) and `gallery_sync.py` (`get_cached_gallery_files`). Ensure the local disk cache of 145 files in `~/.config/divoom-control/cache_gallery/` is populated into the grid robustly without depending on remote network metadata or fragile extension matching.
+
 ### OPEN — Unified Spatial Stage: Multi-Panel Virtual Wall Slicing (Phase 4)
 - Interactive snapping of adjacent tiles into a contiguous multi-panel composite surface.
 - Pushing an image or animation to a wall group automatically slices the canvas across contiguous physical panels according to their relative `(x, y)` coordinates.
