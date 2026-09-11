@@ -107,16 +107,13 @@ async fn push_rgb_to_device(
 }
 
 async fn get_device_transport(daemon: &Daemon, mac: &str) -> Option<Arc<DeviceTransport>> {
-    let devices_guard = daemon.devices.lock().await;
-    if let Some(t) = devices_guard.get(mac) {
-        return Some(t.clone());
+    let dev_opt = daemon.devices.lock().await.get(mac).cloned();
+    if let Some(t) = dev_opt {
+        return Some(t);
     }
-    let guard = daemon.device.lock().await;
-    if guard.is_some() {
-        let cur_id = daemon.device_id.lock().await.clone().unwrap_or_default();
-        if cur_id == mac {
-            return (*guard).clone();
-        }
+    let cur_id = daemon.device_id.lock().await.clone().unwrap_or_default();
+    if cur_id == mac {
+        return daemon.device.lock().await.clone();
     }
     None
 }

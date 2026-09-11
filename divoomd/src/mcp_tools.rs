@@ -310,7 +310,12 @@ async fn dc(sock: &str, method: &str, args: Value, mac: Option<&str>) -> Result<
     check(reply)
 }
 
-async fn dc_kw(sock: &str, method: &str, kwargs: Value, mac: Option<&str>) -> Result<Value, String> {
+async fn dc_kw(
+    sock: &str,
+    method: &str,
+    kwargs: Value,
+    mac: Option<&str>,
+) -> Result<Value, String> {
     let mut payload = json!({ "method": method, "args": [], "kwargs": kwargs });
     if let Some(m) = mac {
         payload["mac"] = json!(m);

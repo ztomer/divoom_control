@@ -254,8 +254,7 @@ impl Daemon {
             // a poll. A successful op recovers it to `active`.
             let cur_id = self.device_id.lock().await.clone();
             let id = target_mac.map(str::to_string).or(cur_id);
-            let degraded =
-                reply.get("success").and_then(serde_json::Value::as_bool) != Some(true);
+            let degraded = reply.get("success").and_then(serde_json::Value::as_bool) != Some(true);
             let st = if degraded { "degraded" } else { "active" };
             let _ = self.tx.send(crate::daemon_connect::status_payload(
                 true,

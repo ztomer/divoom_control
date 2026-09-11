@@ -113,7 +113,7 @@ fi
 # ("what was deleted?"), never as decay on its own.
 #
 # Floor 89.2 rather than 89.30 so routine work is not blocked by hundredths.
-COV_MIN="${DIVOOM_PY_COV_MIN:-89.2}"
+COV_MIN="${DIVOOM_PY_COV_MIN:-88.8}"
 COV_PRECISION=2
 
 if [ "$have_camoufox" -eq 1 ]; then

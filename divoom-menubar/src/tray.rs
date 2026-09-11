@@ -69,12 +69,14 @@ impl Tray {
                 let clk_id = MenuId::new(format!("ch:clock:{}", item.mac));
                 let _ = dev_submenu.append(&MenuItem::with_id(clk_id, "Show Clock", true, None));
                 let eq_id = MenuId::new(format!("ch:visualizer:{}", item.mac));
-                let _ = dev_submenu.append(&MenuItem::with_id(eq_id, "Show Visualizer", true, None));
+                let _ =
+                    dev_submenu.append(&MenuItem::with_id(eq_id, "Show Visualizer", true, None));
                 let amb_id = MenuId::new(format!("ch:ambient:{}", item.mac));
                 let _ = dev_submenu.append(&MenuItem::with_id(amb_id, "Show Ambient", true, None));
                 let _ = dev_submenu.append(&PredefinedMenuItem::separator());
                 let off_id = MenuId::new(format!("pwr:off:{}", item.mac));
-                let _ = dev_submenu.append(&MenuItem::with_id(off_id, "Turn Off Screen", true, None));
+                let _ =
+                    dev_submenu.append(&MenuItem::with_id(off_id, "Turn Off Screen", true, None));
                 let on_id = MenuId::new(format!("pwr:on:{}", item.mac));
                 let _ = dev_submenu.append(&MenuItem::with_id(on_id, "Turn On Screen", true, None));
 
@@ -124,11 +126,12 @@ impl Tray {
     /// from the subscription stream when fresh to eliminate socket churn.
     pub fn poll_daemon(&mut self) {
         let cached = daemon::get_cached_snapshot();
-        let (offline, notif_running, connection_state, devices) = if let Some(snap) = cached.filter(|s| {
-            s.reachable
-                && s.last_event_at
-                    .is_some_and(|t| t.elapsed() < Duration::from_secs(10))
-        }) {
+        let (offline, notif_running, connection_state, devices) = if let Some(snap) =
+            cached.filter(|s| {
+                s.reachable
+                    && s.last_event_at
+                        .is_some_and(|t| t.elapsed() < Duration::from_secs(10))
+            }) {
             (
                 !snap.reachable,
                 snap.notifications_running,
@@ -139,8 +142,16 @@ impl Tray {
             let status = daemon::status();
             let off = matches!(status, daemon::Status::Offline);
             let notif = !off && daemon::notifications_running();
-            let conn = if off { None } else { daemon::connection_state() };
-            let acts = if off { Vec::new() } else { daemon::device_activity_items() };
+            let conn = if off {
+                None
+            } else {
+                daemon::connection_state()
+            };
+            let acts = if off {
+                Vec::new()
+            } else {
+                daemon::device_activity_items()
+            };
             daemon::set_cached_snapshot(daemon::DaemonSnapshot {
                 reachable: !off,
                 connection_state: conn.clone(),

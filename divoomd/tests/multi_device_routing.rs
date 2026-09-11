@@ -1,4 +1,9 @@
 //! Integration tests for multi-device concurrent routing and per-device command queues.
+#![expect(
+    clippy::too_many_lines,
+    clippy::significant_drop_tightening,
+    reason = "integration scenario orchestrates multi-device dispatch and inspects lock guards"
+)]
 
 use divoomd::daemon::{Daemon, DeviceTransport};
 use divoomd::protocol::make_request;
@@ -191,7 +196,10 @@ async fn test_live_job_persists_across_device_switch() {
         let trans_a = devices.get("DEV_A").unwrap();
         if let DeviceTransport::Mock(ref mock_a) = &**trans_a {
             let cmds = mock_a.sent_commands.lock().unwrap();
-            assert!(!cmds.is_empty(), "DEV_A should continue receiving live frames while DEV_B is connected");
+            assert!(
+                !cmds.is_empty(),
+                "DEV_A should continue receiving live frames while DEV_B is connected"
+            );
         }
     }
 

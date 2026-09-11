@@ -202,6 +202,10 @@ pub(crate) async fn cmd_scan(daemon: &Daemon, req: &Request) -> Value {
 }
 
 /// Handle `connect_device` command (BLE or LAN).
+#[expect(
+    clippy::too_many_lines,
+    reason = "connect dispatcher covers mock, lan, spp, and ble variants"
+)]
 pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
     // Reject a concurrent connect: two would clobber the one shared central and
     // overwrite the owned device. Held for the whole command via Drop-on-return.
@@ -267,12 +271,8 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
             .insert(id_str.clone(), transport.clone());
         *daemon.device.lock().await = Some(transport);
         *daemon.device_id.lock().await = Some(id_str.clone());
-        let _ = daemon
-            .tx
-            .send(status_payload(true, Some(&id_str), None));
-        let _ = daemon
-            .tx
-            .send(owned_devices_payload(Some(&id_str)));
+        let _ = daemon.tx.send(status_payload(true, Some(&id_str), None));
+        let _ = daemon.tx.send(owned_devices_payload(Some(&id_str)));
         return json!({"success":true,"connected":true,"connection_state":"connected","lan_ip":ip});
     }
     let id = req
@@ -310,7 +310,6 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
 
     #[cfg(feature = "ble")]
     {
-
         let mut result = run_connect(daemon, &id).await;
         if matches!(&result, Err(e) if is_dead_central(e)) {
             daemon.reset_central().await; // stale CoreBluetooth session — rebuild + retry
