@@ -24,8 +24,12 @@ shipped milestone (per the project planning docs).
 - **Daemon Topology Engine (`divoomd`)**: Added `get_topology` and `set_topology` socket dispatch commands, with JSON persistence to `~/.config/divoom-control/topology.json`.
 - **MCP Screen Discovery (`list_screens`)**: Added tool #14 (`list_screens`) querying the daemon topology for known screens, physical dimensions, resolutions, and wall grouping.
 - **Physical Model Database**: Formalized exact millimeter dimensions and physical silhouettes for Ditoo (90×114mm), Timoo (82.5×90mm), Tivoo-Max (184×163mm), Pixoo-1 (200×200mm), and Pixoo-64 (261×261mm). Rendered to scale ($1\text{mm} \approx 0.65\text{px}$).
-- **Spatial Stage Web UI (`divoom_gui/web_ui/`)**: Added `spatial_stage.js` and `spatial_stage.css` mounted at the top of the main window. Direct 2D drag-and-drop placement, baseline alignment, 1-click device switching, live diode canvases, and 32px compact ribbon toggle with `localStorage` persistence.
-- **Decluttering**: Retired explanatory text banners and redundant per-node badges; unified device selection, preview, and wall coordination directly into the top stage.
+- **Spatial Stage Web UI (`divoom_gui/web_ui/`)**: Added `spatial_stage.js` and `spatial_stage.css` mounted at the top of the main window. Direct 2D drag-and-drop placement, baseline alignment, 1-click device switching, live diode canvases, per-device independent brightness calibration, and 32px compact ribbon toggle with `localStorage` persistence.
+- **Decluttering & Zero Fluff**:
+  - Removed verbose explanatory text and physical dimensions text (`90×114mm (16×16)` -> clean `16×16` badge).
+  - Hidden redundant sidebar device panel (`#connected-device-banner`) and `#device-dots` via CSS without breaking hidden form DOM elements.
+  - Added room/grouping segmented filter tabs (`[All] [Desk] [Wall]`) in the bench header and room selector in the inspector strip.
+  - Refined node typography to 7.5px mono so device names (`Ditoo-L`, `Timoo-M`, `Pixoo-64`) fit completely without truncation.
 
 ## v0.34.0 — the weather widget was invisible, and the harness could not have found it (2026-09-07)
 
