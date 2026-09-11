@@ -187,6 +187,9 @@ s = s.replace('ztomer/divoom_lib', 'ztomer/divoom_control')  # repo was renamed
 if 'depends_on arch:' not in s:
     s = re.sub(r'(\n\s*depends_on macos:[^\n]*\n)',
                r'\\1  depends_on arch: :arm64\n', s, count=1)
+# Command substitution strips trailing newlines; the cask must end with one.
+if not s.endswith('\n'):
+    s += '\n'
 sys.stdout.write(s)
 ")"
 if [ "$NEW_CASK" = "$CUR_CASK" ]; then
