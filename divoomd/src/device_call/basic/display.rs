@@ -281,7 +281,9 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 // VJ effects are 1-indexed on the wire; vj_effect(0) sends 1,
                 // which is what the hand-rolled array did.
                 "vj" => crate::packets::vj_effect(0),
-                "design" | "custom" => crate::packets::channel_switch(crate::packets::BareChannel::Design),
+                "design" | "custom" => {
+                    crate::packets::channel_switch(crate::packets::BareChannel::Design)
+                }
                 "scoreboard" => {
                     crate::packets::channel_switch(crate::packets::BareChannel::Scoreboard)
                 }
