@@ -68,7 +68,19 @@ pub fn catalog() -> Value {
 }
 
 fn tool(name: &str, desc: &str, schema: &Value) -> Value {
-    json!({ "name": name, "description": desc, "inputSchema": schema })
+    let mut s = schema.clone();
+    if let Some(props) = s.get_mut("properties").and_then(Value::as_object_mut) {
+        if name != "list_screens" {
+            props.insert(
+                "mac".into(),
+                json!({
+                    "type": "string",
+                    "description": "Optional MAC address of the target display (default: active display)."
+                }),
+            );
+        }
+    }
+    json!({ "name": name, "description": desc, "inputSchema": s })
 }
 
 #[expect(
@@ -87,15 +99,16 @@ fn tool(name: &str, desc: &str, schema: &Value) -> Value {
 ///
 /// If a mutex guarding shared tool state is poisoned.
 pub async fn call_tool(name: &str, a: &Value, sock: &str) -> Result<Value, String> {
+    let mac = a.get("mac").and_then(Value::as_str);
     match name {
         "set_volume" => {
             let level = need_int(a, "level", 0, 15)?;
-            dc(sock, "music.set_volume", json!([level])).await?;
+            dc(sock, "music.set_volume", json!([level]), mac).await?;
             Ok(json!({ "ok": true, "level": level }))
         }
         "set_brightness" => {
             let level = need_int(a, "level", 0, 100)?;
-            dc(sock, "device.set_brightness", json!([level])).await?;
+            dc(sock, "device.set_brightness", json!([level]), mac).await?;
             Ok(json!({ "ok": true, "level": level }))
         }
         "set_light_mode" => {
@@ -113,7 +126,7 @@ pub async fn call_tool(name: &str, a: &Value, sock: &str) -> Result<Value, Strin
                         LIGHT_MODES.iter().map(|(n, _)| *n).collect::<Vec<_>>()
                     )
                 })?;
-            dc(sock, "control.set_light_mode", json!([channel])).await?;
+            dc(sock, "control.set_light_mode", json!([channel]), mac).await?;
             Ok(json!({ "ok": true, "mode": mode, "channel": channel }))
         }
         "set_weather" => {
@@ -132,7 +145,7 @@ pub async fn call_tool(name: &str, a: &Value, sock: &str) -> Result<Value, Strin
                         WEATHER_TYPES.iter().map(|(n, _)| *n).collect::<Vec<_>>()
                     )
                 })?;
-            dc(sock, "weather.set", json!([temp, wt])).await?;
+            dc(sock, "weather.set", json!([temp, wt]), mac).await?;
             Ok(json!({ "ok": true, "temperature_c": temp, "weather": weather }))
         }
         "set_alarm" => {
@@ -150,6 +163,7 @@ pub async fn call_tool(name: &str, a: &Value, sock: &str) -> Result<Value, Strin
                 sock,
                 "alarm.set_alarm",
                 json!([index, status, hour, minute, week, 0, 1]),
+                mac,
             )
             .await?;
             Ok(
@@ -158,7 +172,7 @@ pub async fn call_tool(name: &str, a: &Value, sock: &str) -> Result<Value, Strin
         }
         "set_radio" => {
             let freq = need_int(a, "freq_x10", 875, 1080)?;
-            dc(sock, "radio.set_radio_frequency", json!([freq])).await?;
+            dc(sock, "radio.set_radio_frequency", json!([freq]), mac).await?;
             Ok(json!({ "ok": true, "freq_x10": freq }))
         }
         "set_low_power" => {
@@ -170,6 +184,7 @@ pub async fn call_tool(name: &str, a: &Value, sock: &str) -> Result<Value, Strin
                 sock,
                 "device.set_low_power_switch",
                 json!([i32::from(enabled)]),
+                mac,
             )
             .await?;
             Ok(json!({ "ok": true, "enabled": enabled }))
@@ -187,8 +202,8 @@ pub async fn call_tool(name: &str, a: &Value, sock: &str) -> Result<Value, Strin
                 .get("mirror")
                 .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false);
-            dc(sock, "design.set_screen_dir", json!([dir])).await?;
-            dc(sock, "design.set_screen_mirror", json!([mirror])).await?;
+            dc(sock, "design.set_screen_dir", json!([dir]), mac).await?;
+            dc(sock, "design.set_screen_mirror", json!([mirror]), mac).await?;
             Ok(json!({ "ok": true, "degrees": degrees, "mirror": mirror }))
         }
         "show_image" => {
@@ -198,7 +213,7 @@ pub async fn call_tool(name: &str, a: &Value, sock: &str) -> Result<Value, Strin
                 .filter(|s| !s.is_empty())
                 .ok_or("file must be a non-empty local path string")?;
             let bytes = std::fs::read(file).map_err(|e| format!("cannot read {file}: {e}"))?;
-            push_image_bytes(sock, &bytes).await?;
+            push_image_bytes(sock, &bytes, mac).await?;
             Ok(json!({ "ok": true, "file": file }))
         }
         "push_animation" => {
@@ -220,23 +235,23 @@ pub async fn call_tool(name: &str, a: &Value, sock: &str) -> Result<Value, Strin
                     .decode(data.unwrap())
                     .map_err(|e| format!("invalid base64: {e}"))?
             };
-            push_image_bytes(sock, &bytes).await?;
+            push_image_bytes(sock, &bytes, mac).await?;
             Ok(
                 json!({ "ok": true, "note": "pushed first frame (full animation streaming is a follow-up)" }),
             )
         }
         "play_sound" => {
             let dur = need_int(a, "duration_ms", 100, 3000)?;
-            dc(sock, "control.set_hot", json!([1])).await?;
+            dc(sock, "control.set_hot", json!([1]), mac).await?;
             Ok(json!({ "ok": true, "duration_ms": dur }))
         }
         "get_capabilities" => cmd(sock, "device_status", json!({})).await,
         "get_device_state" => {
-            let volume = dc_result(sock, "music.get_volume", json!([])).await;
-            let brightness = dc_result(sock, "device.get_brightness", json!([])).await;
-            let light_mode = dc_result(sock, "control.get_light_mode", json!([])).await;
-            let screen_dir = dc_result(sock, "design.get_screen_dir", json!([])).await;
-            let mirror = dc_result(sock, "design.get_screen_mirror", json!([])).await;
+            let volume = dc_result(sock, "music.get_volume", json!([]), mac).await;
+            let brightness = dc_result(sock, "device.get_brightness", json!([]), mac).await;
+            let light_mode = dc_result(sock, "control.get_light_mode", json!([]), mac).await;
+            let screen_dir = dc_result(sock, "design.get_screen_dir", json!([]), mac).await;
+            let mirror = dc_result(sock, "design.get_screen_mirror", json!([]), mac).await;
             Ok(json!({
                 "volume": volume, "brightness": brightness, "light_mode": light_mode,
                 "screen_orientation": screen_dir, "mirror": mirror,
@@ -269,7 +284,7 @@ fn opt_int(a: &Value, key: &str, lo: i64, hi: i64, default: i64) -> Result<i64, 
 
 /// Decode image bytes (PNG/JPG/GIF first frame) to a 16x16 RGB frame and push it
 /// via the daemon's `show_image` (rgb kwargs). Device size is 16 for now.
-async fn push_image_bytes(sock: &str, bytes: &[u8]) -> Result<(), String> {
+async fn push_image_bytes(sock: &str, bytes: &[u8], mac: Option<&str>) -> Result<(), String> {
     let img = image::load_from_memory(bytes).map_err(|e| format!("decode failed: {e}"))?;
     let small = img
         .resize_exact(16, 16, image::imageops::FilterType::Nearest)
@@ -279,41 +294,38 @@ async fn push_image_bytes(sock: &str, bytes: &[u8]) -> Result<(), String> {
         sock,
         "show_image",
         json!({ "w": 16, "h": 16, "time_ms": 100, "rgb": rgb }),
+        mac,
     )
     .await?;
     Ok(())
 }
 
 /// `device_call` with positional args; errors if the daemon reports failure.
-async fn dc(sock: &str, method: &str, args: Value) -> Result<Value, String> {
-    let reply = cmd(
-        sock,
-        "device_call",
-        json!({ "method": method, "args": args }),
-    )
-    .await?;
+async fn dc(sock: &str, method: &str, args: Value, mac: Option<&str>) -> Result<Value, String> {
+    let mut payload = json!({ "method": method, "args": args });
+    if let Some(m) = mac {
+        payload["mac"] = json!(m);
+    }
+    let reply = cmd(sock, "device_call", payload).await?;
     check(reply)
 }
 
-async fn dc_kw(sock: &str, method: &str, kwargs: Value) -> Result<Value, String> {
-    let reply = cmd(
-        sock,
-        "device_call",
-        json!({ "method": method, "args": [], "kwargs": kwargs }),
-    )
-    .await?;
+async fn dc_kw(sock: &str, method: &str, kwargs: Value, mac: Option<&str>) -> Result<Value, String> {
+    let mut payload = json!({ "method": method, "args": [], "kwargs": kwargs });
+    if let Some(m) = mac {
+        payload["mac"] = json!(m);
+    }
+    let reply = cmd(sock, "device_call", payload).await?;
     check(reply)
 }
 
 /// `device_call` returning the `result` value (None on failure) — for read tools.
-async fn dc_result(sock: &str, method: &str, args: Value) -> Value {
-    match cmd(
-        sock,
-        "device_call",
-        json!({ "method": method, "args": args }),
-    )
-    .await
-    {
+async fn dc_result(sock: &str, method: &str, args: Value, mac: Option<&str>) -> Value {
+    let mut payload = json!({ "method": method, "args": args });
+    if let Some(m) = mac {
+        payload["mac"] = json!(m);
+    }
+    match cmd(sock, "device_call", payload).await {
         Ok(v) if v.get("success").and_then(serde_json::Value::as_bool) == Some(true) => {
             v.get("result").cloned().unwrap_or(Value::Null)
         }
@@ -369,5 +381,22 @@ mod tests {
     fn light_and_weather_maps_complete() {
         assert_eq!(LIGHT_MODES.len(), 8);
         assert_eq!(WEATHER_TYPES.len(), 6);
+    }
+
+    #[test]
+    fn tools_include_optional_mac_param() {
+        let c = catalog();
+        let arr = c.as_array().expect("catalog is an array");
+        for t in arr {
+            let name = t.get("name").and_then(Value::as_str).unwrap();
+            let schema = t.get("inputSchema").unwrap();
+            if name != "list_screens" {
+                let props = schema.get("properties").and_then(Value::as_object).unwrap();
+                assert!(
+                    props.contains_key("mac"),
+                    "tool {name} should have optional mac property in inputSchema"
+                );
+            }
+        }
     }
 }

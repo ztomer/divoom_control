@@ -41,6 +41,9 @@ shared memory. Read this on entry and **update it at the end of every round**
   - **Phase 4: Native Menubar Event-Driven Snapshot Ingestion & Visual Device Controls (`divoom-menubar`)**:
     - Subscribed `divoom-menubar` to daemon broadcast stream via `subscribe`, maintaining cached `DaemonSnapshot` and eliminating polling socket churn (from 120 conn/min to 0 in steady state).
     - Built interactive per-device submenus in the macOS status menu with quick channel switcher (Clock, Visualizer, Ambient) and screen power standby toggle.
+  - **Multi-Device MCP Tool Targeting (`divoomd/src/mcp_tools.rs`)**:
+    - Injected optional `mac` parameter into all device tool schemas and forwarded `mac` in `dc`, `dc_kw`, `dc_result`, and `push_image_bytes`.
+    - Enables AI agents to target individual displays directly in a multi-screen fleet (e.g. `set_brightness(level=30, mac=...)`) with automatic active display fallback.
   - **Hardware-Faithful Bitmap Pixel Art Clocks (`preview_controller.js`, `channel_preview.js`)**:
     - Banished blurry vector SVG `<text>` fonts. Integrated 1-bit integer LED bitmap digit tables (3x5 matrices) rendered via discrete pixel `<rect>` blocks.
     - All 6 clock styles render 100% sharp pixel art on integer coordinates.

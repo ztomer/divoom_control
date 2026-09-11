@@ -29,6 +29,9 @@ shipped milestone (per the project planning docs).
 - **Phase 4: Native Menubar Event-Driven Snapshot Ingestion & Visual Device Controls (`divoom-menubar`)**:
   - Implemented event-driven `DaemonSnapshot` ingestion via daemon `subscribe` broadcast stream, slashing polling socket churn from 120 conn/min to 0 in steady state.
   - Built interactive per-device submenus in the macOS menu bar tray with quick channel switcher (Clock, Visualizer, Ambient) and screen power standby toggle.
+- **Multi-Device MCP Tool Targeting (`divoomd/src/mcp_tools.rs`)**:
+  - Injected optional `mac` parameter into all device tool schemas and forwarded `mac` in `dc`, `dc_kw`, `dc_result`, and `push_image_bytes`.
+  - Enables AI agents to target individual displays directly in a multi-screen fleet (e.g. `set_brightness(level=30, mac=...)`) with automatic active display fallback.
 - **Gallery Selection to Hardware Push (`gallery.js`, `gallery_sync.py`)**:
   - Added click handler to `.gallery-item` tiles to highlight selection, immediately update the active device's `DisplayPreview` frame, and dispatch `window.pywebview.api.play_gallery_art`.
   - Implemented `play_gallery_art(file_id)` in `GallerySyncMixin` to find or retrieve cached GIF/images and stream to the active screen via `display_wall_image`.
