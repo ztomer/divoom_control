@@ -4,6 +4,17 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## Unreleased
+
+### Documentation & MCP
+
+- **`docs/MCP_SERVER.md` de-claudified and rationalized**:
+  - Removed outdated milestone tags and vendor-specific framing in favor of a clean, client-agnostic guide for standard MCP clients (Claude Desktop, Cursor, Antigravity, Cline, Continue).
+  - Updated tool catalog to all 13 tools (added `push_animation`), accurate return signatures, and documented current implementation behaviors (`divoomd mcp` vs Python CLI).
+  - Corrected connection and transport details (single-owner daemon model, optional MAC parameter, stdio pipe requirements).
+- **`docs/ROADMAP.md` MCP item rationalized**:
+  - Replaced the conversational narrative in the open MCP roadmap item with an objective, structured technical specification covering screen discovery (`list_screens`), media scaling & animation streaming, native text rendering (`show_text`), lease-based resource arbitration with TTL expiration, and rate-limiting via conflation.
+
 ## v0.34.0 — the weather widget was invisible, and the harness could not have found it (2026-09-07)
 
 A hardware round. The R12 visual pass — open since R12 and filed for rounds as

@@ -1,126 +1,124 @@
-# MCP Server (R15 §5)
+# MCP Server
 
-The divoom-control project ships an [MCP](https://modelcontextprotocol.io/)
-(Model Context Protocol) server. The server speaks JSON-RPC 2.0 over
-stdio and exposes 12 device-control tools. Point any MCP-compatible
-client at this machine's `divoom-control` binary and you can drive
-your Divoom device with natural language.
+The `divoom-control` project ships a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server conforming to the MCP 2024-11-05 specification. The server speaks JSON-RPC 2.0 over standard I/O (stdio) and exposes 13 device-control tools, allowing AI coding assistants and automation clients to monitor and control Divoom devices.
 
-## Architecture (R28): the MCP server is a daemon client
+## Architecture
 
-The MCP server does **not** open its own BLE connection. The daemon is the sole
-owner of the device (R17 single-owner model), so the MCP server builds its tool
-catalog against a `DaemonDeviceProxy` and routes every tool call through the
-daemon's `device_call` RPC. It connects to the local daemon socket (auto-spawning
-one if none is running) or, with `--host`, to a remote daemon over TCP.
+The MCP server operates as a thin client to the `divoomd` background daemon:
+- **Single-Owner Device Model**: The daemon owns the active Bluetooth (BLE/SPP) or LAN connection. The MCP server does not open its own Bluetooth connection.
+- **Daemon Routing**: Every MCP tool call is forwarded to the daemon socket (Unix domain socket `/tmp/divoom.sock` by default, or remote TCP via `--host`/`--port`/`--token`).
+- **Device Targeting**: Because the daemon manages the active connection, specifying a MAC address is not required during normal operation.
+- **Implementations**:
+  - **Native (`divoomd mcp`)**: Compiled Rust implementation bundled within the application. Minimal resource footprint and fast startup.
+  - **Python (`divoom-control mcp-server`)**: Python CLI implementation routing through `DaemonDeviceProxy`.
 
-Consequence: **`--mac` is optional** — the daemon already knows the device. (Pre-
-R28 the server called `_resolve_device()` and grabbed its own BLE connection,
-which fought the daemon and failed with `DeviceConnectionError: ... not found`.)
+## Quick Start
 
-## Quick start
-
+### Running the Native Server (Recommended)
 ```bash
-# CLI path (scriptable). No --mac needed; auto-spawns a local daemon if needed.
+divoomd mcp
+```
+
+### Running the Python CLI Server
+```bash
+# Connect to local daemon (auto-spawns daemon if not running):
 divoom-control mcp-server
 
-# Pin a device (only matters if a daemon has to be spawned):
-divoom-control mcp-server --mac 11:75:58:3f:fd:aa
-
-# Target a remote/headless daemon over TCP (R19 network server):
+# Connect to a remote daemon over TCP:
 divoom-control mcp-server --host 192.168.1.50 --port 9009 --token <secret>
-
-# GUI path (Settings → Connectivity → MCP Server → Start)
-# The GUI spawns the same subprocess and tails the log file.
 ```
 
-Flags: `--socket` (daemon Unix socket, default `/tmp/divoom.sock`),
-`--host`/`--port`/`--token` (remote daemon; `--token` falls back to
-`DIVOOM_DAEMON_TOKEN`).
+Command-line options (Python CLI):
+- `--socket <path>`: Path to local daemon Unix domain socket (default: `/tmp/divoom.sock`).
+- `--host <ip_or_name>`: Remote daemon TCP host (sets `DIVOOM_DAEMON_HOST`).
+- `--port <number>`: Remote daemon TCP port (default: `9009`).
+- `--token <secret>`: Shared secret token for authenticated TCP connections.
 
-The server reads JSON-RPC messages from stdin and writes responses
-to stdout. It runs until stdin closes (the parent MCP client closes
-its end when it wants to stop us).
+## Tool Catalog
 
-## Tool catalog (initial)
+The server exposes 13 tools via `tools/list`:
 
-| Tool | Args | Returns |
-|------|------|---------|
-| `set_volume` | `{level: int 0-15}` | `{ok, level}` |
-| `set_brightness` | `{level: int 0-100}` | `{ok, level}` |
-| `set_light_mode` | `{mode: clock\|lightning\|cloud\|vj\|visualizer\|design\|scoreboard\|animation}` | `{ok, mode, channel}` |
-| `set_weather` | `{temperature_c: int -127..128, weather: clear\|cloudy\|thunderstorm\|rain\|snow\|fog}` | `{ok, temperature_c, weather}` |
-| `set_alarm` | `{index: 0-9, hour: 0-23, minute: 0-59, weekday_mask: 0-127, enabled: bool}` | `{ok, ...}` |
-| `set_radio` | `{freq_x10: 875-1080}` | `{ok, freq_x10}` |
-| `set_low_power` | `{enabled: bool}` | `{ok, enabled}` |
-| `set_screen_orientation` | `{degrees: 0\|90\|180\|270, mirror: bool}` | `{ok, degrees, mirror}` |
-| `show_image` | `{file: local_path}` | `{ok, file}` |
-| `play_sound` | `{duration_ms: 100-3000}` | `{ok, duration_ms}` (best-effort) |
-| `get_capabilities` | `{}` | `{panel_resolution, has_speaker, has_clock, ...}` |
-| `get_device_state` | `{}` | `{volume, brightness, light_mode, screen_orientation, mirror}` |
+| Tool | Arguments | Description / Returns |
+|------|-----------|------------------------|
+| `set_volume` | `{level: int (0..15)}` | Set speaker output volume. Returns `{ok, level}`. |
+| `set_brightness` | `{level: int (0..100)}` | Set display brightness percentage. Returns `{ok, level}`. |
+| `set_light_mode` | `{mode: string}` | Switch active channel: `clock`, `lightning`, `cloud`, `vj`, `visualizer`, `design`, `scoreboard`, `animation`. Returns `{ok, mode, channel}`. |
+| `set_weather` | `{temperature_c: int (-127..128), weather: string}` | Push temperature and weather condition (`clear`, `cloudy`, `thunderstorm`, `rain`, `snow`, `fog`). Returns `{ok, temperature_c, weather}`. |
+| `set_alarm` | `{index: int (0..9), hour: int (0..23), minute: int (0..59), weekday_mask?: int (0..127), enabled?: bool}` | Configure one of 10 device alarms. Returns `{ok, ...}`. |
+| `set_radio` | `{freq_x10: int (875..1080)}` | Tune FM radio frequency (e.g. 101.1 MHz = 1011). Returns `{ok, freq_x10}`. |
+| `set_low_power` | `{enabled: bool}` | Toggle low-power standby mode. Returns `{ok, enabled}`. |
+| `set_screen_orientation` | `{degrees: int (0\|90\|180\|270), mirror?: bool}` | Rotate or flip panel display orientation. Returns `{ok, degrees, mirror}`. |
+| `show_image` | `{file: string}` | Decode a local image file (PNG/JPEG/GIF) and display it on the panel. Returns `{ok, file}`. |
+| `push_animation` | `{file?: string, data?: string}` | Push an animation or image via local file path or base64-encoded data. |
+| `play_sound` | `{duration_ms: int (100..3000)}` | Trigger hardware buzzer alert tone. Returns `{ok, duration_ms}`. |
+| `get_capabilities` | `{}` | Query device connection state, transport type, and MAC address. |
+| `get_device_state` | `{}` | Read current volume, brightness, active light mode, orientation, and mirror settings. |
 
-Out-of-range values and unknown enum strings are returned as
-`isError: true` content blocks with a human-readable message. The
-client can show the message to the user verbatim.
+### Validation and Error Handling
+- Protocol-level validation errors (missing arguments, invalid JSON) return standard JSON-RPC error codes (`-32602`, `-32700`, etc.).
+- Domain errors (values out of range, unparseable images, device communication timeouts) return a tool result with `isError: true` and an explanatory error message, enabling clients to recover and self-correct.
 
-## Client setup
+## Client Configuration
 
-### Claude Desktop
-
-`~/Library/Application Support/Claude/claude_desktop_config.json`
-(macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
-
-```json
-{
-  "mcpServers": {
-    "divoom-control": {
-      "command": "divoom-control",
-      "args": ["mcp-server", "--mac", "11:75:58:3f-fd-aa"]
-    }
-  }
-}
-```
-
-If `divoom-control` isn't on PATH, use the full path:
-
-```json
-{
-  "mcpServers": {
-    "divoom-control": {
-      "command": "/usr/local/bin/divoom-control",
-      "args": ["mcp-server", "--mac", "11-75-58-3f-fd-aa"]
-    }
-  }
-}
-```
+Configure the MCP server in your client of choice.
 
 ### Cursor
+Add to `~/.cursor/mcp.json` (macOS/Linux) or `%USERPROFILE%\.cursor\mcp.json` (Windows):
 
-Cursor reads MCP config from `~/.cursor/mcp.json` (macOS) or
-`%USERPROFILE%\.cursor\mcp.json` (Windows):
+```json
+{
+  "mcpServers": {
+    "divoom-control": {
+      "command": "divoomd",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Or using the Python executable if running in a virtual environment:
 
 ```json
 {
   "mcpServers": {
     "divoom-control": {
       "command": "divoom-control",
-      "args": ["mcp-server", "--mac", "11-75-58-3f-fd-aa"]
+      "args": ["mcp-server"]
     }
   }
 }
 ```
 
-Restart Cursor after editing the config.
+### Claude Desktop
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 
-### Cline (VS Code extension)
+```json
+{
+  "mcpServers": {
+    "divoom-control": {
+      "command": "divoomd",
+      "args": ["mcp"]
+    }
+  }
+}
+```
 
-Cline reads its MCP config from the VS Code settings UI
-("Cline: MCP Servers" → "Edit MCP Settings"). The format is the
-same — add a `divoom-control` entry under `mcpServers`.
+### VS Code / Cline
+In VS Code settings under "Cline: MCP Servers" (or `cline_mcp_settings.json`):
+
+```json
+{
+  "mcpServers": {
+    "divoom-control": {
+      "command": "divoomd",
+      "args": ["mcp"]
+    }
+  }
+}
+```
 
 ### Continue (VS Code / JetBrains)
-
-Continue reads MCP config from `~/.continue/config.json`:
+Add to `~/.continue/config.json`:
 
 ```json
 {
@@ -128,106 +126,86 @@ Continue reads MCP config from `~/.continue/config.json`:
     "modelContextProtocolServers": [
       {
         "name": "divoom-control",
-        "command": "divoom-control",
-        "args": ["mcp-server", "--mac", "11-75-58-3f-fd-aa"]
+        "command": "divoomd",
+        "args": ["mcp"]
       }
     ]
   }
 }
 ```
 
-(Continue's schema may vary by version; the `name`/`command`/`args`
-shape is the contract.)
+## Transport & Process Model
 
-## Verifying it works
+- **Stdio Transport**: Stdin and stdout are strictly reserved for newline-delimited JSON-RPC messages. The MCP server process must be launched directly by the MCP client with connected pipes.
+- **Logging**: Informational and debug logs are sent to `stderr` to prevent corrupting the JSON-RPC stream.
+- **Lifecycle**: The server runs until stdin is closed by the parent process (client disconnect) or a termination signal is received.
 
-Once the client is configured, ask it to do something:
+## Wire Protocol Reference
 
-> "Set the volume to 8 and switch to the lightning channel."
+Conforms to standard MCP 2024-11-05:
 
-The client will translate that into two `tools/call` requests:
-`set_volume {level: 8}` and `set_light_mode {mode: lightning}`. The
-device should respond within ~50 ms and you'll see the new state on
-the panel.
-
-## Logs
-
-When started from the GUI, logs go to
-`~/.config/divoom-control/mcp-server.log`. The status display in
-Settings → Connectivity tails the last 20 lines on a 5-second
-poll so crashes surface quickly.
-
-When started from the CLI, logs go to your terminal's stderr (the
-subprocess never writes to stdout — that stream is reserved for
-JSON-RPC responses).
-
-## Wire format
-
-We follow the [canonical MCP 2024-11-05 spec](https://spec.modelcontextprotocol.io/2024-11-05/).
-
-**Initialize** (client → server):
-
+### Initialize Request
 ```json
-{"jsonrpc": "2.0", "id": 1, "method": "initialize",
- "params": {"protocolVersion": "2024-11-05", "capabilities": {},
-            "clientInfo": {"name": "claude-desktop", "version": "1.0.0"}}}
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {
+    "protocolVersion": "2024-11-05",
+    "capabilities": {},
+    "clientInfo": {
+      "name": "mcp-client",
+      "version": "1.0.0"
+    }
+  }
+}
 ```
 
-**Initialize** (server → client):
-
+### Initialize Response
 ```json
-{"jsonrpc": "2.0", "id": 1, "result": {
-  "protocolVersion": "2024-11-05",
-  "capabilities": {"tools": {}},
-  "serverInfo": {"name": "divoom-control", "version": "0.15.0"}}}
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "protocolVersion": "2024-11-05",
+    "capabilities": {
+      "tools": {}
+    },
+    "serverInfo": {
+      "name": "divoom-control",
+      "version": "0.34.0"
+    }
+  }
+}
 ```
 
-**List tools** (request): `{"jsonrpc": "2.0", "id": 2, "method": "tools/list"}`
-
-**List tools** (response): `{"jsonrpc": "2.0", "id": 2, "result": {"tools": [...]}}`
-
-**Call a tool** (request):
-
+### Tool Execution Request
 ```json
-{"jsonrpc": "2.0", "id": 3, "method": "tools/call",
- "params": {"name": "set_volume", "arguments": {"level": 8}}}
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/call",
+  "params": {
+    "name": "set_brightness",
+    "arguments": {
+      "level": 75
+    }
+  }
+}
 ```
 
-**Call a tool** (response):
-
+### Tool Execution Response
 ```json
-{"jsonrpc": "2.0", "id": 3, "result": {
-  "content": [{"type": "text", "text": "{\"ok\": true, \"level\": 8}"}]}}
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"ok\": true, \"level\": 75}"
+      }
+    ]
+  }
+}
 ```
-
-Errors use the standard JSON-RPC error codes:
-`-32700` (parse), `-32600` (invalid request), `-32601` (method
-not found), `-32602` (invalid params), `-32603` (internal error).
-Tool-level domain errors (out-of-range, unknown enum) come back
-as `isError: true` content blocks, not protocol errors — this
-matches the MCP spec and lets the LLM see the message and
-self-correct.
-
-## Troubleshooting
-
-- **"divoom-control: command not found"** — install the package
-  editable: `pip install -e .` (R14 §4). Or use the full path in
-  the MCP config.
-- **Subprocess dies immediately** — check
-  `~/.config/divoom-control/mcp-server.log` for the Python traceback.
-  Most common cause: the MAC is wrong or the device is out of range.
-- **No response from a tool call** — make sure you sent the request
-  to *this* subprocess's stdin, not the GUI's. The GUI's stdin is
-  not connected to the MCP server.
-
-## Why subprocess, not in-process
-
-The GUI uses pywebview, which owns the main event loop. An
-in-process stdio server would fight pywebview over file descriptors
-and risk deadlocking the GUI. Spawning the server as a subprocess
-keeps the streams clean: stdin/stdout are owned by the MCP client
-parent process, stderr is logged to a file.
-
-This also means a bug in the MCP server can't take down the GUI —
-the worst case is a stuck subprocess that the user can stop from
-Settings → Connectivity.

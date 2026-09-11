@@ -21,6 +21,11 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-11 — Documentation rationalization & MCP capability audit.**
+  - `docs/MCP_SERVER.md` de-claudified and rationalized: updated to 13 tools, accurate parameter schemas, client-agnostic setup examples (Claude, Cursor, Antigravity, Cline, Continue), and documented stdio pipe requirements and daemon-routed architecture.
+  - `docs/ROADMAP.md` MCP item restructured: replaced conversational prose with a formal engineering specification for multi-screen discovery (`list_screens`), media scaling, native text rendering (`show_text`), and lease-based arbitration with TTL expiration.
+  - MCP capability audit completed: evaluated existing 13 tools against full device/daemon capabilities; identified 9 concrete functional gaps (multi-device discovery/addressing, arbitrary resolution scaling beyond 16x16, GIF streaming beyond first frame, native text rendering, live widget lifecycle management, device notifications, timers/stopwatch, full device capability introspection, and exclusive screen leasing).
+
 - **2026-09-07 (final session) — v0.34.0 CUT: the hardware round.** The **R12
   visual pass is CLOSED, 4/4 on real pixels** (`sysmon`, `album_art`,
   `custom_art`, `weather`), with `search_weather_city` recording XFAIL by

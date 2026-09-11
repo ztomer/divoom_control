@@ -224,83 +224,33 @@ a firmware face nobody here specified, and it becomes the first consumer of the
 custom-image path the MCP item below wants to expose — so the two are one piece
 of work, not two.
 
-### OPEN — expose the custom-image surface over MCP, so any app can draw on the panels
+### OPEN — Multi-device display surface and custom rendering over MCP
 
-_Raised 2026-09-07. The intent: every app the user runs should be able to put
-its own information on a Divoom panel, with the daemon owning the device._
+Enable external processes and AI agents to discover, target, and display custom visuals (images, animations, text) on Divoom devices via the daemon-backed MCP server.
 
-**It makes sense, and most of the machinery exists.** MCP already exposes
-`show_image` and `push_animation`; `render_widget` already composes frames;
-`image_proc::process_image_bytes` already sniffs the container (macOS reports
-`image/jpeg` for TIFF bytes, so the declared MIME may never be trusted) and
-scales NEAREST. What is missing is everything AROUND the pixels.
+#### 1. Device & Screen Discovery (`list_screens`)
+The caller needs visibility into available devices to make informed layout and rendering decisions:
+- **Topology & Geometry**: Expose `device_id` (MAC or identifier), model class, native resolution (`width`, `height`), connection status (`connected`/`disconnected`), and relative positioning coordinates `(x, y)` if configured in a multi-device layout.
+- **Explicit Targeting**: The caller explicitly selects the target screen (`target: "<device_id>"`, `"all"`, or a list of IDs). The daemon does not implicitly slice content across devices or assume virtual-wall composition unless specifically requested.
 
-The three things named in the request, and where they already live:
+#### 2. Media & Text Rendering Pipeline
+- **Image & Animation Sizing**: Accept an explicit resize policy (`fit`, `fill`, `exact`, `none`) rather than silently downscaling to 16x16. Return a descriptive error if non-matching dimensions are supplied with `none`.
+- **Animation Streaming**: Implement full multi-frame animation streaming in the native MCP server (closing the current first-frame limitation in `divoomd mcp`).
+- **Native Text Rendering**: Provide a high-level text tool (`show_text` / `render_text`) using the daemon's internal bitmap font engine (`font.rs`), supporting font choice, color, and optional marquee/scrolling behavior without requiring the client to pre-rasterize.
 
-- **Relative positions** — `wall.rs` already has `DeviceSlot { mac, x, y, size,
-  width, height }` and `DivoomWall { total_width, total_height, min_x, min_y,
-  grid_unit_size, is_free_form }`. This is internal; it needs to be QUERYABLE,
-  as metadata the caller reads and reasons about — see item 6 on why the daemon
-  must not turn it into an implicit composition.
-- **Available image size** — per device, not global. `get_capabilities` exists
-  and should carry the panel size and device class rather than a caller
-  assuming 16x16.
-- **Whether to resize** — a policy the caller states (`fit` / `fill` / `none`,
-  and reject-vs-scale when the image does not match), because the daemon
-  scaling silently is how a caller ships a smeared panel and never learns.
+#### 3. Resource Arbitration & Session Management
+- **Screen Leasing & Priority**: Prevent visual thrashing between background daemon jobs (sysmon, weather, clock) and external applications. Callers acquire a timed lease (`acquire_screen` / `release_screen` or per-request lease tokens).
+- **Lease Expiration & Crash Recovery**: A lease must carry a mandatory TTL (e.g. 10–60s) with renewal. If a client terminates or fails to renew, the panel reverts to its previous or default channel rather than retaining a stale frame indefinitely.
+- **Link-Aware Conflation**: For continuous frame pushes over high-latency links (BLE/SPP), incoming frames for a target device are conflated (keeping only the latest frame and dropping intermediate backlogs) to avoid saturating transport queues.
 
-**What the request does not yet cover, and needs:**
+#### 4. Security & Failure Semantics
+- **Access Control**: Clearly define whether the MCP surface inherits the daemon's local Unix socket trust model or requires token-based authentication over TCP.
+- **Fail-Fast Error Reporting**: Pushes to disconnected or unready devices must fail immediately with clear status codes (`DEVICE_DISCONNECTED`), preventing silent no-ops.
 
-1. **Arbitration.** The daemon's live jobs already overwrite each other — the
-   hardware harness has to call `live_jobs_stop_for` between checks or album art
-   bleeds into the next widget. Add N external apps and "who owns this panel"
-   becomes the whole problem. There is a seam already: `exclusive_start` /
-   `exclusive_end` with a token. Needs a lease model with an owner, a priority,
-   and a defined loser.
-2. **A lease EXPIRY, and what the panel shows when a client dies.** Today the
-   last frame stays lit forever; that is exactly the "still seeing album art"
-   symptom from this round. A crashed app must not own a panel indefinitely.
-3. **Rate limiting by conflation, not queueing.** BLE is slow and two apps at
-   10fps will saturate it. Keep the LATEST frame per device and drop the
-   intermediates — the same conclusion the status fan-out reached (a lagging
-   consumer wants the CURRENT truth, not a backlog).
-4. **Authentication is a DECISION, not a default.** R72 found an
-   unauthenticated control surface handing every GUI API method to any local
-   process. "Any app can draw on the panel" is that surface again, deliberately.
-   Whether it is unauthenticated, token-gated, or allowlisted must be chosen and
-   written down, not inherited.
-5. **Honest failure.** A push to a disconnected device must say so. The device
-   is frequently absent and a silent success would leave callers rendering into
-   nothing.
-6. **Targeting is the caller's choice, and the virtual wall is NOT the
-   default.** _(Settled 2026-09-07.)_ A caller addresses **one screen, several,
-   or all of them**, and picks. The geometry and per-screen size are exposed as
-   DESCRIPTIVE metadata — here is what exists, here is where each one sits
-   relative to the others, here is how big each is — so a caller that wants to
-   spread content across screens can compute that itself.
-
-   The daemon does **not** slice a single image across the wall by default, and
-   an external caller does not inherit the wall layout the GUI happens to have
-   configured. Composite-canvas mode, if it is ever built, is an explicit opt-in
-   and is out of scope for the first version: the wall is a GUI concept the user
-   arranges for themselves, and silently applying it to somebody else's push
-   would make the same image behave differently on two machines for reasons the
-   caller cannot see.
-
-   So "relative positions" is worth exposing as INFORMATION, not as an implicit
-   composition. Broadcast-to-all is the simple case and should be one call.
-7. **Text without rasterizing.** `font.rs` and the `text` widget kind already
-   exist; callers will want "show this string" rather than shipping pixels.
-
-**The shape that follows from all of the above**, as a sketch rather than a
-spec: a `list_screens` returning one entry per device (id, size, position
-relative to the others, connected or not, what it is currently showing), and a
-push that takes a target of one id, a list of ids, or all — plus the resize
-policy and the frame. Geometry in, targeting explicit, no implicit composition.
-
-**Sequencing:** the render-the-weather-widget item above is the natural first
-consumer — do it first and the custom-image path gets a real user inside the
-daemon before any external app depends on it.
+**Implementation Sequencing:**
+1. Upgrade `render_widget` to support rendered weather (validates the rendering pipeline within the daemon).
+2. Enhance native device capabilities/status reporting (`device_status` carrying model and panel resolution).
+3. Extend `divoomd mcp` with `list_screens`, resolution-aware image/animation streaming, text rendering, and lease-based arbitration.
 
 ### OPEN — why did 64 subscriptions accumulate in the first place?
 
