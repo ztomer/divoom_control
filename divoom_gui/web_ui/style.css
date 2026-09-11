@@ -222,8 +222,8 @@ button {
     border: 1px solid #e04e17;
     border-radius: 4px;
     color: #ffffff;
-    font-family: var(--font-display);
-    font-weight: 700;
+    font-family: var(--font-sans);
+    font-weight: 600;
     font-size: 13px;
     cursor: pointer;
     transition: background 0.2s;

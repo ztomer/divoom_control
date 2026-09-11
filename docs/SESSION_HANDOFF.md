@@ -37,15 +37,25 @@ shared memory. Read this on entry and **update it at the end of every round**
     - Separated visual highlighting (`highlightNode`) from backend connection IPC.
     - Implemented click-drag differentiation with a $3\text{px}$ movement threshold (`hasMoved`), ensuring dragging never triggers IPC or notifications.
     - Prevented clickthrough bugs by strictly scoping listeners to active drag lifecycles and avoiding transparent overlay elements or pointer-events toggles.
+  - **Font Consistency & Typographic Harmonization**:
+    - Eliminated font family outliers where `monospace` or `Outfit` leaked into UI controls. Room filter pills (`.stage-room-pill`), room select (`.spatial-room-select`), ribbon chips (`.spatial-ribbon-chip`), and device node headers (`.spatial-node-name`) now strictly use `var(--font-sans)` (`Inter`).
+    - Fixed `#appbar-volume-value` to `var(--font-mono)` (`Inter Mono`) matching all other numerical readouts across the app.
+    - Standardized `.glow-btn` button typography to `var(--font-sans)`.
+  - **Room Management Lifecycle (`spatial_rooms.js`)**:
+    - Created dedicated module (`spatial_rooms.js`, 246 lines) managing persistent room grouping across `localStorage` and daemon topology (`topology.json`).
+    - Tactile `+` button in stage header reveals an inline input form to create custom rooms in 1 click.
+    - Custom rooms render with a subtle `×` button to delete; deleting a room gracefully reassigns all assigned displays back to `"Desk"` to prevent orphaned states.
+    - Permanent baseline protection: `"Desk"` cannot be deleted.
+    - Real-time dynamic sync between stage header filter pills and sidebar hardware deck (`#deck-room-select`).
   - **Gates & Verification**:
     - `cargo test -p divoomd --no-default-features` (204/204 passing).
-    - `python3 -m pytest tests/test_gui_api_*.py tests/test_mcp_*.py tests/test_repo_gates.py` (267/267 passing).
+    - `python3 -m pytest tests/test_gui_api_*.py tests/test_mcp_*.py tests/test_repo_gates.py tests/test_fonts.py` (285 passed, 1 skipped).
     - `python3 -m pytest tests/test_e2e_mock_device.py` (15/15 passing).
-    - Dynamic Camoufox interaction verified: Ditoo volume slider visible, switching to Pixoo-64 dynamically hides volume slider, switching back restores it. Node click and drag tests passed with 0 clickthrough or event leak issues.
-    - File size gate (386/386 source files <= 500 lines: `spatial_stage.js` at 492 lines, `spatial_stage.css` at 480 lines).
+    - Dynamic Camoufox interaction verified: font families computed to expected tokens (pills/chips/names `Inter`, values `Inter Mono`, title `Outfit`), room creation, filtering, dynamic select mirroring, and room deletion fallback passed.
+    - File size gate (386/386 source files <= 500 lines: `spatial_stage.js` at 489 lines, `spatial_stage.css` at 488 lines, `spatial_rooms.js` at 246 lines).
     - Emoji gate clean across 735 tracked files.
     - Rebuilt release app and dmg (`dist/Divoom.app` and `dist/Divoom-v0.35.0.dmg`).
-    - Installed locally to `/Applications/Divoom.app` via `scripts/install_local.sh`, verified running daemon inode (`538710128`).
+    - Installed locally to `/Applications/Divoom.app` via `scripts/install_local.sh`, verified running daemon inode (`538740126`).
     - Rebuilt BLE-free binary (`cargo build -p divoomd --no-default-features`) to protect against macOS TCC `SIGABRT`.
 
 - **2026-09-07 (final session) — v0.34.0 CUT: the hardware round.** The **R12

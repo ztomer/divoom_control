@@ -62,7 +62,7 @@
         if (!isCollapsed) ribbon.style.display = 'none';
         ribbon.innerHTML = `
             <div style="display: flex; align-items: center; gap: 8px;">
-                <span style="font-family: var(--font-display); font-weight: 700; font-size: 11px; color: var(--text-muted);">FLEET:</span>
+                <span style="font-family: var(--font-sans); font-weight: 600; font-size: 10px; letter-spacing: 0.5px; color: var(--text-muted);">FLEET:</span>
                 <div id="spatial-ribbon-chips" class="spatial-ribbon-chips"></div>
             </div>
             <button id="stage-expand-btn" class="stage-btn" type="button">Expand Bench</button>
@@ -92,6 +92,20 @@
         const roomSelect = document.getElementById('deck-room-select');
         if (roomSelect) {
             roomSelect.addEventListener('change', (e) => {
+                if (e.target.value === '__add_new__') {
+                    const name = prompt('Enter new room name:');
+                    if (name && window.SpatialRooms) {
+                        const added = window.SpatialRooms.addRoom(name);
+                        if (added && selectedMac) {
+                            deviceRooms[selectedMac] = added;
+                            try { localStorage.setItem('divoom_stage_rooms', JSON.stringify(deviceRooms)); } catch (_) {}
+                        }
+                    }
+                    if (selectedMac) updateInspector(getSelectedDevice());
+                    updateRoomFilterTabs();
+                    refreshBenchNodes();
+                    return;
+                }
                 if (!selectedMac) return;
                 deviceRooms[selectedMac] = e.target.value;
                 try { localStorage.setItem('divoom_stage_rooms', JSON.stringify(deviceRooms)); } catch (_) {}
@@ -99,6 +113,13 @@
                 refreshBenchNodes();
             });
         }
+
+        window.addEventListener('divoom:rooms-updated', () => {
+            if (window.SpatialRooms) Object.assign(deviceRooms, window.SpatialRooms.getDeviceRooms());
+            updateRoomFilterTabs();
+            if (selectedMac) { const dev = getSelectedDevice(); if (dev) updateInspector(dev); }
+            refreshBenchNodes();
+        });
 
         // Sidebar deck brightness slider
         const bSlider = document.getElementById('global-brightness-slider');
@@ -111,9 +132,7 @@
                     deviceBrightness[selectedMac] = val;
                     try { localStorage.setItem('divoom_stage_brightness', JSON.stringify(deviceBrightness)); } catch (_) {}
                 }
-                if (window.pywebview && window.pywebview.api && window.pywebview.api.set_brightness) {
-                    window.pywebview.api.set_brightness(val);
-                }
+                if (window.pywebview?.api?.set_brightness) window.pywebview.api.set_brightness(val);
             });
         }
 
@@ -121,15 +140,10 @@
         const vSlider = document.getElementById('appbar-volume-slider');
         const vVal = document.getElementById('appbar-volume-value');
         if (vSlider) {
-            vSlider.addEventListener('input', (e) => {
-                const val = parseInt(e.target.value);
-                if (vVal) vVal.textContent = val + '/15';
-            });
+            vSlider.addEventListener('input', (e) => { if (vVal) vVal.textContent = e.target.value + '/15'; });
             vSlider.addEventListener('change', (e) => {
                 const val = parseInt(e.target.value);
-                if (window.pywebview && window.pywebview.api && window.pywebview.api.set_volume) {
-                    window.pywebview.api.set_volume(val);
-                }
+                if (window.pywebview?.api?.set_volume) window.pywebview.api.set_volume(val);
             });
         }
 
@@ -137,19 +151,15 @@
         const powerBtn = document.getElementById('deck-device-power');
         if (powerBtn) {
             powerBtn.addEventListener('click', () => {
-                if (bSlider) {
-                    const cur = parseInt(bSlider.value);
-                    const next = cur > 0 ? 0 : 85;
-                    bSlider.value = next;
-                    if (bVal) bVal.textContent = next + '%';
-                    if (selectedMac) {
-                        deviceBrightness[selectedMac] = next;
-                        try { localStorage.setItem('divoom_stage_brightness', JSON.stringify(deviceBrightness)); } catch (_) {}
-                    }
-                    if (window.pywebview && window.pywebview.api && window.pywebview.api.set_brightness) {
-                        window.pywebview.api.set_brightness(next);
-                    }
+                if (!bSlider) return;
+                const next = parseInt(bSlider.value) > 0 ? 0 : 85;
+                bSlider.value = next;
+                if (bVal) bVal.textContent = next + '%';
+                if (selectedMac) {
+                    deviceBrightness[selectedMac] = next;
+                    try { localStorage.setItem('divoom_stage_brightness', JSON.stringify(deviceBrightness)); } catch (_) {}
                 }
+                if (window.pywebview?.api?.set_brightness) window.pywebview.api.set_brightness(next);
             });
         }
 
@@ -201,28 +211,21 @@
         return DIVOOM_SPECS.ditoo;
     }
 
+    function getSelectedDevice() {
+        const list = getDeviceList();
+        return list.find(d => d.address === selectedMac) || list[0];
+    }
+
     function updateRoomFilterTabs() {
         const container = document.getElementById('stage-room-filters');
         if (!container) return;
-        const devices = getDeviceList();
-        const rooms = new Set(['Desk']);
-        devices.forEach(d => {
-            const addr = d.address || 'dev';
-            rooms.add(deviceRooms[addr] || d.room || 'Desk');
-        });
-        const list = ['all', ...Array.from(rooms)];
-        container.innerHTML = list.map(r => `
-            <button type="button" class="stage-room-pill ${activeRoomFilter === r ? 'active' : ''}" data-room="${r}">
-                ${r === 'all' ? 'All' : r}
-            </button>
-        `).join('');
-        container.querySelectorAll('.stage-room-pill').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                activeRoomFilter = e.currentTarget.dataset.room;
+        if (window.SpatialRooms && typeof window.SpatialRooms.renderFilterPills === 'function') {
+            window.SpatialRooms.renderFilterPills(container, activeRoomFilter, (newFilter) => {
+                activeRoomFilter = newFilter;
                 updateRoomFilterTabs();
                 refreshBenchNodes();
             });
-        });
+        }
     }
 
     function refreshBenchNodes() {
@@ -338,7 +341,11 @@
         const addr = dev.address || 'dev';
         if (nameEl) nameEl.textContent = dev.name || spec.name;
         if (tagEl) tagEl.textContent = `${spec.pw}×${spec.ph}`;
-        if (roomSelect) roomSelect.value = deviceRooms[addr] || dev.room || 'Desk';
+        if (roomSelect) {
+            const rm = deviceRooms[addr] || dev.room || 'Desk';
+            if (window.SpatialRooms) window.SpatialRooms.populateSelect(roomSelect, rm);
+            else roomSelect.value = rm;
+        }
         if (volContainer) {
             volContainer.style.display = (spec.form !== 'pixoo') ? 'block' : 'none';
         }

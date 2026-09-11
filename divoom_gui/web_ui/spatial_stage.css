@@ -153,9 +153,9 @@ body {
 }
 
 .stage-room-pill {
-    padding: 1px 7px;
-    font-family: var(--font-mono);
-    font-size: 9px;
+    padding: 2px 7px;
+    font-family: var(--font-sans);
+    font-size: 10px;
     font-weight: 500;
     color: var(--text-muted);
     background: transparent;
@@ -163,24 +163,36 @@ body {
     border-radius: 3px;
     cursor: pointer;
     transition: all 0.1s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
 }
 
-.stage-room-pill:hover {
-    color: var(--text-main);
-    background: #232530;
+.stage-room-pill:hover { color: var(--text-main); background: #232530; }
+.stage-room-pill.active { color: var(--text-main); background: #2c2f3d; border-color: #3e4254; font-weight: 600; }
+.stage-room-del-btn {
+    background: transparent; border: none; color: var(--text-muted);
+    font-family: var(--font-sans); font-size: 11px; line-height: 1; padding: 0 1px;
+    cursor: pointer; opacity: 0.6; border-radius: 2px;
 }
-
-.stage-room-pill.active {
-    color: var(--text-main);
-    background: #2c2f3d;
-    border-color: #3e4254;
-    font-weight: 700;
+.stage-room-del-btn:hover { color: #ff4444; opacity: 1; background: rgba(255,68,68,0.2); }
+.stage-room-add-btn {
+    background: #22242c; border: 1px solid var(--border-color); border-radius: 3px;
+    color: var(--text-muted); padding: 2px 5px; cursor: pointer; display: inline-flex;
+    align-items: center; justify-content: center;
 }
+.stage-room-add-btn:hover { color: var(--text-main); border-color: #40434f; background: #2a2c36; }
+.stage-room-add-btn .kare-icon { width: 9px; height: 9px; }
+.stage-room-input-form { display: inline-flex; align-items: center; gap: 3px; background: #1c1d24; border: 1px solid var(--border-color); border-radius: 3px; padding: 1px 3px; }
+.stage-room-input { background: transparent; border: none; outline: none; color: var(--text-main); font-family: var(--font-sans); font-size: 10px; width: 65px; padding: 1px; }
+.stage-room-confirm-btn, .stage-room-cancel-btn { background: #282a34; border: 1px solid var(--border-color); border-radius: 2px; color: var(--text-muted); font-family: var(--font-sans); font-size: 9px; padding: 1px 4px; cursor: pointer; }
+.stage-room-confirm-btn:hover { color: var(--text-main); background: var(--primary); border-color: var(--primary); }
+.stage-room-cancel-btn:hover { color: #ff4444; }
 
 /* Room selector in inspector */
 .spatial-room-select {
-    font-family: var(--font-mono);
-    font-size: 9px;
+    font-family: var(--font-sans);
+    font-size: 10px;
     background: #242630;
     color: var(--text-main);
     border: 1px solid var(--border-color);
@@ -190,27 +202,22 @@ body {
     cursor: pointer;
 }
 
-.spatial-room-select:focus {
-    border-color: var(--primary);
-}
-
-.spatial-node.dimmed {
-    opacity: 0.28;
-    filter: grayscale(40%);
-}
+.spatial-room-select:focus { border-color: var(--primary); }
+.spatial-node.dimmed { opacity: 0.28; filter: grayscale(40%); }
 
 .spatial-node-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     margin-bottom: 3px;
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
     font-size: 7.5px;
     line-height: 1;
     color: var(--text-muted);
 }
 
 .spatial-node-name {
+    font-family: var(--font-sans);
     font-weight: 600;
     color: var(--text-main);
     overflow: hidden;
@@ -295,7 +302,8 @@ body {
 .spatial-ribbon-chip {
     padding: 2px 7px;
     border-radius: 4px;
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
+    font-weight: 500;
     font-size: 10px;
     background: #22242c;
     border: 1px solid var(--border-color);

@@ -36,6 +36,21 @@ shipped milestone (per the project planning docs).
 - **Zero-lag Spatial Canvas Dragging (`spatial_stage.js`)**: Eliminated drag lag on the canvas. Previously, node `mousedown` immediately invoked `selectDevice(addr, dev)`, triggering synchronous Python IPC (`window.pywebview.api.connect_single_device`), socket negotiation, and toast animations right as dragging began. Separated immediate visual node highlighting (`highlightNode`) from connection switching (`selectDevice`), tracked movement delta threshold ($|\Delta| > 3\text{px}$), and only triggered backend device connection on true click (`mouseup` without movement).
 - **Zero-Clickthrough Architecture**: Verified drag listeners are cleanly isolated to the active drag gesture on `window` and removed on `mouseup` without transparent overlays, unmanaged global event listeners, or `pointer-events: none` hacks that previously caused clickthrough issues.
 
+### Added — Room Management Engine (`spatial_rooms.js`)
+
+- **Room Add/Remove Lifecycle**: Created dedicated `spatial_rooms.js` module managing persistent room grouping across `localStorage` and daemon topology (`topology.json`).
+  - **Inline Room Creation**: Added a tactile Susan Kare `+` button to `#stage-room-filters` revealing an inline text prompt for instant room addition.
+  - **Safe Room Deletion**: Custom rooms expose a subtle `×` button. Deleting a room automatically reassigns any assigned displays back to `"Desk"`, preventing orphan states. The baseline `"Desk"` room is permanently protected against deletion.
+  - **Dynamic Dropdown Population**: `#deck-room-select` dynamically mirrors available rooms in real-time, including a `"+ Add Room..."` selection trigger.
+
+### Fixed — Font Consistency Sweep
+
+- **Standardized on Design System Font Tokens**:
+  - Eliminated leaked `var(--font-mono)` declarations on room filter pills (`.stage-room-pill`), room dropdown select (`.spatial-room-select`), ribbon device chips (`.spatial-ribbon-chip`), and device node header titles (`.spatial-node-name`), unifying them onto `var(--font-sans)` (`Inter`).
+  - Fixed `#appbar-volume-value` from `var(--font-sans)` to `var(--font-mono)` (`Inter Mono`) to match all other numeric readout indicators across the dashboard.
+  - Standardized `.glow-btn` button typography to `var(--font-sans)` (`Inter`).
+  - Cleaned up micro-labels (such as `FLEET:`) to `var(--font-sans)`.
+
 ## v0.34.0 — the weather widget was invisible, and the harness could not have found it (2026-09-07)
 
 A hardware round. The R12 visual pass — open since R12 and filed for rounds as
