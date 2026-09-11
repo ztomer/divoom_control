@@ -224,8 +224,10 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
 
         "sysmon" => crate::live_jobs::sysmon::cmd_sysmon(&req.args).await,
 
-        // --- wall command ---
+        // --- wall & topology commands ---
         "wall_configure" => daemon.cmd_wall_configure(&req).await,
+        "get_topology" => daemon.cmd_get_topology(&req).await,
+        "set_topology" => daemon.cmd_set_topology(&req).await,
 
         // --- notification service stubs (macOS only, but wired for parity) ---
         "start_notifications" => {

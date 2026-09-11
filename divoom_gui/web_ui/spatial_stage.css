@@ -1,0 +1,301 @@
+/*
+   spatial_stage.css — Dieter Rams & Susan Kare Spatial Workbench
+   Matte anthracite surfaces, Braun Tuner Orange accents, tactile bezels,
+   discrete pixelated diode apertures, and zero cyber bloom.
+*/
+
+.spatial-stage-wrapper {
+    margin: 10px 14px 12px 14px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    user-select: none;
+}
+
+/* Stage Header Bar */
+.spatial-stage-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 12px;
+    background: var(--sidebar-bg);
+    border-bottom: 1px solid var(--border-color);
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.spatial-stage-title-area {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-sans);
+}
+
+.spatial-stage-title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    color: var(--text-main);
+    letter-spacing: 0.3px;
+    font-size: 11px;
+}
+
+.spatial-stage-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.stage-btn {
+    background: #22242b;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-main);
+    font-family: var(--font-sans);
+    font-size: 10px;
+    font-weight: 500;
+    padding: 2px 8px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: background 0.1s ease, border-color 0.1s ease;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+
+.stage-btn:hover {
+    background: #2c2e37;
+    border-color: #40434f;
+}
+
+.stage-btn:active {
+    background: #191a20;
+    transform: translateY(1px);
+}
+
+/* 2D Freeform Bench Canvas */
+.spatial-bench {
+    position: relative;
+    height: 180px;
+    background: var(--bg-base);
+    background-image: radial-gradient(circle, #20222a 1px, transparent 1px);
+    background-size: 16px 16px;
+    overflow: hidden;
+}
+
+/* Draggable Device Node Chassis */
+.spatial-node {
+    position: absolute;
+    background: linear-gradient(180deg, #242630 0%, #191a22 100%);
+    border: 1px solid #333644;
+    border-radius: 5px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06);
+    cursor: grab;
+    touch-action: none;
+    padding: 5px;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    transition: border-color 0.1s ease, box-shadow 0.1s ease;
+}
+
+.spatial-node:active {
+    cursor: grabbing;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.1);
+    z-index: 50 !important;
+}
+
+.spatial-node.selected {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 1.5px var(--primary), 0 4px 12px rgba(0,0,0,0.7);
+}
+
+.spatial-node-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--text-muted);
+}
+
+.spatial-node-name {
+    font-weight: 700;
+    color: var(--text-main);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 65px;
+}
+
+.spatial-node-screen {
+    background: #060708;
+    border: 1px solid #1a1c24;
+    border-radius: 3px;
+    box-shadow: inset 0 2px 5px rgba(0,0,0,0.95);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+}
+
+.spatial-node-canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    display: block;
+}
+
+.spatial-node-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 4px;
+    font-family: var(--font-mono);
+    font-size: 8px;
+    color: var(--text-muted);
+}
+
+/* Jewel LED Dots */
+.spatial-jewel {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+.spatial-jewel.online {
+    background-color: var(--accent);
+    box-shadow: 0 0 4px rgba(0, 204, 102, 0.45);
+}
+
+.spatial-jewel.amber {
+    background-color: var(--warn);
+    box-shadow: 0 0 4px rgba(255, 204, 0, 0.45);
+}
+
+.spatial-jewel.standby {
+    background-color: var(--secondary);
+}
+
+/* Contextual Inspector Strip */
+.spatial-inspector {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 12px;
+    background: var(--sidebar-bg);
+    border-top: 1px solid var(--border-color);
+    font-size: 11px;
+    color: var(--text-main);
+}
+
+.spatial-inspector-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.spatial-inspector-name {
+    font-weight: 700;
+}
+
+.spatial-inspector-tag {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    background: #242630;
+    border: 1px solid var(--border-color);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: var(--text-muted);
+}
+
+.spatial-inspector-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.spatial-brightness-control {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.spatial-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 3px;
+    width: 80px;
+    background: #2b2d37;
+    border-radius: 2px;
+    outline: none;
+}
+
+.spatial-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 10px;
+    height: 12px;
+    border-radius: 2px;
+    background: var(--text-main);
+    border: 1px solid #111;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+
+.spatial-slider::-webkit-slider-thumb:hover {
+    background: var(--primary);
+}
+
+/* Compact Ribbon State */
+.spatial-ribbon {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 12px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    margin: 8px 14px;
+    font-size: 11px;
+}
+
+.spatial-ribbon-chips {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.spatial-ribbon-chip {
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    background: #22242c;
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.1s ease;
+}
+
+.spatial-ribbon-chip:hover {
+    color: var(--text-main);
+    border-color: #40434f;
+}
+
+.spatial-ribbon-chip.active {
+    background: var(--primary);
+    color: #ffffff;
+    border-color: #d9450e;
+}

@@ -3,10 +3,72 @@
 
 use super::{DivoomWall, WallConfig};
 use crate::daemon::{Daemon, DeviceTransport};
-use crate::protocol::Request;
+use crate::protocol::{err_reply, Request};
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
+
+fn topology_path() -> Option<PathBuf> {
+    if let Ok(p) = std::env::var("DIVOOM_TOPOLOGY_PATH") {
+        return Some(PathBuf::from(p));
+    }
+    let mut dir = crate::cloud::config_dir()?;
+    dir.push("topology.json");
+    Some(dir)
+}
+
+pub fn load_topology() -> Value {
+    if let Some(path) = topology_path() {
+        if let Ok(s) = std::fs::read_to_string(&path) {
+            if let Ok(val) = serde_json::from_str::<Value>(&s) {
+                return val;
+            }
+        }
+    }
+    json!({
+        "devices": {},
+        "wall_linked": true,
+        "rooms": ["Desk"]
+    })
+}
+
+pub fn save_topology(val: &Value) -> Result<(), String> {
+    let path = topology_path().ok_or_else(|| "cannot find config directory".to_string())?;
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let s = serde_json::to_string_pretty(val).map_err(|e| e.to_string())?;
+    std::fs::write(&path, s).map_err(|e| e.to_string())
+}
+
+pub async fn cmd_get_topology(daemon: &Daemon, _req: &Request) -> Value {
+    let wall_guard = daemon.wall.lock().await;
+    let wall_active = wall_guard.is_some();
+    drop(wall_guard);
+    let slots = daemon.wall_slots.lock().await.clone();
+    let top = load_topology();
+    let cur_dev = daemon.device_id.try_lock().ok().and_then(|g| g.clone());
+    json!({
+        "success": true,
+        "wall_active": wall_active,
+        "slots": slots,
+        "current_device": cur_dev,
+        "topology": top
+    })
+}
+
+pub async fn cmd_set_topology(_daemon: &Daemon, req: &Request) -> Value {
+    let top = req
+        .args
+        .get("topology")
+        .cloned()
+        .unwrap_or_else(|| req.args.clone());
+    match save_topology(&top) {
+        Ok(()) => json!({"success": true}),
+        Err(e) => err_reply(&format!("failed to save topology: {e}")),
+    }
+}
 
 /// Handle `wall_configure` socket command.
 /// Ports `owner_wall.py:wall_configure` including G7 delta reconfiguration:
@@ -116,5 +178,41 @@ pub async fn cmd_wall_configure(daemon: &Daemon, req: &Request) -> Value {
             *daemon.wall.lock().await = None;
             json!({"success": false, "error": e, "wall": false})
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_topology_save_and_load() {
+        let temp_dir = std::env::temp_dir().join("divoom_test_topology");
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let file_path = temp_dir.join("test_topology.json");
+        std::env::set_var("DIVOOM_TOPOLOGY_PATH", &file_path);
+
+        let data = json!({
+            "devices": {
+                "11:22:33:44:55:01": {
+                    "name": "Ditoo Left",
+                    "model": "Ditoo Pro",
+                    "x": 30,
+                    "y": 40,
+                    "brightness": 85
+                }
+            },
+            "wall_linked": true,
+            "rooms": ["Desk"]
+        });
+
+        assert!(save_topology(&data).is_ok());
+        let loaded = load_topology();
+        assert_eq!(loaded["wall_linked"], true);
+        assert_eq!(loaded["devices"]["11:22:33:44:55:01"]["name"], "Ditoo Left");
+        assert_eq!(loaded["devices"]["11:22:33:44:55:01"]["brightness"], 85);
+
+        let _ = std::fs::remove_file(&file_path);
+        std::env::remove_var("DIVOOM_TOPOLOGY_PATH");
     }
 }

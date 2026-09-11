@@ -245,6 +245,14 @@ impl Daemon {
     async fn cmd_wall_configure(&self, req: &Request) -> Value {
         crate::wall::cmd_wall_configure(self, req).await
     }
+
+    async fn cmd_get_topology(&self, req: &Request) -> Value {
+        crate::wall::cmd_get_topology(self, req).await
+    }
+
+    async fn cmd_set_topology(&self, req: &Request) -> Value {
+        crate::wall::cmd_set_topology(self, req).await
+    }
 }
 
 impl Handler for Daemon {

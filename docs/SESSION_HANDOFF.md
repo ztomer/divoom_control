@@ -21,11 +21,13 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
-- **2026-09-11 — Documentation rationalization & MCP capability audit.**
-  - `docs/MCP_SERVER.md` de-claudified and rationalized: updated to 13 tools, accurate parameter schemas, client-agnostic setup examples (Claude, Cursor, Antigravity, Cline, Continue), and documented stdio pipe requirements and daemon-routed architecture.
-  - `docs/ROADMAP.md` MCP item restructured: replaced conversational prose with a formal engineering specification for multi-screen discovery (`list_screens`), media scaling, native text rendering (`show_text`), and lease-based arbitration with TTL expiration.
-  - MCP capability audit completed: evaluated existing 13 tools against full device/daemon capabilities; identified 9 concrete functional gaps (multi-device discovery/addressing, arbitrary resolution scaling beyond 16x16, GIF streaming beyond first frame, native text rendering, live widget lifecycle management, device notifications, timers/stopwatch, full device capability introspection, and exclusive screen leasing) and recorded in `docs/ROADMAP.md`.
-  - **Unified Spatial Stage (rooms, virtual wall, live previews, device selection overhaul)**: Reviewed and codified in `docs/ROADMAP.md`. Confirmed primary hardware matrix (4× 16×16 displays with 64×64 dynamic density support), physical desk adjacency with flexible room drag-out, permanent visibility (~135px) with user-controlled 34px collapse ribbon, shared daemon topology driving MCP `list_screens` and multi-device targeting, and a 4-phase implementation roadmap. Gated: code modifications strictly held until design review is complete.
+- **2026-09-11 — Unified Spatial Stage, Physical Scale Engine & Daemon Topology.**
+  - **Daemon Topology Engine (`divoomd`)**: Implemented `get_topology` and `set_topology` socket commands in `divoomd/src/daemon/dispatch.rs`, `divoomd/src/daemon.rs`, and `divoomd/src/wall/cmds.rs`. Configured JSON persistence to `~/.config/divoom-control/topology.json` (overridable via `DIVOOM_TOPOLOGY_PATH`).
+  - **MCP `list_screens`**: Registered tool #14 (`list_screens`) in `divoomd/src/mcp_tools.rs` exposing screens, physical resolutions, spatial coordinates, and wall grouping. Unit tests updated and verified.
+  - **Physical Hardware Database (Dieter Rams & Susan Kare Craft)**: Mapped exact millimeter dimensions, screen active area, aspect ratio, and physical silhouettes for Timoo (82.5×90mm), Ditoo (90×114mm), Tivoo-Max (184×163mm), Pixoo-1 (200×200mm), and Pixoo-64 (261×261mm). Rendered with true relative scaling (1mm = 0.65px) and discrete diode matrices.
+  - **Spatial Stage Web UI (`divoom_gui/web_ui/`)**: Implemented `spatial_stage.js` and `spatial_stage.css` (both strictly under 500 LOC). Features freeform 2D drag-and-drop placement, baseline desk alignment, 1-click active device switching, model-calibrated brightness slider, and non-destructive 32px compact ribbon toggle with `localStorage` persistence.
+  - **Decluttering**: Retired explanatory text banners and redundant per-node badges; unified device selection, preview, and wall coordination directly into the top stage.
+  - **Dynamic Verification**: `cargo test -p divoomd --no-default-features` (204/204 passing), file size gate (384/384 source files <= 500 lines), emoji gate clean, real PyWebView GUI launched and running live.
 
 - **2026-09-07 (final session) — v0.34.0 CUT: the hardware round.** The **R12
   visual pass is CLOSED, 4/4 on real pixels** (`sysmon`, `album_art`,

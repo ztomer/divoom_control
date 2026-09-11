@@ -9,7 +9,7 @@ use crate::daemon::{Daemon, DeviceTransport};
 
 mod cmds;
 mod dispatch;
-pub(crate) use cmds::cmd_wall_configure;
+pub(crate) use cmds::{cmd_get_topology, cmd_set_topology, cmd_wall_configure};
 
 pub struct WallConfig {
     pub mac: String,

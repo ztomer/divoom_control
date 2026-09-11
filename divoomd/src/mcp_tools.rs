@@ -62,6 +62,8 @@ pub fn catalog() -> Value {
             &json!({"type":"object","properties":{},"additionalProperties":false})),
         tool("get_device_state", "Read the device's current volume, brightness, channel, orientation, mirror.",
             &json!({"type":"object","properties":{},"additionalProperties":false})),
+        tool("list_screens", "List all known and connected display screens, their resolutions, spatial coordinates, rooms, and wall grouping.",
+            &json!({"type":"object","properties":{},"additionalProperties":false})),
     ])
 }
 
@@ -240,6 +242,7 @@ pub async fn call_tool(name: &str, a: &Value, sock: &str) -> Result<Value, Strin
                 "screen_orientation": screen_dir, "mirror": mirror,
             }))
         }
+        "list_screens" => cmd(sock, "get_topology", json!({})).await,
         other => Err(format!("unknown tool: {other}")),
     }
 }
@@ -353,10 +356,10 @@ async fn cmd(sock: &str, command: &str, args: Value) -> Result<Value, String> {
 mod tests {
     use super::*;
     #[test]
-    fn catalog_has_all_thirteen_tools() {
+    fn catalog_has_all_fourteen_tools() {
         let c = catalog();
         let arr = c.as_array().expect("catalog is an array");
-        assert_eq!(arr.len(), 13, "13 MCP tools (parity with mcp_tools.py)");
+        assert_eq!(arr.len(), 14, "14 MCP tools (including list_screens)");
         for t in arr {
             assert!(t.get("name").and_then(|v| v.as_str()).is_some());
             assert!(t.get("inputSchema").is_some());

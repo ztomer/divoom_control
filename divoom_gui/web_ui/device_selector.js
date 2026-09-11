@@ -189,6 +189,7 @@ window.renderDeviceDots = function() {
         host.appendChild(chip);
     });
     if (window.renderWallButton) window.renderWallButton();
+    if (window.SpatialStage && window.SpatialStage.refresh) window.SpatialStage.refresh();
 };
 
 // The Virtual Wall gets a distinct chip — same visual language as device chips

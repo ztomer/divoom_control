@@ -16,8 +16,16 @@ shipped milestone (per the project planning docs).
   - Replaced the conversational narrative in the open MCP roadmap item with an objective, structured technical specification covering screen discovery (`list_screens`), media scaling & animation streaming, native text rendering (`show_text`), lease-based resource arbitration with TTL expiration, and rate-limiting via conflation.
   - Documented all 9 MCP functional capability gaps identified during the comprehensive audit (multi-device discovery, resolution scaling, full animation streaming, native text rendering, live widget lifecycle, rich capabilities, transient notifications, device tools, and screen leasing).
 - **`docs/ROADMAP.md` Unified Spatial Stage initiative codified**:
-  - Detailed architectural specification for a persistent top stage (~135px height, collapsible to 34px) integrating device selection, live pixel previews, room/zone grouping, and virtual wall snapping for multi-device setups (specifically 4× 16×16 displays with 64×64 support).
+  - Detailed architectural specification for a persistent top stage integrating device selection, live pixel previews, room/zone grouping, and virtual wall snapping for multi-device setups (specifically 4× 16×16 displays with 64×64 support).
   - Outlined daemon spatial registry (`topology.json`) integration powering MCP `list_screens` and multi-device targeting, with a 4-phase implementation plan.
+
+### Added — Unified Spatial Stage & Physical Scale Engine
+
+- **Daemon Topology Engine (`divoomd`)**: Added `get_topology` and `set_topology` socket dispatch commands, with JSON persistence to `~/.config/divoom-control/topology.json`.
+- **MCP Screen Discovery (`list_screens`)**: Added tool #14 (`list_screens`) querying the daemon topology for known screens, physical dimensions, resolutions, and wall grouping.
+- **Physical Model Database**: Formalized exact millimeter dimensions and physical silhouettes for Ditoo (90×114mm), Timoo (82.5×90mm), Tivoo-Max (184×163mm), Pixoo-1 (200×200mm), and Pixoo-64 (261×261mm). Rendered to scale ($1\text{mm} \approx 0.65\text{px}$).
+- **Spatial Stage Web UI (`divoom_gui/web_ui/`)**: Added `spatial_stage.js` and `spatial_stage.css` mounted at the top of the main window. Direct 2D drag-and-drop placement, baseline alignment, 1-click device switching, live diode canvases, and 32px compact ribbon toggle with `localStorage` persistence.
+- **Decluttering**: Retired explanatory text banners and redundant per-node badges; unified device selection, preview, and wall coordination directly into the top stage.
 
 ## v0.34.0 — the weather widget was invisible, and the harness could not have found it (2026-09-07)
 
