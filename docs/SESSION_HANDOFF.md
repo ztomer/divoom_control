@@ -334,6 +334,13 @@ wiring a button is small work on top of what exists.
    - Unify `DivoomWall` as a composite view over the `DeviceRegistry` rather than maintaining a disconnected parallel connection tree.
    - *Verification*: Connect 2 simulated devices, start sysmon on screen 1, dispatch commands to screen 2; verify screen 1 streams uninterrupted and screen 2 executes concurrently.
 
+6. **Track 6: Native Menubar Architecture Upgrades (`divoom-menubar`)**:
+   - Stop churning 4 separate one-shot Unix sockets every 2 seconds (`get_status`, `notification_status`, `device_status`, `get_device_activity`); transition to pure event-driven state ingestion over the existing `subscribe` stream.
+   - Wire the 36x36 PNG previews emitted by `set_device_activity` to render real visual thumbnails in the menubar dropdown instead of discarding them.
+   - Upgrade static disabled device rows into actionable items (standby toggle, brightness, channel quick-switch) with fleet connectivity state aggregation.
+   - Implement non-destructive in-place menu updates to prevent menu flicker/dismissal during user interaction.
+   - *Verification*: Verify zero socket connects on timer tick with active subscription, and verify menu items render PNG previews.
+
 **0. Two environment problems that cost this release ~an hour.** Neither is a
 repo defect, but both will recur.
 

@@ -342,6 +342,28 @@ _Shipped in v0.35.0: Full-width top Spatial Preview Bench, physical millimeter p
 - **Finding**: `DivoomWall` currently maintains a disconnected parallel array of transports (`Vec<DeviceSlot>`), fracturing the codebase into two separate worlds ("single device" vs "wall mode").
 - **Plan**: Re-architect `DivoomWall` to consume device transports directly from the `DeviceRegistry`, unifying single-device and multi-device composite rendering under a single transport architecture.
 
+### OPEN — Native Menubar Architecture Upgrades (`divoom-menubar`)
+
+#### 1. Event-Driven State Ingestion via `subscribe` (Eliminate Connection Churn)
+- **Finding**: `divoom-menubar` opens and tears down 4 separate throwaway Unix socket connections every 2 seconds (`daemon::status`, `daemon::notifications_running`, `daemon::connection_state`, `daemon::device_activity`), even though a persistent `subscribe` socket is already running on a background thread.
+- **Plan**: Transition the menubar to pure event-driven state ingestion over the persistent `subscribe` stream. The background thread updates a shared state snapshot without churning 4 one-shot connections per tick.
+
+#### 2. Visual Device Tiles with Graphical Previews
+- **Finding**: The GUI goes out of its way to render 36×36 PNG thumbnails via `_rasterizeToPng` and pushes them to `divoomd` (`set_device_activity`), but `divoom-menubar`'s `device_activity()` parser completely discards the `preview` field, rendering only inert text strings.
+- **Plan**: Parse the PNG preview data in `divoom-menubar` and pass native image icons to `tray-icon` / `NSMenuItem`, restoring the visual tile experience intended by R46/R50.
+
+#### 3. Actionable Per-Device Controls
+- **Finding**: Device rows in the tray menu are created with `enabled = false`, serving only as static read-only labels.
+- **Plan**: Transform device rows into interactive items or submenus with quick actions: toggle standby power, adjust brightness, or quick-switch to Clock/Sysmon.
+
+#### 4. Fleet Connection State Aggregation
+- **Finding**: `resolve_icon_state` models connection health as a single device boolean (`Option<&str>`). When multiple devices are configured, it reflects only whichever device is held by `divoomd`'s single `self.device`.
+- **Plan**: Aggregate multi-device connectivity (e.g. "All 3 screens online", "1 screen degraded", "No screens connected") into the icon state and tooltip.
+
+#### 5. Non-Destructive In-Place Menu Updates
+- **Finding**: When `last_sig` changes, `tray.rebuild()` constructs a brand new `Menu` instance and resets it on the tray icon, which can cause UI jitter or dismiss the menu while the user has it open.
+- **Plan**: Update menu item labels, icons, and checkmarks in-place rather than rebuilding and re-installing the root `Menu` container on transient activity ticks.
+
 ### OPEN — why did 64 subscriptions accumulate in the first place?
 
 The 2026-09-07 wedge is now structurally impossible (a bounded, self-cleaning
