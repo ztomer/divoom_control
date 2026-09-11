@@ -196,14 +196,21 @@
     function populateSelect(selectEl, currentRoom) {
         if (!selectEl) return;
         const rooms = getRooms();
-        const val = currentRoom || 'Desk';
+        const val = (currentRoom !== undefined && currentRoom !== null) ? currentRoom : '';
 
         selectEl.innerHTML = '';
+
+        const unassignedOpt = document.createElement('option');
+        unassignedOpt.value = '';
+        unassignedOpt.textContent = '(Unassigned / No Room)';
+        if (!val || val === 'unassigned') unassignedOpt.selected = true;
+        selectEl.appendChild(unassignedOpt);
+
         rooms.forEach(r => {
             const opt = document.createElement('option');
             opt.value = r;
             opt.textContent = r;
-            if (r === val) opt.selected = true;
+            if (r.toLowerCase() === val.toLowerCase()) opt.selected = true;
             selectEl.appendChild(opt);
         });
 
@@ -213,16 +220,27 @@
         selectEl.appendChild(addOpt);
     }
 
-    function renderFilterPills(containerEl, activeFilter, onFilterChange) {
+    function renderFilterPills(containerEl, activeFilter, onFilterChange, deviceList) {
         if (!containerEl) return;
         containerEl.innerHTML = '';
 
         const rooms = getRooms();
         const allFilters = ['all', ...rooms];
+        const devRooms = getDeviceRooms();
+        const devices = Array.isArray(deviceList) ? deviceList : [];
+        const counts = { all: devices.length };
+        rooms.forEach(r => { counts[r] = 0; });
+        devices.forEach(d => {
+            const r = devRooms[d.address] !== undefined ? devRooms[d.address] : (d.room || '');
+            if (r) {
+                const match = rooms.find(rm => rm.toLowerCase() === r.toLowerCase());
+                if (match) counts[match] = (counts[match] || 0) + 1;
+            }
+        });
 
         allFilters.forEach(r => {
             const isAll = (r === 'all');
-            const isActive = (activeFilter === r);
+            const isActive = (activeFilter.toLowerCase() === r.toLowerCase());
             const pill = document.createElement('div');
             pill.className = `stage-room-pill ${isActive ? 'active' : ''}`;
             pill.dataset.room = r;
@@ -231,6 +249,11 @@
             label.className = 'stage-room-pill-label';
             label.textContent = isAll ? 'All' : r;
             pill.appendChild(label);
+
+            const countSpan = document.createElement('span');
+            countSpan.className = 'stage-room-pill-count';
+            countSpan.textContent = `(${counts[r] !== undefined ? counts[r] : 0})`;
+            pill.appendChild(countSpan);
 
             // Allow deletion for custom rooms (not All and not default Desk)
             if (!isAll && r.toLowerCase() !== 'desk') {
@@ -245,7 +268,7 @@
                     if (confirm(`Remove room "${r}"? Devices in this room will move to Desk.`)) {
                         removeRoom(r);
                         if (typeof onFilterChange === 'function') {
-                            onFilterChange(activeFilter === r ? 'all' : activeFilter);
+                            onFilterChange(activeFilter.toLowerCase() === r.toLowerCase() ? 'all' : activeFilter);
                         }
                     }
                 });
@@ -261,6 +284,21 @@
             containerEl.appendChild(pill);
         });
 
+        // Manage Devices button when a specific room is selected
+        if (activeFilter !== 'all') {
+            const manageBtn = document.createElement('button');
+            manageBtn.type = 'button';
+            manageBtn.className = 'stage-room-manage-btn';
+            manageBtn.title = `Add or remove devices in ${activeFilter}`;
+            manageBtn.setAttribute('aria-label', `Add or remove devices in ${activeFilter}`);
+            manageBtn.innerHTML = '<svg class="kare-icon" viewBox="0 0 16 16"><circle cx="4" cy="4" r="2" fill="currentColor"/><circle cx="12" cy="4" r="2" fill="currentColor"/><circle cx="8" cy="11" r="2" fill="currentColor"/></svg> Devices';
+            manageBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                showRoomDevicesPopover(containerEl, activeFilter, devices, onFilterChange);
+            });
+            containerEl.appendChild(manageBtn);
+        }
+
         // Add Room button at the end
         const addBtn = document.createElement('button');
         addBtn.type = 'button';
@@ -275,6 +313,72 @@
 
         containerEl.appendChild(addBtn);
     }
+
+    function showRoomDevicesPopover(containerEl, roomName, deviceList, onFilterChange) {
+        const existing = document.querySelector('.stage-room-devices-popover');
+        if (existing) { existing.remove(); return; }
+
+        const pop = document.createElement('div');
+        pop.className = 'stage-room-devices-popover';
+
+        const hdr = document.createElement('div');
+        hdr.className = 'stage-room-popover-header';
+        hdr.innerHTML = `<span>Devices in ${roomName}</span>`;
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'stage-room-popover-close';
+        closeBtn.textContent = '×';
+        closeBtn.addEventListener('click', () => pop.remove());
+        hdr.appendChild(closeBtn);
+        pop.appendChild(hdr);
+
+        const devRooms = getDeviceRooms();
+        if (!deviceList || deviceList.length === 0) {
+            const empty = document.createElement('div');
+            empty.style.cssText = 'font-size:10px;color:var(--text-muted);padding:4px;';
+            empty.textContent = 'No devices detected';
+            pop.appendChild(empty);
+        } else {
+            deviceList.forEach(dev => {
+                const item = document.createElement('label');
+                item.className = 'room-device-item';
+                const chk = document.createElement('input');
+                chk.type = 'checkbox';
+                const currentRm = devRooms[dev.address] !== undefined ? devRooms[dev.address] : (dev.room || '');
+                chk.checked = (currentRm.toLowerCase() === roomName.toLowerCase());
+                chk.addEventListener('change', () => {
+                    if (chk.checked) {
+                        devRooms[dev.address] = roomName;
+                    } else {
+                        delete devRooms[dev.address];
+                    }
+                    saveDeviceRooms(devRooms);
+                    syncTopology(null, null, devRooms);
+                    window.dispatchEvent(new CustomEvent('divoom:rooms-updated', { detail: { action: 'devices-updated' } }));
+                    if (typeof onFilterChange === 'function') onFilterChange(roomName);
+                });
+                const lbl = document.createElement('span');
+                lbl.textContent = dev.name || dev.address;
+                item.appendChild(chk);
+                item.appendChild(lbl);
+                pop.appendChild(item);
+            });
+        }
+
+        document.body.appendChild(pop);
+        const rect = containerEl.getBoundingClientRect();
+        pop.style.top = `${rect.bottom + 4}px`;
+        pop.style.left = `${Math.max(10, rect.left)}px`;
+
+        const onDocClick = (e) => {
+            if (!pop.contains(e.target) && !e.target.closest('.stage-room-manage-btn')) {
+                pop.remove();
+                document.removeEventListener('click', onDocClick);
+            }
+        };
+        setTimeout(() => document.addEventListener('click', onDocClick), 50);
+    }
+
 
     function showInlineAddInput(containerEl, addBtn, onFilterChange) {
         addBtn.style.display = 'none';
@@ -344,7 +448,8 @@
         syncTopology,
         loadTopology,
         populateSelect,
-        renderFilterPills
+        renderFilterPills,
+        showRoomDevicesPopover
     };
 
     window.addEventListener('pywebviewready', () => {

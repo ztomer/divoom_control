@@ -100,7 +100,9 @@
                     return;
                 }
                 if (!selectedMac) return;
-                deviceRooms[selectedMac] = e.target.value;
+                const newRoom = e.target.value;
+                if (newRoom) deviceRooms[selectedMac] = newRoom;
+                else delete deviceRooms[selectedMac];
                 if (window.SpatialRooms) {
                     window.SpatialRooms.saveDeviceRooms(deviceRooms);
                     window.SpatialRooms.syncTopology(null, devicePositions, deviceRooms);
@@ -238,10 +240,8 @@
         if (!container) return;
         if (window.SpatialRooms && typeof window.SpatialRooms.renderFilterPills === 'function') {
             window.SpatialRooms.renderFilterPills(container, activeRoomFilter, (newFilter) => {
-                activeRoomFilter = newFilter;
-                updateRoomFilterTabs();
-                refreshBenchNodes();
-            });
+                activeRoomFilter = newFilter; updateRoomFilterTabs(); refreshBenchNodes();
+            }, getDeviceList());
         }
     }
 
@@ -269,8 +269,8 @@
             const isSelected = selectedMac ? (selectedMac === addr) : (idx === 0);
             if (isSelected && !selectedMac) selectedMac = addr;
 
-            const devRoom = deviceRooms[addr] || dev.room || 'Desk';
-            const isDimmed = (activeRoomFilter !== 'all' && devRoom !== activeRoomFilter);
+            const devRoom = deviceRooms[addr] !== undefined ? deviceRooms[addr] : (dev.room || '');
+            const isDimmed = (activeRoomFilter !== 'all' && (devRoom || '').toLowerCase() !== activeRoomFilter.toLowerCase());
 
             // Create node element with model-proportional sizing
             const node = document.createElement('div');
@@ -343,7 +343,7 @@
         if (nameEl) nameEl.textContent = dev.name || spec.name;
         if (tagEl) tagEl.textContent = `${spec.pw}×${spec.ph}`;
         if (roomSelect) {
-            const rm = deviceRooms[addr] || dev.room || 'Desk';
+            const rm = deviceRooms[addr] !== undefined ? deviceRooms[addr] : (dev.room || '');
             if (window.SpatialRooms) window.SpatialRooms.populateSelect(roomSelect, rm);
             else roomSelect.value = rm;
         }

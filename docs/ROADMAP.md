@@ -20,6 +20,7 @@ forward-looking one. Recover a round plan with
   - **MCP `list_screens`**: Registered tool #14 in `divoomd/src/mcp_tools.rs`.
   - **Canvas Drag Performance & Zero Clickthrough**: Separated visual selection from heavy IPC device connection calls; separated dragging vs clicking via movement delta tracking; zero clickthrough leaks or overlay blocks.
   - **Layout Persistence & Hardware Deck Spacing**: Persistent canvas coordinate saving across `localStorage` and daemon `topology.json` on node drag and desk align; case-insensitive MAC normalization; room management and safe Desk fallback; deck inspector spacing expanded (`padding: 12px`, `gap: 12px`, `min-height: 24px` on select, preventing cramped inputs and text clipping).
+  - **Hardware Deck Layout & Room Device Management**: Dedicated full-width device name row (`.deck-name-row`), contained room dropdown (`.deck-select`) without "ROOM" label clipping, `(Unassigned / No Room)` support, live device count badges on room pills, and interactive room device checklist popover (`.stage-room-devices-popover`).
   - **Suite**: 204 Rust unit tests, 314 Python pytest tests (2 skipped), 15 mock device E2E tests, 736 files clean in emoji gate, 116 API methods reachable, 387 source files <= 500 lines.
 
 - **v0.34.0 — the hardware round (2026-09-07)**: the R12 visual pass, open

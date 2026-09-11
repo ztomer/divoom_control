@@ -67,6 +67,19 @@ shipped milestone (per the project planning docs).
   - Wired `endNodeDrag` and `snapToDesk` to persist layout coordinates on movement.
   - Hydrated stage coordinates on GUI launch and `pywebviewready`.
 
+### Added — Room Device Management & Deck Layout Refinements
+
+- **Dedicated Device Name Row (`.deck-name-row`)**:
+  - Moved `#deck-device-name` to its own dedicated, unconstrained full-width row (`font-size: 12px; font-weight: 700; letter-spacing: -0.2px`), completely eliminating text truncation (`Dito...`).
+  - Positioned online status diode jewel and model resolution badge (`.deck-meta-left`) opposite the tactile standby power button (`#deck-device-power`) on a dedicated `.deck-meta-row`.
+- **Contained Room Dropdown (`.deck-select`)**:
+  - Removed the cramped "ROOM" text label prefix before `#deck-room-select`.
+  - Styled `.deck-select` to `width: 100%; box-sizing: border-box;`, ensuring the selector stays strictly within the pane and matches the alignment of the brightness and volume sliders below it.
+- **Room Device Add/Remove Management (`spatial_rooms.js`, `spatial_stage.js`)**:
+  - Added `(Unassigned / No Room)` option at the top of `#deck-room-select`, allowing devices to be easily removed from any room.
+  - Rendered dynamic device count badges inside room filter pills (e.g. `All (4)`, `Desk (3)`, `Wall (1)`, `Shelf (0)`).
+  - Added a `[Devices]` button to the stage room filter bar when a room is active, opening an interactive checklist popover (`.stage-room-devices-popover`) to check/uncheck devices in and out of the room with instant persistence to `localStorage` and `topology.json`.
+
 ## v0.34.0 — the weather widget was invisible, and the harness could not have found it (2026-09-07)
 
 A hardware round. The R12 visual pass — open since R12 and filed for rounds as
