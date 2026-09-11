@@ -59,11 +59,34 @@
             <button id="win-max" class="win-btn max" title="ToggleFullscreen"></button>
         </div>
 
-        <!-- R11 4c: spacer first, so the sliders are pushed to the right side. -->
+        <!-- Integrated Stage / Ribbon Controls (Dieter Rams / Susan Kare) -->
+        <div id="appbar-stage-controls" class="appbar-stage-controls">
+            <!-- Ribbon Mode: shows fleet chips in appbar -->
+            <div id="appbar-ribbon-view" class="appbar-ribbon-view">
+                <span class="appbar-stage-label">FLEET:</span>
+                <div id="spatial-ribbon-chips" class="spatial-ribbon-chips"></div>
+            </div>
+            <!-- Bench Mode: shows Bench label and room filters in appbar -->
+            <div id="appbar-bench-view" class="appbar-bench-view" style="display: none;">
+                <span class="spatial-jewel online"></span>
+                <span class="spatial-stage-title">BENCH</span>
+                <div id="stage-room-filters" class="stage-room-filters"></div>
+            </div>
+        </div>
+
         <div class="appbar-drag-spacer"></div>
 
-        <!-- R32: Settings moved out of the sidebar into a round glass pill here,
-             to the right of the brightness + volume bars. Opens the Settings tab. -->
+        <!-- Stage Actions (Align + Bench/Ribbon Toggle) -->
+        <div id="appbar-stage-actions" class="appbar-stage-actions">
+            <button id="stage-snap-btn" class="stage-btn" type="button" title="Align to desk baseline" style="display: none;">
+                <svg class="kare-icon" viewBox="0 0 16 16"><rect x="2" y="2" width="4" height="4" fill="currentColor"/><rect x="10" y="2" width="4" height="4" fill="currentColor"/><rect x="2" y="10" width="4" height="4" fill="currentColor"/><rect x="10" y="10" width="4" height="4" fill="currentColor"/></svg> Align
+            </button>
+            <button id="stage-toggle-btn" class="stage-btn" type="button" title="Toggle Stage View">
+                <svg class="kare-icon" viewBox="0 0 16 16"><rect x="2" y="4" width="12" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="5" cy="8" r="2"/></svg> <span id="stage-toggle-text">Bench</span>
+            </button>
+        </div>
+
+        <!-- R32: Settings gear -->
         <button id="appbar-settings-btn" class="appbar-gear" data-tab="settings" title="Settings" aria-label="Open settings">
             <svg class="kare-icon" viewBox="0 0 16 16">
                 <path d="M8,6 C6.9,6 6,6.9 6,8 C6,9.1 6.9,10 8,10 C9.1,10 10,9.1 10,8 C10,6.9 9.1,6 8,6 Z M8,0 L6,3 L10,3 Z M8,16 L10,13 L6,13 Z M0,8 L3,6 L3,10 Z M16,8 L13,10 L13,6 Z"/>
@@ -72,8 +95,10 @@
 
     </header>
 
-    <!-- 2. FULL-WIDTH TOP SPATIAL BENCH (Top Zone) -->
-    <div id="spatial-stage-mount" class="full-width-spatial-stage"></div>
+    <!-- 2. FULL-WIDTH TOP SPATIAL BENCH (Canvas only, opens when Bench is active) -->
+    <div id="spatial-stage-mount" class="full-width-spatial-stage" style="display: none;">
+        <div id="spatial-bench" class="spatial-bench"></div>
+    </div>
 
     <div class="app-container">
         
@@ -187,7 +212,7 @@
             <span id="banner-device-name" style="display: none;">No Connected Screen</span>
             <span id="banner-device-mac" style="display: none;">-</span>
             <div id="device-dots" class="device-chips" style="display: none;" role="tablist"></div>
-            <div id="wall-button" class="wall-button-row" hidden></div>
+            <div id="wall-button" class="wall-button-row" hidden style="display: none !important;"></div>
             <!-- R52: scan-in-progress indicator pinned at the very bottom. Its row
                  height is always reserved (visibility toggles, not display) so
                  starting/stopping a scan never reflows the preview above it. -->

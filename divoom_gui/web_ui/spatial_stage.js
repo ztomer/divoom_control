@@ -20,65 +20,49 @@
         const mount = document.getElementById('spatial-stage-mount');
         if (!mount) return;
 
-        // Load saved collapsed state
-        const isCollapsed = localStorage.getItem('spatial_stage_collapsed') === 'true';
+        // Load saved collapsed state (defaults to true for compact appbar ribbon)
+        let isCollapsed = localStorage.getItem('spatial_stage_collapsed') !== 'false';
 
-        // Container wrapper
-        const wrapper = document.createElement('div');
-        wrapper.id = 'spatial-stage-wrapper';
-        wrapper.className = 'spatial-stage-wrapper' + (isCollapsed ? ' hidden' : '');
-        if (isCollapsed) wrapper.style.display = 'none';
+        function updateStageCollapseState() {
+            const ribbonView = document.getElementById('appbar-ribbon-view');
+            const benchView = document.getElementById('appbar-bench-view');
+            const snapBtn = document.getElementById('stage-snap-btn');
+            const toggleText = document.getElementById('stage-toggle-text');
 
-        // Stage Header
-        const header = document.createElement('div');
-        header.className = 'spatial-stage-header';
-        header.innerHTML = `
-            <div class="spatial-stage-title-area">
-                <span class="spatial-jewel online"></span>
-                <span class="spatial-stage-title">BENCH</span>
-                <div id="stage-room-filters" class="stage-room-filters"></div>
-            </div>
-            <div class="spatial-stage-actions">
-                <button id="stage-snap-btn" class="stage-btn" type="button" title="Align to desk baseline"><svg class="kare-icon" viewBox="0 0 16 16"><rect x="2" y="2" width="4" height="4" fill="currentColor"/><rect x="10" y="2" width="4" height="4" fill="currentColor"/><rect x="2" y="10" width="4" height="4" fill="currentColor"/><rect x="10" y="10" width="4" height="4" fill="currentColor"/></svg> Align</button>
-                <button id="stage-collapse-btn" class="stage-btn" type="button" title="Collapse to ribbon"><svg class="kare-icon" viewBox="0 0 16 16"><rect x="2" y="4" width="12" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="5" cy="8" r="2"/></svg> Ribbon</button>
-            </div>
-        `;
-        wrapper.appendChild(header);
+            if (isCollapsed) {
+                mount.style.display = 'none';
+                if (ribbonView) ribbonView.style.display = 'flex';
+                if (benchView) benchView.style.display = 'none';
+                if (snapBtn) snapBtn.style.display = 'none';
+                if (toggleText) toggleText.textContent = 'Bench';
+            } else {
+                mount.style.display = 'block';
+                if (ribbonView) ribbonView.style.display = 'none';
+                if (benchView) benchView.style.display = 'flex';
+                if (snapBtn) snapBtn.style.display = 'inline-flex';
+                if (toggleText) toggleText.textContent = 'Ribbon';
+                refreshBenchNodes();
+            }
+        }
 
-        // 2D Bench Canvas
-        const bench = document.createElement('div');
-        bench.id = 'spatial-bench';
-        bench.className = 'spatial-bench';
-        wrapper.appendChild(bench);
-
-        // Compact Ribbon View
-        const ribbon = document.createElement('div');
-        ribbon.id = 'spatial-stage-ribbon';
-        ribbon.className = 'spatial-ribbon' + (!isCollapsed ? ' hidden' : '');
-        if (!isCollapsed) ribbon.style.display = 'none';
-        ribbon.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <span style="font-family: var(--font-sans); font-weight: 600; font-size: 10px; letter-spacing: 0.5px; color: var(--text-muted);">FLEET:</span>
-                <div id="spatial-ribbon-chips" class="spatial-ribbon-chips"></div>
-            </div>
-            <button id="stage-expand-btn" class="stage-btn" type="button">Expand Bench</button>
-        `;
-
-        mount.appendChild(ribbon);
-        mount.appendChild(wrapper);
         stageMounted = true;
+        updateStageCollapseState();
 
-        // Wire event handlers
-        document.getElementById('stage-collapse-btn').addEventListener('click', () => {
-            wrapper.style.display = 'none'; ribbon.style.display = 'flex';
-            localStorage.setItem('spatial_stage_collapsed', 'true');
-        });
-        document.getElementById('stage-expand-btn').addEventListener('click', () => {
-            ribbon.style.display = 'none'; wrapper.style.display = 'flex';
-            localStorage.setItem('spatial_stage_collapsed', 'false');
-            refreshBenchNodes();
-        });
-        document.getElementById('stage-snap-btn').addEventListener('click', snapToDesk);
+        // Wire stage toggle (Bench <-> Ribbon)
+        const toggleBtn = document.getElementById('stage-toggle-btn');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', () => {
+                isCollapsed = !isCollapsed;
+                localStorage.setItem('spatial_stage_collapsed', isCollapsed ? 'true' : 'false');
+                updateStageCollapseState();
+            });
+        }
+
+        // Wire baseline alignment
+        const snapBtn = document.getElementById('stage-snap-btn');
+        if (snapBtn) {
+            snapBtn.addEventListener('click', snapToDesk);
+        }
 
         // Sidebar deck room select
         const roomSelect = document.getElementById('deck-room-select');

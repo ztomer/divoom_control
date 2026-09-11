@@ -24,38 +24,6 @@ body {
     height: auto !important;
 }
 
-.spatial-stage-wrapper {
-    margin: 0;
-    background: var(--bg-base);
-    border: none;
-    border-radius: 0;
-    box-shadow: none;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    position: relative;
-    user-select: none;
-}
-
-/* Stage Header Bar */
-.spatial-stage-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 6px 12px;
-    background: var(--sidebar-bg);
-    border-bottom: 1px solid var(--border-color);
-    font-size: 11px;
-    color: var(--text-muted);
-}
-
-.spatial-stage-title-area {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-family: var(--font-sans);
-}
-
 .spatial-stage-title {
     font-family: var(--font-display);
     font-weight: 700;
@@ -64,17 +32,12 @@ body {
     font-size: 11px;
 }
 
-.spatial-stage-actions {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
 .stage-btn {
     background: #22242b; border: 1px solid var(--border-color); border-radius: 4px;
     color: var(--text-main); font-family: var(--font-sans); font-size: 10px; font-weight: 500;
     padding: 2px 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px;
     transition: background 0.1s ease, border-color 0.1s ease; box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    -webkit-app-region: no-drag;
 }
 .stage-btn:hover { background: #2c2e37; border-color: #40434f; }
 .stage-btn:active { background: #191a20; transform: translateY(1px); }
@@ -124,6 +87,7 @@ body {
 
 /* Room/Grouping filter tabs in bench header */
 .stage-room-filters {
+    position: relative;
     display: inline-flex;
     align-items: center;
     gap: 3px;
@@ -173,7 +137,7 @@ body {
 .stage-room-pill-count { font-family: var(--font-mono); font-size: 9px; opacity: 0.6; margin-left: 2px; }
 .stage-room-manage-btn { background: #22242c; border: 1px solid var(--border-color); border-radius: 3px; color: var(--text-muted); font-family: var(--font-sans); font-size: 10px; padding: 2px 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
 .stage-room-manage-btn:hover { color: var(--text-main); border-color: #40434f; background: #2a2c36; }
-.stage-room-devices-popover { position: absolute; top: 38px; left: 160px; background: #1a1c24; border: 1px solid var(--border-color); border-radius: 5px; padding: 8px; z-index: 100; box-shadow: 0 4px 16px rgba(0,0,0,0.6); display: flex; flex-direction: column; gap: 6px; min-width: 190px; }
+.stage-room-devices-popover { position: absolute; top: calc(100% + 4px); left: 0; background: #1a1c24; border: 1px solid var(--border-color); border-radius: 5px; padding: 8px; z-index: 1000; box-shadow: 0 4px 16px rgba(0,0,0,0.6); display: flex; flex-direction: column; gap: 6px; min-width: 190px; }
 .stage-room-popover-header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.06); font-family: var(--font-sans); font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); }
 .room-device-item { display: flex; align-items: center; gap: 8px; font-family: var(--font-sans); font-size: 11px; color: var(--text-main); cursor: pointer; padding: 3px 4px; border-radius: 3px; }
 .room-device-item:hover { background: rgba(255,255,255,0.05); }
@@ -256,18 +220,7 @@ body {
 .spatial-jewel.amber { background-color: var(--warn); box-shadow: 0 0 4px rgba(255, 204, 0, 0.45); }
 .spatial-jewel.standby { background-color: var(--secondary); }
 
-/* Compact Ribbon State */
-.spatial-ribbon {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 6px 14px;
-    background: var(--sidebar-bg);
-    border-bottom: 1px solid var(--border-color);
-    margin: 0;
-    font-size: 11px;
-}
-
+/* Compact Ribbon Fleet Chips (Appbar integrated) */
 .spatial-ribbon-chips {
     display: flex;
     align-items: center;
@@ -288,6 +241,7 @@ body {
     align-items: center;
     gap: 5px;
     transition: all 0.1s ease;
+    -webkit-app-region: no-drag;
 }
 
 .spatial-ribbon-chip:hover {
@@ -304,7 +258,7 @@ body {
 /* Active Display Hardware Deck (Dieter Rams / Susan Kare) */
 .sidebar-device-deck {
     margin-top: auto;
-    margin-bottom: 10px;
+    margin-bottom: 2px;
     padding: 12px;
     background: #181920;
     border: 1px solid var(--border-color);

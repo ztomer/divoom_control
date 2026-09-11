@@ -21,7 +21,15 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
-- **2026-09-11 — v0.35.0 RELEASED & INSTALLED LOCALLY: Unified Spatial Stage, Layout Persistence, Deck Layout & Room Device Management.**
+- **2026-09-11 — v0.35.0 RELEASED & INSTALLED LOCALLY: Unified Spatial Stage, Appbar Stage Integration & Clean Deck Docking.**
+  - **Appbar Stage Integration (`index.html`, `appbar.css`, `spatial_stage.js`, `spatial_stage.css`)**:
+    - **Zero-Height Stage in Ribbon Mode**: When in compact Ribbon mode, `#spatial-stage-mount` is completely hidden (`display: none;`, 0px height), recovering 32px of vertical height across the whole application. Fleet chips (`#appbar-ribbon-view`) sit directly in the native appbar next to the window traffic lights.
+    - **Headerless Canvas in Bench Mode**: When expanded to Bench mode via `#stage-toggle-btn`, only the 180px freeform 2D canvas (`#spatial-bench`) drops down beneath the appbar. The title `BENCH` and room filter pills (`#stage-room-filters`) render directly inside `#appbar-bench-view` in the appbar. Redundant nested header bars are completely eliminated.
+    - **Appbar Stage Actions**: Baseline alignment (`#stage-snap-btn`) and stage toggle (`#stage-toggle-btn`) reside in `#appbar-stage-actions` next to the settings gear.
+    - **PyWebView Drag Exclusions**: Appbar stage controls and actions intercept `mousedown` event bubbling to prevent macOS window drag handlers from capturing button and chip clicks.
+  - **Sidebar Bottom Clean-up & Deck Docking**:
+    - Re-anchored the Active Display Hardware Deck (`#sidebar-device-deck`) to the very bottom of the sidebar (`margin-top: auto; margin-bottom: 2px;`), providing maximum breathing room for the dedicated device name row, contained room selector, and tactile sliders.
+    - Retired redundant sidebar [Wall (4)] chip (`#wall-button`) to `display: none !important;` (since Virtual Wall is already a primary sidebar navigation tab), preserving DOM presence for test compatibility.
   - **Active Display Hardware Deck Refinements (`#sidebar-device-deck`)**:
     - **Dedicated Device Name Row**: Resolved text clipping (`Dito...`) by moving `#deck-device-name` to its own dedicated, unconstrained full-width row (`.deck-name-row`, `font-size: 12px; font-weight: 700; letter-spacing: -0.2px`).
     - **Meta Sub-Row**: Positioned online status diode jewel and model resolution badge (`.deck-meta-left`) opposite the tactile standby power button (`#deck-device-power`) on `.deck-meta-row`.
@@ -34,12 +42,13 @@ shared memory. Read this on entry and **update it at the end of every round**
     - `cargo test -p divoomd --no-default-features` (204/204 passing).
     - `python3 -m pytest tests/test_gui_api_*.py tests/test_mcp_*.py tests/test_repo_gates.py tests/test_fonts.py tests/test_daemon_client_coverage.py` (314 passed, 2 skipped).
     - `python3 -m pytest tests/test_e2e_mock_device.py` (15/15 passing).
-    - Dynamic Playwright/Camoufox verification (`verify_deck_and_room_devices.py`): verified dedicated device name row (no clipping), room selector contained inside deck boundaries, room pill counts, popover device check/uncheck, unassigning via dropdown, and screenshot saved (`deck_and_room_devices.png`).
-    - File size gate: 387/387 source files <= 500 lines (`spatial_stage.js` at 492 lines, `spatial_stage.css` at 465 lines, `spatial_rooms.js` at 460 lines).
+    - `python3 -m pytest tests/test_appbar_sidebar.py --run-browser` (2/2 passing).
+    - Dynamic Playwright/Camoufox verification (`verify_appbar_stage_and_docked_deck.py`): verified default Ribbon mode (mount height 0, fleet chips in appbar, toggle text 'Bench'), expanding to Bench mode (mount height 181px, appbar room filters, toggle text 'Ribbon'), dragging nodes with coordinate persistence, baseline alignment, and persistence across reload. Screenshots saved: `gui_ribbon_in_appbar.png`, `gui_bench_in_appbar.png`.
+    - File size gate: 387/387 source files <= 500 lines (`spatial_stage.js` reduced to 475 lines, `spatial_stage.css` reduced to 419 lines, `spatial_rooms.js` at 460 lines).
     - Emoji gate clean across 736 tracked files.
     - API reachability gate: 116/116 public API methods reachable from `web_ui/`.
     - Rebuilt release app and dmg (`dist/Divoom.app` and `dist/Divoom-v0.35.0.dmg`).
-    - Installed locally to `/Applications/Divoom.app` via `scripts/install_local.sh`, verified running daemon inode (`538948290`, PID 42577).
+    - Installed locally to `/Applications/Divoom.app` via `scripts/install_local.sh`, verified running daemon inode (`538964898`, PID 48046).
     - Rebuilt BLE-free binary (`cargo build -p divoomd --no-default-features`) to protect against macOS TCC `SIGABRT`.
 
 - **2026-09-07 (final session) — v0.34.0 CUT: the hardware round.** The **R12

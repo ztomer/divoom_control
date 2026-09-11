@@ -38,7 +38,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // window. Stop the mousedown from bubbling to body for the interactive
     // appbar controls so they work as controls, not drag handles.
     document.querySelectorAll(
-        ".integrated-appbar .appbar-slider, .integrated-appbar .win-btn"
+        ".integrated-appbar .appbar-slider, .integrated-appbar .win-btn, .appbar-stage-controls, .appbar-stage-actions"
     ).forEach((el) => el.addEventListener("mousedown", (e) => e.stopPropagation()));
 
     // Inject HTML Templates

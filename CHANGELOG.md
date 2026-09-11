@@ -80,6 +80,18 @@ shipped milestone (per the project planning docs).
   - Rendered dynamic device count badges inside room filter pills (e.g. `All (4)`, `Desk (3)`, `Wall (1)`, `Shelf (0)`).
   - Added a `[Devices]` button to the stage room filter bar when a room is active, opening an interactive checklist popover (`.stage-room-devices-popover`) to check/uncheck devices in and out of the room with instant persistence to `localStorage` and `topology.json`.
 
+### Added — Integrated Appbar Stage & Clean Bottom-Docked Hardware Deck
+
+- **Appbar Stage Integration (`index.html`, `appbar.css`, `spatial_stage.js`, `spatial_stage.css`)**:
+  - Integrated Stage and Ribbon controls directly into the native window appbar (`.integrated-appbar`):
+    - **Ribbon Mode (Compact)**: Displays fleet chips (`#appbar-ribbon-view`) right next to window traffic lights with zero vertical stage overhead. `#spatial-stage-mount` is completely hidden (`display: none;`, 0px height), reclaiming 32px of vertical canvas across the application.
+    - **Bench Mode (Expanded)**: Drops down the 180px freeform 2D canvas (`#spatial-bench`) beneath the appbar, while displaying the `BENCH` label and room filter pills (`#stage-room-filters`) in `#appbar-bench-view`.
+    - **Stage Actions**: Positioned baseline alignment button (`#stage-snap-btn`) and stage toggle button (`#stage-toggle-btn`) in the appbar next to the settings gear.
+  - Added mousedown event stop propagation for `.appbar-stage-controls` and `.appbar-stage-actions` to prevent macOS pywebview window dragging from capturing button clicks.
+- **Sidebar Bottom Clean-up & Deck Docking (`index.html`, `spatial_stage.css`)**:
+  - Re-anchored the Active Display Hardware Deck (`#sidebar-device-deck`) cleanly to the very bottom of the sidebar (`margin-top: auto; margin-bottom: 2px;`).
+  - Retired the redundant sidebar [Wall (4)] button (`#wall-button`) to `display: none !important;` (Virtual Wall is a primary sidebar navigation tab), preserving DOM element presence for backwards-compatible test assertions while removing visual clutter.
+
 ## v0.34.0 — the weather widget was invisible, and the harness could not have found it (2026-09-07)
 
 A hardware round. The R12 visual pass — open since R12 and filed for rounds as
