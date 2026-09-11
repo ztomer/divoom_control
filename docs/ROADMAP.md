@@ -9,6 +9,14 @@ forward-looking one. Recover a round plan with
 
 ## Shipped
 
+- **v0.35.1 — Gallery Crispness, Offline Custom Art Cache & Isolated Per-Device Previews (2026-09-11)**:
+  - **Gallery Crispness (`gallery.css`)**: Added `image-rendering: pixelated; crisp-edges;` to `.gallery-item-preview` eliminating bilinear interpolation blurriness on community pixel art thumbnails.
+  - **Offline Custom Art Cache (`channels_grids.js`, `custom_art.js`, `gallery_sync.py`)**: Guaranteed offline cache loads all 142 items on launch even before `pywebviewready`, handles errors cleanly, and persists 3 pages x 12 slots to `localStorage['divoom_custom_art_slots']`.
+  - **Per-Device Preview Decoupling & Virtual Wall Slicing (`channel_preview.js`, `channels_core.js`, `app_init.js`, `spatial_stage.js`)**: Decoupled `_channelPreviewSVG` from global fallbacks, added `_renderWallSlotSVG` for spatial canvas bounding boxes, isolated per-device activity parameters, and synchronized stage selection with active Control Center channel tabs.
+  - **Universal Channel Switching & Hot Channel Update Verification**: Restored `showChannelPanel(ch)` call and exposed `window.showChannelPanel` in `channels_core.js`; added support for `hot` / `cloud`, `ambient` / `lighting`, `eq`, and `custom` to `switch_channel` in both Python and Rust; verified all 7 channels emit valid 10-byte padded 0x45 frames via `tests/test_verify_all_channels_and_hot.py` (13 tests passing).
+  - **Hot Channel Preview Grid & Device Preview Integration**: Added dedicated `cloud` / `hot` SVG preview renderer to `window._channelPreviewSVG` (`channel_preview.js`); allowed `opts.src` for any activity kind in `window.setDeviceActivity` (`app_globals.js`); wired `renderHotPreview` and `finishProgress` in `gallery_hot.js` to propagate animated GIF previews to active device previews on the Spatial Stage and ribbon overlay; added automated browser test suite `tests/test_hot_channel_device_preview.py`.
+  - **Suite**: 23/23 tests passed in channel & hot preview suites; 204 unit tests passed in cargo test; file size (387 files <= 500 LOC), api reachability (116/116), and emoji gates clean.
+
 - **v0.35.0 — Unified Spatial Stage, Physical Scale Engine & Option 1 Layout (2026-09-11)**:
   - **Full-Width Spatial Preview Bench & Sidebar Hardware Deck (Option 1 Layout Re-architecture)**:
     - Promoted preview bench to full-width top deck spanning the window width (~1100px) above `.app-container`.
