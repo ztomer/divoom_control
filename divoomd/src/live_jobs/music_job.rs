@@ -132,8 +132,8 @@ pub(super) async fn run_music(daemon_weak: Weak<Daemon>, mac: String, params: Va
                                         let mac_clone = mac.clone();
                                         let rgb_vec = rgb.clone();
                                         let (w_val, h_val, t_val) = (*w, *h_px, *t);
-                                        let success = daemon
-                                            .queue
+                                        let queue = daemon.get_device_queue(&mac).await;
+                                        let success = queue
                                             .run(None, async move {
                                                 if let Some(d) = d_weak.upgrade() {
                                                     if let Some(dev_t) =

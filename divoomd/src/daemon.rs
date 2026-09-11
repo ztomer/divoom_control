@@ -124,7 +124,8 @@ impl Daemon {
     }
 
     /// Get (or lazy-init) the cached `NativeEncoder`. Returns None if the dylib is absent.
-    pub(crate) fn encoder(&self) -> Option<&NativeEncoder> {
+    #[must_use]
+    pub fn encoder(&self) -> Option<&NativeEncoder> {
         self.encoder
             .get_or_init(|| {
                 crate::native_encode::find_encoder_lib().and_then(|p| NativeEncoder::load(p).ok())

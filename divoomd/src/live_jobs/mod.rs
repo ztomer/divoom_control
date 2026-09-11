@@ -170,8 +170,8 @@ async fn run_sysmon(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
         if get_device_transport(&daemon, &mac).await.is_some() {
             let d_weak = daemon_weak.clone();
             let mac_clone = mac.clone();
-            let _ = daemon
-                .queue
+            let queue = daemon.get_device_queue(&mac).await;
+            let _ = queue
                 .run(None, async move {
                     if let Some(d) = d_weak.upgrade() {
                         if let Some(dev_t) = get_device_transport(&d, &mac_clone).await {
@@ -253,8 +253,8 @@ async fn run_stocks(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
             if get_device_transport(&daemon, &mac).await.is_some() {
                 let d_weak = daemon_weak.clone();
                 let mac_clone = mac.clone();
-                let _ = daemon
-                    .queue
+                let queue = daemon.get_device_queue(&mac).await;
+                let _ = queue
                     .run(None, async move {
                         if let Some(d) = d_weak.upgrade() {
                             if let Some(dev_t) = get_device_transport(&d, &mac_clone).await {
@@ -417,8 +417,8 @@ async fn run_weather(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
                     let d_weak = daemon_weak.clone();
                     let mac_clone = mac.clone();
                     let select_face = !face_selected;
-                    let _ = daemon
-                        .queue
+                    let queue = daemon.get_device_queue(&mac).await;
+                    let _ = queue
                         .run(None, async move {
                             if let Some(d) = d_weak.upgrade() {
                                 if let Some(dev_t) = get_device_transport(&d, &mac_clone).await {

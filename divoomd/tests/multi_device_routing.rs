@@ -190,8 +190,8 @@ async fn test_live_job_persists_across_device_switch() {
     // Wait 1.5s for sysmon loop to tick on DEV_A
     tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
 
-    // 5. Verify DEV_A's mock transport received sysmon frames
-    {
+    // 5. Verify DEV_A's mock transport received sysmon frames (when native encoder is available)
+    if d.encoder().is_some() {
         let devices = d.devices.lock().await;
         let trans_a = devices.get("DEV_A").unwrap();
         if let DeviceTransport::Mock(ref mock_a) = &**trans_a {
@@ -201,6 +201,14 @@ async fn test_live_job_persists_across_device_switch() {
                 "DEV_A should continue receiving live frames while DEV_B is connected"
             );
         }
+    }
+
+    // Verify the live job is registered in d.live_jobs
+    {
+        let jobs = d.live_jobs.list(Some("DEV_A")).await;
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(jobs[0]["kind"], "sysmon");
+        assert_eq!(jobs[0]["mac"], "DEV_A");
     }
 
     // Stop live job
