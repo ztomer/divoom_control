@@ -140,7 +140,8 @@ fn main() {
             resubscribe::resubscribe_until_quit(
                 || {
                     daemon::subscribe(
-                        |_ev| {
+                        |ev| {
+                            daemon::update_snapshot_from_event(&ev);
                             let _ = proxy.send_event(UserEvent::DaemonEvent);
                         },
                         || quitting.load(Ordering::Relaxed),

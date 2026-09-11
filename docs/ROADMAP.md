@@ -9,6 +9,15 @@ forward-looking one. Recover a round plan with
 
 ## Shipped
 
+- **v0.35.2 — Unified Multi-Device Architecture, Per-Device Command Queues, Streamer Job Isolation & Native Menubar Event-Driven Streaming (2026-09-11)**:
+  - **Unified DisplayPreview Object Model (`preview_controller.js`, `index.html`)**: Introduced `DisplayPreview` and `DisplayPreviewRegistry` classes encapsulating native resolution (`16x16`, `32x32`, `64x64`), active channel, image/SVG caching, authentic 1-bit bitmap digit rendering, and direct-to-canvas blitting with complete multi-display isolation.
+  - **Hardware-Faithful Bitmap Pixel Art Clocks (`preview_controller.js`, `channel_preview.js`)**: Replaced blurry vector SVG fonts with authentic 1-bit integer bitmap LED matrices (3x5 and 5x7 digit tables) rendered directly via discrete pixel diodes.
+  - **Two-Way Inspector Binding & Spatial Consolidation**: `window.syncChannelControlsToDisplay(mac)` synchronizes inspector controls with target display options on device switch; `SpatialRooms.getWallSlots(devices)` provides a single unified layout algorithm across all spatial views.
+  - **Per-Device Streamer Job Binding & Fleet State**: Added `bindJob`/`unbindJob` to `DisplayPreview`, confining background widget frame dispatch (Sysmon, Music, Stocks) strictly to bound displays; added `window.getFleetStatus()`.
+  - **Rust Daemon Multi-Device Transport Pool & Live Job Decoupling (`divoomd`)**: Replaced single-device assumption with concurrent multi-device pool `daemon.devices: Mutex<HashMap<String, Arc<DeviceTransport>>>` and per-device command queues `get_device_queue(mac)`; live background streamers continue pushing frames even when the user switches screens in the GUI; decoupled SPP from `#[cfg(feature = "ble")]` allowing RFCOMM classic Bluetooth in BLE-free builds; added integration tests in `multi_device_routing.rs`.
+  - **Native Menubar Event-Driven Snapshot Ingestion (`divoom-menubar`)**: Connected `divoom-menubar` to daemon `subscribe` broadcast stream, caching `DaemonSnapshot` and eliminating polling socket churn (from 120 conn/min to 0 in steady state); built interactive per-device submenus with quick channel switcher (Clock, Visualizer, Ambient) and screen power standby toggle.
+  - **Automated Verification**: 9/9 browser preview registry tests passed, 2/2 multi-device routing integration tests passed, 19/19 menubar tests passed, 204 unit tests passed, 2953 Python tests passed (228 skipped). All house gates clean.
+
 - **v0.35.1 — Gallery Crispness, Offline Custom Art Cache & Isolated Per-Device Previews (2026-09-11)**:
   - **Gallery Crispness (`gallery.css`)**: Added `image-rendering: pixelated; crisp-edges;` to `.gallery-item-preview` eliminating bilinear interpolation blurriness on community pixel art thumbnails.
   - **Offline Custom Art Cache (`channels_grids.js`, `custom_art.js`, `gallery_sync.py`)**: Guaranteed offline cache loads all 142 items on launch even before `pywebviewready`, handles errors cleanly, and persists 3 pages x 12 slots to `localStorage['divoom_custom_art_slots']`.

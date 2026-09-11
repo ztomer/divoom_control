@@ -72,3 +72,20 @@ def test_channel_preview_bitmap_digits():
     assert "renderBitmapDigitsSVG" in content
     assert "CLOCK_DIGITS_3X5" in content
     assert "image-rendering:pixelated;" in content
+
+
+def test_channel_controls_sync_structure():
+    """Verify channel_preview.js exports syncChannelControlsToDisplay and binds options."""
+    js_path = Path("divoom_gui/web_ui/channel_preview.js")
+    content = js_path.read_text(encoding="utf-8")
+    assert "window.syncChannelControlsToDisplay = function" in content
+    assert "selectedClockStyle" in content
+    assert "selectedAmbientMode" in content
+
+
+def test_spatial_rooms_get_wall_slots_structure():
+    """Verify spatial_rooms.js exports getWallSlots as unified spatial layout source."""
+    js_path = Path("divoom_gui/web_ui/spatial_rooms.js")
+    content = js_path.read_text(encoding="utf-8")
+    assert "getWallSlots" in content
+    assert "window.SpatialRooms" in content

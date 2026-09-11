@@ -104,6 +104,9 @@ window.restoreDevicePreview = function(address, _fallbackSrc) {
     // flat screen (or the empty state when nothing has been pushed yet).
     const regFrame = window.DisplayPreviewRegistry ? window.DisplayPreviewRegistry.get(address)?.frameSrc : null;
     window._setScreenOverlayFrame(regFrame || window.DivoomState.devicePreviews[address] || null);
+    if (typeof window.syncChannelControlsToDisplay === "function") {
+        window.syncChannelControlsToDisplay(address);
+    }
 };
 
 // ── R46 #2: per-device "last active element" preview ──────────────────────
@@ -181,11 +184,41 @@ window._activeDeviceMac = function() {
 };
 
 // R46 #2: mirror the active widget's pushed frame to its device's last-active
-// preview (used by the sysmon/music/stocks pollers).
-window.markActiveDeviceFrame = function(src) {
+// preview (used by the sysmon/music/stocks pollers). Supports routing to all
+// displays bound to this streamer job.
+window.markActiveDeviceFrame = function(src, specificMac, kind) {
+    if (specificMac && window.setDeviceActivity) {
+        window.setDeviceActivity(specificMac, "image", { src: src });
+        return;
+    }
+    if (kind && window.DisplayPreviewRegistry) {
+        const bound = window.DisplayPreviewRegistry.getDisplaysBoundTo(kind);
+        if (bound.length > 0) {
+            bound.forEach(d => {
+                window.setDeviceActivity(d.mac, "image", { src: src });
+            });
+            return;
+        }
+    }
     const mac = window._activeDeviceMac();
     if (mac && mac !== "None" && src && window.setDeviceActivity)
         window.setDeviceActivity(mac, "image", { src: src });
+};
+
+window.getFleetStatus = function() {
+    const devices = (window.DivoomState && window.DivoomState.discoveredDevices) || [];
+    const connectedMac = window.DivoomState.connectedAddress || window._activeDeviceMac();
+    return {
+        total: devices.length,
+        connectedCount: window.DivoomState.appConnected ? 1 : 0,
+        activeMac: connectedMac,
+        isConnected: !!window.DivoomState.appConnected,
+        devices: devices.map(d => ({
+            mac: d.address,
+            name: d.name,
+            connected: !!(window.DivoomState.appConnected && (d.address === connectedMac))
+        }))
+    };
 };
 
 // R47: device-dots / selector logic (mergeDiscoveredDevices, refreshOwnedDevices,

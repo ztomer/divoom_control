@@ -105,7 +105,7 @@ document.addEventListener("DOMContentLoaded", () => {
             img.src = dataUrl;
             img.style.display = "inline-block";
             // R46 #2: the stock ticker is the device's last-active element.
-            if (selectedWidget === "stock" || selectedWidget === "stocks") window.markActiveDeviceFrame?.(dataUrl);
+            if (selectedWidget === "stock" || selectedWidget === "stocks") window.markActiveDeviceFrame?.(dataUrl, null, "stock");
         }
     }
 
@@ -353,6 +353,16 @@ document.addEventListener("DOMContentLoaded", () => {
             startWeatherPolling();
         } else {
             stopWeatherPolling();
+        }
+
+        const activeMac = window._activeDeviceMac();
+        if (window.DisplayPreviewRegistry && activeMac) {
+            const disp = window.DisplayPreviewRegistry.get(activeMac);
+            if (startMusic) disp.bindJob("music");
+            else if (startStocks) disp.bindJob("stock", { symbol });
+            else if (startSysmon) disp.bindJob("sysmon");
+            else if (startWeather) disp.bindJob("weather");
+            else disp.unbindJob();
         }
     }
 

@@ -146,3 +146,63 @@ window._renderWallSlotSVG = function(slot, addr) {
               + `</svg>`;
     return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
 };
+
+// Two-way synchronization: bind active inspector controls to the selected display's
+// options (DisplayPreview.opts) so switching screens reflects each device's real state.
+window.syncChannelControlsToDisplay = function(mac) {
+    if (!mac || mac === "-" || mac === "None") return;
+    const disp = window.DisplayPreviewRegistry ? window.DisplayPreviewRegistry.get(mac) : null;
+    const act = window.DivoomState?.deviceActivity?.[mac];
+    const opts = (disp && disp.opts) ? disp.opts : (act && act.opts) ? act.opts : {};
+    const ch = (disp && disp.channel) ? disp.channel : (act && act.kind) ? act.kind : "clock";
+
+    // 1. Clock style & color
+    const style = (opts.style != null) ? Number(opts.style) : 0;
+    window.DivoomState.selectedClockStyle = style;
+    document.querySelectorAll("#clock-faces-grid .selector-cell").forEach(el => {
+        const v = Number(el.getAttribute("data-value"));
+        el.classList.toggle("active", v === style);
+    });
+    const clockColor = (ch === "clock" && opts.color) ? opts.color : (document.getElementById("clock-color-input")?.value || "#ffffff");
+    const clockInput = document.getElementById("clock-color-input");
+    if (clockInput && opts.color && ch === "clock") {
+        clockInput.value = clockColor;
+    }
+    if (typeof window.updateClockPreviewsColor === "function") {
+        window.updateClockPreviewsColor(clockColor);
+    }
+
+    // 2. Ambient mode & color
+    const mode = (opts.mode != null) ? Number(opts.mode) : 0;
+    window.DivoomState.selectedAmbientMode = mode;
+    if (typeof window.markActiveAmbientMode === "function") {
+        window.markActiveAmbientMode(mode);
+    }
+    const ambColor = (ch === "ambient" && opts.color) ? opts.color : (document.getElementById("ambient-color-input")?.value || "#00ffcc");
+    const ambInput = document.getElementById("ambient-color-input");
+    if (ambInput && opts.color && ch === "ambient") {
+        ambInput.value = ambColor;
+    }
+    if (typeof window.updateAmbientPreviewsColor === "function") {
+        window.updateAmbientPreviewsColor(ambColor);
+    }
+    if (typeof window.updateAmbientColorVisibility === "function") {
+        window.updateAmbientColorVisibility();
+    }
+
+    // 3. VJ Effect
+    if (opts.vj != null) {
+        document.querySelectorAll("#vj-effects-grid .selector-cell").forEach(el => {
+            const v = Number(el.getAttribute("data-value"));
+            el.classList.toggle("active", v === Number(opts.vj));
+        });
+    }
+
+    // 4. EQ Visualizer
+    if (opts.eq != null) {
+        document.querySelectorAll("#eq-visualizer-grid .selector-cell").forEach(el => {
+            const v = Number(el.getAttribute("data-value"));
+            el.classList.toggle("active", v === Number(opts.eq));
+        });
+    }
+};

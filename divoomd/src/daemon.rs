@@ -39,6 +39,8 @@ pub struct Daemon {
     started: Instant,
     pub(crate) device: Mutex<Option<Arc<DeviceTransport>>>,
     pub(crate) device_id: Mutex<Option<String>>,
+    pub devices: Mutex<std::collections::HashMap<String, Arc<DeviceTransport>>>,
+    pub(crate) queues: Mutex<std::collections::HashMap<String, CommandQueue>>,
     // the CoreBluetooth central, created once and kept alive for the daemon's
     // lifetime (dropping it stops notification delivery).
     #[cfg(feature = "ble")]
@@ -97,6 +99,8 @@ impl Daemon {
             started: Instant::now(),
             device: Mutex::new(None),
             device_id: Mutex::new(default_mac),
+            devices: Mutex::new(std::collections::HashMap::new()),
+            queues: Mutex::new(std::collections::HashMap::new()),
             #[cfg(feature = "ble")]
             central: Mutex::new(None),
             #[cfg(feature = "ble")]
@@ -145,6 +149,14 @@ impl Daemon {
         crate::daemon_connect::cmd_connect(self, req).await
     }
 
+    pub async fn get_device_queue(&self, mac: &str) -> CommandQueue {
+        let mut guard = self.queues.lock().await;
+        guard
+            .entry(mac.to_string())
+            .or_insert_with(|| CommandQueue::new(Some(EXCLUSIVE_TIMEOUT), Some(ITEM_TIMEOUT)))
+            .clone()
+    }
+
     /// `device_call` routes a method string to a protocol op. A small set is ported
     /// first to prove op-level parity (the read-back + a write); unported methods
     /// return an honest error. The device mutex serializes device access.
@@ -156,7 +168,18 @@ impl Daemon {
         // The per-op token gates exclusive mode: if another session holds exclusive,
         // device_call is rejected immediately (Python parity: _cmd_queue.run(token)).
         let token = req.args.get("token").and_then(|v| v.as_str());
-        if let Err(e) = self.queue.check_allowed(token) {
+        let target_mac = req
+            .args
+            .get("mac")
+            .and_then(|v| v.as_str())
+            .or_else(|| req.args.get("target_mac").and_then(|v| v.as_str()));
+
+        if let Some(mac) = target_mac {
+            let q = self.get_device_queue(mac).await;
+            if let Err(e) = q.check_allowed(token) {
+                return err_reply(&e.to_string());
+            }
+        } else if let Err(e) = self.queue.check_allowed(token) {
             return err_reply(&e.to_string());
         }
 
@@ -178,9 +201,28 @@ impl Daemon {
             return self.wall_device_call(req).await;
         }
 
-        let guard = self.device.lock().await;
-        let Some(dev) = guard.as_ref() else {
-            return err_reply("no device connected");
+        let dev = if let Some(mac) = target_mac {
+            let devices_guard = self.devices.lock().await;
+            if let Some(d) = devices_guard.get(mac) {
+                d.clone()
+            } else {
+                let guard = self.device.lock().await;
+                let cur_id = self.device_id.lock().await.clone().unwrap_or_default();
+                if cur_id == mac {
+                    let Some(d) = guard.as_ref() else {
+                        return err_reply("no device connected");
+                    };
+                    d.clone()
+                } else {
+                    return err_reply(&format!("device '{mac}' not connected"));
+                }
+            }
+        } else {
+            let guard = self.device.lock().await;
+            let Some(d) = guard.as_ref() else {
+                return err_reply("no device connected");
+            };
+            d.clone()
         };
 
         // Honor a caller-requested timeout (clamped so a huge value can't wedge the
@@ -202,37 +244,34 @@ impl Daemon {
 
         if let Ok(reply) = tokio::time::timeout(
             timeout,
-            crate::device_call::handle_device_call(self, dev, req, timeout),
+            crate::device_call::handle_device_call(self, &dev, req, timeout),
         )
         .await
         {
             // R59/event-driven link health: a failed mid-session op (or a
             // timeout) means the link is unhealthy → push a `degraded` status
             // so the UI flips the dot amber immediately instead of waiting for
-            // a poll. A successful op recovers it to `active`. The device is
-            // still owned (`guard` holds the lock), so connected stays true.
-            if guard.is_some() {
-                let id = self.device_id.lock().await.clone();
-                let degraded =
-                    reply.get("success").and_then(serde_json::Value::as_bool) != Some(true);
-                let st = if degraded { "degraded" } else { "active" };
-                let _ = self.tx.send(crate::daemon_connect::status_payload(
-                    true,
-                    id.as_deref(),
-                    Some(st),
-                ));
-            }
+            // a poll. A successful op recovers it to `active`.
+            let cur_id = self.device_id.lock().await.clone();
+            let id = target_mac.map(str::to_string).or(cur_id);
+            let degraded =
+                reply.get("success").and_then(serde_json::Value::as_bool) != Some(true);
+            let st = if degraded { "degraded" } else { "active" };
+            let _ = self.tx.send(crate::daemon_connect::status_payload(
+                true,
+                id.as_deref(),
+                Some(st),
+            ));
             reply
         } else {
             let msg = format!("device op timed out after {req_timeout:.0}s");
-            if guard.is_some() {
-                let id = self.device_id.lock().await.clone();
-                let _ = self.tx.send(crate::daemon_connect::status_payload(
-                    true,
-                    id.as_deref(),
-                    Some("degraded"),
-                ));
-            }
+            let cur_id = self.device_id.lock().await.clone();
+            let id = target_mac.map(str::to_string).or(cur_id);
+            let _ = self.tx.send(crate::daemon_connect::status_payload(
+                true,
+                id.as_deref(),
+                Some("degraded"),
+            ));
             err_reply(&msg)
         }
     }

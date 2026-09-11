@@ -117,6 +117,7 @@ document.addEventListener("DOMContentLoaded", () => {
             style5Svg.style.color = color;
         }
     }
+    window.updateClockPreviewsColor = updateClockPreviewsColor;
 
     const clockColorInput = document.getElementById("clock-color-input");
     if (clockColorInput) {
@@ -238,6 +239,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     /// Highlight the mode the device actually accepted; `null` clears it.
     function markActiveAmbientMode(mode) {
+        selectedAmbientMode = mode ?? 0;
+        window.DivoomState.selectedAmbientMode = selectedAmbientMode;
         document.querySelectorAll("#ambient-mode-grid [data-value]").forEach(el => {
             const isActive = mode !== null && parseInt(el.getAttribute("data-value")) === mode;
             el.classList.toggle("ambient-mode-active", isActive);
@@ -252,6 +255,7 @@ document.addEventListener("DOMContentLoaded", () => {
             p.style.boxShadow = `0 0 10px ${color}4d`;
         });
     }
+    window.updateAmbientPreviewsColor = updateAmbientPreviewsColor;
 
     window.applyAmbientColor = function(color) {
         if (!window.requireDevice()) return;
@@ -281,6 +285,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (controls) controls.style.display = show ? "flex" : "none";
         if (favorites) favorites.style.display = show ? "flex" : "none";
     }
+    window.updateAmbientColorVisibility = updateAmbientColorVisibility;
 
     window.buildSelectorGrid("ambient-mode-grid", AMBIENT_EFFECTS, (v) => {
         selectedAmbientMode = parseInt(v);

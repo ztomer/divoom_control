@@ -66,7 +66,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     devPrev.src = info.preview;
                     devPrev.style.display = "inline-block";
                     // R46 #2: cover art is the device's last-active element.
-                    if (window.selectedWidgetIs?.("music")) window.markActiveDeviceFrame?.(info.preview);
+                    if (window.selectedWidgetIs?.("music")) window.markActiveDeviceFrame?.(info.preview, null, "music");
                 }
             } else if (coverEl) {
                 // Metadata but no cover (podcasts, streams). An honest

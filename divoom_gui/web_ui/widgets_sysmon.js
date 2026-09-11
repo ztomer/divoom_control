@@ -69,7 +69,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 // frame into the lower-left device screen overlay too.
                 // R46 #2: mirror the sysmon frame as the device's last-active element.
                 if (r.preview && (typeof window.selectedWidgetIs === "function" ? window.selectedWidgetIs("sysmon") : true)) {
-                    window.markActiveDeviceFrame?.(r.preview);
+                    window.markActiveDeviceFrame?.(r.preview, null, "sysmon");
                 }
             } catch (e) { /* ignore */ }
         });

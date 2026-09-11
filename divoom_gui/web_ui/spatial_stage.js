@@ -312,6 +312,9 @@
                 if (window.showChannelPanel) window.showChannelPanel(act.kind);
             }
         }
+        if (typeof window.syncChannelControlsToDisplay === "function") {
+            window.syncChannelControlsToDisplay(addr);
+        }
     }
 
     function selectDevice(addr, dev) {

@@ -3,7 +3,8 @@
 //! Notifications / Quit) plus a read-only active-device section. State is refreshed
 //! by polling the daemon (`poll_daemon`); menu clicks are dispatched in `on_menu`.
 
-use tray_icon::menu::{Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem};
+use std::time::Duration;
+use tray_icon::menu::{Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem, Submenu};
 use tray_icon::{TrayIcon, TrayIconBuilder};
 
 use crate::state::{resolve_icon_state, IconState};
@@ -49,18 +50,35 @@ impl Tray {
 
     /// Build + install the whole menu: active-device rows (disabled, informational)
     /// then the fixed actions.
-    fn rebuild(&self, devices: &[(String, String)], notif_running: bool) {
+    /// Build + install the whole menu: active-device submenus with actionable
+    /// channel switching and power controls, plus fixed actions.
+    fn rebuild(&self, devices: &[daemon::DeviceActivityItem], notif_running: bool) {
         let menu = Menu::new();
         if devices.is_empty() {
             let _ = menu.append(&MenuItem::new("No active devices", false, None));
         } else {
-            for (name, kind) in devices {
+            for item in devices {
+                let name = &item.name;
+                let kind = &item.kind;
                 let label = if kind.is_empty() || kind == "idle" {
                     name.clone()
                 } else {
                     format!("{name} — {kind}")
                 };
-                let _ = menu.append(&MenuItem::new(label, false, None));
+                let dev_submenu = Submenu::new(&label, true);
+                let clk_id = MenuId::new(format!("ch:clock:{}", item.mac));
+                let _ = dev_submenu.append(&MenuItem::with_id(clk_id, "Show Clock", true, None));
+                let eq_id = MenuId::new(format!("ch:visualizer:{}", item.mac));
+                let _ = dev_submenu.append(&MenuItem::with_id(eq_id, "Show Visualizer", true, None));
+                let amb_id = MenuId::new(format!("ch:ambient:{}", item.mac));
+                let _ = dev_submenu.append(&MenuItem::with_id(amb_id, "Show Ambient", true, None));
+                let _ = dev_submenu.append(&PredefinedMenuItem::separator());
+                let off_id = MenuId::new(format!("pwr:off:{}", item.mac));
+                let _ = dev_submenu.append(&MenuItem::with_id(off_id, "Turn Off Screen", true, None));
+                let on_id = MenuId::new(format!("pwr:on:{}", item.mac));
+                let _ = dev_submenu.append(&MenuItem::with_id(on_id, "Turn On Screen", true, None));
+
+                let _ = menu.append(&dev_submenu);
             }
         }
         let _ = menu.append(&PredefinedMenuItem::separator());
@@ -102,20 +120,37 @@ impl Tray {
     }
 
     /// Poll the daemon and refresh the glyph colour + menu (only when changed, to
-    /// avoid rebuilding the menu while the user has it open).
+    /// avoid rebuilding the menu while the user has it open). Ingests cached state
+    /// from the subscription stream when fresh to eliminate socket churn.
     pub fn poll_daemon(&mut self) {
-        let status = daemon::status();
-        let offline = matches!(status, daemon::Status::Offline);
-        let notif_running = !offline && daemon::notifications_running();
-        // R61 follow-up: the icon previously reflected ONLY the notification
-        // monitor (`status`, above) — never whether a device is BLE/LAN
-        // connected. connection_state() adds that as the primary signal;
-        // notif_running now only affects the tooltip (see resolve_icon_state).
-        let connection_state = if offline {
-            None
+        let cached = daemon::get_cached_snapshot();
+        let (offline, notif_running, connection_state, devices) = if let Some(snap) = cached.filter(|s| {
+            s.reachable
+                && s.last_event_at
+                    .is_some_and(|t| t.elapsed() < Duration::from_secs(10))
+        }) {
+            (
+                !snap.reachable,
+                snap.notifications_running,
+                snap.connection_state,
+                snap.devices,
+            )
         } else {
-            daemon::connection_state()
+            let status = daemon::status();
+            let off = matches!(status, daemon::Status::Offline);
+            let notif = !off && daemon::notifications_running();
+            let conn = if off { None } else { daemon::connection_state() };
+            let acts = if off { Vec::new() } else { daemon::device_activity_items() };
+            daemon::set_cached_snapshot(daemon::DaemonSnapshot {
+                reachable: !off,
+                connection_state: conn.clone(),
+                notifications_running: notif,
+                devices: acts.clone(),
+                last_event_at: Some(std::time::Instant::now()),
+            });
+            (off, notif, conn, acts)
         };
+
         let (icon_state, tooltip) =
             resolve_icon_state(!offline, connection_state.as_deref(), notif_running);
         if self.last_icon_state != Some(icon_state) {
@@ -127,19 +162,13 @@ impl Tray {
             self.last_tooltip = tooltip;
         }
 
-        let devices = if offline {
-            Vec::new()
-        } else {
-            daemon::device_activity()
-        };
-
         let sig = format!(
             "{}|{}|{}",
             if offline { "off" } else { "on" },
             notif_running,
             devices
                 .iter()
-                .map(|(n, k)| format!("{n}:{k}"))
+                .map(|d| format!("{}:{}:{}", d.mac, d.name, d.kind))
                 .collect::<Vec<_>>()
                 .join(",")
         );
@@ -151,7 +180,16 @@ impl Tray {
 
     /// Dispatch a menu click. Returns `Some(Quit)` when the app should exit.
     pub fn on_menu(&mut self, ev: &MenuEvent) -> Option<TrayAction> {
-        if ev.id == self.launch_id {
+        let id_str = ev.id.as_ref();
+        if let Some(rest) = id_str.strip_prefix("ch:") {
+            if let Some((ch, mac)) = rest.split_once(':') {
+                daemon::switch_channel(mac, ch);
+            }
+        } else if let Some(rest) = id_str.strip_prefix("pwr:") {
+            if let Some((action, mac)) = rest.split_once(':') {
+                daemon::set_screen_power(mac, action == "on");
+            }
+        } else if ev.id == self.launch_id {
             launch::open_dashboard();
         } else if ev.id == self.notif_open_id {
             launch::open_notifications();

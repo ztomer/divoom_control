@@ -436,6 +436,31 @@
         input.focus();
     }
 
+    function getWallSlots(devices) {
+        const devList = devices || (window.DivoomState && window.DivoomState.discoveredDevices) || [];
+        const posMap = getSavedPositions();
+        const roomMap = getDeviceRooms();
+        const slots = {};
+        devList.forEach(dev => {
+            const addr = dev.address;
+            if (!addr) return;
+            const p = findPosition(posMap, addr) || { x: 0, y: 0 };
+            const dims = (typeof window.getDeviceDimensions === 'function')
+                ? window.getDeviceDimensions(dev.name)
+                : { width: 80, height: 80, size: 16 };
+            slots[addr] = {
+                x: p.x,
+                y: p.y,
+                width: dims.width,
+                height: dims.height,
+                size: dims.size,
+                name: dev.name || 'Divoom Screen',
+                room: roomMap[addr] || 'Desk'
+            };
+        });
+        return slots;
+    }
+
     window.SpatialRooms = {
         getRooms,
         addRoom,
@@ -445,6 +470,7 @@
         getSavedPositions,
         savePositions,
         findPosition,
+        getWallSlots,
         syncTopology,
         loadTopology,
         populateSelect,

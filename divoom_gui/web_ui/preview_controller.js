@@ -41,7 +41,21 @@
             this.cachedSrc = null;
             this.imgLoaded = false;
             this.wallSlot = null;
+            this.activeJob = null;
             this.lastUpdated = Date.now();
+        }
+
+        bindJob(kind, params) {
+            this.activeJob = { kind: (kind || "").toLowerCase(), params: params || {}, startedAt: Date.now() };
+            this.setActivity(kind, params);
+        }
+
+        unbindJob() {
+            this.activeJob = null;
+        }
+
+        isBoundTo(kind) {
+            return !!(this.activeJob && this.activeJob.kind === (kind || "").toLowerCase());
         }
 
         updateSpec(spec) {
@@ -423,6 +437,11 @@
 
         getAll() {
             return Array.from(this.displays.values());
+        }
+
+        getDisplaysBoundTo(kind) {
+            const k = (kind || "").toLowerCase();
+            return this.getAll().filter(d => d.isBoundTo(k));
         }
 
         getActive() {

@@ -149,18 +149,107 @@ pub fn subscribe(_on_event: impl FnMut(Value), _should_stop: impl Fn() -> bool) 
     false
 }
 
-/// Active devices the daemon knows about → `(name, kind)` rows for the menu
-/// (parity with the pyobjc menubar's activity tiles; lightweight, no BLE scan).
-pub fn device_activity() -> Vec<(String, String)> {
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DeviceActivityItem {
+    pub mac: String,
+    pub name: String,
+    pub kind: String,
+    pub preview: Option<String>,
+}
+
+#[derive(Default, Clone, Debug)]
+pub struct DaemonSnapshot {
+    pub reachable: bool,
+    pub connection_state: Option<String>,
+    pub notifications_running: bool,
+    pub devices: Vec<DeviceActivityItem>,
+    pub last_event_at: Option<std::time::Instant>,
+}
+
+static SNAPSHOT: std::sync::Mutex<Option<DaemonSnapshot>> = std::sync::Mutex::new(None);
+
+pub fn get_cached_snapshot() -> Option<DaemonSnapshot> {
+    SNAPSHOT.lock().unwrap().clone()
+}
+
+pub fn update_snapshot_from_event(ev: &Value) {
+    let mut guard = SNAPSHOT.lock().unwrap();
+    let snap = guard.get_or_insert_with(DaemonSnapshot::default);
+    snap.reachable = true;
+    snap.last_event_at = Some(std::time::Instant::now());
+
+    if let Some(event_type) = ev.get("type").or_else(|| ev.get("event")).and_then(Value::as_str) {
+        match event_type {
+            "status" => {
+                if let Some(st) = ev.get("state").and_then(Value::as_str) {
+                    snap.connection_state = Some(st.to_string());
+                } else if let Some(conn) = ev.get("connected").and_then(Value::as_bool) {
+                    snap.connection_state = Some(if conn { "connected".to_string() } else { "disconnected".to_string() });
+                }
+            }
+            "notification_status" => {
+                snap.notifications_running = ev.get("running").and_then(Value::as_bool).unwrap_or(false);
+            }
+            "owned_devices" => {
+                if let Some(devs) = ev.get("devices").and_then(Value::as_array) {
+                    snap.devices = devs
+                        .iter()
+                        .filter_map(|d| {
+                            let mac = d.get("mac").or_else(|| d.get("address")).and_then(Value::as_str)?;
+                            let name = d.get("name").and_then(Value::as_str).unwrap_or("Divoom").to_string();
+                            let kind = d.get("kind").and_then(Value::as_str).unwrap_or("").to_string();
+                            let preview = d.get("preview").and_then(Value::as_str).map(str::to_string);
+                            Some(DeviceActivityItem {
+                                mac: mac.to_string(),
+                                name,
+                                kind,
+                                preview,
+                            })
+                        })
+                        .collect();
+                }
+            }
+            "activity" => {
+                if let Some(mac) = ev.get("mac").and_then(Value::as_str) {
+                    let name = ev.get("name").and_then(Value::as_str).unwrap_or("Divoom").to_string();
+                    let kind = ev.get("kind").and_then(Value::as_str).unwrap_or("").to_string();
+                    let preview = ev.get("preview").and_then(Value::as_str).map(str::to_string);
+                    if let Some(existing) = snap.devices.iter_mut().find(|d| d.mac == mac) {
+                        existing.name = name;
+                        existing.kind = kind;
+                        if preview.is_some() {
+                            existing.preview = preview;
+                        }
+                    } else {
+                        snap.devices.push(DeviceActivityItem {
+                            mac: mac.to_string(),
+                            name,
+                            kind,
+                            preview,
+                        });
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+pub fn set_cached_snapshot(snap: DaemonSnapshot) {
+    let mut guard = SNAPSHOT.lock().unwrap();
+    *guard = Some(snap);
+}
+
+pub fn device_activity_items() -> Vec<DeviceActivityItem> {
     let Some(v) = request("get_device_activity", json!({})) else {
         return Vec::new();
     };
     let Some(map) = v.get("activity").and_then(|a| a.as_object()) else {
         return Vec::new();
     };
-    let mut rows: Vec<(String, String)> = map
-        .values()
-        .map(|d| {
+    let mut items: Vec<DeviceActivityItem> = map
+        .iter()
+        .map(|(mac, d)| {
             let name = d
                 .get("name")
                 .and_then(|n| n.as_str())
@@ -171,11 +260,43 @@ pub fn device_activity() -> Vec<(String, String)> {
                 .and_then(|k| k.as_str())
                 .unwrap_or("")
                 .to_string();
-            (name, kind)
+            let preview = d
+                .get("preview")
+                .and_then(|p| p.as_str())
+                .map(str::to_string);
+            DeviceActivityItem {
+                mac: mac.clone(),
+                name,
+                kind,
+                preview,
+            }
         })
         .collect();
-    rows.sort();
-    rows
+    items.sort_by(|a, b| a.name.cmp(&b.name));
+    items
+}
+
+
+pub fn switch_channel(mac: &str, channel: &str) {
+    let _ = request(
+        "device_call",
+        json!({
+            "mac": mac,
+            "method": "display.switch_channel",
+            "kwargs": { "channel": channel }
+        }),
+    );
+}
+
+pub fn set_screen_power(mac: &str, on: bool) {
+    let _ = request(
+        "device_call",
+        json!({
+            "mac": mac,
+            "method": "system.set_screen_on",
+            "kwargs": { "on": on }
+        }),
+    );
 }
 
 /// Whether the notification listener is running (menu label state).
@@ -334,5 +455,30 @@ mod tests {
 
         assert!(connected, "subscribe should report it connected");
         assert_eq!(*received.lock().unwrap(), events);
+    }
+
+    #[test]
+    fn snapshot_updates_from_stream_events() {
+        let ev_status = json!({
+            "type": "status",
+            "connected": true,
+            "connection_state": "connected"
+        });
+        update_snapshot_from_event(&ev_status);
+        let snap = get_cached_snapshot().expect("snapshot should exist");
+        assert!(snap.reachable);
+        assert_eq!(snap.connection_state.as_deref(), Some("connected"));
+
+        let ev_devices = json!({
+            "type": "owned_devices",
+            "devices": [
+                {"mac": "11:22:33:44:55:66", "name": "Ditoo Pro", "kind": "ditoo_pro", "preview": "data:image/png;base64,xxx"}
+            ]
+        });
+        update_snapshot_from_event(&ev_devices);
+        let snap2 = get_cached_snapshot().expect("snapshot should exist");
+        assert_eq!(snap2.devices.len(), 1);
+        assert_eq!(snap2.devices[0].name, "Ditoo Pro");
+        assert_eq!(snap2.devices[0].mac, "11:22:33:44:55:66");
     }
 }

@@ -229,11 +229,22 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
         .unwrap_or(false);
     if mock {
         let mock_transport = crate::mock_transport::MockTransport::new();
-        *daemon.device.lock().await = Some(Arc::new(DeviceTransport::Mock(mock_transport)));
-        *daemon.device_id.lock().await = Some("MOCK_MAC".to_string());
-        let _ = daemon.tx.send(status_payload(true, Some("MOCK_MAC"), None));
-        let _ = daemon.tx.send(owned_devices_payload(Some("MOCK_MAC")));
-        return json!({"success":true,"connected":true,"connection_state":"connected","mac":"MOCK_MAC"});
+        let mock_mac = req
+            .args
+            .get("mac")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("MOCK_MAC");
+        let transport = Arc::new(DeviceTransport::Mock(mock_transport));
+        daemon
+            .devices
+            .lock()
+            .await
+            .insert(mock_mac.to_string(), transport.clone());
+        *daemon.device.lock().await = Some(transport);
+        *daemon.device_id.lock().await = Some(mock_mac.to_string());
+        let _ = daemon.tx.send(status_payload(true, Some(mock_mac), None));
+        let _ = daemon.tx.send(owned_devices_payload(Some(mock_mac)));
+        return json!({"success":true,"connected":true,"connection_state":"connected","mac":mock_mac});
     }
 
     let lan_ip = req.args.get("lan_ip").and_then(|v| v.as_str());
@@ -247,44 +258,58 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
         if !lan.probe().await {
             return err_reply(&format!("LAN device at {ip} unreachable"));
         }
-        *daemon.device.lock().await = Some(Arc::new(DeviceTransport::Lan(lan)));
-        *daemon.device_id.lock().await = Some(format!("LAN:{ip}"));
+        let transport = Arc::new(DeviceTransport::Lan(lan));
+        let id_str = format!("LAN:{ip}");
+        daemon
+            .devices
+            .lock()
+            .await
+            .insert(id_str.clone(), transport.clone());
+        *daemon.device.lock().await = Some(transport);
+        *daemon.device_id.lock().await = Some(id_str.clone());
         let _ = daemon
             .tx
-            .send(status_payload(true, Some(&format!("LAN:{ip}")), None));
+            .send(status_payload(true, Some(&id_str), None));
         let _ = daemon
             .tx
-            .send(owned_devices_payload(Some(&format!("LAN:{ip}"))));
+            .send(owned_devices_payload(Some(&id_str)));
         return json!({"success":true,"connected":true,"connection_state":"connected","lan_ip":ip});
     }
+    let id = req
+        .args
+        .get("mac")
+        .or_else(|| req.args.get("id"))
+        .and_then(|v| v.as_str());
+    let id = match id {
+        Some(i) => i.to_string(),
+        None => return err_reply("connect_device requires 'mac' or 'lan_ip'"),
+    };
+    let use_ios_le = req
+        .args
+        .get("use_ios_le_protocol")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(true);
+    if !use_ios_le {
+        match crate::spp::SppTransport::connect(&id, None, None).await {
+            Ok(t) => {
+                let transport = Arc::new(DeviceTransport::Spp(t));
+                daemon
+                    .devices
+                    .lock()
+                    .await
+                    .insert(id.clone(), transport.clone());
+                *daemon.device.lock().await = Some(transport);
+                *daemon.device_id.lock().await = Some(id.clone());
+                let _ = daemon.tx.send(status_payload(true, Some(&id), None));
+                let _ = daemon.tx.send(owned_devices_payload(Some(&id)));
+                return json!({"success":true,"connected":true,"connection_state":"connected","mac":id});
+            }
+            Err(e) => return err_reply(&format!("connect SPP failed: {e}")),
+        }
+    }
+
     #[cfg(feature = "ble")]
     {
-        let id = req
-            .args
-            .get("mac")
-            .or_else(|| req.args.get("id"))
-            .and_then(|v| v.as_str());
-        let id = match id {
-            Some(i) => i.to_string(),
-            None => return err_reply("connect_device requires 'mac' or 'lan_ip'"),
-        };
-        let use_ios_le = req
-            .args
-            .get("use_ios_le_protocol")
-            .and_then(serde_json::Value::as_bool)
-            .unwrap_or(true);
-        if !use_ios_le {
-            match crate::spp::SppTransport::connect(&id, None, None).await {
-                Ok(t) => {
-                    *daemon.device.lock().await = Some(Arc::new(DeviceTransport::Spp(t)));
-                    *daemon.device_id.lock().await = Some(id.clone());
-                    let _ = daemon.tx.send(status_payload(true, Some(&id), None));
-                    let _ = daemon.tx.send(owned_devices_payload(Some(&id)));
-                    return json!({"success":true,"connected":true,"connection_state":"connected","mac":id});
-                }
-                Err(e) => return err_reply(&format!("connect SPP failed: {e}")),
-            }
-        }
 
         let mut result = run_connect(daemon, &id).await;
         if matches!(&result, Err(e) if is_dead_central(e)) {
@@ -293,7 +318,13 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
         }
         match result {
             Ok(t) => {
-                *daemon.device.lock().await = Some(Arc::new(DeviceTransport::Ble(t)));
+                let transport = Arc::new(DeviceTransport::Ble(t));
+                daemon
+                    .devices
+                    .lock()
+                    .await
+                    .insert(id.clone(), transport.clone());
+                *daemon.device.lock().await = Some(transport);
                 *daemon.device_id.lock().await = Some(id.clone());
                 let _ = daemon.tx.send(status_payload(true, Some(&id), None));
                 let _ = daemon.tx.send(owned_devices_payload(Some(&id)));
@@ -308,6 +339,7 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
 
 /// Handle `disconnect` command.
 pub(crate) async fn cmd_disconnect(daemon: &Daemon) -> Value {
+    daemon.devices.lock().await.clear();
     // Take the transport OUT of the mutex first, so the guard is dropped
     // before the disconnect below. Held across the `if let`, this blocks every
     // other task wanting the device for the length of a BLE disconnect.

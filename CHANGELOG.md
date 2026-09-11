@@ -15,6 +15,20 @@ shipped milestone (per the project planning docs).
 - **Hardware-Faithful Bitmap Pixel Art Clocks (`preview_controller.js`, `channel_preview.js`)**:
   - Replaced blurry browser vector SVG `<text>` fonts with 1-bit integer bitmap LED matrices (3x5 and 5x7 digit tables) rendered directly via `<rect>` pixel diodes.
   - All 6 clock faces (Full Screen, Rainbow, With Box, Analog Square, Full Screen Neg, Analog Round) now render 100% crisp, authentic hardware pixel art without anti-aliasing blur.
+- **Phase 1: Two-Way Inspector Binding & Spatial Consolidation (`channel_preview.js`, `channels_grids.js`, `spatial_stage.js`, `spatial_rooms.js`)**:
+  - Added `window.syncChannelControlsToDisplay(mac)` to two-way bind active device options (clock style, clock color, ambient mode, EQ style) to inspector UI controls upon device switching.
+  - Consolidated spatial coordinates into `SpatialRooms.getWallSlots(devices)` as the unified source of truth across all views.
+- **Phase 2: Per-Device Streamer Job Binding & Fleet State (`preview_controller.js`, `app_globals.js`, `widgets_sysmon.js`, `widgets_music.js`, `widgets.js`)**:
+  - Added `bindJob(kind, params)`, `unbindJob()`, and `isBoundTo(kind)` to `DisplayPreview`, preventing background live streamers (Sysmon, Music, Stocks) from leaking frames across unassigned screens.
+  - Implemented `window.getFleetStatus()` for fleet-wide telemetry across connected displays.
+- **Phase 3: Rust Daemon Multi-Device Transport Pool & Live Job Decoupling (`divoomd`)**:
+  - Added `daemon.devices: Mutex<HashMap<String, Arc<DeviceTransport>>>` and per-device command queues `get_device_queue(mac)`, routing `device_call` commands concurrently per MAC.
+  - Decoupled `live_jobs/mod.rs` so live background streamers continue streaming to background displays even while the user focuses another device in the GUI.
+  - Decoupled SPP connection logic from `#[cfg(feature = "ble")]`, allowing RFCOMM Bluetooth classic connections to function cleanly in BLE-free builds.
+  - Added multi-device integration test suite `divoomd/tests/multi_device_routing.rs`.
+- **Phase 4: Native Menubar Event-Driven Snapshot Ingestion & Visual Device Controls (`divoom-menubar`)**:
+  - Implemented event-driven `DaemonSnapshot` ingestion via daemon `subscribe` broadcast stream, slashing polling socket churn from 120 conn/min to 0 in steady state.
+  - Built interactive per-device submenus in the macOS menu bar tray with quick channel switcher (Clock, Visualizer, Ambient) and screen power standby toggle.
 - **Gallery Selection to Hardware Push (`gallery.js`, `gallery_sync.py`)**:
   - Added click handler to `.gallery-item` tiles to highlight selection, immediately update the active device's `DisplayPreview` frame, and dispatch `window.pywebview.api.play_gallery_art`.
   - Implemented `play_gallery_art(file_id)` in `GallerySyncMixin` to find or retrieve cached GIF/images and stream to the active screen via `display_wall_image`.
@@ -24,7 +38,7 @@ shipped milestone (per the project planning docs).
 - **Spatial Stage Streamlining (`spatial_stage.js`)**:
   - Simplified the stage animation loop by delegating directly to `DisplayPreviewRegistry.get(addr).renderTo(cvs, tick)`, retiring redundant local caches and bringing `spatial_stage.js` safely under the 500-LOC ceiling (460 LOC).
 - **Automated Verification Suite**:
-  - Added `tests/test_display_preview_registry.py` (unit + contract checks) and `tests/test_browser_preview_registry.py` (real-browser multi-display isolation and non-black canvas validation).
+  - Added `tests/test_display_preview_registry.py` (unit + contract checks), `tests/test_browser_preview_registry.py` (real-browser multi-display isolation, two-way sync, and non-black canvas validation), `divoomd/tests/multi_device_routing.rs` (concurrent routing & job persistence), and `divoom-menubar` snapshot event tests (19 passed).
 
 ## v0.35.1 — Gallery Crispness, Offline Custom Art Cache & Isolated Per-Device Previews (2026-09-11)
 
