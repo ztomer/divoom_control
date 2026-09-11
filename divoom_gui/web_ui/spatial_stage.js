@@ -283,8 +283,8 @@
 
             // Node Click Selection & Drag
             node.addEventListener('mousedown', (e) => {
-                selectDevice(addr, dev);
-                startNodeDrag(e, addr, node);
+                highlightNode(addr, dev);
+                startNodeDrag(e, addr, node, dev);
             });
 
             bench.appendChild(node);
@@ -303,7 +303,7 @@
         });
     }
 
-    function selectDevice(addr, dev) {
+    function highlightNode(addr, dev) {
         selectedMac = addr;
         document.querySelectorAll('.spatial-node').forEach(n => {
             n.classList.remove('selected');
@@ -314,15 +314,16 @@
             activeNode.classList.add('selected');
             activeNode.style.zIndex = '25';
         }
+        updateInspector(dev);
+        updateRibbonSelection();
+    }
 
-        // Switch active device in pywebview / app state
+    function selectDevice(addr, dev) {
+        highlightNode(addr, dev);
         if (typeof window.connectDevice === 'function') {
             const spec = resolveDeviceSpec(dev);
             window.connectDevice(dev.name || spec.name, addr);
         }
-
-        updateInspector(dev);
-        updateRibbonSelection();
     }
 
     function updateInspector(dev) {
@@ -352,21 +353,18 @@
         const devices = getDeviceList();
         chips.forEach((chip, idx) => {
             const d = devices[idx];
-            if (d && (d.address === selectedMac)) {
-                chip.classList.add('active');
-            } else {
-                chip.classList.remove('active');
-            }
+            chip.classList.toggle('active', !!(d && d.address === selectedMac));
         });
     }
 
-    function startNodeDrag(e, addr, node) {
+    function startNodeDrag(e, addr, node, dev) {
         if (e.button !== 0) return;
         const bench = document.getElementById('spatial-bench');
         if (!bench) return;
 
         activeDrag = {
             addr,
+            dev,
             node,
             startX: e.clientX,
             startY: e.clientY,
@@ -375,7 +373,8 @@
             benchWidth: bench.clientWidth,
             benchHeight: bench.clientHeight,
             nodeWidth: node.offsetWidth,
-            nodeHeight: node.offsetHeight
+            nodeHeight: node.offsetHeight,
+            hasMoved: false
         };
 
         window.addEventListener('mousemove', onNodeDrag);
@@ -387,9 +386,10 @@
         if (!activeDrag) return;
         const dx = e.clientX - activeDrag.startX;
         const dy = e.clientY - activeDrag.startY;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) activeDrag.hasMoved = true;
 
-        let nx = Math.max(0, Math.min(activeDrag.benchWidth - activeDrag.nodeWidth, activeDrag.initialX + dx));
-        let ny = Math.max(0, Math.min(activeDrag.benchHeight - activeDrag.nodeHeight, activeDrag.initialY + dy));
+        const nx = Math.max(0, Math.min(activeDrag.benchWidth - activeDrag.nodeWidth, activeDrag.initialX + dx));
+        const ny = Math.max(0, Math.min(activeDrag.benchHeight - activeDrag.nodeHeight, activeDrag.initialY + dy));
 
         if (!devicePositions[activeDrag.addr]) devicePositions[activeDrag.addr] = {};
         devicePositions[activeDrag.addr].x = nx;
@@ -399,11 +399,16 @@
         activeDrag.node.style.top = `${ny}px`;
     }
 
-    function endNodeDrag() {
+    function endNodeDrag(e) {
         if (activeDrag) {
-            try {
-                localStorage.setItem('divoom_stage_positions', JSON.stringify(devicePositions));
-            } catch (_) {}
+            if (!activeDrag.hasMoved) {
+                if (typeof window.connectDevice === 'function') {
+                    const spec = resolveDeviceSpec(activeDrag.dev);
+                    window.connectDevice(activeDrag.dev.name || spec.name, activeDrag.addr);
+                }
+            } else {
+                try { localStorage.setItem('divoom_stage_positions', JSON.stringify(devicePositions)); } catch (_) {}
+            }
         }
         activeDrag = null;
         window.removeEventListener('mousemove', onNodeDrag);
@@ -411,19 +416,14 @@
     }
 
     function snapToDesk() {
-        const devices = getDeviceList();
         let curX = 20;
-        devices.forEach((dev) => {
+        getDeviceList().forEach((dev) => {
             const addr = dev.address || 'dev';
             const spec = resolveDeviceSpec(dev);
-            const w = Math.round(spec.w_mm * SCALE);
-            const h = Math.round(spec.h_mm * SCALE);
-            devicePositions[addr] = { x: curX, y: Math.max(10, 165 - h) };
-            curX += w + 12;
+            devicePositions[addr] = { x: curX, y: Math.max(10, 165 - Math.round(spec.h_mm * SCALE)) };
+            curX += Math.round(spec.w_mm * SCALE) + 12;
         });
-        try {
-            localStorage.setItem('divoom_stage_positions', JSON.stringify(devicePositions));
-        } catch (_) {}
+        try { localStorage.setItem('divoom_stage_positions', JSON.stringify(devicePositions)); } catch (_) {}
         refreshBenchNodes();
     }
 
@@ -441,8 +441,7 @@
                 const kind = dev.activityKind || 'clock';
                 if (kind === 'clock') {
                     ctx.fillStyle = '#ff5a1f';
-                    ctx.fillRect(2, 5, 1, 6);
-                    ctx.fillRect(5, 5, 3, 1); ctx.fillRect(5, 6, 1, 4); ctx.fillRect(7, 6, 1, 4); ctx.fillRect(5, 10, 3, 1);
+                    ctx.fillRect(2, 5, 1, 6); ctx.fillRect(5, 5, 3, 1); ctx.fillRect(5, 6, 1, 4); ctx.fillRect(7, 6, 1, 4); ctx.fillRect(5, 10, 3, 1);
                     if (Math.floor(tick / 25) % 2 === 0) { ctx.fillRect(9, 7, 1, 1); ctx.fillRect(9, 9, 1, 1); }
                     ctx.fillRect(11, 5, 1, 4); ctx.fillRect(13, 5, 1, 6); ctx.fillRect(11, 8, 3, 1);
                 } else if (kind === 'sysmon') {
@@ -460,12 +459,8 @@
                         }
                     }
                 } else if (cvs.width === 64) {
-                    ctx.strokeStyle = '#1e293b'; ctx.strokeRect(6, 6, 52, 52);
-                    ctx.fillStyle = '#38bdf8';
-                    for (let i = 0; i < 20; i++) {
-                        ctx.fillRect(Math.round(32 + 16 * Math.cos(i * 0.3 + tick * 0.02)),
-                                     Math.round(32 + 12 * Math.sin(i * 0.35 + tick * 0.02)), 2, 2);
-                    }
+                    ctx.strokeStyle = '#1e293b'; ctx.strokeRect(6, 6, 52, 52); ctx.fillStyle = '#38bdf8';
+                    for (let i = 0; i < 20; i++) ctx.fillRect(Math.round(32 + 16 * Math.cos(i * 0.3 + tick * 0.02)), Math.round(32 + 12 * Math.sin(i * 0.35 + tick * 0.02)), 2, 2);
                 } else {
                     ctx.fillStyle = '#ff5a1f'; ctx.fillRect(5, 5, 6, 6);
                 }
@@ -476,11 +471,7 @@
     }
 
     // Expose API
-    window.SpatialStage = {
-        init: initSpatialStage,
-        refresh: refreshBenchNodes,
-        snap: snapToDesk
-    };
+    window.SpatialStage = { init: initSpatialStage, refresh: refreshBenchNodes, snap: snapToDesk };
 
     // Auto-init when DOM ready
     if (document.readyState === 'loading') {

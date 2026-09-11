@@ -32,13 +32,20 @@ shared memory. Read this on entry and **update it at the end of every round**
   - **Daemon Topology Engine (`divoomd`)**: Implemented `get_topology` and `set_topology` socket commands in `divoomd/src/daemon/dispatch.rs`, `divoomd/src/daemon.rs`, and `divoomd/src/wall/cmds.rs`. Configured JSON persistence to `~/.config/divoom-control/topology.json` (overridable via `DIVOOM_TOPOLOGY_PATH`).
   - **MCP `list_screens`**: Registered tool #14 (`list_screens`) in `divoomd/src/mcp_tools.rs` exposing screens, physical resolutions, spatial coordinates, and wall grouping. Unit tests updated and verified.
   - **Physical Hardware Database (Dieter Rams & Susan Kare Craft)**: Mapped exact millimeter dimensions, screen active area, aspect ratio, and physical silhouettes for Timoo (82.5×90mm), Ditoo (90×114mm), Tivoo-Max (184×163mm), Pixoo-1 (200×200mm), and Pixoo-64 (261×261mm). Rendered with true relative scaling (1mm = 0.65px) and discrete diode matrices.
+  - **Canvas Drag Performance & Zero Clickthrough (`spatial_stage.js`)**:
+    - Identified that canvas drag lag was caused by `selectDevice` executing inside `mousedown`, triggering immediate Python IPC (`connect_single_device`), socket negotiation, and toast animations.
+    - Separated visual highlighting (`highlightNode`) from backend connection IPC.
+    - Implemented click-drag differentiation with a $3\text{px}$ movement threshold (`hasMoved`), ensuring dragging never triggers IPC or notifications.
+    - Prevented clickthrough bugs by strictly scoping listeners to active drag lifecycles and avoiding transparent overlay elements or pointer-events toggles.
   - **Gates & Verification**:
     - `cargo test -p divoomd --no-default-features` (204/204 passing).
     - `python3 -m pytest tests/test_gui_api_*.py tests/test_mcp_*.py tests/test_repo_gates.py` (267/267 passing).
     - `python3 -m pytest tests/test_e2e_mock_device.py` (15/15 passing).
-    - Dynamic Camoufox interaction verified: Ditoo volume slider visible, switching to Pixoo-64 dynamically hides volume slider, switching back restores it.
-    - File size gate (386/386 source files <= 500 lines: `spatial_stage.js` at 491 lines, `spatial_stage.css` at 480 lines).
+    - Dynamic Camoufox interaction verified: Ditoo volume slider visible, switching to Pixoo-64 dynamically hides volume slider, switching back restores it. Node click and drag tests passed with 0 clickthrough or event leak issues.
+    - File size gate (386/386 source files <= 500 lines: `spatial_stage.js` at 492 lines, `spatial_stage.css` at 480 lines).
     - Emoji gate clean across 735 tracked files.
+    - Rebuilt release app and dmg (`dist/Divoom.app` and `dist/Divoom-v0.35.0.dmg`).
+    - Installed locally to `/Applications/Divoom.app` via `scripts/install_local.sh`, verified running daemon inode (`538710128`).
     - Rebuilt BLE-free binary (`cargo build -p divoomd --no-default-features`) to protect against macOS TCC `SIGABRT`.
 
 - **2026-09-07 (final session) — v0.34.0 CUT: the hardware round.** The **R12

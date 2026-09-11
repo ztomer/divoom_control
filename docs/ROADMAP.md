@@ -18,7 +18,7 @@ forward-looking one. Recover a round plan with
     - Contextual volume control: speaker slider automatically reveals for audio displays (Ditoo, Timoo, Tivoo-Max) and hides for screen-only units (Pixoo-64, Pixoo-1).
   - **Daemon Topology Engine (`divoomd`)**: Implemented `get_topology` and `set_topology` socket dispatch commands with JSON persistence to `~/.config/divoom-control/topology.json`.
   - **MCP `list_screens`**: Registered tool #14 in `divoomd/src/mcp_tools.rs`.
-  - **Physical Scale Database**: Mapped exact millimeter physical chassis and active screen dimensions ($1\text{mm} = 0.65\text{px}$) for Ditoo, Timoo, Tivoo-Max, Pixoo, and Pixoo-64.
+  - **Canvas Drag Performance & Zero Clickthrough**: Separated visual selection from heavy IPC device connection calls; separated dragging vs clicking via movement delta tracking; zero clickthrough leaks or overlay blocks.
   - **Suite**: 204 Rust unit tests, 267 Python pytest tests, 15 mock device E2E tests, 735 files clean in emoji gate, 386 source files <= 500 lines.
 
 - **v0.34.0 — the hardware round (2026-09-07)**: the R12 visual pass, open

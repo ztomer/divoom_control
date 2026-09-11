@@ -31,6 +31,11 @@ shipped milestone (per the project planning docs).
 - **Physical Model Database**: Formalized exact millimeter dimensions and physical silhouettes for Ditoo (90×114mm), Timoo (82.5×90mm), Tivoo-Max (184×163mm), Pixoo-1 (200×200mm), and Pixoo-64 (261×261mm). Rendered to scale ($1\text{mm} \approx 0.65\text{px}$).
 - **Spatial Stage Web UI (`divoom_gui/web_ui/`)**: Added `spatial_stage.js` and `spatial_stage.css` (both strictly <= 500 LOC). Direct 2D drag-and-drop placement, baseline alignment, 1-click device switching, live diode canvases, per-device independent brightness calibration, and 32px compact ribbon toggle with `localStorage` persistence.
 
+### Fixed — Canvas Drag Performance & Click-Drag Separation
+
+- **Zero-lag Spatial Canvas Dragging (`spatial_stage.js`)**: Eliminated drag lag on the canvas. Previously, node `mousedown` immediately invoked `selectDevice(addr, dev)`, triggering synchronous Python IPC (`window.pywebview.api.connect_single_device`), socket negotiation, and toast animations right as dragging began. Separated immediate visual node highlighting (`highlightNode`) from connection switching (`selectDevice`), tracked movement delta threshold ($|\Delta| > 3\text{px}$), and only triggered backend device connection on true click (`mouseup` without movement).
+- **Zero-Clickthrough Architecture**: Verified drag listeners are cleanly isolated to the active drag gesture on `window` and removed on `mouseup` without transparent overlays, unmanaged global event listeners, or `pointer-events: none` hacks that previously caused clickthrough issues.
+
 ## v0.34.0 — the weather widget was invisible, and the harness could not have found it (2026-09-07)
 
 A hardware round. The R12 visual pass — open since R12 and filed for rounds as
