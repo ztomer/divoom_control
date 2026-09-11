@@ -68,7 +68,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 // R44 §7: when System Monitor is the active widget, mirror its
                 // frame into the lower-left device screen overlay too.
                 // R46 #2: mirror the sysmon frame as the device's last-active element.
-                if (r.preview && selectedWidget === "sysmon") window.markActiveDeviceFrame?.(r.preview);
+                if (r.preview && (typeof window.selectedWidgetIs === "function" ? window.selectedWidgetIs("sysmon") : true)) {
+                    window.markActiveDeviceFrame?.(r.preview);
+                }
             } catch (e) { /* ignore */ }
         });
     }

@@ -291,6 +291,25 @@ _Shipped in v0.35.0: Full-width top Spatial Preview Bench, physical millimeter p
 4. **Full-Width Top Bench (Option 1)**: Re-architected the window layout with a full-width top stage (~1100px) above `.app-container`, removing nested double toolbars.
 5. **Sidebar Hardware Deck**: Pinned to bottom of the sidebar with active identity, Kare SVG power toggle, room assignment, brightness slider, and contextual volume slider (hides for screen-only Pixoo models).
 
+### OPEN — Virtual Wall Consolidation, Accurate Pixel-Art Clocks & Live Preview Pipeline
+
+#### 1. Streamline Virtual Wall & Consolidate Presets into Spatial Rooms
+- **Finding**: With live per-device previews on the Spatial Stage and ribbon, a separate "Virtual Wall preview canvas" is redundant. Each device node on the Spatial Stage already represents the exact physical display and its sliced portion in real scale.
+- **Plan**: Phase out the redundant Virtual Wall dedicated canvas. Consolidate layout presets (`presetsSelect` / `load_preset_by_name`) into the unified `SpatialRooms` engine (`All`, `Desk`, `Wall`, `Shelf`), which already provides clean room grouping, device checklist popovers, and persistent coordinates.
+
+#### 2. Accurate, Faithful Pixel-Art Clockface Previews
+- **Finding**: Clockface previews rendered via browser SVG text (`<text font-family="monospace">12:00</text>`) look blurry and bear little resemblance to real Divoom hardware screens.
+- **Plan**: Replace vector SVG text in `_clockFaceSVG` with authentic Divoom bitmap font matrices (e.g. 7×5 and 5×3 pixel digit definitions) rendered with `image-rendering: pixelated;` onto integer canvas coordinates, guaranteeing 100% pixel-faithful previews.
+
+#### 3. Live Gallery & Hot Channel Preview Pipeline
+- **Finding**: Gallery art and Hot Channel previews do not always reflect live on device preview canvases during live navigation or rotation.
+- **Plan**: Establish an infallible event-driven preview pipeline where any gallery selection, custom art push, or hot channel sync immediately pushes the resolved data-URL frame to `window.setDeviceActivity(mac, kind, { src })` and `window.setDevicePreview(mac, src)`, banishing blank circles.
+
+#### 4. Live Widget Previews (System Monitor, Stocks/Crypto, Media)
+- **Finding**: Switching to System Monitor looked great on device, but the GUI preview stayed stuck on the BTC ticker.
+- **Root Cause & Fix**: `widgets_sysmon.js` threw a silent `ReferenceError` on `selectedWidget` (scoped to `widgets.js`). Fixed to use `window.selectedWidgetIs("sysmon")` and immediate preview refresh on widget selection.
+- **Plan**: Ensure all streaming widgets (Sysmon, Music, Stocks, Weather) actively push their frames to `window.markActiveDeviceFrame(frame)` and update both the Spatial Stage node and flat appbar preview.
+
 ### OPEN — Unified Spatial Stage: Multi-Panel Virtual Wall Slicing (Phase 4)
 - Interactive snapping of adjacent tiles into a contiguous multi-panel composite surface.
 - Pushing an image or animation to a wall group automatically slices the canvas across contiguous physical panels according to their relative `(x, y)` coordinates.

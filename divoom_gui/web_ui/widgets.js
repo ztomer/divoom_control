@@ -238,6 +238,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // Trigger background sync toggles
         syncActiveWidget();
+        if (widgetId === "sysmon" && window.refreshSysmonPreview) {
+            window.refreshSysmonPreview();
+        }
     }
 
     function syncActiveWidgetPreviewsOnly() {

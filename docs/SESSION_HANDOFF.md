@@ -285,6 +285,28 @@ wiring a button is small work on top of what exists.
 
 ## Open threads / next up
 
+### Phased Roadmap & Architecture Priorities (2026-09-11)
+
+1. **Phase A: Virtual Wall & Presets Streamlining**:
+   - The Spatial Bench already gives an exact, physical scale representation of every screen. A separate Virtual Wall canvas is redundant.
+   - Consolidate layout presets (`presetsSelect` / `load_preset_by_name`) into the unified `SpatialRooms` engine (`All`, `Desk`, `Wall`, `Shelf`), which naturally manages room assignments, device checkboxes, and persistent coordinates.
+   - *Verification*: Verify layout persistence and room device assignment without legacy preset modals.
+
+2. **Phase B: Authentic, Pixel-Art Clockface Previews**:
+   - Current SVG vector text rendering (`<text font-family="monospace">12:00</text>`) produces blurry curves that look nothing like the real physical display.
+   - Replace vector text in `_clockFaceSVG` with authentic Divoom bitmap font matrices (e.g. 7×5 and 5×3 pixel digit definitions) rendered with `image-rendering: pixelated;` onto integer canvas coordinates.
+   - *Verification*: Pixel-exact canvas comparison asserting sharp square pixel edges and zero vector anti-aliasing blur.
+
+3. **Phase C: Infallible Live Gallery & Hot Channel Previews**:
+   - Gallery art and Hot Channel previews must reliably propagate to device preview nodes in all scenarios (cold boot, channel switch, live manifest sync).
+   - Solidify the event-driven preview pipeline so any gallery selection, custom art push, or hot channel sync immediately sets the resolved data-URL frame on `window.setDeviceActivity(mac, kind, { src })` and `window.setDevicePreview(mac, src)`.
+   - *Verification*: Playwright browser test verifying thumbnail-to-canvas propagation on channel switch.
+
+4. **Phase D: System Monitor & Widget Live Preview Synchronization**:
+   - Switching to System Monitor on device works, but the preview was stuck showing the BTC ticker due to a `ReferenceError` in `widgets_sysmon.js` (accessing `selectedWidget` scoped to `widgets.js`).
+   - Fixed by calling `window.selectedWidgetIs("sysmon")` and immediately triggering `window.refreshSysmonPreview()` on widget card selection.
+   - *Verification*: Verify clicking System Monitor card immediately replaces the previous stock/BTC frame with live CPU/memory stats on both `#banner-device-screen` and `#stage-canvas-${mac}`.
+
 **0. Two environment problems that cost this release ~an hour.** Neither is a
 repo defect, but both will recur.
 
