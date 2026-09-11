@@ -91,6 +91,9 @@ window._channelPreviewSVG = function(kind, opts) {
     } else if (k === "design" || k === "custom") {
         inner = `<rect x="16" y="16" width="14" height="14" fill="${a}"/><rect x="34" y="16" width="14" height="14" fill="#fff"/>`
               + `<rect x="16" y="34" width="14" height="14" fill="#fff"/><rect x="34" y="34" width="14" height="14" fill="${a}"/>`;
+    } else if (k === "cloud" || k === "hot") {
+        inner = `<path d="M18,36 A10,10 0 0,1 26,22 A12,12 0 0,1 46,26 A8,8 0 0,1 46,36 Z" fill="${a}"/>`
+              + `<polygon points="32,30 28,38 33,38 30,46 40,36 35,36" fill="#ffcc00"/>`;
     } else {
         inner = `<circle cx="32" cy="32" r="7" fill="#888"/>`;
     }

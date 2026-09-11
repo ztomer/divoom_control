@@ -31,7 +31,13 @@ shared memory. Read this on entry and **update it at the end of every round**
     - Added support for `hot` / `cloud`, `ambient` / `lighting`, `eq`, and `custom` to `switch_channel` in both Python (`divoom_lib/display/__init__.py`) and Rust (`divoomd/src/device_call/basic/display.rs`).
     - Added automated wire frame verification suite (`tests/test_verify_all_channels_and_hot.py`, 13 passing tests) confirming all 7 channels emit valid 10-byte padded 0x45 frames with exact channel mode bytes, and text pushes 0x8B frames.
     - Verified Hot Channel full update workflow dynamically: manifest load, background update trigger, phase progression, completion toast, and last-checked timestamp persistence.
-  - **Gate & Suite Status**: 2935 passed, 170 skipped in pytest; 204 unit tests passed in cargo test; file size (387 files <= 500 LOC), api reachability (116/116), and emoji gates clean.
+  - **Hot Channel Preview Grid & Device Preview Integration (`channel_preview.js`, `app_globals.js`, `gallery_hot.js`, `tests/test_hot_channel_device_preview.py`)**:
+    - Added dedicated `cloud` / `hot` SVG preview renderer to `window._channelPreviewSVG` in `channel_preview.js` featuring a distinctive Divoom Cloud icon with glowing bolt.
+    - Allowed `opts.src` in `window.setDeviceActivity` (`app_globals.js`) to provide real preview frames for any activity kind, enabling channels like `cloud` and `custom` to use real animated GIF thumbnails while preserving their semantic kind for menubar/tooltips.
+    - Wired `renderHotPreview` in `gallery_hot.js` to automatically set the active device preview to the top animated GIF when viewing the Cloud/Hot channel.
+    - Wired `finishProgress` in `gallery_hot.js` to immediately update the active device activity to `cloud` with the top hot thumbnail when an update completes (`phase === "done"`).
+    - Added browser-driven test suite `tests/test_hot_channel_device_preview.py` covering hot grid GIF loading, hot update completion propagation to device previews, and per-device preview independence.
+  - **Gate & Suite Status**: 23/23 tests passed in channel & hot preview suites (including real-browser Playwright test); file size (387 files <= 500 LOC), api reachability (116/116), and emoji gates clean.
 
 - **2026-09-11 — v0.35.0 RELEASED & INSTALLED LOCALLY: Unified Spatial Stage, Appbar Stage Integration, Stage Center Alignment & Live Per-Device Previews.**
   - **Stage Center Alignment (`#stage-center-btn`)**:

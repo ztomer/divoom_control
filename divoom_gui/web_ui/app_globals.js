@@ -115,7 +115,7 @@ window.setDeviceActivity = function(mac, kind, opts) {
     }
     if (!mac || mac === "None" || mac === "-") return;
     opts = opts || {};
-    const src = (kind === "image" && opts.src) ? opts.src : window._channelPreviewSVG(kind, opts);
+    const src = (opts.src) ? opts.src : window._channelPreviewSVG(kind, opts);
     window.DivoomState.deviceActivity = window.DivoomState.deviceActivity || {};
     window.DivoomState.deviceActivity[mac] = { kind: kind, src: src, at: Date.now(), opts: opts };
     try { localStorage.setItem("divoomDeviceActivity", JSON.stringify(window.DivoomState.deviceActivity)); } catch (e) {}

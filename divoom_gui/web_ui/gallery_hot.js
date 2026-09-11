@@ -107,7 +107,16 @@ document.addEventListener("DOMContentLoaded", () => {
                 const thumb = list.querySelectorAll(".hot-preview-thumb")[i];
                 if (!thumb) return;
                 window.pywebview.api.get_animated_preview(item.file_id).then(gifUrl => {
-                    if (gifUrl) thumb.src = gifUrl;
+                    if (gifUrl) {
+                        thumb.src = gifUrl;
+                        if (i === 0) {
+                            const mac = (typeof window._activeDeviceMac === "function") ? window._activeDeviceMac() : null;
+                            const curAct = window.DivoomState?.deviceActivity?.[mac];
+                            if (curAct && (curAct.kind === "cloud" || curAct.kind === "hot") && window.setDeviceActivity) {
+                                window.setDeviceActivity(mac, curAct.kind, { src: gifUrl });
+                            }
+                        }
+                    }
                 });
             }
         });
@@ -219,6 +228,12 @@ document.addEventListener("DOMContentLoaded", () => {
             // the tiles reflect the set the device was just synced against — the
             // newest file was missing from the preview until this refresh.
             loadHotPreview();
+            const mac = (typeof window._activeDeviceMac === "function") ? window._activeDeviceMac() : null;
+            if (mac && window.setDeviceActivity) {
+                const firstThumb = document.querySelector("#hot-preview-list .hot-preview-thumb");
+                const src = (firstThumb && firstThumb.src && !firstThumb.src.includes("pixoo.png")) ? firstThumb.src : null;
+                window.setDeviceActivity(mac, "cloud", src ? { src } : {});
+            }
         } else {
             fill.style.width = "100%";
             text.textContent = p.error ? `Failed: ${p.error}` : "Update failed";
