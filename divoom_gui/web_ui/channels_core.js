@@ -25,20 +25,19 @@ document.addEventListener("DOMContentLoaded", () => {
         card.addEventListener("click", () => {
             channelCards.forEach(c => c.classList.remove("active"));
             card.classList.add("active");
-            window.DivoomState.activeChannel = card.getAttribute("data-channel");
-            showChannelPanel(window.DivoomState.activeChannel);
+            const ch = card.getAttribute("data-channel");
+            window.DivoomState.activeChannel = ch;
+            showChannelPanel(ch);
+            if (window.setDeviceActivity) window.setDeviceActivity(window._activeDeviceMac(), ch);
             // Ambient and Text are "non-channel" cards (each has its own
             // Apply/Push button). Every other card — Clock, VJ, EQ, Design,
             // Scoreboard — fires switch_channel.
-            if (["ambient", "text", "sessions"].includes(window.DivoomState.activeChannel)) return;
+            if (["ambient", "text", "sessions"].includes(ch)) return;
             if (!window.requireDevice()) return;
             if (window.pywebview && window.pywebview.api && window.pywebview.api.switch_channel) {
-                const ch = window.DivoomState.activeChannel;
                 window.pywebview.api.switch_channel(ch).then(res => {
                     if (res) {
                         window.showToast("Switched channel", "success", " BLE");
-                        // R46 #2: reflect the channel on the device preview.
-                        if (window.setDeviceActivity) window.setDeviceActivity(window._activeDeviceMac(), ch);
                     } else window.showToast("Failed to switch channel", "error");
                 });
             }

@@ -68,6 +68,10 @@ document.addEventListener("DOMContentLoaded", () => {
     window.DivoomState.selectedClockStyle = 0;
     window.buildSelectorGrid("clock-faces-grid", CLOCK_FACES, (v) => {
         window.DivoomState.selectedClockStyle = v;
+        const color = document.getElementById("clock-color-input")?.value || "#ffffff";
+        if (window.setDeviceActivity) {
+            window.setDeviceActivity(window._activeDeviceMac(), "clock", { style: v, color });
+        }
         applyClockStyle(v);
     }, 0, CLOCK_PREVIEWS);
 
@@ -119,7 +123,11 @@ document.addEventListener("DOMContentLoaded", () => {
         clockColorInput.addEventListener("input", (e) => {
             const color = e.target.value;
             updateClockPreviewsColor(color);
-            applyClockStyle(selectedClockStyle);
+            const style = window.DivoomState.selectedClockStyle ?? 0;
+            if (window.setDeviceActivity) {
+                window.setDeviceActivity(window._activeDeviceMac(), "clock", { style, color });
+            }
+            applyClockStyle(style);
         });
         
         // Call it initially after a small timeout to let the grid render

@@ -21,11 +21,21 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
-- **2026-09-11 — v0.35.0 RELEASED & INSTALLED LOCALLY: Unified Spatial Stage, Appbar Stage Integration & Clean Deck Docking.**
+- **2026-09-11 — v0.35.0 RELEASED & INSTALLED LOCALLY: Unified Spatial Stage, Appbar Stage Integration, Stage Center Alignment & Live Per-Device Previews.**
+  - **Stage Center Alignment (`#stage-center-btn`)**:
+    - Placed `#stage-center-btn` immediately to the left of `#stage-snap-btn` [Align] in `#appbar-stage-actions`, with a Susan Kare SVG icon.
+    - Dynamically toggles with the stage state: visible (`inline-flex`) in expanded Bench mode, hidden (`display: none`) in compact Ribbon mode.
+    - Centering algorithm: calculates collective horizontal bounding box `(maxX - minX)` across all displays on the bench, determines the offset to center within `#spatial-bench.clientWidth`, and shifts every device by uniform `deltaX`.
+    - Strictly preserves Y baseline/top coordinates, relative inter-device spacing, DOM order, and stacking order. Persists coordinates to `localStorage` and `topology.json`.
+  - **Live Per-Device Previews & Elimination of Orange Square Fallback (`spatial_stage.js`, `app_globals.js`, `channels_grids.js`)**:
+    - Completely banished the hardcoded 6x6 orange rectangle (`#ff5a1f`) that previously rendered whenever a channel other than basic sysmon or visualizer was active.
+    - Added an `HTMLImageElement` SVG/raster cache (`previewImgCache`) in `startAnimationLoop`: renders exact clock faces (Full Screen digital, Rainbow tspans, With Box borders, Analog Square with clock hands, Full Screen Neg, Analog Round), EQ visualizers, VJ stars, scoreboards, and ambient modes directly onto `stage-canvas-${addr}` from `window.DivoomState.devicePreviews` and `_channelPreviewSVG`.
+    - Real-time reactivity: selecting a clock face or color in `channels_grids.js` immediately updates `window.setDeviceActivity` and `devicePreviews` for the active display without network latency.
+    - Synchronized selection: clicking any device node on the stage (`highlightNode`) updates active device MAC and banner title, and calls `window.restoreDevicePreview(addr)` so the main screen overlay always mirrors the selected device.
   - **Appbar Stage Integration (`index.html`, `appbar.css`, `spatial_stage.js`, `spatial_stage.css`)**:
     - **Zero-Height Stage in Ribbon Mode**: When in compact Ribbon mode, `#spatial-stage-mount` is completely hidden (`display: none;`, 0px height), recovering 32px of vertical height across the whole application. Fleet chips (`#appbar-ribbon-view`) sit directly in the native appbar next to the window traffic lights.
     - **Headerless Canvas in Bench Mode**: When expanded to Bench mode via `#stage-toggle-btn`, only the 180px freeform 2D canvas (`#spatial-bench`) drops down beneath the appbar. The title `BENCH` and room filter pills (`#stage-room-filters`) render directly inside `#appbar-bench-view` in the appbar. Redundant nested header bars are completely eliminated.
-    - **Appbar Stage Actions**: Baseline alignment (`#stage-snap-btn`) and stage toggle (`#stage-toggle-btn`) reside in `#appbar-stage-actions` next to the settings gear.
+    - **Appbar Stage Actions**: Center (`#stage-center-btn`), baseline alignment (`#stage-snap-btn`), and stage toggle (`#stage-toggle-btn`) reside in `#appbar-stage-actions` next to the settings gear.
     - **PyWebView Drag Exclusions**: Appbar stage controls and actions intercept `mousedown` event bubbling to prevent macOS window drag handlers from capturing button and chip clicks.
   - **Sidebar Bottom Clean-up & Deck Docking**:
     - Re-anchored the Active Display Hardware Deck (`#sidebar-device-deck`) to the very bottom of the sidebar (`margin-top: auto; margin-bottom: 2px;`), providing maximum breathing room for the dedicated device name row, contained room selector, and tactile sliders.
@@ -41,14 +51,12 @@ shared memory. Read this on entry and **update it at the end of every round**
   - **Gates & Verification**:
     - `cargo test -p divoomd --no-default-features` (204/204 passing).
     - `python3 -m pytest tests/test_gui_api_*.py tests/test_mcp_*.py tests/test_repo_gates.py tests/test_fonts.py tests/test_daemon_client_coverage.py` (314 passed, 2 skipped).
-    - `python3 -m pytest tests/test_e2e_mock_device.py` (15/15 passing).
-    - `python3 -m pytest tests/test_appbar_sidebar.py --run-browser` (2/2 passing).
-    - Dynamic Playwright/Camoufox verification (`verify_appbar_stage_and_docked_deck.py`): verified default Ribbon mode (mount height 0, fleet chips in appbar, toggle text 'Bench'), expanding to Bench mode (mount height 181px, appbar room filters, toggle text 'Ribbon'), dragging nodes with coordinate persistence, baseline alignment, and persistence across reload. Screenshots saved: `gui_ribbon_in_appbar.png`, `gui_bench_in_appbar.png`.
-    - File size gate: 387/387 source files <= 500 lines (`spatial_stage.js` reduced to 475 lines, `spatial_stage.css` reduced to 419 lines, `spatial_rooms.js` at 460 lines).
+    - Dynamic Playwright/Camoufox verification (`verify_stage_center_and_previews.py`): verified Center button existence, placement to left of Align, Ribbon mode hidden, Bench mode inline-flex, centering cluster horizontally with 0px difference while preserving Y coordinates and relative spacing, initial canvas free of orange square, switching to Rainbow face (rendered tspans with pink/green hues, non-black pixels, 0 orange pixels), switching to Analog Square face (rendered bezel and clock hands), switching to EQ visualizer, and switching to Scoreboard. Screenshots: `gui_stage_centered.png`, `gui_clock_rainbow_preview.png`, `gui_analog_square_preview.png`.
+    - File size gate: 387/387 source files <= 500 lines (`spatial_stage.js` at 484 lines, `spatial_stage.css` at 419 lines, `spatial_rooms.js` at 460 lines).
     - Emoji gate clean across 736 tracked files.
     - API reachability gate: 116/116 public API methods reachable from `web_ui/`.
     - Rebuilt release app and dmg (`dist/Divoom.app` and `dist/Divoom-v0.35.0.dmg`).
-    - Installed locally to `/Applications/Divoom.app` via `scripts/install_local.sh`, verified running daemon inode (`538964898`, PID 48046).
+    - Installed locally to `/Applications/Divoom.app` via `scripts/install_local.sh`, verified running daemon inode (`538986299`, PID 53416).
     - Rebuilt BLE-free binary (`cargo build -p divoomd --no-default-features`) to protect against macOS TCC `SIGABRT`.
 
 - **2026-09-07 (final session) — v0.34.0 CUT: the hardware round.** The **R12

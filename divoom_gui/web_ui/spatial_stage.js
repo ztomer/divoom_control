@@ -26,6 +26,7 @@
         function updateStageCollapseState() {
             const ribbonView = document.getElementById('appbar-ribbon-view');
             const benchView = document.getElementById('appbar-bench-view');
+            const centerBtn = document.getElementById('stage-center-btn');
             const snapBtn = document.getElementById('stage-snap-btn');
             const toggleText = document.getElementById('stage-toggle-text');
 
@@ -33,12 +34,14 @@
                 mount.style.display = 'none';
                 if (ribbonView) ribbonView.style.display = 'flex';
                 if (benchView) benchView.style.display = 'none';
+                if (centerBtn) centerBtn.style.display = 'none';
                 if (snapBtn) snapBtn.style.display = 'none';
                 if (toggleText) toggleText.textContent = 'Bench';
             } else {
                 mount.style.display = 'block';
                 if (ribbonView) ribbonView.style.display = 'none';
                 if (benchView) benchView.style.display = 'flex';
+                if (centerBtn) centerBtn.style.display = 'inline-flex';
                 if (snapBtn) snapBtn.style.display = 'inline-flex';
                 if (toggleText) toggleText.textContent = 'Ribbon';
                 refreshBenchNodes();
@@ -56,6 +59,12 @@
                 localStorage.setItem('spatial_stage_collapsed', isCollapsed ? 'true' : 'false');
                 updateStageCollapseState();
             });
+        }
+
+        // Wire center alignment
+        const centerBtn = document.getElementById('stage-center-btn');
+        if (centerBtn) {
+            centerBtn.addEventListener('click', centerDevices);
         }
 
         // Wire baseline alignment
@@ -105,33 +114,21 @@
             refreshBenchNodes();
         });
 
-        // Sidebar deck brightness slider
-        const bSlider = document.getElementById('global-brightness-slider');
-        const bVal = document.getElementById('global-brightness-value');
+        // Sidebar deck controls (brightness, volume, power)
+        const bSlider = document.getElementById('global-brightness-slider'), bVal = document.getElementById('global-brightness-value');
         if (bSlider) {
             bSlider.addEventListener('input', (e) => {
                 const val = parseInt(e.target.value);
                 if (bVal) bVal.textContent = val + '%';
-                if (selectedMac) {
-                    deviceBrightness[selectedMac] = val;
-                    try { localStorage.setItem('divoom_stage_brightness', JSON.stringify(deviceBrightness)); } catch (_) {}
-                }
+                if (selectedMac) { deviceBrightness[selectedMac] = val; try { localStorage.setItem('divoom_stage_brightness', JSON.stringify(deviceBrightness)); } catch (_) {} }
                 if (window.pywebview?.api?.set_brightness) window.pywebview.api.set_brightness(val);
             });
         }
-
-        // Sidebar deck volume slider
-        const vSlider = document.getElementById('appbar-volume-slider');
-        const vVal = document.getElementById('appbar-volume-value');
+        const vSlider = document.getElementById('appbar-volume-slider'), vVal = document.getElementById('appbar-volume-value');
         if (vSlider) {
             vSlider.addEventListener('input', (e) => { if (vVal) vVal.textContent = e.target.value + '/15'; });
-            vSlider.addEventListener('change', (e) => {
-                const val = parseInt(e.target.value);
-                if (window.pywebview?.api?.set_volume) window.pywebview.api.set_volume(val);
-            });
+            vSlider.addEventListener('change', (e) => { if (window.pywebview?.api?.set_volume) window.pywebview.api.set_volume(parseInt(e.target.value)); });
         }
-
-        // Sidebar deck standby / power button
         const powerBtn = document.getElementById('deck-device-power');
         if (powerBtn) {
             powerBtn.addEventListener('click', () => {
@@ -139,10 +136,7 @@
                 const next = parseInt(bSlider.value) > 0 ? 0 : 85;
                 bSlider.value = next;
                 if (bVal) bVal.textContent = next + '%';
-                if (selectedMac) {
-                    deviceBrightness[selectedMac] = next;
-                    try { localStorage.setItem('divoom_stage_brightness', JSON.stringify(deviceBrightness)); } catch (_) {}
-                }
+                if (selectedMac) { deviceBrightness[selectedMac] = next; try { localStorage.setItem('divoom_stage_brightness', JSON.stringify(deviceBrightness)); } catch (_) {} }
                 if (window.pywebview?.api?.set_brightness) window.pywebview.api.set_brightness(next);
             });
         }
@@ -154,16 +148,12 @@
             window.SpatialRooms.loadTopology();
         } else {
             try {
-                const saved = localStorage.getItem('divoom_stage_positions');
+                const saved = localStorage.getItem('divoom_stage_positions'), r = localStorage.getItem('divoom_stage_rooms');
                 if (saved) Object.assign(devicePositions, JSON.parse(saved));
-                const r = localStorage.getItem('divoom_stage_rooms');
                 if (r) Object.assign(deviceRooms, JSON.parse(r));
             } catch (_) {}
         }
-        try {
-            const b = localStorage.getItem('divoom_stage_brightness');
-            if (b) Object.assign(deviceBrightness, JSON.parse(b));
-        } catch (_) {}
+        try { const b = localStorage.getItem('divoom_stage_brightness'); if (b) Object.assign(deviceBrightness, JSON.parse(b)); } catch (_) {}
 
         window.addEventListener('divoom:topology-loaded', (e) => {
             const top = e.detail || {};
@@ -306,15 +296,18 @@
         document.querySelectorAll('.spatial-node').forEach(n => { n.classList.remove('selected'); n.style.zIndex = '10'; });
         const activeNode = document.getElementById(`spatial-node-${addr}`);
         if (activeNode) { activeNode.classList.add('selected'); activeNode.style.zIndex = '25'; }
+        const bm = document.getElementById('banner-device-mac'), bn = document.getElementById('banner-device-name');
+        if (bm) bm.textContent = addr;
+        if (bn) { const s = resolveDeviceSpec(dev); bn.textContent = dev.name || s.name; }
         updateInspector(dev);
         updateRibbonSelection();
+        if (typeof window.restoreDevicePreview === 'function') window.restoreDevicePreview(addr);
     }
 
     function selectDevice(addr, dev) {
         highlightNode(addr, dev);
         if (typeof window.connectDevice === 'function') {
-            const spec = resolveDeviceSpec(dev);
-            window.connectDevice(dev.name || spec.name, addr);
+            window.connectDevice(dev.name || resolveDeviceSpec(dev).name, addr);
         }
     }
 
@@ -351,22 +344,13 @@
         if (e.button !== 0) return;
         const bench = document.getElementById('spatial-bench');
         if (!bench) return;
-
         activeDrag = {
-            addr,
-            dev,
-            node,
-            startX: e.clientX,
-            startY: e.clientY,
+            addr, dev, node, startX: e.clientX, startY: e.clientY,
             initialX: devicePositions[addr] ? devicePositions[addr].x : 0,
             initialY: devicePositions[addr] ? devicePositions[addr].y : 0,
-            benchWidth: bench.clientWidth,
-            benchHeight: bench.clientHeight,
-            nodeWidth: node.offsetWidth,
-            nodeHeight: node.offsetHeight,
-            hasMoved: false
+            benchWidth: bench.clientWidth, benchHeight: bench.clientHeight,
+            nodeWidth: node.offsetWidth, nodeHeight: node.offsetHeight, hasMoved: false
         };
-
         window.addEventListener('mousemove', onNodeDrag);
         window.addEventListener('mouseup', endNodeDrag);
         e.preventDefault();
@@ -374,28 +358,21 @@
 
     function onNodeDrag(e) {
         if (!activeDrag) return;
-        const dx = e.clientX - activeDrag.startX;
-        const dy = e.clientY - activeDrag.startY;
+        const dx = e.clientX - activeDrag.startX, dy = e.clientY - activeDrag.startY;
         if (Math.abs(dx) > 3 || Math.abs(dy) > 3) activeDrag.hasMoved = true;
-
         const nx = Math.max(0, Math.min(activeDrag.benchWidth - activeDrag.nodeWidth, activeDrag.initialX + dx));
         const ny = Math.max(0, Math.min(activeDrag.benchHeight - activeDrag.nodeHeight, activeDrag.initialY + dy));
-
         if (!devicePositions[activeDrag.addr]) devicePositions[activeDrag.addr] = {};
         devicePositions[activeDrag.addr].x = nx;
         devicePositions[activeDrag.addr].y = ny;
-
         activeDrag.node.style.left = `${nx}px`;
         activeDrag.node.style.top = `${ny}px`;
     }
 
     function endNodeDrag(e) {
         if (activeDrag) {
-            if (!activeDrag.hasMoved) {
-                if (typeof window.connectDevice === 'function') {
-                    const spec = resolveDeviceSpec(activeDrag.dev);
-                    window.connectDevice(activeDrag.dev.name || spec.name, activeDrag.addr);
-                }
+            if (!activeDrag.hasMoved && typeof window.connectDevice === 'function') {
+                window.connectDevice(activeDrag.dev.name || resolveDeviceSpec(activeDrag.dev).name, activeDrag.addr);
             } else if (window.SpatialRooms) {
                 window.SpatialRooms.savePositions(devicePositions, deviceRooms);
             } else {
@@ -407,11 +384,28 @@
         window.removeEventListener('mouseup', endNodeDrag);
     }
 
+    function centerDevices() {
+        const devs = getDeviceList(), bench = document.getElementById('spatial-bench');
+        if (!devs.length || !bench) return;
+        let minX = Infinity, maxX = -Infinity;
+        devs.forEach(d => {
+            const a = d.address || 'dev', p = devicePositions[a] || { x: 20, y: 50 };
+            const w = Math.round(resolveDeviceSpec(d).w_mm * SCALE);
+            if (p.x < minX) minX = p.x;
+            if (p.x + w > maxX) maxX = p.x + w;
+        });
+        if (minX === Infinity) return;
+        const dx = Math.max(10, Math.round((bench.clientWidth - (maxX - minX)) / 2)) - minX;
+        devs.forEach(d => { const a = d.address || 'dev'; if (devicePositions[a]) devicePositions[a].x += dx; });
+        if (window.SpatialRooms) window.SpatialRooms.savePositions(devicePositions, deviceRooms);
+        else try { localStorage.setItem('divoom_stage_positions', JSON.stringify(devicePositions)); } catch (_) {}
+        refreshBenchNodes();
+    }
+
     function snapToDesk() {
         let curX = 20;
         getDeviceList().forEach((dev) => {
-            const addr = dev.address || 'dev';
-            const spec = resolveDeviceSpec(dev);
+            const addr = dev.address || 'dev', spec = resolveDeviceSpec(dev);
             devicePositions[addr] = { x: curX, y: Math.max(10, 165 - Math.round(spec.h_mm * SCALE)) };
             curX += Math.round(spec.w_mm * SCALE) + 12;
         });
@@ -420,7 +414,8 @@
         refreshBenchNodes();
     }
 
-    // Live canvas rendering loop
+    const previewImgCache = new Map();
+
     function startAnimationLoop() {
         function renderLoop() {
             tick++;
@@ -429,21 +424,34 @@
                 const cvs = document.getElementById(`stage-canvas-${addr}`);
                 if (!cvs) return;
                 const ctx = cvs.getContext('2d');
+                ctx.imageSmoothingEnabled = false;
+
+                const act = (window.DivoomState && window.DivoomState.deviceActivity && window.DivoomState.deviceActivity[addr]) || {};
+                let src = (window.DivoomState && window.DivoomState.devicePreviews && window.DivoomState.devicePreviews[addr]) || act.src;
+                const kind = act.kind || dev.activityKind || (addr === selectedMac ? window.DivoomState.activeChannel : null) || 'clock';
+                if (!src && window._channelPreviewSVG) src = window._channelPreviewSVG(kind, act.opts || {});
+
+                let entry = previewImgCache.get(addr);
+                if (src && (!entry || entry.src !== src)) {
+                    const img = new Image();
+                    entry = { src, img, loaded: false };
+                    img.onload = () => { entry.loaded = true; };
+                    img.src = src;
+                    previewImgCache.set(addr, entry);
+                }
+
                 ctx.fillStyle = '#07080a';
                 ctx.fillRect(0, 0, cvs.width, cvs.height);
-                const kind = dev.activityKind || 'clock';
-                if (kind === 'clock') {
-                    ctx.fillStyle = '#ff5a1f';
-                    ctx.fillRect(2, 5, 1, 6); ctx.fillRect(5, 5, 3, 1); ctx.fillRect(5, 6, 1, 4); ctx.fillRect(7, 6, 1, 4); ctx.fillRect(5, 10, 3, 1);
-                    if (Math.floor(tick / 25) % 2 === 0) { ctx.fillRect(9, 7, 1, 1); ctx.fillRect(9, 9, 1, 1); }
-                    ctx.fillRect(11, 5, 1, 4); ctx.fillRect(13, 5, 1, 6); ctx.fillRect(11, 8, 3, 1);
+
+                if (entry && entry.loaded) {
+                    ctx.drawImage(entry.img, 0, 0, cvs.width, cvs.height);
                 } else if (kind === 'sysmon') {
                     ctx.fillStyle = '#00cc66';
                     for (let x = 1; x < 15; x += 2) {
                         const h = Math.round(3 + 2.5 * Math.sin(x * 0.4 + tick * 0.1));
                         for (let y = 14; y > 14 - h; y--) ctx.fillRect(x, y, 1, 1);
                     }
-                } else if (kind === 'visualizer') {
+                } else if (kind === 'visualizer' || kind === 'eq') {
                     for (let x = 0; x < 16; x++) {
                         const h = Math.round(4 + 3.5 * Math.cos(x * 0.35 + tick * 0.12));
                         for (let y = 0; y < h; y++) {
@@ -451,11 +459,12 @@
                             ctx.fillRect(x, 15 - y, 1, 1);
                         }
                     }
-                } else if (cvs.width === 64) {
-                    ctx.strokeStyle = '#1e293b'; ctx.strokeRect(6, 6, 52, 52); ctx.fillStyle = '#38bdf8';
-                    for (let i = 0; i < 20; i++) ctx.fillRect(Math.round(32 + 16 * Math.cos(i * 0.3 + tick * 0.02)), Math.round(32 + 12 * Math.sin(i * 0.35 + tick * 0.02)), 2, 2);
                 } else {
-                    ctx.fillStyle = '#ff5a1f'; ctx.fillRect(5, 5, 6, 6);
+                    const c = (act.opts && act.opts.color) || '#ffffff';
+                    ctx.fillStyle = c;
+                    ctx.fillRect(2, 5, 1, 6); ctx.fillRect(5, 5, 3, 1); ctx.fillRect(5, 6, 1, 4); ctx.fillRect(7, 6, 1, 4); ctx.fillRect(5, 10, 3, 1);
+                    if (Math.floor(tick / 25) % 2 === 0) { ctx.fillRect(9, 7, 1, 1); ctx.fillRect(9, 9, 1, 1); }
+                    ctx.fillRect(11, 5, 1, 4); ctx.fillRect(13, 5, 1, 6); ctx.fillRect(11, 8, 3, 1);
                 }
             });
             requestAnimationFrame(renderLoop);
@@ -464,7 +473,7 @@
     }
 
     // Expose API
-    window.SpatialStage = { init: initSpatialStage, refresh: refreshBenchNodes, snap: snapToDesk };
+    window.SpatialStage = { init: initSpatialStage, refresh: refreshBenchNodes, snap: snapToDesk, center: centerDevices, getSelectedMac: () => selectedMac };
 
     // Auto-init when DOM ready
     if (document.readyState === 'loading') {

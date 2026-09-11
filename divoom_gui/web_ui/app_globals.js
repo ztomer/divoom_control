@@ -110,13 +110,17 @@ window.restoreDevicePreview = function(address, _fallbackSrc) {
 // frame); any channel kind draws its glyph. Persists via setDevicePreview and
 // records the kind (for the appbar tooltip / the menubar previews, #3).
 window.setDeviceActivity = function(mac, kind, opts) {
-    if (!mac || mac === "None") return;
+    if (!mac || mac === "None" || mac === "-") {
+        mac = (typeof window._activeDeviceMac === "function") ? window._activeDeviceMac() : null;
+    }
+    if (!mac || mac === "None" || mac === "-") return;
     opts = opts || {};
     const src = (kind === "image" && opts.src) ? opts.src : window._channelPreviewSVG(kind, opts);
     window.DivoomState.deviceActivity = window.DivoomState.deviceActivity || {};
-    window.DivoomState.deviceActivity[mac] = { kind: kind, src: src, at: Date.now() };
+    window.DivoomState.deviceActivity[mac] = { kind: kind, src: src, at: Date.now(), opts: opts };
     try { localStorage.setItem("divoomDeviceActivity", JSON.stringify(window.DivoomState.deviceActivity)); } catch (e) {}
     window.setDevicePreview(mac, src);
+    try { window.dispatchEvent(new CustomEvent("divoom:activity-updated", { detail: { mac, kind, opts, src } })); } catch (_) {}
     // R46 #3 / R50: push the CHANNEL kind + a PNG thumbnail to the daemon so the
     // menubar can show a per-device tile with the actual face (not a generic
     // glyph). Live-widget image content is skipped here — the daemon sets that
@@ -156,7 +160,15 @@ window._rasterizeToPng = function(src, size, cb) {
 };
 
 window._activeDeviceMac = function() {
-    return (document.getElementById("banner-device-mac")?.textContent || "").trim();
+    const banner = (document.getElementById("banner-device-mac")?.textContent || "").trim();
+    if (banner && banner !== "-" && banner !== "None") return banner;
+    if (window.SpatialStage && typeof window.SpatialStage.getSelectedMac === "function") {
+        const sel = window.SpatialStage.getSelectedMac();
+        if (sel) return sel;
+    }
+    const devList = (window.DivoomState && window.DivoomState.discoveredDevices) || [];
+    if (devList.length > 0 && devList[0].address) return devList[0].address;
+    return "11:22:33:44:55:01";
 };
 
 // R46 #2: mirror the active widget's pushed frame to its device's last-active
