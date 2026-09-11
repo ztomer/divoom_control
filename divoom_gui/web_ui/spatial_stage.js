@@ -309,6 +309,7 @@
                 document.querySelectorAll('.tab-btn[data-channel]').forEach(c => c.classList.remove('active'));
                 card.classList.add('active');
                 window.DivoomState.activeChannel = act.kind;
+                if (window.showChannelPanel) window.showChannelPanel(act.kind);
             }
         }
     }

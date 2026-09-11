@@ -20,6 +20,7 @@ document.addEventListener("DOMContentLoaded", () => {
             window.loadCloudClockTypes();
         }
     }
+    window.showChannelPanel = showChannelPanel;
 
     channelCards.forEach(card => {
         card.addEventListener("click", () => {
@@ -27,6 +28,7 @@ document.addEventListener("DOMContentLoaded", () => {
             card.classList.add("active");
             const ch = card.getAttribute("data-channel");
             window.DivoomState.activeChannel = ch;
+            showChannelPanel(ch);
             const chOpts = ch === "clock" ? {
                 style: window.DivoomState.selectedClockStyle ?? 0,
                 color: document.getElementById("clock-color-input")?.value || "#ffffff"

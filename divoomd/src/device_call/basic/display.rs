@@ -277,13 +277,19 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             // now come from the same builders as every other 0x45 packet.
             let payload: [u8; 10] = match channel.as_str() {
                 "clock" => ClockPacket::default().to_bytes(),
-                "visualizer" => crate::packets::visualization(0),
+                "visualizer" | "eq" => crate::packets::visualization(0),
                 // VJ effects are 1-indexed on the wire; vj_effect(0) sends 1,
                 // which is what the hand-rolled array did.
                 "vj" => crate::packets::vj_effect(0),
-                "design" => crate::packets::channel_switch(crate::packets::BareChannel::Design),
+                "design" | "custom" => crate::packets::channel_switch(crate::packets::BareChannel::Design),
                 "scoreboard" => {
                     crate::packets::channel_switch(crate::packets::BareChannel::Scoreboard)
+                }
+                "cloud" | "hot" => {
+                    crate::packets::channel_switch(crate::packets::BareChannel::Cloud)
+                }
+                "ambient" | "lighting" => {
+                    crate::packets::channel_switch(crate::packets::BareChannel::Lighting)
                 }
                 other => return err_reply(&format!("switch_channel: unknown channel '{other}'")),
             };

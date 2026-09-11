@@ -379,14 +379,18 @@ class Display:
 
         if channel_lower == "clock":
             return await self.show_clock()
-        elif channel_lower == "visualizer":
+        elif channel_lower in ("visualizer", "eq"):
             return await self.show_visualization(number=0)
         elif channel_lower == "vj":
             return await self.show_effects(number=0)
-        elif channel_lower == "design":
+        elif channel_lower in ("design", "custom"):
             return await self.show_design()
         elif channel_lower == "scoreboard":
             return await self.show_scoreboard()
+        elif channel_lower in ("cloud", "hot"):
+            return await self.communicator.send_command("set light mode", [0x02] + [0x00] * 9)
+        elif channel_lower in ("ambient", "lighting"):
+            return await self.communicator.send_command("set light mode", [0x01] + [0x00] * 9)
         return False
 
 __all__ = ["Display", "Light", "Drawing", "Animation", "Text"]

@@ -23,6 +23,12 @@ shipped milestone (per the project planning docs).
   - In `spatial_stage.js`, resolved device previews from `wallSlot.preview`, `devicePreviews[addr]`, `deviceActivity[addr]`, and `_renderWallSlotSVG`. Synchronized the active channel tab button in the Control Center when selecting a device node on the stage.
   - Fixed `test_web_ui_element_ids.py` by ensuring legacy banner DOM IDs exist as hidden placeholders in `index.html`.
   - Rebuilt `divoom-menubar` to sync version 0.35.0 with `Cargo.toml`.
+- **Universal Channel Switching & Hot Channel Update Verification (`channels_core.js`, `spatial_stage.js`, `display/__init__.py`, `display.rs`)**:
+  - Restored `showChannelPanel(ch)` call and exposed `window.showChannelPanel` in `channels_core.js`, ensuring clicking channel tab buttons immediately activates that channel's configuration panel in the Control Center.
+  - Synchronized `spatial_stage.js` device selection with `window.showChannelPanel`, matching the Control Center controls to the active device's channel.
+  - Added support for `hot` / `cloud`, `ambient` / `lighting`, `eq`, and `custom` to `switch_channel` in both Python (`divoom_lib/display/__init__.py`) and Rust (`divoomd/src/device_call/basic/display.rs`).
+  - Added automated wire frame verification suite (`tests/test_verify_all_channels_and_hot.py`, 13 passing tests) confirming all 7 channels emit valid 10-byte padded 0x45 frames with exact channel mode bytes, and text pushes 0x8B frames.
+  - Verified Hot Channel full update workflow dynamically: manifest load, background update trigger, phase progression, completion toast, and last-checked timestamp persistence.
 
 ## v0.35.0 — Unified Spatial Stage, Physical Scale Engine & Option 1 Layout (2026-09-11)
 
