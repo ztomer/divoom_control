@@ -6,44 +6,77 @@
 // Image content (live widgets / custom art / cover art) supplies a real frame
 // and bypasses this. Split out of app_globals.js to stay under the 500-LOC cap.
 
+// 1-bit bitmap font tables (3x5 pixel grid for compact crisp digits)
+const CLOCK_DIGITS_3X5 = {
+    "0": [0b111, 0b101, 0b101, 0b101, 0b111],
+    "1": [0b010, 0b110, 0b010, 0b010, 0b111],
+    "2": [0b111, 0b001, 0b111, 0b100, 0b111],
+    "3": [0b111, 0b001, 0b111, 0b001, 0b111],
+    "4": [0b101, 0b101, 0b111, 0b001, 0b001],
+    "5": [0b111, 0b100, 0b111, 0b001, 0b111],
+    "6": [0b111, 0b100, 0b111, 0b101, 0b111],
+    "7": [0b111, 0b001, 0b010, 0b010, 0b010],
+    "8": [0b111, 0b101, 0b111, 0b101, 0b111],
+    "9": [0b111, 0b101, 0b111, 0b001, 0b111],
+    ":": [0b000, 0b010, 0b000, 0b010, 0b000]
+};
+
+function renderBitmapDigitsSVG(text, startX, startY, pixelSize, colors) {
+    let svg = "";
+    const digitW = 3 * pixelSize;
+    const gap = pixelSize;
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const matrix = CLOCK_DIGITS_3X5[char];
+        if (!matrix) continue;
+        const dx = startX + i * (digitW + gap);
+        const color = Array.isArray(colors) ? colors[i % colors.length] : colors;
+        for (let r = 0; r < 5; r++) {
+            const rowBits = matrix[r];
+            for (let c = 0; c < 3; c++) {
+                if (rowBits & (1 << (2 - c))) {
+                    svg += `<rect x="${dx + c * pixelSize}" y="${startY + r * pixelSize}" width="${pixelSize}" height="${pixelSize}" fill="${color}"/>`;
+                }
+            }
+        }
+    }
+    return svg;
+}
+
 // R50: render the SPECIFIC clock face the user picked (6 styles), not a generic
 // clock glyph — mirrors the channel tiles (channels_grids.js CLOCK_FACES).
+// Uses authentic 1-bit bitmap digits (renderBitmapDigitsSVG) for sharp hardware pixel art.
 window._clockFaceSVG = function(style, color) {
     const c = color || "#ffffff";
-    // "12:00" sized to fit 64px with margin (font-size 13 monospace ≈ 39px wide),
-    // vertically centred (baseline y=37). text-anchor=middle keeps it centred.
-    const FONT = `font-family="monospace" font-size="13" font-weight="bold"`;
-    const digits = (fill) => `<text x="32" y="37" ${FONT} text-anchor="middle" fill="${fill}">12:00</text>`;
     let inner, bg = "#0a0b10";
+    const rainbowHues = ["#ff5a5a", "#ffc864", "#5ede91", "#5aabff", "#c89bff"];
+
     switch (Number(style)) {
-        case 1: { // Rainbow — per-digit hue via tspans (keeps monospace spacing)
-            const hues = ["#ff5a5a", "#ffc864", "#5ede91", "#5aabff", "#c89bff"];
-            const tspans = ["1", "2", ":", "0", "0"]
-                .map((ch, i) => `<tspan fill="${hues[i]}">${ch}</tspan>`).join("");
-            inner = `<text x="32" y="37" ${FONT} text-anchor="middle">${tspans}</text>`;
+        case 1: // Rainbow — per-digit hue
+            inner = renderBitmapDigitsSVG("12:00", 4, 25, 3, rainbowHues);
             break;
-        }
-        case 2: // With Box — border encloses the digits with padding
-            inner = `<rect x="8" y="23" width="48" height="18" rx="3" fill="none"`
-                  + ` stroke="${c}" stroke-width="2"/>` + digits(c);
+        case 2: // With Box — border encloses the digits
+            inner = `<rect x="1" y="21" width="62" height="23" rx="2" fill="none" stroke="${c}" stroke-width="2"/>`
+                  + renderBitmapDigitsSVG("12:00", 4, 25, 3, c);
             break;
         case 3: // Analog Square
-            inner = `<rect x="16" y="16" width="32" height="32" rx="4" fill="none" stroke="${c}" stroke-width="2.5"/>`
-                  + `<line x1="32" y1="32" x2="32" y2="21" stroke="${c}" stroke-width="2.5" stroke-linecap="round"/>`
-                  + `<line x1="32" y1="32" x2="41" y2="32" stroke="${c}" stroke-width="2" stroke-linecap="round"/>`;
+            inner = `<rect x="12" y="12" width="40" height="40" rx="2" fill="none" stroke="${c}" stroke-width="2.5"/>`
+                  + `<line x1="32" y1="32" x2="32" y2="18" stroke="${c}" stroke-width="2.5" stroke-linecap="square"/>`
+                  + `<line x1="32" y1="32" x2="44" y2="32" stroke="${c}" stroke-width="2" stroke-linecap="square"/>`;
             break;
         case 4: // Full Screen Neg — inverted: color fills the screen, dark digits
-            bg = c; inner = digits("#15171c");
+            bg = c;
+            inner = renderBitmapDigitsSVG("12:00", 4, 25, 3, "#15171c");
             break;
         case 5: // Analog Round
-            inner = `<circle cx="32" cy="32" r="17" fill="none" stroke="${c}" stroke-width="2.5"/>`
-                  + `<line x1="32" y1="32" x2="32" y2="19" stroke="${c}" stroke-width="2.5" stroke-linecap="round"/>`
-                  + `<line x1="32" y1="32" x2="41" y2="36" stroke="${c}" stroke-width="2" stroke-linecap="round"/>`;
+            inner = `<circle cx="32" cy="32" r="20" fill="none" stroke="${c}" stroke-width="2.5"/>`
+                  + `<line x1="32" y1="32" x2="32" y2="17" stroke="${c}" stroke-width="2.5" stroke-linecap="square"/>`
+                  + `<line x1="32" y1="32" x2="43" y2="37" stroke="${c}" stroke-width="2" stroke-linecap="square"/>`;
             break;
         default: // 0 Full Screen digital
-            inner = digits(c);
+            inner = renderBitmapDigitsSVG("12:00", 4, 25, 3, c);
     }
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">`
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" style="image-rendering:pixelated;">`
               + `<rect width="64" height="64" fill="${bg}"/>${inner}</svg>`;
     return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
 };

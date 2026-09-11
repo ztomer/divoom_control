@@ -33,11 +33,12 @@
   let initialized = false;
 
   function init() {
-    if (initialized) return;
     const panel = document.getElementById("panel-design");
     if (!panel) return;
+    if (initialized && panel.dataset.initialized === "true") return;
 
     initialized = true;
+    panel.dataset.initialized = "true";
     initPageTabs(panel);
     buildSlotGrid(panel);
     initLibraryClicks(panel);
@@ -205,6 +206,10 @@
     }
     page[target] = { fileId, thumb };
     saveAssignments();
+    const mac = (typeof window._activeDeviceMac === "function") ? window._activeDeviceMac() : null;
+    if (mac && thumb && window.setDeviceActivity) {
+      window.setDeviceActivity(mac, "image", { src: thumb, fileId: fileId });
+    }
     // Advance the selection to the next empty slot so repeated clicks
     // fill the page in order without extra steps.
     const next = page.findIndex((a) => !a);

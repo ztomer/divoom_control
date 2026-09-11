@@ -424,8 +424,6 @@
         refreshBenchNodes();
     }
 
-    const previewImgCache = new Map();
-
     function startAnimationLoop() {
         function renderLoop() {
             tick++;
@@ -433,53 +431,16 @@
                 const addr = dev.address || ('dev-' + idx);
                 const cvs = document.getElementById(`stage-canvas-${addr}`);
                 if (!cvs) return;
-                const ctx = cvs.getContext('2d');
-                ctx.imageSmoothingEnabled = false;
 
-                const wallSlot = window.DivoomState?.assignedSlots?.[addr];
-                const act = (window.DivoomState && window.DivoomState.deviceActivity && window.DivoomState.deviceActivity[addr]) || {};
-                let src = (wallSlot && wallSlot.preview) || (window.DivoomState && window.DivoomState.devicePreviews && window.DivoomState.devicePreviews[addr]) || act.src;
-                const kind = act.kind || dev.activityKind || (addr === selectedMac ? window.DivoomState.activeChannel : null);
-                if (!src && wallSlot && window._renderWallSlotSVG) {
-                    src = window._renderWallSlotSVG(wallSlot, addr);
-                } else if (!src && window._channelPreviewSVG) {
-                    src = window._channelPreviewSVG(kind || 'clock', act.opts || { defaultColor: '#00cc66' });
-                }
-
-                let entry = previewImgCache.get(addr);
-                if (src && (!entry || entry.src !== src)) {
-                    const img = new Image();
-                    entry = { src, img, loaded: false };
-                    img.onload = () => { entry.loaded = true; };
-                    img.src = src;
-                    previewImgCache.set(addr, entry);
-                }
-
-                ctx.fillStyle = '#07080a';
-                ctx.fillRect(0, 0, cvs.width, cvs.height);
-
-                if (entry && entry.loaded) {
-                    ctx.drawImage(entry.img, 0, 0, cvs.width, cvs.height);
-                } else if (kind === 'sysmon') {
-                    ctx.fillStyle = '#00cc66';
-                    for (let x = 1; x < 15; x += 2) {
-                        const h = Math.round(3 + 2.5 * Math.sin(x * 0.4 + tick * 0.1));
-                        for (let y = 14; y > 14 - h; y--) ctx.fillRect(x, y, 1, 1);
-                    }
-                } else if (kind === 'visualizer' || kind === 'eq') {
-                    for (let x = 0; x < 16; x++) {
-                        const h = Math.round(4 + 3.5 * Math.cos(x * 0.35 + tick * 0.12));
-                        for (let y = 0; y < h; y++) {
-                            ctx.fillStyle = y > 8 ? '#ff5a1f' : y > 4 ? '#ffcc00' : '#00cc66';
-                            ctx.fillRect(x, 15 - y, 1, 1);
-                        }
-                    }
+                if (window.DisplayPreviewRegistry) {
+                    const display = window.DisplayPreviewRegistry.get(addr);
+                    const wallSlot = window.DivoomState?.assignedSlots?.[addr];
+                    if (wallSlot) display.setWallSlot(wallSlot);
+                    display.renderTo(cvs, tick);
                 } else {
-                    const c = (act.opts && act.opts.color) || '#ffffff';
-                    ctx.fillStyle = c;
-                    ctx.fillRect(2, 5, 1, 6); ctx.fillRect(5, 5, 3, 1); ctx.fillRect(5, 6, 1, 4); ctx.fillRect(7, 6, 1, 4); ctx.fillRect(5, 10, 3, 1);
-                    if (Math.floor(tick / 25) % 2 === 0) { ctx.fillRect(9, 7, 1, 1); ctx.fillRect(9, 9, 1, 1); }
-                    ctx.fillRect(11, 5, 1, 4); ctx.fillRect(13, 5, 1, 6); ctx.fillRect(11, 8, 3, 1);
+                    const ctx = cvs.getContext('2d');
+                    ctx.fillStyle = '#07080a';
+                    ctx.fillRect(0, 0, cvs.width, cvs.height);
                 }
             });
             requestAnimationFrame(renderLoop);

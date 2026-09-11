@@ -96,6 +96,36 @@ class GallerySyncMixin(GalleryHotApiMixin):
             })
         return json.dumps(final_list)
 
+    def play_gallery_art(self, file_id: str) -> dict:
+        """Push a cached or downloaded gallery artwork to the active display."""
+        logger.info(f"GUI Action: Play gallery artwork file_id={file_id!r}")
+        if not file_id:
+            return {"success": False, "error": "missing file_id"}
+        cache_dir = Path.home() / ".config" / "divoom-control" / "cache_gallery"
+        target_path = None
+        safe_name = file_id.replace("/", "_")
+        for ext in (".gif", ".png", ".jpg", ".jpeg"):
+            p = (cache_dir / safe_name).with_suffix(ext)
+            if p.exists() and p.stat().st_size > 0:
+                target_path = p
+                break
+        if target_path is None:
+            client = self._client
+            if client:
+                try:
+                    data_url = client.get_animated_preview(file_id)
+                    if data_url:
+                        gallery_assets._store(cache_dir, file_id, data_url)
+                        target_path = (cache_dir / safe_name).with_suffix(".gif")
+                except Exception as e:
+                    logger.warning(f"Failed to fetch gallery preview for {file_id}: {e}")
+        if target_path and target_path.exists():
+            cell_size = self._active_device_size() if hasattr(self, "_active_device_size") else 16
+            if hasattr(self, "display_wall_image"):
+                return self.display_wall_image(str(target_path.absolute()), cell_size)
+            return {"success": True, "path": str(target_path)}
+        return {"success": False, "error": "file not found in cache"}
+
     FILE_SIZE_BITMASK: dict[int, int] = {16: 1, 32: 2, 64: 4, 128: 16, 256: 32}
 
     def fetch_gallery(self, classify: int, target_size: int = 16,

@@ -4,6 +4,28 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## v0.35.2 — Unified DisplayPreview Object Architecture & Hardware-Faithful Bitmap Rendering (2026-09-11)
+
+### Architecture & Fixed
+
+- **Unified Per-Display Object Model (`preview_controller.js`, `index.html`)**:
+  - Introduced `DisplayPreview` and `DisplayPreviewRegistry` to replace fragmented ad-hoc preview dictionaries with an object-oriented architecture.
+  - Each physical and virtual screen encapsulates its native resolution (`16x16`, `32x32`, `64x64`), active channel, raster/SVG frame caching, and integer pixel canvas blitting.
+  - Full multi-display isolation: updates on screen A never contaminate or mutate screen B.
+- **Hardware-Faithful Bitmap Pixel Art Clocks (`preview_controller.js`, `channel_preview.js`)**:
+  - Replaced blurry browser vector SVG `<text>` fonts with 1-bit integer bitmap LED matrices (3x5 and 5x7 digit tables) rendered directly via `<rect>` pixel diodes.
+  - All 6 clock faces (Full Screen, Rainbow, With Box, Analog Square, Full Screen Neg, Analog Round) now render 100% crisp, authentic hardware pixel art without anti-aliasing blur.
+- **Gallery Selection to Hardware Push (`gallery.js`, `gallery_sync.py`)**:
+  - Added click handler to `.gallery-item` tiles to highlight selection, immediately update the active device's `DisplayPreview` frame, and dispatch `window.pywebview.api.play_gallery_art`.
+  - Implemented `play_gallery_art(file_id)` in `GallerySyncMixin` to find or retrieve cached GIF/images and stream to the active screen via `display_wall_image`.
+- **Custom Art Robustness (`custom_art.js`)**:
+  - Fixed `init()` guard to check `panel.dataset.initialized` so re-injected templates properly re-attach slot event listeners.
+  - Updated `assignToSlot` to immediately mirror the assigned art thumbnail to the active screen's preview.
+- **Spatial Stage Streamlining (`spatial_stage.js`)**:
+  - Simplified the stage animation loop by delegating directly to `DisplayPreviewRegistry.get(addr).renderTo(cvs, tick)`, retiring redundant local caches and bringing `spatial_stage.js` safely under the 500-LOC ceiling (460 LOC).
+- **Automated Verification Suite**:
+  - Added `tests/test_display_preview_registry.py` (unit + contract checks) and `tests/test_browser_preview_registry.py` (real-browser multi-display isolation and non-black canvas validation).
+
 ## v0.35.1 — Gallery Crispness, Offline Custom Art Cache & Isolated Per-Device Previews (2026-09-11)
 
 ### Fixed & Improved

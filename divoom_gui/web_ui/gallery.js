@@ -189,6 +189,33 @@ document.addEventListener("DOMContentLoaded", () => {
             // load — drop the tile instead of showing a broken image.
             img.addEventListener("error", () => removeTile(item));
         }
+
+        item.addEventListener("click", () => {
+            document.querySelectorAll(".gallery-item").forEach(i => i.classList.remove("selected", "active"));
+            item.classList.add("selected", "active");
+            window.DivoomState.selectedArtworkIndex = idx;
+
+            const mac = (typeof window._activeDeviceMac === "function") ? window._activeDeviceMac() : null;
+            const currentImg = item.querySelector(".gallery-item-preview");
+            const src = (currentImg && currentImg.src && !currentImg.src.includes("pixoo.png")) ? currentImg.src : (art.preview_url || null);
+            if (mac && src && window.setDeviceActivity) {
+                window.setDeviceActivity(mac, "image", { src: src, fileId: art.file_id, name: art.name });
+            }
+
+            if (art.file_id && window.pywebview?.api?.play_gallery_art) {
+                window.pywebview.api.play_gallery_art(art.file_id).then(res => {
+                    const r = (typeof res === "string") ? JSON.parse(res) : res;
+                    if (r && r.success) {
+                        window.showToast(`Pushed "${art.name}" to screen`, "success", " BLE");
+                    } else if (r && r.error) {
+                        window.showToast(`Gallery push: ${r.error}`, "error");
+                    }
+                }).catch(err => {
+                    window.showToast(`Gallery push error: ${err}`, "error");
+                });
+            }
+        });
+
         return item;
     }
 

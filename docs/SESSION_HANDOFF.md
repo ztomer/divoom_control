@@ -21,6 +21,27 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-11 — v0.35.2: Unified DisplayPreview Object Architecture & Hardware-Faithful Bitmap Rendering.**
+  - **Unified DisplayPreview Class & Registry (`preview_controller.js`, `index.html`)**:
+    - Replaced fragmented ad-hoc preview dictionaries across 8+ frontend modules with an object-oriented architecture (`DisplayPreview` + `DisplayPreviewRegistry`).
+    - Encapsulates per-display screen specs (`16x16`, `32x32`, `64x64`), active channel, image/SVG caching, authentic 1-bit bitmap digit rendering, and direct-to-canvas blitting.
+    - Multi-display isolation: updates to screen A never mutate or contaminate screen B.
+  - **Hardware-Faithful Bitmap Pixel Art Clocks (`preview_controller.js`, `channel_preview.js`)**:
+    - Banished blurry vector SVG `<text>` fonts. Integrated 1-bit integer LED bitmap digit tables (3x5 matrices) rendered via discrete pixel `<rect>` blocks.
+    - All 6 clock styles (Full Screen, Rainbow, With Box, Analog Square, Full Screen Neg, Analog Round) render 100% sharp pixel art on integer coordinates.
+  - **Gallery Selection to Hardware Push (`gallery.js`, `gallery_sync.py`)**:
+    - Added click handler on `.gallery-item` tiles to select artwork, immediately update active `DisplayPreview` frame, and dispatch `window.pywebview.api.play_gallery_art`.
+    - Added `play_gallery_art(file_id)` in `GallerySyncMixin` to find or retrieve cached GIF/images and stream to the active display via `display_wall_image`.
+  - **Custom Art Robustness (`custom_art.js`)**:
+    - Fixed `init()` guard to check `panel.dataset.initialized` so re-injected templates properly re-attach slot event listeners.
+    - Updated `assignToSlot` to immediately mirror the assigned art thumbnail to the active display preview.
+  - **Spatial Stage Streamlining (`spatial_stage.js`)**:
+    - Simplified stage animation loop by delegating directly to `DisplayPreviewRegistry.get(addr).renderTo(cvs, tick)`, retiring redundant local caches and bringing `spatial_stage.js` safely under the 500-LOC ceiling (460 LOC).
+  - **Automated Verification**:
+    - `tests/test_display_preview_registry.py` (4/4 passed): unit checks on `DisplayPreview` and `play_gallery_art`.
+    - `tests/test_browser_preview_registry.py` (passed): real-browser validation of multi-display isolation and non-black canvas pixels.
+    - All house gates clean: 387 files <= 500 LOC, 117/117 API methods reachable, 738 files clean in emoji gate, 204 unit tests passed in cargo test.
+
 - **2026-09-11 — v0.35.1: Gallery Crispness, Offline Custom Art Cache & Isolated Per-Device Previews.**
   - **Gallery Crispness (`gallery.css`)**: Added `image-rendering: pixelated; crisp-edges;` to `.gallery-item-preview` ensuring thumbnail canvases render sharp pixels instead of blurred bicubic interpolation.
   - **Offline Custom Art Cache (`channels_grids.js`, `custom_art.js`, `gallery_sync.py`)**: Guaranteed offline cache loads all 142 items on launch even before `pywebviewready`, handles errors cleanly, and persists 3 pages x 12 slots to `localStorage['divoom_custom_art_slots']`.

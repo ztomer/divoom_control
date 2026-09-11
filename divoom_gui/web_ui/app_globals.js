@@ -87,6 +87,9 @@ window._updateDeviceLabel = function(name) {
 window.setDevicePreview = function(address, src) {
     if (!address || !src) return;
     window.DivoomState.devicePreviews[address] = src;
+    if (window.DisplayPreviewRegistry) {
+        window.DisplayPreviewRegistry.get(address).setFrame(src);
+    }
     try {
         localStorage.setItem("divoomDevicePreviews", JSON.stringify(window.DivoomState.devicePreviews));
     } catch (e) { /* quota — non-fatal */ }
@@ -99,7 +102,8 @@ window.setDevicePreview = function(address, src) {
 window.restoreDevicePreview = function(address, _fallbackSrc) {
     // R49: no product photo anymore — just show this device's last frame in the
     // flat screen (or the empty state when nothing has been pushed yet).
-    window._setScreenOverlayFrame(window.DivoomState.devicePreviews[address] || null);
+    const regFrame = window.DisplayPreviewRegistry ? window.DisplayPreviewRegistry.get(address)?.frameSrc : null;
+    window._setScreenOverlayFrame(regFrame || window.DivoomState.devicePreviews[address] || null);
 };
 
 // ── R46 #2: per-device "last active element" preview ──────────────────────
@@ -118,6 +122,11 @@ window.setDeviceActivity = function(mac, kind, opts) {
     const src = (opts.src) ? opts.src : window._channelPreviewSVG(kind, opts);
     window.DivoomState.deviceActivity = window.DivoomState.deviceActivity || {};
     window.DivoomState.deviceActivity[mac] = { kind: kind, src: src, at: Date.now(), opts: opts };
+    if (window.DisplayPreviewRegistry) {
+        const display = window.DisplayPreviewRegistry.get(mac);
+        display.setActivity(kind, opts);
+        if (src) display.setFrame(src);
+    }
     try { localStorage.setItem("divoomDeviceActivity", JSON.stringify(window.DivoomState.deviceActivity)); } catch (e) {}
     window.setDevicePreview(mac, src);
     try { window.dispatchEvent(new CustomEvent("divoom:activity-updated", { detail: { mac, kind, opts, src } })); } catch (_) {}
