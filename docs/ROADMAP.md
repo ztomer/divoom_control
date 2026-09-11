@@ -259,25 +259,51 @@ Enable external processes and AI agents to discover, target, and display custom 
 
 ### OPEN (DESIGN PHASE) — Unified Spatial Stage: Device Selection, Live Previews, Rooms & Virtual Wall
 
-_Major UI/UX architecture initiative for multi-device environments (e.g., 4 physical Divoom displays). Gate: Design alignment must be completed before any code/UI modifications._
+_Major UI/UX architecture initiative for multi-device environments (primary target: 4 physical Divoom displays, supporting both 16×16 and 64×64). Gate: Design alignment must be completed before any code/UI modifications._
 
-#### Motivation & Current Friction
-- Device selection currently lives in a sidebar dropdown (`#sidebar-device-select`) and fragmented sub-selectors across tabs.
-- The Virtual Wall configuration is siloed in an isolated tab (`wall.css`), detached from everyday device control.
-- Real-time device previews are scattered across individual widget cards, making multi-device monitoring disjointed.
+#### 1. Motivation & Current Friction
+- **Fragmented Selection**: Device selection currently lives in a sidebar dropdown (`#sidebar-device-select`) and separate selectors across tabs.
+- **Isolated Wall Mode**: The Virtual Wall configuration is siloed in an isolated tab (`wall.css`), detached from everyday device control.
+- **Scattered Previews**: Real-time device previews are scattered across individual widget cards, making multi-device monitoring disjointed.
 
-#### Concept: Persistent Spatial Header Stage
-Introduce a unified, persistent canvas at the top of the main dashboard serving three core functions simultaneously:
+#### 2. Confirmed Hardware & Layout Parameters
+- **Hardware Matrix**:
+  - Primary hardware setup: **Four 16×16 devices** (e.g. Ditoo, Pixoo-16, Timebox).
+  - Dynamic Resolution: Architecture is resolution-aware and cleanly supports **64×64 devices** (e.g. Pixoo-64) alongside 16×16 units. On the stage, tiles maintain uniform outer card dimensions for layout stability, while the internal preview canvas renders at high density (4× pixel density for 64×64 displays).
+- **Physical Adjacency & Flexible Grouping**:
+  - Initial Layout: All 4 devices sit adjacent to each other on the desk. They initialize as a connected 4-device array within a default **"Desk"** group.
+  - Spatial Drag & Detachment: Dragging devices adjacent to each other connects them into a multi-panel Virtual Wall cluster. Dragging a device out of the cluster into a separate room/zone (e.g., "Living Room" or "Bedside") decouples it to operate as an independent display.
+- **Visibility & Collapse Ergonomics**:
+  - **Permanently Visible (Default)**: Mounted at the top of `#main-content` (~135px height) above the content tabs, displaying room headers, live mini-pixel mirrors, connection badges, and spatial links.
+  - **Collapsible on Demand**: An explicit header control (`[^] / [v]`) collapses the stage into a compact 34px status ribbon (displaying miniature status dots, device names, and active target chips). State persists in `localStorage`.
 
-1. **Spatial Grouping & Rooms**:
-   - Organize multiple physical devices into logical rooms or physical locations (e.g., "Desk" [2 units], "Living Room" [1 unit], "Bedside" [1 unit]).
-   - Allow devices within a room to be positioned spatially relative to one another (drag-and-drop grid), or snapped into contiguous virtual wall arrays.
-2. **Real-Time Live Previews**:
-   - Render mini pixel previews of each device's live screen directly within its avatar/card, updating dynamically via daemon status/render broadcasts.
-3. **Triple-Duty Interaction (Status, Selection, Alignment)**:
-   - **Status at a glance**: Displays online/offline indicators, transport type (BLE/LAN), battery levels, and active job/channel badges.
-   - **Selection & Targeting**: Clicking a device selects it as the active target for the tabs below (Lighting, Design, Tools, Settings). Clicking a room/group header targets all devices in that group simultaneously.
-   - **Visual Wall Integration**: Splicing content across multiple panels is handled directly on the spatial stage rather than in a separate tool, treating virtual walls as a natural arrangement mode for co-located devices.
+#### 3. Triple-Duty Interaction Model
+1. **Live Preview & Status Mirror**:
+   - Each tile renders a live mini-canvas reflecting the exact frame the physical device is drawing (via daemon status/render broadcasts).
+   - Shows transport type (BLE / SPP / LAN), battery indicator, signal status, and active channel or widget tag (`Clock`, `Sysmon`, `Weather`, `Album Art`).
+2. **Target Selection & Broadcast**:
+   - Single-click selects the active device for the controls/tabs below.
+   - Clicking a room header (e.g. "Desk") selects the room as a broadcast group, applying brightness, channel, or power changes to all devices in that room simultaneously.
+   - Shift/Cmd-click allows arbitrary multi-device selections.
+3. **Visual Wall Integration**:
+   - Snapping adjacent tiles together forms a virtual wall directly on the stage.
+   - Pushing an image or animation to a wall group automatically slices the canvas across the contiguous panels according to their relative `(x, y)` coordinates.
+
+#### 4. Direct Impact on the MCP Server
+This architecture provides the physical topology that the MCP server currently lacks:
+- **Shared Daemon Topology**: The daemon (`divoomd`) stores the room groupings, wall clusters, device names, and relative coordinates in `~/.config/divoom-control/topology.json`.
+- **MCP Tool `list_screens`**: Exposes the physical layout to AI agents and external clients, returning device IDs, names, room assignments, wall groups, resolutions (`16×16` / `64×64`), and spatial coordinates.
+- **Multi-Device Tool Targeting**: MCP display and control tools (`show_image`, `push_animation`, `show_text`, `set_brightness`, `set_light_mode`) accept a `target` argument:
+  - `target: "<mac_or_name>"` (Individual device)
+  - `target: "room:<name>"` (Broadcast to an entire room)
+  - `target: "wall:<name>"` (Slice across a composite wall cluster)
+  - `target: "all"` (Global broadcast)
+
+#### 5. Phased Execution Roadmap
+1. **Phase 1: Daemon Topology Schema & Persistence**: Extend `wall_configure` and daemon state to persist room names, group IDs, and resolutions in `topology.json`.
+2. **Phase 2: MCP `list_screens` & Target Routing**: Implement `list_screens` in `divoomd mcp` and wire target routing for individual devices, rooms, and wall clusters.
+3. **Phase 3: Spatial Stage Web UI Component**: Implement `spatial_stage.js` and `spatial_stage.css`, mounting the persistent top stage in `index.html` with real-time mini-pixel mirrors and the collapse toggle.
+4. **Phase 4: Drag & Drop Snapping**: Add interactive drag-and-drop relative positioning and wall-snap linkages.
 
 #### Design Invariant
 **Strict hold on UI implementation until layout, ergonomics, and state models are fully designed and approved.**
