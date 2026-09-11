@@ -21,7 +21,7 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
-- **2026-09-11 — Full-Width Spatial Preview Bench & Sidebar Hardware Deck (Option 1).**
+- **2026-09-11 — v0.35.0 RELEASED & INSTALLED LOCALLY: Unified Spatial Stage, Physical Scale Engine & Option 1 Layout.**
   - **Top Zone Architecture**: Promoted the Spatial Preview Bench to a full-width top stage (`#spatial-stage-mount`, ~1100px wide) directly above `.app-container`. Eliminated duplicate top/bottom toolbars on the bench canvas, leaving a clean Dieter Rams radial dot canvas with header controls (`[All] [Desk] [Wall]` room filters, `Align`, and `Ribbon` toggle).
   - **Universal Appbar Clean-up**: Stripped duplicate brightness and speaker volume sliders from the top titlebar (`.integrated-appbar`), reserving it strictly for window controls, title, and settings gear.
   - **Active Display Hardware Deck (`#sidebar-device-deck`)**: Pinned at the bottom of the left sidebar navigation column in the space vacated by the old preview banner:

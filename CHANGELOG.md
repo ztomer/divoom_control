@@ -4,7 +4,7 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
-## Unreleased
+## v0.35.0 — Unified Spatial Stage, Physical Scale Engine & Option 1 Layout (2026-09-11)
 
 ### Documentation & MCP
 

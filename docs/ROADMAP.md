@@ -9,6 +9,18 @@ forward-looking one. Recover a round plan with
 
 ## Shipped
 
+- **v0.35.0 — Unified Spatial Stage, Physical Scale Engine & Option 1 Layout (2026-09-11)**:
+  - **Full-Width Spatial Preview Bench & Sidebar Hardware Deck (Option 1 Layout Re-architecture)**:
+    - Promoted preview bench to full-width top deck spanning the window width (~1100px) above `.app-container`.
+    - Decluttered bench canvas: removed nested double toolbars, keeping clean radial dot grid with header controls (`[All] [Desk] [Wall]` room filter pills, `Align` desk snapping, `Ribbon` toggle).
+    - Appbar streamlined: removed duplicate brightness and volume sliders from the universal titlebar.
+    - Active Display Hardware Deck (`#sidebar-device-deck`): pinned to bottom of sidebar with live identity (jewel, name, `16×16` / `64×64` tag), Kare SVG power standby toggle, room assignment, brightness slider, and contextual speaker volume slider.
+    - Contextual volume control: speaker slider automatically reveals for audio displays (Ditoo, Timoo, Tivoo-Max) and hides for screen-only units (Pixoo-64, Pixoo-1).
+  - **Daemon Topology Engine (`divoomd`)**: Implemented `get_topology` and `set_topology` socket dispatch commands with JSON persistence to `~/.config/divoom-control/topology.json`.
+  - **MCP `list_screens`**: Registered tool #14 in `divoomd/src/mcp_tools.rs`.
+  - **Physical Scale Database**: Mapped exact millimeter physical chassis and active screen dimensions ($1\text{mm} = 0.65\text{px}$) for Ditoo, Timoo, Tivoo-Max, Pixoo, and Pixoo-64.
+  - **Suite**: 204 Rust unit tests, 267 Python pytest tests, 15 mock device E2E tests, 735 files clean in emoji gate, 386 source files <= 500 lines.
+
 - **v0.34.0 — the hardware round (2026-09-07)**: the R12 visual pass, open
   since R12, closed **4/4 on real pixels**. It found one real defect —
   `run_weather` set weather DATA and never selected the face that draws it, so
@@ -257,56 +269,20 @@ Enable external processes and AI agents to discover, target, and display custom 
 2. Enhance native device capabilities/status reporting (`device_status` carrying model and panel resolution).
 3. Extend `divoomd mcp` with `list_screens`, resolution-aware image/animation streaming, text rendering, and lease-based arbitration.
 
-### OPEN (DESIGN PHASE) — Unified Spatial Stage: Device Selection, Live Previews, Rooms & Virtual Wall
+### SHIPPED (v0.35.0) — Unified Spatial Stage & Physical Scale Engine (Phases 1–3 + Option 1)
 
-_Major UI/UX architecture initiative for multi-device environments (primary target: 4 physical Divoom displays, supporting both 16×16 and 64×64). Gate: Design alignment must be completed before any code/UI modifications._
+_Shipped in v0.35.0: Full-width top Spatial Preview Bench, physical millimeter proportions database, freeform 2D drag placement, desk baseline alignment, compact ribbon toggle, room filter pills, daemon topology persistence, MCP `list_screens` tool, decluttered titlebar, and sidebar Active Display Hardware Deck with contextual volume and independent brightness._
 
-#### 1. Motivation & Current Friction
-- **Fragmented Selection**: Device selection currently lives in a sidebar dropdown (`#sidebar-device-select`) and separate selectors across tabs.
-- **Isolated Wall Mode**: The Virtual Wall configuration is siloed in an isolated tab (`wall.css`), detached from everyday device control.
-- **Scattered Previews**: Real-time device previews are scattered across individual widget cards, making multi-device monitoring disjointed.
+#### Shipped Capabilities:
+1. **Daemon Topology Engine**: `get_topology` and `set_topology` socket dispatch commands with JSON persistence to `~/.config/divoom-control/topology.json`.
+2. **MCP Tool `list_screens`**: Exposes physical screen coordinates, dimensions, and resolutions to MCP AI clients.
+3. **Physical Scale Database**: Mapped exact physical chassis and active screen dimensions ($1\text{mm} = 0.65\text{px}$) for Ditoo, Timoo, Tivoo-Max, Pixoo, and Pixoo-64.
+4. **Full-Width Top Bench (Option 1)**: Re-architected the window layout with a full-width top stage (~1100px) above `.app-container`, removing nested double toolbars.
+5. **Sidebar Hardware Deck**: Pinned to bottom of the sidebar with active identity, Kare SVG power toggle, room assignment, brightness slider, and contextual volume slider (hides for screen-only Pixoo models).
 
-#### 2. Confirmed Hardware & Layout Parameters
-- **Hardware Matrix**:
-  - Primary hardware setup: **Four 16×16 devices** (e.g. Ditoo, Pixoo-16, Timebox).
-  - Dynamic Resolution: Architecture is resolution-aware and cleanly supports **64×64 devices** (e.g. Pixoo-64) alongside 16×16 units. On the stage, tiles maintain uniform outer card dimensions for layout stability, while the internal preview canvas renders at high density (4× pixel density for 64×64 displays).
-- **Physical Adjacency & Flexible Grouping**:
-  - Initial Layout: All 4 devices sit adjacent to each other on the desk. They initialize as a connected 4-device array within a default **"Desk"** group.
-  - Spatial Drag & Detachment: Dragging devices adjacent to each other connects them into a multi-panel Virtual Wall cluster. Dragging a device out of the cluster into a separate room/zone (e.g., "Living Room" or "Bedside") decouples it to operate as an independent display.
-- **Visibility & Collapse Ergonomics**:
-  - **Permanently Visible (Default)**: Mounted at the top of `#main-content` (~135px height) above the content tabs, displaying room headers, live mini-pixel mirrors, connection badges, and spatial links.
-  - **Collapsible on Demand**: An explicit header control (`[^] / [v]`) collapses the stage into a compact 34px status ribbon (displaying miniature status dots, device names, and active target chips). State persists in `localStorage`.
-
-#### 3. Triple-Duty Interaction Model
-1. **Live Preview & Status Mirror**:
-   - Each tile renders a live mini-canvas reflecting the exact frame the physical device is drawing (via daemon status/render broadcasts).
-   - Shows transport type (BLE / SPP / LAN), battery indicator, signal status, and active channel or widget tag (`Clock`, `Sysmon`, `Weather`, `Album Art`).
-2. **Target Selection & Broadcast**:
-   - Single-click selects the active device for the controls/tabs below.
-   - Clicking a room header (e.g. "Desk") selects the room as a broadcast group, applying brightness, channel, or power changes to all devices in that room simultaneously.
-   - Shift/Cmd-click allows arbitrary multi-device selections.
-3. **Visual Wall Integration**:
-   - Snapping adjacent tiles together forms a virtual wall directly on the stage.
-   - Pushing an image or animation to a wall group automatically slices the canvas across the contiguous panels according to their relative `(x, y)` coordinates.
-
-#### 4. Direct Impact on the MCP Server
-This architecture provides the physical topology that the MCP server currently lacks:
-- **Shared Daemon Topology**: The daemon (`divoomd`) stores the room groupings, wall clusters, device names, and relative coordinates in `~/.config/divoom-control/topology.json`.
-- **MCP Tool `list_screens`**: Exposes the physical layout to AI agents and external clients, returning device IDs, names, room assignments, wall groups, resolutions (`16×16` / `64×64`), and spatial coordinates.
-- **Multi-Device Tool Targeting**: MCP display and control tools (`show_image`, `push_animation`, `show_text`, `set_brightness`, `set_light_mode`) accept a `target` argument:
-  - `target: "<mac_or_name>"` (Individual device)
-  - `target: "room:<name>"` (Broadcast to an entire room)
-  - `target: "wall:<name>"` (Slice across a composite wall cluster)
-  - `target: "all"` (Global broadcast)
-
-#### 5. Phased Execution Roadmap
-1. **Phase 1: Daemon Topology Schema & Persistence**: Extend `wall_configure` and daemon state to persist room names, group IDs, and resolutions in `topology.json`.
-2. **Phase 2: MCP `list_screens` & Target Routing**: Implement `list_screens` in `divoomd mcp` and wire target routing for individual devices, rooms, and wall clusters.
-3. **Phase 3: Spatial Stage Web UI Component**: Implement `spatial_stage.js` and `spatial_stage.css`, mounting the persistent top stage in `index.html` with real-time mini-pixel mirrors and the collapse toggle.
-4. **Phase 4: Drag & Drop Snapping**: Add interactive drag-and-drop relative positioning and wall-snap linkages.
-
-#### Design Invariant
-**Strict hold on UI implementation until layout, ergonomics, and state models are fully designed and approved.**
+### OPEN — Unified Spatial Stage: Multi-Panel Virtual Wall Slicing (Phase 4)
+- Interactive snapping of adjacent tiles into a contiguous multi-panel composite surface.
+- Pushing an image or animation to a wall group automatically slices the canvas across contiguous physical panels according to their relative `(x, y)` coordinates.
 
 ### OPEN — why did 64 subscriptions accumulate in the first place?
 
