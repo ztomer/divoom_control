@@ -298,15 +298,49 @@ _Shipped in v0.35.0: Full-width top Spatial Preview Bench, physical millimeter p
 - **Custom Art Robustness**: Fixed `init()` guard in `custom_art.js` to check `panel.dataset.initialized` so re-injected templates properly re-attach slot event listeners. Updated `assignToSlot` to immediately mirror the assigned art thumbnail to the active display preview.
 - **Spatial Stage Streamlining**: Simplified stage animation loop by delegating directly to `DisplayPreviewRegistry.get(addr).renderTo(cvs, tick)`, retiring redundant local caches and bringing `spatial_stage.js` safely under the 500-LOC ceiling (460 LOC).
 
-### OPEN — Virtual Wall Consolidation & Spatial Rooms Unification
+### OPEN — Core Architectural Unification & Multi-Display Estate
 
 #### 1. Streamline Virtual Wall & Consolidate Presets into Spatial Rooms
 - **Finding**: With live per-device previews on the Spatial Stage and ribbon, a separate "Virtual Wall preview canvas" is redundant. Each device node on the Spatial Stage already represents the exact physical display and its sliced portion in real scale.
 - **Plan**: Phase out the redundant Virtual Wall dedicated canvas. Consolidate layout presets (`presetsSelect` / `load_preset_by_name`) into the unified `SpatialRooms` engine (`All`, `Desk`, `Wall`, `Shelf`), which already provides clean room grouping, device checklist popovers, and persistent coordinates.
 
-#### 2. Unified Spatial Stage: Multi-Panel Virtual Wall Slicing (Phase 4)
+#### 2. Per-Device Live Widget & Background Streamer Binding (`DisplayJobBinding`)
+- **Finding**: Background streamers (Sysmon, Music, Stocks/Crypto, Weather) currently write to a single file-scoped `selectedWidget` and blit frames onto `window._activeDeviceMac()`. If Display A is running Sysmon and the user clicks Display B, Sysmon frames immediately leak onto Display B.
+- **Plan**: Introduce a `DisplayJobBinding` model where live jobs are bound explicitly to target display IDs (e.g., `displayA.bindJob("sysmon")`, `displayB.bindJob("stocks", "BTC")`). Streamers push frames directly to their assigned display object regardless of which tab or device is currently focused in the UI.
+
+#### 3. Multi-Device Fleet State & Transport Lifecycle (`DeviceNode` Architecture)
+- **Finding**: `window.DivoomState.appConnected` is a single global boolean, and `#banner-device-mac` holds one active screen. If one display among several goes to sleep or drops BLE, global connection state flickers or incorrectly marks all screens disconnected.
+- **Plan**: Establish a `DeviceNode` frontend registry mirroring `divoomd`'s multi-device topology. Each physical screen independently tracks its own connection lifecycle (`connected`, `reconnecting`, `offline`), transport (`BLE`, `LAN`, `Mock`), battery, brightness, and volume.
+
+#### 4. Channel Configuration Two-Way Binding (`DisplayPreview.opts`)
+- **Finding**: Channel configuration controls (clock style selector, color picker, ambient mode palette) currently operate on global singletons (`selectedClockStyle`, `#clock-color-input`), causing Display 1's clock style to overwrite Display 2's upon selection.
+- **Plan**: Two-way bind the Control Center / Inspector controls to `DisplayPreviewRegistry.getActive().opts`. When switching screens, the controls automatically load that display's saved settings without mutating other screens.
+
+#### 5. Unified Spatial Stage: Multi-Panel Virtual Wall Slicing (Phase 4)
 - Interactive snapping of adjacent tiles into a contiguous multi-panel composite surface.
 - Pushing an image or animation to a wall group automatically slices the canvas across contiguous physical panels according to their relative `(x, y)` coordinates.
+
+### OPEN — Rust Daemon Architectural Unification: Multi-Device Registry & Per-Device Queuing
+
+#### 1. Multi-Device Transport Pool (`DeviceRegistry`)
+- **Finding**: In `divoomd/src/daemon.rs`, the daemon holds a single device mutex: `pub(crate) device: Mutex<Option<Arc<DeviceTransport>>>` and `device_id: Mutex<Option<String>>`. Connecting to Screen B overwrites Screen A.
+- **Plan**: Introduce a `DeviceRegistry` holding `Arc<RwLock<HashMap<String, Arc<DeviceTransport>>>>`. All paired and configured physical screens (BLE and LAN) remain concurrently connected and accessible.
+
+#### 2. Explicit Per-Device Routing in `device_call`
+- **Finding**: `cmd_device_call` blindly executes on `self.device` (whoever was connected last).
+- **Plan**: Update `cmd_device_call` to extract target `mac` from `req.args` (falling back to the primary connected screen if omitted). Commands are routed directly to the target device's transport.
+
+#### 3. Decoupled Live Job Routing
+- **Finding**: In `divoomd/src/live_jobs/mod.rs:109`, `get_device_transport(&daemon, mac)` compares `cur_id == mac`. If a live job is running on Screen A, and the user selects Screen B in the GUI, `cur_id` changes to B, and Screen A's job immediately stalls in `health::JobState::WaitingForDevice`.
+- **Plan**: Update `get_device_transport` to look up the exact requested `mac` in the `DeviceRegistry`. Streaming jobs for Screen A continue uninterrupted regardless of which screen is currently focused in the GUI.
+
+#### 4. Per-Device Command Queuing & Isolation
+- **Finding**: The daemon owns a single global `CommandQueue`. A slow operation (such as a 30-second hot channel sync or GIF stream) on Screen A wedges commands or locks out Screen B under exclusive mode.
+- **Plan**: Instantiate per-device command queues (`HashMap<String, Arc<CommandQueue>>`). Screen A and Screen B process commands concurrently without contention.
+
+#### 5. Unified Wall as Composite Registry View
+- **Finding**: `DivoomWall` currently maintains a disconnected parallel array of transports (`Vec<DeviceSlot>`), fracturing the codebase into two separate worlds ("single device" vs "wall mode").
+- **Plan**: Re-architect `DivoomWall` to consume device transports directly from the `DeviceRegistry`, unifying single-device and multi-device composite rendering under a single transport architecture.
 
 ### OPEN — why did 64 subscriptions accumulate in the first place?
 

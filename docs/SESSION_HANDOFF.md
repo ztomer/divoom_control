@@ -306,37 +306,33 @@ wiring a button is small work on top of what exists.
 
 ## Open threads / next up
 
-### Phased Roadmap & Architecture Priorities (2026-09-11)
+### Architectural Unification Tracks (Next Up)
 
-1. **Phase A: Virtual Wall & Presets Streamlining**:
-   - The Spatial Bench already gives an exact, physical scale representation of every screen. A separate Virtual Wall canvas is redundant.
-   - Consolidate layout presets (`presetsSelect` / `load_preset_by_name`) into the unified `SpatialRooms` engine (`All`, `Desk`, `Wall`, `Shelf`), which naturally manages room assignments, device checkboxes, and persistent coordinates.
-   - *Verification*: Verify layout persistence and room device assignment without legacy preset modals.
+1. **Track 1: Virtual Wall & Presets Consolidation into Spatial Rooms**:
+   - Consolidate layout presets (`presetsSelect` / `load_preset_by_name`) into the unified `SpatialRooms` engine (`All`, `Desk`, `Wall`, `Shelf`).
+   - Phase out redundant separate Virtual Wall preview canvas now that the Spatial Bench provides real-scale per-device nodes.
+   - *Verification*: Verify layout persistence, coordinate preservation, and multi-device wall slotting entirely within Spatial Rooms.
 
-2. **Phase B: Authentic, Pixel-Art Clockface Previews**:
-   - Current SVG vector text rendering (`<text font-family="monospace">12:00</text>`) produces blurry curves that look nothing like the real physical display.
-   - Replace vector text in `_clockFaceSVG` with authentic Divoom bitmap font matrices (e.g. 7×5 and 5×3 pixel digit definitions) rendered with `image-rendering: pixelated;` onto integer canvas coordinates.
-   - *Verification*: Pixel-exact canvas comparison asserting sharp square pixel edges and zero vector anti-aliasing blur.
+2. **Track 2: Per-Device Live Widget & Background Streamer Binding (`DisplayJobBinding`)**:
+   - Decouple background streamers (Sysmon, Music, Stocks/Crypto, Weather) from the global `selectedWidget` singleton and the active UI tab.
+   - Bind streamers to explicit target display IDs (`displayA.bindJob("sysmon")`, `displayB.bindJob("stocks", "BTC")`), preventing frames from leaking to whatever screen is selected in the UI.
+   - *Verification*: Verify running Sysmon on display A while switching GUI focus to display B leaves display A streaming sysmon and display B on its own channel.
 
-3. **Phase C: Infallible Live Gallery & Hot Channel Previews**:
-   - Gallery art and Hot Channel previews must reliably propagate to device preview nodes in all scenarios (cold boot, channel switch, live manifest sync).
-   - Solidify the event-driven preview pipeline so any gallery selection, custom art push, or hot channel sync immediately sets the resolved data-URL frame on `window.setDeviceActivity(mac, kind, { src })` and `window.setDevicePreview(mac, src)`.
-   - *Verification*: Playwright browser test verifying thumbnail-to-canvas propagation on channel switch.
+3. **Track 3: Multi-Device Fleet State & Transport Lifecycle (`DeviceNode` Architecture)**:
+   - Modernize `window.DivoomState.appConnected` (single boolean) and `#banner-device-mac` to a true multi-device registry mirroring `divoomd`'s topology.
+   - Each physical screen independently manages its connection lifecycle (`connected`, `reconnecting`, `offline`), transport (`BLE`, `LAN`, `Mock`), battery, brightness, and volume.
+   - *Verification*: Verify disconnecting screen 1 does not mark screen 2 offline or disable global controls.
 
-4. **Phase D: System Monitor & Widget Live Preview Synchronization**:
-   - Switching to System Monitor on device works, but the preview was stuck showing the BTC ticker due to a `ReferenceError` in `widgets_sysmon.js` (accessing `selectedWidget` scoped to `widgets.js`).
-   - Fixed by calling `window.selectedWidgetIs("sysmon")` and immediately triggering `window.refreshSysmonPreview()` on widget card selection.
-   - *Verification*: Verify clicking System Monitor card immediately replaces the previous stock/BTC frame with live CPU/memory stats on both `#banner-device-screen` and `#stage-canvas-${mac}`.
+4. **Track 4: Channel Configuration Two-Way Binding (`DisplayPreview.opts`)**:
+   - Two-way bind the Control Center and sidebar inspector controls to `DisplayPreviewRegistry.getActive().opts`.
+   - Switching selected screens automatically populates the controls with that specific screen's configuration (clock style, color, ambient mode) without clobbering other screens.
+   - *Verification*: Select display 1 (Clock style 1 Rainbow), select display 2 (Clock style 3 Analog Square); assert inspector controls switch values without mutating display 1.
 
-5. **Phase E: Gallery Selection to Device Hardware Push**:
-   - User report: Selecting gallery art in the Cloud/Community gallery does not show up on the physical screen.
-   - Action: Audit `.gallery-item` click handler in `gallery_ui.js` / `gallery.js` to ensure selecting an art tile immediately dispatches `pywebview.api.display_image` or `play_gif` to the active device, and updates the device preview frame.
-   - *Verification*: E2E test verifying gallery item click dispatches wire frames to MockBleakClient and updates `devicePreviews`.
-
-6. **Phase F: Custom Art Channel Cache Restoration**:
-   - User report: Custom art channel is empty again in runtime use.
-   - Action: Audit `loadCustomArtCacheGrid` in `channels_grids.js` and `get_cached_gallery_files` in `gallery_sync.py`. Ensure the 145 files in `~/.config/divoom-control/cache_gallery/` populate into the custom art grid robustly without depending on fragile remote network metadata.
-   - *Verification*: Test asserting that with cached files present on disk, `get_cached_gallery_files()` returns all items and the custom art cache grid renders non-empty.
+5. **Track 5: Rust Daemon Multi-Device Registry & Per-Device Queuing (`DeviceRegistry`)**:
+   - Replace the single `pub(crate) device: Mutex<Option<Arc<DeviceTransport>>>` and global `CommandQueue` with a multi-transport registry and per-device command queues.
+   - Route `cmd_device_call` and `get_device_transport` by target MAC address, ensuring live streaming jobs on screen A do not enter `WaitingForDevice` when the GUI connects to screen B.
+   - Unify `DivoomWall` as a composite view over the `DeviceRegistry` rather than maintaining a disconnected parallel connection tree.
+   - *Verification*: Connect 2 simulated devices, start sysmon on screen 1, dispatch commands to screen 2; verify screen 1 streams uninterrupted and screen 2 executes concurrently.
 
 **0. Two environment problems that cost this release ~an hour.** Neither is a
 repo defect, but both will recur.
