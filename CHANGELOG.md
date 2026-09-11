@@ -14,6 +14,9 @@ shipped milestone (per the project planning docs).
   - Corrected connection and transport details (single-owner daemon model, optional MAC parameter, stdio pipe requirements).
 - **`docs/ROADMAP.md` MCP item rationalized**:
   - Replaced the conversational narrative in the open MCP roadmap item with an objective, structured technical specification covering screen discovery (`list_screens`), media scaling & animation streaming, native text rendering (`show_text`), lease-based resource arbitration with TTL expiration, and rate-limiting via conflation.
+  - Documented all 9 MCP functional capability gaps identified during the comprehensive audit (multi-device discovery, resolution scaling, full animation streaming, native text rendering, live widget lifecycle, rich capabilities, transient notifications, device tools, and screen leasing).
+- **`docs/ROADMAP.md` Unified Spatial Stage initiative added**:
+  - Added architectural specification for a persistent top header stage unifying device selection, real-time pixel previews, room/group categorization, and drag-and-drop virtual wall layout for multi-device setups (e.g. 4 hardware displays). Code changes gated on design alignment.
 
 ## v0.34.0 — the weather widget was invisible, and the harness could not have found it (2026-09-07)
 

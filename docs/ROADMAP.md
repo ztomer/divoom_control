@@ -229,21 +229,26 @@ of work, not two.
 Enable external processes and AI agents to discover, target, and display custom visuals (images, animations, text) on Divoom devices via the daemon-backed MCP server.
 
 #### 1. Device & Screen Discovery (`list_screens`)
-The caller needs visibility into available devices to make informed layout and rendering decisions:
 - **Topology & Geometry**: Expose `device_id` (MAC or identifier), model class, native resolution (`width`, `height`), connection status (`connected`/`disconnected`), and relative positioning coordinates `(x, y)` if configured in a multi-device layout.
 - **Explicit Targeting**: The caller explicitly selects the target screen (`target: "<device_id>"`, `"all"`, or a list of IDs). The daemon does not implicitly slice content across devices or assume virtual-wall composition unless specifically requested.
 
 #### 2. Media & Text Rendering Pipeline
-- **Image & Animation Sizing**: Accept an explicit resize policy (`fit`, `fill`, `exact`, `none`) rather than silently downscaling to 16x16. Return a descriptive error if non-matching dimensions are supplied with `none`.
-- **Animation Streaming**: Implement full multi-frame animation streaming in the native MCP server (closing the current first-frame limitation in `divoomd mcp`).
-- **Native Text Rendering**: Provide a high-level text tool (`show_text` / `render_text`) using the daemon's internal bitmap font engine (`font.rs`), supporting font choice, color, and optional marquee/scrolling behavior without requiring the client to pre-rasterize.
+- **Image & Animation Sizing**: Accept an explicit resize policy (`fit`, `fill`, `exact`, `none`) rather than silently downscaling to 16x16. Support arbitrary native resolutions (16x16, 32x32, 64x64). Return a descriptive error if non-matching dimensions are supplied with `none`.
+- **Full Animation Streaming**: Implement multi-frame animation streaming in the native MCP server (closing the current first-frame limitation in `divoomd mcp`).
+- **Native Text Rendering (`show_text`)**: Provide a high-level text tool using the daemon's internal bitmap font engine (`font.rs`), supporting font choice, color, and optional marquee/scrolling behavior without requiring the client to pre-rasterize.
 
-#### 3. Resource Arbitration & Session Management
-- **Screen Leasing & Priority**: Prevent visual thrashing between background daemon jobs (sysmon, weather, clock) and external applications. Callers acquire a timed lease (`acquire_screen` / `release_screen` or per-request lease tokens).
+#### 3. Live Jobs, Notifications & Built-in Tools
+- **Live Widget Lifecycle (`live_jobs_control`)**: Expose tools to start, stop, and inspect background widgets (`sysmon`, `now_playing` / album art, rendered weather, custom art) rather than requiring direct daemon socket calls.
+- **Transient Notifications (`show_notification`)**: Expose a tool to display transient visual notification alerts on the panel.
+- **Hardware Tools Mapping**: Expose device tools already implemented in the daemon: scoreboard score updates (`scoreboard.set_scoreboard`), timers (`timer.set_timer`), and countdowns (`countdown.set_countdown`).
+- **Rich Capabilities Introspection (`get_capabilities`)**: Upgrade the tool to return physical panel dimensions (`width`, `height`), device model, battery status, and hardware feature flags (speaker, radio, clock).
+
+#### 4. Resource Arbitration & Session Management
+- **Screen Leasing & Priority**: Prevent visual collisions between background daemon jobs (sysmon, weather, clock) and external applications. Callers acquire a timed lease (`acquire_screen` / `release_screen` or per-request lease tokens).
 - **Lease Expiration & Crash Recovery**: A lease must carry a mandatory TTL (e.g. 10–60s) with renewal. If a client terminates or fails to renew, the panel reverts to its previous or default channel rather than retaining a stale frame indefinitely.
 - **Link-Aware Conflation**: For continuous frame pushes over high-latency links (BLE/SPP), incoming frames for a target device are conflated (keeping only the latest frame and dropping intermediate backlogs) to avoid saturating transport queues.
 
-#### 4. Security & Failure Semantics
+#### 5. Security & Failure Semantics
 - **Access Control**: Clearly define whether the MCP surface inherits the daemon's local Unix socket trust model or requires token-based authentication over TCP.
 - **Fail-Fast Error Reporting**: Pushes to disconnected or unready devices must fail immediately with clear status codes (`DEVICE_DISCONNECTED`), preventing silent no-ops.
 
@@ -251,6 +256,31 @@ The caller needs visibility into available devices to make informed layout and r
 1. Upgrade `render_widget` to support rendered weather (validates the rendering pipeline within the daemon).
 2. Enhance native device capabilities/status reporting (`device_status` carrying model and panel resolution).
 3. Extend `divoomd mcp` with `list_screens`, resolution-aware image/animation streaming, text rendering, and lease-based arbitration.
+
+### OPEN (DESIGN PHASE) — Unified Spatial Stage: Device Selection, Live Previews, Rooms & Virtual Wall
+
+_Major UI/UX architecture initiative for multi-device environments (e.g., 4 physical Divoom displays). Gate: Design alignment must be completed before any code/UI modifications._
+
+#### Motivation & Current Friction
+- Device selection currently lives in a sidebar dropdown (`#sidebar-device-select`) and fragmented sub-selectors across tabs.
+- The Virtual Wall configuration is siloed in an isolated tab (`wall.css`), detached from everyday device control.
+- Real-time device previews are scattered across individual widget cards, making multi-device monitoring disjointed.
+
+#### Concept: Persistent Spatial Header Stage
+Introduce a unified, persistent canvas at the top of the main dashboard serving three core functions simultaneously:
+
+1. **Spatial Grouping & Rooms**:
+   - Organize multiple physical devices into logical rooms or physical locations (e.g., "Desk" [2 units], "Living Room" [1 unit], "Bedside" [1 unit]).
+   - Allow devices within a room to be positioned spatially relative to one another (drag-and-drop grid), or snapped into contiguous virtual wall arrays.
+2. **Real-Time Live Previews**:
+   - Render mini pixel previews of each device's live screen directly within its avatar/card, updating dynamically via daemon status/render broadcasts.
+3. **Triple-Duty Interaction (Status, Selection, Alignment)**:
+   - **Status at a glance**: Displays online/offline indicators, transport type (BLE/LAN), battery levels, and active job/channel badges.
+   - **Selection & Targeting**: Clicking a device selects it as the active target for the tabs below (Lighting, Design, Tools, Settings). Clicking a room/group header targets all devices in that group simultaneously.
+   - **Visual Wall Integration**: Splicing content across multiple panels is handled directly on the spatial stage rather than in a separate tool, treating virtual walls as a natural arrangement mode for co-located devices.
+
+#### Design Invariant
+**Strict hold on UI implementation until layout, ergonomics, and state models are fully designed and approved.**
 
 ### OPEN — why did 64 subscriptions accumulate in the first place?
 
