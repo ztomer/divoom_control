@@ -21,7 +21,8 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
-- **2026-09-11 — v0.35.2: Unified Multi-Device Architecture, Per-Device Command Queues, Streamer Job Isolation & Native Menubar Event-Driven Streaming.**
+- **2026-09-11 — v0.35.2 RELEASED & INSTALLED LOCALLY: Unified Multi-Device Architecture, Per-Device Command Queues, Streamer Job Isolation & Native Menubar Event-Driven Streaming.**
+  - **Release & Local Verification**: GitHub CI all green (5/5 jobs), release `v0.35.2` published with DMG and Homebrew cask updated; installed to `/Applications/Divoom.app` via `scripts/install_local.sh`, verified running daemon inode (`539489682`, PID 8041). Development BLE-free debug binary restored.
   - **Unified DisplayPreview Class & Registry (`preview_controller.js`, `index.html`)**:
     - Replaced fragmented ad-hoc preview dictionaries across 8+ frontend modules with an object-oriented architecture (`DisplayPreview` + `DisplayPreviewRegistry`).
     - Encapsulates per-display screen specs (`16x16`, `32x32`, `64x64`), active channel, image/SVG caching, authentic 1-bit bitmap digit rendering, and direct-to-canvas blitting.
