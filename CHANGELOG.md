@@ -51,6 +51,22 @@ shipped milestone (per the project planning docs).
   - Standardized `.glow-btn` button typography to `var(--font-sans)` (`Inter`).
   - Cleaned up micro-labels (such as `FLEET:`) to `var(--font-sans)`.
 
+### Fixed — Layout Persistence & Deck Card Spacing
+
+- **Hardware Deck Spacing & Breathing Room (`spatial_stage.css`)**:
+  - Expanded spacing in the Active Display Hardware Deck (`.sidebar-device-deck`): increased padding to `12px` and flex gap to `12px`.
+  - Added dedicated row padding (`padding: 2px 0`) and gap (`8px`) to `.deck-room-row`.
+  - Increased `.deck-select` padding (`4px 8px`), font size (`11px`), and minimum height (`24px`), eliminating cramped text inside the dropdown.
+  - Preserved device header name readability (`font-size: 11px`) to prevent truncation of names like `Ditoo-L`.
+  - Increased slider row gap to `5px` with distinct label and thumb hierarchy.
+- **Preview Canvas Layout Persistence Across Sessions**:
+  - Exposed `get_topology` and `set_topology` on `DivoomGuiAPI` (`divoom_gui/gui_api.py`) and `DaemonClient` (`divoom_client/daemon_protocol.py`), satisfying the `check_gui_api_reachable.py` gate.
+  - Updated daemon topology handler `cmd_set_topology` (`divoomd/src/wall/cmds.rs`) to merge incoming device entries rather than overwriting the whole configuration file.
+  - Centralized coordinate persistence in `spatial_rooms.js` (`savePositions`, `getSavedPositions`, `findPosition`, `syncTopology`, `loadTopology`), syncing to `localStorage` and `topology.json`.
+  - Implemented case-insensitive MAC normalization (`findPosition`) so address case differences across BLE, LAN, and mocks never discard saved coordinates.
+  - Wired `endNodeDrag` and `snapToDesk` to persist layout coordinates on movement.
+  - Hydrated stage coordinates on GUI launch and `pywebviewready`.
+
 ## v0.34.0 — the weather widget was invisible, and the harness could not have found it (2026-09-07)
 
 A hardware round. The R12 visual pass — open since R12 and filed for rounds as

@@ -250,3 +250,38 @@ class TestGuiApiTopLevelCoverage(unittest.TestCase):
         with patch.object(MCPController, "instance", return_value=fake_ctl):
             self.api.start_mcp_server(mac="")
         fake_ctl.start.assert_called_with(mac=None)
+
+    # ---- get_topology & set_topology --------------------------------------
+
+    def test_get_topology_delegates_to_daemon_client(self):
+        fake = MagicMock()
+        fake.get_topology.return_value = {"success": True, "topology": {"devices": {}}}
+        self.api._daemon_client = fake
+        result = self.api.get_topology()
+        self.assertTrue(result["success"])
+        fake.get_topology.assert_called_once()
+
+    def test_get_topology_daemon_unavailable(self):
+        with patch.object(self.api, "_client", return_value=None):
+            result = self.api.get_topology()
+        self.assertFalse(result["success"])
+        self.assertIn("daemon unavailable", result["error"])
+
+    def test_set_topology_delegates_to_daemon_client(self):
+        fake = MagicMock()
+        fake.set_topology.return_value = {"success": True}
+        self.api._daemon_client = fake
+        data = {"topology": {"devices": {"11:22": {"x": 10, "y": 20}}}}
+        result = self.api.set_topology(data)
+        self.assertTrue(result["success"])
+        fake.set_topology.assert_called_with({"devices": {"11:22": {"x": 10, "y": 20}}})
+
+    def test_set_topology_accepts_json_string(self):
+        fake = MagicMock()
+        fake.set_topology.return_value = {"success": True}
+        self.api._daemon_client = fake
+        json_str = json.dumps({"devices": {"11:22": {"x": 10, "y": 20}}})
+        result = self.api.set_topology(json_str)
+        self.assertTrue(result["success"])
+        fake.set_topology.assert_called_with({"devices": {"11:22": {"x": 10, "y": 20}}})
+

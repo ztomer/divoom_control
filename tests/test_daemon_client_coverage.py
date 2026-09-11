@@ -442,3 +442,18 @@ def test_push_animation_unlink_failure_is_swallowed(monkeypatch, tmp_path):
     result = _run(proxy.push_animation(b"GIF89a-payload"))
     assert result is True
     assert len(calls) == 1
+
+
+def test_daemon_client_get_set_topology():
+    client = DaemonClient()
+    client.send_command = MagicMock(return_value={"success": True})
+
+    res_get = client.get_topology()
+    assert res_get["success"] is True
+    client.send_command.assert_called_with("get_topology")
+
+    top_data = {"devices": {"AA:BB": {"x": 10, "y": 20}}}
+    res_set = client.set_topology(top_data)
+    assert res_set["success"] is True
+    client.send_command.assert_called_with("set_topology", {"topology": top_data})
+

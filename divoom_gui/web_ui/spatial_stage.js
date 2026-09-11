@@ -39,12 +39,8 @@
                 <div id="stage-room-filters" class="stage-room-filters"></div>
             </div>
             <div class="spatial-stage-actions">
-                <button id="stage-snap-btn" class="stage-btn" type="button" title="Align to desk baseline">
-                    <svg class="kare-icon" viewBox="0 0 16 16"><rect x="2" y="2" width="4" height="4" fill="currentColor"/><rect x="10" y="2" width="4" height="4" fill="currentColor"/><rect x="2" y="10" width="4" height="4" fill="currentColor"/><rect x="10" y="10" width="4" height="4" fill="currentColor"/></svg> Align
-                </button>
-                <button id="stage-collapse-btn" class="stage-btn" type="button" title="Collapse to ribbon">
-                    <svg class="kare-icon" viewBox="0 0 16 16"><rect x="2" y="4" width="12" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="5" cy="8" r="2"/></svg> Ribbon
-                </button>
+                <button id="stage-snap-btn" class="stage-btn" type="button" title="Align to desk baseline"><svg class="kare-icon" viewBox="0 0 16 16"><rect x="2" y="2" width="4" height="4" fill="currentColor"/><rect x="10" y="2" width="4" height="4" fill="currentColor"/><rect x="2" y="10" width="4" height="4" fill="currentColor"/><rect x="10" y="10" width="4" height="4" fill="currentColor"/></svg> Align</button>
+                <button id="stage-collapse-btn" class="stage-btn" type="button" title="Collapse to ribbon"><svg class="kare-icon" viewBox="0 0 16 16"><rect x="2" y="4" width="12" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="5" cy="8" r="2"/></svg> Ribbon</button>
             </div>
         `;
         wrapper.appendChild(header);
@@ -74,18 +70,14 @@
 
         // Wire event handlers
         document.getElementById('stage-collapse-btn').addEventListener('click', () => {
-            wrapper.style.display = 'none';
-            ribbon.style.display = 'flex';
+            wrapper.style.display = 'none'; ribbon.style.display = 'flex';
             localStorage.setItem('spatial_stage_collapsed', 'true');
         });
-
         document.getElementById('stage-expand-btn').addEventListener('click', () => {
-            ribbon.style.display = 'none';
-            wrapper.style.display = 'flex';
+            ribbon.style.display = 'none'; wrapper.style.display = 'flex';
             localStorage.setItem('spatial_stage_collapsed', 'false');
             refreshBenchNodes();
         });
-
         document.getElementById('stage-snap-btn').addEventListener('click', snapToDesk);
 
         // Sidebar deck room select
@@ -98,7 +90,8 @@
                         const added = window.SpatialRooms.addRoom(name);
                         if (added && selectedMac) {
                             deviceRooms[selectedMac] = added;
-                            try { localStorage.setItem('divoom_stage_rooms', JSON.stringify(deviceRooms)); } catch (_) {}
+                            window.SpatialRooms.saveDeviceRooms(deviceRooms);
+                            window.SpatialRooms.syncTopology(null, devicePositions, deviceRooms);
                         }
                     }
                     if (selectedMac) updateInspector(getSelectedDevice());
@@ -108,7 +101,12 @@
                 }
                 if (!selectedMac) return;
                 deviceRooms[selectedMac] = e.target.value;
-                try { localStorage.setItem('divoom_stage_rooms', JSON.stringify(deviceRooms)); } catch (_) {}
+                if (window.SpatialRooms) {
+                    window.SpatialRooms.saveDeviceRooms(deviceRooms);
+                    window.SpatialRooms.syncTopology(null, devicePositions, deviceRooms);
+                } else {
+                    try { localStorage.setItem('divoom_stage_rooms', JSON.stringify(deviceRooms)); } catch (_) {}
+                }
                 updateRoomFilterTabs();
                 refreshBenchNodes();
             });
@@ -163,15 +161,36 @@
             });
         }
 
-        // Load topology, rooms, and brightness from local cache
+        // Load topology, rooms, and brightness from cache & daemon
+        if (window.SpatialRooms) {
+            Object.assign(devicePositions, window.SpatialRooms.getSavedPositions());
+            Object.assign(deviceRooms, window.SpatialRooms.getDeviceRooms());
+            window.SpatialRooms.loadTopology();
+        } else {
+            try {
+                const saved = localStorage.getItem('divoom_stage_positions');
+                if (saved) Object.assign(devicePositions, JSON.parse(saved));
+                const r = localStorage.getItem('divoom_stage_rooms');
+                if (r) Object.assign(deviceRooms, JSON.parse(r));
+            } catch (_) {}
+        }
         try {
-            const saved = localStorage.getItem('divoom_stage_positions');
-            if (saved) Object.assign(devicePositions, JSON.parse(saved));
-            const r = localStorage.getItem('divoom_stage_rooms');
-            if (r) Object.assign(deviceRooms, JSON.parse(r));
             const b = localStorage.getItem('divoom_stage_brightness');
             if (b) Object.assign(deviceBrightness, JSON.parse(b));
         } catch (_) {}
+
+        window.addEventListener('divoom:topology-loaded', (e) => {
+            const top = e.detail || {};
+            if (top.devices) {
+                Object.keys(top.devices).forEach(a => {
+                    const d = top.devices[a];
+                    if (d && typeof d.x === 'number' && typeof d.y === 'number') devicePositions[a] = { x: d.x, y: d.y };
+                    if (d && d.room) deviceRooms[a] = d.room;
+                });
+            }
+            updateRoomFilterTabs();
+            refreshBenchNodes();
+        });
 
         refreshBenchNodes();
         startAnimationLoop();
@@ -202,12 +221,10 @@
 
     function resolveDeviceSpec(dev) {
         const name = (dev.name || '').toLowerCase();
-        if (name.includes('64')) return DIVOOM_SPECS.pixoo64;
+        if (name.includes('64') || dev.size === 64) return DIVOOM_SPECS.pixoo64;
         if (name.includes('max') || name.includes('tivoo-max')) return DIVOOM_SPECS.tivoo_max;
         if (name.includes('timoo')) return DIVOOM_SPECS.timoo;
-        if (name.includes('ditoo')) return DIVOOM_SPECS.ditoo;
         if (name.includes('pixoo')) return DIVOOM_SPECS.pixoo;
-        if (dev.size === 64) return DIVOOM_SPECS.pixoo64;
         return DIVOOM_SPECS.ditoo;
     }
 
@@ -240,19 +257,13 @@
 
         let defaultX = 20;
         devices.forEach((dev, idx) => {
-            const addr = dev.address || ('dev-' + idx);
-            const spec = resolveDeviceSpec(dev);
-            const w = Math.round(spec.w_mm * SCALE);
-            const h = Math.round(spec.h_mm * SCALE);
-            const sw = Math.round(spec.screen_mm * SCALE);
-            const pw = spec.pw;
-            const ph = spec.ph;
+            const addr = dev.address || ('dev-' + idx), spec = resolveDeviceSpec(dev);
+            const w = Math.round(spec.w_mm * SCALE), h = Math.round(spec.h_mm * SCALE);
+            const sw = Math.round(spec.screen_mm * SCALE), pw = spec.pw, ph = spec.ph;
 
-            if (!devicePositions[addr]) {
-                const baselineY = Math.max(10, 160 - h);
-                devicePositions[addr] = { x: defaultX, y: baselineY };
-            }
-            const pos = devicePositions[addr];
+            let pos = window.SpatialRooms ? window.SpatialRooms.findPosition(devicePositions, addr) : devicePositions[addr];
+            if (!pos) pos = { x: defaultX, y: Math.max(10, 160 - h) };
+            devicePositions[addr] = pos;
             defaultX += w + 12;
 
             const isSelected = selectedMac ? (selectedMac === addr) : (idx === 0);
@@ -308,15 +319,9 @@
 
     function highlightNode(addr, dev) {
         selectedMac = addr;
-        document.querySelectorAll('.spatial-node').forEach(n => {
-            n.classList.remove('selected');
-            n.style.zIndex = '10';
-        });
+        document.querySelectorAll('.spatial-node').forEach(n => { n.classList.remove('selected'); n.style.zIndex = '10'; });
         const activeNode = document.getElementById(`spatial-node-${addr}`);
-        if (activeNode) {
-            activeNode.classList.add('selected');
-            activeNode.style.zIndex = '25';
-        }
+        if (activeNode) { activeNode.classList.add('selected'); activeNode.style.zIndex = '25'; }
         updateInspector(dev);
         updateRibbonSelection();
     }
@@ -330,15 +335,11 @@
     }
 
     function updateInspector(dev) {
-        const spec = resolveDeviceSpec(dev);
-        const nameEl = document.getElementById('deck-device-name');
-        const tagEl = document.getElementById('deck-device-tag');
-        const roomSelect = document.getElementById('deck-room-select');
-        const volContainer = document.getElementById('deck-volume-container');
-        const bSlider = document.getElementById('global-brightness-slider');
-        const bVal = document.getElementById('global-brightness-value');
+        const spec = resolveDeviceSpec(dev), addr = dev.address || 'dev';
+        const nameEl = document.getElementById('deck-device-name'), tagEl = document.getElementById('deck-device-tag');
+        const roomSelect = document.getElementById('deck-room-select'), volContainer = document.getElementById('deck-volume-container');
+        const bSlider = document.getElementById('global-brightness-slider'), bVal = document.getElementById('global-brightness-value');
 
-        const addr = dev.address || 'dev';
         if (nameEl) nameEl.textContent = dev.name || spec.name;
         if (tagEl) tagEl.textContent = `${spec.pw}×${spec.ph}`;
         if (roomSelect) {
@@ -346,9 +347,7 @@
             if (window.SpatialRooms) window.SpatialRooms.populateSelect(roomSelect, rm);
             else roomSelect.value = rm;
         }
-        if (volContainer) {
-            volContainer.style.display = (spec.form !== 'pixoo') ? 'block' : 'none';
-        }
+        if (volContainer) volContainer.style.display = (spec.form !== 'pixoo') ? 'block' : 'none';
 
         const curB = (deviceBrightness[addr] !== undefined) ? deviceBrightness[addr] : 85;
         if (bSlider) bSlider.value = curB;
@@ -413,6 +412,8 @@
                     const spec = resolveDeviceSpec(activeDrag.dev);
                     window.connectDevice(activeDrag.dev.name || spec.name, activeDrag.addr);
                 }
+            } else if (window.SpatialRooms) {
+                window.SpatialRooms.savePositions(devicePositions, deviceRooms);
             } else {
                 try { localStorage.setItem('divoom_stage_positions', JSON.stringify(devicePositions)); } catch (_) {}
             }
@@ -430,7 +431,8 @@
             devicePositions[addr] = { x: curX, y: Math.max(10, 165 - Math.round(spec.h_mm * SCALE)) };
             curX += Math.round(spec.w_mm * SCALE) + 12;
         });
-        try { localStorage.setItem('divoom_stage_positions', JSON.stringify(devicePositions)); } catch (_) {}
+        if (window.SpatialRooms) window.SpatialRooms.savePositions(devicePositions, deviceRooms);
+        else try { localStorage.setItem('divoom_stage_positions', JSON.stringify(devicePositions)); } catch (_) {}
         refreshBenchNodes();
     }
 

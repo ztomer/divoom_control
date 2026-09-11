@@ -368,6 +368,26 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
         logger.info(f"save_notification_routing: saved {len(rules)} rules via daemon")
         return {"rules": [list(r) for r in load_routing_table()], "error": None}
 
+    def get_topology(self) -> dict:
+        """Fetch saved device positions, rooms, and wall state from daemon."""
+        client = self._client()
+        if client is None:
+            return {"success": False, "error": "daemon unavailable"}
+        return client.get_topology()
+
+    def set_topology(self, topology_data: dict) -> dict:
+        """Persist device positions, rooms, and wall configuration to daemon."""
+        client = self._client()
+        if client is None:
+            return {"success": False, "error": "daemon unavailable"}
+        if isinstance(topology_data, str):
+            try:
+                topology_data = json.loads(topology_data)
+            except Exception as e:
+                return {"success": False, "error": f"invalid json: {e}"}
+        top = topology_data.get("topology", topology_data) if isinstance(topology_data, dict) else {}
+        return client.set_topology(top)
+
     def device_call(self, method: str, args: list = None, kwargs: dict = None,
                      target: str = "device", blobs: dict = None,
                      token: str = None) -> str:

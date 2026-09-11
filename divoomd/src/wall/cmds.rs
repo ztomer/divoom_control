@@ -64,9 +64,28 @@ pub async fn cmd_set_topology(_daemon: &Daemon, req: &Request) -> Value {
         .get("topology")
         .cloned()
         .unwrap_or_else(|| req.args.clone());
-    match save_topology(&top) {
-        Ok(()) => json!({"success": true}),
-        Err(e) => err_reply(&format!("failed to save topology: {e}")),
+    let mut current = load_topology();
+    if let (Some(cur_obj), Some(new_obj)) = (current.as_object_mut(), top.as_object()) {
+        for (k, v) in new_obj {
+            if k == "devices" {
+                if let (Some(cur_devs), Some(new_devs)) = (cur_obj.get_mut("devices").and_then(Value::as_object_mut), v.as_object()) {
+                    for (dev_k, dev_v) in new_devs {
+                        cur_devs.insert(dev_k.clone(), dev_v.clone());
+                    }
+                    continue;
+                }
+            }
+            cur_obj.insert(k.clone(), v.clone());
+        }
+        match save_topology(&current) {
+            Ok(()) => json!({"success": true}),
+            Err(e) => err_reply(&format!("failed to save topology: {e}")),
+        }
+    } else {
+        match save_topology(&top) {
+            Ok(()) => json!({"success": true}),
+            Err(e) => err_reply(&format!("failed to save topology: {e}")),
+        }
     }
 }
 

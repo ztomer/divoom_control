@@ -347,6 +347,12 @@ class DaemonClient(HostDataMixin, CloudDataMixin):
                                  {"slots": slots, "cell_size": cell_size},
                                  read_timeout=load_daemon_config().connect_timeout)
 
+    def get_topology(self) -> dict:
+        return self.send_command("get_topology")
+
+    def set_topology(self, topology: dict) -> dict:
+        return self.send_command("set_topology", {"topology": topology})
+
     def probe_lan(self) -> dict:
         return self.send_command("probe_lan")
 

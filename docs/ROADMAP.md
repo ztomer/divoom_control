@@ -19,8 +19,8 @@ forward-looking one. Recover a round plan with
   - **Daemon Topology Engine (`divoomd`)**: Implemented `get_topology` and `set_topology` socket dispatch commands with JSON persistence to `~/.config/divoom-control/topology.json`.
   - **MCP `list_screens`**: Registered tool #14 in `divoomd/src/mcp_tools.rs`.
   - **Canvas Drag Performance & Zero Clickthrough**: Separated visual selection from heavy IPC device connection calls; separated dragging vs clicking via movement delta tracking; zero clickthrough leaks or overlay blocks.
-  - **Room Management Engine (`spatial_rooms.js`) & Font Harmonization**: Persistent room add/remove lifecycle with inline creation and safe Desk fallback; strict font unification on design tokens (`var(--font-sans)` for controls, `var(--font-mono)` for technical readouts, `var(--font-display)` for titles).
-  - **Suite**: 204 Rust unit tests, 285 Python pytest tests (1 skipped), 15 mock device E2E tests, 735 files clean in emoji gate, 386 source files <= 500 lines.
+  - **Layout Persistence & Hardware Deck Spacing**: Persistent canvas coordinate saving across `localStorage` and daemon `topology.json` on node drag and desk align; case-insensitive MAC normalization; room management and safe Desk fallback; deck inspector spacing expanded (`padding: 12px`, `gap: 12px`, `min-height: 24px` on select, preventing cramped inputs and text clipping).
+  - **Suite**: 204 Rust unit tests, 314 Python pytest tests (2 skipped), 15 mock device E2E tests, 736 files clean in emoji gate, 116 API methods reachable, 387 source files <= 500 lines.
 
 - **v0.34.0 — the hardware round (2026-09-07)**: the R12 visual pass, open
   since R12, closed **4/4 on real pixels**. It found one real defect —

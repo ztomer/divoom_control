@@ -10,6 +10,7 @@
     const DEFAULT_ROOMS = ['Desk', 'Shelf', 'Wall'];
     const STORAGE_KEY = 'divoom_stage_room_list';
     const DEVICE_ROOMS_KEY = 'divoom_stage_rooms';
+    const POSITIONS_KEY = 'divoom_stage_positions';
 
     function getRooms() {
         try {
@@ -25,6 +26,24 @@
         return [...DEFAULT_ROOMS];
     }
 
+    function getSavedPositions() {
+        try {
+            const raw = localStorage.getItem(POSITIONS_KEY);
+            if (raw) return JSON.parse(raw);
+        } catch (_) {}
+        return {};
+    }
+
+    function findPosition(positions, mac) {
+        if (!positions || !mac) return null;
+        if (positions[mac]) return positions[mac];
+        const lower = mac.toLowerCase();
+        if (positions[lower]) return positions[lower];
+        const upper = mac.toUpperCase();
+        if (positions[upper]) return positions[upper];
+        return null;
+    }
+
     function saveRooms(rooms) {
         if (!rooms.includes('Desk')) rooms.unshift('Desk');
         try {
@@ -33,12 +52,92 @@
         syncTopology(rooms);
     }
 
-    function syncTopology(rooms) {
+    function syncTopology(rooms, positions, devRooms) {
+        const rms = rooms || getRooms();
+        const posMap = positions || getSavedPositions();
+        const roomMap = devRooms || getDeviceRooms();
+
+        const devices = {};
+        Object.keys(posMap).forEach(addr => {
+            const p = posMap[addr];
+            if (p && typeof p.x === 'number' && typeof p.y === 'number') {
+                devices[addr] = {
+                    x: p.x,
+                    y: p.y,
+                    room: roomMap[addr] || 'Desk'
+                };
+            }
+        });
+
         if (window.pywebview && window.pywebview.api && window.pywebview.api.set_topology) {
             try {
-                window.pywebview.api.set_topology({ rooms: rooms });
+                window.pywebview.api.set_topology({
+                    rooms: rms,
+                    devices: devices,
+                    wall_linked: true
+                });
             } catch (_) {}
         }
+    }
+
+    async function loadTopology() {
+        if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.get_topology) {
+            return null;
+        }
+        try {
+            const reply = await window.pywebview.api.get_topology();
+            if (!reply || !reply.success) return null;
+            const top = reply.topology || {};
+
+            if (Array.isArray(top.rooms) && top.rooms.length > 0) {
+                const current = getRooms();
+                top.rooms.forEach(r => {
+                    if (r && !current.some(c => c.toLowerCase() === r.toLowerCase())) {
+                        current.push(r);
+                    }
+                });
+                if (!current.includes('Desk')) current.unshift('Desk');
+                try { localStorage.setItem(STORAGE_KEY, JSON.stringify(current)); } catch (_) {}
+            }
+
+            if (top.devices && typeof top.devices === 'object') {
+                const posMap = getSavedPositions();
+                const roomMap = getDeviceRooms();
+                let changedPos = false;
+                let changedRooms = false;
+
+                Object.keys(top.devices).forEach(addr => {
+                    const dev = top.devices[addr];
+                    if (dev && typeof dev.x === 'number' && typeof dev.y === 'number') {
+                        posMap[addr] = { x: dev.x, y: dev.y };
+                        changedPos = true;
+                    }
+                    if (dev && dev.room) {
+                        roomMap[addr] = dev.room;
+                        changedRooms = true;
+                    }
+                });
+
+                if (changedPos) {
+                    try { localStorage.setItem(POSITIONS_KEY, JSON.stringify(posMap)); } catch (_) {}
+                }
+                if (changedRooms) {
+                    try { localStorage.setItem(DEVICE_ROOMS_KEY, JSON.stringify(roomMap)); } catch (_) {}
+                }
+            }
+
+            window.dispatchEvent(new CustomEvent('divoom:topology-loaded', { detail: top }));
+            return top;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function savePositions(positions, devRooms) {
+        try {
+            localStorage.setItem(POSITIONS_KEY, JSON.stringify(positions));
+        } catch (_) {}
+        syncTopology(null, positions, devRooms);
     }
 
     function getDeviceRooms() {
@@ -239,7 +338,16 @@
         removeRoom,
         getDeviceRooms,
         saveDeviceRooms,
+        getSavedPositions,
+        savePositions,
+        findPosition,
+        syncTopology,
+        loadTopology,
         populateSelect,
         renderFilterPills
     };
+
+    window.addEventListener('pywebviewready', () => {
+        loadTopology();
+    });
 })();

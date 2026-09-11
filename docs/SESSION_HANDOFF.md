@@ -21,41 +21,47 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
-- **2026-09-11 — v0.35.0 RELEASED & INSTALLED LOCALLY: Unified Spatial Stage, Physical Scale Engine & Option 1 Layout.**
+- **2026-09-11 — v0.35.0 RELEASED & INSTALLED LOCALLY: Unified Spatial Stage, Layout Persistence, Deck Spacing & Room Management.**
   - **Top Zone Architecture**: Promoted the Spatial Preview Bench to a full-width top stage (`#spatial-stage-mount`, ~1100px wide) directly above `.app-container`. Eliminated duplicate top/bottom toolbars on the bench canvas, leaving a clean Dieter Rams radial dot canvas with header controls (`[All] [Desk] [Wall]` room filters, `Align`, and `Ribbon` toggle).
   - **Universal Appbar Clean-up**: Stripped duplicate brightness and speaker volume sliders from the top titlebar (`.integrated-appbar`), reserving it strictly for window controls, title, and settings gear.
-  - **Active Display Hardware Deck (`#sidebar-device-deck`)**: Pinned at the bottom of the left sidebar navigation column in the space vacated by the old preview banner:
-    - Live device identity (status diode jewel, display name, resolution badge e.g. `16×16` / `64×64`, and tactile Kare SVG power standby toggle).
+  - **Active Display Hardware Deck (`#sidebar-device-deck`)**: Pinned at the bottom of the left sidebar navigation column with refined spacing (`padding: 12px`, `gap: 12px`, room row `gap: 8px`, `deck-select` `min-height: 24px; padding: 4px 8px; font-size: 11px`, preventing cramped inputs and text clipping):
+    - Live device identity (status diode jewel, display name `Ditoo-L`, resolution badge e.g. `16×16` / `64×64`, and tactile Kare SVG power standby toggle).
     - Room assignment selector (`#deck-room-select`).
     - Device brightness slider (`#global-brightness-slider` / `#global-brightness-value`) with Braun Tuner Orange tactile slider thumb.
     - Contextual speaker volume row (`#deck-volume-container` with `#appbar-volume-slider` / `#appbar-volume-value`): dynamically visible (`display: block`) for audio-capable displays (Ditoo, Timoo, Tivoo-Max) and hidden (`display: none`) for screen-only devices (Pixoo-64, Pixoo-1).
-  - **Daemon Topology Engine (`divoomd`)**: Implemented `get_topology` and `set_topology` socket commands in `divoomd/src/daemon/dispatch.rs`, `divoomd/src/daemon.rs`, and `divoomd/src/wall/cmds.rs`. Configured JSON persistence to `~/.config/divoom-control/topology.json` (overridable via `DIVOOM_TOPOLOGY_PATH`).
+  - **Layout & Coordinate Persistence (`divoomd`, `gui_api.py`, `spatial_rooms.js`, `spatial_stage.js`)**:
+    - Resolved layout loss when moving devices: exposed `get_topology` and `set_topology` on `DivoomGuiAPI` and `DaemonClient`.
+    - Updated `divoomd/src/wall/cmds.rs` (`cmd_set_topology`) to merge device coordinates and properties into `load_topology()` rather than clobbering unmentioned keys.
+    - Centralized layout persistence in `spatial_rooms.js` (`savePositions`, `getSavedPositions`, `findPosition`, `syncTopology`, `loadTopology`). Coordinates are saved synchronously to `localStorage` (`divoom_stage_positions`) and synced asynchronously to the daemon's `topology.json`.
+    - Added case-insensitive address normalization in `findPosition(positions, addr)` so case mismatches (BLE vs IP vs mock) never lose saved coordinates or reset to baseline defaults.
+    - Wired `endNodeDrag` and `snapToDesk` to persist coordinates to daemon topology and `localStorage`.
+    - On GUI load and `pywebviewready`, queries `get_topology()` to hydrate device coordinates and room groupings.
   - **MCP `list_screens`**: Registered tool #14 (`list_screens`) in `divoomd/src/mcp_tools.rs` exposing screens, physical resolutions, spatial coordinates, and wall grouping. Unit tests updated and verified.
   - **Physical Hardware Database (Dieter Rams & Susan Kare Craft)**: Mapped exact millimeter dimensions, screen active area, aspect ratio, and physical silhouettes for Timoo (82.5×90mm), Ditoo (90×114mm), Tivoo-Max (184×163mm), Pixoo-1 (200×200mm), and Pixoo-64 (261×261mm). Rendered with true relative scaling (1mm = 0.65px) and discrete diode matrices.
   - **Canvas Drag Performance & Zero Clickthrough (`spatial_stage.js`)**:
-    - Identified that canvas drag lag was caused by `selectDevice` executing inside `mousedown`, triggering immediate Python IPC (`connect_single_device`), socket negotiation, and toast animations.
     - Separated visual highlighting (`highlightNode`) from backend connection IPC.
     - Implemented click-drag differentiation with a $3\text{px}$ movement threshold (`hasMoved`), ensuring dragging never triggers IPC or notifications.
-    - Prevented clickthrough bugs by strictly scoping listeners to active drag lifecycles and avoiding transparent overlay elements or pointer-events toggles.
+    - Scoped listeners to active drag lifecycles without clickthrough issues.
   - **Font Consistency & Typographic Harmonization**:
     - Eliminated font family outliers where `monospace` or `Outfit` leaked into UI controls. Room filter pills (`.stage-room-pill`), room select (`.spatial-room-select`), ribbon chips (`.spatial-ribbon-chip`), and device node headers (`.spatial-node-name`) now strictly use `var(--font-sans)` (`Inter`).
     - Fixed `#appbar-volume-value` to `var(--font-mono)` (`Inter Mono`) matching all other numerical readouts across the app.
     - Standardized `.glow-btn` button typography to `var(--font-sans)`.
   - **Room Management Lifecycle (`spatial_rooms.js`)**:
-    - Created dedicated module (`spatial_rooms.js`, 246 lines) managing persistent room grouping across `localStorage` and daemon topology (`topology.json`).
+    - Created dedicated module (`spatial_rooms.js`, 354 lines) managing persistent room grouping across `localStorage` and daemon topology (`topology.json`).
     - Tactile `+` button in stage header reveals an inline input form to create custom rooms in 1 click.
     - Custom rooms render with a subtle `×` button to delete; deleting a room gracefully reassigns all assigned displays back to `"Desk"` to prevent orphaned states.
     - Permanent baseline protection: `"Desk"` cannot be deleted.
     - Real-time dynamic sync between stage header filter pills and sidebar hardware deck (`#deck-room-select`).
   - **Gates & Verification**:
     - `cargo test -p divoomd --no-default-features` (204/204 passing).
-    - `python3 -m pytest tests/test_gui_api_*.py tests/test_mcp_*.py tests/test_repo_gates.py tests/test_fonts.py` (285 passed, 1 skipped).
+    - `python3 -m pytest tests/test_gui_api_*.py tests/test_mcp_*.py tests/test_repo_gates.py tests/test_fonts.py tests/test_daemon_client_coverage.py` (314 passed, 2 skipped).
     - `python3 -m pytest tests/test_e2e_mock_device.py` (15/15 passing).
-    - Dynamic Camoufox interaction verified: font families computed to expected tokens (pills/chips/names `Inter`, values `Inter Mono`, title `Outfit`), room creation, filtering, dynamic select mirroring, and room deletion fallback passed.
-    - File size gate (386/386 source files <= 500 lines: `spatial_stage.js` at 489 lines, `spatial_stage.css` at 488 lines, `spatial_rooms.js` at 246 lines).
-    - Emoji gate clean across 735 tracked files.
+    - Dynamic Playwright/Camoufox verification verified: device drag moves saved to `localStorage` and daemon `topology.json`, reloaded stage restored coordinates, room management passed, deck card spacing metrics verified (`deckGap: 12px`, `roomRowGap: 8px`, `roomSelectMinHeight: 24px`), and screenshot captured.
+    - File size gate: 387/387 source files <= 500 lines (`spatial_stage.js` at 491 lines, `spatial_stage.css` at 492 lines, `spatial_rooms.js` at 354 lines, `gui_api.py` at 468 lines).
+    - Emoji gate clean across 736 tracked files.
+    - API reachability gate: 116/116 public API methods reachable from `web_ui/`.
     - Rebuilt release app and dmg (`dist/Divoom.app` and `dist/Divoom-v0.35.0.dmg`).
-    - Installed locally to `/Applications/Divoom.app` via `scripts/install_local.sh`, verified running daemon inode (`538740126`).
+    - Installed locally to `/Applications/Divoom.app` via `scripts/install_local.sh`, verified running daemon inode (`538924259`, PID 37266).
     - Rebuilt BLE-free binary (`cargo build -p divoomd --no-default-features`) to protect against macOS TCC `SIGABRT`.
 
 - **2026-09-07 (final session) — v0.34.0 CUT: the hardware round.** The **R12
