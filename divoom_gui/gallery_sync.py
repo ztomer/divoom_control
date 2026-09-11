@@ -87,8 +87,9 @@ class GallerySyncMixin(GalleryHotApiMixin):
                     logger.warning(f"Failed to encode cache file {path}: {e}")
         
         final_list = []
-        for item in results.values():
+        for safe_name, item in results.items():
             final_list.append({
+                "file_id": safe_name,
                 "name": item["name"],
                 "path": item["path"],
                 "preview_url": item["preview_url"]

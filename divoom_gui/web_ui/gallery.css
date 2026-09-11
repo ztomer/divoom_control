@@ -67,6 +67,9 @@
     width: 100%;
     height: 100%;
     object-fit: contain;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
 }
 
 /* Honest placeholders: "still loading" must look different from "no preview

@@ -443,13 +443,25 @@ document.addEventListener("DOMContentLoaded", () => {
     function loadCustomArtCacheGrid() {
         const grid = document.getElementById("custom-art-cache-grid");
         if (!grid) return;
-        grid.innerHTML = '<div class="empty-list" style="grid-column: 1/-1;">Loading offline cache...</div>';
+        const search = document.getElementById("custom-art-search");
+        if (_customArtCacheFiles && _customArtCacheFiles.length > 0) {
+            renderCustomArtCacheGrid(search ? search.value : "");
+        } else {
+            grid.innerHTML = '<div class="empty-list" style="grid-column: 1/-1;">Loading offline cache...</div>';
+        }
         if (window.pywebview && window.pywebview.api && window.pywebview.api.get_cached_gallery_files) {
             window.pywebview.api.get_cached_gallery_files().then(json => {
                 try { _customArtCacheFiles = JSON.parse(json) || []; } catch (e) { _customArtCacheFiles = []; }
-                const search = document.getElementById("custom-art-search");
                 renderCustomArtCacheGrid(search ? search.value : "");
+            }).catch(() => {
+                if (!_customArtCacheFiles || _customArtCacheFiles.length === 0) {
+                    grid.innerHTML = '<div class="empty-list" style="grid-column: 1/-1;">No cached gallery files.</div>';
+                }
             });
+        } else {
+            window.addEventListener("pywebviewready", () => {
+                loadCustomArtCacheGrid();
+            }, { once: true });
         }
     }
 
@@ -469,7 +481,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (e.detail && e.detail.tab === "pixel-art") {
             const active = document.querySelector(".tab-btn[data-pixel-tab].active");
             if (!active || active.getAttribute("data-pixel-tab") === "pixel-custom-art") {
-                setTimeout(loadCustomArtCacheGrid, 50);
+                loadCustomArtCacheGrid();
             }
         }
     });

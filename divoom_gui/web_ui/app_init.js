@@ -227,6 +227,8 @@ document.addEventListener("DOMContentLoaded", () => {
                         Object.keys(previews).forEach(mac => {
                             const slot = window.DivoomState.assignedSlots[mac];
                             if (slot) { slot.preview = previews[mac]; any = true; }
+                            if (window.setDevicePreview) window.setDevicePreview(mac, previews[mac]);
+                            if (window.setDeviceActivity) window.setDeviceActivity(mac, "image", { src: previews[mac] });
                         });
                         if (any && window.renderArrangerCanvas) window.renderArrangerCanvas();
                     }

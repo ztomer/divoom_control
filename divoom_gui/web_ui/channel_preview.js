@@ -54,11 +54,12 @@ window._channelPreviewSVG = function(kind, opts) {
     const k = (kind || "").toLowerCase();
     let inner;
     if (k === "clock") {
-        // R50: reflect the selected face + color (falls back to current state).
+        // Reflect explicit style + color, falling back to global only when requested
         const style = (opts.style != null) ? opts.style
-                    : (window.DivoomState.selectedClockStyle ?? 0);
+                    : (opts.useGlobalFallback ? (window.DivoomState.selectedClockStyle ?? 0) : (opts.defaultStyle ?? 0));
         const color = opts.color
-                    || document.getElementById("clock-color-input")?.value || "#ffffff";
+                    || (opts.useGlobalFallback ? document.getElementById("clock-color-input")?.value : null)
+                    || opts.defaultColor || "#ffffff";
         return window._clockFaceSVG(style, color);
     } else if (k === "visualizer" || k === "eq") {
         inner = `<rect x="13" y="36" width="8" height="16" fill="${a}"/><rect x="24" y="22" width="8" height="30" fill="${a}"/>`
@@ -94,5 +95,18 @@ window._channelPreviewSVG = function(kind, opts) {
         inner = `<circle cx="32" cy="32" r="7" fill="#888"/>`;
     }
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#0a0b10"/>${inner}</svg>`;
+    return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+};
+
+// Render slot coordinates and spatial bounds for a device in Virtual Wall mode
+window._renderWallSlotSVG = function(slot, addr) {
+    const x = (slot && slot.x) ?? 0;
+    const y = (slot && slot.y) ?? 0;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">`
+              + `<rect width="64" height="64" fill="#0a0b14"/>`
+              + `<rect x="4" y="4" width="56" height="56" rx="4" fill="none" stroke="#ff5a1f" stroke-width="2" stroke-dasharray="4,2"/>`
+              + `<text x="32" y="27" font-family="sans-serif" font-size="11" font-weight="bold" fill="#ff5a1f" text-anchor="middle">WALL</text>`
+              + `<text x="32" y="43" font-family="monospace" font-size="9" fill="#8892b0" text-anchor="middle">(${x},${y})</text>`
+              + `</svg>`;
     return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
 };

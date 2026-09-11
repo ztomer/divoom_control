@@ -20,7 +20,16 @@
   let currentPage = 0;
   let selectedSlot = null;
   // assignments[page][slot] = {fileId, thumb} | null
-  const assignments = Array.from({ length: PAGES }, () => new Array(SLOTS).fill(null));
+  let assignments = Array.from({ length: PAGES }, () => new Array(SLOTS).fill(null));
+  try {
+    const saved = localStorage.getItem("divoom_custom_art_slots");
+    if (saved) assignments = JSON.parse(saved);
+  } catch (_) {}
+
+  function saveAssignments() {
+    try { localStorage.setItem("divoom_custom_art_slots", JSON.stringify(assignments)); } catch (_) {}
+  }
+
   let initialized = false;
 
   function init() {
@@ -33,6 +42,8 @@
     buildSlotGrid(panel);
     initLibraryClicks(panel);
     initPushButton(panel);
+    renderSlots();
+    if (window.loadCustomArtCacheGrid) window.loadCustomArtCacheGrid();
   }
 
   // ── Page tabs ────────────────────────────────────────────────────────────
@@ -82,6 +93,7 @@
       clear.addEventListener("click", (e) => {
         e.stopPropagation();
         assignments[currentPage][i] = null;
+        saveAssignments();
         if (selectedSlot === i) selectedSlot = null;
         renderSlots();
         markAssignedLibraryItems();
@@ -114,11 +126,13 @@
           const from = parseInt(fromSlot, 10);
           if (from === i) return;
           [page[from], page[i]] = [page[i], page[from]];
+          saveAssignments();
         } else {
           const fileId = e.dataTransfer.getData("text/x-fileid");
           const thumb = e.dataTransfer.getData("text/x-thumb");
           if (!fileId) return;
           page[i] = { fileId, thumb };
+          saveAssignments();
         }
         renderSlots();
         markAssignedLibraryItems();
@@ -190,6 +204,7 @@
       }
     }
     page[target] = { fileId, thumb };
+    saveAssignments();
     // Advance the selection to the next empty slot so repeated clicks
     // fill the page in order without extra steps.
     const next = page.findIndex((a) => !a);
@@ -285,6 +300,7 @@
     initLibraryClicks(panel);
     initPushButton(panel);
     renderSlots();
+    if (window.loadCustomArtCacheGrid) window.loadCustomArtCacheGrid();
   };
 
   // Self-heal on tab changes to make sure initialization happens if
@@ -292,6 +308,7 @@
   window.addEventListener("tab-changed", (e) => {
     if (e.detail && e.detail.tab === "pixel-art") {
       init();
+      if (window.loadCustomArtCacheGrid) window.loadCustomArtCacheGrid();
     }
   });
 

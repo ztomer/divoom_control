@@ -302,6 +302,15 @@
         updateInspector(dev);
         updateRibbonSelection();
         if (typeof window.restoreDevicePreview === 'function') window.restoreDevicePreview(addr);
+        const act = window.DivoomState?.deviceActivity?.[addr];
+        if (act?.kind) {
+            const card = document.querySelector(`.tab-btn[data-channel="${act.kind}"]`);
+            if (card) {
+                document.querySelectorAll('.tab-btn[data-channel]').forEach(c => c.classList.remove('active'));
+                card.classList.add('active');
+                window.DivoomState.activeChannel = act.kind;
+            }
+        }
     }
 
     function selectDevice(addr, dev) {
@@ -426,10 +435,15 @@
                 const ctx = cvs.getContext('2d');
                 ctx.imageSmoothingEnabled = false;
 
+                const wallSlot = window.DivoomState?.assignedSlots?.[addr];
                 const act = (window.DivoomState && window.DivoomState.deviceActivity && window.DivoomState.deviceActivity[addr]) || {};
-                let src = (window.DivoomState && window.DivoomState.devicePreviews && window.DivoomState.devicePreviews[addr]) || act.src;
-                const kind = act.kind || dev.activityKind || (addr === selectedMac ? window.DivoomState.activeChannel : null) || 'clock';
-                if (!src && window._channelPreviewSVG) src = window._channelPreviewSVG(kind, act.opts || {});
+                let src = (wallSlot && wallSlot.preview) || (window.DivoomState && window.DivoomState.devicePreviews && window.DivoomState.devicePreviews[addr]) || act.src;
+                const kind = act.kind || dev.activityKind || (addr === selectedMac ? window.DivoomState.activeChannel : null);
+                if (!src && wallSlot && window._renderWallSlotSVG) {
+                    src = window._renderWallSlotSVG(wallSlot, addr);
+                } else if (!src && window._channelPreviewSVG) {
+                    src = window._channelPreviewSVG(kind || 'clock', act.opts || { defaultColor: '#00cc66' });
+                }
 
                 let entry = previewImgCache.get(addr);
                 if (src && (!entry || entry.src !== src)) {

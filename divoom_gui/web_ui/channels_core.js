@@ -27,8 +27,14 @@ document.addEventListener("DOMContentLoaded", () => {
             card.classList.add("active");
             const ch = card.getAttribute("data-channel");
             window.DivoomState.activeChannel = ch;
-            showChannelPanel(ch);
-            if (window.setDeviceActivity) window.setDeviceActivity(window._activeDeviceMac(), ch);
+            const chOpts = ch === "clock" ? {
+                style: window.DivoomState.selectedClockStyle ?? 0,
+                color: document.getElementById("clock-color-input")?.value || "#ffffff"
+            } : (ch === "ambient" ? {
+                mode: window.DivoomState.selectedAmbientMode ?? 0,
+                color: document.getElementById("ambient-color-input")?.value || "#00cc66"
+            } : {});
+            if (window.setDeviceActivity) window.setDeviceActivity(window._activeDeviceMac(), ch, chOpts);
             // Ambient and Text are "non-channel" cards (each has its own
             // Apply/Push button). Every other card — Clock, VJ, EQ, Design,
             // Scoreboard — fires switch_channel.

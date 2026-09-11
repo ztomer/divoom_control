@@ -4,6 +4,26 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## v0.35.1 — Gallery Crispness, Offline Custom Art Cache & Isolated Per-Device Previews (2026-09-11)
+
+### Fixed & Improved
+
+- **Gallery Crispness (`divoom_gui/web_ui/gallery.css`)**:
+  - Applied `image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges;` to `.gallery-item-preview`.
+  - Banished WebKit bilinear interpolation blurriness on community pixel art thumbnails, matching the crispness of the hot channel preview.
+- **Offline Custom Art Cache & Slot Persistence (`gallery_sync.py`, `channels_grids.js`, `custom_art.js`)**:
+  - Fixed `loadCustomArtCacheGrid` in `channels_grids.js` to render immediately if cache data is present, attach safely to `pywebviewready` if the bridge is initializing, and handle errors gracefully without getting stuck on "Loading offline cache...".
+  - Added `file_id` field in `gallery_sync.py`'s `get_cached_gallery_files()` serialization so cached files can be identified and mapped directly.
+  - Added `localStorage` persistence (`divoom_custom_art_slots`) in `custom_art.js` across 3 pages x 12 slots, ensuring slot assignments survive page reloads and tab navigation.
+- **Per-Device Preview Decoupling & Virtual Wall Slicing (`channel_preview.js`, `channels_core.js`, `app_init.js`, `spatial_stage.js`)**:
+  - Decoupled `_channelPreviewSVG` in `channel_preview.js` from global state fallback (`selectedClockStyle` and `#clock-color-input`) unless explicit fallback is requested, preventing device 1's clock/color configuration from mutating previews on devices 2, 3, and 4.
+  - Added `_renderWallSlotSVG(slot, addr)` in `channel_preview.js` to render spatial bounding boxes, "WALL", and coordinate slices `(x,y)` for devices participating in Virtual Wall mode.
+  - In `channels_core.js`, isolated channel switching parameters on channel tab click so each display maintains its own activity state.
+  - In `app_init.js`, forwarded multi-device sliced image previews from `display_wall_image` to `setDevicePreview` and `setDeviceActivity`.
+  - In `spatial_stage.js`, resolved device previews from `wallSlot.preview`, `devicePreviews[addr]`, `deviceActivity[addr]`, and `_renderWallSlotSVG`. Synchronized the active channel tab button in the Control Center when selecting a device node on the stage.
+  - Fixed `test_web_ui_element_ids.py` by ensuring legacy banner DOM IDs exist as hidden placeholders in `index.html`.
+  - Rebuilt `divoom-menubar` to sync version 0.35.0 with `Cargo.toml`.
+
 ## v0.35.0 — Unified Spatial Stage, Physical Scale Engine & Option 1 Layout (2026-09-11)
 
 ### Documentation & MCP

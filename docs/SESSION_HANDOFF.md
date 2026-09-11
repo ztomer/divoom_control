@@ -21,6 +21,13 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-11 — v0.35.1: Gallery Crispness, Offline Custom Art Cache & Isolated Per-Device Previews.**
+  - **Gallery Crispness (`gallery.css`)**: Added `image-rendering: pixelated; crisp-edges;` to `.gallery-item-preview` ensuring thumbnail canvases render sharp pixels instead of blurred bicubic interpolation.
+  - **Offline Custom Art Cache (`channels_grids.js`, `custom_art.js`, `gallery_sync.py`)**: Guaranteed offline cache loads all 142 items on launch even before `pywebviewready`, handles errors cleanly, and persists 3 pages x 12 slots to `localStorage['divoom_custom_art_slots']`.
+  - **Per-Device Preview Decoupling & Virtual Wall Slicing (`channel_preview.js`, `channels_core.js`, `app_init.js`, `spatial_stage.js`)**: Decoupled `_channelPreviewSVG` from global fallbacks, added `_renderWallSlotSVG` for spatial canvas bounding boxes, isolated per-device activity parameters, and synchronized stage selection with active Control Center channel tabs.
+  - **MCP / CLI Audit**: Audited the 14 MCP tools and CLI surface; documented existing coverage and multi-device capabilities.
+  - **Gate & Suite Status**: 2922 passed, 170 skipped in pytest; 204 unit tests passed in cargo test; file size (387 files <= 500 LOC), api reachability (116/116), and emoji gates clean.
+
 - **2026-09-11 — v0.35.0 RELEASED & INSTALLED LOCALLY: Unified Spatial Stage, Appbar Stage Integration, Stage Center Alignment & Live Per-Device Previews.**
   - **Stage Center Alignment (`#stage-center-btn`)**:
     - Placed `#stage-center-btn` immediately to the left of `#stage-snap-btn` [Align] in `#appbar-stage-actions`, with a Susan Kare SVG icon.
