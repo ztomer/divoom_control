@@ -17,8 +17,8 @@
 
     function initSpatialStage() {
         if (stageMounted) return;
-        const mainContent = document.querySelector('.main-content');
-        if (!mainContent) return;
+        const mount = document.getElementById('spatial-stage-mount');
+        if (!mount) return;
 
         // Load saved collapsed state
         const isCollapsed = localStorage.getItem('spatial_stage_collapsed') === 'true';
@@ -55,33 +55,6 @@
         bench.className = 'spatial-bench';
         wrapper.appendChild(bench);
 
-        // Contextual Inspector Strip
-        const inspector = document.createElement('div');
-        inspector.id = 'spatial-inspector';
-        inspector.className = 'spatial-inspector';
-        inspector.innerHTML = `
-            <div class="spatial-inspector-left">
-                <span class="spatial-jewel online" id="insp-dot"></span>
-                <span class="spatial-inspector-name" id="insp-name">Screen</span>
-                <span class="spatial-inspector-tag" id="insp-model">16×16</span>
-                <select id="insp-room-select" class="spatial-room-select" title="Assign Room">
-                    <option value="Desk">Desk</option>
-                    <option value="Shelf">Shelf</option>
-                    <option value="Wall">Wall</option>
-                    <option value="Studio">Studio</option>
-                </select>
-                <span id="insp-channel" style="font-family: var(--font-mono); font-size: 10px; color: var(--primary);">Clock</span>
-            </div>
-            <div class="spatial-inspector-right">
-                <div class="spatial-brightness-control">
-                    <svg class="kare-icon" viewBox="0 0 16 16" style="color: var(--text-muted);"><circle cx="8" cy="8" r="3" fill="currentColor"/><line x1="8" y1="1" x2="8" y2="3" stroke="currentColor" stroke-width="1.5"/><line x1="8" y1="13" x2="8" y2="15" stroke="currentColor" stroke-width="1.5"/><line x1="1" y1="8" x2="3" y2="8" stroke="currentColor" stroke-width="1.5"/><line x1="13" y1="8" x2="15" y2="8" stroke="currentColor" stroke-width="1.5"/></svg>
-                    <input type="range" id="stage-brightness-slider" min="5" max="100" value="85" class="spatial-slider">
-                    <span id="stage-brightness-val" style="font-family: var(--font-mono); font-size: 10px; min-width: 28px; text-align: right;">85%</span>
-                </div>
-            </div>
-        `;
-        wrapper.appendChild(inspector);
-
         // Compact Ribbon View
         const ribbon = document.createElement('div');
         ribbon.id = 'spatial-stage-ribbon';
@@ -89,15 +62,14 @@
         if (!isCollapsed) ribbon.style.display = 'none';
         ribbon.innerHTML = `
             <div style="display: flex; align-items: center; gap: 8px;">
-                <span style="font-family: var(--font-display); font-weight: 700; font-size: 11px; color: var(--text-muted);">STAGE:</span>
+                <span style="font-family: var(--font-display); font-weight: 700; font-size: 11px; color: var(--text-muted);">FLEET:</span>
                 <div id="spatial-ribbon-chips" class="spatial-ribbon-chips"></div>
             </div>
             <button id="stage-expand-btn" class="stage-btn" type="button">Expand Bench</button>
         `;
 
-        // Mount at top of mainContent before first child
-        mainContent.insertBefore(ribbon, mainContent.firstChild);
-        mainContent.insertBefore(wrapper, mainContent.firstChild);
+        mount.appendChild(ribbon);
+        mount.appendChild(wrapper);
         stageMounted = true;
 
         // Wire event handlers
@@ -116,7 +88,8 @@
 
         document.getElementById('stage-snap-btn').addEventListener('click', snapToDesk);
 
-        const roomSelect = document.getElementById('insp-room-select');
+        // Sidebar deck room select
+        const roomSelect = document.getElementById('deck-room-select');
         if (roomSelect) {
             roomSelect.addEventListener('change', (e) => {
                 if (!selectedMac) return;
@@ -127,19 +100,58 @@
             });
         }
 
-        const bSlider = document.getElementById('stage-brightness-slider');
-        const bVal = document.getElementById('stage-brightness-val');
-        bSlider.addEventListener('input', (e) => {
-            const val = parseInt(e.target.value);
-            bVal.textContent = val + '%';
-            if (selectedMac) {
-                deviceBrightness[selectedMac] = val;
-                try { localStorage.setItem('divoom_stage_brightness', JSON.stringify(deviceBrightness)); } catch (_) {}
-            }
-            if (window.pywebview && window.pywebview.api && window.pywebview.api.set_brightness) {
-                window.pywebview.api.set_brightness(val);
-            }
-        });
+        // Sidebar deck brightness slider
+        const bSlider = document.getElementById('global-brightness-slider');
+        const bVal = document.getElementById('global-brightness-value');
+        if (bSlider) {
+            bSlider.addEventListener('input', (e) => {
+                const val = parseInt(e.target.value);
+                if (bVal) bVal.textContent = val + '%';
+                if (selectedMac) {
+                    deviceBrightness[selectedMac] = val;
+                    try { localStorage.setItem('divoom_stage_brightness', JSON.stringify(deviceBrightness)); } catch (_) {}
+                }
+                if (window.pywebview && window.pywebview.api && window.pywebview.api.set_brightness) {
+                    window.pywebview.api.set_brightness(val);
+                }
+            });
+        }
+
+        // Sidebar deck volume slider
+        const vSlider = document.getElementById('appbar-volume-slider');
+        const vVal = document.getElementById('appbar-volume-value');
+        if (vSlider) {
+            vSlider.addEventListener('input', (e) => {
+                const val = parseInt(e.target.value);
+                if (vVal) vVal.textContent = val + '/15';
+            });
+            vSlider.addEventListener('change', (e) => {
+                const val = parseInt(e.target.value);
+                if (window.pywebview && window.pywebview.api && window.pywebview.api.set_volume) {
+                    window.pywebview.api.set_volume(val);
+                }
+            });
+        }
+
+        // Sidebar deck standby / power button
+        const powerBtn = document.getElementById('deck-device-power');
+        if (powerBtn) {
+            powerBtn.addEventListener('click', () => {
+                if (bSlider) {
+                    const cur = parseInt(bSlider.value);
+                    const next = cur > 0 ? 0 : 85;
+                    bSlider.value = next;
+                    if (bVal) bVal.textContent = next + '%';
+                    if (selectedMac) {
+                        deviceBrightness[selectedMac] = next;
+                        try { localStorage.setItem('divoom_stage_brightness', JSON.stringify(deviceBrightness)); } catch (_) {}
+                    }
+                    if (window.pywebview && window.pywebview.api && window.pywebview.api.set_brightness) {
+                        window.pywebview.api.set_brightness(next);
+                    }
+                }
+            });
+        }
 
         // Load topology, rooms, and brightness from local cache
         try {
@@ -315,18 +327,20 @@
 
     function updateInspector(dev) {
         const spec = resolveDeviceSpec(dev);
-        const inspName = document.getElementById('insp-name');
-        const inspModel = document.getElementById('insp-model');
-        const inspChannel = document.getElementById('insp-channel');
-        const inspRoom = document.getElementById('insp-room-select');
-        const bSlider = document.getElementById('stage-brightness-slider');
-        const bVal = document.getElementById('stage-brightness-val');
+        const nameEl = document.getElementById('deck-device-name');
+        const tagEl = document.getElementById('deck-device-tag');
+        const roomSelect = document.getElementById('deck-room-select');
+        const volContainer = document.getElementById('deck-volume-container');
+        const bSlider = document.getElementById('global-brightness-slider');
+        const bVal = document.getElementById('global-brightness-value');
 
         const addr = dev.address || 'dev';
-        if (inspName) inspName.textContent = dev.name || spec.name;
-        if (inspModel) inspModel.textContent = `${spec.pw}×${spec.ph}`;
-        if (inspChannel) inspChannel.textContent = dev.activityKind || 'Clock';
-        if (inspRoom) inspRoom.value = deviceRooms[addr] || dev.room || 'Desk';
+        if (nameEl) nameEl.textContent = dev.name || spec.name;
+        if (tagEl) tagEl.textContent = `${spec.pw}×${spec.ph}`;
+        if (roomSelect) roomSelect.value = deviceRooms[addr] || dev.room || 'Desk';
+        if (volContainer) {
+            volContainer.style.display = (spec.form !== 'pixoo') ? 'block' : 'none';
+        }
 
         const curB = (deviceBrightness[addr] !== undefined) ? deviceBrightness[addr] : 85;
         if (bSlider) bSlider.value = curB;

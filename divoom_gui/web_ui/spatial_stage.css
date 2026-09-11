@@ -4,12 +4,32 @@
    discrete pixelated diode apertures, and zero cyber bloom.
 */
 
+body {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.full-width-spatial-stage {
+    width: 100%;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-base);
+}
+
+.app-container {
+    flex: 1;
+    min-height: 0;
+    height: auto !important;
+}
+
 .spatial-stage-wrapper {
-    margin: 10px 14px 12px 14px;
-    background: var(--card-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    margin: 0;
+    background: var(--bg-base);
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -254,86 +274,15 @@
     background-color: var(--secondary);
 }
 
-/* Contextual Inspector Strip */
-.spatial-inspector {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 6px 12px;
-    background: var(--sidebar-bg);
-    border-top: 1px solid var(--border-color);
-    font-size: 11px;
-    color: var(--text-main);
-}
-
-.spatial-inspector-left {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.spatial-inspector-name {
-    font-weight: 700;
-}
-
-.spatial-inspector-tag {
-    font-family: var(--font-mono);
-    font-size: 9px;
-    background: #242630;
-    border: 1px solid var(--border-color);
-    padding: 1px 5px;
-    border-radius: 3px;
-    color: var(--text-muted);
-}
-
-.spatial-inspector-right {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.spatial-brightness-control {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.spatial-slider {
-    -webkit-appearance: none;
-    appearance: none;
-    height: 3px;
-    width: 80px;
-    background: #2b2d37;
-    border-radius: 2px;
-    outline: none;
-}
-
-.spatial-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 10px;
-    height: 12px;
-    border-radius: 2px;
-    background: var(--text-main);
-    border: 1px solid #111;
-    cursor: pointer;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.5);
-}
-
-.spatial-slider::-webkit-slider-thumb:hover {
-    background: var(--primary);
-}
-
 /* Compact Ribbon State */
 .spatial-ribbon {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 4px 12px;
-    background: var(--card-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    margin: 8px 14px;
+    padding: 6px 14px;
+    background: var(--sidebar-bg);
+    border-bottom: 1px solid var(--border-color);
+    margin: 0;
     font-size: 11px;
 }
 
@@ -367,4 +316,165 @@
     background: var(--primary);
     color: #ffffff;
     border-color: #d9450e;
+}
+
+/* Active Display Hardware Deck (Dieter Rams / Susan Kare) */
+.sidebar-device-deck {
+    margin-top: auto;
+    margin-bottom: 10px;
+    padding: 10px;
+    background: #181920;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 2px 5px rgba(0, 0, 0, 0.4);
+}
+
+.deck-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding-bottom: 6px;
+}
+
+.deck-identity {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+}
+
+.deck-device-name {
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.deck-device-tag {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    background: #23252d;
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    padding: 1px 4px;
+    color: var(--text-muted);
+}
+
+.deck-power-btn {
+    background: #20222a;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-muted);
+    font-size: 11px;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.1s ease;
+}
+
+.deck-power-btn:hover {
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+.deck-room-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.deck-field-label {
+    font-family: var(--font-sans);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.deck-select {
+    background: #20222a;
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    color: var(--text-main);
+    font-family: var(--font-sans);
+    font-size: 10px;
+    padding: 2px 6px;
+    cursor: pointer;
+    outline: none;
+}
+
+.deck-select:focus {
+    border-color: var(--primary);
+}
+
+.deck-slider-row {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.deck-slider-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 10px;
+}
+
+.deck-slider-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+    font-weight: 500;
+}
+
+.deck-slider-label .kare-icon {
+    width: 12px;
+    height: 12px;
+}
+
+.deck-val {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--text-main);
+}
+
+.deck-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    background: #252731;
+    border-radius: 2px;
+    outline: none;
+}
+
+.deck-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    background: var(--text-main);
+    border: 1px solid #111;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    transition: background 0.1s ease;
+}
+
+.deck-slider::-webkit-slider-thumb:hover {
+    background: var(--primary);
 }

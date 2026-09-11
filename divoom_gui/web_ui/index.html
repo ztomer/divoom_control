@@ -62,31 +62,6 @@
         <!-- R11 4c: spacer first, so the sliders are pushed to the right side. -->
         <div class="appbar-drag-spacer"></div>
 
-        <!-- Global Brightness + Volume in Appbar (Round 6) -->
-        <div class="appbar-brightness">
-            <svg class="kare-icon" viewBox="0 0 16 16" title="Brightness">
-                <circle cx="8" cy="8" r="3" fill="currentColor"/>
-                <path d="M8,1 L8,3 M8,13 L8,15 M1,8 L3,8 M13,8 L15,8 M3,3 L4.5,4.5 M11.5,11.5 L13,13 M3,13 L4.5,11.5 M11.5,4.5 L13,3" stroke="currentColor" stroke-width="2"/>
-            </svg>
-            <input type="range" id="global-brightness-slider" min="0" max="100" value="80" class="appbar-slider" title="Global Brightness">
-            <span id="global-brightness-value">80%</span>
-        </div>
-
-        <!-- Volume Slider (Round 6 — new functionality exposure).
-             Protocol range is 0-15 (divoom.music.set_volume), so the
-             input is constrained to 15 in app.js. Kare: pixel-perfect
-             clarity — display the raw 0-15 value, not a percentage
-             (no magic conversion). -->
-        <div class="appbar-brightness">
-            <svg class="kare-icon" viewBox="0 0 16 16" title="Volume">
-                <path d="M2,6 L2,10 L5,10 L9,14 L9,2 L5,6 Z" fill="currentColor"/>
-                <path d="M11,5 C12.5,6 12.5,10 11,11" fill="none" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M13,3 C15.5,5 15.5,11 13,13" fill="none" stroke="currentColor" stroke-width="1.5"/>
-            </svg>
-            <input type="range" id="appbar-volume-slider" min="0" max="15" value="7" class="appbar-slider" title="Device Volume">
-            <span id="appbar-volume-value">7/15</span>
-        </div>
-
         <!-- R32: Settings moved out of the sidebar into a round glass pill here,
              to the right of the brightness + volume bars. Opens the Settings tab. -->
         <button id="appbar-settings-btn" class="appbar-gear" data-tab="settings" title="Settings" aria-label="Open settings">
@@ -97,8 +72,8 @@
 
     </header>
 
-    <!-- R32: the bottom-right connectivity indicator pill was removed — the
-         per-device dots below the preview convey device/transport state now. -->
+    <!-- 2. FULL-WIDTH TOP SPATIAL BENCH (Top Zone) -->
+    <div id="spatial-stage-mount" class="full-width-spatial-stage"></div>
 
     <div class="app-container">
         
@@ -166,34 +141,54 @@
                 </button>
             </nav>
             
-            <!-- Connected Device Panel (Moved from channels).
-                 R32 §C2: the preview shows the last image this app pushed to
-                 the active device (falls back to the product icon).
-                 R32 §C3: the dropdown is replaced by per-device dots overlaid
-                 on the preview — color-coded, tooltipped, click to switch.
-                 The <select> is kept hidden as the canonical selection state. -->
-            <div class="sidebar-device-panel" id="connected-device-banner">
-                <!-- R49: a flat, face-on screen panel. The product photos are 3/4
-                     perspective renders, so a live frame composited onto them
-                     landed crooked. Instead we show the live frame straight in a
-                     neutral bezel — what's actually on the screen, aligned, for
-                     any model. The device name sits below. -->
-                <div class="sidebar-device-preview">
-                    <div id="banner-device-screen" class="device-screen" aria-hidden="true"></div>
+            <!-- Active Display Hardware Deck (Dieter Rams / Susan Kare) -->
+            <div class="sidebar-device-deck" id="sidebar-device-deck">
+                <div class="deck-header">
+                    <div class="deck-identity">
+                        <span class="spatial-jewel online" id="deck-device-dot"></span>
+                        <span class="deck-device-name" id="deck-device-name">Ditoo-L</span>
+                        <span class="deck-device-tag" id="deck-device-tag">16×16</span>
+                    </div>
+                    <button type="button" id="deck-device-power" class="deck-power-btn" title="Toggle Display Power" aria-label="Toggle Display Power"><svg class="kare-icon" viewBox="0 0 16 16"><path d="M8,2 L8,7 M5,4.2 C3.5,5.3 2.5,7.2 2.5,9.5 C2.5,12.5 5,15 8,15 C11,15 13.5,12.5 13.5,9.5 C13.5,7.2 12.5,5.3 11,4.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
                 </div>
-                <div id="banner-device-label" class="device-name-label">No screen connected</div>
-                <select id="sidebar-device-select" class="sidebar-device-select" hidden>
-                    <option value="">Select Screen…</option>
-                </select>
-                <!-- Canonical selection state (hidden data holders read across the
-                     UI — gallery resolution, active-mac checks). -->
-                <span id="banner-device-name" style="display: none;">No Connected Screen</span>
-                <span id="banner-device-mac" style="display: none;">-</span>
+                <div class="deck-room-row">
+                    <label for="deck-room-select" class="deck-field-label">Room</label>
+                    <select id="deck-room-select" class="deck-select" title="Assign Room">
+                        <option value="Desk">Desk</option>
+                        <option value="Shelf">Shelf</option>
+                        <option value="Wall">Wall</option>
+                        <option value="Studio">Studio</option>
+                    </select>
+                </div>
+                <div class="deck-slider-row">
+                    <div class="deck-slider-header">
+                        <div class="deck-slider-label">
+                            <svg class="kare-icon" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3" fill="currentColor"/><line x1="8" y1="1" x2="8" y2="3" stroke="currentColor" stroke-width="1.5"/><line x1="8" y1="13" x2="8" y2="15" stroke="currentColor" stroke-width="1.5"/><line x1="1" y1="8" x2="3" y2="8" stroke="currentColor" stroke-width="1.5"/><line x1="13" y1="8" x2="15" y2="8" stroke="currentColor" stroke-width="1.5"/></svg>
+                            <span>Brightness</span>
+                        </div>
+                        <span id="global-brightness-value" class="deck-val">85%</span>
+                    </div>
+                    <input type="range" id="global-brightness-slider" min="0" max="100" value="85" class="deck-slider" title="Display Brightness">
+                </div>
+                <div class="deck-slider-row" id="deck-volume-container">
+                    <div class="deck-slider-header">
+                        <div class="deck-slider-label">
+                            <svg class="kare-icon" viewBox="0 0 16 16"><path d="M2,6 L2,10 L5,10 L9,14 L9,2 L5,6 Z" fill="currentColor"/><path d="M11,5 C12.5,6 12.5,10 11,11" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M13,3 C15.5,5 15.5,11 13,13" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+                            <span>Speaker</span>
+                        </div>
+                        <span id="appbar-volume-value" class="deck-val">7/15</span>
+                    </div>
+                    <input type="range" id="appbar-volume-slider" min="0" max="15" value="7" class="deck-slider" title="Speaker Volume">
+                </div>
             </div>
-            <!-- R48: named device chips live outside the glass panel, below it. -->
-            <div id="device-dots" class="device-chips" role="tablist" aria-label="Switch device"></div>
-            <!-- The Virtual Wall is a composite of screens, not a device — its own
-                 distinct button sits in a row below the device dots. -->
+
+            <!-- Canonical selection state & legacy support -->
+            <select id="sidebar-device-select" class="sidebar-device-select" hidden>
+                <option value="">Select Screen…</option>
+            </select>
+            <span id="banner-device-name" style="display: none;">No Connected Screen</span>
+            <span id="banner-device-mac" style="display: none;">-</span>
+            <div id="device-dots" class="device-chips" style="display: none;" role="tablist"></div>
             <div id="wall-button" class="wall-button-row" hidden></div>
             <!-- R52: scan-in-progress indicator pinned at the very bottom. Its row
                  height is always reserved (visibility toggles, not display) so

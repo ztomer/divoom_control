@@ -21,15 +21,15 @@ shipped milestone (per the project planning docs).
 
 ### Added — Unified Spatial Stage & Physical Scale Engine
 
+- **Full-Width Spatial Preview Bench & Sidebar Hardware Deck (Option 1 Layout Re-architecture)**:
+  - **Top Zone**: Spatial Preview Bench promoted to a full-width top deck spanning the window (~1100px) above `.app-container`. Bench canvas stripped of redundant top and bottom nested toolbars, presenting a clean radial dot workspace.
+  - **Universal Appbar**: Stripped duplicate brightness and speaker volume sliders from the top window titlebar, leaving a focused title, window traffic lights, and settings gear.
+  - **Active Display Hardware Deck (`#sidebar-device-deck`)**: Pinned to the bottom of the sidebar navigation column. Groups active device status diode, name, resolution badge, tactile Kare SVG standby toggle, room assignment selector, display brightness slider, and contextual speaker volume slider.
+  - **Contextual Volume Control**: Speaker volume slider dynamically visible (`block`) for audio-capable displays (Ditoo, Timoo, Tivoo-Max) and hidden (`none`) for screen-only devices (Pixoo-64, Pixoo-1).
 - **Daemon Topology Engine (`divoomd`)**: Added `get_topology` and `set_topology` socket dispatch commands, with JSON persistence to `~/.config/divoom-control/topology.json`.
 - **MCP Screen Discovery (`list_screens`)**: Added tool #14 (`list_screens`) querying the daemon topology for known screens, physical dimensions, resolutions, and wall grouping.
 - **Physical Model Database**: Formalized exact millimeter dimensions and physical silhouettes for Ditoo (90×114mm), Timoo (82.5×90mm), Tivoo-Max (184×163mm), Pixoo-1 (200×200mm), and Pixoo-64 (261×261mm). Rendered to scale ($1\text{mm} \approx 0.65\text{px}$).
-- **Spatial Stage Web UI (`divoom_gui/web_ui/`)**: Added `spatial_stage.js` and `spatial_stage.css` mounted at the top of the main window. Direct 2D drag-and-drop placement, baseline alignment, 1-click device switching, live diode canvases, per-device independent brightness calibration, and 32px compact ribbon toggle with `localStorage` persistence.
-- **Decluttering & Zero Fluff**:
-  - Removed verbose explanatory text and physical dimensions text (`90×114mm (16×16)` -> clean `16×16` badge).
-  - Hidden redundant sidebar device panel (`#connected-device-banner`) and `#device-dots` via CSS without breaking hidden form DOM elements.
-  - Added room/grouping segmented filter tabs (`[All] [Desk] [Wall]`) in the bench header and room selector in the inspector strip.
-  - Refined node typography to 7.5px mono so device names (`Ditoo-L`, `Timoo-M`, `Pixoo-64`) fit completely without truncation.
+- **Spatial Stage Web UI (`divoom_gui/web_ui/`)**: Added `spatial_stage.js` and `spatial_stage.css` (both strictly <= 500 LOC). Direct 2D drag-and-drop placement, baseline alignment, 1-click device switching, live diode canvases, per-device independent brightness calibration, and 32px compact ribbon toggle with `localStorage` persistence.
 
 ## v0.34.0 — the weather widget was invisible, and the harness could not have found it (2026-09-07)
 

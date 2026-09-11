@@ -21,22 +21,25 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
-- **2026-09-11 — Unified Spatial Stage, Physical Scale Engine, Daemon Topology & Real App Decluttering.**
+- **2026-09-11 — Full-Width Spatial Preview Bench & Sidebar Hardware Deck (Option 1).**
+  - **Top Zone Architecture**: Promoted the Spatial Preview Bench to a full-width top stage (`#spatial-stage-mount`, ~1100px wide) directly above `.app-container`. Eliminated duplicate top/bottom toolbars on the bench canvas, leaving a clean Dieter Rams radial dot canvas with header controls (`[All] [Desk] [Wall]` room filters, `Align`, and `Ribbon` toggle).
+  - **Universal Appbar Clean-up**: Stripped duplicate brightness and speaker volume sliders from the top titlebar (`.integrated-appbar`), reserving it strictly for window controls, title, and settings gear.
+  - **Active Display Hardware Deck (`#sidebar-device-deck`)**: Pinned at the bottom of the left sidebar navigation column in the space vacated by the old preview banner:
+    - Live device identity (status diode jewel, display name, resolution badge e.g. `16×16` / `64×64`, and tactile Kare SVG power standby toggle).
+    - Room assignment selector (`#deck-room-select`).
+    - Device brightness slider (`#global-brightness-slider` / `#global-brightness-value`) with Braun Tuner Orange tactile slider thumb.
+    - Contextual speaker volume row (`#deck-volume-container` with `#appbar-volume-slider` / `#appbar-volume-value`): dynamically visible (`display: block`) for audio-capable displays (Ditoo, Timoo, Tivoo-Max) and hidden (`display: none`) for screen-only devices (Pixoo-64, Pixoo-1).
   - **Daemon Topology Engine (`divoomd`)**: Implemented `get_topology` and `set_topology` socket commands in `divoomd/src/daemon/dispatch.rs`, `divoomd/src/daemon.rs`, and `divoomd/src/wall/cmds.rs`. Configured JSON persistence to `~/.config/divoom-control/topology.json` (overridable via `DIVOOM_TOPOLOGY_PATH`).
   - **MCP `list_screens`**: Registered tool #14 (`list_screens`) in `divoomd/src/mcp_tools.rs` exposing screens, physical resolutions, spatial coordinates, and wall grouping. Unit tests updated and verified.
   - **Physical Hardware Database (Dieter Rams & Susan Kare Craft)**: Mapped exact millimeter dimensions, screen active area, aspect ratio, and physical silhouettes for Timoo (82.5×90mm), Ditoo (90×114mm), Tivoo-Max (184×163mm), Pixoo-1 (200×200mm), and Pixoo-64 (261×261mm). Rendered with true relative scaling (1mm = 0.65px) and discrete diode matrices.
-  - **Spatial Stage Web UI (`divoom_gui/web_ui/`)**: Implemented `spatial_stage.js` and `spatial_stage.css` (both strictly under 500 LOC). Features freeform 2D drag-and-drop placement, baseline desk alignment, 1-click active device switching, per-device independent brightness calibration, and non-destructive 32px compact ribbon toggle with `localStorage` persistence.
-  - **Decluttering & Zero Fluff**:
-    - Removed verbose explanatory text and mm labels (`90×114mm (16×16)` -> clean `16×16` badge).
-    - Hidden redundant sidebar device panel (`#connected-device-banner`) and `#device-dots` via CSS without breaking hidden form DOM elements.
-    - Added room/grouping segmented filter tabs (`[All] [Desk] [Wall]`) in the bench header and room selector in the inspector strip.
-    - Refined node typography to 7.5px mono so device names (`Ditoo-L`, `Timoo-M`, `Pixoo-64`) fit completely without truncation.
   - **Gates & Verification**:
     - `cargo test -p divoomd --no-default-features` (204/204 passing).
-    - File size gate (386/386 source files <= 500 lines: `spatial_stage.js` at 477 lines, `spatial_stage.css` at 369 lines).
+    - `python3 -m pytest tests/test_gui_api_*.py tests/test_mcp_*.py tests/test_repo_gates.py` (267/267 passing).
+    - `python3 -m pytest tests/test_e2e_mock_device.py` (15/15 passing).
+    - Dynamic Camoufox interaction verified: Ditoo volume slider visible, switching to Pixoo-64 dynamically hides volume slider, switching back restores it.
+    - File size gate (386/386 source files <= 500 lines: `spatial_stage.js` at 491 lines, `spatial_stage.css` at 480 lines).
     - Emoji gate clean across 735 tracked files.
-    - Fixed `tests/test_repo_gates.py` by pinning and installing Camoufox `152.0.4-beta.29`.
-    - Headless Chrome pixel-perfect render verified against the real app (`gui_preview_bench_refined.png`).
+    - Rebuilt BLE-free binary (`cargo build -p divoomd --no-default-features`) to protect against macOS TCC `SIGABRT`.
 
 - **2026-09-07 (final session) — v0.34.0 CUT: the hardware round.** The **R12
   visual pass is CLOSED, 4/4 on real pixels** (`sysmon`, `album_art`,
