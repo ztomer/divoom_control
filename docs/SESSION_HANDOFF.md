@@ -21,6 +21,10 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-12 — #3a/#5 analysis round (no code changes; both need the live app next).**
+  - #3a bounded statically: switch = one 0x45 packet; contended worst case = 60s ITEM_TIMEOUT then rejection (reads as flakiness). Fix shape awaits live timing — no guessing.
+  - #5 narrowed by elimination (canvas can't blank, static grids can't empty); two live readings + the distinguishing observation recorded in the roadmap.
+  - Next: live session — #3a timing, #5 distinguishing check, then #2 (GIF work) and confirmations for #1/#4/#6.
 - **2026-09-12 — defect #6 FIXED as `6ac2549`: connection-state funnel in `connection_events.js`.**
   - `setConnectionState` sole writer of dot/banner/flag; heartbeat latch removed; status events clear stale `connecting`; no-bridge click lands inactive. No poll timer re-added (R59 stands; subscribe snapshot heals).
   - 13-assertion node probe (throwaway): all pass new code, latch check fails pre-fix. `node --check`, file-size/emoji/api-reachable green. Live confirmation wanted. #3's flaky half resolves with this; #3a (queue latency) still to remeasure.

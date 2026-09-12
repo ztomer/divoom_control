@@ -216,15 +216,17 @@ a live confirmation before a fix ships).
    Symptom matches "Animated Image Previews (`DisplayPreview` GIF
    Playback)" exactly (WebKit `drawImage` freezes GIF at frame 0;
    device fine). No new mechanism; fix there covers this.
-3. **Channel switching slow/flaky — TWO MECHANISMS, one cross-linked.**
-   (a) Slow: `switch_channel` RPC serializes behind in-flight streamer
-   frames on the per-device queue (`QueuePermit`) — latency, not loss.
-   (b) Multi-click: `requireDevice()` gates on `DivoomState.appConnected`
-   (`app_globals.js:39-45`) and toasts "Connect a device first" when it
-   is false — so every click taken while #6's desync holds visibly
-   fails, and the user clicks again. When state resyncs, it works.
-   I.e. the flaky half of #3 IS #6. Fix #6 first, then measure what
-   slowness remains before touching the queue.
+3. **Channel switching slow/flaky — TRIAGED 2026-09-12 (static bounds; timing needs hardware).**
+   (a) Slow, bounded: a switch is ONE 0x45 packet (fast uncontended),
+   but it serializes behind the current queue holder with ITEM_TIMEOUT
+   60s (`daemon.rs:32-33`) — a wedged BLE write can stall a switch for
+   up to a minute before rejection. The GUI also issues 2 sequential
+   RPCs per click (`live_jobs_stop_for` + `switch_channel`).
+   (b) Multi-click: rejection surfaces as "Failed to switch channel" →
+   retry reads as flakiness; PLUS the #6 desync (fixed) which toasted
+   "Connect a device first" while connected. Fix shape for the residual
+   (priority lane / shorter switch timeout / link work) MUST be driven
+   by a live timing, not guessed.
 4. **Weather "here" — FIXED 2026-09-12 (needs a live glance).**
    Root cause ran both sides: `parse_wttr` discarded `nearest_area`
    and `cmd_weather` echoed the request's (empty) location, so the
@@ -234,14 +236,18 @@ a live confirmation before a fix ships).
    else the resolved city (`now_playing.rs`), GUI fallback is
    `"unknown"` (`widgets.py`). Both new tests proven red-then-green.
    Still to confirm live: card shows the real city with no override set.
-5. **Clock/custom-art intermittently empty — HYPOTHESIS (race).**
-   `_channelPreviewSVG`'s clock branch always returns a face
-   (`channel_preview.js:89-97`), so the blank is downstream: the
-   `DisplayPreview` frame-cache path (`mode === "frame"` blitting
-   before the async SVG/img `onload` resolves). Intermittency fits a
-   load race, not a logic branch. Same suspected race for custom-art
-   thumbnails (`assignToSlot` mirror before load). Confirm with
-   instrumentation (log blits with empty cache), not by staring.
+5. **Clock/custom-art intermittently empty — TRIAGED 2026-09-12, two readings (needs the live app to distinguish).**
+   Eliminated statically: the canvas path cannot blank (the glyph
+   switch is exhaustive with a clock default; every renderer draws
+   unconditionally), and the static panel grids build once at load
+   with nothing rewriting them after. The frame-cache race hypothesis
+   is narrowed accordingly — a pending frame falls back to a GLYPH,
+   never to blank. Remaining candidates: (a) the ASYNC panel sections
+   (cloud clock list, custom-art cache grid) failing to populate, or
+   (b) a zero-sized canvas / device-side blank. Distinguishing
+   observation for the live session: is the empty area panel chrome
+   with missing tiles, or a blank canvas — screenshot plus DOM check
+   of `#clock-faces-grid` children and canvas width/height.
 6. **UI stuck on "connecting" — FIXED 2026-09-12 (needs a live session).**
    `window.setConnectionState` (`connection_events.js`) is now the SOLE
    writer of dot class, banner, and `appConnected`; the click flow, the
