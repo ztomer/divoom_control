@@ -56,6 +56,8 @@ jobs:
       # finds the goh checkout above and degrades to plain text if absent.
       - name: Scripts parse, lint, and reference live modules
         run: python3 tools/check_scripts.py
+      - name: Tests live in tests/, Rust test modules are cfg-gated (Phase 1)
+        run: python3 tools/check_test_placement.py
       - name: Positional args are not read from the compacted list
         run: python3 tools/check_positional_args.py
       - name: Every client-socket write goes through the WRITE_TIMEOUT seam

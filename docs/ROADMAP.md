@@ -197,6 +197,62 @@ are not restated.
 
 ## Open workstreams
 
+### OPEN — user-reported defects, filed 2026-09-12
+
+Filed verbatim from a live session against v0.35.4. None diagnosed yet;
+each needs reproduction + root-cause before a fix.
+
+1. **Live cover art blurry** — the original album art renders blurry (device
+   shows it fine, so the blur is in our fetch/render path, not the panel).
+2. **Bench previews frozen while device animates** — animations are not
+   animated in the bench, and album-art previews do not change, while the
+   device itself plays them correctly. Preview-only defect; suspect the
+   `DisplayPreview` frame path (frozen GIF frame / stale cache / unbound
+   job) rather than the daemon streamer.
+3. **Channel switching slow / flaky** — channels are very slow and weird to
+   switch, sometimes requiring multiple UI clicks to take effect.
+   Investigate the full path (click handler → `switch_channel` RPC →
+   per-device queue → `activity` broadcast → preview rehydration).
+4. **Weather shows "here" instead of the actual location** — the weather
+   widget labels the location "here" rather than the resolved city.
+5. **Clock channel and custom art intermittently empty** — Channels → Clock
+   renders empty (not always); custom art shows the same symptom. Note the
+   intermittency when reproducing.
+6. **UI stuck on "connecting" while daemon is connected** — daemon reports
+   connected but the UI still says connecting. The whole connection-state
+   flow (daemon → `subscribe` broadcast → `gui_main.py` → `DivoomState` /
+   banner) needs serious investigation, not a one-line patch.
+
+### OPEN — code rearrangement, filed 2026-09-12
+
+Plan lives in `docs/PLANNING_TEST_REORG.md` (prune to git history on
+ship). **Phase 1 SHIPPED 2026-09-12**: 4 strays moved
+(`divoomd/test_show_image.py` → `tests/test_show_image_hw.py`,
+`divoomd/smoke_display_aliases.py` →
+`tests/test_smoke_display_aliases_hw.py` — bonus find, same class —
+`scripts/test_watchface_roundtrip.py` →
+`tests/test_watchface_roundtrip.py` with its `test_e2e_mock_device.py`
+importer updated, `scripts/hw_test_modes.py` →
+`scripts/hw_walk_modes.py`), 4 ungated `pub mod *_tests` in
+`divoomd/src/lib.rs` gated with `#[cfg(test)]`, and new gate
+`tools/check_test_placement.py` (step 5/26 in local CI, mirrored in
+`tests.yml`, calibrated both directions). Full verification green:
+pytest 2946 passed / 236 skipped, cargo both matrices, clippy both
+cfgs, fmt, ci_local 26/26. **Still open**: Phase 2 (`tests/` squatters),
+Phase 3 (obsolete-Python retirement), Phase 4 (ship + prune the plan).
+
+Census summary (retained for the open phases): `divoom_lib` itself is
+NOT dead — census is 0 DIRECT / 0 WRAPPED and Python is canonical for
+wire formats — so "retire obsolete Python" means `examples/` (7 files,
+pre-daemon path), old-path scripts, and a per-subcommand
+`divoom_lib/cli.py` audit.
+
+1. Move stray test files into the `tests/` folder so there is one place
+   tests live.
+2. Retire obsolete Python code where relevant (dead / superseded by
+   `divoomd`, per the ownership rule below — `tools/capability_census.py`
+   is the arbiter, not memory).
+
 ### The ownership rule (read this before calling anything a duplicate)
 
 _Current as of 2026-08-31, after R72._

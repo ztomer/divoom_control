@@ -1,12 +1,20 @@
 #!/usr/bin/env python3
 """
-Smoke-test for device.show_image via the Rust native daemon.
-Pushes a 16x16 solid-red frame to the connected Pixoo.
-Usage: python3 test_show_image.py [mac_address]
+Hardware smoke-test for device.show_image via the running daemon.
+
+Pushes a 16x16 quadrant frame to the connected display and asserts the
+daemon reports success. Moved from divoomd/test_show_image.py (Phase 1
+of docs/PLANNING_TEST_REORG.md): one place for tests to live.
+
+Hardware-gated via tests/conftest.py HARDWARE_TEST_MODULES — skipped
+without --run-hardware. Manual use unchanged:
+python3 tests/test_show_image_hw.py [mac_address]
 """
+import os
 import sys, socket, json, time
 
 SOCK = "/tmp/divoomd.sock"
+TEST_MAC = os.environ.get("DIVOOM_TEST_MAC")
 
 def call(sock_path, req):
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -21,8 +29,9 @@ def call(sock_path, req):
     s.close()
     return json.loads(data.split(b"\n")[0])
 
-def main():
-    mac = sys.argv[1] if len(sys.argv) > 1 else None
+def main(mac=None):
+    if mac is None and len(sys.argv) > 1:
+        mac = sys.argv[1]
 
     # Ping
     r = call(SOCK, {"command": "ping"})
@@ -81,6 +90,15 @@ def main():
     }})
     elapsed = time.time() - t0
     print(f"show_image ({elapsed:.2f}s):", r)
+    if not r.get("success"):
+        raise AssertionError(f"show_image failed: {r}")
+    return r
+
+
+def test_show_image_quadrants():
+    """Push quadrant frame; daemon must report success (needs --run-hardware)."""
+    main(mac=TEST_MAC)
+
 
 if __name__ == "__main__":
     main()

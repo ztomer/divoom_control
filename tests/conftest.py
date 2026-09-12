@@ -81,11 +81,14 @@ HARDWARE_TEST_MODULES = frozenset({
     "test_light_functions",
     "test_music_functions",
     "test_push_protocol_diagnostic",
+    "test_show_image_hw",
     "test_sleep_functions",
+    "test_smoke_display_aliases_hw",
     "test_system_functions",
     "test_timeplan_functions",
     "test_tool_functions",
     "test_tool_timer_functions",
+    "test_watchface_roundtrip",
 })
 
 

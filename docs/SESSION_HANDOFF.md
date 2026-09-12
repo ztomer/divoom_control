@@ -21,6 +21,13 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-12 — test rearrangement Phase 1 SHIPPED (uncommitted): plan `docs/PLANNING_TEST_REORG.md`, roadmap item updated.**
+  - 4 strays moved into `tests/` (all hardware-gated): `test_show_image_hw.py`, `test_smoke_display_aliases_hw.py` (bonus find), `test_watchface_roundtrip.py` (move-not-port: mock test pins the facade seam; importer updated, 15/15 pass). `hw_test_modes.py` → `hw_walk_modes.py`.
+  - 4 ungated `pub mod *_tests` in `divoomd/src/lib.rs` gated with `#[cfg(test)]`; `mock_transport` kept `pub` (runtime). All 21 `mock_*` tests pass.
+  - New gate `tools/check_test_placement.py` (step 5/26, mirrored in CI, calibrated both directions, probe removed).
+  - Verification: pytest 2946 passed / 236 skipped, cargo both matrices green, clippy both cfgs + fmt clean, `ci_local.sh --fast` 26/26.
+  - Next up: Phase 2 (`tests/` squatters) and Phase 3 (obsolete-Python retirement) from the plan file. Six user-reported defects + connection-state flow still open in the roadmap.
+
 - **2026-09-12 — v0.35.4 RELEASED & INSTALLED LOCALLY: Virtual Wall Simplification, Spatial Bench Alignment & Channel Persistence.**
   - **Release & Local Verification**: GitHub Actions CI all green (5/5 jobs in 6m3s), release `v0.35.4` published with DMG and Homebrew cask updated; installed to `/Applications/Divoom.app` via `scripts/install_local.sh`, verified running daemon inode (`540421883`, PID 76699). Development BLE-free debug binary restored.
   - **Virtual Wall Tab Simplification & Arranger Canvas Elimination (`index.html`, `app_globals.js`, `app_init.js`, `spatial_stage.js`, `presets_manager.py`)**:

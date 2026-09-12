@@ -239,7 +239,7 @@ async def test_clock_dial_set_and_read_back_roundtrip():
 async def test_watchface_roundtrip_script_e2e(monkeypatch):
     """Verify that verify_device in the watchface roundtrip script successfully
     interacts with the Divoom facade using MockBleakClient."""
-    from scripts.test_watchface_roundtrip import verify_device
+    from tests.test_watchface_roundtrip import verify_device
     
     original_divoom_init = Divoom.__init__
     

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""hw_test_modes.py — DETERMINISTIC hardware mode test over the daemon socket.
+"""hw_walk_modes.py — DETERMINISTIC hardware mode walk over the daemon socket.
 
 Drives a RUNNING daemon (pure socket IPC — no BLE in THIS process, so it runs from
 any shell without a TCC crash; the daemon does the Bluetooth). It walks every
@@ -13,10 +13,10 @@ which retries on a fixed budget; pass --mac to skip discovery entirely. Idempote
 
 Usage:
     ./run.sh                              # in a BT-granted terminal (or the .app)
-    python3 scripts/hw_test_modes.py                 # connected / first device
-    python3 scripts/hw_test_modes.py --mac <ADDR>    # target one device
-    python3 scripts/hw_test_modes.py --all           # every discovered device
-    python3 scripts/hw_test_modes.py --dwell 2.0 --quick
+    python3 scripts/hw_walk_modes.py                 # connected / first device
+    python3 scripts/hw_walk_modes.py --mac <ADDR>    # target one device
+    python3 scripts/hw_walk_modes.py --all           # every discovered device
+    python3 scripts/hw_walk_modes.py --dwell 2.0 --quick
 
 Exit code 0 iff every step passed.
 """

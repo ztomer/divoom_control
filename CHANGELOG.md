@@ -4,6 +4,41 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## Unreleased — test rearrangement Phase 1 (2026-09-12)
+
+Plan: `docs/PLANNING_TEST_REORG.md`. One place for tests to live, plus
+gated Rust test modules. Full verification green (pytest 2946 passed /
+236 skipped, cargo both matrices, clippy both cfgs, fmt, ci_local 26/26).
+
+- **Stray pytest files moved into `tests/`** (history preserved via
+  `git mv`, all hardware-gated in `tests/conftest.py`):
+  `divoomd/test_show_image.py` → `tests/test_show_image_hw.py` (flow
+  wrapped in `test_show_image_quadrants`, MAC via `DIVOOM_TEST_MAC`);
+  `divoomd/smoke_display_aliases.py` →
+  `tests/test_smoke_display_aliases_hw.py` (bonus find, same class;
+  module-level flow refactored into `run_smoke()` so collection is
+  side-effect free); `scripts/test_watchface_roundtrip.py` →
+  `tests/test_watchface_roundtrip.py` with the `verify_device` import in
+  `tests/test_e2e_mock_device.py` updated (15/15 pass). The planned
+  daemon-socket port was rejected during implementation: the mock test
+  pins the facade seam and `hw_verify.py` has no watchface coverage, so
+  a port would rewrite a passing test for zero new coverage.
+- **Non-test driver renamed**: `scripts/hw_test_modes.py` →
+  `scripts/hw_walk_modes.py` (usage lines updated).
+- **Rust test modules gated** (`divoomd/src/lib.rs`): four ungated
+  `pub mod *_tests` declarations now `#[cfg(test)] mod`, copying the
+  `c7_positional_tests` pattern — release builds no longer carry empty
+  public test modules. All 21 `mock_*` tests still run and pass.
+  `mock_transport` deliberately untouched (runtime code: `connect
+  {"mock": true}`).
+- **New gate `tools/check_test_placement.py`**: fails on any tracked
+  `test_*.py` outside `tests/` and any ungated `*_tests`/`tests` module
+  declaration in the workspace crates; carries `scope_is_empty` plus a
+  50-file scan floor. Wired into `.gatesrc` `GOH_CI_STEPS` (step 5/26)
+  and mirrored in `.github/workflows/tests.yml`. Calibrated both
+  directions (removed `cfg` → red at `lib.rs:54`; staged stray →
+  red); probe removed without residue.
+
 ## v0.35.4 — Virtual Wall Simplification, Spatial Bench Alignment & Channel Persistence (2026-09-12)
 
 ### Architecture & Added

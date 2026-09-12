@@ -1,9 +1,21 @@
 #!/usr/bin/env python3
-"""Automated watchface set-and-readback roundtrip verification script.
+"""Automated watchface set-and-readback roundtrip verification.
 
 Connects to target Divoom devices, sets a specific watchface (clock dial),
 and queries it back to verify successful two-way communication.
 Tries multiple protocol options (iOS LE, Basic Escaped, Basic Non-Escaped).
+
+Moved from scripts/test_watchface_roundtrip.py (Phase 1 of
+docs/PLANNING_TEST_REORG.md): one place for tests to live.
+Hardware-gated via tests/conftest.py HARDWARE_TEST_MODULES — the manual
+driver path below is skipped without --run-hardware. Manual use unchanged:
+python3 tests/test_watchface_roundtrip.py --addresses <ADDR> --dial 3
+
+NOTE (2026-09-12): verify_device deliberately stays on the Divoom facade
+rather than the daemon socket. tests/test_e2e_mock_device.py pins that
+seam (monkeypatched Divoom.__init__ + MockBleakClient), and a socket port
+would only move the mock without adding coverage. The daemon-socket port
+belongs to the old-path-scripts work in Phase 3, not to this move.
 """
 
 import argparse
