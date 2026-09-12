@@ -21,6 +21,13 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-12 — defect #5 FIXED as `1260582` and LIVE-VERIFIED on the installed build; fleet of 4 connected.**
+  - Root cause was neither triage reading: a HIDDEN panel, not an empty one. `showChannelPanel` toggled every `.channel-panel` in the document by `panel-<kind>` and is fed the activity bus (21 kinds, 7 panels) — an unmatched kind hid all panels under a still-lit Clock tab; `#panel-design` (Custom Art) still carried `channel-panel` from before R42 and was hidden by every other kind. Fix: toggle scoped to `#control-panel .channel-panels`, unknown kind is a no-op, Custom Art always laid out.
+  - Class test `tests/test_channel_panel_visibility.py` (all 21 kinds, saved-`image` rehydrate, tab click) proven red on the pre-fix tree, 6/6 green with the persistence suite after. Sibling sweep clean (selector cells only clear a highlight; other switchers read a closed vocabulary).
+  - Live (rebuilt bundle, `install_local.sh`, inode-verified, all 4 devices connected): injected `image` + `sysmon` activity for the selected Ditoo via the socket, pushed real custom art to it from the GUI, re-selected it from the fleet — Clock panel and Custom Art stayed populated through all of it. Ditoo restored to clock afterwards.
+  - CI: `ci_local.sh --fast` went red on `cargo test --locked` (wall test SIGABRT: eager CoreBluetooth central in a grant-less terminal) — fixed at the root as `be136f9` (lazy central, `wall/bounds.rs`); rerun 27/27 green.
+  - Tooling note: this Python's camoufox package had no browser (`python3 -m camoufox fetch` was needed before the e2e suite would run rather than skip). Background clicks do not reach the pywebview WebView; real clicks via System Events do.
+  - Still open from the defect round: #2 (animated GIF previews, planned under "Preview Animation Fidelity"); live glances for #1 (cover art with music playing) and #6 (connect/drop/reconnect). #4 GUI half is now behind the installed daemon (weather returned the real city on the installed build in the opencode session).
 - **2026-09-12 — live session: 4 devices available, 1 connected (`f90d2cc9…`, BLE).**
   - Daemon half of #4 VERIFIED live (dev build on temp socket returned the real city; killed after; live setup untouched).
   - #3a MEASURED live (transient switches, restored to clock): all channels 0.04–0.12s — noted below. State-changing socket commands are now run directly (devices volunteered); restarts/reinstalls stay user-run.

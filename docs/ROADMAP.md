@@ -243,18 +243,21 @@ a live confirmation before a fix ships).
    `""`. Explicit `"London"` echoes back on both. Dev daemon killed
    afterwards; live setup untouched. Remaining: the GUI half needs the
    new daemon behind the GUI (`install_local.sh` restart, user-run).
-5. **Clock/custom-art intermittently empty — TRIAGED 2026-09-12, two readings (needs the live app to distinguish).**
-   Eliminated statically: the canvas path cannot blank (the glyph
-   switch is exhaustive with a clock default; every renderer draws
-   unconditionally), and the static panel grids build once at load
-   with nothing rewriting them after. The frame-cache race hypothesis
-   is narrowed accordingly — a pending frame falls back to a GLYPH,
-   never to blank. Remaining candidates: (a) the ASYNC panel sections
-   (cloud clock list, custom-art cache grid) failing to populate, or
-   (b) a zero-sized canvas / device-side blank. Distinguishing
-   observation for the live session: is the empty area panel chrome
-   with missing tiles, or a blank canvas — screenshot plus DOM check
-   of `#clock-faces-grid` children and canvas width/height.
+5. **Clock/custom-art intermittently empty — FIXED 2026-09-12 as `1260582` (needs a live glance).**
+   Neither of the two triage readings: it was a HIDDEN panel, not an
+   empty one. `showChannelPanel` toggled `active` on every
+   `.channel-panel` in the document and is fed the activity bus, whose
+   vocabulary (`image`, `sysmon`, `custom`, `hot`, `playlist`, ...) is
+   far wider than the seven panels; an unmatched kind hid them ALL
+   while the tab highlight stayed on Clock. Intermittent because it
+   tracks the selected device's last activity. `#panel-design` (Custom
+   Art) still carried `channel-panel` from before R42 moved it to Pixel
+   Art, so the same toggle hid it for every kind but `design`. Fix:
+   toggle scoped to `#control-panel .channel-panels`, unknown kind is a
+   no-op, Custom Art always laid out. Class test
+   `tests/test_channel_panel_visibility.py` (all 21 kinds, rehydrate,
+   tab click) proven red-then-green. Live: reproduce by pushing gallery
+   art (kind `image`) then opening Channels and Pixel Art.
 6. **UI stuck on "connecting" — FIXED 2026-09-12 (needs a live session).**
    `window.setConnectionState` (`connection_events.js`) is now the SOLE
    writer of dot class, banner, and `appConnected`; the click flow, the

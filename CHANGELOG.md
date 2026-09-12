@@ -6,6 +6,44 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased — user-defect fixes (2026-09-12, from triage `ba62ba2`)
 
+### Fixed — wall spun up CoreBluetooth even when no slot needed the radio
+
+- `DivoomWall::connect` created the central before checking whether any
+  slot lacked an existing transport; a mock-only wall in a process with
+  no Bluetooth grant was killed by macOS with SIGABRT (the integration
+  test passed in a granted terminal and died in an ungranted one, with
+  no Rust change between). The central is now created lazily on the
+  first slot that needs it; `WallBounds` moved to `wall/bounds.rs`.
+
+### Fixed — Clock / Custom Art panels intermittently empty (#5)
+
+- `showChannelPanel` (`channels_core.js`) toggled `active` on every
+  `.channel-panel` in the document and is fed the activity bus (daemon
+  `activity` events, bench rehydration, spatial-stage selection). That
+  vocabulary (`image`, `sysmon`, `music`, `custom`, `hot`, `playlist`,
+  ...) is far wider than the seven Channels-tab panels, so an unmatched
+  kind hid EVERY panel while the tab highlight (moved only `if (card)`)
+  stayed on Clock: the "empty clock" is a lit tab over a hidden panel.
+  Intermittent because it tracks the selected device's LAST activity
+  (a gallery push lands `image`; a widget lands `sysmon`).
+- `#panel-design` (Custom Art) still carried `channel-panel` from
+  before R42 moved it into the Pixel Art tab, so the same toggle hid it
+  for every kind but `design`, which nothing sends any more. Its sub-tab
+  already governs visibility; it is now always laid out
+  (`templates_pixel_art.js`, `style_extra.css`, `channels.css`).
+- Fix: the toggle is scoped to `#control-panel .channel-panels`, and a
+  kind with no panel is a no-op (the showing panel keeps matching the
+  lit tab). The dead `design` cache-grid branch is gone (the Pixel Art
+  `tab-changed` hook has owned that since R42).
+- Sibling sweep: selector-cell toggles only clear a HIGHLIGHT on an
+  unmatched value; the sub-tab and main-tab switchers read their target
+  from the clicked button (closed vocabulary). No further instances.
+- Regression test `tests/test_channel_panel_visibility.py` pins the
+  class invariant (exactly one Channels panel visible, matching the lit
+  tab; Custom Art untouched) across all 21 activity kinds, a saved
+  `image` rehydration, and a click through every tab. All three proven
+  red on the pre-fix tree; 6/6 green with the persistence suite after.
+
 ### Fixed — connection state funnel: UI can no longer stick on "connecting" (#6, unblocks #3's flaky half)
 
 - `window.setConnectionState` (`connection_events.js`) is now the SOLE
