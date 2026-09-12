@@ -232,26 +232,31 @@ one per-device fact"), fixed and pinned in browser tests:
 - previews mirror the panel: every live frame is broadcast with its
   pixels (`c1185fb`).
 
-### OPEN — now-playing prefers a stopped Music.app over a playing client (filed 2026-09-12)
+### SHIPPED — now-playing: an empty session is not a track; idle reply names the players (`64c7100`, 2026-09-12)
 
-With Apple Music open but stopped, `now_playing` reported Music as the
-now-playing app (no title, `is_playing: false`) and masked Kaset, which
-was playing; quitting Music fixed it. The daemon lists both players in
-`players`; it should prefer the one that is playing (or skip a client
-whose session reports stopped/no title) rather than trusting
-MediaRemote's "now playing app" pointer.
+With Apple Music open but stopped, MediaRemote handed the Now Playing
+session to Music with nothing in it and Kaset (playing) could not be
+read past it -- MediaRemote answers for one session only. An empty
+session (no title, artist or art) now parses as nothing playing, and the
+idle reply carries the registered players plus a hint naming the fix
+(play in or quit the holder), which the cover card shows. Residual:
+MediaRemote offers no per-client read, so a truly masked player stays
+invisible until the holder plays or quits.
 
-### OPEN — Bluetooth permission prompt on every rebuild (filed 2026-09-12)
+### SHIPPED — stable local code-signing identity: Bluetooth grant survives rebuilds (2026-09-12)
 
-Every `build_release.sh` + `install_local.sh` (and every dev-daemon bundle)
-is ad-hoc signed, so its cdhash changes and macOS TCC treats it as a new
-app: a fresh Bluetooth prompt per install, which an unattended session
-cannot answer. Fix: sign the bundle (and the dev daemon) with a stable
-self-signed code-signing identity created once in the login keychain, so
-the grant keys on the identity's designated requirement instead of the
-hash. Needs the user at the keyboard to create the identity; the build
-scripts then take `DIVOOM_CODESIGN_IDENTITY`. Until then: no BLE rebuilds
-while the user is away (memory rule).
+TCC keys the Bluetooth grant on the code's designated requirement; ad-hoc
+signing made that the per-build cdhash, so every install was a new
+prompt. `scripts/make_signing_identity.sh` creates a self-signed
+code-signing certificate ("Divoom Local Signing") in the login keychain
+and trusts it for code signing -- no Apple developer account needed.
+`scripts/codesign_identity.sh` is the ONE place that decides how a
+bundle is signed (the identity when present, ad-hoc otherwise;
+`DIVOOM_CODESIGN_ADHOC=1` forces ad-hoc); `build_release.sh`,
+`install_local.sh` and `make_dev_daemon_app.sh` source it. Proven with
+the user at the keyboard: one prompt on the first identity-signed
+install, none on a second different build. New machine: run
+`scripts/make_signing_identity.sh` once (one keychain prompt).
 
 ### OPEN — user-reported defects, filed 2026-09-12
 

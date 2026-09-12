@@ -113,10 +113,14 @@ if find "${APP}" \( -iname '*smali*' -o -path '*references*' -o -iname '*.apk' \
   exit 1
 fi
 
-# 4. Adhoc re-sign the whole bundle (covers the chmod'd binaries + the .app's
+# 4. Re-sign the whole bundle (covers the chmod'd binaries + the .app's
 #    Info.plist BT usage strings → TCC attributes Bluetooth to com.divoom.control).
-echo "→ codesigning (adhoc, deep)"
-codesign --force --deep --sign - "${APP}" 2>/dev/null \
+#    With the local identity present the grant survives rebuilds; ad-hoc
+#    otherwise (scripts/codesign_identity.sh decides, in one place).
+echo "→ codesigning (deep)"
+# shellcheck source=scripts/codesign_identity.sh
+. "$(dirname "$0")/codesign_identity.sh"
+divoom_codesign "${APP}" 2>/dev/null \
   && echo "   signed" || echo "   WARN: codesign failed (unsigned bundle still runs locally)"
 
 # 5. .dmg (plain folder image with an /Applications symlink for drag-install).

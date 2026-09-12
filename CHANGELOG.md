@@ -6,6 +6,19 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased — user-defect fixes (2026-09-12, from triage `ba62ba2`)
 
+### Added — stable local code-signing identity (no Apple account)
+
+- `scripts/make_signing_identity.sh` creates and trusts a self-signed
+  code-signing certificate; `scripts/codesign_identity.sh` is the one
+  signing seam used by the release, install and dev-daemon scripts. The
+  Bluetooth grant now follows the identity instead of the per-build
+  hash: proven prompt-free across two different installs.
+
+### Fixed — a stopped player no longer reads as a nameless paused track
+
+- An empty MediaRemote session parses as nothing playing; the idle
+  reply names the registered players with a hint, shown on the card.
+
 ### Fixed — cover art is the original album art; previews mirror the panel (#1, second reading)
 
 - The cover shows the daemon's original artwork bytes (`artwork`),

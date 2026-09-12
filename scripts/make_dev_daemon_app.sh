@@ -87,6 +87,12 @@ chmod +x "$APP/Contents/MacOS/run"
 
 /usr/bin/plutil -lint "$APP/Contents/Info.plist" >/dev/null || die "Info.plist is malformed"
 
+# Sign with the stable local identity when present, so the dev daemon's
+# Bluetooth grant survives rebuilds too (scripts/codesign_identity.sh).
+# shellcheck source=scripts/codesign_identity.sh
+. "$REPO/scripts/codesign_identity.sh"
+divoom_codesign "$APP" >/dev/null 2>&1 || warn "codesign failed (unsigned bundle still runs locally)"
+
 # Register with LaunchServices so `open` finds it by bundle id.
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP" 2>/dev/null || true
 

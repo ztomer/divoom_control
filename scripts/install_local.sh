@@ -67,7 +67,9 @@ ok "nothing running from a Divoom bundle"
 section "installing"
 rm -rf "$DEST"
 cp -R "$SRC" "$DEST"
-if codesign --force --deep --sign - "$DEST" >/dev/null 2>&1; then
+# shellcheck source=scripts/codesign_identity.sh
+. "$(dirname "$0")/codesign_identity.sh"
+if divoom_codesign "$DEST" 2>/dev/null; then
     ok "signed $DEST"
 else
     warn "codesign failed (an unsigned bundle still runs locally)"
