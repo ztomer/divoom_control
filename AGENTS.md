@@ -51,8 +51,12 @@ These are lessons paid for in real shipped bugs; don't relearn them.
   **SIGABRT and no message at all** — which reads exactly like a crash in your
   change and is not one (a Rust panic always prints). The real app is unaffected:
   the GUI launches the daemon and owns the grant. For terminal work, either build
-  BLE-free (`cargo build -p divoomd --no-default-features`) or launch via
-  Terminal (`open *.command`) so the grant is inherited. `cargo test` rebuilds
+  BLE-free (`cargo build -p divoomd --no-default-features`) or install the bundle
+  (`scripts/build_release.sh` + `scripts/install_local.sh`; with the local signing
+  identity from `scripts/make_signing_identity.sh` the grant survives rebuilds)
+  and drive `/tmp/divoom.sock`. A mock-only test that SIGABRTs in an ungranted
+  terminal is a code finding: production is touching the radio on a path that
+  does not need it. `cargo test` rebuilds
   `target/debug/divoomd` WITH default features, so redo the BLE-free build after
   any test run.
 - **Tests**: hardware tests are gated/skip by default (`tests/conftest.py`);

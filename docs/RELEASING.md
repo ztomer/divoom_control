@@ -38,6 +38,11 @@ open dist/Divoom.app
 
 - First scan prompts for Bluetooth — **grant it once** (the bundle declares
   `NSBluetoothAlwaysUsageDescription`, so macOS shows the normal dialog).
+  "Once" holds only if the bundle is signed with the stable local identity:
+  run `scripts/make_signing_identity.sh` once per machine, and
+  `build_release.sh` / `install_local.sh` sign with it. Ad-hoc signing (no
+  identity in the keychain) makes every rebuild a new prompt, because TCC
+  keys the grant on the per-build hash.
 - Confirm: device scan finds screens, connect + push works, the menu-bar agent
   appears, and the daemon spawns (`/tmp/divoomd.log`). Since v0.21.4 the GUI
   spawns the native `divoomd` **TCC-disclaimed** so it's its own BT-responsible

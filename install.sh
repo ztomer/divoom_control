@@ -108,7 +108,7 @@ if [[ "$BUILD" == "1" ]]; then
 
   info "building self-contained bundle (this takes a few minutes)"
   # build_release.sh owns the bundle: native dylib, divoomd, divoom-menubar,
-  # icon, PyInstaller, the references leak-guard, and the adhoc signature. This
+  # icon, PyInstaller, the references leak-guard, and the signature (scripts/codesign_identity.sh). This
   # script does not duplicate any of it — one builder, one bundle.
   bash scripts/build_release.sh "$PYBUILD"
 else

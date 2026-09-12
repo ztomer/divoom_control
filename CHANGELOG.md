@@ -4,59 +4,25 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
-## Unreleased — user-defect fixes (2026-09-12, from triage `ba62ba2`)
+## v0.36.0 — One struct per panel, the six user-reported defects, prompt-free rebuilds (2026-09-12)
 
-### Added — stable local code-signing identity (no Apple account)
+Minor bump: new capability (per-device fleet model, per-device
+disconnect/status, frame broadcast, local signing identity) and corrected
+behaviour users depend on. Read first if you upgrade:
 
-- `scripts/make_signing_identity.sh` creates and trusts a self-signed
-  code-signing certificate; `scripts/codesign_identity.sh` is the one
-  signing seam used by the release, install and dev-daemon scripts. The
-  Bluetooth grant now follows the identity instead of the per-build
-  hash: proven prompt-free across two different installs.
-
-### Fixed — a stopped player no longer reads as a nameless paused track
-
-- An empty MediaRemote session parses as nothing playing; the idle
-  reply names the registered players with a hint, shown on the card.
-
-### Fixed — cover art is the original album art; previews mirror the panel (#1, second reading)
-
-- The cover shows the daemon's original artwork bytes (`artwork`),
-  smoothly scaled; the device-size frame (`preview`) stays pixelated
-  beside it. The earlier `pixelated` cover rule is gone.
-- Every live frame a job pushes is broadcast as an `activity` event with
-  a PNG of itself and kept on the panel's activity record; the GUI feeds
-  it to the panel's preview. Bench, ribbon and wall follow the device on
-  any tab, and the menubar's tiles get real frames.
-
-### Fixed — the GUI's selected panel is one fact; per-panel link state in the GUI
-
-- `select_device`: the bench tells Python which panel is selected on
-  every path (highlight and first-panel fallback); Python's proxy
-  rebinds without connecting. A gallery push landed on the last
-  connected panel while the preview showed the selected one.
-- Status events update the named panel; bench and deck jewels read the
-  panel's link (they were hardcoded green); the global dot follows the
-  selected panel. `owned_devices` repaints the bench and deck and never
-  carries the daemon's name placeholder.
-
-### Fixed — animated bench previews frozen at frame 0 (#2)
-
-- `gif_frames.js`: a client-side GIF decoder (LZW, local colour tables,
-  interlace, transparency, disposal 0-3) and a per-preview `Player`;
-  `DisplayPreview.renderTo` draws the frame for "now" instead of
-  `drawImage` of an `<img>`, which WebKit never advances. Static sources
-  are untouched. Browser test with a calibration branch; differential
-  check against PIL over 287 real gallery GIFs (285 byte-exact, 2 off by
-  one grey level where PIL rounds a two-entry palette).
-
-### Changed — the GUI names its panel; per-device disconnect
-
-- `DaemonDeviceProxy(mac=...)`: every `device_call` and `device_status`
-  carries the panel the user selected instead of meaning "whichever
-  connected last". `disconnect {mac}` drops one panel (job stopped, link
-  retired, then the radio hangs up) and leaves the others streaming;
-  connecting one panel no longer disconnects the fleet.
+- **A live widget now stops when you say stop.** Before, one more frame
+  could land after a stop, a channel switch, or even on a panel that had
+  just reconnected. If a panel "kept coming back" to a widget, that was
+  this, and it is gone.
+- **The panel you selected on the bench is the panel that gets the push.**
+  Before, a push could land on whichever panel connected last.
+- **The cover card shows the real album art, smoothly scaled.** v0.35.4's
+  interim fix rendered it as diodes; that was the wrong reading. Only the
+  device-frame preview beside it is diodes.
+- **Bluetooth prompts on rebuild are over** once
+  `scripts/make_signing_identity.sh` has run on the machine.
+- **A panel's dot is its own.** One panel dropping no longer flips the
+  fleet, and a dropped panel no longer stays green.
 
 ### Changed — one `Device` struct per panel (daemon), one `DeviceView` per panel (menubar)
 
@@ -96,14 +62,25 @@ any panel's status event overwrote.
 
 Also: `DivoomWall::connect` creates the CoreBluetooth central lazily.
 
-### Fixed — wall spun up CoreBluetooth even when no slot needed the radio
+### Fixed — cover art is the original album art; previews mirror the panel (#1, second reading)
 
-- `DivoomWall::connect` created the central before checking whether any
-  slot lacked an existing transport; a mock-only wall in a process with
-  no Bluetooth grant was killed by macOS with SIGABRT (the integration
-  test passed in a granted terminal and died in an ungranted one, with
-  no Rust change between). The central is now created lazily on the
-  first slot that needs it; `WallBounds` moved to `wall/bounds.rs`.
+- The cover shows the daemon's original artwork bytes (`artwork`),
+  smoothly scaled; the device-size frame (`preview`) stays pixelated
+  beside it. The earlier `pixelated` cover rule is gone.
+- Every live frame a job pushes is broadcast as an `activity` event with
+  a PNG of itself and kept on the panel's activity record; the GUI feeds
+  it to the panel's preview. Bench, ribbon and wall follow the device on
+  any tab, and the menubar's tiles get real frames.
+
+### Fixed — animated bench previews frozen at frame 0 (#2)
+
+- `gif_frames.js`: a client-side GIF decoder (LZW, local colour tables,
+  interlace, transparency, disposal 0-3) and a per-preview `Player`;
+  `DisplayPreview.renderTo` draws the frame for "now" instead of
+  `drawImage` of an `<img>`, which WebKit never advances. Static sources
+  are untouched. Browser test with a calibration branch; differential
+  check against PIL over 287 real gallery GIFs (285 byte-exact, 2 off by
+  one grey level where PIL rounds a two-entry palette).
 
 ### Fixed — Clock / Custom Art panels intermittently empty (#5)
 
@@ -152,19 +129,8 @@ Also: `DivoomWall::connect` creates the CoreBluetooth central lazily.
   not committed — no JS harness exists in this repo): all pass on the
   new code, and the heartbeat-latch check fails on the pre-fix file.
   `node --check` clean; file-size/emoji/api-reachable gates green.
-  Live confirmation wanted (real connect/drop/reconnect cycle).
-
-### Fixed — blurry live cover art (#1)
-
-- The cover `<img>` upscaled the device-size preview frame bilinearly
-  while its device-preview sibling rendered `pixelated`. Added
-  `image-rendering: pixelated; crisp-edges` to
-  `.music-previews-container .music-cover-preview img`
-  (`widgets_extra.css`). Sibling sweep: all other pixel-art surfaces
-  already pixelated; the appbar logo (full-res asset) correctly left
-  alone. Verified by cascade inspection (specific rule wins, base does
-  not reset) + element-ID tests + emoji gate; visual confirmation
-  wants a live session with music playing.
+  Live-confirmed: a per-panel drop turned the jewel standby and the dot
+  inactive; the reconnect healed both without a click.
 
 ### Fixed — weather card said "here" instead of the city (#4)
 
@@ -187,10 +153,56 @@ Also: `DivoomWall::connect` creates the CoreBluetooth central lazily.
   `test_get_weather_without_a_city_says_unknown_never_here`.
   Full matrices green (cargo both, clippy both, fmt); 46
   weather-adjacent pytest pass; weather parity + census arbiters green.
-- Live confirmation still wanted: card shows the real city with no
-  override set.
+- Live-confirmed on the installed daemon: `weather` with no override
+  answered the real geolocated city; the card shows it.
 
-## Unreleased — test rearrangement Phase 1 (2026-09-12)
+### Fixed — the GUI's selected panel is one fact; per-panel link state in the GUI
+
+- `select_device`: the bench tells Python which panel is selected on
+  every path (highlight and first-panel fallback); Python's proxy
+  rebinds without connecting. A gallery push landed on the last
+  connected panel while the preview showed the selected one.
+- Status events update the named panel; bench and deck jewels read the
+  panel's link (they were hardcoded green); the global dot follows the
+  selected panel. `owned_devices` repaints the bench and deck and never
+  carries the daemon's name placeholder.
+
+### Changed — the GUI names its panel; per-device disconnect
+
+- `DaemonDeviceProxy(mac=...)`: every `device_call` and `device_status`
+  carries the panel the user selected instead of meaning "whichever
+  connected last". `disconnect {mac}` drops one panel (job stopped, link
+  retired, then the radio hangs up) and leaves the others streaming;
+  connecting one panel no longer disconnects the fleet.
+
+### Added — stable local code-signing identity (no Apple account)
+
+- `scripts/make_signing_identity.sh` creates and trusts a self-signed
+  code-signing certificate; `scripts/codesign_identity.sh` is the one
+  signing seam used by the release, install and dev-daemon scripts. The
+  Bluetooth grant now follows the identity instead of the per-build
+  hash: proven prompt-free across two different installs.
+
+### Fixed — a stopped player no longer reads as a nameless paused track
+
+- An empty MediaRemote session parses as nothing playing; the idle
+  reply names the registered players with a hint, shown on the card.
+
+### Fixed — wall spun up CoreBluetooth even when no slot needed the radio
+
+- `DivoomWall::connect` created the central before checking whether any
+  slot lacked an existing transport; a mock-only wall in a process with
+  no Bluetooth grant was killed by macOS with SIGABRT (the integration
+  test passed in a granted terminal and died in an ungranted one, with
+  no Rust change between). The central is now created lazily on the
+  first slot that needs it; `WallBounds` moved to `wall/bounds.rs`.
+
+
+The interim #1 change (`424f54e`, `pixelated` on the cover image) shipped
+between triage and this release and is reverted by the stanza above; it is
+recorded here only so the history reads straight.
+
+### Changed — tests rearranged into `tests/`, Rust test modules gated (four phases, `5d92643`..`0a5cd70`)
 
 Plan: `docs/PLANNING_TEST_REORG.md`. One place for tests to live, plus
 gated Rust test modules. Full verification green (pytest 2946 passed /

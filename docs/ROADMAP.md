@@ -9,6 +9,14 @@ forward-looking one. Recover a round plan with
 
 ## Shipped
 
+- **v0.36.0 — One struct per panel, the six user-reported defects, prompt-free rebuilds (2026-09-12)**:
+  - **Daemon per-device aggregate (`divoomd/src/device.rs`)**: `Device` (identity: one live job, activity) holds an `Option<Link>` (connection: transport + the ONE queue); `Fleet` is the single owner of which panels exist and which is current. Queued work is bound to its link and dropped if the link is retired; a job's `alive` flag is cleared before abort and checked at execution. Every pushed live frame is broadcast with its pixels. Replaces five mac-keyed maps that disagreed (ghost frame after stop, GUI calls on a different queue from live jobs, two widgets per screen, ghost frame on reconnect). Gate: `divoomd/tests/live_jobs_stress.rs` (10 scenarios, 4 red before).
+  - **Six user-reported defects, all live-confirmed with the user at the keyboard**: cover art (original art, smooth; device frame, diodes), animated bench previews (`gif_frames.js` client-side decoder), channel switching (measured 0.04-0.12s; the flaky half was the connecting-state funnel), weather city, empty Clock/Custom Art panels (document-wide panel toggle), stuck "connecting".
+  - **GUI fleet state**: the proxy names its panel on every call; bench selection is one funnel (`select_device`); status events are per-panel; bench/deck jewels are honest; `owned_devices` is fleet-wide and never carries a placeholder name; previews mirror the panel through the broadcast frames. Per-device `disconnect {mac}` / `device_status {mac}`.
+  - **Menubar**: `DeviceView` per panel with link state; the tray word is derived.
+  - **Signing**: self-signed local code-signing identity (`scripts/make_signing_identity.sh`, `scripts/codesign_identity.sh`); the Bluetooth grant survives rebuilds (proven: second different build, no prompt).
+  - **Also**: tests rearranged into `tests/` with a placement gate; wall creates the BLE central lazily; BLE debug lines tagged with the peripheral id; now-playing treats an empty MediaRemote session as nothing playing.
+
 - **v0.35.4 — Virtual Wall Simplification, Spatial Bench Alignment & Channel Persistence (2026-09-12)**:
   - **Virtual Wall Tab Simplification & Arranger Canvas Elimination**: Removed redundant `.arranger-card` (`#arranger-canvas`, preset management UI) from Tab 2; Virtual Wall now focuses on "Split & Sync Wall Art" directly using Spatial Stage Bench node positions (`SpatialRooms.getWallSlots()`); deleted dead preset methods on `DivoomGuiAPI` (`save_preset`, `load_preset_names`, `load_preset_by_name`).
   - **Per-Device Active Channel Persistence & Preview Rehydration**: Persisted active channel and options to `localStorage['divoom_device_channels']` with case-insensitive MAC resolution; on device selection and bench refresh, rehydrates `DisplayPreviewRegistry`, channel panel buttons, and inspector controls; whitelisted `"activity"` in `gui_main.py` to forward daemon channel change broadcasts to `window.Divoom.onActivity`.
@@ -197,155 +205,44 @@ are not restated.
 
 ## Open workstreams
 
-### SHIPPED — per-device aggregate: the live-widget "repeating" class (2026-09-12)
+### The per-device rule (v0.36.0, read before adding any per-panel state)
 
-`ea60483` + `355b0a6`. See the CHANGELOG stanza "one `Device` struct per
-panel". The stress suite `divoomd/tests/live_jobs_stress.rs` is the
-class-level gate: stop-is-a-fence, one queue per panel, one widget per
-screen, churn, disconnect/reconnect, link-drop persistence, fleet-wide
-`owned_devices`. **Rule for new code:** anything that sends to a panel
-goes through `Device::link()` -> `Link::run` / `Link::queue.acquire`;
-never hold a transport `Arc` across an await without the link's permit,
-and never key new per-device state by mac string -- put it on `Device`.
+**All per-device state lives on ONE struct per panel** — `Device` in the
+daemon, `DeviceView` in the menubar, `discoveredDevices[mac]` in the GUI —
+and each fact has ONE writer. The class this closes: two owners of one
+per-panel fact drifting apart. It produced, in one day, a frame that landed
+after "stop", a push on the wrong panel, a fleet renamed "Divoom", jewels
+that were always green, and previews that stopped following the device.
 
-Follow-ups from the same audit, SHIPPED `dfb0c3f`: the GUI's proxy is
-bound to the panel it connected and names it on every `device_call` and
-`device_status`; `disconnect {mac}` drops one panel and leaves the rest
-streaming; connecting one panel no longer disconnects the fleet. Still
-open: the daemon's "current" device only matters for mac-less callers
-now (the CLI, MCP tools); retire it once those pass a mac too.
+* Anything that sends to a panel goes through `Device::link()` ->
+  `Link::run` / `Link::queue.acquire`. Never hold a transport `Arc` across an
+  await without the link's permit. Never key new per-device state by mac
+  string — put it on `Device`.
+* A queued unit of work holds the `Link` it was queued on and re-checks
+  `retired` (and its job's `alive`) at execution time. Abort alone never
+  cancels work already handed to the queue worker.
+* The daemon's "current" device exists only for mac-less callers (CLI, MCP
+  tools). The GUI names its panel on every call. Retire "current" once
+  those two pass `mac` (open item).
+* The GUI's selection changes through `setSelected` -> `select_device`
+  only. A status event updates the panel it names; the global dot follows
+  the SELECTED panel; a status naming nobody is fleet-wide.
+* The gate is `divoomd/tests/live_jobs_stress.rs`; every new scenario there
+  should be shown red first.
 
-### SHIPPED — the selection funnel and per-panel GUI state (2026-09-12, with the user at the keyboard)
+Residual, filed: MediaRemote answers for one Now Playing session, so a
+playing app behind a stopped holder cannot be read; the idle reply names
+the registered players and the card shows the hint.
 
-Found live, all the same class as the daemon aggregate ("two owners of
-one per-device fact"), fixed and pinned in browser tests:
-- a gallery push went to the Pixoo while the preview showed the Ditoo:
-  the bench selection (JS, restored from storage) and Python's proxy
-  (bound by auto-reconnect) disagreed. `select_device` is the one funnel
-  (`89ecea2`), used by every selection path including the first-panel
-  fallback (`f4c2f77`, and `setSelected` after the fallback skipped it).
-- status events moved one global dot for any panel; the bench and deck
-  jewels were hardcoded `online`. Now per-panel `activityState`, jewels
-  derived (`jewelClassFor`), global dot follows the SELECTED panel only.
-- `owned_devices` renamed panels "Divoom" (daemon placeholder leaked,
-  `db5e8ab`); it now repaints bench and deck too.
-- previews mirror the panel: every live frame is broadcast with its
-  pixels (`c1185fb`).
+### SHIPPED — user-reported defects filed and closed 2026-09-12
 
-### SHIPPED — now-playing: an empty session is not a track; idle reply names the players (`64c7100`, 2026-09-12)
-
-With Apple Music open but stopped, MediaRemote handed the Now Playing
-session to Music with nothing in it and Kaset (playing) could not be
-read past it -- MediaRemote answers for one session only. An empty
-session (no title, artist or art) now parses as nothing playing, and the
-idle reply carries the registered players plus a hint naming the fix
-(play in or quit the holder), which the cover card shows. Residual:
-MediaRemote offers no per-client read, so a truly masked player stays
-invisible until the holder plays or quits.
-
-### SHIPPED — stable local code-signing identity: Bluetooth grant survives rebuilds (2026-09-12)
-
-TCC keys the Bluetooth grant on the code's designated requirement; ad-hoc
-signing made that the per-build cdhash, so every install was a new
-prompt. `scripts/make_signing_identity.sh` creates a self-signed
-code-signing certificate ("Divoom Local Signing") in the login keychain
-and trusts it for code signing -- no Apple developer account needed.
-`scripts/codesign_identity.sh` is the ONE place that decides how a
-bundle is signed (the identity when present, ad-hoc otherwise;
-`DIVOOM_CODESIGN_ADHOC=1` forces ad-hoc); `build_release.sh`,
-`install_local.sh` and `make_dev_daemon_app.sh` source it. Proven with
-the user at the keyboard: one prompt on the first identity-signed
-install, none on a second different build. New machine: run
-`scripts/make_signing_identity.sh` once (one keychain prompt).
-
-### OPEN — user-reported defects, filed 2026-09-12
-
-Filed verbatim from a live session against v0.35.4. Triaged 2026-09-12
-(code inspection only — no device in the triage session, so each needs
-a live confirmation before a fix ships).
-
-1. **Live cover art blurry — FIXED 2026-09-12 as `3864862`, LIVE-CONFIRMED with the user.**
-   The first fix (`424f54e`, `pixelated` on the cover) was the wrong
-   reading. The cover is the REAL album art and scales smoothly; the
-   device preview beside it is the 16x16 frame and is the one rendered
-   as diodes. The cover was blurry because it was handed the device
-   frame. `get_current_track_info` now returns `artwork` (the daemon's
-   original bytes, MIME as sniffed) for the cover and `preview` for the
-   frame. Follow-on, also live: previews mirror the panel through the
-   daemon -- every pushed live frame is broadcast with its pixels
-   (`c1185fb`), so the bench updates on any tab (confirmed: track skip
-   with the app on Channels moved the Ditoo's node).
-2. **Bench previews frozen — FIXED 2026-09-12 as `c10af86`, LIVE-CONFIRMED (Hetera Bounce animates on the Ditoo's bench node).**
-   WebKit never advances a GIF through `drawImage` of an
-   HTMLImageElement, so every preview sat on frame 0. `gif_frames.js`
-   decodes the GIF client-side (LZW, local tables, interlace, disposal)
-   and `DisplayPreview.renderTo` draws the frame for "now"; the canvas
-   stays the one renderer. Browser test with a calibration branch that
-   shows the old path freezing; differential check vs PIL over all 287
-   cached gallery GIFs (285 byte-exact, 2 off by one grey level where
-   PIL is the one rounding). Live: open the bench with animated art
-   selected and watch it move.
-3. **Channel switching slow/flaky — MEASURED 2026-09-12, no queue change.**
-   Live timing on the connected device (transient switches, restored to
-   clock): every channel name switches in 0.04–0.12s — clock, vj,
-   visualizer, eq, scoreboard, ambient, lighting, design, custom, hot.
-   (One probe error on the way: `visualization` is not a channel name —
-   the button says `visualizer`, which the daemon accepts. No product
-   bug.) The queue is NOT slow on a healthy link, so no priority lane
-   and no timeout change — either would be guessing against a 50ms
-   measurement. Residual explanations, both bounded: wedged-link stalls
-   (60s item timeout, then rejection toast → retry reads as flakiness)
-   and the #6 desync (fixed). Reopen only with a slow-switch timestamp
-   from a session where the link state is captured alongside.
-4. **Weather "here" — FIXED 2026-09-12 (needs a live glance).**
-   Root cause ran both sides: `parse_wttr` discarded `nearest_area`
-   and `cmd_weather` echoed the request's (empty) location, so the
-   common no-override case fell through to a hardcoded `"here"` in
-   `WidgetsApi.get_weather`. Fix: `WeatherInfo.location` parsed from
-   `nearest_area` (`weather.rs`), daemon prefers the explicit request
-   else the resolved city (`now_playing.rs`), GUI fallback is
-   `"unknown"` (`widgets.py`). Both new tests proven red-then-green.
-   Still to confirm live: card shows the real city with no override set.
-   LIVE-VERIFIED 2026-09-12 (daemon half): a BLE-free dev build on a temp
-   socket answered `weather{""}` with `"location": "Sao Cristavem"` —
-   the real geolocated city — where the installed v0.35.4 daemon answers
-   `""`. Explicit `"London"` echoes back on both. Dev daemon killed
-   afterwards; live setup untouched. Remaining: the GUI half needs the
-   new daemon behind the GUI (`install_local.sh` restart, user-run).
-5. **Clock/custom-art intermittently empty — FIXED 2026-09-12 as `1260582`, LIVE-CONFIRMED on the installed build.**
-   Neither of the two triage readings: it was a HIDDEN panel, not an
-   empty one. `showChannelPanel` toggled `active` on every
-   `.channel-panel` in the document and is fed the activity bus, whose
-   vocabulary (`image`, `sysmon`, `custom`, `hot`, `playlist`, ...) is
-   far wider than the seven panels; an unmatched kind hid them ALL
-   while the tab highlight stayed on Clock. Intermittent because it
-   tracks the selected device's last activity. `#panel-design` (Custom
-   Art) still carried `channel-panel` from before R42 moved it to Pixel
-   Art, so the same toggle hid it for every kind but `design`. Fix:
-   toggle scoped to `#control-panel .channel-panels`, unknown kind is a
-   no-op, Custom Art always laid out. Class test
-   `tests/test_channel_panel_visibility.py` (all 21 kinds, rehydrate,
-   tab click) proven red-then-green. Live: reproduce by pushing gallery
-   art (kind `image`) then opening Channels and Pixel Art.
-6. **UI stuck on "connecting" — FIXED 2026-09-12, LIVE-CONFIRMED (per-panel drop -> standby jewel + inactive dot; reconnect heals both without a click).**
-   `window.setConnectionState` (`connection_events.js`) is now the SOLE
-   writer of dot class, banner, and `appConnected`; the click flow, the
-   daemon status events, and the heartbeat all route through it. The
-   heartbeat's heal-downward-only latch is removed (an authoritative
-   answer heals both directions); a status event clears a stale
-   `connecting` left by an unsettled click promise; a click with no
-   bridge lands `inactive` with a toast instead of parking on
-   `connecting` forever. Verified by a 13-assertion node probe against
-   stubbed DOM (all pass; the heartbeat latch check FAILS on the
-   pre-fix file), `node --check`, file-size/emoji/api-reachable gates.
-   Deliberately NOT re-added: a poll timer (R59 removed polls; the
-   subscribe snapshot is the healer — re-add a slow poll only if stuck
-   states persist). This also resolves the flaky half of #3
-   (`requireDevice` gates on the flag this funnel now keeps honest).
-
-Proposed fix order: #4 (one-line, provable without hardware) → #1
-(one-rule CSS, needs a device glance) → #6 (structural; unblocks #3b)
-→ #3a-remeasure → #5 (instrument first) → #2 (already planned).
+All six, live-confirmed on the installed build with the user present.
+The mechanisms and commits are in the v0.36.0 CHANGELOG stanza. What the
+next reader needs: #3's "slow/flaky" was two things (a healthy link
+switches in 0.04-0.12s; the flakiness was the connecting-state funnel),
+and #1's first fix went the wrong way (the cover is a PHOTO and scales
+smoothly; only the device frame is diodes). Reopen #3 only with a
+timestamped slow switch plus the link state captured alongside.
 
 ### SHIPPED — code rearrangement (2026-09-12, four phases in three commits)
 
@@ -496,13 +393,12 @@ _Shipped in v0.35.0: Full-width top Spatial Preview Bench, physical millimeter p
   - Two-way synchronized layout presets (`presetsSelect`) and arranger node dragging with the `SpatialRooms` engine (`devRooms[mac] = 'Wall'`, `pos[mac] = { x, y }`, persistent saving, and live Spatial Stage updates).
   - Added automated test suite `tests/test_virtual_wall_preview_sync.py` (3 passed).
 
-#### 2. Per-Device Live Widget & Background Streamer Binding (`DisplayJobBinding`)
-- **Finding**: Background streamers (Sysmon, Music, Stocks/Crypto, Weather) currently write to a single file-scoped `selectedWidget` and blit frames onto `window._activeDeviceMac()`. If Display A is running Sysmon and the user clicks Display B, Sysmon frames immediately leak onto Display B.
-- **Plan**: Introduce a `DisplayJobBinding` model where live jobs are bound explicitly to target display IDs (e.g., `displayA.bindJob("sysmon")`, `displayB.bindJob("stocks", "BTC")`). Streamers push frames directly to their assigned display object regardless of which tab or device is currently focused in the UI.
+#### 2. Per-Device Live Widget & Background Streamer Binding (SHIPPED v0.36.0)
+- Live jobs live on the daemon's `Device` (one per panel), push frames bound to that panel's `Link`, and broadcast each frame with its pixels; the GUI's previews mirror the panel from the bus, so a job on A keeps painting A's preview while the user works on B. Selecting a panel binds the Python proxy to it (`select_device`).
 
-#### 3. Multi-Device Fleet State & Transport Lifecycle (`DeviceNode` Architecture)
-- **Finding**: `window.DivoomState.appConnected` is a single global boolean, and `#banner-device-mac` holds one active screen. If one display among several goes to sleep or drops BLE, global connection state flickers or incorrectly marks all screens disconnected.
-- **Plan**: Establish a `DeviceNode` frontend registry mirroring `divoomd`'s multi-device topology. Each physical screen independently tracks its own connection lifecycle (`connected`, `reconnecting`, `offline`), transport (`BLE`, `LAN`, `Mock`), battery, brightness, and volume.
+#### 3. Multi-Device Fleet State & Transport Lifecycle (MOSTLY SHIPPED v0.36.0)
+- Shipped: the daemon `Fleet`; per-panel `activityState`/`daemonOwned` in the GUI written by per-panel status events; bench, ribbon and deck jewels derived from it; the global dot follows the selected panel; the menubar's `DeviceView.link`.
+- Remaining: `window.DivoomState.appConnected` is still one boolean (it now means "the selected panel is linked"), and `requireDevice()` gates on it. Battery/brightness/volume are not yet per-panel in the GUI model.
 
 #### 4. Channel Configuration Two-Way Binding (`DisplayPreview.opts`)
 - **Finding**: Channel configuration controls (clock style selector, color picker, ambient mode palette) currently operate on global singletons (`selectedClockStyle`, `#clock-color-input`), causing Display 1's clock style to overwrite Display 2's upon selection.
@@ -512,14 +408,10 @@ _Shipped in v0.35.0: Full-width top Spatial Preview Bench, physical millimeter p
 - Interactive snapping of adjacent tiles into a contiguous multi-panel composite surface.
 - Pushing an image or animation to a wall group automatically slices the canvas across contiguous physical panels according to their relative `(x, y)` coordinates.
 
-### OPEN — Preview Animation Fidelity, Channel Decoupling & Gallery Push Reliability
+### SHIPPED — Preview Animation Fidelity, Channel Decoupling & Gallery Push Reliability
 
-#### 1. Animated Image Previews (`DisplayPreview` GIF Playback) — SHIPPED 2026-09-12 (`c10af86`, client-side decoder; see user-defect #2 above)
-- **Problem**: When previewing animated GIF pixel art (from Community Gallery, Custom Art, Hot Channel, or local file uploads), preview nodes on the Spatial Stage Bench, Ribbon, and Virtual Wall render only the static first frame of the animation.
-- **Root Cause**: `DisplayPreview.renderTo(canvas, tick)` in `preview_controller.js` blits an in-memory `HTMLImageElement` via `ctx.drawImage(this.cachedImg, 0, 0, w, h)`. In WebKit (macOS PyWebView), `drawImage` from an offscreen `Image` object does not advance GIF animation frames on canvas blits, freezing animation playback at frame 0.
-- **Plan**:
-  - Implement a dual-mode preview surface on stage/arranger nodes: when `mode === "frame"` and the asset is an animated GIF, switch the visible surface to an overlaid `<img class="stage-node-gif">` tag (which WebKit animates natively with hardware acceleration and zero raster loop overhead), or integrate a lightweight client-side GIF frame demuxer that advances bitmap frames in `renderTo(canvas, tick)` according to elapsed milliseconds and frame duration metadata.
-  - Ensure `image-rendering: pixelated; crisp-edges;` is applied across all animation surfaces to maintain crisp integer diodes without blurring.
+#### 1. Animated Image Previews — SHIPPED v0.36.0 (`gif_frames.js`)
+- WebKit never advances a GIF drawn through `drawImage`; a client-side decoder (LZW, local tables, interlace, disposal) hands the canvas the frame for "now", so the canvas stays the one renderer. Validated against PIL over 287 cached gallery GIFs (285 byte-exact; the 2 differ where PIL rounds a two-entry palette).
 
 #### 2. Prevent Out-of-Band Preview Mutations & Live Job Preemption (SHIPPED 2026-09-12)
 - **Problem**: Selecting System Monitor (stats) and subsequently pushing an image or gallery artwork caused the device and preview to revert back to stats after 5 seconds due to persistent background streaming loops.
@@ -551,16 +443,14 @@ _Shipped in v0.35.0: Full-width top Spatial Preview Bench, physical millimeter p
 #### 1. Event-Driven State Ingestion via `subscribe` (SHIPPED & WIRED)
 - **Completed**: `divoom-menubar` consumes event-driven state over persistent `subscribe` stream with zero socket churn in steady state. `divoomd` now broadcasts `"activity"` events on `set_device_activity` and channel switches, updating menubar device labels and channels in real time.
 
-#### 2. Visual Device Tiles with Graphical Previews
-- **Finding**: The GUI goes out of its way to render 36×36 PNG thumbnails via `_rasterizeToPng` and pushes them to `divoomd` (`set_device_activity`), but `divoom-menubar`'s `device_activity()` parser completely discards the `preview` field, rendering only inert text strings.
-- **Plan**: Parse the PNG preview data in `divoom-menubar` and pass native image icons to `tray-icon` / `NSMenuItem`, restoring the visual tile experience intended by R46/R50.
+#### 2. Visual Device Tiles with Graphical Previews (data SHIPPED v0.36.0, rendering open)
+- `DeviceView.preview` now carries real frames: the daemon broadcasts every live frame as a PNG data URL and keeps it on the panel's activity record. Remaining: hand it to `tray-icon` / `NSMenuItem` as an image instead of text.
 
 #### 3. Actionable Per-Device Controls (SHIPPED & WIRED)
 - **Completed**: Device rows in the tray menu feature interactive submenus with quick channel switcher (Clock, Visualizer, Ambient) and screen power standby toggle ("Turn Off Screen" / "Turn On Screen"). Wired to `system.set_screen_on` in `divoomd` with automatic streamer job preemption on standby.
 
-#### 4. Fleet Connection State Aggregation
-- **Finding**: `resolve_icon_state` models connection health as a single device boolean (`Option<&str>`). When multiple devices are configured, it reflects only whichever device is held by `divoomd`'s single `self.device`.
-- **Plan**: Aggregate multi-device connectivity (e.g. "All 3 screens online", "1 screen degraded", "No screens connected") into the icon state and tooltip.
+#### 4. Fleet Connection State Aggregation (SHIPPED v0.36.0)
+- `DeviceView.link` per panel; `DaemonSnapshot::connection_state()` derives the tray word (any degraded panel wins, else any active). A per-panel status event moves only that panel. Remaining polish: a count in the tooltip ("3 of 4 online").
 
 #### 5. Non-Destructive In-Place Menu Updates
 - **Finding**: When `last_sig` changes, `tray.rebuild()` constructs a brand new `Menu` instance and resets it on the tray icon, which can cause UI jitter or dismiss the menu while the user has it open.
