@@ -6,6 +6,24 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased — user-defect fixes (2026-09-12, from triage `ba62ba2`)
 
+### Fixed — animated bench previews frozen at frame 0 (#2)
+
+- `gif_frames.js`: a client-side GIF decoder (LZW, local colour tables,
+  interlace, transparency, disposal 0-3) and a per-preview `Player`;
+  `DisplayPreview.renderTo` draws the frame for "now" instead of
+  `drawImage` of an `<img>`, which WebKit never advances. Static sources
+  are untouched. Browser test with a calibration branch; differential
+  check against PIL over 287 real gallery GIFs (285 byte-exact, 2 off by
+  one grey level where PIL rounds a two-entry palette).
+
+### Changed — the GUI names its panel; per-device disconnect
+
+- `DaemonDeviceProxy(mac=...)`: every `device_call` and `device_status`
+  carries the panel the user selected instead of meaning "whichever
+  connected last". `disconnect {mac}` drops one panel (job stopped, link
+  retired, then the radio hangs up) and leaves the others streaming;
+  connecting one panel no longer disconnects the fleet.
+
 ### Changed — one `Device` struct per panel (daemon), one `DeviceView` per panel (menubar)
 
 The live-widget "keeps coming back" class, root-caused by a stress suite

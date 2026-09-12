@@ -208,13 +208,12 @@ goes through `Device::link()` -> `Link::run` / `Link::queue.acquire`;
 never hold a transport `Arc` across an await without the link's permit,
 and never key new per-device state by mac string -- put it on `Device`.
 
-Open follow-ups from the same audit (not defects, design):
-- The GUI still sends mac-less `device_call`s and relies on the daemon's
-  "current" device tracking its bench selection via re-`connect`. With the
-  fleet in place the GUI should pass `mac` on every device call
-  (`divoom_client/daemon_protocol.py::device_call`), retiring "current".
-- `disconnect` is fleet-wide. A per-device `disconnect {mac}` is now a
-  one-liner on the fleet (`detach`/`remove`) once the GUI wants it.
+Follow-ups from the same audit, SHIPPED `dfb0c3f`: the GUI's proxy is
+bound to the panel it connected and names it on every `device_call` and
+`device_status`; `disconnect {mac}` drops one panel and leaves the rest
+streaming; connecting one panel no longer disconnects the fleet. Still
+open: the daemon's "current" device only matters for mac-less callers
+now (the CLI, MCP tools); retire it once those pass a mac too.
 
 ### OPEN — Bluetooth permission prompt on every rebuild (filed 2026-09-12)
 
@@ -243,10 +242,16 @@ a live confirmation before a fix ships).
    surface already pixelated (wall, gallery, custom_art, channels,
    stage); the appbar logo is a full-res asset and correctly untouched.
    Confirm live that the cover should show the device frame.
-2. **Bench previews frozen — CORROBORATES the existing OPEN item.**
-   Symptom matches "Animated Image Previews (`DisplayPreview` GIF
-   Playback)" exactly (WebKit `drawImage` freezes GIF at frame 0;
-   device fine). No new mechanism; fix there covers this.
+2. **Bench previews frozen — FIXED 2026-09-12 as `c10af86` (needs a device glance).**
+   WebKit never advances a GIF through `drawImage` of an
+   HTMLImageElement, so every preview sat on frame 0. `gif_frames.js`
+   decodes the GIF client-side (LZW, local tables, interlace, disposal)
+   and `DisplayPreview.renderTo` draws the frame for "now"; the canvas
+   stays the one renderer. Browser test with a calibration branch that
+   shows the old path freezing; differential check vs PIL over all 287
+   cached gallery GIFs (285 byte-exact, 2 off by one grey level where
+   PIL is the one rounding). Live: open the bench with animated art
+   selected and watch it move.
 3. **Channel switching slow/flaky — MEASURED 2026-09-12, no queue change.**
    Live timing on the connected device (transient switches, restored to
    clock): every channel name switches in 0.04–0.12s — clock, vj,
@@ -476,7 +481,7 @@ _Shipped in v0.35.0: Full-width top Spatial Preview Bench, physical millimeter p
 
 ### OPEN — Preview Animation Fidelity, Channel Decoupling & Gallery Push Reliability
 
-#### 1. Animated Image Previews (`DisplayPreview` GIF Playback)
+#### 1. Animated Image Previews (`DisplayPreview` GIF Playback) — SHIPPED 2026-09-12 (`c10af86`, client-side decoder; see user-defect #2 above)
 - **Problem**: When previewing animated GIF pixel art (from Community Gallery, Custom Art, Hot Channel, or local file uploads), preview nodes on the Spatial Stage Bench, Ribbon, and Virtual Wall render only the static first frame of the animation.
 - **Root Cause**: `DisplayPreview.renderTo(canvas, tick)` in `preview_controller.js` blits an in-memory `HTMLImageElement` via `ctx.drawImage(this.cachedImg, 0, 0, w, h)`. In WebKit (macOS PyWebView), `drawImage` from an offscreen `Image` object does not advance GIF animation frames on canvas blits, freezing animation playback at frame 0.
 - **Plan**:
