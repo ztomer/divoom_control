@@ -16,6 +16,8 @@ path = "src/main.rs"
 tray-icon = "0.24"
 tao = "0.37"
 serde_json = "1"
+# Panel tiles: decode the daemon's PNG frame previews into menu icons.
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 # macOS: wake the main CFRunLoop so the status item shows up on first paint, and
 # (via tao) run as an Accessory app (no Dock icon — it's a menubar agent).

@@ -533,6 +533,7 @@ dependencies = [
 name = "divoom-menubar"
 version = "0.36.0"
 dependencies = [
+ "image",
  "objc2-core-foundation",
  "serde_json",
  "tao",

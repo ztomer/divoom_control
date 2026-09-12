@@ -24,6 +24,12 @@ pub struct Tray {
     last_sig: String,
     last_icon_state: Option<IconState>,
     last_tooltip: String,
+    /// Frame previews decoded into menu icons, once per frame.
+    tiles: std::cell::RefCell<crate::tiles::TileCache>,
+    /// The device rows of the installed menu, by mac, so a new frame updates
+    /// a row's icon IN PLACE instead of rebuilding the menu (which dismisses
+    /// it while the user has it open).
+    rows: std::cell::RefCell<std::collections::HashMap<String, Submenu>>,
 }
 
 impl Tray {
@@ -43,6 +49,8 @@ impl Tray {
             last_sig: String::new(),
             last_icon_state: None, // forces the first poll_daemon() to set icon + tooltip
             last_tooltip: String::new(),
+            tiles: std::cell::RefCell::new(crate::tiles::TileCache::default()),
+            rows: std::cell::RefCell::new(std::collections::HashMap::new()),
         };
         tray.rebuild(&[], false);
         Some(tray)
@@ -54,6 +62,7 @@ impl Tray {
     /// channel switching and power controls, plus fixed actions.
     fn rebuild(&self, devices: &[daemon::DeviceView], notif_running: bool) {
         let menu = Menu::new();
+        let mut rows = std::collections::HashMap::new();
         if devices.is_empty() {
             let _ = menu.append(&MenuItem::new("No active devices", false, None));
         } else {
@@ -66,6 +75,9 @@ impl Tray {
                     format!("{name} — {kind}")
                 };
                 let dev_submenu = Submenu::new(&label, true);
+                // The tile: the frame the panel is showing, from the daemon's
+                // broadcast (none when it has not sent one -- text stays honest).
+                dev_submenu.set_icon(self.tiles.borrow_mut().icon_for(item.preview.as_deref()));
                 let clk_id = MenuId::new(format!("ch:clock:{}", item.mac));
                 let _ = dev_submenu.append(&MenuItem::with_id(clk_id, "Show Clock", true, None));
                 let eq_id = MenuId::new(format!("ch:visualizer:{}", item.mac));
@@ -81,8 +93,10 @@ impl Tray {
                 let _ = dev_submenu.append(&MenuItem::with_id(on_id, "Turn On Screen", true, None));
 
                 let _ = menu.append(&dev_submenu);
+                rows.insert(item.mac.clone(), dev_submenu);
             }
         }
+        *self.rows.borrow_mut() = rows;
         let _ = menu.append(&PredefinedMenuItem::separator());
         let _ = menu.append(&MenuItem::with_id(
             self.launch_id.clone(),
@@ -161,8 +175,22 @@ impl Tray {
             (off, notif, conn, acts)
         };
 
-        let (icon_state, tooltip) =
+        let (icon_state, base_tooltip) =
             resolve_icon_state(!offline, connection_state.as_deref(), notif_running);
+        // The fleet count belongs in the tooltip: one word cannot say
+        // "3 of 4 online".
+        let linked = devices
+            .iter()
+            .filter(|d| matches!(d.link.as_deref(), Some("active" | "connected" | "degraded")))
+            .count();
+        let tooltip = if devices.len() > 1 {
+            format!(
+                "{base_tooltip} ({linked} of {} panels online)",
+                devices.len()
+            )
+        } else {
+            base_tooltip
+        };
         if self.last_icon_state != Some(icon_state) {
             let _ = self.icon.set_icon(Some(make_icon(icon_state.color())));
             self.last_icon_state = Some(icon_state);
@@ -182,7 +210,15 @@ impl Tray {
                 .collect::<Vec<_>>()
                 .join(",")
         );
-        if sig != self.last_sig {
+        if sig == self.last_sig {
+            // Same rows, maybe new frames: refresh the tiles in place.
+            let rows = self.rows.borrow();
+            for d in &devices {
+                if let Some(row) = rows.get(&d.mac) {
+                    row.set_icon(self.tiles.borrow_mut().icon_for(d.preview.as_deref()));
+                }
+            }
+        } else {
             self.rebuild(&devices, notif_running);
             self.last_sig = sig;
         }

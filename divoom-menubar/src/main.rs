@@ -11,6 +11,7 @@ mod daemon;
 mod launch;
 mod resubscribe;
 mod state;
+mod tiles;
 mod tray;
 
 use std::sync::atomic::{AtomicBool, Ordering};
