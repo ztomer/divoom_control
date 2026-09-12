@@ -223,39 +223,20 @@ each needs reproduction + root-cause before a fix.
    flow (daemon → `subscribe` broadcast → `gui_main.py` → `DivoomState` /
    banner) needs serious investigation, not a one-line patch.
 
-### OPEN — code rearrangement, filed 2026-09-12
+### SHIPPED — code rearrangement (2026-09-12, four phases in three commits)
 
-Plan lives in `docs/PLANNING_TEST_REORG.md` (prune to git history on
-ship). **Phase 1 SHIPPED 2026-09-12**: 4 strays moved
-(`divoomd/test_show_image.py` → `tests/test_show_image_hw.py`,
-`divoomd/smoke_display_aliases.py` →
-`tests/test_smoke_display_aliases_hw.py` — bonus find, same class —
-`scripts/test_watchface_roundtrip.py` →
-`tests/test_watchface_roundtrip.py` with its `test_e2e_mock_device.py`
-importer updated, `scripts/hw_test_modes.py` →
-`scripts/hw_walk_modes.py`), 4 ungated `pub mod *_tests` in
-`divoomd/src/lib.rs` gated with `#[cfg(test)]`, and new gate
-`tools/check_test_placement.py` (step 5/26 in local CI, mirrored in
-`tests.yml`, calibrated both directions). Full verification green:
-pytest 2946 passed / 236 skipped, cargo both matrices, clippy both
-cfgs, fmt, ci_local 26/26. **Phase 2 SHIPPED 2026-09-12**: dead trio
-(`test_runner`, `api_test`, `minimal_api`) + 2 superseded runners
-deleted (self-referential only), `perf_*` benchmarks moved to `scripts/`
-(their 11 `test_perf_*` functions were never suite-collected; all pass
-explicitly from the new location). Suite 3182 collected before and
-after, full run identical at 2946/236. **Phase 3 SHIPPED 2026-09-12** — with the premise corrected: almost nothing was obsolete. `examples/` × 7 KEPT (shipped package's only usage docs; every facade call verified live; stale R13-era README weather paragraph fixed) + new `tools/check_examples.py` gate pinning docs to code (in CI, calibrated). `validate_devices.py`, `diagnose_ble.py`, all 14 `cli.py` subcommands KEPT with recorded reasoning. `scratch/` emptied (42 ignored files; proven safe — runtime dir self-heals, dependent test regenerates). Mock-test rename skipped (churn without value). **Still open**: Phase 4 (ship + prune the plan).
-
-Census summary (retained for the open phases): `divoom_lib` itself is
-NOT dead — census is 0 DIRECT / 0 WRAPPED and Python is canonical for
-wire formats — so "retire obsolete Python" means `examples/` (7 files,
-pre-daemon path), old-path scripts, and a per-subcommand
-`divoom_lib/cli.py` audit.
-
-1. Move stray test files into the `tests/` folder so there is one place
-   tests live.
-2. Retire obsolete Python code where relevant (dead / superseded by
-   `divoomd`, per the ownership rule below — `tools/capability_census.py`
-   is the arbiter, not memory).
+Recover the plan with `git log --diff-filter=D -- docs/PLANNING_TEST_REORG.md`.
+**Phase 1** (`5d92643`): 4 strays into `tests/` (all hardware-gated),
+`hw_test_modes.py` → `hw_walk_modes.py`, 4 ungated `pub mod *_tests`
+gated, new `tools/check_test_placement.py`. **Phase 2** (`3f37b6c`):
+dead trio + 2 superseded runners deleted, `perf_*` → `scripts/`
+(11 perf tests pass explicitly; never suite-collected). **Phase 3**
+(`245c961`): audit found almost nothing obsolete — `examples/` × 7,
+both old-path scripts, all 14 CLI subcommands KEPT with reasoning;
+README stale-weather paragraph fixed; new `tools/check_examples.py`;
+`scratch/` emptied (42 ignored files, regeneration proven).
+**Phase 4**: full `ci_local.sh` 28/28 green, plan pruned to history.
+Suite end state: 2946 passed / 236 skipped; collection 3182.
 
 ### The ownership rule (read this before calling anything a duplicate)
 

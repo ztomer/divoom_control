@@ -81,6 +81,17 @@ gated Rust test modules. Full verification green (pytest 2946 passed /
 - Arbiters green throughout: census 0/0, gui-is-client empty, both
   parity gates agree; 89 CLI/mock/census tests pass.
 
+### Phase 4 — ship (2026-09-12)
+
+- Full `./scripts/ci_local.sh` (not `--fast`): **28/28 steps green**,
+  including the slow Python suite and both new gates.
+- Plan file pruned to git history (`git log --diff-filter=D --
+  docs/PLANNING_TEST_REORG.md`); roadmap item marked shipped.
+- Incidental `divoom_lib/libdivoom_compact.dylib` rebuild from the
+  verification runs restored — the round changed no C sources, so the
+  commit carries no binary diff (native encoder tests re-pass against
+  the committed binary).
+
 ## v0.35.4 — Virtual Wall Simplification, Spatial Bench Alignment & Channel Persistence (2026-09-12)
 
 ### Architecture & Added

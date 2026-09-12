@@ -21,6 +21,12 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-12 — test rearrangement Phase 4 SHIPPED (uncommitted): full `ci_local.sh` 28/28 green, plan pruned to git history.**
+  - Incidental dylib rebuild from verification runs restored (no C changes → no binary diff; native tests re-pass).
+  - Whole round: `5d92643` (Phase 1) → `3f37b6c` (Phase 2) → `245c961` (Phase 3) → this commit (Phase 4). Suite end state 2946/236, collection 3182.
+  - Release decision is OPEN and belongs to the user: cutting a release needs push + green GitHub CI on the tagged commit (`scripts/release.sh` preflight). Nothing pushed, nothing tagged.
+  - Next up: the six user-reported defects + connection-state flow in the roadmap (untouched by this round).
+
 - **2026-09-12 — test rearrangement Phase 3 SHIPPED (uncommitted): the premise was wrong, which is the finding.**
   - `examples/` × 7 KEPT (shipped package docs, all calls verified live) + README stale-weather fix + new `check_examples.py` gate (in CI, calibrated, probe removed).
   - `validate_devices.py`, `diagnose_ble.py`, 14/14 CLI subcommands KEPT with reasoning; mock rename skipped as churn.
