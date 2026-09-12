@@ -236,6 +236,12 @@ a live confirmation before a fix ships).
    else the resolved city (`now_playing.rs`), GUI fallback is
    `"unknown"` (`widgets.py`). Both new tests proven red-then-green.
    Still to confirm live: card shows the real city with no override set.
+   LIVE-VERIFIED 2026-09-12 (daemon half): a BLE-free dev build on a temp
+   socket answered `weather{""}` with `"location": "Sao Cristavem"` —
+   the real geolocated city — where the installed v0.35.4 daemon answers
+   `""`. Explicit `"London"` echoes back on both. Dev daemon killed
+   afterwards; live setup untouched. Remaining: the GUI half needs the
+   new daemon behind the GUI (`install_local.sh` restart, user-run).
 5. **Clock/custom-art intermittently empty — TRIAGED 2026-09-12, two readings (needs the live app to distinguish).**
    Eliminated statically: the canvas path cannot blank (the glyph
    switch is exhaustive with a clock default; every renderer draws

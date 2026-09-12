@@ -21,6 +21,10 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-12 — live session open: 4 devices available, 1 connected (`f90d2cc9…`, BLE).**
+  - Daemon half of #4 VERIFIED live: dev BLE-free build on temp socket returned the real city (`Sao Cristavem`); installed daemon returns `""`. Dev daemon killed, live setup untouched. Roadmap updated.
+  - NOT run without the user: anything state-changing (channel switches, connects, restarts) or needing eyes (cover blur, empty panels, GIF motion, connecting dot). Runbook in chat; results to record here.
+  - Next: user runs the runbook (or explicitly hands me state-changing commands), then #2 GIF work + release decision.
 - **2026-09-12 — #3a/#5 analysis round (no code changes; both need the live app next).**
   - #3a bounded statically: switch = one 0x45 packet; contended worst case = 60s ITEM_TIMEOUT then rejection (reads as flakiness). Fix shape awaits live timing — no guessing.
   - #5 narrowed by elimination (canvas can't blank, static grids can't empty); two live readings + the distinguishing observation recorded in the roadmap.
