@@ -188,6 +188,14 @@ Also: `DivoomWall::connect` creates the CoreBluetooth central lazily.
 - An empty MediaRemote session parses as nothing playing; the idle
   reply names the registered players with a hint, shown on the card.
 
+### Fixed — the daemon finds the native encoder on Linux
+
+- `scripts/build_libdivoom.sh` has produced a `.so` on Linux since R20,
+  but the daemon's finder and the client's spawn path looked for
+  `.dylib` only, so a Linux daemon ran without frames. Both now use the
+  platform's name; the Linux Rust CI job builds the library before
+  testing, so the live-jobs stress suite runs there too.
+
 ### Fixed — wall spun up CoreBluetooth even when no slot needed the radio
 
 - `DivoomWall::connect` created the central before checking whether any

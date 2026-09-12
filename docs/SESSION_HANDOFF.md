@@ -42,8 +42,10 @@ shared memory. Read this on entry and **update it at the end of every round**
     the login keychain) signs every bundle via `scripts/codesign_identity.sh`;
     a second, different build installed with NO Bluetooth prompt. Rebuild +
     `scripts/install_local.sh` freely on this machine.
-  - **Verification**: `ci_local.sh` full green at tag time; CI at the tagged
-    commit per `scripts/release.sh`.
+  - **Cross-platform**: the encoder lookup is platform-named (`.so` on Linux)
+    and Linux CI builds it; the examples check installs its own `bleak`.
+  - **Verification**: `ci_local.sh` full green (28/28) at tag time; GitHub CI
+    green at the tagged commit per `scripts/release.sh`.
 
 ## Open threads / next up
 
