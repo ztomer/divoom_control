@@ -21,7 +21,8 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
-- **2026-09-12 — v0.35.4: Virtual Wall Simplification, Spatial Bench Alignment & Channel Persistence.**
+- **2026-09-12 — v0.35.4 RELEASED & INSTALLED LOCALLY: Virtual Wall Simplification, Spatial Bench Alignment & Channel Persistence.**
+  - **Release & Local Verification**: GitHub Actions CI all green (5/5 jobs in 6m3s), release `v0.35.4` published with DMG and Homebrew cask updated; installed to `/Applications/Divoom.app` via `scripts/install_local.sh`, verified running daemon inode (`540421883`, PID 76699). Development BLE-free debug binary restored.
   - **Virtual Wall Tab Simplification & Arranger Canvas Elimination (`index.html`, `app_globals.js`, `app_init.js`, `spatial_stage.js`, `presets_manager.py`)**:
     - Completely removed redundant `.arranger-card` (`#arranger-canvas`, `#add-arranger-screen-btn`, `#clear-arranger-btn`, `#preset-name-input`, `#save-preset-btn`, `#presets-select`) from Tab 2.
     - Virtual Wall Tab is now a clean "Split & Sync Wall Art" controller powered directly by the physical Spatial Stage Bench (`SpatialRooms.getWallSlots()`), respecting physical screen dimensions, 2D coordinates, and room assignments.
