@@ -9,7 +9,7 @@ This project is worked across multiple agents/sessions (opencode + Claude) that
 conversation stores), so the handoff is file-based. **On entry, read
 `docs/SESSION_HANDOFF.md`.** After **each round of work**, before you stop, you
 MUST update the handoff so the *next* session — including the opencode session
-`ses_184471307ffeCUHgzv9w51O0oA` — can pick up without re-deriving state:
+`ses_f6a64811fffeYyM9ixX43QtgDz` — can pick up without re-deriving state:
 
 1. **docs/SESSION_HANDOFF.md** — update "Current state" + "Open threads / next
    up". This is the canonical living state both tools read first.

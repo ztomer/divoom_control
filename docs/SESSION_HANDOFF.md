@@ -10,7 +10,7 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## How to resume
 
-- **opencode**: `opencode -s ses_184471307ffeCUHgzv9w51O0oA` (or `opencode export <id>`).
+- **opencode**: `opencode -s ses_f6a64811fffeYyM9ixX43QtgDz` (or `opencode export <id>`).
 - **Claude Code**: reads `CLAUDE.md` → `AGENTS.md` → this file, plus `git log`.
 - Both: `git log --oneline`, `CHANGELOG.md`, `docs/ROADMAP.md`.
 - This file is the CURRENT state, not an archive. Once a round ships and its

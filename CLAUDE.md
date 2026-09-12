@@ -18,7 +18,7 @@ the next agent (Claude or opencode) can continue:
 The git history + `SESSION_HANDOFF.md` + CHANGELOG are the cross-session memory —
 do not rely on conversation context surviving.
 
-To read the opencode session: `opencode export ses_184471307ffeCUHgzv9w51O0oA`.
+To read the opencode session: `opencode export ses_f6a64811fffeYyM9ixX43QtgDz`.
 
 See `AGENTS.md` for the full project conventions (protocol truth, GUI layout,
 hardware/Bluetooth, tests, build discipline).
