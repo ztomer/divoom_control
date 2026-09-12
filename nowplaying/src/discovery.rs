@@ -17,7 +17,9 @@
 //! Discovery therefore reports three separable facts per player:
 //!   * it is REGISTERED with Now Playing (could own the session), and/or
 //!   * it is REACHABLE by its own provider (Feishin's Subsonic path), and
-//!   * it is PLAYING right now.
+//!   * it is PLAYING right now -- the framework's own per-client playback
+//!     state, read since 2026-09-12 (it was "unknown" before, when the
+//!     per-client entry points were mis-declared and crashed).
 //!
 //! A UI can then say "Kaset is paused, Feishin is playing" instead of showing
 //! one stale track, and `current_track()` can prefer whoever is actually
@@ -91,46 +93,56 @@ pub fn parse_players(line: &str) -> Result<Vec<Player>, String> {
         // An app registers more than once — Kaset appears as itself AND as
         // com.apple.WebKit.GPU, both named "Kaset". Reporting one player twice
         // would make a UI list look broken, so collapse on the display name.
+        // The framework's own playback state per client (2026-09-12); an
+        // older helper line has none and the player stays unknown.
+        let is_playing = entry
+            .get("state")
+            .and_then(|s| s.as_str())
+            .map(|state| state == "Playing");
         if !seen.insert(name.clone()) {
+            // A duplicate registration that IS playing outranks the earlier
+            // idle one: Kaset's WebKit GPU helper is the client that plays.
+            if is_playing == Some(true) {
+                if let Some(p) = out.iter_mut().find(|p: &&mut Player| p.name == name) {
+                    p.is_playing = Some(true);
+                }
+            }
             continue;
         }
         out.push(Player {
             id,
             name,
             via: Reach::MediaRemote,
-            is_playing: None,
+            is_playing,
         });
     }
     Ok(out)
 }
 
-/// Attribute the active session to a registered player, where that is possible.
+/// Fill in the playing state of registered players the helper could not
+/// state, from the session.
 ///
-/// # Why this is deliberately conservative
-///
-/// The session's info dictionary carries NO app identity on macOS 26.6.2
-/// (verified by dumping every key), and the APIs that would name it —
-/// `MRMediaRemoteGetNowPlayingApplicationDisplayName` and `...ApplicationPID` —
-/// segfault when called. So the session cannot be matched to a client directly.
-///
-/// What IS sound: the session belongs to one of the registered clients. When
-/// exactly ONE app is registered, the session is unambiguously its. With
-/// several, attributing it would be a guess, and a guess rendered as fact is
-/// worse than an honest "unknown" — a UI can say "something is playing" without
-/// pinning it on the wrong app.
+/// The helper reports the framework's per-client playback state since
+/// 2026-09-12, so this normally has nothing left to do. It remains for an
+/// older helper line (no `state`), and stays conservative there: with exactly
+/// ONE registered app the session is unambiguously its; with several,
+/// attributing it would be a guess, and a guess rendered as fact is worse
+/// than an honest "unknown".
 pub fn annotate_with_session(players: &mut [Player], session: Option<&Track>) {
     let Some(track) = session else { return };
-    let registered: Vec<usize> = players
+    let unknown: Vec<usize> = players
         .iter()
         .enumerate()
-        .filter(|(_, p)| p.via == Reach::MediaRemote)
+        .filter(|(_, p)| p.via == Reach::MediaRemote && p.is_playing.is_none())
         .map(|(i, _)| i)
         .collect();
-    if registered.len() == 1 {
-        players[registered[0]].is_playing = Some(track.is_playing);
+    let registered = players
+        .iter()
+        .filter(|p| p.via == Reach::MediaRemote)
+        .count();
+    if registered == 1 && unknown.len() == 1 {
+        players[unknown[0]].is_playing = Some(track.is_playing);
     }
-    // Several registered apps: leave every one `None`. We know SOMETHING is
-    // playing; we do not know which, and saying so is the honest answer.
 }
 
 #[cfg(test)]
@@ -148,6 +160,28 @@ mod tests {
         assert_eq!(players[0].name, "Kaset");
         assert_eq!(players[0].via, Reach::MediaRemote);
         assert_eq!(players[0].is_playing, None, "registration is not playback");
+    }
+
+    #[test]
+    fn the_frameworks_state_names_which_registration_plays() {
+        // Measured 2026-09-12: Kaset's WebKit GPU helper is the client that
+        // plays; the app's own registration idles. One player, playing.
+        let line = r#"{"ok":true,"players":[
+            {"bundle_id":"com.sertacozercan.Kaset","name":"Kaset","state":"Paused"},
+            {"bundle_id":"com.apple.WebKit.GPU","name":"Kaset","state":"Playing"},
+            {"bundle_id":"com.apple.Music","name":"Music","state":"Stopped"}]}"#;
+        let players = parse_players(line).unwrap();
+        assert_eq!(players.len(), 2);
+        assert_eq!(
+            players[0].is_playing,
+            Some(true),
+            "the playing registration wins"
+        );
+        assert_eq!(players[1].is_playing, Some(false), "stopped is a known no");
+        // And a known state is never overwritten by the session guess.
+        let mut players = players;
+        annotate_with_session(&mut players, Some(&track("MediaRemote", false)));
+        assert_eq!(players[0].is_playing, Some(true));
     }
 
     #[test]

@@ -34,6 +34,21 @@ mod parsing {
     }
 
     #[test]
+    fn the_chosen_players_state_outranks_the_rate() {
+        // 2026-09-12: the helper picks the player the framework says is
+        // PLAYING. Kaset's client omits the rate entirely (measured), so the
+        // rate rule alone would have had to guess.
+        let playing = r#"{"ok":true,"source":"player","state":"Playing",
+            "bundle_id":"com.apple.WebKit.GPU","playing":true,
+            "title":"What I Need","artist":"High June","players":[]}"#;
+        assert!(parse_helper_output(playing).unwrap().unwrap().is_playing);
+        // The elected-session fallback still reads the rate: paused holder.
+        let elected = r#"{"ok":true,"source":"elected","playing":true,
+            "playback_rate":0,"title":"What I Need","artist":"High June","players":[]}"#;
+        assert!(!parse_helper_output(elected).unwrap().unwrap().is_playing);
+    }
+
+    #[test]
     fn nothing_playing_is_not_an_error() {
         assert_eq!(
             parse_helper_output(r#"{"ok":true,"playing":false}"#).unwrap(),

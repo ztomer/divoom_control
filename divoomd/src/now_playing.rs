@@ -156,6 +156,16 @@ pub async fn cmd_now_playing(args: &Value) -> Value {
     blocking_now_playing(move || now_playing_blocking(include_artwork)).await
 }
 
+/// "Kaset (paused)", "Feishin (playing)", or just the name when unknown.
+#[cfg(target_os = "macos")]
+fn player_with_state(p: &nowplaying::discovery::Player) -> String {
+    match p.is_playing {
+        Some(true) => format!("{} (playing)", p.name),
+        Some(false) => format!("{} (paused)", p.name),
+        None => p.name.clone(),
+    }
+}
+
 fn now_playing_blocking(include_artwork: bool) -> Value {
     #[cfg(target_os = "macos")]
     {
@@ -169,21 +179,20 @@ fn now_playing_blocking(include_artwork: bool) -> Value {
         }
         match nowplaying::current_track() {
             Ok(None) => {
-                // Nothing is playing as far as macOS will tell us. Name the
-                // registered players, because the usual reason a playing app
-                // is invisible is another player holding the Now Playing
-                // session with nothing loaded (Music opened and stopped masked
-                // Kaset, 2026-09-12); the fix is on the user's side (quit or
-                // play in that app), so the UI must be able to say so.
-                let players: Vec<String> =
-                    nowplaying::players().into_iter().map(|p| p.name).collect();
+                // Nothing is playing: since 2026-09-12 the helper asks every
+                // registered player for its own state, so a stopped holder
+                // of the session no longer hides a playing app (Music opened
+                // and stopped masked Kaset before). Name the players with
+                // their states so the UI can say who is paused.
+                let players: Vec<String> = nowplaying::players()
+                    .into_iter()
+                    .map(|p| player_with_state(&p))
+                    .collect();
                 let mut out = json!({"success": true, "available": true, "playing": false});
                 if !players.is_empty() {
                     out["players"] = json!(players);
                     out["hint"] = json!(format!(
-                        "Now Playing is idle. Registered: {}. A player that is open \
-                         but stopped can hold the session and hide another app -- \
-                         play in it or quit it.",
+                        "Nothing is playing. Registered: {}.",
                         players.join(", ")
                     ));
                 }

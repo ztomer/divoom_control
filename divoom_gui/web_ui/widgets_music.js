@@ -40,8 +40,8 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             if (info.playing === false || !info.track) {
                 if (nameEl) nameEl.textContent = "Nothing playing";
-                // The daemon's hint names a stopped player that may be holding
-                // the Now Playing session (honest placeholder, with the fix).
+                // The daemon's hint names the registered players and their
+                // states, e.g. "Kaset (paused)" (honest placeholder).
                 if (artistEl) artistEl.textContent = info.hint || "";
                 if (coverEl) coverEl.src = "assets/pixoo.png";
                 if (devPrev) devPrev.style.display = "none";

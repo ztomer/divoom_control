@@ -5,6 +5,10 @@
 //! entitlement, and a dylib loaded into perl inherits it. Probed on macOS
 //! 26.6.2 — direct dlopen returns a NULL dictionary, the perl path returns the
 //! full record including artwork.
+//!
+//! Since 2026-09-12 the helper reads PER PLAYER: it asks every active player
+//! for its playback state and reports the one that is playing, whoever holds
+//! the elected session. The elected session is the fallback when nothing is.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -133,13 +137,20 @@ pub fn parse_helper_output(line: &str) -> Result<Option<Track>, String> {
         .filter(|bytes| !bytes.is_empty())
         .map(|bytes| Artwork::new(bytes, text("artwork_mime_declared")));
 
-    // PlaybackRate 0 means paused. MediaRemote goes on reporting a paused
-    // session's track indefinitely, so without this a widget would push cover
-    // art for something nobody is listening to.
-    let is_playing = v
-        .get("playback_rate")
-        .and_then(serde_json::Value::as_f64)
-        .is_none_or(|r| r > 0.0);
+    // The helper's `state` is the framework's own playback state for the
+    // player it chose (2026-09-12, per-player read); it outranks the rate,
+    // which a player may omit. Without it, PlaybackRate 0 means paused:
+    // MediaRemote goes on reporting a paused session's track indefinitely,
+    // so without this a widget would push cover art for something nobody is
+    // listening to.
+    let is_playing = v.get("state").and_then(|s| s.as_str()).map_or_else(
+        || {
+            v.get("playback_rate")
+                .and_then(serde_json::Value::as_f64)
+                .is_none_or(|r| r > 0.0)
+        },
+        |state| state == "Playing",
+    );
 
     let track = Track {
         title: text("title"),
@@ -152,10 +163,10 @@ pub fn parse_helper_output(line: &str) -> Result<Option<Track>, String> {
     // An EMPTY session is not a track. macOS hands the Now Playing session
     // to the last app that touched it, and a player that was opened and
     // never loaded anything (Apple Music, stopped) holds it with no title,
-    // no artist, no art and rate 0 -- while another app is audibly playing
-    // and cannot be read, because MediaRemote answers for one session only.
-    // Reporting that as "a paused track with no name" made the widget say
-    // nothing was playing at all (2026-09-12, Kaset masked by Music).
+    // no artist, no art and rate 0. Reporting that as "a paused track with
+    // no name" made the widget say nothing was playing at all (2026-09-12,
+    // Kaset masked by Music; the per-player read now finds Kaset first, and
+    // this guard covers the case where nothing is playing at all).
     if track.title.is_none() && track.artist.is_none() && track.artwork.is_none() {
         return Ok(None);
     }
