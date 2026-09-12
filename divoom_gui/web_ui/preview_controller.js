@@ -40,6 +40,7 @@
             this.cachedImg = null;
             this.cachedSrc = null;
             this.imgLoaded = false;
+            this.gif = (window.GifFrames) ? new window.GifFrames.Player() : null; // #2: GIFs play via the decoder
             this.wallSlot = null;
             this.activeJob = null;
             this.lastUpdated = Date.now();
@@ -79,6 +80,7 @@
                 this.cachedImg = null;
                 this.cachedSrc = null;
                 this.imgLoaded = false;
+                if (this.gif) this.gif.clear();
             }
             this.lastUpdated = Date.now();
         }
@@ -90,6 +92,7 @@
             this.lastUpdated = Date.now();
             if (this.cachedSrc !== src) {
                 this.cachedSrc = src;
+                if (this.gif) this.gif.attach(src);
                 this.imgLoaded = false;
                 const img = new Image();
                 img.onload = () => {
@@ -127,7 +130,8 @@
             ctx.fillStyle = "#07080a";
             ctx.fillRect(0, 0, w, h);
 
-            // 2. If a real raster/SVG frame is loaded, draw it
+            // 2. A loaded frame: an animated GIF draws the frame for NOW (drawImage froze at 0)
+            if (this.mode === "frame" && this.gif && this.gif.draw(ctx, w, h)) return;
             if (this.mode === "frame" && this.cachedImg && this.imgLoaded) {
                 ctx.drawImage(this.cachedImg, 0, 0, w, h);
                 return;
