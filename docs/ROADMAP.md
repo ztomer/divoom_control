@@ -216,6 +216,18 @@ Open follow-ups from the same audit (not defects, design):
 - `disconnect` is fleet-wide. A per-device `disconnect {mac}` is now a
   one-liner on the fleet (`detach`/`remove`) once the GUI wants it.
 
+### OPEN — Bluetooth permission prompt on every rebuild (filed 2026-09-12)
+
+Every `build_release.sh` + `install_local.sh` (and every dev-daemon bundle)
+is ad-hoc signed, so its cdhash changes and macOS TCC treats it as a new
+app: a fresh Bluetooth prompt per install, which an unattended session
+cannot answer. Fix: sign the bundle (and the dev daemon) with a stable
+self-signed code-signing identity created once in the login keychain, so
+the grant keys on the identity's designated requirement instead of the
+hash. Needs the user at the keyboard to create the identity; the build
+scripts then take `DIVOOM_CODESIGN_IDENTITY`. Until then: no BLE rebuilds
+while the user is away (memory rule).
+
 ### OPEN — user-reported defects, filed 2026-09-12
 
 Filed verbatim from a live session against v0.35.4. Triaged 2026-09-12
