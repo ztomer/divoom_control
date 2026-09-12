@@ -387,3 +387,26 @@ async fn disconnecting_one_panel_leaves_the_others_streaming() {
     );
     stop_job(&d, "DEV_B", "sysmon").await;
 }
+
+#[tokio::test]
+async fn owned_devices_never_invents_a_name() {
+    // The GUI overwrites its scan name with whatever this carries, so a
+    // placeholder here renamed three real panels "Divoom" on screen.
+    let d = daemon_with_mock("DEV_A").await;
+    let mut rx = d.subscribe().expect("daemon broadcasts");
+    d.live_jobs
+        .set_device_activity("DEV_A".into(), "clock".into(), None, None)
+        .await;
+    daemon_with_mock_on(&d, "DEV_B").await;
+    let mut owned = None;
+    while let Ok(ev) = rx.try_recv() {
+        if ev["type"] == json!("owned_devices") {
+            owned = Some(ev);
+        }
+    }
+    let owned = owned.expect("owned_devices broadcast");
+    for dev in owned["devices"].as_array().unwrap() {
+        let name = dev["name"].as_str().unwrap();
+        assert_ne!(name, "Divoom", "placeholder leaked as a name: {dev}");
+    }
+}

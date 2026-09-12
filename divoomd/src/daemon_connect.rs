@@ -64,7 +64,7 @@ pub(crate) async fn owned_devices_payload(daemon: &Daemon) -> Value {
         let act = d.activity().await;
         devices.push(json!({
             "address": d.id,
-            "name": act.as_ref().map_or("", |a| a.name.as_str()),
+            "name": d.display_name().await,
             "kind": act.as_ref().map_or("idle", |a| a.kind.as_str()),
             "state": "active",
             "preview": act.as_ref().and_then(|a| a.preview.clone()),

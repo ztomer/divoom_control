@@ -261,7 +261,7 @@ impl Device {
     async fn set_activity_state(&self, kind: &str, state: &str) {
         let mut guard = self.activity.lock().await;
         let a = guard.get_or_insert_with(|| Activity {
-            name: "Divoom".to_string(),
+            name: String::new(), // unknown; consumers substitute their own placeholder
             kind: kind.to_string(),
             preview: None,
             at: now_secs(),
@@ -281,7 +281,7 @@ impl Device {
     ) {
         let mut guard = self.activity.lock().await;
         let a = guard.get_or_insert_with(|| Activity {
-            name: name.clone().unwrap_or_else(|| "Divoom".to_string()),
+            name: name.clone().unwrap_or_default(),
             kind: kind.to_string(),
             preview: None,
             at: now_secs(),
@@ -300,6 +300,22 @@ impl Device {
 
     pub async fn activity(&self) -> Option<Activity> {
         self.activity.lock().await.clone()
+    }
+
+    /// The panel's name as best the daemon knows it: what a client told us
+    /// through activity, else what the transport reports, else empty.
+    /// Never a placeholder -- the GUI keeps its own scan name when this is
+    /// empty, and a made-up one would overwrite it.
+    pub async fn display_name(&self) -> String {
+        if let Some(a) = self.activity().await {
+            if !a.name.is_empty() {
+                return a.name;
+            }
+        }
+        self.transport()
+            .await
+            .and_then(|t| t.device_name())
+            .unwrap_or_default()
     }
 }
 
