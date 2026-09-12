@@ -21,65 +21,45 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-12 (later) — v0.37 work COMMITTED, NOT YET INSTALLED OR TAGGED.**
+  Detail: the "Unreleased" CHANGELOG stanza; plan: ROADMAP "v0.37 plan"
+  (steps 0-4 and 6 SHIPPED, 5 open).
+  - **CLI is a daemon client** (e1b8ca7): attaches to the running daemon,
+    never spawns one, never opens Bluetooth; bleak out of its import path.
+  - **No "current" device** (2bcd5b0): `Fleet::resolve_target(mac)` --
+    explicit mac, else the single linked panel, else a refusal with the count.
+  - **GUI link is per panel** (b05083d); **menubar rows draw the frames**
+    (5d4b33f, visual check on the real tray pending install).
+  - **Now-playing reads per client** (a2a0520, fd038e8): the "platform
+    limit" was a three-argument declaration of a five-argument function;
+    signatures recovered from the framework's code (skill
+    `private-framework-signatures`). Live: Kaset playing behind its own
+    stub session, the helper reports the WebKit record with the artwork.
+  - **Password in the Keychain** (1830695): `secret_store` seam, migration
+    on first read, Settings says where it lives.
+  - **Browser opt-in at the launch seam** (6d9cda6): 30-odd non-browser
+    tests were hidden by a module-text skip; default suite 3204/0/207.
+  - **Installed app is still v0.36.0.** Next: full gate, push, CI, then
+    `scripts/build_release.sh && scripts/install_local.sh`, reconnect the
+    fleet, check the menubar tiles and the CLI's mac-less refusal on the
+    new daemon, and the Keychain migration on the real config.ini.
 - **2026-09-12 — v0.36.0 RELEASED & INSTALLED LOCALLY: one struct per panel, the
   six user-reported defects, prompt-free rebuilds.** Detail: the v0.36.0
-  CHANGELOG stanza; design rule: ROADMAP "per-device aggregate".
-  - **Daemon**: `Device` (identity: live job, activity) holds an `Option<Link>`
-    (connection: transport + the ONE queue); `Fleet` is the single owner. Queued
-    work is bound to its link and dropped if the link is retired; a job's
-    `alive` flag is a fence. Every pushed live frame is broadcast with its
-    pixels. `owned_devices` is fleet-wide. Per-device `disconnect {mac}` and
-    `device_status {mac}`. Gate: `divoomd/tests/live_jobs_stress.rs` (10).
-  - **GUI**: the proxy names its panel on every call; bench selection is one
-    funnel (`select_device`); status events are per-panel and jewels are
-    honest; previews mirror the panel via the broadcast frames; animated GIFs
-    play through `gif_frames.js`; the cover card shows the ORIGINAL art.
-  - **Menubar**: `DeviceView` per panel with link state; tray word derived.
-  - **All six user defects live-confirmed on the installed build with the user
-    at the keyboard** (#1 corrected to the user's reading: cover = original
-    art, smooth; device frame = diodes).
-  - **Signing**: "Divoom Local Signing" (self-signed, trusted for codeSign in
-    the login keychain) signs every bundle via `scripts/codesign_identity.sh`;
-    a second, different build installed with NO Bluetooth prompt. Rebuild +
-    `scripts/install_local.sh` freely on this machine.
-  - **Cross-platform**: the encoder lookup is platform-named (`.so` on Linux)
-    and Linux CI builds it; the examples check installs its own `bleak`.
-  - **Verification**: `ci_local.sh` full green (28/28) at tag time; GitHub CI
-    5/5 green at the tagged commit (`4b42cec`); release + DMG + cask via
-    `scripts/release.sh`; installed via `install_local.sh` (daemon inode
-    542223575, both binaries report 0.36.0, signed by the local identity,
-    four panels reconnected with no prompt, per-device status/disconnect
-    exercised on the installed daemon).
+  CHANGELOG stanza; design rule: ROADMAP "per-device aggregate". Signing:
+  "Divoom Local Signing" (self-signed) signs every bundle via
+  `scripts/codesign_identity.sh`; rebuild + `scripts/install_local.sh`
+  prompt-free on this machine.
 
 ## Open threads / next up
 
-1. **Retire the daemon's "current" device.** Only mac-less callers use it now:
-   the CLI (`divoom_lib/cli.py`) and MCP tools (`divoomd/src/mcp_tools.rs`).
-   Once they pass `mac`, `Fleet::current` and `preset` go, and
-   `connect_single_device`'s disconnect-free path is the only path.
-2. **GUI `appConnected` is still one boolean.** It now follows the SELECTED
-   panel's link (per-panel state lives on `discoveredDevices[].activityState`);
-   the remaining single-device residue is `requireDevice()` and the global dot.
-   Track 3 in the ROADMAP.
-3. **Menubar tiles.** `DeviceView.preview` now carries real frames from the
-   broadcast; the tray still lists names. Track 6.
-4. **Now-playing masking — fixed 2026-09-12 (not a platform limit).** The
-   helper reads every registered client's playback state through the
-   per-client MediaRemote entry points (signatures recovered from the
-   framework's code) and reports the playing one with the richest record.
-   Not yet installed: the shipped app still carries the old helper until
-   the next `scripts/install_local.sh`.
-5. **The browser e2e suite fails randomly at NORMAL machine load** (two runs,
-   non-overlapping camoufox failures, all pass alone). Do not raise the
-   timeout; measure browser + daemon startup under controlled load. ROADMAP
-   OPEN heading. Note `python3 -m camoufox fetch` is needed once per Python
-   install or the suite SKIPS rather than fails.
-6. **Password store — done 2026-09-12 (1830695).** The Divoom password
-   lives in the macOS Keychain (service `divoom-control`, account
-   `divoom-cloud`, via the `security` CLI), migrated out of `config.ini` on
-   first read; Settings says "Password stored in Keychain".
-   `DIVOOMD_SECRET_BACKEND=file` forces the file for tests and headless CI.
-7. **Release hygiene**: a new machine needs `scripts/make_signing_identity.sh`
+1. **Step 5, browser e2e under load** (ROADMAP v0.37 plan, the one open
+   step): measured 2026-09-12 with the browser subset under a CPU burner;
+   numbers in the ROADMAP entry. CI never ran the browser subset at all
+   (the "GUI e2e" step runs pytest without `--run-browser`).
+2. **`examples/` documents the bleak facade** -- library docs, or retire in
+   favour of daemon-client examples. Not decided.
+3. **Menubar tile visual check** on the real tray, after the next install.
+4. **Release hygiene**: a new machine needs `scripts/make_signing_identity.sh`
    once (one keychain prompt, user present) or every install prompts.
 
 **Environment notes that recur** (not repo defects):
