@@ -87,20 +87,6 @@ def test_update_wall_slots_preserves_named_presets(tmp_path):
     assert not (tmp_path / "presets.json.tmp").exists()  # atomic temp cleaned
 
 
-def test_save_preset_roundtrip_atomic(tmp_path):
-    from divoom_gui.presets_manager import PresetsManagerMixin
-
-    class Host(PresetsManagerMixin):
-        def _get_presets_file(self):
-            return tmp_path / "presets.json"
-
-    h = Host()
-    assert h.save_preset("Wall A", json.dumps({"AA": {"x": 0}})) is True
-    names = json.loads(h.load_preset_names())
-    assert names == ["Wall A"]
-    assert not (tmp_path / "presets.json.tmp").exists()
-
-
 def test_load_config_corrupt_int_field_does_not_wipe_whole_config(tmp_path, monkeypatch):
     """One non-numeric field in config.ini (corrupt / hand-edited) must degrade
     to that field's default — NOT escape to the outer except and return {},

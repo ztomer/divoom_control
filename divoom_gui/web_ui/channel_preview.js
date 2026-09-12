@@ -151,10 +151,27 @@ window._renderWallSlotSVG = function(slot, addr) {
 // options (DisplayPreview.opts) so switching screens reflects each device's real state.
 window.syncChannelControlsToDisplay = function(mac) {
     if (!mac || mac === "-" || mac === "None") return;
+    const saved = (typeof window.getDeviceChannel === "function") ? window.getDeviceChannel(mac) : null;
     const disp = window.DisplayPreviewRegistry ? window.DisplayPreviewRegistry.get(mac) : null;
     const act = window.DivoomState?.deviceActivity?.[mac];
-    const opts = (disp && disp.opts) ? disp.opts : (act && act.opts) ? act.opts : {};
-    const ch = (disp && disp.channel) ? disp.channel : (act && act.kind) ? act.kind : "clock";
+    const ch = (saved && saved.channel) ? saved.channel : (disp && disp.channel) ? disp.channel : (act && act.kind) ? act.kind : "clock";
+    const opts = (saved && saved.opts) ? saved.opts : (disp && disp.opts) ? disp.opts : (act && act.opts) ? act.opts : {};
+    if (disp && saved?.channel && disp.channel !== saved.channel) {
+        disp.setActivity(saved.channel, saved.opts || {});
+    }
+
+    // Rehydrate active channel tab & panel to match this display
+    if (ch) {
+        window.DivoomState.activeChannel = ch;
+        const card = document.querySelector(`.tab-btn[data-channel="${ch}"]`);
+        if (card) {
+            document.querySelectorAll(".tab-btn[data-channel]").forEach(c => c.classList.remove("active"));
+            card.classList.add("active");
+        }
+        if (typeof window.showChannelPanel === "function") {
+            window.showChannelPanel(ch);
+        }
+    }
 
     // 1. Clock style & color
     const style = (opts.style != null) ? Number(opts.style) : 0;

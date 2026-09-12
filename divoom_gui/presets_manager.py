@@ -150,58 +150,6 @@ class PresetsManagerMixin:
             logger.error(f"Failed to load config: {e}")
             return json.dumps({})
 
-    def save_preset(self, name: str, slots_json: str) -> bool:
-        logger.info(f"GUI Action: Saving layout preset '{name}'...")
-        try:
-            presets_file = self._get_presets_file()
-            presets = {}
-            if presets_file.exists():
-                try:
-                    presets = json.loads(presets_file.read_text(encoding="utf-8"))
-                except Exception:
-                    pass
-            presets[name] = json.loads(slots_json)
-            # R42 §5 / A1: atomic write — a crash mid-write must not corrupt the
-            # shared presets file (a corrupt file used to cascade into
-            # update_wall_slots wiping every saved preset).
-            atomic_write_text(presets_file, json.dumps(presets, indent=2))
-            return True
-        except Exception as e:
-            logger.error(f"Failed to save preset: {e}")
-            return False
-
-    def load_preset_names(self) -> str:
-        logger.info("GUI Action: Loading preset names...")
-        try:
-            presets_file = self._get_presets_file()
-            if presets_file.exists():
-                try:
-                    presets = json.loads(presets_file.read_text(encoding="utf-8"))
-                    names = [k for k in presets.keys() if k != "_last_active_slots_" and k != "lan_devices"]
-                    return json.dumps(names)
-                except Exception:
-                    pass
-            return json.dumps([])
-        except Exception as e:
-            logger.error(f"Failed to load preset names: {e}")
-            return json.dumps([])
-
-    def load_preset_by_name(self, name: str) -> str:
-        logger.info(f"GUI Action: Loading preset '{name}'...")
-        try:
-            presets_file = self._get_presets_file()
-            if presets_file.exists():
-                try:
-                    presets = json.loads(presets_file.read_text(encoding="utf-8"))
-                    slots = presets.get(name, {})
-                    return json.dumps(slots)
-                except Exception:
-                    pass
-            return json.dumps({})
-        except Exception as e:
-            logger.error(f"Failed to load preset '{name}': {e}")
-            return json.dumps({})
-
     def load_lan_devices(self) -> str:
         logger.info("GUI Action: Loading LAN devices...")
         try:

@@ -433,7 +433,10 @@
         get(mac, spec) {
             const key = mac || "default";
             if (!this.displays.has(key)) {
-                this.displays.set(key, new DisplayPreview(key, spec));
+                const disp = new DisplayPreview(key, spec);
+                const s = (typeof window.getDeviceChannel === "function") ? window.getDeviceChannel(key) : null;
+                if (s?.channel) disp.setActivity(s.channel, s.opts || {});
+                this.displays.set(key, disp);
             } else if (spec) {
                 this.displays.get(key).updateSpec(spec);
             }
@@ -469,21 +472,21 @@
 
         loadPersistedState() {
             try {
+                const chs = JSON.parse(localStorage.getItem("divoom_device_channels") || "{}");
                 const acts = JSON.parse(localStorage.getItem("divoomDeviceActivity") || "{}");
                 const prevs = JSON.parse(localStorage.getItem("divoomDevicePreviews") || "{}");
-                Object.keys(acts).forEach(mac => {
-                    const act = acts[mac];
-                    if (act && act.kind) {
-                        const display = this.get(mac);
-                        display.setActivity(act.kind, act.opts || {});
-                        if (act.src) display.setFrame(act.src);
+                Object.keys(chs).forEach(m => {
+                    if (chs[m]?.channel) this.get(m).setActivity(chs[m].channel, chs[m].opts || {});
+                });
+                Object.keys(acts).forEach(m => {
+                    const act = acts[m];
+                    if (act?.kind) {
+                        const d = this.get(m);
+                        d.setActivity(act.kind, act.opts || {});
+                        if (act.src) d.setFrame(act.src);
                     }
                 });
-                Object.keys(prevs).forEach(mac => {
-                    if (prevs[mac]) {
-                        this.get(mac).setFrame(prevs[mac]);
-                    }
-                });
+                Object.keys(prevs).forEach(m => { if (prevs[m]) this.get(m).setFrame(prevs[m]); });
             } catch (_) {}
         }
     }

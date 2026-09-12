@@ -21,6 +21,27 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-12 — v0.35.4: Virtual Wall Simplification, Spatial Bench Alignment & Channel Persistence.**
+  - **Virtual Wall Tab Simplification & Arranger Canvas Elimination (`index.html`, `app_globals.js`, `app_init.js`, `spatial_stage.js`, `presets_manager.py`)**:
+    - Completely removed redundant `.arranger-card` (`#arranger-canvas`, `#add-arranger-screen-btn`, `#clear-arranger-btn`, `#preset-name-input`, `#save-preset-btn`, `#presets-select`) from Tab 2.
+    - Virtual Wall Tab is now a clean "Split & Sync Wall Art" controller powered directly by the physical Spatial Stage Bench (`SpatialRooms.getWallSlots()`), respecting physical screen dimensions, 2D coordinates, and room assignments.
+    - Pruned redundant arranger blitting and DOM listeners from `app_globals.js`, `app_init.js`, and `spatial_stage.js`.
+    - Deleted dead methods `save_preset`, `load_preset_names`, and `load_preset_by_name` from `PresetsManagerMixin`. Verified by `tools/check_gui_api_reachable.py` (114 reachable, 0 allowlisted, 0 unreached).
+  - **Per-Device Active Channel Persistence & Preview Rehydration (`app_globals.js`, `channels_core.js`, `channel_preview.js`, `preview_controller.js`, `spatial_stage.js`, `gui_main.py`, `connection_events.js`)**:
+    - Added `saveDeviceChannel` and `getDeviceChannel` in `app_globals.js`, storing active channels and options per-MAC in `localStorage['divoom_device_channels']` with case-insensitive MAC lookup.
+    - Rehydrates active channel on device selection and bench refresh (`refreshBenchNodes`), updating `DisplayPreviewRegistry`, active tab buttons, and channel panels.
+    - Whitelisted `"activity"` event in `gui_main.py:_start_shutdown_follower`, delivering daemon channel switch broadcasts to `connection_events.js:window.Divoom.onActivity` for instant cross-surface synchronization.
+    - Added automated test suite `tests/test_channel_persistence.py` (3 passed).
+  - **Separation of Concerns Formalization**:
+    - Audited architectural boundaries across Daemon (`divoomd`), Native Menubar (`divoom-menubar`), and Web GUI (`divoom_gui`).
+    - Formally established Daemon as sole device transport authority & event broadcaster; Native Menubar as lightweight system-wide monitor & action trigger; and Web GUI as rich multi-screen spatial staging & content authoring environment.
+  - **Automated Verification**:
+    - Full local CI (`./scripts/ci_local.sh --fast`): all 25 steps passed.
+    - Full Python suite: 2946 passed, 234 skipped.
+    - Playwright browser suite: `tests/test_channel_persistence.py`, `tests/test_virtual_wall_preview_sync.py`, `tests/test_gui_wall_canvas_drag.py` (11 passed).
+    - House gates clean: 389/389 files <= 500 LOC (`check_file_size.py`), 744 files clean in emoji gate (`house_emoji_gate.sh`).
+    - Real application test: `scripts/gui_pov.py` completed with 0 errors.
+
 - **2026-09-12 — v0.35.3 RELEASED & INSTALLED LOCALLY: Architectural Remediation, Multi-Surface State Coordination & Virtual Wall Spatial Synchronization.**
   - **Release & Local Verification**: GitHub Actions CI all green (5/5 jobs), release `v0.35.3` published with DMG and Homebrew cask updated; installed to `/Applications/Divoom.app` via `scripts/install_local.sh`, verified running daemon inode (`540204817`, PID 36828). Development BLE-free debug binary restored.
   - **Defects Remediated**: Addressed 5 core architectural defects discovered during the full system audit (`architectural_audit_report.md`).
@@ -409,10 +430,10 @@ wiring a button is small work on top of what exists.
 
 ### Architectural Unification Tracks (Next Up)
 
-1. **Track 1: Virtual Wall & Presets Consolidation into Spatial Rooms (SHIPPED 2026-09-12)**:
-   - Unified Virtual Wall arranger preview rendering with the Main Bench via `DisplayPreviewRegistry`.
-   - Banished false-positive orange "W" glyph on the Main Bench when wall devices are on procedural channels (`clock`, `eq`, `ambient`).
-   - Synchronized layout presets (`presetsSelect`) and arranger node dragging with the `SpatialRooms` engine (`devRooms[mac] = 'Wall'`, `pos[mac] = { x, y }`, persistent saving, and live Spatial Stage updates).
+1. **Track 1: Virtual Wall Simplification & Spatial Stage Bench Consolidation (SHIPPED 2026-09-12)**:
+   - Completely retired redundant 2D `.arranger-card` from Tab 2 in favor of the full-fidelity Spatial Stage Bench.
+   - Virtual Wall Tab simplified to "Split & Sync Wall Art" querying `SpatialRooms.getWallSlots()` directly.
+   - Pruned dead code from web UI and deleted obsolete API methods (`save_preset`, `load_preset_names`, `load_preset_by_name`).
    - Automated tests: `tests/test_virtual_wall_preview_sync.py` (3 passed).
 
 2. **Track 2: Per-Device Live Widget & Background Streamer Binding (`DisplayJobBinding`)**:
@@ -425,10 +446,11 @@ wiring a button is small work on top of what exists.
    - Each physical screen independently manages its connection lifecycle (`connected`, `reconnecting`, `offline`), transport (`BLE`, `LAN`, `Mock`), battery, brightness, and volume.
    - *Verification*: Verify disconnecting screen 1 does not mark screen 2 offline or disable global controls.
 
-4. **Track 4: Channel Configuration Two-Way Binding (`DisplayPreview.opts`)**:
-   - Two-way bind the Control Center and sidebar inspector controls to `DisplayPreviewRegistry.getActive().opts`.
-   - Switching selected screens automatically populates the controls with that specific screen's configuration (clock style, color, ambient mode) without clobbering other screens.
-   - *Verification*: Select display 1 (Clock style 1 Rainbow), select display 2 (Clock style 3 Analog Square); assert inspector controls switch values without mutating display 1.
+4. **Track 4: Channel Configuration Two-Way Binding & Persistence (SHIPPED 2026-09-12)**:
+   - Saved active channel choices and options per-MAC in `localStorage['divoom_device_channels']`.
+   - Rehydrates active channel on device selection and bench refresh (`refreshBenchNodes`), updating `DisplayPreviewRegistry`, active tab buttons, and channel panels.
+   - Connected daemon `"activity"` event broadcast to `gui_main.py` and `window.Divoom.onActivity` for instant cross-surface synchronization.
+   - Automated tests: `tests/test_channel_persistence.py` (3 passed).
 
 5. **Track 5: Rust Daemon Multi-Device Registry & Per-Device Queuing (`DeviceRegistry`) (SHIPPED 2026-09-12)**:
    - Serialized `cmd_device_call` device dispatch via RAII `QueuePermit` on `CommandQueue`, strictly serializing concurrent RPC callers against live streamers and firmware updates.

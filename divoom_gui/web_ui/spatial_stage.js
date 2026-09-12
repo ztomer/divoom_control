@@ -224,6 +224,11 @@
         if (!bench) return;
         bench.innerHTML = '';
 
+        if (window.SpatialRooms) {
+            Object.assign(devicePositions, window.SpatialRooms.getSavedPositions());
+            Object.assign(deviceRooms, window.SpatialRooms.getDeviceRooms());
+        }
+
         const devices = getDeviceList();
         const ribbonChips = document.getElementById('spatial-ribbon-chips');
         if (ribbonChips) ribbonChips.innerHTML = '';
@@ -289,6 +294,30 @@
 
             if (isSelected) updateInspector(dev);
         });
+
+        // Rehydrate active channel and preview for primary device on initial bench load
+        if (devices.length > 0 && selectedMac) {
+            const activeDev = devices.find(d => (d.address || 'dev-0') === selectedMac) || devices[0];
+            const activeAddr = activeDev.address || selectedMac;
+            const savedCh = (typeof window.getDeviceChannel === 'function') ? window.getDeviceChannel(activeAddr) : null;
+            if (savedCh && window.DisplayPreviewRegistry) {
+                window.DisplayPreviewRegistry.get(activeAddr).setActivity(savedCh.channel, savedCh.opts || {});
+            }
+            if (typeof window.restoreDevicePreview === 'function') window.restoreDevicePreview(activeAddr);
+            const act = savedCh ? { kind: savedCh.channel, opts: savedCh.opts } : window.DivoomState?.deviceActivity?.[activeAddr];
+            if (act?.kind) {
+                const card = document.querySelector(`.tab-btn[data-channel="${act.kind}"]`);
+                if (card) {
+                    document.querySelectorAll('.tab-btn[data-channel]').forEach(c => c.classList.remove('active'));
+                    card.classList.add('active');
+                    window.DivoomState.activeChannel = act.kind;
+                    if (window.showChannelPanel) window.showChannelPanel(act.kind);
+                }
+            }
+            if (typeof window.syncChannelControlsToDisplay === 'function') {
+                window.syncChannelControlsToDisplay(activeAddr);
+            }
+        }
     }
 
     function highlightNode(addr, dev) {
@@ -302,7 +331,8 @@
         updateInspector(dev);
         updateRibbonSelection();
         if (typeof window.restoreDevicePreview === 'function') window.restoreDevicePreview(addr);
-        const act = window.DivoomState?.deviceActivity?.[addr];
+        const savedCh = (typeof window.getDeviceChannel === 'function') ? window.getDeviceChannel(addr) : null;
+        const act = savedCh ? { kind: savedCh.channel, opts: savedCh.opts } : window.DivoomState?.deviceActivity?.[addr];
         if (act?.kind) {
             const card = document.querySelector(`.tab-btn[data-channel="${act.kind}"]`);
             if (card) {
@@ -443,20 +473,12 @@
                     const wallSlot = window.DivoomState?.assignedSlots?.[addr];
                     if (wallSlot) display.setWallSlot(wallSlot);
                     if (cvs) display.renderTo(cvs, tick);
-                    const arrangerCvs = document.getElementById(`arranger-canvas-${addr}`);
-                    if (arrangerCvs) display.renderTo(arrangerCvs, tick);
                 } else if (cvs) {
                     const ctx = cvs.getContext('2d');
                     ctx.fillStyle = '#07080a';
                     ctx.fillRect(0, 0, cvs.width, cvs.height);
                 }
             });
-            if (window.DisplayPreviewRegistry && window.DivoomState?.assignedSlots) {
-                Object.keys(window.DivoomState.assignedSlots).forEach(addr => {
-                    const arrangerCvs = document.getElementById(`arranger-canvas-${addr}`);
-                    if (arrangerCvs) window.DisplayPreviewRegistry.get(addr).renderTo(arrangerCvs, tick);
-                });
-            }
             requestAnimationFrame(renderLoop);
         }
         renderLoop();

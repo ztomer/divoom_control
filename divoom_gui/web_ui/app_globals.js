@@ -129,10 +129,9 @@ window.setDeviceActivity = function(mac, kind, opts) {
         const display = window.DisplayPreviewRegistry.get(mac);
         display.setActivity(kind, opts);
         if (src) display.setFrame(src);
-        const arrangerCvs = document.getElementById(`arranger-canvas-${mac}`);
-        if (arrangerCvs) display.renderTo(arrangerCvs, 0);
     }
     try { localStorage.setItem("divoomDeviceActivity", JSON.stringify(window.DivoomState.deviceActivity)); } catch (e) {}
+    if (typeof window.saveDeviceChannel === "function") window.saveDeviceChannel(mac, kind, opts);
     window.setDevicePreview(mac, src);
     try { window.dispatchEvent(new CustomEvent("divoom:activity-updated", { detail: { mac, kind, opts, src } })); } catch (_) {}
     // R46 #3 / R50: push the CHANNEL kind + a PNG thumbnail to the daemon so the
@@ -349,108 +348,40 @@ window.updateDeviceSelectorDropdown = function() {
     if (window.renderDeviceDots) window.renderDeviceDots();
 };
 
-// ── 4. FREE-FORM DISPLAY WALL ARRANGER CANVAS ──
-const arrangerCanvas = document.getElementById("arranger-canvas");
-
+// ── 4. DISPLAY WALL SLOTS SYNCHRONIZATION ──
 window.syncArrangerToPython = function() {
+    const slots = window.SpatialRooms ? window.SpatialRooms.getWallSlots() : (window.DivoomState.assignedSlots || {});
+    window.DivoomState.assignedSlots = slots;
     if (window.pywebview && window.pywebview.api) {
-        window.pywebview.api.update_wall_slots(JSON.stringify(window.DivoomState.assignedSlots));
+        window.pywebview.api.update_wall_slots(JSON.stringify(slots));
     }
     if (window.updateSyncTargetList) window.updateSyncTargetList();
-    // R32 §C3: wall slots changed → the MatrixWall dot may appear/disappear.
     if (window.renderDeviceDots) window.renderDeviceDots();
 };
 
 window.renderArrangerCanvas = function() {
-    if (!arrangerCanvas) return;
-    arrangerCanvas.innerHTML = "";
+    // Redundant arranger canvas retired in favor of Spatial Stage Bench (#spatial-bench)
+    if (window.SpatialStage?.refresh) window.SpatialStage.refresh();
+};
 
-    Object.keys(window.DivoomState.assignedSlots).forEach(mac => {
-        const slot = window.DivoomState.assignedSlots[mac];
-        if (!slot || !slot.name || !mac || mac === "undefined") {
-            delete window.DivoomState.assignedSlots[mac];
-            return;
-        }
-        const node = document.createElement("div");
-        node.className = "arranger-node";
-        const accent = window.deviceColor(mac);
-        Object.assign(node.style, {
-            left: `${slot.x}px`, top: `${slot.y}px`,
-            width: `${slot.width}px`, height: `${slot.height}px`,
-            borderColor: accent
-        });
-        node.style.setProperty("--node-accent", accent);
-        node.title = `${slot.name} — ${mac}`;
-        
-        const res = slot.size || 16;
-        node.innerHTML = `
-            <span class="arranger-node-chip" style="background:${accent}"></span>
-            <div class="arranger-node-screen">
-                <canvas class="arranger-node-canvas arranger-node-preview" id="arranger-canvas-${mac}" width="${res}" height="${res}"></canvas>
-            </div>
-            <div class="arranger-node-remove" data-mac="${mac}">×</div>
-        `;
-        if (window.DisplayPreviewRegistry) {
-            const disp = window.DisplayPreviewRegistry.get(mac);
-            if (slot.preview && disp.mode !== "frame") disp.setFrame(slot.preview);
-            const cvs = node.querySelector(".arranger-node-canvas");
-            if (cvs) disp.renderTo(cvs, 0);
-        }
-        
-        let isDragging = false, startX, startY, startLeft, startTop;
-        
-        node.addEventListener("mousedown", (e) => {
-            if (e.target.classList.contains("arranger-node-remove")) {
-                delete window.DivoomState.assignedSlots[mac];
-                window.renderArrangerCanvas();
-                window.syncArrangerToPython();
-                if (window.SpatialRooms) {
-                    const pos = window.SpatialRooms.getSavedPositions();
-                    delete pos[mac];
-                    window.SpatialRooms.savePositions(pos);
-                    if (window.SpatialStage?.refresh) window.SpatialStage.refresh();
-                }
-                e.stopPropagation();
-                return;
-            }
-            isDragging = true;
-            node.classList.add("dragging");
-            startX = e.clientX; startY = e.clientY;
-            startLeft = parseInt(node.style.left) || 0;
-            startTop = parseInt(node.style.top) || 0;
-            e.preventDefault();
-        });
-        
-        document.addEventListener("mousemove", (e) => {
-            if (!isDragging) return;
-            const deltaX = e.clientX - startX, deltaY = e.clientY - startY;
-            let newLeft = startLeft + deltaX, newTop = startTop + deltaY;
-            const maxLeft = arrangerCanvas.clientWidth - node.clientWidth;
-            const maxTop = arrangerCanvas.clientHeight - node.clientHeight;
-            newLeft = Math.max(0, Math.min(newLeft, maxLeft));
-            newTop = Math.max(0, Math.min(newTop, maxTop));
-            
-            node.style.left = `${newLeft}px`;
-            node.style.top = `${newTop}px`;
-            window.DivoomState.assignedSlots[mac].x = newLeft;
-            window.DivoomState.assignedSlots[mac].y = newTop;
-        });
-        
-        document.addEventListener("mouseup", () => {
-            if (isDragging) {
-                isDragging = false;
-                node.classList.remove("dragging");
-                window.syncArrangerToPython();
-                if (window.SpatialRooms) {
-                    const pos = window.SpatialRooms.getSavedPositions();
-                    const devRooms = window.SpatialRooms.getDeviceRooms();
-                    pos[mac] = { x: parseInt(node.style.left) || 0, y: parseInt(node.style.top) || 0 };
-                    devRooms[mac] = 'Wall';
-                    window.SpatialRooms.savePositions(pos, devRooms);
-                    if (window.SpatialStage?.refresh) window.SpatialStage.refresh();
-                }
-            }
-        });
-        arrangerCanvas.appendChild(node);
-    });
+// ── 5. PER-DEVICE CHANNEL PERSISTENCE ──
+window.saveDeviceChannel = function(mac, channel, opts) {
+    if (!mac || mac === "default" || mac === "-") mac = window._activeDeviceMac();
+    if (!mac || mac === "-") return;
+    try {
+        const channels = JSON.parse(localStorage.getItem("divoom_device_channels") || "{}");
+        channels[mac] = { channel: channel, opts: opts || {}, at: Date.now() };
+        localStorage.setItem("divoom_device_channels", JSON.stringify(channels));
+    } catch (_) {}
+};
+
+window.getDeviceChannel = function(mac) {
+    if (!mac || mac === "default" || mac === "-") mac = window._activeDeviceMac();
+    if (!mac || mac === "-") return null;
+    try {
+        const channels = JSON.parse(localStorage.getItem("divoom_device_channels") || "{}");
+        return channels[mac] || channels[mac.toLowerCase()] || channels[mac.toUpperCase()] || null;
+    } catch (_) {
+        return null;
+    }
 };

@@ -36,7 +36,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 mode: window.DivoomState.selectedAmbientMode ?? 0,
                 color: document.getElementById("ambient-color-input")?.value || "#00cc66"
             } : {});
-            if (window.setDeviceActivity) window.setDeviceActivity(window._activeDeviceMac(), ch, chOpts);
+            const activeMac = (typeof window._activeDeviceMac === "function") ? window._activeDeviceMac() : null;
+            if (window.saveDeviceChannel) window.saveDeviceChannel(activeMac, ch, chOpts);
+            if (window.setDeviceActivity) window.setDeviceActivity(activeMac, ch, chOpts);
             // Ambient and Text are "non-channel" cards (each has its own
             // Apply/Push button). Every other card — Clock, VJ, EQ, Design,
             // Scoreboard — fires switch_channel.

@@ -220,18 +220,13 @@ def test_r11_scoreboard_restyle_blue_over_red():
 
 
 def test_r11_wall_toolbar_unified():
-    """Phase 5 (item 6): single wall toolbar, icons+labels, editable preset name,
-    no 'Canvas'/'Layout & Presets' headings."""
+    """Virtual Wall tab is streamlined for Split & Sync Art; spatial arrangement
+    is unified in the Spatial Bench."""
     html = INDEX_HTML.read_text()
-    wall = re.search(r'id="display-wall".+?id="arranger-canvas"', html, re.DOTALL).group(0)
-    assert "wall-toolbar" in wall
-    assert 'id="preset-name-input"' in wall, "editable preset name field missing"
-    for ctrl in ('id="add-arranger-screen-btn"', 'id="clear-arranger-btn"',
-                 'id="save-preset-btn"', 'id="presets-select"'):
-        assert ctrl in wall, f"{ctrl} missing from unified toolbar"
-    assert ">Canvas<" not in wall, "'Canvas' heading should be gone"
-    assert "Layout &amp; Presets" not in wall, "'Layout & Presets' heading should be gone"
-    assert "save-preset-btn" in APP_JS
+    wall = re.search(r'id="display-wall".+?</section>', html, re.DOTALL).group(0)
+    assert 'id="apply-wall-art"' in wall
+    assert 'id="browse-wall-art-btn"' in wall
+    assert 'id="arranger-canvas"' not in wall
 
 
 def test_r18_subtabs_have_icons_and_fit_content():

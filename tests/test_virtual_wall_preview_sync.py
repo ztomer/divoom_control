@@ -12,10 +12,10 @@ INDEX_HTML = Path(__file__).resolve().parent.parent / "divoom_gui" / "web_ui" / 
 
 
 @pytest.mark.asyncio
-async def test_virtual_wall_and_main_bench_clock_preview_sync():
-    """Verify that setting Clock channel renders the identical bitmap clock on both
-    the Main Bench (#stage-canvas-${mac}) and Virtual Wall Arranger (#arranger-canvas-${mac}),
-    with zero false-positive orange 'W' glyph pixels."""
+async def test_virtual_wall_arranger_retired_and_bench_clock_rendering():
+    """Verify that setting Clock channel renders the authentic bitmap clock on the
+    Main Bench (#stage-canvas-${mac}) with zero false-positive orange 'W' glyph pixels,
+    and the redundant #arranger-canvas is absent from the DOM."""
     assert INDEX_HTML.exists()
     from playwright.async_api import async_playwright
 
@@ -37,8 +37,7 @@ async def test_virtual_wall_and_main_bench_clock_preview_sync():
                 [d1]: { x: 50, y: 50, width: 80, height: 80, size: 16, name: "Pixoo-Wall" }
             };
 
-            // Render both canvases
-            window.renderArrangerCanvas();
+            // Render bench nodes
             if (window.SpatialStage?.refresh) window.SpatialStage.refresh();
 
             // Configure device with Rainbow Clock style 1
@@ -47,14 +46,13 @@ async def test_virtual_wall_and_main_bench_clock_preview_sync():
 
             // Check DOM presence
             const stageCvs = document.getElementById(`stage-canvas-${d1}`);
-            const arrangerCvs = document.getElementById(`arranger-canvas-${d1}`);
-            if (!stageCvs || !arrangerCvs) {
-                return { error: "Missing canvases", hasStage: !!stageCvs, hasArranger: !!arrangerCvs };
+            const arrangerCanvas = document.getElementById("arranger-canvas");
+            if (!stageCvs) {
+                return { error: "Missing stage canvas", hasStage: !!stageCvs, hasArranger: !!arrangerCanvas };
             }
 
             // Render one frame
             disp.renderTo(stageCvs, 1);
-            disp.renderTo(arrangerCvs, 1);
 
             // Analyze stage canvas pixels
             const sCtx = stageCvs.getContext("2d");
@@ -67,44 +65,30 @@ async def test_virtual_wall_and_main_bench_clock_preview_sync():
                 if (r === 255 && g === 90 && b === 31) sOrangeGlyph++;
             }
 
-            // Analyze arranger canvas pixels
-            const aCtx = arrangerCvs.getContext("2d");
-            const aData = aCtx.getImageData(0, 0, arrangerCvs.width, arrangerCvs.height).data;
-            let aNonBlack = 0, aOrangeGlyph = 0;
-            for (let i = 0; i < aData.length; i += 4) {
-                const r = aData[i], g = aData[i + 1], b = aData[i + 2];
-                if (r > 30 || g > 30 || b > 30) aNonBlack++;
-                if (r === 255 && g === 90 && b === 31) aOrangeGlyph++;
-            }
-
             return {
                 channel: disp.channel,
                 mode: disp.mode,
                 stageNonBlack: sNonBlack,
                 stageOrangeGlyph: sOrangeGlyph,
-                arrangerNonBlack: aNonBlack,
-                arrangerOrangeGlyph: aOrangeGlyph,
-                matching: (sNonBlack === aNonBlack) && (sNonBlack > 0)
+                hasArranger: !!arrangerCanvas
             };
         }""", dev1)
 
         assert "error" not in res, f"Setup error: {res}"
+        assert res["hasArranger"] is False, "Redundant #arranger-canvas should not be in DOM"
         assert res["channel"] == "clock"
         assert res["mode"] == "glyph"
         assert res["stageNonBlack"] > 0
-        assert res["arrangerNonBlack"] > 0
         # Zero orange 'W' glyph pixels because device is in clock channel
         assert res["stageOrangeGlyph"] == 0
-        assert res["arrangerOrangeGlyph"] == 0
-        assert res["matching"] is True
 
         await browser.close()
 
 
 @pytest.mark.asyncio
-async def test_virtual_wall_and_main_bench_frame_and_eq_sync():
-    """Verify that image frames (e.g. from display_wall_image split) and visualizers
-    render in lockstep across both canvases."""
+async def test_main_bench_frame_and_eq_rendering():
+    """Verify that EQ visualizers and Wall channel glyph render accurately
+    on the Main Bench canvas."""
     assert INDEX_HTML.exists()
     from playwright.async_api import async_playwright
 
@@ -124,7 +108,6 @@ async def test_virtual_wall_and_main_bench_frame_and_eq_sync():
             window.DivoomState.assignedSlots = {
                 [d1]: { x: 50, y: 50, width: 80, height: 80, size: 16, name: "Pixoo-Wall" }
             };
-            window.renderArrangerCanvas();
             if (window.SpatialStage?.refresh) window.SpatialStage.refresh();
 
             const disp = window.DisplayPreviewRegistry.get(d1);
@@ -132,47 +115,35 @@ async def test_virtual_wall_and_main_bench_frame_and_eq_sync():
             // 1. Switch to EQ / Visualizer
             disp.setActivity("eq", { color: "#5aabff" });
             const stageCvs = document.getElementById(`stage-canvas-${d1}`);
-            const arrangerCvs = document.getElementById(`arranger-canvas-${d1}`);
+            if (!stageCvs) return { error: "stage canvas missing" };
 
             disp.renderTo(stageCvs, 5);
-            disp.renderTo(arrangerCvs, 5);
 
             const eqStagePixels = stageCvs.getContext("2d").getImageData(0, 0, 16, 16).data;
-            const eqArrangerPixels = arrangerCvs.getContext("2d").getImageData(0, 0, 16, 16).data;
-
-            let eqMatching = true;
-            for (let i = 0; i < eqStagePixels.length; i++) {
-                if (eqStagePixels[i] !== eqArrangerPixels[i]) {
-                    eqMatching = false;
-                    break;
-                }
+            let eqNonBlack = 0;
+            for (let i = 0; i < eqStagePixels.length; i += 4) {
+                if (eqStagePixels[i] > 20 || eqStagePixels[i+1] > 20 || eqStagePixels[i+2] > 20) eqNonBlack++;
             }
 
-            // 2. Explicit wall channel renders orange glyph on both
+            // 2. Explicit wall channel renders orange glyph
             disp.setActivity("wall");
             disp.renderTo(stageCvs, 0);
-            disp.renderTo(arrangerCvs, 0);
 
             const wallStageData = stageCvs.getContext("2d").getImageData(0, 0, 16, 16).data;
-            const wallArrangerData = arrangerCvs.getContext("2d").getImageData(0, 0, 16, 16).data;
-            let stageOrange = 0, arrangerOrange = 0;
+            let stageOrange = 0;
             for (let i = 0; i < wallStageData.length; i += 4) {
                 if (wallStageData[i] === 255 && wallStageData[i + 1] === 90 && wallStageData[i + 2] === 31) stageOrange++;
-                if (wallArrangerData[i] === 255 && wallArrangerData[i + 1] === 90 && wallArrangerData[i + 2] === 31) arrangerOrange++;
             }
 
             return {
-                eqMatching,
-                stageOrange,
-                arrangerOrange,
-                wallMatching: (stageOrange === arrangerOrange) && (stageOrange > 0)
+                eqNonBlack,
+                stageOrange
             };
         }""", dev1)
 
-        assert res["eqMatching"] is True
+        assert res.get("error") is None
+        assert res["eqNonBlack"] > 0
         assert res["stageOrange"] > 0
-        assert res["arrangerOrange"] > 0
-        assert res["wallMatching"] is True
 
         await browser.close()
 

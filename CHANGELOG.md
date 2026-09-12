@@ -4,6 +4,29 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## v0.35.4 — Virtual Wall Simplification, Spatial Bench Alignment & Channel Persistence (2026-09-12)
+
+### Architecture & Added
+
+- **Virtual Wall Arranger Retirement & Spatial Stage Bench Consolidation (`index.html`, `app_globals.js`, `app_init.js`, `spatial_stage.js`, `presets_manager.py`)**:
+  - Completely removed redundant `.arranger-card` (`#arranger-canvas`, `#add-arranger-screen-btn`, `#clear-arranger-btn`, `#preset-name-input`, `#save-preset-btn`, `#presets-select`) from Tab 2.
+  - Virtual Wall Tab is now a clean "Split & Sync Wall Art" controller powered directly by the physical Spatial Stage Bench (`SpatialRooms.getWallSlots()`), respecting physical screen dimensions, 2D coordinates, and room assignments.
+  - Pruned redundant arranger blitting and DOM listeners from `app_globals.js`, `app_init.js`, and `spatial_stage.js`.
+  - Deleted dead methods `save_preset`, `load_preset_names`, and `load_preset_by_name` from `PresetsManagerMixin`. Verified by `tools/check_gui_api_reachable.py` (114 reachable, 0 allowlisted, 0 unreached).
+
+- **Per-Device Active Channel Persistence & Preview Rehydration (`app_globals.js`, `channels_core.js`, `channel_preview.js`, `preview_controller.js`, `spatial_stage.js`, `gui_main.py`, `connection_events.js`)**:
+  - Added `saveDeviceChannel` and `getDeviceChannel` in `app_globals.js`, storing active channels and options per-MAC in `localStorage['divoom_device_channels']` with case-insensitive MAC lookup.
+  - Rehydrates active channel on device selection and bench refresh (`refreshBenchNodes`), updating `DisplayPreviewRegistry`, active tab buttons, and channel panels.
+  - Whitelisted `"activity"` event in `gui_main.py:_start_shutdown_follower`, delivering daemon channel switch broadcasts to `connection_events.js:window.Divoom.onActivity` for instant cross-surface synchronization.
+  - Added automated test suite `tests/test_channel_persistence.py` (3 passed).
+
+- **Automated Verification**:
+  - Full local CI (`./scripts/ci_local.sh --fast`): all 25 steps passed.
+  - Full Python suite: 2946 passed, 234 skipped.
+  - Playwright visual tests: `test_channel_persistence.py`, `test_virtual_wall_preview_sync.py`, `test_gui_wall_canvas_drag.py` (11 passed).
+  - House gates clean: 389/389 files <= 500 LOC (`check_file_size.py`), 744 files clean in emoji gate (`house_emoji_gate.sh`).
+  - Real application test: `scripts/gui_pov.py` completed with 0 errors.
+
 ## v0.35.3 — Architectural Remediation, Multi-Surface State Coordination & Virtual Wall Spatial Synchronization (2026-09-12)
 
 ### Architecture & Fixed

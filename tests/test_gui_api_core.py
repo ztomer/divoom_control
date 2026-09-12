@@ -252,11 +252,3 @@ class TestGuiApiCoreBasics(GuiApiTestBase):
         self.assertIsInstance(self.api.current_divoom, DaemonDeviceProxy)
         fake.connect_device.assert_called_once()
         self.assertEqual(fake.connect_device.call_args.kwargs.get("mac"), "00:11:22:33:44:55")
-
-    def test_preset_persistence(self):
-        """Test preset name loading when no files exist."""
-        preset_names = self.api.load_preset_names()
-        self.assertEqual(json.loads(preset_names), [])
-
-        preset_data = self.api.load_preset_by_name("NonExistent")
-        self.assertEqual(json.loads(preset_data), {})

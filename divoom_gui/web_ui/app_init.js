@@ -60,153 +60,7 @@ document.addEventListener("DOMContentLoaded", () => {
         document.getElementById('device-settings').innerHTML = window.DivoomTemplates.deviceSettings;
     }
 
-    // ── 5. CANVAS ARRANGER AND PRESETS BINDINGS ──
-    const addArrangerBtn = document.getElementById("add-arranger-screen-btn");
-    if (addArrangerBtn) {
-        addArrangerBtn.addEventListener("click", () => {
-            document.querySelectorAll(".arranger-popup").forEach(p => p.remove());
-            
-            const bleOptions = (window.DivoomState.discoveredDevices || []).map(d => `<option value="${d.address}"> BLE: ${d.name}</option>`);
-            const lanOptions = (window.DivoomState.registeredLanDevices || []).map(d => `<option value="LAN:${d.ip}"> LAN: ${d.ip}</option>`);
-            const combinedOptions = bleOptions.concat(lanOptions).join("");
-
-            if (!combinedOptions) {
-                window.showToast("No devices found. Scan BLE screens or configure a LAN screen first!", "error");
-                return;
-            }
-            
-            const popup = document.createElement("div");
-            popup.className = "arranger-popup";
-            popup.innerHTML = `
-                <h3 style="font-family: var(--font-display); font-size:16px; margin-bottom:15px; color: var(--text-main);">Add Screen to Arranger</h3>
-                <select id="canvas-add-select" class="custom-select" style="width:100%; margin-bottom:15px;">${combinedOptions}</select>
-                <div style="display:flex; gap:10px; justify-content:flex-end;">
-                    <button id="canvas-add-cancel" class="glow-btn compact" style="background:rgba(130,131,138,0.1); border: 1px solid var(--border-color); color: var(--text-main); box-shadow:none;">Cancel</button>
-                    <button id="canvas-add-confirm" class="glow-btn compact" style="background: var(--primary); border: 1px solid var(--primary); color:#fff; box-shadow:none;">Add Node</button>
-                </div>
-            `;
-            
-            document.body.appendChild(popup);
-            document.getElementById("canvas-add-cancel").addEventListener("click", () => popup.remove());
-            document.getElementById("canvas-add-confirm").addEventListener("click", () => {
-                const selectEl = document.getElementById("canvas-add-select");
-                const addr = selectEl ? selectEl.value : "";
-                popup.remove();
-                if (!addr) return;
-                if (window.DivoomState.assignedSlots[addr]) {
-                    window.showToast("Device already placed on canvas!", "error");
-                    return;
-                }
-                const isLan = addr.startsWith("LAN:");
-                let devName = "Divoom Screen";
-                if (isLan) {
-                    devName = `Wi-Fi Screen: ${addr.split("LAN:")[1]}`;
-                } else {
-                    const dev = window.DivoomState.discoveredDevices.find(d => d.address === addr);
-                    devName = dev ? dev.name : "Divoom Screen";
-                }
-                const dims = window.getDeviceDimensions(devName);
-                const placementX = Math.round((arrangerCanvas.clientWidth - dims.width) / 2);
-                const placementY = Math.round((arrangerCanvas.clientHeight - dims.height) / 2);
-                
-                window.DivoomState.assignedSlots[addr] = {
-                    x: placementX, y: placementY, width: dims.width, height: dims.height,
-                    size: dims.size, name: devName, image: dims.image
-                };
-                window.renderArrangerCanvas();
-                window.syncArrangerToPython();
-                if (window.SpatialRooms) {
-                    const pos = window.SpatialRooms.getSavedPositions();
-                    const devRooms = window.SpatialRooms.getDeviceRooms();
-                    pos[addr] = { x: placementX, y: placementY };
-                    devRooms[addr] = 'Wall';
-                    window.SpatialRooms.savePositions(pos, devRooms);
-                    if (window.SpatialStage?.refresh) window.SpatialStage.refresh();
-                }
-            });
-        });
-    }
-
-    const clearArrangerBtn = document.getElementById("clear-arranger-btn");
-    if (clearArrangerBtn) {
-        clearArrangerBtn.addEventListener("click", () => {
-            window.DivoomState.assignedSlots = {};
-            window.renderArrangerCanvas();
-            window.syncArrangerToPython();
-        });
-    }
-
-    const presetsSelect = document.getElementById("presets-select");
-    if (presetsSelect) {
-        presetsSelect.addEventListener("change", (e) => {
-            const name = e.target.value;
-            if (!name) return;
-            if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.load_preset_by_name(name).then(slotsJson => {
-                    if (slotsJson) {
-                        window.DivoomState.assignedSlots = JSON.parse(slotsJson);
-                        window.renderArrangerCanvas();
-                        window.syncArrangerToPython();
-                        if (window.SpatialRooms) {
-                            const pos = window.SpatialRooms.getSavedPositions();
-                            const devRooms = window.SpatialRooms.getDeviceRooms();
-                            Object.keys(window.DivoomState.assignedSlots).forEach(addr => {
-                                const slot = window.DivoomState.assignedSlots[addr];
-                                pos[addr] = { x: slot.x, y: slot.y };
-                                devRooms[addr] = 'Wall';
-                            });
-                            window.SpatialRooms.savePositions(pos, devRooms);
-                            if (window.SpatialStage?.refresh) window.SpatialStage.refresh();
-                        }
-                        window.showToast(`Layout preset '${name}' applied!`, "success");
-                    }
-                });
-            }
-        });
-    }
-
-
-
-    const savePresetBtn = document.getElementById("save-preset-btn");
-    if (savePresetBtn) {
-        savePresetBtn.addEventListener("click", () => {
-            if (Object.keys(window.DivoomState.assignedSlots).length === 0) {
-                window.showToast("Add at least one screen before saving", "error");
-                return;
-            }
-            // R42 §5: pywebview's cocoa backend does NOT implement
-            // window.prompt — the old fallback returned null and the save
-            // silently no-opped (the user believed the preset was saved).
-            // Require the toolbar name field and say so.
-            const nameInput = document.getElementById("preset-name-input");
-            const name = (nameInput?.value || "").trim();
-            if (!name) {
-                window.showToast("Type a preset name first (toolbar field)", "error");
-                nameInput?.focus();
-                return;
-            }
-            if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.save_preset(name, JSON.stringify(window.DivoomState.assignedSlots)).then(res => {
-                    if (res) {
-                        window.showToast(`Saved layout '${name}'`, "success");
-                        window.pywebview.api.load_preset_names().then(namesJson => {
-                            if (namesJson && presetsSelect) {
-                                const names = JSON.parse(namesJson);
-                                presetsSelect.innerHTML = '<option value="">Load Preset...</option>';
-                                names.forEach(n => {
-                                    const opt = document.createElement("option");
-                                    opt.value = n; opt.textContent = n;
-                                    presetsSelect.appendChild(opt);
-                                });
-                            }
-                        });
-                    }
-                });
-            }
-        });
-    }
-
-    // ── 6. NATIVE FILE BROWSERS (wall art only; custom art uses page/slot grid) ──
+    // ── 5. VIRTUAL DISPLAY WALL (SPLIT & SYNC) ──
     const browseWallArtBtn = document.getElementById("browse-wall-art-btn");
     const filePathInput = document.getElementById("file-path-input");
     const filePreviewContainer = document.getElementById("file-preview-container");
@@ -230,26 +84,37 @@ document.addEventListener("DOMContentLoaded", () => {
     if (applyWallArtBtn) {
         applyWallArtBtn.addEventListener("click", () => {
             const path = filePathInput?.value.trim();
-            if (!path) return;
-            if (Object.keys(window.DivoomState.assignedSlots).length === 0) return;
+            if (!path) {
+                window.showToast("Please select an image file first", "error");
+                return;
+            }
+            const allSlots = window.SpatialRooms ? window.SpatialRooms.getWallSlots() : (window.DivoomState.assignedSlots || {});
+            const wallMacs = Object.keys(allSlots).filter(mac => (allSlots[mac].room || '').toLowerCase() === 'wall');
+            const activeSlots = (wallMacs.length > 0)
+                ? Object.fromEntries(wallMacs.map(mac => [mac, allSlots[mac]]))
+                : allSlots;
+            const slotCount = Object.keys(activeSlots).length;
+            if (slotCount === 0) {
+                window.showToast("No screens configured on the Spatial Bench!", "error");
+                return;
+            }
+            window.DivoomState.assignedSlots = activeSlots;
             window.showToast("Splitting image and syncing wall...", "success");
             if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.update_wall_slots(JSON.stringify(activeSlots));
                 window.pywebview.api.display_wall_image(path, 16).then(res => {
                     const success = typeof res === "object" ? res.success : !!res;
                     if (success) {
                         window.showToast("Synchronized display wall", "success", " BLE");
-                        // R45 #3: show each screen's DOWNSCALED crop (exactly what
-                        // the device renders) in the arranger preview — the daemon
-                        // already returns them as {mac: dataURI}; we just dropped them.
                         const previews = (res && typeof res === "object" && res.previews) || {};
-                        let any = false;
                         Object.keys(previews).forEach(mac => {
-                            const slot = window.DivoomState.assignedSlots[mac];
-                            if (slot) { slot.preview = previews[mac]; any = true; }
                             if (window.setDevicePreview) window.setDevicePreview(mac, previews[mac]);
                             if (window.setDeviceActivity) window.setDeviceActivity(mac, "image", { src: previews[mac] });
                         });
-                        if (any && window.renderArrangerCanvas) window.renderArrangerCanvas();
+                        if (window.SpatialStage?.refresh) window.SpatialStage.refresh();
+                    } else {
+                        const errMsg = (res && res.error) || "Failed to split and sync wall image";
+                        window.showToast(errMsg, "error");
                     }
                 });
             }
@@ -429,18 +294,6 @@ document.addEventListener("DOMContentLoaded", () => {
                     }
                 }
             });
-            
-            window.pywebview.api.load_preset_names().then(namesJson => {
-                if (namesJson && presetsSelect) {
-                    const names = JSON.parse(namesJson);
-                    presetsSelect.innerHTML = '<option value="">Load Preset...</option>';
-                    names.forEach(n => {
-                        const opt = document.createElement("option");
-                        opt.value = n; opt.textContent = n;
-                        presetsSelect.appendChild(opt);
-                    });
-                }
-            });
         }
         
         // Realtime Custom Art Preview Helper
@@ -459,11 +312,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 customArtPreviewContainer.style.display = "flex";
             }
         };
-        
-        // Close modals on tab change
-        window.addEventListener("tab-changed", () => {
-            document.querySelectorAll(".arranger-popup").forEach(p => p.remove());
-        });
     }, 1000);
 });
 

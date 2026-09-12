@@ -241,6 +241,37 @@ window.Divoom.onHotProgress = function(ev) {
     }
 };
 
+// Activity event: daemon or menubar switched channel or started a job
+window.Divoom.onActivity = function(ev) {
+    if (!ev || !ev.mac || !ev.kind) return;
+    const mac = ev.mac;
+    const kind = ev.kind;
+    const opts = ev.opts || {};
+    if (typeof window.saveDeviceChannel === "function") {
+        window.saveDeviceChannel(mac, kind, opts);
+    }
+    if (window.DisplayPreviewRegistry) {
+        window.DisplayPreviewRegistry.get(mac).setActivity(kind, opts);
+    }
+    window.DivoomState.deviceActivity = window.DivoomState.deviceActivity || {};
+    window.DivoomState.deviceActivity[mac] = { kind: kind, at: Date.now(), opts: opts };
+    if (mac === (typeof window._activeDeviceMac === "function" ? window._activeDeviceMac() : null)) {
+        window.DivoomState.activeChannel = kind;
+        const card = document.querySelector(`.tab-btn[data-channel="${kind}"]`);
+        if (card) {
+            document.querySelectorAll(".tab-btn[data-channel]").forEach(c => c.classList.remove("active"));
+            card.classList.add("active");
+        }
+        if (typeof window.showChannelPanel === "function") {
+            window.showChannelPanel(kind);
+        }
+        if (typeof window.syncChannelControlsToDisplay === "function") {
+            window.syncChannelControlsToDisplay(mac);
+        }
+    }
+    if (window.SpatialStage?.refresh) window.SpatialStage.refresh();
+};
+
 window.startConnectionHeartbeat = function() {
     // No polling: connection state, owned devices, and daemon health are all
     // event-driven now (window.Divoom.onDaemonEvent / onOwnedDevices /
