@@ -277,3 +277,122 @@ async fn test_device_call_preempts_conflicting_live_jobs() {
         "Live job on DEV_A should have been preempted by switch_channel"
     );
 }
+
+#[tokio::test]
+async fn test_device_call_set_screen_on_and_standby_preemption() {
+    use std::sync::Arc;
+    let d = Arc::new(Daemon::new());
+    d.initialize_self_weak(Arc::downgrade(&d));
+
+    // 1. Connect DEV_A
+    let conn = d
+        .handle(make_request(
+            "connect",
+            Some(json!({"mock": true, "mac": "DEV_A"})),
+            None,
+        ))
+        .await;
+    assert_eq!(conn["success"], json!(true));
+
+    // 2. Start sysmon live job on DEV_A
+    let job_res = d
+        .handle(make_request(
+            "live_job_start",
+            Some(json!({
+                "kind": "sysmon",
+                "mac": "DEV_A",
+                "interval_s": 1.0,
+                "params": {"size": 16}
+            })),
+            None,
+        ))
+        .await;
+    assert_eq!(job_res["success"], json!(true));
+    assert_eq!(d.live_jobs.list(Some("DEV_A")).await.len(), 1);
+
+    // 3. Send system.set_screen_on with on: false
+    let off_call = d
+        .handle(make_request(
+            "device_call",
+            Some(json!({
+                "mac": "DEV_A",
+                "method": "system.set_screen_on",
+                "kwargs": {"on": false}
+            })),
+            None,
+        ))
+        .await;
+    assert_eq!(off_call["success"], json!(true));
+
+    // 4. Verify live job was preempted by standby/screen-off
+    assert_eq!(
+        d.live_jobs.list(Some("DEV_A")).await.len(),
+        0,
+        "Live job should be stopped when display power is turned off"
+    );
+
+    // 5. Verify 0x74 with 0 was sent to mock device
+    {
+        let devices = d.devices.lock().await;
+        let trans_a = devices.get("DEV_A").unwrap();
+        if let DeviceTransport::Mock(ref mock) = &**trans_a {
+            let cmds = mock.sent_commands.lock().unwrap();
+            let last_cmd = cmds.last().expect("command should be recorded");
+            assert_eq!(last_cmd.0, 0x74);
+            assert_eq!(last_cmd.1, [0x00]);
+        }
+    }
+
+    // 6. Send system.set_screen_on with on: true and explicit brightness: 80
+    let on_call = d
+        .handle(make_request(
+            "device_call",
+            Some(json!({
+                "mac": "DEV_A",
+                "method": "system.set_screen_on",
+                "kwargs": {"on": true, "brightness": 80}
+            })),
+            None,
+        ))
+        .await;
+    assert_eq!(on_call["success"], json!(true));
+
+    {
+        let devices = d.devices.lock().await;
+        let trans_a = devices.get("DEV_A").unwrap();
+        if let DeviceTransport::Mock(ref mock) = &**trans_a {
+            let cmds = mock.sent_commands.lock().unwrap();
+            let last_cmd = cmds.last().expect("command should be recorded");
+            assert_eq!(last_cmd.0, 0x74);
+            assert_eq!(last_cmd.1, [80]);
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_set_device_activity_broadcasts_event() {
+    let d = Daemon::new();
+    let mut rx = d.subscribe().expect("broadcast subscriber available");
+
+    let res = d
+        .handle(make_request(
+            "set_device_activity",
+            Some(json!({
+                "mac": "AA:BB:CC:DD:EE:FF",
+                "kind": "custom_art",
+                "name": "Ditoo Pro",
+                "preview": "data:image/png;base64,mock"
+            })),
+            None,
+        ))
+        .await;
+    assert_eq!(res["success"], json!(true));
+
+    // Verify broadcast event was received
+    let ev = rx.recv().await.expect("event should be broadcast");
+    assert_eq!(ev["type"], json!("activity"));
+    assert_eq!(ev["mac"], json!("AA:BB:CC:DD:EE:FF"));
+    assert_eq!(ev["kind"], json!("custom_art"));
+    assert_eq!(ev["name"], json!("Ditoo Pro"));
+    assert_eq!(ev["preview"], json!("data:image/png;base64,mock"));
+}

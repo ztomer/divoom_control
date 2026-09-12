@@ -159,8 +159,20 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
                 .map(std::string::ToString::to_string);
             daemon
                 .live_jobs
-                .set_device_activity(mac, kind, name, preview)
+                .set_device_activity(mac.clone(), kind.clone(), name.clone(), preview.clone())
                 .await;
+            let mut ev = json!({
+                "type": "activity",
+                "mac": mac,
+                "kind": kind,
+            });
+            if let Some(ref n) = name {
+                ev["name"] = json!(n);
+            }
+            if let Some(ref p) = preview {
+                ev["preview"] = json!(p);
+            }
+            let _ = daemon.tx.send(ev);
             json!({"success": true})
         }
 

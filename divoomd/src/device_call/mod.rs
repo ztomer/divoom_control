@@ -35,6 +35,114 @@ use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 
 pub(crate) use args::{pos_bool, pos_i64};
 
+fn decode_blob_map(req: &Request) -> Result<std::collections::HashMap<usize, Vec<u8>>, String> {
+    let mut map = std::collections::HashMap::new();
+    if let Some(blobs) = req.args.get("blobs").and_then(|v| v.as_object()) {
+        for (idx_str, b64val) in blobs {
+            let idx: usize = match idx_str.parse() {
+                Ok(i) => i,
+                Err(_) => return Err(format!("blobs: bad index key '{idx_str}'")),
+            };
+            let Some(b64) = b64val.as_str() else {
+                return Err(format!("blobs[{idx_str}]: not a string"));
+            };
+            match B64.decode(b64) {
+                Ok(data) => {
+                    map.insert(idx, data);
+                }
+                Err(e) => return Err(format!("blobs[{idx_str}]: base64 error: {e}")),
+            }
+        }
+    }
+    Ok(map)
+}
+
+fn report_no_lan(dev: &DeviceTransport) -> Value {
+    let (cause, why) = match dev {
+        DeviceTransport::Spp(_) => (
+            "no_lan_capability",
+            "this device is connected over Bluetooth, which has no LAN API",
+        ),
+        #[cfg(feature = "ble")]
+        DeviceTransport::Ble(_) => (
+            "no_lan_capability",
+            "this device is connected over Bluetooth, which has no LAN API",
+        ),
+        _ => (
+            "not_configured",
+            "no LAN address is configured for this device",
+        ),
+    };
+    let mut reply = crate::protocol::err_reply(why);
+    if let Value::Object(ref mut m) = reply {
+        m.insert("cause".into(), Value::String(cause.into()));
+    }
+    reply
+}
+
+async fn handle_lan_fallback(
+    lan_dev: &crate::lan::LanTransport,
+    method: &str,
+    args: &[i64],
+    raw_args: &[Value],
+    req: &Request,
+) -> Value {
+    let res = if matches!(
+        method,
+        "system.set_screen_on" | "device.set_screen_on" | "set_screen_on" | "display.set_screen_on"
+    ) {
+        let on = raw_args
+            .first()
+            .and_then(|v| v.as_bool().or_else(|| v.as_i64().map(|n| n != 0)))
+            .or_else(|| {
+                req.args
+                    .get("kwargs")
+                    .and_then(|m| {
+                        m.get("on")
+                            .or_else(|| m.get("OnOff"))
+                            .or_else(|| m.get("screen_on"))
+                    })
+                    .and_then(|v| v.as_bool().or_else(|| v.as_i64().map(|n| n != 0)))
+            })
+            .unwrap_or(true);
+        lan_dev
+            .post(
+                "Channel/OnOffScreen",
+                Some(serde_json::json!({ "OnOff": i32::from(on) })),
+            )
+            .await
+    } else if matches!(
+        method,
+        "system.set_brightness"
+            | "device.set_brightness"
+            | "set_brightness"
+            | "display.set_brightness"
+    ) {
+        let val = args
+            .first()
+            .copied()
+            .or_else(|| {
+                req.args
+                    .get("kwargs")
+                    .and_then(|m| m.get("brightness").or_else(|| m.get("Brightness")))
+                    .and_then(serde_json::Value::as_i64)
+            })
+            .unwrap_or(100);
+        lan_dev
+            .post(
+                "Channel/SetBrightness",
+                Some(serde_json::json!({ "Brightness": val })),
+            )
+            .await
+    } else {
+        return crate::protocol::err_reply("method only supported on a BLE/SPP device");
+    };
+    match res {
+        Ok(val) => serde_json::json!({ "success": true, "result": val }),
+        Err(e) => crate::protocol::err_reply(&e.to_string()),
+    }
+}
+
 pub async fn handle_device_call(
     daemon: &Daemon,
     dev: &DeviceTransport,
@@ -45,17 +153,6 @@ pub async fn handle_device_call(
         return crate::protocol::err_reply("device_call requires 'method'");
     };
 
-    // Numeric positional args (for brightness, clock, etc.).
-    //
-    // WARNING (R67/C7): this list is COMPACTED — `filter_map` drops every
-    // non-numeric entry, so `args[i]` is the i-th NUMBER, not the i-th
-    // ARGUMENT. For a call like show_light("#00FFCC", 80, true, 2) it is
-    // [80, 2], and `args.get(1)` yields the mode, not the brightness. That
-    // silently swapped ambient brightness for the mode number on real hardware
-    // until a wire trace caught it.
-    //
-    // Use `pos_i64()` for anything positional. `args` is retained only for
-    // handlers whose arguments are all numeric, where the two agree.
     let args: Vec<i64> = req
         .args
         .get("args")
@@ -63,7 +160,6 @@ pub async fn handle_device_call(
         .map(|a| a.iter().filter_map(serde_json::Value::as_i64).collect())
         .unwrap_or_default();
 
-    // Raw positional args as Values (for string paths in display.show_image)
     let raw_args: Vec<Value> = req
         .args
         .get("args")
@@ -71,32 +167,10 @@ pub async fn handle_device_call(
         .cloned()
         .unwrap_or_default();
 
-    // Blob map: base64-encoded binary data keyed by positional arg index.
-    let mut blob_map_raw: std::collections::HashMap<usize, Vec<u8>> =
-        std::collections::HashMap::new();
-    if let Some(blobs) = req.args.get("blobs").and_then(|v| v.as_object()) {
-        for (idx_str, b64val) in blobs {
-            let idx: usize = match idx_str.parse() {
-                Ok(i) => i,
-                Err(_) => {
-                    return crate::protocol::err_reply(&format!("blobs: bad index key '{idx_str}'"))
-                }
-            };
-            let Some(b64) = b64val.as_str() else {
-                return crate::protocol::err_reply(&format!("blobs[{idx_str}]: not a string"));
-            };
-            match B64.decode(b64) {
-                Ok(data) => {
-                    blob_map_raw.insert(idx, data);
-                }
-                Err(e) => {
-                    return crate::protocol::err_reply(&format!(
-                        "blobs[{idx_str}]: base64 error: {e}"
-                    ))
-                }
-            }
-        }
-    }
+    let blob_map_raw = match decode_blob_map(req) {
+        Ok(m) => m,
+        Err(e) => return crate::protocol::err_reply(&e),
+    };
     let blob_map = std::sync::Mutex::new(blob_map_raw);
 
     if method.starts_with("lan.") {
@@ -104,56 +178,23 @@ pub async fn handle_device_call(
             let kwargs = req.args.get("kwargs").and_then(|v| v.as_object());
             return lan::handle_lan_call(lan_dev, method, &args, kwargs).await;
         }
-        {
-            // R71 P3.1: say WHY, with a machine-readable cause.
-            //
-            // "device is not connected via LAN" was accurate and useless: the
-            // GUI collapsed it to a bare false and the user saw "Failed to send
-            // overlay", which reads as a broken feature rather than "this model
-            // has no LAN". Same defect R70 fixed for cloud browse, unfixed on
-            // this side. `cause` is a flag, never parsed text, so the wording
-            // can change without moving the UI.
-            let (cause, why) = match dev {
-                DeviceTransport::Spp(_) => (
-                    "no_lan_capability",
-                    "this device is connected over Bluetooth, which has no LAN API",
-                ),
-                #[cfg(feature = "ble")]
-                DeviceTransport::Ble(_) => (
-                    "no_lan_capability",
-                    "this device is connected over Bluetooth, which has no LAN API",
-                ),
-                _ => (
-                    "not_configured",
-                    "no LAN address is configured for this device",
-                ),
-            };
-            let mut reply = crate::protocol::err_reply(why);
-            if let Value::Object(ref mut m) = reply {
-                m.insert("cause".into(), Value::String(cause.into()));
-            }
-            return reply;
-        }
+        return report_no_lan(dev);
     }
 
-    // LAN devices are handled above; everything else (BLE / SPP / Mock) routes
-    // through the build-agnostic DeviceTransport method layer.
-    {
-        if matches!(dev, DeviceTransport::Lan(_)) {
-            crate::protocol::err_reply("method only supported on a BLE/SPP device")
-        } else {
-            let kwargs = req.args.get("kwargs").and_then(|v| v.as_object());
-            let ctx = CallCtx {
-                daemon,
-                dev,
-                args: &args,
-                raw_args: &raw_args,
-                kwargs,
-                blob_map: &blob_map,
-                timeout,
-            };
-
-            routing::route(method, ctx).await
-        }
+    if let Some(lan_dev) = dev.lan() {
+        return handle_lan_fallback(lan_dev, method, &args, &raw_args, req).await;
     }
+
+    let kwargs = req.args.get("kwargs").and_then(|v| v.as_object());
+    let ctx = CallCtx {
+        daemon,
+        dev,
+        args: &args,
+        raw_args: &raw_args,
+        kwargs,
+        blob_map: &blob_map,
+        timeout,
+    };
+
+    routing::route(method, ctx).await
 }

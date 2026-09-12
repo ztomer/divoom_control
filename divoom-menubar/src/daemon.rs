@@ -236,11 +236,7 @@ pub fn update_snapshot_from_event(ev: &Value) {
             }
             "activity" => {
                 if let Some(mac) = ev.get("mac").and_then(Value::as_str) {
-                    let name = ev
-                        .get("name")
-                        .and_then(Value::as_str)
-                        .unwrap_or("Divoom")
-                        .to_string();
+                    let name_opt = ev.get("name").and_then(Value::as_str);
                     let kind = ev
                         .get("kind")
                         .and_then(Value::as_str)
@@ -251,7 +247,11 @@ pub fn update_snapshot_from_event(ev: &Value) {
                         .and_then(Value::as_str)
                         .map(str::to_string);
                     if let Some(existing) = snap.devices.iter_mut().find(|d| d.mac == mac) {
-                        existing.name = name;
+                        if let Some(n) = name_opt {
+                            if !n.is_empty() {
+                                existing.name = n.to_string();
+                            }
+                        }
                         existing.kind = kind;
                         if preview.is_some() {
                             existing.preview = preview;
@@ -259,7 +259,7 @@ pub fn update_snapshot_from_event(ev: &Value) {
                     } else {
                         snap.devices.push(DeviceActivityItem {
                             mac: mac.to_string(),
-                            name,
+                            name: name_opt.unwrap_or("Divoom").to_string(),
                             kind,
                             preview,
                         });

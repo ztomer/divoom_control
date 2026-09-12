@@ -21,6 +21,25 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-12 — Multi-Surface State Coordination Fix: `system.set_screen_on` Implementation, Standby Job Preemption & Menubar Activity Event Streaming.**
+  - **Defect Class Solved**: Uncoordinated Background Streamers & Split-Brain State Mutations across Multi-Surface Clients (Daemon, Menubar, GUI).
+  - **Unified Screen Power RPC (`divoomd/src/device_call`)**:
+    - Implemented `system.set_screen_on` and its aliases (`device.set_screen_on`, `set_screen_on`, `display.set_screen_on`) in `basic.rs` and `routing.rs`. Fixes broken `divoom-menubar` power toggles ("Turn Off Screen" / "Turn On Screen") that previously failed with unported method error.
+    - Added direct support for LAN devices in `device_call/mod.rs` (`Channel/OnOffScreen` and `Channel/SetBrightness`), allowing both Bluetooth and Wi-Fi displays to be controlled identically from all surfaces.
+    - Factored `decode_blob_map`, `report_no_lan`, and `handle_lan_fallback` to ensure all dispatch functions strictly honor Clippy's 100-line cap.
+  - **Standby & Zero-Brightness Preemption (`divoomd/src/daemon.rs`)**:
+    - In `preempt_conflicting_live_jobs`, added preemption on `set_screen_on` with `on: false` and `set_brightness` with `0`. Stops all active background live streaming jobs immediately so sleeping devices are not woken up 5s later.
+  - **Broadcast Stream Event Ingestion (`divoomd/src/daemon/dispatch.rs`, `divoom-menubar/src/daemon.rs`)**:
+    - In `dispatch.rs:set_device_activity`: broadcasts `{"type": "activity", "mac": mac, "kind": kind, "name": name, "preview": preview}` over `daemon.tx` to all subscribers.
+    - In `daemon.rs:cmd_device_call`: broadcasts `"activity"` event when `switch_channel` completes.
+    - In `divoom-menubar/src/daemon.rs`: updated `update_snapshot_from_event` so existing device names are never clobbered by empty/default names upon receiving activity events.
+  - **Automated Verification**:
+    - Integration tests in `divoomd/tests/multi_device_routing.rs`: `test_device_call_set_screen_on_and_standby_preemption` and `test_set_device_activity_broadcasts_event` (5/5 passed in 1.51s).
+    - Menubar tests in `divoom-menubar/src/daemon/tests.rs`: `snapshot_updates_from_stream_events` (19/19 passed in 0.41s).
+    - Local CI (`./scripts/ci_local.sh --fast`): all 25 steps passed.
+    - House gates clean: 389/389 files <= 500 LOC, 744 files clean in emoji gate.
+    - Development BLE-free binary restored (`cargo build -p divoomd --no-default-features`).
+
 - **2026-09-12 — State Management Fix: Background Live Job Preemption on Channel Switch, Image Push & Gallery Art Selection.**
   - **Problem Solved**: When a user selected System Monitor (stats) and subsequently pushed a gallery artwork or changed channels, the device briefly switched and then reverted back to stats after 5 seconds due to competing background live streaming tasks (`run_sysmon`) continuing to push frames indefinitely.
   - **Rust Daemon Preemption (`divoomd/src/daemon.rs`, `divoomd/src/art.rs`)**:

@@ -150,4 +150,19 @@ fn snapshot_updates_from_stream_events() {
     assert_eq!(snap2.devices.len(), 1);
     assert_eq!(snap2.devices[0].name, "Ditoo Pro");
     assert_eq!(snap2.devices[0].mac, "11:22:33:44:55:66");
+
+    let ev_act = json!({
+        "type": "activity",
+        "mac": "11:22:33:44:55:66",
+        "kind": "clock",
+        "preview": "data:image/png;base64,yyy"
+    });
+    update_snapshot_from_event(&ev_act);
+    let snap3 = get_cached_snapshot().expect("snapshot should exist");
+    assert_eq!(snap3.devices[0].kind, "clock");
+    assert_eq!(snap3.devices[0].name, "Ditoo Pro");
+    assert_eq!(
+        snap3.devices[0].preview.as_deref(),
+        Some("data:image/png;base64,yyy")
+    );
 }

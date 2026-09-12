@@ -384,17 +384,15 @@ _Shipped in v0.35.0: Full-width top Spatial Preview Bench, physical millimeter p
 
 ### OPEN — Native Menubar Architecture Upgrades (`divoom-menubar`)
 
-#### 1. Event-Driven State Ingestion via `subscribe` (Eliminate Connection Churn)
-- **Finding**: `divoom-menubar` opens and tears down 4 separate throwaway Unix socket connections every 2 seconds (`daemon::status`, `daemon::notifications_running`, `daemon::connection_state`, `daemon::device_activity`), even though a persistent `subscribe` socket is already running on a background thread.
-- **Plan**: Transition the menubar to pure event-driven state ingestion over the persistent `subscribe` stream. The background thread updates a shared state snapshot without churning 4 one-shot connections per tick.
+#### 1. Event-Driven State Ingestion via `subscribe` (SHIPPED & WIRED)
+- **Completed**: `divoom-menubar` consumes event-driven state over persistent `subscribe` stream with zero socket churn in steady state. `divoomd` now broadcasts `"activity"` events on `set_device_activity` and channel switches, updating menubar device labels and channels in real time.
 
 #### 2. Visual Device Tiles with Graphical Previews
 - **Finding**: The GUI goes out of its way to render 36×36 PNG thumbnails via `_rasterizeToPng` and pushes them to `divoomd` (`set_device_activity`), but `divoom-menubar`'s `device_activity()` parser completely discards the `preview` field, rendering only inert text strings.
 - **Plan**: Parse the PNG preview data in `divoom-menubar` and pass native image icons to `tray-icon` / `NSMenuItem`, restoring the visual tile experience intended by R46/R50.
 
-#### 3. Actionable Per-Device Controls
-- **Finding**: Device rows in the tray menu are created with `enabled = false`, serving only as static read-only labels.
-- **Plan**: Transform device rows into interactive items or submenus with quick actions: toggle standby power, adjust brightness, or quick-switch to Clock/Sysmon.
+#### 3. Actionable Per-Device Controls (SHIPPED & WIRED)
+- **Completed**: Device rows in the tray menu feature interactive submenus with quick channel switcher (Clock, Visualizer, Ambient) and screen power standby toggle ("Turn Off Screen" / "Turn On Screen"). Wired to `system.set_screen_on` in `divoomd` with automatic streamer job preemption on standby.
 
 #### 4. Fleet Connection State Aggregation
 - **Finding**: `resolve_icon_state` models connection health as a single device boolean (`Option<&str>`). When multiple devices are configured, it reflects only whichever device is held by `divoomd`'s single `self.device`.

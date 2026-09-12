@@ -8,6 +8,13 @@ shipped milestone (per the project planning docs).
 
 ### Architecture & Fixed
 
+- **Multi-Surface State Coordination Fix across Daemon & Menubar (`routing.rs`, `basic.rs`, `mod.rs`, `daemon.rs`, `dispatch.rs`, `divoom-menubar/src/daemon.rs`)**:
+  - Implemented `system.set_screen_on` and its aliases (`device.set_screen_on`, `set_screen_on`, `display.set_screen_on`) in `basic.rs` and `routing.rs`. Fixes broken `divoom-menubar` power toggles ("Turn Off Screen" / "Turn On Screen") that previously failed with unported method error.
+  - Added direct LAN device support in `device_call/mod.rs` for `system.set_screen_on` (`Channel/OnOffScreen`) and `system.set_brightness` (`Channel/SetBrightness`).
+  - Added preemption in `preempt_conflicting_live_jobs` on `set_screen_on` with `on: false` and `set_brightness` with `0`. Stops all active background live streaming jobs immediately so sleeping devices are not woken up 5s later.
+  - Dispatched `"activity"` events (`type: "activity", mac, kind, name, preview`) over `daemon.tx` in `set_device_activity` and `cmd_device_call` (on channel switch), enabling real-time event-driven updates for menubar and other subscribers without polling.
+  - Updated `divoom-menubar`'s `update_snapshot_from_event` to preserve existing device names when an activity event omits the name.
+  - Added integration tests in `divoomd/tests/multi_device_routing.rs` (`test_device_call_set_screen_on_and_standby_preemption`, `test_set_device_activity_broadcasts_event`) and unit tests in `divoom-menubar/src/daemon/tests.rs`.
 - **Live Job Preemption & State Management Stabilization (`daemon.rs`, `art.rs`, `lighting.py`, `gallery_sync.py`, `preview_controller.js`, `app_globals.js`, `gallery.js`, `widgets.js`, `custom_art.js`)**:
   - Solved issue where selecting System Monitor (stats) and subsequently pushing an image or gallery artwork caused the device and preview to revert back to stats after 5 seconds due to persistent background streaming loops.
   - Rust Daemon: added `preempt_conflicting_live_jobs` in `Daemon::cmd_device_call` and `art.rs:cmd_custom_art_push` to halt any running live streaming jobs (`sysmon`, `music`, `stocks`, `weather`) on the target device when an image, channel, clock, or custom art is pushed.

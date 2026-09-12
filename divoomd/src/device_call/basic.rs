@@ -148,6 +148,36 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 Err(e) => err_reply(&format!("set_brightness failed: {e}")),
             }
         }
+        "system.set_screen_on"
+        | "device.set_screen_on"
+        | "set_screen_on"
+        | "display.set_screen_on" => {
+            let on = raw_args
+                .first()
+                .and_then(|v| v.as_bool().or_else(|| v.as_i64().map(|n| n != 0)))
+                .or_else(|| {
+                    kw.and_then(|m| {
+                        m.get("on")
+                            .or_else(|| m.get("OnOff"))
+                            .or_else(|| m.get("screen_on"))
+                    })
+                    .and_then(|v| v.as_bool().or_else(|| v.as_i64().map(|n| n != 0)))
+                })
+                .unwrap_or(true);
+            let val = if on {
+                kw.and_then(|m| m.get("brightness").or_else(|| m.get("Brightness")))
+                    .and_then(serde_json::Value::as_i64)
+                    .unwrap_or(85)
+                    .clamp(1, 100)
+                    .byte()
+            } else {
+                0
+            };
+            match dev.send_command(0x74, &[val], true).await {
+                Ok(()) => json!({"success": true, "result": true}),
+                Err(e) => err_reply(&format!("set_screen_on failed: {e}")),
+            }
+        }
         // Switch to the cloud/hot channel (Python HotUpdate.show_hot_channel):
         // 0x45 [0x02], then optionally 0x85 [1, page] to select a page.
         "hot_update.show_hot_channel" | "show_hot_channel" => {

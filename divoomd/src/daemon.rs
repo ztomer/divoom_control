@@ -161,10 +161,6 @@ impl Daemon {
     /// `device_call` routes a method string to a protocol op. A small set is ported
     /// first to prove op-level parity (the read-back + a write); unported methods
     /// return an honest error. The device mutex serializes device access.
-    #[expect(
-        clippy::significant_drop_tightening,
-        reason = "the guarded value is read by everything after this line; the explicit drops that could be added were placed where they helped and the borrow checker refused the rest"
-    )]
     pub(crate) async fn cmd_device_call(&self, req: &Request) -> Value {
         // The per-op token gates exclusive mode: if another session holds exclusive,
         // device_call is rejected immediately (Python parity: _cmd_queue.run(token)).
@@ -204,28 +200,9 @@ impl Daemon {
             return self.wall_device_call(req).await;
         }
 
-        let dev = if let Some(mac) = target_mac {
-            let devices_guard = self.devices.lock().await;
-            if let Some(d) = devices_guard.get(mac) {
-                d.clone()
-            } else {
-                let guard = self.device.lock().await;
-                let cur_id = self.device_id.lock().await.clone().unwrap_or_default();
-                if cur_id == mac {
-                    let Some(d) = guard.as_ref() else {
-                        return err_reply("no device connected");
-                    };
-                    d.clone()
-                } else {
-                    return err_reply(&format!("device '{mac}' not connected"));
-                }
-            }
-        } else {
-            let guard = self.device.lock().await;
-            let Some(d) = guard.as_ref() else {
-                return err_reply("no device connected");
-            };
-            d.clone()
+        let dev = match self.resolve_target_device(target_mac).await {
+            Ok(d) => d,
+            Err(e) => return e,
         };
 
         // Honor a caller-requested timeout (clamped so a huge value can't wedge the
@@ -264,6 +241,11 @@ impl Daemon {
                 id.as_deref(),
                 Some(st),
             ));
+            if !degraded {
+                if let Some(target) = id.as_deref() {
+                    self.record_successful_call_activity(req, target).await;
+                }
+            }
             reply
         } else {
             let msg = format!("device op timed out after {req_timeout:.0}s");
@@ -275,6 +257,67 @@ impl Daemon {
                 Some("degraded"),
             ));
             err_reply(&msg)
+        }
+    }
+
+    async fn resolve_target_device(
+        &self,
+        target_mac: Option<&str>,
+    ) -> Result<Arc<DeviceTransport>, Value> {
+        if let Some(mac) = target_mac {
+            let devices_guard = self.devices.lock().await;
+            if let Some(d) = devices_guard.get(mac) {
+                return Ok(d.clone());
+            }
+            drop(devices_guard);
+            let cur_id = self.device_id.lock().await.clone().unwrap_or_default();
+            if cur_id == mac {
+                let guard = self.device.lock().await;
+                guard
+                    .as_ref()
+                    .cloned()
+                    .ok_or_else(|| err_reply("no device connected"))
+            } else {
+                Err(err_reply(&format!("device '{mac}' not connected")))
+            }
+        } else {
+            let guard = self.device.lock().await;
+            guard
+                .as_ref()
+                .cloned()
+                .ok_or_else(|| err_reply("no device connected"))
+        }
+    }
+
+    async fn record_successful_call_activity(&self, req: &Request, target: &str) {
+        let method = req
+            .args
+            .get("method")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let bare = method.split('.').next_back().unwrap_or(method);
+        if bare == "switch_channel" {
+            let ch = req
+                .args
+                .get("args")
+                .and_then(|a| a.as_array())
+                .and_then(|a| a.first())
+                .and_then(|v| v.as_str())
+                .or_else(|| {
+                    req.args
+                        .get("kwargs")
+                        .and_then(|m| m.get("channel"))
+                        .and_then(|v| v.as_str())
+                })
+                .unwrap_or("clock");
+            self.live_jobs
+                .set_device_activity(target.to_string(), ch.to_string(), None, None)
+                .await;
+            let _ = self.tx.send(json!({
+                "type": "activity",
+                "mac": target,
+                "kind": ch,
+            }));
         }
     }
 
@@ -323,7 +366,45 @@ impl Daemon {
                 | "show_scoreboard"
                 | "show_hot_channel"
         );
-        if is_display_disruptive {
+        let is_screen_off = match bare_method {
+            "set_screen_on" | "on_off_screen" => {
+                let on = req
+                    .args
+                    .get("args")
+                    .and_then(|v| v.as_array())
+                    .and_then(|a| a.first())
+                    .and_then(|v| v.as_bool().or_else(|| v.as_i64().map(|n| n != 0)))
+                    .or_else(|| {
+                        req.args
+                            .get("kwargs")
+                            .and_then(|m| {
+                                m.get("on")
+                                    .or_else(|| m.get("OnOff"))
+                                    .or_else(|| m.get("screen_on"))
+                            })
+                            .and_then(|v| v.as_bool().or_else(|| v.as_i64().map(|n| n != 0)))
+                    })
+                    .unwrap_or(true);
+                !on
+            }
+            "set_brightness" => {
+                let val = req
+                    .args
+                    .get("args")
+                    .and_then(|v| v.as_array())
+                    .and_then(|a| a.first())
+                    .and_then(serde_json::Value::as_i64)
+                    .or_else(|| {
+                        req.args
+                            .get("kwargs")
+                            .and_then(|m| m.get("brightness").or_else(|| m.get("Brightness")))
+                            .and_then(serde_json::Value::as_i64)
+                    });
+                val == Some(0)
+            }
+            _ => false,
+        };
+        if is_display_disruptive || is_screen_off {
             if req.args.get("target").and_then(|v| v.as_str()) == Some("wall") {
                 self.live_jobs.stop_all(self).await;
             } else {
