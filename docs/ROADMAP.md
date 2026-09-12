@@ -197,6 +197,25 @@ are not restated.
 
 ## Open workstreams
 
+### SHIPPED — per-device aggregate: the live-widget "repeating" class (2026-09-12)
+
+`ea60483` + `355b0a6`. See the CHANGELOG stanza "one `Device` struct per
+panel". The stress suite `divoomd/tests/live_jobs_stress.rs` is the
+class-level gate: stop-is-a-fence, one queue per panel, one widget per
+screen, churn, disconnect/reconnect, link-drop persistence, fleet-wide
+`owned_devices`. **Rule for new code:** anything that sends to a panel
+goes through `Device::link()` -> `Link::run` / `Link::queue.acquire`;
+never hold a transport `Arc` across an await without the link's permit,
+and never key new per-device state by mac string -- put it on `Device`.
+
+Open follow-ups from the same audit (not defects, design):
+- The GUI still sends mac-less `device_call`s and relies on the daemon's
+  "current" device tracking its bench selection via re-`connect`. With the
+  fleet in place the GUI should pass `mac` on every device call
+  (`divoom_client/daemon_protocol.py::device_call`), retiring "current".
+- `disconnect` is fleet-wide. A per-device `disconnect {mac}` is now a
+  one-liner on the fleet (`detach`/`remove`) once the GUI wants it.
+
 ### OPEN — user-reported defects, filed 2026-09-12
 
 Filed verbatim from a live session against v0.35.4. Triaged 2026-09-12

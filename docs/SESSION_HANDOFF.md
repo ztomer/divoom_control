@@ -21,6 +21,10 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-12 — live-widget "repeating" class ROOT-CAUSED and FIXED: per-device aggregate (`ea60483`, `355b0a6`).**
+  - Stress suite first (`divoomd/tests/live_jobs_stress.rs`): 4/5 red on the old tree -- ghost frame after stop, GUI device_call on a different queue from the live job, two kinds per screen, ghost frame on the reconnected panel. Root: five mac-keyed maps disagreeing. Now `Device` (identity: live job + activity) holds an `Option<Link>` (connection: transport + the one queue); queued work is bound to its link and drops itself if the link is retired; `Fleet` is the single owner. hot_update / custom_art_push hold the panel's permit. `owned_devices` is fleet-wide (the GUI un-owned the other panels on each connect). Menubar `DeviceView` keeps link state per panel; tray word derived.
+  - 7/7 stress, whole crate green both matrices, clippy pedantic both, menubar 20/20. Live stress on the 4-panel fleet: see below / next entry.
+  - Follow-ups filed in the roadmap: GUI should send `mac` on every device_call; per-device disconnect.
 - **2026-09-12 — defect #5 FIXED as `1260582` and LIVE-VERIFIED on the installed build; fleet of 4 connected.**
   - Root cause was neither triage reading: a HIDDEN panel, not an empty one. `showChannelPanel` toggled every `.channel-panel` in the document by `panel-<kind>` and is fed the activity bus (21 kinds, 7 panels) — an unmatched kind hid all panels under a still-lit Clock tab; `#panel-design` (Custom Art) still carried `channel-panel` from before R42 and was hidden by every other kind. Fix: toggle scoped to `#control-panel .channel-panels`, unknown kind is a no-op, Custom Art always laid out.
   - Class test `tests/test_channel_panel_visibility.py` (all 21 kinds, saved-`image` rehydrate, tab click) proven red on the pre-fix tree, 6/6 green with the persistence suite after. Sibling sweep clean (selector cells only clear a highlight; other switchers read a closed vocabulary).

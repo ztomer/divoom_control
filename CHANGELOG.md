@@ -6,6 +6,44 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased — user-defect fixes (2026-09-12, from triage `ba62ba2`)
 
+### Changed — one `Device` struct per panel (daemon), one `DeviceView` per panel (menubar)
+
+The live-widget "keeps coming back" class, root-caused by a stress suite
+(`divoomd/tests/live_jobs_stress.rs`, 7 scenarios, 4 red before the fix):
+
+- **Stop was not a fence.** Aborting a live job cancelled its await of the
+  frame push, not the push already handed to the queue worker, so one more
+  widget frame landed after the user asked for a clock.
+- **Two serialization regimes.** The GUI's `device_call` carries no mac
+  and rode the daemon-global queue; the live job for the same panel rode
+  the per-mac queue. Their packets interleaved on one BLE link.
+- **Two kinds could run on one screen**, alternating frames.
+- **Ghost frame on reconnect.** A frame queued by a job that `disconnect`
+  stopped landed on the reconnected panel: the queued closure re-resolved
+  the transport by mac and found the new one.
+- **`hot_update` / `custom_art_push`** streamed multi-packet transfers
+  under a mutex that serialized against nothing that mattered.
+- **`owned_devices`** named only the device that had just connected, so
+  the GUI un-owned every other panel on each connect.
+
+Root cause: a device was five maps sharing a key (`devices`, `queues`,
+the legacy `device`/`device_id` pair, the coordinator's task/params/
+health/activity tables). New `divoomd/src/device.rs`: `Device` = the
+panel's identity, owning its one `LiveJob` and its `Activity`; `Link` =
+one connection = transport + the one `CommandQueue`, with queued work
+bound to the link it was queued on and dropped if that link is retired;
+`Fleet` = the single owner of which devices exist and which is current.
+Everything that touches a panel (device_call, live frames, hot update,
+custom art, exclusive mode) rides the panel's one queue. A link drop
+keeps the identity, so a widget survives a BLE blip and resumes on
+reconnect; an explicit disconnect drains the fleet.
+
+Menubar: `DeviceView` carries per-device `link` state; the tray's single
+word is derived (worst link wins) instead of being one shared field that
+any panel's status event overwrote.
+
+Also: `DivoomWall::connect` creates the CoreBluetooth central lazily.
+
 ### Fixed — wall spun up CoreBluetooth even when no slot needed the radio
 
 - `DivoomWall::connect` created the central before checking whether any
