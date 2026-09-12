@@ -34,7 +34,6 @@ import sys
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
-from divoom_lib import Divoom
 from divoom_lib.models.capabilities import (
     DEVICE_CAPABILITIES,
     DeviceRegistry,

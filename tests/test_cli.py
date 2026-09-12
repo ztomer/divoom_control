@@ -179,6 +179,7 @@ async def test_cmd_capabilities_uses_fake_divoom(monkeypatch) -> None:
         return _FakeDivoom(), "AA:BB:CC:DD:EE:FF"
 
     monkeypatch.setattr(cli_commands, "_resolve_device",fake_resolve)
+    monkeypatch.setattr(cli_commands, "_capabilities", lambda args, mac: _FakeCapabilities())
     ns = cli_module.build_parser().parse_args(["capabilities", "--mac", "AA:BB:CC:DD:EE:FF"])
     rc = await cli_module.cmd_capabilities(ns)
     assert rc == 0
@@ -190,6 +191,7 @@ async def test_cmd_capabilities_json_output(monkeypatch, capsys) -> None:
         return _FakeDivoom(), "AA:BB:CC:DD:EE:FF"
 
     monkeypatch.setattr(cli_commands, "_resolve_device",fake_resolve)
+    monkeypatch.setattr(cli_commands, "_capabilities", lambda args, mac: _FakeCapabilities())
     ns = cli_module.build_parser().parse_args(["capabilities", "--mac", "AA:BB:CC:DD:EE:FF", "--json"])
     rc = await cli_module.cmd_capabilities(ns)
     assert rc == 0
@@ -260,6 +262,7 @@ async def test_cmd_set_temperature_calls_weather_set(monkeypatch) -> None:
 async def test_cmd_set_temperature_rejects_when_no_capability(monkeypatch) -> None:
     fake = _FakeDivoomForWeather(has_weather=False)
     monkeypatch.setattr(cli_commands, "_resolve_device",AsyncMock(return_value=(fake, "AA:BB:CC:DD:EE:FF")))
+    monkeypatch.setattr(cli_commands, "_capabilities", lambda args, mac: fake.capabilities)
 
     p = cli_module.build_parser()
     ns = p.parse_args(["set-temperature", "18", "--mac", "AA:BB:CC:DD:EE:FF"])

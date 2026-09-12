@@ -60,6 +60,11 @@ pub use crate::transport::BleResult;
 pub struct Discovered {
     pub name: String,
     pub id: String,
+    /// Raw advertisement manufacturer data, company id -> bytes (hex). The
+    /// CLI's `identify` reads it to grow the fingerprint table; it used to
+    /// scan through bleak for this, a second radio owner.
+    pub manufacturer_data: std::collections::BTreeMap<u16, String>,
+    pub service_uuids: Vec<String>,
 }
 
 /// Create the platform adapter. The caller must keep it alive (see [`Adapter`]).
@@ -110,15 +115,30 @@ pub async fn scan(central: &BleCentral, timeout: Duration) -> BleResult<Vec<Disc
         central.stop_scan().await?;
         let mut out = Vec::new();
         for p in central.peripherals().await? {
-            let name = p
-                .properties()
-                .await?
-                .and_then(|pr| pr.local_name)
+            let props = p.properties().await?;
+            let name = props
+                .as_ref()
+                .and_then(|pr| pr.local_name.clone())
                 .unwrap_or_default();
             if DEVICE_NAME_HINTS.iter().any(|h| name.contains(h)) {
+                let manufacturer_data = props
+                    .as_ref()
+                    .map(|pr| {
+                        pr.manufacturer_data
+                            .iter()
+                            .map(|(k, v)| (*k, crate::wire::hex(v)))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let service_uuids = props
+                    .as_ref()
+                    .map(|pr| pr.services.iter().map(ToString::to_string).collect())
+                    .unwrap_or_default();
                 out.push(Discovered {
                     name,
                     id: p.id().to_string(),
+                    manufacturer_data,
+                    service_uuids,
                 });
             }
         }

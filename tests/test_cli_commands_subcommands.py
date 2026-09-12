@@ -33,19 +33,24 @@ class _FakeIdentifyScanner:
         pass
 
 
+def _identify_client(monkeypatch, devices):
+    class _C:
+        def scan(self, timeout=None, limit=None):
+            return {"success": True, "devices": devices}
+    monkeypatch.setattr(cli_commands, "_daemon_client", lambda: _C())
+
+
 async def test_cmd_identify_errors_when_nothing_found(monkeypatch) -> None:
-    _FakeIdentifyScanner.devices = []
-    monkeypatch.setattr("bleak.BleakScanner", _FakeIdentifyScanner)
+    _identify_client(monkeypatch, [])
     with pytest.raises(SystemExit) as exc:
         await cli_commands.cmd_identify(_parse("identify", "--timeout", "0.01"))
     assert exc.value.code == 1
 
 
 async def test_cmd_identify_json(monkeypatch, capsys) -> None:
-    device = SimpleNamespace(address="AA:BB:CC:DD:EE:FF", name="Pixoo")
-    adv = SimpleNamespace(manufacturer_data={0x0001: b"\x01\x02"}, service_uuids=["1234"])
-    _FakeIdentifyScanner.devices = [(device, adv)]
-    monkeypatch.setattr("bleak.BleakScanner", _FakeIdentifyScanner)
+    # The daemon's scan carries the advertisement (company id -> hex bytes).
+    _identify_client(monkeypatch, [{"address": "AA:BB:CC:DD:EE:FF", "name": "Pixoo",
+                                    "manufacturer_data": {"1": "0102"}, "service_uuids": ["1234"]}])
     rc = await cli_commands.cmd_identify(
         _parse("identify", "--timeout", "0.01", "--json")
     )
@@ -58,16 +63,14 @@ async def test_cmd_identify_json(monkeypatch, capsys) -> None:
 
 
 async def test_cmd_identify_text(monkeypatch, capsys) -> None:
-    device = SimpleNamespace(address="AA:BB:CC:DD:EE:FF", name="Pixoo")
-    adv = SimpleNamespace(manufacturer_data={0x0001: b"\x01\x02"}, service_uuids=["1234"])
-    _FakeIdentifyScanner.devices = [(device, adv)]
-    monkeypatch.setattr("bleak.BleakScanner", _FakeIdentifyScanner)
+    _identify_client(monkeypatch, [{"address": "AA:BB:CC:DD:EE:FF", "name": "Pixoo",
+                                    "manufacturer_data": {"1": "0102"}, "service_uuids": ["1234"]}])
     rc = await cli_commands.cmd_identify(_parse("identify", "--timeout", "0.01"))
     assert rc == 0
     out = capsys.readouterr().out
     assert "AA:BB:CC:DD:EE:FF" in out
     assert "company_id=0x0001" in out
-    assert "service_uuids:" in out
+    assert "service_uuid: 1234" in out
 
 
 # ── cmd_mcp_server ───────────────────────────────────────────────────────

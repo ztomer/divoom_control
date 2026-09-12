@@ -72,109 +72,136 @@ def test_print_dict_non_json(capsys) -> None:
 
 
 async def test_resolve_device_bypasses_connect_for_pair_and_identify() -> None:
-    ns_pair = SimpleNamespace(command="pair", mac=None)
-    d, mac = await cli_commands._resolve_device(ns_pair)
-    assert d is None
-    assert mac == ""
-
-    ns_identify = SimpleNamespace(command="identify", mac="AA:BB:CC:DD:EE:FF")
-    d2, mac2 = await cli_commands._resolve_device(ns_identify)
-    assert d2 is None
-    assert mac2 == "AA:BB:CC:DD:EE:FF"
+    d, mac = await cli_commands._resolve_device(SimpleNamespace(command="pair", mac="AA:BB"))
+    assert d is None and mac == "AA:BB"
+    d, mac = await cli_commands._resolve_device(SimpleNamespace(command="identify", mac=None))
+    assert d is None and mac == ""
 
 
-class _CapturingDivoom:
-    instances: list = []
+class _FakeClient:
+    """The daemon as the CLI sees it (2026-09-12: the CLI is a daemon client;
+    it used to open BLE itself through the bleak facade)."""
 
-    def __init__(self, **kwargs) -> None:
-        self.kwargs = kwargs
-        _CapturingDivoom.instances.append(self)
+    def __init__(self, *, status=None, per_mac=None, scan=None, connect=None):
+        self.status = status or {"success": True, "connected": False, "mac": None, "devices": []}
+        self.per_mac = per_mac or {}
+        self.scan_reply = scan or {"success": True, "devices": []}
+        self.connect_reply = connect or {"success": True, "connected": True}
+        self.calls = []
 
-    async def connect(self) -> None:
-        self.connected = True
+    def device_status(self, mac=None):
+        self.calls.append(("device_status", mac))
+        if mac is not None:
+            return self.per_mac.get(mac, {"success": True, "connected": False, "mac": mac})
+        return self.status
+
+    def scan(self, timeout=None, limit=None):
+        self.calls.append(("scan", timeout))
+        return self.scan_reply
+
+    def connect_device(self, **kw):
+        self.calls.append(("connect", kw.get("mac")))
+        return self.connect_reply
+
+    def device_call(self, method, args=None, kwargs=None, **kw):
+        self.calls.append(("device_call", method, kw.get("mac")))
+        return {"success": True, "result": True}
 
 
-async def test_resolve_device_autodiscovers_when_no_mac(monkeypatch) -> None:
-    async def fake_discover(timeout):
-        return [{"address": "AA:BB:CC:DD:EE:FF", "name": "Pixoo"}]
+def _use_client(monkeypatch, client):
+    monkeypatch.setattr(cli_commands, "_daemon_client", lambda: client)
+    return client
 
-    monkeypatch.setattr(
-        "divoom_lib.utils.discovery.discover_all_divoom_devices", fake_discover
-    )
-    _CapturingDivoom.instances = []
-    monkeypatch.setattr(cli_commands, "Divoom", _CapturingDivoom)
 
-    ns = SimpleNamespace(command="scan", mac=None, timeout=1.0, device_type=None)
+async def test_resolve_device_explicit_mac_connects_through_the_daemon(monkeypatch) -> None:
+    client = _use_client(monkeypatch, _FakeClient())
+    ns = SimpleNamespace(command="set-volume", mac="AA:BB", timeout=1.0, device_type=None)
     d, mac = await cli_commands._resolve_device(ns)
-    assert mac == "AA:BB:CC:DD:EE:FF"
-    assert d.kwargs["device_name"] == "Pixoo"
+    assert mac == "AA:BB"
+    assert ("connect", "AA:BB") in client.calls, "not linked yet: the daemon connects it"
+    assert ("scan", 1.0) not in client.calls, "an explicit mac never scans"
+    assert d._mac == "AA:BB", "the proxy names its panel on every call"
+
+
+async def test_resolve_device_uses_the_single_linked_panel(monkeypatch) -> None:
+    client = _use_client(monkeypatch, _FakeClient(
+        status={"success": True, "connected": True, "mac": "CC:DD", "devices": [{"mac": "CC:DD"}]},
+        per_mac={"CC:DD": {"success": True, "connected": True, "mac": "CC:DD"}},
+    ))
+    ns = SimpleNamespace(command="set-volume", mac=None, timeout=1.0, device_type=None)
+    d, mac = await cli_commands._resolve_device(ns)
+    assert mac == "CC:DD"
+    assert not any(c[0] in ("scan", "connect") for c in client.calls)
+
+
+async def test_resolve_device_refuses_to_guess_between_several_panels(monkeypatch) -> None:
+    _use_client(monkeypatch, _FakeClient(
+        status={"success": True, "connected": True, "mac": None,
+                "devices": [{"mac": "AA:AA"}, {"mac": "BB:BB"}]},
+    ))
+    ns = SimpleNamespace(command="set-volume", mac=None, timeout=1.0, device_type=None)
+    with pytest.raises(SystemExit) as exc:
+        await cli_commands._resolve_device(ns)
+    assert exc.value.code == 2
+
+
+async def test_resolve_device_scans_through_the_daemon_when_nothing_is_linked(monkeypatch) -> None:
+    client = _use_client(monkeypatch, _FakeClient(
+        scan={"success": True, "devices": [{"address": "EE:FF", "name": "Pixoo"}]},
+    ))
+    ns = SimpleNamespace(command="set-volume", mac=None, timeout=2.5, device_type=None)
+    d, mac = await cli_commands._resolve_device(ns)
+    assert mac == "EE:FF"
+    assert ("scan", 2.5) in client.calls and ("connect", "EE:FF") in client.calls
 
 
 async def test_resolve_device_errors_when_no_devices_found(monkeypatch) -> None:
-    async def fake_discover(timeout):
-        return []
-
-    monkeypatch.setattr(
-        "divoom_lib.utils.discovery.discover_all_divoom_devices", fake_discover
-    )
-    ns = SimpleNamespace(command="scan", mac=None, timeout=1.0, device_type=None)
+    _use_client(monkeypatch, _FakeClient())
+    ns = SimpleNamespace(command="set-volume", mac=None, timeout=0.1, device_type=None)
     with pytest.raises(SystemExit) as exc:
         await cli_commands._resolve_device(ns)
     assert exc.value.code == 1
 
 
-async def test_resolve_device_explicit_mac_skips_discovery(monkeypatch) -> None:
-    _CapturingDivoom.instances = []
-    monkeypatch.setattr(cli_commands, "Divoom", _CapturingDivoom)
-    ns = SimpleNamespace(
-        command="scan", mac="AA:BB:CC:DD:EE:FF", timeout=1.0, device_type="TivooMax"
-    )
-    d, mac = await cli_commands._resolve_device(ns)
-    assert mac == "AA:BB:CC:DD:EE:FF"
-    assert "device_name" not in d.kwargs
-    assert d.kwargs["device_type"] == "TivooMax"
+def test_no_daemon_is_a_refusal_not_a_spawn(monkeypatch) -> None:
+    # A shell-spawned daemon has no Bluetooth grant and dies on its first
+    # scan, so the CLI attaches to a running one or says what to start.
+    import divoom_client.daemon_client as dc
+    seen = {}
+    def fake_ensure(*a, **kw):
+        seen.update(kw)
+        return None
+    monkeypatch.setattr(dc, "ensure_daemon", fake_ensure)
+    with pytest.raises(SystemExit) as exc:
+        cli_commands._daemon_client()
+    assert exc.value.code == 3
+    assert seen.get("spawn") is False
 
 
 # ── cmd_scan ─────────────────────────────────────────────────────────────
 
 
 async def test_cmd_scan_prints_results(monkeypatch, capsys) -> None:
-    async def fake_discover(timeout):
-        return [{"address": "AA:BB:CC:DD:EE:FF", "name": "Pixoo"}]
-
-    monkeypatch.setattr(
-        "divoom_lib.utils.discovery.discover_all_divoom_devices", fake_discover
-    )
+    _use_client(monkeypatch, _FakeClient(
+        scan={"success": True, "devices": [{"address": "AA:BB:CC:DD:EE:FF", "name": "Pixoo"}]}))
     rc = await cli_commands.cmd_scan(_parse("scan"))
     assert rc == 0
-    out = capsys.readouterr().out
-    assert "AA:BB:CC:DD:EE:FF" in out
-    assert "Pixoo" in out
+    assert "AA:BB:CC:DD:EE:FF  Pixoo" in capsys.readouterr().out
 
 
 async def test_cmd_scan_no_devices_found(monkeypatch, capsys) -> None:
-    async def fake_discover(timeout):
-        return []
-
-    monkeypatch.setattr(
-        "divoom_lib.utils.discovery.discover_all_divoom_devices", fake_discover
-    )
+    _use_client(monkeypatch, _FakeClient())
     rc = await cli_commands.cmd_scan(_parse("scan"))
     assert rc == 0
     assert "no Divoom devices found" in capsys.readouterr().out
 
 
 async def test_cmd_scan_json(monkeypatch, capsys) -> None:
-    async def fake_discover(timeout):
-        return [{"address": "AA:BB:CC:DD:EE:FF", "name": "Pixoo"}]
-
-    monkeypatch.setattr(
-        "divoom_lib.utils.discovery.discover_all_divoom_devices", fake_discover
-    )
+    _use_client(monkeypatch, _FakeClient(
+        scan={"success": True, "devices": [{"address": "AA:BB:CC:DD:EE:FF", "name": "Pixoo"}]}))
     rc = await cli_commands.cmd_scan(_parse("scan", "--json"))
     assert rc == 0
-    data = json.loads(capsys.readouterr().out)
-    assert data[0]["address"] == "AA:BB:CC:DD:EE:FF"
+    assert json.loads(capsys.readouterr().out) == [{"address": "AA:BB:CC:DD:EE:FF", "name": "Pixoo"}]
 
 
 # ── cmd_capabilities: notes formatting ─────────────────────────────────
@@ -193,6 +220,8 @@ async def test_cmd_capabilities_prints_notes(monkeypatch, capsys) -> None:
 
         async def disconnect(self):
             pass
+
+    monkeypatch.setattr(cli_commands, "_capabilities", lambda a, m: Caps())
 
     async def fake_resolve(args):
         return D(), "AA:BB:CC:DD:EE:FF"
@@ -214,7 +243,7 @@ async def test_cmd_set_volume_happy_path(monkeypatch, capsys) -> None:
     rc = await cli_commands.cmd_set_volume(_parse("set-volume", "7", "--mac", "AA:BB"))
     assert rc == 0
     fake.music.set_volume.assert_awaited_once_with(7)
-    fake.disconnect.assert_awaited_once()
+    fake.disconnect.assert_not_awaited()  # the daemon keeps the link
     assert "set volume to 7/15" in capsys.readouterr().out
 
 
@@ -226,7 +255,7 @@ async def test_cmd_set_volume_device_reports_failure(monkeypatch) -> None:
     )
     rc = await cli_commands.cmd_set_volume(_parse("set-volume", "7", "--mac", "AA:BB"))
     assert rc == 1
-    fake.disconnect.assert_awaited_once()
+    fake.disconnect.assert_not_awaited()  # the daemon keeps the link
 
 
 async def test_cmd_set_brightness_happy_path(monkeypatch, capsys) -> None:
@@ -252,7 +281,7 @@ async def test_cmd_set_brightness_device_reports_failure(monkeypatch) -> None:
         _parse("set-brightness", "50", "--mac", "AA:BB")
     )
     assert rc == 1
-    fake.disconnect.assert_awaited_once()
+    fake.disconnect.assert_not_awaited()  # the daemon keeps the link
 
 
 # ── cmd_set_radio ────────────────────────────────────────────────────────
@@ -261,18 +290,20 @@ async def test_cmd_set_brightness_device_reports_failure(monkeypatch) -> None:
 async def test_cmd_set_radio_rejects_when_no_fm_capability(monkeypatch) -> None:
     fake = FakeDivoom()
     fake.capabilities.has_fm = False
+    monkeypatch.setattr(cli_commands, "_capabilities", lambda a, m: fake.capabilities)
     monkeypatch.setattr(
         cli_commands, "_resolve_device", AsyncMock(return_value=(fake, "AA:BB"))
     )
     with pytest.raises(SystemExit) as exc:
         await cli_commands.cmd_set_radio(_parse("set-radio", "875", "--mac", "AA:BB"))
     assert exc.value.code == 1
-    fake.disconnect.assert_awaited_once()
+    fake.disconnect.assert_not_awaited()  # the daemon keeps the link
 
 
 async def test_cmd_set_radio_happy_path(monkeypatch, capsys) -> None:
     fake = FakeDivoom()
     fake.capabilities.has_fm = True
+    monkeypatch.setattr(cli_commands, "_capabilities", lambda a, m: fake.capabilities)
     monkeypatch.setattr(
         cli_commands, "_resolve_device", AsyncMock(return_value=(fake, "AA:BB"))
     )
@@ -296,6 +327,7 @@ async def test_cmd_set_alarm_rejects_bad_time_format() -> None:
 async def test_cmd_set_alarm_rejects_when_no_alarm_capability(monkeypatch) -> None:
     fake = FakeDivoom()
     fake.capabilities.has_alarm = False
+    monkeypatch.setattr(cli_commands, "_capabilities", lambda a, m: fake.capabilities)
     monkeypatch.setattr(
         cli_commands, "_resolve_device", AsyncMock(return_value=(fake, "AA:BB"))
     )
@@ -307,6 +339,7 @@ async def test_cmd_set_alarm_rejects_when_no_alarm_capability(monkeypatch) -> No
 async def test_cmd_set_alarm_happy_path(monkeypatch, capsys) -> None:
     fake = FakeDivoom()
     fake.capabilities.has_alarm = True
+    monkeypatch.setattr(cli_commands, "_capabilities", lambda a, m: fake.capabilities)
     monkeypatch.setattr(
         cli_commands, "_resolve_device", AsyncMock(return_value=(fake, "AA:BB"))
     )
@@ -338,7 +371,7 @@ async def test_cmd_push_image_happy_path(monkeypatch, tmp_path, capsys) -> None:
     )
     assert rc == 0
     fake.display.show_image.assert_awaited_once_with(str(f))
-    fake.disconnect.assert_awaited_once()
+    fake.disconnect.assert_not_awaited()  # the daemon keeps the link
     assert "pic.png" in capsys.readouterr().out
 
 
@@ -359,7 +392,7 @@ async def test_cmd_push_gif_device_reports_failure(monkeypatch, tmp_path) -> Non
     )
     rc = await cli_commands.cmd_push_gif(_parse("push-gif", str(f), "--mac", "AA:BB"))
     assert rc == 1
-    fake.disconnect.assert_awaited_once()
+    fake.disconnect.assert_not_awaited()  # the daemon keeps the link
 
 
 # ── cmd_pair ─────────────────────────────────────────────────────────────

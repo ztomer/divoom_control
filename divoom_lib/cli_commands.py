@@ -13,10 +13,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from divoom_lib import Divoom
 from divoom_lib.models.capabilities import (
+    Capabilities,
     DEVICE_CAPABILITIES,
     DeviceRegistry,
+    capabilities_for,
 )
 
 
@@ -42,38 +43,71 @@ def _err(msg: str, code: int = 1) -> None:
     sys.exit(code)
 
 
-async def _resolve_device(args: argparse.Namespace) -> tuple[Divoom, str]:
-    """Connect to the requested device and return (Divoom instance, MAC)."""
+def _daemon_client():
+    """The running daemon, or a clear refusal.
+
+    The CLI is a DAEMON CLIENT (2026-09-12, user correction): the daemon is the
+    sole owner of device I/O, and the CLI used to be a second implementation
+    over bleak. It does not spawn a daemon either -- a shell-spawned one has no
+    Bluetooth grant and dies on its first scan with SIGABRT and no message --
+    so with nothing running it says what to start.
+    """
+    from divoom_client.daemon_client import ensure_daemon
+    client = ensure_daemon(spawn=False)
+    if client is None:
+        _err("no divoomd daemon is running. Start the Divoom app (it owns the "
+             "Bluetooth grant) or the dev daemon bundle "
+             "(scripts/make_dev_daemon_app.sh), then retry.", 3)
+    return client
+
+
+def _capabilities(args: argparse.Namespace, mac: str) -> Capabilities:
+    """The capability table for this panel: explicit --type, else the MAC
+    registry, else the baseline. Pure data -- no device I/O."""
+    if getattr(args, "device_type", None):
+        return capabilities_for(args.device_type)
+    caps = DeviceRegistry().lookup(mac)
+    return caps if caps is not None else capabilities_for(None)
+
+
+async def _resolve_device(args: argparse.Namespace):
+    """Return (device proxy, id). The proxy speaks to the daemon for ONE
+    panel: `--mac` names it; without it, the daemon's own resolver answers
+    for a single linked panel and refuses when several are linked.
+    """
     if args.command == "pair" or args.command == "identify":
         # These commands don't need a connected device.
         return None, (args.mac or "")
+    from divoom_client.daemon_proxy import DaemonDeviceProxy
+    client = _daemon_client()
     mac = args.mac
-    device_name = None
     if not mac:
-        # Auto-discover the first Divoom device.
-        from bleak import BleakScanner
-        from divoom_lib.utils.discovery import discover_all_divoom_devices
-        results = await discover_all_divoom_devices(timeout=args.timeout)
-        if not results:
-            _err("no Divoom devices found", 1)
-        mac = results[0]["address"]
-        device_name = results[0].get("name")
-
-    kwargs: dict = {"mac": mac, "device_type": args.device_type}
-    # Try to pass the manufacturer_data from the scan if we have it.
-    if device_name:
-        kwargs["device_name"] = device_name
-    divoom = Divoom(**kwargs)
-    await divoom.connect()
-    return divoom, mac
+        st = client.device_status()
+        if st.get("mac"):
+            mac = st["mac"]
+        elif len(st.get("devices") or []) > 1:
+            _err("several panels are connected; pass --mac to say which: "
+                 + ", ".join(d["mac"] for d in st["devices"]), 2)
+        else:
+            # Nothing linked: scan through the daemon and take the first.
+            results = (client.scan(timeout=args.timeout) or {}).get("devices") or []
+            if not results:
+                _err("no Divoom devices found", 1)
+            mac = results[0]["address"]
+    st = client.device_status(mac=mac)
+    if not st.get("connected"):
+        reply = client.connect_device(mac=mac, use_ios_le_protocol=True)
+        if not reply.get("connected"):
+            _err(f"could not connect {mac}: {reply.get('error') or reply.get('message') or reply}", 1)
+    return DaemonDeviceProxy(client, target="device", mac=mac), mac
 
 
 # ── Commands ──────────────────────────────────────────────────────────
 
 
 async def cmd_scan(args: argparse.Namespace) -> int:
-    from divoom_lib.utils.discovery import discover_all_divoom_devices
-    results = await discover_all_divoom_devices(timeout=args.timeout)
+    client = _daemon_client()
+    results = (client.scan(timeout=args.timeout) or {}).get("devices") or []
     if args.json:
         _print(results, as_json=True)
     else:
@@ -87,7 +121,7 @@ async def cmd_scan(args: argparse.Namespace) -> int:
 async def cmd_capabilities(args: argparse.Namespace) -> int:
     d, mac = await _resolve_device(args)
     try:
-        caps = d.capabilities
+        caps = _capabilities(args, mac)
         if args.json:
             _print({
                 "mac": mac,
@@ -121,8 +155,7 @@ async def cmd_capabilities(args: argparse.Namespace) -> int:
                 print(f"  notes: {'; '.join(caps.notes)}")
         return 0
     finally:
-        if d is not None:
-            await d.disconnect()
+        pass  # the daemon keeps the link; the CLI never hangs up a panel
 
 
 async def cmd_set_volume(args: argparse.Namespace) -> int:
@@ -134,7 +167,7 @@ async def cmd_set_volume(args: argparse.Namespace) -> int:
         _print(f"set volume to {args.value}/15 (ok={ok})", as_json=args.json)
         return 0 if ok else 1
     finally:
-        await d.disconnect()
+        pass  # the daemon keeps the link; the CLI never hangs up a panel
 
 
 async def cmd_set_brightness(args: argparse.Namespace) -> int:
@@ -146,20 +179,20 @@ async def cmd_set_brightness(args: argparse.Namespace) -> int:
         _print(f"set brightness to {args.value}% (ok={ok})", as_json=args.json)
         return 0 if ok else 1
     finally:
-        await d.disconnect()
+        pass  # the daemon keeps the link; the CLI never hangs up a panel
 
 
 async def cmd_set_radio(args: argparse.Namespace) -> int:
     d, mac = await _resolve_device(args)
     try:
-        if not d.capabilities.has_fm:
+        if not _capabilities(args, mac).has_fm:
             _err(f"device {mac} has no FM radio (capabilities.has_fm=False)", 1)
         ok = await d.radio.set_radio_frequency(args.freq_x10)
         mhz = args.freq_x10 / 10.0
         _print(f"tuned FM to {mhz:.1f} MHz (ok={ok})", as_json=args.json)
         return 0 if ok else 1
     finally:
-        await d.disconnect()
+        pass  # the daemon keeps the link; the CLI never hangs up a panel
 
 
 async def cmd_set_alarm(args: argparse.Namespace) -> int:
@@ -172,7 +205,7 @@ async def cmd_set_alarm(args: argparse.Namespace) -> int:
         _err("time must be HH:MM (24h)", 2)
     d, mac = await _resolve_device(args)
     try:
-        if not d.capabilities.has_alarm:
+        if not _capabilities(args, mac).has_alarm:
             _err(f"device {mac} has no alarm (capabilities.has_alarm=False)", 1)
         # Signature: set_alarm(alarm_index, status, hour, minute, week, mode, trigger_mode, fm_freq, volume)
         # week=127 = all days, mode=0=default, trigger_mode=0=default, fm_freq=0=off, volume=0=default
@@ -180,7 +213,7 @@ async def cmd_set_alarm(args: argparse.Namespace) -> int:
         _print(f"set alarm 0 to {hh:02d}:{mm:02d} every day (ok={ok})", as_json=args.json)
         return 0 if ok else 1
     finally:
-        await d.disconnect()
+        pass  # the daemon keeps the link; the CLI never hangs up a panel
 
 
 # R14 §1 — weather command (0x5F).
@@ -203,7 +236,7 @@ async def cmd_set_temperature(args: argparse.Namespace) -> int:
         _err("temperature must be -127..128", 2)
     d, mac = await _resolve_device(args)
     try:
-        if not d.capabilities.has_weather:
+        if not _capabilities(args, mac).has_weather:
             _err(f"device {mac} has no weather channel (capabilities.has_weather=False)", 1)
         weather_id = WEATHER_NAME_TO_ID[args.weather]
         ok = await d.weather.set(args.temperature, weather_id)
@@ -213,7 +246,7 @@ async def cmd_set_temperature(args: argparse.Namespace) -> int:
         )
         return 0 if ok else 1
     finally:
-        await d.disconnect()
+        pass  # the daemon keeps the link; the CLI never hangs up a panel
 
 
 async def cmd_push_image(args: argparse.Namespace) -> int:
@@ -226,7 +259,7 @@ async def cmd_push_image(args: argparse.Namespace) -> int:
         _print(f"pushed {path.name} to {mac} (ok={ok})", as_json=args.json)
         return 0 if ok else 1
     finally:
-        await d.disconnect()
+        pass  # the daemon keeps the link; the CLI never hangs up a panel
 
 
 async def cmd_push_gif(args: argparse.Namespace) -> int:
@@ -239,7 +272,7 @@ async def cmd_push_gif(args: argparse.Namespace) -> int:
         _print(f"pushed animated {path.name} to {mac} (ok={ok})", as_json=args.json)
         return 0 if ok else 1
     finally:
-        await d.disconnect()
+        pass  # the daemon keeps the link; the CLI never hangs up a panel
 
 
 async def cmd_pair(args: argparse.Namespace) -> int:
@@ -262,40 +295,34 @@ async def cmd_pair(args: argparse.Namespace) -> int:
 
 
 async def cmd_identify(args: argparse.Namespace) -> int:
-    """Print the raw BLE manufacturer_data for a device. Used to populate
-    the ADVERTISED_FINGERPRINTS table as the user identifies new devices."""
-    from bleak import BleakScanner
-    timeout = args.timeout
-    print(f"Scanning for {timeout}s...", file=sys.stderr)
-    # Use the callback API so we get the full AdvertisementData.
-    found = {}
-    def cb(device, adv):
-        if adv.manufacturer_data:
-            found[device.address] = (device.name, adv.manufacturer_data, adv.service_uuids)
-    scanner = BleakScanner(detection_callback=cb)
-    await scanner.start()
-    import asyncio as _aio
-    await _aio.sleep(timeout)
-    await scanner.stop()
-
+    """Print the raw BLE manufacturer_data for nearby devices. Used to
+    populate the ADVERTISED_FINGERPRINTS table as the user identifies new
+    devices. Read through the daemon's scan (it carries the advertisement's
+    manufacturer data and service UUIDs); the radio has one owner."""
+    client = _daemon_client()
+    print(f"Scanning for {args.timeout}s...", file=sys.stderr)
+    results = (client.scan(timeout=args.timeout) or {}).get("devices") or []
+    found = {r["address"]: r for r in results if r.get("manufacturer_data")}
     if not found:
         _err("no devices with manufacturer_data found", 1)
 
     if args.json:
         out = {
-            addr: {"name": name, "manufacturer_data": {hex(k): v.hex() for k, v in md.items()}, "service_uuids": list(uuids)}
-            for addr, (name, md, uuids) in found.items()
+            addr: {"name": r.get("name"), "manufacturer_data": {
+                hex(int(k)): v for k, v in r["manufacturer_data"].items()},
+                "service_uuids": list(r.get("service_uuids") or [])}
+            for addr, r in found.items()
         }
         _print(out, as_json=True)
     else:
-        for addr, (name, md, uuids) in found.items():
-            print(f"\n{addr}  {name}")
-            for company_id, payload in md.items():
-                print(f"  manufacturer_data: company_id=0x{company_id:04x} bytes={payload.hex()}")
-            if uuids:
-                print(f"  service_uuids:     {list(uuids)}")
-        print("\nTo register a fingerprint, add to ADVERTISED_FINGERPRINTS in", file=sys.stderr)
-        print("divoom_lib/models/capabilities.py and re-run identify.", file=sys.stderr)
+        for addr, r in found.items():
+            print(f"\n{addr}  {r.get('name')}")
+            for company_id, payload in r["manufacturer_data"].items():
+                print(f"  manufacturer_data: company_id=0x{int(company_id):04x} bytes={payload}")
+            for u in r.get("service_uuids") or []:
+                print(f"  service_uuid: {u}")
+        print("\nAdd a fingerprint to ADVERTISED_FINGERPRINTS in "
+              "divoom_lib/models/capabilities.py as (company_id, prefix_bytes) -> device_type.")
     return 0
 
 

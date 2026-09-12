@@ -195,7 +195,14 @@ pub(crate) async fn cmd_scan(daemon: &Daemon, req: &Request) -> Value {
         Ok(devs) => {
             let devices: Vec<Value> = devs
                 .iter()
-                .map(|d| json!({"name": d.name, "address": d.id}))
+                .map(|d| {
+                    json!({
+                        "name": d.name,
+                        "address": d.id,
+                        "manufacturer_data": d.manufacturer_data,
+                        "service_uuids": d.service_uuids,
+                    })
+                })
                 .collect();
             *daemon.last_scan.lock().await = Some((Instant::now(), devices.clone()));
             json!({"success": true, "devices": devices})
