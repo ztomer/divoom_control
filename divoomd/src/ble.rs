@@ -134,6 +134,10 @@ pub struct BleTransport {
     // keep the central alive for the connection's lifetime (notifications need it)
     _central: BleCentral,
     peripheral: Peripheral,
+    /// First 8 characters of the peripheral id, stamped on every
+    /// `DIVOOMD_BLE_DEBUG` line. A fleet trace without it cannot say which
+    /// panel a frame went to, which made a 4-device stress run unreadable.
+    tag: String,
     write_char: Characteristic,
     protocol: Protocol,
     rx: Mutex<mpsc::Receiver<Frame>>,
@@ -208,7 +212,8 @@ impl BleTransport {
             let n = args.len().min(12);
             let hx = crate::wire::hex(&args[..n]);
             eprintln!(
-                "[ble] tx cmd=0x{command_id:02x} ({} args){}",
+                "[ble {}] tx cmd=0x{command_id:02x} ({} args){}",
+                self.tag,
                 args.len(),
                 if n > 0 {
                     format!(" {hx}{}", if args.len() > n { ".." } else { "" })

@@ -126,13 +126,15 @@ pub(super) async fn connect(central: &BleCentral, id: &str) -> BleResult<BleTran
 
     // Parse inbound bytes into Frames using the ported framing: iOS-LE frames
     // are self-delimited (header-prefixed); Basic frames need a stateful buffer.
+    let tag = wire_tag(&peripheral.id().to_string());
+    let rx_tag = tag.clone();
     tokio::spawn(async move {
         let mut basic_buf: Vec<u8> = Vec::new();
         while let Some(n) = notifications.next().await {
             let data = n.value;
             if std::env::var("DIVOOMD_BLE_DEBUG").is_ok() {
                 let hx = crate::wire::hex(&data);
-                eprintln!("[ble] rx {} bytes: {hx}", data.len());
+                eprintln!("[ble {rx_tag}] rx {} bytes: {hx}", data.len());
             }
             if data.len() >= 4 && data[0..4] == IOS_LE_HEADER {
                 if let Some(p) = framing::parse_ios_le_notification(&data) {
@@ -152,7 +154,7 @@ pub(super) async fn connect(central: &BleCentral, id: &str) -> BleResult<BleTran
                 for m in framing::parse_basic_protocol_frames(&mut basic_buf) {
                     if std::env::var("DIVOOMD_BLE_DEBUG").is_ok() {
                         eprintln!(
-                            "[ble] basic frame cmd=0x{:02x} ({} payload bytes)",
+                            "[ble {rx_tag}] basic frame cmd=0x{:02x} ({} payload bytes)",
                             m.command_id,
                             m.payload.len()
                         );
@@ -186,7 +188,25 @@ pub(super) async fn connect(central: &BleCentral, id: &str) -> BleResult<BleTran
         protocol: Protocol::Basic,
         rx: Mutex::new(rx),
         device_name: std::sync::Mutex::new(dev_name),
+        tag,
     };
     transport.autoprobe().await;
     Ok(transport)
+}
+
+/// The short device tag stamped on debug lines: enough of the id to tell
+/// panels apart in a fleet trace, short enough to leave room for the bytes.
+fn wire_tag(id: &str) -> String {
+    id.chars().take(8).collect()
+}
+
+#[cfg(test)]
+mod tag_tests {
+    use super::wire_tag;
+
+    #[test]
+    fn tag_is_the_first_eight_characters() {
+        assert_eq!(wire_tag("e9a41e1e-9a96-974f"), "e9a41e1e");
+        assert_eq!(wire_tag("AA:BB"), "AA:BB");
+    }
 }
