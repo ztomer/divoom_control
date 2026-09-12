@@ -186,8 +186,9 @@ def spawn_daemon(
             Path(_mei).parent / "Resources" / "divoom_lib" if _mei else None,
             Path(_rp) if _rp else None,
         ) if d is not None]
+        from divoom_lib.native_lib import platform_libname
         for _dir in _dylib_dirs:
-            _dy = _dir / "libdivoom_compact.dylib"
+            _dy = _dir / platform_libname()  # .dylib on macOS, .so on Linux
             if _dy.exists():
                 rust_env_extra["DIVOOMD_ENCODER_LIB"] = str(_dy)
                 break

@@ -14,13 +14,11 @@
 //! 5. Disconnecting a device stops its jobs and nothing lands on the next
 //!    transport for that mac.
 //!
-//! macOS only: every scenario counts FRAMES on the mock, and a frame exists
-//! only after the native encoder (`divoom_lib/libdivoom_compact.dylib`, a
-//! macOS build artefact) has encoded it. On Linux there is no encoder, so
-//! `push_rgb_to_device` never reaches the transport and every count would
-//! read zero -- which is the pass condition for half the scenarios. A suite
-//! that cannot fail is not run.
-#![cfg(target_os = "macos")]
+//! Every scenario counts FRAMES on the mock, and a frame exists only after
+//! the native encoder (`divoom_lib/libdivoom_compact.{dylib,so}`, built by
+//! `scripts/build_libdivoom.sh` on every platform) has encoded it. The
+//! encoder assertion below is deliberate: without it every count reads zero,
+//! which is the pass condition for half the scenarios.
 use divoomd::daemon::{Daemon, DeviceTransport};
 use divoomd::protocol::make_request;
 use divoomd::socket_server::Handler;
@@ -41,7 +39,7 @@ async fn daemon_with_mock(mac: &str) -> Arc<Daemon> {
     assert_eq!(conn["success"], json!(true), "mock connect: {conn}");
     assert!(
         d.encoder().is_some(),
-        "these scenarios need the frame encoder (divoom_lib/libdivoom_compact.dylib)"
+        "these scenarios need the frame encoder: run scripts/build_libdivoom.sh"
     );
     d
 }

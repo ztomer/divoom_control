@@ -11,8 +11,23 @@
 
 use libloading::{Library, Symbol};
 
-/// Find the `libdivoom_compact` dylib: `DIVOOMD_ENCODER_LIB` env override, else
-/// relative to the running binary (project-root `divoom_lib/`).
+/// The shared-library filenames, this platform's first.
+///
+/// `scripts/build_libdivoom.sh` produces both spellings; the encoder is
+/// cross-platform C. Only the finder used to be macOS-only (it looked for
+/// `.dylib` alone, so a Linux daemon never found the `.so` the same script
+/// had just built -- 2026-09-12).
+#[must_use]
+pub const fn encoder_lib_names() -> [&'static str; 2] {
+    if cfg!(target_os = "macos") {
+        ["libdivoom_compact.dylib", "libdivoom_compact.so"]
+    } else {
+        ["libdivoom_compact.so", "libdivoom_compact.dylib"]
+    }
+}
+
+/// Find the `libdivoom_compact` shared library: `DIVOOMD_ENCODER_LIB` env
+/// override, else relative to the running binary (project-root `divoom_lib/`).
 #[must_use]
 pub fn find_encoder_lib() -> Option<std::path::PathBuf> {
     if let Ok(p) = std::env::var("DIVOOMD_ENCODER_LIB") {
@@ -25,12 +40,10 @@ pub fn find_encoder_lib() -> Option<std::path::PathBuf> {
     // parents — the count changed when R66 made this a workspace crate
     // (target/ moved to the repo root). See crate::paths.
     let root = crate::paths::find_root_containing("divoom_lib")?;
-    let candidate = root.join("divoom_lib").join("libdivoom_compact.dylib");
-    if candidate.exists() {
-        Some(candidate)
-    } else {
-        None
-    }
+    encoder_lib_names()
+        .iter()
+        .map(|n| root.join("divoom_lib").join(n))
+        .find(|c| c.exists())
 }
 
 // const u8* rgb, int w, int h, u16 time_ms, u8* out, int out_size -> int written

@@ -39,7 +39,13 @@ REPO = Path(__file__).resolve().parent.parent
 EXAMPLES = REPO / "examples"
 
 sys.path.insert(0, str(REPO))
-import divoom_lib.divoom as _divoom_mod  # noqa: E402
+# The facade imports bleak at module level; this check needs the real
+# classes (it asks has_member on them), so bleak is THIS check's dependency.
+try:
+    import divoom_lib.divoom as _divoom_mod  # noqa: E402
+except ModuleNotFoundError as exc:  # pragma: no cover - environment, not logic
+    err(f"[examples] cannot import the facade: {exc}. This check needs `pip install bleak`.")
+    sys.exit(2)
 from divoom_lib.models.capabilities import Capabilities  # noqa: E402
 
 DIVOOM_SRC = REPO / "divoom_lib" / "divoom.py"
