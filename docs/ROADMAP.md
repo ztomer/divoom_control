@@ -216,17 +216,18 @@ a live confirmation before a fix ships).
    Symptom matches "Animated Image Previews (`DisplayPreview` GIF
    Playback)" exactly (WebKit `drawImage` freezes GIF at frame 0;
    device fine). No new mechanism; fix there covers this.
-3. **Channel switching slow/flaky — TRIAGED 2026-09-12 (static bounds; timing needs hardware).**
-   (a) Slow, bounded: a switch is ONE 0x45 packet (fast uncontended),
-   but it serializes behind the current queue holder with ITEM_TIMEOUT
-   60s (`daemon.rs:32-33`) — a wedged BLE write can stall a switch for
-   up to a minute before rejection. The GUI also issues 2 sequential
-   RPCs per click (`live_jobs_stop_for` + `switch_channel`).
-   (b) Multi-click: rejection surfaces as "Failed to switch channel" →
-   retry reads as flakiness; PLUS the #6 desync (fixed) which toasted
-   "Connect a device first" while connected. Fix shape for the residual
-   (priority lane / shorter switch timeout / link work) MUST be driven
-   by a live timing, not guessed.
+3. **Channel switching slow/flaky — MEASURED 2026-09-12, no queue change.**
+   Live timing on the connected device (transient switches, restored to
+   clock): every channel name switches in 0.04–0.12s — clock, vj,
+   visualizer, eq, scoreboard, ambient, lighting, design, custom, hot.
+   (One probe error on the way: `visualization` is not a channel name —
+   the button says `visualizer`, which the daemon accepts. No product
+   bug.) The queue is NOT slow on a healthy link, so no priority lane
+   and no timeout change — either would be guessing against a 50ms
+   measurement. Residual explanations, both bounded: wedged-link stalls
+   (60s item timeout, then rejection toast → retry reads as flakiness)
+   and the #6 desync (fixed). Reopen only with a slow-switch timestamp
+   from a session where the link state is captured alongside.
 4. **Weather "here" — FIXED 2026-09-12 (needs a live glance).**
    Root cause ran both sides: `parse_wttr` discarded `nearest_area`
    and `cmd_weather` echoed the request's (empty) location, so the
