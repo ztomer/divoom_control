@@ -72,7 +72,7 @@ mod tests {
             .as_bool()
             .unwrap());
 
-        let device_lock = d.device.lock().await;
+        let device_lock = d.current_transport().await;
         let DeviceTransport::Mock(ref mock) = **device_lock.as_ref().unwrap() else {
             drop(device_lock);
             panic!("expected Mock")

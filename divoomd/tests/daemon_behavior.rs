@@ -7,6 +7,20 @@ use divoomd::socket_server::Handler;
 use serde_json::json;
 
 #[tokio::test]
+async fn exclusive_start_needs_a_device() {
+    let d = Daemon::new();
+    let a = d
+        .handle(make_request(
+            "exclusive_start",
+            Some(json!({"token": "A"})),
+            None,
+        ))
+        .await;
+    assert_eq!(a["success"], json!(false));
+    assert!(a["error"].as_str().unwrap().contains("no device connected"));
+}
+
+#[tokio::test]
 async fn ping_and_status_shapes() {
     let d = Daemon::new();
     assert_eq!(
@@ -27,6 +41,16 @@ async fn ping_and_status_shapes() {
 #[tokio::test]
 async fn exclusive_steal_reject_through_handler() {
     let d = Daemon::new();
+    // Exclusive mode owns the CURRENT device's queue (2026-09-12: the queue
+    // moved onto the device, so there is nothing to hold before a connect).
+    let conn = d
+        .handle(make_request(
+            "connect",
+            Some(json!({"mock": true, "mac": "DEV_X"})),
+            None,
+        ))
+        .await;
+    assert_eq!(conn["success"], json!(true));
     let a = d
         .handle(make_request(
             "exclusive_start",

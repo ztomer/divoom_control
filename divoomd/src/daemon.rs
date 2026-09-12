@@ -17,8 +17,6 @@ use serde_json::{json, Value};
 
 use std::sync::{Arc, OnceLock, Weak};
 
-use crate::command_queue::CommandQueue;
-
 use crate::native_encode::NativeEncoder;
 use crate::protocol::{err_reply, Request};
 use crate::socket_server::Handler;
@@ -29,18 +27,16 @@ use tokio::sync::Mutex;
 
 mod dispatch;
 
-const EXCLUSIVE_TIMEOUT: Duration = Duration::from_secs(30);
-const ITEM_TIMEOUT: Duration = Duration::from_secs(60);
+pub(crate) const EXCLUSIVE_TIMEOUT: Duration = Duration::from_secs(30);
+pub(crate) const ITEM_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub use crate::transport::DeviceTransport;
 
 pub struct Daemon {
-    pub(crate) queue: CommandQueue,
     started: Instant,
-    pub(crate) device: Mutex<Option<Arc<DeviceTransport>>>,
-    pub(crate) device_id: Mutex<Option<String>>,
-    pub devices: Mutex<std::collections::HashMap<String, Arc<DeviceTransport>>>,
-    pub(crate) queues: Mutex<std::collections::HashMap<String, CommandQueue>>,
+    /// Every device this daemon knows: identity, link, live job, activity.
+    /// The single owner of per-device state -- see `crate::device`.
+    pub fleet: Arc<crate::device::Fleet>,
     // the CoreBluetooth central, created once and kept alive for the daemon's
     // lifetime (dropping it stops notification delivery).
     #[cfg(feature = "ble")]
@@ -94,13 +90,16 @@ impl Daemon {
     pub fn new_with_mac(default_mac: Option<String>) -> Self {
         let (tx, _) = tokio::sync::broadcast::channel(32);
         let tx_for_hot = tx.clone();
+        let fleet = Arc::new(crate::device::Fleet::default());
+        if let Some(mac) = default_mac {
+            // `--mac`: the panel this daemon is FOR. Known (and current) from
+            // the start, unlinked until a connect succeeds.
+            fleet.preset(&mac);
+        }
         Self {
-            queue: CommandQueue::new(Some(EXCLUSIVE_TIMEOUT), Some(ITEM_TIMEOUT)),
             started: Instant::now(),
-            device: Mutex::new(None),
-            device_id: Mutex::new(default_mac),
-            devices: Mutex::new(std::collections::HashMap::new()),
-            queues: Mutex::new(std::collections::HashMap::new()),
+            live_jobs: Arc::new(crate::live_jobs::LiveJobCoordinator::new(fleet.clone())),
+            fleet,
             #[cfg(feature = "ble")]
             central: Mutex::new(None),
             #[cfg(feature = "ble")]
@@ -111,7 +110,6 @@ impl Daemon {
             last_scan: Mutex::new(None),
             encoder: OnceLock::new(),
             tx,
-            live_jobs: Arc::new(crate::live_jobs::LiveJobCoordinator::new()),
             self_weak: OnceLock::new(),
             // R67/C6: wired to the event bus, so every phase change is
             // BROADCAST as well as stored. A store-only cell is what left the
@@ -120,6 +118,15 @@ impl Daemon {
             wall: Mutex::new(None),
             wall_slots: Mutex::new(serde_json::Map::new()),
             shutdown: Arc::new(tokio::sync::Notify::new()),
+        }
+    }
+
+    /// The current device's transport, if it is connected. Test-facing
+    /// convenience over `fleet.current()`.
+    pub async fn current_transport(&self) -> Option<Arc<DeviceTransport>> {
+        match self.fleet.current().await {
+            Some(d) => d.transport().await,
+            None => None,
         }
     }
 
@@ -148,14 +155,6 @@ impl Daemon {
 
     async fn cmd_connect(&self, req: &Request) -> Value {
         crate::daemon_connect::cmd_connect(self, req).await
-    }
-
-    pub async fn get_device_queue(&self, mac: &str) -> CommandQueue {
-        let mut guard = self.queues.lock().await;
-        guard
-            .entry(mac.to_string())
-            .or_insert_with(|| CommandQueue::new(Some(EXCLUSIVE_TIMEOUT), Some(ITEM_TIMEOUT)))
-            .clone()
     }
 
     /// `device_call` routes a method string to a protocol op. A small set is ported
@@ -191,21 +190,18 @@ impl Daemon {
             return self.wall_device_call(req).await;
         }
 
-        let q = if let Some(mac) = target_mac {
-            self.get_device_queue(mac).await
-        } else {
-            self.queue.clone()
+        // The device's ONE link carries both the queue and the transport, so
+        // a mac-less call (what the GUI sends) and a live job on the same
+        // panel are serialized together. They used to ride different queues.
+        let link = match self.resolve_target_link(target_mac).await {
+            Ok(l) => l,
+            Err(e) => return e,
         };
-
-        let _permit = match q.acquire(token.map(str::to_string)).await {
+        let _permit = match link.queue.acquire(token.map(str::to_string)).await {
             Ok(p) => p,
             Err(e) => return err_reply(&e.to_string()),
         };
-
-        let dev = match self.resolve_target_device(target_mac).await {
-            Ok(d) => d,
-            Err(e) => return e,
-        };
+        let dev = link.transport.clone();
 
         // Honor a caller-requested timeout (clamped so a huge value can't wedge the
         // device lock forever), and ENFORCE it at the top level: if the whole
@@ -234,7 +230,7 @@ impl Daemon {
             // timeout) means the link is unhealthy → push a `degraded` status
             // so the UI flips the dot amber immediately instead of waiting for
             // a poll. A successful op recovers it to `active`.
-            let cur_id = self.device_id.lock().await.clone();
+            let cur_id = self.fleet.current_id().await;
             let id = target_mac.map(str::to_string).or(cur_id);
             let degraded = reply.get("success").and_then(serde_json::Value::as_bool) != Some(true);
             let st = if degraded { "degraded" } else { "active" };
@@ -251,7 +247,7 @@ impl Daemon {
             reply
         } else {
             let msg = format!("device op timed out after {req_timeout:.0}s");
-            let cur_id = self.device_id.lock().await.clone();
+            let cur_id = self.fleet.current_id().await;
             let id = target_mac.map(str::to_string).or(cur_id);
             let _ = self.tx.send(crate::daemon_connect::status_payload(
                 true,
@@ -262,33 +258,22 @@ impl Daemon {
         }
     }
 
-    pub(crate) async fn resolve_target_device(
+    /// The connection a request addresses: an explicit `mac`, else the
+    /// current device. The errors are the two things a caller can act on.
+    pub(crate) async fn resolve_target_link(
         &self,
         target_mac: Option<&str>,
-    ) -> Result<Arc<DeviceTransport>, Value> {
-        if let Some(mac) = target_mac {
-            let devices_guard = self.devices.lock().await;
-            if let Some(d) = devices_guard.get(mac) {
-                return Ok(d.clone());
-            }
-            drop(devices_guard);
-            let cur_id = self.device_id.lock().await.clone().unwrap_or_default();
-            if cur_id == mac {
-                let guard = self.device.lock().await;
-                guard
-                    .as_ref()
-                    .cloned()
-                    .ok_or_else(|| err_reply("no device connected"))
-            } else {
-                Err(err_reply(&format!("device '{mac}' not connected")))
-            }
-        } else {
-            let guard = self.device.lock().await;
-            guard
-                .as_ref()
-                .cloned()
-                .ok_or_else(|| err_reply("no device connected"))
-        }
+    ) -> Result<Arc<crate::device::Link>, Value> {
+        let not_connected = || {
+            target_mac.map_or_else(
+                || err_reply("no device connected"),
+                |mac| err_reply(&format!("device '{mac}' not connected")),
+            )
+        };
+        let Some(d) = self.fleet.resolve(target_mac).await else {
+            return Err(not_connected());
+        };
+        d.link().await.ok_or_else(not_connected)
     }
 
     async fn record_successful_call_activity(&self, req: &Request, target: &str) {
@@ -413,7 +398,7 @@ impl Daemon {
                 let dev_mac = if let Some(m) = target_mac {
                     Some(m.to_string())
                 } else {
-                    self.device_id.lock().await.clone()
+                    self.fleet.current_id().await
                 };
                 if let Some(m) = dev_mac {
                     self.live_jobs.stop_all_for_device(self, &m).await;
@@ -431,14 +416,10 @@ impl Handler for Daemon {
         Some(self.tx.subscribe())
     }
     fn initial_status(&self) -> Value {
-        #[cfg(feature = "ble")]
-        let (connected, id) = {
-            let dev = self.device.try_lock().is_ok_and(|g| g.is_some());
-            let id = self.device_id.try_lock().ok().and_then(|g| g.clone());
-            (dev, id)
-        };
-        #[cfg(not(feature = "ble"))]
-        let (connected, id): (bool, Option<String>) = (false, None);
+        // Synchronous by trait contract; the fleet is read with try_lock, so
+        // a contended lock reads as "not connected" for this one snapshot
+        // (the subscribe stream corrects it on the next status event).
+        let (connected, id) = self.fleet.status_now();
         let mut ev = json!({
             "type": "status",
             "state": if connected { "active" } else { "idle" },

@@ -35,6 +35,7 @@ pub mod daemon_ble;
 pub mod daemon_connect;
 pub mod daemon_mock;
 mod daemon_status;
+pub mod device;
 pub mod device_call;
 pub mod framing;
 pub mod hot_progress;

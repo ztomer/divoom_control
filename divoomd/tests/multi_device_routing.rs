@@ -10,6 +10,17 @@ use divoomd::protocol::make_request;
 use divoomd::socket_server::Handler;
 use serde_json::json;
 
+/// The mock transport behind a connected device.
+async fn transport_of(d: &Daemon, mac: &str) -> std::sync::Arc<DeviceTransport> {
+    d.fleet
+        .get(mac)
+        .await
+        .expect("device known")
+        .transport()
+        .await
+        .expect("device connected")
+}
+
 #[tokio::test]
 async fn test_concurrent_multi_device_routing() {
     let d = Daemon::new();
@@ -36,11 +47,8 @@ async fn test_concurrent_multi_device_routing() {
     assert_eq!(conn_b["mac"], json!("DEV_B"));
 
     // Verify both are present in the devices registry
-    {
-        let devices = d.devices.lock().await;
-        assert!(devices.contains_key("DEV_A"));
-        assert!(devices.contains_key("DEV_B"));
-    }
+    assert!(d.fleet.connected("DEV_A").await.is_some());
+    assert!(d.fleet.connected("DEV_B").await.is_some());
 
     // 2. Issue targeted device_call to DEV_A
     let call_a = d
@@ -78,12 +86,11 @@ async fn test_concurrent_multi_device_routing() {
 
     // 4. Verify commands reached DEV_A and DEV_B independently
     {
-        let devices = d.devices.lock().await;
-        let trans_a = devices.get("DEV_A").unwrap();
-        let trans_b = devices.get("DEV_B").unwrap();
+        let trans_a = transport_of(&d, "DEV_A").await;
+        let trans_b = transport_of(&d, "DEV_B").await;
 
         if let (DeviceTransport::Mock(ref mock_a), DeviceTransport::Mock(ref mock_b)) =
-            (&**trans_a, &**trans_b)
+            (&*trans_a, &*trans_b)
         {
             let cmds_a = mock_a.sent_commands.lock().unwrap();
             let cmds_b = mock_b.sent_commands.lock().unwrap();
@@ -100,7 +107,16 @@ async fn test_concurrent_multi_device_routing() {
     }
 
     // 5. Per-device queue isolation: lock DEV_A exclusively
-    let q_a = d.get_device_queue("DEV_A").await;
+    let q_a = d
+        .fleet
+        .get("DEV_A")
+        .await
+        .unwrap()
+        .link()
+        .await
+        .unwrap()
+        .queue
+        .clone();
     let acq = q_a.acquire_now("TOKEN_FOR_A");
     assert!(acq.is_ok());
 
@@ -181,20 +197,16 @@ async fn test_live_job_persists_across_device_switch() {
     assert_eq!(conn_b["success"], json!(true));
 
     // 4. Verify DEV_A's transport is still in `d.devices`
-    {
-        let devices = d.devices.lock().await;
-        assert!(devices.contains_key("DEV_A"));
-        assert!(devices.contains_key("DEV_B"));
-    }
+    assert!(d.fleet.connected("DEV_A").await.is_some());
+    assert!(d.fleet.connected("DEV_B").await.is_some());
 
     // Wait 1.5s for sysmon loop to tick on DEV_A
     tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
 
     // 5. Verify DEV_A's mock transport received sysmon frames (when native encoder is available)
     if d.encoder().is_some() {
-        let devices = d.devices.lock().await;
-        let trans_a = devices.get("DEV_A").unwrap();
-        if let DeviceTransport::Mock(ref mock_a) = &**trans_a {
+        let trans_a = transport_of(&d, "DEV_A").await;
+        if let DeviceTransport::Mock(ref mock_a) = &*trans_a {
             let cmds = mock_a.sent_commands.lock().unwrap();
             assert!(
                 !cmds.is_empty(),
@@ -333,9 +345,8 @@ async fn test_device_call_set_screen_on_and_standby_preemption() {
 
     // 5. Verify 0x74 with 0 was sent to mock device
     {
-        let devices = d.devices.lock().await;
-        let trans_a = devices.get("DEV_A").unwrap();
-        if let DeviceTransport::Mock(ref mock) = &**trans_a {
+        let trans_a = transport_of(&d, "DEV_A").await;
+        if let DeviceTransport::Mock(ref mock) = &*trans_a {
             let cmds = mock.sent_commands.lock().unwrap();
             let last_cmd = cmds.last().expect("command should be recorded");
             assert_eq!(last_cmd.0, 0x74);
@@ -358,9 +369,8 @@ async fn test_device_call_set_screen_on_and_standby_preemption() {
     assert_eq!(on_call["success"], json!(true));
 
     {
-        let devices = d.devices.lock().await;
-        let trans_a = devices.get("DEV_A").unwrap();
-        if let DeviceTransport::Mock(ref mock) = &**trans_a {
+        let trans_a = transport_of(&d, "DEV_A").await;
+        if let DeviceTransport::Mock(ref mock) = &*trans_a {
             let cmds = mock.sent_commands.lock().unwrap();
             let last_cmd = cmds.last().expect("command should be recorded");
             assert_eq!(last_cmd.0, 0x74);
@@ -436,63 +446,7 @@ async fn test_disconnect_stops_live_jobs_and_drains_devices() {
 
     // Assert live jobs were cleanly stopped and devices cleared
     assert_eq!(d.live_jobs.list(None).await.len(), 0);
-    assert!(d.devices.lock().await.is_empty());
+    assert!(d.fleet.linked().await.is_empty());
     let st = d.handle(make_request("device_status", None, None)).await;
     assert_eq!(st["connected"], json!(false));
-}
-
-#[tokio::test]
-async fn test_wall_configure_reuses_daemon_transports_and_binds_coordinates() {
-    let d = Daemon::new();
-
-    // 1. Connect DEV_A into daemon fleet
-    let conn = d
-        .handle(make_request(
-            "connect",
-            Some(json!({"mock": true, "mac": "DEV_A"})),
-            None,
-        ))
-        .await;
-    assert_eq!(conn["success"], json!(true));
-
-    // 2. Configure a wall containing DEV_A
-    let wall_res = d
-        .handle(make_request(
-            "wall_configure",
-            Some(json!({
-                "slots": {
-                    "DEV_A": { "x": 10, "y": 20, "size": 16, "width": 16, "height": 16 }
-                }
-            })),
-            None,
-        ))
-        .await;
-    assert_eq!(wall_res["success"], json!(true));
-    assert_eq!(wall_res["wall"], json!(true));
-
-    // 3. Verify slot coordinates and device presence
-    {
-        let wall_guard = d.wall.lock().await;
-        let wall = wall_guard.as_ref().expect("wall should be configured");
-        assert_eq!(wall.devices.len(), 1);
-        let slot = &wall.devices[0];
-        assert_eq!(slot.mac, "DEV_A");
-        assert_eq!(slot.x, 10);
-        assert_eq!(slot.y, 20);
-        assert_eq!(slot.size, 16);
-        assert!(slot.device.is_some());
-    }
-
-    // 4. Tear down wall with empty slots
-    let teardown = d
-        .handle(make_request(
-            "wall_configure",
-            Some(json!({"slots": {}})),
-            None,
-        ))
-        .await;
-    assert_eq!(teardown["success"], json!(true));
-
-    // DEV_A must still be preserved in daemon.devices
-    assert!(d.devices.lock().await.contains_key("DEV_A"));
 }

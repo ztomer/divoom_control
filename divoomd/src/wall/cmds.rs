@@ -48,7 +48,7 @@ pub async fn cmd_get_topology(daemon: &Daemon, _req: &Request) -> Value {
     drop(wall_guard);
     let slots = daemon.wall_slots.lock().await.clone();
     let top = load_topology();
-    let cur_dev = daemon.device_id.try_lock().ok().and_then(|g| g.clone());
+    let cur_dev = daemon.fleet.current_id().await;
     json!({
         "success": true,
         "wall_active": wall_active,
@@ -95,7 +95,7 @@ pub async fn cmd_set_topology(_daemon: &Daemon, req: &Request) -> Value {
 async fn teardown_wall(daemon: &Daemon) -> Value {
     let mut wall_guard = daemon.wall.lock().await;
     if let Some(old_wall) = wall_guard.take() {
-        let preserved: Vec<String> = daemon.devices.lock().await.keys().cloned().collect();
+        let preserved: Vec<String> = daemon.fleet.ids().await;
         old_wall.disconnect(&preserved).await;
     }
     drop(wall_guard);
@@ -134,10 +134,6 @@ fn parse_wall_configs(slots: &serde_json::Map<String, Value>, cell_size: i32) ->
 /// Ports `owner_wall.py:wall_configure` including G7 delta reconfiguration:
 /// when the new layout overlaps the current wall, reuse the shared panels.
 #[expect(
-    clippy::significant_drop_tightening,
-    reason = "the guarded value is read by everything after this line; the explicit drops that could be added were placed where they helped and the borrow checker refused the rest"
-)]
-#[expect(
     clippy::cast_possible_truncation,
     reason = "cell size from JSON clamped to reasonable pixel dimension"
 )]
@@ -161,15 +157,9 @@ pub async fn cmd_wall_configure(daemon: &Daemon, req: &Request) -> Value {
     // G7: delta reconfiguration.
     let old_wall_guard = daemon.wall.lock().await;
     let mut existing_by_mac: HashMap<String, Arc<DeviceTransport>> = HashMap::new();
-    {
-        let fleet = daemon.devices.lock().await;
-        for (mac, transport) in fleet.iter() {
-            existing_by_mac.insert(mac.to_uppercase(), transport.clone());
-        }
-        if let Some(ref cur_dev) = *daemon.device.lock().await {
-            if let Some(ref cur_id) = *daemon.device_id.lock().await {
-                existing_by_mac.insert(cur_id.to_uppercase(), cur_dev.clone());
-            }
+    for d in daemon.fleet.linked().await {
+        if let Some(t) = d.transport().await {
+            existing_by_mac.insert(d.id.to_uppercase(), t);
         }
     }
     if let Some(ref old_wall) = *old_wall_guard {
@@ -180,10 +170,16 @@ pub async fn cmd_wall_configure(daemon: &Daemon, req: &Request) -> Value {
                     .or_insert_with(|| d.clone());
             }
         }
-        let fleet = daemon.devices.lock().await;
+        let fleet_ids: Vec<String> = daemon
+            .fleet
+            .ids()
+            .await
+            .into_iter()
+            .map(|i| i.to_uppercase())
+            .collect();
         for slot in &old_wall.devices {
             let upper = slot.mac.to_uppercase();
-            if !slots.contains_key(&upper) && !fleet.contains_key(&upper) {
+            if !slots.contains_key(&upper) && !fleet_ids.contains(&upper) {
                 #[cfg(feature = "ble")]
                 if let Some(ref d) = slot.device {
                     if let DeviceTransport::Ble(ref b) = **d {

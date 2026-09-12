@@ -9,10 +9,6 @@ use serde_json::{json, Value};
     clippy::too_many_lines,
     reason = "a device command dispatch table: one arm per protocol method and its aliases, each a few lines of argument shuffling before it builds a frame. The length is the number of COMMANDS the device answers, not complexity in any one of them, and splitting it puts a layer between a method name and the code that implements it -- which is the one thing a reader opens these files to find"
 )]
-#[expect(
-    clippy::option_if_let_else,
-    reason = "a command dispatch table: every arm is missing-argument outside and result-or-reason inside. As `map_or_else` each verb becomes two closures and the table stops looking like a table"
-)]
 pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
     match req.command.as_str() {
         "ping" => json!({"success": true, "pong": true}),
@@ -50,16 +46,23 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
 
         // exclusive mode is fully real (uses the ported queue's acquire_now /
         // release). The token lives in args (the request-level token is auth).
+        // Exclusive mode owns the CURRENT device's queue -- the same queue
+        // its device_calls ride, so the token actually gates them.
         "exclusive_start" => match req.args.get("token").and_then(|v| v.as_str()) {
-            Some(t) => match daemon.queue.acquire_now(t) {
-                Ok(()) => json!({"success": true, "token": t}),
-                Err(e) => err_reply(&e.to_string()),
+            Some(t) => match daemon.resolve_target_link(None).await {
+                Ok(link) => match link.queue.acquire_now(t) {
+                    Ok(()) => json!({"success": true, "token": t}),
+                    Err(e) => err_reply(&e.to_string()),
+                },
+                Err(e) => e,
             },
             None => err_reply("exclusive_start requires 'token'"),
         },
         "exclusive_end" => match req.args.get("token").and_then(|v| v.as_str()) {
             Some(t) => {
-                daemon.queue.release(t);
+                if let Ok(link) = daemon.resolve_target_link(None).await {
+                    link.queue.release(t);
+                }
                 json!({"success": true})
             }
             None => err_reply("exclusive_end requires 'token'"),
@@ -127,10 +130,7 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
 
         "live_jobs_stop_for" => {
             let mac_str = req.args.get("mac").and_then(|v| v.as_str());
-            let mac_owner = {
-                let guard = daemon.device_id.try_lock().ok();
-                guard.and_then(|g| g.clone())
-            };
+            let mac_owner = daemon.fleet.current_id().await;
             let Some(mac) = mac_str.or(mac_owner.as_deref()) else {
                 return err_reply("live_jobs_stop_for requires 'mac' or connected device");
             };

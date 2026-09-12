@@ -69,7 +69,7 @@ async fn mock_connect_succeeds_and_owns_device() {
     assert_eq!(res["success"], json!(true));
     assert_eq!(res["mac"], json!("MOCK_MAC"));
     assert!(
-        daemon.device.lock().await.is_some(),
+        daemon.current_transport().await.is_some(),
         "device not owned after mock connect"
     );
 }
@@ -94,7 +94,7 @@ async fn disconnect_with_no_device_is_safe() {
     let daemon = Daemon::new();
     let res = cmd_disconnect(&daemon).await;
     assert_eq!(res["success"], json!(true));
-    assert!(daemon.device.lock().await.is_none());
+    assert!(daemon.current_transport().await.is_none());
 }
 
 // Connect → device_call → disconnect → reconnect must stay stable across a
@@ -110,12 +110,12 @@ async fn connect_disconnect_reconnect_loop_stays_responsive() {
         .await;
         assert_eq!(c["success"], json!(true));
         assert!(
-            daemon.device.lock().await.is_some(),
+            daemon.current_transport().await.is_some(),
             "device not owned after connect"
         );
         let d = cmd_disconnect(&daemon).await;
         assert_eq!(d["success"], json!(true));
-        assert!(daemon.device.lock().await.is_none());
+        assert!(daemon.current_transport().await.is_none());
     }
 }
 

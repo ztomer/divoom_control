@@ -46,7 +46,7 @@ mod tests {
                 .unwrap()
         );
 
-        let device_lock = d.device.lock().await;
+        let device_lock = d.current_transport().await;
         let DeviceTransport::Mock(ref mock) = **device_lock.as_ref().unwrap() else {
             drop(device_lock);
             panic!("expected Mock")
@@ -81,7 +81,7 @@ mod tests {
         assert!(call(json!({"method":"animation.app_new_send_gif_cmd","kwargs":{"control_word":0,"file_size":300}})).await["success"].as_bool().unwrap());
         assert!(call(json!({"method":"animation.app_big64_user_define","kwargs":{"control_word":0,"file_size":10,"index":2,"file_id":16_909_060}})).await["success"].as_bool().unwrap());
 
-        let device_lock = d.device.lock().await;
+        let device_lock = d.current_transport().await;
         let DeviceTransport::Mock(ref mock) = **device_lock.as_ref().unwrap() else {
             drop(device_lock);
             panic!()
@@ -115,7 +115,7 @@ mod tests {
                 .unwrap()
         );
         assert!(call(json!({"method":"music.set_sd_music_info","kwargs":{"current_time":60,"music_id":1,"volume":10,"status":1,"play_mode":2}})).await["success"].as_bool().unwrap());
-        let device_lock = d.device.lock().await;
+        let device_lock = d.current_transport().await;
         let DeviceTransport::Mock(ref mock) = **device_lock.as_ref().unwrap() else {
             drop(device_lock);
             panic!()
@@ -144,8 +144,8 @@ mod tests {
 
         assert!(call_res["success"].as_bool().unwrap_or(false));
 
-        let device_lock = d.device.lock().await;
-        if let Some(ref transport_arc) = &*device_lock {
+        let device_lock = d.current_transport().await;
+        if let Some(ref transport_arc) = &device_lock {
             if let DeviceTransport::Mock(ref mock) = **transport_arc {
                 let cmds = mock.sent_commands.lock().unwrap();
                 assert_eq!(cmds.len(), 1);
@@ -186,7 +186,7 @@ mod tests {
                 .await;
             assert!(call_res["success"].as_bool().unwrap_or(false));
 
-            let device_lock = d.device.lock().await;
+            let device_lock = d.current_transport().await;
             let transport_arc = device_lock.as_ref().expect("connected device");
             let DeviceTransport::Mock(ref mock) = **transport_arc else {
                 panic!("Expected Mock transport");
@@ -218,7 +218,7 @@ mod tests {
             .await;
         assert!(call_res["success"].as_bool().unwrap_or(false));
 
-        let device_lock = d.device.lock().await;
+        let device_lock = d.current_transport().await;
         let transport_arc = device_lock.as_ref().expect("connected device");
         let DeviceTransport::Mock(ref mock) = **transport_arc else {
             panic!("Expected Mock transport");

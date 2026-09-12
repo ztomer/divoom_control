@@ -8,10 +8,15 @@ use crate::transport::DeviceTransport;
 
 impl Daemon {
     pub(crate) async fn device_status(&self) -> Value {
-        let connected = self.device.lock().await.is_some();
-        let id_val = self.device_id.lock().await.clone();
+        let current = self.fleet.current().await;
+        let id_val = current.as_ref().map(|d| d.id.clone());
+        let transport = match current {
+            Some(ref d) => d.transport().await,
+            None => None,
+        };
+        let connected = transport.is_some();
 
-        let (mac, lan_ip) = if let Some(ref dev) = *self.device.lock().await {
+        let (mac, lan_ip) = if let Some(ref dev) = transport {
             match &**dev {
                 #[cfg(feature = "ble")]
                 DeviceTransport::Ble(_) => (id_val.map_or(Value::Null, Value::String), Value::Null),

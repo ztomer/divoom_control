@@ -353,8 +353,11 @@ async fn forward_notification(daemon: &Daemon, app_type: u8, text: &str) -> bool
 
     #[cfg(feature = "ble")]
     {
-        let guard = daemon.device.lock().await;
-        if let Some(ref dev) = *guard {
+        let transport = match daemon.fleet.current().await {
+            Some(d) => d.transport().await,
+            None => None,
+        };
+        if let Some(ref dev) = transport {
             match &**dev {
                 crate::daemon::DeviceTransport::Ble(ref ble) => {
                     return ble.send_command(0x50, &payload, true).await.is_ok();

@@ -104,13 +104,15 @@ async fn run_connect(daemon: &Daemon, id: &str) -> Result<BleTransport, String> 
 /// Handle `probe_lan` — check whether the connected device is reachable over its
 /// LAN HTTP API (Python-daemon parity). BLE/SPP devices report "no LAN configured".
 pub(crate) async fn probe_lan(daemon: &Daemon) -> Value {
-    let dev = {
-        let guard = daemon.device.lock().await;
-        match &*guard {
-            Some(d) => d.clone(),
+    let dev = match daemon.fleet.current().await {
+        Some(d) => match d.transport().await {
+            Some(t) => t,
             None => {
                 return json!({"success": true, "reachable": false, "detail": "no device connected"})
             }
+        },
+        None => {
+            return json!({"success": true, "reachable": false, "detail": "no device connected"})
         }
     };
     match dev.lan() {
@@ -239,13 +241,7 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
             .and_then(serde_json::Value::as_str)
             .unwrap_or("MOCK_MAC");
         let transport = Arc::new(DeviceTransport::Mock(mock_transport));
-        daemon
-            .devices
-            .lock()
-            .await
-            .insert(mock_mac.to_string(), transport.clone());
-        *daemon.device.lock().await = Some(transport);
-        *daemon.device_id.lock().await = Some(mock_mac.to_string());
+        daemon.fleet.adopt(mock_mac, transport).await;
         let _ = daemon.tx.send(status_payload(true, Some(mock_mac), None));
         let _ = daemon.tx.send(owned_devices_payload(Some(mock_mac)));
         return json!({"success":true,"connected":true,"connection_state":"connected","mac":mock_mac});
@@ -264,13 +260,7 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
         }
         let transport = Arc::new(DeviceTransport::Lan(lan));
         let id_str = format!("LAN:{ip}");
-        daemon
-            .devices
-            .lock()
-            .await
-            .insert(id_str.clone(), transport.clone());
-        *daemon.device.lock().await = Some(transport);
-        *daemon.device_id.lock().await = Some(id_str.clone());
+        daemon.fleet.adopt(&id_str, transport).await;
         let _ = daemon.tx.send(status_payload(true, Some(&id_str), None));
         let _ = daemon.tx.send(owned_devices_payload(Some(&id_str)));
         return json!({"success":true,"connected":true,"connection_state":"connected","lan_ip":ip});
@@ -293,13 +283,7 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
         match crate::spp::SppTransport::connect(&id, None, None).await {
             Ok(t) => {
                 let transport = Arc::new(DeviceTransport::Spp(t));
-                daemon
-                    .devices
-                    .lock()
-                    .await
-                    .insert(id.clone(), transport.clone());
-                *daemon.device.lock().await = Some(transport);
-                *daemon.device_id.lock().await = Some(id.clone());
+                daemon.fleet.adopt(&id, transport).await;
                 let _ = daemon.tx.send(status_payload(true, Some(&id), None));
                 let _ = daemon.tx.send(owned_devices_payload(Some(&id)));
                 return json!({"success":true,"connected":true,"connection_state":"connected","mac":id});
@@ -318,13 +302,7 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
         match result {
             Ok(t) => {
                 let transport = Arc::new(DeviceTransport::Ble(t));
-                daemon
-                    .devices
-                    .lock()
-                    .await
-                    .insert(id.clone(), transport.clone());
-                *daemon.device.lock().await = Some(transport);
-                *daemon.device_id.lock().await = Some(id.clone());
+                daemon.fleet.adopt(&id, transport).await;
                 let _ = daemon.tx.send(status_payload(true, Some(&id), None));
                 let _ = daemon.tx.send(owned_devices_payload(Some(&id)));
                 json!({"success":true,"connected":true,"connection_state":"connected","mac":id})
@@ -338,12 +316,12 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
 
 /// Handle `disconnect` command.
 pub(crate) async fn cmd_disconnect(daemon: &Daemon) -> Value {
-    daemon.live_jobs.stop_all(daemon).await;
-    let mut devices = daemon.devices.lock().await;
-    let drained: Vec<Arc<DeviceTransport>> = devices.drain().map(|(_, t)| t).collect();
-    drop(devices);
-    for t in drained {
-        match &*t {
+    // The fleet stops every live job and retires every link BEFORE the
+    // transports are torn down, so nothing queued can land on the way out
+    // -- or on whatever connects next under the same id.
+    let links = daemon.fleet.drain().await;
+    for l in links {
+        match &*l.transport {
             #[cfg(feature = "ble")]
             DeviceTransport::Ble(b) => {
                 let _ = b.disconnect().await;
@@ -354,23 +332,6 @@ pub(crate) async fn cmd_disconnect(daemon: &Daemon) -> Value {
             DeviceTransport::Lan(_) | DeviceTransport::Mock(_) => {}
         }
     }
-    // Take the transport OUT of the mutex first, so the guard is dropped
-    // before the disconnect below. Held across the `if let`, this blocks every
-    // other task wanting the device for the length of a BLE disconnect.
-    let taken = daemon.device.lock().await.take();
-    if let Some(t) = taken {
-        match &*t {
-            #[cfg(feature = "ble")]
-            DeviceTransport::Ble(b) => {
-                let _ = b.disconnect().await;
-            }
-            DeviceTransport::Spp(s) => {
-                let _ = s.disconnect().await;
-            }
-            DeviceTransport::Lan(_) | DeviceTransport::Mock(_) => {}
-        }
-    }
-    *daemon.device_id.lock().await = None;
     let _ = daemon.tx.send(status_payload(false, None, None));
     let _ = daemon.tx.send(owned_devices_payload(None));
     json!({"success": true})

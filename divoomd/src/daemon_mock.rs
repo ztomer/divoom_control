@@ -18,10 +18,12 @@ use crate::protocol::{err_reply, Request};
 /// the Python reference's `FailureReason.DROPPED`) is echoed on both
 /// broadcasts and the reply for the e2e assertion.
 pub(crate) async fn cmd_mock_simulate_drop(daemon: &Daemon, req: &Request) -> Value {
-    let is_mock = {
-        let guard = daemon.device.lock().await;
-        matches!(guard.as_deref(), Some(DeviceTransport::Mock(_)))
+    let current = daemon.fleet.current().await;
+    let transport = match current {
+        Some(ref d) => d.transport().await,
+        None => None,
     };
+    let is_mock = matches!(transport.as_deref(), Some(DeviceTransport::Mock(_)));
     if !is_mock {
         return err_reply("mock_simulate_drop requires an active mock connection");
     }
@@ -32,7 +34,7 @@ pub(crate) async fn cmd_mock_simulate_drop(daemon: &Daemon, req: &Request) -> Va
         .and_then(|v| v.as_str())
         .unwrap_or("dropped")
         .to_string();
-    let id = daemon.device_id.lock().await.clone();
+    let id = current.map(|d| d.id.clone());
 
     // Step 1: link goes unhealthy — still owned, dot flips amber (mirrors the
     // R59 degraded push on a failed device_call op).
@@ -45,8 +47,11 @@ pub(crate) async fn cmd_mock_simulate_drop(daemon: &Daemon, req: &Request) -> Va
     // Step 2: the link is actually gone — tear the device down the same way
     // cmd_disconnect does, but tag "disconnected" (not "idle") so this reads
     // as an unexpected drop, not a clean user-initiated disconnect.
-    daemon.device.lock().await.take();
-    *daemon.device_id.lock().await = None;
+    // A dropped LINK: the device keeps its identity and its live job (which
+    // reports waiting_for_device until a reconnect adopts a new link).
+    if let Some(ref i) = id {
+        daemon.fleet.detach(i).await;
+    }
     let mut disconnected_evt = status_payload(false, None, Some("disconnected"));
     if let Some(o) = disconnected_evt.as_object_mut() {
         o.insert("reason".into(), json!(reason.clone()));
@@ -89,9 +94,12 @@ mod tests {
         assert_eq!(res["connection_state"], json!("disconnected"));
         assert_eq!(res["reason"], json!("out_of_range"));
 
-        // The device is fully unowned afterward, exactly like a real drop.
-        assert!(daemon.device.lock().await.is_none());
-        assert!(daemon.device_id.lock().await.is_none());
+        // The link is gone afterward, exactly like a real drop: no current
+        // device, nothing connected -- but the identity is kept so a live
+        // job can wait for the panel to come back.
+        assert!(daemon.fleet.current().await.is_none());
+        assert!(daemon.fleet.linked().await.is_empty());
+        assert!(daemon.fleet.get("MOCK_MAC").await.is_some());
 
         // First broadcast: degraded, still "connected" (link unhealthy but owned).
         let degraded_evt = rx.try_recv().expect("degraded status broadcast missing");
@@ -149,15 +157,18 @@ mod tests {
         // Set up a LAN transport directly (no network I/O needed to construct it)
         // to stand in for "a real device is connected".
         let lan = crate::lan::LanTransport::new("127.0.0.1", 0);
-        *daemon.device.lock().await = Some(std::sync::Arc::new(
-            crate::daemon::DeviceTransport::Lan(lan),
-        ));
-        *daemon.device_id.lock().await = Some("LAN:127.0.0.1".to_string());
+        daemon
+            .fleet
+            .adopt(
+                "LAN:127.0.0.1",
+                std::sync::Arc::new(crate::daemon::DeviceTransport::Lan(lan)),
+            )
+            .await;
 
         let res =
             cmd_mock_simulate_drop(&daemon, &make_request("mock_simulate_drop", None, None)).await;
         assert_eq!(res["success"], json!(false));
         // The real (non-mock) device must be left untouched.
-        assert!(daemon.device.lock().await.is_some());
+        assert!(daemon.fleet.current().await.unwrap().is_connected().await);
     }
 }

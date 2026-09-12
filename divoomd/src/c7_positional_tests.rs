@@ -48,7 +48,7 @@ mod tests {
             res["success"].as_bool().unwrap_or(false),
             "{method} failed: {res}"
         );
-        let guard = d.device.lock().await;
+        let guard = d.current_transport().await;
         let transport = guard.as_ref().expect("connected device");
         let DeviceTransport::Mock(ref mock) = **transport else {
             panic!("expected mock transport")
@@ -162,7 +162,7 @@ mod switch_channel_tests {
             res["success"].as_bool().unwrap_or(false),
             "{channel}: {res}"
         );
-        let guard = d.device.lock().await;
+        let guard = d.current_transport().await;
         let transport = guard.as_ref().expect("connected device");
         let DeviceTransport::Mock(ref mock) = **transport else {
             panic!("expected mock transport")

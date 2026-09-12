@@ -9,11 +9,12 @@
 
 use crate::wire::WireNarrow as _;
 use serde_json::Value;
-use std::sync::Weak;
+use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use super::{
-    get_device_transport, health, now_playing_track_async, push_rgb_to_device, report_health,
+    get_device_transport, health, now_playing_track_async, push_live_frame, report_health,
 };
 use crate::daemon::Daemon;
 
@@ -21,7 +22,12 @@ use crate::daemon::Daemon;
     clippy::too_many_lines,
     reason = "one live job, start to finish: poll the player, diff against what is on screen, render, push. Each step's result decides whether the next runs"
 )]
-pub(super) async fn run_music(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
+pub(super) async fn run_music(
+    daemon_weak: Weak<Daemon>,
+    mac: String,
+    params: Value,
+    alive: Arc<AtomicBool>,
+) {
     const JOB_KIND: &str = "music";
     let size = params
         .get("size")
@@ -127,33 +133,17 @@ pub(super) async fn run_music(daemon_weak: Weak<Daemon>, mac: String, params: Va
                             }
                             Ok(frames) => {
                                 if let Some((rgb, w, h_px, t)) = frames.first() {
-                                    if get_device_transport(&daemon, &mac).await.is_some() {
-                                        let d_weak = daemon_weak.clone();
-                                        let mac_clone = mac.clone();
-                                        let rgb_vec = rgb.clone();
-                                        let (w_val, h_val, t_val) = (*w, *h_px, *t);
-                                        let queue = daemon.get_device_queue(&mac).await;
-                                        let success = queue
-                                            .run(None, async move {
-                                                if let Some(d) = d_weak.upgrade() {
-                                                    if let Some(dev_t) =
-                                                        get_device_transport(&d, &mac_clone).await
-                                                    {
-                                                        push_rgb_to_device(
-                                                            &d, &dev_t, &rgb_vec, w_val, h_val,
-                                                            t_val,
-                                                        )
-                                                        .await
-                                                        .is_ok()
-                                                    } else {
-                                                        false
-                                                    }
-                                                } else {
-                                                    false
-                                                }
-                                            })
-                                            .await
-                                            .unwrap_or(false);
+                                    if connected {
+                                        let success = push_live_frame(
+                                            &daemon,
+                                            &mac,
+                                            &alive,
+                                            rgb.clone(),
+                                            *w,
+                                            *h_px,
+                                            *t,
+                                        )
+                                        .await;
                                         // Advance only on a CONFIRMED push, so a
                                         // failure retries next tick instead of
                                         // being recorded as done.

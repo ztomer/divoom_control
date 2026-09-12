@@ -218,8 +218,7 @@ pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
         if explicit.is_some() {
             explicit
         } else {
-            let guard = daemon.device_id.lock().await;
-            guard.clone()
+            daemon.fleet.current_id().await
         }
     };
     if let Some(ref m) = target_mac {
@@ -272,10 +271,18 @@ pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
             .get("mac")
             .and_then(Value::as_str)
             .or_else(|| args.get("target_mac").and_then(Value::as_str));
-        let dev = match daemon.resolve_target_device(target_mac).await {
-            Ok(d) => d,
+        // The panel's one queue: a multi-packet page transfer must not be
+        // interleaved with a live-widget frame or a GUI device_call, and
+        // holding the permit is what guarantees that (2026-09-12).
+        let link = match daemon.resolve_target_link(target_mac).await {
+            Ok(l) => l,
             Err(e) => return e,
         };
+        let _permit = match link.queue.acquire(None).await {
+            Ok(p) => p,
+            Err(e) => return crate::protocol::err_reply(&e.to_string()),
+        };
+        let dev = link.transport.clone();
         if matches!(
             &*dev,
             crate::daemon::DeviceTransport::Ble(_) | crate::daemon::DeviceTransport::Spp(_)
@@ -315,10 +322,15 @@ pub async fn cmd_custom_art_query_page(daemon: Arc<Daemon>, args: &Value) -> Val
             .get("mac")
             .and_then(Value::as_str)
             .or_else(|| args.get("target_mac").and_then(Value::as_str));
-        let dev = match daemon.resolve_target_device(target_mac).await {
-            Ok(d) => d,
+        let link = match daemon.resolve_target_link(target_mac).await {
+            Ok(l) => l,
             Err(e) => return e,
         };
+        let _permit = match link.queue.acquire(None).await {
+            Ok(p) => p,
+            Err(e) => return crate::protocol::err_reply(&e.to_string()),
+        };
+        let dev = link.transport.clone();
         if matches!(
             &*dev,
             crate::daemon::DeviceTransport::Ble(_) | crate::daemon::DeviceTransport::Spp(_)

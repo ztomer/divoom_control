@@ -24,7 +24,7 @@ mod tests {
     }
 
     async fn sent(d: &Daemon) -> Vec<(u8, Vec<u8>)> {
-        let device_lock = d.device.lock().await;
+        let device_lock = d.current_transport().await;
         let DeviceTransport::Mock(ref mock) = **device_lock.as_ref().unwrap() else {
             drop(device_lock);
             panic!("expected Mock")

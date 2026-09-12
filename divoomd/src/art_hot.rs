@@ -349,13 +349,6 @@ async fn load_hot_files(
 // -- `expect` policing over-declaration is the reason to prefer it, and the
 // reason it has to be cfg'd rather than pasted.
 #[cfg_attr(
-    feature = "ble",
-    expect(
-        clippy::significant_drop_tightening,
-        reason = "the guarded value is read by everything after this line; the explicit drops that could be added were placed where they helped and the borrow checker refused the rest"
-    )
-)]
-#[cfg_attr(
     not(feature = "ble"),
     expect(
         unused_variables,
@@ -398,11 +391,26 @@ pub(crate) async fn run_hot_update(
         // concurrent device command wait instead. (Download above ran lock-free —
         // it is pure HTTP; only the BLE exchange needs exclusivity. get_status /
         // hot_update_progress are lock-free so the progress UI is unaffected.)
-        let guard = daemon.device.lock().await;
-        let dev = match guard.as_ref() {
-            Some(d) => d.clone(),
-            None => return Err("no device connected".into()),
-        };
+        //
+        // 2026-09-12: "the device lock" is now the panel's ONE queue. Holding
+        // its permit is what actually serializes against live-widget frames
+        // and GUI device_calls (which ride the same queue); the old
+        // `daemon.device` mutex serialized against nothing that mattered.
+        // The live widget on this panel is retired first, or it would paint
+        // over the hot channel the moment the permit is released.
+        let link = daemon
+            .resolve_target_link(None)
+            .await
+            .map_err(|_| "no device connected".to_string())?;
+        if let Some(id) = daemon.fleet.current_id().await {
+            daemon.live_jobs.stop_all_for_device(&daemon, &id).await;
+        }
+        let _permit = link
+            .queue
+            .acquire(None)
+            .await
+            .map_err(|e| format!("hot_update could not take the device: {e}"))?;
+        let dev = link.transport.clone();
         if matches!(
             &*dev,
             crate::daemon::DeviceTransport::Ble(_) | crate::daemon::DeviceTransport::Spp(_)

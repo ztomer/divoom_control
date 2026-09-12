@@ -55,8 +55,8 @@ pub mod tests {
 
         assert!(call_res["success"].as_bool().unwrap_or(false));
 
-        let device_lock = d.device.lock().await;
-        if let Some(ref transport_arc) = &*device_lock {
+        let device_lock = d.current_transport().await;
+        if let Some(ref transport_arc) = &device_lock {
             if let DeviceTransport::Mock(ref mock) = **transport_arc {
                 let cmds = mock.sent_commands.lock().unwrap();
                 assert_eq!(cmds.len(), 1);
@@ -93,7 +93,7 @@ pub mod tests {
         use crate::weather::WeatherInfo;
 
         let d = setup_mock_daemon().await;
-        let transport = d.device.lock().await.clone().expect("a mock device");
+        let transport = d.current_transport().await.expect("a mock device");
         crate::live_jobs::push_weather(
             &transport,
             WeatherInfo {
@@ -105,8 +105,8 @@ pub mod tests {
         )
         .await;
 
-        let device_lock = d.device.lock().await;
-        if let Some(ref transport_arc) = &*device_lock {
+        let device_lock = d.current_transport().await;
+        if let Some(ref transport_arc) = &device_lock {
             if let DeviceTransport::Mock(ref mock) = **transport_arc {
                 let cmds = mock.sent_commands.lock().unwrap();
                 // NOT just "a 0x45 starting with 0x00". The first version of
@@ -189,8 +189,8 @@ pub mod tests {
 
         assert!(call_res["success"].as_bool().unwrap_or(false));
 
-        let device_lock = d.device.lock().await;
-        if let Some(ref transport_arc) = &*device_lock {
+        let device_lock = d.current_transport().await;
+        if let Some(ref transport_arc) = &device_lock {
             if let DeviceTransport::Mock(ref mock) = **transport_arc {
                 let cmds = mock.sent_commands.lock().unwrap();
                 assert_eq!(cmds.len(), 1);
@@ -227,8 +227,8 @@ pub mod tests {
 
         assert!(call_res["success"].as_bool().unwrap_or(false));
 
-        let device_lock = d.device.lock().await;
-        if let Some(ref transport_arc) = &*device_lock {
+        let device_lock = d.current_transport().await;
+        if let Some(ref transport_arc) = &device_lock {
             if let DeviceTransport::Mock(ref mock) = **transport_arc {
                 let cmds = mock.sent_commands.lock().unwrap();
                 assert_eq!(cmds.len(), 1);
@@ -255,8 +255,8 @@ pub mod tests {
         })), None)).await;
 
         assert!(call_res["success"].as_bool().unwrap_or(false));
-        let device_lock = d.device.lock().await;
-        if let Some(ref transport_arc) = &*device_lock {
+        let device_lock = d.current_transport().await;
+        if let Some(ref transport_arc) = &device_lock {
             if let DeviceTransport::Mock(ref mock) = **transport_arc {
                 let cmds = mock.sent_commands.lock().unwrap();
                 assert_eq!(cmds.len(), 1);
@@ -361,8 +361,8 @@ pub mod tests {
         );
 
         // Exactly one device_call (A's) reached the device, with the right wire bytes.
-        let device_lock = d.device.lock().await;
-        if let Some(ref transport_arc) = &*device_lock {
+        let device_lock = d.current_transport().await;
+        if let Some(ref transport_arc) = &device_lock {
             if let DeviceTransport::Mock(ref mock) = **transport_arc {
                 let cmds = mock.sent_commands.lock().unwrap();
                 assert_eq!(cmds.len(), 1, "only A's call should reach the device");

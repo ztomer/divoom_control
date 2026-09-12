@@ -1,5 +1,6 @@
 use crate::wire::WireNarrow as _;
 use serde_json::Value;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
@@ -107,15 +108,50 @@ async fn push_rgb_to_device(
 }
 
 async fn get_device_transport(daemon: &Daemon, mac: &str) -> Option<Arc<DeviceTransport>> {
-    let dev_opt = daemon.devices.lock().await.get(mac).cloned();
-    if let Some(t) = dev_opt {
-        return Some(t);
-    }
-    let cur_id = daemon.device_id.lock().await.clone().unwrap_or_default();
-    if cur_id == mac {
-        return daemon.device.lock().await.clone();
-    }
-    None
+    daemon.fleet.get(mac).await?.transport().await
+}
+
+/// Send one live-widget frame to `mac`, or drop it.
+///
+/// The frame is queued on the LINK the panel has right now and carries the
+/// job's `alive` flag. When its turn comes it re-checks both: a job stopped
+/// in the meantime, or a link retired by a reconnect, means the frame is
+/// dropped rather than painted over whatever the user asked for since. This
+/// is the fence that makes `live_job_stop` and `disconnect` mean "nothing
+/// more lands", which the old queue-by-mac closure could not promise.
+///
+/// Returns whether the frame reached the transport.
+pub(super) async fn push_live_frame(
+    daemon: &Arc<Daemon>,
+    mac: &str,
+    alive: &Arc<AtomicBool>,
+    rgb: Vec<u8>,
+    w: i32,
+    h: i32,
+    time_ms: u16,
+) -> bool {
+    let Some(device) = daemon.fleet.get(mac).await else {
+        return false;
+    };
+    let Some(link) = device.link().await else {
+        return false;
+    };
+    let d_weak = Arc::downgrade(daemon);
+    let alive = alive.clone();
+    let link_in = link.clone();
+    link.run(None, async move {
+        if !alive.load(Ordering::SeqCst) || link_in.is_retired() {
+            return false;
+        }
+        let Some(d) = d_weak.upgrade() else {
+            return false;
+        };
+        push_rgb_to_device(&d, &link_in.transport, &rgb, w, h, time_ms)
+            .await
+            .is_ok()
+    })
+    .await
+    .unwrap_or(false)
 }
 
 // --- Live Widgets Loops ---
@@ -124,7 +160,7 @@ async fn get_device_transport(daemon: &Daemon, mac: &str) -> Option<Arc<DeviceTr
     clippy::cast_possible_wrap,
     reason = "system percentages and byte rates rendered onto a panel, converted for the drawing arithmetic below"
 )]
-async fn run_sysmon(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
+async fn run_sysmon(daemon_weak: Weak<Daemon>, mac: String, params: Value, alive: Arc<AtomicBool>) {
     const JOB_KIND: &str = "sysmon";
     let size = params
         .get("size")
@@ -167,21 +203,9 @@ async fn run_sysmon(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
         let s = sysmon::sample(&sys);
         let rgb = render_sysmon(s.cpu, s.mem, s.battery, size);
 
-        if get_device_transport(&daemon, &mac).await.is_some() {
-            let d_weak = daemon_weak.clone();
-            let mac_clone = mac.clone();
-            let queue = daemon.get_device_queue(&mac).await;
-            let _ = queue
-                .run(None, async move {
-                    if let Some(d) = d_weak.upgrade() {
-                        if let Some(dev_t) = get_device_transport(&d, &mac_clone).await {
-                            let _ =
-                                push_rgb_to_device(&d, &dev_t, &rgb, size as i32, size as i32, 100)
-                                    .await;
-                        }
-                    }
-                })
-                .await;
+        if connected {
+            let _ =
+                push_live_frame(&daemon, &mac, &alive, rgb, size as i32, size as i32, 100).await;
         }
 
         let nap = if connected {
@@ -197,7 +221,7 @@ async fn run_sysmon(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
     clippy::cast_possible_wrap,
     reason = "a price and a percentage change rendered onto a panel"
 )]
-async fn run_stocks(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
+async fn run_stocks(daemon_weak: Weak<Daemon>, mac: String, params: Value, alive: Arc<AtomicBool>) {
     const JOB_KIND: &str = "stocks";
     let symbol = params
         .get("symbol")
@@ -250,26 +274,8 @@ async fn run_stocks(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
         if let Ok(quote) = crate::render_widget::fetch_quote(&client, &symbol).await {
             let rgb = render_stock(&symbol, quote.price, quote.change, size);
 
-            if get_device_transport(&daemon, &mac).await.is_some() {
-                let d_weak = daemon_weak.clone();
-                let mac_clone = mac.clone();
-                let queue = daemon.get_device_queue(&mac).await;
-                let _ = queue
-                    .run(None, async move {
-                        if let Some(d) = d_weak.upgrade() {
-                            if let Some(dev_t) = get_device_transport(&d, &mac_clone).await {
-                                let _ = push_rgb_to_device(
-                                    &d,
-                                    &dev_t,
-                                    &rgb,
-                                    size as i32,
-                                    size as i32,
-                                    100,
-                                )
-                                .await;
-                            }
-                        }
-                    })
+            if connected {
+                let _ = push_live_frame(&daemon, &mac, &alive, rgb, size as i32, size as i32, 100)
                     .await;
             }
         }
@@ -342,7 +348,12 @@ pub(crate) async fn push_weather(
         .await;
 }
 
-async fn run_weather(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
+async fn run_weather(
+    daemon_weak: Weak<Daemon>,
+    mac: String,
+    params: Value,
+    alive: Arc<AtomicBool>,
+) {
     const JOB_KIND: &str = "weather";
     let location = params
         .get("location")
@@ -413,18 +424,19 @@ async fn run_weather(daemon_weak: Weak<Daemon>, mac: String, params: Value) {
                 .await;
             }
             Ok(info) => {
-                if get_device_transport(&daemon, &mac).await.is_some() {
-                    let d_weak = daemon_weak.clone();
-                    let mac_clone = mac.clone();
+                if let Some(link) = match daemon.fleet.get(&mac).await {
+                    Some(d) => d.link().await,
+                    None => None,
+                } {
                     let select_face = !face_selected;
-                    let queue = daemon.get_device_queue(&mac).await;
-                    let _ = queue
+                    let alive_in = alive.clone();
+                    let link_in = link.clone();
+                    let _ = link
                         .run(None, async move {
-                            if let Some(d) = d_weak.upgrade() {
-                                if let Some(dev_t) = get_device_transport(&d, &mac_clone).await {
-                                    push_weather(&dev_t, info, select_face).await;
-                                }
+                            if !alive_in.load(Ordering::SeqCst) || link_in.is_retired() {
+                                return;
                             }
+                            push_weather(&link_in.transport, info, select_face).await;
                         })
                         .await;
                     // The face is selected for as long as this job keeps the
