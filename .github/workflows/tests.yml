@@ -58,6 +58,12 @@ jobs:
         run: python3 tools/check_scripts.py
       - name: Tests live in tests/, Rust test modules are cfg-gated (Phase 1)
         run: python3 tools/check_test_placement.py
+      # check_examples resolves the facade's REAL classes (it asks
+      # `has_member` on them), so it needs the package's runtime deps -- the
+      # same install the `test` job does. Without it the job died on
+      # `import bleak` the first time it ran on GitHub (2026-09-12).
+      - name: Install runtime deps for the facade check
+        run: pip install -r requirements.txt
       - name: examples/ documents a facade that still exists (Phase 3)
         run: python3 tools/check_examples.py
       - name: Positional args are not read from the compacted list

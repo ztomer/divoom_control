@@ -13,6 +13,14 @@
 //! 4. Rapid start/stop churn leaks nothing and leaves the device quiet.
 //! 5. Disconnecting a device stops its jobs and nothing lands on the next
 //!    transport for that mac.
+//!
+//! macOS only: every scenario counts FRAMES on the mock, and a frame exists
+//! only after the native encoder (`divoom_lib/libdivoom_compact.dylib`, a
+//! macOS build artefact) has encoded it. On Linux there is no encoder, so
+//! `push_rgb_to_device` never reaches the transport and every count would
+//! read zero -- which is the pass condition for half the scenarios. A suite
+//! that cannot fail is not run.
+#![cfg(target_os = "macos")]
 use divoomd::daemon::{Daemon, DeviceTransport};
 use divoomd::protocol::make_request;
 use divoomd::socket_server::Handler;
