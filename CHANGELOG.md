@@ -4,6 +4,65 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## Unreleased (v0.37 work, 2026-09-12)
+
+Read first if you upgrade:
+
+- **Your Divoom account password moves out of `config.ini` into the macOS
+  Keychain** (service `divoom-control`, account `divoom-cloud`) the first
+  time the daemon reads it, and the file's `password =` line is blanked.
+  Settings says "Password stored in Keychain". Linux with `secret-tool`
+  uses the Secret Service; anywhere else the file stays (0600) and the
+  daemon logs one warning. `DIVOOMD_SECRET_BACKEND=file` forces the file.
+- **Now Playing follows whichever app is actually playing.** A paused or
+  empty player holding the system's session no longer hides another app
+  (a stopped Music masked a playing Kaset; Kaset's own stub registration
+  masked its full record with the artwork). The idle hint names the
+  registered players with their states.
+- **The `divoom` CLI talks to the running daemon** and no longer opens
+  Bluetooth itself; with no daemon it says what to start (exit 3), and
+  with several panels linked and no `--mac` it lists them (exit 2).
+- **Nothing is "the current device" any more.** A daemon command names its
+  panel, or there is exactly one linked; with several and no `mac` the
+  daemon refuses with the count. Notifications go to every linked panel.
+- **Menubar rows show the frame each panel is showing.**
+
+### Changed
+
+- CLI: `cli_commands` attaches with `ensure_daemon(spawn=False)` (a
+  shell-spawned daemon has no Bluetooth grant and dies on its first scan),
+  drives `DaemonDeviceProxy(mac=...)`, reads the daemon's scan
+  (`manufacturer_data`, `service_uuids` on the reply) for `scan` and
+  `identify`, takes capabilities from the table, and never hangs up a
+  panel. bleak is out of its import path.
+- Daemon: `Fleet::resolve_target(mac)` replaces `current`/`current_id`/
+  `preset` and the `--mac` preset; mac-less `device_status` returns the
+  fleet; `hot_update` targets the GUI's displayed address; a GUI
+  `ConnectionApi.get_capabilities` that called a daemon method that does
+  not exist is gone.
+- GUI: `panelIsLinked(mac)`, `requireDevice(mac)`, per-panel status
+  events; `appConnected` follows the selected panel; the cloud status box
+  has one renderer, and "not signed in" is a status, not an alarm.
+- Menubar: `tiles::TileCache` decodes each panel's PNG preview once into
+  its row icon; tooltip "N of M panels online".
+- Now-playing helper: `MRMediaRemoteGetNowPlayingInfoForClient` and
+  `GetPlaybackStateForClient` take `(client, origin, ...)` — signatures
+  read from the framework's code on macOS 26.6.2 (the three-argument
+  declaration that crashed had been recorded as a platform limit). Every
+  registered client is read; the playing one with the richest record wins.
+- Credentials: `secret_store` seam (Keychain via the Apple-signed
+  `security` CLI in stdin mode, so the item's ACL does not key on the
+  daemon's churning local signature); `cloud_store` split into
+  `mod`/`ini`/`cache` with one `write_private` for every 0600 write.
+  Migration is on read; an email-only save moves a file password first;
+  a refused NEW password writes nothing.
+- Tests: the `--run-browser` opt-in lives in
+  `tests.support.browser.require_browser()` instead of a module-text
+  scan that hid every non-browser test sharing a file with a browser one
+  (30-odd tests, two stale). Stress suite gains "a mac-less call with
+  several panels is refused with the count". Linux CI builds the encoder
+  (`libdivoom_compact.so`) so the stress suite runs there too.
+
 ## v0.36.0 — One struct per panel, the six user-reported defects, prompt-free rebuilds (2026-09-12)
 
 Minor bump: new capability (per-device fleet model, per-device
