@@ -9,6 +9,13 @@ forward-looking one. Recover a round plan with
 
 ## Shipped
 
+- **v0.35.3 — Architectural Remediation, Multi-Surface State Coordination & Virtual Wall Spatial Synchronization (2026-09-12)**:
+  - **Architectural Defects Remediation (`divoomd`)**: Serialized device dispatch in `cmd_device_call` using RAII `QueuePermit` on `CommandQueue`, strictly serializing concurrent RPC callers against live streamers and firmware updates; terminated zombie background streamers on disconnect via `daemon.live_jobs.stop_all(daemon).await` and drained `daemon.devices`; refactored `DivoomWall::connect` to bind `WallConfig` directly to tasks, ensuring complete coordinate invariance; unified virtual wall transport pool with `daemon.devices` and preserved active fleet connections on wall teardown; enabled multi-device MAC targeting in `cmd_custom_art_push` and `cmd_custom_art_query_page`.
+  - **Multi-Surface State Coordination (`divoomd`, `divoom-menubar`)**: Unified `system.set_screen_on` across BLE and LAN; added standby and zero-brightness preemption to automatically halt active streamers; broadcasted event-driven `"activity"` updates over `daemon.tx` to menubar and subscribers; preserved device names on activity updates.
+  - **Live Job Preemption & State Management Stabilization**: Preempted background streaming jobs across daemon, Python API, and frontend upon channel switch, image push, and gallery art selection; fixed gallery double-click bug.
+  - **Virtual Wall & Main Bench Preview Unification + Two-Way Spatial Preset Synchronization**: Replaced static arranger images with dynamic `<canvas>` elements driven by `DisplayPreviewRegistry`; banished false-positive orange "W" glyph; two-way synchronized Virtual Wall layout presets and node dragging with the `SpatialRooms` engine.
+  - **Automated Verification**: `divoomd/tests/multi_device_routing.rs` (7/7 passed), Python unit and browser tests (173 passed), local CI all 25 steps passed.
+
 - **v0.35.2 — Unified Multi-Device Architecture, Per-Device Command Queues, Streamer Job Isolation & Native Menubar Event-Driven Streaming (2026-09-11)**:
   - **Unified DisplayPreview Object Model (`preview_controller.js`, `index.html`)**: Introduced `DisplayPreview` and `DisplayPreviewRegistry` classes encapsulating native resolution (`16x16`, `32x32`, `64x64`), active channel, image/SVG caching, authentic 1-bit bitmap digit rendering, and direct-to-canvas blitting with complete multi-display isolation.
   - **Hardware-Faithful Bitmap Pixel Art Clocks (`preview_controller.js`, `channel_preview.js`)**: Replaced blurry vector SVG fonts with authentic 1-bit integer bitmap LED matrices (3x5 and 5x7 digit tables) rendered directly via discrete pixel diodes.

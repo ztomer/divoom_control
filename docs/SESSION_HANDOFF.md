@@ -21,7 +21,7 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
-- **2026-09-12 — Architectural Remediation: Command Queue Serialization via QueuePermit, Ghost Live Streamer Cleanup on Disconnect, Virtual Wall Coordinate Invariance & Fleet Transport Pool Unification.**
+- **2026-09-12 — v0.35.3 RELEASE: Architectural Remediation, Multi-Surface State Coordination & Virtual Wall Spatial Synchronization.**
   - **Defects Remediated**: Addressed 5 core architectural defects discovered during the full system audit (`architectural_audit_report.md`).
   - **Serialized Device Dispatch via QueuePermit (`divoomd/src/command_queue.rs`, `divoomd/src/daemon.rs`)**:
     - Added RAII `QueuePermit` backed by a oneshot release channel to `CommandQueue`.

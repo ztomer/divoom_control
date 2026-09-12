@@ -5,7 +5,7 @@ so it can run from any context (incl. an unprivileged shell) without a TCC crash
 the daemon (a granted process) does all the Bluetooth.
 
 Usage:
-    divoom-control daemon            # in a BT-granted terminal (or the .app)
+    ./run.sh                         # in a BT-granted terminal (or the .app)
     python3 scripts/hw_smoke.py [--scan-timeout N] [--phase discover|connect|stress|all]
 
 Style: Susan Kare icons + restrained Braun colours (matches ~/projects/scripts).

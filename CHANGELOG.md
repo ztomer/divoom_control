@@ -4,7 +4,7 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
-## v0.35.2 — Unified DisplayPreview Object Architecture & Hardware-Faithful Bitmap Rendering (2026-09-11)
+## v0.35.3 — Architectural Remediation, Multi-Surface State Coordination & Virtual Wall Spatial Synchronization (2026-09-12)
 
 ### Architecture & Fixed
 
@@ -24,6 +24,7 @@ shipped milestone (per the project planning docs).
   - Dispatched `"activity"` events (`type: "activity", mac, kind, name, preview`) over `daemon.tx` in `set_device_activity` and `cmd_device_call` (on channel switch), enabling real-time event-driven updates for menubar and other subscribers without polling.
   - Updated `divoom-menubar`'s `update_snapshot_from_event` to preserve existing device names when an activity event omits the name.
   - Added integration tests in `divoomd/tests/multi_device_routing.rs` (`test_device_call_set_screen_on_and_standby_preemption`, `test_set_device_activity_broadcasts_event`) and unit tests in `divoom-menubar/src/daemon/tests.rs`.
+
 - **Live Job Preemption & State Management Stabilization (`daemon.rs`, `art.rs`, `lighting.py`, `gallery_sync.py`, `preview_controller.js`, `app_globals.js`, `gallery.js`, `widgets.js`, `custom_art.js`)**:
   - Solved issue where selecting System Monitor (stats) and subsequently pushing an image or gallery artwork caused the device and preview to revert back to stats after 5 seconds due to persistent background streaming loops.
   - Rust Daemon: added `preempt_conflicting_live_jobs` in `Daemon::cmd_device_call` and `art.rs:cmd_custom_art_push` to halt any running live streaming jobs (`sysmon`, `music`, `stocks`, `weather`) on the target device when an image, channel, clock, or custom art is pushed.
@@ -31,16 +32,23 @@ shipped milestone (per the project planning docs).
   - Frontend: updated `DisplayPreview.setActivity` to unbind active streamer jobs when switching to non-widget channels or setting artwork (`opts.fileId`), while preserving bindings during normal live frame ticks (`{ src: src }`).
   - Frontend: updated `markActiveDeviceFrame` to return early when `kind` is specified and no displays are bound to that streamer, preventing background ticks from clobbering active displays; explicitly unbound jobs in `gallery.js` and `custom_art.js`; wired `divoom:activity-updated` in `widgets.js` to clear pollers on non-widget activation.
   - Verified via Rust integration test `divoomd/tests/multi_device_routing.rs:test_device_call_preempts_conflicting_live_jobs`, Python unit tests in `tests/test_gui_api_lighting.py`, and Playwright browser test in `tests/test_browser_preview_registry.py:test_browser_stats_gallery_job_preemption`.
+
 - **Virtual Wall & Main Bench Preview Unification (`preview_controller.js`, `wall.css`, `app_globals.js`, `spatial_stage.js`, `settings_hardware.js`)**:
   - Eliminated preview divergence between the Virtual Wall arranger (`#arranger-canvas`) and Main Bench (`#spatial-bench`).
   - Fixed `preview_controller.js` false-positive orange "W" glyph: replaced `if (this.wallSlot)` with `if (this.channel === "wall")`. When displays in wall slots run procedural channels (Clock, EQ visualizer, Ambient), they now render their actual channel pixel art on the Main Bench instead of being suppressed by the wall slot glyph.
   - Replaced static `<img>` tags in `.arranger-node-screen` (`renderArrangerCanvas`) with dynamic `<canvas class="arranger-node-canvas arranger-node-preview">` elements driven directly by `DisplayPreviewRegistry.get(mac).renderTo(cvs, 0)`.
   - Updated `spatial_stage.js:startAnimationLoop` to blit active frames concurrently to both `#stage-canvas-${mac}` and `#arranger-canvas-${mac}`, guaranteeing identical real-time previews for clocks, visualizers, ambient lighting, and art slices across both views.
+
 - **Two-Way Spatial Preset Synchronization (`app_init.js`, `app_globals.js`, `spatial_rooms.js`, `spatial_stage.js`)**:
   - Synchronized Virtual Wall presets (`#presets-select`) with the `SpatialRooms` engine (`All`, `Desk`, `Wall`, `Shelf`).
   - Loading a layout preset or dragging nodes in the Virtual Wall Arranger updates `SpatialRooms` room assignment (`devRooms[mac] = 'Wall'`), updates coordinates (`pos[mac] = { x, y }`), persists via `SpatialRooms.savePositions()`, and re-renders the Spatial Stage.
   - Dragging nodes on the Spatial Stage updates assigned wall slot coordinates and refreshes the Arranger canvas via `syncArrangerToPython()`.
   - Added automated browser test suite `tests/test_virtual_wall_preview_sync.py` verifying clock preview sync on both canvases with 0 orange pixels, frame and EQ spectrum sync, and preset load synchronization with `SpatialRooms`.
+
+## v0.35.2 — Unified DisplayPreview Object Architecture & Hardware-Faithful Bitmap Rendering (2026-09-11)
+
+### Architecture & Fixed
+
 - **Unified Per-Display Object Model (`preview_controller.js`, `index.html`)**:
   - Introduced `DisplayPreview` and `DisplayPreviewRegistry` to replace fragmented ad-hoc preview dictionaries with an object-oriented architecture.
   - Each physical and virtual screen encapsulates its native resolution (`16x16`, `32x32`, `64x64`), active channel, raster/SVG frame caching, and integer pixel canvas blitting.

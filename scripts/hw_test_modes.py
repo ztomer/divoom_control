@@ -12,7 +12,7 @@ which retries on a fixed budget; pass --mac to skip discovery entirely. Idempote
 — it leaves the device on clock face 0 at brightness 60.
 
 Usage:
-    divoom-control daemon                 # in a BT-granted terminal (or ./run.sh)
+    ./run.sh                              # in a BT-granted terminal (or the .app)
     python3 scripts/hw_test_modes.py                 # connected / first device
     python3 scripts/hw_test_modes.py --mac <ADDR>    # target one device
     python3 scripts/hw_test_modes.py --all           # every discovered device
@@ -237,7 +237,7 @@ def main() -> int:
         st = d.call("device_status")
     except (FileNotFoundError, ConnectionRefusedError, socket.error) as e:
         err(f"daemon not reachable at {args.socket}: {e}")
-        err("start it first: ./run.sh  (or: divoom-control daemon)")
+        err("start it first: ./run.sh")
         return 2
 
     # Resolve target device(s) deterministically.
