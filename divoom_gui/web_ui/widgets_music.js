@@ -61,7 +61,10 @@ document.addEventListener("DOMContentLoaded", () => {
             // daemon now supplies the bytes and the backend hands us a data:
             // URL, which is what every other image in this app already uses.
             if (info.preview) {
-                if (coverEl) coverEl.src = info.preview;
+                // Left: the real album art, smoothly resized. Right: the
+                // device-size frame, pixelated. They are different pictures
+                // on purpose (#1, 2026-09-12).
+                if (coverEl) coverEl.src = info.artwork || info.preview;
                 if (devPrev) {
                     devPrev.src = info.preview;
                     devPrev.style.display = "inline-block";

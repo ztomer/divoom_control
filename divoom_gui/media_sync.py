@@ -56,9 +56,19 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
                 return json.dumps({"available": True, "playing": False})
 
             preview = ""
+            artwork = ""
             art_b64 = reply.get("artwork_b64")
             if art_b64:
                 preview = self._artwork_preview(art_b64)
+                # The real album art for the card's cover (a smooth resize of
+                # the original); `preview` is the device-size frame beside it
+                # and is the one that must stay pixelated. Handing the cover
+                # the device frame was #1's actual cause -- a 16x16 upscaled
+                # is blurry with smoothing on and blocky with it off, never
+                # album art. The daemon's `artwork_mime` is sniffed from the
+                # bytes, not the player's claim.
+                mime = reply.get("artwork_mime") or "image/jpeg"
+                artwork = f"data:{mime};base64,{art_b64}"
 
             return json.dumps({
                 "available": True,
@@ -73,6 +83,7 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
                 # rather than showing a stopped player as live.
                 "is_playing": reply.get("is_playing", True),
                 "preview": preview,
+                "artwork": artwork,
             })
         except Exception as e:
             logger.warning(f"now_playing failed: {e}")
