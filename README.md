@@ -189,7 +189,8 @@ divoom_lib/            Async BLE/LAN library (macOS + Linux)
   display/ system/ scheduling/ media/ tools/ utils/   domain submodules
   native/ + native_src/  ctypes wrappers + C sources for encoders/downsampler
   libdivoom_compact.*    built native library (.dylib / .so)
-  cli.py                 the `divoom-control` CLI
+  cli.py                 the `divoom-control` CLI (a daemon client: needs a
+                          running divoomd, opens no Bluetooth itself)
 divoom_client/         Daemon CLIENT library (spawn/find/talk to divoomd)
   daemon_client.py        spawn_daemon()/ensure_daemon(), DaemonDeviceProxy
   daemon_protocol.py     NDJSON wire protocol + DaemonClient
