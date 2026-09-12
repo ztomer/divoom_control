@@ -32,7 +32,9 @@ def test_connect_single_device_lan_success(host, monkeypatch, tmp_path):
     host._daemon_client = client
     ok = host.connect_single_device("LAN:192.168.1.50")
     assert ok is True
-    client.disconnect_device.assert_called_once()
+    # 2026-09-12: connecting one panel must not disconnect the fleet.
+    client.disconnect_device.assert_not_called()
+    assert host.current_divoom._mac == "LAN:192.168.1.50"
     _, kwargs = client.connect_device.call_args
     assert kwargs["lan_ip"] == "192.168.1.50"
     assert kwargs["lan_token"] == 0

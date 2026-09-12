@@ -322,3 +322,68 @@ async fn owned_devices_lists_the_whole_fleet_not_just_the_newcomer() {
     ids.sort();
     assert_eq!(ids, vec!["DEV_A", "DEV_B"]);
 }
+
+#[tokio::test]
+async fn disconnecting_one_panel_leaves_the_others_streaming() {
+    let d = daemon_with_mock("DEV_A").await;
+    daemon_with_mock_on(&d, "DEV_B").await;
+    assert_eq!(
+        start_job(&d, "DEV_A", "sysmon").await["success"],
+        json!(true)
+    );
+    assert_eq!(
+        start_job(&d, "DEV_B", "sysmon").await["success"],
+        json!(true)
+    );
+    assert!(wait_for_sent(&d, "DEV_B", 1, Duration::from_secs(3)).await >= 1);
+
+    let r = d
+        .handle(make_request(
+            "disconnect",
+            Some(json!({"mac": "dev_a"})),
+            None,
+        ))
+        .await;
+    assert_eq!(r["success"], json!(true), "{r}");
+    assert!(d.fleet.get("DEV_A").await.is_none(), "DEV_A forgotten");
+    assert!(
+        d.fleet.connected("DEV_B").await.is_some(),
+        "DEV_B untouched"
+    );
+    let kinds: Vec<_> = d
+        .live_jobs
+        .list(None)
+        .await
+        .iter()
+        .map(|j| j["mac"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(kinds, vec!["DEV_B"], "only DEV_B's job survives");
+
+    // Per-device status: the proxy bound to DEV_B asks about DEV_B even
+    // though nothing is "current" any more.
+    let st = d
+        .handle(make_request(
+            "device_status",
+            Some(json!({"mac": "DEV_B"})),
+            None,
+        ))
+        .await;
+    assert_eq!(st["connected"], json!(true));
+    assert_eq!(st["mac"], json!("DEV_B"));
+    let st_a = d
+        .handle(make_request(
+            "device_status",
+            Some(json!({"mac": "DEV_A"})),
+            None,
+        ))
+        .await;
+    assert_eq!(st_a["connected"], json!(false));
+
+    let before = sent_count(&d, "DEV_B").await;
+    tokio::time::sleep(Duration::from_millis(5500)).await;
+    assert!(
+        sent_count(&d, "DEV_B").await > before,
+        "DEV_B kept streaming"
+    );
+    stop_job(&d, "DEV_B", "sysmon").await;
+}

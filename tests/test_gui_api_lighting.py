@@ -145,7 +145,7 @@ class TestLightingApiCoverage(unittest.TestCase):
         fake.wall_configure.return_value = {"success": True, "wall": True}
 
         def _device_call(method, args=None, kwargs=None, target="device",
-                         blobs=None, token=None):
+                         blobs=None, token=None, mac=None):
             if method == "get_last_previews":
                 if isinstance(previews_result, Exception):
                     raise previews_result

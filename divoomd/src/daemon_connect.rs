@@ -317,6 +317,38 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
     err_reply("BLE support is disabled, requires 'lan_ip'")
 }
 
+async fn hang_up(t: &DeviceTransport) {
+    match t {
+        #[cfg(feature = "ble")]
+        DeviceTransport::Ble(b) => {
+            let _ = b.disconnect().await;
+        }
+        DeviceTransport::Spp(s) => {
+            let _ = s.disconnect().await;
+        }
+        DeviceTransport::Lan(_) | DeviceTransport::Mock(_) => {}
+    }
+}
+
+/// `disconnect {mac}`: one panel leaves the fleet; the others keep their
+/// links and jobs. Its own job is stopped and its link retired BEFORE the
+/// radio hangs up, so nothing queued can land on the way out.
+pub(crate) async fn cmd_disconnect_one(daemon: &Daemon, mac: &str) -> Value {
+    let Some(dev) = daemon.fleet.get(mac).await else {
+        return err_reply(&format!("device '{mac}' not connected"));
+    };
+    daemon.live_jobs.stop_all_for_device(daemon, &dev.id).await;
+    let link = daemon.fleet.remove(&dev.id).await;
+    if let Some(l) = link {
+        hang_up(&l.transport).await;
+    }
+    let _ = daemon
+        .tx
+        .send(status_payload(false, Some(&dev.id), Some("disconnected")));
+    let _ = daemon.tx.send(owned_devices_payload(daemon).await);
+    json!({"success": true, "mac": dev.id})
+}
+
 /// Handle `disconnect` command.
 pub(crate) async fn cmd_disconnect(daemon: &Daemon) -> Value {
     // The fleet stops every live job and retires every link BEFORE the
@@ -324,16 +356,7 @@ pub(crate) async fn cmd_disconnect(daemon: &Daemon) -> Value {
     // -- or on whatever connects next under the same id.
     let links = daemon.fleet.drain().await;
     for l in links {
-        match &*l.transport {
-            #[cfg(feature = "ble")]
-            DeviceTransport::Ble(b) => {
-                let _ = b.disconnect().await;
-            }
-            DeviceTransport::Spp(s) => {
-                let _ = s.disconnect().await;
-            }
-            DeviceTransport::Lan(_) | DeviceTransport::Mock(_) => {}
-        }
+        hang_up(&l.transport).await;
     }
     let _ = daemon.tx.send(status_payload(false, None, None));
     let _ = daemon.tx.send(owned_devices_payload(daemon).await);

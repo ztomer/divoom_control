@@ -152,6 +152,20 @@ impl Fleet {
         link
     }
 
+    /// Forget one device entirely: its job stopped, its link retired (and
+    /// returned so the caller can hang up), its activity gone. If it was
+    /// current, the fleet has no current device afterwards.
+    pub async fn remove(&self, id: &str) -> Option<Arc<Link>> {
+        let removed = self.devices.lock().await.remove(&key(id))?;
+        removed.stop_live_job(None).await;
+        let link = removed.detach().await;
+        let mut cur = self.current.lock().await;
+        if cur.as_deref() == Some(key(id).as_str()) {
+            *cur = None;
+        }
+        link
+    }
+
     /// Forget every device: jobs stopped, links retired, activity gone.
     pub async fn drain(&self) -> Vec<Arc<Link>> {
         let drained: Vec<Arc<Device>> = self.devices.lock().await.drain().map(|(_, d)| d).collect();

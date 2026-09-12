@@ -140,7 +140,7 @@ def test_proxy_status_cache_dedupes_intra_op_reads():
     calls = {"n": 0}
 
     class _Client:
-        def device_status(self):
+        def device_status(self, mac=None):
             calls["n"] += 1
             return {"connected": True, "lan_ip": None, "mac": "AA:BB"}
 
@@ -158,7 +158,7 @@ def test_proxy_status_cache_refetches_after_ttl():
     calls = {"n": 0}
 
     class _Client:
-        def device_status(self):
+        def device_status(self, mac=None):
             calls["n"] += 1
             return {"connected": True}
 
@@ -168,3 +168,34 @@ def test_proxy_status_cache_refetches_after_ttl():
     object.__setattr__(proxy, "_status_cache_ts", proxy._status_cache_ts - 1.0)
     _ = proxy.is_connected
     assert calls["n"] == 2
+
+
+# ── 2026-09-12: a proxy bound to a panel names it on every call ─────────
+def test_proxy_bound_to_a_mac_names_it_on_calls_and_status():
+    """With a fleet, "current" is whichever panel connected LAST. A proxy for
+    the user's selected panel must say which one it means, both when it
+    sends a command and when it asks whether it is connected."""
+    import asyncio
+    from divoom_client.daemon_client import DaemonDeviceProxy
+
+    seen = {}
+
+    class _Client:
+        is_remote = False
+
+        def device_status(self, mac=None):
+            seen["status_mac"] = mac
+            return {"connected": True, "mac": mac}
+
+        def device_call(self, method, args=None, kwargs=None, *, target="device",
+                        blobs=None, token=None, mac=None):
+            seen["call"] = (method, mac, target)
+            return {"success": True, "result": True}
+
+    proxy = DaemonDeviceProxy(_Client(), mac="e9a41e1e-9a96")
+    assert proxy.is_connected
+    assert seen["status_mac"] == "e9a41e1e-9a96"
+    asyncio.run(proxy.display.switch_channel("clock"))
+    assert seen["call"] == ("display.switch_channel", "e9a41e1e-9a96", "device")
+    # The bound mac survives attribute chaining and token wrapping.
+    assert proxy._with_token("T").display._mac == "e9a41e1e-9a96"

@@ -108,17 +108,21 @@ class DaemonDeviceProxy:
     _STATUS_TTL = 0.25
 
     def __init__(self, client: DaemonClient, _path: str = "", *,
-                 target: str = "device", _token: str | None = None) -> None:
+                 target: str = "device", _token: str | None = None,
+                 mac: str | None = None) -> None:
         object.__setattr__(self, "_client", client)
         object.__setattr__(self, "_path", _path)
         object.__setattr__(self, "_target", target)
         object.__setattr__(self, "_token", _token)
+        # The panel this proxy speaks to. Every device_call carries it, so
+        # the daemon never has to guess from "current".
+        object.__setattr__(self, "_mac", mac)
         object.__setattr__(self, "_status_cache", None)
         object.__setattr__(self, "_status_cache_ts", 0.0)
 
     def _with_token(self, token: str) -> "DaemonDeviceProxy":
         return DaemonDeviceProxy(self._client, self._path,
-                                 target=self._target, _token=token)
+                                 target=self._target, _token=token, mac=self._mac)
 
     async def push_animation(self, file_or_data: str | bytes,
                               *,
@@ -179,7 +183,7 @@ class DaemonDeviceProxy:
         now = time.monotonic()
         if self._status_cache is not None and (now - self._status_cache_ts) < self._STATUS_TTL:
             return self._status_cache
-        st = self._client.device_status()
+        st = self._client.device_status(mac=self._mac)
         object.__setattr__(self, "_status_cache", st)
         object.__setattr__(self, "_status_cache_ts", now)
         return st
@@ -198,7 +202,8 @@ class DaemonDeviceProxy:
         if name.startswith("_"):
             raise AttributeError(name)
         path = f"{self._path}.{name}" if self._path else name
-        return DaemonDeviceProxy(self._client, path, target=self._target, _token=self._token)
+        return DaemonDeviceProxy(self._client, path, target=self._target,
+                                 _token=self._token, mac=self._mac)
 
     def __call__(self, *args: Any, **kwargs: Any):
         method = self._path
@@ -224,7 +229,8 @@ class DaemonDeviceProxy:
 
         async def _invoke():
             reply = client.device_call(method, call_args, dict(kwargs),
-                                       target=target, blobs=blobs, token=token)
+                                       target=target, blobs=blobs, token=token,
+                                       mac=self._mac)
             if not reply.get("success", False):
                 raise _DeviceCallError(
                     reply.get("error", f"device_call {method} failed"),

@@ -7,8 +7,11 @@ use crate::daemon::Daemon;
 use crate::transport::DeviceTransport;
 
 impl Daemon {
-    pub(crate) async fn device_status(&self) -> Value {
-        let current = self.fleet.current().await;
+    /// `device_status`: one panel when `mac` names it, else the current
+    /// device. A proxy bound to a panel asks about THAT panel, not about
+    /// whichever connected last.
+    pub(crate) async fn device_status(&self, mac: Option<&str>) -> Value {
+        let current = self.fleet.resolve(mac).await;
         let id_val = current.as_ref().map(|d| d.id.clone());
         let transport = match current {
             Some(ref d) => d.transport().await,

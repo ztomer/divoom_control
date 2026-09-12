@@ -219,7 +219,7 @@ class DaemonClient(HostDataMixin, CloudDataMixin):
     def device_call(self, method: str, args: list | None = None,
                     kwargs: dict | None = None, *, target: str = "device",
                     blobs: dict[int, bytes] | None = None,
-                    token: str | None = None) -> dict:
+                    token: str | None = None, mac: str | None = None) -> dict:
         """Proxy a device method through the daemon (R17 P5): the daemon owns the
         BLE connection and runs ``divoom.<method>(*args, **kwargs)``. ``target``
         selects the single device ("device") or the daemon-owned wall ("wall").
@@ -238,6 +238,11 @@ class DaemonClient(HostDataMixin, CloudDataMixin):
             "method": method, "args": args or [], "kwargs": kwargs or {},
             "target": target,
         }
+        # 2026-09-12: name the panel. A mac-less call means "the daemon's
+        # current device", which with a fleet of four is whichever connected
+        # LAST -- not necessarily the one the user has selected.
+        if mac and target != "wall":
+            payload["mac"] = mac
         if token:
             payload["token"] = token
         if blobs:
@@ -308,9 +313,10 @@ class DaemonClient(HostDataMixin, CloudDataMixin):
             "device_name": device_name, "use_ios_le_protocol": use_ios_le_protocol,
         }, read_timeout=load_daemon_config().connect_timeout)
 
-    def disconnect_device(self) -> dict:
+    def disconnect_device(self, mac: str | None = None) -> dict:
+        """Disconnect one panel (``mac``) or, with no ``mac``, the whole fleet."""
         from divoom_client.daemon_config import load_daemon_config
-        return self.send_command("disconnect",
+        return self.send_command("disconnect", {"mac": mac} if mac else None,
                                  read_timeout=load_daemon_config().connect_timeout)
 
     def shutdown(self) -> dict:
@@ -318,8 +324,9 @@ class DaemonClient(HostDataMixin, CloudDataMixin):
         the daemon replies, then exits shortly after."""
         return self.send_command("shutdown")
 
-    def device_status(self) -> dict:
-        return self.send_command("device_status")
+    def device_status(self, mac: str | None = None) -> dict:
+        """Status of one panel (``mac``) or, with no ``mac``, the daemon's current device."""
+        return self.send_command("device_status", {"mac": mac} if mac else None)
 
     def scan(self, timeout: float | None = None, limit: int | None = None) -> dict:
         # Divoom BLE discovery is slow (a full scan can take 30-60s). The daemon

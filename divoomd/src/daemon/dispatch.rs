@@ -42,7 +42,11 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
             res
         }
 
-        "device_status" => daemon.device_status().await,
+        "device_status" => {
+            daemon
+                .device_status(req.args.get("mac").and_then(|v| v.as_str()))
+                .await
+        }
 
         // exclusive mode is fully real (uses the ported queue's acquire_now /
         // release). The token lives in args (the request-level token is auth).
@@ -84,7 +88,10 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
         #[cfg(feature = "ble")]
         "scan" => daemon.cmd_scan(&req).await,
         "connect" => daemon.cmd_connect(&req).await,
-        "disconnect" => daemon.cmd_disconnect().await,
+        "disconnect" => match req.args.get("mac").and_then(|v| v.as_str()) {
+            Some(mac) => crate::daemon_connect::cmd_disconnect_one(daemon, mac).await,
+            None => daemon.cmd_disconnect().await,
+        },
         "mock_simulate_drop" => crate::daemon_mock::cmd_mock_simulate_drop(daemon, &req).await,
         "device_call" => daemon.cmd_device_call(&req).await,
 

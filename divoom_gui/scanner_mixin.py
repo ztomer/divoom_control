@@ -299,8 +299,9 @@ class ScannerMixin:
                 logger.error("Connect failed: daemon could not be (re)started")
                 return False
 
-            # Drop any prior daemon-owned device first.
-            client.disconnect_device()
+            # 2026-09-12: no fleet-wide disconnect here. The daemon keeps one
+            # Device per panel; connecting the selected one must not drop
+            # the other three the bench is showing.
 
             if address.startswith("LAN:"):
                 ip = address.split("LAN:")[1]
@@ -322,7 +323,7 @@ class ScannerMixin:
                 self.current_divoom = None
                 return False
 
-            self.current_divoom = DaemonDeviceProxy(client, target="device")
+            self.current_divoom = DaemonDeviceProxy(client, target="device", mac=address)
             if not self.current_divoom.is_connected:
                 logger.error("Daemon reported success but device is NOT connected.")
                 self.current_divoom = None
