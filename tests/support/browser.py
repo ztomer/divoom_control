@@ -93,12 +93,25 @@ import pytest
 UI_TIMEOUT_MS = int(os.environ.get("DIVOOM_E2E_TIMEOUT_MS", "20000"))
 
 
+#: Set by ``tests/conftest.py`` from ``--run-browser``. The opt-in lives HERE,
+#: at the one seam every browser launch goes through, rather than in a scan of
+#: each module's text for the word "playwright": that scan skipped WHOLE
+#: modules, and two of them (the round-6 layout suite, the stack-teardown
+#: suite) were mostly source-grep and subprocess tests that never touch a
+#: browser -- 30-odd tests hidden by default, two of them stale for months
+#: (found 2026-09-12).
+RUN_BROWSER = False
+
+
 def require_browser() -> None:
-    """Skip the test unless a launchable browser is actually present.
+    """Skip the test unless browser tests are opted in AND a launchable
+    browser is actually present.
 
     Checks the binary, not just the import — that distinction is the whole
     point of this helper.
     """
+    if not RUN_BROWSER:
+        pytest.skip("launches a real browser; run with --run-browser")
     pytest.importorskip("playwright.async_api")
     pytest.importorskip("camoufox.utils")
     try:

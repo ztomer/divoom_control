@@ -136,8 +136,10 @@ def test_r11_custom_art_push_is_pinned_footer():
     """The Custom Art panel is a flex column with a fixed header (tabs+slots)
     and a scrolling library, so the Push button stays pinned at the bottom."""
     css = _channels_css()
-    assert re.search(r"#panel-design\.active\s*\{[^}]*flex-direction:\s*column", css), (
-        "#panel-design.active must be a flex column so the push button pins"
+    # Always laid out, not only when `.active` (1260582: the panel toggle no
+    # longer sets that class on it), so the selector is the bare id.
+    assert re.search(r"#panel-design\s*\{[^}]*flex-direction:\s*column", css), (
+        "#panel-design must be a flex column so the push button pins"
     )
     assert re.search(r"#push-custom-art-btn\s*\{[^}]*flex-shrink:\s*0", css), (
         "#push-custom-art-btn must not shrink (pinned footer)"
@@ -192,9 +194,11 @@ def test_r11_appbar_phase3():
     # R32: the corner connectivity indicator pill is gone.
     assert 'class="appbar-transports corner-transports"' not in html
     assert 'corner-transports' not in html, "the corner indicator markup should be removed (R32)"
-    # 4c: a drag-spacer appears before the brightness blocks (pushes sliders right)
+    # 4c: the appbar keeps its drag-spacer; the brightness slider itself
+    # moved to the deck (`global-brightness-slider`, Spatial Bench f59e558).
     header = re.search(r'<header class="integrated-appbar.+?</header>', html, re.DOTALL).group(0)
-    assert header.index("appbar-drag-spacer") < header.index("appbar-brightness")
+    assert "appbar-drag-spacer" in header
+    assert 'id="global-brightness-slider"' in html, "brightness slider lives in the deck"
 
     css = APPBAR_CSS.read_text()
     assert "#appbar-volume-value" in css, "4a: volume value must share the value type rule"

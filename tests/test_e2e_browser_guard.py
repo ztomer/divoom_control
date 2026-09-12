@@ -26,6 +26,13 @@ import pytest
 from tests.support import browser as browser_support
 
 
+@pytest.fixture(autouse=True)
+def _browser_tests_opted_in(monkeypatch):
+    """These tests are about the BINARY check; the --run-browser opt-in that
+    now sits in front of it is taken as given here."""
+    monkeypatch.setattr(browser_support, "RUN_BROWSER", True)
+
+
 def _run_guard() -> str | None:
     """Run require_browser(); return the skip reason, or None if it allowed the test.
 
