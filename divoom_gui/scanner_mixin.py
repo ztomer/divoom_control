@@ -277,6 +277,31 @@ class ScannerMixin:
         except Exception as ce:
             logger.warning(f"Failed to cache discovered devices/count: {ce}")
 
+    def select_device(self, address: str) -> bool:
+        """The bench selected a panel: bind every device action to IT.
+
+        2026-09-12: the bench restores its selection from local storage, and
+        the startup auto-reconnect binds ``current_divoom`` to the LAST
+        CONNECTED panel. Those are two owners of "the selected device", and
+        they disagreed: the preview showed the Ditoo while the gallery push
+        went to the Pixoo. Selection is now one funnel -- the bench calls
+        this on every highlight, and the Python proxy follows. No connect
+        happens here; the daemon keeps the panel's link regardless.
+        """
+        if not address:
+            return False
+        if address == "MatrixWall":
+            self.current_target_mode = "wall"
+            return True
+        self.current_target_mode = "single"
+        client = self._client()
+        if client is None:
+            return False
+        cur = getattr(self, "current_divoom", None)
+        if cur is None or getattr(cur, "_mac", None) != address:
+            self.current_divoom = DaemonDeviceProxy(client, target="device", mac=address)
+        return True
+
     def connect_single_device(self, address: str) -> bool:
         logger.info(f"GUI Action: Connecting to {address} (daemon-owned)...")
         try:

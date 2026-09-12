@@ -199,14 +199,34 @@ window.Divoom.onDaemonEvent = function(ev) {
     // connected flag (the P6 honest-state regression). As the authoritative
     // writer, a status event also clears a stale "connecting" dot left by a
     // click flow whose promise never settled (#6).
-    if (!connected || dropped) {
-        window.setConnectionState({ mode: "inactive" });
-    } else if (degraded) {
-        window.setConnectionState({ mode: "degraded", mac: mac });
-    } else {
-        window.setConnectionState({ mode: "active", transport: mac && mac.startsWith("LAN:") ? "lan" : "ble", mac: mac });
+    // Per-panel first (2026-09-12): the daemon names the panel a status is
+    // about, and with a fleet the global dot is the SELECTED panel's link,
+    // not whichever panel last spoke. An event naming nobody is fleet-wide.
+    const list = window.DivoomState.discoveredDevices || [];
+    const known = mac ? list.find(d => d.address === mac) : null;
+    const stateWord = (!connected || dropped) ? "disconnected" : (degraded ? "degraded" : "active");
+    if (known) {
+        known.activityState = stateWord;
+        known.daemonOwned = connected && !dropped;
+    } else if (!mac) {
+        list.forEach(d => { d.activityState = stateWord; if (stateWord === "disconnected") d.daemonOwned = false; });
+    }
+    const activeMac = (typeof window._activeDeviceMac === "function") ? window._activeDeviceMac() : null;
+    // A selection that is not a known panel (a bench placeholder, a stale
+    // restore) does not own the dot; the event then speaks for the app.
+    const selectionIsReal = !!activeMac && list.some(d => d.address === activeMac);
+    const aboutSelected = !mac || !selectionIsReal || mac === activeMac;
+    if (aboutSelected) {
+        if (!connected || dropped) {
+            window.setConnectionState({ mode: "inactive" });
+        } else if (degraded) {
+            window.setConnectionState({ mode: "degraded", mac: mac });
+        } else {
+            window.setConnectionState({ mode: "active", transport: mac && mac.startsWith("LAN:") ? "lan" : "ble", mac: mac });
+        }
     }
     if (window.renderDeviceDots) window.renderDeviceDots();
+    if (window.SpatialStage?.refresh) window.SpatialStage.refresh();
 };
 
 // R59/event-driven: the daemon pushes owned-device changes as `owned_devices`

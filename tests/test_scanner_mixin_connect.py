@@ -143,3 +143,25 @@ def test_device_name_for_cache_loop_exhausts_without_match(host, tmp_path):
     cache_file.write_text(json.dumps([{"address": "XX:XX", "name": "Other"}]),
                           encoding="utf-8")
     assert host._device_name_for("AA:BB") is None
+
+
+def test_select_device_rebinds_the_proxy_without_connecting(host, monkeypatch):
+    """2026-09-12: the bench's selection is the one owner of 'the selected
+    panel'. Selecting must rebind the Python proxy to that mac and must NOT
+    connect or disconnect anything (the daemon keeps the fleet's links)."""
+    from unittest.mock import MagicMock
+    client = MagicMock()
+    host._daemon_client = client
+    assert host.select_device("e9a41e1e-ditoo") is True
+    assert host.current_divoom._mac == "e9a41e1e-ditoo"
+    assert host.current_target_mode == "single"
+    client.connect_device.assert_not_called()
+    client.disconnect_device.assert_not_called()
+    first = host.current_divoom
+    assert host.select_device("e9a41e1e-ditoo") is True
+    assert host.current_divoom is first, "same panel keeps the same proxy"
+    assert host.select_device("a9fccb71-pixoo") is True
+    assert host.current_divoom._mac == "a9fccb71-pixoo"
+    assert host.select_device("MatrixWall") is True
+    assert host.current_target_mode == "wall"
+    assert host.select_device("") is False

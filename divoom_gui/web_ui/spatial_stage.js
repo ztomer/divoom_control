@@ -264,7 +264,7 @@
             node.innerHTML = `
                 <div class="spatial-node-header" style="width: 100%;">
                     <span class="spatial-node-name" title="${dev.name || spec.name}">${dev.name || spec.name}</span>
-                    <span class="spatial-jewel online"></span>
+                    <span class="spatial-jewel ${jewelClass(dev)}"></span>
                 </div>
                 <div class="spatial-node-screen" style="width: ${sw}px; height: ${sw}px; margin: auto;">
                     <canvas id="stage-canvas-${addr}" width="${pw}" height="${ph}" 
@@ -287,7 +287,7 @@
                 const chip = document.createElement('button');
                 chip.type = 'button';
                 chip.className = 'spatial-ribbon-chip' + (isSelected ? ' active' : '');
-                chip.innerHTML = `<span class="spatial-jewel online"></span> ${dev.name || 'Screen'}`;
+                chip.innerHTML = `<span class="spatial-jewel ${jewelClass(dev)}"></span> ${dev.name || 'Screen'}`;
                 chip.addEventListener('click', () => selectDevice(addr, dev));
                 ribbonChips.appendChild(chip);
             }
@@ -320,8 +320,12 @@
         }
     }
 
+    const jewelClass = (dev) => window.jewelClassFor(dev); // the panel's LINK, not a hardcoded 'online'
+
     function highlightNode(addr, dev) {
         selectedMac = addr;
+        // One funnel for "the selected panel": Python's proxy follows the bench.
+        try { window.pywebview?.api?.select_device?.(addr); } catch (_) {}
         document.querySelectorAll('.spatial-node').forEach(n => { n.classList.remove('selected'); n.style.zIndex = '10'; });
         const activeNode = document.getElementById(`spatial-node-${addr}`);
         if (activeNode) { activeNode.classList.add('selected'); activeNode.style.zIndex = '25'; }

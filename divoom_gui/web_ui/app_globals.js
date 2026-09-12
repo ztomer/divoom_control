@@ -172,6 +172,16 @@ window._rasterizeToPng = function(src, size, cb) {
     } catch (e) { cb(null); }
 };
 
+// The bench jewel is the panel's LINK as the daemon last reported it (it was
+// a hardcoded 'online'): amber while degraded, standby when the daemon does
+// not hold the panel, online otherwise.
+window.jewelClassFor = function(dev) {
+    if (!dev) return "standby";
+    if (dev.activityState === "degraded") return "amber";
+    if (!dev.daemonOwned || dev.activityState === "disconnected") return "standby";
+    return "online";
+};
+
 window._activeDeviceMac = function() {
     const banner = (document.getElementById("banner-device-mac")?.textContent || "").trim();
     if (banner && banner !== "-" && banner !== "None") return banner;
