@@ -6,6 +6,18 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased — user-defect fixes (2026-09-12, from triage `ba62ba2`)
 
+### Fixed — blurry live cover art (#1)
+
+- The cover `<img>` upscaled the device-size preview frame bilinearly
+  while its device-preview sibling rendered `pixelated`. Added
+  `image-rendering: pixelated; crisp-edges` to
+  `.music-previews-container .music-cover-preview img`
+  (`widgets_extra.css`). Sibling sweep: all other pixel-art surfaces
+  already pixelated; the appbar logo (full-res asset) correctly left
+  alone. Verified by cascade inspection (specific rule wins, base does
+  not reset) + element-ID tests + emoji gate; visual confirmation
+  wants a live session with music playing.
+
 ### Fixed — weather card said "here" instead of the city (#4)
 
 - **Root cause ran both sides.** `parse_wttr` discarded wttr.in's

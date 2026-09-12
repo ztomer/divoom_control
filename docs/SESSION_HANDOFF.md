@@ -21,7 +21,8 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
-- **2026-09-12 — defect #4 FIXED (uncommitted): weather card "here" → resolved city / honest "unknown".**
+- **2026-09-12 — defect #1 FIXED (uncommitted): cover img renders pixelated; sibling sweep clean.**
+  - One CSS rule (`widgets_extra.css:96`); cascade verified, element-ID tests + emoji gate green. Visual confirmation wants music playing live. Next: #6 (structural) per triage order.
   - Daemon parses `nearest_area` into `WeatherInfo.location`, reply prefers explicit request else resolved city; GUI fallback `"here"` → `"unknown"`. `Copy` dropped (unneeded).
   - Both new tests proven red-then-green; cargo/clippy/fmt both matrices clean; 46 weather pytest pass; parity + census green.
   - Live confirmation wanted (real city, no override). Next: #1 (one-rule CSS) per triage order.

@@ -203,16 +203,15 @@ Filed verbatim from a live session against v0.35.4. Triaged 2026-09-12
 (code inspection only — no device in the triage session, so each needs
 a live confirmation before a fix ships).
 
-1. **Live cover art blurry — MECHANISM FOUND.** `get_current_track_info`
-   serves the device-size frame (16×16) as `info.preview`
-   (`media_sync.py:_artwork_preview`); BOTH `#music-cover-img` and
-   `#music-device-preview` get that PNG (`widgets_music.js:63-67`).
-   The device-preview img has `image-rendering: pixelated`
-   (`widgets_extra.css:119-127`); the cover img
-   (`.music-previews-container .music-cover-preview img`) does NOT —
-   bilinear upscale of 16px to ~128px. Same class as the v0.35.1
-   gallery fix. Fix shape: one CSS rule. Confirm on device that the
-   cover is meant to show the device frame (not the original art).
+1. **Live cover art blurry — FIXED 2026-09-12 (needs a device glance).**
+   `info.preview` is the device-size frame; the cover img upscaled it
+   bilinearly while its device-preview sibling already rendered
+   `pixelated`. Fix: `image-rendering: pixelated; crisp-edges` on
+   `.music-previews-container .music-cover-preview img`
+   (`widgets_extra.css:96`). Sibling sweep: every other pixel-art
+   surface already pixelated (wall, gallery, custom_art, channels,
+   stage); the appbar logo is a full-res asset and correctly untouched.
+   Confirm live that the cover should show the device frame.
 2. **Bench previews frozen — CORROBORATES the existing OPEN item.**
    Symptom matches "Animated Image Previews (`DisplayPreview` GIF
    Playback)" exactly (WebKit `drawImage` freezes GIF at frame 0;
