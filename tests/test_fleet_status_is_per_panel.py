@@ -25,7 +25,9 @@ STATE_JS = """() => {
     };
     const byMac = {};
     list.forEach(d => { byMac[d.address] = { state: d.activityState || null, owned: !!d.daemonOwned, jewel: jewel(d.address) }; });
+    const deck = document.getElementById('deck-device-dot');
     return { byMac, appConnected: !!window.DivoomState.appConnected,
+             deckJewel: deck ? [...deck.classList].filter(c => c !== 'spatial-jewel').join(' ') : null,
              dot: (document.getElementById('status-dot') || document.querySelector('.status-dot'))?.className || null };
 }"""
 
@@ -89,6 +91,7 @@ async def test_status_moves_only_the_named_panel_and_the_jewel_is_honest():
             return (%s)();
         }""" % STATE_JS, [ditoo, pixoo, None])
         assert state["byMac"][ditoo]["jewel"] == "standby", state
+        assert state["deckJewel"] == "standby", f"the sidebar card's jewel must follow the selected panel: {state}"
         assert not state["appConnected"], "the selected panel dropped; the app is not connected"
         assert state["byMac"][pixoo]["jewel"] == "online"
 

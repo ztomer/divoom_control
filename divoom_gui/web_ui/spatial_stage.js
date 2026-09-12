@@ -321,7 +321,6 @@
     }
 
     const jewelClass = (dev) => window.jewelClassFor(dev); // the panel's LINK, not a hardcoded 'online'
-
     function highlightNode(addr, dev) {
         selectedMac = addr;
         // One funnel for "the selected panel": Python's proxy follows the bench.
@@ -366,6 +365,7 @@
 
         if (nameEl) nameEl.textContent = dev.name || spec.name;
         if (tagEl) tagEl.textContent = `${spec.pw}×${spec.ph}`;
+        const deckDot = document.getElementById('deck-device-dot'); if (deckDot) deckDot.className = `spatial-jewel ${jewelClass(dev)}`;
         if (roomSelect) {
             const rm = deviceRooms[addr] !== undefined ? deviceRooms[addr] : (dev.room || '');
             if (window.SpatialRooms) window.SpatialRooms.populateSelect(roomSelect, rm);
