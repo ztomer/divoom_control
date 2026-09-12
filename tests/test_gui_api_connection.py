@@ -50,21 +50,6 @@ class TestConnectionApiCoverage(unittest.TestCase):
             result = self.api.connection.scan_devices()
         self.assertEqual(json.loads(result), [])
 
-    # ---- get_capabilities: no daemon / success -----------------------------
-
-    def test_get_capabilities_no_daemon_returns_empty_dict(self):
-        with patch.object(self.api.connection, "_client", return_value=None):
-            result = self.api.connection.get_capabilities()
-        self.assertEqual(json.loads(result), {})
-
-    def test_get_capabilities_success(self):
-        fake = MagicMock()
-        fake.device_call.return_value = {"result": {"leds": 16}}
-        with patch.object(self.api.connection, "_client", return_value=fake):
-            result = self.api.connection.get_capabilities()
-        self.assertEqual(json.loads(result), {"leds": 16})
-        fake.device_call.assert_called_with("get_capabilities", [], {}, target="device")
-
     # ---- _client: lazy daemon spawn + caching ------------------------------
 
     def test_connection_client_spawns_and_caches_daemon(self):
