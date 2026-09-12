@@ -205,7 +205,7 @@ are not restated.
 
 ## Open workstreams
 
-### v0.37 plan: finish the fleet model, then the residuals (filed 2026-09-12; 0-4 and 6 SHIPPED, 5 OPEN)
+### v0.37 plan: finish the fleet model, then the residuals (filed 2026-09-12; all six SHIPPED)
 
 Order is by leverage; 1-3 are one thread, 6 is independent, 5 is
 measurement-gated. Each step shipped with its tests shown red first.
@@ -284,14 +284,22 @@ GPU client carried the full record with the art, and the helper reported
 the latter. Players carry their states (`Kaset (playing)`,
 `Music` unknown) in the idle hint.
 
-**5. Browser e2e flakiness under load** (tests, ~half a day, measure first)
-Run the camoufox subset 5x under synthetic load (parallel `cargo build` +
-a CPU burner); record which wait fires (20s UI timeout, daemon spawn, or
-the fake bridge). Expected fix: readiness observables (socket ping, page
-marker) instead of fixed sleeps, and the browser subset serialized in its
-own CI step. Raise a timeout only if the measurement shows the readiness
-wait itself is the bottleneck, by the measured margin. Gate: 5/5 green
-under load, numbers recorded here.
+**5. Browser e2e flakiness under load — MEASURED and SHIPPED (2026-09-12)**
+Measured: the whole browser subset (150 tests, every module that launches
+camoufox) run twice under a CPU burner on half the cores plus a
+`cargo check` loop, on top of the machine's own load (average 30-130):
+150/150 and 150/150, 597s and 587s, against 412s unloaded. No test
+failed, so nothing to attribute; what the numbers DID show is one
+readiness wait (`test_e2e_widget_selection`) going from 3s unloaded to
+16s under load, 3s short of the 20s budget -- the budget was the risk,
+not the waits (they are already readiness observables via `wait_js`).
+Shipped: `UI_TIMEOUT_MS` default 60s, sized from that 5x swing with
+margin (a cap costs nothing on a green run); the browser suites run in
+their own serialized CI step, which they never did before (CI installed
+camoufox and then ran pytest without `--run-browser`); and the opt-in
+moved to the launch seam (6d9cda6), which unhid 30-odd non-browser tests.
+Gate going forward: that CI step, plus re-run this measurement if a
+budget is ever raised again.
 
 **6. Plaintext password in config.ini — SHIPPED (1830695)**
 `secret_store` behind `cloud_store::load_config`/`save_config`: macOS

@@ -52,10 +52,8 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Open threads / next up
 
-1. **Step 5, browser e2e under load** (ROADMAP v0.37 plan, the one open
-   step): measured 2026-09-12 with the browser subset under a CPU burner;
-   numbers in the ROADMAP entry. CI never ran the browser subset at all
-   (the "GUI e2e" step runs pytest without `--run-browser`).
+1. **Browser suites now run in CI** (own step, `--run-browser`); the first
+   run of that step on the shared macOS runner is the thing to watch.
 2. **`examples/` documents the bleak facade** -- library docs, or retire in
    favour of daemon-client examples. Not decided.
 3. **Menubar tile visual check** on the real tray, after the next install.

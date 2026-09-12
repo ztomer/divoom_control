@@ -89,8 +89,16 @@ import pytest
 # Deliberately NOT applied to absence assertions ("this must not appear"),
 # where a short timeout IS the assertion. Those keep their own explicit values.
 #
-# Override for a slow CI box with DIVOOM_E2E_TIMEOUT_MS.
-UI_TIMEOUT_MS = int(os.environ.get("DIVOOM_E2E_TIMEOUT_MS", "20000"))
+# Sized from a measurement, not a guess (2026-09-12, v0.37 step 5): the whole
+# subset (150 tests) run twice under a CPU burner on half the cores plus a
+# cargo-check loop, load average 30-130, went 150/150 both times in 597s and
+# 587s against 412s unloaded -- but the SAME readiness wait that takes 3s
+# unloaded took 16s under load (test_e2e_widget_selection, a 5x swing), 3s
+# short of the old 20s budget. Since every wait returns the moment its
+# condition holds, a larger cap costs nothing on a green run and only
+# lengthens a red one, so the cap carries the measured swing with margin.
+# Override with DIVOOM_E2E_TIMEOUT_MS.
+UI_TIMEOUT_MS = int(os.environ.get("DIVOOM_E2E_TIMEOUT_MS", "60000"))
 
 
 #: Set by ``tests/conftest.py`` from ``--run-browser``. The opt-in lives HERE,

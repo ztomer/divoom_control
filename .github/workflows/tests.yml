@@ -175,8 +175,16 @@ jobs:
         # Rust↔Python parity tests never run in CI. Default features include `ble`.
         run: cargo build -p divoomd --locked
 
-      - name: Run tests (C + Python parity + Rust-daemon parity + GUI e2e)
+      - name: Run tests (C + Python parity + Rust-daemon parity; browser suites opt in below)
         run: python3 -m pytest -q
+
+      # The browser suites run in their OWN step, serialized, after everything
+      # else: they are the process-contention-sensitive part (v0.37 step 5
+      # measured a 5x swing in one readiness wait under load), and until
+      # 2026-09-12 CI installed camoufox and then never ran them at all --
+      # the default pytest run skips them without --run-browser.
+      - name: Run the browser e2e suites (--run-browser, serialized)
+        run: python3 -m pytest -q --run-browser $(grep -l playwright tests/test_*.py)
 
   rust-core:
     # The hardware-/platform-free gate for the native daemon. Builds + tests the
