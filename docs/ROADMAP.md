@@ -215,6 +215,32 @@ streaming; connecting one panel no longer disconnects the fleet. Still
 open: the daemon's "current" device only matters for mac-less callers
 now (the CLI, MCP tools); retire it once those pass a mac too.
 
+### SHIPPED — the selection funnel and per-panel GUI state (2026-09-12, with the user at the keyboard)
+
+Found live, all the same class as the daemon aggregate ("two owners of
+one per-device fact"), fixed and pinned in browser tests:
+- a gallery push went to the Pixoo while the preview showed the Ditoo:
+  the bench selection (JS, restored from storage) and Python's proxy
+  (bound by auto-reconnect) disagreed. `select_device` is the one funnel
+  (`89ecea2`), used by every selection path including the first-panel
+  fallback (`f4c2f77`, and `setSelected` after the fallback skipped it).
+- status events moved one global dot for any panel; the bench and deck
+  jewels were hardcoded `online`. Now per-panel `activityState`, jewels
+  derived (`jewelClassFor`), global dot follows the SELECTED panel only.
+- `owned_devices` renamed panels "Divoom" (daemon placeholder leaked,
+  `db5e8ab`); it now repaints bench and deck too.
+- previews mirror the panel: every live frame is broadcast with its
+  pixels (`c1185fb`).
+
+### OPEN — now-playing prefers a stopped Music.app over a playing client (filed 2026-09-12)
+
+With Apple Music open but stopped, `now_playing` reported Music as the
+now-playing app (no title, `is_playing: false`) and masked Kaset, which
+was playing; quitting Music fixed it. The daemon lists both players in
+`players`; it should prefer the one that is playing (or skip a client
+whose session reports stopped/no title) rather than trusting
+MediaRemote's "now playing app" pointer.
+
 ### OPEN — Bluetooth permission prompt on every rebuild (filed 2026-09-12)
 
 Every `build_release.sh` + `install_local.sh` (and every dev-daemon bundle)
@@ -233,16 +259,18 @@ Filed verbatim from a live session against v0.35.4. Triaged 2026-09-12
 (code inspection only — no device in the triage session, so each needs
 a live confirmation before a fix ships).
 
-1. **Live cover art blurry — FIXED 2026-09-12 (needs a device glance).**
-   `info.preview` is the device-size frame; the cover img upscaled it
-   bilinearly while its device-preview sibling already rendered
-   `pixelated`. Fix: `image-rendering: pixelated; crisp-edges` on
-   `.music-previews-container .music-cover-preview img`
-   (`widgets_extra.css:96`). Sibling sweep: every other pixel-art
-   surface already pixelated (wall, gallery, custom_art, channels,
-   stage); the appbar logo is a full-res asset and correctly untouched.
-   Confirm live that the cover should show the device frame.
-2. **Bench previews frozen — FIXED 2026-09-12 as `c10af86` (needs a device glance).**
+1. **Live cover art blurry — FIXED 2026-09-12 as `3864862`, LIVE-CONFIRMED with the user.**
+   The first fix (`424f54e`, `pixelated` on the cover) was the wrong
+   reading. The cover is the REAL album art and scales smoothly; the
+   device preview beside it is the 16x16 frame and is the one rendered
+   as diodes. The cover was blurry because it was handed the device
+   frame. `get_current_track_info` now returns `artwork` (the daemon's
+   original bytes, MIME as sniffed) for the cover and `preview` for the
+   frame. Follow-on, also live: previews mirror the panel through the
+   daemon -- every pushed live frame is broadcast with its pixels
+   (`c1185fb`), so the bench updates on any tab (confirmed: track skip
+   with the app on Channels moved the Ditoo's node).
+2. **Bench previews frozen — FIXED 2026-09-12 as `c10af86`, LIVE-CONFIRMED (Hetera Bounce animates on the Ditoo's bench node).**
    WebKit never advances a GIF through `drawImage` of an
    HTMLImageElement, so every preview sat on frame 0. `gif_frames.js`
    decodes the GIF client-side (LZW, local tables, interlace, disposal)
@@ -279,7 +307,7 @@ a live confirmation before a fix ships).
    `""`. Explicit `"London"` echoes back on both. Dev daemon killed
    afterwards; live setup untouched. Remaining: the GUI half needs the
    new daemon behind the GUI (`install_local.sh` restart, user-run).
-5. **Clock/custom-art intermittently empty — FIXED 2026-09-12 as `1260582` (needs a live glance).**
+5. **Clock/custom-art intermittently empty — FIXED 2026-09-12 as `1260582`, LIVE-CONFIRMED on the installed build.**
    Neither of the two triage readings: it was a HIDDEN panel, not an
    empty one. `showChannelPanel` toggled `active` on every
    `.channel-panel` in the document and is fed the activity bus, whose
@@ -294,7 +322,7 @@ a live confirmation before a fix ships).
    `tests/test_channel_panel_visibility.py` (all 21 kinds, rehydrate,
    tab click) proven red-then-green. Live: reproduce by pushing gallery
    art (kind `image`) then opening Channels and Pixel Art.
-6. **UI stuck on "connecting" — FIXED 2026-09-12 (needs a live session).**
+6. **UI stuck on "connecting" — FIXED 2026-09-12, LIVE-CONFIRMED (per-panel drop -> standby jewel + inactive dot; reconnect heals both without a click).**
    `window.setConnectionState` (`connection_events.js`) is now the SOLE
    writer of dot class, banner, and `appConnected`; the click flow, the
    daemon status events, and the heartbeat all route through it. The

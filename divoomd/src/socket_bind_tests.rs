@@ -10,8 +10,11 @@ use std::sync::Arc;
 
 /// Unique per test — no clock or RNG here, so the test name is the uniqueness.
 fn tmp_path(tag: &str) -> String {
+    // Per-process: two test binaries (or a CI step and a stray run) sharing
+    // one path saw each other's lock as StartupInProgress (flaked once,
+    // 2026-09-12).
     std::env::temp_dir()
-        .join(format!("divoomd_bind_{tag}.sock"))
+        .join(format!("divoomd_bind_{}_{tag}.sock", std::process::id()))
         .to_string_lossy()
         .into_owned()
 }

@@ -6,6 +6,27 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased — user-defect fixes (2026-09-12, from triage `ba62ba2`)
 
+### Fixed — cover art is the original album art; previews mirror the panel (#1, second reading)
+
+- The cover shows the daemon's original artwork bytes (`artwork`),
+  smoothly scaled; the device-size frame (`preview`) stays pixelated
+  beside it. The earlier `pixelated` cover rule is gone.
+- Every live frame a job pushes is broadcast as an `activity` event with
+  a PNG of itself and kept on the panel's activity record; the GUI feeds
+  it to the panel's preview. Bench, ribbon and wall follow the device on
+  any tab, and the menubar's tiles get real frames.
+
+### Fixed — the GUI's selected panel is one fact; per-panel link state in the GUI
+
+- `select_device`: the bench tells Python which panel is selected on
+  every path (highlight and first-panel fallback); Python's proxy
+  rebinds without connecting. A gallery push landed on the last
+  connected panel while the preview showed the selected one.
+- Status events update the named panel; bench and deck jewels read the
+  panel's link (they were hardcoded green); the global dot follows the
+  selected panel. `owned_devices` repaints the bench and deck and never
+  carries the daemon's name placeholder.
+
 ### Fixed — animated bench previews frozen at frame 0 (#2)
 
 - `gif_frames.js`: a client-side GIF decoder (LZW, local colour tables,

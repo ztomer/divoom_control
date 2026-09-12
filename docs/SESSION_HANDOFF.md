@@ -21,6 +21,11 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-12 — keyboard session with the user: ALL SIX defects LIVE-CONFIRMED on the installed build; six more fleet defects found live and fixed.**
+  - Installed (several Bluetooth prompts, user present). Live: #5 panels populated; #2 Hetera Bounce animates on the bench; #6 per-panel drop -> standby + inactive, reconnect heals; #3 fleet intact while selecting; #1 corrected per the user (cover = ORIGINAL art, smooth; frame = diodes) and confirmed; previews now mirror the panel via broadcast frames (track skip on the Channels tab moved the bench node).
+  - Found live and fixed: push landed on the wrong panel (selection funnel `89ecea2`, fallback `f4c2f77`+setSelected); global dot/jewels fleet-blind and hardcoded (`89ecea2`, `8c7d502`); "Divoom" placeholder renamed panels (`db5e8ab`); previews stale off-tab (`c1185fb`); cover art wrong reading (`3864862`).
+  - Filed: now-playing prefers a stopped Music.app over a playing client (roadmap OPEN). Signing identity still open (needs keychain).
+  - Tooling: osascript lost Accessibility mid-session; `computer-use` full control + background `app_click` reach the WebView when the app is frontmost (`open -a Divoom` first). An Osaurus overlay and ZoneTilerWM intercept full-screen clicks; background app clicks bypass them.
 - **2026-09-12 — follow-ups SHIPPED: GUI names its panel (`dfb0c3f`), #2 animated previews (`c10af86`).**
   - Proxy bound to the connected address; `device_call`/`device_status` carry `mac`; `disconnect {mac}`; connect no longer drops the fleet. Stress scenario 8 + proxy test; CI 27/27.
   - #2: `gif_frames.js` decoder + player, canvas stays the renderer. Browser test (calibrated: old path shown to freeze) + PIL differential over 287 cached GIFs. Neighbouring browser suites 16/16.
