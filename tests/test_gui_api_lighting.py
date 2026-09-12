@@ -230,4 +230,39 @@ class TestLightingApiCoverage(unittest.TestCase):
         self.api.current_divoom = None
         self.assertFalse(self.api.lighting.set_clock_rich())
 
+    def test_stop_live_widgets_passes_target_mac(self):
+        dev = MagicMock()
+        dev.mac = "11:22:33:44:55:66"
+        self.api.current_divoom = dev
+        mock_client = MagicMock()
+        self.api._daemon_client = mock_client
+        self.api.lighting._stop_live_widgets()
+        mock_client.live_jobs_stop_for.assert_called_with("11:22:33:44:55:66")
+
+    def test_display_wall_image_stops_live_widgets(self):
+        dev = MagicMock()
+        dev.mac = "11:22:33:44:55:66"
+        dev.display.show_image = AsyncMock(return_value=True)
+        self.api.current_divoom = dev
+        mock_client = MagicMock()
+        self.api._daemon_client = mock_client
+        result = self.api.lighting.display_wall_image("/tmp/fake.png", 16)
+        self.assertTrue(result["success"])
+        mock_client.live_jobs_stop_for.assert_called_with("11:22:33:44:55:66")
+
+    def test_play_gallery_art_stops_live_widgets(self):
+        dev = MagicMock()
+        dev.mac = "11:22:33:44:55:66"
+        self.api.current_divoom = dev
+        mock_client = MagicMock()
+        self.api._daemon_client = mock_client
+        with patch.object(Path, "exists", return_value=True), \
+             patch.object(Path, "stat") as mock_stat, \
+             patch.object(self.api, "display_wall_image", return_value={"success": True}) as mock_wall_img:
+            mock_stat.return_value.st_size = 100
+            res = self.api.play_gallery_art("art_123")
+            self.assertTrue(res["success"])
+            mock_client.live_jobs_stop_for.assert_called_with("11:22:33:44:55:66")
+            mock_wall_img.assert_called_once()
+
 

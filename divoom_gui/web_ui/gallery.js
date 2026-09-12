@@ -196,6 +196,9 @@ document.addEventListener("DOMContentLoaded", () => {
             window.DivoomState.selectedArtworkIndex = idx;
 
             const mac = (typeof window._activeDeviceMac === "function") ? window._activeDeviceMac() : null;
+            if (mac && window.DisplayPreviewRegistry) {
+                window.DisplayPreviewRegistry.get(mac)?.unbindJob();
+            }
             const currentImg = item.querySelector(".gallery-item-preview");
             const src = (currentImg && currentImg.src && !currentImg.src.includes("pixoo.png")) ? currentImg.src : (art.preview_url || null);
             if (mac && src && window.setDeviceActivity) {

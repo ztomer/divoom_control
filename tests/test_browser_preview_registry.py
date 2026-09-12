@@ -234,3 +234,66 @@ async def test_browser_multi_screen_streamer_isolation():
         await browser.close()
 
 
+@pytest.mark.asyncio
+async def test_browser_stats_gallery_job_preemption():
+    assert INDEX_HTML.exists()
+    from playwright.async_api import async_playwright
+
+    async with async_playwright() as p:
+        browser = await launch_browser(p)
+        page = await browser.new_page(viewport={"width": 1200, "height": 850})
+        await page.goto(f"file://{INDEX_HTML}")
+        await page.wait_for_load_state("domcontentloaded")
+        await wait_js(page, "() => !!window.DisplayPreviewRegistry && !!window.setDeviceActivity")
+
+        dev1 = "11:22:33:44:55:01"
+        preempt_res = await eval_js(page, """([d1]) => {
+            window.DivoomState = window.DivoomState || {};
+            window.DivoomState.discoveredDevices = [
+                { address: d1, name: "Pixoo-Desk" }
+            ];
+            window.DisplayPreviewRegistry.syncFromFleet(window.DivoomState.discoveredDevices);
+
+            const p1 = window.DisplayPreviewRegistry.get(d1);
+
+            // 1. User starts sysmon (binds job)
+            p1.bindJob("sysmon");
+            const boundBefore = p1.isBoundTo("sysmon");
+            const boundListBefore = window.DisplayPreviewRegistry.getDisplaysBoundTo("sysmon").length;
+
+            // 2. User clicks a gallery image -> setDeviceActivity to image
+            const galleryFrame = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+            window.setDeviceActivity(d1, "image", { src: galleryFrame, fileId: "gallery_art_42" });
+
+            const boundAfter = p1.isBoundTo("sysmon");
+            const boundListAfter = window.DisplayPreviewRegistry.getDisplaysBoundTo("sysmon").length;
+
+            // 3. Sysmon background poller ticks and tries to mark frame with kind="sysmon"
+            const clobberFrame = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAADklEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+            window.markActiveDeviceFrame(clobberFrame, null, "sysmon");
+
+            return {
+                boundBefore,
+                boundListBefore,
+                boundAfter,
+                boundListAfter,
+                currentChannel: p1.channel,
+                currentFileId: p1.opts && p1.opts.fileId,
+                frameSrc: p1.frameSrc,
+                wasClobbered: p1.frameSrc === clobberFrame,
+                retainedGallery: p1.frameSrc === galleryFrame
+            };
+        }""", [dev1])
+
+        assert preempt_res["boundBefore"] is True
+        assert preempt_res["boundListBefore"] == 1
+        assert preempt_res["boundAfter"] is False
+        assert preempt_res["boundListAfter"] == 0
+        assert preempt_res["currentChannel"] == "image"
+        assert preempt_res["currentFileId"] == "gallery_art_42"
+        assert preempt_res["wasClobbered"] is False
+        assert preempt_res["retainedGallery"] is True
+
+        await browser.close()
+
+

@@ -64,7 +64,12 @@
         }
 
         setActivity(channel, opts) {
-            this.channel = (channel || "clock").toLowerCase();
+            const ch = (channel || "clock").toLowerCase();
+            const isArtwork = !!(opts && (opts.fileId || opts.file_id || opts.takeover || opts.gallery));
+            if (this.activeJob && (ch !== "image" ? this.activeJob.kind !== ch : isArtwork)) {
+                this.unbindJob();
+            }
+            this.channel = ch;
             this.opts = Object.assign({}, this.opts, opts || {});
             if (this.opts.src) {
                 this.setFrame(this.opts.src);

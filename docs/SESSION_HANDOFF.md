@@ -21,6 +21,28 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-12 — State Management Fix: Background Live Job Preemption on Channel Switch, Image Push & Gallery Art Selection.**
+  - **Problem Solved**: When a user selected System Monitor (stats) and subsequently pushed a gallery artwork or changed channels, the device briefly switched and then reverted back to stats after 5 seconds due to competing background live streaming tasks (`run_sysmon`) continuing to push frames indefinitely.
+  - **Rust Daemon Preemption (`divoomd/src/daemon.rs`, `divoomd/src/art.rs`)**:
+    - Added `preempt_conflicting_live_jobs(&self, req: &Request, target_mac: Option<&str>)` in `Daemon::cmd_device_call`. Automatically halts all active streaming tasks (`self.live_jobs.stop_all_for_device(self, &m).await`, or `stop_all` if `target: "wall"`) upon receiving any display-disruptive command (`show_image`, `display_image`, `show_clock`, `set_clock`, `set_clock_rich`, `show_light`, `set_light`, `switch_channel`, `show_text`, `set_design`, `show_design`, `send_image`, `push_animation`, `stream_animation_8b`, `show_effects`, `show_visualization`, `show_scoreboard`, `show_hot_channel`).
+    - Added preemption in `art.rs:cmd_custom_art_push` to stop active jobs on the target MAC when pushing custom art slots.
+  - **Python API & Client Preemption (`divoom_gui/api/lighting.py`, `divoom_gui/gallery_sync.py`)**:
+    - Fixed `_stop_live_widgets(self, mac: str | None = None)` in `LightingApi`: properly accesses `self._client`, resolves target MAC from current device, and calls `client.live_jobs_stop_for(target_mac)`.
+    - Wired `self._stop_live_widgets()` into `display_wall_image`, `push_text`, and `set_clock_rich`.
+    - Fixed client method lookup in `gallery_sync.py:play_gallery_art`, calling `client.live_jobs_stop_for(mac)` before pushing artwork and safely reusing `client` for downloading uncached previews.
+  - **Frontend DisplayPreview Job Unbinding & Poller Containment (`preview_controller.js`, `app_globals.js`, `gallery.js`, `widgets.js`, `custom_art.js`)**:
+    - In `preview_controller.js`: updated `DisplayPreview.prototype.setActivity` so that switching away from a streaming widget channel or setting artwork (`opts.fileId`) automatically unbinds the active streaming job (`this.unbindJob()`), while preserving the binding during normal widget streaming ticks (`{ src: src }`).
+    - In `app_globals.js`: updated `markActiveDeviceFrame(src, specificMac, kind)` so that when `kind` is provided and no displays are bound to that widget, it returns early and never clobbers the active display with stale frames.
+    - In `gallery.js` and `custom_art.js`: explicitly unbinds the target display's active job upon artwork tile selection.
+    - In `widgets.js`: added `divoom:activity-updated` listener that clears local timers (`sysmonTimer`, `stockTimer`, weather polling) and unmarks active widget cards whenever a non-widget activity is displayed.
+  - **Automated Verification**:
+    - Rust integration test `divoomd/tests/multi_device_routing.rs:test_device_call_preempts_conflicting_live_jobs` (passed).
+    - Python unit tests in `tests/test_gui_api_lighting.py` (27 passed).
+    - Playwright browser test in `tests/test_browser_preview_registry.py:test_browser_stats_gallery_job_preemption` (4 passed in 12.45s).
+    - Full Python pytest suite: 2956 passed, 232 skipped.
+    - Full local CI (`./scripts/ci_local.sh --fast`): all 25 steps passed.
+    - House gates clean: 389/389 files <= 500 LOC, 744 files clean in emoji gate.
+
 - **2026-09-12 — Virtual Wall & Main Bench Preview Unification + Two-Way Spatial Preset Synchronization.**
   - **Virtual Wall Preview Unification (`preview_controller.js`, `wall.css`, `app_globals.js`, `spatial_stage.js`, `settings_hardware.js`)**:
     - Banished divergent preview rendering between the Virtual Wall arranger (`#arranger-canvas`) and Main Bench (`#spatial-bench`).

@@ -101,6 +101,17 @@ class GallerySyncMixin(GalleryHotApiMixin):
         logger.info(f"GUI Action: Play gallery artwork file_id={file_id!r}")
         if not file_id:
             return {"success": False, "error": "missing file_id"}
+        client = self._client() if callable(getattr(self, "_client", None)) else getattr(self, "_client", None)
+        if client:
+            try:
+                cur = getattr(self, "current_divoom", None) or getattr(self, "_current_divoom", None)
+                mac = getattr(cur, "mac", None)
+                try:
+                    client.live_jobs_stop_for(mac)
+                except TypeError:
+                    client.live_jobs_stop_for()
+            except Exception as e:
+                logger.debug(f"stop live widgets before gallery play: {e}")
         cache_dir = Path.home() / ".config" / "divoom-control" / "cache_gallery"
         target_path = None
         safe_name = file_id.replace("/", "_")
@@ -110,7 +121,6 @@ class GallerySyncMixin(GalleryHotApiMixin):
                 target_path = p
                 break
         if target_path is None:
-            client = self._client
             if client:
                 try:
                     data_url = client.get_animated_preview(file_id)

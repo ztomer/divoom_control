@@ -8,6 +8,13 @@ shipped milestone (per the project planning docs).
 
 ### Architecture & Fixed
 
+- **Live Job Preemption & State Management Stabilization (`daemon.rs`, `art.rs`, `lighting.py`, `gallery_sync.py`, `preview_controller.js`, `app_globals.js`, `gallery.js`, `widgets.js`, `custom_art.js`)**:
+  - Solved issue where selecting System Monitor (stats) and subsequently pushing an image or gallery artwork caused the device and preview to revert back to stats after 5 seconds due to persistent background streaming loops.
+  - Rust Daemon: added `preempt_conflicting_live_jobs` in `Daemon::cmd_device_call` and `art.rs:cmd_custom_art_push` to halt any running live streaming jobs (`sysmon`, `music`, `stocks`, `weather`) on the target device when an image, channel, clock, or custom art is pushed.
+  - Python API: fixed `_stop_live_widgets(self, mac)` to properly resolve target MAC from current device and invoke `client.live_jobs_stop_for(target_mac)`; wired into `display_wall_image`, `push_text`, and `set_clock_rich`; fixed client lookup and added preemption in `play_gallery_art`.
+  - Frontend: updated `DisplayPreview.setActivity` to unbind active streamer jobs when switching to non-widget channels or setting artwork (`opts.fileId`), while preserving bindings during normal live frame ticks (`{ src: src }`).
+  - Frontend: updated `markActiveDeviceFrame` to return early when `kind` is specified and no displays are bound to that streamer, preventing background ticks from clobbering active displays; explicitly unbound jobs in `gallery.js` and `custom_art.js`; wired `divoom:activity-updated` in `widgets.js` to clear pollers on non-widget activation.
+  - Verified via Rust integration test `divoomd/tests/multi_device_routing.rs:test_device_call_preempts_conflicting_live_jobs`, Python unit tests in `tests/test_gui_api_lighting.py`, and Playwright browser test in `tests/test_browser_preview_registry.py:test_browser_stats_gallery_job_preemption`.
 - **Virtual Wall & Main Bench Preview Unification (`preview_controller.js`, `wall.css`, `app_globals.js`, `spatial_stage.js`, `settings_hardware.js`)**:
   - Eliminated preview divergence between the Virtual Wall arranger (`#arranger-canvas`) and Main Bench (`#spatial-bench`).
   - Fixed `preview_controller.js` false-positive orange "W" glyph: replaced `if (this.wallSlot)` with `if (this.channel === "wall")`. When displays in wall slots run procedural channels (Clock, EQ visualizer, Ambient), they now render their actual channel pixel art on the Main Bench instead of being suppressed by the wall slot glyph.

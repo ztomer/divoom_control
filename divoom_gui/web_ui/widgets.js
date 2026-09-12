@@ -456,6 +456,20 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+    window.addEventListener("divoom:activity-updated", (e) => {
+        const k = (e.detail?.kind || "").toLowerCase();
+        const widgetKinds = ["music", "stock", "stocks", "sysmon", "weather"];
+        if (k && !widgetKinds.includes(k)) {
+            stopTrackPolling();
+            if (sysmonTimer) { clearInterval(sysmonTimer); sysmonTimer = null; }
+            if (stockTimer) { clearInterval(stockTimer); stockTimer = null; }
+            stopWeatherPolling();
+            ["music", "stock", "sysmon", "weather", "notif-manual", "notif-mirror"].forEach(id => {
+                document.getElementById(`widget-card-${id}`)?.classList.remove("widget-active");
+            });
+        }
+    });
+
     // Startup Delay Inits
     setTimeout(() => window.loadTickers && window.loadTickers(), 1500);
     setTimeout(() => {

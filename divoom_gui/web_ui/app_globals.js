@@ -193,14 +193,16 @@ window.markActiveDeviceFrame = function(src, specificMac, kind) {
         window.setDeviceActivity(specificMac, "image", { src: src });
         return;
     }
-    if (kind && window.DisplayPreviewRegistry) {
-        const bound = window.DisplayPreviewRegistry.getDisplaysBoundTo(kind);
-        if (bound.length > 0) {
-            bound.forEach(d => {
-                window.setDeviceActivity(d.mac, "image", { src: src });
-            });
-            return;
+    if (kind) {
+        if (window.DisplayPreviewRegistry) {
+            const bound = window.DisplayPreviewRegistry.getDisplaysBoundTo(kind);
+            if (bound.length > 0) {
+                bound.forEach(d => {
+                    window.setDeviceActivity(d.mac, "image", { src: src });
+                });
+            }
         }
+        return;
     }
     const mac = window._activeDeviceMac();
     if (mac && mac !== "None" && src && window.setDeviceActivity)

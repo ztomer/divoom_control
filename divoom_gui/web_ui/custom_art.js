@@ -207,6 +207,9 @@
     page[target] = { fileId, thumb };
     saveAssignments();
     const mac = (typeof window._activeDeviceMac === "function") ? window._activeDeviceMac() : null;
+    if (mac && window.DisplayPreviewRegistry) {
+      window.DisplayPreviewRegistry.get(mac)?.unbindJob();
+    }
     if (mac && thumb && window.setDeviceActivity) {
       window.setDeviceActivity(mac, "image", { src: thumb, fileId: fileId });
     }

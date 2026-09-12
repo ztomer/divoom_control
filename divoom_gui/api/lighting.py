@@ -15,15 +15,23 @@ class LightingApi(ApiBase, WidgetFrameMixin):
     def __init__(self, loop_thread, daemon_client_getter, state_getter):
         super().__init__(loop_thread, daemon_client_getter, state_getter)
 
-    def _stop_live_widgets(self) -> None:
+    def _stop_live_widgets(self, mac: str | None = None) -> None:
         """A static-display takeover (channel / clock / VJ / visualizer / solid
-        light) is mutually exclusive with a streaming live widget. Stop the
-        active device's live jobs first, or the widget's next tick re-pushes its
-        frame and clobbers the switch (HW-confirmed). Best-effort."""
+        light / image) is mutually exclusive with a streaming live widget. Stop
+        the active device's live jobs first, or the widget's next tick re-pushes
+        its frame and clobbers the switch (HW-confirmed). Best-effort."""
         try:
             client = self._client
             if client is not None:
-                client.live_jobs_stop_for()
+                target_mac = mac
+                if not target_mac:
+                    cur = self._current_divoom
+                    if cur is not None and hasattr(cur, "mac"):
+                        target_mac = cur.mac
+                try:
+                    client.live_jobs_stop_for(target_mac)
+                except TypeError:
+                    client.live_jobs_stop_for()
         except Exception as e:
             logger.debug(f"stop live widgets before switch: {e}")
 
@@ -101,6 +109,7 @@ class LightingApi(ApiBase, WidgetFrameMixin):
         try:
             if not text or not str(text).strip():
                 return False
+            self._stop_live_widgets()
             size = self._device_size()
             _extras, png_path = self._widget_frame(
                 "text", size,
@@ -149,6 +158,7 @@ class LightingApi(ApiBase, WidgetFrameMixin):
 
     def display_wall_image(self, file_path: str, cell_size: int) -> dict:
         logger.info(f"GUI Action: Push display wall asset {file_path!r} (cell size={cell_size})...")
+        self._stop_live_widgets()
         try:
             self._rebuild_wall_instance(cell_size)
             target = self._wall_instance if self._wall_instance else self._current_divoom
@@ -181,6 +191,7 @@ class LightingApi(ApiBase, WidgetFrameMixin):
                        humidity: bool = False, weather: bool = False,
                        date: bool = False, color: str = "#ffffff") -> bool:
         logger.info(f"GUI Action: Setting rich clock (style={style}, twentyfour={twentyfour}, ...)")
+        self._stop_live_widgets()
         try:
             return self._dispatch(lambda t: t.display.set_clock_rich(style=style, twentyfour=twentyfour,
                                                                      humidity=humidity, weather=weather,

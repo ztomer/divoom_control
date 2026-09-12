@@ -192,6 +192,8 @@ impl Daemon {
             return err_reply("device_call requires a 'method' string");
         }
 
+        self.preempt_conflicting_live_jobs(req, target_mac).await;
+
         // R67: `target` was NEVER READ. The Python client has always sent
         // `target: "wall"` for wall operations (DaemonDeviceProxy(target="wall")),
         // and the daemon ignored it and used the single device — so a configured
@@ -291,6 +293,50 @@ impl Daemon {
 
     async fn cmd_set_topology(&self, req: &Request) -> Value {
         crate::wall::cmd_set_topology(self, req).await
+    }
+
+    async fn preempt_conflicting_live_jobs(&self, req: &Request, target_mac: Option<&str>) {
+        let method = req
+            .args
+            .get("method")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let bare_method = method.split('.').next_back().unwrap_or(method);
+        let is_display_disruptive = matches!(
+            bare_method,
+            "show_image"
+                | "display_image"
+                | "show_clock"
+                | "set_clock"
+                | "set_clock_rich"
+                | "show_light"
+                | "set_light"
+                | "switch_channel"
+                | "show_text"
+                | "set_design"
+                | "show_design"
+                | "send_image"
+                | "push_animation"
+                | "stream_animation_8b"
+                | "show_effects"
+                | "show_visualization"
+                | "show_scoreboard"
+                | "show_hot_channel"
+        );
+        if is_display_disruptive {
+            if req.args.get("target").and_then(|v| v.as_str()) == Some("wall") {
+                self.live_jobs.stop_all(self).await;
+            } else {
+                let dev_mac = if let Some(m) = target_mac {
+                    Some(m.to_string())
+                } else {
+                    self.device_id.lock().await.clone()
+                };
+                if let Some(m) = dev_mac {
+                    self.live_jobs.stop_all_for_device(self, &m).await;
+                }
+            }
+        }
     }
 }
 

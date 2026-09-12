@@ -221,3 +221,59 @@ async fn test_live_job_persists_across_device_switch() {
         .await;
     assert_eq!(stop_res["success"], json!(true));
 }
+
+#[tokio::test]
+async fn test_device_call_preempts_conflicting_live_jobs() {
+    use std::sync::Arc;
+    let d = Arc::new(Daemon::new());
+    d.initialize_self_weak(Arc::downgrade(&d));
+
+    // 1. Connect DEV_A
+    let conn = d
+        .handle(make_request(
+            "connect",
+            Some(json!({"mock": true, "mac": "DEV_A"})),
+            None,
+        ))
+        .await;
+    assert_eq!(conn["success"], json!(true));
+
+    // 2. Start sysmon live job on DEV_A
+    let job_res = d
+        .handle(make_request(
+            "live_job_start",
+            Some(json!({
+                "kind": "sysmon",
+                "mac": "DEV_A",
+                "interval_s": 1.0,
+                "params": {"size": 16}
+            })),
+            None,
+        ))
+        .await;
+    assert_eq!(job_res["success"], json!(true));
+
+    // Verify job is running
+    assert_eq!(d.live_jobs.list(Some("DEV_A")).await.len(), 1);
+
+    // 3. Send a display-disruptive device call (e.g. switch_channel)
+    let call = d
+        .handle(make_request(
+            "device_call",
+            Some(json!({
+                "mac": "DEV_A",
+                "method": "display.switch_channel",
+                "kwargs": {"channel": "clock"}
+            })),
+            None,
+        ))
+        .await;
+    assert_eq!(call["success"], json!(true));
+
+    // 4. Verify sysmon was cleanly preempted and is no longer running on DEV_A
+    assert_eq!(
+        d.live_jobs.list(Some("DEV_A")).await.len(),
+        0,
+        "Live job on DEV_A should have been preempted by switch_channel"
+    );
+}

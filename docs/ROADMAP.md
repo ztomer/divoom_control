@@ -343,28 +343,22 @@ _Shipped in v0.35.0: Full-width top Spatial Preview Bench, physical millimeter p
   - Implement a dual-mode preview surface on stage/arranger nodes: when `mode === "frame"` and the asset is an animated GIF, switch the visible surface to an overlaid `<img class="stage-node-gif">` tag (which WebKit animates natively with hardware acceleration and zero raster loop overhead), or integrate a lightweight client-side GIF frame demuxer that advances bitmap frames in `renderTo(canvas, tick)` according to elapsed milliseconds and frame duration metadata.
   - Ensure `image-rendering: pixelated; crisp-edges;` is applied across all animation surfaces to maintain crisp integer diodes without blurring.
 
-#### 2. Prevent Out-of-Band Preview Mutations & Enforce Channel Reconciliation
-- **Problem**: The preview for a display occasionally changes spontaneously or reverts to an unrelated channel/image without the user having selected that channel or pushed content.
-- **Root Causes**:
-  - *Unscoped Widget Fallback*: In `app_globals.js:markActiveDeviceFrame(src, specificMac, kind)`, line 206 falls back to `const mac = window._activeDeviceMac()` and executes `window.setDeviceActivity(mac, "image", { src })` whenever a background widget (Sysmon, Music, Stocks) emits a frame without an explicit `specificMac` or active binding. This clobbers the active screen's preview into `"image"` mode even when running Clock, Visualizer, or Ambient.
-  - *Static SVG Injection Overwrite*: `setDeviceActivity(mac, kind, opts)` calls `window._channelPreviewSVG(kind, opts)` and unconditionally executes `display.setFrame(src)`. This sets `display.mode = "frame"`, overriding procedural canvas renderers with a static SVG raster once `img.onload` resolves.
-  - *Stale Preview Restore*: `restoreDevicePreview(address)` reads `window.DivoomState.devicePreviews[address]` or `regFrame` which may contain an old cached image from a past session or different channel modes.
-  - *Missing Hardware State Sync*: When the physical device switches channel externally or via daemon timer, the UI does not reconcile its `DisplayPreview` channel with hardware telemetry.
-- **Plan**:
-  - Remove unscoped `window._activeDeviceMac()` fallback in `markActiveDeviceFrame`: require either an explicit `specificMac` or an active `DisplayJobBinding` before blitting widget frames.
-  - Keep `DisplayPreview.mode` strictly in `"glyph"` mode for procedural channels (`clock`, `ambient`, `eq`, `scoreboard`), reserving `"frame"` mode exclusively for real image pushes, custom art, and gallery assets.
-  - Subscribe to daemon device status broadcast events to reconcile `DisplayPreview` channels with hardware state.
+#### 2. Prevent Out-of-Band Preview Mutations & Live Job Preemption (SHIPPED 2026-09-12)
+- **Problem**: Selecting System Monitor (stats) and subsequently pushing an image or gallery artwork caused the device and preview to revert back to stats after 5 seconds due to persistent background streaming loops.
+- **Resolution**:
+  - *Rust Daemon Preemption*: In `Daemon::cmd_device_call` (`divoomd/src/daemon.rs`) and `art.rs:cmd_custom_art_push`, added `preempt_conflicting_live_jobs` to automatically stop any running live streaming tasks (`sysmon`, `music`, `stocks`, `weather`) on the target device whenever an image, channel, clock, or custom art is pushed.
+  - *Python API Preemption*: Fixed `_stop_live_widgets(self, mac)` in `LightingApi` to properly resolve target MAC and call `client.live_jobs_stop_for(target_mac)`; wired into `display_wall_image`, `push_text`, and `set_clock_rich`.
+  - *Frontend Job Unbinding*: Updated `DisplayPreview.setActivity` in `preview_controller.js` to automatically unbind active streamer jobs on channel switches and artwork takeovers (`opts.fileId`), while preserving bindings during normal live frame ticks (`{ src: src }`).
+  - *Unscoped Fallback Removal*: Removed the unscoped `_activeDeviceMac()` fallback in `app_globals.js:markActiveDeviceFrame` so that when `kind` is specified, it never clobbers active displays when no displays are bound to that streamer.
+  - *Timer Containment*: Wired `widgets.js` to listen for `divoom:activity-updated` and clear local timers and active cards on non-widget activities.
+  - *Automated Tests*: Verified via Rust integration test `multi_device_routing.rs:test_device_call_preempts_conflicting_live_jobs`, Python unit tests in `test_gui_api_lighting.py`, and Playwright browser test `test_browser_preview_registry.py:test_browser_stats_gallery_job_preemption`.
 
-#### 3. Fix Gallery Artwork Double-Click Requirement
-- **Problem**: Clicking an artwork tile in the Community Gallery (`#gallery-container`) often does nothing on the first click, requiring the user to press the image a second time to push it to the display.
-- **Root Cause**:
-  - *Bound Method vs Instance in Python Backend (`divoom_gui/gallery_sync.py:113`)*: In `play_gallery_art(file_id)`, `client = self._client` captured the method itself rather than calling `client = self._client()`. Invoking `client.get_animated_preview(file_id)` threw an `AttributeError: 'method' object has no attribute 'get_animated_preview'`, which was silently swallowed in `except Exception as e: logger.warning(...)`.
-  - When uncached, the first click failed immediately with `{"success": False, "error": "file not found in cache"}`.
-  - Meanwhile, `lazyLoadAnimatedPreview` in `gallery.js` was independently fetching and caching the GIF in the background. By the second click, the file existed in `cache_gallery/`, allowing the second click to succeed.
-- **Plan**:
-  - Fix `client = self._client()` in `divoom_gui/gallery_sync.py:play_gallery_art` so uncached artworks are fetched, cached, and streamed on the very first invocation.
-  - Provide immediate visual loading state (tactile press animation + spinner) on the clicked gallery tile while `play_gallery_art` completes.
-  - Add regression test in `tests/test_gallery_play_first_click.py` verifying that uncached `play_gallery_art` succeeds on call 1.
+#### 3. Fix Gallery Artwork Double-Click Requirement (SHIPPED 2026-09-12)
+- **Problem**: Clicking an artwork tile in the Community Gallery (`#gallery-container`) failed on the first click when uncached, requiring the user to press the image a second time.
+- **Resolution**:
+  - *Bound Method vs Instance in Python Backend (`divoom_gui/gallery_sync.py:113`)*: In `play_gallery_art(file_id)`, fixed `client = self._client()` method lookup and resolved `cur = getattr(self, "current_divoom", None)` so that uncached previews are reliably fetched, cached, and streamed on the very first invocation without throwing swallowed `AttributeError`s.
+  - Added preemption `client.live_jobs_stop_for(mac)` in `play_gallery_art` before pushing the artwork.
+  - Verified via unit test `test_play_gallery_art_stops_live_widgets` in `tests/test_gui_api_lighting.py`.
 
 ### OPEN — Rust Daemon Architectural Unification: Multi-Device Registry & Per-Device Queuing
 

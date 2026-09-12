@@ -213,6 +213,19 @@ pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
         .unwrap_or(0)
         .byte();
 
+    let target_mac = {
+        let explicit = args.get("mac").and_then(|v| v.as_str()).map(String::from);
+        if explicit.is_some() {
+            explicit
+        } else {
+            let guard = daemon.device_id.lock().await;
+            guard.clone()
+        }
+    };
+    if let Some(ref m) = target_mac {
+        daemon.live_jobs.stop_all_for_device(&daemon, m).await;
+    }
+
     // Build slot_map: {slot_index -> file_id}
     let mut slot_map: Vec<(usize, String)> = Vec::new();
     if let Some(slots_obj) = args.get("slots").and_then(|v| v.as_object()) {
