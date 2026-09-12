@@ -36,8 +36,21 @@ window.showToast = function(message, type = "success", transport = null) {
     setTimeout(() => { toast.classList.remove("show"); }, 3000);
 };
 
-window.requireDevice = function() {
-    if (!window.DivoomState.appConnected) {
+// Is THIS panel linked, as the daemon last told us? Per-panel truth
+// (2026-09-12): `appConnected` is the selected panel's link, derived from the
+// same flags by setConnectionState, never a second opinion.
+window.panelIsLinked = function(mac) {
+    if (!mac) return false;
+    const d = (window.DivoomState.discoveredDevices || []).find(x => x.address === mac);
+    return !!(d && d.daemonOwned && d.activityState !== "disconnected");
+};
+
+// Gate an action on a panel: the named one, else the selected one.
+window.requireDevice = function(mac) {
+    const target = mac || (typeof window._activeDeviceMac === "function" ? window._activeDeviceMac() : null);
+    const linked = mac ? window.panelIsLinked(mac)
+        : (window.panelIsLinked(target) || !!window.DivoomState.appConnected);
+    if (!linked) {
         window.showToast("Connect a device first — scan and connect under Settings.", "error");
         return false;
     }
@@ -221,15 +234,16 @@ window.markActiveDeviceFrame = function(src, specificMac, kind) {
 window.getFleetStatus = function() {
     const devices = (window.DivoomState && window.DivoomState.discoveredDevices) || [];
     const connectedMac = window.DivoomState.connectedAddress || window._activeDeviceMac();
+    const linked = devices.filter(d => window.panelIsLinked(d.address));
     return {
         total: devices.length,
-        connectedCount: window.DivoomState.appConnected ? 1 : 0,
+        connectedCount: linked.length,
         activeMac: connectedMac,
         isConnected: !!window.DivoomState.appConnected,
         devices: devices.map(d => ({
             mac: d.address,
             name: d.name,
-            connected: !!(window.DivoomState.appConnected && (d.address === connectedMac))
+            connected: window.panelIsLinked(d.address)
         }))
     };
 };

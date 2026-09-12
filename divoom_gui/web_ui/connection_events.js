@@ -38,6 +38,22 @@ window.setConnectionState = function(s) {
             : mode === "connecting" ? "Connecting..." : "Disconnected";
         dot.removeAttribute("style");
     }
+    // The funnel writes BOTH views of the same fact: the panel's own flags
+    // (what jewels, requireDevice and getFleetStatus read) and appConnected,
+    // which is the selected panel's link and nothing more.
+    const list = window.DivoomState.discoveredDevices || [];
+    if (s.mac) {
+        const known = list.find(d => d.address === s.mac);
+        if (known) {
+            known.daemonOwned = (mode === "active" || mode === "degraded");
+            known.activityState = mode === "degraded" ? "degraded"
+                : mode === "active" ? "active"
+                : mode === "inactive" ? "disconnected" : known.activityState;
+        }
+    } else if (mode === "inactive") {
+        // Nobody named: the daemon (or the bridge) is gone for every panel.
+        list.forEach(d => { d.daemonOwned = false; d.activityState = "disconnected"; });
+    }
     window.DivoomState.appConnected = (mode === "active" || mode === "degraded");
     if ((mode === "active" || mode === "degraded") && s.mac) {
         let name = s.name || s.mac;
@@ -84,7 +100,7 @@ window.connectDevice = function(name, address) {
         // The client read_timeout is ~30s; fire the watchdog a beat after.
         let connectWatchdog = null;
         connectWatchdog = setTimeout(() => {
-            window.setConnectionState({ mode: "inactive" });
+            window.setConnectionState({ mode: "inactive", mac: address });
             window.showToast(`Background service not responding for ${name}. Try Reconnect.`, "error");
             if (window.renderDeviceDots) window.renderDeviceDots();
         }, 35000);
@@ -112,7 +128,7 @@ window.connectDevice = function(name, address) {
                 if (window.updateSyncTargetList) window.updateSyncTargetList();
                 if (window.updateChannelButtonsVisibility) window.updateChannelButtonsVisibility(name);
             } else {
-                window.setConnectionState({ mode: "inactive" });
+                window.setConnectionState({ mode: "inactive", mac: address });
                 // BLE Hardening P1: show the daemon's actionable reason (asleep /
                 // BT off / held by the phone app), not a generic failure.
                 if (window.pywebview?.api?.get_last_connect_error) {
@@ -170,8 +186,11 @@ window.refreshConnectionState = function() {
             // Genuinely dropped — or the daemon explicitly reports disconnected
             // while a stale connected:true lingered. Flip the dot + the global
             // flag so the UI stops claiming a live link; a disconnected state
-            // must NOT be masked by a stale connected flag.
-            window.setConnectionState({ mode: "inactive" });
+            // must NOT be masked by a stale connected flag. The answer is about
+            // the SELECTED panel (the proxy asks for it by mac), so name it;
+            // no answer at all is the daemon gone, which names nobody.
+            const sel = (typeof window._activeDeviceMac === "function") ? window._activeDeviceMac() : null;
+            window.setConnectionState({ mode: "inactive", mac: s ? sel : null });
         } else {
             // Honest connected (ble/lan/wall) — colour the dot by transport type.
             window.setConnectionState({ mode: "active", transport: window._activeTransportType() });
@@ -218,7 +237,7 @@ window.Divoom.onDaemonEvent = function(ev) {
     const aboutSelected = !mac || !selectionIsReal || mac === activeMac;
     if (aboutSelected) {
         if (!connected || dropped) {
-            window.setConnectionState({ mode: "inactive" });
+            window.setConnectionState({ mode: "inactive", mac: mac });
         } else if (degraded) {
             window.setConnectionState({ mode: "degraded", mac: mac });
         } else {

@@ -150,3 +150,50 @@ async def test_bench_selection_always_reaches_python_including_the_fallback():
         assert res["afterFallback"]["calls"] == ["T1:TIMOO"], res
         assert res["sel"] == "E9:DITOO" and res["calls"][-1] == "E9:DITOO", res
         await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_require_device_and_fleet_status_are_per_panel():
+    """Step 2 of the v0.37 plan: `requireDevice(mac)` gates on THAT panel's
+    link; without a mac it gates on the selected panel; getFleetStatus
+    counts linked panels instead of reporting the one global boolean."""
+    from playwright.async_api import async_playwright
+
+    async with async_playwright() as p:
+        browser = await launch_browser(p)
+        page = await browser.new_page(viewport={"width": 1280, "height": 850})
+        await page.goto(f"file://{INDEX_HTML}")
+        await page.wait_for_load_state("domcontentloaded")
+        await wait_js(page, "() => !!window.requireDevice && !!window.panelIsLinked")
+        res = await eval_js(page, """() => {
+            window.showToast = () => {};
+            const d = 'E9:DITOO', px = 'A9:PIXOO';
+            window.DivoomState.discoveredDevices = [
+                { address: d, name: 'Ditoo' }, { address: px, name: 'Pixoo' }];
+            window.Divoom.onOwnedDevices({ type: 'owned_devices', devices: [
+                { address: d, name: 'Ditoo', kind: 'clock', state: 'active' },
+                { address: px, name: 'Pixoo', kind: 'clock', state: 'active' }]});
+            document.getElementById('banner-device-mac').textContent = d;
+            window.setConnectionState({ mode: 'active', transport: 'ble', mac: d, name: 'Ditoo' });
+            const both = { sel: window.requireDevice(), px: window.requireDevice(px),
+                           count: window.getFleetStatus().connectedCount };
+            // The Pixoo drops: the selected Ditoo still passes, the Pixoo does not.
+            window.Divoom.onDaemonEvent({ type: 'status', connected: false, state: 'disconnected', mac: px });
+            const pxDown = { sel: window.requireDevice(), px: window.requireDevice(px),
+                             count: window.getFleetStatus().connectedCount,
+                             appConnected: window.DivoomState.appConnected };
+            // The Ditoo (selected) drops: the gate closes, the count is 0.
+            window.Divoom.onDaemonEvent({ type: 'status', connected: false, state: 'disconnected', mac: d });
+            const allDown = { sel: window.requireDevice(), count: window.getFleetStatus().connectedCount,
+                              appConnected: window.DivoomState.appConnected };
+            // A click-flow reconnect of the Pixoo through the funnel marks that panel.
+            window.setConnectionState({ mode: 'active', transport: 'ble', mac: px, name: 'Pixoo' });
+            const pxBack = { px: window.requireDevice(px), linked: window.panelIsLinked(px),
+                             count: window.getFleetStatus().connectedCount };
+            return { both, pxDown, allDown, pxBack };
+        }""")
+        assert res["both"] == {"sel": True, "px": True, "count": 2}
+        assert res["pxDown"] == {"sel": True, "px": False, "count": 1, "appConnected": True}
+        assert res["allDown"] == {"sel": False, "count": 0, "appConnected": False}
+        assert res["pxBack"] == {"px": True, "linked": True, "count": 1}
+        await browser.close()
