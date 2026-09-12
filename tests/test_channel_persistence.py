@@ -142,3 +142,34 @@ async def test_on_activity_event_sync():
         assert res["activeTab"] == "clock"
 
         await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_on_activity_with_pixels_updates_the_preview():
+    """2026-09-12: a live job's frame arrives on the bus with its pixels
+    (`preview`); the panel's DisplayPreview must switch to that frame so the
+    bench mirrors the device without any tab polling."""
+    assert INDEX_HTML.exists()
+    from playwright.async_api import async_playwright
+
+    async with async_playwright() as p:
+        browser = await launch_browser(p)
+        page = await browser.new_page(viewport={"width": 1280, "height": 850})
+        await page.goto(f"file://{INDEX_HTML}")
+        await page.wait_for_load_state("domcontentloaded")
+        await wait_js(page, "() => !!window.Divoom?.onActivity")
+
+        dev = "44:55:66:77:88:AA"
+        png = ("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ"
+               "AAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==")
+        res = await eval_js(page, """([mac, png]) => {
+            window.DivoomState.discoveredDevices = [{ address: mac, name: "Pixoo-Frame", room: "Desk" }];
+            if (window.SpatialStage?.refresh) window.SpatialStage.refresh();
+            window.Divoom.onActivity({ type: 'activity', mac, kind: 'music', preview: png });
+            const disp = window.DisplayPreviewRegistry.get(mac);
+            return { mode: disp.mode, src: disp.frameSrc, channel: disp.channel };
+        }""", [dev, png])
+        assert res["channel"] == "music"
+        assert res["mode"] == "frame", "the preview must show the frame, not a glyph"
+        assert res["src"] == png
+        await browser.close()

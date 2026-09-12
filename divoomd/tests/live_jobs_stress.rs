@@ -410,3 +410,44 @@ async fn owned_devices_never_invents_a_name() {
         assert_ne!(name, "Divoom", "placeholder leaked as a name: {dev}");
     }
 }
+
+#[tokio::test]
+async fn every_pushed_live_frame_is_broadcast_with_its_pixels() {
+    // The bench kept the old cover while the device had the new one,
+    // because only a tab's poll refreshed the preview. A frame that
+    // reached the panel is announced on the bus with a PNG of itself.
+    let d = daemon_with_mock("DEV_A").await;
+    let mut rx = d.subscribe().expect("daemon broadcasts");
+    assert_eq!(
+        start_job(&d, "DEV_A", "sysmon").await["success"],
+        json!(true)
+    );
+    assert!(wait_for_sent(&d, "DEV_A", 1, Duration::from_secs(3)).await >= 1);
+    let mut frame_event = None;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+    while tokio::time::Instant::now() < deadline {
+        if let Ok(ev) = rx.try_recv() {
+            if ev["type"] == json!("activity")
+                && ev["kind"] == json!("sysmon")
+                && ev["preview"].is_string()
+            {
+                frame_event = Some(ev);
+                break;
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    let ev = frame_event.expect("an activity event carrying the frame");
+    assert_eq!(ev["mac"], json!("DEV_A"));
+    assert!(ev["preview"]
+        .as_str()
+        .unwrap()
+        .starts_with("data:image/png;base64,"));
+    // ...and the activity record keeps it for a late subscriber.
+    let act = d.live_jobs.get_device_activity().await;
+    assert!(act["activity"]["DEV_A"]["preview"]
+        .as_str()
+        .unwrap()
+        .starts_with("data:image/png"));
+    stop_job(&d, "DEV_A", "sysmon").await;
+}

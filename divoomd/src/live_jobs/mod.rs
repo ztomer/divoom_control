@@ -8,6 +8,7 @@ use crate::daemon::{Daemon, DeviceTransport};
 
 mod coordinator;
 pub mod font;
+mod frame;
 mod health;
 /// macOS-only: it reads now-playing through the `nowplaying` crate, which is
 /// itself a macOS-only dependency of this crate (MediaRemote does not exist
@@ -20,6 +21,7 @@ pub mod render;
 pub mod sysmon;
 
 pub use coordinator::LiveJobCoordinator;
+use frame::{push_live_frame, LiveFrame};
 pub use health::{JobHealth, JobState};
 #[cfg(target_os = "macos")]
 use music_job::run_music;
@@ -77,7 +79,7 @@ async fn now_playing_track_async() -> Result<Option<nowplaying::Track>, String> 
 
 // --- Device Helpers ---
 
-async fn push_rgb_to_device(
+pub(super) async fn push_rgb_to_device(
     daemon: &Daemon,
     dev: &DeviceTransport,
     rgb: &[u8],
@@ -109,49 +111,6 @@ async fn push_rgb_to_device(
 
 async fn get_device_transport(daemon: &Daemon, mac: &str) -> Option<Arc<DeviceTransport>> {
     daemon.fleet.get(mac).await?.transport().await
-}
-
-/// Send one live-widget frame to `mac`, or drop it.
-///
-/// The frame is queued on the LINK the panel has right now and carries the
-/// job's `alive` flag. When its turn comes it re-checks both: a job stopped
-/// in the meantime, or a link retired by a reconnect, means the frame is
-/// dropped rather than painted over whatever the user asked for since. This
-/// is the fence that makes `live_job_stop` and `disconnect` mean "nothing
-/// more lands", which the old queue-by-mac closure could not promise.
-///
-/// Returns whether the frame reached the transport.
-pub(super) async fn push_live_frame(
-    daemon: &Arc<Daemon>,
-    mac: &str,
-    alive: &Arc<AtomicBool>,
-    rgb: Vec<u8>,
-    w: i32,
-    h: i32,
-    time_ms: u16,
-) -> bool {
-    let Some(device) = daemon.fleet.get(mac).await else {
-        return false;
-    };
-    let Some(link) = device.link().await else {
-        return false;
-    };
-    let d_weak = Arc::downgrade(daemon);
-    let alive = alive.clone();
-    let link_in = link.clone();
-    link.run(None, async move {
-        if !alive.load(Ordering::SeqCst) || link_in.is_retired() {
-            return false;
-        }
-        let Some(d) = d_weak.upgrade() else {
-            return false;
-        };
-        push_rgb_to_device(&d, &link_in.transport, &rgb, w, h, time_ms)
-            .await
-            .is_ok()
-    })
-    .await
-    .unwrap_or(false)
 }
 
 // --- Live Widgets Loops ---
@@ -204,8 +163,19 @@ async fn run_sysmon(daemon_weak: Weak<Daemon>, mac: String, params: Value, alive
         let rgb = render_sysmon(s.cpu, s.mem, s.battery, size);
 
         if connected {
-            let _ =
-                push_live_frame(&daemon, &mac, &alive, rgb, size as i32, size as i32, 100).await;
+            let _ = push_live_frame(
+                &daemon,
+                &mac,
+                JOB_KIND,
+                &alive,
+                LiveFrame {
+                    rgb,
+                    w: size as i32,
+                    h: size as i32,
+                    time_ms: 100,
+                },
+            )
+            .await;
         }
 
         let nap = if connected {
@@ -275,8 +245,19 @@ async fn run_stocks(daemon_weak: Weak<Daemon>, mac: String, params: Value, alive
             let rgb = render_stock(&symbol, quote.price, quote.change, size);
 
             if connected {
-                let _ = push_live_frame(&daemon, &mac, &alive, rgb, size as i32, size as i32, 100)
-                    .await;
+                let _ = push_live_frame(
+                    &daemon,
+                    &mac,
+                    JOB_KIND,
+                    &alive,
+                    LiveFrame {
+                        rgb,
+                        w: size as i32,
+                        h: size as i32,
+                        time_ms: 100,
+                    },
+                )
+                .await;
             }
         }
 

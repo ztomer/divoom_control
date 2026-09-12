@@ -15,6 +15,7 @@ use std::time::Duration;
 
 use super::{
     get_device_transport, health, now_playing_track_async, push_live_frame, report_health,
+    LiveFrame,
 };
 use crate::daemon::Daemon;
 
@@ -137,11 +138,14 @@ pub(super) async fn run_music(
                                         let success = push_live_frame(
                                             &daemon,
                                             &mac,
+                                            JOB_KIND,
                                             &alive,
-                                            rgb.clone(),
-                                            *w,
-                                            *h_px,
-                                            *t,
+                                            LiveFrame {
+                                                rgb: rgb.clone(),
+                                                w: *w,
+                                                h: *h_px,
+                                                time_ms: *t,
+                                            },
                                         )
                                         .await;
                                         // Advance only on a CONFIRMED push, so a

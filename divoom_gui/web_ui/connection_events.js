@@ -280,7 +280,9 @@ window.Divoom.onActivity = function(ev) {
     if (!ev || !ev.mac || !ev.kind) return;
     const mac = ev.mac;
     const kind = ev.kind;
-    const opts = ev.opts || {};
+    const opts = Object.assign({}, ev.opts || {});
+    // A live job's frame arrives with the pixels; the preview mirrors it.
+    if (ev.preview && !opts.src) opts.src = ev.preview;
     if (typeof window.saveDeviceChannel === "function") {
         window.saveDeviceChannel(mac, kind, opts);
     }
