@@ -119,3 +119,34 @@ async def test_status_moves_only_the_named_panel_and_the_jewel_is_honest():
         }""" % STATE_JS, [ditoo, pixoo, None])
         assert all(v["jewel"] == "standby" for v in state["byMac"].values()), state
         await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_bench_selection_always_reaches_python_including_the_fallback():
+    """The bench's selection and Python's device proxy must move together
+    on EVERY path: an explicit highlight, and the fallback that picks the
+    first panel when the restored selection is not listed. The second path
+    once skipped Python, and a music job started on the wrong panel."""
+    from playwright.async_api import async_playwright
+
+    async with async_playwright() as p:
+        browser = await launch_browser(p)
+        page = await browser.new_page(viewport={"width": 1280, "height": 850})
+        await page.goto(f"file://{INDEX_HTML}")
+        await page.wait_for_load_state("domcontentloaded")
+        await wait_js(page, "() => !!window.SpatialStage")
+        res = await eval_js(page, """() => {
+            const calls = [];
+            window.pywebview = { api: { select_device: (m) => { calls.push(m); return Promise.resolve(true); } } };
+            window.DivoomState.discoveredDevices = [
+                { address: 'T1:TIMOO', name: 'Timoo' }, { address: 'E9:DITOO', name: 'Ditoo' }];
+            // Restored selection is a panel that no longer exists.
+            window.SpatialStage.refresh();
+            const afterFallback = { sel: window.SpatialStage.getSelectedMac(), calls: calls.slice() };
+            document.querySelector('.spatial-ribbon-chip:nth-child(2)')?.click();
+            return { afterFallback, sel: window.SpatialStage.getSelectedMac(), calls };
+        }""")
+        assert res["afterFallback"]["sel"] == "T1:TIMOO"
+        assert res["afterFallback"]["calls"] == ["T1:TIMOO"], res
+        assert res["sel"] == "E9:DITOO" and res["calls"][-1] == "E9:DITOO", res
+        await browser.close()

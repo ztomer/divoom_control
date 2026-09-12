@@ -51,7 +51,6 @@
         stageMounted = true;
         updateStageCollapseState();
 
-        // Wire stage toggle (Bench <-> Ribbon)
         const toggleBtn = document.getElementById('stage-toggle-btn');
         if (toggleBtn) {
             toggleBtn.addEventListener('click', () => {
@@ -61,19 +60,16 @@
             });
         }
 
-        // Wire center alignment
         const centerBtn = document.getElementById('stage-center-btn');
         if (centerBtn) {
             centerBtn.addEventListener('click', centerDevices);
         }
 
-        // Wire baseline alignment
         const snapBtn = document.getElementById('stage-snap-btn');
         if (snapBtn) {
             snapBtn.addEventListener('click', snapToDesk);
         }
 
-        // Sidebar deck room select
         const roomSelect = document.getElementById('deck-room-select');
         if (roomSelect) {
             roomSelect.addEventListener('change', (e) => {
@@ -246,7 +242,7 @@
             defaultX += w + 12;
 
             // A restored selection that is not a listed panel: fall back to the first.
-            if (idx === 0 && (!selectedMac || !devices.some(d => (d.address || 'dev-0') === selectedMac))) selectedMac = addr;
+            if (idx === 0 && (!selectedMac || !devices.some(d => (d.address || 'dev-0') === selectedMac))) setSelected(addr);
             const isSelected = selectedMac === addr;
 
             const devRoom = deviceRooms[addr] !== undefined ? deviceRooms[addr] : (dev.room || '');
@@ -322,9 +318,14 @@
     }
 
     const jewelClass = (dev) => window.jewelClassFor(dev);
-    function highlightNode(addr, dev) {
+    // The ONE way the selection changes: bench state and Python's proxy move together.
+    function setSelected(addr) {
         selectedMac = addr;
-        try { window.pywebview?.api?.select_device?.(addr); } catch (_) {} // Python's proxy follows the bench
+        try { window.pywebview?.api?.select_device?.(addr); } catch (_) {}
+    }
+
+    function highlightNode(addr, dev) {
+        setSelected(addr);
         document.querySelectorAll('.spatial-node').forEach(n => { n.classList.remove('selected'); n.style.zIndex = '10'; });
         const activeNode = document.getElementById(`spatial-node-${addr}`);
         if (activeNode) { activeNode.classList.add('selected'); activeNode.style.zIndex = '25'; }
@@ -488,10 +489,8 @@
         renderLoop();
     }
 
-    // Expose API
     window.SpatialStage = { init: initSpatialStage, refresh: refreshBenchNodes, snap: snapToDesk, center: centerDevices, getSelectedMac: () => selectedMac };
 
-    // Auto-init when DOM ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initSpatialStage);
     } else {
