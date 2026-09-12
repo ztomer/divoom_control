@@ -97,11 +97,12 @@
 }
 
 /* Live preview rendered into the device's screen region (pixelated, 1:1) */
-.arranger-node-preview {
+.arranger-node-preview, .arranger-node-canvas {
     width: 100%;
     height: 100%;
     object-fit: cover;
     image-rendering: pixelated;
+    image-rendering: crisp-edges;
     z-index: 2;
 }
 

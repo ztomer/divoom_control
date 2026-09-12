@@ -386,10 +386,15 @@
         if (activeDrag) {
             if (!activeDrag.hasMoved && typeof window.connectDevice === 'function') {
                 window.connectDevice(activeDrag.dev.name || resolveDeviceSpec(activeDrag.dev).name, activeDrag.addr);
-            } else if (window.SpatialRooms) {
-                window.SpatialRooms.savePositions(devicePositions, deviceRooms);
             } else {
-                try { localStorage.setItem('divoom_stage_positions', JSON.stringify(devicePositions)); } catch (_) {}
+                if (window.SpatialRooms) window.SpatialRooms.savePositions(devicePositions, deviceRooms);
+                else try { localStorage.setItem('divoom_stage_positions', JSON.stringify(devicePositions)); } catch (_) {}
+                if (window.DivoomState?.assignedSlots?.[activeDrag.addr]) {
+                    window.DivoomState.assignedSlots[activeDrag.addr].x = devicePositions[activeDrag.addr].x;
+                    window.DivoomState.assignedSlots[activeDrag.addr].y = devicePositions[activeDrag.addr].y;
+                    if (window.renderArrangerCanvas) window.renderArrangerCanvas();
+                    if (window.syncArrangerToPython) window.syncArrangerToPython();
+                }
             }
         }
         activeDrag = null;
@@ -433,19 +438,25 @@
             getDeviceList().forEach((dev, idx) => {
                 const addr = dev.address || ('dev-' + idx);
                 const cvs = document.getElementById(`stage-canvas-${addr}`);
-                if (!cvs) return;
-
                 if (window.DisplayPreviewRegistry) {
                     const display = window.DisplayPreviewRegistry.get(addr);
                     const wallSlot = window.DivoomState?.assignedSlots?.[addr];
                     if (wallSlot) display.setWallSlot(wallSlot);
-                    display.renderTo(cvs, tick);
-                } else {
+                    if (cvs) display.renderTo(cvs, tick);
+                    const arrangerCvs = document.getElementById(`arranger-canvas-${addr}`);
+                    if (arrangerCvs) display.renderTo(arrangerCvs, tick);
+                } else if (cvs) {
                     const ctx = cvs.getContext('2d');
                     ctx.fillStyle = '#07080a';
                     ctx.fillRect(0, 0, cvs.width, cvs.height);
                 }
             });
+            if (window.DisplayPreviewRegistry && window.DivoomState?.assignedSlots) {
+                Object.keys(window.DivoomState.assignedSlots).forEach(addr => {
+                    const arrangerCvs = document.getElementById(`arranger-canvas-${addr}`);
+                    if (arrangerCvs) window.DisplayPreviewRegistry.get(addr).renderTo(arrangerCvs, tick);
+                });
+            }
             requestAnimationFrame(renderLoop);
         }
         renderLoop();

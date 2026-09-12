@@ -310,9 +310,13 @@ _Shipped in v0.35.0: Full-width top Spatial Preview Bench, physical millimeter p
 
 ### OPEN — Core Architectural Unification & Multi-Display Estate
 
-#### 1. Streamline Virtual Wall & Consolidate Presets into Spatial Rooms
-- **Finding**: With live per-device previews on the Spatial Stage and ribbon, a separate "Virtual Wall preview canvas" is redundant. Each device node on the Spatial Stage already represents the exact physical display and its sliced portion in real scale.
-- **Plan**: Phase out the redundant Virtual Wall dedicated canvas. Consolidate layout presets (`presetsSelect` / `load_preset_by_name`) into the unified `SpatialRooms` engine (`All`, `Desk`, `Wall`, `Shelf`), which already provides clean room grouping, device checklist popovers, and persistent coordinates.
+#### 1. Streamline Virtual Wall & Consolidate Presets into Spatial Rooms (SHIPPED 2026-09-12)
+- **Delivered**:
+  - Unified Virtual Wall arranger preview rendering with the Main Bench (`#spatial-bench`) via `DisplayPreviewRegistry`.
+  - Banished false-positive orange "W" glyph on the Main Bench when wall devices are on procedural channels (`clock`, `eq`, `ambient`).
+  - Rendered authentic integer pixel art canvases inside the Arranger nodes (`.arranger-node-canvas`) synchronized with the Spatial Stage loop.
+  - Two-way synchronized layout presets (`presetsSelect`) and arranger node dragging with the `SpatialRooms` engine (`devRooms[mac] = 'Wall'`, `pos[mac] = { x, y }`, persistent saving, and live Spatial Stage updates).
+  - Added automated test suite `tests/test_virtual_wall_preview_sync.py` (3 passed).
 
 #### 2. Per-Device Live Widget & Background Streamer Binding (`DisplayJobBinding`)
 - **Finding**: Background streamers (Sysmon, Music, Stocks/Crypto, Weather) currently write to a single file-scoped `selectedWidget` and blit frames onto `window._activeDeviceMac()`. If Display A is running Sysmon and the user clicks Display B, Sysmon frames immediately leak onto Display B.

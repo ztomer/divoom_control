@@ -8,6 +8,16 @@ shipped milestone (per the project planning docs).
 
 ### Architecture & Fixed
 
+- **Virtual Wall & Main Bench Preview Unification (`preview_controller.js`, `wall.css`, `app_globals.js`, `spatial_stage.js`, `settings_hardware.js`)**:
+  - Eliminated preview divergence between the Virtual Wall arranger (`#arranger-canvas`) and Main Bench (`#spatial-bench`).
+  - Fixed `preview_controller.js` false-positive orange "W" glyph: replaced `if (this.wallSlot)` with `if (this.channel === "wall")`. When displays in wall slots run procedural channels (Clock, EQ visualizer, Ambient), they now render their actual channel pixel art on the Main Bench instead of being suppressed by the wall slot glyph.
+  - Replaced static `<img>` tags in `.arranger-node-screen` (`renderArrangerCanvas`) with dynamic `<canvas class="arranger-node-canvas arranger-node-preview">` elements driven directly by `DisplayPreviewRegistry.get(mac).renderTo(cvs, 0)`.
+  - Updated `spatial_stage.js:startAnimationLoop` to blit active frames concurrently to both `#stage-canvas-${mac}` and `#arranger-canvas-${mac}`, guaranteeing identical real-time previews for clocks, visualizers, ambient lighting, and art slices across both views.
+- **Two-Way Spatial Preset Synchronization (`app_init.js`, `app_globals.js`, `spatial_rooms.js`, `spatial_stage.js`)**:
+  - Synchronized Virtual Wall presets (`#presets-select`) with the `SpatialRooms` engine (`All`, `Desk`, `Wall`, `Shelf`).
+  - Loading a layout preset or dragging nodes in the Virtual Wall Arranger updates `SpatialRooms` room assignment (`devRooms[mac] = 'Wall'`), updates coordinates (`pos[mac] = { x, y }`), persists via `SpatialRooms.savePositions()`, and re-renders the Spatial Stage.
+  - Dragging nodes on the Spatial Stage updates assigned wall slot coordinates and refreshes the Arranger canvas via `syncArrangerToPython()`.
+  - Added automated browser test suite `tests/test_virtual_wall_preview_sync.py` verifying clock preview sync on both canvases with 0 orange pixels, frame and EQ spectrum sync, and preset load synchronization with `SpatialRooms`.
 - **Unified Per-Display Object Model (`preview_controller.js`, `index.html`)**:
   - Introduced `DisplayPreview` and `DisplayPreviewRegistry` to replace fragmented ad-hoc preview dictionaries with an object-oriented architecture.
   - Each physical and virtual screen encapsulates its native resolution (`16x16`, `32x32`, `64x64`), active channel, raster/SVG frame caching, and integer pixel canvas blitting.

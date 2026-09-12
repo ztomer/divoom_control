@@ -115,6 +115,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 };
                 window.renderArrangerCanvas();
                 window.syncArrangerToPython();
+                if (window.SpatialRooms) {
+                    const pos = window.SpatialRooms.getSavedPositions();
+                    const devRooms = window.SpatialRooms.getDeviceRooms();
+                    pos[addr] = { x: placementX, y: placementY };
+                    devRooms[addr] = 'Wall';
+                    window.SpatialRooms.savePositions(pos, devRooms);
+                    if (window.SpatialStage?.refresh) window.SpatialStage.refresh();
+                }
             });
         });
     }
@@ -139,6 +147,17 @@ document.addEventListener("DOMContentLoaded", () => {
                         window.DivoomState.assignedSlots = JSON.parse(slotsJson);
                         window.renderArrangerCanvas();
                         window.syncArrangerToPython();
+                        if (window.SpatialRooms) {
+                            const pos = window.SpatialRooms.getSavedPositions();
+                            const devRooms = window.SpatialRooms.getDeviceRooms();
+                            Object.keys(window.DivoomState.assignedSlots).forEach(addr => {
+                                const slot = window.DivoomState.assignedSlots[addr];
+                                pos[addr] = { x: slot.x, y: slot.y };
+                                devRooms[addr] = 'Wall';
+                            });
+                            window.SpatialRooms.savePositions(pos, devRooms);
+                            if (window.SpatialStage?.refresh) window.SpatialStage.refresh();
+                        }
                         window.showToast(`Layout preset '${name}' applied!`, "success");
                     }
                 });

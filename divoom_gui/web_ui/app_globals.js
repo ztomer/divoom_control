@@ -129,6 +129,8 @@ window.setDeviceActivity = function(mac, kind, opts) {
         const display = window.DisplayPreviewRegistry.get(mac);
         display.setActivity(kind, opts);
         if (src) display.setFrame(src);
+        const arrangerCvs = document.getElementById(`arranger-canvas-${mac}`);
+        if (arrangerCvs) display.renderTo(arrangerCvs, 0);
     }
     try { localStorage.setItem("divoomDeviceActivity", JSON.stringify(window.DivoomState.deviceActivity)); } catch (e) {}
     window.setDevicePreview(mac, src);
@@ -378,12 +380,20 @@ window.renderArrangerCanvas = function() {
         node.style.setProperty("--node-accent", accent);
         node.title = `${slot.name} — ${mac}`;
         
-        const previewInner = slot.preview ? `<img src="${slot.preview}" class="arranger-node-preview" alt="">` : "";
+        const res = slot.size || 16;
         node.innerHTML = `
             <span class="arranger-node-chip" style="background:${accent}"></span>
-            <div class="arranger-node-screen">${previewInner}</div>
+            <div class="arranger-node-screen">
+                <canvas class="arranger-node-canvas arranger-node-preview" id="arranger-canvas-${mac}" width="${res}" height="${res}"></canvas>
+            </div>
             <div class="arranger-node-remove" data-mac="${mac}">×</div>
         `;
+        if (window.DisplayPreviewRegistry) {
+            const disp = window.DisplayPreviewRegistry.get(mac);
+            if (slot.preview && disp.mode !== "frame") disp.setFrame(slot.preview);
+            const cvs = node.querySelector(".arranger-node-canvas");
+            if (cvs) disp.renderTo(cvs, 0);
+        }
         
         let isDragging = false, startX, startY, startLeft, startTop;
         
@@ -392,6 +402,12 @@ window.renderArrangerCanvas = function() {
                 delete window.DivoomState.assignedSlots[mac];
                 window.renderArrangerCanvas();
                 window.syncArrangerToPython();
+                if (window.SpatialRooms) {
+                    const pos = window.SpatialRooms.getSavedPositions();
+                    delete pos[mac];
+                    window.SpatialRooms.savePositions(pos);
+                    if (window.SpatialStage?.refresh) window.SpatialStage.refresh();
+                }
                 e.stopPropagation();
                 return;
             }
@@ -423,6 +439,14 @@ window.renderArrangerCanvas = function() {
                 isDragging = false;
                 node.classList.remove("dragging");
                 window.syncArrangerToPython();
+                if (window.SpatialRooms) {
+                    const pos = window.SpatialRooms.getSavedPositions();
+                    const devRooms = window.SpatialRooms.getDeviceRooms();
+                    pos[mac] = { x: parseInt(node.style.left) || 0, y: parseInt(node.style.top) || 0 };
+                    devRooms[mac] = 'Wall';
+                    window.SpatialRooms.savePositions(pos, devRooms);
+                    if (window.SpatialStage?.refresh) window.SpatialStage.refresh();
+                }
             }
         });
         arrangerCanvas.appendChild(node);

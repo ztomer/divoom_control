@@ -21,6 +21,24 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-12 — Virtual Wall & Main Bench Preview Unification + Two-Way Spatial Preset Synchronization.**
+  - **Virtual Wall Preview Unification (`preview_controller.js`, `wall.css`, `app_globals.js`, `spatial_stage.js`, `settings_hardware.js`)**:
+    - Banished divergent preview rendering between the Virtual Wall arranger (`#arranger-canvas`) and Main Bench (`#spatial-bench`).
+    - Fixed `preview_controller.js`: previously `if (this.wallSlot)` unconditionally rendered an orange dashed "W" glyph on the Main Bench whenever a device had an assigned wall slot, suppressing live procedural channels (Clock, EQ visualizer, Ambient). Changed condition to `if (this.channel === "wall")`, ensuring procedural channels display their authentic pixel art on the Main Bench.
+    - Replaced static `<img>` tags in `.arranger-node-screen` (`app_globals.js:renderArrangerCanvas`) with dynamic `<canvas class="arranger-node-canvas arranger-node-preview">` elements backed directly by `DisplayPreviewRegistry.get(mac).renderTo(cvs, 0)`.
+    - Concurrently ticked and blitted active frames to both `#stage-canvas-${mac}` and `#arranger-canvas-${mac}` in `spatial_stage.js:startAnimationLoop`, ensuring real-time multi-canvas synchronization for clocks, EQ spectrums, ambient modes, and art slices with identical pixel fidelity.
+  - **Two-Way Spatial Preset Synchronization (`app_init.js`, `app_globals.js`, `spatial_rooms.js`, `spatial_stage.js`)**:
+    - Synchronized Virtual Wall presets (`#presets-select`) with the `SpatialRooms` engine.
+    - Loading a layout preset or dragging nodes in the Virtual Wall Arranger now updates `SpatialRooms` room assignment (`devRooms[mac] = 'Wall'`), updates spatial coordinates (`pos[mac] = { x, y }`), saves via `SpatialRooms.savePositions()`, and re-renders the Spatial Stage.
+    - Dragging nodes on the Spatial Stage updates assigned wall slot coordinates and refreshes the Arranger canvas via `syncArrangerToPython()`.
+  - **Automated Verification**:
+    - Dynamic browser test suite `tests/test_virtual_wall_preview_sync.py` (3 passed): Clock preview sync on both canvases with 0 orange glyph pixels, Frame and EQ spectrum sync on both canvases, and preset load synchronization with `SpatialRooms`.
+    - Full browser suite: 13 passed in 35.11s.
+    - Full Python suite: 2953 passed, 231 skipped.
+    - Rust suite: 205 unit tests, 51 integration tests passed.
+    - Local CI (`./scripts/ci_local.sh --fast`): all 25 steps passed.
+    - House gates clean: 389/389 source files <= 500 LOC, 743 files clean in emoji gate.
+
 - **2026-09-11 — v0.35.2 RELEASED & INSTALLED LOCALLY: Unified Multi-Device Architecture, Per-Device Command Queues, Streamer Job Isolation & Native Menubar Event-Driven Streaming.**
   - **Release & Local Verification**: GitHub CI all green (5/5 jobs), release `v0.35.2` published with DMG and Homebrew cask updated; installed to `/Applications/Divoom.app` via `scripts/install_local.sh`, verified running daemon inode (`539489682`, PID 8041). Development BLE-free debug binary restored.
   - **Unified DisplayPreview Class & Registry (`preview_controller.js`, `index.html`)**:

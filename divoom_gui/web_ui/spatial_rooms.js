@@ -137,6 +137,7 @@
         try {
             localStorage.setItem(POSITIONS_KEY, JSON.stringify(positions));
         } catch (_) {}
+        if (devRooms) saveDeviceRooms(devRooms);
         syncTopology(null, positions, devRooms);
     }
 

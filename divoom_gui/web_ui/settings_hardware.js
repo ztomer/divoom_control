@@ -16,6 +16,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (sourceBtn) sourceBtn.classList.add("active");
         const el = document.getElementById(targetTab);
         if (el) el.classList.add("active");
+        if (targetTab === "display-wall" && window.renderArrangerCanvas) window.renderArrangerCanvas();
 
         // Dispatch custom event to notify other scripts (e.g. widgets or gallery)
         window.dispatchEvent(new CustomEvent("tab-changed", { detail: { tab: targetTab } }));

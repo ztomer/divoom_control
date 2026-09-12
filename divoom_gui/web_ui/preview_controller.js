@@ -128,8 +128,8 @@
                 return;
             }
 
-            // 3. If in Virtual Wall mode, render the wall slot indicator
-            if (this.wallSlot) {
+            // 3. If explicitly in Virtual Wall channel, render the wall slot glyph
+            if (this.channel === "wall") {
                 this.renderWallGlyph(ctx, w, h);
                 return;
             }
