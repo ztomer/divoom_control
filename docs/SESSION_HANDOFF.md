@@ -21,7 +21,8 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
-- **2026-09-12 — v0.35.3 RELEASE: Architectural Remediation, Multi-Surface State Coordination & Virtual Wall Spatial Synchronization.**
+- **2026-09-12 — v0.35.3 RELEASED & INSTALLED LOCALLY: Architectural Remediation, Multi-Surface State Coordination & Virtual Wall Spatial Synchronization.**
+  - **Release & Local Verification**: GitHub Actions CI all green (5/5 jobs), release `v0.35.3` published with DMG and Homebrew cask updated; installed to `/Applications/Divoom.app` via `scripts/install_local.sh`, verified running daemon inode (`540204817`, PID 36828). Development BLE-free debug binary restored.
   - **Defects Remediated**: Addressed 5 core architectural defects discovered during the full system audit (`architectural_audit_report.md`).
   - **Serialized Device Dispatch via QueuePermit (`divoomd/src/command_queue.rs`, `divoomd/src/daemon.rs`)**:
     - Added RAII `QueuePermit` backed by a oneshot release channel to `CommandQueue`.
