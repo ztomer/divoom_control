@@ -253,6 +253,8 @@ window.Divoom.onOwnedDevices = function(ev) {
         known.activityState = dev.state || "active";
     });
     if (window.renderDeviceDots) window.renderDeviceDots();
+    // The bench and deck jewels read daemonOwned too (2026-09-12).
+    if (window.SpatialStage?.refresh) window.SpatialStage.refresh();
 };
 
 // R59/event-driven: macOS notification-monitor status. The daemon broadcasts

@@ -245,8 +245,9 @@
             devicePositions[addr] = pos;
             defaultX += w + 12;
 
-            const isSelected = selectedMac ? (selectedMac === addr) : (idx === 0);
-            if (isSelected && !selectedMac) selectedMac = addr;
+            // A restored selection that is not a listed panel: fall back to the first.
+            if (idx === 0 && (!selectedMac || !devices.some(d => (d.address || 'dev-0') === selectedMac))) selectedMac = addr;
+            const isSelected = selectedMac === addr;
 
             const devRoom = deviceRooms[addr] !== undefined ? deviceRooms[addr] : (dev.room || '');
             const isDimmed = (activeRoomFilter !== 'all' && (devRoom || '').toLowerCase() !== activeRoomFilter.toLowerCase());
@@ -320,11 +321,10 @@
         }
     }
 
-    const jewelClass = (dev) => window.jewelClassFor(dev); // the panel's LINK, not a hardcoded 'online'
+    const jewelClass = (dev) => window.jewelClassFor(dev);
     function highlightNode(addr, dev) {
         selectedMac = addr;
-        // One funnel for "the selected panel": Python's proxy follows the bench.
-        try { window.pywebview?.api?.select_device?.(addr); } catch (_) {}
+        try { window.pywebview?.api?.select_device?.(addr); } catch (_) {} // Python's proxy follows the bench
         document.querySelectorAll('.spatial-node').forEach(n => { n.classList.remove('selected'); n.style.zIndex = '10'; });
         const activeNode = document.getElementById(`spatial-node-${addr}`);
         if (activeNode) { activeNode.classList.add('selected'); activeNode.style.zIndex = '25'; }

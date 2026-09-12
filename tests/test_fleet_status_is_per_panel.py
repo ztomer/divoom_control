@@ -63,6 +63,23 @@ async def test_status_moves_only_the_named_panel_and_the_jewel_is_honest():
         assert state["byMac"][pixoo]["jewel"] == "online", state
         assert state["appConnected"]
 
+        # An owned_devices event alone (no status event after it) must
+        # repaint the bench and the deck: a panel the daemon just adopted
+        # shows online everywhere, not only in the sidebar chips.
+        state = await eval_js(page, """([d, px, _]) => {
+            window.DivoomState.discoveredDevices.forEach(x => { x.daemonOwned = false; x.activityState = 'disconnected'; });
+            window.SpatialStage.refresh();
+            const before = (%s)();
+            window.Divoom.onOwnedDevices({ type: 'owned_devices', devices: [
+                { address: d, name: "Ditoo", kind: "clock", state: "active" },
+                { address: px, name: "Pixoo", kind: "clock", state: "active" },
+            ]});
+            return { before, after: (%s)() };
+        }""" % (STATE_JS, STATE_JS), [ditoo, pixoo, None])
+        assert state["before"]["byMac"][ditoo]["jewel"] == "standby"
+        assert state["after"]["byMac"][ditoo]["jewel"] == "online", state["after"]
+        assert state["after"]["deckJewel"] == "online", state["after"]
+
         # The PIXOO drops: the Ditoo (selected) must stay connected, the
         # Pixoo's jewel must go to standby.
         state = await eval_js(page, """([d, px, _]) => {
