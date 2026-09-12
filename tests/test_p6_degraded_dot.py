@@ -73,13 +73,18 @@ def test_js_connection_state_is_event_driven():
 
 
 def test_js_degraded_sets_amber_dot_class():
-    assert '"transport-dot active degraded"' in APP_GLOBALS
+    # The funnel builds the class from the mode: degraded = active + degraded.
+    assert 'cls += "active degraded"' in APP_GLOBALS
 
 
 def test_js_disconnect_clears_appConnected():
     # a genuine drop must flip appConnected so the rest of the UI stops acting
-    # connected.
-    assert "window.DivoomState.appConnected = false" in APP_GLOBALS
+    # connected. Since #6 (6ac2549) there is ONE writer, setConnectionState,
+    # which derives the flag from the mode; a drop routes through it as
+    # "inactive". The behaviour is pinned in tests/test_e2e_device_status_dot.py
+    # and tests/test_fleet_status_is_per_panel.py; this only guards the funnel.
+    assert 'window.DivoomState.appConnected = (mode === "active" || mode === "degraded")' in APP_GLOBALS
+    assert 'window.setConnectionState({ mode: "inactive" })' in APP_GLOBALS
 
 
 def test_heartbeat_started_on_init():
