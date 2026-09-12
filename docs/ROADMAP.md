@@ -255,11 +255,20 @@ once per change (`image` crate) into a `muda::IconMenuItem` per panel
 panels online". Tests: data-URL to RGBA incl. a rejected non-PNG; visual
 check on the real tray with two panels streaming.
 
-**4. Now-playing masking** (nowplaying, 20-minute probe)
-Probe `dlsym` for `MRMediaRemoteSetNowPlayingApplicationOverrideForPID`
-and per-client info accessors on this macOS. If one resolves, the helper
-nominates the client whose `is_playing` is true. If not, close as a
-platform limit here WITH the probe's result, keeping the card's hint.
+**4. Now-playing masking — CLOSED as a platform limit (probed 2026-09-12)**
+On macOS 26.6.2, `dlsym` finds `MRMediaRemoteGetNowPlayingInfoForClient`,
+`MRMediaRemoteGetNowPlayingInfoForOrigin`, `MRNowPlayingClientGetProcessIdentifier`
+and `MRMediaRemoteGetNowPlayingPlayer`; `...SetNowPlayingApplicationOverrideForPID`
+and every player-path constructor except `MRNowPlayingPlayerPathCreate` are
+absent. Calling `GetNowPlayingInfoForClient` with a client from
+`GetNowPlayingClients` SEGFAULTS the entitled helper under both argument
+orders `(client, queue, block)` and `(queue, client, block)`, as does the
+PID accessor (matching the existing note on the display-name/PID
+accessors). No public ABI to consult, so the per-client read stays
+unavailable: the daemon reports an empty session as nothing playing and
+names the registered players with the fix (play in or quit the holder).
+Reopen only with a documented signature (or a working open-source caller)
+for `MRMediaRemoteGetNowPlayingInfoForClient`.
 
 **5. Browser e2e flakiness under load** (tests, ~half a day, measure first)
 Run the camoufox subset 5x under synthetic load (parallel `cargo build` +
