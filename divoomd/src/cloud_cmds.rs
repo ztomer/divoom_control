@@ -75,6 +75,7 @@ pub async fn handle(command: &str, req: &Request) -> Value {
                         "user_id": creds.user_id,
                         "email": creds.email,
                         "utc": creds.utc,
+                        "password_store": crate::secret_store::label(),
                     }),
                     Err(e) => err_reply(&format!("saved, but login failed: {e}")),
                 },
@@ -95,6 +96,7 @@ pub async fn handle(command: &str, req: &Request) -> Value {
                     "user_id": creds.user_id,
                     "email": creds.email,
                     "utc": creds.utc,
+                    "password_store": crate::secret_store::label(),
                 }),
                 Err(e) => err_reply(&e),
             }
@@ -108,6 +110,7 @@ pub async fn handle(command: &str, req: &Request) -> Value {
                     "user_id": creds.user_id,
                     "email": creds.email,
                     "utc": creds.utc,
+                    "password_store": crate::secret_store::label(),
                 }
             }),
             None => json!({ "success": true, "credentials": serde_json::Value::Null }),

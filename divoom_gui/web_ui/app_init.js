@@ -283,15 +283,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         }, 1000);
                     }
                     
-                    const statusBox = getEl("divoom-cloud-status-box");
-                    if (statusBox) {
-                        const isConn = !!conf.cloud_connected;
-                        statusBox.style.display = "flex";
-                        statusBox.style.background = isConn ? "rgba(34, 197, 94, 0.15)" : "rgba(239, 68, 68, 0.15)";
-                        statusBox.style.border = isConn ? "1px solid rgba(34, 197, 94, 0.3)" : "1px solid rgba(239, 68, 68, 0.3)";
-                        statusBox.style.color = isConn ? "#22c55e" : "#ef4444";
-                        statusBox.innerHTML = `<span>${isConn ? ' Connected as <b>' + (conf.cloud_email || conf.email) + '</b>' : ' Not connected. Save credentials to log in.'}</span>`;
-                    }
+                    window.renderCloudStatus(conf.cloud_connected ? "connected" : "signed_out", conf);
                 }
             });
         }

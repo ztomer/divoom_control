@@ -1,6 +1,45 @@
 /* settings_hardware.js — Theme, scanner, LAN, transport, cloud */
 /* settings.js — Bluetooth scanning, Wi-Fi screen lists, theme modes, and cloud credentials */
 
+/* The cloud status box has ONE renderer. Startup and the save path used to
+   paint it separately and had already drifted (one said "Save your
+   credentials", the other "Save credentials"); a second fact to show, where
+   the password lives, would have drifted too.
+   state: "connected" | "signed_out" | "failed". Signed-out is a setup step,
+   not a fault, so it is not painted as an alarm. */
+window.renderCloudStatus = function(state, conf) {
+    const box = document.getElementById("divoom-cloud-status-box");
+    if (!box) return;
+    conf = conf || {};
+    const tint = state === "connected" ? "34, 197, 94"
+               : state === "failed" ? "239, 68, 68" : "148, 163, 184";
+    box.style.display = "flex";
+    box.style.background = `rgba(${tint}, 0.15)`;
+    box.style.border = `1px solid rgba(${tint}, 0.3)`;
+    box.style.color = state === "connected" ? "#22c55e" : state === "failed" ? "#ef4444" : "#94a3b8";
+    if (state === "connected") {
+        const who = document.createElement("b");
+        who.textContent = conf.cloud_email || conf.email || "";
+        const store = conf.cloud_password_store
+            ? ` Password stored in ${conf.cloud_password_store}.` : "";
+        box.replaceChildren("Connected as ", who, store);
+    } else if (state === "failed") {
+        box.replaceChildren("Authentication failed. Check the email and password.");
+    } else {
+        box.replaceChildren("Not signed in. Save credentials to log in.");
+    }
+};
+
+/* Re-read the shared store after a save so the box shows what the daemon
+   holds (email, and where the password went), not what the form sent. */
+window.refreshCloudStatus = function() {
+    if (!(window.pywebview && window.pywebview.api && window.pywebview.api.load_config)) return;
+    window.pywebview.api.load_config().then(raw => {
+        const conf = typeof raw === "string" ? JSON.parse(raw || "{}") : (raw || {});
+        window.renderCloudStatus(conf.cloud_connected ? "connected" : "signed_out", conf);
+    }).catch(() => {});
+};
+
 document.addEventListener("DOMContentLoaded", () => {
     // ── 1. MAIN TAB SWITCH NAVIGATION ──
     const navButtons = document.querySelectorAll(".nav-btn");
@@ -339,24 +378,11 @@ document.addEventListener("DOMContentLoaded", () => {
                     .then(res => {
                         if (res) {
                             window.showToast("Credentials configured & login cache generated!", "success");
-                            const statusBox = document.getElementById("divoom-cloud-status-box");
-                            if (statusBox) {
-                                statusBox.style.display = "flex";
-                                statusBox.style.background = "rgba(34, 197, 94, 0.15)";
-                                statusBox.style.border = "1px solid rgba(34, 197, 94, 0.3)";
-                                statusBox.style.color = "#22c55e";
-                                statusBox.innerHTML = `<span> Connected as <b>${email}</b></span>`;
-                            }
+                            window.renderCloudStatus("connected", { cloud_email: email });
+                            window.refreshCloudStatus();
                         } else {
                             window.showToast("Authentication failed. Please verify credentials.", "error");
-                            const statusBox = document.getElementById("divoom-cloud-status-box");
-                            if (statusBox) {
-                                statusBox.style.display = "flex";
-                                statusBox.style.background = "rgba(239, 68, 68, 0.15)";
-                                statusBox.style.border = "1px solid rgba(239, 68, 68, 0.3)";
-                                statusBox.style.color = "#ef4444";
-                                statusBox.innerHTML = `<span> Not connected. Save your credentials to log in.</span>`;
-                            }
+                            window.renderCloudStatus("failed");
                         }
                     });
             }

@@ -49,6 +49,9 @@ class DaemonCredentials:
     user_id: int = 0
     email: str = ""
     utc: int = 0
+    # Where the daemon keeps the password: "Keychain", "Secret Service" or
+    # "config.ini" (v0.37 step 6). Settings shows it; "" from an older daemon.
+    password_store: str = ""
 
     def is_valid(self) -> bool:
         return self.token != 0 and self.user_id != 0
@@ -62,6 +65,7 @@ class DaemonCredentials:
             user_id=int(data.get("user_id") or 0),
             email=str(data.get("email") or ""),
             utc=int(data.get("utc") or 0),
+            password_store=str(data.get("password_store") or ""),
         )
 
 

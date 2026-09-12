@@ -173,6 +173,19 @@ def test_load_config_cloud_connected_uses_creds_email(home):
     assert data["cloud_email"] == "creds@example.com"
 
 
+def test_load_config_reports_where_the_password_lives(home):
+    """v0.37 step 6: Settings says 'Password stored in Keychain'; the fact
+    rides on the daemon's cached credentials and is "" when unknown."""
+    creds = _FakeCreds(valid=True, email="creds@example.com")
+    creds.password_store = "Keychain"
+    data = json.loads(Host(cached_creds=creds).load_config())
+    assert data["cloud_password_store"] == "Keychain"
+    data = json.loads(Host(cached_creds=_FakeCreds(valid=True, email="x@y")).load_config())
+    assert data["cloud_password_store"] == ""
+    data = json.loads(Host(cached_creds=_FakeCreds(valid=False)).load_config())
+    assert data["cloud_password_store"] == "", "signed out: no store claim"
+
+
 def test_load_config_cloud_connected_falls_back_to_config_email(home):
     """creds valid but has no usable .email attr -> falls back to config.ini
     email (the `hasattr(...) and self.cached_creds.email` False arm)."""

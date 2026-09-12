@@ -118,6 +118,7 @@ class PresetsManagerMixin:
                     
             cloud_connected = False
             cloud_email = ""
+            cloud_password_store = ""
             # R72 P1.1: ask the DAEMON for its cached login, here rather than at
             # startup. Cache-only on purpose -- `get_cached_credentials` cannot
             # go to the network, so opening Settings never blocks behind a cloud
@@ -132,6 +133,7 @@ class PresetsManagerMixin:
             if self.cached_creds and self.cached_creds.is_valid():
                 cloud_connected = True
                 cloud_email = self.cached_creds.email if (hasattr(self.cached_creds, "email") and self.cached_creds.email) else email
+                cloud_password_store = getattr(self.cached_creds, "password_store", "") or ""
 
             return json.dumps({
                 "email": email,
@@ -144,6 +146,7 @@ class PresetsManagerMixin:
                 "devices": cached_devices,
                 "cloud_connected": cloud_connected,
                 "cloud_email": cloud_email,
+                "cloud_password_store": cloud_password_store,
                 "last_detected_count": last_detected_count
             })
         except Exception as e:

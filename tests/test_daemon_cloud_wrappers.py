@@ -319,3 +319,7 @@ def test_credentials_value_object_semantics():
     assert DaemonCredentials.from_reply({"token": 1, "user_id": 1}).is_valid() is True
     # Missing/garbage fields must not raise -- a daemon mid-upgrade can omit them.
     assert DaemonCredentials.from_reply({"token": None, "email": None}).token == 0
+    # v0.37 step 6: the daemon says where it keeps the password; an older
+    # daemon says nothing and the field reads "" rather than a guess.
+    assert DaemonCredentials.from_reply({"token": 1, "user_id": 1, "password_store": "Keychain"}).password_store == "Keychain"
+    assert DaemonCredentials.from_reply({"token": 1, "user_id": 1}).password_store == ""

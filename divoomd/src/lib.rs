@@ -74,6 +74,7 @@ pub mod render_widget;
 #[cfg(test)]
 mod render_widget_tests;
 pub mod response;
+pub mod secret_store;
 pub mod socket_bind;
 pub mod socket_owner;
 pub mod socket_server;

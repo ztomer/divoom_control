@@ -394,7 +394,10 @@ mod tests {
         let config_ini = "[divoom]\nemail = test_user@divoom.com\npassword = test_password_123\n";
         fs::write(conf_dir.join("config.ini"), config_ini).unwrap();
 
-        let (email, password) = load_config();
+        // Through the seam with NO backend: the real `load_config` would
+        // migrate this password into the host's keychain.
+        let (email, password) =
+            crate::cloud_store::load_config_with(&conf_dir.join("config.ini"), None);
         assert_eq!(email, "test_user@divoom.com");
         assert_eq!(password, "test_password_123");
     }
@@ -461,6 +464,8 @@ mod tests {
             .await;
         let temp = TempDir::new().unwrap();
         std::env::set_var("HOME", temp.path());
+        // Keep the host's keychain out of a unit test.
+        std::env::set_var(crate::secret_store::ENV_OVERRIDE, "file");
 
         *last_auth_fail_at().lock().unwrap() = None;
 
