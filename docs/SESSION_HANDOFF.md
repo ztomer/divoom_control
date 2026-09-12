@@ -45,7 +45,11 @@ shared memory. Read this on entry and **update it at the end of every round**
   - **Cross-platform**: the encoder lookup is platform-named (`.so` on Linux)
     and Linux CI builds it; the examples check installs its own `bleak`.
   - **Verification**: `ci_local.sh` full green (28/28) at tag time; GitHub CI
-    green at the tagged commit per `scripts/release.sh`.
+    5/5 green at the tagged commit (`4b42cec`); release + DMG + cask via
+    `scripts/release.sh`; installed via `install_local.sh` (daemon inode
+    542223575, both binaries report 0.36.0, signed by the local identity,
+    four panels reconnected with no prompt, per-device status/disconnect
+    exercised on the installed daemon).
 
 ## Open threads / next up
 
