@@ -85,10 +85,10 @@ before and after** (R71's P2 packet): a feature that returned `False` for months
 while its caller reported success is exactly the case where "it now returns
 True" proves nothing.
 
-**`save_credentials` also writes the account password in PLAINTEXT** to
-`config.ini`. That is out of R72's scope and tracked separately, but P1.1 should
-not move this site without noticing it — the daemon-side store is the natural
-place to fix it.
+**`save_credentials` used to write the account password in PLAINTEXT** to
+`config.ini`. Fixed 2026-09-12 in the daemon-side store (`secret_store`: the
+OS keychain, migrated on first read) — which is why P1.1 routed the GUI
+through the daemon first.
 
 ## REACHES — a call into an owned module, name not a command
 

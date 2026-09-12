@@ -63,16 +63,22 @@ shared memory. Read this on entry and **update it at the end of every round**
    Track 3 in the ROADMAP.
 3. **Menubar tiles.** `DeviceView.preview` now carries real frames from the
    broadcast; the tray still lists names. Track 6.
-4. **Now-playing masking residual.** MediaRemote answers for one session; a
-   playing app behind a stopped holder stays invisible. The idle reply names
-   the players and the card shows the hint; nothing more is readable.
+4. **Now-playing masking — fixed 2026-09-12 (not a platform limit).** The
+   helper reads every registered client's playback state through the
+   per-client MediaRemote entry points (signatures recovered from the
+   framework's code) and reports the playing one with the richest record.
+   Not yet installed: the shipped app still carries the old helper until
+   the next `scripts/install_local.sh`.
 5. **The browser e2e suite fails randomly at NORMAL machine load** (two runs,
    non-overlapping camoufox failures, all pass alone). Do not raise the
    timeout; measure browser + daemon startup under controlled load. ROADMAP
    OPEN heading. Note `python3 -m camoufox fetch` is needed once per Python
    install or the suite SKIPS rather than fails.
-6. **`config.ini` stores the Divoom account password in PLAINTEXT.**
-   `cloud_store` in the daemon is the one place that would change.
+6. **Password store — done 2026-09-12 (1830695).** The Divoom password
+   lives in the macOS Keychain (service `divoom-control`, account
+   `divoom-cloud`, via the `security` CLI), migrated out of `config.ini` on
+   first read; Settings says "Password stored in Keychain".
+   `DIVOOMD_SECRET_BACKEND=file` forces the file for tests and headless CI.
 7. **Release hygiene**: a new machine needs `scripts/make_signing_identity.sh`
    once (one keychain prompt, user present) or every install prompts.
 

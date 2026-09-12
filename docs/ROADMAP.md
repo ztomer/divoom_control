@@ -205,28 +205,30 @@ are not restated.
 
 ## Open workstreams
 
-### OPEN — v0.37 plan: finish the fleet model, then the residuals (filed 2026-09-12)
+### v0.37 plan: finish the fleet model, then the residuals (filed 2026-09-12; 0-4 and 6 SHIPPED, 5 OPEN)
 
 Order is by leverage; 1-3 are one thread, 6 is independent, 5 is
-measurement-gated, 4 decides itself. Each step ships with its tests shown
-red first, and the entry here flips to SHIPPED with the commit.
+measurement-gated. Each step shipped with its tests shown red first.
 
-**0. The CLI is a daemon client** (Python, ~2h) — user correction 2026-09-12.
-`divoom_lib/cli.py` drives `divoom_lib.Divoom` over bleak directly: a
-second device-I/O implementation beside the daemon, the exact class the
-ownership rule below forbids (and why `bleak` looked like a check's
-dependency). Port `cli_commands._resolve_device` and `cmd_scan` to
-`DaemonClient` + `DaemonDeviceProxy(mac=...)` (spawning the daemon the way
-the GUI does); `capabilities` via `get_capabilities`; every `d.<facade>.<m>`
-chain resolves through `device_call`, so each command's method must exist
-in the daemon's routing (gate: `tools/check_hw_verify_methods.py`-style
-name check for the CLI). `--mac` names the panel; without it the daemon's
-resolver (step 1) answers for a single linked panel and refuses otherwise.
-bleak leaves the CLI's import path. Open question, not decided here:
-`examples/` documents the same bleak facade -- library docs, or retire
-them in favour of daemon-client examples.
+**0. The CLI is a daemon client — SHIPPED (e1b8ca7)** — user correction.
+`cli_commands` attaches to the running daemon (`ensure_daemon(spawn=False)`;
+a shell-spawned daemon has no Bluetooth grant and dies on its first scan,
+so with nothing running the CLI says what to start, exit 3) and drives
+`DaemonDeviceProxy(mac=...)`; `scan`/`identify` read the daemon's scan
+(`manufacturer_data`, `service_uuids` on the reply); capabilities come
+from the table by `--type` or the MAC registry; the CLI never hangs up a
+panel. `--mac` names the panel; without it the daemon's resolver answers
+for a single linked panel and refuses otherwise (exit 2, listing them).
+bleak is out of the CLI's import path. Open question, not decided:
+`examples/` documents the bleak facade -- library docs, or retire them in
+favour of daemon-client examples.
 
-**1. Retire the daemon's "current" device** (daemon + GUI, ~half a day)
+**1. Retire the daemon's "current" device — SHIPPED (2bcd5b0)**
+`Fleet::resolve_target(mac)`: explicit mac, else the single linked panel,
+else a refusal naming the count. `Fleet::current`/`current_id`/`preset`
+and the daemon `--mac` preset are gone; mac-less `device_status` returns
+the fleet; `hot_update` targets the GUI's displayed address; notifications
+go to every linked panel. As planned:
 The mac-less daemon commands are `hot_update`, `probe_lan`, notification
 routing, `exclusive_start`/`end`, `live_jobs_stop_for`, `device_status`,
 `disconnect`, and MCP tools when `mac` is omitted (and the CLI after 0).
@@ -241,34 +243,46 @@ routing, `exclusive_start`/`end`, `live_jobs_stop_for`, `device_status`,
 - Tests: stress scenario "two linked, mac-less call refused with count";
   MCP one-panel default.
 
-**2. `appConnected` per panel** (GUI, ~2h)
-Keep the name, make it DERIVED inside `setConnectionState` from the
+**2. `appConnected` per panel — SHIPPED (b05083d)**
+`panelIsLinked(mac)`, `requireDevice(mac)`, per-panel status events, fleet
+counts from linked panels; `test_fleet_status_is_per_panel.py` covers the
+other panel dropping. As planned: keep the name, make it DERIVED inside `setConnectionState` from the
 selected panel's `daemonOwned && activityState !== "disconnected"`; no
 other writer. `requireDevice()` keeps its 25 call sites and gains an
 optional mac. Tests: extend `test_fleet_status_is_per_panel.py` — the
 other panel drops, the selected one still passes `requireDevice`.
 
-**3. Menubar tiles draw the frames** (menubar, ~2h)
+**3. Menubar tiles draw the frames — SHIPPED (5d4b33f)**
+`tiles::TileCache` decodes each panel's PNG data URL once into the row's
+`Submenu` icon (nearest-neighbour to 36pt, set in place when the row
+signature is unchanged); tooltip "N of M panels online". The visual check
+on the real tray is pending the next install. As planned:
 `DeviceView.preview` is a PNG data URL from the frame broadcast. Decode
 once per change (`image` crate) into a `muda::IconMenuItem` per panel
 (tray-icon 0.24 bundles muda), cached by the URL string. Tooltip: "3 of 4
 panels online". Tests: data-URL to RGBA incl. a rejected non-PNG; visual
 check on the real tray with two panels streaming.
 
-**4. Now-playing masking — CLOSED as a platform limit (probed 2026-09-12)**
-On macOS 26.6.2, `dlsym` finds `MRMediaRemoteGetNowPlayingInfoForClient`,
-`MRMediaRemoteGetNowPlayingInfoForOrigin`, `MRNowPlayingClientGetProcessIdentifier`
-and `MRMediaRemoteGetNowPlayingPlayer`; `...SetNowPlayingApplicationOverrideForPID`
-and every player-path constructor except `MRNowPlayingPlayerPathCreate` are
-absent. Calling `GetNowPlayingInfoForClient` with a client from
-`GetNowPlayingClients` SEGFAULTS the entitled helper under both argument
-orders `(client, queue, block)` and `(queue, client, block)`, as does the
-PID accessor (matching the existing note on the display-name/PID
-accessors). No public ABI to consult, so the per-client read stays
-unavailable: the daemon reports an empty session as nothing playing and
-names the registered players with the fix (play in or quit the holder).
-Reopen only with a documented signature (or a working open-source caller)
-for `MRMediaRemoteGetNowPlayingInfoForClient`.
+**4. Now-playing masking — SHIPPED (a2a0520, fd038e8; the "platform limit"
+was a wrong signature)**
+The first probe declared `MRMediaRemoteGetNowPlayingInfoForClient` as
+`(client, queue, block)`, it crashed, and this item was closed as a platform
+limit. Wrong: read from the framework's own code on macOS 26.6.2
+(`dyld_info -exports` + in-process disassembly, see the
+`private-framework-signatures` skill) it takes FIVE arguments,
+`(client, origin, includeArtwork, queue, block)`, building an `MRPlayerPath`
+and calling `...InfoForPlayer(path, includeArtwork, queue, block)`.
+`GetPlaybackStateForClient(client, origin, queue, block(u32))`,
+`GetActivePlayerPathsForOrigin`, `GetLocalOrigin()` and
+`CopyPlaybackStateDescription` (0 Unknown 1 Playing 2 Paused 3 Stopped
+4 Interrupted 5 Seeking) verified the same way and live through the
+entitled perl host. The helper now reads every registered client's state
+and reports the playing one with the richest record; the elected session
+is the fallback when nothing plays. Live (Kaset playing, Music open): the
+elected session was Kaset's own five-key stub with no artwork, the WebKit
+GPU client carried the full record with the art, and the helper reported
+the latter. Players carry their states (`Kaset (playing)`,
+`Music` unknown) in the idle hint.
 
 **5. Browser e2e flakiness under load** (tests, ~half a day, measure first)
 Run the camoufox subset 5x under synthetic load (parallel `cargo build` +
@@ -279,14 +293,18 @@ own CI step. Raise a timeout only if the measurement shows the readiness
 wait itself is the bottleneck, by the measured margin. Gate: 5/5 green
 under load, numbers recorded here.
 
-**6. Plaintext password in config.ini** (daemon `cloud_store`, ~half a day)
-A credential backend seam behind `save_config`/`load_config`: macOS
-Keychain (`security add-/find-generic-password`, service `divoom-control`),
-Linux `secret-tool` when present, else a 0600 file with a logged warning.
-Migration on first read: a plaintext password found in the file goes to
-the backend and the file field is blanked; Settings shows "stored in
-Keychain". Tests: fake backend (seam-and-cover), migration red-then-green,
-and no test writes a real keychain entry.
+**6. Plaintext password in config.ini — SHIPPED (1830695)**
+`secret_store` behind `cloud_store::load_config`/`save_config`: macOS
+Keychain through the Apple-signed `security` CLI in stdin mode (service
+`divoom-control`, account `divoom-cloud`; the framework would key the
+item's ACL on the daemon's churning local signature), Linux `secret-tool`
+when on PATH, else the 0600 file with a once-logged warning;
+`DIVOOMD_SECRET_BACKEND` forces one. Migration on READ blanks the file
+copy; an email-only save moves a file password first; a refused NEW
+password writes nothing. Settings says "Password stored in Keychain" (one
+renderer for the status box). Tests drive a `FakeBackend` against temp
+files; migration proven red-then-green; the HOME-based tests pin the file
+backend so nothing touches a real keychain.
 
 ### The per-device rule (v0.36.0, read before adding any per-panel state)
 
