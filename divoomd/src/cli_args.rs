@@ -36,7 +36,6 @@ pub struct ConfigArgs {
     pub host: Option<String>,
     pub port: Option<u16>,
     pub token: Option<String>,
-    pub mac: Option<String>,
 }
 
 pub const DEFAULT_SOCKET_PATH: &str = "/tmp/divoomd.sock";
@@ -53,7 +52,6 @@ OPTIONS:
     --host <HOST>               also serve TCP on this host (requires --port and a token)
     --port <PORT>               TCP port, when --host is given
     --token <TOKEN>             shared secret for the TCP listener [env: DIVOOM_DAEMON_TOKEN]
-    --mac <MAC>                 preferred device address
     -V, --version               print version and exit
     -h, --help                  print this help and exit
 
@@ -122,8 +120,6 @@ pub fn parse(args: &[String], env_token: Option<String>) -> Outcome {
             }
         } else if arg == "--token" || arg.starts_with("--token=") {
             take("--token").map(|v| cfg.token = Some(v))
-        } else if arg == "--mac" || arg.starts_with("--mac=") {
-            take("--mac").map(|v| cfg.mac = Some(v))
         } else {
             Err(format!(
                 "divoomd: unknown argument {arg:?}\n\nRun `divoomd --help` for usage."
@@ -176,14 +172,11 @@ mod tests {
             "8080",
             "--token",
             "s3cret",
-            "--mac",
-            "AA:BB:CC:DD:EE:FF",
         ]);
         assert_eq!(c.socket_path, "/tmp/c.sock");
         assert_eq!(c.host.as_deref(), Some("127.0.0.1"));
         assert_eq!(c.port, Some(8080));
         assert_eq!(c.token.as_deref(), Some("s3cret"));
-        assert_eq!(c.mac.as_deref(), Some("AA:BB:CC:DD:EE:FF"));
     }
 
     #[test]

@@ -83,19 +83,9 @@ impl Default for Daemon {
 impl Daemon {
     #[must_use]
     pub fn new() -> Self {
-        Self::new_with_mac(None)
-    }
-
-    #[must_use]
-    pub fn new_with_mac(default_mac: Option<String>) -> Self {
         let (tx, _) = tokio::sync::broadcast::channel(32);
         let tx_for_hot = tx.clone();
         let fleet = Arc::new(crate::device::Fleet::default());
-        if let Some(mac) = default_mac {
-            // `--mac`: the panel this daemon is FOR. Known (and current) from
-            // the start, unlinked until a connect succeeds.
-            fleet.preset(&mac);
-        }
         Self {
             started: Instant::now(),
             live_jobs: Arc::new(crate::live_jobs::LiveJobCoordinator::new(fleet.clone())),
@@ -121,12 +111,12 @@ impl Daemon {
         }
     }
 
-    /// The current device's transport, if it is connected. Test-facing
-    /// convenience over `fleet.current()`.
+    /// The transport a mac-less request means (the single linked panel), if
+    /// any. Test-facing convenience over `fleet.resolve_target(None)`.
     pub async fn current_transport(&self) -> Option<Arc<DeviceTransport>> {
-        match self.fleet.current().await {
-            Some(d) => d.transport().await,
-            None => None,
+        match self.fleet.resolve_target(None).await {
+            Ok(d) => d.transport().await,
+            Err(_) => None,
         }
     }
 
@@ -178,8 +168,6 @@ impl Daemon {
             return err_reply("device_call requires a 'method' string");
         }
 
-        self.preempt_conflicting_live_jobs(req, target_mac).await;
-
         // R67: `target` was NEVER READ. The Python client has always sent
         // `target: "wall"` for wall operations (DaemonDeviceProxy(target="wall")),
         // and the daemon ignored it and used the single device — so a configured
@@ -187,16 +175,26 @@ impl Daemon {
         // "no device connected" instead. Together with the address-casing bug in
         // ble/connect.rs, that is why the virtual wall did not work at all.
         if req.args.get("target").and_then(|v| v.as_str()) == Some("wall") {
+            if Self::is_display_disruptive(req) {
+                self.live_jobs.stop_all(self).await;
+            }
             return self.wall_device_call(req).await;
         }
 
         // The device's ONE link carries both the queue and the transport, so
-        // a mac-less call (what the GUI sends) and a live job on the same
-        // panel are serialized together. They used to ride different queues.
-        let link = match self.resolve_target_link(target_mac).await {
+        // a mac-less call and a live job on the same panel are serialized
+        // together. A mac-less call with several panels linked is refused.
+        let device = match self.fleet.resolve_target(target_mac).await {
+            Ok(d) => d,
+            Err(e) => return err_reply(&e),
+        };
+        let target_id = device.id.clone();
+        let link = match self.resolve_target_link(Some(&target_id)).await {
             Ok(l) => l,
             Err(e) => return e,
         };
+        self.preempt_conflicting_live_jobs(req, &target_id).await;
+
         let _permit = match link.queue.acquire(token.map(str::to_string)).await {
             Ok(p) => p,
             Err(e) => return err_reply(&e.to_string()),
@@ -230,8 +228,7 @@ impl Daemon {
             // timeout) means the link is unhealthy → push a `degraded` status
             // so the UI flips the dot amber immediately instead of waiting for
             // a poll. A successful op recovers it to `active`.
-            let cur_id = self.fleet.current_id().await;
-            let id = target_mac.map(str::to_string).or(cur_id);
+            let id = Some(target_id.clone());
             let degraded = reply.get("success").and_then(serde_json::Value::as_bool) != Some(true);
             let st = if degraded { "degraded" } else { "active" };
             let _ = self.tx.send(crate::daemon_connect::status_payload(
@@ -247,8 +244,7 @@ impl Daemon {
             reply
         } else {
             let msg = format!("device op timed out after {req_timeout:.0}s");
-            let cur_id = self.fleet.current_id().await;
-            let id = target_mac.map(str::to_string).or(cur_id);
+            let id = Some(target_id.clone());
             let _ = self.tx.send(crate::daemon_connect::status_payload(
                 true,
                 id.as_deref(),
@@ -264,16 +260,14 @@ impl Daemon {
         &self,
         target_mac: Option<&str>,
     ) -> Result<Arc<crate::device::Link>, Value> {
-        let not_connected = || {
-            target_mac.map_or_else(
-                || err_reply("no device connected"),
-                |mac| err_reply(&format!("device '{mac}' not connected")),
-            )
-        };
-        let Some(d) = self.fleet.resolve(target_mac).await else {
-            return Err(not_connected());
-        };
-        d.link().await.ok_or_else(not_connected)
+        let d = self
+            .fleet
+            .resolve_target(target_mac)
+            .await
+            .map_err(|e| err_reply(&e))?;
+        d.link()
+            .await
+            .ok_or_else(|| err_reply(&format!("device '{}' not connected", d.id)))
     }
 
     async fn record_successful_call_activity(&self, req: &Request, target: &str) {
@@ -325,14 +319,15 @@ impl Daemon {
         crate::wall::cmd_set_topology(self, req).await
     }
 
-    async fn preempt_conflicting_live_jobs(&self, req: &Request, target_mac: Option<&str>) {
+    /// Methods that repaint the panel and therefore retire its live widget.
+    fn is_display_disruptive(req: &Request) -> bool {
         let method = req
             .args
             .get("method")
             .and_then(|v| v.as_str())
             .unwrap_or("");
         let bare_method = method.split('.').next_back().unwrap_or(method);
-        let is_display_disruptive = matches!(
+        matches!(
             bare_method,
             "show_image"
                 | "display_image"
@@ -352,7 +347,17 @@ impl Daemon {
                 | "show_visualization"
                 | "show_scoreboard"
                 | "show_hot_channel"
-        );
+        )
+    }
+
+    async fn preempt_conflicting_live_jobs(&self, req: &Request, target_id: &str) {
+        let method = req
+            .args
+            .get("method")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let bare_method = method.split('.').next_back().unwrap_or(method);
+        let is_display_disruptive = Self::is_display_disruptive(req);
         let is_screen_off = match bare_method {
             "set_screen_on" | "on_off_screen" => {
                 let on = req
@@ -392,18 +397,7 @@ impl Daemon {
             _ => false,
         };
         if is_display_disruptive || is_screen_off {
-            if req.args.get("target").and_then(|v| v.as_str()) == Some("wall") {
-                self.live_jobs.stop_all(self).await;
-            } else {
-                let dev_mac = if let Some(m) = target_mac {
-                    Some(m.to_string())
-                } else {
-                    self.fleet.current_id().await
-                };
-                if let Some(m) = dev_mac {
-                    self.live_jobs.stop_all_for_device(self, &m).await;
-                }
-            }
+            self.live_jobs.stop_all_for_device(self, target_id).await;
         }
     }
 }
@@ -418,7 +412,8 @@ impl Handler for Daemon {
     fn initial_status(&self) -> Value {
         // Synchronous by trait contract; the fleet is read with try_lock, so
         // a contended lock reads as "not connected" for this one snapshot
-        // (the subscribe stream corrects it on the next status event).
+        // (the subscribe stream corrects it on the next status event). The
+        // id is the single linked panel's, or absent with several.
         let (connected, id) = self.fleet.status_now();
         let mut ev = json!({
             "type": "status",

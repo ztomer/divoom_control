@@ -218,7 +218,12 @@ pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
         if explicit.is_some() {
             explicit
         } else {
-            daemon.fleet.current_id().await
+            daemon
+                .fleet
+                .resolve_target(None)
+                .await
+                .ok()
+                .map(|d| d.id.clone())
         }
     };
     if let Some(ref m) = target_mac {
@@ -411,6 +416,7 @@ pub async fn cmd_hot_update(
             device_size,
             show_after,
             progress_arc.clone(),
+            (!address.is_empty()).then(|| address.clone()),
         )
         .await;
         match result {

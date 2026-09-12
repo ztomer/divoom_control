@@ -143,7 +143,7 @@ async fn main() {
         tcp_token = Some(token);
     }
 
-    let daemon = Arc::new(Daemon::new_with_mac(args.mac));
+    let daemon = Arc::new(Daemon::new());
     daemon.initialize_self_weak(Arc::downgrade(&daemon));
 
     // Monthly-best background sync is OPT-IN (parity: in Python it is a SEPARATE

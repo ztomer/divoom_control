@@ -195,60 +195,43 @@ def test_rust_tcp_token_auth():
             os.remove(sp)
 
 
-def test_rust_default_mac():
-    # Resolved by VERSION: see tests/support/daemon_binary.py
+def test_rust_status_with_nothing_connected_reports_nothing():
+    """2026-09-12: the daemon has no "current" device. It used to accept
+    `--mac` and report that address as `mac` while `connected` was false --
+    a panel it had never reached, presented as known. Now a status with
+    nothing linked says so, and lists no devices."""
     from tests.support.daemon_binary import require_divoomd
 
     bin_path = require_divoomd()
-
-    sp = f"/tmp/divoomd_parity_mac_{os.getpid()}.sock"
+    sp = "/tmp/divoomd_test_status_empty.sock"
     if os.path.exists(sp):
         os.remove(sp)
-
-    default_mac = "AA:BB:CC:DD:EE:FF"
-
-    # Spawn divoomd with a default MAC address configured
     proc = subprocess.Popen(
-        [str(bin_path), "--socket", sp, "--mac", default_mac],
+        [str(bin_path), "--socket", sp],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True
     )
-
-    # Wait for the Unix socket to be bound
-    bound = False
-    for _ in range(50):
-        if os.path.exists(sp):
-            bound = True
-            break
-        time.sleep(0.05)
-
-    if not bound:
-        proc.kill()
-        stdout, stderr = proc.communicate(timeout=1.0)
-        pytest.fail(f"Rust daemon failed to bind. stdout: {stdout}, stderr: {stderr}")
-
     try:
-        client = DaemonClient(sp)
+        for _ in range(50):
+            if os.path.exists(sp):
+                break
+            time.sleep(0.1)
+        else:
+            out, err = proc.communicate(timeout=2)
+            pytest.fail(f"Rust daemon failed to bind. stdout: {out}, stderr: {err}")
+        client = DaemonClient(socket_path=sp)
         reply = client.send_command("device_status")
         assert reply["success"] is True
-        assert reply.get("mac") == default_mac
+        assert reply.get("mac") is None
         assert reply.get("connected") is False
         assert reply.get("connection_state") == "disconnected"
-
+        assert reply.get("devices") == []
     finally:
-        try:
-            DaemonClient(sp).send_command("shutdown")
-        except Exception:
-            pass
         proc.terminate()
-        try:
-            proc.wait(timeout=2.0)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+        proc.wait(timeout=5)
         if os.path.exists(sp):
             os.remove(sp)
-
 
 def test_rust_spp_connect_failure_integration(rust_daemon_ctx):
     client = rust_daemon_ctx

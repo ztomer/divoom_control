@@ -457,3 +457,39 @@ async fn every_pushed_live_frame_is_broadcast_with_its_pixels() {
         .starts_with("data:image/png"));
     stop_job(&d, "DEV_A", "sysmon").await;
 }
+
+#[tokio::test]
+async fn a_macless_call_with_several_panels_is_refused_with_the_count() {
+    // "Whichever connected last" is gone: a caller that did not say which
+    // panel is told there are several, and nothing is sent to any of them.
+    let d = daemon_with_mock("DEV_A").await;
+    daemon_with_mock_on(&d, "DEV_B").await;
+    let r = d
+        .handle(make_request(
+            "device_call",
+            Some(json!({"method": "display.switch_channel", "kwargs": {"channel": "clock"}})),
+            None,
+        ))
+        .await;
+    assert_eq!(r["success"], json!(false), "{r}");
+    let err = r["error"].as_str().unwrap();
+    assert!(err.starts_with("2 panels connected"), "{err}");
+    assert_eq!(sent_count(&d, "DEV_A").await, 0);
+    assert_eq!(sent_count(&d, "DEV_B").await, 0);
+    // Named, it goes through -- and only there.
+    let r = d
+        .handle(make_request(
+            "device_call",
+            Some(json!({"mac": "dev_b", "method": "display.switch_channel", "kwargs": {"channel": "clock"}})),
+            None,
+        ))
+        .await;
+    assert_eq!(r["success"], json!(true), "{r}");
+    assert_eq!(sent_count(&d, "DEV_A").await, 0);
+    assert!(sent_count(&d, "DEV_B").await >= 1);
+    // Mac-less status is the fleet, not a guess.
+    let st = d.handle(make_request("device_status", None, None)).await;
+    assert_eq!(st["connected"], json!(true));
+    assert!(st["mac"].is_null(), "{st}");
+    assert_eq!(st["devices"].as_array().unwrap().len(), 2);
+}

@@ -192,7 +192,8 @@ def test_spawn_daemon_rust_path_with_mac(monkeypatch, tmp_path):
     monkeypatch.setattr(daemon_client, "_spawn_disclaimed_macos", fake_disclaim)
     pid = daemon_client.spawn_daemon(str(tmp_path / "sock"), mac="11:22:33")
     assert pid == 444
-    assert seen["cmd"] == [str(rust_bin), "--socket", str(tmp_path / "sock"), "--mac", "11:22:33"]
+    # 2026-09-12: no `--mac` -- the daemon has no "current" device to preset.
+    assert seen["cmd"] == [str(rust_bin), "--socket", str(tmp_path / "sock")]
 
 
 def test_spawn_daemon_log_open_failure_is_swallowed(monkeypatch, tmp_path):

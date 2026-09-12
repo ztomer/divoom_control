@@ -211,11 +211,25 @@ Order is by leverage; 1-3 are one thread, 6 is independent, 5 is
 measurement-gated, 4 decides itself. Each step ships with its tests shown
 red first, and the entry here flips to SHIPPED with the commit.
 
+**0. The CLI is a daemon client** (Python, ~2h) — user correction 2026-09-12.
+`divoom_lib/cli.py` drives `divoom_lib.Divoom` over bleak directly: a
+second device-I/O implementation beside the daemon, the exact class the
+ownership rule below forbids (and why `bleak` looked like a check's
+dependency). Port `cli_commands._resolve_device` and `cmd_scan` to
+`DaemonClient` + `DaemonDeviceProxy(mac=...)` (spawning the daemon the way
+the GUI does); `capabilities` via `get_capabilities`; every `d.<facade>.<m>`
+chain resolves through `device_call`, so each command's method must exist
+in the daemon's routing (gate: `tools/check_hw_verify_methods.py`-style
+name check for the CLI). `--mac` names the panel; without it the daemon's
+resolver (step 1) answers for a single linked panel and refuses otherwise.
+bleak leaves the CLI's import path. Open question, not decided here:
+`examples/` documents the same bleak facade -- library docs, or retire
+them in favour of daemon-client examples.
+
 **1. Retire the daemon's "current" device** (daemon + GUI, ~half a day)
-The CLI is not a daemon caller (it drives `divoom_lib.Divoom` over bleak).
 The mac-less daemon commands are `hot_update`, `probe_lan`, notification
 routing, `exclusive_start`/`end`, `live_jobs_stop_for`, `device_status`,
-`disconnect`, and MCP tools when `mac` is omitted.
+`disconnect`, and MCP tools when `mac` is omitted (and the CLI after 0).
 - One resolver for all of them: explicit `mac`, else the single linked
   panel when exactly one is linked, else a refusal naming the count
   ("3 panels connected; pass mac"). Kills "whichever connected last"

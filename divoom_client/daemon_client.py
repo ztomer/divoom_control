@@ -214,8 +214,9 @@ def spawn_daemon(
             "server was archived; see divoom_client/__init__.py."
         )
     cmd = [rust_bin, "--socket", socket_path]
-    if mac:
-        cmd += ["--mac", mac]
+    # `--mac` used to preset the daemon's "current" device; there is no such
+    # thing any more (a request names its panel, or there is exactly one).
+    _ = mac
     log_path = os.environ.get("DIVOOM_DAEMON_LOG", "/tmp/divoom_client.log")
     try:
         with open(log_path, "a", buffering=1) as fh:

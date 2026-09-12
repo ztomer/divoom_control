@@ -18,7 +18,11 @@ use crate::protocol::{err_reply, Request};
 /// the Python reference's `FailureReason.DROPPED`) is echoed on both
 /// broadcasts and the reply for the e2e assertion.
 pub(crate) async fn cmd_mock_simulate_drop(daemon: &Daemon, req: &Request) -> Value {
-    let current = daemon.fleet.current().await;
+    let current = daemon
+        .fleet
+        .resolve_target(req.args.get("mac").and_then(|v| v.as_str()))
+        .await
+        .ok();
     let transport = match current {
         Some(ref d) => d.transport().await,
         None => None,
@@ -97,7 +101,7 @@ mod tests {
         // The link is gone afterward, exactly like a real drop: no current
         // device, nothing connected -- but the identity is kept so a live
         // job can wait for the panel to come back.
-        assert!(daemon.fleet.current().await.is_none());
+        assert!(daemon.fleet.resolve_target(None).await.is_err());
         assert!(daemon.fleet.linked().await.is_empty());
         assert!(daemon.fleet.get("MOCK_MAC").await.is_some());
 
@@ -169,6 +173,14 @@ mod tests {
             cmd_mock_simulate_drop(&daemon, &make_request("mock_simulate_drop", None, None)).await;
         assert_eq!(res["success"], json!(false));
         // The real (non-mock) device must be left untouched.
-        assert!(daemon.fleet.current().await.unwrap().is_connected().await);
+        assert!(
+            daemon
+                .fleet
+                .resolve_target(None)
+                .await
+                .unwrap()
+                .is_connected()
+                .await
+        );
     }
 }

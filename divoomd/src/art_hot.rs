@@ -360,6 +360,7 @@ pub(crate) async fn run_hot_update(
     device_size: u32,
     show_after: bool,
     progress: Arc<HotProgress>,
+    address_hint: Option<String>,
 ) -> Result<Value, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(HTTP_TIMEOUT_SECS))
@@ -398,13 +399,17 @@ pub(crate) async fn run_hot_update(
         // `daemon.device` mutex serialized against nothing that mattered.
         // The live widget on this panel is retired first, or it would paint
         // over the hot channel the moment the permit is released.
-        let link = daemon
-            .resolve_target_link(None)
+        // The GUI passes the panel it displays as `address` (R53, used only
+        // for the stamp until 2026-09-12); it is the target now.
+        let target = daemon.fleet.resolve_target(address_hint.as_deref()).await?;
+        let link = target
+            .link()
             .await
-            .map_err(|_| "no device connected".to_string())?;
-        if let Some(id) = daemon.fleet.current_id().await {
-            daemon.live_jobs.stop_all_for_device(&daemon, &id).await;
-        }
+            .ok_or_else(|| format!("device '{}' not connected", target.id))?;
+        daemon
+            .live_jobs
+            .stop_all_for_device(&daemon, &target.id)
+            .await;
         let _permit = link
             .queue
             .acquire(None)

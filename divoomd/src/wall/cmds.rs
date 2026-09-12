@@ -48,7 +48,13 @@ pub async fn cmd_get_topology(daemon: &Daemon, _req: &Request) -> Value {
     drop(wall_guard);
     let slots = daemon.wall_slots.lock().await.clone();
     let top = load_topology();
-    let cur_dev = daemon.fleet.current_id().await;
+    // The single linked panel, or null: there is no "current" any more.
+    let cur_dev = daemon
+        .fleet
+        .resolve_target(None)
+        .await
+        .ok()
+        .map(|d| d.id.clone());
     json!({
         "success": true,
         "wall_active": wall_active,

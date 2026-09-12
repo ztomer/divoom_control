@@ -1,4 +1,4 @@
-//! The fleet: single owner of "which devices exist" and "which one is current".
+//! The fleet: single owner of "which devices exist". No "current" device.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -13,13 +13,11 @@ fn key(id: &str) -> String {
     id.to_ascii_uppercase()
 }
 
-/// Every device this daemon knows, plus which one a mac-less request means.
+/// Every device this daemon knows. There is no "current" device: a request
+/// names its panel, or there is exactly one linked panel, or it is refused.
 #[derive(Default)]
 pub struct Fleet {
     devices: Mutex<HashMap<String, Arc<Device>>>,
-    /// Canonical key of the "current" device -- the one a request with no
-    /// `mac` addresses. The most recently adopted device becomes current.
-    current: Mutex<Option<String>>,
 }
 
 impl Fleet {
@@ -35,56 +33,31 @@ impl Fleet {
             .clone()
     }
 
-    /// Declare `id` before any connection (the `--mac` the daemon was
-    /// started for). Synchronous because it runs inside `Daemon::new`,
-    /// before there is a runtime to await on; nothing else holds the locks
-    /// yet.
-    ///
-    /// # Panics
-    ///
-    /// If called while another task holds the fleet's locks -- it is meant
-    /// for construction only.
-    pub fn preset(&self, id: &str) {
-        let mut devices = self
-            .devices
-            .try_lock()
-            .expect("fleet preset runs before any task");
-        devices.entry(key(id)).or_insert_with(|| Device::new(id));
-        drop(devices);
-        *self
-            .current
-            .try_lock()
-            .expect("fleet preset runs before any task") = Some(key(id));
-    }
-
-    /// `(connected, current id)` without awaiting, for callers that cannot
-    /// (the socket server's initial status is synchronous). A contended lock
-    /// reads as disconnected for this snapshot only.
+    /// `(connected, id)` without awaiting, for callers that cannot (the
+    /// socket server's initial status is synchronous). `id` is the single
+    /// linked panel's, absent when none or several are linked. A contended
+    /// lock reads as disconnected for this snapshot only.
     #[must_use]
     pub fn status_now(&self) -> (bool, Option<String>) {
-        let Ok(cur) = self.current.try_lock() else {
-            return (false, None);
-        };
-        let Some(k) = cur.clone() else {
-            return (false, None);
-        };
         let Ok(devices) = self.devices.try_lock() else {
             return (false, None);
         };
-        let Some(d) = devices.get(&k) else {
-            return (false, None);
-        };
-        let connected = d.link.try_lock().is_ok_and(|l| l.is_some());
-        (connected, Some(d.id.clone()))
+        let linked: Vec<&Arc<Device>> = devices
+            .values()
+            .filter(|d| d.link.try_lock().is_ok_and(|l| l.is_some()))
+            .collect();
+        match linked.as_slice() {
+            [] => (false, None),
+            [one] => (true, Some(one.id.clone())),
+            _ => (true, None),
+        }
     }
 
     /// Take ownership of a freshly connected transport under `id`: the
-    /// device keeps its identity (and live job), the old link is retired,
-    /// and the device becomes current.
+    /// device keeps its identity (and live job); the old link is retired.
     pub async fn adopt(&self, id: &str, transport: Arc<DeviceTransport>) -> Arc<Device> {
         let dev = self.get_or_create(id).await;
         dev.attach(transport).await;
-        *self.current.lock().await = Some(key(id));
         dev
     }
 
@@ -102,21 +75,34 @@ impl Fleet {
         }
     }
 
-    pub async fn current(&self) -> Option<Arc<Device>> {
-        let k = self.current.lock().await.clone()?;
-        self.devices.lock().await.get(&k).cloned()
-    }
-
-    /// The current device's id as the client knows it.
-    pub async fn current_id(&self) -> Option<String> {
-        self.current().await.map(|d| d.id.clone())
-    }
-
-    /// An explicit id, else the current device.
-    pub async fn resolve(&self, id: Option<&str>) -> Option<Arc<Device>> {
-        match id {
-            Some(i) => self.get(i).await,
-            None => self.current().await,
+    /// The panel a request means. An explicit `id` names it. Without one
+    /// there is exactly one honest answer: the single linked panel. With
+    /// several linked, the caller has to say which -- "whichever connected
+    /// last" is the guess that put a push on the wrong panel (2026-09-12).
+    ///
+    /// # Errors
+    ///
+    /// The three things a caller can act on: that panel is not connected,
+    /// nothing is connected, or several are and `mac` is required.
+    pub async fn resolve_target(&self, id: Option<&str>) -> Result<Arc<Device>, String> {
+        if let Some(i) = id {
+            return self
+                .connected(i)
+                .await
+                .ok_or_else(|| format!("device '{i}' not connected"));
+        }
+        let mut linked = self.linked().await;
+        match linked.len() {
+            0 => Err("no device connected".to_string()),
+            1 => Ok(linked.remove(0)),
+            n => Err(format!(
+                "{n} panels connected; pass 'mac' to say which ({})",
+                linked
+                    .iter()
+                    .map(|d| d.id.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )),
         }
     }
 
@@ -144,26 +130,15 @@ impl Fleet {
     /// stay (the job waits for the panel to come back).
     pub async fn detach(&self, id: &str) -> Option<Arc<Link>> {
         let d = self.get(id).await?;
-        let link = d.detach().await;
-        let mut cur = self.current.lock().await;
-        if cur.as_deref() == Some(key(id).as_str()) {
-            *cur = None;
-        }
-        link
+        d.detach().await
     }
 
     /// Forget one device entirely: its job stopped, its link retired (and
-    /// returned so the caller can hang up), its activity gone. If it was
-    /// current, the fleet has no current device afterwards.
+    /// returned so the caller can hang up), its activity gone.
     pub async fn remove(&self, id: &str) -> Option<Arc<Link>> {
         let removed = self.devices.lock().await.remove(&key(id))?;
         removed.stop_live_job(None).await;
-        let link = removed.detach().await;
-        let mut cur = self.current.lock().await;
-        if cur.as_deref() == Some(key(id).as_str()) {
-            *cur = None;
-        }
-        link
+        removed.detach().await
     }
 
     /// Forget every device: jobs stopped, links retired, activity gone.
@@ -176,7 +151,6 @@ impl Fleet {
                 links.push(l);
             }
         }
-        *self.current.lock().await = None;
         links
     }
 

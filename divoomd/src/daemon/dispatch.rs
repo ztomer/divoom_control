@@ -79,7 +79,10 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
             json!({"success": true, "shutting_down": true})
         }
 
-        "probe_lan" => crate::daemon_connect::probe_lan(daemon).await,
+        "probe_lan" => {
+            crate::daemon_connect::probe_lan(daemon, req.args.get("mac").and_then(|v| v.as_str()))
+                .await
+        }
 
         "sync_artwork" => crate::sync_artwork::sync_artwork(daemon, &req.args).await,
 
@@ -137,11 +140,11 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
 
         "live_jobs_stop_for" => {
             let mac_str = req.args.get("mac").and_then(|v| v.as_str());
-            let mac_owner = daemon.fleet.current_id().await;
-            let Some(mac) = mac_str.or(mac_owner.as_deref()) else {
-                return err_reply("live_jobs_stop_for requires 'mac' or connected device");
+            let target = match daemon.fleet.resolve_target(mac_str).await {
+                Ok(d) => d.id.clone(),
+                Err(e) => return err_reply(&format!("live_jobs_stop_for: {e}")),
             };
-            let count = daemon.live_jobs.stop_all_for_device(daemon, mac).await;
+            let count = daemon.live_jobs.stop_all_for_device(daemon, &target).await;
             json!({"success": true, "count": count})
         }
 

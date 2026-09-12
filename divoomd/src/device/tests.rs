@@ -12,14 +12,32 @@ fn mock() -> Arc<DeviceTransport> {
 }
 
 #[tokio::test]
-async fn adopt_makes_the_device_current_and_lookup_ignores_case() {
+async fn a_single_linked_panel_answers_a_macless_request_and_lookup_ignores_case() {
     let f = Fleet::default();
     f.adopt("aa:bb:CC", mock()).await;
-    assert_eq!(f.current_id().await.as_deref(), Some("aa:bb:CC"));
     assert!(f.get("AA:BB:cc").await.is_some());
-    assert!(f.resolve(None).await.is_some());
-    assert!(f.resolve(Some("nope")).await.is_none());
+    assert_eq!(f.resolve_target(None).await.unwrap().id, "aa:bb:CC");
+    assert!(f.resolve_target(Some("nope")).await.is_err());
     assert_eq!(f.linked().await.len(), 1);
+}
+
+#[tokio::test]
+async fn several_linked_panels_refuse_a_macless_request_with_the_count() {
+    // "Whichever connected last" put a push on the wrong panel; a caller
+    // that did not say which panel is told there are several.
+    let f = Fleet::default();
+    f.adopt("A", mock()).await;
+    f.adopt("B", mock()).await;
+    let err = f.resolve_target(None).await.err().expect("refused");
+    assert!(err.starts_with("2 panels connected"), "{err}");
+    assert!(err.contains('A') && err.contains('B'), "{err}");
+    assert_eq!(f.resolve_target(Some("b")).await.unwrap().id, "B");
+    f.detach("A").await;
+    assert_eq!(f.resolve_target(None).await.unwrap().id, "B");
+    assert!(
+        f.resolve_target(Some("A")).await.is_err(),
+        "unlinked is not connected"
+    );
 }
 
 #[tokio::test]
@@ -60,18 +78,17 @@ async fn re_adopting_an_id_keeps_the_device_but_retires_its_old_link() {
 }
 
 #[tokio::test]
-async fn detach_keeps_identity_and_clears_current_only_for_that_device() {
+async fn detach_keeps_identity_and_only_that_panel_goes_unlinked() {
     let f = Fleet::default();
     f.adopt("A", mock()).await;
     f.adopt("B", mock()).await;
-    assert_eq!(f.current_id().await.as_deref(), Some("B"));
     f.detach("A").await;
-    assert_eq!(f.current_id().await.as_deref(), Some("B"));
     assert!(f.get("A").await.is_some(), "identity survives");
     assert!(f.connected("A").await.is_none());
+    assert!(f.connected("B").await.is_some());
     f.detach("b").await;
-    assert!(f.current().await.is_none());
     assert!(f.linked().await.is_empty());
+    assert_eq!(f.status_now(), (false, None));
 }
 
 #[tokio::test]
@@ -82,7 +99,7 @@ async fn drain_retires_links_and_forgets_devices() {
     let drained = f.drain().await;
     assert_eq!(drained.len(), 1);
     assert!(link.is_retired());
-    assert!(f.current().await.is_none());
+    assert!(f.resolve_target(None).await.is_err());
     assert!(f.get("A").await.is_none());
     assert_eq!(link.run(None, async { 1 }).await, None);
 }

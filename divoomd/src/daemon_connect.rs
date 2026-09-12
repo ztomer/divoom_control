@@ -106,17 +106,15 @@ async fn run_connect(daemon: &Daemon, id: &str) -> Result<BleTransport, String> 
 
 /// Handle `probe_lan` — check whether the connected device is reachable over its
 /// LAN HTTP API (Python-daemon parity). BLE/SPP devices report "no LAN configured".
-pub(crate) async fn probe_lan(daemon: &Daemon) -> Value {
-    let dev = match daemon.fleet.current().await {
-        Some(d) => match d.transport().await {
+pub(crate) async fn probe_lan(daemon: &Daemon, mac: Option<&str>) -> Value {
+    let dev = match daemon.fleet.resolve_target(mac).await {
+        Ok(d) => match d.transport().await {
             Some(t) => t,
             None => {
                 return json!({"success": true, "reachable": false, "detail": "no device connected"})
             }
         },
-        None => {
-            return json!({"success": true, "reachable": false, "detail": "no device connected"})
-        }
+        Err(e) => return json!({"success": true, "reachable": false, "detail": e}),
     };
     match dev.lan() {
         Some(lan) => {

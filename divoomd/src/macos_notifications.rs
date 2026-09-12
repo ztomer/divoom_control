@@ -353,23 +353,30 @@ async fn forward_notification(daemon: &Daemon, app_type: u8, text: &str) -> bool
 
     #[cfg(feature = "ble")]
     {
-        let transport = match daemon.fleet.current().await {
-            Some(d) => d.transport().await,
-            None => None,
-        };
-        if let Some(ref dev) = transport {
-            match &**dev {
+        // A notification goes to EVERY linked panel that can take one. There
+        // is no "current" panel to pick (2026-09-12); a per-panel routing
+        // choice belongs in the routing rules if it is ever wanted.
+        let mut delivered = false;
+        for d in daemon.fleet.linked().await {
+            let Some(dev) = d.transport().await else {
+                continue;
+            };
+            let ok = match &*dev {
                 crate::daemon::DeviceTransport::Ble(ref ble) => {
-                    return ble.send_command(0x50, &payload, true).await.is_ok();
+                    ble.send_command(0x50, &payload, true).await.is_ok()
                 }
                 crate::daemon::DeviceTransport::Spp(ref spp) => {
-                    return spp.send_command(0x50, &payload, true).await.is_ok();
+                    spp.send_command(0x50, &payload, true).await.is_ok()
                 }
-                crate::daemon::DeviceTransport::Lan(_) => {}
+                crate::daemon::DeviceTransport::Lan(_) => false,
                 crate::daemon::DeviceTransport::Mock(ref mock) => {
-                    return mock.send_command(0x50, &payload, true).await.is_ok();
+                    mock.send_command(0x50, &payload, true).await.is_ok()
                 }
-            }
+            };
+            delivered |= ok;
+        }
+        if delivered {
+            return true;
         }
     }
     #[cfg(not(feature = "ble"))]
