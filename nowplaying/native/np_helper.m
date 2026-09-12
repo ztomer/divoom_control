@@ -50,11 +50,8 @@ typedef void (*MRGetNowPlayingInfo_t)(dispatch_queue_t, void (^)(CFDictionaryRef
 typedef void (*MRGetNowPlayingClients_t)(dispatch_queue_t, void (^)(CFArrayRef));
 typedef CFStringRef (*MRClientAccessor_t)(const void *);
 typedef const void *(*MRGetLocalOrigin_t)(void);
-typedef void (*MRGetActivePaths_t)(const void *origin, dispatch_queue_t, void (^)(CFArrayRef));
-typedef void (*MRStateForPlayer_t)(const void *path, dispatch_queue_t, void (^)(uint32_t));
-typedef void (*MRInfoForPlayer_t)(const void *path, Boolean art, dispatch_queue_t, void (^)(CFDictionaryRef));
 typedef void (*MRStateForClient_t)(const void *client, const void *origin, dispatch_queue_t, void (^)(uint32_t));
-typedef const void *(*MRPathGetClient_t)(const void *path);
+typedef void (*MRInfoForClient_t)(const void *client, const void *origin, Boolean art, dispatch_queue_t, void (^)(CFDictionaryRef));
 typedef CFStringRef (*MRStateDescription_t)(uint32_t);
 
 enum { kStatePlaying = 1 };
@@ -108,35 +105,45 @@ static void appendTrack(NSMutableString *out, NSDictionary *info) {
     }
 }
 
-/// The system's ONE elected session, the pre-2026-09-12 read. Still the
-/// answer when no player is actually playing (a paused holder is reported
-/// with rate 0, an empty holder as nothing).
-static void emitElectedSession(MRGetNowPlayingInfo_t getInfo, NSString *playersJSON) {
-    __block BOOL done = NO;
-    getInfo(dispatch_get_main_queue(), ^(CFDictionaryRef information) {
-        NSDictionary *info = (__bridge NSDictionary *)information;
-        NSMutableString *out = [NSMutableString stringWithString:@"{\"ok\":true,\"source\":\"elected\""];
-        if (!info || info.count == 0) {
-            [out appendString:@",\"playing\":false"];
-        } else {
-            appendTrack(out, info);
-        }
-        [out appendFormat:@",\"players\":%@}", playersJSON];
-        emit(out);
-        done = YES;
-    });
-    if (!pump(&done, 5.0)) emit(@"{\"ok\":false,\"error\":\"timeout\"}");
+/// One registered client and what it reports.
+@interface NPCandidate : NSObject
+@property(nonatomic) const void *client;
+@property(nonatomic, copy) NSString *bundle;
+@property(nonatomic, copy) NSString *parent;
+@property(nonatomic, copy) NSString *name;
+@property(nonatomic) uint32_t state;
+@property(nonatomic, copy) NSString *stateName;
+@property(nonatomic, copy) NSDictionary *info;
+@end
+@implementation NPCandidate
+@end
+
+static NSString *playersJSON(NSArray<NPCandidate *> *cands) {
+    NSMutableString *out = [NSMutableString stringWithString:@"["];
+    for (NPCandidate *c in cands) {
+        if (out.length > 1) [out appendString:@","];
+        [out appendFormat:@"{\"bundle_id\":%@,\"parent_bundle_id\":%@,\"name\":%@,\"state\":%@}",
+             JSONString(c.bundle), JSONString(c.parent), JSONString(c.name), JSONString(c.stateName)];
+    }
+    [out appendString:@"]"];
+    return out;
 }
 
 /// Read the current track and print it as one JSON line.
 ///
-/// Every active player path is asked for its playback state; the first one
-/// PLAYING is the track, whoever holds the elected session. That is the
-/// masking fix (2026-09-12): macOS hands the Now Playing session to the last
-/// app that touched it and keeps it there when that app pauses or sits empty,
-/// so a stopped Music masked an audibly playing Kaset for a reader of the one
-/// elected session. With no player playing, the elected session is reported
-/// as before. Exported for the perl loader (see np_load.pl).
+/// Every registered client is asked for its own playback state, and the
+/// PLAYING one with the richest record is the track. The elected session --
+/// the one record the pre-2026-09-12 read could see -- is the answer only
+/// when no client is playing (a paused holder with rate 0, or nothing).
+///
+/// That is the masking fix: macOS hands the Now Playing session to the last
+/// app that touched it and keeps it there when that app pauses or sits
+/// empty, so a stopped Music masked an audibly playing Kaset. And "richest"
+/// matters because one app registers more than once: while Kaset played,
+/// the ELECTED session was Kaset's own five-key stub (a stale title, no
+/// rate, no artwork) while its WebKit GPU helper carried the thirteen-key
+/// record with the art (measured 2026-09-12). Both say Playing; only one is
+/// worth showing. Exported for the perl loader (see np_load.pl).
 void np_get(void) {
     @autoreleasepool {
         void *handle = dlopen(kFrameworkPath.UTF8String, RTLD_LAZY);
@@ -145,11 +152,10 @@ void np_get(void) {
             return;
         }
         MRGetNowPlayingInfo_t getInfo = dlsym(handle, "MRMediaRemoteGetNowPlayingInfo");
+        MRGetNowPlayingClients_t getClients = dlsym(handle, "MRMediaRemoteGetNowPlayingClients");
         MRGetLocalOrigin_t localOrigin = dlsym(handle, "MRMediaRemoteGetLocalOrigin");
-        MRGetActivePaths_t activePaths = dlsym(handle, "MRMediaRemoteGetActivePlayerPathsForOrigin");
-        MRStateForPlayer_t stateFor = dlsym(handle, "MRMediaRemoteGetPlaybackStateForPlayer");
-        MRInfoForPlayer_t infoFor = dlsym(handle, "MRMediaRemoteGetNowPlayingInfoForPlayer");
-        MRPathGetClient_t pathClient = dlsym(handle, "MRNowPlayingPlayerPathGetClient");
+        MRStateForClient_t stateFor = dlsym(handle, "MRMediaRemoteGetPlaybackStateForClient");
+        MRInfoForClient_t infoFor = dlsym(handle, "MRMediaRemoteGetNowPlayingInfoForClient");
         MRClientAccessor_t getBundle = dlsym(handle, "MRNowPlayingClientGetBundleIdentifier");
         MRClientAccessor_t getParent = dlsym(handle, "MRNowPlayingClientGetParentAppBundleIdentifier");
         MRClientAccessor_t getName = dlsym(handle, "MRNowPlayingClientGetDisplayName");
@@ -158,19 +164,11 @@ void np_get(void) {
             emit(@"{\"ok\":false,\"error\":\"symbol_missing\"}");
             return;
         }
-        // The per-player set is a 2026 reading of the framework; without it
-        // (an older macOS) the elected session is all there is.
-        BOOL perPlayer = localOrigin && activePaths && stateFor && infoFor;
-        if (!perPlayer) {
-            emitElectedSession(getInfo, @"[]");
-            return;
-        }
 
-        const void *origin = localOrigin();
         __block BOOL done = NO;
-        __block NSArray *paths = nil;
-        activePaths(origin, dispatch_get_main_queue(), ^(CFArrayRef arr) {
-            paths = arr ? [(__bridge NSArray *)arr copy] : @[];
+        __block NSDictionary *elected = nil;
+        getInfo(dispatch_get_main_queue(), ^(CFDictionaryRef information) {
+            elected = information ? [(__bridge NSDictionary *)information copy] : nil;
             done = YES;
         });
         if (!pump(&done, 5.0)) {
@@ -178,52 +176,69 @@ void np_get(void) {
             return;
         }
 
-        NSMutableString *players = [NSMutableString stringWithString:@"["];
-        id chosen = nil;
-        for (id path in paths) {
-            const void *client = pathClient ? pathClient((__bridge const void *)path) : NULL;
-            NSString *bundle = client && getBundle ? (__bridge NSString *)getBundle(client) : nil;
-            NSString *parent = client && getParent ? (__bridge NSString *)getParent(client) : nil;
-            NSString *name = client && getName ? (__bridge NSString *)getName(client) : nil;
-            __block BOOL got = NO;
-            __block uint32_t state = 0;
-            stateFor((__bridge const void *)path, dispatch_get_main_queue(), ^(uint32_t s) {
-                state = s;
-                got = YES;
+        // The per-client set is a 2026 reading of the framework; without it
+        // (an older macOS) the elected session is all there is.
+        BOOL perClient = getClients && localOrigin && stateFor && infoFor && stateName;
+        NSMutableArray<NPCandidate *> *cands = [NSMutableArray array];
+        if (perClient) {
+            const void *origin = localOrigin();
+            __block BOOL gotClients = NO;
+            __block NSArray *clients = nil;
+            getClients(dispatch_get_main_queue(), ^(CFArrayRef arr) {
+                clients = arr ? [(__bridge NSArray *)arr copy] : @[];
+                gotClients = YES;
             });
-            pump(&got, 2.0);
-            NSString *stateStr = stateName ? (__bridge_transfer NSString *)stateName(state) : nil;
-            if (players.length > 1) [players appendString:@","];
-            [players appendFormat:@"{\"bundle_id\":%@,\"parent_bundle_id\":%@,\"name\":%@,\"state\":%@}",
-                 JSONString(bundle), JSONString(parent), JSONString(name),
-                 JSONString(stateStr ?: [NSString stringWithFormat:@"%u", state])];
-            if (!chosen && got && state == kStatePlaying) chosen = path;
+            pump(&gotClients, 5.0);
+            for (id c in clients) {
+                NPCandidate *cand = [NPCandidate new];
+                cand.client = (__bridge const void *)c;
+                cand.bundle = getBundle ? (__bridge NSString *)getBundle(cand.client) : nil;
+                cand.parent = getParent ? (__bridge NSString *)getParent(cand.client) : nil;
+                cand.name = getName ? (__bridge NSString *)getName(cand.client) : nil;
+                __block BOOL got = NO;
+                __block uint32_t state = 0;
+                stateFor(cand.client, origin, dispatch_get_main_queue(), ^(uint32_t s) {
+                    state = s;
+                    got = YES;
+                });
+                if (pump(&got, 2.0)) {
+                    cand.state = state;
+                    cand.stateName = (__bridge_transfer NSString *)stateName(state);
+                }
+                [cands addObject:cand];
+            }
+            for (NPCandidate *cand in cands) {
+                if (cand.state != kStatePlaying) continue;
+                __block BOOL got = NO;
+                infoFor(cand.client, origin, true, dispatch_get_main_queue(), ^(CFDictionaryRef information) {
+                    cand.info = information ? [(__bridge NSDictionary *)information copy] : nil;
+                    got = YES;
+                });
+                pump(&got, 3.0);
+            }
         }
-        [players appendString:@"]"];
 
-        if (!chosen) {
-            emitElectedSession(getInfo, players);
-            return;
+        NPCandidate *best = nil;
+        for (NPCandidate *cand in cands) {
+            if (cand.info.count == 0) continue;
+            if (!best || cand.info.count > best.info.count) best = cand;
         }
-        const void *client = pathClient ? pathClient((__bridge const void *)chosen) : NULL;
-        NSString *bundle = client && getBundle ? (__bridge NSString *)getBundle(client) : nil;
-        NSString *parent = client && getParent ? (__bridge NSString *)getParent(client) : nil;
-        __block BOOL gotInfo = NO;
-        infoFor((__bridge const void *)chosen, true, dispatch_get_main_queue(), ^(CFDictionaryRef information) {
-            NSDictionary *info = (__bridge NSDictionary *)information;
-            NSMutableString *out = [NSMutableString stringWithString:@"{\"ok\":true,\"source\":\"player\""];
-            [out appendFormat:@",\"bundle_id\":%@,\"parent_bundle_id\":%@,\"state\":\"Playing\"",
-                 JSONString(bundle), JSONString(parent)];
-            if (!info || info.count == 0) {
+
+        NSMutableString *out = [NSMutableString stringWithString:@"{\"ok\":true"];
+        if (!best) {
+            [out appendString:@",\"source\":\"elected\""];
+            if (elected.count == 0) {
                 [out appendString:@",\"playing\":false"];
             } else {
-                appendTrack(out, info);
+                appendTrack(out, elected);
             }
-            [out appendFormat:@",\"players\":%@}", players];
-            emit(out);
-            gotInfo = YES;
-        });
-        if (!pump(&gotInfo, 5.0)) emit(@"{\"ok\":false,\"error\":\"timeout\"}");
+        } else {
+            [out appendFormat:@",\"source\":\"player\",\"bundle_id\":%@,\"parent_bundle_id\":%@,\"state\":\"Playing\"",
+                 JSONString(best.bundle), JSONString(best.parent)];
+            appendTrack(out, best.info);
+        }
+        [out appendFormat:@",\"players\":%@}", playersJSON(cands)];
+        emit(out);
     }
 }
 

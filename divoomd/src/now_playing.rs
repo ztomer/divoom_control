@@ -156,12 +156,13 @@ pub async fn cmd_now_playing(args: &Value) -> Value {
     blocking_now_playing(move || now_playing_blocking(include_artwork)).await
 }
 
-/// "Kaset (paused)", "Feishin (playing)", or just the name when unknown.
+/// "Kaset (not playing)", "Feishin (playing)", or just the name when the
+/// framework itself does not know (Music, just opened).
 #[cfg(target_os = "macos")]
 fn player_with_state(p: &nowplaying::discovery::Player) -> String {
     match p.is_playing {
         Some(true) => format!("{} (playing)", p.name),
-        Some(false) => format!("{} (paused)", p.name),
+        Some(false) => format!("{} (not playing)", p.name),
         None => p.name.clone(),
     }
 }

@@ -94,11 +94,17 @@ pub fn parse_players(line: &str) -> Result<Vec<Player>, String> {
         // com.apple.WebKit.GPU, both named "Kaset". Reporting one player twice
         // would make a UI list look broken, so collapse on the display name.
         // The framework's own playback state per client (2026-09-12); an
-        // older helper line has none and the player stays unknown.
-        let is_playing = entry
-            .get("state")
-            .and_then(|s| s.as_str())
-            .map(|state| state == "Playing");
+        // older helper line has none and the player stays unknown, as does
+        // a client the framework itself calls Unknown (Music, just opened).
+        let is_playing =
+            entry
+                .get("state")
+                .and_then(|s| s.as_str())
+                .and_then(|state| match state {
+                    "Playing" | "Seeking" => Some(true),
+                    "Paused" | "Stopped" | "Interrupted" => Some(false),
+                    _ => None,
+                });
         if !seen.insert(name.clone()) {
             // A duplicate registration that IS playing outranks the earlier
             // idle one: Kaset's WebKit GPU helper is the client that plays.
@@ -169,15 +175,17 @@ mod tests {
         let line = r#"{"ok":true,"players":[
             {"bundle_id":"com.sertacozercan.Kaset","name":"Kaset","state":"Paused"},
             {"bundle_id":"com.apple.WebKit.GPU","name":"Kaset","state":"Playing"},
-            {"bundle_id":"com.apple.Music","name":"Music","state":"Stopped"}]}"#;
+            {"bundle_id":"com.apple.Music","name":"Music","state":"Stopped"},
+            {"bundle_id":"com.apple.TV","name":"TV","state":"Unknown"}]}"#;
         let players = parse_players(line).unwrap();
-        assert_eq!(players.len(), 2);
+        assert_eq!(players.len(), 3);
         assert_eq!(
             players[0].is_playing,
             Some(true),
             "the playing registration wins"
         );
         assert_eq!(players[1].is_playing, Some(false), "stopped is a known no");
+        assert_eq!(players[2].is_playing, None, "Unknown stays unknown, not no");
         // And a known state is never overwritten by the session guess.
         let mut players = players;
         annotate_with_session(&mut players, Some(&track("MediaRemote", false)));
