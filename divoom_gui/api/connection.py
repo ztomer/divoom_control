@@ -31,13 +31,6 @@ class ConnectionApi(ApiBase):
             logger.error(f"Scan failed: {e}")
             return json.dumps([])
 
-    def get_capabilities(self) -> str:
-        client = self._client()   # method form (ConnectionApi shadows the base property)
-        if client is None:
-            return json.dumps({})
-        reply = client.device_call("get_capabilities", [], {}, target="device")
-        return json.dumps(reply.get("result", {}))
-
     # ── Daemon lifecycle ────────────────────────────────────────────────
 
     def _client(self):
