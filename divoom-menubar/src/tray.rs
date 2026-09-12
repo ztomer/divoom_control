@@ -52,7 +52,7 @@ impl Tray {
     /// then the fixed actions.
     /// Build + install the whole menu: active-device submenus with actionable
     /// channel switching and power controls, plus fixed actions.
-    fn rebuild(&self, devices: &[daemon::DeviceActivityItem], notif_running: bool) {
+    fn rebuild(&self, devices: &[daemon::DeviceView], notif_running: bool) {
         let menu = Menu::new();
         if devices.is_empty() {
             let _ = menu.append(&MenuItem::new("No active devices", false, None));
@@ -135,7 +135,7 @@ impl Tray {
             (
                 !snap.reachable,
                 snap.notifications_running,
-                snap.connection_state,
+                snap.connection_state(),
                 snap.devices,
             )
         } else {
@@ -152,13 +152,12 @@ impl Tray {
             } else {
                 daemon::device_activity_items()
             };
-            daemon::set_cached_snapshot(daemon::DaemonSnapshot {
-                reachable: !off,
-                connection_state: conn.clone(),
-                notifications_running: notif,
-                devices: acts.clone(),
-                last_event_at: Some(std::time::Instant::now()),
-            });
+            daemon::set_cached_snapshot(daemon::DaemonSnapshot::polled(
+                !off,
+                conn.as_deref(),
+                notif,
+                acts.clone(),
+            ));
             (off, notif, conn, acts)
         };
 

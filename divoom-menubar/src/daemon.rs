@@ -149,21 +149,98 @@ pub fn subscribe(_on_event: impl FnMut(Value), _should_stop: impl Fn() -> bool) 
     false
 }
 
+/// Everything the menubar knows about ONE panel. The single per-device
+/// struct (2026-09-12): the link state used to be one field on the whole
+/// snapshot, so four panels shared one "connected", and a status event for
+/// one of them overwrote the others'.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DeviceActivityItem {
+pub struct DeviceView {
     pub mac: String,
     pub name: String,
+    /// What the panel is showing (`clock`, `sysmon`, ...; `idle` when nothing).
     pub kind: String,
     pub preview: Option<String>,
+    /// The daemon's link state for this panel (`active`, `degraded`,
+    /// `disconnected`, ...) as last broadcast; `None` until one arrives.
+    pub link: Option<String>,
+}
+
+impl DeviceView {
+    fn new(mac: &str, name: &str) -> Self {
+        Self {
+            mac: mac.to_string(),
+            name: name.to_string(),
+            kind: String::new(),
+            preview: None,
+            link: None,
+        }
+    }
 }
 
 #[derive(Default, Clone, Debug)]
 pub struct DaemonSnapshot {
     pub reachable: bool,
-    pub connection_state: Option<String>,
     pub notifications_running: bool,
-    pub devices: Vec<DeviceActivityItem>,
+    pub devices: Vec<DeviceView>,
     pub last_event_at: Option<std::time::Instant>,
+    /// A status broadcast that named no device (the daemon's single-device
+    /// era, or a fleet-wide disconnect). Consulted only when no device
+    /// carries its own link state.
+    fleet_link: Option<String>,
+}
+
+impl DaemonSnapshot {
+    /// A snapshot assembled by polling (`device_status` + activity), for
+    /// when the subscribe stream is stale. The polled `connection_state`
+    /// names no device, so it lands as the fleet-wide word.
+    #[must_use]
+    pub fn polled(
+        reachable: bool,
+        connection_state: Option<&str>,
+        notifications_running: bool,
+        devices: Vec<DeviceView>,
+    ) -> Self {
+        Self {
+            reachable,
+            notifications_running,
+            devices,
+            last_event_at: Some(std::time::Instant::now()),
+            fleet_link: connection_state.map(str::to_string),
+        }
+    }
+
+    /// The one state the tray icon shows, DERIVED from the devices: any
+    /// degraded panel wins, else any active one, else the fleet-wide word.
+    #[must_use]
+    pub fn connection_state(&self) -> Option<String> {
+        let links: Vec<&str> = self
+            .devices
+            .iter()
+            .filter_map(|d| d.link.as_deref())
+            .collect();
+        if links.contains(&"degraded") {
+            return Some("degraded".to_string());
+        }
+        if let Some(l) = links.iter().find(|l| matches!(**l, "active" | "connected")) {
+            return Some((*l).to_string());
+        }
+        links
+            .first()
+            .map(|l| (*l).to_string())
+            .or_else(|| self.fleet_link.clone())
+    }
+
+    fn device_mut(&mut self, mac: &str) -> &mut DeviceView {
+        let idx = self
+            .devices
+            .iter()
+            .position(|d| d.mac.eq_ignore_ascii_case(mac))
+            .unwrap_or_else(|| {
+                self.devices.push(DeviceView::new(mac, "Divoom"));
+                self.devices.len() - 1
+            });
+        &mut self.devices[idx]
+    }
 }
 
 static SNAPSHOT: std::sync::Mutex<Option<DaemonSnapshot>> = std::sync::Mutex::new(None);
@@ -182,91 +259,116 @@ pub fn update_snapshot_from_event(ev: &Value) {
     snap.reachable = true;
     snap.last_event_at = Some(std::time::Instant::now());
 
-    if let Some(event_type) = ev
+    let Some(event_type) = ev
         .get("type")
         .or_else(|| ev.get("event"))
         .and_then(Value::as_str)
-    {
-        match event_type {
-            "status" => {
-                if let Some(st) = ev.get("state").and_then(Value::as_str) {
-                    snap.connection_state = Some(st.to_string());
-                } else if let Some(conn) = ev.get("connected").and_then(Value::as_bool) {
-                    snap.connection_state = Some(if conn {
+    else {
+        return;
+    };
+    match event_type {
+        "status" => snap.apply_status(ev),
+        "notification_status" => {
+            snap.notifications_running =
+                ev.get("running").and_then(Value::as_bool).unwrap_or(false);
+        }
+        "owned_devices" => snap.apply_owned_devices(ev),
+        "activity" => snap.apply_activity(ev),
+        _ => {}
+    }
+}
+
+impl DaemonSnapshot {
+    /// A `status` broadcast: per-device when it names a panel (`mac` or
+    /// `lan_ip`), fleet-wide when it names nobody (a disconnect-all).
+    fn apply_status(&mut self, ev: &Value) {
+        let state = ev.get("state").and_then(Value::as_str).map_or_else(
+            || {
+                ev.get("connected").and_then(Value::as_bool).map(|c| {
+                    if c {
                         "connected".to_string()
                     } else {
                         "disconnected".to_string()
-                    });
-                }
-            }
-            "notification_status" => {
-                snap.notifications_running =
-                    ev.get("running").and_then(Value::as_bool).unwrap_or(false);
-            }
-            "owned_devices" => {
-                if let Some(devs) = ev.get("devices").and_then(Value::as_array) {
-                    snap.devices = devs
-                        .iter()
-                        .filter_map(|d| {
-                            let mac = d
-                                .get("mac")
-                                .or_else(|| d.get("address"))
-                                .and_then(Value::as_str)?;
-                            let name = d
-                                .get("name")
-                                .and_then(Value::as_str)
-                                .unwrap_or("Divoom")
-                                .to_string();
-                            let kind = d
-                                .get("kind")
-                                .and_then(Value::as_str)
-                                .unwrap_or("")
-                                .to_string();
-                            let preview =
-                                d.get("preview").and_then(Value::as_str).map(str::to_string);
-                            Some(DeviceActivityItem {
-                                mac: mac.to_string(),
-                                name,
-                                kind,
-                                preview,
-                            })
-                        })
-                        .collect();
-                }
-            }
-            "activity" => {
-                if let Some(mac) = ev.get("mac").and_then(Value::as_str) {
-                    let name_opt = ev.get("name").and_then(Value::as_str);
-                    let kind = ev
-                        .get("kind")
-                        .and_then(Value::as_str)
-                        .unwrap_or("")
-                        .to_string();
-                    let preview = ev
-                        .get("preview")
-                        .and_then(Value::as_str)
-                        .map(str::to_string);
-                    if let Some(existing) = snap.devices.iter_mut().find(|d| d.mac == mac) {
-                        if let Some(n) = name_opt {
-                            if !n.is_empty() {
-                                existing.name = n.to_string();
-                            }
-                        }
-                        existing.kind = kind;
-                        if preview.is_some() {
-                            existing.preview = preview;
-                        }
-                    } else {
-                        snap.devices.push(DeviceActivityItem {
-                            mac: mac.to_string(),
-                            name: name_opt.unwrap_or("Divoom").to_string(),
-                            kind,
-                            preview,
-                        });
                     }
-                }
+                })
+            },
+            |st| Some(st.to_string()),
+        );
+        let Some(state) = state else { return };
+        let id = ev
+            .get("mac")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .or_else(|| {
+                ev.get("lan_ip")
+                    .and_then(Value::as_str)
+                    .map(|ip| format!("LAN:{ip}"))
+            });
+        if let Some(mac) = id {
+            // Per-device: only that panel's link moves.
+            self.device_mut(&mac).link = Some(state);
+        } else {
+            for d in &mut self.devices {
+                d.link = Some(state.clone());
             }
-            _ => {}
+            self.fleet_link = Some(state);
+        }
+    }
+
+    /// The daemon's full owned-device list replaces ours; a device that
+    /// carries no `state` keeps the link we already knew for it.
+    fn apply_owned_devices(&mut self, ev: &Value) {
+        let Some(devs) = ev.get("devices").and_then(Value::as_array) else {
+            return;
+        };
+        let previous = std::mem::take(&mut self.devices);
+        self.devices = devs
+            .iter()
+            .filter_map(|d| {
+                let mac = d
+                    .get("mac")
+                    .or_else(|| d.get("address"))
+                    .and_then(Value::as_str)?;
+                let text = |k: &str| d.get(k).and_then(Value::as_str).map(str::to_string);
+                Some(DeviceView {
+                    mac: mac.to_string(),
+                    name: text("name").unwrap_or_else(|| "Divoom".to_string()),
+                    kind: text("kind").unwrap_or_default(),
+                    preview: text("preview"),
+                    link: text("state").or_else(|| {
+                        previous
+                            .iter()
+                            .find(|x| x.mac.eq_ignore_ascii_case(mac))
+                            .and_then(|x| x.link.clone())
+                    }),
+                })
+            })
+            .collect();
+    }
+
+    fn apply_activity(&mut self, ev: &Value) {
+        let Some(mac) = ev.get("mac").and_then(Value::as_str) else {
+            return;
+        };
+        let name_opt = ev.get("name").and_then(Value::as_str);
+        let kind = ev
+            .get("kind")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        let preview = ev
+            .get("preview")
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        let existing = self.device_mut(mac);
+        if let Some(n) = name_opt {
+            if !n.is_empty() {
+                existing.name = n.to_string();
+            }
+        }
+        existing.kind = kind;
+        if preview.is_some() {
+            existing.preview = preview;
         }
     }
 }
@@ -276,14 +378,14 @@ pub fn set_cached_snapshot(snap: DaemonSnapshot) {
     *guard = Some(snap);
 }
 
-pub fn device_activity_items() -> Vec<DeviceActivityItem> {
+pub fn device_activity_items() -> Vec<DeviceView> {
     let Some(v) = request("get_device_activity", json!({})) else {
         return Vec::new();
     };
     let Some(map) = v.get("activity").and_then(|a| a.as_object()) else {
         return Vec::new();
     };
-    let mut items: Vec<DeviceActivityItem> = map
+    let mut items: Vec<DeviceView> = map
         .iter()
         .map(|(mac, d)| {
             let name = d
@@ -300,11 +402,15 @@ pub fn device_activity_items() -> Vec<DeviceActivityItem> {
                 .get("preview")
                 .and_then(|p| p.as_str())
                 .map(str::to_string);
-            DeviceActivityItem {
+            DeviceView {
                 mac: mac.clone(),
                 name,
                 kind,
                 preview,
+                link: d
+                    .get("state")
+                    .and_then(|st| st.as_str())
+                    .map(str::to_string),
             }
         })
         .collect();

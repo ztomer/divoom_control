@@ -127,8 +127,19 @@ fn subscribe_delivers_every_broadcast_event_in_order() {
     assert_eq!(*received.lock().unwrap(), events);
 }
 
+/// Both snapshot tests mutate the process-global SNAPSHOT: hold the lock
+/// and start from a clean one, or they interleave.
+fn fresh_snapshot() -> std::sync::MutexGuard<'static, ()> {
+    let guard = ENV_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    set_cached_snapshot(DaemonSnapshot::default());
+    guard
+}
+
 #[test]
 fn snapshot_updates_from_stream_events() {
+    let _serial = fresh_snapshot();
     let ev_status = json!({
         "type": "status",
         "connected": true,
@@ -137,7 +148,7 @@ fn snapshot_updates_from_stream_events() {
     update_snapshot_from_event(&ev_status);
     let snap = get_cached_snapshot().expect("snapshot should exist");
     assert!(snap.reachable);
-    assert_eq!(snap.connection_state.as_deref(), Some("connected"));
+    assert_eq!(snap.connection_state().as_deref(), Some("connected"));
 
     let ev_devices = json!({
         "type": "owned_devices",
@@ -165,4 +176,48 @@ fn snapshot_updates_from_stream_events() {
         snap3.devices[0].preview.as_deref(),
         Some("data:image/png;base64,yyy")
     );
+}
+
+#[test]
+fn link_state_is_per_device_and_the_icon_state_is_derived() {
+    let _serial = fresh_snapshot();
+    // Two panels; a status event naming one must not move the other, and
+    // the tray's single word follows the worst link.
+    update_snapshot_from_event(&json!({
+        "type": "owned_devices",
+        "devices": [
+            {"address": "AA:AA", "name": "Desk", "kind": "clock", "state": "active"},
+            {"address": "BB:BB", "name": "Shelf", "kind": "sysmon", "state": "active"}
+        ]
+    }));
+    let snap = get_cached_snapshot().unwrap();
+    assert_eq!(snap.devices.len(), 2);
+    assert!(snap
+        .devices
+        .iter()
+        .all(|d| d.link.as_deref() == Some("active")));
+    assert_eq!(snap.connection_state().as_deref(), Some("active"));
+
+    update_snapshot_from_event(&json!({
+        "type": "status", "state": "degraded", "connected": true, "mac": "bb:bb"
+    }));
+    let snap = get_cached_snapshot().unwrap();
+    let desk = snap.devices.iter().find(|d| d.mac == "AA:AA").unwrap();
+    let shelf = snap.devices.iter().find(|d| d.mac == "BB:BB").unwrap();
+    assert_eq!(
+        desk.link.as_deref(),
+        Some("active"),
+        "the other panel must not move"
+    );
+    assert_eq!(shelf.link.as_deref(), Some("degraded"));
+    assert_eq!(snap.connection_state().as_deref(), Some("degraded"));
+
+    // A fleet-wide disconnect names nobody and lands on everyone.
+    update_snapshot_from_event(&json!({"type": "status", "state": "idle", "connected": false}));
+    let snap = get_cached_snapshot().unwrap();
+    assert!(snap
+        .devices
+        .iter()
+        .all(|d| d.link.as_deref() == Some("idle")));
+    assert_eq!(snap.connection_state().as_deref(), Some("idle"));
 }

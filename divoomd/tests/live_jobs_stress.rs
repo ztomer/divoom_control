@@ -298,3 +298,27 @@ async fn a_link_drop_keeps_the_widget_and_a_reconnect_resumes_it_cleanly() {
     assert_eq!(d.live_jobs.list(Some("DEV_A")).await.len(), 1);
     stop_job(&d, "DEV_A", "sysmon").await;
 }
+
+#[tokio::test]
+async fn owned_devices_lists_the_whole_fleet_not_just_the_newcomer() {
+    // The GUI re-marks daemon ownership from this list on every event, so a
+    // list carrying only the newcomer un-owned every other panel on connect.
+    let d = daemon_with_mock("DEV_A").await;
+    let mut rx = d.subscribe().expect("daemon broadcasts");
+    daemon_with_mock_on(&d, "DEV_B").await;
+    let mut owned = None;
+    while let Ok(ev) = rx.try_recv() {
+        if ev["type"] == json!("owned_devices") {
+            owned = Some(ev);
+        }
+    }
+    let owned = owned.expect("owned_devices broadcast after the second connect");
+    let mut ids: Vec<String> = owned["devices"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["address"].as_str().unwrap().to_string())
+        .collect();
+    ids.sort();
+    assert_eq!(ids, vec!["DEV_A", "DEV_B"]);
+}

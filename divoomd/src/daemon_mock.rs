@@ -57,7 +57,7 @@ pub(crate) async fn cmd_mock_simulate_drop(daemon: &Daemon, req: &Request) -> Va
         o.insert("reason".into(), json!(reason.clone()));
     }
     let _ = daemon.tx.send(disconnected_evt);
-    let _ = daemon.tx.send(owned_devices_payload(None));
+    let _ = daemon.tx.send(owned_devices_payload(daemon).await);
 
     json!({"success": true, "connection_state": "disconnected", "reason": reason})
 }

@@ -53,20 +53,23 @@ pub(crate) fn status_payload(
 /// pushes the set on connect/disconnect instead of the UI polling
 /// `get_device_activity` every 4s. `devices` mirrors `get_device_activity`'s
 /// per-mac shape (`address`/`name`/`kind`/`state`) so the UI can reuse its merge.
-#[expect(
-    clippy::option_if_let_else,
-    reason = "the `Some` arm is a multi-line body, not an expression -- it decodes a reply, or builds a payload, before it decides. Hoisting it into a closure argument puts the substance of the function inside a call"
-)]
-pub(crate) fn owned_devices_payload(device_id: Option<&str>) -> Value {
-    let devices = match device_id {
-        Some(id) => vec![json!({
-            "address": id,
-            "name": "",
-            "kind": "idle",
+///
+/// 2026-09-12: built from the WHOLE fleet. It used to carry only the device
+/// that had just connected, so with four panels linked the event said the
+/// daemon owned one -- and the GUI, which re-marks ownership from this list,
+/// un-owned the other three on every connect.
+pub(crate) async fn owned_devices_payload(daemon: &Daemon) -> Value {
+    let mut devices = Vec::new();
+    for d in daemon.fleet.linked().await {
+        let act = d.activity().await;
+        devices.push(json!({
+            "address": d.id,
+            "name": act.as_ref().map_or("", |a| a.name.as_str()),
+            "kind": act.as_ref().map_or("idle", |a| a.kind.as_str()),
             "state": "active",
-        })],
-        None => vec![],
-    };
+            "preview": act.as_ref().and_then(|a| a.preview.clone()),
+        }));
+    }
     json!({ "type": "owned_devices", "devices": devices })
 }
 
@@ -243,7 +246,7 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
         let transport = Arc::new(DeviceTransport::Mock(mock_transport));
         daemon.fleet.adopt(mock_mac, transport).await;
         let _ = daemon.tx.send(status_payload(true, Some(mock_mac), None));
-        let _ = daemon.tx.send(owned_devices_payload(Some(mock_mac)));
+        let _ = daemon.tx.send(owned_devices_payload(daemon).await);
         return json!({"success":true,"connected":true,"connection_state":"connected","mac":mock_mac});
     }
 
@@ -262,7 +265,7 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
         let id_str = format!("LAN:{ip}");
         daemon.fleet.adopt(&id_str, transport).await;
         let _ = daemon.tx.send(status_payload(true, Some(&id_str), None));
-        let _ = daemon.tx.send(owned_devices_payload(Some(&id_str)));
+        let _ = daemon.tx.send(owned_devices_payload(daemon).await);
         return json!({"success":true,"connected":true,"connection_state":"connected","lan_ip":ip});
     }
     let id = req
@@ -285,7 +288,7 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
                 let transport = Arc::new(DeviceTransport::Spp(t));
                 daemon.fleet.adopt(&id, transport).await;
                 let _ = daemon.tx.send(status_payload(true, Some(&id), None));
-                let _ = daemon.tx.send(owned_devices_payload(Some(&id)));
+                let _ = daemon.tx.send(owned_devices_payload(daemon).await);
                 return json!({"success":true,"connected":true,"connection_state":"connected","mac":id});
             }
             Err(e) => return err_reply(&format!("connect SPP failed: {e}")),
@@ -304,7 +307,7 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
                 let transport = Arc::new(DeviceTransport::Ble(t));
                 daemon.fleet.adopt(&id, transport).await;
                 let _ = daemon.tx.send(status_payload(true, Some(&id), None));
-                let _ = daemon.tx.send(owned_devices_payload(Some(&id)));
+                let _ = daemon.tx.send(owned_devices_payload(daemon).await);
                 json!({"success":true,"connected":true,"connection_state":"connected","mac":id})
             }
             Err(e) => err_reply(&format!("connect failed: {e}")),
@@ -333,7 +336,7 @@ pub(crate) async fn cmd_disconnect(daemon: &Daemon) -> Value {
         }
     }
     let _ = daemon.tx.send(status_payload(false, None, None));
-    let _ = daemon.tx.send(owned_devices_payload(None));
+    let _ = daemon.tx.send(owned_devices_payload(daemon).await);
     json!({"success": true})
 }
 
