@@ -282,15 +282,15 @@ body.theme-light .arranger-node-image {
     flex-direction: column;
 }
 
+/* Defect #5 (2026-09-12): this panel is NOT a .channel-panel. It lives in
+   the Pixel Art tab, whose .pixel-subtab-content decides visibility, so it
+   is always laid out here -- the channel-navigation toggle used to hide it
+   for every kind but "design", which nothing sends any more. */
 #panel-design {
-    display: none;
+    display: flex;
     height: 100%;
     flex-direction: column;
     min-height: 0;
-}
-
-#panel-design.active {
-    display: flex;
 }
 
 #panel-design .custom-art-upload-section {

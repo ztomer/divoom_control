@@ -73,7 +73,7 @@
    (.custom-art-scroll-container, flex:1) takes the slack and the Push-to-Device
    button (flex-shrink:0) stays pinned at the bottom of the window instead of
    scrolling away — same pattern as the Monthly Best batch-sync bar. */
-#panel-design.active {
+#panel-design {
     display: flex;
     flex-direction: column;
     min-height: 0;

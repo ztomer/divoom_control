@@ -54,7 +54,7 @@ window.DivoomTemplates.pixelArt = `                <div class="tabs-section" sty
                     <div class="custom-art-layout">
                         <div class="card glass-card" style="flex:1; min-height:0; display:flex; flex-direction:column;">
                             <div class="card-body" style="flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden;">
-                                <div class="channel-panel active" id="panel-design">
+                                <div id="panel-design">
                                     <div class="custom-art-fixed">
                                         <div id="custom-art-page-tabs" class="custom-art-tabs">
                                             <button class="page-tab glow-btn compact" data-page="0">Page 1</button>

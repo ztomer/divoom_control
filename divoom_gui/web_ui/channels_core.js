@@ -9,16 +9,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // ── CHANNEL CARDS NAVIGATION (R15 §1+§7: `.channel-card` → `.tab-btn`) ──
     const channelCards = document.querySelectorAll(".tab-btn[data-channel]");
-    const channelPanels = document.querySelectorAll(".channel-panel");
+    // Scoped to the Channels tab on purpose (defect #5, 2026-09-12): the
+    // Custom Art panel in Pixel Art used to match a document-wide
+    // ".channel-panel" query and got hidden by every channel switch.
+    const channelPanels = document.querySelectorAll("#control-panel .channel-panels .channel-panel");
 
+    // The activity bus carries far more kinds than there are panels
+    // ("image", "sysmon", "custom", "hot", "playlist", ...). A kind with no
+    // panel is a no-op: the panel that is showing stays showing, matching
+    // the tab highlight, which the callers already only move `if (card)`.
+    // Toggling every panel off left the Clock tab lit over an empty card.
     function showChannelPanel(channel) {
-        channelPanels.forEach(p => p.classList.toggle("active", p.id === `panel-${channel}`));
-        if (channel === "design") {
-            window.loadCustomArtCacheGrid();
-        }
+        const target = `panel-${channel}`;
+        if (![...channelPanels].some(p => p.id === target)) return false;
+        channelPanels.forEach(p => p.classList.toggle("active", p.id === target));
         if (channel === "clock" && window.loadCloudClockTypes) {
             window.loadCloudClockTypes();
         }
+        return true;
     }
     window.showChannelPanel = showChannelPanel;
 
