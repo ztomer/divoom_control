@@ -168,7 +168,27 @@ fn now_playing_blocking(include_artwork: bool) -> Value {
             });
         }
         match nowplaying::current_track() {
-            Ok(None) => json!({"success": true, "available": true, "playing": false}),
+            Ok(None) => {
+                // Nothing is playing as far as macOS will tell us. Name the
+                // registered players, because the usual reason a playing app
+                // is invisible is another player holding the Now Playing
+                // session with nothing loaded (Music opened and stopped masked
+                // Kaset, 2026-09-12); the fix is on the user's side (quit or
+                // play in that app), so the UI must be able to say so.
+                let players: Vec<String> =
+                    nowplaying::players().into_iter().map(|p| p.name).collect();
+                let mut out = json!({"success": true, "available": true, "playing": false});
+                if !players.is_empty() {
+                    out["players"] = json!(players);
+                    out["hint"] = json!(format!(
+                        "Now Playing is idle. Registered: {}. A player that is open \
+                         but stopped can hold the session and hide another app -- \
+                         play in it or quit it.",
+                        players.join(", ")
+                    ));
+                }
+                out
+            }
             Ok(Some(track)) => track_to_json(&track, include_artwork),
             Err(e) => json!({
                 "success": false,

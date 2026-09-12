@@ -40,7 +40,9 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             if (info.playing === false || !info.track) {
                 if (nameEl) nameEl.textContent = "Nothing playing";
-                if (artistEl) artistEl.textContent = "";
+                // The daemon's hint names a stopped player that may be holding
+                // the Now Playing session (honest placeholder, with the fix).
+                if (artistEl) artistEl.textContent = info.hint || "";
                 if (coverEl) coverEl.src = "assets/pixoo.png";
                 if (devPrev) devPrev.style.display = "none";
                 return;

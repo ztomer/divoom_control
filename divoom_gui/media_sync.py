@@ -53,7 +53,10 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
                 return json.dumps({"available": False,
                                    "reason": reply.get("reason", "unavailable")})
             if not reply.get("playing", False):
-                return json.dumps({"available": True, "playing": False})
+                # Idle, but say WHY when the daemon can: a stopped player
+                # holding the Now Playing session hides a playing one.
+                return json.dumps({"available": True, "playing": False,
+                                   "hint": reply.get("hint", "")})
 
             preview = ""
             artwork = ""

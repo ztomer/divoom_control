@@ -197,3 +197,19 @@ mod host_tests {
         }
     }
 }
+
+#[test]
+fn an_empty_session_is_not_a_track() {
+    // Apple Music opened and stopped holds the Now Playing session with
+    // nothing in it; that is "nothing playing", not a nameless paused track.
+    let t = parse_helper_output(
+        r#"{"ok":true,"playing":true,"playback_rate":0,"title":null,"artist":null,"album":null}"#,
+    )
+    .unwrap();
+    assert!(t.is_none(), "an empty session must read as nothing playing");
+    // ...but a session with only artwork (a stream) is still something.
+    let t =
+        parse_helper_output(r#"{"ok":true,"playing":true,"playback_rate":1,"artwork_b64":"AAEC"}"#)
+            .unwrap();
+    assert!(t.is_some());
+}

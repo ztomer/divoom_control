@@ -141,14 +141,25 @@ pub fn parse_helper_output(line: &str) -> Result<Option<Track>, String> {
         .and_then(serde_json::Value::as_f64)
         .is_none_or(|r| r > 0.0);
 
-    Ok(Some(Track {
+    let track = Track {
         title: text("title"),
         artist: text("artist"),
         album: text("album"),
         source: "MediaRemote".to_string(),
         artwork,
         is_playing,
-    }))
+    };
+    // An EMPTY session is not a track. macOS hands the Now Playing session
+    // to the last app that touched it, and a player that was opened and
+    // never loaded anything (Apple Music, stopped) holds it with no title,
+    // no artist, no art and rate 0 -- while another app is audibly playing
+    // and cannot be read, because MediaRemote answers for one session only.
+    // Reporting that as "a paused track with no name" made the widget say
+    // nothing was playing at all (2026-09-12, Kaset masked by Music).
+    if track.title.is_none() && track.artist.is_none() && track.artwork.is_none() {
+        return Ok(None);
+    }
+    Ok(Some(track))
 }
 
 /// Query the current track. `Ok(None)` means nothing is playing.
