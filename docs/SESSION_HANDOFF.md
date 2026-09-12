@@ -21,6 +21,13 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-12 — test rearrangement Phase 3 SHIPPED (uncommitted): the premise was wrong, which is the finding.**
+  - `examples/` × 7 KEPT (shipped package docs, all calls verified live) + README stale-weather fix + new `check_examples.py` gate (in CI, calibrated, probe removed).
+  - `validate_devices.py`, `diagnose_ble.py`, 14/14 CLI subcommands KEPT with reasoning; mock rename skipped as churn.
+  - `scratch/` emptied (42 ignored files; regeneration proven by the dependent suite, 17/17).
+  - Arbiters green (census 0/0, gui-client empty, both parities), 89 CLI/mock tests pass.
+  - Next up: Phase 4 (full `ci_local.sh`, prune plan to git history, release decision).
+
 - **2026-09-12 — test rearrangement Phase 2 SHIPPED (uncommitted): `tests/` squatters cleared.**
   - Deleted trio + 2 superseded runners (self-referential only, verified by re-grep); `perf_*` → `scripts/` (11 perf tests pass explicitly, were never suite-collected).
   - Verification: collection 3182 before/after (delta 0), full suite 2946/236 identical to Phase 1, placement/scripts/file-size gates green.

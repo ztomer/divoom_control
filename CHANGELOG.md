@@ -55,6 +55,32 @@ gated Rust test modules. Full verification green (pytest 2946 passed /
 - Verified: suite collection 3182 before and after (delta exactly 0),
   full run 2946 passed / 236 skipped — identical to Phase 1.
 
+### Phase 3 — obsolete-Python audit: almost nothing was obsolete (2026-09-12)
+
+- **`examples/` × 7 KEPT.** The package is shipped and these are its
+  only usage docs; all 7 import cleanly and every facade call was
+  verified against live signatures. Fixed one stale doc on the way:
+  README claimed `divoom.weather` was unwired (R13-era) — it has been
+  wired since (`divoom.py:115`) — and now documents `set_weather.py`.
+- **New gate `tools/check_examples.py`.** Imports each example and
+  resolves every `divoom.<facade>.<method>` chain against the real
+  classes (wiring derived from `Divoom.__init__` itself, not duplicated).
+  Wired into `.gatesrc` + `tests.yml`, calibrated red with a probe
+  example (removed without residue). Out of scope by design: ctor
+  kwargs, external calls, data flow.
+- **`validate_devices.py`, `diagnose_ble.py`, all 14 `cli.py`
+  subcommands KEPT** with per-item reasoning in the plan file (actively
+  maintained / diagnostic without ownership / tested live handlers +
+  intentional error stubs).
+- **`scratch/` emptied** (42 git-ignored files). Pre-removal finding:
+  it is a runtime dir, and one test round-trips `stocks_16.png` through
+  it — safety proven by emptying and watching that suite regenerate
+  exactly what it needs (17/17 pass).
+- **`mock_device_tests*` rename skipped** — names carry their reason;
+  renaming tested files for aesthetics is churn.
+- Arbiters green throughout: census 0/0, gui-is-client empty, both
+  parity gates agree; 89 CLI/mock/census tests pass.
+
 ## v0.35.4 — Virtual Wall Simplification, Spatial Bench Alignment & Channel Persistence (2026-09-12)
 
 ### Architecture & Added

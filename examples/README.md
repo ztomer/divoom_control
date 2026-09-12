@@ -13,18 +13,14 @@ BLE is used.
 | `push_animated_gif.py`   | Decode a GIF frame-by-frame, push as 0x8B animation. |
 | `set_radio.py`           | Tune FM radio (Tivoo / Tivoo Max / Timoo / Ditoo only). |
 | `set_alarm.py`           | Set a single alarm that fires every day at HH:MM. |
+| `set_weather.py`        | Set temperature + icon on the weather channel (`--temperature`, `--weather`). |
 | `auto_connect.py`        | Long-lived watcher: connect to a known device whenever it appears in range. |
 
-### What's *not* in here
+### Weather
 
-A weather / temperature example was planned for R13 §2 but couldn't be
-written honestly: `divoom_lib/system/temp_weather.py` defines a
-`TempWeatherCommand` class (the 0x5F command) but it is **not wired to
-the Divoom facade** — `divoom.weather` doesn't exist as an attribute.
-Adding it is a 3-line follow-up (mirror the `Music`/`Radio` wiring in
-`divoom.py:106-107`) and is tracked in the R13 §2 close-out. The
-`Capabilities.has_weather` flag exists in the table but the public
-method to call is missing.
+`set_weather.py` drives `divoom.weather.set(temperature, weather_type)`
+(the 0x5F command, wired on the `Divoom` facade). Weather types: clear,
+cloudy, thunderstorm, rain, snow, fog.
 
 A `divoom-control` CLI lives at `divoom_lib/cli.py` and is the
 scriptable counterpart to these examples. After installing the

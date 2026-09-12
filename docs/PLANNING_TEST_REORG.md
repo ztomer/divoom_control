@@ -195,20 +195,51 @@ collected 0 tests, so the deletion delta must be exactly 0).
 
 ### Phase 3 — Obsolete-Python retirement (per-item, slow)
 
+Status 2026-09-12: SHIPPED, with the premise corrected. Evidence showed
+there was almost nothing to retire — the "obsolete Python" was
+usage-patterns that turned out to be live. Per-item dispositions:
+
+1. `examples/` × 7 — KEEP. The package is shipped (`pyproject`
+   `divoom-control` + console script) and the README presents these as
+   its public usage docs. All 7 import side-effect free; every facade
+   call verified against live signatures (`show_image`,
+   `set_radio_frequency`, 7-positional `set_alarm`, `weather.set`,
+   capabilities flags, discovery fn). One stale doc fixed on the way:
+   README claimed `divoom.weather` was unwired (R13-era); `divoom.py:115`
+   wires it, and `set_weather.py` was already using it — README now
+   documents `set_weather.py` instead. New gate `tools/check_examples.py`
+   pins the docs to the code (import each example + resolve every
+   `divoom.<facade>.<method>` chain against the real classes, wiring
+   derived from `Divoom.__init__`'s own assignments): step in local CI,
+   mirrored in `tests.yml`, calibrated red with a probe example and
+   removed without residue. Out of scope by design: ctor kwargs,
+   external-lib calls, data flow (documented in the gate).
+2. Old-path scripts — KEEP both. `validate_devices.py` (356 lines) is
+   actively maintained (carries its own R71 note), three modes incl.
+   rigorous round-trips, already covered by `check_scripts.py`'s
+   api-method check — which was literally built for it.
+   `diagnose_ble.py` is a documented diagnostic that never owns a
+   device. No change.
+3. `divoom_lib/cli.py` subcommand audit — KEEP all 14. 11 live facade
+   handlers (covered by `test_cli*.py`, 89 pass), `mcp-server` (thin
+   daemon client), `daemon`/`menubar` intentional error stubs with
+   actionable messages (documented pattern since R66). No change.
+4. `scratch/` — 42 ignored files removed (`rm -rf` + `mkdir`; invisible
+   to git). Pre-removal finding that changed the shape: `scratch/` is a
+   RUNTIME dir (`widget_frames.py` mkdirs it; `media_source` +
+   `monthly_best_daemon` write through it) and
+   `test_gui_api_wall_media.py:284` round-trips `stocks_16.png` through
+   it — so a blanket "unreferenced, rm" was wrong; proven safe instead
+   by emptying it and watching that suite regenerate exactly what it
+   needs (17/17 pass, `stocks_16.png` + `stocks_32.png` recreated).
+5. `mock_device_tests*` topical rename — SKIPPED. The numbered names
+   carry their raison d'être in-file (500-line cap split); renaming
+   tested Rust files for aesthetics alone is churn. Revisit on the next
+   split.
+
 Arbiters stay green throughout: `capability_census.py`,
 `check_gui_is_a_client.py`, both parity gates. They define what
 "obsolete" may not touch.
-
-1. `examples/` × 7 — run each against the daemon model; port to
-   daemon-socket examples or delete with a changelog note.
-2. Old-path scripts — port to daemon client or retire.
-3. `divoom_lib/cli.py` subcommand audit — keep / kill / mark
-   reference-only per subcommand.
-4. `scratch/` — confirm unreferenced, `rm` (untracked, no commit).
-5. Optional: topical rename of the `mock_device_tests*` split.
-
-Rule: additive-before-subtractive — the replacement is proven working
-before the old file goes.
 
 ### Phase 4 — Ship
 

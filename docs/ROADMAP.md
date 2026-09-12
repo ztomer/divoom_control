@@ -243,8 +243,7 @@ cfgs, fmt, ci_local 26/26. **Phase 2 SHIPPED 2026-09-12**: dead trio
 deleted (self-referential only), `perf_*` benchmarks moved to `scripts/`
 (their 11 `test_perf_*` functions were never suite-collected; all pass
 explicitly from the new location). Suite 3182 collected before and
-after, full run identical at 2946/236. **Still open**: Phase 3
-(obsolete-Python retirement), Phase 4 (ship + prune the plan).
+after, full run identical at 2946/236. **Phase 3 SHIPPED 2026-09-12** — with the premise corrected: almost nothing was obsolete. `examples/` × 7 KEPT (shipped package's only usage docs; every facade call verified live; stale R13-era README weather paragraph fixed) + new `tools/check_examples.py` gate pinning docs to code (in CI, calibrated). `validate_devices.py`, `diagnose_ble.py`, all 14 `cli.py` subcommands KEPT with recorded reasoning. `scratch/` emptied (42 ignored files; proven safe — runtime dir self-heals, dependent test regenerates). Mock-test rename skipped (churn without value). **Still open**: Phase 4 (ship + prune the plan).
 
 Census summary (retained for the open phases): `divoom_lib` itself is
 NOT dead — census is 0 DIRECT / 0 WRAPPED and Python is canonical for

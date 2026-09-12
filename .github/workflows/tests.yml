@@ -58,6 +58,8 @@ jobs:
         run: python3 tools/check_scripts.py
       - name: Tests live in tests/, Rust test modules are cfg-gated (Phase 1)
         run: python3 tools/check_test_placement.py
+      - name: examples/ documents a facade that still exists (Phase 3)
+        run: python3 tools/check_examples.py
       - name: Positional args are not read from the compacted list
         run: python3 tools/check_positional_args.py
       - name: Every client-socket write goes through the WRITE_TIMEOUT seam
