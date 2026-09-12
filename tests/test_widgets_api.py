@@ -139,3 +139,24 @@ def test_get_weather_without_a_daemon_is_an_error_not_a_reading(loop_thread):
     result = _api_with_client(loop_thread, None).get_weather()
     assert result["provider"] == "error"
     assert "error" in result
+
+
+def test_get_weather_without_a_city_says_unknown_never_here(loop_thread, monkeypatch):
+    """The live-session defect: the card read "here" instead of a city.
+
+    That string was a hardcoded fallback for "daemon reply has no location
+    AND no local override resolved one". A placeholder must never
+    masquerade as the user's location — say it is unknown.
+    """
+    import divoom_lib.weather_provider as wp
+
+    monkeypatch.setattr(wp, "resolve_location", lambda _explicit: "")
+    client = _FakeWeatherClient({
+        "success": True, "temperature_c": 17,
+        "weather_type": int(WeatherType.Clear),
+    })
+    result = _api_with_client(loop_thread, client).get_weather()
+
+    assert result["provider"] == "daemon"
+    assert result["location"] == "unknown"
+    assert result["location"] != "here"

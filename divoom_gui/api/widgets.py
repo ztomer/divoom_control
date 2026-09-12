@@ -48,7 +48,12 @@ class WidgetsApi(ApiBase):
             return {
                 "temperature_c": reply.get("temperature_c", 0),
                 "weather_type": reply.get("weather_type", int(WeatherType.Clear)),
-                "location": reply.get("location") or location or "here",
+                # The daemon reports the city it resolved (from wttr.in
+                # nearest_area); the local value is the explicit override
+                # when one is set. If neither names a city the honest
+                # answer is that it is unknown — the hardcoded "here" this
+                # replaced masqueraded as a location.
+                "location": reply.get("location") or location or "unknown",
                 "provider": "daemon",
                 "fetched_at": time.time(),
             }

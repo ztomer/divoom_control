@@ -92,10 +92,16 @@ pub fn code_to_type(code: i32) -> WeatherType {
 }
 
 /// A weather reading.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WeatherInfo {
     pub temperature_c: i8,
     pub weather: WeatherType,
+    /// The city wttr.in resolved — from `nearest_area`, NOT the request.
+    /// Empty only when the response carries no area (or a caller built the
+    /// struct by hand). The GUI used to render a hardcoded "here" whenever
+    /// the daemon echoed the request's (empty) location back; that fallback
+    /// chain ends here instead.
+    pub location: String,
 }
 
 /// Parse wttr.in's `?format=j1` response.
@@ -118,9 +124,24 @@ pub fn parse_wttr(body: &serde_json::Value) -> Option<WeatherInfo> {
         .and_then(|v| v.as_str())
         .and_then(|s| s.parse::<i32>().ok())
         .unwrap_or(113);
+    // The resolved city: wttr.in geolocates an empty request by IP and
+    // reports what it picked here. Absent (a hand-built fixture, an odd
+    // provider response) means unknown, never a placeholder.
+    let location = body
+        .get("nearest_area")
+        .and_then(|a| a.as_array())
+        .and_then(|a| a.first())
+        .and_then(|area| area.get("areaName"))
+        .and_then(|n| n.as_array())
+        .and_then(|n| n.first())
+        .and_then(|n| n.get("value"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
     Some(WeatherInfo {
         temperature_c: temp_c,
         weather: code_to_type(code),
+        location,
     })
 }
 
@@ -163,6 +184,26 @@ mod tests {
         let info = parse_wttr(&body).expect("a reading");
         assert_eq!(info.temperature_c, 21);
         assert_eq!(info.weather, WeatherType::Rain);
+    }
+
+    #[test]
+    fn parses_the_resolved_city_from_nearest_area() {
+        // The GUI rendered a hardcoded "here" because the daemon echoed the
+        // request's (empty) location instead of the city wttr.in resolved.
+        // An explicit area wins at the caller; the parse reports the rest.
+        let body = json!({
+            "current_condition": [{"temp_C": "21", "weatherCode": "113"}],
+            "nearest_area": [{"areaName": [{"value": "Tel Aviv"}]}],
+        });
+        let info = parse_wttr(&body).expect("a reading");
+        assert_eq!(info.location, "Tel Aviv");
+    }
+
+    #[test]
+    fn a_missing_area_is_unknown_not_a_placeholder() {
+        let body = json!({"current_condition": [{"temp_C": "21", "weatherCode": "113"}]});
+        let info = parse_wttr(&body).expect("a reading");
+        assert_eq!(info.location, "");
     }
 
     #[test]

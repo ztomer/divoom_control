@@ -39,7 +39,10 @@ pub async fn cmd_weather(args: &Value) -> Value {
             "success": true,
             "temperature_c": info.temperature_c,
             "weather_type": info.weather as u8,
-            "location": location,
+            // An explicit request wins (a saved override names the city the
+            // user picked); otherwise report the city the provider resolved,
+            // never echo an empty request back and let the caller invent one.
+            "location": if location.is_empty() { info.location } else { location },
         }),
         // Say WHY. A weather card that silently shows nothing is the exact
         // dead-but-green state this round has been about.

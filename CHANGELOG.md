@@ -4,6 +4,32 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## Unreleased — user-defect fixes (2026-09-12, from triage `ba62ba2`)
+
+### Fixed — weather card said "here" instead of the city (#4)
+
+- **Root cause ran both sides.** `parse_wttr` discarded wttr.in's
+  `nearest_area` and `cmd_weather` echoed the request's (empty)
+  location back, so the common no-override case fell through to a
+  hardcoded `"here"` in the GUI — a placeholder masquerading as the
+  user's location.
+- **Daemon** (`divoomd/src/weather.rs`, `divoomd/src/now_playing.rs`):
+  `WeatherInfo` gains `location: String` parsed from
+  `nearest_area[0].areaName[0].value` (absent means unknown, never a
+  placeholder); the reply prefers an explicit request location, else
+  the resolved city. `Copy` dropped from the struct (single-move at
+  both call sites; clippy clean on both cfgs).
+- **GUI** (`divoom_gui/api/widgets.py`): the fallback is now
+  `"unknown"`.
+- **Tests, both proven red-then-green**: Rust
+  `parses_the_resolved_city_from_nearest_area` +
+  `a_missing_area_is_unknown_not_a_placeholder`; Python
+  `test_get_weather_without_a_city_says_unknown_never_here`.
+  Full matrices green (cargo both, clippy both, fmt); 46
+  weather-adjacent pytest pass; weather parity + census arbiters green.
+- Live confirmation still wanted: card shows the real city with no
+  override set.
+
 ## Unreleased — test rearrangement Phase 1 (2026-09-12)
 
 Plan: `docs/PLANNING_TEST_REORG.md`. One place for tests to live, plus

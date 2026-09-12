@@ -99,6 +99,7 @@ pub mod tests {
             WeatherInfo {
                 temperature_c: 21,
                 weather: WeatherType::Clear,
+                location: String::new(),
             },
             true,
         )

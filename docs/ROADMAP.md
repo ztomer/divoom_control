@@ -226,14 +226,15 @@ a live confirmation before a fix ships).
    fails, and the user clicks again. When state resyncs, it works.
    I.e. the flaky half of #3 IS #6. Fix #6 first, then measure what
    slowness remains before touching the queue.
-4. **Weather "here" — ROOT CAUSE FOUND (no device needed).**
-   `WidgetsApi.get_weather` (`divoom_gui/api/widgets.py:42`):
-   `"location": reply.get("location") or location or "here"`. When the
-   daemon reply carries no location AND local `resolve_location` comes
-   back empty, the hardcoded placeholder leaks into the UI — an
-   "honest placeholders" violation (the error path below it already
-   uses `"unavailable"`). Fix shape: honest fallback string + find why
-   location resolves empty (daemon reply vs local resolver).
+4. **Weather "here" — FIXED 2026-09-12 (needs a live glance).**
+   Root cause ran both sides: `parse_wttr` discarded `nearest_area`
+   and `cmd_weather` echoed the request's (empty) location, so the
+   common no-override case fell through to a hardcoded `"here"` in
+   `WidgetsApi.get_weather`. Fix: `WeatherInfo.location` parsed from
+   `nearest_area` (`weather.rs`), daemon prefers the explicit request
+   else the resolved city (`now_playing.rs`), GUI fallback is
+   `"unknown"` (`widgets.py`). Both new tests proven red-then-green.
+   Still to confirm live: card shows the real city with no override set.
 5. **Clock/custom-art intermittently empty — HYPOTHESIS (race).**
    `_channelPreviewSVG`'s clock branch always returns a face
    (`channel_preview.js:89-97`), so the blank is downstream: the

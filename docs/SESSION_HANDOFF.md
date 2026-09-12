@@ -21,7 +21,10 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
-- **2026-09-12 — user-defect triage (code inspection, no device): all six named, roadmap updated.**
+- **2026-09-12 — defect #4 FIXED (uncommitted): weather card "here" → resolved city / honest "unknown".**
+  - Daemon parses `nearest_area` into `WeatherInfo.location`, reply prefers explicit request else resolved city; GUI fallback `"here"` → `"unknown"`. `Copy` dropped (unneeded).
+  - Both new tests proven red-then-green; cargo/clippy/fmt both matrices clean; 46 weather pytest pass; parity + census green.
+  - Live confirmation wanted (real city, no override). Next: #1 (one-rule CSS) per triage order.
   - #1 cover blur = missing `pixelated` on the cover img (device-preview img has it); one-rule fix class.
   - #2 frozen bench = corroborates the existing GIF-playback OPEN item; no new mechanism.
   - #3 channel flakiness splits: slowness (queue serialization, remeasure later) + multi-click (IS #6 — `requireDevice` toasts while `appConnected` desynced).
