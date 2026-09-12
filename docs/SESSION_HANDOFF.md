@@ -21,18 +21,20 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
-- **2026-09-12 — defect #1 FIXED (uncommitted): cover img renders pixelated; sibling sweep clean.**
+- **2026-09-12 — defect #1 FIXED as `424f54e`: cover img renders pixelated; sibling sweep clean.**
   - One CSS rule (`widgets_extra.css:96`); cascade verified, element-ID tests + emoji gate green. Visual confirmation wants music playing live. Next: #6 (structural) per triage order.
+- **2026-09-12 — defect #4 FIXED as `090ee0c`: weather card "here" → resolved city / honest "unknown".**
   - Daemon parses `nearest_area` into `WeatherInfo.location`, reply prefers explicit request else resolved city; GUI fallback `"here"` → `"unknown"`. `Copy` dropped (unneeded).
   - Both new tests proven red-then-green; cargo/clippy/fmt both matrices clean; 46 weather pytest pass; parity + census green.
-  - Live confirmation wanted (real city, no override). Next: #1 (one-rule CSS) per triage order.
+  - Live confirmation wanted (real city, no override).
+- **2026-09-12 — user-defect triage as `ba62ba2` (code inspection, no device): all six named.**
   - #1 cover blur = missing `pixelated` on the cover img (device-preview img has it); one-rule fix class.
   - #2 frozen bench = corroborates the existing GIF-playback OPEN item; no new mechanism.
   - #3 channel flakiness splits: slowness (queue serialization, remeasure later) + multi-click (IS #6 — `requireDevice` toasts while `appConnected` desynced).
   - #4 "here" = hardcoded fallback in `WidgetsApi.get_weather` (`or "here"`); honest-placeholder violation, one-line + resolver investigation.
   - #5 intermittent empty = suspected frame-cache load race (clock branch never returns blank); needs instrumentation, not staring.
   - #6 connecting-stuck = three state writers, no funnel; heartbeat only heals downward. Load-bearing fix, unblocks #3b.
-  - Proposed order: #4 → #1 → #6 → #3a-remeasure → #5 → #2. Fixes NOT started — each needs live confirmation first.
+  - Proposed order: #4 → #1 → #6 → #3a-remeasure → #5 → #2.
 
 - **2026-09-12 — test rearrangement Phase 4 SHIPPED as 0a5cd70: full `ci_local.sh` 28/28 green, plan pruned to git history.**
   - Incidental dylib rebuild from verification runs restored (no C changes → no binary diff; native tests re-pass).
