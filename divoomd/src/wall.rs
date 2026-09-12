@@ -7,8 +7,11 @@ use std::sync::Arc;
 
 use crate::daemon::{Daemon, DeviceTransport};
 
+mod bounds;
 mod cmds;
 mod dispatch;
+
+use bounds::WallBounds;
 pub(crate) use cmds::{cmd_get_topology, cmd_set_topology, cmd_wall_configure};
 
 #[derive(Clone, Debug)]
@@ -59,44 +62,23 @@ impl DivoomWall {
         existing: &HashMap<String, Arc<DeviceTransport>>,
     ) -> Result<Self, String> {
         let is_free_form = configs.iter().any(|c| c.width.is_some());
-        let (min_x, min_y, total_width, total_height, grid_unit_size);
+        let WallBounds {
+            min_x,
+            min_y,
+            total_width,
+            total_height,
+            grid_unit_size,
+        } = WallBounds::from_configs(configs);
 
-        if is_free_form {
-            min_x = configs.iter().map(|c| c.x).min().unwrap_or(0);
-            min_y = configs.iter().map(|c| c.y).min().unwrap_or(0);
-            let max_x = configs
-                .iter()
-                .map(|c| c.x + c.width.unwrap_or(120))
-                .max()
-                .unwrap_or(0);
-            let max_y = configs
-                .iter()
-                .map(|c| c.y + c.height.unwrap_or(120))
-                .max()
-                .unwrap_or(0);
-            total_width = max_x - min_x;
-            total_height = max_y - min_y;
-            grid_unit_size = configs.first().map_or(16, |c| c.size);
-        } else {
-            let mut slots_across = 0;
-            let mut slots_down = 0;
-            for cfg in configs {
-                if cfg.x + 1 > slots_across {
-                    slots_across = cfg.x + 1;
-                }
-                if cfg.y + 1 > slots_down {
-                    slots_down = cfg.y + 1;
-                }
-            }
-            grid_unit_size = configs.first().map_or(16, |c| c.size);
-            total_width = slots_across * grid_unit_size;
-            total_height = slots_down * grid_unit_size;
-            min_x = 0;
-            min_y = 0;
-        }
-
+        // The CoreBluetooth central is created LAZILY, only once a slot
+        // actually needs a fresh radio connection. Creating it up front made
+        // a wall built entirely from already-connected (or mock) transports
+        // spin up CoreBluetooth for nothing -- and in a process without a
+        // Bluetooth grant macOS answers that with SIGABRT, which is how the
+        // integration test died in a terminal that lacked the grant while
+        // passing in one that had it.
         #[cfg(feature = "ble")]
-        let central = daemon.central().await.ok();
+        let mut central: Option<crate::central::BleCentral> = None;
 
         let mut results = Vec::new();
         for cfg in configs {
@@ -106,6 +88,10 @@ impl DivoomWall {
                 let dev = existing_dev.clone();
                 results.push(tokio::spawn(async move { (cfg_clone, Ok(dev)) }));
             } else {
+                #[cfg(feature = "ble")]
+                if central.is_none() {
+                    central = daemon.central().await.ok();
+                }
                 #[cfg(feature = "ble")]
                 if let Some(ref c) = central {
                     let c_clone = c.clone();
