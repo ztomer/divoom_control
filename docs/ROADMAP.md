@@ -199,29 +199,67 @@ are not restated.
 
 ### OPEN — user-reported defects, filed 2026-09-12
 
-Filed verbatim from a live session against v0.35.4. None diagnosed yet;
-each needs reproduction + root-cause before a fix.
+Filed verbatim from a live session against v0.35.4. Triaged 2026-09-12
+(code inspection only — no device in the triage session, so each needs
+a live confirmation before a fix ships).
 
-1. **Live cover art blurry** — the original album art renders blurry (device
-   shows it fine, so the blur is in our fetch/render path, not the panel).
-2. **Bench previews frozen while device animates** — animations are not
-   animated in the bench, and album-art previews do not change, while the
-   device itself plays them correctly. Preview-only defect; suspect the
-   `DisplayPreview` frame path (frozen GIF frame / stale cache / unbound
-   job) rather than the daemon streamer.
-3. **Channel switching slow / flaky** — channels are very slow and weird to
-   switch, sometimes requiring multiple UI clicks to take effect.
-   Investigate the full path (click handler → `switch_channel` RPC →
-   per-device queue → `activity` broadcast → preview rehydration).
-4. **Weather shows "here" instead of the actual location** — the weather
-   widget labels the location "here" rather than the resolved city.
-5. **Clock channel and custom art intermittently empty** — Channels → Clock
-   renders empty (not always); custom art shows the same symptom. Note the
-   intermittency when reproducing.
-6. **UI stuck on "connecting" while daemon is connected** — daemon reports
-   connected but the UI still says connecting. The whole connection-state
-   flow (daemon → `subscribe` broadcast → `gui_main.py` → `DivoomState` /
-   banner) needs serious investigation, not a one-line patch.
+1. **Live cover art blurry — MECHANISM FOUND.** `get_current_track_info`
+   serves the device-size frame (16×16) as `info.preview`
+   (`media_sync.py:_artwork_preview`); BOTH `#music-cover-img` and
+   `#music-device-preview` get that PNG (`widgets_music.js:63-67`).
+   The device-preview img has `image-rendering: pixelated`
+   (`widgets_extra.css:119-127`); the cover img
+   (`.music-previews-container .music-cover-preview img`) does NOT —
+   bilinear upscale of 16px to ~128px. Same class as the v0.35.1
+   gallery fix. Fix shape: one CSS rule. Confirm on device that the
+   cover is meant to show the device frame (not the original art).
+2. **Bench previews frozen — CORROBORATES the existing OPEN item.**
+   Symptom matches "Animated Image Previews (`DisplayPreview` GIF
+   Playback)" exactly (WebKit `drawImage` freezes GIF at frame 0;
+   device fine). No new mechanism; fix there covers this.
+3. **Channel switching slow/flaky — TWO MECHANISMS, one cross-linked.**
+   (a) Slow: `switch_channel` RPC serializes behind in-flight streamer
+   frames on the per-device queue (`QueuePermit`) — latency, not loss.
+   (b) Multi-click: `requireDevice()` gates on `DivoomState.appConnected`
+   (`app_globals.js:39-45`) and toasts "Connect a device first" when it
+   is false — so every click taken while #6's desync holds visibly
+   fails, and the user clicks again. When state resyncs, it works.
+   I.e. the flaky half of #3 IS #6. Fix #6 first, then measure what
+   slowness remains before touching the queue.
+4. **Weather "here" — ROOT CAUSE FOUND (no device needed).**
+   `WidgetsApi.get_weather` (`divoom_gui/api/widgets.py:42`):
+   `"location": reply.get("location") or location or "here"`. When the
+   daemon reply carries no location AND local `resolve_location` comes
+   back empty, the hardcoded placeholder leaks into the UI — an
+   "honest placeholders" violation (the error path below it already
+   uses `"unavailable"`). Fix shape: honest fallback string + find why
+   location resolves empty (daemon reply vs local resolver).
+5. **Clock/custom-art intermittently empty — HYPOTHESIS (race).**
+   `_channelPreviewSVG`'s clock branch always returns a face
+   (`channel_preview.js:89-97`), so the blank is downstream: the
+   `DisplayPreview` frame-cache path (`mode === "frame"` blitting
+   before the async SVG/img `onload` resolves). Intermittency fits a
+   load race, not a logic branch. Same suspected race for custom-art
+   thumbnails (`assignToSlot` mirror before load). Confirm with
+   instrumentation (log blits with empty cache), not by staring.
+6. **UI stuck on "connecting" — CLASS NAMED (three writers, no funnel).**
+   The dot/`appConnected` state has three writers
+   (`connection_events.js`): the `connectDevice` click flow (sets
+   `connecting`, settles on promise/watchdog), the `onDaemonEvent`
+   status path (sets `appConnected = connected && !dropped`), and the
+   `refreshConnectionState` heartbeat — which early-returns unless
+   `appConnected` is ALREADY true, i.e. it can only ever heal
+   downward. Stuck-`connecting` paths: bridge missing at click (dot
+   class set BEFORE the `pywebview.api` guard, nothing clears it), or
+   a hung `connect_single_device` (the R57 watchdog exists because the
+   daemon sometimes never answers connect). Fix shape per the
+   bypassed-funnel rule: ONE funnel with the daemon status event as
+   authoritative; heartbeat must heal upward too. This is the load-bearing
+   fix — #3b resolves with it.
+
+Proposed fix order: #4 (one-line, provable without hardware) → #1
+(one-rule CSS, needs a device glance) → #6 (structural; unblocks #3b)
+→ #3a-remeasure → #5 (instrument first) → #2 (already planned).
 
 ### SHIPPED — code rearrangement (2026-09-12, four phases in three commits)
 

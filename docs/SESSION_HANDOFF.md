@@ -21,26 +21,35 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
-- **2026-09-12 — test rearrangement Phase 4 SHIPPED (uncommitted): full `ci_local.sh` 28/28 green, plan pruned to git history.**
+- **2026-09-12 — user-defect triage (code inspection, no device): all six named, roadmap updated.**
+  - #1 cover blur = missing `pixelated` on the cover img (device-preview img has it); one-rule fix class.
+  - #2 frozen bench = corroborates the existing GIF-playback OPEN item; no new mechanism.
+  - #3 channel flakiness splits: slowness (queue serialization, remeasure later) + multi-click (IS #6 — `requireDevice` toasts while `appConnected` desynced).
+  - #4 "here" = hardcoded fallback in `WidgetsApi.get_weather` (`or "here"`); honest-placeholder violation, one-line + resolver investigation.
+  - #5 intermittent empty = suspected frame-cache load race (clock branch never returns blank); needs instrumentation, not staring.
+  - #6 connecting-stuck = three state writers, no funnel; heartbeat only heals downward. Load-bearing fix, unblocks #3b.
+  - Proposed order: #4 → #1 → #6 → #3a-remeasure → #5 → #2. Fixes NOT started — each needs live confirmation first.
+
+- **2026-09-12 — test rearrangement Phase 4 SHIPPED as 0a5cd70: full `ci_local.sh` 28/28 green, plan pruned to git history.**
   - Incidental dylib rebuild from verification runs restored (no C changes → no binary diff; native tests re-pass).
   - Whole round: `5d92643` (Phase 1) → `3f37b6c` (Phase 2) → `245c961` (Phase 3) → this commit (Phase 4). Suite end state 2946/236, collection 3182.
   - Release decision is OPEN and belongs to the user: cutting a release needs push + green GitHub CI on the tagged commit (`scripts/release.sh` preflight). Nothing pushed, nothing tagged.
   - Next up: the six user-reported defects + connection-state flow in the roadmap (untouched by this round).
 
-- **2026-09-12 — test rearrangement Phase 3 SHIPPED (uncommitted): the premise was wrong, which is the finding.**
+- **2026-09-12 — test rearrangement Phase 3 SHIPPED as 245c961: the premise was wrong, which is the finding.**
   - `examples/` × 7 KEPT (shipped package docs, all calls verified live) + README stale-weather fix + new `check_examples.py` gate (in CI, calibrated, probe removed).
   - `validate_devices.py`, `diagnose_ble.py`, 14/14 CLI subcommands KEPT with reasoning; mock rename skipped as churn.
   - `scratch/` emptied (42 ignored files; regeneration proven by the dependent suite, 17/17).
   - Arbiters green (census 0/0, gui-client empty, both parities), 89 CLI/mock tests pass.
   - Next up: Phase 4 (full `ci_local.sh`, prune plan to git history, release decision).
 
-- **2026-09-12 — test rearrangement Phase 2 SHIPPED (uncommitted): `tests/` squatters cleared.**
+- **2026-09-12 — test rearrangement Phase 2 SHIPPED as 3f37b6c: `tests/` squatters cleared.**
   - Deleted trio + 2 superseded runners (self-referential only, verified by re-grep); `perf_*` → `scripts/` (11 perf tests pass explicitly, were never suite-collected).
   - Verification: collection 3182 before/after (delta 0), full suite 2946/236 identical to Phase 1, placement/scripts/file-size gates green.
   - Procedural note: `git stash` + `pop` around staged renames split the index (repaired with `git add -A`, re-verified) — recorded in the plan file.
   - Next up: Phase 3 (obsolete-Python retirement: `examples/` × 7, old-path scripts, `divoom_lib/cli.py` audit, `scratch/` rm).
 
-- **2026-09-12 — test rearrangement Phase 1 SHIPPED (uncommitted): plan `docs/PLANNING_TEST_REORG.md`, roadmap item updated.**
+- **2026-09-12 — test rearrangement Phase 1 SHIPPED as 5d92643: plan `docs/PLANNING_TEST_REORG.md`, roadmap item updated.**
   - 4 strays moved into `tests/` (all hardware-gated): `test_show_image_hw.py`, `test_smoke_display_aliases_hw.py` (bonus find), `test_watchface_roundtrip.py` (move-not-port: mock test pins the facade seam; importer updated, 15/15 pass). `hw_test_modes.py` → `hw_walk_modes.py`.
   - 4 ungated `pub mod *_tests` in `divoomd/src/lib.rs` gated with `#[cfg(test)]`; `mock_transport` kept `pub` (runtime). All 21 `mock_*` tests pass.
   - New gate `tools/check_test_placement.py` (step 5/26, mirrored in CI, calibrated both directions, probe removed).
