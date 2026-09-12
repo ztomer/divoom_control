@@ -205,6 +205,66 @@ are not restated.
 
 ## Open workstreams
 
+### OPEN — v0.37 plan: finish the fleet model, then the residuals (filed 2026-09-12)
+
+Order is by leverage; 1-3 are one thread, 6 is independent, 5 is
+measurement-gated, 4 decides itself. Each step ships with its tests shown
+red first, and the entry here flips to SHIPPED with the commit.
+
+**1. Retire the daemon's "current" device** (daemon + GUI, ~half a day)
+The CLI is not a daemon caller (it drives `divoom_lib.Divoom` over bleak).
+The mac-less daemon commands are `hot_update`, `probe_lan`, notification
+routing, `exclusive_start`/`end`, `live_jobs_stop_for`, `device_status`,
+`disconnect`, and MCP tools when `mac` is omitted.
+- One resolver for all of them: explicit `mac`, else the single linked
+  panel when exactly one is linked, else a refusal naming the count
+  ("3 panels connected; pass mac"). Kills "whichever connected last"
+  without breaking the one-panel user.
+- GUI passes the displayed address to `hot_update`; notifications get a
+  "target panel" setting instead of the implicit current one.
+- Delete `Fleet::current`, `current_id`, `preset` and the `--mac` preset
+  once nothing reads them; mac-less `device_status` returns the fleet.
+- Tests: stress scenario "two linked, mac-less call refused with count";
+  MCP one-panel default.
+
+**2. `appConnected` per panel** (GUI, ~2h)
+Keep the name, make it DERIVED inside `setConnectionState` from the
+selected panel's `daemonOwned && activityState !== "disconnected"`; no
+other writer. `requireDevice()` keeps its 25 call sites and gains an
+optional mac. Tests: extend `test_fleet_status_is_per_panel.py` — the
+other panel drops, the selected one still passes `requireDevice`.
+
+**3. Menubar tiles draw the frames** (menubar, ~2h)
+`DeviceView.preview` is a PNG data URL from the frame broadcast. Decode
+once per change (`image` crate) into a `muda::IconMenuItem` per panel
+(tray-icon 0.24 bundles muda), cached by the URL string. Tooltip: "3 of 4
+panels online". Tests: data-URL to RGBA incl. a rejected non-PNG; visual
+check on the real tray with two panels streaming.
+
+**4. Now-playing masking** (nowplaying, 20-minute probe)
+Probe `dlsym` for `MRMediaRemoteSetNowPlayingApplicationOverrideForPID`
+and per-client info accessors on this macOS. If one resolves, the helper
+nominates the client whose `is_playing` is true. If not, close as a
+platform limit here WITH the probe's result, keeping the card's hint.
+
+**5. Browser e2e flakiness under load** (tests, ~half a day, measure first)
+Run the camoufox subset 5x under synthetic load (parallel `cargo build` +
+a CPU burner); record which wait fires (20s UI timeout, daemon spawn, or
+the fake bridge). Expected fix: readiness observables (socket ping, page
+marker) instead of fixed sleeps, and the browser subset serialized in its
+own CI step. Raise a timeout only if the measurement shows the readiness
+wait itself is the bottleneck, by the measured margin. Gate: 5/5 green
+under load, numbers recorded here.
+
+**6. Plaintext password in config.ini** (daemon `cloud_store`, ~half a day)
+A credential backend seam behind `save_config`/`load_config`: macOS
+Keychain (`security add-/find-generic-password`, service `divoom-control`),
+Linux `secret-tool` when present, else a 0600 file with a logged warning.
+Migration on first read: a plaintext password found in the file goes to
+the backend and the file field is blanked; Settings shows "stored in
+Keychain". Tests: fake backend (seam-and-cover), migration red-then-green,
+and no test writes a real keychain entry.
+
 ### The per-device rule (v0.36.0, read before adding any per-panel state)
 
 **All per-device state lives on ONE struct per panel** — `Device` in the
