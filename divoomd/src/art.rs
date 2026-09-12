@@ -268,12 +268,14 @@ pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
     // Push to device over BLE
     #[cfg(feature = "ble")]
     {
-        let guard = daemon.device.lock().await;
-        let dev = match guard.as_ref() {
-            Some(d) => d.clone(),
-            None => return json!({"success": false, "error": "no device connected"}),
+        let target_mac = args
+            .get("mac")
+            .and_then(Value::as_str)
+            .or_else(|| args.get("target_mac").and_then(Value::as_str));
+        let dev = match daemon.resolve_target_device(target_mac).await {
+            Ok(d) => d,
+            Err(e) => return e,
         };
-        drop(guard);
         if matches!(
             &*dev,
             crate::daemon::DeviceTransport::Ble(_) | crate::daemon::DeviceTransport::Spp(_)
@@ -309,12 +311,14 @@ pub async fn cmd_custom_art_query_page(daemon: Arc<Daemon>, args: &Value) -> Val
         .byte();
     #[cfg(feature = "ble")]
     {
-        let guard = daemon.device.lock().await;
-        let dev = match guard.as_ref() {
-            Some(d) => d.clone(),
-            None => return json!({"success": false, "error": "no device connected"}),
+        let target_mac = args
+            .get("mac")
+            .and_then(Value::as_str)
+            .or_else(|| args.get("target_mac").and_then(Value::as_str));
+        let dev = match daemon.resolve_target_device(target_mac).await {
+            Ok(d) => d,
+            Err(e) => return e,
         };
-        drop(guard);
         if matches!(
             &*dev,
             crate::daemon::DeviceTransport::Ble(_) | crate::daemon::DeviceTransport::Spp(_)

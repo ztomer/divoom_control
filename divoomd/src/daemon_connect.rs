@@ -338,7 +338,22 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
 
 /// Handle `disconnect` command.
 pub(crate) async fn cmd_disconnect(daemon: &Daemon) -> Value {
-    daemon.devices.lock().await.clear();
+    daemon.live_jobs.stop_all(daemon).await;
+    let mut devices = daemon.devices.lock().await;
+    let drained: Vec<Arc<DeviceTransport>> = devices.drain().map(|(_, t)| t).collect();
+    drop(devices);
+    for t in drained {
+        match &*t {
+            #[cfg(feature = "ble")]
+            DeviceTransport::Ble(b) => {
+                let _ = b.disconnect().await;
+            }
+            DeviceTransport::Spp(s) => {
+                let _ = s.disconnect().await;
+            }
+            DeviceTransport::Lan(_) | DeviceTransport::Mock(_) => {}
+        }
+    }
     // Take the transport OUT of the mutex first, so the guard is dropped
     // before the disconnect below. Held across the `if let`, this blocks every
     // other task wanting the device for the length of a BLE disconnect.
@@ -352,8 +367,7 @@ pub(crate) async fn cmd_disconnect(daemon: &Daemon) -> Value {
             DeviceTransport::Spp(s) => {
                 let _ = s.disconnect().await;
             }
-            DeviceTransport::Lan(_) => {}
-            DeviceTransport::Mock(_) => {}
+            DeviceTransport::Lan(_) | DeviceTransport::Mock(_) => {}
         }
     }
     *daemon.device_id.lock().await = None;

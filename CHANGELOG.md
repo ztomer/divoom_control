@@ -8,6 +8,15 @@ shipped milestone (per the project planning docs).
 
 ### Architecture & Fixed
 
+- **Architectural Defects Remediation: Concurrency Serialization, Disconnect Cleanup, Coordinate Invariance & Wall Transport Unification (`command_queue.rs`, `daemon.rs`, `daemon_connect.rs`, `wall.rs`, `wall/cmds.rs`, `art.rs`, `multi_device_routing.rs`)**:
+  - Remediated 5 systemic architectural defects identified during system audit (`architectural_audit_report.md`).
+  - Serialized device dispatch in `cmd_device_call` using RAII `QueuePermit` on `CommandQueue`, preventing concurrent RPC callers from interleaving packets with background streamers (`run_sysmon`, `run_stocks`, etc.) or corrupting multi-packet firmware updates (`art_hot.rs`).
+  - Terminated zombie background streamers in `cmd_disconnect` via `daemon.live_jobs.stop_all(daemon).await` and drained `daemon.devices`, preventing infinite task loops and eliminating phantom channel reversion upon device reconnection.
+  - Resolved Virtual Wall coordinate misalignment in `DivoomWall::connect` by binding `WallConfig` directly to connection tasks, eliminating positional indexing shifts if individual panels fail or panic.
+  - Unified Virtual Wall transport pool with `daemon.devices` in `cmd_wall_configure`, eliminating duplicate BLE connection attempts to active displays, supporting mock device walls in testing, and preserving active fleet connections on wall teardown.
+  - Added multi-device MAC targeting to `cmd_custom_art_push` and `cmd_custom_art_query_page`.
+  - Added integration tests `test_disconnect_stops_live_jobs_and_drains_devices` and `test_wall_configure_reuses_daemon_transports_and_binds_coordinates` in `multi_device_routing.rs` (7/7 passed).
+
 - **Multi-Surface State Coordination Fix across Daemon & Menubar (`routing.rs`, `basic.rs`, `mod.rs`, `daemon.rs`, `dispatch.rs`, `divoom-menubar/src/daemon.rs`)**:
   - Implemented `system.set_screen_on` and its aliases (`device.set_screen_on`, `set_screen_on`, `display.set_screen_on`) in `basic.rs` and `routing.rs`. Fixes broken `divoom-menubar` power toggles ("Turn Off Screen" / "Turn On Screen") that previously failed with unported method error.
   - Added direct LAN device support in `device_call/mod.rs` for `system.set_screen_on` (`Channel/OnOffScreen`) and `system.set_brightness` (`Channel/SetBrightness`).

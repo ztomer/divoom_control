@@ -92,46 +92,23 @@ pub async fn cmd_set_topology(_daemon: &Daemon, req: &Request) -> Value {
     }
 }
 
-/// Handle `wall_configure` socket command.
-/// Ports `owner_wall.py:wall_configure` including G7 delta reconfiguration:
-/// when the new layout overlaps the current wall, reuse the shared panels.
-#[expect(
-    clippy::significant_drop_tightening,
-    reason = "the guarded value is read by everything after this line; the explicit drops that could be added were placed where they helped and the borrow checker refused the rest"
-)]
+async fn teardown_wall(daemon: &Daemon) -> Value {
+    let mut wall_guard = daemon.wall.lock().await;
+    if let Some(old_wall) = wall_guard.take() {
+        let preserved: Vec<String> = daemon.devices.lock().await.keys().cloned().collect();
+        old_wall.disconnect(&preserved).await;
+    }
+    drop(wall_guard);
+    *daemon.wall_slots.lock().await = serde_json::Map::new();
+    json!({"success": true, "wall": false})
+}
+
 #[expect(
     clippy::cast_possible_truncation,
     reason = "wall dimensions from a caller's JSON, bounded by the number of panels a wall can hold"
 )]
-pub async fn cmd_wall_configure(daemon: &Daemon, req: &Request) -> Value {
-    let raw_slots = if let Some(m) = req.args.get("slots").and_then(|v| v.as_object()) {
-        m.clone()
-    } else {
-        let mut wall_guard = daemon.wall.lock().await;
-        if let Some(old_wall) = wall_guard.take() {
-            old_wall.disconnect().await;
-        }
-        *daemon.wall_slots.lock().await = serde_json::Map::new();
-        return json!({"success": true, "wall": false});
-    };
-    let mut slots: serde_json::Map<String, Value> = serde_json::Map::new();
-    for (k, v) in &raw_slots {
-        slots.insert(k.to_uppercase(), v.clone());
-    }
-    if slots.is_empty() {
-        let mut wall_guard = daemon.wall.lock().await;
-        if let Some(old_wall) = wall_guard.take() {
-            old_wall.disconnect().await;
-        }
-        *daemon.wall_slots.lock().await = serde_json::Map::new();
-        return json!({"success": true, "wall": false});
-    }
-    let cell_size = req
-        .args
-        .get("cell_size")
-        .and_then(serde_json::Value::as_i64)
-        .unwrap_or(16) as i32;
-    let configs: Vec<WallConfig> = slots
+fn parse_wall_configs(slots: &serde_json::Map<String, Value>, cell_size: i32) -> Vec<WallConfig> {
+    slots
         .iter()
         .map(|(mac, s)| WallConfig {
             mac: mac.clone(),
@@ -150,31 +127,63 @@ pub async fn cmd_wall_configure(daemon: &Daemon, req: &Request) -> Value {
                 .and_then(serde_json::Value::as_i64)
                 .map(|v| v as i32),
         })
-        .collect();
+        .collect()
+}
+
+/// Handle `wall_configure` socket command.
+/// Ports `owner_wall.py:wall_configure` including G7 delta reconfiguration:
+/// when the new layout overlaps the current wall, reuse the shared panels.
+#[expect(
+    clippy::significant_drop_tightening,
+    reason = "the guarded value is read by everything after this line; the explicit drops that could be added were placed where they helped and the borrow checker refused the rest"
+)]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "cell size from JSON clamped to reasonable pixel dimension"
+)]
+pub async fn cmd_wall_configure(daemon: &Daemon, req: &Request) -> Value {
+    let Some(raw_slots) = req.args.get("slots").and_then(Value::as_object) else {
+        return teardown_wall(daemon).await;
+    };
+    let mut slots: serde_json::Map<String, Value> = serde_json::Map::new();
+    for (k, v) in raw_slots {
+        slots.insert(k.to_uppercase(), v.clone());
+    }
+    if slots.is_empty() {
+        return teardown_wall(daemon).await;
+    }
+    let cell_size = req
+        .args
+        .get("cell_size")
+        .and_then(serde_json::Value::as_i64)
+        .unwrap_or(16) as i32;
+    let configs = parse_wall_configs(&slots, cell_size);
     // G7: delta reconfiguration.
     let old_wall_guard = daemon.wall.lock().await;
-    let existing_by_mac: HashMap<String, Arc<DeviceTransport>> = {
-        if let Some(ref old_wall) = *old_wall_guard {
-            let old_slots_guard = daemon.wall_slots.lock().await;
-            let old_macs: std::collections::HashSet<_> = old_slots_guard.keys().cloned().collect();
-            drop(old_slots_guard);
-            let new_macs: std::collections::HashSet<_> = slots.keys().cloned().collect();
-            if old_macs.is_disjoint(&new_macs) {
-                HashMap::new()
-            } else {
-                old_wall
-                    .devices
-                    .iter()
-                    .filter_map(|s| s.device.as_ref().map(|d| (s.mac.clone(), d.clone())))
-                    .collect()
-            }
-        } else {
-            HashMap::new()
+    let mut existing_by_mac: HashMap<String, Arc<DeviceTransport>> = HashMap::new();
+    {
+        let fleet = daemon.devices.lock().await;
+        for (mac, transport) in fleet.iter() {
+            existing_by_mac.insert(mac.to_uppercase(), transport.clone());
         }
-    };
-    if let Some(old_wall) = old_wall_guard.as_ref() {
+        if let Some(ref cur_dev) = *daemon.device.lock().await {
+            if let Some(ref cur_id) = *daemon.device_id.lock().await {
+                existing_by_mac.insert(cur_id.to_uppercase(), cur_dev.clone());
+            }
+        }
+    }
+    if let Some(ref old_wall) = *old_wall_guard {
         for slot in &old_wall.devices {
-            if !existing_by_mac.contains_key(&slot.mac) {
+            if let Some(ref d) = slot.device {
+                existing_by_mac
+                    .entry(slot.mac.to_uppercase())
+                    .or_insert_with(|| d.clone());
+            }
+        }
+        let fleet = daemon.devices.lock().await;
+        for slot in &old_wall.devices {
+            let upper = slot.mac.to_uppercase();
+            if !slots.contains_key(&upper) && !fleet.contains_key(&upper) {
                 #[cfg(feature = "ble")]
                 if let Some(ref d) = slot.device {
                     if let DeviceTransport::Ble(ref b) = **d {

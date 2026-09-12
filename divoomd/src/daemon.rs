@@ -171,15 +171,6 @@ impl Daemon {
             .and_then(|v| v.as_str())
             .or_else(|| req.args.get("target_mac").and_then(|v| v.as_str()));
 
-        if let Some(mac) = target_mac {
-            let q = self.get_device_queue(mac).await;
-            if let Err(e) = q.check_allowed(token) {
-                return err_reply(&e.to_string());
-            }
-        } else if let Err(e) = self.queue.check_allowed(token) {
-            return err_reply(&e.to_string());
-        }
-
         // Validate the REQUEST before the connection. This used to check the
         // device first, so a device_call with no `method` was reported as
         // "no device connected" — a diagnosis that sends the caller to look at
@@ -199,6 +190,17 @@ impl Daemon {
         if req.args.get("target").and_then(|v| v.as_str()) == Some("wall") {
             return self.wall_device_call(req).await;
         }
+
+        let q = if let Some(mac) = target_mac {
+            self.get_device_queue(mac).await
+        } else {
+            self.queue.clone()
+        };
+
+        let _permit = match q.acquire(token.map(str::to_string)).await {
+            Ok(p) => p,
+            Err(e) => return err_reply(&e.to_string()),
+        };
 
         let dev = match self.resolve_target_device(target_mac).await {
             Ok(d) => d,
@@ -260,7 +262,7 @@ impl Daemon {
         }
     }
 
-    async fn resolve_target_device(
+    pub(crate) async fn resolve_target_device(
         &self,
         target_mac: Option<&str>,
     ) -> Result<Arc<DeviceTransport>, Value> {

@@ -11,6 +11,7 @@ mod cmds;
 mod dispatch;
 pub(crate) use cmds::{cmd_get_topology, cmd_set_topology, cmd_wall_configure};
 
+#[derive(Clone, Debug)]
 pub struct WallConfig {
     pub mac: String,
     pub x: i32,
@@ -45,14 +46,6 @@ impl DivoomWall {
     ///
     /// From the BLE stack below: the adapter is gone, the peripheral is not
     /// connected, or the write did not complete.
-    #[expect(
-        clippy::too_many_lines,
-        reason = "a protocol sequence, run start to finish: each step's result decides whether and how the next one runs, and the shared state between them is the point. Extracting steps means threading that state through several signatures to make one linear exchange look like several"
-    )]
-    #[expect(
-        clippy::option_if_let_else,
-        reason = "the `Some` arm is a multi-line body, not an expression -- it decodes a reply, or builds a payload, before it decides. Hoisting it into a closure argument puts the substance of the function inside a call"
-    )]
     #[cfg_attr(
         not(feature = "ble"),
         expect(
@@ -107,10 +100,11 @@ impl DivoomWall {
 
         let mut results = Vec::new();
         for cfg in configs {
+            let cfg_clone = cfg.clone();
             let mac = cfg.mac.clone();
             if let Some(existing_dev) = existing.get(&mac) {
                 let dev = existing_dev.clone();
-                results.push(tokio::spawn(async move { (mac, Ok(dev)) }));
+                results.push(tokio::spawn(async move { (cfg_clone, Ok(dev)) }));
             } else {
                 #[cfg(feature = "ble")]
                 if let Some(ref c) = central {
@@ -118,46 +112,38 @@ impl DivoomWall {
                     let m_clone = mac.clone();
                     results.push(tokio::spawn(async move {
                         match crate::ble::BleTransport::connect(&c_clone, &m_clone).await {
-                            Ok(ble_dev) => (m_clone, Ok(Arc::new(DeviceTransport::Ble(ble_dev)))),
-                            Err(e) => (m_clone, Err(e.to_string())),
+                            Ok(ble_dev) => (cfg_clone, Ok(Arc::new(DeviceTransport::Ble(ble_dev)))),
+                            Err(e) => (cfg_clone, Err(e.to_string())),
                         }
                     }));
                     continue;
                 }
                 results.push(tokio::spawn(async move {
-                    (mac, Err("BLE support disabled or unavailable".to_string()))
+                    (
+                        cfg_clone,
+                        Err("BLE support disabled or unavailable".to_string()),
+                    )
                 }));
-            }
-        }
-
-        let mut join_results = Vec::new();
-        for task in results {
-            if let Ok(r) = task.await {
-                join_results.push(r);
             }
         }
 
         let mut devices = Vec::new();
         let mut connected_count = 0;
-
-        for (idx, (mac, res)) in join_results.into_iter().enumerate() {
-            let cfg = &configs[idx];
-            let slot_device = match res {
-                Ok(dev) => {
+        for task in results {
+            if let Ok((cfg, res)) = task.await {
+                let slot_device = res.ok().inspect(|_| {
                     connected_count += 1;
-                    Some(dev)
-                }
-                _ => None,
-            };
-            devices.push(DeviceSlot {
-                device: slot_device,
-                mac,
-                x: cfg.x,
-                y: cfg.y,
-                size: cfg.size,
-                width: cfg.width,
-                height: cfg.height,
-            });
+                });
+                devices.push(DeviceSlot {
+                    device: slot_device,
+                    mac: cfg.mac,
+                    x: cfg.x,
+                    y: cfg.y,
+                    size: cfg.size,
+                    width: cfg.width,
+                    height: cfg.height,
+                });
+            }
         }
 
         if connected_count == 0 && !configs.is_empty() {
@@ -175,9 +161,15 @@ impl DivoomWall {
         })
     }
 
-    pub async fn disconnect(&self) {
+    pub async fn disconnect(&self, preserved_macs: &[String]) {
         let mut tasks = Vec::new();
         for slot in &self.devices {
+            if preserved_macs
+                .iter()
+                .any(|m| m.eq_ignore_ascii_case(&slot.mac))
+            {
+                continue;
+            }
             if let Some(ref dev) = slot.device {
                 let dev_clone = dev.clone();
                 tasks.push(tokio::spawn(async move {
@@ -189,8 +181,7 @@ impl DivoomWall {
                         DeviceTransport::Spp(s) => {
                             let _ = s.disconnect().await;
                         }
-                        DeviceTransport::Lan(_) => {}
-                        DeviceTransport::Mock(_) => {}
+                        DeviceTransport::Lan(_) | DeviceTransport::Mock(_) => {}
                     }
                 }));
             }

@@ -360,27 +360,13 @@ _Shipped in v0.35.0: Full-width top Spatial Preview Bench, physical millimeter p
   - Added preemption `client.live_jobs_stop_for(mac)` in `play_gallery_art` before pushing the artwork.
   - Verified via unit test `test_play_gallery_art_stops_live_widgets` in `tests/test_gui_api_lighting.py`.
 
-### OPEN — Rust Daemon Architectural Unification: Multi-Device Registry & Per-Device Queuing
-
-#### 1. Multi-Device Transport Pool (`DeviceRegistry`)
-- **Finding**: In `divoomd/src/daemon.rs`, the daemon holds a single device mutex: `pub(crate) device: Mutex<Option<Arc<DeviceTransport>>>` and `device_id: Mutex<Option<String>>`. Connecting to Screen B overwrites Screen A.
-- **Plan**: Introduce a `DeviceRegistry` holding `Arc<RwLock<HashMap<String, Arc<DeviceTransport>>>>`. All paired and configured physical screens (BLE and LAN) remain concurrently connected and accessible.
-
-#### 2. Explicit Per-Device Routing in `device_call`
-- **Finding**: `cmd_device_call` blindly executes on `self.device` (whoever was connected last).
-- **Plan**: Update `cmd_device_call` to extract target `mac` from `req.args` (falling back to the primary connected screen if omitted). Commands are routed directly to the target device's transport.
-
-#### 3. Decoupled Live Job Routing
-- **Finding**: In `divoomd/src/live_jobs/mod.rs:109`, `get_device_transport(&daemon, mac)` compares `cur_id == mac`. If a live job is running on Screen A, and the user selects Screen B in the GUI, `cur_id` changes to B, and Screen A's job immediately stalls in `health::JobState::WaitingForDevice`.
-- **Plan**: Update `get_device_transport` to look up the exact requested `mac` in the `DeviceRegistry`. Streaming jobs for Screen A continue uninterrupted regardless of which screen is currently focused in the GUI.
-
-#### 4. Per-Device Command Queuing & Isolation
-- **Finding**: The daemon owns a single global `CommandQueue`. A slow operation (such as a 30-second hot channel sync or GIF stream) on Screen A wedges commands or locks out Screen B under exclusive mode.
-- **Plan**: Instantiate per-device command queues (`HashMap<String, Arc<CommandQueue>>`). Screen A and Screen B process commands concurrently without contention.
-
-#### 5. Unified Wall as Composite Registry View
-- **Finding**: `DivoomWall` currently maintains a disconnected parallel array of transports (`Vec<DeviceSlot>`), fracturing the codebase into two separate worlds ("single device" vs "wall mode").
-- **Plan**: Re-architect `DivoomWall` to consume device transports directly from the `DeviceRegistry`, unifying single-device and multi-device composite rendering under a single transport architecture.
+### SHIPPED (2026-09-12) — Rust Daemon Architectural Remediation & Fleet Transport Pool Unification
+- **Per-Device Queue Serialization (`command_queue.rs`, `daemon.rs`)**: Added RAII `QueuePermit` with oneshot channel completion. Wrapped `cmd_device_call` in `q.acquire(token).await`, guaranteeing strict FIFO command ordering and mutual exclusion between RPC callers, live streamers (`run_sysmon`, `run_stocks`), and multi-packet firmware updates (`art_hot.rs`).
+- **Ghost Live Streamer Cleanup & Multi-Device Disconnect (`daemon_connect.rs`)**: In `cmd_disconnect`, cleanly halts all active streamers (`daemon.live_jobs.stop_all`) and disconnects all `daemon.devices` transports, preventing zombie tasks and phantom channel reversion.
+- **Virtual Wall Coordinate-Task Invariance (`wall.rs`)**: Bound `WallConfig` directly to spawned connection tasks in `DivoomWall::connect`, eliminating positional index correlation shifts when any panel fails or panics.
+- **Transport Pool Unification & Fleet Preservation (`wall/cmds.rs`, `wall.rs`)**: Unified `daemon.devices` and `daemon.device` into `existing_by_mac` in `cmd_wall_configure`, eliminating duplicate BLE connection attempts, enabling mock device walls in testing, and preserving active fleet connections on wall teardown.
+- **Fleet MAC Targeting in Custom Art (`art.rs`)**: Updated `cmd_custom_art_push` and `cmd_custom_art_query_page` to resolve target display via `daemon.resolve_target_device(mac).await`.
+- **Automated Verification**: `divoomd/tests/multi_device_routing.rs` (7/7 passed), local CI all 25 steps passed, house gates clean.
 
 ### OPEN — Native Menubar Architecture Upgrades (`divoom-menubar`)
 

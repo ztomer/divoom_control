@@ -51,6 +51,14 @@ impl std::fmt::Display for AcquireError {
     }
 }
 
+/// An RAII guard granting serialized device access on a [`CommandQueue`].
+///
+/// Releasing or dropping this permit unblocks the worker to advance to the next queue item.
+#[derive(Debug)]
+pub struct QueuePermit {
+    _release: oneshot::Sender<()>,
+}
+
 struct Job {
     token: Option<String>,
     run: Box<dyn FnOnce() -> BoxFut + Send>,
@@ -155,6 +163,47 @@ impl CommandQueue {
         T: Send + 'static,
     {
         self.submit(token, fut).await.ok()
+    }
+
+    /// Acquire serialized device access on this queue in FIFO order.
+    ///
+    /// Respects exclusive ownership, idle timeouts, and queue-stopped state.
+    /// Holding the returned [`QueuePermit`] serializes the caller's device I/O
+    /// against all other tasks and background streamers on the same queue.
+    ///
+    /// # Errors
+    ///
+    /// When the queue is stopped, or when the exclusive slot is held by another token.
+    ///
+    /// # Panics
+    ///
+    /// If the mutex guarding this value is poisoned -- another thread panicked
+    /// while holding it, so the value cannot be trusted.
+    pub async fn acquire(&self, token: Option<String>) -> Result<QueuePermit, AcquireError> {
+        self.check_allowed(token.as_deref())?;
+        let (tx, rx) = oneshot::channel();
+        let (done_tx, done_rx) = oneshot::channel();
+        let run: Box<dyn FnOnce() -> BoxFut + Send> = Box::new(move || {
+            Box::pin(async move {
+                if tx.send(QueuePermit { _release: done_tx }).is_ok() {
+                    let _ = done_rx.await;
+                }
+            })
+        });
+        {
+            let mut g = self.inner.lock().unwrap();
+            if g.stopped {
+                return Err(AcquireError::Stopped);
+            }
+            g.pending.push_back(Job {
+                token,
+                run,
+                enqueued: Instant::now(),
+                timeout: self.item_timeout,
+            });
+        }
+        self.notify.notify_one();
+        rx.await.map_err(|_| AcquireError::Stopped)
     }
 
     /// Acquire the exclusive slot immediately (OFF the dispatch queue). Rejects a

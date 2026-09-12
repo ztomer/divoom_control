@@ -396,3 +396,103 @@ async fn test_set_device_activity_broadcasts_event() {
     assert_eq!(ev["name"], json!("Ditoo Pro"));
     assert_eq!(ev["preview"], json!("data:image/png;base64,mock"));
 }
+
+#[tokio::test]
+async fn test_disconnect_stops_live_jobs_and_drains_devices() {
+    use std::sync::Arc;
+    let d = Arc::new(Daemon::new());
+    d.initialize_self_weak(Arc::downgrade(&d));
+
+    // Connect DEV_A and DEV_B
+    let _ = d
+        .handle(make_request(
+            "connect",
+            Some(json!({"mock": true, "mac": "DEV_A"})),
+            None,
+        ))
+        .await;
+    let _ = d
+        .handle(make_request(
+            "connect",
+            Some(json!({"mock": true, "mac": "DEV_B"})),
+            None,
+        ))
+        .await;
+
+    // Start sysmon on DEV_A
+    let start_res = d
+        .handle(make_request(
+            "live_job_start",
+            Some(json!({"kind": "sysmon", "mac": "DEV_A", "interval_s": 1.0})),
+            None,
+        ))
+        .await;
+    assert_eq!(start_res["success"], json!(true));
+    assert_eq!(d.live_jobs.list(None).await.len(), 1);
+
+    // Issue disconnect command
+    let disc_res = d.handle(make_request("disconnect", None, None)).await;
+    assert_eq!(disc_res["success"], json!(true));
+
+    // Assert live jobs were cleanly stopped and devices cleared
+    assert_eq!(d.live_jobs.list(None).await.len(), 0);
+    assert!(d.devices.lock().await.is_empty());
+    let st = d.handle(make_request("device_status", None, None)).await;
+    assert_eq!(st["connected"], json!(false));
+}
+
+#[tokio::test]
+async fn test_wall_configure_reuses_daemon_transports_and_binds_coordinates() {
+    let d = Daemon::new();
+
+    // 1. Connect DEV_A into daemon fleet
+    let conn = d
+        .handle(make_request(
+            "connect",
+            Some(json!({"mock": true, "mac": "DEV_A"})),
+            None,
+        ))
+        .await;
+    assert_eq!(conn["success"], json!(true));
+
+    // 2. Configure a wall containing DEV_A
+    let wall_res = d
+        .handle(make_request(
+            "wall_configure",
+            Some(json!({
+                "slots": {
+                    "DEV_A": { "x": 10, "y": 20, "size": 16, "width": 16, "height": 16 }
+                }
+            })),
+            None,
+        ))
+        .await;
+    assert_eq!(wall_res["success"], json!(true));
+    assert_eq!(wall_res["wall"], json!(true));
+
+    // 3. Verify slot coordinates and device presence
+    {
+        let wall_guard = d.wall.lock().await;
+        let wall = wall_guard.as_ref().expect("wall should be configured");
+        assert_eq!(wall.devices.len(), 1);
+        let slot = &wall.devices[0];
+        assert_eq!(slot.mac, "DEV_A");
+        assert_eq!(slot.x, 10);
+        assert_eq!(slot.y, 20);
+        assert_eq!(slot.size, 16);
+        assert!(slot.device.is_some());
+    }
+
+    // 4. Tear down wall with empty slots
+    let teardown = d
+        .handle(make_request(
+            "wall_configure",
+            Some(json!({"slots": {}})),
+            None,
+        ))
+        .await;
+    assert_eq!(teardown["success"], json!(true));
+
+    // DEV_A must still be preserved in daemon.devices
+    assert!(d.devices.lock().await.contains_key("DEV_A"));
+}
