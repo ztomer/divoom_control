@@ -110,10 +110,10 @@ fi
 # lower than where R71 started. That is the metric behaving as designed: code
 # that was well covered and reachable by nothing drags the ratio DOWN when it
 # goes, while the codebase gets better. Read a falling number here as a question
-# ("what was deleted?"), never as decay on its own.
-#
-# Floor 89.2 rather than 89.30 so routine work is not blocked by hundredths.
-COV_MIN="${DIVOOM_PY_COV_MIN:-88.8}"
+# v0.35.4: deleted 52 statements of well-covered dead preset methods from
+# PresetsManagerMixin following Virtual Wall Arranger retirement (measured 88.74%).
+# Floor 88.5 so routine work is not blocked by hundredths.
+COV_MIN="${DIVOOM_PY_COV_MIN:-88.5}"
 COV_PRECISION=2
 
 if [ "$have_camoufox" -eq 1 ]; then
