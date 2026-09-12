@@ -341,10 +341,11 @@ wiring a button is small work on top of what exists.
 
 ### Architectural Unification Tracks (Next Up)
 
-1. **Track 1: Virtual Wall & Presets Consolidation into Spatial Rooms**:
-   - Consolidate layout presets (`presetsSelect` / `load_preset_by_name`) into the unified `SpatialRooms` engine (`All`, `Desk`, `Wall`, `Shelf`).
-   - Phase out redundant separate Virtual Wall preview canvas now that the Spatial Bench provides real-scale per-device nodes.
-   - *Verification*: Verify layout persistence, coordinate preservation, and multi-device wall slotting entirely within Spatial Rooms.
+1. **Track 1: Virtual Wall & Presets Consolidation into Spatial Rooms (SHIPPED 2026-09-12)**:
+   - Unified Virtual Wall arranger preview rendering with the Main Bench via `DisplayPreviewRegistry`.
+   - Banished false-positive orange "W" glyph on the Main Bench when wall devices are on procedural channels (`clock`, `eq`, `ambient`).
+   - Synchronized layout presets (`presetsSelect`) and arranger node dragging with the `SpatialRooms` engine (`devRooms[mac] = 'Wall'`, `pos[mac] = { x, y }`, persistent saving, and live Spatial Stage updates).
+   - Automated tests: `tests/test_virtual_wall_preview_sync.py` (3 passed).
 
 2. **Track 2: Per-Device Live Widget & Background Streamer Binding (`DisplayJobBinding`)**:
    - Decouple background streamers (Sysmon, Music, Stocks/Crypto, Weather) from the global `selectedWidget` singleton and the active UI tab.
@@ -368,11 +369,24 @@ wiring a button is small work on top of what exists.
    - *Verification*: Connect 2 simulated devices, start sysmon on screen 1, dispatch commands to screen 2; verify screen 1 streams uninterrupted and screen 2 executes concurrently.
 
 6. **Track 6: Native Menubar Architecture Upgrades (`divoom-menubar`)**:
-   - Stop churning 4 separate one-shot Unix sockets every 2 seconds (`get_status`, `notification_status`, `device_status`, `get_device_activity`); transition to pure event-driven state ingestion over the existing `subscribe` stream.
-   - Wire the 36x36 PNG previews emitted by `set_device_activity` to render real visual thumbnails in the menubar dropdown instead of discarding them.
-   - Upgrade static disabled device rows into actionable items (standby toggle, brightness, channel quick-switch) with fleet connectivity state aggregation.
-   - Implement non-destructive in-place menu updates to prevent menu flicker/dismissal during user interaction.
-   - *Verification*: Verify zero socket connects on timer tick with active subscription, and verify menu items render PNG previews.
+   - Event-driven snapshot ingestion via `subscribe` (shipped in v0.35.2).
+   - Visual device tiles with graphical previews.
+   - Actionable per-device controls.
+
+7. **Track 7: Animated Image Previews (`DisplayPreview` GIF Playback)**:
+   - Render animated GIF pixel art (from Community Gallery, Custom Art, Hot Channel, or uploads) animated in the preview nodes on the Spatial Stage Bench, Ribbon, and Virtual Wall.
+   - WebKit canvas 2D `drawImage` from an in-memory `Image` freezes GIF playback at frame 0. Resolve via dual-mode DOM `<img>` overlay or lightweight client-side GIF frame demuxer advancing frames based on animation `tick` timestamps.
+
+8. **Track 8: Prevent Out-of-Band Preview Mutations & Enforce Channel Reconciliation**:
+   - Resolve bugs where a display's preview changes spontaneously without user intent or channel switch.
+   - Remove unscoped `window._activeDeviceMac()` fallback in `markActiveDeviceFrame` so unbound widgets cannot overwrite active previews with `"image"`.
+   - Stop static `_channelPreviewSVG` from setting `display.mode = "frame"`, keeping procedural channels strictly in `"glyph"` mode.
+   - Reconcile `DisplayPreview` channel state with hardware daemon broadcast events.
+
+9. **Track 9: Fix Gallery Artwork Double-Click Requirement**:
+   - Fix bug where clicking an artwork tile in the Community Gallery (`#gallery-container`) often does nothing on the first click and requires a second press.
+   - Root cause in `divoom_gui/gallery_sync.py:113`: `client = self._client` captured the method rather than invoking `self._client()`, causing uncached preview downloads to fail with `AttributeError` on click 1.
+   - Provide immediate visual loading state (tactile press + spinner) and add regression tests.
 
 **0. Two environment problems that cost this release ~an hour.** Neither is a
 repo defect, but both will recur.
