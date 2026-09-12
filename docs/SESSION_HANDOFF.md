@@ -21,6 +21,10 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-12 — defect #6 FIXED as `4e4947c`: connection-state funnel in `connection_events.js`.**
+  - `setConnectionState` sole writer of dot/banner/flag; heartbeat latch removed; status events clear stale `connecting`; no-bridge click lands inactive. No poll timer re-added (R59 stands; subscribe snapshot heals).
+  - 13-assertion node probe (throwaway): all pass new code, latch check fails pre-fix. `node --check`, file-size/emoji/api-reachable green. Live confirmation wanted. #3's flaky half resolves with this; #3a (queue latency) still to remeasure.
+  - Next: #3a remeasure → #5 (instrument) → #2 (planned GIF work).
 - **2026-09-12 — defect #1 FIXED as `424f54e`: cover img renders pixelated; sibling sweep clean.**
   - One CSS rule (`widgets_extra.css:96`); cascade verified, element-ID tests + emoji gate green. Visual confirmation wants music playing live. Next: #6 (structural) per triage order.
 - **2026-09-12 — defect #4 FIXED as `090ee0c`: weather card "here" → resolved city / honest "unknown".**

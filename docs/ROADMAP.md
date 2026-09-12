@@ -242,20 +242,21 @@ a live confirmation before a fix ships).
    load race, not a logic branch. Same suspected race for custom-art
    thumbnails (`assignToSlot` mirror before load). Confirm with
    instrumentation (log blits with empty cache), not by staring.
-6. **UI stuck on "connecting" — CLASS NAMED (three writers, no funnel).**
-   The dot/`appConnected` state has three writers
-   (`connection_events.js`): the `connectDevice` click flow (sets
-   `connecting`, settles on promise/watchdog), the `onDaemonEvent`
-   status path (sets `appConnected = connected && !dropped`), and the
-   `refreshConnectionState` heartbeat — which early-returns unless
-   `appConnected` is ALREADY true, i.e. it can only ever heal
-   downward. Stuck-`connecting` paths: bridge missing at click (dot
-   class set BEFORE the `pywebview.api` guard, nothing clears it), or
-   a hung `connect_single_device` (the R57 watchdog exists because the
-   daemon sometimes never answers connect). Fix shape per the
-   bypassed-funnel rule: ONE funnel with the daemon status event as
-   authoritative; heartbeat must heal upward too. This is the load-bearing
-   fix — #3b resolves with it.
+6. **UI stuck on "connecting" — FIXED 2026-09-12 (needs a live session).**
+   `window.setConnectionState` (`connection_events.js`) is now the SOLE
+   writer of dot class, banner, and `appConnected`; the click flow, the
+   daemon status events, and the heartbeat all route through it. The
+   heartbeat's heal-downward-only latch is removed (an authoritative
+   answer heals both directions); a status event clears a stale
+   `connecting` left by an unsettled click promise; a click with no
+   bridge lands `inactive` with a toast instead of parking on
+   `connecting` forever. Verified by a 13-assertion node probe against
+   stubbed DOM (all pass; the heartbeat latch check FAILS on the
+   pre-fix file), `node --check`, file-size/emoji/api-reachable gates.
+   Deliberately NOT re-added: a poll timer (R59 removed polls; the
+   subscribe snapshot is the healer — re-add a slow poll only if stuck
+   states persist). This also resolves the flaky half of #3
+   (`requireDevice` gates on the flag this funnel now keeps honest).
 
 Proposed fix order: #4 (one-line, provable without hardware) → #1
 (one-rule CSS, needs a device glance) → #6 (structural; unblocks #3b)

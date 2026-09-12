@@ -6,6 +6,26 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased — user-defect fixes (2026-09-12, from triage `ba62ba2`)
 
+### Fixed — connection state funnel: UI can no longer stick on "connecting" (#6, unblocks #3's flaky half)
+
+- `window.setConnectionState` (`connection_events.js`) is now the SOLE
+  writer of the status dot, the banner, and `DivoomState.appConnected`.
+  Three writers with no funnel is how a pending click parked the dot on
+  `connecting` while the daemon was connected.
+- The heartbeat's heal-downward-only latch is gone: an authoritative
+  answer heals in both directions. A daemon status event clears a stale
+  `connecting`; a click with no pywebview bridge lands `inactive` with
+  a toast instead of parking forever. Click success/failure side
+  effects (preview restore, dots, sync lists) untouched.
+- Deliberately NOT re-added: a poll timer. R59 removed polls and the
+  subscribe snapshot is the healer; re-add a slow poll only if stuck
+  states persist live.
+- Verified by a 13-assertion node probe over stubbed DOM (throwaway,
+  not committed — no JS harness exists in this repo): all pass on the
+  new code, and the heartbeat-latch check fails on the pre-fix file.
+  `node --check` clean; file-size/emoji/api-reachable gates green.
+  Live confirmation wanted (real connect/drop/reconnect cycle).
+
 ### Fixed — blurry live cover art (#1)
 
 - The cover `<img>` upscaled the device-size preview frame bilinearly

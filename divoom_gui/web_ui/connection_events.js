@@ -5,10 +5,56 @@
  * this module calls). Two update paths feed the connection dot + banner:
  *   1. event-driven  — window.Divoom.onDaemonEvent, pushed by the GUI's daemon
  *      subscription on every connect/disconnect (R58/UI-reliability). Immediate.
- *   2. polling        — refreshConnectionState, the 4s heartbeat that catches a
+ *   2. polling        — refreshConnectionState, the heartbeat that catches a
  *      mid-session DEGRADED drop the connect/disconnect events don't cover.
  * The heartbeat is the safety net; the event is the fast path.
+ *
+ * #6: every path below funnels through window.setConnectionState — the SOLE
+ * writer of the dot class, the banner, and DivoomState.appConnected. Three
+ * writers with no funnel is how the UI got stuck on "connecting" while the
+ * daemon was connected: the click flow owned the dot, the heartbeat refused
+ * to heal upward (early-return unless already connected), and a status event
+ * arriving mid-click wrote around both.
  */
+
+// ── THE funnel for connection surface state ─────────────────────────────
+// mode: "connecting" | "active" | "degraded" | "inactive".
+// A degraded link stays "connected" (the daemon self-heals); "connecting"
+// never wipes the banner (a pending click must not erase the last known
+// device before its outcome is known).
+window.setConnectionState = function(s) {
+    s = s || {};
+    const mode = s.mode || "inactive";
+    const dot = document.getElementById("global-status-dot");
+    if (dot) {
+        let cls = "transport-dot ";
+        if (mode === "connecting") cls += "connecting";
+        else if (mode === "degraded") cls += "active degraded";
+        else if (mode === "active") cls += "active " + (s.transport || "ble");
+        else cls += "inactive";
+        dot.className = cls;
+        dot.title = mode === "active" ? "Connected"
+            : mode === "degraded" ? "Link degraded — reconnecting"
+            : mode === "connecting" ? "Connecting..." : "Disconnected";
+        dot.removeAttribute("style");
+    }
+    window.DivoomState.appConnected = (mode === "active" || mode === "degraded");
+    if ((mode === "active" || mode === "degraded") && s.mac) {
+        let name = s.name || s.mac;
+        const found = (window.DivoomState.discoveredDevices || [])
+            .find(d => d.address === s.mac);
+        if (found && found.name) name = found.name;
+        const bannerName = document.getElementById("banner-device-name");
+        const bannerMac = document.getElementById("banner-device-mac");
+        if (bannerName) bannerName.textContent = name;
+        if (bannerMac) bannerMac.textContent = s.mac;
+    } else if (mode === "inactive") {
+        const bannerName = document.getElementById("banner-device-name");
+        const bannerMac = document.getElementById("banner-device-mac");
+        if (bannerName) bannerName.textContent = "None";
+        if (bannerMac) bannerMac.textContent = "None";
+    }
+};
 
 // ── 3. CONNECTION ACTIONS ──
 // updateSidebarSpeakerIcon was removed — speaker status now lives in
@@ -19,8 +65,7 @@ window.updateSidebarSpeakerIcon = function(_hasSpeaker) {
 
 window.connectDevice = function(name, address) {
     window.showToast(`Connecting to ${name}...`, "success");
-    const statusDot = document.getElementById("global-status-dot");
-    if (statusDot) { statusDot.className = "transport-dot connecting"; statusDot.removeAttribute("style"); }
+    window.setConnectionState({ mode: "connecting" });
     // R35 §2: pulse the sidebar device dot being connected, in the device's
     // own accent color (CSS var --dot-pulse-color, amber fallback for the
     // global dot). Cleared by re-render on success or explicitly on failure.
@@ -39,24 +84,17 @@ window.connectDevice = function(name, address) {
         // The client read_timeout is ~30s; fire the watchdog a beat after.
         let connectWatchdog = null;
         connectWatchdog = setTimeout(() => {
-            window.DivoomState.appConnected = false;
+            window.setConnectionState({ mode: "inactive" });
             window.showToast(`Background service not responding for ${name}. Try Reconnect.`, "error");
-            if (statusDot) { statusDot.className = "transport-dot inactive"; statusDot.removeAttribute("style"); }
             if (window.renderDeviceDots) window.renderDeviceDots();
-            document.getElementById("banner-device-name").textContent = "None";
-            document.getElementById("banner-device-mac").textContent = "None";
         }, 35000);
         window.pywebview.api.connect_single_device(address).then(res => {
             clearTimeout(connectWatchdog);
             if (res) {
-                window.DivoomState.appConnected = true;
                 const type = address === "MatrixWall" ? "wall" : (address.startsWith("LAN:") ? "lan" : "ble");
                 const label = type === "wall" ? " Wall" : (type === "lan" ? " LAN" : " BLE");
                 window.showToast(`Connected to ${name}!`, "success", label);
-                if (statusDot) { statusDot.className = `transport-dot active ${type}`; statusDot.removeAttribute("style"); }
-
-                document.getElementById("banner-device-name").textContent = name;
-                document.getElementById("banner-device-mac").textContent = address;
+                window.setConnectionState({ mode: "active", transport: type, mac: address, name: name });
                 window._updateDeviceLabel(name);
                 // R32 §C2: prefer the last-pushed preview; fall back to the
                 // product icon when this device hasn't been pushed to yet.
@@ -74,7 +112,7 @@ window.connectDevice = function(name, address) {
                 if (window.updateSyncTargetList) window.updateSyncTargetList();
                 if (window.updateChannelButtonsVisibility) window.updateChannelButtonsVisibility(name);
             } else {
-                window.DivoomState.appConnected = false;
+                window.setConnectionState({ mode: "inactive" });
                 // BLE Hardening P1: show the daemon's actionable reason (asleep /
                 // BT off / held by the phone app), not a generic failure.
                 if (window.pywebview?.api?.get_last_connect_error) {
@@ -85,17 +123,19 @@ window.connectDevice = function(name, address) {
                 } else {
                     window.showToast(`Failed to connect to ${name}`, "error");
                 }
-                if (statusDot) { statusDot.className = "transport-dot inactive"; statusDot.removeAttribute("style"); }
                 // R34 §2: stop the pulse + restore the per-device hue.
                 if (window.renderDeviceDots) window.renderDeviceDots();
-                document.getElementById("banner-device-name").textContent = "None";
-                document.getElementById("banner-device-mac").textContent = "None";
                 window._updateDeviceLabel(null);
                 window.updateSidebarSpeakerIcon(false);
                 if (window.updateSyncTargetList) window.updateSyncTargetList();
                 if (window.updateChannelButtonsVisibility) window.updateChannelButtonsVisibility("None");
             }
         });
+    } else {
+        // No bridge (page loaded before pywebview attached): never leave the
+        // dot parked on "connecting" with nothing that can clear it.
+        window.setConnectionState({ mode: "inactive" });
+        window.showToast("Backend not ready — retry in a moment.", "error");
     }
 };
 
@@ -113,35 +153,29 @@ window._activeTransportType = function() {
 };
 
 window.refreshConnectionState = function() {
-    if (!window.DivoomState.appConnected) return;
+    // No latch: an authoritative answer heals in BOTH directions. The old
+    // early-return unless appConnected meant a false flag could never become
+    // true again no matter what the daemon reported (#6).
     const api = window.pywebview && window.pywebview.api;
     if (!api || !api.get_connection_state) return;
     api.get_connection_state().then(raw => {
         let s;
         try { s = JSON.parse(raw); } catch (e) { return; }
-        const dot = document.getElementById("global-status-dot");
-        if (!dot) return;
         const state = s && s.state;
         if (state === "degraded") {
             // Reports connected but a write/drop just failed — show amber, keep
             // appConnected (the daemon's live-job self-heal may revive it).
-            dot.className = "transport-dot active degraded";
-            dot.title = "Link degraded — reconnecting";
+            window.setConnectionState({ mode: "degraded" });
         } else if (state === "disconnected" || !s || !s.connected) {
             // Genuinely dropped — or the daemon explicitly reports disconnected
             // while a stale connected:true lingered. Flip the dot + the global
             // flag so the UI stops claiming a live link; a disconnected state
             // must NOT be masked by a stale connected flag.
-            window.DivoomState.appConnected = false;
-            dot.className = "transport-dot inactive";
-            dot.title = "Disconnected";
+            window.setConnectionState({ mode: "inactive" });
         } else {
             // Honest connected (ble/lan/wall) — colour the dot by transport type.
-            const type = window._activeTransportType();
-            dot.className = `transport-dot active ${type}`;
-            dot.title = "";
+            window.setConnectionState({ mode: "active", transport: window._activeTransportType() });
         }
-        dot.removeAttribute("style");
     }).catch(() => {});
 };
 
@@ -155,44 +189,22 @@ window.Divoom.onDaemonEvent = function(ev) {
     if (!ev || typeof ev !== "object") return;
     const type = ev.type;
     if (type !== "status") return;  // notifications are surfaced natively by macOS
-    const dot = document.getElementById("global-status-dot");
     const connected = ev.connected === true;
     const degraded = ev.state === "degraded";
     const dropped = ev.state === "disconnected";
-    if (dot) {
-        if (!connected || dropped) {
-            dot.className = "transport-dot inactive";
-            dot.title = "Disconnected";
-        } else if (degraded) {
-            // Link unhealthy (a write/drop just failed) — amber, still owned.
-            dot.className = "transport-dot active degraded";
-            dot.title = "Link degraded — reconnecting";
-        } else {
-            const isLan = !!ev.lan_ip;
-            dot.className = `transport-dot active ${isLan ? "lan" : "ble"}`;
-            dot.title = "Connected";
-        }
-        dot.removeAttribute("style");
-    }
+    const mac = ev.lan_ip ? ("LAN:" + ev.lan_ip) : (ev.mac || null);
     // A degraded link stays "connected" (the daemon self-heals); a genuine drop
     // or an explicit `disconnected` state flips appConnected so the rest of the
     // UI stops acting connected — an honest state must NOT be masked by a stale
-    // connected flag (the P6 honest-state regression).
-    window.DivoomState.appConnected = connected && !dropped;
-    const mac = ev.lan_ip ? ("LAN:" + ev.lan_ip) : (ev.mac || null);
-    const bannerName = document.getElementById("banner-device-name");
-    const bannerMac = document.getElementById("banner-device-mac");
-    if (connected && mac) {
-        // Resolve a friendly name from the last scan when known.
-        let name = mac;
-        const found = (window.DivoomState.discoveredDevices || [])
-            .find(d => d.address === mac);
-        if (found && found.name) name = found.name;
-        if (bannerName) bannerName.textContent = name;
-        if (bannerMac) bannerMac.textContent = mac;
+    // connected flag (the P6 honest-state regression). As the authoritative
+    // writer, a status event also clears a stale "connecting" dot left by a
+    // click flow whose promise never settled (#6).
+    if (!connected || dropped) {
+        window.setConnectionState({ mode: "inactive" });
+    } else if (degraded) {
+        window.setConnectionState({ mode: "degraded", mac: mac });
     } else {
-        if (bannerName) bannerName.textContent = "None";
-        if (bannerMac) bannerMac.textContent = "None";
+        window.setConnectionState({ mode: "active", transport: mac && mac.startsWith("LAN:") ? "lan" : "ble", mac: mac });
     }
     if (window.renderDeviceDots) window.renderDeviceDots();
 };
