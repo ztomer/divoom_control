@@ -44,7 +44,7 @@ sys.path.insert(0, str(REPO))
 try:
     import divoom_lib.divoom as _divoom_mod  # noqa: E402
 except ModuleNotFoundError as exc:  # pragma: no cover - environment, not logic
-    err(f"[examples] cannot import the facade: {exc}. This check needs `pip install bleak`.")
+    err(f"[examples] cannot import the facade: {exc}. This check needs the package's runtime deps: `pip install -r requirements.txt`.")
     sys.exit(2)
 from divoom_lib.models.capabilities import Capabilities  # noqa: E402
 

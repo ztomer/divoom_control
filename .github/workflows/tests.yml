@@ -59,11 +59,11 @@ jobs:
       - name: Tests live in tests/, Rust test modules are cfg-gated (Phase 1)
         run: python3 tools/check_test_placement.py
       # check_examples resolves the facade's REAL classes (`has_member` on
-      # them), and the facade imports bleak at module level. That is the
-      # check's own dependency, installed here for it alone.
+      # them), so it needs the facade's import closure (bleak, Pillow, ...):
+      # the package's runtime requirements, installed for THIS step alone.
       - name: examples/ documents a facade that still exists (Phase 3)
         run: |
-          pip install bleak
+          pip install -r requirements.txt
           python3 tools/check_examples.py
       - name: Positional args are not read from the compacted list
         run: python3 tools/check_positional_args.py
