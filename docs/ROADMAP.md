@@ -238,8 +238,13 @@ importer updated, `scripts/hw_test_modes.py` →
 `tools/check_test_placement.py` (step 5/26 in local CI, mirrored in
 `tests.yml`, calibrated both directions). Full verification green:
 pytest 2946 passed / 236 skipped, cargo both matrices, clippy both
-cfgs, fmt, ci_local 26/26. **Still open**: Phase 2 (`tests/` squatters),
-Phase 3 (obsolete-Python retirement), Phase 4 (ship + prune the plan).
+cfgs, fmt, ci_local 26/26. **Phase 2 SHIPPED 2026-09-12**: dead trio
+(`test_runner`, `api_test`, `minimal_api`) + 2 superseded runners
+deleted (self-referential only), `perf_*` benchmarks moved to `scripts/`
+(their 11 `test_perf_*` functions were never suite-collected; all pass
+explicitly from the new location). Suite 3182 collected before and
+after, full run identical at 2946/236. **Still open**: Phase 3
+(obsolete-Python retirement), Phase 4 (ship + prune the plan).
 
 Census summary (retained for the open phases): `divoom_lib` itself is
 NOT dead — census is 0 DIRECT / 0 WRAPPED and Python is canonical for

@@ -31,15 +31,37 @@ Inside `tests/` (275 files), the uncollected files break down as follows
   script list names `examples/discover_devices.py`, which does not exist),
   `api_test.py`, `minimal_api.py` (old direct-device path; referenced only
   by `test_runner.py` itself). Confirm no other references at deletion time.
+  — DONE 2026-09-12. Reference re-grep showed the trio is self-referential
+  only (the one outside hit was `run_integration_tests.py`'s own logger
+  name, not an import). Note: `api_test.py` DOES match the placement
+  gate (`*_test.py` suffix) — gate count went 254 → 252 with `test_runner`.
 - **Ad-hoc benchmarks — move to `scripts/`:** `perf_downsample.py`,
   `perf_image_encode.py`. Both self-describe as "intended for ad-hoc runs,
-  not the regular CI suite". No references anywhere.
+  not the regular CI suite". No references anywhere. — DONE 2026-09-12
+  with one correction to the census: both files DO define `test_perf_*`
+  functions (11 total), but they are never collected in suite runs
+  (filenames match neither `test_*.py` nor `*_test.py`; verified 0 hits
+  in full-suite collection). Moving preserves exact behavior: explicit
+  `pytest scripts/perf_*.py` still collects and all 11 pass from the new
+  location, `__main__` ad-hoc use unchanged. Open question recorded, not
+  decided: whether CI should run perf regressions at all (timing-flaky
+  by nature) — belongs to Phase 3 or a later round, not this move.
 - **Superseded runners — delete:** `run_integration_tests.py` (old
   `Divoom()` + `discovery` path, own `test_case` registry predating
   pytest), `automated_visual_tester.py` (PyWebView screenshot runner
   superseded by `scripts/gui_pov.py`). No references to either.
+  — DONE 2026-09-12.
 - **Keep:** `tests/support/`, `tests/fixtures/`, and
   `tests/e2e_gui_bridge.py` (live helper, see above).
+
+Phase 2 verification (2026-09-12): `pytest --collect-only` 3182 before
+and after (deletion delta exactly 0, as predicted); full suite 2946
+passed / 236 skipped, identical to Phase 1; `check_test_placement`
+(252 files), `check_scripts` (37 scripts), `check_file_size` green.
+Procedural note: a `git stash` + `pop` around staged renames came back
+with the index split (renames as A+D, deletions unstaged) — repaired
+with `git add -A` and re-verified. Avoid stashing mid-round with staged
+moves; if you must, check `git status` shape after the pop.
 
 ### Python: "obsolete" is usage-patterns, not modules
 
@@ -156,6 +178,11 @@ change must not introduce `dead_code` under `-D warnings`),
 `ci_local.sh --fast`.
 
 ### Phase 2 — `tests/` squatters (one commit)
+
+Status 2026-09-12: SHIPPED. Trio + 2 superseded runners deleted,
+`perf_*` moved to `scripts/` (11/11 pass explicitly from the new
+location). Suite collection 3182 before and after; full suite 2946
+passed / 236 skipped, identical to Phase 1.
 
 Per the census above: delete the trio (`test_runner.py`, `api_test.py`,
 `minimal_api.py`) and the two superseded runners

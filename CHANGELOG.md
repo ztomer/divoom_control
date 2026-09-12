@@ -39,6 +39,22 @@ gated Rust test modules. Full verification green (pytest 2946 passed /
   directions (removed `cfg` → red at `lib.rs:54`; staged stray →
   red); probe removed without residue.
 
+### Phase 2 — `tests/` squatters cleared (2026-09-12)
+
+- Deleted the dead manual-runner trio (`test_runner.py`, `api_test.py`,
+  `minimal_api.py` — old direct-device path, self-referential only) and
+  two superseded runners (`run_integration_tests.py`,
+  `automated_visual_tester.py`, superseded by pytest and
+  `scripts/gui_pov.py`).
+- Moved `perf_downsample.py` + `perf_image_encode.py` to `scripts/`
+  (now covered by `check_scripts.py`). Correction to the census: both
+  define `test_perf_*` functions (11 total) that were never
+  suite-collected (filenames match no `python_files` pattern); all 11
+  pass explicitly from the new location. Whether CI should run perf
+  regressions is recorded open in the plan, not decided here.
+- Verified: suite collection 3182 before and after (delta exactly 0),
+  full run 2946 passed / 236 skipped — identical to Phase 1.
+
 ## v0.35.4 — Virtual Wall Simplification, Spatial Bench Alignment & Channel Persistence (2026-09-12)
 
 ### Architecture & Added

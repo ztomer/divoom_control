@@ -21,6 +21,12 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-12 — test rearrangement Phase 2 SHIPPED (uncommitted): `tests/` squatters cleared.**
+  - Deleted trio + 2 superseded runners (self-referential only, verified by re-grep); `perf_*` → `scripts/` (11 perf tests pass explicitly, were never suite-collected).
+  - Verification: collection 3182 before/after (delta 0), full suite 2946/236 identical to Phase 1, placement/scripts/file-size gates green.
+  - Procedural note: `git stash` + `pop` around staged renames split the index (repaired with `git add -A`, re-verified) — recorded in the plan file.
+  - Next up: Phase 3 (obsolete-Python retirement: `examples/` × 7, old-path scripts, `divoom_lib/cli.py` audit, `scratch/` rm).
+
 - **2026-09-12 — test rearrangement Phase 1 SHIPPED (uncommitted): plan `docs/PLANNING_TEST_REORG.md`, roadmap item updated.**
   - 4 strays moved into `tests/` (all hardware-gated): `test_show_image_hw.py`, `test_smoke_display_aliases_hw.py` (bonus find), `test_watchface_roundtrip.py` (move-not-port: mock test pins the facade seam; importer updated, 15/15 pass). `hw_test_modes.py` → `hw_walk_modes.py`.
   - 4 ungated `pub mod *_tests` in `divoomd/src/lib.rs` gated with `#[cfg(test)]`; `mock_transport` kept `pub` (runtime). All 21 `mock_*` tests pass.
