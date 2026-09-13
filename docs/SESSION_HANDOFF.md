@@ -43,8 +43,10 @@ shared memory. Read this on entry and **update it at the end of every round**
     menubar and CLI set and follow it. Live-verified both directions.
   - **2026-09-13 GUI requests** (4635bf1): Version card (live-checked on
     the installed app: dashboard and daemon both 0.37.0), clock extras
-    as toggles, bench open by default. Clock-face previews: blocked on
-    an undecoded native picture format, finding in ROADMAP item 8.
+    as toggles, bench open by default, and cloud clock-face previews
+    (c90a6c4): the store's native 128x128 picture format decoded from
+    the app's library (Ghidra on libtimebox.so; `art_codec/fix.rs`),
+    cards live-checked on the installed app (as drawn + on the panel).
   - **Installed: 0.37.0 (latest build, inode in install log), not yet tagged.** Live-verified
     on it: Keychain migration of the real config.ini (password line gone,
     item in the login keychain, real login), per-client now-playing, CLI
