@@ -21,39 +21,16 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
-- **2026-09-12 (later) — v0.37 work COMMITTED, NOT YET INSTALLED OR TAGGED.**
-  Detail: the "Unreleased" CHANGELOG stanza; plan: ROADMAP "v0.37 plan"
-  (steps 0-4 and 6 SHIPPED, 5 open).
-  - **CLI is a daemon client** (e1b8ca7): attaches to the running daemon,
-    never spawns one, never opens Bluetooth; bleak out of its import path.
-  - **No "current" device** (2bcd5b0): `Fleet::resolve_target(mac)` --
-    explicit mac, else the single linked panel, else a refusal with the count.
-  - **GUI link is per panel** (b05083d); **menubar rows draw the frames**
-    (5d4b33f, visual check on the real tray pending install).
-  - **Now-playing reads per client** (a2a0520, fd038e8): the "platform
-    limit" was a three-argument declaration of a five-argument function;
-    signatures recovered from the framework's code (skill
-    `private-framework-signatures`). Live: Kaset playing behind its own
-    stub session, the helper reports the WebKit record with the artwork.
-  - **Password in the Keychain** (1830695): `secret_store` seam, migration
-    on first read, Settings says where it lives.
-  - **Browser opt-in at the launch seam** (6d9cda6): 30-odd non-browser
-    tests were hidden by a module-text skip; default suite 3204/0/207.
-  - **Active panel** (216ce0b..1612a37): daemon-owned selection; bench,
-    menubar and CLI set and follow it. Live-verified both directions.
-  - **2026-09-13 GUI requests** (4635bf1): Version card (live-checked on
-    the installed app: dashboard and daemon both 0.37.0), clock extras
-    as toggles, bench open by default, and cloud clock-face previews
-    (c90a6c4): the store's native 128x128 picture format decoded from
-    the app's library (Ghidra on libtimebox.so; `art_codec/fix.rs`),
-    cards live-checked on the installed app (as drawn + on the panel).
-  - **Installed: 0.37.0 (latest build, inode in install log), not yet tagged.** Live-verified
-    on it: Keychain migration of the real config.ini (password line gone,
-    item in the login keychain, real login), per-client now-playing, CLI
-    mac-less refusal and `select`, tray rows with "(active)" and the
-    submenu switch, bench following. CI 5/5 green at 9130c4b (main),
-    including the browser step. Not tagged: `scripts/release.sh` cuts
-    v0.37.0 (version and CHANGELOG stanza are already in place).
+- **2026-09-13 — v0.37.0 RELEASED & INSTALLED LOCALLY** (tag v0.37.0 at
+  cd553cd, GitHub release with the DMG, cask bumped; daemon inode
+  546319145 running from /Applications/Divoom.app, signed by the local
+  identity). Detail: the v0.37.0 CHANGELOG stanza; the ROADMAP "Shipped"
+  entry. Verified on the installed build after install: daemon and
+  menubar report 0.37.0; the active panel, `owned_devices` command,
+  store faces (19) and their picture decode, Keychain-backed credentials
+  (no password line in config.ini), and the CLI `select` all answer.
+  Local gate 27/28 with one socket-test flake (5/5 green alone, ledger in
+  ROADMAP); GitHub CI 5/5 green at the tagged commit.
 - **2026-09-12 — v0.36.0 RELEASED & INSTALLED LOCALLY: one struct per panel, the
   six user-reported defects, prompt-free rebuilds.** Detail: the v0.36.0
   CHANGELOG stanza; design rule: ROADMAP "per-device aggregate". Signing:
