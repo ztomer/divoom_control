@@ -1,7 +1,8 @@
-/* cloud_clock_faces.js — browse Divoom's public clock-face catalog
-   (Channel/GetDialType + Channel/GetDialList) and apply one via the
-   existing set_clock() path. No thumbnails are available from this API —
-   only ClockId/Name — so the list is a plain text list, not a grid. */
+/* cloud_clock_faces.js — the Clock panel's cloud faces. Two catalogs:
+   the STORE (store_clock_faces; a picture per face, shown as drawn and at
+   the selected panel's resolution) and the public list
+   (Channel/GetDialType + GetDialList; ClockId/Name only, so a text list).
+   Both apply through the existing set_clock() path. */
 
 document.addEventListener("DOMContentLoaded", () => {
     const typeSelect = document.getElementById("cloud-clock-type-select");

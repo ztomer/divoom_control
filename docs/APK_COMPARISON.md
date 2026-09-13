@@ -88,7 +88,10 @@ Header is 8 bytes. RR=0x03, NN=2 bytes (u16).
 APK header before calling native:
   header = {0x25, validCnt, speed>>8, speed&255, rowCnt, columnCnt}
   For 32x32: {0x25=37, 1, speed_hi, speed_lo, 2, 2}
-Native output: (unknown internal format, wrapped with header)
+Native output: DECODED 2026-09-13 (Ghidra on `libtimebox.so`): the 0x1A
+  (26) container's frames are `u32 BE len` + a 0xAA record with flag 0x15,
+  a quadtree over 8x8 tiles with per-node sub-palettes. The reader is
+  `divoomd/src/art_codec/fix.rs` (the store's clock-face pictures).
 ```
 
 **Verdict:** Our RR=0x03 and 2-byte NN come from **hass-divoom**, not the APK.

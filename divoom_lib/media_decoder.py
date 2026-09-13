@@ -72,14 +72,14 @@ CLOUD_CONTAINER_MAGICS = (8, 9, 12, 18, 26)
 
 
 def decode_cloud_frames(raw_bytes: bytes, *, max_frames: int = 24):
-    """Decode a Divoom cloud container (magic 8 / 9 / 12 / 18 / 26) into
+    """Decode a Divoom cloud container (magic 8 / 9 / 12 / 18) into
     native-size PIL frames.
 
     Magic 9: ``[magic][total_frames][speed:2 BE]`` + AES-CBC-encrypted raw RGB
     16×16 frames (768 bytes each). Magic 8 is the static variant (1 header
     byte, then the same AES container → a single 16×16 frame). Magic 12 is a
     scroll/marquee buffer (``[12][scrollMode][speed:2 BE]`` + AES → a 64×16
-    RGB frame). Magic 18/26 add per-frame LZO compression and a row/column
+    RGB frame). Magic 18 adds per-frame LZO compression and a row/column
     tile layout.
 
     R36: this is the SEND-path decoder, not just a preview helper — the cloud
@@ -89,7 +89,10 @@ def decode_cloud_frames(raw_bytes: bytes, *, max_frames: int = 24):
     bytes (it ACKs the transfer and renders nothing — the R36 Ditoo bug).
 
     Returns ``(frames, duration_ms)`` with frames at NATIVE pixel size
-    (16×16 for magic 9; tiles×16 for 18/26), or ``(None, 0)`` if the payload
+    (16×16 for magic 9; tiles×16 for 18), or ``(None, 0)`` if the payload.
+    Magic 26 is NOT the same layout (the app's dispatcher routes it to its
+    native Iframe decoder; ``divoomd/src/art_codec/fix.rs`` reads it) -- this
+    reference module still treats it as 18 and fails on real files
     isn't a decodable cloud container.
     """
     try:

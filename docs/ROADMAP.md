@@ -9,8 +9,17 @@ forward-looking one. Recover a round plan with
 
 ## Shipped
 
+- **v0.37.0 — The active panel, the Keychain, Now Playing per client, the CLI as a daemon client, clock faces with pictures (2026-09-13)**:
+  - **Active panel** (`Fleet::selected`, `select_device`, `selection` broadcast): the bench highlight, the menubar's "(active)" row and "Active panel" switch, and `divoom-control select --mac` set ONE daemon-owned selection; a mac-less request goes to it while linked, else to the single linked panel, else is refused naming why. The first panel to link is active until the user picks another. "Whichever connected last" is gone.
+  - **Password in the OS store** (`secret_store`): macOS Keychain through the Apple-signed `security` CLI (so the item's ACL does not key on the daemon's churning local signature), Linux `secret-tool`, else the 0600 file with a warning; migrated out of `config.ini` on first read; Settings says where it lives.
+  - **Now Playing per client**: `MRMediaRemoteGetNowPlayingInfoForClient` takes five arguments (read from the framework's code; the three-argument declaration that crashed had been recorded as a platform limit). Every registered client is read; the playing one with the richest record wins; a paused or empty session no longer masks a playing app.
+  - **CLI is a daemon client**: attaches to the running daemon, never spawns one, never opens Bluetooth; a refused scan is an error.
+  - **Menubar**: rows carry the panel's frame as an icon, "(active)", and the switch; the polled fallback rebuilds the fleet from the daemon's `owned_devices` command (it read "No active devices" with idle panels linked).
+  - **Clock faces with pictures**: the store catalog (`store_clock_faces`) and Divoom's native 128x128 picture format decoded from the app's library (`art_codec/fix.rs`, Ghidra on `libtimebox.so`); the Clock panel shows each face as drawn and at the selected panel's resolution. Magic 26 is that family, not magic 18's AES+LZO, which the codec had assumed for both.
+  - **Also**: Settings Version card; clock extra panels as toggles; the bench opens expanded; the browser suites run in CI (own step; never had), their opt-in at the launch seam (30-odd hidden tests surfaced, two stale); `UI_TIMEOUT_MS` 60s from a measured 5x swing under load; the encoder builds on Linux CI.
+
 - **v0.36.0 — One struct per panel, the six user-reported defects, prompt-free rebuilds (2026-09-12)**:
-  - **Daemon per-device aggregate (`divoomd/src/device.rs`)**: `Device` (identity: one live job, activity) holds an `Option<Link>` (connection: transport + the ONE queue); `Fleet` is the single owner of which panels exist and which is current. Queued work is bound to its link and dropped if the link is retired; a job's `alive` flag is cleared before abort and checked at execution. Every pushed live frame is broadcast with its pixels. Replaces five mac-keyed maps that disagreed (ghost frame after stop, GUI calls on a different queue from live jobs, two widgets per screen, ghost frame on reconnect). Gate: `divoomd/tests/live_jobs_stress.rs` (10 scenarios, 4 red before).
+  - **Daemon per-device aggregate (`divoomd/src/device.rs`)**: `Device` (identity: one live job, activity) holds an `Option<Link>` (connection: transport + the ONE queue); `Fleet` is the single owner of which panels exist (and, since v0.37.0, which is ACTIVE). Queued work is bound to its link and dropped if the link is retired; a job's `alive` flag is cleared before abort and checked at execution. Every pushed live frame is broadcast with its pixels. Replaces five mac-keyed maps that disagreed (ghost frame after stop, GUI calls on a different queue from live jobs, two widgets per screen, ghost frame on reconnect). Gate: `divoomd/tests/live_jobs_stress.rs` (10 scenarios, 4 red before).
   - **Six user-reported defects, all live-confirmed with the user at the keyboard**: cover art (original art, smooth; device frame, diodes), animated bench previews (`gif_frames.js` client-side decoder), channel switching (measured 0.04-0.12s; the flaky half was the connecting-state funnel), weather city, empty Clock/Custom Art panels (document-wide panel toggle), stuck "connecting".
   - **GUI fleet state**: the proxy names its panel on every call; bench selection is one funnel (`select_device`); status events are per-panel; bench/deck jewels are honest; `owned_devices` is fleet-wide and never carries a placeholder name; previews mirror the panel through the broadcast frames. Per-device `disconnect {mac}` / `device_status {mac}`.
   - **Menubar**: `DeviceView` per panel with link state; the tray word is derived.
@@ -180,7 +189,7 @@ are not restated.
 
 ## Current debt & quality
 
-- **Gates**: 25 steps, run by `pre-push` since R71 P0 — they used to run only
+- **Gates**: 27 steps (28 full), run by `pre-push` since R71 P0 — they used to run only
   when someone typed the command. Local and CI are kept identical on purpose.
   `check_applescript_launch.py` joined the list on 2026-09-07: no source may
   address an application by LaunchServices NAME in AppleScript without an
@@ -195,169 +204,16 @@ are not restated.
   against 443 daemon commands, and fails the build on a new one. Parity gates
   hold the two files that legitimately have two readers
   (`check_weather_parity.py`, `check_hotchannel_parity.py`).
-- **Tests**: ~3000 Python, 198 Rust; hardware tests gated/skip by default; 60
-  native-downscaler parity tests. **The browser e2e subset is flaky under normal
-  load — see the OPEN item below.**
+- **Tests**: ~3200 Python (default suite 3213, 209 skipped), ~260 Rust;
+  hardware tests gated/skip by default; 60 native-downscaler parity tests.
+  The browser subset (150) opts in with `--run-browser`, runs in its own CI
+  step, and was measured 150/150 twice under load (see the CLOSED item).
 - **C module**: `libdivoom` (LANCZOS downsampler) via `build_libdivoom.sh`;
   normalize-then-quantize matches PIL byte-for-byte (60/60 parity tests).
 
 ---
 
 ## Open workstreams
-
-### v0.37 plan: finish the fleet model, then the residuals (filed 2026-09-12; all seven SHIPPED)
-
-Order is by leverage; 1-3 are one thread, 6 is independent, 5 is
-measurement-gated. Each step shipped with its tests shown red first.
-
-**0. The CLI is a daemon client — SHIPPED (e1b8ca7)** — user correction.
-`cli_commands` attaches to the running daemon (`ensure_daemon(spawn=False)`;
-a shell-spawned daemon has no Bluetooth grant and dies on its first scan,
-so with nothing running the CLI says what to start, exit 3) and drives
-`DaemonDeviceProxy(mac=...)`; `scan`/`identify` read the daemon's scan
-(`manufacturer_data`, `service_uuids` on the reply); capabilities come
-from the table by `--type` or the MAC registry; the CLI never hangs up a
-panel. `--mac` names the panel; without it the daemon's resolver answers
-for a single linked panel and refuses otherwise (exit 2, listing them).
-bleak is out of the CLI's import path. Open question, not decided:
-`examples/` documents the bleak facade -- library docs, or retire them in
-favour of daemon-client examples.
-
-**1. Retire the daemon's "current" device — SHIPPED (2bcd5b0)**
-`Fleet::resolve_target(mac)`: explicit mac, else the single linked panel,
-else a refusal naming the count. `Fleet::current`/`current_id`/`preset`
-and the daemon `--mac` preset are gone; mac-less `device_status` returns
-the fleet; `hot_update` targets the GUI's displayed address; notifications
-go to every linked panel. As planned:
-The mac-less daemon commands are `hot_update`, `probe_lan`, notification
-routing, `exclusive_start`/`end`, `live_jobs_stop_for`, `device_status`,
-`disconnect`, and MCP tools when `mac` is omitted (and the CLI after 0).
-- One resolver for all of them: explicit `mac`, else the single linked
-  panel when exactly one is linked, else a refusal naming the count
-  ("3 panels connected; pass mac"). Kills "whichever connected last"
-  without breaking the one-panel user.
-- GUI passes the displayed address to `hot_update`; notifications get a
-  "target panel" setting instead of the implicit current one.
-- Delete `Fleet::current`, `current_id`, `preset` and the `--mac` preset
-  once nothing reads them; mac-less `device_status` returns the fleet.
-- Tests: stress scenario "two linked, mac-less call refused with count";
-  MCP one-panel default.
-
-**2. `appConnected` per panel — SHIPPED (b05083d)**
-`panelIsLinked(mac)`, `requireDevice(mac)`, per-panel status events, fleet
-counts from linked panels; `test_fleet_status_is_per_panel.py` covers the
-other panel dropping. As planned: keep the name, make it DERIVED inside `setConnectionState` from the
-selected panel's `daemonOwned && activityState !== "disconnected"`; no
-other writer. `requireDevice()` keeps its 25 call sites and gains an
-optional mac. Tests: extend `test_fleet_status_is_per_panel.py` — the
-other panel drops, the selected one still passes `requireDevice`.
-
-**3. Menubar tiles draw the frames — SHIPPED (5d4b33f)**
-`tiles::TileCache` decodes each panel's PNG data URL once into the row's
-`Submenu` icon (nearest-neighbour to 36pt, set in place when the row
-signature is unchanged); tooltip "N of M panels online". The visual check
-on the real tray is pending the next install. As planned:
-`DeviceView.preview` is a PNG data URL from the frame broadcast. Decode
-once per change (`image` crate) into a `muda::IconMenuItem` per panel
-(tray-icon 0.24 bundles muda), cached by the URL string. Tooltip: "3 of 4
-panels online". Tests: data-URL to RGBA incl. a rejected non-PNG; visual
-check on the real tray with two panels streaming.
-
-**4. Now-playing masking — SHIPPED (a2a0520, fd038e8; the "platform limit"
-was a wrong signature)**
-The first probe declared `MRMediaRemoteGetNowPlayingInfoForClient` as
-`(client, queue, block)`, it crashed, and this item was closed as a platform
-limit. Wrong: read from the framework's own code on macOS 26.6.2
-(`dyld_info -exports` + in-process disassembly, see the
-`private-framework-signatures` skill) it takes FIVE arguments,
-`(client, origin, includeArtwork, queue, block)`, building an `MRPlayerPath`
-and calling `...InfoForPlayer(path, includeArtwork, queue, block)`.
-`GetPlaybackStateForClient(client, origin, queue, block(u32))`,
-`GetActivePlayerPathsForOrigin`, `GetLocalOrigin()` and
-`CopyPlaybackStateDescription` (0 Unknown 1 Playing 2 Paused 3 Stopped
-4 Interrupted 5 Seeking) verified the same way and live through the
-entitled perl host. The helper now reads every registered client's state
-and reports the playing one with the richest record; the elected session
-is the fallback when nothing plays. Live (Kaset playing, Music open): the
-elected session was Kaset's own five-key stub with no artwork, the WebKit
-GPU client carried the full record with the art, and the helper reported
-the latter. Players carry their states (`Kaset (playing)`,
-`Music` unknown) in the idle hint.
-
-**5. Browser e2e flakiness under load — MEASURED and SHIPPED (2026-09-12)**
-Measured: the whole browser subset (150 tests, every module that launches
-camoufox) run twice under a CPU burner on half the cores plus a
-`cargo check` loop, on top of the machine's own load (average 30-130):
-150/150 and 150/150, 597s and 587s, against 412s unloaded. No test
-failed, so nothing to attribute; what the numbers DID show is one
-readiness wait (`test_e2e_widget_selection`) going from 3s unloaded to
-16s under load, 3s short of the 20s budget -- the budget was the risk,
-not the waits (they are already readiness observables via `wait_js`).
-Shipped: `UI_TIMEOUT_MS` default 60s, sized from that 5x swing with
-margin (a cap costs nothing on a green run); the browser suites run in
-their own serialized CI step, which they never did before (CI installed
-camoufox and then ran pytest without `--run-browser`); and the opt-in
-moved to the launch seam (6d9cda6), which unhid 30-odd non-browser tests.
-Gate going forward: that CI step, plus re-run this measurement if a
-budget is ever raised again. Observed 2026-09-13: run 34757201157 failed
-ONE browser test on the runner (`test_gallery_scrolls_internally_not_whole_card`,
-the container never overflowed within 60s; 147 others passed) and the
-re-run at the next commit was green with no code change in that path.
-The test now prints the container's sizes and ancestor chain on timeout
-(2bac300), so the next occurrence carries its own diagnosis.
-
-**6. Plaintext password in config.ini — SHIPPED (1830695)**
-`secret_store` behind `cloud_store::load_config`/`save_config`: macOS
-Keychain through the Apple-signed `security` CLI in stdin mode (service
-`divoom-control`, account `divoom-cloud`; the framework would key the
-item's ACL on the daemon's churning local signature), Linux `secret-tool`
-when on PATH, else the 0600 file with a once-logged warning;
-`DIVOOMD_SECRET_BACKEND` forces one. Migration on READ blanks the file
-copy; an email-only save moves a file password first; a refused NEW
-password writes nothing. Settings says "Password stored in Keychain" (one
-renderer for the status box). Tests drive a `FakeBackend` against temp
-files; migration proven red-then-green; the HOME-based tests pin the file
-backend so nothing touches a real keychain.
-
-**7. The active panel (user request 2026-09-12) — SHIPPED (216ce0b,
-1920ec7, 1ebb6df, 1612a37)**
-"It's not clear from the menubar which device is active, and there is no
-way to switch." Selection is a fleet-level fact the daemon owns
-(`Fleet::selected`): the first panel to link takes the slot; a bench
-click, the menubar's "Active panel" item or `divoom-control select --mac`
-change it through `select_device`, which broadcasts `selection` and
-`owned_devices` (each device carries `selected`) so every client follows.
-The resolver: explicit mac, else the active panel while linked, else the
-single linked panel, else a refusal that says whether the active panel is
-offline or none is active; forgetting the active panel hands the slot to
-a linked one. The bench's first-render fallback is provisional (Python
-proxy only) so a GUI start never overwrites a choice made elsewhere.
-Live on the installed build: CLI select moved the bench; the tray's
-submenu switch moved the daemon and the bench. Found on the way: the tray
-said "No active devices" with two idle panels linked (its polled fallback
-read the live-widget activity map); the daemon now serves `owned_devices`
-on request in the broadcast's shape.
-
-**8. Four GUI requests (2026-09-13) — all SHIPPED (4635bf1, c90a6c4)**
-A Version card in Settings > Connectivity (dashboard, daemon, protocol,
-mismatch note); clock Extra Panels as toggles; the bench open by
-default; and **local previews of cloud clock faces at the target
-resolution**. The last needed the app's native picture format: the
-store catalog (`StoreClockGetClassify`/`GetList`, `store_clock_faces`)
-ships each face as a magic-26 container whose frame is a `0xAA` record
-with flag `0x15`. Ghidra on `libtimebox.so` (`divoom_image_decode_
-decode_one_fix`, `decode_fix_{64,32,16,8}`) gave the format: a quadtree
-over 8x8 tiles, each node indexing the palette its parent handed down
-(mode 0), narrowing it with a bitmask (mode 2), or splitting in four
-(mode 1); the leaf packs its mode into the count byte; bits per index is
-ceil(log2 n) (`gdivoom_image_bits_table`). The app's dispatcher also
-shows magic 26 is this family, not the AES+LZO layout of magic 18 that
-the codec had assumed for both. `art_codec/fix.rs` decodes it with the
-'Digital Tech' face as a pixel-for-pixel golden. The catalog the panel
-listed before (`GetDialType`/`GetDialList`) still has no pictures; the
-store's faces now sit above it as cards, as drawn and at the selected
-panel's diode count. Unported: flag 0 for 32/64/128 and `PixelDecode64New`
-(64x64 store shapes), none seen in the store yet.
 
 ### The per-device rule (v0.36.0, read before adding any per-panel state)
 
@@ -375,43 +231,21 @@ that were always green, and previews that stopped following the device.
 * A queued unit of work holds the `Link` it was queued on and re-checks
   `retired` (and its job's `alive`) at execution time. Abort alone never
   cancels work already handed to the queue worker.
-* The daemon's "current" device exists only for mac-less callers (CLI, MCP
-  tools). The GUI names its panel on every call. Retire "current" once
-  those two pass `mac` (open item).
-* The GUI's selection changes through `setSelected` -> `select_device`
-  only. A status event updates the panel it names; the global dot follows
-  the SELECTED panel; a status naming nobody is fleet-wide.
+* There is no "current" device. The ACTIVE panel is a user selection the
+  daemon owns (`Fleet::selected`); a mac-less request resolves to it while
+  it is linked, else to the single linked panel, else is refused. The GUI
+  names its panel on every call anyway.
+* The selection changes through ONE funnel everywhere: bench click ->
+  `select_device`, menubar "Active panel", CLI `select`; the daemon
+  broadcasts `selection`/`owned_devices` and every client follows. The
+  bench's first-render fallback is provisional (Python proxy only). A
+  status event updates the panel it names; the global dot follows the
+  active panel; a status naming nobody is fleet-wide.
 * The gate is `divoomd/tests/live_jobs_stress.rs`; every new scenario there
   should be shown red first.
 
-Residual, filed: MediaRemote answers for one Now Playing session, so a
-playing app behind a stopped holder cannot be read; the idle reply names
-the registered players and the card shows the hint.
-
-### SHIPPED — user-reported defects filed and closed 2026-09-12
-
-All six, live-confirmed on the installed build with the user present.
-The mechanisms and commits are in the v0.36.0 CHANGELOG stanza. What the
-next reader needs: #3's "slow/flaky" was two things (a healthy link
-switches in 0.04-0.12s; the flakiness was the connecting-state funnel),
-and #1's first fix went the wrong way (the cover is a PHOTO and scales
-smoothly; only the device frame is diodes). Reopen #3 only with a
-timestamped slow switch plus the link state captured alongside.
-
-### SHIPPED — code rearrangement (2026-09-12, four phases in three commits)
-
-Recover the plan with `git log --diff-filter=D -- docs/PLANNING_TEST_REORG.md`.
-**Phase 1** (`5d92643`): 4 strays into `tests/` (all hardware-gated),
-`hw_test_modes.py` → `hw_walk_modes.py`, 4 ungated `pub mod *_tests`
-gated, new `tools/check_test_placement.py`. **Phase 2** (`3f37b6c`):
-dead trio + 2 superseded runners deleted, `perf_*` → `scripts/`
-(11 perf tests pass explicitly; never suite-collected). **Phase 3**
-(`245c961`): audit found almost nothing obsolete — `examples/` × 7,
-both old-path scripts, all 14 CLI subcommands KEPT with reasoning;
-README stale-weather paragraph fixed; new `tools/check_examples.py`;
-`scratch/` emptied (42 ignored files, regeneration proven).
-**Phase 4**: full `ci_local.sh` 28/28 green, plan pruned to history.
-Suite end state: 2946 passed / 236 skipped; collection 3182.
+Now Playing is read per client since v0.37.0 (the earlier "one session"
+residual was a mis-declared call, not a platform limit).
 
 ### The ownership rule (read this before calling anything a duplicate)
 
@@ -597,18 +431,17 @@ _Shipped in v0.35.0: Full-width top Spatial Preview Bench, physical millimeter p
 #### 1. Event-Driven State Ingestion via `subscribe` (SHIPPED & WIRED)
 - **Completed**: `divoom-menubar` consumes event-driven state over persistent `subscribe` stream with zero socket churn in steady state. `divoomd` now broadcasts `"activity"` events on `set_device_activity` and channel switches, updating menubar device labels and channels in real time.
 
-#### 2. Visual Device Tiles with Graphical Previews (data SHIPPED v0.36.0, rendering open)
-- `DeviceView.preview` now carries real frames: the daemon broadcasts every live frame as a PNG data URL and keeps it on the panel's activity record. Remaining: hand it to `tray-icon` / `NSMenuItem` as an image instead of text.
+#### 2. Visual Device Tiles with Graphical Previews (SHIPPED v0.37.0)
+- `tiles::TileCache` decodes each panel's PNG preview once into its row's icon, updated in place while the menu is open. The path from a real broadcast to the `Icon` is a test; the `NSMenu` drawing it is the one part checked only by eye.
 
 #### 3. Actionable Per-Device Controls (SHIPPED & WIRED)
 - **Completed**: Device rows in the tray menu feature interactive submenus with quick channel switcher (Clock, Visualizer, Ambient) and screen power standby toggle ("Turn Off Screen" / "Turn On Screen"). Wired to `system.set_screen_on` in `divoomd` with automatic streamer job preemption on standby.
 
 #### 4. Fleet Connection State Aggregation (SHIPPED v0.36.0)
-- `DeviceView.link` per panel; `DaemonSnapshot::connection_state()` derives the tray word (any degraded panel wins, else any active). A per-panel status event moves only that panel. Remaining polish: a count in the tooltip ("3 of 4 online").
+- `DeviceView.link` per panel; `DaemonSnapshot::connection_state()` derives the tray word (any degraded panel wins, else any active). A per-panel status event moves only that panel. Tooltip: "N of M panels online — active: <name>" (v0.37.0).
 
-#### 5. Non-Destructive In-Place Menu Updates
-- **Finding**: When `last_sig` changes, `tray.rebuild()` constructs a brand new `Menu` instance and resets it on the tray icon, which can cause UI jitter or dismiss the menu while the user has it open.
-- **Plan**: Update menu item labels, icons, and checkmarks in-place rather than rebuilding and re-installing the root `Menu` container on transient activity ticks.
+#### 5. Non-Destructive In-Place Menu Updates (half done)
+- Frames update the row ICON in place (v0.37.0). A change of rows, names, kinds or the active panel still rebuilds the root `Menu`, which dismisses it if open. Remaining: update labels and the "Active panel" check in place too.
 
 ### OPEN — why did 64 subscriptions accumulate in the first place?
 
@@ -701,42 +534,27 @@ own planning file is scratch and will not survive the session.
 - **`routines` needs a self-watchdog too**, for the same reason divoom does
   (D6): launchd has no watchdog, so detection must be in-process.
 
-### OPEN — the browser e2e suite is LOAD-SENSITIVE, and it undermines the gate
+### CLOSED (2026-09-12) — the browser e2e suite under load, measured
 
-**Found 2026-08-31 while validating R72.** Two consecutive full-suite runs on
-the same commit failed **different, non-overlapping sets** of tests:
+**Found 2026-08-31 while validating R72**: two consecutive full-suite runs
+on the same commit failed different, non-overlapping sets of camoufox
+tests (4, then 5; all pass alone) at a machine load of ~7-9 from the
+developer's own processes. The suspected mechanism was startup crossing a
+fixed timeout chosen on an idle machine.
 
-| Run | Failures | Tests |
-|-----|----------|-------|
-| 1 | 4 | `e2e_gui_daemon_connect_disconnect` x2, `e2e_hot_channel_sync_button`, `e2e_sync_now` |
-| 2 | 5 | `e2e_device_status_dot`, `e2e_photo_albums`, `e2e_ux_feedback`, `gui_wall_canvas_drag` x2 |
-
-**Overlap: zero.** Every one of the nine is a camoufox/browser test, and every
-one passes in isolation — re-run together afterwards, 28 passed in 6m03s.
-
-**And the load is NOT an artefact of this session, which makes it worse.** The
-first reading was 9.19 while full suites, `gate.sh --full` and cargo rebuilds
-overlapped. But with all of that finished the machine still sits at **6.85**,
-entirely from the developer's own processes (an MCP server, a TUI under test).
-That is the NORMAL condition this suite runs in. The flakiness is not something
-you have to provoke; it is the default on a working machine.
-
-**Why this is not just "flaky tests".** R71 P0 made `pre-push` run the full
-local CI, which was the right call and is already earning its keep. But a gate
-that fails randomly is a gate people learn to bypass, and `--no-verify` is
-exactly the invisible escape hatch P0 was written to avoid. A ~0.15% random
-failure rate across ~3000 tests is enough to redden most pushes.
-
-**The likely mechanism**, not yet confirmed: these tests `wait_js` on a
-condition with a fixed timeout while a real daemon and a real browser start.
-Under load, startup crosses the timeout. That is a threshold chosen on an idle
-machine, which is the classic `measure-one-thing` failure.
-
-**Not fixed here** — it is a suite-wide timing property, not an R72 finding, and
-diagnosing it properly means measuring browser+daemon startup under controlled
-load rather than guessing at a bigger number. Recorded with its evidence so the
-next session does not rediscover it, or worse, "fix" it by loosening a threshold
-without measuring.
+**Measured 2026-09-12** (v0.37 step 5): the whole browser subset (150
+tests) run twice under a half-core CPU burner plus a `cargo check` loop on
+top of the machine's own load (average 30-130): 150/150 both times, 597s
+and 587s against 412s unloaded. No failure to attribute, but one readiness
+wait (`test_e2e_widget_selection`) took 3s unloaded and 16s under load --
+3s short of the 20s budget. The waits were already readiness observables
+(`wait_js`); the CAP carried the risk. `UI_TIMEOUT_MS` defaults to 60s,
+sized from that 5x swing. The suites now run in CI in their own serialized
+step (they never had: CI installed camoufox, then ran pytest without
+`--run-browser`), and the opt-in moved to the launch seam, which surfaced
+30-odd hidden non-browser tests. Observed since: 4 CI runs green, 1 with a
+single timeout in the gallery-overflow test that did not recur; that test
+now prints its layout on timeout.
 
 ### Earlier shipped workstreams — pruned to git history
 
