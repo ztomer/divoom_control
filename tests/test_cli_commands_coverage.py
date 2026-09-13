@@ -196,6 +196,23 @@ async def test_cmd_scan_no_devices_found(monkeypatch, capsys) -> None:
     assert "no Divoom devices found" in capsys.readouterr().out
 
 
+async def test_a_refused_scan_is_an_error_not_an_empty_list(monkeypatch, capsys) -> None:
+    # Live 2026-09-12: the GUI's own scan was running, the daemon answered
+    # "scan already in progress", and the CLI printed "(no Divoom devices
+    # found)". A refusal must read as a refusal, on every scan path.
+    _use_client(monkeypatch, _FakeClient(
+        scan={"success": False, "error": "scan already in progress"}))
+    with pytest.raises(SystemExit) as exc:
+        await cli_commands.cmd_scan(_parse("scan"))
+    assert exc.value.code == 1
+    assert "scan already in progress" in capsys.readouterr().err
+    ns = SimpleNamespace(command="set-volume", mac=None, timeout=1.0, device_type=None)
+    with pytest.raises(SystemExit) as exc:
+        await cli_commands._resolve_device(ns)
+    assert exc.value.code == 1
+    assert "scan already in progress" in capsys.readouterr().err
+
+
 async def test_cmd_scan_json(monkeypatch, capsys) -> None:
     _use_client(monkeypatch, _FakeClient(
         scan={"success": True, "devices": [{"address": "AA:BB:CC:DD:EE:FF", "name": "Pixoo"}]}))

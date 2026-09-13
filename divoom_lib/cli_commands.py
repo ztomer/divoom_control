@@ -70,6 +70,20 @@ def _capabilities(args: argparse.Namespace, mac: str) -> Capabilities:
     return caps if caps is not None else capabilities_for(None)
 
 
+def _scan(client, timeout) -> list:
+    """The daemon's scan results, or a refusal that SAYS why.
+
+    Found live (2026-09-12): the GUI scans on its own schedule, and a CLI scan
+    that collides with it gets `{"success": false, "error": "scan already in
+    progress"}`. Reading only `devices` turned that into "(no Divoom devices
+    found)", a false answer. Every scan reader goes through here.
+    """
+    reply = client.scan(timeout=timeout) or {}
+    if not reply.get("success", True):
+        _err(f"scan failed: {reply.get('error') or reply}", 1)
+    return reply.get("devices") or []
+
+
 async def _resolve_device(args: argparse.Namespace):
     """Return (device proxy, id). The proxy speaks to the daemon for ONE
     panel: `--mac` names it; without it, the daemon's own resolver answers
@@ -90,7 +104,7 @@ async def _resolve_device(args: argparse.Namespace):
                  + ", ".join(d["mac"] for d in st["devices"]), 2)
         else:
             # Nothing linked: scan through the daemon and take the first.
-            results = (client.scan(timeout=args.timeout) or {}).get("devices") or []
+            results = _scan(client, args.timeout)
             if not results:
                 _err("no Divoom devices found", 1)
             mac = results[0]["address"]
@@ -107,7 +121,7 @@ async def _resolve_device(args: argparse.Namespace):
 
 async def cmd_scan(args: argparse.Namespace) -> int:
     client = _daemon_client()
-    results = (client.scan(timeout=args.timeout) or {}).get("devices") or []
+    results = _scan(client, args.timeout)
     if args.json:
         _print(results, as_json=True)
     else:
@@ -301,7 +315,7 @@ async def cmd_identify(args: argparse.Namespace) -> int:
     manufacturer data and service UUIDs); the radio has one owner."""
     client = _daemon_client()
     print(f"Scanning for {args.timeout}s...", file=sys.stderr)
-    results = (client.scan(timeout=args.timeout) or {}).get("devices") or []
+    results = _scan(client, args.timeout)
     found = {r["address"]: r for r in results if r.get("manufacturer_data")}
     if not found:
         _err("no devices with manufacturer_data found", 1)
