@@ -22,22 +22,41 @@ async fn a_single_linked_panel_answers_a_macless_request_and_lookup_ignores_case
 }
 
 #[tokio::test]
-async fn several_linked_panels_refuse_a_macless_request_with_the_count() {
-    // "Whichever connected last" put a push on the wrong panel; a caller
-    // that did not say which panel is told there are several.
+async fn the_selected_panel_takes_macless_requests_and_none_selected_refuses_with_the_count() {
+    // "Whichever connected last" put a push on the wrong panel. The active
+    // panel is a visible, stable choice instead: the first to link until the
+    // user selects another; a later link never steals it.
     let f = Fleet::default();
     f.adopt("A", mock()).await;
     f.adopt("B", mock()).await;
-    let err = f.resolve_target(None).await.err().expect("refused");
-    assert!(err.starts_with("2 panels connected"), "{err}");
-    assert!(err.contains('A') && err.contains('B'), "{err}");
-    assert_eq!(f.resolve_target(Some("b")).await.unwrap().id, "B");
-    f.detach("A").await;
+    assert_eq!(f.selected_id().as_deref(), Some("A"));
+    assert_eq!(f.resolve_target(None).await.unwrap().id, "A");
+    assert!(f.select("b"), "a change");
+    assert!(!f.select("B"), "same panel, case-insensitively: no change");
     assert_eq!(f.resolve_target(None).await.unwrap().id, "B");
+    assert_eq!(f.resolve_target(Some("a")).await.unwrap().id, "A");
+    // A link drop keeps the selection (the panel may come back) but a
+    // mac-less request cannot wait for it: it goes to the single linked one.
+    f.detach("B").await;
+    assert!(f.is_selected("B"));
+    assert_eq!(f.resolve_target(None).await.unwrap().id, "A");
     assert!(
-        f.resolve_target(Some("A")).await.is_err(),
+        f.resolve_target(Some("B")).await.is_err(),
         "unlinked is not connected"
     );
+    // Forgetting the active panel hands the slot to a linked one.
+    f.remove("B").await;
+    assert_eq!(f.selected_id().as_deref(), Some("A"));
+    // An active panel that is NOT linked cannot take a mac-less request,
+    // and with several others linked the caller is told which is which.
+    f.adopt("C", mock()).await;
+    f.select("Z");
+    let err = f.resolve_target(None).await.err().expect("refused");
+    assert!(
+        err.starts_with("the active panel 'Z' is not connected and 2 others are"),
+        "{err}"
+    );
+    assert!(err.contains('A') && err.contains('C'), "{err}");
 }
 
 #[tokio::test]

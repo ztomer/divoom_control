@@ -91,6 +91,7 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
         #[cfg(feature = "ble")]
         "scan" => daemon.cmd_scan(&req).await,
         "connect" => daemon.cmd_connect(&req).await,
+        "select_device" => crate::daemon_connect::cmd_select_device(daemon, &req).await,
         "disconnect" => match req.args.get("mac").and_then(|v| v.as_str()) {
             Some(mac) => crate::daemon_connect::cmd_disconnect_one(daemon, mac).await,
             None => daemon.cmd_disconnect().await,

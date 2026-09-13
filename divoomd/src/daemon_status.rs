@@ -8,15 +8,15 @@ use crate::transport::DeviceTransport;
 
 impl Daemon {
     /// `device_status`: one panel when `mac` names it. Without a mac, the
-    /// single linked panel if there is exactly one; otherwise the fleet
-    /// summary (`connected` = any linked, `mac` null, `devices` listed) --
-    /// a caller that did not say which panel gets told there are several.
+    /// panel a mac-less request would go to (the selected one while linked,
+    /// else the single linked one); otherwise the fleet summary
+    /// (`connected` = any linked, `mac` null, `devices` listed) -- a caller
+    /// that did not say which panel gets told there are several.
     pub(crate) async fn device_status(&self, mac: Option<&str>) -> Value {
         let linked = self.fleet.linked().await;
         let target = match mac {
             Some(m) => self.fleet.get(m).await,
-            None if linked.len() == 1 => linked.first().cloned(),
-            None => None,
+            None => self.fleet.resolve_target(None).await.ok(),
         };
         let id_val = target.as_ref().map(|d| d.id.clone());
         let transport = match target {
@@ -45,7 +45,7 @@ impl Daemon {
 
         let devices: Vec<Value> = linked
             .iter()
-            .map(|d| json!({"mac": d.id, "connected": true}))
+            .map(|d| json!({"mac": d.id, "connected": true, "selected": self.fleet.is_selected(&d.id)}))
             .collect();
         json!({
             "success": true,
@@ -55,6 +55,7 @@ impl Daemon {
             "lan_ip": lan_ip,
             "wall": false,
             "devices": devices,
+            "selected": self.fleet.selected_id(),
         })
     }
 }

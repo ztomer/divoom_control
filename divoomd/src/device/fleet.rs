@@ -1,4 +1,8 @@
-//! The fleet: single owner of "which devices exist". No "current" device.
+//! The fleet: single owner of "which devices exist" and which one the user
+//! has SELECTED. Selection is a user-interface fact (the panel the bench and
+//! the menubar show as active), not a routing default that connection order
+//! sets: a mac-less request goes to the selected panel only while that
+//! panel is linked, else to the single linked panel, else it is refused.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -13,14 +17,56 @@ fn key(id: &str) -> String {
     id.to_ascii_uppercase()
 }
 
-/// Every device this daemon knows. There is no "current" device: a request
-/// names its panel, or there is exactly one linked panel, or it is refused.
+/// Every device this daemon knows, and the one the user selected. A request
+/// names its panel, or the selected panel is linked, or there is exactly
+/// one linked panel, or it is refused.
 #[derive(Default)]
 pub struct Fleet {
     devices: Mutex<HashMap<String, Arc<Device>>>,
+    /// The user's active panel, by id as the client gave it. Set by
+    /// `select_device` (bench click, menubar), by the first link when nothing
+    /// is selected, cleared when that device is forgotten.
+    selected: std::sync::Mutex<Option<String>>,
 }
 
 impl Fleet {
+    /// The selected panel's id, linked or not.
+    #[must_use]
+    pub fn selected_id(&self) -> Option<String> {
+        self.selected
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    #[must_use]
+    pub fn is_selected(&self, id: &str) -> bool {
+        self.selected_id().is_some_and(|s| key(&s) == key(id))
+    }
+
+    /// Make `id` the active panel. Returns whether that changed anything.
+    pub fn select(&self, id: &str) -> bool {
+        let mut sel = self
+            .selected
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if sel.as_deref().is_some_and(|s| key(s) == key(id)) {
+            return false;
+        }
+        *sel = Some(id.to_string());
+        true
+    }
+
+    fn unselect_if(&self, id: &str) {
+        let mut sel = self
+            .selected
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if sel.as_deref().is_some_and(|s| key(s) == key(id)) {
+            *sel = None;
+        }
+    }
+
     /// The device for `id`, created (unconnected) if the fleet has never
     /// heard of it. Activity and live jobs can exist for a panel the daemon
     /// is not currently linked to.
@@ -46,6 +92,9 @@ impl Fleet {
             .values()
             .filter(|d| d.link.try_lock().is_ok_and(|l| l.is_some()))
             .collect();
+        if let Some(sel) = linked.iter().find(|d| self.is_selected(&d.id)) {
+            return (true, Some(sel.id.clone()));
+        }
         match linked.as_slice() {
             [] => (false, None),
             [one] => (true, Some(one.id.clone())),
@@ -58,6 +107,11 @@ impl Fleet {
     pub async fn adopt(&self, id: &str, transport: Arc<DeviceTransport>) -> Arc<Device> {
         let dev = self.get_or_create(id).await;
         dev.attach(transport).await;
+        // The first panel to link is the active one until the user says
+        // otherwise; a later link never steals the selection.
+        if self.selected_id().is_none() {
+            self.select(id);
+        }
         dev
     }
 
@@ -75,10 +129,11 @@ impl Fleet {
         }
     }
 
-    /// The panel a request means. An explicit `id` names it. Without one
-    /// there is exactly one honest answer: the single linked panel. With
-    /// several linked, the caller has to say which -- "whichever connected
-    /// last" is the guess that put a push on the wrong panel (2026-09-12).
+    /// The panel a request means. An explicit `id` names it. Without one:
+    /// the SELECTED panel while it is linked, else the single linked panel.
+    /// With several linked and no linked selection, the caller has to say
+    /// which -- "whichever connected last" is the guess that put a push on
+    /// the wrong panel (2026-09-12).
     ///
     /// # Errors
     ///
@@ -92,17 +147,26 @@ impl Fleet {
                 .ok_or_else(|| format!("device '{i}' not connected"));
         }
         let mut linked = self.linked().await;
+        if let Some(pos) = linked.iter().position(|d| self.is_selected(&d.id)) {
+            return Ok(linked.remove(pos));
+        }
         match linked.len() {
             0 => Err("no device connected".to_string()),
             1 => Ok(linked.remove(0)),
-            n => Err(format!(
-                "{n} panels connected; pass 'mac' to say which ({})",
-                linked
+            n => {
+                let names = linked
                     .iter()
                     .map(|d| d.id.as_str())
                     .collect::<Vec<_>>()
-                    .join(", ")
-            )),
+                    .join(", ");
+                Err(self.selected_id().map_or_else(
+                    || format!("{n} panels connected and none active; pass 'mac' to say which ({names})"),
+                    |sel| format!(
+                        "the active panel '{sel}' is not connected and {n} others are; \
+                         pass 'mac' to say which ({names})"
+                    ),
+                ))
+            }
         }
     }
 
@@ -137,12 +201,26 @@ impl Fleet {
     /// returned so the caller can hang up), its activity gone.
     pub async fn remove(&self, id: &str) -> Option<Arc<Link>> {
         let removed = self.devices.lock().await.remove(&key(id))?;
+        if self.is_selected(id) {
+            // The active slot passes to a linked panel (lowest id, so the
+            // choice is the same every time) rather than sitting empty.
+            self.unselect_if(id);
+            let mut linked = self.linked().await;
+            linked.sort_by_key(|d| key(&d.id));
+            if let Some(next) = linked.first() {
+                self.select(&next.id);
+            }
+        }
         removed.stop_live_job(None).await;
         removed.detach().await
     }
 
     /// Forget every device: jobs stopped, links retired, activity gone.
     pub async fn drain(&self) -> Vec<Arc<Link>> {
+        *self
+            .selected
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
         let drained: Vec<Arc<Device>> = self.devices.lock().await.drain().map(|(_, d)| d).collect();
         let mut links = Vec::new();
         for d in &drained {

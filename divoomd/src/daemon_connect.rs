@@ -68,9 +68,24 @@ pub(crate) async fn owned_devices_payload(daemon: &Daemon) -> Value {
             "kind": act.as_ref().map_or("idle", |a| a.kind.as_str()),
             "state": "active",
             "preview": act.as_ref().and_then(|a| a.preview.clone()),
+            "selected": daemon.fleet.is_selected(&d.id),
         }));
     }
-    json!({ "type": "owned_devices", "devices": devices })
+    json!({ "type": "owned_devices", "devices": devices, "selected": daemon.fleet.selected_id() })
+}
+
+/// `select_device {mac}`: make a panel the ACTIVE one for every client at
+/// once -- the bench highlights it, the menubar marks it, mac-less commands
+/// go to it while it is linked. Broadcast so the other clients follow.
+pub(crate) async fn cmd_select_device(daemon: &Daemon, req: &Request) -> Value {
+    let Some(mac) = req.args.get("mac").and_then(|v| v.as_str()) else {
+        return err_reply("select_device requires 'mac'");
+    };
+    if daemon.fleet.select(mac) {
+        let _ = daemon.tx.send(json!({ "type": "selection", "mac": mac }));
+        let _ = daemon.tx.send(owned_devices_payload(daemon).await);
+    }
+    json!({ "success": true, "selected": mac })
 }
 
 /// btleplug surfaces a dead `CoreBluetooth` central (its session ended after a
