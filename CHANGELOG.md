@@ -37,6 +37,10 @@ Read first if you upgrade:
 - **Settings has a Version card** (Connectivity tab): dashboard, daemon and
   protocol versions, with a note when the daemon is older than the app.
 - **Clock "Extra Panels" are toggles**, and **the bench starts open**.
+- **Cloud clock faces show a picture**: the store's faces appear as cards
+  in the Clock panel, as drawn and as the selected panel would show them,
+  with Apply. Divoom's native 128x128 picture format was decoded from the
+  app's library for this.
 
 ### Changed
 
@@ -61,9 +65,10 @@ Read first if you upgrade:
   `owned_devices` command (the broadcast's shape) instead of the
   live-widget activity map, which listed only panels with a widget.
 - Daemon: `store_clock_faces` reads the clock-face STORE (19 faces with a
-  picture id each; the picture is a native high-res encoding no decoder
-  here reads yet, so no client shows them). The public catalog the Clock
-  panel lists has no pictures at all.
+  picture each); `art_codec/fix.rs` decodes the picture (magic 26 is the
+  app's "Iframe" family, not magic 18's AES+LZO layout, which the codec
+  had assumed for both). The public catalog the Clock panel lists has no
+  pictures at all.
 - Daemon: `Fleet::selected` (the active panel), `select_device {mac}`
   with a `selection` broadcast, `selected` on `device_status` and
   `owned_devices`; the resolver prefers the active panel while linked.

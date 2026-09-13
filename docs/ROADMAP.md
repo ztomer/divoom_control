@@ -338,23 +338,26 @@ said "No active devices" with two idle panels linked (its polled fallback
 read the live-widget activity map); the daemon now serves `owned_devices`
 on request in the broadcast's shape.
 
-**8. Four GUI requests (2026-09-13) — three SHIPPED (4635bf1), one OPEN**
-Shipped: a Version card in Settings > Connectivity (dashboard, daemon,
-protocol, mismatch note); clock Extra Panels as toggles; the bench open
-by default. OPEN, with the finding: **local previews of cloud clock
-faces at the target resolution.** The catalog the panel lists
-(`Channel/GetDialType`/`GetDialList`, ids 10..) has no pictures on any
-endpoint. The clock-face STORE (`StoreClockGetClassify`/`GetList`, now
-reachable -- `store_clock_faces`, b5522af) has 19 faces (ids 998..1021)
-with an `ImagePixelId` each; the file is a magic-26 container
-`{0x1A, frames, speed BE, rows 8, cols 8}` whose frame is `u32 BE len`
-+ a `0xAA` record with flag `0x15` and a 66-entry palette followed by
-3682 bytes -- too small for 128x128 at any bit depth, and not LZO, zlib
-or lz4 (probed). This is the native `pixelEncodeBlueHigh` output the
-APK comparison already called "unknown internal format". Next step if
-wanted: decompile that native routine (the decrypted APK's `libNDK`),
-or capture one known image through it and diff. Until then no client
-shows these, and the panel keeps the text list.
+**8. Four GUI requests (2026-09-13) — all SHIPPED (4635bf1, c90a6c4)**
+A Version card in Settings > Connectivity (dashboard, daemon, protocol,
+mismatch note); clock Extra Panels as toggles; the bench open by
+default; and **local previews of cloud clock faces at the target
+resolution**. The last needed the app's native picture format: the
+store catalog (`StoreClockGetClassify`/`GetList`, `store_clock_faces`)
+ships each face as a magic-26 container whose frame is a `0xAA` record
+with flag `0x15`. Ghidra on `libtimebox.so` (`divoom_image_decode_
+decode_one_fix`, `decode_fix_{64,32,16,8}`) gave the format: a quadtree
+over 8x8 tiles, each node indexing the palette its parent handed down
+(mode 0), narrowing it with a bitmask (mode 2), or splitting in four
+(mode 1); the leaf packs its mode into the count byte; bits per index is
+ceil(log2 n) (`gdivoom_image_bits_table`). The app's dispatcher also
+shows magic 26 is this family, not the AES+LZO layout of magic 18 that
+the codec had assumed for both. `art_codec/fix.rs` decodes it with the
+'Digital Tech' face as a pixel-for-pixel golden. The catalog the panel
+listed before (`GetDialType`/`GetDialList`) still has no pictures; the
+store's faces now sit above it as cards, as drawn and at the selected
+panel's diode count. Unported: flag 0 for 32/64/128 and `PixelDecode64New`
+(64x64 store shapes), none seen in the store yet.
 
 ### The per-device rule (v0.36.0, read before adding any per-panel state)
 
