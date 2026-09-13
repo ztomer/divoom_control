@@ -556,6 +556,12 @@ step (they never had: CI installed camoufox, then ran pytest without
 single timeout in the gallery-overflow test that did not recur; that test
 now prints its layout on timeout.
 
+**Flake ledger** (one line each; a repeat earns a real investigation):
+- 2026-09-13, local full gate at load ~20: `socket_bind::tests::clears_a_stale_socket`
+  saw `UnresponsiveListener` -- a `connect()` to a socket file whose
+  listener had been dropped SUCCEEDED and then heard silence. 5/5 green
+  when re-run alone; every sibling test uses its own pid-tagged path.
+
 ### Earlier shipped workstreams — pruned to git history
 
 The camoufox pin raised to latest (R68), the GUI e2e migration off Playwright
