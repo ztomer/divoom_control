@@ -28,6 +28,12 @@ Read first if you upgrade:
   panel, or there is exactly one linked; with several and no `mac` the
   daemon refuses with the count. Notifications go to every linked panel.
 - **Menubar rows show the frame each panel is showing.**
+- **There is an ACTIVE panel, and every client agrees on it.** The bench
+  highlight, the menubar's "(active)" row and its "Active panel" switch,
+  and `divoom-control select --mac` all set the same daemon-owned
+  selection; a mac-less command goes to the active panel while it is
+  linked. The first panel to link is active until you pick another.
+  The tray also no longer says "No active devices" with idle panels linked.
 
 ### Changed
 
@@ -46,7 +52,14 @@ Read first if you upgrade:
   events; `appConnected` follows the selected panel; the cloud status box
   has one renderer, and "not signed in" is a status, not an alarm.
 - Menubar: `tiles::TileCache` decodes each panel's PNG preview once into
-  its row icon; tooltip "N of M panels online".
+  its row icon; tooltip "N of M panels online — active: <name>". Rows
+  carry "(active)" and a checked "Active panel" item that switches the
+  selection. The polled fallback rebuilds the fleet from the daemon's new
+  `owned_devices` command (the broadcast's shape) instead of the
+  live-widget activity map, which listed only panels with a widget.
+- Daemon: `Fleet::selected` (the active panel), `select_device {mac}`
+  with a `selection` broadcast, `selected` on `device_status` and
+  `owned_devices`; the resolver prefers the active panel while linked.
 - Now-playing helper: `MRMediaRemoteGetNowPlayingInfoForClient` and
   `GetPlaybackStateForClient` take `(client, origin, ...)` — signatures
   read from the framework's code on macOS 26.6.2 (the three-argument

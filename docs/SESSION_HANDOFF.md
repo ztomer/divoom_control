@@ -39,10 +39,14 @@ shared memory. Read this on entry and **update it at the end of every round**
     on first read, Settings says where it lives.
   - **Browser opt-in at the launch seam** (6d9cda6): 30-odd non-browser
     tests were hidden by a module-text skip; default suite 3204/0/207.
-  - **Installed app is still v0.36.0.** Next: full gate, push, CI, then
-    `scripts/build_release.sh && scripts/install_local.sh`, reconnect the
-    fleet, check the menubar tiles and the CLI's mac-less refusal on the
-    new daemon, and the Keychain migration on the real config.ini.
+  - **Active panel** (216ce0b..1612a37): daemon-owned selection; bench,
+    menubar and CLI set and follow it. Live-verified both directions.
+  - **Installed: 0.37.0 (inode 543666093), not yet tagged.** Live-verified
+    on it: Keychain migration of the real config.ini (password line gone,
+    item in the login keychain, real login), per-client now-playing, CLI
+    mac-less refusal and `select`, tray rows with "(active)" and the
+    submenu switch, bench following. CI 5/5 green at 8479a67 including
+    the new browser step; later commits pushed after the gate.
 - **2026-09-12 — v0.36.0 RELEASED & INSTALLED LOCALLY: one struct per panel, the
   six user-reported defects, prompt-free rebuilds.** Detail: the v0.36.0
   CHANGELOG stanza; design rule: ROADMAP "per-device aggregate". Signing:
@@ -56,7 +60,10 @@ shared memory. Read this on entry and **update it at the end of every round**
    run of that step on the shared macOS runner is the thing to watch.
 2. **`examples/` documents the bleak facade** -- library docs, or retire in
    favour of daemon-client examples. Not decided.
-3. **Menubar tile visual check** on the real tray, after the next install.
+3. **Menubar tile visual check**: the rows and the switch were read through
+   System Events (NotchNook covers that part of the menu bar for a click
+   tool); the tile ICON itself is proven up to the `Icon` handed to
+   `NSMenu`, not by eye.
 4. **Release hygiene**: a new machine needs `scripts/make_signing_identity.sh`
    once (one keychain prompt, user present) or every install prompts.
 

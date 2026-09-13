@@ -205,7 +205,7 @@ are not restated.
 
 ## Open workstreams
 
-### v0.37 plan: finish the fleet model, then the residuals (filed 2026-09-12; all six SHIPPED)
+### v0.37 plan: finish the fleet model, then the residuals (filed 2026-09-12; all seven SHIPPED)
 
 Order is by leverage; 1-3 are one thread, 6 is independent, 5 is
 measurement-gated. Each step shipped with its tests shown red first.
@@ -313,6 +313,25 @@ password writes nothing. Settings says "Password stored in Keychain" (one
 renderer for the status box). Tests drive a `FakeBackend` against temp
 files; migration proven red-then-green; the HOME-based tests pin the file
 backend so nothing touches a real keychain.
+
+**7. The active panel (user request 2026-09-12) — SHIPPED (216ce0b,
+1920ec7, 1ebb6df, 1612a37)**
+"It's not clear from the menubar which device is active, and there is no
+way to switch." Selection is a fleet-level fact the daemon owns
+(`Fleet::selected`): the first panel to link takes the slot; a bench
+click, the menubar's "Active panel" item or `divoom-control select --mac`
+change it through `select_device`, which broadcasts `selection` and
+`owned_devices` (each device carries `selected`) so every client follows.
+The resolver: explicit mac, else the active panel while linked, else the
+single linked panel, else a refusal that says whether the active panel is
+offline or none is active; forgetting the active panel hands the slot to
+a linked one. The bench's first-render fallback is provisional (Python
+proxy only) so a GUI start never overwrites a choice made elsewhere.
+Live on the installed build: CLI select moved the bench; the tray's
+submenu switch moved the daemon and the bench. Found on the way: the tray
+said "No active devices" with two idle panels linked (its polled fallback
+read the live-widget activity map); the daemon now serves `owned_devices`
+on request in the broadcast's shape.
 
 ### The per-device rule (v0.36.0, read before adding any per-panel state)
 
