@@ -45,8 +45,9 @@ shared memory. Read this on entry and **update it at the end of every round**
     on it: Keychain migration of the real config.ini (password line gone,
     item in the login keychain, real login), per-client now-playing, CLI
     mac-less refusal and `select`, tray rows with "(active)" and the
-    submenu switch, bench following. CI 5/5 green at 8479a67 including
-    the new browser step; later commits pushed after the gate.
+    submenu switch, bench following. CI 5/5 green at 9130c4b (main),
+    including the browser step. Not tagged: `scripts/release.sh` cuts
+    v0.37.0 (version and CHANGELOG stanza are already in place).
 - **2026-09-12 — v0.36.0 RELEASED & INSTALLED LOCALLY: one struct per panel, the
   six user-reported defects, prompt-free rebuilds.** Detail: the v0.36.0
   CHANGELOG stanza; design rule: ROADMAP "per-device aggregate". Signing:
