@@ -30,6 +30,7 @@
 @import url('gallery.css');
 @import url('spatial_stage.css');
 @import url("style_extra.css");
+@import url("clock_faces.css");
 
 :root {
     --bg-base: #121316;

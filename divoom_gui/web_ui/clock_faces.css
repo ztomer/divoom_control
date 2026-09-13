@@ -1,0 +1,57 @@
+/* clock_faces.css — the Clock panel's extra-panel toggles, the cloud clock-face
+   catalog list and the clock-face store cards. Split from style_extra.css for
+   the 500-line cap (2026-09-13). */
+
+/* Clock "Extra Panels": toggles, not checkboxes (user request 2026-09-13).
+   The switch is the state, the word beside it is the name. */
+.clock-extras-row { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
+.clock-extra-toggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+
+/* Clock-face store cards: the face as drawn (128x128, shown 1:1) beside the
+   same face at the selected panel's resolution, scaled up so each diode is
+   a visible block -- the same pair the music card shows for album art. */
+.cloud-clock-store { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.cloud-clock-store .empty-list { grid-column: 1 / -1; }
+.clock-face-card { display: grid; grid-template-columns: 128px 128px 1fr; gap: 10px; align-items: center; padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; }
+.clock-face-card img { display: block; width: 128px; height: 128px; background: #000; border-radius: 3px; }
+.clock-face-card .clock-face-device { image-rendering: pixelated; }
+.clock-face-card .clock-face-caption { font-size: 10px; color: var(--text-muted); text-align: center; margin-top: 3px; }
+.clock-face-card .clock-face-meta { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.clock-face-card .clock-face-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Cloud clock-face list (Channel/GetDialType + GetDialList browser) ── */
+.cloud-clock-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 220px;
+    overflow-y: auto;
+}
+.cloud-clock-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+}
+.cloud-clock-name {
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.cloud-clock-apply-btn {
+    flex-shrink: 0;
+    padding: 4px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-primary, inherit);
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+.cloud-clock-apply-btn:hover { border-color: var(--primary); color: var(--primary); }
+.cloud-clock-apply-btn:disabled { opacity: 0.5; cursor: default; }
