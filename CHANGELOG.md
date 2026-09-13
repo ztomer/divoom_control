@@ -4,8 +4,10 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
-## Unreleased (v0.37 work, 2026-09-12)
+## v0.37.0 — Password in the Keychain, Now Playing per client, the CLI as a daemon client (2026-09-12)
 
+Minor bump: new capability (OS credential store, per-client now-playing,
+fleet resolver, menubar tiles) and corrected behaviour users depend on.
 Read first if you upgrade:
 
 - **Your Divoom account password moves out of `config.ini` into the macOS
