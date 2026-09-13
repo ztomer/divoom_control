@@ -145,13 +145,29 @@ async def test_gallery_scrolls_internally_not_whole_card():
             "#gallery-container was missing or unwritable. The scroll wait "
             "below would have timed out for this reason, naming nothing."
         )
-        # Wait for layout to settle and scroll height to exceed client height
-        await wait_js(page, """
-            () => {
+        # Wait for layout to settle and scroll height to exceed client height.
+        # On a timeout, say what the layout WAS: this went red on CI on
+        # 2026-09-13 (the bench now starts open) with a message that named
+        # only the condition, and the numbers are the whole diagnosis.
+        from tests.support.browser import MainWorldTimeout
+        try:
+            await wait_js(page, """
+                () => {
+                    const g = document.getElementById('gallery-container');
+                    return g && g.scrollHeight > g.clientHeight;
+                }
+            """, timeout=UI_TIMEOUT_MS)
+        except MainWorldTimeout as exc:
+            layout = await eval_js(page, """() => {
                 const g = document.getElementById('gallery-container');
-                return g && g.scrollHeight > g.clientHeight;
-            }
-        """, timeout=UI_TIMEOUT_MS)
+                const cs = g ? getComputedStyle(g) : null;
+                const chain = [];
+                for (let e = g; e; e = e.parentElement) chain.push(`${e.tagName.toLowerCase()}#${e.id||''}.${[...e.classList].join('.')} ${e.clientHeight}h/${e.scrollHeight}s ${getComputedStyle(e).display}/${getComputedStyle(e).overflowY}`);
+                return { scrollHeight: g && g.scrollHeight, clientHeight: g && g.clientHeight, display: cs && cs.display,
+                         overflowY: cs && cs.overflowY, win: window.innerHeight, doc: document.documentElement.scrollHeight,
+                         benchOpen: getComputedStyle(document.getElementById('spatial-stage-mount')).display, chain: chain.slice(0, 8) };
+            }""")
+            raise AssertionError(f"gallery never overflowed: {layout}") from exc
 
         gallery_scroll = await eval_js(page, """
             () => {
