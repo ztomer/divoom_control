@@ -165,3 +165,19 @@ def test_select_device_rebinds_the_proxy_without_connecting(host, monkeypatch):
     assert host.select_device("MatrixWall") is True
     assert host.current_target_mode == "wall"
     assert host.select_device("") is False
+
+
+def test_select_device_tells_the_daemon_unless_provisional(host):
+    """The daemon owns the ACTIVE panel (the menubar switches it too), so a
+    bench click reaches it; the bench's first-render placeholder does not,
+    or it would overwrite a choice made elsewhere on every GUI start."""
+    from unittest.mock import MagicMock
+    client = MagicMock()
+    host._daemon_client = client
+    assert host.select_device("e9a41e1e-ditoo") is True
+    client.select_device.assert_called_once_with("e9a41e1e-ditoo")
+    assert host.select_device("a9fccb71-pixoo", provisional=True) is True
+    client.select_device.assert_called_once()
+    assert host.current_divoom._mac == "a9fccb71-pixoo", "the proxy still follows"
+    client.select_device.side_effect = RuntimeError("socket gone")
+    assert host.select_device("t1-timoo") is True, "a daemon hiccup does not break the click"

@@ -137,18 +137,30 @@ async def test_bench_selection_always_reaches_python_including_the_fallback():
         await wait_js(page, "() => !!window.SpatialStage")
         res = await eval_js(page, """() => {
             const calls = [];
-            window.pywebview = { api: { select_device: (m) => { calls.push(m); return Promise.resolve(true); } } };
+            window.pywebview = { api: { select_device: (m, prov) => { calls.push([m, !!prov]); return Promise.resolve(true); } } };
             window.DivoomState.discoveredDevices = [
                 { address: 'T1:TIMOO', name: 'Timoo' }, { address: 'E9:DITOO', name: 'Ditoo' }];
             // Restored selection is a panel that no longer exists.
             window.SpatialStage.refresh();
             const afterFallback = { sel: window.SpatialStage.getSelectedMac(), calls: calls.slice() };
             document.querySelector('.spatial-ribbon-chip:nth-child(2)')?.click();
-            return { afterFallback, sel: window.SpatialStage.getSelectedMac(), calls };
+            const afterClick = { sel: window.SpatialStage.getSelectedMac(), calls: calls.slice() };
+            // The daemon says the active panel is the other one (a menubar
+            // switch): the bench follows through the same funnel, and a
+            // repeat of its own word is not a second call.
+            window.Divoom.onSelection({ type: 'selection', mac: 'T1:TIMOO' });
+            const afterDaemon = { sel: window.SpatialStage.getSelectedMac(), calls: calls.slice() };
+            window.Divoom.onOwnedDevices({ type: 'owned_devices', devices: [
+                { address: 'T1:TIMOO', name: 'Timoo', state: 'active', selected: true },
+                { address: 'E9:DITOO', name: 'Ditoo', state: 'active', selected: false }]});
+            return { afterFallback, afterClick, afterDaemon, sel: window.SpatialStage.getSelectedMac(), calls };
         }""")
+        # The fallback is PROVISIONAL: Python binds its proxy, the daemon is not told.
         assert res["afterFallback"]["sel"] == "T1:TIMOO"
-        assert res["afterFallback"]["calls"] == ["T1:TIMOO"], res
-        assert res["sel"] == "E9:DITOO" and res["calls"][-1] == "E9:DITOO", res
+        assert res["afterFallback"]["calls"] == [["T1:TIMOO", True]], res
+        assert res["afterClick"]["sel"] == "E9:DITOO" and res["afterClick"]["calls"][-1] == ["E9:DITOO", False], res
+        assert res["afterDaemon"]["sel"] == "T1:TIMOO" and res["afterDaemon"]["calls"][-1] == ["T1:TIMOO", False], res
+        assert res["sel"] == "T1:TIMOO" and len(res["calls"]) == len(res["afterDaemon"]["calls"]), res
         await browser.close()
 
 
@@ -196,4 +208,45 @@ async def test_require_device_and_fleet_status_are_per_panel():
         assert res["pxDown"] == {"sel": True, "px": False, "count": 1, "appConnected": True}
         assert res["allDown"] == {"sel": False, "count": 0, "appConnected": False}
         assert res["pxBack"] == {"px": True, "linked": True, "count": 1}
+        await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_bench_node_drag_moves_the_panel_and_a_still_click_connects_it():
+    """The bench node drag lives in spatial_drag.js (split 2026-09-12, no
+    test had pinned it): a press that never moves is a click and connects
+    the panel; one that moves saves the new position and connects nothing."""
+    from playwright.async_api import async_playwright
+
+    async with async_playwright() as p:
+        browser = await launch_browser(p)
+        page = await browser.new_page(viewport={"width": 1280, "height": 850})
+        # The stage starts collapsed (the ribbon); the bench is the expanded view.
+        await page.add_init_script("try { localStorage.setItem('spatial_stage_collapsed', 'false'); } catch (_) {}")
+        await page.goto(f"file://{INDEX_HTML}")
+        await page.wait_for_load_state("domcontentloaded")
+        await wait_js(page, "() => !!window.SpatialStage && !!window.SpatialDrag")
+        await eval_js(page, """() => {
+            window.__connects = [];
+            window.connectDevice = (name, addr) => { window.__connects.push(addr); };
+            window.pywebview = { api: { select_device: () => Promise.resolve(true) } };
+            window.DivoomState.discoveredDevices = [{ address: 'E9:DITOO', name: 'Ditoo' }];
+            window.SpatialStage.refresh();
+        }""")
+        node = page.locator("#spatial-node-E9\\:DITOO")
+        box = await node.bounding_box()
+        assert box, "the bench renders the panel"
+        # A still click: connect, no move.
+        await page.mouse.move(box["x"] + 10, box["y"] + 10)
+        await page.mouse.down()
+        await page.mouse.up()
+        assert await eval_js(page, "() => window.__connects") == ["E9:DITOO"]
+        # A drag: the node moves and nothing connects.
+        await page.mouse.move(box["x"] + 10, box["y"] + 10)
+        await page.mouse.down()
+        await page.mouse.move(box["x"] + 90, box["y"] + 40, steps=5)
+        await page.mouse.up()
+        after = await node.bounding_box()
+        assert after["x"] > box["x"] + 40, (box, after)
+        assert await eval_js(page, "() => window.__connects") == ["E9:DITOO"], "a drag is not a click"
         await browser.close()

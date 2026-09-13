@@ -341,7 +341,7 @@ def _make_daemon_event_handler(window):
         # web UI, for immediate honest rendering (R59/event-driven; replaces the
         # 4s polling heartbeats). Each maps to window.Divoom.on<Event>.
         if etype in ("status", "notification", "owned_devices",
-                     "notif_status", "hot_progress", "activity"):
+                     "notif_status", "hot_progress", "activity", "selection"):
             handler = {
                 "status": "onDaemonEvent",
                 "notification": "onDaemonEvent",
@@ -349,6 +349,7 @@ def _make_daemon_event_handler(window):
                 "notif_status": "onNotifStatus",
                 "hot_progress": "onHotProgress",
                 "activity": "onActivity",
+                "selection": "onSelection",
             }.get(etype)
             try:
                 payload = _json.dumps(ev, separators=(",", ":"))

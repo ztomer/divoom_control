@@ -69,6 +69,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("scan", parents=[shared], help="Scan for nearby Divoom devices.")
     sub.add_parser("capabilities", parents=[shared], help="Print the active device's capabilities.")
+    sub.add_parser("select", parents=[shared],
+                   help="Make --mac the ACTIVE panel for every client (bench, menubar, mac-less commands).")
     sub.add_parser("identify", parents=[shared], help="Print raw BLE manufacturer_data for a new device, for fingerprinting.")
 
     # SETTERS (require a value)
@@ -157,6 +159,7 @@ from divoom_lib.cli_commands import (
     _err,
     _resolve_device,
     cmd_scan,
+    cmd_select,
     cmd_capabilities,
     cmd_set_volume,
     cmd_set_brightness,
@@ -178,6 +181,7 @@ from divoom_lib.cli_commands import (
 
 COMMANDS: dict[str, Callable[[argparse.Namespace], Awaitable[int]]] = {
     "scan":          cmd_scan,
+    "select":        cmd_select,
     "capabilities":  cmd_capabilities,
     "set-volume":    cmd_set_volume,
     "set-brightness":cmd_set_brightness,

@@ -100,8 +100,8 @@ async def _resolve_device(args: argparse.Namespace):
         if st.get("mac"):
             mac = st["mac"]
         elif len(st.get("devices") or []) > 1:
-            _err("several panels are connected; pass --mac to say which: "
-                 + ", ".join(d["mac"] for d in st["devices"]), 2)
+            _err("several panels are connected and none is the active one; pass --mac, "
+                 "or `select --mac` one: " + ", ".join(d["mac"] for d in st["devices"]), 2)
         else:
             # Nothing linked: scan through the daemon and take the first.
             results = _scan(client, args.timeout)
@@ -129,6 +129,23 @@ async def cmd_scan(args: argparse.Namespace) -> int:
             print("(no Divoom devices found)")
         for r in results:
             print(f"{r['address']}  {r['name']}")
+    return 0
+
+
+async def cmd_select(args: argparse.Namespace) -> int:
+    """Make a panel the ACTIVE one: the daemon owns the selection, so the
+    bench highlights it, the menubar marks it, and mac-less commands go to
+    it while it is linked."""
+    if not args.mac:
+        _err("--mac is required for `select`", 2)
+    client = _daemon_client()
+    reply = client.select_device(args.mac) or {}
+    if not reply.get("success"):
+        _err(f"select failed: {reply.get('error') or reply}", 1)
+    if args.json:
+        _print(reply, as_json=True)
+    else:
+        print(f"active panel: {args.mac}")
     return 0
 
 

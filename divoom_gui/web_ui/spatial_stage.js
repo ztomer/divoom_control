@@ -6,7 +6,6 @@
     'use strict';
 
     let stageMounted = false;
-    let activeDrag = null;
     let selectedMac = null;
     let isWallMode = false;
     let tick = 0;
@@ -241,8 +240,10 @@
             devicePositions[addr] = pos;
             defaultX += w + 12;
 
-            // A restored selection that is not a listed panel: fall back to the first.
-            if (idx === 0 && (!selectedMac || !devices.some(d => (d.address || 'dev-0') === selectedMac))) setSelected(addr);
+            // A restored selection that is not a listed panel: fall back to the
+            // first -- PROVISIONALLY: the daemon owns the active panel and may
+            // already have one; its broadcast then moves the highlight.
+            if (idx === 0 && (!selectedMac || !devices.some(d => (d.address || 'dev-0') === selectedMac))) setSelected(addr, true);
             const isSelected = selectedMac === addr;
 
             const devRoom = deviceRooms[addr] !== undefined ? deviceRooms[addr] : (dev.room || '');
@@ -274,7 +275,7 @@
             // Node Click Selection & Drag
             node.addEventListener('mousedown', (e) => {
                 highlightNode(addr, dev);
-                startNodeDrag(e, addr, node, dev);
+                window.SpatialDrag.start(e, { addr, node, dev, positions: devicePositions, rooms: deviceRooms, nameOf: (d) => d.name || resolveDeviceSpec(d).name });
             });
 
             bench.appendChild(node);
@@ -318,10 +319,21 @@
     }
 
     const jewelClass = (dev) => window.jewelClassFor(dev);
-    // The ONE way the selection changes: bench state and Python's proxy move together.
-    function setSelected(addr) {
+    // The ONE way the selection changes: bench state, Python's proxy and the
+    // daemon's active panel move together (provisional = bench placeholder,
+    // the daemon is not told).
+    function setSelected(addr, provisional) {
         selectedMac = addr;
-        try { window.pywebview?.api?.select_device?.(addr); } catch (_) {}
+        try { window.pywebview?.api?.select_device?.(addr, !!provisional); } catch (_) {}
+    }
+
+    // The daemon said which panel is active (a menubar switch, a CLI call,
+    // its own first-link default): follow it. Same funnel as a click, and
+    // the daemon ignores a re-selection of its own choice, so no loop.
+    function followSelection(addr) {
+        if (!addr || addr === selectedMac) return;
+        const dev = (window.DivoomState?.discoveredDevices || []).find(d => (d.address || 'dev-0') === addr);
+        if (dev) highlightNode(addr, dev); else setSelected(addr, true);
     }
 
     function highlightNode(addr, dev) {
@@ -388,55 +400,6 @@
         });
     }
 
-    function startNodeDrag(e, addr, node, dev) {
-        if (e.button !== 0) return;
-        const bench = document.getElementById('spatial-bench');
-        if (!bench) return;
-        activeDrag = {
-            addr, dev, node, startX: e.clientX, startY: e.clientY,
-            initialX: devicePositions[addr] ? devicePositions[addr].x : 0,
-            initialY: devicePositions[addr] ? devicePositions[addr].y : 0,
-            benchWidth: bench.clientWidth, benchHeight: bench.clientHeight,
-            nodeWidth: node.offsetWidth, nodeHeight: node.offsetHeight, hasMoved: false
-        };
-        window.addEventListener('mousemove', onNodeDrag);
-        window.addEventListener('mouseup', endNodeDrag);
-        e.preventDefault();
-    }
-
-    function onNodeDrag(e) {
-        if (!activeDrag) return;
-        const dx = e.clientX - activeDrag.startX, dy = e.clientY - activeDrag.startY;
-        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) activeDrag.hasMoved = true;
-        const nx = Math.max(0, Math.min(activeDrag.benchWidth - activeDrag.nodeWidth, activeDrag.initialX + dx));
-        const ny = Math.max(0, Math.min(activeDrag.benchHeight - activeDrag.nodeHeight, activeDrag.initialY + dy));
-        if (!devicePositions[activeDrag.addr]) devicePositions[activeDrag.addr] = {};
-        devicePositions[activeDrag.addr].x = nx;
-        devicePositions[activeDrag.addr].y = ny;
-        activeDrag.node.style.left = `${nx}px`;
-        activeDrag.node.style.top = `${ny}px`;
-    }
-
-    function endNodeDrag(e) {
-        if (activeDrag) {
-            if (!activeDrag.hasMoved && typeof window.connectDevice === 'function') {
-                window.connectDevice(activeDrag.dev.name || resolveDeviceSpec(activeDrag.dev).name, activeDrag.addr);
-            } else {
-                if (window.SpatialRooms) window.SpatialRooms.savePositions(devicePositions, deviceRooms);
-                else try { localStorage.setItem('divoom_stage_positions', JSON.stringify(devicePositions)); } catch (_) {}
-                if (window.DivoomState?.assignedSlots?.[activeDrag.addr]) {
-                    window.DivoomState.assignedSlots[activeDrag.addr].x = devicePositions[activeDrag.addr].x;
-                    window.DivoomState.assignedSlots[activeDrag.addr].y = devicePositions[activeDrag.addr].y;
-                    if (window.renderArrangerCanvas) window.renderArrangerCanvas();
-                    if (window.syncArrangerToPython) window.syncArrangerToPython();
-                }
-            }
-        }
-        activeDrag = null;
-        window.removeEventListener('mousemove', onNodeDrag);
-        window.removeEventListener('mouseup', endNodeDrag);
-    }
-
     function centerDevices() {
         const devs = getDeviceList(), bench = document.getElementById('spatial-bench');
         if (!devs.length || !bench) return;
@@ -489,7 +452,7 @@
         renderLoop();
     }
 
-    window.SpatialStage = { init: initSpatialStage, refresh: refreshBenchNodes, snap: snapToDesk, center: centerDevices, getSelectedMac: () => selectedMac };
+    window.SpatialStage = { init: initSpatialStage, refresh: refreshBenchNodes, snap: snapToDesk, center: centerDevices, getSelectedMac: () => selectedMac, followSelection: followSelection };
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initSpatialStage);

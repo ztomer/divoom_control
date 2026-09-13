@@ -89,7 +89,10 @@ class ScannerMixin:
             connected = bool(status.get("connected"))
             if state == "disconnected":
                 connected = False
-            return json.dumps({"connected": connected, "state": state})
+            # The daemon's ACTIVE panel rides along so the bench can follow a
+            # switch made elsewhere (menubar, CLI).
+            return json.dumps({"connected": connected, "state": state,
+                               "selected": status.get("selected")})
         except Exception as e:
             logger.debug(f"get_connection_state failed: {e}")
             return json.dumps({"connected": False, "state": "disconnected"})
@@ -277,8 +280,14 @@ class ScannerMixin:
         except Exception as ce:
             logger.warning(f"Failed to cache discovered devices/count: {ce}")
 
-    def select_device(self, address: str) -> bool:
-        """The bench selected a panel: bind every device action to IT.
+    def select_device(self, address: str, provisional: bool = False) -> bool:
+        """The bench selected a panel: bind every device action to IT, and
+        tell the daemon, which owns the ACTIVE panel for every client (the
+        menubar can switch it too, and the bench follows).
+
+        ``provisional`` is the bench's own placeholder before the daemon has
+        spoken (first render picks the first panel); it binds the proxy but
+        does not push a selection the daemon may already have made elsewhere.
 
         2026-09-12: the bench restores its selection from local storage, and
         the startup auto-reconnect binds ``current_divoom`` to the LAST
@@ -300,6 +309,11 @@ class ScannerMixin:
         cur = getattr(self, "current_divoom", None)
         if cur is None or getattr(cur, "_mac", None) != address:
             self.current_divoom = DaemonDeviceProxy(client, target="device", mac=address)
+        if not provisional:
+            try:
+                client.select_device(address)
+            except Exception as exc:
+                logger.debug("select_device not accepted by the daemon: %s", exc)
         return True
 
     def connect_single_device(self, address: str) -> bool:

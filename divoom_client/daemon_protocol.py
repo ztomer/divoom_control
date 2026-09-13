@@ -325,8 +325,15 @@ class DaemonClient(HostDataMixin, CloudDataMixin):
         return self.send_command("shutdown")
 
     def device_status(self, mac: str | None = None) -> dict:
-        """Status of one panel (``mac``) or, with no ``mac``, the daemon's current device."""
+        """Status of one panel (``mac``) or, with no ``mac``, the panel a
+        mac-less request would go to (the ACTIVE one while linked, else the
+        single linked one) plus the fleet (``devices``, ``selected``)."""
         return self.send_command("device_status", {"mac": mac} if mac else None)
+
+    def select_device(self, mac: str) -> dict:
+        """Make ``mac`` the ACTIVE panel for every client (bench, menubar,
+        CLI): the daemon owns the selection and broadcasts the change."""
+        return self.send_command("select_device", {"mac": mac})
 
     def scan(self, timeout: float | None = None, limit: int | None = None) -> dict:
         # Divoom BLE discovery is slow (a full scan can take 30-60s). The daemon

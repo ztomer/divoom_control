@@ -59,21 +59,21 @@ def test_get_connection_state_connected():
     s = _make()
     s._fake = _FakeClient({"connected": True, "connection_state": "connected"})
     assert json.loads(s.get_connection_state()) == {
-        "connected": True, "state": "connected"}
+        "connected": True, "state": "connected", "selected": None}
 
 
 def test_get_connection_state_degraded():
     s = _make()
     s._fake = _FakeClient({"connected": True, "connection_state": "degraded"})
     assert json.loads(s.get_connection_state()) == {
-        "connected": True, "state": "degraded"}
+        "connected": True, "state": "degraded", "selected": None}
 
 
 def test_get_connection_state_disconnected():
     s = _make()
     s._fake = _FakeClient({"connected": False})
     assert json.loads(s.get_connection_state()) == {
-        "connected": False, "state": "disconnected"}
+        "connected": False, "state": "disconnected", "selected": None}
 
 
 def test_get_connection_state_no_daemon_reads_disconnected():
@@ -96,7 +96,7 @@ def test_get_connection_state_explicit_disconnected_not_masked_by_connected():
     s = _make()
     s._fake = _FakeClient({"connected": True, "connection_state": "disconnected"})
     assert json.loads(s.get_connection_state()) == {
-        "connected": False, "state": "disconnected"}
+        "connected": False, "state": "disconnected", "selected": None}
 
 
 # ── get_known_devices ───────────────────────────────────────────────────────

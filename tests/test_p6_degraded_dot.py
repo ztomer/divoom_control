@@ -38,7 +38,8 @@ def _mixin(client):
 def test_get_connection_state_passes_through_degraded():
     m = _mixin(_FakeClient({"connected": True, "connection_state": "degraded"}))
     out = json.loads(m.get_connection_state())
-    assert out == {"connected": True, "state": "degraded"}
+    # `selected` rides along (the daemon's ACTIVE panel); None when unknown.
+    assert out == {"connected": True, "state": "degraded", "selected": None}
 
 
 def test_get_connection_state_connected():

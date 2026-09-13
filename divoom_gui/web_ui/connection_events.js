@@ -177,6 +177,7 @@ window.refreshConnectionState = function() {
     api.get_connection_state().then(raw => {
         let s;
         try { s = JSON.parse(raw); } catch (e) { return; }
+        if (s && s.selected && window.SpatialStage?.followSelection) window.SpatialStage.followSelection(s.selected);
         const state = s && s.state;
         if (state === "degraded") {
             // Reports connected but a write/drop just failed — show amber, keep
@@ -274,6 +275,16 @@ window.Divoom.onOwnedDevices = function(ev) {
     if (window.renderDeviceDots) window.renderDeviceDots();
     // The bench and deck jewels read daemonOwned too (2026-09-12).
     if (window.SpatialStage?.refresh) window.SpatialStage.refresh();
+    // The daemon owns the ACTIVE panel; the bench follows its word.
+    const active = ev.devices.find(dev => dev.selected === true);
+    if (active && active.address && window.SpatialStage?.followSelection) window.SpatialStage.followSelection(active.address);
+};
+
+// The daemon's `selection` broadcast: a menubar switch, a CLI call, or its
+// own first-link default. One funnel with a bench click.
+window.Divoom.onSelection = function(ev) {
+    if (!ev || !ev.mac) return;
+    if (window.SpatialStage?.followSelection) window.SpatialStage.followSelection(ev.mac);
 };
 
 // R59/event-driven: macOS notification-monitor status. The daemon broadcasts
