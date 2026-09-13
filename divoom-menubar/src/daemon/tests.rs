@@ -221,3 +221,38 @@ fn link_state_is_per_device_and_the_icon_state_is_derived() {
         .all(|d| d.link.as_deref() == Some("idle")));
     assert_eq!(snap.connection_state().as_deref(), Some("idle"));
 }
+
+/// The daemon-to-tile path against a REAL broadcast: the fixture is an
+/// `activity` event captured from the installed 0.37.0 daemon on 2026-09-12
+/// with a sysmon widget running on the Pixoo (`tests/fixtures/`). What the
+/// tray cannot prove headlessly is the `NSMenu` drawing the icon; everything
+/// up to the `Icon` it hands over is proven here.
+#[test]
+fn a_real_activity_broadcast_becomes_a_tile() {
+    let raw = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/activity_event.json"
+    ))
+    .expect("fixture");
+    let ev: Value = serde_json::from_str(&raw).unwrap();
+    let mut snap = DaemonSnapshot::default();
+    snap.apply_activity(&ev);
+    let pixoo = snap
+        .devices
+        .iter()
+        .find(|d| d.mac == "a9fccb71-3d3d-4de3-c381-0de382cdc4aa")
+        .expect("the broadcast names its panel");
+    assert_eq!(pixoo.kind, "sysmon");
+    let preview = pixoo
+        .preview
+        .as_deref()
+        .expect("the broadcast carries the frame");
+    let (rgba, w, h) = crate::tiles::decode_data_url(preview).expect("a PNG the tray can decode");
+    assert_eq!((w, h), (16, 16), "a Pixoo frame is 16x16");
+    assert!(rgba.iter().any(|&b| b != 0), "the frame is not blank");
+    let mut cache = crate::tiles::TileCache::default();
+    assert!(
+        cache.icon_for(Some(preview)).is_some(),
+        "the row gets an icon"
+    );
+}
