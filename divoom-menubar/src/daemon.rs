@@ -163,6 +163,10 @@ pub struct DeviceView {
     /// The daemon's link state for this panel (`active`, `degraded`,
     /// `disconnected`, ...) as last broadcast; `None` until one arrives.
     pub link: Option<String>,
+    /// The ACTIVE panel: the one the bench shows and mac-less requests go
+    /// to. One per fleet; set by the daemon's `selection`/`owned_devices`
+    /// broadcasts and by `select_device`.
+    pub selected: bool,
 }
 
 impl DeviceView {
@@ -173,6 +177,7 @@ impl DeviceView {
             kind: String::new(),
             preview: None,
             link: None,
+            selected: false,
         }
     }
 }
@@ -274,6 +279,7 @@ pub fn update_snapshot_from_event(ev: &Value) {
         }
         "owned_devices" => snap.apply_owned_devices(ev),
         "activity" => snap.apply_activity(ev),
+        "selection" => snap.apply_selection(ev.get("mac").and_then(Value::as_str)),
         _ => {}
     }
 }
@@ -341,9 +347,26 @@ impl DaemonSnapshot {
                             .find(|x| x.mac.eq_ignore_ascii_case(mac))
                             .and_then(|x| x.link.clone())
                     }),
+                    selected: d.get("selected").and_then(Value::as_bool).unwrap_or(false),
                 })
             })
             .collect();
+    }
+
+    /// A `selection` broadcast (or a polled `selected`): exactly one panel
+    /// is active, and a panel the daemon names that this view has not seen
+    /// yet is added so the mark never points at nothing.
+    pub fn apply_selection(&mut self, mac: Option<&str>) {
+        for d in &mut self.devices {
+            d.selected = mac.is_some_and(|m| d.mac.eq_ignore_ascii_case(m));
+        }
+        if let Some(m) = mac {
+            if !self.devices.iter().any(|d| d.selected) {
+                let mut v = DeviceView::new(m, m);
+                v.selected = true;
+                self.devices.push(v);
+            }
+        }
     }
 
     fn apply_activity(&mut self, ev: &Value) {
@@ -411,6 +434,7 @@ pub fn device_activity_items() -> Vec<DeviceView> {
                     .get("state")
                     .and_then(|st| st.as_str())
                     .map(str::to_string),
+                selected: false,
             }
         })
         .collect();
@@ -418,54 +442,8 @@ pub fn device_activity_items() -> Vec<DeviceView> {
     items
 }
 
-pub fn switch_channel(mac: &str, channel: &str) {
-    let _ = request(
-        "device_call",
-        json!({
-            "mac": mac,
-            "method": "display.switch_channel",
-            "kwargs": { "channel": channel }
-        }),
-    );
-}
-
-pub fn set_screen_power(mac: &str, on: bool) {
-    let _ = request(
-        "device_call",
-        json!({
-            "mac": mac,
-            "method": "system.set_screen_on",
-            "kwargs": { "on": on }
-        }),
-    );
-}
-
-/// Whether the notification listener is running (menu label state).
-pub fn notifications_running() -> bool {
-    let Some(v) = request("notification_status", json!({})) else {
-        return false;
-    };
-    v.get("running")
-        .and_then(serde_json::Value::as_bool)
-        .or_else(|| {
-            v.get("state")
-                .and_then(|s| s.as_str())
-                .map(|s| s == "running")
-        })
-        .unwrap_or(false)
-}
-
-pub fn start_notifications() {
-    let _ = request("start_notifications", json!({}));
-}
-
-pub fn stop_notifications() {
-    let _ = request("stop_notifications", json!({}));
-}
-
-pub fn shutdown() {
-    let _ = request("shutdown", json!({}));
-}
+mod commands;
+pub use commands::*;
 
 #[cfg(all(test, unix))]
 mod tests;

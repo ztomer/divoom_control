@@ -4,7 +4,9 @@
 //! by polling the daemon (`poll_daemon`); menu clicks are dispatched in `on_menu`.
 
 use std::time::Duration;
-use tray_icon::menu::{Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem, Submenu};
+use tray_icon::menu::{
+    CheckMenuItem, Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem, Submenu,
+};
 use tray_icon::{TrayIcon, TrayIconBuilder};
 
 use crate::state::{resolve_icon_state, IconState};
@@ -69,15 +71,32 @@ impl Tray {
             for item in devices {
                 let name = &item.name;
                 let kind = &item.kind;
-                let label = if kind.is_empty() || kind == "idle" {
+                let mut label = if kind.is_empty() || kind == "idle" {
                     name.clone()
                 } else {
                     format!("{name} — {kind}")
                 };
+                // The active panel is named in the row itself, not only by
+                // a mark inside its submenu (never one channel).
+                if item.selected {
+                    label.push_str(" (active)");
+                }
                 let dev_submenu = Submenu::new(&label, true);
                 // The tile: the frame the panel is showing, from the daemon's
                 // broadcast (none when it has not sent one -- text stays honest).
                 dev_submenu.set_icon(self.tiles.borrow_mut().icon_for(item.preview.as_deref()));
+                // Switching panels: the check is the state, the click is the
+                // action; the active one is disabled because there is nothing
+                // to do on it.
+                let sel_id = MenuId::new(format!("sel:{}", item.mac));
+                let _ = dev_submenu.append(&CheckMenuItem::with_id(
+                    sel_id,
+                    "Active panel",
+                    !item.selected,
+                    item.selected,
+                    None,
+                ));
+                let _ = dev_submenu.append(&PredefinedMenuItem::separator());
                 let clk_id = MenuId::new(format!("ch:clock:{}", item.mac));
                 let _ = dev_submenu.append(&MenuItem::with_id(clk_id, "Show Clock", true, None));
                 let eq_id = MenuId::new(format!("ch:visualizer:{}", item.mac));
@@ -161,11 +180,18 @@ impl Tray {
             } else {
                 daemon::connection_state()
             };
-            let acts = if off {
+            let mut acts = if off {
                 Vec::new()
             } else {
                 daemon::device_activity_items()
             };
+            if !off {
+                if let Some(sel) = daemon::selected_mac() {
+                    for a in &mut acts {
+                        a.selected = a.mac.eq_ignore_ascii_case(&sel);
+                    }
+                }
+            }
             daemon::set_cached_snapshot(daemon::DaemonSnapshot::polled(
                 !off,
                 conn.as_deref(),
@@ -183,7 +209,7 @@ impl Tray {
             .iter()
             .filter(|d| matches!(d.link.as_deref(), Some("active" | "connected" | "degraded")))
             .count();
-        let tooltip = if devices.len() > 1 {
+        let mut tooltip = if devices.len() > 1 {
             format!(
                 "{base_tooltip} ({linked} of {} panels online)",
                 devices.len()
@@ -191,6 +217,10 @@ impl Tray {
         } else {
             base_tooltip
         };
+        if let Some(active) = devices.iter().find(|d| d.selected) {
+            tooltip.push_str(" — active: ");
+            tooltip.push_str(&active.name);
+        }
         if self.last_icon_state != Some(icon_state) {
             let _ = self.icon.set_icon(Some(make_icon(icon_state.color())));
             self.last_icon_state = Some(icon_state);
@@ -206,7 +236,7 @@ impl Tray {
             notif_running,
             devices
                 .iter()
-                .map(|d| format!("{}:{}:{}", d.mac, d.name, d.kind))
+                .map(|d| format!("{}:{}:{}:{}", d.mac, d.name, d.kind, d.selected))
                 .collect::<Vec<_>>()
                 .join(",")
         );
@@ -227,7 +257,10 @@ impl Tray {
     /// Dispatch a menu click. Returns `Some(Quit)` when the app should exit.
     pub fn on_menu(&mut self, ev: &MenuEvent) -> Option<TrayAction> {
         let id_str = ev.id.as_ref();
-        if let Some(rest) = id_str.strip_prefix("ch:") {
+        if let Some(mac) = id_str.strip_prefix("sel:") {
+            daemon::select_device(mac);
+            self.last_sig.clear(); // the mark moves on the next poll
+        } else if let Some(rest) = id_str.strip_prefix("ch:") {
             if let Some((ch, mac)) = rest.split_once(':') {
                 daemon::switch_channel(mac, ch);
             }

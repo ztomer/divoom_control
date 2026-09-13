@@ -256,3 +256,38 @@ fn a_real_activity_broadcast_becomes_a_tile() {
         "the row gets an icon"
     );
 }
+
+#[test]
+fn the_active_panel_follows_selection_and_owned_devices_broadcasts() {
+    // User request 2026-09-12: the menubar did not say which panel is active
+    // and could not switch. The daemon owns the selection; the view mirrors
+    // its broadcasts, exactly one panel marked.
+    let mut snap = DaemonSnapshot::default();
+    snap.apply_owned_devices(&json!({
+        "type": "owned_devices",
+        "devices": [
+            {"address": "AA", "name": "Pixoo", "state": "active", "selected": true},
+            {"address": "BB", "name": "Ditoo", "state": "active", "selected": false},
+        ]
+    }));
+    let active = |s: &DaemonSnapshot| -> Vec<String> {
+        s.devices
+            .iter()
+            .filter(|d| d.selected)
+            .map(|d| d.mac.clone())
+            .collect()
+    };
+    assert_eq!(active(&snap), vec!["AA"]);
+    snap.apply_selection(Some("bb"));
+    assert_eq!(
+        active(&snap),
+        vec!["BB"],
+        "case-insensitive, one mark moves"
+    );
+    // A selection the view has never heard of is still shown, never nothing.
+    snap.apply_selection(Some("CC"));
+    assert_eq!(active(&snap), vec!["CC"]);
+    assert_eq!(snap.devices.len(), 3);
+    snap.apply_selection(None);
+    assert!(active(&snap).is_empty());
+}
