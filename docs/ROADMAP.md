@@ -333,6 +333,24 @@ said "No active devices" with two idle panels linked (its polled fallback
 read the live-widget activity map); the daemon now serves `owned_devices`
 on request in the broadcast's shape.
 
+**8. Four GUI requests (2026-09-13) — three SHIPPED (4635bf1), one OPEN**
+Shipped: a Version card in Settings > Connectivity (dashboard, daemon,
+protocol, mismatch note); clock Extra Panels as toggles; the bench open
+by default. OPEN, with the finding: **local previews of cloud clock
+faces at the target resolution.** The catalog the panel lists
+(`Channel/GetDialType`/`GetDialList`, ids 10..) has no pictures on any
+endpoint. The clock-face STORE (`StoreClockGetClassify`/`GetList`, now
+reachable -- `store_clock_faces`, b5522af) has 19 faces (ids 998..1021)
+with an `ImagePixelId` each; the file is a magic-26 container
+`{0x1A, frames, speed BE, rows 8, cols 8}` whose frame is `u32 BE len`
++ a `0xAA` record with flag `0x15` and a 66-entry palette followed by
+3682 bytes -- too small for 128x128 at any bit depth, and not LZO, zlib
+or lz4 (probed). This is the native `pixelEncodeBlueHigh` output the
+APK comparison already called "unknown internal format". Next step if
+wanted: decompile that native routine (the decrypted APK's `libNDK`),
+or capture one known image through it and diff. Until then no client
+shows these, and the panel keeps the text list.
+
 ### The per-device rule (v0.36.0, read before adding any per-panel state)
 
 **All per-device state lives on ONE struct per panel** — `Device` in the

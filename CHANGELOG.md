@@ -34,6 +34,9 @@ Read first if you upgrade:
   selection; a mac-less command goes to the active panel while it is
   linked. The first panel to link is active until you pick another.
   The tray also no longer says "No active devices" with idle panels linked.
+- **Settings has a Version card** (Connectivity tab): dashboard, daemon and
+  protocol versions, with a note when the daemon is older than the app.
+- **Clock "Extra Panels" are toggles**, and **the bench starts open**.
 
 ### Changed
 
@@ -57,6 +60,10 @@ Read first if you upgrade:
   selection. The polled fallback rebuilds the fleet from the daemon's new
   `owned_devices` command (the broadcast's shape) instead of the
   live-widget activity map, which listed only panels with a widget.
+- Daemon: `store_clock_faces` reads the clock-face STORE (19 faces with a
+  picture id each; the picture is a native high-res encoding no decoder
+  here reads yet, so no client shows them). The public catalog the Clock
+  panel lists has no pictures at all.
 - Daemon: `Fleet::selected` (the active panel), `select_device {mac}`
   with a `selection` broadcast, `selected` on `device_status` and
   `owned_devices`; the resolver prefers the active panel while linked.
