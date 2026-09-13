@@ -401,45 +401,19 @@ pub fn set_cached_snapshot(snap: DaemonSnapshot) {
     *guard = Some(snap);
 }
 
-pub fn device_activity_items() -> Vec<DeviceView> {
-    let Some(v) = request("get_device_activity", json!({})) else {
+/// The fleet as the daemon sees it, from the `owned_devices` command --
+/// the same payload it broadcasts, so the polled fallback and the event
+/// stream cannot disagree. Before 2026-09-12 this was rebuilt from
+/// `get_device_activity`, which lists only panels with a live-widget
+/// record: with two idle panels linked the tray said "No active devices".
+pub fn owned_devices() -> Vec<DeviceView> {
+    let Some(v) = request("owned_devices", json!({})) else {
         return Vec::new();
     };
-    let Some(map) = v.get("activity").and_then(|a| a.as_object()) else {
-        return Vec::new();
-    };
-    let mut items: Vec<DeviceView> = map
-        .iter()
-        .map(|(mac, d)| {
-            let name = d
-                .get("name")
-                .and_then(|n| n.as_str())
-                .unwrap_or("Divoom")
-                .to_string();
-            let kind = d
-                .get("kind")
-                .and_then(|k| k.as_str())
-                .unwrap_or("")
-                .to_string();
-            let preview = d
-                .get("preview")
-                .and_then(|p| p.as_str())
-                .map(str::to_string);
-            DeviceView {
-                mac: mac.clone(),
-                name,
-                kind,
-                preview,
-                link: d
-                    .get("state")
-                    .and_then(|st| st.as_str())
-                    .map(str::to_string),
-                selected: false,
-            }
-        })
-        .collect();
-    items.sort_by(|a, b| a.name.cmp(&b.name));
-    items
+    let mut snap = DaemonSnapshot::default();
+    snap.apply_owned_devices(&v);
+    snap.devices.sort_by(|a, b| a.name.cmp(&b.name));
+    snap.devices
 }
 
 mod commands;

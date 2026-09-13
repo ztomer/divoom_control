@@ -188,6 +188,15 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
         }
 
         "get_device_activity" => daemon.live_jobs.get_device_activity().await,
+        // The same payload the daemon broadcasts, on request: a client whose
+        // event stream went quiet rebuilds the fleet from ONE shape instead
+        // of stitching device_status and get_device_activity (the menubar
+        // did that and read "No active devices" with two panels linked).
+        "owned_devices" => {
+            let mut v = crate::daemon_connect::owned_devices_payload(daemon).await;
+            v["success"] = json!(true);
+            v
+        }
 
         // --- art / hot-channel commands ---
         "custom_art_push" => {

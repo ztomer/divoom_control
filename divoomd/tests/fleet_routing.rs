@@ -155,3 +155,21 @@ async fn a_macless_call_goes_to_the_selected_panel_and_is_refused_when_none_is()
     assert_eq!(st["selected"], json!("DEV_B"), "{st}");
     assert_eq!(st["mac"], json!("DEV_B"));
 }
+
+#[tokio::test]
+async fn owned_devices_is_also_a_command_with_the_broadcast_shape() {
+    // The menubar's polled fallback rebuilt the fleet from get_device_activity
+    // and read "No active devices" with two idle panels linked. One shape,
+    // on request and on the wire.
+    let d = daemon_with_mock("DEV_A").await;
+    daemon_with_mock_on(&d, "DEV_B").await;
+    let r = d.handle(make_request("owned_devices", None, None)).await;
+    assert_eq!(r["success"], json!(true), "{r}");
+    assert_eq!(r["type"], json!("owned_devices"));
+    let devs = r["devices"].as_array().unwrap();
+    assert_eq!(devs.len(), 2);
+    let a = devs.iter().find(|x| x["address"] == "DEV_A").unwrap();
+    assert_eq!(a["selected"], json!(true), "the first-linked panel is active: {r}");
+    assert_eq!(a["state"], json!("active"));
+    assert_eq!(r["selected"], json!("DEV_A"));
+}

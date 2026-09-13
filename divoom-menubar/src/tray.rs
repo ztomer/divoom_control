@@ -180,18 +180,11 @@ impl Tray {
             } else {
                 daemon::connection_state()
             };
-            let mut acts = if off {
+            let acts = if off {
                 Vec::new()
             } else {
-                daemon::device_activity_items()
+                daemon::owned_devices()
             };
-            if !off {
-                if let Some(sel) = daemon::selected_mac() {
-                    for a in &mut acts {
-                        a.selected = a.mac.eq_ignore_ascii_case(&sel);
-                    }
-                }
-            }
             daemon::set_cached_snapshot(daemon::DaemonSnapshot::polled(
                 !off,
                 conn.as_deref(),

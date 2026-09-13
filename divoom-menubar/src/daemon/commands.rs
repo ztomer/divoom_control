@@ -1,16 +1,8 @@
 //! The write commands the menu sends (one short-lived request each).
 
-use serde_json::{json, Value};
+use serde_json::json;
 
 use super::request;
-
-/// The active panel's mac from a polled `device_status`, if the daemon has one.
-pub fn selected_mac() -> Option<String> {
-    let v = request("device_status", json!({}))?;
-    v.get("selected")
-        .and_then(Value::as_str)
-        .map(str::to_string)
-}
 
 /// Make `mac` the active panel for every client (bench, menubar, CLI).
 pub fn select_device(mac: &str) {
