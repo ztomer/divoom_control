@@ -169,7 +169,11 @@ async fn owned_devices_is_also_a_command_with_the_broadcast_shape() {
     let devs = r["devices"].as_array().unwrap();
     assert_eq!(devs.len(), 2);
     let a = devs.iter().find(|x| x["address"] == "DEV_A").unwrap();
-    assert_eq!(a["selected"], json!(true), "the first-linked panel is active: {r}");
+    assert_eq!(
+        a["selected"],
+        json!(true),
+        "the first-linked panel is active: {r}"
+    );
     assert_eq!(a["state"], json!("active"));
     assert_eq!(r["selected"], json!("DEV_A"));
 }
