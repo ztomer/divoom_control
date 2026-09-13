@@ -14,6 +14,11 @@ bridged. The storage/decision logic lives in :mod:`divoom_lib.lifecycle_config`.
 """
 from __future__ import annotations
 
+import json
+import logging
+
+logger = logging.getLogger("divoom_gui")
+
 
 class LifecycleSettingsMixin:
     """get/set for the two menu-bar/daemon lifecycle flags."""
@@ -34,8 +39,25 @@ class LifecycleSettingsMixin:
         from divoom_lib.lifecycle_config import set_quit_menubar_on_exit
         return set_quit_menubar_on_exit(bool(value))
 
-    def get_app_version(self) -> str:
-        """The app version, for the Settings footer. Dev tree: read pyproject.toml.
+    def get_versions(self) -> str:
+        """The Version card: the dashboard's own version, and the daemon's as
+        it reports itself (`get_status.daemon_version`, plus the protocol),
+        so a stale daemon behind a fresh app is visible in Settings."""
+        out = {"app": self._app_version(), "daemon": None, "protocol": None, "daemon_reachable": False}
+        try:
+            client = self._client()
+            if client is not None:
+                st = client.send_command("get_status", {}, read_timeout=3) or {}
+                if st.get("success"):
+                    out["daemon_reachable"] = True
+                    out["daemon"] = st.get("daemon_version")
+                    out["protocol"] = st.get("protocol_version")
+        except Exception as exc:
+            logger.debug("get_versions: daemon not asked: %s", exc)
+        return json.dumps(out)
+
+    def _app_version(self) -> str:
+        """The app version, for the Version card. Dev tree: read pyproject.toml.
         Packaged .app: the bundle's Info.plist CFBundleShortVersionString (set from
         the same pyproject version at build time)."""
         import sys

@@ -189,6 +189,21 @@ window.DivoomTemplates.settings = `                <!-- R15 §1+§7: tab chrome 
                             <pre id="mcp-log" class="panel-hint text-mono-sm" style="max-height: 140px; overflow-y: auto; background: rgba(0,0,0,0.25); padding: 8px; border-radius: 4px; white-space: pre-wrap;">No log entries yet.</pre>
                         </div>
                     </div>
+                    <!-- Version (user request 2026-09-13): app, daemon and
+                         protocol, read live -- a mismatch between the app and
+                         the daemon it found is the first thing to check. -->
+                    <div class="card glass-card">
+                        <div class="card-header flex-header">
+                            <h3>Version</h3>
+                            <span id="app-version" class="text-mono-sm">v...</span>
+                        </div>
+                        <div class="card-body col gap-10">
+                            <div class="row gap-10"><span class="panel-hint">Dashboard</span><span id="version-app" class="text-mono-sm" style="margin-left:auto;">...</span></div>
+                            <div class="row gap-10"><span class="panel-hint">Daemon (divoomd)</span><span id="version-daemon" class="text-mono-sm" style="margin-left:auto;">...</span></div>
+                            <div class="row gap-10"><span class="panel-hint">Protocol</span><span id="version-protocol" class="text-mono-sm" style="margin-left:auto;">...</span></div>
+                            <p id="version-note" class="panel-hint" hidden></p>
+                        </div>
+                    </div>
                     </div>
                 </div>
 
@@ -247,6 +262,5 @@ window.DivoomTemplates.settings = `                <!-- R15 §1+§7: tab chrome 
                             </div>
                         </div>
                     </div>
-                    <div class="settings-version panel-hint" style="text-align:center; margin-top:14px; opacity:0.6; font-size:11px;">Divoom Control <span id="app-version">v...</span></div>
                 </div>
     `;

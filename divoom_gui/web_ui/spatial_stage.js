@@ -20,7 +20,8 @@
         if (!mount) return;
 
         // Load saved collapsed state (defaults to true for compact appbar ribbon)
-        let isCollapsed = localStorage.getItem('spatial_stage_collapsed') !== 'false';
+        // Open by default (user request 2026-09-13); a deliberate collapse is remembered.
+        let isCollapsed = localStorage.getItem('spatial_stage_collapsed') === 'true';
 
         function updateStageCollapseState() {
             const ribbonView = document.getElementById('appbar-ribbon-view');

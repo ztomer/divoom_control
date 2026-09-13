@@ -250,3 +250,29 @@ async def test_bench_node_drag_moves_the_panel_and_a_still_click_connects_it():
         assert after["x"] > box["x"] + 40, (box, after)
         assert await eval_js(page, "() => window.__connects") == ["E9:DITOO"], "a drag is not a click"
         await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_the_bench_starts_open_and_a_collapse_is_remembered():
+    """User request 2026-09-13: the bench (not the ribbon) is the first thing
+    a fresh install shows; collapsing it once is respected next time."""
+    from playwright.async_api import async_playwright
+
+    async with async_playwright() as p:
+        browser = await launch_browser(p)
+        page = await browser.new_page(viewport={"width": 1280, "height": 850})
+        await page.goto(f"file://{INDEX_HTML}")
+        await page.wait_for_load_state("domcontentloaded")
+        await wait_js(page, "() => !!window.SpatialStage")
+        state = await eval_js(page, """() => ({
+            bench: getComputedStyle(document.getElementById('appbar-bench-view')).display,
+            ribbon: getComputedStyle(document.getElementById('appbar-ribbon-view')).display })""")
+        assert state["bench"] != "none" and state["ribbon"] == "none", f"fresh start is collapsed: {state}"
+        await page.add_init_script("try { localStorage.setItem('spatial_stage_collapsed', 'true'); } catch (_) {}")
+        await page.goto(f"file://{INDEX_HTML}")
+        await wait_js(page, "() => !!window.SpatialStage")
+        state = await eval_js(page, """() => ({
+            bench: getComputedStyle(document.getElementById('appbar-bench-view')).display,
+            ribbon: getComputedStyle(document.getElementById('appbar-ribbon-view')).display })""")
+        assert state["bench"] == "none" and state["ribbon"] != "none", f"a remembered collapse was ignored: {state}"
+        await browser.close()

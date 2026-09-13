@@ -492,3 +492,8 @@ body.theme-light .arranger-node-image {
     color: var(--text-primary);
     border-color: var(--border-hover);
 }
+
+/* Clock "Extra Panels": toggles, not checkboxes (user request 2026-09-13).
+   The switch is the state, the word beside it is the name. */
+.clock-extras-row { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
+.clock-extra-toggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }

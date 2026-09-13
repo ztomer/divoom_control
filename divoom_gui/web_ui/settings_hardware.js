@@ -40,6 +40,25 @@ window.refreshCloudStatus = function() {
     }).catch(() => {});
 };
 
+// The Version card: dashboard, daemon and protocol versions, read live.
+// Rendered by one function so the note about a mismatch cannot drift
+// from the numbers it is about.
+window.renderVersions = function(v) {
+    const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+    const app = v && v.app ? v.app : "?";
+    const daemon = v && v.daemon ? v.daemon : (v && v.daemon_reachable === false ? "not running" : "?");
+    set("app-version", "v" + app);
+    set("version-app", app);
+    set("version-daemon", daemon);
+    set("version-protocol", v && v.protocol ? v.protocol : "?");
+    const note = document.getElementById("version-note");
+    if (note) {
+        const mismatch = v && v.daemon && v.app && v.daemon !== v.app;
+        note.hidden = !mismatch;
+        note.textContent = mismatch ? `The daemon is ${v.daemon} but the dashboard is ${app}: restart the app so both come from the same install.` : "";
+    }
+};
+
 document.addEventListener("DOMContentLoaded", () => {
     // ── 1. MAIN TAB SWITCH NAVIGATION ──
     const navButtons = document.querySelectorAll(".nav-btn");
@@ -161,12 +180,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (window.pywebview) restoreScanSettings();
     else window.addEventListener("pywebviewready", restoreScanSettings);
 
-    // Settings footer version indicator (backend get_app_version → pyproject/plist).
     function loadAppVersion() {
-        const el = document.getElementById("app-version");
-        if (!el || !window.pywebview?.api?.get_app_version) return;
-        Promise.resolve(window.pywebview.api.get_app_version())
-            .then(v => { if (v) el.textContent = "v" + v; })
+        const api = window.pywebview?.api;
+        if (!api?.get_versions) return;
+        Promise.resolve(api.get_versions())
+            .then(raw => { try { window.renderVersions(typeof raw === "string" ? JSON.parse(raw) : raw); } catch (_) {} })
             .catch(() => {});
     }
     if (window.pywebview) loadAppVersion();

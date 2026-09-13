@@ -71,17 +71,17 @@ def test_set_quit_menubar_on_exit_coerces_to_bool_and_delegates(mixin, monkeypat
 # ── get_app_version ──────────────────────────────────────────────────────────
 
 
-def test_get_app_version_reads_real_pyproject_toml(mixin):
+def test_app_version_reads_real_pyproject_toml(mixin):
     """Happy path (dev tree): reads pyproject.toml directly — verified
     against an independent tomllib read of the same file (not a hardcoded
     version string, so this doesn't rot on the next version bump)."""
     repo_root = Path(__file__).resolve().parent.parent
     with (repo_root / "pyproject.toml").open("rb") as f:
         expected = str(tomllib.load(f)["project"]["version"])
-    assert mixin.get_app_version() == expected
+    assert mixin._app_version() == expected
 
 
-def test_get_app_version_falls_back_to_meipass_plist_when_no_pyproject(mixin, monkeypatch, tmp_path):
+def test_app_version_falls_back_to_meipass_plist_when_no_pyproject(mixin, monkeypatch, tmp_path):
     """Packaged .app path: no pyproject.toml on disk (PyInstaller bundle),
     but sys._MEIPASS is set and Contents/Info.plist has the bundle version."""
     import plistlib
@@ -101,10 +101,10 @@ def test_get_app_version_falls_back_to_meipass_plist_when_no_pyproject(mixin, mo
         plistlib.dump({"CFBundleShortVersionString": "9.9.9"}, f)
 
     monkeypatch.setattr(sys, "_MEIPASS", str(contents_dir / "Frameworks"), raising=False)
-    assert mixin.get_app_version() == "9.9.9"
+    assert mixin._app_version() == "9.9.9"
 
 
-def test_get_app_version_returns_unknown_when_nothing_available(mixin, monkeypatch):
+def test_app_version_returns_unknown_when_nothing_available(mixin, monkeypatch):
     """No pyproject.toml AND no _MEIPASS (not a packaged bundle either) →
     the honest "?" placeholder, never a crash."""
     real_is_file = Path.is_file
@@ -116,10 +116,10 @@ def test_get_app_version_returns_unknown_when_nothing_available(mixin, monkeypat
 
     monkeypatch.setattr(Path, "is_file", fake_is_file)
     monkeypatch.delattr(sys, "_MEIPASS", raising=False)
-    assert mixin.get_app_version() == "?"
+    assert mixin._app_version() == "?"
 
 
-def test_get_app_version_tolerates_corrupt_pyproject(mixin, monkeypatch):
+def test_app_version_tolerates_corrupt_pyproject(mixin, monkeypatch):
     """L47-48: an exception while parsing pyproject.toml (corrupt TOML, odd
     permissions, ...) is swallowed — falls through to the next strategy,
     not raised to the pywebview JS-API thread."""
@@ -130,10 +130,10 @@ def test_get_app_version_tolerates_corrupt_pyproject(mixin, monkeypatch):
 
     monkeypatch.setattr(real_tomllib, "load", _boom)
     monkeypatch.delattr(sys, "_MEIPASS", raising=False)
-    assert mixin.get_app_version() == "?"
+    assert mixin._app_version() == "?"
 
 
-def test_get_app_version_meipass_set_but_no_plist_file(mixin, monkeypatch, tmp_path):
+def test_app_version_meipass_set_but_no_plist_file(mixin, monkeypatch, tmp_path):
     """L56->61 branch: sys._MEIPASS is set (looks like a bundle) but
     Info.plist isn't actually there (odd/partial bundle) — falls through
     to "?" rather than raising."""
@@ -149,10 +149,10 @@ def test_get_app_version_meipass_set_but_no_plist_file(mixin, monkeypatch, tmp_p
     frameworks_dir.mkdir(parents=True)
     # No Info.plist written at tmp_path / "Contents" / "Info.plist".
     monkeypatch.setattr(sys, "_MEIPASS", str(frameworks_dir), raising=False)
-    assert mixin.get_app_version() == "?"
+    assert mixin._app_version() == "?"
 
 
-def test_get_app_version_tolerates_corrupt_plist(mixin, monkeypatch, tmp_path):
+def test_app_version_tolerates_corrupt_plist(mixin, monkeypatch, tmp_path):
     """L59-60: an exception while parsing Info.plist (corrupt bundle) is
     swallowed too, falling through to "?"."""
     real_is_file = Path.is_file
@@ -168,4 +168,4 @@ def test_get_app_version_tolerates_corrupt_plist(mixin, monkeypatch, tmp_path):
     (contents_dir / "Frameworks").mkdir(parents=True)
     (contents_dir / "Info.plist").write_bytes(b"not a plist")
     monkeypatch.setattr(sys, "_MEIPASS", str(contents_dir / "Frameworks"), raising=False)
-    assert mixin.get_app_version() == "?"
+    assert mixin._app_version() == "?"

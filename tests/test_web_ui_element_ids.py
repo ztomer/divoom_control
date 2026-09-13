@@ -85,6 +85,11 @@ def test_the_clock_rich_controls_are_wired_end_to_end():
                 "clock-rich-humidity", "clock-rich-24h"):
         assert f'id="{box}"' in html, f"{box} checkbox missing from index.html"
         assert box in js, f"{box} is defined in markup but nothing reads it"
+        # 2026-09-13: drawn as a toggle switch (the state) beside its name
+        # (the label), never a bare checkbox and never a switch alone.
+        i = html.index(f'id="{box}"')
+        assert 'class="switch alarm-switch"' in html[i - 120:i], f"{box} is not a toggle"
+        assert "slider-round" in html[i:i + 120], f"{box} has no switch knob"
 
     assert "set_clock_rich(" in js, "the rich clock API call is gone from the JS"
     assert "set_clock(" in js, (
