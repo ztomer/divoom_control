@@ -61,8 +61,9 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Open threads / next up
 
-1. **Browser suites now run in CI** (own step, `--run-browser`); the first
-   run of that step on the shared macOS runner is the thing to watch.
+1. **Browser suites run in CI** (own step, `--run-browser`): 3 runs green,
+   1 with a single timeout in the gallery-overflow test that did not
+   recur; that test now reports its layout on timeout. Watch for a repeat.
 2. **`examples/` documents the bleak facade** -- library docs, or retire in
    favour of daemon-client examples. Not decided.
 3. **Menubar tile visual check**: the rows and the switch were read through

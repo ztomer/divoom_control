@@ -299,7 +299,12 @@ their own serialized CI step, which they never did before (CI installed
 camoufox and then ran pytest without `--run-browser`); and the opt-in
 moved to the launch seam (6d9cda6), which unhid 30-odd non-browser tests.
 Gate going forward: that CI step, plus re-run this measurement if a
-budget is ever raised again.
+budget is ever raised again. Observed 2026-09-13: run 34757201157 failed
+ONE browser test on the runner (`test_gallery_scrolls_internally_not_whole_card`,
+the container never overflowed within 60s; 147 others passed) and the
+re-run at the next commit was green with no code change in that path.
+The test now prints the container's sizes and ancestor chain on timeout
+(2bac300), so the next occurrence carries its own diagnosis.
 
 **6. Plaintext password in config.ini — SHIPPED (1830695)**
 `secret_store` behind `cloud_store::load_config`/`save_config`: macOS
