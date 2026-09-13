@@ -133,6 +133,23 @@ pub async fn handle(command: &str, req: &Request) -> Value {
             }
         }
 
+        "store_clock_faces" => {
+            let limit = req
+                .args
+                .get("limit")
+                .and_then(serde_json::Value::as_i64)
+                .unwrap_or(50);
+            let page = req
+                .args
+                .get("page")
+                .and_then(serde_json::Value::as_i64)
+                .unwrap_or(1);
+            match crate::cloud_dials::store_clock_faces(limit, page).await {
+                Ok(res) => json!({ "success": true, "result": res }),
+                Err(e) => err_reply(&e),
+            }
+        }
+
         "get_dial_types" => match crate::cloud::get_dial_types().await {
             Ok(res) => json!({ "success": true, "result": res }),
             Err(e) => err_reply(&e),

@@ -325,6 +325,7 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
         | "get_cached_credentials"
         | "get_category_file_list"
         | "get_dial_types"
+        | "store_clock_faces"
         | "get_dial_list"
         | "list_clock_faces"
         | "search_weather_city"
