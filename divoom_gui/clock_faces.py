@@ -21,3 +21,10 @@ class ClockFacesMixin(CloudPanelMixin):
     def get_dial_list(self, dial_type: str, page: int = 1) -> dict:
         return self._cloud_list(
             "clock faces", lambda c: c.get_dial_list(dial_type, page=page))
+
+    def get_store_clock_faces(self) -> dict:
+        """The store catalog WITH pictures (2026-09-13): each face carries
+        `image_file_id`; the panel renders it through get_animated_preview
+        and rasterizes it to the selected panel's resolution beside it."""
+        return self._cloud_list(
+            "clock face store", lambda c: c.store_clock_faces())

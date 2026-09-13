@@ -61,8 +61,19 @@ pub fn resolve_to_gif(raw: &[u8]) -> Option<Vec<u8>> {
             let fr: Vec<(Vec<u8>, u32)> = frames.into_iter().map(|f| (f, dur)).collect();
             encode_frames_to_gif(&fr, 16, 16)
         }
-        18 | 26 => {
+        18 => {
             let (frames, w, h, dur) = decode_cloud_magic18_26(raw)?;
+            let fr: Vec<(Vec<u8>, u32)> = frames.into_iter().map(|f| (f, dur)).collect();
+            encode_frames_to_gif(&fr, w, h)
+        }
+        // Magic 26 is the app's "Iframe" container (plain length-prefixed
+        // 0xAA records, decoded natively by PixelDecode128), not the AES+LZO
+        // layout of 18 -- the two were one arm here until 2026-09-13. The
+        // 128x128 shape is what the clock-face store ships; anything else
+        // still tries the old reading before giving up.
+        26 => {
+            let (frames, w, h, dur) = crate::art_codec::decode_cloud_magic26(raw)
+                .or_else(|| decode_cloud_magic18_26(raw))?;
             let fr: Vec<(Vec<u8>, u32)> = frames.into_iter().map(|f| (f, dur)).collect();
             encode_frames_to_gif(&fr, w, h)
         }

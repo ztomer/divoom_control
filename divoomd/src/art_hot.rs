@@ -191,6 +191,12 @@ async fn download_hot_file(client: &reqwest::Client, f: &mut HotFile) -> bool {
     true
 }
 
+/// The digest as hex, for tests that pin a decoded frame.
+#[cfg(test)]
+pub(crate) fn sha1_digest_hex(data: &[u8]) -> String {
+    sha1_digest(data)
+}
+
 #[expect(
     clippy::many_single_char_names,
     clippy::tuple_array_conversions,

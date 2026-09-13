@@ -341,6 +341,10 @@
                                          device silently ignores an id outside its 16 built-in styles. -->
                                     <div class="mt-6" style="padding-top: 16px; border-top: 1px solid var(--border-color);">
                                         <div class="label-caption mb-12">Cloud Clock Faces <span class="text-12" style="color: var(--text-muted); font-weight: 400;">(requires device on WiFi)</span></div>
+                                        <!-- The store's faces come with a picture (decoded by the daemon from
+                                             Divoom's native 128x128 format, 2026-09-13). Each card shows it as
+                                             drawn and as the selected panel would show it. -->
+                                        <div id="cloud-clock-store" class="cloud-clock-store"></div>
                                         <select id="cloud-clock-type-select" class="custom-select small mb-12"></select>
                                         <div id="cloud-clock-list" class="cloud-clock-list"></div>
                                     </div>

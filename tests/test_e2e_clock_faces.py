@@ -151,6 +151,9 @@ window.__api = {
     get_dial_list: () => ({ok: false, items: [],
         error: "Could not load clock faces: the background service is not running",
         cause: "unreachable"}),
+    get_store_clock_faces: () => ({ok: false, items: [],
+        error: "Could not load clock face store: the background service is not running",
+        cause: "unreachable"}),
 };
 window.pywebview = { api: new Proxy({}, { get: (_t, name) => (...args) => {
     if (window.__api && typeof window.__api[name] === 'function')
@@ -207,5 +210,63 @@ async def test_an_unreachable_daemon_names_the_reason_instead_of_showing_nothing
             assert "Reopen" in hint, hint
             assert hint.rstrip(".").lower() not in reason.lower(), (
                 f"the hint only restates the reason: {hint!r} / {reason!r}")
+        finally:
+            await browser.close()
+
+
+# ── 2026-09-13: the store's faces, with pictures, at the panel's resolution ──
+
+_FACE_PNG = (Path(__file__).parent / "fixtures" / "clock_face_128.txt")
+
+
+async def test_store_faces_show_the_picture_as_drawn_and_at_the_panels_resolution():
+    """The user asked to see how a cloud face will look on the target panel.
+    The store card shows the daemon's decoded picture (as drawn) beside the
+    same picture rasterized to the SELECTED panel's diode count -- one
+    source, two zoom levels -- and Apply on it sends that face's ClockId."""
+    require_browser()
+    from playwright.async_api import async_playwright
+
+    face_url = _FACE_PNG.read_text().strip()
+    async with async_playwright() as p:
+        browser, page = await _open(p)
+        try:
+            await eval_js(page, "() => {" + f"const faceUrl = {face_url!r};" + """
+                window.__previews = [];
+                window.__api.get_store_clock_faces = () => [
+                    {clock_id: 998, name: "Digital Tech", image_file_id: "group1/x", clock_type: 0, category: "Normal"},
+                    {clock_id: 999, name: "No Picture", image_file_id: "", clock_type: 0, category: "Normal"}];
+                window.__api.get_animated_preview = (fid) => { window.__previews.push(fid); return faceUrl; };
+                window.DivoomState.discoveredDevices = [{ address: 'E9:DITOO', name: 'Ditoo-light-2' }];
+                window.DivoomState.appConnected = true;
+                window.__setClockCalls = [];
+                window.__api.set_clock = (style, color) => { window.__setClockCalls.push([style, color]); return true; };
+                window.DivoomState.cloudClockStoreLoaded = false;
+                window.loadCloudClockTypes();
+            }""")
+            await wait_js(page, "() => document.querySelectorAll('#cloud-clock-store .clock-face-card').length === 2")
+            # The picture arrives from the daemon by file id; the device view is rasterized from it.
+            await wait_js(page, """() => {
+                const c = document.querySelector('#cloud-clock-store .clock-face-card[data-clock-id="998"]');
+                return c && c.querySelector('.clock-face-original').src.startsWith('data:image/png')
+                         && c.querySelector('.clock-face-device').src.startsWith('data:image/png');
+            }""")
+            info = await eval_js(page, """() => {
+                const c = document.querySelector('#cloud-clock-store .clock-face-card[data-clock-id="998"]');
+                const dev = c.querySelector('.clock-face-device');
+                const img = new Image(); img.src = dev.src;
+                return { previews: window.__previews, caption: c.children[1].querySelector('.clock-face-caption')?.textContent,
+                         devNatural: [img.naturalWidth, img.naturalHeight], origSrcLen: c.querySelector('.clock-face-original').src.length };
+            }""")
+            assert info["previews"] == ["group1/x"], info
+            assert "16x16" in (info["caption"] or ""), info
+            # The device view is a real 16x16 raster (the rasterizer decoded synchronously from a data URL).
+            await wait_js(page, """() => { const d = document.querySelector('#cloud-clock-store .clock-face-card[data-clock-id="998"] .clock-face-device'); return d.naturalWidth === 16 && d.naturalHeight === 16; }""")
+            # A face without a picture still lists, honestly, with no image.
+            no_pic = await eval_js(page, """() => document.querySelector('#cloud-clock-store .clock-face-card[data-clock-id="999"] .clock-face-original').getAttribute('src')""")
+            assert not no_pic
+            await page.click('#cloud-clock-store .clock-face-card[data-clock-id="998"] .cloud-clock-apply-btn')
+            await wait_js(page, "() => (window.__setClockCalls || []).length > 0")
+            assert await eval_js(page, "() => window.__setClockCalls") == [[998, "#ffffff"]]
         finally:
             await browser.close()

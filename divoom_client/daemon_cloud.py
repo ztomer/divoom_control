@@ -141,6 +141,11 @@ class CloudDataMixin:
     def get_dial_types(self) -> list:
         return self.cloud_call("get_dial_types") or []
 
+    def store_clock_faces(self, limit: int = 50, page: int = 1) -> list:
+        """The clock-face STORE: faces with a picture (`image_file_id`, a
+        128x128 cloud file `get_animated_preview` renders). Authenticated."""
+        return self.cloud_call("store_clock_faces", {"limit": limit, "page": page}) or []
+
     def get_dial_list(self, dial_type: str, page: int = 1) -> list:
         return self.cloud_call(
             "get_dial_list", {"dial_type": dial_type, "page": page}) or []
