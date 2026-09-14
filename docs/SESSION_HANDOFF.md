@@ -21,6 +21,18 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-14 — legacy-facade retirement, step 1 (uncommitted): the missing
+  gate + a stale docstring.** `tests/test_no_direct_facade_in_production.py`
+  (5 tests, green) asserts no production code instantiates `Divoom(...)`,
+  subclasses `DivoomProtocol`, or imports the orphan modules (`wall`,
+  `monthly_best_daemon`) — AST-based, so prose never trips it; seed is zero
+  hits. `divoom_lib/mcp_server.py` usage docstring now shows the daemon-client
+  path (`ensure_daemon` + `DaemonDeviceProxy`, matching `cmd_mcp_server`)
+  instead of the retired `Divoom(mac=...)` facade. NOT done: archiving
+  `wall.py`/`monthly_best_daemon.py` + `examples/` (needs test re-targeting
+  to the proxy); the C ext + `native_src/` stays regardless (`divoomd`
+  FFIs it until the Rust-native encoder lands).
+
 - **2026-09-13 — v0.37.0 RELEASED & INSTALLED LOCALLY** (tag v0.37.0 at
   cd553cd, GitHub release with the DMG, cask bumped; daemon inode
   546319145 running from /Applications/Divoom.app, signed by the local

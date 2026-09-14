@@ -31,16 +31,17 @@ Errors use the standard JSON-RPC error codes:
     -32602  Invalid params
     -32603  Internal error
 
-Usage (programmatic)::
+Usage (programmatic — daemon client; the MCP server never opens its own
+BLE connection, the daemon is the sole device owner)::
 
     from divoom_lib.mcp_server import MCPServer
     from divoom_lib.mcp_tools import build_tool_catalog
-    from divoom_lib import Divoom
+    from divoom_client.daemon_client import ensure_daemon, DaemonDeviceProxy
 
+    client = ensure_daemon("/tmp/divoom.sock", mac="...")
+    proxy = DaemonDeviceProxy(client)
     server = MCPServer(server_info={"name": "divoom-control", "version": "0.15.0"})
-    divoom = Divoom(mac="...")
-    await divoom.connect()
-    server.tools = build_tool_catalog(divoom)
+    server.tools = build_tool_catalog(proxy)
     await server.run_stdio()
 
 Usage (CLI)::

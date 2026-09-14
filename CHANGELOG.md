@@ -4,6 +4,17 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## Unreleased — legacy-facade retirement, step 1: the missing gate
+
+- New gate `tests/test_no_direct_facade_in_production.py`: no production
+  code may instantiate `Divoom(...)`, subclass `DivoomProtocol`, or import
+  the orphan modules (`wall`, `monthly_best_daemon`). AST-based, seed zero.
+- `divoom_lib/mcp_server.py` usage docstring corrected to the daemon-client
+  path (`ensure_daemon` + `DaemonDeviceProxy`).
+- Still open: archiving `wall.py` / `monthly_best_daemon.py` / `examples/`
+  (needs test re-targeting); C ext + `native_src/` stays until the
+  Rust-native encoder lands.
+
 ## v0.37.0 — Password in the Keychain, Now Playing per client, the CLI as a daemon client (2026-09-12)
 
 Minor bump: new capability (OS credential store, per-client now-playing,
