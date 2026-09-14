@@ -20,6 +20,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# The Divoom-filtered scan uses the retired library's discovery helper.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "examples"))
 
 def report_environment() -> None:
     """Interpreter and CoreBluetooth authorization, before any scan. A

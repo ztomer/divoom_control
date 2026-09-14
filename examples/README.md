@@ -18,7 +18,6 @@ from it; `divoom_lib` comes from the checkout or the installed package):
 
     python3 examples/discover_and_connect.py
     python3 -m pytest examples/tests -q            # its own suite (1400+ tests)
-    python3 examples/diagnose_ble.py               # macOS BLE permission + scan diagnosis
 
 Every script supports `--mac` to target a specific device; if omitted, the
 first Divoom device discovered over BLE is used. Stop `divoomd` first — the

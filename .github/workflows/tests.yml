@@ -140,13 +140,13 @@ jobs:
             # one; `set` afterwards is belt-and-braces if anything else exists.
             python -m camoufox fetch official/152.0.4-beta.29 || true
             python -m camoufox set official/stable/152.0.4-beta.29 || true
-            if python3 tools/check_camoufox_installed.py; then
+            if python3 tools/camoufox_installed.py; then
               exit 0
             fi
             echo "attempt ${attempt}: no browser installed; retrying in $((attempt * 15))s"
             sleep $((attempt * 15))
           done
-          python3 tools/check_camoufox_installed.py  # emit the failure and exit non-zero
+          python3 tools/camoufox_installed.py  # emit the failure and exit non-zero
           exit 1
 
       # R70 P5.0. This gate imports DivoomGuiAPI to enumerate the REAL class —
