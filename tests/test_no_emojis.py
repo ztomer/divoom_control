@@ -127,14 +127,14 @@ def test_emoji_range_table_includes_known_blocks() -> None:
     a future Unicode release adds a new block, this test reminds you
     to update the table.
 
-    We use escape sequences (``"\\uXXXX"``) so this test file itself
-    does not contain emoji codepoints (which would trip the main
-    no-emoji scan)."""
+    The glyphs are built from their NUMBERS (``chr(0x...)``) so this test
+    file itself contains neither an emoji nor an escape that renders as one
+    -- the house gate reads both (escapes since 2026-09-14)."""
     # Quick spot check: a few well-known emoji codepoints.
-    assert _is_emoji("\U0001F697")  # 0x1F697 (transport)
-    assert _is_emoji("\U0001F389")  # 0x1F389 (symbols)
-    assert _is_emoji("\u2600")   # 0x2600 sun (misc symbols, forbidden; \u-escaped)
-    assert _is_emoji("\u2705")  # 0x2705 check-mark-button (dingbats, forbidden; \u-escaped)
+    assert _is_emoji(chr(0x1F697))  # transport
+    assert _is_emoji(chr(0x1F389))  # symbols
+    assert _is_emoji(chr(0x2600))   # sun (misc symbols, forbidden)
+    assert _is_emoji(chr(0x2705))   # check-mark-button (dingbats, forbidden)
     # ...but the permitted Kare icons are NOT flagged (mirror the house gate).
     assert not _is_emoji("\u2713")  # \u2713 allowed
     assert not _is_emoji("\u2717")  # \u2717 allowed
