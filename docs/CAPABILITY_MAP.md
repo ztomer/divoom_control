@@ -221,9 +221,10 @@ audit's F5, F6 and F7, and none of them has the shape the census detects:
   The audit called it "a third control surface". It is not always-on: it starts
   only when `DIVOOM_CONTROL_SERVER=1` or `DIVOOM_CONTROL_SOCKET` is set, and
   `gui_main.py:166` already labels it "Optional headless control server surface
-  (E2E testing)". Nothing in production enables it; the only non-test caller is
-  `scripts/validate_devices.py`, which already handles a token. **Verdict: it
-  stays, as declared test tooling.**
+  (E2E testing)". Nothing in production enables it, and since 2026-09-14 it has
+  no non-test caller at all (`scripts/validate_devices.py`, the last one, was
+  retired with the direct-to-device library). **Verdict: it stays, as declared
+  test tooling.**
 
   **What was actually wrong was the auth.** `_authorized()` returned True when
   no token was set, so a tokenless TCP surface reflection-dispatched the whole

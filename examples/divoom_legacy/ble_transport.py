@@ -5,7 +5,6 @@ import logging
 import time
 import os
 from typing import Optional, Any
-from divoom_legacy.divoom import BleakClient
 from bleak.exc import BleakError
 
 from divoom_lib import models, framing
