@@ -112,7 +112,7 @@ when it installs nothing (a GitHub API rate limit produced three 403s, "Synced 0
 versions from 0 repos.", and a green step). Any CI step that INSTALLS or
 GENERATES something must verify the artifact, not the exit code — and a retry
 must loop on the verification, because looping on an exit code never retries a
-failure that exits 0. See `tools/check_camoufox_installed.py`.
+failure that exits 0. See `tools/camoufox_installed.py`.
 
 **Check which transport/environment a defect actually needs before writing its
 test.** This round's body-drain regression test was first written against the

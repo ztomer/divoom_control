@@ -22,7 +22,7 @@ fi
 ok "native dylib built"
 
 have_camoufox=0
-if python3 tools/check_camoufox_installed.py >/tmp/py_ci_camoufox.log 2>&1; then
+if python3 tools/camoufox_installed.py >/tmp/py_ci_camoufox.log 2>&1; then
     ok "camoufox browser present ($(cat /tmp/py_ci_camoufox.log))"
     have_camoufox=1
 else

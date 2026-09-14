@@ -1,6 +1,6 @@
 """The camoufox install check must be able to FAIL, in both absent shapes.
 
-`tools/check_camoufox_installed.py` exists because `python -m camoufox fetch`
+`tools/camoufox_installed.py` exists because `python -m camoufox fetch`
 exits 0 when it installs nothing: CI run 32654312489 hit GitHub's
 unauthenticated API rate limit, printed three 403s and "Synced 0 versions from
 0 repos.", and still reported its workflow step green. The failure surfaced
@@ -26,7 +26,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-CHECKER = REPO_ROOT / "tools" / "check_camoufox_installed.py"
+CHECKER = REPO_ROOT / "tools" / "camoufox_installed.py"
 
 
 def _run_checker_under(preamble: str) -> subprocess.CompletedProcess[str]:
@@ -38,7 +38,7 @@ def _run_checker_under(preamble: str) -> subprocess.CompletedProcess[str]:
     src = textwrap.dedent(preamble) + textwrap.dedent(
         f'''
         import runpy, sys
-        sys.argv = ["check_camoufox_installed.py"]
+        sys.argv = ["camoufox_installed.py"]
         try:
             runpy.run_path({str(CHECKER)!r}, run_name="__main__")
         except SystemExit as exc:

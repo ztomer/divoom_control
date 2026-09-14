@@ -81,5 +81,5 @@ def test_camoufox_is_the_only_excused_gate():
     data = json.loads((REPO / "tools" / "empty_scope_allow.json").read_text())
     legit = {k for k in data["legitimate"] if not k.startswith("_")}
     blind = {k for k in data["known_blind"] if not k.startswith("_")}
-    assert legit == {"check_camoufox_installed.py"}, legit
+    assert legit == set(), f"a gate is excused; the last legitimate excuse turned out to be host-dependent: {legit}"
     assert blind == set(), f"a gate is excused instead of guarded: {blind}"
