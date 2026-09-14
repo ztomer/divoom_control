@@ -11,7 +11,8 @@ module in release while advertising an API that only exists under
 Two checks, both over TRACKED files (`git ls-files` — untracked scratch
 is not this gate's subject):
 
-  1. every tracked `test_*.py` / `*_test.py` lives under `tests/`.
+  1. every tracked `test_*.py` / `*_test.py` lives under `tests/` or
+     `examples/tests/` (the retired library's own suite).
   2. every file-backed test-module declaration (`mod foo_tests;`,
      `mod tests;`) in the workspace crates is gated by a `#[cfg(...test...)]`
      attribute. Inline `mod tests { ... }` blocks are out of scope.
@@ -64,8 +65,11 @@ def check_python_placement(failures: list[str]) -> int:
         base = f.rsplit("/", 1)[-1]
         if base.startswith("test_") or base.endswith("_test.py"):
             count += 1
-            if not (f == "tests/" or f.startswith("tests/")):
-                failures.append(f"{f}: test file outside tests/")
+            # Two suites, each beside what it tests: tests/ for the product,
+            # examples/tests/ for the retired library that lives in examples/
+            # (standalone since 2026-09-14; run with `pytest examples/tests`).
+            if not f.startswith(("tests/", "examples/tests/")):
+                failures.append(f"{f}: test file outside tests/ or examples/tests/")
     return count
 
 

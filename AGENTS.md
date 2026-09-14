@@ -60,7 +60,7 @@ These are lessons paid for in real shipped bugs; don't relearn them.
   `target/debug/divoomd` WITH default features, so redo the BLE-free build after
   any test run.
 - **Tests**: hardware tests are gated/skip by default (`tests/conftest.py`);
-  prefer the mock-device E2E (`tests/test_e2e_mock_device.py`) for wire checks.
+  prefer the mock-device E2E (`examples/tests/test_e2e_mock_device.py`, the retired library's suite) for wire checks.
 - **Does the app actually work?** `scripts/gui_pov.py` drives the REAL web UI
   against the REAL GUI backend against a REAL daemon, with no mocks in the
   chain, and checks the things a screenshot cannot: that the daemon is still

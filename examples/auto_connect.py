@@ -24,7 +24,7 @@ import sys
 
 from bleak import BleakScanner
 
-from divoom_lib import Divoom
+from divoom_legacy import Divoom
 
 
 async def main(mac: str | None, timeout: float, once: bool, on_connect: bool) -> int:

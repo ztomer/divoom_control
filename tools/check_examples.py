@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""check_examples.py — examples/ documents the shipped library; pin it.
+"""check_examples.py — examples/ is a standalone library; pin its scripts to it.
 
-`pyproject.toml` ships `divoom_lib` as the `divoom-control` package with a
-console script, and `examples/README.md` presents these 7 scripts as the
-public usage docs. R73 proved untested public API rots (three methods
-nobody had ever called, two broken) — and nothing imports these examples,
-so a facade rename breaks the only library docs silently.
+The direct-to-device library lives in `examples/divoom_legacy/` (retired
+from the product on 2026-09-14; the daemon owns those capabilities) and the
+scripts beside it are its usage docs. R73 proved untested public API rots
+(three methods nobody had ever called, two broken) — and nothing imports
+these examples, so a facade rename breaks the only library docs silently.
 
 This gate pins them structurally, without hardware:
 
@@ -39,16 +39,17 @@ REPO = Path(__file__).resolve().parent.parent
 EXAMPLES = REPO / "examples"
 
 sys.path.insert(0, str(REPO))
+sys.path.insert(0, str(EXAMPLES))
 # The facade imports bleak at module level; this check needs the real
 # classes (it asks has_member on them), so bleak is THIS check's dependency.
 try:
-    import divoom_lib.divoom as _divoom_mod  # noqa: E402
+    import divoom_legacy.divoom as _divoom_mod  # noqa: E402
 except ModuleNotFoundError as exc:  # pragma: no cover - environment, not logic
     err(f"[examples] cannot import the facade: {exc}. This check needs the package's runtime deps: `pip install -r requirements.txt`.")
     sys.exit(2)
 from divoom_lib.models.capabilities import Capabilities  # noqa: E402
 
-DIVOOM_SRC = REPO / "divoom_lib" / "divoom.py"
+DIVOOM_SRC = EXAMPLES / "divoom_legacy" / "divoom.py"
 
 
 def facade_map() -> dict[str, type]:

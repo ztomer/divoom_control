@@ -4,16 +4,47 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
-## Unreleased — legacy-facade retirement, step 1: the missing gate
+## v0.38.0 — the direct-to-device library retired to examples/ (2026-09-14)
 
-- New gate `tests/test_no_direct_facade_in_production.py`: no production
-  code may instantiate `Divoom(...)`, subclass `DivoomProtocol`, or import
-  the orphan modules (`wall`, `monthly_best_daemon`). AST-based, seed zero.
-- `divoom_lib/mcp_server.py` usage docstring corrected to the daemon-client
-  path (`ensure_daemon` + `DaemonDeviceProxy`).
-- Still open: archiving `wall.py` / `monthly_best_daemon.py` / `examples/`
-  (needs test re-targeting); C ext + `native_src/` stays until the
-  Rust-native encoder lands.
+Minor bump: a structural change to what the package ships, no behaviour
+change on the daemon path. Read first if you imported `divoom_lib` yourself:
+
+- **`divoom_lib` no longer contains the direct-to-device library.** The
+  `Divoom` facade, `DivoomConnection`, the BLE/LAN/SPP transports,
+  `display/`, `system/`, `tools/`, `scheduling/`, `media/`, `cloud`,
+  `fonts/` (the Python half), `media_decoder`, the Python `native/`
+  encoders, `wall`, `monthly_best_daemon`, `game`, `probing`, `protocol`,
+  `sender_protocol`, `tool` and eight `utils/` helpers — 77 modules, plus
+  `models.DeviceSlot` — now live in **`examples/divoom_legacy/`** as a
+  standalone package with its own suite (`examples/tests`, 1413 tests) and
+  the example scripts beside it. Measured first: an AST closure over every
+  production entry point (`divoom_gui`, `divoom_client`, `nowplaying`, the
+  CLI/MCP modules) reaches 27 of the 104 modules; the 77 were the legacy
+  direct path the daemon replaced. `from divoom_lib import Divoom` and
+  `from divoom_lib import LanTransport` are gone; the retained core is
+  framing, models, the transport interface, auth, `native_lib`, the CLI and
+  MCP clients. The font blobs stay in `divoom_lib/fonts/` (the daemon
+  `include_bytes!` them).
+- **Production cannot import it back.** `tests/test_no_direct_facade_in_production.py`
+  scans `divoom_gui`, `divoom_client`, `nowplaying` and `divoom_lib` for any
+  `divoom_legacy` import, `Divoom(...)` or `DivoomProtocol` subclass;
+  `tools/check_gui_is_a_client.py` forbids the package by prefix.
+- **The retired code is still the spec.** `tools/check_positional_args.py`
+  and `examples/tests/test_device_call_parity.py` read the daemon's
+  `device_call` arms against the legacy Python signatures, where they now
+  live; `scripts/codegen/gen_image_vectors.py` regenerates the encoder
+  parity vectors from the moved encoders byte-identically (verified).
+- Retired outright: `scripts/validate_devices.py` (drove devices through the
+  facade or a GUI control server; already broken), `scripts/perf_*.py`
+  (benchmarks of the retired Python encoders), `tools/check_no_allow.py`,
+  `tools/check_file_size.py`, `scripts/house_emoji_gate.sh` (copies of house
+  checks). `scripts/diagnose_ble.py` and `scripts/mock_device.py` moved to
+  `examples/`.
+- **The gate list runs the house gates by name.** `structural.sh --full`
+  (emoji, markers, 500-line cap with the ratchet baseline, shell lint,
+  secrets) and `rust_gate.sh` (fmt, clippy, manifest lints, machete,
+  no-`#[allow]`) replace seven hand-listed steps; CI runs the same two.
+  `scripts/py_ci.sh` runs the legacy suite after the product suite.
 
 ## v0.37.0 — Password in the Keychain, Now Playing per client, the CLI as a daemon client (2026-09-12)
 

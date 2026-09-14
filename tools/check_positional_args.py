@@ -36,7 +36,10 @@ from _empty_scope import scope_is_empty  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 RUST_DIR = REPO / "divoomd" / "src" / "device_call"
-PY_DIR = REPO / "divoom_lib"
+# The Python signatures are the REFERENCE the Rust arms implement; the library
+# itself is retired to examples/divoom_legacy (2026-09-14) and stays there as
+# the spec this gate reads.
+PY_DIR = REPO / "examples" / "divoom_legacy"
 
 # Annotations that are NOT a single JSON number, and therefore vanish from the
 # compacted list.

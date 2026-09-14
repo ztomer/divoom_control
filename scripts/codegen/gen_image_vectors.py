@@ -5,13 +5,20 @@ libdivoom_compact. The Rust FFI calls the SAME C functions, so a match confirms 
 FFI marshalling (pointers, out-buffer sizing, return-length truncation) is correct.
 
     PYTHONPATH=<repo root> python3 scripts/codegen/gen_image_vectors.py
+
+The Python reference encoders were retired to examples/divoom_legacy on
+2026-09-14 (nothing in the product runs them); they remain the SPEC these
+vectors are generated from, so this script puts examples/ on the path itself.
 """
 import json
 import random
+import sys
 from pathlib import Path
 
-from divoom_lib.native import image_encoder as IE
-from divoom_lib.utils.divoom_image_encode_32 import encode_animation_frame_32 as py_frame32
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "examples"))
+
+from divoom_legacy.native import image_encoder as IE
+from divoom_legacy.utils.divoom_image_encode_32 import encode_animation_frame_32 as py_frame32
 
 
 def rgb_n(w, h, nc, seed):
@@ -36,7 +43,8 @@ def main():
         frame32.append({"w": 32, "h": 32, "time": 500, "rgb": rgb.hex(), "out": bytes(f32).hex()})
 
     out = {"frame": frame, "static": static, "frame32": frame32}
-    dest = Path(__file__).parent / "divoomd" / "tests" / "image_vectors.json"
+    # Repo-root relative: the script lives two levels down.
+    dest = Path(__file__).resolve().parents[2] / "divoomd" / "tests" / "image_vectors.json"
     dest.write_text(json.dumps(out, indent=2))
     print(f"wrote {len(frame)+len(static)+len(frame32)} vectors -> {dest}")
 

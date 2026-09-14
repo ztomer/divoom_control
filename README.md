@@ -9,10 +9,12 @@ Control Divoom pixel-display devices (Pixoo / Tivoo / Timebox / Ditoo …) as a
 The project has three Python packages, two native **Rust** binaries (the daemon
 and the menu-bar agent), and a native accelerator:
 
-1. **`divoom_lib/`** — high-level async library speaking the Divoom BLE protocol
-   (plus Bluetooth-Classic SPP and LAN where supported): channels, image/animation
-   push, text, clock, brightness, alarms, FM radio, notifications, and more. Runs
-   on **macOS and Linux**. Includes the CLI (`divoom-control`) and an MCP server.
+1. **`divoom_lib/`** — the shared protocol core: SPP framing, the command and
+   capability models, the transport interface, cloud auth, the native-library
+   loader, plus the CLI (`divoom-control`) and the MCP server, both of which are
+   daemon clients. Runs on **macOS and Linux**. (The direct-to-device Python
+   library — the `Divoom` facade and its BLE/LAN/SPP transports — is retired
+   from the product and lives on as `examples/divoom_legacy/`, standalone.)
 2. **`divoomd/`** — the native **Rust** daemon: a headless, always-on agent that
    is the **single owner** of the device connection and serves a command/event
    protocol over a Unix socket and (optionally) TCP. On macOS it also does
@@ -136,61 +138,44 @@ python3 -m divoom_gui.gui_main
 > prompts for Bluetooth permission; grant it to the launching terminal/app.
 > The GUI auto-spawns the daemon, which owns the device connection.
 
-## Use the library
+## Drive a device from Python
+
+The product path is the daemon: `divoom_client.DaemonDeviceProxy` talks to a
+running `divoomd`, which owns the Bluetooth connection.
 
 ```python
-import asyncio
-from divoom_lib.divoom import Divoom
-from divoom_lib.utils.discovery import discover_device
+from divoom_client.daemon_client import ensure_daemon, DaemonDeviceProxy
 
-async def main():
-    device, _ = await discover_device()                # scan over BLE
-    divoom = Divoom(mac=device.address)
-    await divoom.connect()
-    try:
-        await divoom.display.show_image("art.gif")     # push a static image / GIF
-        await divoom.device.set_brightness(80)
-        await divoom.notification.show_notification(6) # WhatsApp icon
-    finally:
-        await divoom.disconnect()
-
-asyncio.run(main())
+client = ensure_daemon()                       # spawn or find divoomd
+device = DaemonDeviceProxy(client)
+device.set_brightness(80)
 ```
 
-> Note: the library lets you own the device directly. If the daemon is running it
-> already holds the connection (single-owner) — stop it first, or talk to it via
-> the daemon protocol instead. More runnable scripts are in `examples/`.
-
----
-
-## Testing
-
-```bash
-make test                              # builds the native lib, then the unit suite
-python3 -m pytest -q                   # ~1260 tests, no hardware needed
-python3 -m pytest -q --run-hardware    # also BLE integration tests (needs a device)
-```
-
-The unit suite needs no hardware. `conftest.py` auto-rebuilds the native lib if
-it's missing or older than its C sources, so the **encoder correctness suite runs
-against both the C and Python implementations** (`test_encoder_both_impls.py`) —
-the guard that keeps the two from drifting.
-
----
+The old direct-to-device library (`Divoom(mac=...)`, its own BLE/LAN/SPP
+transports, every command group) is retired from the product and kept
+runnable under `examples/divoom_legacy/` with its scripts and its own test
+suite — see `examples/README.md`. Nothing in the product imports it, and a
+gate keeps it that way.
 
 ## Project layout
 
 ```
-divoom_lib/            Async BLE/LAN library (macOS + Linux)
-  divoom.py              Divoom facade (.display, .device, .system, .alarm, …)
+divoom_lib/            Shared protocol core (macOS + Linux)
   framing.py             SPP framing/escaping (native-accelerated + Python)
-  connection.py          transport + command send/response
+  models/                command tables, capabilities, constants
+  transport.py           transport interface + command routing map
+  divoom_auth.py         cloud credentials (Keychain-backed)
   native_lib.py          resolves libdivoom_compact.{dylib|so|dll}
-  display/ system/ scheduling/ media/ tools/ utils/   domain submodules
-  native/ + native_src/  ctypes wrappers + C sources for encoders/downsampler
+  native_src/            C sources for encoders/downsampler (divoomd FFIs them)
+  fonts/                 the device bitmap font blobs (divoomd include_bytes!)
   libdivoom_compact.*    built native library (.dylib / .so)
-  cli.py                 the `divoom-control` CLI (a daemon client: needs a
-                          running divoomd, opens no Bluetooth itself)
+  cli.py mcp_server.py   the `divoom-control` CLI and MCP server (daemon
+                          clients: need a running divoomd, open no Bluetooth)
+examples/              The retired direct-to-device library, standalone
+  divoom_legacy/         Divoom facade, BLE/LAN/SPP transports, display/ system/
+                          scheduling/ media/ tools/, Python encoders (77 modules)
+  tests/                 its own suite: python3 -m pytest examples/tests
+  *.py                   usage scripts (run from the repo root)
 divoom_client/         Daemon CLIENT library (spawn/find/talk to divoomd)
   daemon_client.py        spawn_daemon()/ensure_daemon(), DaemonDeviceProxy
   daemon_protocol.py     NDJSON wire protocol + DaemonClient

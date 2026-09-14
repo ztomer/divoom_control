@@ -3,7 +3,7 @@
 **Why calibration is the deliverable, not a formality.** This is the third pass
 at "does anything in Python do a job the daemon owns". The first two used
 hand-written lists and both missed things -- R70's denylist could not see
-`divoom_auth` because it named `divoom_lib.cloud`, and could not see the
+`divoom_auth` because it named `divoom_legacy.cloud`, and could not see the
 notification stack because it was scoped to `divoom_gui/`. A census that reports
 "nothing found" is worth exactly as much as its ability to find something, so
 these tests require it to rediscover the two findings that were established
@@ -12,7 +12,7 @@ BEFORE it was written:
   F1  `divoom_gui/gui_api.py` calls `divoom_lib.divoom_auth.get_cached_credentials()`
       while the daemon answers `get_cached_credentials` and a wrapper exists
   F2  `divoom_gui/api/tools.py::sync_time` rebuilds the payload through
-      `divoom_lib.system.date_time` -- and that Python path was BROKEN, an
+      `divoom_legacy.system.date_time` -- and that Python path was BROKEN, an
       AttributeError swallowed into a silent False
 
 If either stops being found, the census has stopped measuring what it claims.
@@ -100,7 +100,7 @@ def test_the_census_detects_F2s_shape_a_reimplementation(tmp_path, monkeypatch):
         tmp_path, monkeypatch,
         "class Api:\n"
         "    def sync_time(self):\n"
-        "        from divoom_lib.system.date_time import DateTimeCommand\n"
+        "        from divoom_legacy.system.date_time import DateTimeCommand\n"
         "        return DateTimeCommand(self.dev).update_date_time()\n",
         {"sync_time"})
     assert [n for _w2, n, _l in wrapped] == ["sync_time"], wrapped

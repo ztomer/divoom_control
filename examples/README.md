@@ -1,10 +1,28 @@
-# examples/ — `divoom_lib` end-to-end usage
+# examples/ — the retired direct-to-device library, standalone
 
-These scripts show the public API of `divoom_lib` from outside the
-package. They are intentionally short so you can copy them into your
-own project and adapt them. Every script supports `--mac` to target a
-specific device; if omitted, the first Divoom device discovered over
-BLE is used.
+`divoom_legacy/` is the Python library that used to be the product:
+the `Divoom` facade, its BLE / LAN / Bluetooth-Classic transports, the
+display / system / media / scheduling / tools command groups and the
+Python encoders — 77 modules retired from `divoom_lib` on 2026-09-14
+because nothing the shipped product imports reaches them (the `divoomd`
+daemon owns every one of those capabilities now). They live here so the
+scripts below keep running and the protocol knowledge stays executable.
+
+It depends on the retained `divoom_lib` core (framing, models, transport
+interface, auth, the native library) and on nothing else in the repo;
+nothing in the repo depends on it, and `tests/test_no_direct_facade_in_production.py`
+fails the moment production imports it.
+
+Run from the repo root (`examples/` is put on `sys.path` by running a script
+from it; `divoom_lib` comes from the checkout or the installed package):
+
+    python3 examples/discover_and_connect.py
+    python3 -m pytest examples/tests -q            # its own suite (1400+ tests)
+    python3 examples/diagnose_ble.py               # macOS BLE permission + scan diagnosis
+
+Every script supports `--mac` to target a specific device; if omitted, the
+first Divoom device discovered over BLE is used. Stop `divoomd` first — the
+device is single-owner and the daemon holds the connection while it runs.
 
 | Script | What it does |
 |---|---|
@@ -22,8 +40,8 @@ BLE is used.
 (the 0x5F command, wired on the `Divoom` facade). Weather types: clear,
 cloudy, thunderstorm, rain, snow, fog.
 
-A `divoom-control` CLI lives at `divoom_lib/cli.py` and is the
-scriptable counterpart to these examples. After installing the
+The product's `divoom-control` CLI (`divoom_lib/cli.py`) is a daemon client,
+not a user of this library; it is the scriptable counterpart to these examples. After installing the
 package, run `divoom-control --help` for a single-command interface to
 all of the above.
 

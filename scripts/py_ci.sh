@@ -127,3 +127,11 @@ else
     warn "coverage floor NOT enforced — needs camoufox for a comparable number"
     python3 -m pytest -q
 fi
+
+# The retired library's own suite (examples/divoom_legacy + examples/tests,
+# standalone since 2026-09-14). Not in the coverage floor -- nothing in the
+# product runs that code -- but it stays green: it is the executable spec the
+# device_call parity and positional-args gates read their signatures from.
+info "pytest examples/tests (the retired library, standalone)"
+python3 -m pytest examples/tests -q -p no:cacheprovider
+ok "legacy suite green"

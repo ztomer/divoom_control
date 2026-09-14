@@ -15,7 +15,7 @@ mocks `CloudClient` PINS the wrong architecture instead of noticing it.
 Two rule families, both scoped to `divoom_gui/`:
 
 1. **Forbidden imports** — transports and second implementations. If the GUI
-   can `import divoom_lib.cloud`, sooner or later a panel will, because that is
+   can `import divoom_legacy.cloud`, sooner or later a panel will, because that is
    easier than adding a `daemon_protocol` wrapper. That is the literal history
    of all five cloud panels.
 
@@ -56,8 +56,8 @@ GUI_DIR = REPO / "divoom_gui"
 
 # ── rule 1: imports the GUI must not have ────────────────────────────────────
 #
-# Matched against the dotted module path, prefix-wise: "divoom_lib.cloud" also
-# catches "divoom_lib.cloud.something". Each entry says what the GUI should do
+# Matched against the dotted module path, prefix-wise: "divoom_legacy.cloud" also
+# catches "divoom_legacy.cloud.something". Each entry says what the GUI should do
 # INSTEAD, because a gate that only says "no" gets worked around.
 FORBIDDEN_IMPORTS: dict[str, str] = {
     "bleak": "the GUI must never link BLE — divoomd owns the radio",
@@ -67,13 +67,17 @@ FORBIDDEN_IMPORTS: dict[str, str] = {
     "urllib.request": "ask the daemon; it owns every outbound HTTP call",
     "requests": "ask the daemon; it owns every outbound HTTP call",
     "httpx": "ask the daemon; it owns every outbound HTTP call",
-    "divoom_lib.cloud": "ask the daemon: get_dial_types, get_my_playlists, ...",
-    "divoom_lib.divoom": "device access goes through DaemonDeviceProxy",
-    "divoom_lib.wall": "wall access goes through DaemonDeviceProxy(target='wall')",
-    "divoom_lib.fonts": "ask the daemon to render text — it has the same font",
-    "divoom_lib.tools.hot_update": "ask the daemon: hot_update / its manifest",
-    "divoom_lib.utils.media_source": "ask the daemon: render_widget",
-    "divoom_lib.media_decoder": "ask the daemon: get_animated_preview",
+    # The retired direct-to-device library (examples/divoom_legacy, 2026-09-14):
+    # every capability it had, the daemon owns. Specific entries keep the
+    # specific answer; the package rule catches the rest.
+    "divoom_legacy": "the legacy library is retired; ask the daemon",
+    "divoom_legacy.cloud": "ask the daemon: get_dial_types, get_my_playlists, ...",
+    "divoom_legacy.divoom": "device access goes through DaemonDeviceProxy",
+    "divoom_legacy.wall": "wall access goes through DaemonDeviceProxy(target='wall')",
+    "divoom_legacy.fonts": "ask the daemon to render text — it has the same font",
+    "divoom_legacy.tools.hot_update": "ask the daemon: hot_update / its manifest",
+    "divoom_legacy.utils.media_source": "ask the daemon: render_widget",
+    "divoom_legacy.media_decoder": "ask the daemon: get_animated_preview",
 }
 
 # ── rule 2: calls that CONSTRUCT pixels ──────────────────────────────────────
@@ -109,8 +113,8 @@ ALLOWLIST: list[tuple[str, str, str, str]] = [
 def _module_names(node: ast.AST) -> list[str]:
     """Dotted module paths an import statement brings in.
 
-    `from divoom_lib.utils import media_source` must resolve to
-    `divoom_lib.utils.media_source`, not `divoom_lib.utils` — the GUI imports
+    `from divoom_legacy.utils import media_source` must resolve to
+    `divoom_legacy.utils.media_source`, not `divoom_legacy.utils` — the GUI imports
     it exactly that way, and matching only the package would either miss it or
     ban every sibling.
     """
@@ -125,7 +129,7 @@ def _module_names(node: ast.AST) -> list[str]:
 
 
 def _forbidden_import(dotted: str) -> tuple[str, str] | None:
-    """Longest matching prefix, so `divoom_lib.cloud` wins over a broader rule."""
+    """Longest matching prefix, so `divoom_legacy.cloud` wins over a broader rule."""
     best: tuple[str, str] | None = None
     for mod, why in FORBIDDEN_IMPORTS.items():
         if dotted == mod or dotted.startswith(mod + "."):
@@ -142,8 +146,8 @@ def scan_file(path: Path) -> list[tuple[str, str, str]]:
         return [("parse", str(path), f"could not parse: {exc}")]
 
     found: list[tuple[str, str, str]] = []
-    # `from divoom_lib.cloud import CloudClient` yields BOTH `divoom_lib.cloud`
-    # and `divoom_lib.cloud.CloudClient`, and the prefix rule matches both — one
+    # `from divoom_legacy.cloud import CloudClient` yields BOTH `divoom_legacy.cloud`
+    # and `divoom_legacy.cloud.CloudClient`, and the prefix rule matches both — one
     # import, reported twice, which inflates the count and makes the list read
     # as worse than it is. Deduplicate on (kind, symbol, line).
     seen: set[tuple[str, str, int]] = set()

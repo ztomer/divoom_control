@@ -47,7 +47,7 @@ To keep the codebase reliable, performant, and clean, all contributions must str
     *   **Async Event Loop Integrity**: Never perform blocking I/O (such as synchronous file reads, writes, or JSON caches) directly inside an async loop. Always delegate blocking routines to executor threads using `await asyncio.to_thread()`.
 
 3.  **SOLID Architecture & Loose Coupling (Uncle Bob Rules)**:
-    *   **Dependency Inversion (DIP)**: Core functional packages (`display/`, `system/`, `media/`, `scheduling/`, etc.) must not depend on the concrete `Divoom` client. They must be type-hinted and decoupled against the abstract `CommandSender` Protocol interface defined in `divoom_lib/sender_protocol.py`. This ensures they can be tested in isolation with fake senders.
+    *   **Dependency Inversion (DIP)**: Core functional packages (`display/`, `system/`, `media/`, `scheduling/`, etc.) must not depend on the concrete `Divoom` client. They must be type-hinted and decoupled against the abstract `CommandSender` Protocol interface defined in `examples/divoom_legacy/sender_protocol.py` (the retired library; the rule still holds inside it). This ensures they can be tested in isolation with fake senders.
     *   **Single Responsibility Principle (SRP)**: Avoid building multi-purpose "God Objects". High-level coordination should reside in dedicated controllers (e.g. `DivoomWall`), while low-level byte packing and escaping resides in pure helper modules like `framing.py`.
     *   **Custom Domain Exceptions**: Raise semantic, domain-specific subclasses (e.g., `DeviceConnectionError`, `CharacteristicDiscoveryError` in `divoom_lib/exceptions.py`) rather than generic `ValueError` or `ConnectionError` with raw text messages.
 
@@ -76,4 +76,4 @@ Please note that this project is released with a Contributor Code of Conduct. By
 If you are an AI agent working on this codebase, or a human looking for a quick start:
 
 1.  **Read `ARCHITECTURE.md`**: This file contains a high-level overview of the system, protocol details, and common pitfalls. It is designed to give you context quickly.
-2.  **Use `scripts/mock_device.py`**: This script provides a `MockBleakClient` that simulates a Divoom device. You can use it to verify protocol logic without needing physical hardware.
+2.  **Use `examples/tests/support/mock_device.py`**: This module provides a `MockBleakClient` that simulates a Divoom device for the retired library's suite. You can use it to verify protocol logic without needing physical hardware.

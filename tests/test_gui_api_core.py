@@ -141,7 +141,7 @@ class TestGuiApiCoreBasics(GuiApiTestBase):
     def test_r72_sync_time_and_auto_off_go_to_the_daemon(self):
         """R72 P1.2/P1.3: these used to build packets through divoom_lib.
 
-        The old version patched `divoom_lib.system.date_time.DateTimeCommand`
+        The old version patched `divoom_legacy.system.date_time.DateTimeCommand`
         and `...device_settings.DeviceSettings` -- i.e. it pinned the duplicate
         implementation in place. Both now travel to the daemon through the
         device proxy, so the assertion is about the METHOD PATH, which is the

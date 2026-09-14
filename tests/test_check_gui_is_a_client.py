@@ -61,13 +61,13 @@ def _run(gui_dir: Path, allowlist) -> int:
 # ── 1. it bites ──────────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("body, why", [
-    ("from divoom_lib.cloud import CloudClient\n", "cloud HTTP in the GUI"),
+    ("from divoom_legacy.cloud import CloudClient\n", "cloud HTTP in the GUI"),
     ("import bleak\n", "the BLE stack in the GUI process"),
     ("import urllib.request\n", "outbound HTTP in the GUI"),
     ("import pyaudio\n", "audio capture in the GUI"),
-    ("from divoom_lib.fonts.bitmap_font import get_default_font\n",
+    ("from divoom_legacy.fonts.bitmap_font import get_default_font\n",
      "a second bitmap font"),
-    ("from divoom_lib.utils import media_source\n", "a second widget renderer"),
+    ("from divoom_legacy.utils import media_source\n", "a second widget renderer"),
     ("from PIL import Image\nx = Image.new('RGB', (16, 16))\n",
      "building a frame"),
     ("img = img.resize((16, 16))\n", "resampling that can drift"),
@@ -100,13 +100,13 @@ def test_a_stale_allowlist_entry_fails(tmp_path):
     reads as "still broken" to anyone auditing the list.
     """
     gui = _tree(tmp_path, **{"panel.py": "x = 1\n"})
-    stale = [("panel.py", "import", "divoom_lib.cloud", "R70 P2.1")]
+    stale = [("panel.py", "import", "divoom_legacy.cloud", "R70 P2.1")]
     assert _run(gui, stale) == 1
 
 
 def test_an_allowlisted_violation_passes(tmp_path):
-    gui = _tree(tmp_path, **{"panel.py": "from divoom_lib.cloud import CloudClient\n"})
-    entry = [("panel.py", "import", "divoom_lib.cloud", "R70 P2.1")]
+    gui = _tree(tmp_path, **{"panel.py": "from divoom_legacy.cloud import CloudClient\n"})
+    entry = [("panel.py", "import", "divoom_legacy.cloud", "R70 P2.1")]
     assert _run(gui, entry) == 0
 
 
@@ -114,10 +114,10 @@ def test_the_allowlist_does_not_excuse_a_DIFFERENT_violation(tmp_path):
     """Allowlisting the cloud import must not also excuse a `bleak` import in
     the same file — otherwise one entry launders a whole file."""
     gui = _tree(tmp_path, **{"panel.py": (
-        "from divoom_lib.cloud import CloudClient\n"
+        "from divoom_legacy.cloud import CloudClient\n"
         "import bleak\n"
     )})
-    entry = [("panel.py", "import", "divoom_lib.cloud", "R70 P2.1")]
+    entry = [("panel.py", "import", "divoom_legacy.cloud", "R70 P2.1")]
     assert _run(gui, entry) == 1
 
 

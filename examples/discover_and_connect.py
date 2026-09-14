@@ -16,8 +16,8 @@ import argparse
 import asyncio
 import sys
 
-from divoom_lib import Divoom
-from divoom_lib.utils.discovery import discover_all_divoom_devices
+from divoom_legacy import Divoom
+from divoom_legacy.utils.discovery import discover_all_divoom_devices
 
 
 async def main(timeout: float = 10.0) -> int:

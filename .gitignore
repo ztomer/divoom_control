@@ -79,3 +79,6 @@ target/
 # 2026-09-07 by `git add -A` -- leaving a two-entry file in the tree that reads
 # as though the packet has two checks. The durable record is the CHANGELOG.
 report.json
+
+# gates_of_heck checkout CI drops beside the tree (see .github/workflows)
+/goh/

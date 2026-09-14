@@ -25,9 +25,7 @@ guard = pytest.importorskip("_empty_scope")
 #: Every gate wired to the helper. If one is added without the guard,
 #: `check_empty_scope.py` catches it; this list keeps the wiring visible here too.
 GUARDED = [
-    "check_file_size.py",
     "check_gui_is_a_client.py",
-    "check_no_allow.py",
     "check_positional_args.py",
     "check_scripts.py",
     "check_applescript_launch.py",

@@ -136,22 +136,36 @@ def daemon_capabilities() -> set[str]:
     return caps | {c.rsplit(".", 1)[-1] for c in caps if "." in c}
 
 
+# Both the retained core and the retired library (examples/divoom_legacy,
+# 2026-09-14) count as "the library": a reimplementation over either is the
+# same finding.
+_LIB_PREFIXES = ("divoom_lib", "divoom_legacy")
+
+
+def _is_lib(name: str) -> bool:
+    return any(name == p or name.startswith(p + ".") for p in _LIB_PREFIXES)
+
+
 def _divoom_lib_aliases(tree: ast.AST) -> dict[str, str]:
-    """Local name -> divoom_lib path, for both import spellings."""
+    """Local name -> library path, for both import spellings."""
     out: dict[str, str] = {}
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("divoom_lib"):
+        if isinstance(node, ast.ImportFrom) and _is_lib(node.module or ""):
             for a in node.names:
                 out[a.asname or a.name] = f"{node.module}.{a.name}"
         elif isinstance(node, ast.Import):
             for a in node.names:
-                if a.name.startswith("divoom_lib"):
+                if _is_lib(a.name):
                     out[a.asname or a.name.split(".")[0]] = a.name
     return out
 
 
 def _is_owned_lib(path: str) -> bool:
-    tail = path[len("divoom_lib."):] if path.startswith("divoom_lib.") else path
+    tail = path
+    for prefix in _LIB_PREFIXES:
+        if path.startswith(prefix + "."):
+            tail = path[len(prefix) + 1:]
+            break
     return any(tail == m or tail.startswith(m + ".") for m in OWNED_LIB)
 
 

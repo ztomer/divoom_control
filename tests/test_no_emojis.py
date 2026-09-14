@@ -76,11 +76,8 @@ def _is_emoji(ch: str) -> bool:
 #                             gates_of_heck checkout ($GOH_DIR/checks/); it lists
 #                             the permitted Kare glyphs in its ALLOWED set +
 #                             status messages.
-#   tools/check_file_size.py — the 500-line gate; uses the same Kare check/cross
-#                              glyphs in its status output.
 EXEMPT_FILES = {
     "scripts/hw_smoke.py",
-    "tools/check_file_size.py",
 }
 
 

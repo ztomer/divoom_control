@@ -15,7 +15,7 @@ import asyncio
 import logging
 import sys
 
-from divoom_lib import Divoom
+from divoom_legacy import Divoom
 from divoom_lib.models import WeatherType
 
 

@@ -16,13 +16,13 @@ import argparse
 import asyncio
 import sys
 
-from divoom_lib import Divoom
+from divoom_legacy import Divoom
 
 
 async def main(mhz: float, mac: str | None, timeout: float) -> int:
     freq_x10 = int(round(mhz * 10))
     if mac is None:
-        from divoom_lib.utils.discovery import discover_all_divoom_devices
+        from divoom_legacy.utils.discovery import discover_all_divoom_devices
         devices = await discover_all_divoom_devices(timeout=timeout)
         if not devices:
             print("No Divoom devices found.", file=sys.stderr)

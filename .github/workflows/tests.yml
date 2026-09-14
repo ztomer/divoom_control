@@ -36,20 +36,13 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
-      - name: Check for disallowed emoji
-        # R67: CI used to invoke the goh checker DIRECTLY while the local gate
-        # went through scripts/house_emoji_gate.sh, which passes the repo's
-        # GOH_EXCLUDE from .gatesrc. So CI scanned docs/divoom_docs/ — captured
-        # third-party Divoom API responses full of emoji — and local did not.
-        # The local gate was WEAKER than CI's, which is the house trap in its
-        # documented direction, and it is why this job had been red since
-        # 2026-08-23 while every local run said green.
-        #
-        # Both sides now run the SAME wrapper with the SAME config. A gate whose
-        # two invocations disagree is not one gate.
-        run: GOH_DIR="$GITHUB_WORKSPACE/goh" ./scripts/house_emoji_gate.sh
-      - name: Check source files within 500-line house limit
-        run: python3 tools/check_file_size.py
+      - name: Structural house gates
+        # The SAME entry the local gate list runs: structural.sh reads this
+        # repo's .gatesrc (GOH_EXCLUDE for docs/divoom_docs/, the 500-line cap,
+        # the length baseline) and runs emoji, markers, length, shell lint and
+        # secrets. R67's lesson stands: a gate whose two invocations disagree
+        # is not one gate, so CI and local share one command and one config.
+        run: GOH_DIR="$GITHUB_WORKSPACE/goh" GOH_NO_NATIVE=1 bash goh/gates/structural.sh --full
       # R67: these ran ONLY in the local gate list, so local and CI disagreed
       # about what "green" means — the same divergence the house rules name,
       # pointing the other way. They resolve the TUI via tools/_tui.py, which
@@ -202,8 +195,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - name: Check out gates_of_heck
+        uses: actions/checkout@v7
+        with:
+          repository: ztomer/gates_of_heck
+          path: goh
+          token: ${{ secrets.GOH_TOKEN || github.token }}
       - name: No #[allow] in tracked Rust source (house gate)
-        run: python3 tools/check_no_allow.py
+        run: python3 goh/checks/check_no_allow.py
       - name: Install D-Bus headers
         # clippy --all-features enables `ble` → btleplug → dbus → libdbus-sys,
         # which needs the system dbus-1.pc. Without this the clippy step fails

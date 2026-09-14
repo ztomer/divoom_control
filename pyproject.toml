@@ -25,7 +25,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "divoom-control"
-version = "0.37.0"
+version = "0.38.0"
 description = "macOS control surface for Divoom pixel displays (Pixoo / Tivoo / Ditoo / Timoo)"
 readme = "README.md"
 license = { text = "MIT" }
@@ -87,8 +87,11 @@ divoom-control = "divoom_lib.cli:main"
 # ── setuptools: package discovery + data files ───────────────────────
 
 [tool.setuptools]
-# The lib packages + the GUI package (macOS only). Native dylibs and
-# the web_ui/ directory are shipped as package data.
+# The retained core (divoom_lib: framing, models, transport interface, auth,
+# native_lib, the CLI/MCP clients), the daemon client and the GUI package
+# (macOS only). The direct-to-device library is NOT shipped: it was retired
+# to examples/divoom_legacy on 2026-09-14 and is excluded below. Native
+# dylibs and the web_ui/ directory are package data.
 include-package-data = true
 
 [tool.setuptools.packages.find]

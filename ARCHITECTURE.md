@@ -15,7 +15,9 @@ divoomd/          THE DAEMON (Rust). Single owner of the device connection;
                   macOS + Linux. This is the runtime core.
 divoom-menubar/   The menu-bar/tray agent (Rust, tao + tray-icon). A daemon
                   client. macOS. Bundled in the shipped .app.
-divoom_lib/       Pure protocol + transports + encoders + CLI + MCP + weather.
+divoom_lib/       Protocol core (framing, models, transport interface, auth,
+                  native_lib) + CLI + MCP + weather. The direct-to-device
+                  library is examples/divoom_legacy/ (retired 2026-09-14).
                   The native accelerator (libdivoom_compact.{dylib|so}) and the
                   device bitmap font (divoom_lib/fonts/, R28) live here. No
                   host/OS/GUI deps beyond bleak. macOS + Linux.
@@ -54,9 +56,10 @@ graph LR
   builds its tool catalog against a `DaemonDeviceProxy` rather than opening its
   own BLE connection (which would fight the daemon for the single-owner device).
   `--mac` optional; `--host/--port/--token` target a remote daemon.
-- **The CLI** (`divoom_lib.cli`) is the one consumer that can own the device
-  directly, via `divoom_lib`. If the daemon is running it already holds the
-  connection — stop it first, or go through the daemon protocol.
+- **The CLI** (`divoom_lib.cli`) is a daemon client like the GUI and the MCP
+  server: it opens no Bluetooth itself. The only code that can own a device
+  directly is the retired library under `examples/divoom_legacy/`, which the
+  product never imports (`tests/test_no_direct_facade_in_production.py`).
 - **Daemon protocol:** newline-delimited JSON (control plane) over a Unix socket
   (local, trusted) and, optionally, TCP (`--host`/`--port`/`--token`, R19).
   Binary device data (images/GIFs) is shipped via base64 `blobs` only when the
@@ -120,14 +123,14 @@ graph TD
 
 ### Key Components
 
-*   **`divoom_lib/divoom.py` (`Divoom`)**: The main facade orchestrator. It registers all functional submodules and exposes clean, high-level APIs to user scripts and bridge controllers, delegating connection states and command routing to `DivoomConnection`.
+*   **`examples/divoom_legacy/divoom.py` (`Divoom`)** (retired from the product 2026-09-14, kept standalone under `examples/`): The direct-to-device facade orchestrator. It registers all functional submodules and exposes clean, high-level APIs to user scripts and bridge controllers, delegating connection states and command routing to `DivoomConnection`.
 *   **`divoom_lib/connection.py` (`DivoomConnection`)**: The central transport controller that manages connection state lifecycles and routes encoded frames over BLE, Bluetooth Classic RFCOMM (`BTSppTransport`), or Wi-Fi (`LanTransport`).
 *   **`divoom_lib/bt_spp_transport.py` (`BTSppTransport`)**: Async Bluetooth Classic SPP RFCOMM driver utilizing macOS `IOBluetooth` delegates and dedicated run loops to bypass DriverKit daemon hangs and talk to classic devices (Timoo, Tivoo, Ditoo, etc.).
-*   **`divoom_lib/lan_transport.py` (`LanTransport`)**: Local Wi-Fi HTTP client that sends stateless POST JSON commands to Divoom screens (e.g. Pixoo 64) over port `:9000`.
+*   **`examples/divoom_legacy/lan_transport.py` (`LanTransport`)** (retired): Local Wi-Fi HTTP client that sends stateless POST JSON commands to Divoom screens (e.g. Pixoo 64) over port `:9000`.
 *   **`divoom_lib/framing.py`**: A pure functional library containing stateless helpers for encoding/decoding basic and iOS LE protocol packets, checksum calculation, and payload byte escaping.
-*   **`divoom_lib/protocol.py` (`DivoomProtocol`)**: A thin, backward-compatible subclass of `Divoom` kept to prevent breaking old client integrations.
+*   **`examples/divoom_legacy/protocol.py` (`DivoomProtocol`)** (retired): A thin, backward-compatible subclass of `Divoom` kept to prevent breaking old client integrations.
 *   **`divoom_lib/models/`**: Configuration models (`DivoomConfig`), constants, and command code schemas.
-*   **`divoom_lib/display/`, `divoom_lib/system/`, `divoom_lib/media/`, `divoom_lib/scheduling/`, `divoom_lib/tools/`**: Decoupled domain submodules wrapping raw commands.
+*   **`examples/divoom_legacy/{display,system,media,scheduling,tools}/`** (retired): Decoupled domain submodules wrapping raw commands — now the executable spec the daemon's `device_call` arms are gated against (`tools/check_positional_args.py`, `examples/tests/test_device_call_parity.py`).
 
 ## Communication Protocols
 

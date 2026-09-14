@@ -230,5 +230,5 @@ def test_no_panel_imports_the_cloud_client_any_more():
     for name in ("clock_faces.py", "playlists.py", "aid_sleep.py",
                  "photo_albums.py", "weather_city.py"):
         src = (gui / name).read_text()
-        assert "divoom_lib.cloud" not in src, f"{name} still imports CloudClient"
+        assert "divoom_legacy.cloud" not in src, f"{name} still imports CloudClient"
         assert "CloudPanelMixin" in src, f"{name} must go through the funnel"

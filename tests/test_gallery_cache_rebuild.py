@@ -15,27 +15,13 @@ import json
 import shutil
 import sys
 import tempfile
-import types
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-# Stub the C dylib (not available in the test environment) so that the
-# top-level `from divoom_lib import media_decoder` inside
-# divoom_gui/gallery_sync.py succeeds without loading the native lib.
-if "divoom_lib.media_decoder" not in sys.modules:
-    import divoom_lib
-    _shim = types.ModuleType("divoom_lib.media_decoder")
-    _shim.extract_image_from_magic_43 = lambda b: None
-    _shim.extract_gif_from_magic_43 = lambda b: None
-    _shim.decode_and_save_preview = lambda *a, **k: None
-    sys.modules["divoom_lib.media_decoder"] = _shim
-    divoom_lib.media_decoder = _shim
-
-
 def _import_gallery_sync():
-    """Import gui/gallery_sync.py. media_decoder stub is set up at module load."""
+    """Import gui/gallery_sync.py (it no longer touches the retired media_decoder)."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from divoom_gui.gallery_sync import GallerySyncMixin
     return GallerySyncMixin
