@@ -340,7 +340,16 @@ def test_compact_tiles_native_and_python_fallback_agree(monkeypatch):
     fallback_result = media_decoder._compact_tiles(blob, 1, 2)
 
     assert native_result.size == fallback_result.size == (32, 16)
-    assert list(native_result.getdata()) == list(fallback_result.getdata())
+    # `getdata()` is removed in Pillow 14 (2027-10-15); its replacement
+    # `get_flattened_data()` exists only on Pillow 12+. The tree floats
+    # Pillow unpinned (local venv is 10.4), so bridge both: prefer the new
+    # API where it exists, fall back where it does not. Identical data on
+    # RGB either way (verified the same way Taxes did at t6_capture.py:295).
+    def pixels(img):
+        modern = getattr(img, "get_flattened_data", None)
+        return list(modern() if modern is not None else img.getdata())
+
+    assert pixels(native_result) == pixels(fallback_result)
     assert fallback_result.getpixel((0, 0)) == (10, 20, 30)
     assert fallback_result.getpixel((16, 0)) == (40, 50, 60)
 
