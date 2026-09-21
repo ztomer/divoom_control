@@ -32,10 +32,84 @@ fn env_duration(key: &str, default: Duration) -> Duration {
     })
 }
 
+/// Bind the unix socket, or exit with the reason and the remedy.
+///
+/// Single-instance guard, stale-socket clearing and blocker diagnosis all
+/// live in `socket_bind::acquire`, under an advisory lock so inspect-and-bind
+/// is atomic against another daemon starting at the same moment. `held` owns
+/// the listener, the startup lock and the identity of the file we bound;
+/// keeping them in one value is what makes the shutdown ordering structural
+/// instead of a comment -- see `socket_owner::HeldSocket`.
+fn bind_unix(socket_path: &str) -> divoomd::socket_owner::HeldSocket<UnixListener> {
+    let acquired = match divoomd::socket_bind::acquire(socket_path) {
+        Ok(a) => a,
+        Err(f) => {
+            // Say it BOTH ways. stderr goes to the GUI's daemon log, which is
+            // where a human looks; the sidecar file is what the client reads to
+            // turn "no daemon" into an actual explanation.
+            eprintln!("divoomd: {}", f.reason(socket_path));
+            eprintln!("divoomd: {}", f.remedy());
+            if f.describes_the_socket() {
+                divoomd::socket_bind::write_failure(socket_path, &f);
+            } else {
+                // We lost the single-instance race, which means a HEALTHY
+                // daemon owns this socket. Any sidecar sitting there is now
+                // describing a condition that no longer holds, so clear it
+                // rather than adding one — the winner cannot, since it never
+                // re-enters acquire().
+                divoomd::socket_bind::clear_failure(socket_path);
+            }
+            std::process::exit(f.exit_code());
+        }
+    };
+    match acquired.into_held(|std_listener| {
+        std_listener.set_nonblocking(true)?;
+        UnixListener::from_std(std_listener)
+    }) {
+        Ok(h) => h,
+        Err(e) => {
+            eprintln!("divoomd: cannot use {socket_path}: {e}");
+            std::process::exit(1);
+        }
+    }
+}
+
+/// Bind the optional TCP listener: `None` when no host was given, the
+/// listener and its required token otherwise. Exits when the request is
+/// incomplete (no port, no token) or the bind fails.
+async fn bind_tcp(
+    host: Option<String>,
+    port: Option<u16>,
+    token: Option<String>,
+) -> Option<(tokio::net::TcpListener, String)> {
+    let host = host?;
+    let Some(port) = port else {
+        eprintln!("divoomd: TCP port is required when host is specified");
+        std::process::exit(1);
+    };
+    let token = match token {
+        Some(ref t) if !t.is_empty() => t.clone(),
+        _ => {
+            eprintln!("divoomd: TCP listener requested without a token; refusing to expose the daemon unauthenticated. Set DIVOOM_DAEMON_TOKEN or pass --token.");
+            std::process::exit(1);
+        }
+    };
+    let addr = format!("{host}:{port}");
+    let l = match tokio::net::TcpListener::bind(&addr).await {
+        Ok(listener) => listener,
+        Err(e) => {
+            eprintln!("divoomd: cannot bind TCP listener to {addr}: {e}");
+            std::process::exit(1);
+        }
+    };
+    eprintln!("divoomd listening on tcp://{addr} (token required)");
+    Some((l, token))
+}
+
 #[tokio::main]
 async fn main() {
-    let argv: Vec<String> = std::env::args().skip(1).collect();
-    let args = match cli_args::parse(&argv, std::env::var("DIVOOM_DAEMON_TOKEN").ok()) {
+    let raw: Vec<String> = std::env::args().skip(1).collect();
+    let args = match cli_args::parse(&raw, std::env::var("DIVOOM_DAEMON_TOKEN").ok()) {
         // `--version` MUST answer without side effects: it is how the client and
         // the gates ask a built binary what it is, and a probe that starts a
         // daemon on the default socket is not a probe. Printed before any socket
@@ -65,71 +139,10 @@ async fn main() {
         Outcome::Run(cfg) => *cfg,
     };
     let socket_path = args.socket_path;
-    // Single-instance guard, stale-socket clearing and blocker diagnosis all
-    // live in socket_bind::acquire, under an advisory lock so inspect-and-bind
-    // is atomic against another daemon starting at the same moment.
-    let acquired = match divoomd::socket_bind::acquire(&socket_path) {
-        Ok(a) => a,
-        Err(f) => {
-            // Say it BOTH ways. stderr goes to the GUI's daemon log, which is
-            // where a human looks; the sidecar file is what the client reads to
-            // turn "no daemon" into an actual explanation.
-            eprintln!("divoomd: {}", f.reason(&socket_path));
-            eprintln!("divoomd: {}", f.remedy());
-            if f.describes_the_socket() {
-                divoomd::socket_bind::write_failure(&socket_path, &f);
-            } else {
-                // We lost the single-instance race, which means a HEALTHY
-                // daemon owns this socket. Any sidecar sitting there is now
-                // describing a condition that no longer holds, so clear it
-                // rather than adding one — the winner cannot, since it never
-                // re-enters acquire().
-                divoomd::socket_bind::clear_failure(&socket_path);
-            }
-            std::process::exit(f.exit_code());
-        }
-    };
-    // `held` owns the listener, the startup lock and the identity of the file
-    // we bound. Keeping them in one value is what makes the shutdown ordering
-    // structural instead of a comment — see `socket_owner::HeldSocket`.
-    let held = match acquired.into_held(|std_listener| {
-        std_listener.set_nonblocking(true)?;
-        UnixListener::from_std(std_listener)
-    }) {
-        Ok(h) => h,
-        Err(e) => {
-            eprintln!("divoomd: cannot use {socket_path}: {e}");
-            std::process::exit(1);
-        }
-    };
+    let held = bind_unix(&socket_path);
     eprintln!("divoomd listening on {socket_path}");
 
-    let mut tcp_listener = None;
-    let mut tcp_token = None;
-    if let Some(host) = args.host {
-        let Some(port) = args.port else {
-            eprintln!("divoomd: TCP port is required when host is specified");
-            std::process::exit(1);
-        };
-        let token = match args.token {
-            Some(ref t) if !t.is_empty() => t.clone(),
-            _ => {
-                eprintln!("divoomd: TCP listener requested without a token; refusing to expose the daemon unauthenticated. Set DIVOOM_DAEMON_TOKEN or pass --token.");
-                std::process::exit(1);
-            }
-        };
-        let addr = format!("{host}:{port}");
-        let l = match tokio::net::TcpListener::bind(&addr).await {
-            Ok(listener) => listener,
-            Err(e) => {
-                eprintln!("divoomd: cannot bind TCP listener to {addr}: {e}");
-                std::process::exit(1);
-            }
-        };
-        eprintln!("divoomd listening on tcp://{addr} (token required)");
-        tcp_listener = Some(l);
-        tcp_token = Some(token);
-    }
+    let tcp = bind_tcp(args.host, args.port, args.token).await;
 
     let daemon = Arc::new(Daemon::new());
     daemon.initialize_self_weak(Arc::downgrade(&daemon));
@@ -165,7 +178,7 @@ async fn main() {
     );
 
     let shutdown = daemon.shutdown.clone();
-    if let (Some(l), Some(t)) = (tcp_listener, tcp_token) {
+    if let Some((l, t)) = tcp {
         let tcp_fut = serve_tcp(l, daemon.clone(), t, max_connections, idle_timeout);
         tokio::select! {
             () = unix_fut => {}

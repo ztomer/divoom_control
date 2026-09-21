@@ -142,10 +142,6 @@ async fn scrolling_text(ctx: &CallCtx<'_>) -> Value {
     json!({"success": true, "result": true, "characters": units.len(), "rate": rate})
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "a device command dispatch table: one arm per protocol method and its aliases, each a few lines of argument shuffling before it builds a frame. The length is the number of COMMANDS the device answers, not complexity in any one of them, and splitting it puts a layer between a method name and the code that implements it -- which is the one thing a reader opens these files to find"
-)]
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     if method.ends_with("show_scrolling_text") || method.ends_with("scrolling_text") {
         return scrolling_text(&ctx).await;
@@ -155,107 +151,45 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     let raw_args = ctx.raw_args;
     let kw = ctx.kwargs;
 
+    // Every numeric field: its positional slot, else the keyword, else `dflt`.
+    let arg = |slot: usize, name: &str, dflt: i64| {
+        args.get(slot)
+            .copied()
+            .or_else(|| {
+                kw.and_then(|v| v.get(name))
+                    .and_then(serde_json::Value::as_i64)
+            })
+            .unwrap_or(dflt)
+    };
     let is_content_only = method.ends_with("set_text_content");
     let control = if is_content_only {
         6
     } else {
-        args.first()
-            .copied()
-            .or_else(|| {
-                kw.and_then(|v| v.get("control"))
-                    .and_then(serde_json::Value::as_i64)
-            })
-            .unwrap_or(6)
-            .byte()
+        arg(0, "control", 6).byte()
     };
-
     let mut payload = Vec::new();
     payload.push(control);
 
     match control {
         1 => {
             // Speed
-            let speed = args
-                .get(1)
-                .copied()
-                .or_else(|| {
-                    kw.and_then(|v| v.get("speed"))
-                        .and_then(serde_json::Value::as_i64)
-                })
-                .unwrap_or(0)
-                .word();
-            let text_box_id = args
-                .get(2)
-                .copied()
-                .or_else(|| {
-                    kw.and_then(|v| v.get("text_box_id"))
-                        .and_then(serde_json::Value::as_i64)
-                })
-                .unwrap_or(0)
-                .byte();
+            let speed = arg(1, "speed", 0).word();
+            let text_box_id = arg(2, "text_box_id", 0).byte();
             payload.extend_from_slice(&speed.to_le_bytes());
             payload.push(text_box_id);
         }
         2 => {
             // Effects
-            let effect_style = args
-                .get(1)
-                .copied()
-                .or_else(|| {
-                    kw.and_then(|v| v.get("effect_style"))
-                        .and_then(serde_json::Value::as_i64)
-                })
-                .unwrap_or(0)
-                .byte();
+            let effect_style = arg(1, "effect_style", 0).byte();
             payload.push(effect_style);
         }
         3 => {
             // Display Box
-            let x = args
-                .get(1)
-                .copied()
-                .or_else(|| {
-                    kw.and_then(|v| v.get("x"))
-                        .and_then(serde_json::Value::as_i64)
-                })
-                .unwrap_or(0)
-                .byte();
-            let y = args
-                .get(2)
-                .copied()
-                .or_else(|| {
-                    kw.and_then(|v| v.get("y"))
-                        .and_then(serde_json::Value::as_i64)
-                })
-                .unwrap_or(0)
-                .byte();
-            let width = args
-                .get(3)
-                .copied()
-                .or_else(|| {
-                    kw.and_then(|v| v.get("width"))
-                        .and_then(serde_json::Value::as_i64)
-                })
-                .unwrap_or(0)
-                .byte();
-            let height = args
-                .get(4)
-                .copied()
-                .or_else(|| {
-                    kw.and_then(|v| v.get("height"))
-                        .and_then(serde_json::Value::as_i64)
-                })
-                .unwrap_or(0)
-                .byte();
-            let text_box_id = args
-                .get(5)
-                .copied()
-                .or_else(|| {
-                    kw.and_then(|v| v.get("text_box_id"))
-                        .and_then(serde_json::Value::as_i64)
-                })
-                .unwrap_or(0)
-                .byte();
+            let x = arg(1, "x", 0).byte();
+            let y = arg(2, "y", 0).byte();
+            let width = arg(3, "width", 0).byte();
+            let height = arg(4, "height", 0).byte();
+            let text_box_id = arg(5, "text_box_id", 0).byte();
             payload.push(x);
             payload.push(y);
             payload.push(width);
@@ -264,24 +198,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         }
         4 => {
             // Font
-            let font_size = args
-                .get(1)
-                .copied()
-                .or_else(|| {
-                    kw.and_then(|v| v.get("font_size"))
-                        .and_then(serde_json::Value::as_i64)
-                })
-                .unwrap_or(0)
-                .byte();
-            let text_box_id = args
-                .get(2)
-                .copied()
-                .or_else(|| {
-                    kw.and_then(|v| v.get("text_box_id"))
-                        .and_then(serde_json::Value::as_i64)
-                })
-                .unwrap_or(0)
-                .byte();
+            let font_size = arg(1, "font_size", 0).byte();
+            let text_box_id = arg(2, "text_box_id", 0).byte();
             payload.push(font_size);
             payload.push(text_box_id);
         }
@@ -289,15 +207,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             // Color
             let color_val = raw_args.get(1).or_else(|| kw.and_then(|v| v.get("color")));
             let [r, g, b] = rgb_triple(color_val);
-            let text_box_id = args
-                .get(2)
-                .copied()
-                .or_else(|| {
-                    kw.and_then(|v| v.get("text_box_id"))
-                        .and_then(serde_json::Value::as_i64)
-                })
-                .unwrap_or(0)
-                .byte();
+            let text_box_id = arg(2, "text_box_id", 0).byte();
             payload.push(r);
             payload.push(g);
             payload.push(b);
@@ -305,37 +215,16 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         }
         6 => {
             // Content
-            let content_val = if is_content_only {
-                raw_args
-                    .first()
-                    .or_else(|| kw.and_then(|v| v.get("text_content")))
-                    .or_else(|| kw.and_then(|v| v.get("text")))
-            } else {
-                raw_args
-                    .get(1)
-                    .or_else(|| kw.and_then(|v| v.get("text_content")))
-                    .or_else(|| kw.and_then(|v| v.get("text")))
-            };
-            let content = content_val.and_then(|v| v.as_str()).unwrap_or("");
-            let text_box_id = if is_content_only {
-                args.get(1)
-                    .copied()
-                    .or_else(|| {
-                        kw.and_then(|v| v.get("text_box_id"))
-                            .and_then(serde_json::Value::as_i64)
-                    })
-                    .unwrap_or(0)
-                    .byte()
-            } else {
-                args.get(2)
-                    .copied()
-                    .or_else(|| {
-                        kw.and_then(|v| v.get("text_box_id"))
-                            .and_then(serde_json::Value::as_i64)
-                    })
-                    .unwrap_or(0)
-                    .byte()
-            };
+            // `set_text_content` carries no control word, so its positional
+            // arguments sit one slot earlier.
+            let slot = usize::from(!is_content_only);
+            let content = raw_args
+                .get(slot)
+                .or_else(|| kw.and_then(|v| v.get("text_content")))
+                .or_else(|| kw.and_then(|v| v.get("text")))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let text_box_id = arg(slot + 1, "text_box_id", 0).byte();
             let content_bytes = content.as_bytes();
             let len = content_bytes.len().word();
             payload.extend_from_slice(&len.to_le_bytes());
@@ -344,24 +233,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         }
         7 => {
             // Image Effects
-            let effect_style = args
-                .get(1)
-                .copied()
-                .or_else(|| {
-                    kw.and_then(|v| v.get("effect_style"))
-                        .and_then(serde_json::Value::as_i64)
-                })
-                .unwrap_or(0)
-                .byte();
-            let text_box_id = args
-                .get(2)
-                .copied()
-                .or_else(|| {
-                    kw.and_then(|v| v.get("text_box_id"))
-                        .and_then(serde_json::Value::as_i64)
-                })
-                .unwrap_or(0)
-                .byte();
+            let effect_style = arg(1, "effect_style", 0).byte();
+            let text_box_id = arg(2, "text_box_id", 0).byte();
             payload.push(effect_style);
             payload.push(text_box_id);
         }

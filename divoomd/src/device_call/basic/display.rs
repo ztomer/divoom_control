@@ -8,10 +8,6 @@ use crate::protocol::err_reply;
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "a device command dispatch table: one arm per protocol method and its aliases, each a few lines of argument shuffling before it builds a frame. The length is the number of COMMANDS the device answers, not complexity in any one of them, and splitting it puts a layer between a method name and the code that implements it -- which is the one thing a reader opens these files to find"
-)]
 pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let args = ctx.args;
@@ -23,48 +19,8 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         // colour, so the wall path (`t.show_clock(clock=style)`) silently
         // discarded the user's colour. It now reads the same fields as its
         // `display.` sibling, through the one shared packet.
-        "device.show_clock" | "show_clock" => {
-            let p = clock_packet_from_call(args, raw_args, kw);
-            match dev
-                .send_command(CMD_SET_LIGHT_MODE, &p.to_bytes(), true)
-                .await
-            {
-                Ok(()) => json!({"success": true, "result": true}),
-                Err(e) => err_reply(&format!("show_clock failed: {e}")),
-            }
-        }
-        "device.show_image" | "show_image" => {
-            // Out-of-range dims fail the length check below: -1 can never
-            // match a real buffer length, and neither can a wrapped huge one.
-            let w = i32::try_from(get_kwarg_i64(kw, "w", 16)).unwrap_or(-1);
-            let h = i32::try_from(get_kwarg_i64(kw, "h", 16)).unwrap_or(-1);
-            let time_ms = get_kwarg_i64(kw, "time_ms", 100).word();
-            let rgb: Vec<u8> = match kw.and_then(|m| m.get("rgb")).and_then(|v| v.as_array()) {
-                Some(a) => a
-                    .iter()
-                    .filter_map(|x| x.as_u64().map(crate::wire::WireNarrow::byte))
-                    .collect(),
-                None => return err_reply("show_image requires 'rgb' (array of u8)"),
-            };
-            let expected = usize::try_from(w * h * 3).unwrap_or(usize::MAX);
-            if rgb.len() != expected {
-                return err_reply(&format!(
-                    "show_image: rgb.len()={} expected w*h*3={expected}",
-                    rgb.len()
-                ));
-            }
-            let Some(enc) = ctx.daemon.encoder() else {
-                return err_reply("encoder not available");
-            };
-            let Some(blob) = enc.encode_animation_frame(&rgb, w, h, time_ms) else {
-                return err_reply("encode_animation_frame failed");
-            };
-            match dev.stream_animation_8b(&blob).await {
-                Ok(true) => json!({"success": true, "result": true}),
-                Ok(false) => err_reply("stream_animation_8b: empty blob"),
-                Err(e) => err_reply(&format!("stream_animation_8b failed: {e}")),
-            }
-        }
+        "device.show_clock" | "show_clock" => show_clock(ctx).await,
+        "device.show_image" | "show_image" => show_image(ctx).await,
         "display.show_image" | "display.display_image" => {
             let size = kw
                 .and_then(|v| v.get("size"))
@@ -153,29 +109,8 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 Err(e) => err_reply(&format!("display.show_clock failed: {e}")),
             }
         }
-        "display.set_clock_rich" => {
-            let p = clock_packet_from_call(args, raw_args, kw);
-            match dev
-                .send_command(CMD_SET_LIGHT_MODE, &p.to_bytes(), true)
-                .await
-            {
-                Ok(()) => json!({"success": true, "result": true}),
-                Err(e) => err_reply(&format!("display.set_clock_rich failed: {e}")),
-            }
-        }
-        "display.show_design" => {
-            match dev
-                .send_command(
-                    CMD_SET_LIGHT_MODE,
-                    &crate::packets::channel_switch(crate::packets::BareChannel::Design),
-                    false,
-                )
-                .await
-            {
-                Ok(()) => json!({"success": true, "result": true}),
-                Err(e) => err_reply(&format!("display.show_design failed: {e}")),
-            }
-        }
+        "display.set_clock_rich" => set_clock_rich(ctx).await,
+        "display.show_design" => show_design(ctx).await,
         // R67/C1: the lighting-type byte was hardcoded to 0x00 here, so all five
         // ambient modes sent identical Plain-Colour packets while every RPC
         // returned success. `power` was also read only from kwargs, never from
@@ -183,121 +118,226 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         // Python's signature is show_light(color, brightness, power, lightning_type)
         // and DaemonDeviceProxy forwards those positionally, so both are read
         // positionally-or-by-keyword now.
-        "display.show_light" | "light.show_light" | "show_light" => {
-            // R67/C7: brightness used to read `args.get(1)` — the COMPACTED
-            // numeric list, which for ("#00FFCC", 80, true, 2) is [80, 2]. So
-            // index 1 was the MODE, and the ambient brightness slider silently
-            // sent the mode number instead (mode 0 meant brightness 0). Found
-            // by the wire trace on real hardware; no test could see it.
-            let rgb = color_from_arg(raw_args, kw).unwrap_or([0xFF, 0xFF, 0xFF]);
-            let brightness = crate::device_call::pos_i64(raw_args, 1, kw, "brightness", 100)
-                .clamp(0, 100)
-                .byte();
-            let power = crate::device_call::pos_bool(raw_args, 2, kw, "power", true);
-            let kind = LightingType::from_i64(
-                raw_args
-                    .get(3)
-                    .and_then(serde_json::Value::as_i64)
-                    .or_else(|| {
-                        kw.and_then(|v| v.get("lightning_type"))
-                            .and_then(serde_json::Value::as_i64)
-                    })
-                    .or_else(|| {
-                        kw.and_then(|v| v.get("mode_type"))
-                            .and_then(serde_json::Value::as_i64)
-                    })
-                    .unwrap_or(0),
-            );
-            let payload = LightPacket {
-                rgb,
-                brightness,
-                kind,
-                power,
-            }
-            .to_bytes();
-            match dev.send_command(0x45, &payload, true).await {
-                Ok(()) => json!({"success": true, "result": true}),
-                Err(e) => err_reply(&format!("display.show_light failed: {e}")),
-            }
-        }
+        "display.show_light" | "light.show_light" | "show_light" => show_light(ctx).await,
         // VJ effects (1-indexed on BLE): 0x45 [0x03, number+1, 0×8] (Python show_effects).
-        "display.show_effects" | "show_effects" => {
-            let number = args
-                .first()
-                .copied()
-                .or_else(|| {
-                    kw.and_then(|v| v.get("number"))
-                        .and_then(serde_json::Value::as_i64)
-                })
-                .unwrap_or(0);
-            let payload = crate::packets::vj_effect(number.clamp(0, 254).byte());
-            match dev.send_command(0x45, &payload, true).await {
-                Ok(()) => json!({"success": true, "result": true}),
-                Err(e) => err_reply(&format!("display.show_effects failed: {e}")),
-            }
-        }
+        "display.show_effects" | "show_effects" => show_effects(ctx).await,
         // Visualization channel: 0x45 [0x04, number, 0×8] (Python show_visualization).
-        "display.show_visualization" | "show_visualization" => {
-            let number = args
-                .first()
-                .copied()
-                .or_else(|| {
-                    kw.and_then(|v| v.get("number"))
-                        .and_then(serde_json::Value::as_i64)
-                })
-                .unwrap_or(0);
-            let payload = crate::packets::visualization(number.clamp(0, 255).byte());
-            match dev.send_command(0x45, &payload, true).await {
-                Ok(()) => json!({"success": true, "result": true}),
-                Err(e) => err_reply(&format!("display.show_visualization failed: {e}")),
-            }
-        }
+        "display.show_visualization" | "show_visualization" => show_visualization(ctx).await,
         // Scoreboard channel: 0x45 [0x06, 0×9] (Python show_scoreboard).
-        "display.show_scoreboard" | "show_scoreboard" => {
-            let payload = crate::packets::channel_switch(crate::packets::BareChannel::Scoreboard);
-            match dev.send_command(0x45, &payload, true).await {
-                Ok(()) => json!({"success": true, "result": true}),
-                Err(e) => err_reply(&format!("display.show_scoreboard failed: {e}")),
-            }
-        }
+        "display.show_scoreboard" | "show_scoreboard" => show_scoreboard(ctx).await,
         // Channel switch by name → the matching 0x45 channel payload (Python switch_channel).
-        "display.switch_channel" | "switch_channel" => {
-            let channel = raw_args
-                .first()
-                .and_then(|v| v.as_str())
-                .or_else(|| kw.and_then(|v| v.get("channel")).and_then(|v| v.as_str()))
-                .unwrap_or("")
-                .to_lowercase();
-            // R67/C1 sibling: these were five hand-written byte arrays, and the
-            // "clock" one was a full ClockPacket spelled out by hand — the exact
-            // shape that let the overlay fields drift in the first place. They
-            // now come from the same builders as every other 0x45 packet.
-            let payload: [u8; 10] = match channel.as_str() {
-                "clock" => ClockPacket::default().to_bytes(),
-                "visualizer" | "eq" => crate::packets::visualization(0),
-                // VJ effects are 1-indexed on the wire; vj_effect(0) sends 1,
-                // which is what the hand-rolled array did.
-                "vj" => crate::packets::vj_effect(0),
-                "design" | "custom" => {
-                    crate::packets::channel_switch(crate::packets::BareChannel::Design)
-                }
-                "scoreboard" => {
-                    crate::packets::channel_switch(crate::packets::BareChannel::Scoreboard)
-                }
-                "cloud" | "hot" => {
-                    crate::packets::channel_switch(crate::packets::BareChannel::Cloud)
-                }
-                "ambient" | "lighting" => {
-                    crate::packets::channel_switch(crate::packets::BareChannel::Lighting)
-                }
-                other => return err_reply(&format!("switch_channel: unknown channel '{other}'")),
-            };
-            match dev.send_command(CMD_SET_LIGHT_MODE, &payload, true).await {
-                Ok(()) => json!({"success": true, "result": true}),
-                Err(e) => err_reply(&format!("display.switch_channel failed: {e}")),
-            }
-        }
+        "display.switch_channel" | "switch_channel" => switch_channel(ctx).await,
         _ => err_reply("unimplemented display command"),
+    }
+}
+async fn show_clock(ctx: CallCtx<'_>) -> Value {
+    let dev = ctx.dev;
+    let args = ctx.args;
+    let raw_args = ctx.raw_args;
+    let kw = ctx.kwargs;
+
+    let p = clock_packet_from_call(args, raw_args, kw);
+    match dev
+        .send_command(CMD_SET_LIGHT_MODE, &p.to_bytes(), true)
+        .await
+    {
+        Ok(()) => json!({"success": true, "result": true}),
+        Err(e) => err_reply(&format!("show_clock failed: {e}")),
+    }
+}
+
+async fn show_image(ctx: CallCtx<'_>) -> Value {
+    let dev = ctx.dev;
+    let kw = ctx.kwargs;
+
+    // Out-of-range dims fail the length check below: -1 can never
+    // match a real buffer length, and neither can a wrapped huge one.
+    let w = i32::try_from(get_kwarg_i64(kw, "w", 16)).unwrap_or(-1);
+    let h = i32::try_from(get_kwarg_i64(kw, "h", 16)).unwrap_or(-1);
+    let time_ms = get_kwarg_i64(kw, "time_ms", 100).word();
+    let rgb: Vec<u8> = match kw.and_then(|m| m.get("rgb")).and_then(|v| v.as_array()) {
+        Some(a) => a
+            .iter()
+            .filter_map(|x| x.as_u64().map(crate::wire::WireNarrow::byte))
+            .collect(),
+        None => return err_reply("show_image requires 'rgb' (array of u8)"),
+    };
+    let expected = usize::try_from(w * h * 3).unwrap_or(usize::MAX);
+    if rgb.len() != expected {
+        return err_reply(&format!(
+            "show_image: rgb.len()={} expected w*h*3={expected}",
+            rgb.len()
+        ));
+    }
+    let Some(enc) = ctx.daemon.encoder() else {
+        return err_reply("encoder not available");
+    };
+    let Some(blob) = enc.encode_animation_frame(&rgb, w, h, time_ms) else {
+        return err_reply("encode_animation_frame failed");
+    };
+    match dev.stream_animation_8b(&blob).await {
+        Ok(true) => json!({"success": true, "result": true}),
+        Ok(false) => err_reply("stream_animation_8b: empty blob"),
+        Err(e) => err_reply(&format!("stream_animation_8b failed: {e}")),
+    }
+}
+
+async fn set_clock_rich(ctx: CallCtx<'_>) -> Value {
+    let dev = ctx.dev;
+    let args = ctx.args;
+    let raw_args = ctx.raw_args;
+    let kw = ctx.kwargs;
+
+    let p = clock_packet_from_call(args, raw_args, kw);
+    match dev
+        .send_command(CMD_SET_LIGHT_MODE, &p.to_bytes(), true)
+        .await
+    {
+        Ok(()) => json!({"success": true, "result": true}),
+        Err(e) => err_reply(&format!("display.set_clock_rich failed: {e}")),
+    }
+}
+
+async fn show_design(ctx: CallCtx<'_>) -> Value {
+    let dev = ctx.dev;
+
+    match dev
+        .send_command(
+            CMD_SET_LIGHT_MODE,
+            &crate::packets::channel_switch(crate::packets::BareChannel::Design),
+            false,
+        )
+        .await
+    {
+        Ok(()) => json!({"success": true, "result": true}),
+        Err(e) => err_reply(&format!("display.show_design failed: {e}")),
+    }
+}
+
+async fn show_light(ctx: CallCtx<'_>) -> Value {
+    let dev = ctx.dev;
+    let raw_args = ctx.raw_args;
+    let kw = ctx.kwargs;
+
+    // R67/C7: brightness used to read `args.get(1)` — the COMPACTED
+    // numeric list, which for ("#00FFCC", 80, true, 2) is [80, 2]. So
+    // index 1 was the MODE, and the ambient brightness slider silently
+    // sent the mode number instead (mode 0 meant brightness 0). Found
+    // by the wire trace on real hardware; no test could see it.
+    let rgb = color_from_arg(raw_args, kw).unwrap_or([0xFF, 0xFF, 0xFF]);
+    let brightness = crate::device_call::pos_i64(raw_args, 1, kw, "brightness", 100)
+        .clamp(0, 100)
+        .byte();
+    let power = crate::device_call::pos_bool(raw_args, 2, kw, "power", true);
+    let kind = LightingType::from_i64(
+        raw_args
+            .get(3)
+            .and_then(serde_json::Value::as_i64)
+            .or_else(|| {
+                kw.and_then(|v| v.get("lightning_type"))
+                    .and_then(serde_json::Value::as_i64)
+            })
+            .or_else(|| {
+                kw.and_then(|v| v.get("mode_type"))
+                    .and_then(serde_json::Value::as_i64)
+            })
+            .unwrap_or(0),
+    );
+    let payload = LightPacket {
+        rgb,
+        brightness,
+        kind,
+        power,
+    }
+    .to_bytes();
+    match dev.send_command(0x45, &payload, true).await {
+        Ok(()) => json!({"success": true, "result": true}),
+        Err(e) => err_reply(&format!("display.show_light failed: {e}")),
+    }
+}
+
+async fn show_effects(ctx: CallCtx<'_>) -> Value {
+    let dev = ctx.dev;
+    let args = ctx.args;
+    let kw = ctx.kwargs;
+
+    let number = args
+        .first()
+        .copied()
+        .or_else(|| {
+            kw.and_then(|v| v.get("number"))
+                .and_then(serde_json::Value::as_i64)
+        })
+        .unwrap_or(0);
+    let payload = crate::packets::vj_effect(number.clamp(0, 254).byte());
+    match dev.send_command(0x45, &payload, true).await {
+        Ok(()) => json!({"success": true, "result": true}),
+        Err(e) => err_reply(&format!("display.show_effects failed: {e}")),
+    }
+}
+
+async fn show_visualization(ctx: CallCtx<'_>) -> Value {
+    let dev = ctx.dev;
+    let args = ctx.args;
+    let kw = ctx.kwargs;
+
+    let number = args
+        .first()
+        .copied()
+        .or_else(|| {
+            kw.and_then(|v| v.get("number"))
+                .and_then(serde_json::Value::as_i64)
+        })
+        .unwrap_or(0);
+    let payload = crate::packets::visualization(number.clamp(0, 255).byte());
+    match dev.send_command(0x45, &payload, true).await {
+        Ok(()) => json!({"success": true, "result": true}),
+        Err(e) => err_reply(&format!("display.show_visualization failed: {e}")),
+    }
+}
+
+async fn show_scoreboard(ctx: CallCtx<'_>) -> Value {
+    let dev = ctx.dev;
+
+    let payload = crate::packets::channel_switch(crate::packets::BareChannel::Scoreboard);
+    match dev.send_command(0x45, &payload, true).await {
+        Ok(()) => json!({"success": true, "result": true}),
+        Err(e) => err_reply(&format!("display.show_scoreboard failed: {e}")),
+    }
+}
+
+async fn switch_channel(ctx: CallCtx<'_>) -> Value {
+    let dev = ctx.dev;
+    let raw_args = ctx.raw_args;
+    let kw = ctx.kwargs;
+
+    let channel = raw_args
+        .first()
+        .and_then(|v| v.as_str())
+        .or_else(|| kw.and_then(|v| v.get("channel")).and_then(|v| v.as_str()))
+        .unwrap_or("")
+        .to_lowercase();
+    // R67/C1 sibling: these were five hand-written byte arrays, and the
+    // "clock" one was a full ClockPacket spelled out by hand — the exact
+    // shape that let the overlay fields drift in the first place. They
+    // now come from the same builders as every other 0x45 packet.
+    let payload: [u8; 10] = match channel.as_str() {
+        "clock" => ClockPacket::default().to_bytes(),
+        "visualizer" | "eq" => crate::packets::visualization(0),
+        // VJ effects are 1-indexed on the wire; vj_effect(0) sends 1,
+        // which is what the hand-rolled array did.
+        "vj" => crate::packets::vj_effect(0),
+        "design" | "custom" => crate::packets::channel_switch(crate::packets::BareChannel::Design),
+        "scoreboard" => crate::packets::channel_switch(crate::packets::BareChannel::Scoreboard),
+        "cloud" | "hot" => crate::packets::channel_switch(crate::packets::BareChannel::Cloud),
+        "ambient" | "lighting" => {
+            crate::packets::channel_switch(crate::packets::BareChannel::Lighting)
+        }
+        other => return err_reply(&format!("switch_channel: unknown channel '{other}'")),
+    };
+    match dev.send_command(CMD_SET_LIGHT_MODE, &payload, true).await {
+        Ok(()) => json!({"success": true, "result": true}),
+        Err(e) => err_reply(&format!("display.switch_channel failed: {e}")),
     }
 }
 

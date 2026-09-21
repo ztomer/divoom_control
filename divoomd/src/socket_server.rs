@@ -19,6 +19,9 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixListener;
 use tokio::sync::Semaphore;
 
+mod pump;
+use pump::pump_events;
+
 use crate::subscriptions::{Registry, RENEGOTIATE_AFTER};
 
 use crate::protocol::{encode_message, err_reply, iter_messages, Request, MAX_REPLY_BYTES};
@@ -166,7 +169,7 @@ fn constant_time_eq(a: &str, b: &str) -> bool {
 ///
 /// A timeout surfaces as [`std::io::ErrorKind::TimedOut`] so a caller that
 /// wants to drop the peer rather than propagate can tell the two apart.
-async fn write_line<S>(stream: &mut S, msg: &Value) -> std::io::Result<()>
+pub(crate) async fn write_line<S>(stream: &mut S, msg: &Value) -> std::io::Result<()>
 where
     S: tokio::io::AsyncWrite + Unpin,
 {
@@ -260,91 +263,9 @@ where
                         write_line(&mut stream, &reply).await?;
                         continue;
                     };
-                    let evict = lease.evict.clone();
-                    let lease_id = lease.id;
                     let initial = handler.initial_status();
                     write_line(&mut stream, &initial).await?;
-                    // Idle watchdog: a subscriber that receives no events for
-                    // `idle_timeout` is dropped (releasing its permit), so a silent
-                    // client can't pin a slot forever. Any delivered event resets it.
-                    let mut deadline = tokio::time::Instant::now() + idle_timeout;
-                    let mut dropped: u64 = 0;
-                    loop {
-                        tokio::select! {
-                            n = stream.read(&mut tmp) => {
-                                match n {
-                                    // EOF
-                                    Ok(0) | Err(_) => break, // error
-                                    // Any byte from the client is liveness
-                                    // evidence, and the only kind there is:
-                                    // deliveries are a broadcast, so they move
-                                    // every subscriber's clock together and
-                                    // separate nobody. The payload is still
-                                    // ignored; only the fact of it counts.
-                                    Ok(_) => subscriptions.touch(lease_id),
-                                }
-                            }
-                            msg = rx.recv() => {
-                                match msg {
-                                    Ok(event) => {
-                                        // Bounded: a peer that stops reading is
-                                        // disconnected, never allowed to stall
-                                        // this task (see WRITE_TIMEOUT).
-                                        match write_line(&mut stream, &event).await {
-                                            Ok(()) => {}
-                                            Err(e)
-                                                if e.kind()
-                                                    == std::io::ErrorKind::TimedOut =>
-                                            {
-                                                eprintln!(
-                                                    "divoomd: subscriber did not drain a write \
-                                                     within {}s; dropping it",
-                                                    WRITE_TIMEOUT.as_secs()
-                                                );
-                                                break;
-                                            }
-                                            Err(e) => return Err(e),
-                                        }
-                                        deadline = tokio::time::Instant::now() + idle_timeout;
-                                    }
-                                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                                        // Tell the client it has a GAP, so it can
-                                        // resync instead of trusting stale state,
-                                        // and drop it once it is hopeless.
-                                        dropped = dropped.saturating_add(n);
-                                        let gap = serde_json::json!({
-                                            "type": "lagged",
-                                            "dropped": n,
-                                            "dropped_total": dropped,
-                                        });
-                                        let _ = write_line(&mut stream, &gap).await;
-                                        if dropped > LAG_BUDGET {
-                                            eprintln!(
-                                                "divoomd: subscriber lost {dropped} events \
-                                                 (budget {LAG_BUDGET}); dropping it"
-                                            );
-                                            break;
-                                        }
-                                    }
-                                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
-                                        break;
-                                    }
-                                }
-                            }
-                            () = tokio::time::sleep_until(deadline) => break, // quiet channel: drop
-                            () = evict.notified() => {
-                                // Our slot was reclaimed for a newcomer because
-                                // this client had gone quiet. Say why, so it
-                                // reads as a renegotiation and not a fault.
-                                let notice = serde_json::json!({
-                                    "type": "resubscribe",
-                                    "reason": "subscription slot reclaimed after inactivity; reconnect to continue",
-                                });
-                                let _ = write_line(&mut stream, &notice).await;
-                                break;
-                            }
-                        }
-                    }
+                    pump_events(&mut stream, &mut rx, &lease, &subscriptions, idle_timeout).await?;
                     return Ok(());
                 }
                 {

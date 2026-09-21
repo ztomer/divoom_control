@@ -16,68 +16,50 @@ async fn transport_of(d: &Daemon, mac: &str) -> std::sync::Arc<DeviceTransport> 
         .expect("device connected")
 }
 
+/// Connect a mock device under `mac` and assert the daemon adopted it.
+async fn connect_mock(d: &Daemon, mac: &str) {
+    let conn = d
+        .handle(make_request(
+            "connect",
+            Some(json!({"mock": true, "mac": mac})),
+            None,
+        ))
+        .await;
+    assert_eq!(conn["success"], json!(true), "{conn}");
+    assert_eq!(conn["mac"], json!(mac));
+}
+
+/// A targeted `display.set_clock_rich` that must succeed.
+async fn set_clock_rich(d: &Daemon, mac: &str, style: u8, color: &str) {
+    let call = d
+        .handle(make_request(
+            "device_call",
+            Some(json!({
+                "mac": mac,
+                "method": "display.set_clock_rich",
+                "kwargs": { "style": style, "color": color }
+            })),
+            None,
+        ))
+        .await;
+    assert_eq!(call["success"], json!(true), "{call}");
+}
+
 #[tokio::test]
 async fn test_concurrent_multi_device_routing() {
     let d = Daemon::new();
 
     // 1. Connect Device A and Device B with mock transports
-    let conn_a = d
-        .handle(make_request(
-            "connect",
-            Some(json!({"mock": true, "mac": "DEV_A"})),
-            None,
-        ))
-        .await;
-    assert_eq!(conn_a["success"], json!(true));
-    assert_eq!(conn_a["mac"], json!("DEV_A"));
-
-    let conn_b = d
-        .handle(make_request(
-            "connect",
-            Some(json!({"mock": true, "mac": "DEV_B"})),
-            None,
-        ))
-        .await;
-    assert_eq!(conn_b["success"], json!(true));
-    assert_eq!(conn_b["mac"], json!("DEV_B"));
+    connect_mock(&d, "DEV_A").await;
+    connect_mock(&d, "DEV_B").await;
 
     // Verify both are present in the devices registry
     assert!(d.fleet.connected("DEV_A").await.is_some());
     assert!(d.fleet.connected("DEV_B").await.is_some());
 
-    // 2. Issue targeted device_call to DEV_A
-    let call_a = d
-        .handle(make_request(
-            "device_call",
-            Some(json!({
-                "mac": "DEV_A",
-                "method": "display.set_clock_rich",
-                "kwargs": {
-                    "style": 1,
-                    "color": "#ff0000"
-                }
-            })),
-            None,
-        ))
-        .await;
-    assert_eq!(call_a["success"], json!(true));
-
-    // 3. Issue targeted device_call to DEV_B
-    let call_b = d
-        .handle(make_request(
-            "device_call",
-            Some(json!({
-                "mac": "DEV_B",
-                "method": "display.set_clock_rich",
-                "kwargs": {
-                    "style": 3,
-                    "color": "#0000ff"
-                }
-            })),
-            None,
-        ))
-        .await;
-    assert_eq!(call_b["success"], json!(true));
+    // 2./3. Issue a targeted clock call to each device
+    set_clock_rich(&d, "DEV_A", 1, "#ff0000").await;
+    set_clock_rich(&d, "DEV_B", 3, "#0000ff").await;
 
     // 4. Verify commands reached DEV_A and DEV_B independently
     {

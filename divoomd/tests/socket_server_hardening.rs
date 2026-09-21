@@ -300,6 +300,22 @@ async fn subscribers_cannot_starve_request_handling() {
 /// ones. It also replaced the original watchdog, which reset on every event the
 /// daemon DELIVERED — a broadcast, so it moved every subscriber's clock in
 /// lockstep and could never tell a live client from a dead one.
+/// Subscribe on a fresh connection and consume the initial status line.
+async fn subscribe(path: &std::path::Path) -> UnixStream {
+    let mut s = UnixStream::connect(path).await.unwrap();
+    s.write_all(encode_message(&json!({ "command": "subscribe" })).as_slice())
+        .await
+        .unwrap();
+    let mut buf = [0u8; 512];
+    let n = tokio::time::timeout(Duration::from_secs(2), s.read(&mut buf))
+        .await
+        .expect("initial status")
+        .unwrap();
+    let v: Value = serde_json::from_slice(&buf[..n]).unwrap();
+    assert_eq!(v["type"], json!("status"));
+    s
+}
+
 #[tokio::test]
 async fn a_quiet_subscription_yields_its_slot_and_an_active_one_keeps_it() {
     let path = temp_sock("lru");
@@ -313,21 +329,6 @@ async fn a_quiet_subscription_yields_its_slot_and_an_active_one_keeps_it() {
         4,
         Duration::from_secs(120),
     ));
-
-    async fn subscribe(path: &std::path::Path) -> UnixStream {
-        let mut s = UnixStream::connect(path).await.unwrap();
-        s.write_all(encode_message(&json!({ "command": "subscribe" })).as_slice())
-            .await
-            .unwrap();
-        let mut buf = [0u8; 512];
-        let n = tokio::time::timeout(Duration::from_secs(2), s.read(&mut buf))
-            .await
-            .expect("initial status")
-            .unwrap();
-        let v: Value = serde_json::from_slice(&buf[..n]).unwrap();
-        assert_eq!(v["type"], json!("status"));
-        s
-    }
 
     let mut quiet = subscribe(&path).await;
     let mut busy = subscribe(&path).await;
