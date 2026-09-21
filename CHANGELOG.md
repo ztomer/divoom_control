@@ -65,6 +65,30 @@ shipped milestone (per the project planning docs).
   crosses the boundary. Stale `tao` refs fixed where they stated the
   stack (`ARCHITECTURE.md`, `README.md` tree, the keep-alive parity
   test's docstring); dated audit prose left as written.
+- **No `#[expect]` anywhere in the workspace** (the house `no_allow`
+  gate refuses it since gates_of_heck v0.12.2; `check_no_allow` reports
+  146 files clean). Every finding fixed in place rather than annotated:
+  the sixteen `device_call` dispatch tables keep one line per method and
+  put each command's code in a named `async fn` below it (`CallCtx` is
+  `Copy` for the hand-off); `routing.rs` is a `ROUTES` const of
+  `(Family, names)` plus a 13-arm match; `daemon::dispatch`,
+  `cloud_cmds` and `mcp_tools` are split the same way; the hand-rolled
+  SHA-1 and AES-128-CBC are the `sha1` and `aes` + `cbc` crates, both
+  pinned to standard vectors (the AES had no test at all); the hot
+  session, `ble::connect`, `run_music`, `sync_files_to_device`,
+  `serve_connection` and `main` are named phases; `ClockPacket`'s three
+  cycle faces are `ClockFaces`; `draw_text` takes a `TextStyle`,
+  `process_wall_image` a `SlotCut`; the mock transport's no-I/O methods
+  return ready futures. `commands.rs` is regenerated as a data table
+  (the generator's output path had pointed at `scripts/divoomd/` since
+  the workspace layout; it carries `@generated` now).
+- **Tests find the frame encoder from any build dir.**
+  `paths::find_root_containing` walks up from the running binary; under
+  cargo's `build.build-dir` layout a test binary lives outside the
+  checkout, so every encoder-dependent test refused with "run
+  build_libdivoom.sh" against a library sitting right there. The
+  checkout the binary was compiled from is now the last rung, pinned by
+  a test that runs from that layout.
 - **Workflow comment corrected.** `.github/workflows/tests.yml`
   rust-core still said menubar's "tao/tray-icon deps need GTK/glib";
   now says the crate is macOS-only with Apple-target deps. Behaviour
