@@ -3,9 +3,10 @@
 //! the Python pywebview dashboard. Replaced the pyobjc menubar (removed in R66,
 //! 2026-08-17); the desktop UI stays Python and the daemon stays Rust.
 //!
-//! Built on tao (event loop) + tray-icon. tray-icon needs an event loop on the
-//! main thread; tao gives the classic `run()` closure. We poll the daemon on a
-//! `WaitUntil` timer and forward tray/menu events through the loop proxy.
+//! Built on winit (event loop) + tray-icon. tray-icon needs an event loop on the
+//! main thread; winit runs it via `run_app` with the `App` handler below. We
+//! poll the daemon on a `WaitUntil` timer and forward tray/menu events through
+//! the loop proxy.
 
 mod daemon;
 mod launch;
@@ -19,9 +20,11 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use tao::event::{Event, StartCause};
-use tao::event_loop::{ControlFlow, EventLoopBuilder};
 use tray_icon::menu::MenuEvent;
+use winit::application::ApplicationHandler;
+use winit::event::{StartCause, WindowEvent};
+use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+use winit::window::WindowId;
 
 use tray::{Tray, TrayAction};
 
@@ -106,19 +109,16 @@ fn main() {
         }
         CliOutcome::Run => {}
     }
-    // `set_activation_policy` below takes `&mut self`, and exists only on macOS,
-    // so the binding is `mut` only there; on other targets it stays immutable
-    // and `unused_mut` never fires.
-    #[cfg(target_os = "macos")]
-    let mut event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
-    #[cfg(not(target_os = "macos"))]
-    let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
+    let mut builder = EventLoop::<UserEvent>::with_user_event();
     // macOS: run as a menubar agent (no Dock icon).
     #[cfg(target_os = "macos")]
     {
-        use tao::platform::macos::{ActivationPolicy, EventLoopExtMacOS};
-        event_loop.set_activation_policy(ActivationPolicy::Accessory);
+        use winit::platform::macos::{ActivationPolicy, EventLoopBuilderExtMacOS};
+        builder.with_activation_policy(ActivationPolicy::Accessory);
     }
+    let event_loop = builder
+        .build()
+        .expect("menubar event loop must build on the main thread");
 
     // Forward menu events to the loop so it wakes on each click.
     let proxy = event_loop.create_proxy();
@@ -154,45 +154,98 @@ fn main() {
         });
     }
 
-    let mut tray: Option<Tray> = None;
+    let mut app = App {
+        tray: None,
+        quitting,
+    };
 
-    event_loop.run(move |event, _target, control_flow| {
-        match event {
+    event_loop
+        .run_app(&mut app)
+        .expect("menubar event loop must run on the main thread");
+}
+
+/// The winit `ApplicationHandler`: the same state machine tao's `run()` closure
+/// used to hold as captures (`tray`, `quitting`), now as struct fields. Every
+/// arm below mirrors the old closure arm-for-arm: tray creation on `Init`
+/// (tray-icon issue #90 -- only once the loop is actually running), daemon
+/// poll on each timer tick or live broadcast, quit tearing down the status
+/// item first. Unhandled events leave the control flow untouched, so the
+/// pending `WaitUntil` deadline survives them exactly as before.
+struct App {
+    tray: Option<Tray>,
+    quitting: Arc<AtomicBool>,
+}
+
+impl App {
+    /// Re-arm the daemon poll timer after every handled event.
+    fn arm_poll_timer(event_loop: &ActiveEventLoop) {
+        event_loop.set_control_flow(ControlFlow::WaitUntil(Instant::now() + POLL));
+    }
+
+    fn poll_daemon(&mut self) {
+        if let Some(t) = self.tray.as_mut() {
+            t.poll_daemon();
+        }
+    }
+}
+
+impl ApplicationHandler<UserEvent> for App {
+    fn resumed(&mut self, _event_loop: &ActiveEventLoop) {
+        // Windowless agent: nothing to create here. The tray is built in
+        // `new_events(Init)` instead, once the loop is actually running.
+    }
+
+    fn window_event(
+        &mut self,
+        _event_loop: &ActiveEventLoop,
+        _window_id: WindowId,
+        _event: WindowEvent,
+    ) {
+        // Windowless agent: no windows, no window events.
+    }
+
+    fn new_events(&mut self, event_loop: &ActiveEventLoop, cause: StartCause) {
+        match cause {
             // Create the tray once the loop is actually running (tray-icon issue #90).
-            Event::NewEvents(StartCause::Init) => {
-                tray = Tray::build();
-                if let Some(t) = tray.as_mut() {
-                    t.poll_daemon();
-                }
+            StartCause::Init => {
+                self.tray = Tray::build();
+                self.poll_daemon();
                 macos_wake();
-                *control_flow = ControlFlow::WaitUntil(Instant::now() + POLL);
+                Self::arm_poll_timer(event_loop);
             }
             // Timer tick → refresh status/devices.
-            Event::NewEvents(StartCause::ResumeTimeReached { .. })
-            | Event::UserEvent(UserEvent::DaemonEvent) => {
-                if let Some(t) = tray.as_mut() {
-                    t.poll_daemon();
-                }
-                *control_flow = ControlFlow::WaitUntil(Instant::now() + POLL);
+            StartCause::ResumeTimeReached { .. } => {
+                self.poll_daemon();
+                Self::arm_poll_timer(event_loop);
             }
-            // A live daemon broadcast arrived — refresh now instead of
-            // waiting for the next POLL tick.
-            Event::UserEvent(UserEvent::Menu(ev)) => {
-                let quit = tray
+            _ => {}
+        }
+    }
+
+    // A live daemon broadcast arrived — refresh now instead of
+    // waiting for the next POLL tick.
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
+        match event {
+            UserEvent::DaemonEvent => {
+                self.poll_daemon();
+                Self::arm_poll_timer(event_loop);
+            }
+            UserEvent::Menu(ev) => {
+                let quit = self
+                    .tray
                     .as_mut()
                     .and_then(|t| t.on_menu(&ev))
                     .is_some_and(|a| matches!(a, TrayAction::Quit));
                 if quit {
-                    tray.take(); // drop the status item before exiting
-                    quitting.store(true, Ordering::Relaxed); // let the subscribe thread exit
-                    *control_flow = ControlFlow::Exit;
+                    self.tray.take(); // drop the status item before exiting
+                    self.quitting.store(true, Ordering::Relaxed); // let the subscribe thread exit
+                    event_loop.exit();
                 } else {
-                    *control_flow = ControlFlow::WaitUntil(Instant::now() + POLL);
+                    Self::arm_poll_timer(event_loop);
                 }
             }
-            _ => {}
         }
-    })
+    }
 }
 
 /// macOS: nudge the main run loop so the status item paints on first show.

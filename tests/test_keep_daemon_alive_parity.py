@@ -2,7 +2,7 @@
 
 **R72 P3.3.** Auditing the Rust menubar against the round's invariant found it
 otherwise clean: `daemon.rs` is a lean socket client, and its dependency list
-(`tray-icon`, `tao`, `serde_json`, one CFRunLoop binding) contains no transport,
+(`tray-icon`, `winit`, `serde_json`, one CFRunLoop binding) contains no transport,
 device, HTTP or image crate, so it *cannot* duplicate daemon work. The one thing
 it does read for itself is this flag.
 

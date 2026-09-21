@@ -13,7 +13,7 @@ divoomd/          THE DAEMON (Rust). Single owner of the device connection;
                   serves an NDJSON command/event protocol over a Unix socket and
                   optionally TCP; on macOS also does notification monitoring.
                   macOS + Linux. This is the runtime core.
-divoom-menubar/   The menu-bar/tray agent (Rust, tao + tray-icon). A daemon
+divoom-menubar/   The menu-bar/tray agent (Rust, winit + tray-icon). A daemon
                   client. macOS. Bundled in the shipped .app.
 divoom_lib/       Protocol core (framing, models, transport interface, auth,
                   native_lib) + CLI + MCP + weather. The direct-to-device
