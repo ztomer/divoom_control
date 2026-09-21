@@ -47,14 +47,9 @@ async fn send(dev: &DeviceTransport, cmd: u8, p: &[u8], label: &str) -> Value {
 ///
 /// If the mutex guarding this value is poisoned -- another thread panicked
 /// while holding it, so the value cannot be trusted.
-#[expect(
-    clippy::too_many_lines,
-    reason = "a device command dispatch table: one arm per protocol method and its aliases, each a few lines of argument shuffling before it builds a frame. The length is the number of COMMANDS the device answers, not complexity in any one of them, and splitting it puts a layer between a method name and the code that implements it -- which is the one thing a reader opens these files to find"
-)]
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let kw = ctx.kwargs;
-    let i = |n: &str, d: i64| kw_i64(kw, n).unwrap_or(d);
     // big data may come as blob[0]
     let blob0 = ctx.blob_map.lock().unwrap().get(&0).cloned();
     let data = |name: &str| -> Vec<u8> { blob0.clone().unwrap_or_else(|| kw_bytes(kw, name)) };
@@ -70,98 +65,28 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             send(dev, 0x6b, &[], "drawing_mul_encode_gif_play").await
         }
         "drawing.drawing_ctrl_movie_play" | "drawing_ctrl_movie_play" => {
-            send(
-                dev,
-                0x6e,
-                &[i("control_command", 0).byte()],
-                "drawing_ctrl_movie_play",
-            )
-            .await
+            drawing_ctrl_movie_play(ctx).await
         }
         "drawing.drawing_mul_pad_enter" | "drawing_mul_pad_enter" => {
-            send(
-                dev,
-                0x6f,
-                &[i("r", 0).byte(), i("g", 0).byte(), i("b", 0).byte()],
-                "drawing_mul_pad_enter",
-            )
-            .await
+            drawing_mul_pad_enter(ctx).await
         }
-        "drawing.drawing_pad_ctrl" | "drawing_pad_ctrl" => {
-            let mut p = vec![
-                i("r", 0).byte(),
-                i("g", 0).byte(),
-                i("b", 0).byte(),
-                i("num_points", 0).byte(),
-            ];
-            p.extend_from_slice(&kw_bytes(kw, "offset_list"));
-            send(dev, 0x58, &p, "drawing_pad_ctrl").await
-        }
-        "drawing.drawing_mul_pad_ctrl" | "drawing_mul_pad_ctrl" => {
-            let mut p = vec![
-                i("screen_id", 0).byte(),
-                i("r", 0).byte(),
-                i("g", 0).byte(),
-                i("b", 0).byte(),
-                i("num_points", 0).byte(),
-            ];
-            p.extend_from_slice(&kw_bytes(kw, "offset_list"));
-            send(dev, 0x3a, &p, "drawing_mul_pad_ctrl").await
-        }
-        "drawing.drawing_big_pad_ctrl" | "drawing_big_pad_ctrl" => {
-            let mut p = vec![
-                i("canvas_width", 0).byte(),
-                i("screen_id", 0).byte(),
-                i("r", 0).byte(),
-                i("g", 0).byte(),
-                i("b", 0).byte(),
-                i("num_points", 0).byte(),
-            ];
-            p.extend_from_slice(&kw_bytes(kw, "offset_list"));
-            send(dev, 0x3b, &p, "drawing_big_pad_ctrl").await
-        }
+        "drawing.drawing_pad_ctrl" | "drawing_pad_ctrl" => drawing_pad_ctrl(ctx).await,
+        "drawing.drawing_mul_pad_ctrl" | "drawing_mul_pad_ctrl" => drawing_mul_pad_ctrl(ctx).await,
+        "drawing.drawing_big_pad_ctrl" | "drawing_big_pad_ctrl" => drawing_big_pad_ctrl(ctx).await,
         "drawing.drawing_mul_encode_single_pic" | "drawing_mul_encode_single_pic" => {
-            let mut p = vec![i("screen_id", 0).byte()];
-            p.extend_from_slice(&le16(i("data_length", 0)));
-            p.extend_from_slice(&data("data"));
-            send(dev, 0x5b, &p, "drawing_mul_encode_single_pic").await
+            drawing_mul_encode_single_pic(ctx).await
         }
         "drawing.drawing_mul_encode_pic" | "drawing_mul_encode_pic" => {
-            let mut p = vec![i("screen_id", 0).byte()];
-            p.extend_from_slice(&le16(i("total_length", 0)));
-            p.push(i("pic_id", 0).byte());
-            p.extend_from_slice(&data("pic_data"));
-            send(dev, 0x5c, &p, "drawing_mul_encode_pic").await
+            drawing_mul_encode_pic(ctx).await
         }
         "drawing.drawing_encode_movie_play" | "drawing_encode_movie_play" => {
-            let mut p = Vec::new();
-            p.extend_from_slice(&le16(i("frame_id", 0)));
-            p.extend_from_slice(&le16(i("data_length", 0)));
-            p.extend_from_slice(&data("data"));
-            send(dev, 0x6c, &p, "drawing_encode_movie_play").await
+            drawing_encode_movie_play(ctx).await
         }
         "drawing.drawing_mul_encode_movie_play" | "drawing_mul_encode_movie_play" => {
-            let mut p = vec![i("screen_id", 0).byte()];
-            p.extend_from_slice(&le16(i("frame_id", 0)));
-            p.extend_from_slice(&le16(i("data_length", 0)));
-            p.extend_from_slice(&data("data"));
-            send(dev, 0x6d, &p, "drawing_mul_encode_movie_play").await
+            drawing_mul_encode_movie_play(ctx).await
         }
         // sand_paint_ctrl (0x34): [control] + INITIALIZE[device_id, image_length LE16, *image_data] / RESET[].
-        "drawing.sand_paint_ctrl" | "sand_paint_ctrl" => {
-            let control = i("control", 0);
-            let mut p = vec![control.byte()];
-            match control {
-                0 => {
-                    p.push(i("device_id", 0).byte());
-                    p.extend_from_slice(&le16(i("image_length", 0)));
-                    p.extend_from_slice(&data("image_data"));
-                }
-                1 => {}
-                _ => return err_reply(&format!("sand_paint_ctrl: unknown control {control}")),
-            }
-            send(dev, 0x34, &p, "sand_paint_ctrl").await
-        }
+        "drawing.sand_paint_ctrl" | "sand_paint_ctrl" => sand_paint_ctrl(ctx).await,
         // 0x35 is SPP_SCROLL(53) in the APK's command table, NOT the missing
         // opcode the R12 audit reported. Its only builder is CmdManager.b3:
         //
@@ -181,29 +106,192 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         // along with the `pic_scan_ctrl` name, and is removed here rather than
         // shipped as a second guess at a command we now have ground truth for.
         "drawing.set_scroll" | "set_scroll" | "drawing.pic_scan_ctrl" | "pic_scan_ctrl" => {
-            // Refuse an under-specified call instead of defaulting to zeros.
-            // `speed` defaulted to 0 is a no-op packet that still reported
-            // success -- the same dishonesty as the sync_time year-2000 bug
-            // R72 fixed, and it cost two invalid hardware runs this round
-            // before anyone noticed the zeros.
-            let (Some(mode), Some(speed)) = (kw_i64(kw, "mode"), kw_i64(kw, "speed")) else {
-                return err_reply(
-                    "set_scroll requires both `mode` and `speed`; refusing to \
-                         send a zero-speed no-op and report it as success",
-                );
-            };
-            if let Some(c) = kw_i64(kw, "control") {
-                if c != 0 {
-                    return err_reply(&format!(
-                        "set_scroll: control={c} has no counterpart in the APK \
-                         (CmdManager.b3 is the only SPP_SCROLL builder); only 0 is real"
-                    ));
-                }
-            }
-            let mut p = vec![0u8, mode.byte()];
-            p.extend_from_slice(&le16(speed));
-            send(dev, 0x35, &p, "set_scroll").await
+            set_scroll(ctx).await
         }
         _ => err_reply("unimplemented drawing command"),
     }
+}
+async fn drawing_ctrl_movie_play(ctx: CallCtx<'_>) -> Value {
+    let dev = ctx.dev;
+    let kw = ctx.kwargs;
+    let i = |n: &str, d: i64| kw_i64(kw, n).unwrap_or(d);
+
+    send(
+        dev,
+        0x6e,
+        &[i("control_command", 0).byte()],
+        "drawing_ctrl_movie_play",
+    )
+    .await
+}
+
+async fn drawing_mul_pad_enter(ctx: CallCtx<'_>) -> Value {
+    let dev = ctx.dev;
+    let kw = ctx.kwargs;
+    let i = |n: &str, d: i64| kw_i64(kw, n).unwrap_or(d);
+
+    send(
+        dev,
+        0x6f,
+        &[i("r", 0).byte(), i("g", 0).byte(), i("b", 0).byte()],
+        "drawing_mul_pad_enter",
+    )
+    .await
+}
+
+async fn drawing_pad_ctrl(ctx: CallCtx<'_>) -> Value {
+    let dev = ctx.dev;
+    let kw = ctx.kwargs;
+    let i = |n: &str, d: i64| kw_i64(kw, n).unwrap_or(d);
+
+    let mut p = vec![
+        i("r", 0).byte(),
+        i("g", 0).byte(),
+        i("b", 0).byte(),
+        i("num_points", 0).byte(),
+    ];
+    p.extend_from_slice(&kw_bytes(kw, "offset_list"));
+    send(dev, 0x58, &p, "drawing_pad_ctrl").await
+}
+
+async fn drawing_mul_pad_ctrl(ctx: CallCtx<'_>) -> Value {
+    let dev = ctx.dev;
+    let kw = ctx.kwargs;
+    let i = |n: &str, d: i64| kw_i64(kw, n).unwrap_or(d);
+
+    let mut p = vec![
+        i("screen_id", 0).byte(),
+        i("r", 0).byte(),
+        i("g", 0).byte(),
+        i("b", 0).byte(),
+        i("num_points", 0).byte(),
+    ];
+    p.extend_from_slice(&kw_bytes(kw, "offset_list"));
+    send(dev, 0x3a, &p, "drawing_mul_pad_ctrl").await
+}
+
+async fn drawing_big_pad_ctrl(ctx: CallCtx<'_>) -> Value {
+    let dev = ctx.dev;
+    let kw = ctx.kwargs;
+    let i = |n: &str, d: i64| kw_i64(kw, n).unwrap_or(d);
+
+    let mut p = vec![
+        i("canvas_width", 0).byte(),
+        i("screen_id", 0).byte(),
+        i("r", 0).byte(),
+        i("g", 0).byte(),
+        i("b", 0).byte(),
+        i("num_points", 0).byte(),
+    ];
+    p.extend_from_slice(&kw_bytes(kw, "offset_list"));
+    send(dev, 0x3b, &p, "drawing_big_pad_ctrl").await
+}
+
+async fn drawing_mul_encode_single_pic(ctx: CallCtx<'_>) -> Value {
+    let dev = ctx.dev;
+    let kw = ctx.kwargs;
+    let i = |n: &str, d: i64| kw_i64(kw, n).unwrap_or(d);
+    // big data may come as blob[0]
+    let blob0 = ctx.blob_map.lock().unwrap().get(&0).cloned();
+    let data = |name: &str| -> Vec<u8> { blob0.clone().unwrap_or_else(|| kw_bytes(kw, name)) };
+
+    let mut p = vec![i("screen_id", 0).byte()];
+    p.extend_from_slice(&le16(i("data_length", 0)));
+    p.extend_from_slice(&data("data"));
+    send(dev, 0x5b, &p, "drawing_mul_encode_single_pic").await
+}
+
+async fn drawing_mul_encode_pic(ctx: CallCtx<'_>) -> Value {
+    let dev = ctx.dev;
+    let kw = ctx.kwargs;
+    let i = |n: &str, d: i64| kw_i64(kw, n).unwrap_or(d);
+    // big data may come as blob[0]
+    let blob0 = ctx.blob_map.lock().unwrap().get(&0).cloned();
+    let data = |name: &str| -> Vec<u8> { blob0.clone().unwrap_or_else(|| kw_bytes(kw, name)) };
+
+    let mut p = vec![i("screen_id", 0).byte()];
+    p.extend_from_slice(&le16(i("total_length", 0)));
+    p.push(i("pic_id", 0).byte());
+    p.extend_from_slice(&data("pic_data"));
+    send(dev, 0x5c, &p, "drawing_mul_encode_pic").await
+}
+
+async fn drawing_encode_movie_play(ctx: CallCtx<'_>) -> Value {
+    let dev = ctx.dev;
+    let kw = ctx.kwargs;
+    let i = |n: &str, d: i64| kw_i64(kw, n).unwrap_or(d);
+    // big data may come as blob[0]
+    let blob0 = ctx.blob_map.lock().unwrap().get(&0).cloned();
+    let data = |name: &str| -> Vec<u8> { blob0.clone().unwrap_or_else(|| kw_bytes(kw, name)) };
+
+    let mut p = Vec::new();
+    p.extend_from_slice(&le16(i("frame_id", 0)));
+    p.extend_from_slice(&le16(i("data_length", 0)));
+    p.extend_from_slice(&data("data"));
+    send(dev, 0x6c, &p, "drawing_encode_movie_play").await
+}
+
+async fn drawing_mul_encode_movie_play(ctx: CallCtx<'_>) -> Value {
+    let dev = ctx.dev;
+    let kw = ctx.kwargs;
+    let i = |n: &str, d: i64| kw_i64(kw, n).unwrap_or(d);
+    // big data may come as blob[0]
+    let blob0 = ctx.blob_map.lock().unwrap().get(&0).cloned();
+    let data = |name: &str| -> Vec<u8> { blob0.clone().unwrap_or_else(|| kw_bytes(kw, name)) };
+
+    let mut p = vec![i("screen_id", 0).byte()];
+    p.extend_from_slice(&le16(i("frame_id", 0)));
+    p.extend_from_slice(&le16(i("data_length", 0)));
+    p.extend_from_slice(&data("data"));
+    send(dev, 0x6d, &p, "drawing_mul_encode_movie_play").await
+}
+
+async fn sand_paint_ctrl(ctx: CallCtx<'_>) -> Value {
+    let dev = ctx.dev;
+    let kw = ctx.kwargs;
+    let i = |n: &str, d: i64| kw_i64(kw, n).unwrap_or(d);
+    // big data may come as blob[0]
+    let blob0 = ctx.blob_map.lock().unwrap().get(&0).cloned();
+    let data = |name: &str| -> Vec<u8> { blob0.clone().unwrap_or_else(|| kw_bytes(kw, name)) };
+
+    let control = i("control", 0);
+    let mut p = vec![control.byte()];
+    match control {
+        0 => {
+            p.push(i("device_id", 0).byte());
+            p.extend_from_slice(&le16(i("image_length", 0)));
+            p.extend_from_slice(&data("image_data"));
+        }
+        1 => {}
+        _ => return err_reply(&format!("sand_paint_ctrl: unknown control {control}")),
+    }
+    send(dev, 0x34, &p, "sand_paint_ctrl").await
+}
+
+async fn set_scroll(ctx: CallCtx<'_>) -> Value {
+    let dev = ctx.dev;
+    let kw = ctx.kwargs;
+
+    // Refuse an under-specified call instead of defaulting to zeros.
+    // `speed` defaulted to 0 is a no-op packet that still reported
+    // success -- the same dishonesty as the sync_time year-2000 bug
+    // R72 fixed, and it cost two invalid hardware runs this round
+    // before anyone noticed the zeros.
+    let (Some(mode), Some(speed)) = (kw_i64(kw, "mode"), kw_i64(kw, "speed")) else {
+        return err_reply(
+            "set_scroll requires both `mode` and `speed`; refusing to \
+                     send a zero-speed no-op and report it as success",
+        );
+    };
+    if let Some(c) = kw_i64(kw, "control") {
+        if c != 0 {
+            return err_reply(&format!(
+                "set_scroll: control={c} has no counterpart in the APK \
+                     (CmdManager.b3 is the only SPP_SCROLL builder); only 0 is real"
+            ));
+        }
+    }
+    let mut p = vec![0u8, mode.byte()];
+    p.extend_from_slice(&le16(speed));
+    send(dev, 0x35, &p, "set_scroll").await
 }

@@ -1,8 +1,4 @@
 //! Integration tests for multi-device concurrent routing and per-device command queues.
-#![expect(
-    clippy::too_many_lines,
-    reason = "integration scenario orchestrates multi-device dispatch and inspects lock guards"
-)]
 
 use divoomd::daemon::{Daemon, DeviceTransport};
 use divoomd::protocol::make_request;

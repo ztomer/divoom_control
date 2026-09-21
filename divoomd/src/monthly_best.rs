@@ -142,10 +142,6 @@ pub async fn monthly_best_loop_task(daemon: Arc<Daemon>) {
     }
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "a scripted sequence -- connect, upload each file, verify, disconnect -- where every step's failure is reported against the step it happened in"
-)]
 async fn sync_files_to_device(
     daemon: &Daemon,
     target: &str,

@@ -5,10 +5,6 @@ use crate::daemon::Daemon;
 use crate::protocol::{err_reply, Request};
 use serde_json::{json, Value};
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "a device command dispatch table: one arm per protocol method and its aliases, each a few lines of argument shuffling before it builds a frame. The length is the number of COMMANDS the device answers, not complexity in any one of them, and splitting it puts a layer between a method name and the code that implements it -- which is the one thing a reader opens these files to find"
-)]
 pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
     match req.command.as_str() {
         "ping" => json!({"success": true, "pong": true}),

@@ -227,10 +227,6 @@ pub(crate) async fn cmd_scan(daemon: &Daemon, req: &Request) -> Value {
 }
 
 /// Handle `connect_device` command (BLE or LAN).
-#[expect(
-    clippy::too_many_lines,
-    reason = "connect dispatcher covers mock, lan, spp, and ble variants"
-)]
 pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
     // Reject a concurrent connect: two would clobber the one shared central and
     // overwrite the owned device. Held for the whole command via Drop-on-return.

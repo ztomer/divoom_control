@@ -11,10 +11,6 @@ use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "a protocol sequence, run start to finish: each step's result decides whether and how the next one runs, and the shared state between them is the point. Extracting steps means threading that state through several signatures to make one linear exchange look like several"
-)]
 pub(super) async fn run_hot_session(
     ble: &crate::daemon::DeviceTransport,
     files: &[HotFile],
@@ -64,10 +60,6 @@ pub(super) async fn run_hot_session(
         let (cmd, payload) = if let Some(p) = pending_request.take() {
             (cmd_f7, p)
         } else {
-            #[expect(
-                clippy::single_match_else,
-                reason = "the None arm logs and BREAKS the transfer loop, which map_or_else cannot express: a closure cannot break its caller's loop"
-            )]
             match ble
                 .wait_for_any_response(&[cmd_f7, cmd_done], idle_to)
                 .await
