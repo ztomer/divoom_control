@@ -31,10 +31,6 @@ mod tests {
         d
     }
 
-    #[expect(
-        clippy::significant_drop_tightening,
-        reason = "a test that reads the recorded commands directly through the guard. Taking the lock once is what makes the assertions a single consistent observation, and a second `lock()` while this one is alive deadlocks the non-reentrant mutex"
-    )]
     async fn sent(method: &str, args: serde_json::Value) -> (u8, Vec<u8>) {
         let d = setup_mock_daemon().await;
         let res = d
@@ -53,9 +49,10 @@ mod tests {
         let DeviceTransport::Mock(ref mock) = **transport else {
             panic!("expected mock transport")
         };
-        let cmds = mock.sent_commands.lock().unwrap();
-        let (id, payload) = &cmds[0];
-        (*id, payload.clone())
+        // Clone out from under a lock temporary, into a local so the lock is
+        // released before the transport guard it borrows from.
+        let first = mock.sent_commands.lock().unwrap()[0].clone();
+        first
     }
 
     #[tokio::test]
@@ -141,10 +138,6 @@ mod switch_channel_tests {
     use crate::socket_server::Handler;
     use serde_json::json;
 
-    #[expect(
-        clippy::significant_drop_tightening,
-        reason = "a test that reads the recorded commands directly through the guard. Taking the lock once is what makes the assertions a single consistent observation, and a second `lock()` while this one is alive deadlocks the non-reentrant mutex"
-    )]
     async fn sent(channel: &str) -> (u8, Vec<u8>) {
         let d = Daemon::new();
         let conn = d
@@ -167,9 +160,10 @@ mod switch_channel_tests {
         let DeviceTransport::Mock(ref mock) = **transport else {
             panic!("expected mock transport")
         };
-        let cmds = mock.sent_commands.lock().unwrap();
-        let (id, payload) = &cmds[0];
-        (*id, payload.clone())
+        // Clone out from under a lock temporary, into a local so the lock is
+        // released before the transport guard it borrows from.
+        let first = mock.sent_commands.lock().unwrap()[0].clone();
+        first
     }
 
     #[tokio::test]

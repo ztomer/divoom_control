@@ -57,18 +57,16 @@ impl MockTransport {
     ///
     /// If a mutex guarding the shared state is poisoned -- another thread
     /// panicked while holding it.
-    #[expect(
-        clippy::significant_drop_tightening,
-        reason = "the guard makes the write and the flush ATOMIC on the bridge's stdin. Releasing between them lets another command interleave halfway through a frame"
-    )]
     pub async fn send_command(
         &self,
         command_id: u8,
         args: &[u8],
         _write_with_response: bool,
     ) -> BleResult<()> {
-        let mut cmd = self.sent_commands.lock().unwrap();
-        cmd.push((command_id, args.to_vec()));
+        self.sent_commands
+            .lock()
+            .unwrap()
+            .push((command_id, args.to_vec()));
         Ok(())
     }
 
@@ -111,13 +109,11 @@ impl MockTransport {
     ///
     /// If a mutex guarding the shared state is poisoned -- another thread
     /// panicked while holding it.
-    #[expect(
-        clippy::significant_drop_tightening,
-        reason = "a test that reads the recorded commands directly through the guard. Taking the lock once is what makes the assertions a single consistent observation, and a second `lock()` while this one is alive deadlocks the non-reentrant mutex"
-    )]
     pub async fn stream_animation_8b(&self, blob: &[u8]) -> BleResult<bool> {
-        let mut cmd = self.sent_commands.lock().unwrap();
-        cmd.push((0x8bu8, blob.to_vec()));
+        self.sent_commands
+            .lock()
+            .unwrap()
+            .push((0x8bu8, blob.to_vec()));
         Ok(true)
     }
 

@@ -7,10 +7,6 @@ use divoomd::socket_server::Handler;
 use serde_json::json;
 
 #[tokio::test]
-#[expect(
-    clippy::significant_drop_tightening,
-    reason = "the wall guard is inspected field by field; the scope block already bounds it"
-)]
 async fn test_wall_configure_reuses_daemon_transports_and_binds_coordinates() {
     let d = Daemon::new();
 
@@ -41,15 +37,23 @@ async fn test_wall_configure_reuses_daemon_transports_and_binds_coordinates() {
 
     // 3. Verify slot coordinates and device presence
     {
-        let wall_guard = d.wall.lock().await;
-        let wall = wall_guard.as_ref().expect("wall should be configured");
-        assert_eq!(wall.devices.len(), 1);
-        let slot = &wall.devices[0];
-        assert_eq!(slot.mac, "DEV_A");
-        assert_eq!(slot.x, 10);
-        assert_eq!(slot.y, 20);
-        assert_eq!(slot.size, 16);
-        assert!(slot.device.is_some());
+        // The wall lock is held for one read that copies the slot facts out;
+        // the assertions run on the copy.
+        let slots: Vec<(String, i32, i32, i32, bool)> = d
+            .wall
+            .lock()
+            .await
+            .as_ref()
+            .expect("wall should be configured")
+            .devices
+            .iter()
+            .map(|s| (s.mac.clone(), s.x, s.y, s.size, s.device.is_some()))
+            .collect();
+        assert_eq!(
+            slots,
+            vec![("DEV_A".to_string(), 10, 20, 16, true)],
+            "(mac, x, y, size, device present)"
+        );
     }
 
     // 4. Tear down wall with empty slots

@@ -126,7 +126,6 @@ mod tests {
         assert_eq!(cmds[2], (0xb5, vec![60, 0, 1, 0, 10, 1, 2])); // cur LE16, id LE16, vol, status, mode
     }
 
-    #[expect(clippy::significant_drop_tightening, reason = "see the module note")]
     #[tokio::test]
     async fn test_mock_music_set_volume() {
         let d = setup_mock_daemon().await;
@@ -152,6 +151,7 @@ mod tests {
                 let (cmd_id, payload) = &cmds[0];
                 assert_eq!(*cmd_id, 0x08);
                 assert_eq!(*payload, vec![12]);
+                drop(cmds); // the asserts above are the lock's last use
             } else {
                 panic!("Expected Mock transport");
             }
@@ -168,7 +168,6 @@ mod tests {
     /// for ("#00FFCC", 80, true, 2) it was [80, 2] and index 1 gave the MODE.
     /// The ambient brightness slider therefore transmitted the mode number, and
     /// mode 0 meant brightness 0. Only a wire trace on real hardware exposed it.
-    #[expect(clippy::significant_drop_tightening, reason = "see the module note")]
     #[tokio::test]
     async fn test_mock_show_light_reads_brightness_not_the_mode() {
         for (mode, want_type) in [(0u8, 0u8), (2, 2), (4, 4)] {
@@ -199,10 +198,10 @@ mod tests {
                 vec![0x01, 0x00, 0xFF, 0xCC, 80, want_type, 0x01, 0x00, 0x00, 0x00],
                 "mode {mode}: brightness must be 80 (not the mode), type must be {want_type}"
             );
+            drop(cmds); // the asserts above are the lock's last use
         }
     }
 
-    #[expect(clippy::significant_drop_tightening, reason = "see the module note")]
     #[tokio::test]
     async fn test_mock_show_light_honours_power_off_positionally() {
         let d = setup_mock_daemon().await;
@@ -228,5 +227,6 @@ mod tests {
         assert_eq!(payload[4], 55, "brightness");
         assert_eq!(payload[5], 1, "lighting type");
         assert_eq!(payload[6], 0, "power off must survive the positional read");
+        drop(cmds); // the asserts above are the lock's last use
     }
 }

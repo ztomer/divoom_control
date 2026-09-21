@@ -1,7 +1,6 @@
 //! Integration tests for multi-device concurrent routing and per-device command queues.
 #![expect(
     clippy::too_many_lines,
-    clippy::significant_drop_tightening,
     reason = "integration scenario orchestrates multi-device dispatch and inspects lock guards"
 )]
 
@@ -207,9 +206,9 @@ async fn test_live_job_persists_across_device_switch() {
     if d.encoder().is_some() {
         let trans_a = transport_of(&d, "DEV_A").await;
         if let DeviceTransport::Mock(ref mock_a) = &*trans_a {
-            let cmds = mock_a.sent_commands.lock().unwrap();
+            let sent_any = !mock_a.sent_commands.lock().unwrap().is_empty();
             assert!(
-                !cmds.is_empty(),
+                sent_any,
                 "DEV_A should continue receiving live frames while DEV_B is connected"
             );
         }
@@ -347,8 +346,13 @@ async fn test_device_call_set_screen_on_and_standby_preemption() {
     {
         let trans_a = transport_of(&d, "DEV_A").await;
         if let DeviceTransport::Mock(ref mock) = &*trans_a {
-            let cmds = mock.sent_commands.lock().unwrap();
-            let last_cmd = cmds.last().expect("command should be recorded");
+            let last_cmd = mock
+                .sent_commands
+                .lock()
+                .unwrap()
+                .last()
+                .cloned()
+                .expect("command should be recorded");
             assert_eq!(last_cmd.0, 0x74);
             assert_eq!(last_cmd.1, [0x00]);
         }
@@ -371,8 +375,13 @@ async fn test_device_call_set_screen_on_and_standby_preemption() {
     {
         let trans_a = transport_of(&d, "DEV_A").await;
         if let DeviceTransport::Mock(ref mock) = &*trans_a {
-            let cmds = mock.sent_commands.lock().unwrap();
-            let last_cmd = cmds.last().expect("command should be recorded");
+            let last_cmd = mock
+                .sent_commands
+                .lock()
+                .unwrap()
+                .last()
+                .cloned()
+                .expect("command should be recorded");
             assert_eq!(last_cmd.0, 0x74);
             assert_eq!(last_cmd.1, [80]);
         }

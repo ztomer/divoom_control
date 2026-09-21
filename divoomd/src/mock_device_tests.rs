@@ -30,7 +30,6 @@ pub mod tests {
         d
     }
 
-    #[expect(clippy::significant_drop_tightening, reason = "see the module note")]
     #[tokio::test]
     async fn test_mock_display_set_clock_rich() {
         let d = setup_mock_daemon().await;
@@ -67,6 +66,7 @@ pub mod tests {
                     *payload,
                     vec![0x00, 0x01, 0x03, 0x01, 0x01, 0x00, 0x01, 0xFF, 0x00, 0xFF]
                 );
+                drop(cmds); // the asserts above are the lock's last use
             } else {
                 panic!("Expected Mock transport");
             }
@@ -86,7 +86,6 @@ pub mod tests {
     /// output is owned by a DIFFERENT channel.
     ///
     /// So the ORDER is the property: the channel switch must precede the data.
-    #[expect(clippy::significant_drop_tightening, reason = "see the module note")]
     #[tokio::test]
     async fn test_mock_weather_selects_the_clock_face_before_sending_data() {
         use crate::packets::WeatherType;
@@ -138,6 +137,7 @@ pub mod tests {
                     !cmds.iter().any(|(id, _)| *id == 0x32),
                     "the unexplained 0x32 must not come back"
                 );
+                drop(cmds); // `switch`/`data` below are owned copies
                 assert!(
                     switch < data,
                     "the channel switch must come BEFORE the weather data, \
@@ -151,7 +151,6 @@ pub mod tests {
         }
     }
 
-    #[expect(clippy::significant_drop_tightening, reason = "see the module note")]
     #[tokio::test]
     async fn test_mock_display_show_clock() {
         let d = setup_mock_daemon().await;
@@ -201,6 +200,7 @@ pub mod tests {
                     *payload,
                     vec![0x00, 0x00, 0x04, 0x01, 0x01, 0x01, 0x00, 0x00, 0xFF, 0x00]
                 );
+                drop(cmds); // the asserts above are the lock's last use
             } else {
                 panic!("Expected Mock transport");
             }
@@ -209,7 +209,6 @@ pub mod tests {
         }
     }
 
-    #[expect(clippy::significant_drop_tightening, reason = "see the module note")]
     #[tokio::test]
     async fn test_mock_device_set_brightness() {
         let d = setup_mock_daemon().await;
@@ -235,6 +234,7 @@ pub mod tests {
                 let (cmd_id, payload) = &cmds[0];
                 assert_eq!(*cmd_id, 0x74);
                 assert_eq!(*payload, vec![75]);
+                drop(cmds); // the asserts above are the lock's last use
             } else {
                 panic!("Expected Mock transport");
             }
@@ -243,7 +243,6 @@ pub mod tests {
         }
     }
 
-    #[expect(clippy::significant_drop_tightening, reason = "see the module note")]
     #[tokio::test]
     async fn test_mock_set_date_time() {
         let d = setup_mock_daemon().await;
@@ -263,6 +262,7 @@ pub mod tests {
                 let (cmd_id, payload) = &cmds[0];
                 assert_eq!(*cmd_id, 0x18);
                 assert_eq!(*payload, vec![26, 20, 6, 29, 19, 53, 7, 0]);
+                drop(cmds); // the asserts above are the lock's last use
             } else {
                 panic!("Expected Mock transport");
             }
