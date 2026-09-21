@@ -81,7 +81,7 @@ async def test_initialize_returns_server_info_and_capabilities() -> None:
         "id": 1,
         "method": "initialize",
         "params": {
-            "protocolVersion": "2024-11-05",
+            "protocolVersion": "2026-07-28",
             "capabilities": {},
             "clientInfo": {"name": "test", "version": "1.0"},
         },
@@ -90,9 +90,83 @@ async def test_initialize_returns_server_info_and_capabilities() -> None:
     assert resp["jsonrpc"] == "2.0"
     assert resp["id"] == 1
     result = resp["result"]
-    assert result["protocolVersion"] == "2024-11-05"
+    assert result["protocolVersion"] == "2026-07-28"
     assert result["capabilities"] == {"tools": {}}
     assert result["serverInfo"] == {"name": "divoom-control", "version": "0.15.0"}
+
+
+# ── 1b. initialize negotiation (SEP-2575) ────────────────────────────
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("version", [
+    "2024-11-05",
+    "2025-03-26",
+    "2025-06-18",
+    "2025-11-25",
+    "2026-07-28",
+])
+async def test_initialize_echoes_each_supported_version(version: str) -> None:
+    """A client asking for a supported version is answered in it."""
+    s = _build_server()
+    resp = await s.handle({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {"protocolVersion": version, "capabilities": {}},
+    })
+    assert resp["result"]["protocolVersion"] == version
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("requested", [
+    "2099-01-01",  # unknown future
+    "1999-12-31",  # unknown past
+    None,          # missing
+    123,           # garbage type
+])
+async def test_initialize_unknown_or_missing_version_gets_latest(requested) -> None:
+    """Anything we don't support (or nothing at all) gets 2026-07-28."""
+    from divoom_lib.mcp_server import MCPServer
+    s = _build_server()
+    params: dict = {"capabilities": {}}
+    if requested is not None:
+        params["protocolVersion"] = requested
+    resp = await s.handle({
+        "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": params,
+    })
+    assert resp["result"]["protocolVersion"] == MCPServer.LATEST_PROTOCOL_VERSION == "2026-07-28"
+
+
+@pytest.mark.asyncio
+async def test_initialize_tolerates_meta() -> None:
+    """SEP-2575 clients repeat context in every request's `_meta`;
+    initialize must still negotiate normally with it present."""
+    s = _build_server()
+    resp = await s.handle({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2026-07-28",
+            "capabilities": {},
+            "clientInfo": {"name": "test", "version": "1.0"},
+            "_meta": {
+                "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+                "io.modelcontextprotocol/clientInfo": {"name": "test", "version": "1.0"},
+            },
+        },
+    })
+    assert resp["result"]["protocolVersion"] == "2026-07-28"
+
+
+def test_negotiate_protocol_version_unit() -> None:
+    from divoom_lib.mcp_server import MCPServer, negotiate_protocol_version
+    for v in MCPServer.SUPPORTED_PROTOCOL_VERSIONS:
+        assert negotiate_protocol_version(v) == v
+    assert negotiate_protocol_version("2026-07-28") == "2026-07-28"
+    assert negotiate_protocol_version("nope") == MCPServer.LATEST_PROTOCOL_VERSION
+    assert negotiate_protocol_version(None) == MCPServer.LATEST_PROTOCOL_VERSION
 
 
 # ── 2. tools/list ─────────────────────────────────────────────────────

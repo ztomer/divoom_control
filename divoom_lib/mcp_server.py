@@ -1,11 +1,17 @@
 """
 R15 §5 — MCP server core.
 
-A minimal MCP-compatible JSON-RPC server (stdio transport, spec
-2024-11-05). The server holds a list of ``Tool`` definitions and
-dispatches incoming ``tools/call`` requests to their handlers.
+A minimal MCP-compatible JSON-RPC server (stdio transport). The server
+holds a list of ``Tool`` definitions and dispatches incoming
+``tools/call`` requests to their handlers.
 
-Wire format (per the canonical MCP 2024-11-05 spec)::
+Protocol negotiation (SEP-2575): the server answers ``initialize`` with
+the client's requested ``protocolVersion`` when it is one of
+``SUPPORTED_PROTOCOL_VERSIONS``, else the latest
+(``LATEST_PROTOCOL_VERSION``). Extra ``params`` members such as ``_meta``
+are tolerated (ignored).
+
+Wire format (per the canonical MCP spec)::
 
     {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
 
@@ -147,6 +153,17 @@ def _jsonrpc_error(req_id: Any, code: int, message: str, data: Any = None) -> di
 # ── Server core ───────────────────────────────────────────────────────
 
 
+def negotiate_protocol_version(requested: Any) -> str:
+    """Return the ``initialize`` answer for a requested protocol version.
+
+    Echo ``requested`` when it is one we support, else the latest.
+    Anything non-string (missing, null, garbage) also gets the latest.
+    """
+    if isinstance(requested, str) and requested in MCPServer.SUPPORTED_PROTOCOL_VERSIONS:
+        return requested
+    return MCPServer.LATEST_PROTOCOL_VERSION
+
+
 class MCPServer:
     """Minimal MCP server. Holds a tool catalog and dispatches requests.
 
@@ -155,15 +172,26 @@ class MCPServer:
     Divoom instance by ``build_tool_catalog(divoom)``.
     """
 
-    PROTOCOL_VERSION = "2024-11-05"
+    #: Latest SEP-2575 protocol version; the default answer and the
+    #: fallback when a client asks for something unknown. Fleet
+    #: reference: zinc's ``engine_client.PROTOCOL_VERSION``.
+    LATEST_PROTOCOL_VERSION = "2026-07-28"
+    #: Every version we can serve. A client asking for one of these is
+    #: answered in it; anything else (or nothing) gets the latest.
+    SUPPORTED_PROTOCOL_VERSIONS = (
+        "2024-11-05",
+        "2025-03-26",
+        "2025-06-18",
+        "2025-11-25",
+        "2026-07-28",
+    )
+    PROTOCOL_VERSION = LATEST_PROTOCOL_VERSION
 
     def __init__(
         self,
         server_info: dict,
-        protocol_version: str = PROTOCOL_VERSION,
     ) -> None:
         self.server_info = dict(server_info)
-        self.protocol_version = protocol_version
         self.tools: list[Tool] = []
         self._initialized = False
         # Cached for tests + the stdio loop.
@@ -236,8 +264,11 @@ class MCPServer:
 
     def _handle_initialize(self, params: dict) -> dict:
         self._initialized = True
+        # SEP-2575 negotiation: echo a supported request, else latest.
+        # Extra params members (e.g. `_meta`) are tolerated — ignored here.
+        requested = params.get("protocolVersion") if isinstance(params, dict) else None
         return {
-            "protocolVersion": self.protocol_version,
+            "protocolVersion": negotiate_protocol_version(requested),
             "capabilities": {"tools": {}},
             "serverInfo": self.server_info,
         }

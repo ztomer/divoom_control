@@ -1,6 +1,6 @@
 # MCP Server
 
-The `divoom-control` project ships a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server conforming to the MCP 2024-11-05 specification. The server speaks JSON-RPC 2.0 over standard I/O (stdio) and exposes 13 device-control tools, allowing AI coding assistants and automation clients to monitor and control Divoom devices.
+The `divoom-control` project ships a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server speaking JSON-RPC 2.0 over standard I/O (stdio) and exposing 13 device-control tools, allowing AI coding assistants and automation clients to monitor and control Divoom devices. Protocol negotiation follows SEP-2575: the server answers `initialize` with the client's requested `protocolVersion` when it is one it supports (`2024-11-05`, `2025-03-26`, `2025-06-18`, `2025-11-25`, `2026-07-28`), else the latest (`2026-07-28`). Extra `params` members such as `_meta` are tolerated.
 
 ## Architecture
 
@@ -142,7 +142,8 @@ Add to `~/.continue/config.json`:
 
 ## Wire Protocol Reference
 
-Conforms to standard MCP 2024-11-05:
+Negotiated per SEP-2575 (supported: `2024-11-05`, `2025-03-26`,
+`2025-06-18`, `2025-11-25`, `2026-07-28`; latest `2026-07-28`):
 
 ### Initialize Request
 ```json
@@ -151,7 +152,7 @@ Conforms to standard MCP 2024-11-05:
   "id": 1,
   "method": "initialize",
   "params": {
-    "protocolVersion": "2024-11-05",
+    "protocolVersion": "2026-07-28",
     "capabilities": {},
     "clientInfo": {
       "name": "mcp-client",
@@ -167,7 +168,7 @@ Conforms to standard MCP 2024-11-05:
   "jsonrpc": "2.0",
   "id": 1,
   "result": {
-    "protocolVersion": "2024-11-05",
+    "protocolVersion": "2026-07-28",
     "capabilities": {
       "tools": {}
     },

@@ -12,7 +12,36 @@
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
-const PROTOCOL_VERSION: &str = "2024-11-05";
+/// Latest SEP-2575 protocol version: the default answer and the fallback
+/// when a client asks for something unknown. Fleet reference: zinc's
+/// `engine_client::PROTOCOL_VERSION`.
+const PROTOCOL_VERSION: &str = "2026-07-28";
+
+/// Every protocol version we can serve. A client asking for one of these
+/// is answered in it; anything else (or nothing) gets the latest.
+const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &[
+    "2024-11-05",
+    "2025-03-26",
+    "2025-06-18",
+    "2025-11-25",
+    "2026-07-28",
+];
+
+/// SEP-2575 negotiation: echo `requested` when it is one we support,
+/// else the latest. A missing/non-string request also gets the latest.
+fn negotiate_protocol_version(requested: Option<&str>) -> &'static str {
+    match requested {
+        Some(v) if SUPPORTED_PROTOCOL_VERSIONS.contains(&v) => {
+            // `v` is one of the table entries, so re-derive the static str.
+            SUPPORTED_PROTOCOL_VERSIONS
+                .iter()
+                .find(|s| **s == v)
+                .copied()
+                .unwrap_or(PROTOCOL_VERSION)
+        }
+        _ => PROTOCOL_VERSION,
+    }
+}
 
 /// # Errors
 ///
@@ -72,11 +101,19 @@ async fn handle_line(line: &str, sock: &str) -> Option<Value> {
     let id = id.unwrap_or(Value::Null);
 
     let result: Result<Value, (i64, String)> = match method {
-        "initialize" => Ok(json!({
-            "protocolVersion": PROTOCOL_VERSION,
-            "capabilities": { "tools": {} },
-            "serverInfo": { "name": "divoom-control", "version": env!("CARGO_PKG_VERSION") },
-        })),
+        "initialize" => {
+            // SEP-2575 negotiation: echo a supported request, else latest.
+            // Extra params members (e.g. `_meta`) are tolerated — ignored here.
+            let requested = req
+                .get("params")
+                .and_then(|p| p.get("protocolVersion"))
+                .and_then(|v| v.as_str());
+            Ok(json!({
+                "protocolVersion": negotiate_protocol_version(requested),
+                "capabilities": { "tools": {} },
+                "serverInfo": { "name": "divoom-control", "version": env!("CARGO_PKG_VERSION") },
+            }))
+        }
         "notifications/initialized" => return None,
         "ping" => Ok(json!({})),
         "tools/list" => Ok(json!({ "tools": crate::mcp_tools::catalog() })),
@@ -112,4 +149,22 @@ fn tool_content(value: &Value, is_error: bool) -> Value {
         "content": [ { "type": "text", "text": text } ],
         "isError": is_error,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn negotiation_echoes_supported_and_falls_back_to_latest() {
+        for v in SUPPORTED_PROTOCOL_VERSIONS {
+            assert_eq!(negotiate_protocol_version(Some(v)), *v);
+        }
+        assert_eq!(negotiate_protocol_version(Some("2026-07-28")), "2026-07-28");
+        assert_eq!(
+            negotiate_protocol_version(Some("2099-01-01")),
+            PROTOCOL_VERSION
+        );
+        assert_eq!(negotiate_protocol_version(None), PROTOCOL_VERSION);
+    }
 }
