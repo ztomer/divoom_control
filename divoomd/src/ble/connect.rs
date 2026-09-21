@@ -11,6 +11,7 @@ use crate::autoprobe::Protocol;
 use crate::framing;
 use crate::models::IOS_LE_HEADER;
 use crate::response::Frame;
+use btleplug::platform::Peripheral;
 
 /// Connect to the device whose `id` matches a prior `scan()` result. Discovers
 /// services, subscribes to notifications, spawns the frame-parsing task, and
@@ -25,6 +26,87 @@ pub(super) async fn connect(central: &BleCentral, id: &str) -> BleResult<BleTran
     if dbg_on {
         eprintln!("[ble][connect] start_scan");
     }
+    let peripheral = find_peripheral(central, id).await?;
+    if dbg_on {
+        eprintln!("[ble][connect] found peripheral, connecting");
+    }
+
+    // NOTE (Linux/BlueZ): these dual-mode Divoom devices also advertise the
+    // classic SPP profile (UUID 0x1101), and BlueZ routes connect() to BR/EDR —
+    // returning org.bluez.Error.BREDR.ProfileUnavailable ("No more profiles to
+    // connect to") or a D-Bus "Timeout waiting for reply", even though the LE
+    // GATT link briefly comes up. CoreBluetooth (macOS) connects fine. Making
+    // BLE connect reliable on Linux needs forcing the LE transport / pairing /
+    // disabling BR/EDR — tracked in scripts/linux_remote/README.md. Scan works
+    // on Linux today; connect does not.
+    match tokio::time::timeout(CONNECT_TIMEOUT, peripheral.connect()).await {
+        Ok(r) => {
+            if dbg_on {
+                eprintln!("[ble][connect] connect returned");
+            }
+            r?;
+        }
+        Err(_) => return Err("BLE connect timed out".into()),
+    }
+    if dbg_on {
+        eprintln!("[ble][connect] discover_services");
+    }
+    match tokio::time::timeout(CONNECT_TIMEOUT, peripheral.discover_services()).await {
+        Ok(r) => r?,
+        Err(_) => return Err("BLE discover_services timed out".into()),
+    }
+    let chars = peripheral.characteristics();
+    let write_char = chars
+        .iter()
+        .find(|c| c.uuid == super::WRITE_UUID)
+        .ok_or("no write characteristic")?
+        .clone();
+    let notify_char = chars
+        .iter()
+        .find(|c| c.uuid == super::NOTIFY_UUID)
+        .ok_or("no notify characteristic")?
+        .clone();
+
+    match tokio::time::timeout(CONNECT_TIMEOUT, peripheral.subscribe(&notify_char)).await {
+        Ok(r) => r?,
+        Err(_) => return Err("BLE subscribe timed out".into()),
+    }
+    let notifications = peripheral.notifications().await?;
+    let tag = wire_tag(&peripheral.id().to_string());
+    let rx = spawn_rx_pump(notifications, tag.clone());
+    let dev_name = peripheral
+        .properties()
+        .await
+        .ok()
+        .flatten()
+        .and_then(|pr| pr.local_name);
+
+    let mut transport = BleTransport {
+        _central: central.clone(),
+        peripheral,
+        write_char,
+        protocol: Protocol::Basic,
+        rx: Mutex::new(rx),
+        device_name: std::sync::Mutex::new(dev_name),
+        tag,
+    };
+    transport.autoprobe().await;
+    Ok(transport)
+}
+
+/// The short device tag stamped on debug lines: enough of the id to tell
+/// panels apart in a fleet trace, short enough to leave room for the bytes.
+fn wire_tag(id: &str) -> String {
+    id.chars().take(8).collect()
+}
+
+/// Scan until the target peripheral is seen, or a deadline passes.
+///
+/// A single fixed scan window intermittently misses a device on macOS (its
+/// next advertisement may not land inside the window) -- most visibly on
+/// RECONNECT after a disconnect -- so the discovered set is polled,
+/// mirroring the Python daemon's reconnect-scan retries.
+async fn find_peripheral(central: &BleCentral, id: &str) -> BleResult<Peripheral> {
     // EVERY central await below is bounded by a timeout. On a dead
     // CoreBluetooth session `start_scan`/`peripherals`/`stop_scan` hang forever
     // with no error, which would wedge `connect` and defeat the caller's
@@ -72,58 +154,19 @@ pub(super) async fn connect(central: &BleCentral, id: &str) -> BleResult<BleTran
         tokio::time::sleep(Duration::from_millis(400)).await;
     }
     let _ = tokio::time::timeout(Duration::from_secs(3), central.stop_scan()).await;
-    let peripheral = found.ok_or_else(|| "device not found in scan".to_string())?;
-    if dbg_on {
-        eprintln!("[ble][connect] found peripheral, connecting");
-    }
+    found.ok_or_else(|| "device not found in scan".into())
+}
 
-    // NOTE (Linux/BlueZ): these dual-mode Divoom devices also advertise the
-    // classic SPP profile (UUID 0x1101), and BlueZ routes connect() to BR/EDR —
-    // returning org.bluez.Error.BREDR.ProfileUnavailable ("No more profiles to
-    // connect to") or a D-Bus "Timeout waiting for reply", even though the LE
-    // GATT link briefly comes up. CoreBluetooth (macOS) connects fine. Making
-    // BLE connect reliable on Linux needs forcing the LE transport / pairing /
-    // disabling BR/EDR — tracked in scripts/linux_remote/README.md. Scan works
-    // on Linux today; connect does not.
-    match tokio::time::timeout(CONNECT_TIMEOUT, peripheral.connect()).await {
-        Ok(r) => {
-            if dbg_on {
-                eprintln!("[ble][connect] connect returned");
-            }
-            r?;
-        }
-        Err(_) => return Err("BLE connect timed out".into()),
-    }
-    if dbg_on {
-        eprintln!("[ble][connect] discover_services");
-    }
-    match tokio::time::timeout(CONNECT_TIMEOUT, peripheral.discover_services()).await {
-        Ok(r) => r?,
-        Err(_) => return Err("BLE discover_services timed out".into()),
-    }
-    let chars = peripheral.characteristics();
-    let write_char = chars
-        .iter()
-        .find(|c| c.uuid == super::WRITE_UUID)
-        .ok_or("no write characteristic")?
-        .clone();
-    let notify_char = chars
-        .iter()
-        .find(|c| c.uuid == super::NOTIFY_UUID)
-        .ok_or("no notify characteristic")?
-        .clone();
-
-    match tokio::time::timeout(CONNECT_TIMEOUT, peripheral.subscribe(&notify_char)).await {
-        Ok(r) => r?,
-        Err(_) => return Err("BLE subscribe timed out".into()),
-    }
-    let mut notifications = peripheral.notifications().await?;
+/// Parse inbound bytes into Frames on their own task, using the ported
+/// framing: iOS-LE frames are self-delimited (header-prefixed); Basic frames
+/// need a stateful buffer. Returns the receiving end.
+fn spawn_rx_pump(
+    mut notifications: std::pin::Pin<
+        Box<dyn futures::Stream<Item = btleplug::api::ValueNotification> + Send>,
+    >,
+    rx_tag: String,
+) -> mpsc::Receiver<Frame> {
     let (tx, rx) = mpsc::channel::<Frame>(256);
-
-    // Parse inbound bytes into Frames using the ported framing: iOS-LE frames
-    // are self-delimited (header-prefixed); Basic frames need a stateful buffer.
-    let tag = wire_tag(&peripheral.id().to_string());
-    let rx_tag = tag.clone();
     tokio::spawn(async move {
         let mut basic_buf: Vec<u8> = Vec::new();
         while let Some(n) = notifications.next().await {
@@ -170,30 +213,7 @@ pub(super) async fn connect(central: &BleCentral, id: &str) -> BleResult<BleTran
         }
     });
 
-    let dev_name = peripheral
-        .properties()
-        .await
-        .ok()
-        .flatten()
-        .and_then(|pr| pr.local_name);
-
-    let mut transport = BleTransport {
-        _central: central.clone(),
-        peripheral,
-        write_char,
-        protocol: Protocol::Basic,
-        rx: Mutex::new(rx),
-        device_name: std::sync::Mutex::new(dev_name),
-        tag,
-    };
-    transport.autoprobe().await;
-    Ok(transport)
-}
-
-/// The short device tag stamped on debug lines: enough of the id to tell
-/// panels apart in a fleet trace, short enough to leave room for the bytes.
-fn wire_tag(id: &str) -> String {
-    id.chars().take(8).collect()
+    rx
 }
 
 #[cfg(test)]
