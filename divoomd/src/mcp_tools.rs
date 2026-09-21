@@ -96,6 +96,7 @@ fn tool(name: &str, desc: &str, schema: &Value) -> Value {
 /// If a mutex guarding shared tool state is poisoned.
 pub async fn call_tool(name: &str, a: &Value, sock: &str) -> Result<Value, String> {
     let mac = a.get("mac").and_then(Value::as_str);
+
     match name {
         "set_volume" => {
             let level = need_int(a, "level", 0, 15)?;
@@ -107,155 +108,186 @@ pub async fn call_tool(name: &str, a: &Value, sock: &str) -> Result<Value, Strin
             dc(sock, "device.set_brightness", json!([level]), mac).await?;
             Ok(json!({ "ok": true, "level": level }))
         }
-        "set_light_mode" => {
-            let mode = a
-                .get("mode")
-                .and_then(|v| v.as_str())
-                .ok_or("mode must be a string")?;
-            let channel = LIGHT_MODES
-                .iter()
-                .find(|(n, _)| *n == mode)
-                .map(|(_, c)| *c)
-                .ok_or_else(|| {
-                    format!(
-                        "mode must be one of {:?}",
-                        LIGHT_MODES.iter().map(|(n, _)| *n).collect::<Vec<_>>()
-                    )
-                })?;
-            dc(sock, "control.set_light_mode", json!([channel]), mac).await?;
-            Ok(json!({ "ok": true, "mode": mode, "channel": channel }))
-        }
-        "set_weather" => {
-            let temp = need_int(a, "temperature_c", -127, 128)?;
-            let weather = a
-                .get("weather")
-                .and_then(|v| v.as_str())
-                .ok_or("weather must be a string")?;
-            let wt = WEATHER_TYPES
-                .iter()
-                .find(|(n, _)| *n == weather)
-                .map(|(_, t)| *t)
-                .ok_or_else(|| {
-                    format!(
-                        "weather must be one of {:?}",
-                        WEATHER_TYPES.iter().map(|(n, _)| *n).collect::<Vec<_>>()
-                    )
-                })?;
-            dc(sock, "weather.set", json!([temp, wt]), mac).await?;
-            Ok(json!({ "ok": true, "temperature_c": temp, "weather": weather }))
-        }
-        "set_alarm" => {
-            let index = need_int(a, "index", 0, 9)?;
-            let hour = need_int(a, "hour", 0, 23)?;
-            let minute = need_int(a, "minute", 0, 59)?;
-            let week = opt_int(a, "weekday_mask", 0, 127, 0)?;
-            let enabled = a
-                .get("enabled")
-                .and_then(serde_json::Value::as_bool)
-                .unwrap_or(true);
-            let status = i32::from(enabled);
-            // set_alarm(index, status, hour, minute, week, mode=0, trigger_mode=1)
-            dc(
-                sock,
-                "alarm.set_alarm",
-                json!([index, status, hour, minute, week, 0, 1]),
-                mac,
-            )
-            .await?;
-            Ok(
-                json!({ "ok": true, "index": index, "hour": hour, "minute": minute, "weekday_mask": week, "enabled": enabled }),
-            )
-        }
+        "set_light_mode" => set_light_mode(a, sock).await,
+        "set_weather" => set_weather(a, sock).await,
+        "set_alarm" => set_alarm(a, sock).await,
         "set_radio" => {
             let freq = need_int(a, "freq_x10", 875, 1080)?;
             dc(sock, "radio.set_radio_frequency", json!([freq]), mac).await?;
             Ok(json!({ "ok": true, "freq_x10": freq }))
         }
-        "set_low_power" => {
-            let enabled = a
-                .get("enabled")
-                .and_then(serde_json::Value::as_bool)
-                .ok_or("enabled must be a boolean")?;
-            dc(
-                sock,
-                "device.set_low_power_switch",
-                json!([i32::from(enabled)]),
-                mac,
-            )
-            .await?;
-            Ok(json!({ "ok": true, "enabled": enabled }))
-        }
-        "set_screen_orientation" => {
-            let degrees = need_int(a, "degrees", 0, 270)?;
-            let dir = match degrees {
-                0 => 0,
-                90 => 1,
-                180 => 2,
-                270 => 3,
-                _ => return Err("degrees must be 0, 90, 180, or 270".into()),
-            };
-            let mirror = a
-                .get("mirror")
-                .and_then(serde_json::Value::as_bool)
-                .unwrap_or(false);
-            dc(sock, "design.set_screen_dir", json!([dir]), mac).await?;
-            dc(sock, "design.set_screen_mirror", json!([mirror]), mac).await?;
-            Ok(json!({ "ok": true, "degrees": degrees, "mirror": mirror }))
-        }
-        "show_image" => {
-            let file = a
-                .get("file")
-                .and_then(|v| v.as_str())
-                .filter(|s| !s.is_empty())
-                .ok_or("file must be a non-empty local path string")?;
-            let bytes = std::fs::read(file).map_err(|e| format!("cannot read {file}: {e}"))?;
-            push_image_bytes(sock, &bytes, mac).await?;
-            Ok(json!({ "ok": true, "file": file }))
-        }
-        "push_animation" => {
-            let file = a
-                .get("file")
-                .and_then(|v| v.as_str())
-                .filter(|s| !s.is_empty());
-            let data = a
-                .get("data")
-                .and_then(|v| v.as_str())
-                .filter(|s| !s.is_empty());
-            if file.is_some() == data.is_some() {
-                return Err("provide exactly one of 'file' or 'data'".into());
-            }
-            let bytes = if let Some(f) = file {
-                std::fs::read(f).map_err(|e| format!("cannot read {f}: {e}"))?
-            } else {
-                base64::engine::general_purpose::STANDARD
-                    .decode(data.unwrap())
-                    .map_err(|e| format!("invalid base64: {e}"))?
-            };
-            push_image_bytes(sock, &bytes, mac).await?;
-            Ok(
-                json!({ "ok": true, "note": "pushed first frame (full animation streaming is a follow-up)" }),
-            )
-        }
+        "set_low_power" => set_low_power(a, sock).await,
+        "set_screen_orientation" => set_screen_orientation(a, sock).await,
+        "show_image" => show_image(a, sock).await,
+        "push_animation" => push_animation(a, sock).await,
         "play_sound" => {
             let dur = need_int(a, "duration_ms", 100, 3000)?;
             dc(sock, "control.set_hot", json!([1]), mac).await?;
             Ok(json!({ "ok": true, "duration_ms": dur }))
         }
         "get_capabilities" => cmd(sock, "device_status", json!({})).await,
-        "get_device_state" => {
-            let volume = dc_result(sock, "music.get_volume", json!([]), mac).await;
-            let brightness = dc_result(sock, "device.get_brightness", json!([]), mac).await;
-            let light_mode = dc_result(sock, "control.get_light_mode", json!([]), mac).await;
-            let screen_dir = dc_result(sock, "design.get_screen_dir", json!([]), mac).await;
-            let mirror = dc_result(sock, "design.get_screen_mirror", json!([]), mac).await;
-            Ok(json!({
-                "volume": volume, "brightness": brightness, "light_mode": light_mode,
-                "screen_orientation": screen_dir, "mirror": mirror,
-            }))
-        }
+        "get_device_state" => get_device_state(a, sock).await,
         "list_screens" => cmd(sock, "get_topology", json!({})).await,
         other => Err(format!("unknown tool: {other}")),
     }
+}
+async fn set_light_mode(a: &Value, sock: &str) -> Result<Value, String> {
+    let mac = a.get("mac").and_then(Value::as_str);
+
+    let mode = a
+        .get("mode")
+        .and_then(|v| v.as_str())
+        .ok_or("mode must be a string")?;
+    let channel = LIGHT_MODES
+        .iter()
+        .find(|(n, _)| *n == mode)
+        .map(|(_, c)| *c)
+        .ok_or_else(|| {
+            format!(
+                "mode must be one of {:?}",
+                LIGHT_MODES.iter().map(|(n, _)| *n).collect::<Vec<_>>()
+            )
+        })?;
+    dc(sock, "control.set_light_mode", json!([channel]), mac).await?;
+    Ok(json!({ "ok": true, "mode": mode, "channel": channel }))
+}
+
+async fn set_weather(a: &Value, sock: &str) -> Result<Value, String> {
+    let mac = a.get("mac").and_then(Value::as_str);
+
+    let temp = need_int(a, "temperature_c", -127, 128)?;
+    let weather = a
+        .get("weather")
+        .and_then(|v| v.as_str())
+        .ok_or("weather must be a string")?;
+    let wt = WEATHER_TYPES
+        .iter()
+        .find(|(n, _)| *n == weather)
+        .map(|(_, t)| *t)
+        .ok_or_else(|| {
+            format!(
+                "weather must be one of {:?}",
+                WEATHER_TYPES.iter().map(|(n, _)| *n).collect::<Vec<_>>()
+            )
+        })?;
+    dc(sock, "weather.set", json!([temp, wt]), mac).await?;
+    Ok(json!({ "ok": true, "temperature_c": temp, "weather": weather }))
+}
+
+async fn set_alarm(a: &Value, sock: &str) -> Result<Value, String> {
+    let mac = a.get("mac").and_then(Value::as_str);
+
+    let index = need_int(a, "index", 0, 9)?;
+    let hour = need_int(a, "hour", 0, 23)?;
+    let minute = need_int(a, "minute", 0, 59)?;
+    let week = opt_int(a, "weekday_mask", 0, 127, 0)?;
+    let enabled = a
+        .get("enabled")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(true);
+    let status = i32::from(enabled);
+    // set_alarm(index, status, hour, minute, week, mode=0, trigger_mode=1)
+    dc(
+        sock,
+        "alarm.set_alarm",
+        json!([index, status, hour, minute, week, 0, 1]),
+        mac,
+    )
+    .await?;
+    Ok(
+        json!({ "ok": true, "index": index, "hour": hour, "minute": minute, "weekday_mask": week, "enabled": enabled }),
+    )
+}
+
+async fn set_low_power(a: &Value, sock: &str) -> Result<Value, String> {
+    let mac = a.get("mac").and_then(Value::as_str);
+
+    let enabled = a
+        .get("enabled")
+        .and_then(serde_json::Value::as_bool)
+        .ok_or("enabled must be a boolean")?;
+    dc(
+        sock,
+        "device.set_low_power_switch",
+        json!([i32::from(enabled)]),
+        mac,
+    )
+    .await?;
+    Ok(json!({ "ok": true, "enabled": enabled }))
+}
+
+async fn set_screen_orientation(a: &Value, sock: &str) -> Result<Value, String> {
+    let mac = a.get("mac").and_then(Value::as_str);
+
+    let degrees = need_int(a, "degrees", 0, 270)?;
+    let dir = match degrees {
+        0 => 0,
+        90 => 1,
+        180 => 2,
+        270 => 3,
+        _ => return Err("degrees must be 0, 90, 180, or 270".into()),
+    };
+    let mirror = a
+        .get("mirror")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    dc(sock, "design.set_screen_dir", json!([dir]), mac).await?;
+    dc(sock, "design.set_screen_mirror", json!([mirror]), mac).await?;
+    Ok(json!({ "ok": true, "degrees": degrees, "mirror": mirror }))
+}
+
+async fn show_image(a: &Value, sock: &str) -> Result<Value, String> {
+    let mac = a.get("mac").and_then(Value::as_str);
+
+    let file = a
+        .get("file")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .ok_or("file must be a non-empty local path string")?;
+    let bytes = std::fs::read(file).map_err(|e| format!("cannot read {file}: {e}"))?;
+    push_image_bytes(sock, &bytes, mac).await?;
+    Ok(json!({ "ok": true, "file": file }))
+}
+
+async fn push_animation(a: &Value, sock: &str) -> Result<Value, String> {
+    let mac = a.get("mac").and_then(Value::as_str);
+
+    let file = a
+        .get("file")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty());
+    let data = a
+        .get("data")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty());
+    if file.is_some() == data.is_some() {
+        return Err("provide exactly one of 'file' or 'data'".into());
+    }
+    let bytes = if let Some(f) = file {
+        std::fs::read(f).map_err(|e| format!("cannot read {f}: {e}"))?
+    } else {
+        base64::engine::general_purpose::STANDARD
+            .decode(data.unwrap())
+            .map_err(|e| format!("invalid base64: {e}"))?
+    };
+    push_image_bytes(sock, &bytes, mac).await?;
+    Ok(
+        json!({ "ok": true, "note": "pushed first frame (full animation streaming is a follow-up)" }),
+    )
+}
+
+async fn get_device_state(a: &Value, sock: &str) -> Result<Value, String> {
+    let mac = a.get("mac").and_then(Value::as_str);
+
+    let volume = dc_result(sock, "music.get_volume", json!([]), mac).await;
+    let brightness = dc_result(sock, "device.get_brightness", json!([]), mac).await;
+    let light_mode = dc_result(sock, "control.get_light_mode", json!([]), mac).await;
+    let screen_dir = dc_result(sock, "design.get_screen_dir", json!([]), mac).await;
+    let mirror = dc_result(sock, "design.get_screen_mirror", json!([]), mac).await;
+    Ok(json!({
+        "volume": volume, "brightness": brightness, "light_mode": light_mode,
+        "screen_orientation": screen_dir, "mirror": mirror,
+    }))
 }
 
 // --- helpers -----------------------------------------------------------------
