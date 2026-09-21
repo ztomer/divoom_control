@@ -142,6 +142,67 @@ pub async fn monthly_best_loop_task(daemon: Arc<Daemon>) {
     }
 }
 
+/// Fetch one gallery file's bytes, or say why not and answer `None`.
+async fn download(client: &reqwest::Client, file_id: &str, file_name: &str) -> Option<Vec<u8>> {
+    let dl_url = format!("https://fin.divoom-gz.com/{file_id}");
+    let resp = match client.get(&dl_url).send().await {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("[ Wrn ] Failed to download {file_name}: {e}");
+            return None;
+        }
+    };
+    if resp.status() != 200 {
+        eprintln!(
+            "[ Wrn ] Download of {} failed with status {}",
+            file_name,
+            resp.status()
+        );
+        return None;
+    }
+    match resp.bytes().await {
+        Ok(b) => Some(b.to_vec()),
+        Err(e) => {
+            eprintln!("[ Wrn ] Failed to read bytes for {file_name}: {e}");
+            None
+        }
+    }
+}
+
+/// Resolve a gallery file to a displayable image and show it.
+///
+/// `media::resolve_to_gif` handles GIF/PNG/JPG, magic-43, and the cloud/hot
+/// containers (magic 9/18/26 AES+LZO, 0xAA) by re-encoding them to an
+/// animated GIF the device can render. The only honest-error path is a truly
+/// unrecognized container, which would otherwise stick the device in its
+/// loading animation.
+async fn show(daemon: &Daemon, file_bytes: &[u8], file_name: &str) -> bool {
+    let Some(img) = crate::media::resolve_to_gif(file_bytes) else {
+        eprintln!(
+            "[ Wrn ] {} (magic {}) not decodable in native daemon; skipping (no raw-stream)",
+            file_name, file_bytes[0]
+        );
+        return false;
+    };
+    let req_show = Request {
+        command: "device_call".to_string(),
+        args: json!({
+            "method": "display.show_image",
+            "kwargs": {"size": 16},
+            "blobs": {
+                "0": base64::engine::general_purpose::STANDARD.encode(&img)
+            }
+        }),
+        token: None,
+    };
+    daemon
+        .dispatch(req_show)
+        .await
+        .get("success")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+}
+
 async fn sync_files_to_device(
     daemon: &Daemon,
     target: &str,
@@ -200,66 +261,15 @@ async fn sync_files_to_device(
             file_name,
             file_id
         );
-        let dl_url = format!("https://fin.divoom-gz.com/{file_id}");
-
-        let resp = match client.get(&dl_url).send().await {
-            Ok(r) => r,
-            Err(e) => {
-                eprintln!("[ Wrn ] Failed to download {file_name}: {e}");
-                continue;
-            }
-        };
-
-        if resp.status() != 200 {
-            eprintln!(
-                "[ Wrn ] Download of {} failed with status {}",
-                file_name,
-                resp.status()
-            );
+        let Some(file_bytes) = download(&client, file_id, file_name).await else {
             continue;
-        }
-
-        let file_bytes = match resp.bytes().await {
-            Ok(b) => b.to_vec(),
-            Err(e) => {
-                eprintln!("[ Wrn ] Failed to read bytes for {file_name}: {e}");
-                continue;
-            }
         };
 
         if file_bytes.len() < 4 {
             continue;
         }
 
-        // Resolve to a displayable image and show it. `media::resolve_to_gif`
-        // handles GIF/PNG/JPG, magic-43, and the cloud/hot containers (magic 9/18/26
-        // AES+LZO, 0xAA) by re-encoding them to an animated GIF the device can
-        // render. The only honest-error path is a truly unrecognized container,
-        // which would otherwise stick the device in its loading animation.
-        let success = if let Some(img) = crate::media::resolve_to_gif(&file_bytes) {
-            let req_show = Request {
-                command: "device_call".to_string(),
-                args: json!({
-                    "method": "display.show_image",
-                    "kwargs": {"size": 16},
-                    "blobs": {
-                        "0": base64::engine::general_purpose::STANDARD.encode(&img)
-                    }
-                }),
-                token: None,
-            };
-            let show_reply = daemon.dispatch(req_show).await;
-            show_reply
-                .get("success")
-                .and_then(serde_json::Value::as_bool)
-                .unwrap_or(false)
-        } else {
-            eprintln!(
-                "[ Wrn ] {} (magic {}) not decodable in native daemon; skipping (no raw-stream)",
-                file_name, file_bytes[0]
-            );
-            false
-        };
+        let success = show(daemon, &file_bytes, file_name).await;
 
         if success {
             println!("[ Ok  ] Successfully pushed {file_name}");
