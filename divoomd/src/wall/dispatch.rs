@@ -20,11 +20,6 @@ use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
 impl Daemon {
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "wall coordinates and panel indices from a caller's JSON"
-    )]
     pub(crate) async fn wall_device_call(&self, req: &Request) -> Value {
         let Some(method) = req.args.get("method").and_then(|v| v.as_str()) else {
             return err_reply("device_call requires 'method'");
@@ -70,7 +65,7 @@ impl Daemon {
                     Ok(d) => d,
                     Err(e) => return err_reply(&format!("wall show_image: read {path}: {e}")),
                 };
-                let time_ms = num(1, "time", 100) as u16;
+                let time_ms = num(1, "time", 100).word();
                 let Some(daemon_arc) = self.self_weak.get().and_then(std::sync::Weak::upgrade)
                 else {
                     return err_reply("daemon self reference unavailable");

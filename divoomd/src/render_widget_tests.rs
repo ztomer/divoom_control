@@ -15,6 +15,7 @@ use serde_json::{json, Value};
 use base64::Engine;
 
 use crate::render_widget::{cmd_render_widget, Quote};
+use crate::wire::WireNarrow as _;
 
 fn frame_bytes(reply: &Value) -> Vec<u8> {
     base64::engine::general_purpose::STANDARD
@@ -116,10 +117,6 @@ async fn stocks_without_a_symbol_fails_rather_than_rendering_an_empty_tile() {
 }
 
 #[tokio::test]
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "test fixture arithmetic building a synthetic sample"
-)]
 async fn sysmon_through_render_widget_is_byte_identical_to_cmd_sysmon() {
     // The named regression risk of generalizing: sysmon is the ONE preview
     // path that already works (R67/C2), and a refactor that quietly changed
@@ -138,10 +135,10 @@ async fn sysmon_through_render_widget_is_byte_identical_to_cmd_sysmon() {
     for size in [16u64, 32, 64] {
         let a = cmd_render_widget(&json!({"kind": "sysmon", "size": size})).await;
         let expected = crate::live_jobs::render::render_sysmon(
-            a["cpu"].as_u64().unwrap() as u8,
-            a["mem"].as_u64().unwrap() as u8,
-            a["battery"].as_u64().unwrap() as u8,
-            size as u32,
+            a["cpu"].as_u64().unwrap().byte(),
+            a["mem"].as_u64().unwrap().byte(),
+            a["battery"].as_u64().unwrap().byte(),
+            u32::try_from(size).expect("panel edge fits u32"),
         );
         assert_eq!(
             frame_bytes(&a),
@@ -154,9 +151,9 @@ async fn sysmon_through_render_widget_is_byte_identical_to_cmd_sysmon() {
     // moved from one to the other without noticing.
     let b = crate::live_jobs::sysmon::cmd_sysmon(&json!({"size": 32})).await;
     let b_expected = crate::live_jobs::render::render_sysmon(
-        b["cpu"].as_u64().unwrap() as u8,
-        b["mem"].as_u64().unwrap() as u8,
-        b["battery"].as_u64().unwrap() as u8,
+        b["cpu"].as_u64().unwrap().byte(),
+        b["mem"].as_u64().unwrap().byte(),
+        b["battery"].as_u64().unwrap().byte(),
         32,
     );
     assert_eq!(frame_bytes(&b), b_expected);

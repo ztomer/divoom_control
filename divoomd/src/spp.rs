@@ -254,15 +254,15 @@ impl SppTransport {
         self.wait_for_response(command_id, timeout).await
     }
 
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "a chunk index written as the two-byte packet index. The transfer is chunked by MTU and a frame has thousands of chunks at most"
-    )]
     /// # Errors
     ///
     /// When any chunk of the transfer fails to write, or the device stops
     /// acknowledging mid-stream.
+    ///
+    /// # Panics
+    ///
+    /// If a transfer needs more than 65536 chunks — tens of megabytes, while
+    /// frames are kilobytes.
     pub async fn stream_animation_8b(
         &self,
         blob: &[u8],
@@ -312,7 +312,11 @@ impl SppTransport {
             let mut chunk_args = Vec::with_capacity(7 + chunk_len);
             chunk_args.push(1u8); // CW=1
             chunk_args.extend_from_slice(&file_size.to_le_bytes());
-            chunk_args.extend_from_slice(&(chunk_idx as u16).to_le_bytes());
+            chunk_args.extend_from_slice(
+                &u16::try_from(chunk_idx)
+                    .expect("fewer than 65536 chunks per transfer")
+                    .to_le_bytes(),
+            );
             chunk_args.extend_from_slice(&blob[offset..offset + chunk_len]);
             if chunk_len < CHUNK_SIZE {
                 chunk_args.resize(7 + CHUNK_SIZE, 0u8);

@@ -35,10 +35,6 @@ fn to_hex(b: &[u8]) -> String {
 }
 
 #[test]
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "oracle fixture dimensions and durations from a JSON file this test ships"
-)]
 fn ffi_image_encoders_match_python() {
     let path = dylib_path();
     if path.is_empty() {
@@ -59,9 +55,9 @@ fn ffi_image_encoders_match_python() {
 
     for c in v["frame"].as_array().unwrap() {
         let (w, h, t) = (
-            c["w"].as_i64().unwrap() as i32,
-            c["h"].as_i64().unwrap() as i32,
-            c["time"].as_u64().unwrap() as u16,
+            i32::try_from(c["w"].as_i64().unwrap()).expect("oracle width fits i32"),
+            i32::try_from(c["h"].as_i64().unwrap()).expect("oracle height fits i32"),
+            u16::try_from(c["time"].as_u64().unwrap()).expect("oracle duration fits u16"),
         );
         let rgb = hex_to_bytes(c["rgb"].as_str().unwrap());
         let got = enc
@@ -75,8 +71,8 @@ fn ffi_image_encoders_match_python() {
     }
     for c in v["static"].as_array().unwrap() {
         let (w, h) = (
-            c["w"].as_i64().unwrap() as i32,
-            c["h"].as_i64().unwrap() as i32,
+            i32::try_from(c["w"].as_i64().unwrap()).expect("oracle width fits i32"),
+            i32::try_from(c["h"].as_i64().unwrap()).expect("oracle height fits i32"),
         );
         let rgb = hex_to_bytes(c["rgb"].as_str().unwrap());
         let got = enc.encode_static_image(&rgb, w, h).expect("static encodes");
@@ -88,9 +84,9 @@ fn ffi_image_encoders_match_python() {
     }
     for c in v["frame32"].as_array().unwrap() {
         let (w, h, t) = (
-            c["w"].as_i64().unwrap() as i32,
-            c["h"].as_i64().unwrap() as i32,
-            c["time"].as_u64().unwrap() as u16,
+            i32::try_from(c["w"].as_i64().unwrap()).expect("oracle width fits i32"),
+            i32::try_from(c["h"].as_i64().unwrap()).expect("oracle height fits i32"),
+            u16::try_from(c["time"].as_u64().unwrap()).expect("oracle duration fits u16"),
         );
         let rgb = hex_to_bytes(c["rgb"].as_str().unwrap());
         let got = enc

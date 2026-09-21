@@ -11,14 +11,15 @@ fn in_range_values_pass_through_unchanged() {
 }
 
 #[test]
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "the test asserts what the BARE CAST does, next to what the helper does, so the difference is legible where it matters"
-)]
 fn an_over_range_value_saturates_instead_of_wrapping() {
-    // THE POINT. `300 as u8` is 44 -- a real, wrong value that goes to the
-    // hardware with nothing to say it was not what was asked for.
-    assert_eq!(300i64 as u8, 44, "this is what the bare cast did");
+    // THE POINT. A bare `300 as u8` was 44 -- a real, wrong value that went
+    // to the hardware with nothing to say it was not what was asked for.
+    // The wrap is spelled with `rem_euclid` now (casts are banned), same value 44.
+    assert_eq!(
+        u8::try_from(300i64.rem_euclid(256)).unwrap(),
+        44,
+        "this is what the bare cast did"
+    );
     assert_eq!(300i64.byte(), 255, "and this is what it should do");
     assert_eq!(70_000i64.word(), 65_535);
     assert_eq!(i64::MAX.byte(), 255);
@@ -26,15 +27,14 @@ fn an_over_range_value_saturates_instead_of_wrapping() {
 }
 
 #[test]
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "as above: `-1 as u8` is 255, and the test says so out loud"
-)]
 fn a_negative_value_saturates_to_zero_rather_than_a_large_one() {
-    // `-1 as u8` is 255: the maximum, from a caller who asked for less than the
-    // minimum. That inversion is the worst reading of the two.
-    assert_eq!(-1i64 as u8, 255, "this is what the bare cast did");
+    // `-1 as u8` was 255: the maximum, from a caller who asked for less than
+    // the minimum. That inversion is the worst reading of the two.
+    assert_eq!(
+        u8::try_from((-1i64).rem_euclid(256)).unwrap(),
+        255,
+        "this is what the bare cast did"
+    );
     assert_eq!((-1i64).byte(), 0, "and this is what it should do");
     assert_eq!((-300i64).word(), 0);
     assert_eq!(i64::MIN.dword(), 0);

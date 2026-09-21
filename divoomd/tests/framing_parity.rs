@@ -29,15 +29,11 @@ fn to_hex(b: &[u8]) -> String {
     divoomd::wire::hex(b)
 }
 
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "an oracle fixture's byte array, read from a JSON file this test ships"
-)]
 fn as_u8_vec(v: &Value) -> Vec<u8> {
     v.as_array()
         .unwrap()
         .iter()
-        .map(|x| x.as_u64().unwrap() as u8)
+        .map(|x| u8::try_from(x.as_u64().unwrap()).expect("oracle byte fits u8"))
         .collect()
 }
 
@@ -56,14 +52,10 @@ fn encode_basic_matches_python() {
 }
 
 #[test]
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "an oracle fixture's packet number from a JSON file this test ships"
-)]
 fn encode_ios_le_matches_python() {
     for c in vectors()["encode_ios_le"].as_array().unwrap() {
         let payload = as_u8_vec(&c["payload"]);
-        let packet = c["packet"].as_u64().unwrap() as u32;
+        let packet = u32::try_from(c["packet"].as_u64().unwrap()).expect("oracle packet fits u32");
         let got = encode_ios_le_payload(&payload, packet).expect("non-empty payload");
         assert_eq!(
             to_hex(&got),

@@ -4,18 +4,26 @@
 
 pub use super::font::*;
 
+/// `round(k * size / b)` for non-negative panel geometry, saturating into `i32`.
+///
+/// Several renderers used to compute this as `(k as f32 * scale).round() as
+/// i32`, which needs a float-to-int cast. The integer form is exact for
+/// non-negative inputs (the multiply runs in `u64`, so no input overflows),
+/// and saturates (like the cast did) past `i32::MAX`.
+fn scale_round_i32(k: u32, size: u32, b: u32) -> i32 {
+    i32::try_from((u64::from(k) * u64::from(size) + u64::from(b) / 2) / u64::from(b))
+        .unwrap_or(i32::MAX)
+}
+
 // --- Renderers ---
 
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_precision_loss,
-    clippy::cast_sign_loss,
-    reason = "gauge geometry on a fixed-size panel: percentages scaled to a bar length in pixels, bounded by the panel edge"
-)]
 pub(crate) fn render_sysmon(cpu: u8, mem: u8, battery: u8, size: u32) -> Vec<u8> {
-    let mut buf = vec![0u8; (size * size * 3) as usize];
-    for i in 0..(size * size) as usize {
+    // Panel edges are 16/32/64: small and never negative. The drawing code
+    // below works in `i32` (coordinates go negative when clipping), so the
+    // edge crosses the boundary once, here.
+    let edge = i32::try_from(size).expect("panel edge is non-negative");
+    let mut buf = vec![0u8; usize::try_from(size * size * 3).expect("panel buffer fits usize")];
+    for i in 0..usize::try_from(size * size).expect("panel pixels fit usize") {
         buf[i * 3] = 5;
         buf[i * 3 + 1] = 6;
         buf[i * 3 + 2] = 12;
@@ -27,13 +35,15 @@ pub(crate) fn render_sysmon(cpu: u8, mem: u8, battery: u8, size: u32) -> Vec<u8>
 
     let draw_gauge =
         |buf: &mut [u8], x: i32, y: i32, w_max: i32, h: i32, val: u8, color: (u8, u8, u8)| {
-            let frac = f32::from(val) / 100.0;
-            let w_fill = ((w_max as f32 * frac).round() as i32).clamp(1, w_max);
+            // Filled pixels for a 0..=100 value over a `w_max`-wide bar,
+            // at least one so a zero reading still shows its slot.
+            let w_fill = ((w_max * i32::from(val) + 50) / 100).clamp(1, w_max);
             for yy in y..y + h {
-                if yy >= 0 && yy < size as i32 {
+                if yy >= 0 && yy < edge {
                     for xx in x..x + w_fill {
-                        if xx >= 0 && xx < size as i32 {
-                            let idx = ((yy * size as i32 + xx) * 3) as usize;
+                        if xx >= 0 && xx < edge {
+                            let idx = usize::try_from((yy * edge + xx) * 3)
+                                .expect("clipped pixel offset");
                             buf[idx] = color.0;
                             buf[idx + 1] = color.1;
                             buf[idx + 2] = color.2;
@@ -48,12 +58,11 @@ pub(crate) fn render_sysmon(cpu: u8, mem: u8, battery: u8, size: u32) -> Vec<u8>
         draw_gauge(&mut buf, 1, 6, 14, 3, mem, mem_color);
         draw_gauge(&mut buf, 1, 11, 14, 3, battery, bat_color);
     } else {
-        let scale = size as f32 / 32.0;
-        let y_cpu_bar = (6.0 * scale).round() as i32;
-        let y_mem_bar = (16.0 * scale).round() as i32;
-        let y_bat_bar = (26.0 * scale).round() as i32;
-        let bar_w = (28.0 * scale).round() as i32;
-        let mut bar_h = (3.0 * scale).round() as i32;
+        let y_cpu_bar = scale_round_i32(6, size, 32);
+        let y_mem_bar = scale_round_i32(16, size, 32);
+        let y_bat_bar = scale_round_i32(26, size, 32);
+        let bar_w = scale_round_i32(28, size, 32);
+        let mut bar_h = scale_round_i32(3, size, 32);
         if bar_h < 3 {
             bar_h = 3;
         }
@@ -65,18 +74,15 @@ pub(crate) fn render_sysmon(cpu: u8, mem: u8, battery: u8, size: u32) -> Vec<u8>
     buf
 }
 
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    reason = "triangle vertices on a 16-pixel panel"
-)]
 fn draw_triangle(buf: &mut [u8], size: i32, is_up: bool, color: (u8, u8, u8)) {
+    // Rows are five at most and x stays on-panel: small and non-negative, so
+    // the pixel offset crosses into `usize` once, here.
+    let edge = usize::try_from(size).expect("panel edge is non-negative");
     if is_up {
         let rows = [(8, 8), (7, 9), (6, 10), (5, 11), (5, 11)];
         for (y, &(x0, x1)) in rows.iter().enumerate() {
             for x in x0..=x1 {
-                let idx = ((y as i32 * size + x) * 3) as usize;
+                let idx = (y * edge + usize::try_from(x).expect("triangle x is non-negative")) * 3;
                 buf[idx] = color.0;
                 buf[idx + 1] = color.1;
                 buf[idx + 2] = color.2;
@@ -86,7 +92,7 @@ fn draw_triangle(buf: &mut [u8], size: i32, is_up: bool, color: (u8, u8, u8)) {
         let rows = [(5, 11), (5, 11), (6, 10), (7, 9), (8, 8)];
         for (y, &(x0, x1)) in rows.iter().enumerate() {
             for x in x0..=x1 {
-                let idx = ((y as i32 * size + x) * 3) as usize;
+                let idx = (y * edge + usize::try_from(x).expect("triangle x is non-negative")) * 3;
                 buf[idx] = color.0;
                 buf[idx + 1] = color.1;
                 buf[idx + 2] = color.2;
@@ -95,10 +101,6 @@ fn draw_triangle(buf: &mut [u8], size: i32, is_up: bool, color: (u8, u8, u8)) {
     }
 }
 
-#[expect(
-    clippy::cast_sign_loss,
-    reason = "triangle vertices on a 32-pixel panel"
-)]
 fn draw_triangle_32(buf: &mut [u8], size: i32, is_up: bool, color: (u8, u8, u8)) {
     let y_range = if is_up {
         vec![
@@ -123,7 +125,7 @@ fn draw_triangle_32(buf: &mut [u8], size: i32, is_up: bool, color: (u8, u8, u8))
     };
     for (y, x0, x1) in y_range {
         for x in x0..=x1 {
-            let idx = ((y * size + x) * 3) as usize;
+            let idx = usize::try_from((y * size + x) * 3).expect("clipped triangle offset");
             buf[idx] = color.0;
             buf[idx + 1] = color.1;
             buf[idx + 2] = color.2;
@@ -147,15 +149,11 @@ fn draw_triangle_32(buf: &mut [u8], size: i32, is_up: bool, color: (u8, u8, u8))
 ///
 /// Vertical centring is new and comes free: the glyphs occupy the top rows of
 /// a 16-row cell, so the old path drew text hanging off the top edge.
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    reason = "text placement on a fixed-size panel"
-)]
 pub(crate) fn render_text(text: &str, color: (u8, u8, u8), size: u32, full_font: bool) -> Vec<u8> {
     const GAP: i32 = 1;
 
-    let mut buf = vec![0u8; (size * size * 3) as usize];
+    let edge = i32::try_from(size).expect("panel edge is non-negative");
+    let mut buf = vec![0u8; usize::try_from(size * size * 3).expect("panel buffer fits usize")];
     let font = BitmapFont::new(if full_font {
         FONT_BYTES_FULL
     } else {
@@ -163,40 +161,26 @@ pub(crate) fn render_text(text: &str, color: (u8, u8, u8), size: u32, full_font:
     });
 
     let width = font.measure_width(text, GAP);
-    let x0 = if width < size as i32 {
-        (size as i32 - width) / 2
-    } else {
-        0
-    };
+    let x0 = if width < edge { (edge - width) / 2 } else { 0 };
     // Centre on the INK, not on the 16-row cell: the half-size glyphs sit in
     // the top of their cell, so cell-centring would still look top-heavy.
     let y0 = match font.ink_rows(text) {
         Some((top, bottom)) => {
-            let ink_h = (bottom - top + 1) as i32;
-            ((size as i32 - ink_h) / 2 - top as i32).max(0)
+            // Ink rows stay inside the 16-row cell: small by construction.
+            let ink_h = i32::try_from(bottom - top + 1).expect("ink band fits i32");
+            let top = i32::try_from(top).expect("ink top fits i32");
+            ((edge - ink_h) / 2 - top).max(0)
         }
         None => 0,
     };
-    font.draw_text(
-        &mut buf,
-        size as i32,
-        x0,
-        y0,
-        text,
-        color,
-        GAP,
-        Some(size as i32 - x0),
-    );
+    font.draw_text(&mut buf, edge, x0, y0, text, color, GAP, Some(edge - x0));
     buf
 }
 
-#[expect(
-    clippy::cast_possible_wrap,
-    reason = "gauge and text geometry on a fixed-size panel"
-)]
 pub(crate) fn render_stock(symbol: &str, price: f64, change: f64, size: u32) -> Vec<u8> {
-    let mut buf = vec![0u8; (size * size * 3) as usize];
-    for i in 0..(size * size) as usize {
+    let edge = i32::try_from(size).expect("panel edge is non-negative");
+    let mut buf = vec![0u8; usize::try_from(size * size * 3).expect("panel buffer fits usize")];
+    for i in 0..usize::try_from(size * size).expect("panel pixels fit usize") {
         buf[i * 3] = 5;
         buf[i * 3 + 1] = 6;
         buf[i * 3 + 2] = 12;
@@ -207,38 +191,38 @@ pub(crate) fn render_stock(symbol: &str, price: f64, change: f64, size: u32) -> 
     let font = BitmapFont::new(FONT_BYTES);
 
     if size == 16 {
-        draw_triangle(&mut buf, size as i32, is_up, text_color);
+        draw_triangle(&mut buf, edge, is_up, text_color);
         font.draw_text(
             &mut buf,
-            size as i32,
+            edge,
             0,
             6,
             &symbol.to_uppercase(),
             (255, 255, 255),
             1,
-            Some(size as i32),
+            Some(edge),
         );
     } else {
         font.draw_text(
             &mut buf,
-            size as i32,
+            edge,
             2,
             2,
             &symbol.to_uppercase(),
             (255, 255, 255),
             1,
-            Some(size as i32 - 2),
+            Some(edge - 2),
         );
-        draw_triangle_32(&mut buf, size as i32, is_up, text_color);
+        draw_triangle_32(&mut buf, edge, is_up, text_color);
         font.draw_text(
             &mut buf,
-            size as i32,
+            edge,
             2,
             16,
             &format!("${price:.2}"),
             text_color,
             1,
-            Some(size as i32 - 2),
+            Some(edge - 2),
         );
     }
 

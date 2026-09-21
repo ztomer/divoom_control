@@ -73,20 +73,15 @@ impl NativeEncoder {
     /// Worst-case output buffer: header + 256*3 palette + 1 byte/pixel (8 bits/px).
     /// MUST match the C's conservative `worst_size` check (the under-allocation bug
     /// this session fixed: the buffer has to be `w*h`, not `(w*h+7)/8`).
-    #[expect(
-        clippy::cast_sign_loss,
-        reason = "an output buffer length handed to the C encoder, which takes it as a signed int"
-    )]
+    /// Panel dims are small and non-negative; that crosses into `usize` here.
     fn out_buf(w: i32, h: i32, header: usize) -> Vec<u8> {
-        vec![0u8; header + 256 * 3 + (w as usize) * (h as usize)]
+        let (w, h) = (
+            usize::try_from(w).expect("panel width is non-negative"),
+            usize::try_from(h).expect("panel height is non-negative"),
+        );
+        vec![0u8; header + 256 * 3 + w * h]
     }
 
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_possible_wrap,
-        clippy::cast_sign_loss,
-        reason = "frame dimensions and duration handed to the C encoder across an FFI boundary whose signature fixes the widths"
-    )]
     fn call_frame(
         &self,
         sym: &[u8],
@@ -97,7 +92,8 @@ impl NativeEncoder {
         header: usize,
     ) -> Option<Vec<u8>> {
         let mut out = Self::out_buf(w, h, header);
-        let n = out.len() as i32;
+        // Buffer lengths here are `w*h*3` plus a small header: far inside i32.
+        let n = i32::try_from(out.len()).expect("frame buffer fits i32");
         // SAFETY: rgb is w*h*3 bytes, out is sized to the C's worst case; the C
         // function writes at most `n` bytes and returns the count (or <0 on error).
         let rc = unsafe {
@@ -107,7 +103,8 @@ impl NativeEncoder {
         if rc < 0 {
             return None;
         }
-        out.truncate(rc as usize);
+        // `rc` counted the bytes the C encoder wrote: non-negative by the check above.
+        out.truncate(usize::try_from(rc).expect("encoder byte count is non-negative"));
         Some(out)
     }
 
@@ -136,16 +133,16 @@ impl NativeEncoder {
     }
 
     /// `divoom_encode_static_image` — single-image 0x44 body (7-byte header).
+    ///
+    /// # Panics
+    ///
+    /// If the output buffer length exceeds `i32::MAX` — it is `w*h*3` plus a
+    /// small header for panel-sized frames.
     #[must_use]
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_possible_wrap,
-        clippy::cast_sign_loss,
-        reason = "image dimensions handed to the C encoder, bounded by the panel edge"
-    )]
     pub fn encode_static_image(&self, rgb: &[u8], w: i32, h: i32) -> Option<Vec<u8>> {
         let mut out = Self::out_buf(w, h, 7);
-        let n = out.len() as i32;
+        // As above: a small buffer length, non-negative by construction.
+        let n = i32::try_from(out.len()).expect("frame buffer fits i32");
         // SAFETY: as above (no time_ms arg for the static encoder).
         let rc = unsafe {
             let f: Symbol<EncodeStaticFn> = self.lib.get(b"divoom_encode_static_image").ok()?;
@@ -154,7 +151,8 @@ impl NativeEncoder {
         if rc < 0 {
             return None;
         }
-        out.truncate(rc as usize);
+        // As above: a small buffer length, non-negative by the check.
+        out.truncate(usize::try_from(rc).expect("encoder byte count is non-negative"));
         Some(out)
     }
 }

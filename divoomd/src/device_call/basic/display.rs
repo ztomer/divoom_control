@@ -12,11 +12,6 @@ use serde_json::{json, Value};
     clippy::too_many_lines,
     reason = "a device command dispatch table: one arm per protocol method and its aliases, each a few lines of argument shuffling before it builds a frame. The length is the number of COMMANDS the device answers, not complexity in any one of them, and splitting it puts a layer between a method name and the code that implements it -- which is the one thing a reader opens these files to find"
 )]
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "a device command dispatcher: every value here comes from a caller's JSON and is written into a protocol field of fixed width. The ones that could be out of range go through `wire::WireNarrow`; these are indices, enum discriminants and already-bounded counts"
-)]
 pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let args = ctx.args;
@@ -39,8 +34,10 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
         }
         "device.show_image" | "show_image" => {
-            let w = get_kwarg_i64(kw, "w", 16) as i32;
-            let h = get_kwarg_i64(kw, "h", 16) as i32;
+            // Out-of-range dims fail the length check below: -1 can never
+            // match a real buffer length, and neither can a wrapped huge one.
+            let w = i32::try_from(get_kwarg_i64(kw, "w", 16)).unwrap_or(-1);
+            let h = i32::try_from(get_kwarg_i64(kw, "h", 16)).unwrap_or(-1);
             let time_ms = get_kwarg_i64(kw, "time_ms", 100).word();
             let rgb: Vec<u8> = match kw.and_then(|m| m.get("rgb")).and_then(|v| v.as_array()) {
                 Some(a) => a
@@ -49,7 +46,7 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     .collect(),
                 None => return err_reply("show_image requires 'rgb' (array of u8)"),
             };
-            let expected = (w * h * 3) as usize;
+            let expected = usize::try_from(w * h * 3).unwrap_or(usize::MAX);
             if rgb.len() != expected {
                 return err_reply(&format!(
                     "show_image: rgb.len()={} expected w*h*3={expected}",

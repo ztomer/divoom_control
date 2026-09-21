@@ -25,6 +25,24 @@ pub struct SysmonSample {
     pub battery: u8,
 }
 
+/// Saturating `f32` → `u8` for sensor percentages: what `as` did
+/// (truncate toward zero, saturate out of range, NaN to zero), without the
+/// cast. The whole part is walked rather than narrowed — at most 255 trivial
+/// steps, once per sample.
+fn pct_u8(pct: f32) -> u8 {
+    if pct.is_nan() || pct <= 0.0 {
+        return 0;
+    }
+    if pct >= 255.0 {
+        return 255;
+    }
+    let mut whole = 0u8;
+    while whole < 255 && f32::from(whole + 1) <= pct {
+        whole += 1;
+    }
+    whole
+}
+
 /// Read CPU, memory and battery from an already-refreshed `System`.
 ///
 /// Takes the `System` rather than making one: CPU usage is a DELTA between two
@@ -32,22 +50,16 @@ pub struct SysmonSample {
 /// one-shot request's instance (refreshed twice around a short sleep) both have
 /// to own their own. What they must not own is a second copy of this arithmetic.
 #[must_use]
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_precision_loss,
-    clippy::cast_sign_loss,
-    reason = "system counters -- CPU percentage, memory and network totals -- converted for display arithmetic. The percentages are 0..=100 and the totals are far below 2^53"
-)]
 pub fn sample(sys: &System) -> SysmonSample {
     let total_mem = sys.total_memory();
     let used_mem = sys.used_memory();
     SysmonSample {
-        cpu: sys.global_cpu_info().cpu_usage() as u8,
-        mem: if total_mem > 0 {
-            ((used_mem as f64 / total_mem as f64) * 100.0) as u8
-        } else {
-            0
-        },
+        cpu: pct_u8(sys.global_cpu_info().cpu_usage()),
+        mem: used_mem
+            .saturating_mul(100)
+            .checked_div(total_mem)
+            .unwrap_or(0)
+            .byte(),
         battery: get_battery_percent().unwrap_or(100),
     }
 }

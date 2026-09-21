@@ -54,10 +54,6 @@ use serde_json::{json, Value};
 ///
 /// The glyphs come from the same `divoom_fond16_*` blob family the APK ships
 /// and this daemon already embeds, so the bytes are reused verbatim.
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "a chunk index times five, written as the chunk's offset byte. The caller has already refused more than 255 units"
-)]
 async fn scrolling_text(ctx: &CallCtx<'_>) -> Value {
     use crate::live_jobs::render::device_glyph_bytes;
 
@@ -108,7 +104,7 @@ async fn scrolling_text(ctx: &CallCtx<'_>) -> Value {
     for (chunk_idx, chunk) in units.chunks(5).enumerate() {
         let mut p = Vec::with_capacity(3 + chunk.len() * 34);
         p.push(total);
-        p.push((chunk_idx * 5) as u8);
+        p.push((chunk_idx.saturating_mul(5)).byte());
         p.push(chunk.len().byte());
         for &u in chunk {
             p.push((u & 0xFF) as u8);

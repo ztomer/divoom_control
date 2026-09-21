@@ -206,17 +206,13 @@ mod tests {
     }
 
     #[test]
-    #[expect(
-        clippy::cast_sign_loss,
-        reason = "the test sweeps the whole byte range on purpose, comparing our formula against the Python one it replaced"
-    )]
     fn the_python_formula_and_this_one_agree_across_the_whole_range() {
         // (256 + c) & 0xFF for c < 0, else c & 0xFF — every representable input.
         for c in i8::MIN..=i8::MAX {
             let python = if c < 0 {
-                ((256 + i32::from(c)) & 0xFF) as u8
+                u8::try_from((256 + i32::from(c)) & 0xFF).expect("masked to a byte")
             } else {
-                (i32::from(c) & 0xFF) as u8
+                u8::try_from(i32::from(c) & 0xFF).expect("masked to a byte")
             };
             assert_eq!(encode_temperature(c), python, "disagreement at {c}C");
         }

@@ -109,18 +109,14 @@ impl BitmapFont {
         }
     }
 
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_possible_wrap,
-        reason = "a glyph width in pixels, from two column indices within one 8-or-16-wide bitmap"
-    )]
     pub(crate) fn char_width(&self, ch: char) -> i32 {
         if ch == ' ' {
             return self.space_width;
         }
         let rows = self.rows(ch);
         if let Some((c0, c1)) = Self::col_bbox(&rows) {
-            (c1 - c0 + 1) as i32
+            // Column indices inside one 8-or-16-wide bitmap: tiny by construction.
+            i32::try_from(c1 - c0 + 1).expect("glyph width fits i32")
         } else {
             self.space_width
         }
@@ -167,12 +163,6 @@ impl BitmapFont {
     }
 
     #[expect(clippy::too_many_arguments)]
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_possible_wrap,
-        clippy::cast_sign_loss,
-        reason = "glyph and pixel coordinates within one panel: rows, columns and an index into a `size * size * 3` buffer, all bounded by the panel edge"
-    )]
     pub(crate) fn draw_text(
         &self,
         buf: &mut [u8],
@@ -204,7 +194,7 @@ impl BitmapFont {
                 continue;
             }
             let (c0, c1) = bb.unwrap();
-            let gw = (c1 - c0 + 1) as i32;
+            let gw = i32::try_from(c1 - c0 + 1).expect("glyph width fits i32");
             if let Some(mw) = max_width {
                 if (x + advance + gw - x0) > mw {
                     break;
@@ -215,15 +205,18 @@ impl BitmapFont {
                 if v == 0 {
                     continue;
                 }
-                let yy = y0 + r as i32;
+                // Row and column indices inside one cell: small by construction.
+                let yy = y0 + i32::try_from(r).expect("glyph row fits i32");
                 if yy < 0 || yy >= size {
                     continue;
                 }
                 for c in c0..=c1 {
                     if ((v >> (15 - c)) & 1) != 0 {
-                        let xx = x + (c as i32 - c0 as i32);
+                        let xx = x + i32::try_from(c).expect("glyph column fits i32")
+                            - i32::try_from(c0).expect("glyph column fits i32");
                         if xx >= 0 && xx < size {
-                            let idx = ((yy * size + xx) * 3) as usize;
+                            let idx = usize::try_from((yy * size + xx) * 3)
+                                .expect("clipped pixel offset");
                             buf[idx] = color.0;
                             buf[idx + 1] = color.1;
                             buf[idx + 2] = color.2;

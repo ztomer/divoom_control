@@ -37,22 +37,18 @@ pub fn process_image_bytes(
     }
 }
 
-#[expect(
-    clippy::cast_possible_wrap,
-    reason = "an image edge length as the signed dimension the encoder takes. Device panels are 16, 32 or 64 pixels"
-)]
 fn process_static(data: &[u8], size: u32, time_ms: u16) -> Result<Vec<Frame>, String> {
     let img = image::load_from_memory(data).map_err(|e| format!("image load: {e}"))?;
     let img = img.resize_exact(size, size, FilterType::Nearest);
     let rgb = img.to_rgb8().into_raw();
-    Ok(vec![(rgb, size as i32, size as i32, time_ms)])
+    Ok(vec![(
+        rgb,
+        i32::try_from(size).expect("panel edge fits i32"),
+        i32::try_from(size).expect("panel edge fits i32"),
+        time_ms,
+    )])
 }
 
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    reason = "a GIF frame delay in milliseconds, floored at 50, and panel edge lengths of 16 to 64"
-)]
 fn process_gif(data: Vec<u8>, size: u32, default_time_ms: u16) -> Result<Vec<Frame>, String> {
     use image::codecs::gif::GifDecoder;
     let decoder =
@@ -71,12 +67,15 @@ fn process_gif(data: Vec<u8>, size: u32, default_time_ms: u16) -> Result<Vec<Fra
         let time_ms = if denom == 0 {
             default_time_ms
         } else {
-            ((numer / denom.max(1)) as u16).max(50)
+            u16::try_from(numer / denom.max(1))
+                .unwrap_or(u16::MAX)
+                .max(50)
         };
         let rgba = frame.into_buffer();
         let img = DynamicImage::ImageRgba8(rgba).resize_exact(size, size, FilterType::Nearest);
         let rgb = img.to_rgb8().into_raw();
-        out.push((rgb, size as i32, size as i32, time_ms));
+        let edge = i32::try_from(size).expect("panel edge fits i32");
+        out.push((rgb, edge, edge, time_ms));
     }
     Ok(out)
 }

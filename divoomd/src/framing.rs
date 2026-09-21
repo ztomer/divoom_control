@@ -14,10 +14,6 @@ use crate::models;
 /// With `escape`, body bytes 0x01/0x02/0x03 expand to their 2-byte escape
 /// sequences.
 #[must_use]
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "a length field split into two bytes by masking. `& 0xFF` makes each half a byte by construction"
-)]
 pub fn encode_basic_payload(payload: &[u8], escape: bool) -> Vec<u8> {
     let mut body: Vec<u8> = Vec::with_capacity(if escape {
         payload.len() * 2
@@ -40,14 +36,15 @@ pub fn encode_basic_payload(payload: &[u8], escape: bool) -> Vec<u8> {
     let length_value = body.len() + models::MESSAGE_CHECKSUM_LENGTH;
     let mut out: Vec<u8> = Vec::with_capacity(body.len() + 6);
     out.push(models::MESSAGE_START_BYTE);
-    out.push((length_value & 0xFF) as u8);
-    out.push(((length_value >> 8) & 0xFF) as u8);
+    // Low bytes of the length, little-endian (exact: no narrowing involved).
+    out.push(length_value.to_le_bytes()[0]);
+    out.push(length_value.to_le_bytes()[1]);
     out.extend_from_slice(&body);
 
     // checksum over everything after the start byte so far: [len_lo, len_hi, body...]
     let checksum: u32 = out[1..].iter().map(|&b| u32::from(b)).sum::<u32>() & 0xFFFF;
-    out.push((checksum & 0xFF) as u8);
-    out.push(((checksum >> 8) & 0xFF) as u8);
+    out.push(checksum.to_le_bytes()[0]);
+    out.push(checksum.to_le_bytes()[1]);
     out.push(models::MESSAGE_END_BYTE);
     out
 }
@@ -57,13 +54,13 @@ pub fn encode_basic_payload(payload: &[u8], escape: bool) -> Vec<u8> {
 /// `[FE EF AA 55][len_lo][len_hi][pkt][cmd][data...][cksum_lo][cksum_hi][0x02]`,
 /// where `len = total - 7`, only the low byte of `packet_number` is transmitted,
 /// and the checksum is `sum(bytes[4..len-3]) & 0xFFFF`.
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "a frame length minus its header, written as the four-byte length field. A BLE frame is bounded by the MTU-chunked transfer above"
-)]
 /// # Errors
 ///
 /// When the payload is empty -- every frame must carry at least a command id.
+///
+/// # Panics
+///
+/// If the framed length exceeds `u32::MAX` -- frames are MTU-chunked far below that.
 pub fn encode_ios_le_payload(payload: &[u8], packet_number: u32) -> Result<Vec<u8>, &'static str> {
     if payload.is_empty() {
         return Err("payload must contain at least the command id");
@@ -73,9 +70,9 @@ pub fn encode_ios_le_payload(payload: &[u8], packet_number: u32) -> Result<Vec<u
     let mut out = vec![0u8; total_len];
 
     out[0..4].copy_from_slice(&models::IOS_LE_HEADER);
-    let length_field = (total_len - 7) as u32;
-    out[4] = (length_field & 0xFF) as u8;
-    out[5] = ((length_field >> 8) & 0xFF) as u8;
+    let length_field = u32::try_from(total_len - 7).expect("frame lengths are MTU-chunked");
+    out[4] = length_field.to_le_bytes()[0];
+    out[5] = length_field.to_le_bytes()[1];
     out[6] = (packet_number & 0xFF) as u8;
     out[7] = payload[0];
     if n > 1 {

@@ -196,10 +196,11 @@ async fn push_custom_art_page(
 // ── public handlers (called from daemon.rs dispatch) ─────────────────────
 
 /// Handle `custom_art_push` command.
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "a page index and a frame count from a caller's JSON, bounded by the device's own page count"
-)]
+///
+/// # Panics
+///
+/// If the `slot` argument exceeds the platform word size — unreachable on the
+/// 64-bit targets this crate ships.
 pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
     // Parsed in both configurations because the no-BLE build still validates
     // and answers the request; only the transport that would USE it is absent.
@@ -241,10 +242,12 @@ pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
             }
         }
     } else if let Some(file_ids) = args.get("file_ids").and_then(|v| v.as_array()) {
-        let base = args
-            .get("slot")
-            .and_then(serde_json::Value::as_u64)
-            .unwrap_or(0) as usize;
+        let base = usize::try_from(
+            args.get("slot")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0),
+        )
+        .expect("a slot index fits in a usize on 64-bit targets");
         for (i, fid_val) in file_ids.iter().enumerate() {
             if let Some(fid) = fid_val.as_str() {
                 if base + i < SLOTS_PER_PAGE {

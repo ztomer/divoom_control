@@ -38,10 +38,6 @@ async fn send(dev: &DeviceTransport, cmd: u8, payload: &[u8], label: &str) -> Va
     }
 }
 
-#[expect(
-    clippy::cast_possible_wrap,
-    reason = "a device command dispatcher: every value here comes from a caller's JSON and is written into a protocol field of fixed width. The ones that could be out of range go through `wire::WireNarrow`; these are indices, enum discriminants and already-bounded counts"
-)]
 /// # Panics
 ///
 /// If the mutex guarding this value is poisoned -- another thread panicked
@@ -159,7 +155,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     if data.len() < 2 {
                         return err_reply("set_user_gif: transmit needs >=2 data bytes");
                     }
-                    p.extend_from_slice(&le16(data.len() as i64));
+                    p.extend_from_slice(&le16(i64::try_from(data.len()).unwrap_or(i64::MAX)));
                     p.extend_from_slice(&data);
                 }
                 _ => return err_reply(&format!("set_user_gif: unknown control word {cw}")),

@@ -133,10 +133,6 @@ async fn login_email(email: &str, pwhash: &str) -> Result<DivoomCredentials, Str
     })
 }
 
-#[expect(
-    clippy::cast_possible_wrap,
-    reason = "a Unix timestamp as the signed seconds the protocol carries. It goes negative in 2038 only if the field were 32-bit, and it is 64"
-)]
 async fn get_server_utc() -> i64 {
     let body = json!({"Command": "APP/GetServerUTC"});
     if let Ok(data) = post_cloud("APP/GetServerUTC", &body).await {
@@ -144,10 +140,14 @@ async fn get_server_utc() -> i64 {
             return utc;
         }
     }
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64
+    // Unix seconds fit in an i64 until the year 292 million; saturate past that.
+    i64::try_from(
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs(),
+    )
+    .unwrap_or(i64::MAX)
 }
 
 async fn login_guest() -> Result<DivoomCredentials, String> {

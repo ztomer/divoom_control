@@ -7,12 +7,6 @@ use serde_json::{json, Value};
     clippy::too_many_lines,
     reason = "a device command dispatch table: one arm per protocol method and its aliases, each a few lines of argument shuffling before it builds a frame. The length is the number of COMMANDS the device answers, not complexity in any one of them, and splitting it puts a layer between a method name and the code that implements it -- which is the one thing a reader opens these files to find"
 )]
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    reason = "a device command dispatcher: every value here comes from a caller's JSON and is written into a protocol field of fixed width. The ones that could be out of range go through `wire::WireNarrow`; these are indices, enum discriminants and already-bounded counts"
-)]
 /// # Panics
 ///
 /// If the mutex guarding this value is poisoned -- another thread panicked
@@ -88,8 +82,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let minute = g(4, "minute", 0);
             let second = g(5, "second", 0);
             let payload = [
-                (year % 100) as u8,
-                (year / 100) as u8,
+                (year % 100).byte(),
+                (year / 100).byte(),
                 month.byte(),
                 day.byte(),
                 hour.byte(),
@@ -128,7 +122,10 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     return err_reply("Password must be a 4-digit string");
                 }
                 for c in password.chars() {
-                    payload.push(c.to_digit(10).unwrap() as u8);
+                    // `to_digit(10)` returns 0..=9 by contract (and the
+                    // all-ascii-digit check above makes `unwrap` unreachable).
+                    payload
+                        .push(u8::try_from(c.to_digit(10).unwrap()).expect("decimal digit fits"));
                 }
             }
 
@@ -226,7 +223,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     "success": true,
                     "result": {
                         "format": i64::from(p[0]),
-                        "value": i64::from(p[1] as i8),
+                        "value": i64::from(i8::from_ne_bytes([p[1]])),
                     }
                 }),
                 _ => json!({"success": true, "result": Value::Null}),
@@ -305,9 +302,11 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 for item in arr {
                     if let Some(pair) = item.as_array() {
                         if pair.len() >= 2 {
-                            let temp_val = pair[0].as_i64().unwrap_or(0) as i8;
+                            // Saturate into the field width: a caller asking
+                            // for 300 degrees used to wrap to 44 on the wire.
+                            let temp_val = pair[0].as_i64().unwrap_or(0).byte();
                             let weather_type = pair[1].as_i64().unwrap_or(0).byte();
-                            payload.push(temp_val as u8);
+                            payload.push(temp_val);
                             payload.push(weather_type);
                         }
                     }
@@ -383,7 +382,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     kw.and_then(|v| v.get("temperature"))
                         .and_then(serde_json::Value::as_i64)
                 })
-                .unwrap_or(0) as i8;
+                .unwrap_or(0)
+                .byte();
             let weather = args
                 .get(1)
                 .copied()
@@ -397,7 +397,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 })
                 .unwrap_or(0)
                 .byte();
-            match dev.send_command(0x5f, &[temp as u8, weather], true).await {
+            match dev.send_command(0x5f, &[temp, weather], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("send_current_temp failed: {e}")),
             }

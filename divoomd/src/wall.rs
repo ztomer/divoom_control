@@ -401,12 +401,14 @@ impl DivoomWall {
     }
 }
 
+/// Configured wall geometry is non-negative; a negative here previously
+/// wrapped to a multi-gigabyte allocation and panicked downstream, so it
+/// fails fast with its name attached instead.
+fn dim(x: i32) -> u32 {
+    u32::try_from(x).expect("wall geometry is non-negative")
+}
+
 #[expect(clippy::too_many_arguments)]
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "wall tile geometry: a tile count and pixel offsets within a wall whose dimensions the caller configured"
-)]
 fn process_wall_image(
     data: &[u8],
     is_gif: bool,
@@ -438,20 +440,21 @@ fn process_wall_image(
             let time_ms = if denom == 0 {
                 default_time_ms
             } else {
-                ((numer / denom.max(1)) as u16).max(50)
+                u16::try_from(numer / denom.max(1))
+                    .unwrap_or(u16::MAX)
+                    .max(50)
             };
             let rgba = frame.into_buffer();
             let mut img = image::DynamicImage::ImageRgba8(rgba);
-            img = img.resize_exact(total_width as u32, total_height as u32, FilterType::Nearest);
+            img = img.resize_exact(dim(total_width), dim(total_height), FilterType::Nearest);
             let mut cropped = img.crop_imm(
-                slot_left as u32,
-                slot_upper as u32,
-                slot_width as u32,
-                slot_height as u32,
+                dim(slot_left),
+                dim(slot_upper),
+                dim(slot_width),
+                dim(slot_height),
             );
             if is_free_form {
-                cropped =
-                    cropped.resize_exact(slot_size as u32, slot_size as u32, FilterType::Nearest);
+                cropped = cropped.resize_exact(dim(slot_size), dim(slot_size), FilterType::Nearest);
             }
             let rgb = cropped.to_rgb8().into_raw();
             out.push((rgb, slot_size, slot_size, time_ms));
@@ -459,15 +462,15 @@ fn process_wall_image(
         Ok(out)
     } else {
         let mut img = image::load_from_memory(data).map_err(|e| format!("image load: {e}"))?;
-        img = img.resize_exact(total_width as u32, total_height as u32, FilterType::Nearest);
+        img = img.resize_exact(dim(total_width), dim(total_height), FilterType::Nearest);
         let mut cropped = img.crop_imm(
-            slot_left as u32,
-            slot_upper as u32,
-            slot_width as u32,
-            slot_height as u32,
+            dim(slot_left),
+            dim(slot_upper),
+            dim(slot_width),
+            dim(slot_height),
         );
         if is_free_form {
-            cropped = cropped.resize_exact(slot_size as u32, slot_size as u32, FilterType::Nearest);
+            cropped = cropped.resize_exact(dim(slot_size), dim(slot_size), FilterType::Nearest);
         }
         let rgb = cropped.to_rgb8().into_raw();
         Ok(vec![(rgb, slot_size, slot_size, default_time_ms)])

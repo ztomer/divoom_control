@@ -241,12 +241,9 @@ impl WeatherType {
 /// of step that looks obviously right and is silently wrong for half its input
 /// range — the negative half, which nobody tests in July.
 #[must_use]
-#[expect(
-    clippy::cast_sign_loss,
-    reason = "a temperature in Celsius as the signed byte the protocol carries, having been range-checked above"
-)]
 pub const fn encode_temperature(celsius: i8) -> u8 {
-    celsius as u8
+    // Reinterpret the signed byte: -1°C goes on the wire as 255.
+    celsius.to_ne_bytes()[0]
 }
 
 /// The temperature + weather-icon packet.

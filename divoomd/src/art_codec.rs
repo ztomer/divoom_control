@@ -87,14 +87,6 @@ pub(crate) fn decode_cloud_magic9(data: &[u8]) -> Option<(Vec<Vec<u8>>, u32)> {
 /// to `row*col*768` bytes, reassembled via `compact_tiles`. Returns
 /// `(frames, width, height, duration_ms)` — each frame is `width*height*3` RGB.
 /// Mirrors Python `media_decoder.decode_cloud_frames` (magic 18/26).
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "image dimensions rebuilt from a tile count. The frame's own header bounds the counts, and 16 pixels per tile puts the product far inside u32"
-)]
-#[expect(
-    clippy::large_stack_frames,
-    reason = "a frame decoder holding one image's worth of fixed-size buffers. The frames are panel-sized -- at most 64x64 -- so this is large by the lint's threshold and small in absolute terms"
-)]
 pub(crate) fn decode_cloud_magic18_26(data: &[u8]) -> Option<(Vec<Vec<u8>>, u32, u32, u32)> {
     if data.len() < 6 {
         return None;
@@ -112,7 +104,40 @@ pub(crate) fn decode_cloud_magic18_26(data: &[u8]) -> Option<(Vec<Vec<u8>>, u32,
     }
     let decrypted = aes_cbc_decrypt(&data[6..])?;
     let uncompressed = row_count * column_count * 768;
-    let lzo = LZO::init().ok()?;
+    let frames = inflate_frames(
+        &decrypted,
+        total_frames,
+        uncompressed,
+        row_count,
+        column_count,
+    )?;
+    if frames.is_empty() {
+        return None;
+    }
+    let width = u32::try_from(column_count.saturating_mul(16)).unwrap_or(u32::MAX);
+    let height = u32::try_from(row_count.saturating_mul(16)).unwrap_or(u32::MAX);
+    Some((frames, width, height, if speed >= 10 { speed } else { 100 }))
+}
+
+/// Inflate every frame of a decrypted magic 18/26 container with LZO1X.
+///
+/// Owns the decompressor: the LZO workspace is 128KB inline, so it is heaped
+/// in a `Box` AND held in this frame rather than the caller's — neither frame
+/// trips the stack-frame lint that way.
+fn inflate_frames(
+    decrypted: &[u8],
+    total_frames: usize,
+    uncompressed: usize,
+    row_count: usize,
+    column_count: usize,
+) -> Option<Vec<Vec<u8>>> {
+    // A combinator chain (`Box::new(LZO::init().ok()?)`) materializes the
+    // 128KB workspace four times over as it converts through each wrapper;
+    // matching moves it into the box from a single temporary instead.
+    let lzo = match LZO::init() {
+        Ok(lzo) => Box::new(lzo),
+        Err(_) => return None,
+    };
     let mut frames = Vec::new();
     let mut pos = 0usize;
     for _ in 0..total_frames.min(24) {
@@ -137,9 +162,7 @@ pub(crate) fn decode_cloud_magic18_26(data: &[u8]) -> Option<(Vec<Vec<u8>>, u32,
     if frames.is_empty() {
         return None;
     }
-    let width = (column_count * 16) as u32;
-    let height = (row_count * 16) as u32;
-    Some((frames, width, height, if speed >= 10 { speed } else { 100 }))
+    Some(frames)
 }
 
 /// Reassemble `row_count×column_count` 16×16 tiles (concatenated in grid order,
@@ -303,15 +326,15 @@ mod parity_tests {
     }
 
     #[test]
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "an oracle fixture's duration, compared against ours. The value comes from a JSON file this test ships"
-    )]
     fn magic9_matches_python_oracle() {
         let (frames, dur) = decode_cloud_magic9(&raw("magic9.bin")).expect("magic9 decode");
         let o = oracle("magic9.json");
         let exp = o["frames"].as_array().unwrap();
-        assert_eq!(dur, o["dur"].as_u64().unwrap() as u32, "duration");
+        assert_eq!(
+            dur,
+            u32::try_from(o["dur"].as_u64().unwrap()).expect("oracle duration fits u32"),
+            "duration"
+        );
         assert_eq!(frames.len(), exp.len(), "frame count");
         for (i, (got, e)) in frames.iter().zip(exp).enumerate() {
             assert_eq!(
@@ -323,18 +346,26 @@ mod parity_tests {
     }
 
     #[test]
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "oracle fixture dimensions and duration from a JSON file this test ships"
-    )]
     fn magic18_matches_python_oracle() {
         let (frames, w, h, dur) =
             decode_cloud_magic18_26(&raw("magic18.bin")).expect("magic18 decode");
         let o = oracle("magic18.json");
         let size = o["size"].as_array().unwrap();
-        assert_eq!(w, size[0].as_u64().unwrap() as u32, "width");
-        assert_eq!(h, size[1].as_u64().unwrap() as u32, "height");
-        assert_eq!(dur, o["dur"].as_u64().unwrap() as u32, "duration");
+        assert_eq!(
+            w,
+            u32::try_from(size[0].as_u64().unwrap()).expect("oracle width fits u32"),
+            "width"
+        );
+        assert_eq!(
+            h,
+            u32::try_from(size[1].as_u64().unwrap()).expect("oracle height fits u32"),
+            "height"
+        );
+        assert_eq!(
+            dur,
+            u32::try_from(o["dur"].as_u64().unwrap()).expect("oracle duration fits u32"),
+            "duration"
+        );
         let exp = o["frames"].as_array().unwrap();
         assert_eq!(frames.len(), exp.len(), "frame count");
         for (i, (got, e)) in frames.iter().zip(exp).enumerate() {
@@ -348,10 +379,6 @@ mod parity_tests {
 
     /// Build a minimal 0xAA hot frame: header, palette, then a packed 256-index
     /// pixel map at `bpp` bits per pixel, LSB-first.
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a frame body length written into a two-byte header. The frame is built here and is a few kilobytes at most"
-    )]
     fn hot_frame(palette: &[[u8; 3]], indices: &[usize; 256]) -> Vec<u8> {
         let bpp = {
             let x = palette.len() - 1;
@@ -368,13 +395,9 @@ mod parity_tests {
                      // `if n_colors_raw == 0 { 256 }`. Clamping to 255 here silently emits a
                      // 255-colour frame for a 256-colour palette; the parity test at the
                      // bottom of this file catches it, which is how this was found.
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "256 wrapping to 0 is the protocol's own encoding of a \
-                      full palette, not an accident -- see the decoder's \
-                      `if n_colors_raw == 0 { 256 }`"
-        )]
-        let n_colors = palette.len() as u8;
+                     // THE WRAP IS THE ENCODING (see above): mask to the low byte
+                     // instead of casting, so the 256→0 mapping is explicit.
+        let n_colors = u8::try_from(palette.len() & 0xFF).expect("masked to a byte");
         body[1] = n_colors;
         for c in palette {
             body.extend_from_slice(c);
@@ -393,7 +416,11 @@ mod parity_tests {
             body.extend_from_slice(&packed);
         }
         let mut out = vec![0xAAu8];
-        out.extend_from_slice(&((body.len() + 5) as u16).to_le_bytes());
+        out.extend_from_slice(
+            &u16::try_from(body.len() + 5)
+                .expect("hot frame is kilobytes")
+                .to_le_bytes(),
+        );
         out.extend_from_slice(&100u16.to_le_bytes());
         out.extend_from_slice(&body);
         out
@@ -410,18 +437,14 @@ mod parity_tests {
     /// passed on the old code at bpp=0 and proved nothing. This is the CLASS —
     /// every palette width a real file can use.
     #[test]
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "test fixture colours built as `i % 256`, which is by construction a byte"
-    )]
     fn hot_frames_decode_at_every_palette_width() {
         for n_colors in [1usize, 2, 3, 4, 5, 8, 9, 16, 17, 32, 100, 255, 256] {
             let palette: Vec<[u8; 3]> = (0..n_colors)
                 .map(|i| {
                     [
-                        (i % 256) as u8,
-                        ((i * 7) % 256) as u8,
-                        ((i * 13) % 256) as u8,
+                        u8::try_from(i % 256).expect("remainder under 256"),
+                        u8::try_from((i * 7) % 256).expect("remainder under 256"),
+                        u8::try_from((i * 13) % 256).expect("remainder under 256"),
                     ]
                 })
                 .collect();

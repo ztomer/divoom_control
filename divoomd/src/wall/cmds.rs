@@ -109,29 +109,33 @@ async fn teardown_wall(daemon: &Daemon) -> Value {
     json!({"success": true, "wall": false})
 }
 
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "wall dimensions from a caller's JSON, bounded by the number of panels a wall can hold"
-)]
 fn parse_wall_configs(slots: &serde_json::Map<String, Value>, cell_size: i32) -> Vec<WallConfig> {
+    // Wall geometry arrives as JSON integers and lives in `i32` fields.
+    // Saturate on the way in: a caller asking for a trillion-pixel wall gets
+    // the largest representable one, not a wrapped reinterpretation of it.
+    fn narrow(v: i64) -> i32 {
+        i32::try_from(v.clamp(i64::from(i32::MIN), i64::from(i32::MAX)))
+            .expect("clamped to i32 range")
+    }
     slots
         .iter()
         .map(|(mac, s)| WallConfig {
             mac: mac.clone(),
-            x: s.get("x").and_then(serde_json::Value::as_i64).unwrap_or(0) as i32,
-            y: s.get("y").and_then(serde_json::Value::as_i64).unwrap_or(0) as i32,
-            size: s
-                .get("size")
-                .and_then(serde_json::Value::as_i64)
-                .unwrap_or_else(|| i64::from(cell_size)) as i32,
+            x: narrow(s.get("x").and_then(serde_json::Value::as_i64).unwrap_or(0)),
+            y: narrow(s.get("y").and_then(serde_json::Value::as_i64).unwrap_or(0)),
+            size: narrow(
+                s.get("size")
+                    .and_then(serde_json::Value::as_i64)
+                    .unwrap_or_else(|| i64::from(cell_size)),
+            ),
             width: s
                 .get("width")
                 .and_then(serde_json::Value::as_i64)
-                .map(|v| v as i32),
+                .map(narrow),
             height: s
                 .get("height")
                 .and_then(serde_json::Value::as_i64)
-                .map(|v| v as i32),
+                .map(narrow),
         })
         .collect()
 }
@@ -139,10 +143,6 @@ fn parse_wall_configs(slots: &serde_json::Map<String, Value>, cell_size: i32) ->
 /// Handle `wall_configure` socket command.
 /// Ports `owner_wall.py:wall_configure` including G7 delta reconfiguration:
 /// when the new layout overlaps the current wall, reuse the shared panels.
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "cell size from JSON clamped to reasonable pixel dimension"
-)]
 pub async fn cmd_wall_configure(daemon: &Daemon, req: &Request) -> Value {
     let Some(raw_slots) = req.args.get("slots").and_then(Value::as_object) else {
         return teardown_wall(daemon).await;
@@ -158,7 +158,9 @@ pub async fn cmd_wall_configure(daemon: &Daemon, req: &Request) -> Value {
         .args
         .get("cell_size")
         .and_then(serde_json::Value::as_i64)
-        .unwrap_or(16) as i32;
+        .unwrap_or(16)
+        .clamp(i64::from(i32::MIN), i64::from(i32::MAX));
+    let cell_size = i32::try_from(cell_size).expect("clamped to i32 range");
     let configs = parse_wall_configs(&slots, cell_size);
     // G7: delta reconfiguration.
     let old_wall_guard = daemon.wall.lock().await;
