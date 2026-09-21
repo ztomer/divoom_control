@@ -317,16 +317,9 @@ async fn monitor_loop(
 
 // ── forward one notification to the device ────────────────────────────────
 
-// Stays `async` in both configurations: it is awaited by the notification
-// watcher's loop, and a non-async twin would fork that loop in two.
-#[cfg_attr(
-    not(feature = "ble"),
-    expect(
-        clippy::unused_async,
-        reason = "the only await is the ble-gated write to the device"
-    )
-)]
-async fn forward_notification(daemon: &Daemon, app_type: u8, text: &str) -> bool {
+/// The 0x50 notification payload: a bare app-type word, or the type, the
+/// text's length and up to 128 bytes of text.
+fn notification_payload(app_type: u8, text: &str) -> Vec<u8> {
     let mut payload = Vec::new();
     if text.is_empty() {
         let wire = if app_type >= 8 {
@@ -344,38 +337,46 @@ async fn forward_notification(daemon: &Daemon, app_type: u8, text: &str) -> bool
         payload.push(text_bytes.len().byte());
         payload.extend_from_slice(&text_bytes);
     }
+    payload
+}
 
-    #[cfg(feature = "ble")]
-    {
-        // A notification goes to EVERY linked panel that can take one. There
-        // is no "current" panel to pick (2026-09-12); a per-panel routing
-        // choice belongs in the routing rules if it is ever wanted.
-        let mut delivered = false;
-        for d in daemon.fleet.linked().await {
-            let Some(dev) = d.transport().await else {
-                continue;
-            };
-            let ok = match &*dev {
-                crate::daemon::DeviceTransport::Ble(ref ble) => {
-                    ble.send_command(0x50, &payload, true).await.is_ok()
-                }
-                crate::daemon::DeviceTransport::Spp(ref spp) => {
-                    spp.send_command(0x50, &payload, true).await.is_ok()
-                }
-                crate::daemon::DeviceTransport::Lan(_) => false,
-                crate::daemon::DeviceTransport::Mock(ref mock) => {
-                    mock.send_command(0x50, &payload, true).await.is_ok()
-                }
-            };
-            delivered |= ok;
-        }
-        if delivered {
-            return true;
-        }
+/// A notification goes to EVERY linked panel that can take one. There is no
+/// "current" panel to pick (2026-09-12); a per-panel routing choice belongs
+/// in the routing rules if it is ever wanted. Returns whether any took it.
+#[cfg(feature = "ble")]
+async fn forward_notification(daemon: &Daemon, app_type: u8, text: &str) -> bool {
+    let payload = notification_payload(app_type, text);
+    let mut delivered = false;
+    for d in daemon.fleet.linked().await {
+        let Some(dev) = d.transport().await else {
+            continue;
+        };
+        let ok = match &*dev {
+            crate::daemon::DeviceTransport::Ble(ref ble) => {
+                ble.send_command(0x50, &payload, true).await.is_ok()
+            }
+            crate::daemon::DeviceTransport::Spp(ref spp) => {
+                spp.send_command(0x50, &payload, true).await.is_ok()
+            }
+            crate::daemon::DeviceTransport::Lan(_) => false,
+            crate::daemon::DeviceTransport::Mock(ref mock) => {
+                mock.send_command(0x50, &payload, true).await.is_ok()
+            }
+        };
+        delivered |= ok;
     }
-    #[cfg(not(feature = "ble"))]
-    {
-        let _ = (daemon, payload);
-    }
-    false
+    delivered
+}
+
+/// Without `ble` there is no panel to reach: the stub keeps the watcher
+/// loop's shape (a future) and answers at once. The payload is still built,
+/// so a malformed notification fails the same way in both builds.
+#[cfg(not(feature = "ble"))]
+fn forward_notification(
+    _daemon: &Daemon,
+    app_type: u8,
+    text: &str,
+) -> impl std::future::Future<Output = bool> + Send {
+    let _ = notification_payload(app_type, text);
+    std::future::ready(false)
 }

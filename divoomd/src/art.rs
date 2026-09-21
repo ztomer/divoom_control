@@ -51,33 +51,27 @@ pub(crate) const fn device_type_for_size(size: u32) -> u32 {
 
 use crate::art_codec::{decode_cloud_magic9, decode_hot_file, decode_magic43};
 
-// With `ble` off there is no encoder to reach, so the body is a bare `None`:
-// every parameter goes unread and clippy asks for a `const fn`. Both are true
-// of the stub and false of the real function, so the annotation is conditional
-// -- an unconditional one would be UNFULFILLED in the default build, which is
-// itself an error under `-D warnings`.
-#[cfg_attr(
-    not(feature = "ble"),
-    expect(
-        unused_variables,
-        clippy::missing_const_for_fn,
-        reason = "the no-BLE build has no encoder, so this is a `None` stub"
-    )
-)]
+#[cfg(feature = "ble")]
 fn encode_frame(daemon: &Daemon, rgb: &[u8], w: i32, h: i32, time_ms: u16) -> Option<Vec<u8>> {
-    #[cfg(feature = "ble")]
-    {
-        let enc = daemon.encoder()?;
-        if w == 32 && h == 32 {
-            enc.encode_animation_frame_32(rgb, w, h, time_ms)
-        } else {
-            enc.encode_animation_frame(rgb, w, h, time_ms)
-        }
+    let enc = daemon.encoder()?;
+    if w == 32 && h == 32 {
+        enc.encode_animation_frame_32(rgb, w, h, time_ms)
+    } else {
+        enc.encode_animation_frame(rgb, w, h, time_ms)
     }
-    #[cfg(not(feature = "ble"))]
-    {
-        None
-    }
+}
+
+/// With `ble` off there is no encoder to reach: the stub keeps the BLE
+/// build's signature and answers `None`.
+#[cfg(not(feature = "ble"))]
+const fn encode_frame(
+    _daemon: &Daemon,
+    _rgb: &[u8],
+    _w: i32,
+    _h: i32,
+    _time_ms: u16,
+) -> Option<Vec<u8>> {
+    None
 }
 
 // ── download + resolve cloud file to 16x16 RGB frame ─────────────────────
@@ -204,15 +198,13 @@ async fn push_custom_art_page(
 pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
     // Parsed in both configurations because the no-BLE build still validates
     // and answers the request; only the transport that would USE it is absent.
-    #[cfg_attr(
-        not(feature = "ble"),
-        expect(unused_variables, reason = "consumed by the ble-gated push below")
-    )]
     let page = args
         .get("page")
         .and_then(serde_json::Value::as_u64)
         .unwrap_or(0)
         .byte();
+    #[cfg(not(feature = "ble"))]
+    let _ = page; // no transport in this build; consumed here
 
     let target_mac = {
         let explicit = args.get("mac").and_then(|v| v.as_str()).map(String::from);
@@ -307,75 +299,74 @@ pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
 }
 
 /// Handle `custom_art_query_page` command.
-///
-/// Stays `async` in both configurations: it is stored in the dispatch table
-/// beside every other handler, and a non-async twin would need its own arm.
-#[cfg_attr(
-    not(feature = "ble"),
-    expect(
-        unused_variables,
-        clippy::unused_async,
-        reason = "no transport to await without BLE; the signature is the dispatch table's"
-    )
-)]
+#[cfg(feature = "ble")]
 pub async fn cmd_custom_art_query_page(daemon: Arc<Daemon>, args: &Value) -> Value {
     let page = args
         .get("page")
         .and_then(serde_json::Value::as_u64)
         .unwrap_or(0)
         .byte();
-    #[cfg(feature = "ble")]
-    {
-        let target_mac = args
-            .get("mac")
-            .and_then(Value::as_str)
-            .or_else(|| args.get("target_mac").and_then(Value::as_str));
-        let link = match daemon.resolve_target_link(target_mac).await {
-            Ok(l) => l,
-            Err(e) => return e,
-        };
-        let _permit = match link.queue.acquire(None).await {
-            Ok(p) => p,
-            Err(e) => return crate::protocol::err_reply(&e.to_string()),
-        };
-        let dev = link.transport.clone();
-        if matches!(
-            &*dev,
-            crate::daemon::DeviceTransport::Ble(_) | crate::daemon::DeviceTransport::Spp(_)
-        ) {
-            let resp = dev
-                .send_command_and_wait(CMD_QUERY, &[page], std::time::Duration::from_secs(4))
-                .await;
-            match resp {
-                Some(data) if data.len() >= 8 => {
-                    let rtype = data[0];
-                    if rtype == 2 {
-                        return json!({"success": true, "ids": []});
-                    }
-                    if rtype == 1 {
-                        let item_count = u16::from_le_bytes([data[6], data[7]]) as usize;
-                        let mut ids = Vec::new();
-                        let mut pos = 8;
-                        for _ in 0..item_count {
-                            if pos + 4 > data.len() {
-                                break;
-                            }
-                            let fid =
-                                u32::from_le_bytes(data[pos..pos + 4].try_into().unwrap_or([0; 4]));
-                            ids.push(fid);
-                            pos += 4;
+    let target_mac = args
+        .get("mac")
+        .and_then(Value::as_str)
+        .or_else(|| args.get("target_mac").and_then(Value::as_str));
+    let link = match daemon.resolve_target_link(target_mac).await {
+        Ok(l) => l,
+        Err(e) => return e,
+    };
+    let _permit = match link.queue.acquire(None).await {
+        Ok(p) => p,
+        Err(e) => return crate::protocol::err_reply(&e.to_string()),
+    };
+    let dev = link.transport.clone();
+    if matches!(
+        &*dev,
+        crate::daemon::DeviceTransport::Ble(_) | crate::daemon::DeviceTransport::Spp(_)
+    ) {
+        let resp = dev
+            .send_command_and_wait(CMD_QUERY, &[page], std::time::Duration::from_secs(4))
+            .await;
+        match resp {
+            Some(data) if data.len() >= 8 => {
+                let rtype = data[0];
+                if rtype == 2 {
+                    return json!({"success": true, "ids": []});
+                }
+                if rtype == 1 {
+                    let item_count = u16::from_le_bytes([data[6], data[7]]) as usize;
+                    let mut ids = Vec::new();
+                    let mut pos = 8;
+                    for _ in 0..item_count {
+                        if pos + 4 > data.len() {
+                            break;
                         }
-                        return json!({"success": true, "ids": ids});
+                        let fid =
+                            u32::from_le_bytes(data[pos..pos + 4].try_into().unwrap_or([0; 4]));
+                        ids.push(fid);
+                        pos += 4;
                     }
-                    return json!({"success": false, "error": "unexpected response type"});
+                    return json!({"success": true, "ids": ids});
                 }
-                _ => {
-                    return json!({"success": false, "ids": [], "error": "no response (device timed out)"})
-                }
+                return json!({"success": false, "error": "unexpected response type"});
+            }
+            _ => {
+                return json!({"success": false, "ids": [], "error": "no response (device timed out)"})
             }
         }
     }
     json!({"success": false, "error": "custom_art_query_page requires BLE transport"})
+}
+
+/// Without `ble` there is no transport to query: the stub keeps the dispatch
+/// table's shape (a future) and answers at once.
+#[cfg(not(feature = "ble"))]
+pub fn cmd_custom_art_query_page(
+    _daemon: Arc<Daemon>,
+    _args: &Value,
+) -> impl std::future::Future<Output = Value> + Send {
+    std::future::ready(
+        json!({"success": false, "error": "custom_art_query_page requires BLE transport"}),
+    )
 }
 
 /// Handle `hot_update` command — starts a background task, returns immediately.

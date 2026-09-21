@@ -49,18 +49,15 @@ impl DivoomWall {
     ///
     /// From the BLE stack below: the adapter is gone, the peripheral is not
     /// connected, or the write did not complete.
-    #[cfg_attr(
-        not(feature = "ble"),
-        expect(
-            unused_variables,
-            reason = "`daemon` is the handle to the radio; without `ble` the wall still lays out its grid and reports that it cannot reach any panel"
-        )
-    )]
     pub async fn connect(
         daemon: &Daemon,
         configs: &[WallConfig],
         existing: &HashMap<String, Arc<DeviceTransport>>,
     ) -> Result<Self, String> {
+        // `daemon` is the handle to the radio; without `ble` the wall still
+        // lays out its grid and reports that it cannot reach any panel.
+        #[cfg(not(feature = "ble"))]
+        let _ = daemon;
         let is_free_form = configs.iter().any(|c| c.width.is_some());
         let WallBounds {
             min_x,

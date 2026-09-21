@@ -290,18 +290,6 @@ async fn load_hot_files(
     Ok((arc, ok_dl, false))
 }
 
-// CONDITIONAL, because the lint it silences only fires WITH `ble`: the drop
-// tightening it is about is in the gated session block. An unconditional
-// `expect` here is unfulfilled in the no-BLE build, which `-D warnings` rejects
-// -- `expect` policing over-declaration is the reason to prefer it, and the
-// reason it has to be cfg'd rather than pasted.
-#[cfg_attr(
-    not(feature = "ble"),
-    expect(
-        unused_variables,
-        reason = "daemon, show_after and the download count are consumed by the ble-gated hot session; without a transport the function still fetches and decodes, then reports that there is nothing to push"
-    )
-)]
 pub(crate) async fn run_hot_update(
     daemon: Arc<Daemon>,
     device_size: u32,
@@ -321,6 +309,11 @@ pub(crate) async fn run_hot_update(
     progress.set(&json!({"phase": "fetching_manifest"}));
     let device_type = device_type_for_size(device_size);
     let (files, ok_dl, from_cache) = load_hot_files(&client, device_type, &progress).await?;
+    // daemon, show_after and the download count are consumed by the
+    // ble-gated hot session; without a transport the function still fetches
+    // and decodes, then reports that there is nothing to push.
+    #[cfg(not(feature = "ble"))]
+    let _ = (&daemon, show_after, ok_dl, &address_hint);
     if from_cache {
         // Nothing was re-fetched — jump the download bar to full so the UI moves
         // straight to the upload phase instead of sitting at "fetching".
