@@ -62,107 +62,26 @@ pub(super) async fn run_music(
         )
         .await;
 
-        match now_playing_track_async().await {
-            Err(e) => {
-                report_health(
-                    &daemon,
-                    health.as_ref(),
-                    &mac,
-                    JOB_KIND,
-                    health::JobState::Failed(format!("now-playing unavailable: {e}")),
-                )
-                .await;
+        let report = |state: health::JobState| {
+            report_health(&daemon, health.as_ref(), &mac, JOB_KIND, state)
+        };
+        match verdict(now_playing_track_async().await, &last_identity) {
+            Tick::Nothing => {}
+            Tick::Fault(reason) => report(health::JobState::Failed(reason)).await,
+            Tick::NoCover { identity, reason } => {
+                report(health::JobState::Failed(reason)).await;
+                last_identity = identity;
             }
-            Ok(None) => {}
-            // A PAUSED track is not pushed. MediaRemote keeps reporting a
-            // session's track after it is paused, so without this the panel
-            // would keep showing cover art for something nobody is listening
-            // to — and would re-push it on every reconnect.
-            Ok(Some(track)) if !track.is_playing => {
-                report_health(
-                    &daemon,
-                    health.as_ref(),
-                    &mac,
-                    JOB_KIND,
-                    health::JobState::Failed(format!("paused: {}", track.display())),
-                )
-                .await;
-            }
-            Ok(Some(track)) => {
-                let identity = track.identity();
-                if identity != last_identity {
-                    match track.artwork.as_ref() {
-                        // Metadata but no cover — common for podcasts and
-                        // streams. Say so rather than leaving the previous
-                        // track's art on the panel as if it were current.
-                        None => {
-                            report_health(
-                                &daemon,
-                                health.as_ref(),
-                                &mac,
-                                JOB_KIND,
-                                health::JobState::Failed(format!(
-                                    "no cover art for {}",
-                                    track.display()
-                                )),
-                            )
-                            .await;
-                            last_identity = identity;
-                        }
-                        Some(art) => match crate::image_proc::process_image_bytes(
-                            art.bytes.clone(),
-                            size,
-                            100,
-                        ) {
-                            Err(e) => {
-                                report_health(
-                                    &daemon,
-                                    health.as_ref(),
-                                    &mac,
-                                    JOB_KIND,
-                                    health::JobState::Failed(format!(
-                                        "could not decode {} cover art ({} bytes): {e}",
-                                        art.format.mime(),
-                                        art.len()
-                                    )),
-                                )
-                                .await;
-                            }
-                            Ok(frames) => {
-                                if let Some((rgb, w, h_px, t)) = frames.first() {
-                                    if connected {
-                                        let success = push_live_frame(
-                                            &daemon,
-                                            &mac,
-                                            JOB_KIND,
-                                            &alive,
-                                            LiveFrame {
-                                                rgb: rgb.clone(),
-                                                w: *w,
-                                                h: *h_px,
-                                                time_ms: *t,
-                                            },
-                                        )
-                                        .await;
-                                        // Advance only on a CONFIRMED push, so a
-                                        // failure retries next tick instead of
-                                        // being recorded as done.
-                                        if success {
-                                            last_identity = identity;
-                                            report_health(
-                                                &daemon,
-                                                health.as_ref(),
-                                                &mac,
-                                                JOB_KIND,
-                                                health::JobState::Running,
-                                            )
-                                            .await;
-                                        }
-                                    }
-                                }
-                            }
-                        },
+            Tick::Cover { identity, track } => {
+                match push_cover(&daemon, &mac, &alive, &track, size, connected).await {
+                    // Advance only on a CONFIRMED push, so a failure retries
+                    // next tick instead of being recorded as done.
+                    Ok(true) => {
+                        last_identity = identity;
+                        report(health::JobState::Running).await;
                     }
+                    Ok(false) => {}
+                    Err(reason) => report(health::JobState::Failed(reason)).await,
                 }
             }
         }
@@ -174,4 +93,93 @@ pub(super) async fn run_music(
         };
         tokio::time::sleep(nap).await;
     }
+}
+
+/// What one tick of the job decided about the current track.
+enum Tick {
+    /// Nothing playing, or the same track as last time.
+    Nothing,
+    /// A fault to report; the last pushed identity stands.
+    Fault(String),
+    /// A new track with metadata but no cover: report it, and remember the
+    /// identity so it is not reported again every tick.
+    NoCover { identity: String, reason: String },
+    /// A new track with cover art to push.
+    Cover {
+        identity: String,
+        track: nowplaying::Track,
+    },
+}
+
+/// The tick's decision, from what now-playing said and what was last pushed.
+fn verdict(now: Result<Option<nowplaying::Track>, String>, last_identity: &str) -> Tick {
+    let track = match now {
+        Err(e) => return Tick::Fault(format!("now-playing unavailable: {e}")),
+        Ok(None) => return Tick::Nothing,
+        Ok(Some(track)) => track,
+    };
+    // A PAUSED track is not pushed. MediaRemote keeps reporting a session's
+    // track after it is paused, so without this the panel would keep showing
+    // cover art for something nobody is listening to -- and would re-push it
+    // on every reconnect.
+    if !track.is_playing {
+        return Tick::Fault(format!("paused: {}", track.display()));
+    }
+    let identity = track.identity();
+    if identity == last_identity {
+        return Tick::Nothing;
+    }
+    if track.artwork.is_none() {
+        // Metadata but no cover -- common for podcasts and streams. Say so
+        // rather than leaving the previous track's art on the panel as if it
+        // were current.
+        return Tick::NoCover {
+            reason: format!("no cover art for {}", track.display()),
+            identity,
+        };
+    }
+    Tick::Cover { identity, track }
+}
+
+/// Decode the track's cover to the panel size and push its first frame.
+/// `Ok(true)` is a confirmed push; `Ok(false)` is nothing sent (no device,
+/// or the push failed and will retry); `Err` is undecodable art.
+async fn push_cover(
+    daemon: &Arc<Daemon>,
+    mac: &str,
+    alive: &Arc<AtomicBool>,
+    track: &nowplaying::Track,
+    size: u32,
+    connected: bool,
+) -> Result<bool, String> {
+    let Some(art) = track.artwork.as_ref() else {
+        return Ok(false);
+    };
+    let frames =
+        crate::image_proc::process_image_bytes(art.bytes.clone(), size, 100).map_err(|e| {
+            format!(
+                "could not decode {} cover art ({} bytes): {e}",
+                art.format.mime(),
+                art.len()
+            )
+        })?;
+    let Some((rgb, w, h_px, t)) = frames.first() else {
+        return Ok(false);
+    };
+    if !connected {
+        return Ok(false);
+    }
+    Ok(push_live_frame(
+        daemon,
+        mac,
+        "music",
+        alive,
+        LiveFrame {
+            rgb: rgb.clone(),
+            w: *w,
+            h: *h_px,
+            time_ms: *t,
+        },
+    )
+    .await)
 }
