@@ -4,7 +4,7 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
-## Unreleased — MCP negotiation, Python 3.14 floor, menubar off tao (UNCOMMITTED, owner review pending)
+## v0.39.0 — MCP negotiation, Python 3.14 floor, menubar off tao (2026-09-21)
 
 - **MCP `initialize` now negotiates the protocol version (SEP-2575,
   latest `2026-07-28`).** Both live servers — the native `divoomd mcp`
