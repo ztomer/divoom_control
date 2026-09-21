@@ -197,68 +197,9 @@ pub(crate) fn sha1_digest_hex(data: &[u8]) -> String {
     sha1_digest(data)
 }
 
-#[expect(
-    clippy::many_single_char_names,
-    clippy::tuple_array_conversions,
-    reason = "`a`..`e` and `h[0..5]` are RFC 3174's own names for the SHA-1 \
-              working variables. Renaming them to something descriptive would \
-              make this harder to check against the specification, which is \
-              the only way anyone verifies a hash implementation."
-)]
 fn sha1_digest(data: &[u8]) -> String {
-    // Minimal SHA-1 (RFC 3174) — avoids a dep for a 20-byte output.
-    let mut h: [u32; 5] = [
-        0x6745_2301,
-        0xEFCD_AB89,
-        0x98BA_DCFE,
-        0x1032_5476,
-        0xC3D2_E1F0,
-    ];
-    let bit_len = (data.len() as u64) * 8;
-    let mut padded = data.to_vec();
-    padded.push(0x80);
-    while padded.len() % 64 != 56 {
-        padded.push(0);
-    }
-    padded.extend_from_slice(&bit_len.to_be_bytes());
-    for chunk in padded.as_chunks::<64>().0 {
-        let mut w = [0u32; 80];
-        for i in 0..16 {
-            w[i] = u32::from_be_bytes(chunk[4 * i..4 * i + 4].try_into().unwrap());
-        }
-        for i in 16..80 {
-            w[i] = (w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16]).rotate_left(1);
-        }
-        let (mut a, mut b, mut c, mut d, mut e) = (h[0], h[1], h[2], h[3], h[4]);
-        for (i, wi) in w.iter().enumerate() {
-            let (f_val, k) = match i {
-                0..=19 => ((b & c) | (!b & d), 0x5A82_7999_u32),
-                20..=39 => (b ^ c ^ d, 0x6ED9_EBA1),
-                40..=59 => ((b & c) | (b & d) | (c & d), 0x8F1B_BCDC),
-                _ => (b ^ c ^ d, 0xCA62_C1D6),
-            };
-            let temp = a
-                .rotate_left(5)
-                .wrapping_add(f_val)
-                .wrapping_add(e)
-                .wrapping_add(k)
-                .wrapping_add(*wi);
-            e = d;
-            d = c;
-            c = b.rotate_left(30);
-            b = a;
-            a = temp;
-        }
-        h[0] = h[0].wrapping_add(a);
-        h[1] = h[1].wrapping_add(b);
-        h[2] = h[2].wrapping_add(c);
-        h[3] = h[3].wrapping_add(d);
-        h[4] = h[4].wrapping_add(e);
-    }
-    format!(
-        "{:08x}{:08x}{:08x}{:08x}{:08x}",
-        h[0], h[1], h[2], h[3], h[4]
-    )
+    use sha1::{Digest, Sha1};
+    crate::wire::hex(&Sha1::digest(data))
 }
 
 #[cfg(feature = "ble")]

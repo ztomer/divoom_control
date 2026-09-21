@@ -41,48 +41,51 @@ impl MockTransport {
         *n = Some(name);
     }
 
+    /// The mock does no I/O: the command is recorded now and the returned
+    /// future is already complete. Callers `.await` it exactly like the real
+    /// transport's (`transport.rs` matches both arms with one `.await`).
+    ///
     /// # Errors
     ///
-    /// When the write cannot be completed: the peripheral is gone, the
-    /// characteristic is missing, or the write times out. A timeout is reported
-    /// as unreachable rather than as a protocol error, because that is what it
-    /// means here.
-    #[expect(
-        clippy::unused_async,
-        clippy::unused_async_trait_impl,
-        reason = "the signature mirrors the real transport, which does await. A \
-              double that does not is still required to have the same type"
-    )]
+    /// Never; the signature carries the real transport's error type so the
+    /// two are interchangeable behind `DeviceTransport`.
+    ///
     /// # Panics
     ///
     /// If a mutex guarding the shared state is poisoned -- another thread
     /// panicked while holding it.
-    pub async fn send_command(
+    pub fn send_command(
         &self,
         command_id: u8,
         args: &[u8],
         _write_with_response: bool,
-    ) -> BleResult<()> {
+    ) -> impl std::future::Future<Output = BleResult<()>> + Send {
         self.sent_commands
             .lock()
             .unwrap()
             .push((command_id, args.to_vec()));
-        Ok(())
+        std::future::ready(Ok(()))
     }
 
+    /// The simulated response for `command_id`, if one was staged; complete
+    /// immediately, like [`Self::send_command`].
+    ///
     /// # Panics
     ///
     /// If the mutex guarding this value is poisoned -- another thread panicked
     /// while holding it, so the value cannot be trusted.
-    #[expect(
-        clippy::unused_async,
-        clippy::unused_async_trait_impl,
-        reason = "the signature mirrors the real transport, which does await. A \
-              double that does not is still required to have the same type"
-    )]
-    pub async fn wait_for_response(&self, command_id: u8, _timeout: Duration) -> Option<Vec<u8>> {
-        let resp = self.simulated_responses.lock().unwrap();
-        resp.get(&command_id).cloned()
+    pub fn wait_for_response(
+        &self,
+        command_id: u8,
+        _timeout: Duration,
+    ) -> impl std::future::Future<Output = Option<Vec<u8>>> + Send {
+        let resp = self
+            .simulated_responses
+            .lock()
+            .unwrap()
+            .get(&command_id)
+            .cloned();
+        std::future::ready(resp)
     }
 
     pub async fn send_command_and_wait(
@@ -95,26 +98,26 @@ impl MockTransport {
         self.wait_for_response(command_id, timeout).await
     }
 
+    /// Records the blob as one `0x8b` command; complete immediately, like
+    /// [`Self::send_command`].
+    ///
     /// # Errors
     ///
-    /// When any chunk of the transfer fails to write, or the device stops
-    /// acknowledging mid-stream.
-    #[expect(
-        clippy::unused_async,
-        clippy::unused_async_trait_impl,
-        reason = "the signature mirrors the real transport, which does await. A \
-              double that does not is still required to have the same type"
-    )]
+    /// Never; the real transport's error type, for interchangeability.
+    ///
     /// # Panics
     ///
     /// If a mutex guarding the shared state is poisoned -- another thread
     /// panicked while holding it.
-    pub async fn stream_animation_8b(&self, blob: &[u8]) -> BleResult<bool> {
+    pub fn stream_animation_8b(
+        &self,
+        blob: &[u8],
+    ) -> impl std::future::Future<Output = BleResult<bool>> + Send {
         self.sent_commands
             .lock()
             .unwrap()
             .push((0x8bu8, blob.to_vec()));
-        Ok(true)
+        std::future::ready(Ok(true))
     }
 
     pub async fn wait_for_any_response(

@@ -53,6 +53,15 @@ pub(crate) struct BitmapFont {
     space_width: i32,
 }
 
+/// How a line of text is drawn: its colour, the gap between glyphs, and the
+/// width (from the line's own x0) past which it stops.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct TextStyle {
+    pub color: (u8, u8, u8),
+    pub gap: i32,
+    pub max_width: Option<i32>,
+}
+
 impl BitmapFont {
     pub(crate) const fn new(blob: &'static [u8]) -> Self {
         Self {
@@ -162,7 +171,9 @@ impl BitmapFont {
         }
     }
 
-    #[expect(clippy::too_many_arguments)]
+    /// Draw `text` with its top-left at `(x0, y0)`; returns the x after the
+    /// last glyph drawn. Glyphs that would cross `style.max_width` (measured
+    /// from `x0`) stop the line.
     pub(crate) fn draw_text(
         &self,
         buf: &mut [u8],
@@ -170,10 +181,13 @@ impl BitmapFont {
         x0: i32,
         y0: i32,
         text: &str,
-        color: (u8, u8, u8),
-        gap: i32,
-        max_width: Option<i32>,
+        style: &TextStyle,
     ) -> i32 {
+        let TextStyle {
+            color,
+            gap,
+            max_width,
+        } = *style;
         let mut x = x0;
         let chars: Vec<char> = text.chars().collect();
         for (i, &ch) in chars.iter().enumerate() {

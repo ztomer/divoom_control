@@ -5,11 +5,6 @@
 //! pin `render_widget` against the crate-internal renderers it must not fork
 //! from, which an integration test could not reach.
 
-#![expect(
-    clippy::float_cmp,
-    reason = "0.0 and 1.0 are exact in binary floating point"
-)]
-
 use serde_json::{json, Value};
 
 use base64::Engine;
@@ -254,7 +249,12 @@ fn pct_change_of_a_zero_previous_close_is_zero_not_infinity() {
         prev_close: 0.0,
         change: 10.0,
     };
-    assert_eq!(q.pct_change(), 0.0);
+    assert_eq!(
+        q.pct_change().partial_cmp(&0.0),
+        Some(std::cmp::Ordering::Equal),
+        "exact zero, got {}",
+        q.pct_change()
+    );
 }
 
 #[test]

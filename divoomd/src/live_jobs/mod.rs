@@ -43,19 +43,15 @@ use render::{render_stock, render_sysmon};
 /// starts sees nothing. `live_job_list` answers that, but only if the state is
 /// stored — and storing it at each call site separately is how the two would
 /// drift. One helper does both halves.
-#[expect(
-    clippy::ref_option,
-    reason = "the caller holds an Option<JobHealth> and reports through it when there is one. Option<&JobHealth> pushes an as_ref() to five call sites"
-)]
 async fn report_health(
     daemon: &Daemon,
-    health: &Option<health::JobHealth>,
+    health: Option<&health::JobHealth>,
     mac: &str,
     kind: &str,
     state: health::JobState,
 ) {
     let Some(h) = health else { return };
-    h.report(state);
+    h.report(&state);
     if let Some(snapshot) = h.snapshot() {
         daemon.live_jobs.record_health(mac, kind, snapshot).await;
     }
@@ -139,7 +135,7 @@ async fn run_sysmon(daemon_weak: Weak<Daemon>, mac: String, params: Value, alive
         let connected = get_device_transport(&daemon, &mac).await.is_some();
         report_health(
             &daemon,
-            &health,
+            health.as_ref(),
             &mac,
             JOB_KIND,
             if connected {
@@ -218,7 +214,7 @@ async fn run_stocks(daemon_weak: Weak<Daemon>, mac: String, params: Value, alive
         let connected = get_device_transport(&daemon, &mac).await.is_some();
         report_health(
             &daemon,
-            &health,
+            health.as_ref(),
             &mac,
             JOB_KIND,
             if connected {
@@ -300,7 +296,10 @@ pub(crate) async fn push_weather(
         // that the clock face's extra panels are what put weather on the
         // screen. Selecting the channel alone would show a clock.
         let face = crate::packets::ClockPacket {
-            weather: true,
+            faces: crate::packets::ClockFaces {
+                weather: true,
+                ..Default::default()
+            },
             ..Default::default()
         };
         let _ = dev_t
@@ -371,7 +370,7 @@ async fn run_weather(
         }
         report_health(
             &daemon,
-            &health,
+            health.as_ref(),
             &mac,
             JOB_KIND,
             if connected {
@@ -389,7 +388,7 @@ async fn run_weather(
             Err(e) => {
                 report_health(
                     &daemon,
-                    &health,
+                    health.as_ref(),
                     &mac,
                     JOB_KIND,
                     health::JobState::Failed(e),

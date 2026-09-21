@@ -79,10 +79,6 @@ impl LightingType {
 ///
 /// Wire: `[env, twentyfour, style, active, humidity, weather, date, R, G, B]`
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "the packet's own layout: each bool is one documented on/off field of the device's clock frame. An enum would model as exclusive what the protocol sends together"
-)]
 pub struct ClockPacket {
     /// Environment/clock selector; 0 selects the clock channel.
     pub env: u8,
@@ -90,10 +86,21 @@ pub struct ClockPacket {
     /// Clock face style, 0-15.
     pub style: u8,
     pub active: bool,
+    /// Bytes 4-6: the extra faces the device cycles through with the clock.
+    pub faces: ClockFaces,
+    pub rgb: [u8; 3],
+}
+
+/// The three on/off faces of the clock frame (bytes 4, 5, 6).
+///
+/// A group of their own because the device CYCLES through whichever are set;
+/// see the measured mapping below. The names are the APK's and describe the
+/// fields, not the screens.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ClockFaces {
     pub humidity: bool,
     pub weather: bool,
     pub date: bool,
-    pub rgb: [u8; 3],
 }
 
 // What these three flags actually DRAW, measured on a Tivoo-Max 2026-09-07 by
@@ -125,9 +132,7 @@ impl Default for ClockPacket {
             twentyfour: true,
             style: 0,
             active: true,
-            humidity: false,
-            weather: false,
-            date: false,
+            faces: ClockFaces::default(),
             rgb: [0xFF, 0xFF, 0xFF],
         }
     }
@@ -142,9 +147,9 @@ impl ClockPacket {
             u8::from(self.twentyfour),
             self.style.min(15),
             u8::from(self.active),
-            u8::from(self.humidity),
-            u8::from(self.weather),
-            u8::from(self.date),
+            u8::from(self.faces.humidity),
+            u8::from(self.faces.weather),
+            u8::from(self.faces.date),
             self.rgb[0],
             self.rgb[1],
             self.rgb[2],

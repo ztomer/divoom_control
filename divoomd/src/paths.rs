@@ -11,6 +11,14 @@
 //! Searching UP for a known marker directory is immune to that whole class. It
 //! also handles layouts a fixed count never could -- a shared `CARGO_TARGET_DIR`,
 //! `cargo run`, or an installed .app bundle.
+//!
+//! One layout defeats the walk entirely: cargo's `build.build-dir` (the house
+//! layout since 2026-09-20) puts test binaries under `~/.cargo/build/<hash>/`,
+//! outside the checkout, so nothing above them is the repo. For that case the
+//! last rung is the checkout this binary was COMPILED from
+//! (`CARGO_MANIFEST_DIR`, baked in at build time): exact for a dev or test
+//! build, and a path that simply does not exist for a shipped binary, whose
+//! own bundle the walk found first.
 
 use std::path::{Path, PathBuf};
 
@@ -33,11 +41,18 @@ pub fn find_root_containing_from(start: &Path, marker: &str) -> Option<PathBuf> 
     None
 }
 
-/// Same, anchored at the running executable.
+/// Same, anchored at the running executable, then at the checkout this
+/// binary was compiled from (see the module doc).
 #[must_use]
 pub fn find_root_containing(marker: &str) -> Option<PathBuf> {
-    let exe = std::env::current_exe().ok()?;
-    find_root_containing_from(&exe, marker)
+    if let Some(root) = std::env::current_exe()
+        .ok()
+        .and_then(|exe| find_root_containing_from(&exe, marker))
+    {
+        return Some(root);
+    }
+    let compiled_from = Path::new(env!("CARGO_MANIFEST_DIR"));
+    find_root_containing_from(&compiled_from.join(marker), marker)
 }
 
 #[cfg(test)]
@@ -87,6 +102,18 @@ mod tests {
             find_root_containing_from(&bin, "divoom_client").unwrap(),
             root
         );
+    }
+
+    /// This very test binary lives wherever cargo's build dir is -- under the
+    /// house layout, outside the checkout -- so the walk up from it finds no
+    /// repo, and the compiled-from rung is what answers. Before that rung,
+    /// every encoder-dependent test failed with "run `build_libdivoom.sh`"
+    /// against a library that was sitting right there.
+    #[test]
+    fn a_test_binary_outside_the_checkout_still_finds_the_repo() {
+        let root = find_root_containing("divoom_lib").expect("the checkout");
+        assert!(root.join("divoom_lib").is_dir(), "{}", root.display());
+        assert!(root.join("divoomd").join("Cargo.toml").is_file());
     }
 
     #[test]

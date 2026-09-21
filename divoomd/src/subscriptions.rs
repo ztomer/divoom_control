@@ -94,18 +94,11 @@ impl Registry {
         let now = Instant::now();
         let mut st = self.state.lock().ok()?;
 
-        // Set when a victim is displaced, and notified AFTER the lock is
-        // released -- see the drop below.
-        #[expect(
-            clippy::useless_let_if_seq,
-            reason = "deliberate: the victim is computed UNDER the lock and \
-                      notified after it is dropped, so the binding has to \
-                      outlive the `if` that sets it. Collapsing it into the \
-                      branch is what would put a notify under the mutex."
-        )]
-        let mut displaced: Option<Arc<Notify>> = None;
-
-        if st.entries.len() >= self.capacity {
+        // The victim, if one is displaced: computed UNDER the lock, notified
+        // AFTER it is released -- see the drop below.
+        let displaced: Option<Arc<Notify>> = if st.entries.len() < self.capacity {
+            None
+        } else {
             // Least-recently-active occupant. `min_by_key` returns the FIRST
             // minimum, so equal timestamps break toward the oldest entry, which
             // is the one that has been unproven longest.
@@ -120,8 +113,8 @@ impl Registry {
                 return None; // everyone here is demonstrably in use
             }
             st.entries.remove(idx);
-            displaced = Some(evict);
-        }
+            Some(evict)
+        };
 
         let id = st.next_id;
         st.next_id += 1;

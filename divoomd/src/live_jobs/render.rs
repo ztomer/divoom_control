@@ -173,7 +173,12 @@ pub(crate) fn render_text(text: &str, color: (u8, u8, u8), size: u32, full_font:
         }
         None => 0,
     };
-    font.draw_text(&mut buf, edge, x0, y0, text, color, GAP, Some(edge - x0));
+    let style = TextStyle {
+        color,
+        gap: GAP,
+        max_width: Some(edge - x0),
+    };
+    font.draw_text(&mut buf, edge, x0, y0, text, &style);
     buf
 }
 
@@ -192,38 +197,25 @@ pub(crate) fn render_stock(symbol: &str, price: f64, change: f64, size: u32) -> 
 
     if size == 16 {
         draw_triangle(&mut buf, edge, is_up, text_color);
-        font.draw_text(
-            &mut buf,
-            edge,
-            0,
-            6,
-            &symbol.to_uppercase(),
-            (255, 255, 255),
-            1,
-            Some(edge),
-        );
+        let label = TextStyle {
+            color: (255, 255, 255),
+            gap: 1,
+            max_width: Some(edge),
+        };
+        font.draw_text(&mut buf, edge, 0, 6, &symbol.to_uppercase(), &label);
     } else {
-        font.draw_text(
-            &mut buf,
-            edge,
-            2,
-            2,
-            &symbol.to_uppercase(),
-            (255, 255, 255),
-            1,
-            Some(edge - 2),
-        );
+        let label = TextStyle {
+            color: (255, 255, 255),
+            gap: 1,
+            max_width: Some(edge - 2),
+        };
+        font.draw_text(&mut buf, edge, 2, 2, &symbol.to_uppercase(), &label);
         draw_triangle_32(&mut buf, edge, is_up, text_color);
-        font.draw_text(
-            &mut buf,
-            edge,
-            2,
-            16,
-            &format!("${price:.2}"),
-            text_color,
-            1,
-            Some(edge - 2),
-        );
+        let price_style = TextStyle {
+            color: text_color,
+            ..label
+        };
+        font.draw_text(&mut buf, edge, 2, 16, &format!("${price:.2}"), &price_style);
     }
 
     buf
@@ -267,7 +259,12 @@ mod tests {
         let font = BitmapFont::new(FONT_BYTES);
         let mut buf = vec![0u8; 256 * 256 * 3];
         for text in ["A", "HI", "HELLO", "A B", "  ", "12:34", "!@#"] {
-            let drawn = font.draw_text(&mut buf, 256, 0, 0, text, (255, 255, 255), 1, None);
+            let style = TextStyle {
+                color: (255, 255, 255),
+                gap: 1,
+                max_width: None,
+            };
+            let drawn = font.draw_text(&mut buf, 256, 0, 0, text, &style);
             assert_eq!(
                 font.measure_width(text, 1),
                 drawn,

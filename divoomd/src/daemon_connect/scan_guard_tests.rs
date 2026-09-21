@@ -124,10 +124,6 @@ async fn connect_disconnect_reconnect_loop_stays_responsive() {
 // mock op must complete well within that and leave the lock free for the next
 // call (no false-fire, no wedge). Verifying the timeout *fires* on a genuinely
 // hung op needs real hardware (or a network-blocked LAN target) — see plan.
-#[expect(
-    clippy::similar_names,
-    reason = "a test that issues two numbered requests and compares their two numbered replies"
-)]
 #[tokio::test]
 async fn device_call_timeout_enforced_but_not_false_firing() {
     let daemon = Daemon::new();
@@ -138,27 +134,27 @@ async fn device_call_timeout_enforced_but_not_false_firing() {
     .await;
     assert_eq!(c["success"], json!(true));
 
-    let req = make_request(
+    let first = make_request(
         "device_call",
         Some(json!({ "method": "display.get_brightness" })),
         None,
     );
-    let res = tokio::time::timeout(
+    let first_reply = tokio::time::timeout(
         std::time::Duration::from_secs(2),
-        daemon.cmd_device_call(&req),
+        daemon.cmd_device_call(&first),
     )
     .await
     .expect("device_call must return within 2s — the timeout path must not hang");
-    assert_eq!(res["success"], json!(true));
+    assert_eq!(first_reply["success"], json!(true));
 
     // The lock was released: a second call is immediately possible.
-    let req2 = make_request(
+    let second = make_request(
         "device_call",
         Some(json!({ "method": "display.get_brightness" })),
         None,
     );
-    let res2 = daemon.cmd_device_call(&req2).await;
-    assert_eq!(res2["success"], json!(true));
+    let second_reply = daemon.cmd_device_call(&second).await;
+    assert_eq!(second_reply["success"], json!(true));
 }
 
 // A caller-requested short timeout on a fast mock op must still succeed — the

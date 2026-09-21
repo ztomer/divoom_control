@@ -85,3 +85,22 @@ async fn load_hot_files_returns_cached_without_refetch() {
     assert_eq!(got[0].file_id, "x.bin");
     clear_manifest_cache();
 }
+
+/// RFC 3174's own vectors: the digest the manifest compares uploads against
+/// must be the standard SHA-1, not something merely 40 hex characters long.
+#[test]
+fn sha1_matches_the_rfc_3174_vectors() {
+    use super::sha1_digest_hex;
+    assert_eq!(
+        sha1_digest_hex(b"abc"),
+        "a9993e364706816aba3e25717850c26c9cd0d89d"
+    );
+    assert_eq!(
+        sha1_digest_hex(b""),
+        "da39a3ee5e6b4b0d3255bfef95601890afd80709"
+    );
+    assert_eq!(
+        sha1_digest_hex(b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"),
+        "84983e441c3bd26ebaae4aa1f95129e5e54670f1"
+    );
+}

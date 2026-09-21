@@ -17,7 +17,10 @@ mod tests {
     #[test]
     fn clock_humidity_sets_byte_4_only() {
         let p = ClockPacket {
-            humidity: true,
+            faces: ClockFaces {
+                humidity: true,
+                ..Default::default()
+            },
             ..Default::default()
         };
         let b = p.to_bytes();
@@ -27,7 +30,10 @@ mod tests {
     #[test]
     fn clock_weather_sets_byte_5_only() {
         let p = ClockPacket {
-            weather: true,
+            faces: ClockFaces {
+                weather: true,
+                ..Default::default()
+            },
             ..Default::default()
         };
         let b = p.to_bytes();
@@ -42,7 +48,10 @@ mod tests {
     #[test]
     fn clock_date_sets_byte_6_only() {
         let p = ClockPacket {
-            date: true,
+            faces: ClockFaces {
+                date: true,
+                ..Default::default()
+            },
             ..Default::default()
         };
         let b = p.to_bytes();
@@ -67,9 +76,11 @@ mod tests {
             twentyfour: true,
             style: 7,
             active: true,
-            humidity: true,
-            weather: false,
-            date: true,
+            faces: ClockFaces {
+                humidity: true,
+                weather: false,
+                date: true,
+            },
             rgb: [0xAA, 0xBB, 0xCC],
         };
         assert_eq!(

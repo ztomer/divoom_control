@@ -237,14 +237,10 @@ async fn subscribers_cannot_starve_request_handling() {
         Duration::from_secs(60),
     ));
 
-    // Fill the subscription budget.
-    // NOT dead, though nothing reads it: it holds the two streams OPEN, which
-    // is what keeps their subscriptions occupying the budget. Drop it and the
-    // third subscribe below succeeds and the test asserts nothing.
-    #[expect(
-        clippy::collection_is_never_read,
-        reason = "an RAII holder: the connections must outlive the assertions"
-    )]
+    // Fill the subscription budget. The holder keeps the two streams OPEN,
+    // which is what keeps their subscriptions occupying the budget; the
+    // count is asserted below so the budget the third subscribe hits is the
+    // one this test built.
     let mut subs = Vec::new();
     let mut buf = [0u8; 512];
     for i in 0..2 {
@@ -260,6 +256,7 @@ async fn subscribers_cannot_starve_request_handling() {
         assert_eq!(v["type"], json!("status"), "subscriber {i}: {v}");
         subs.push(s);
     }
+    assert_eq!(subs.len(), 2, "both subscribers are held open");
 
     // A 3rd subscribe is refused with a REASON, not silence...
     let mut extra = UnixStream::connect(&path).await.unwrap();

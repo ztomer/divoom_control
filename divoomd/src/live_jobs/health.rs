@@ -103,37 +103,33 @@ impl JobHealth {
 
     /// Record the current state; emit `live_job_state` if it differs from the
     /// last one. Returns true when an event was emitted.
-    #[expect(
-        clippy::needless_pass_by_value,
-        reason = "a small enum the caller constructs for this call and nothing else"
-    )]
-    pub fn report(&self, state: JobState) -> bool {
+    pub fn report(&self, state: &JobState) -> bool {
         {
             let Ok(mut guard) = self.last.lock() else {
                 return false;
             };
-            if guard.as_ref() == Some(&state) {
+            if guard.as_ref() == Some(state) {
                 return false;
             }
             *guard = Some(state.clone());
         }
-        let _ = self.tx.send(self.event_for(&state));
+        let _ = self.tx.send(self.event_for(state));
         true
     }
 
     /// Convenience: report Running.
     pub fn running(&self) -> bool {
-        self.report(JobState::Running)
+        self.report(&JobState::Running)
     }
 
     /// Convenience: report `WaitingForDevice`.
     pub fn waiting(&self) -> bool {
-        self.report(JobState::WaitingForDevice)
+        self.report(&JobState::WaitingForDevice)
     }
 
     /// Convenience: report Failed.
     pub fn failed(&self, reason: impl Into<String>) -> bool {
-        self.report(JobState::Failed(reason.into()))
+        self.report(&JobState::Failed(reason.into()))
     }
 }
 

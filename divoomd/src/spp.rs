@@ -183,11 +183,9 @@ impl SppTransport {
         payload.push(command_id);
         payload.extend_from_slice(args);
 
-        #[expect(
-            clippy::significant_drop_in_scrutinee,
-            reason = "the guard is a temporary of this `let` and drops at its semicolon, before the send below"
-        )]
-        let framing_str = match *self.protocol.lock().unwrap() {
+        // Copied out under the lock; the guard is gone before the send.
+        let protocol = *self.protocol.lock().unwrap();
+        let framing_str = match protocol {
             Protocol::Basic => "basic",
             Protocol::IosLe => "ios_le",
         };

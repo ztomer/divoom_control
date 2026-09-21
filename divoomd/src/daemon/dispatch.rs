@@ -230,7 +230,7 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
                 return err_reply("Daemon was dropped");
             };
             let progress = daemon.hot_progress.clone();
-            crate::art::cmd_hot_update(daemon_arc, &req.args, progress).await
+            crate::art::cmd_hot_update(daemon_arc, &req.args, progress)
         }
 
         "hot_update_progress" => crate::art::cmd_hot_update_progress(&daemon.hot_progress),

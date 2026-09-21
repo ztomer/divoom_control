@@ -347,9 +347,11 @@ fn clock_packet_from_call(
         twentyfour: kwb("twentyfour", true),
         style,
         active: true,
-        humidity: kwb("humidity", false),
-        weather: kwb("weather", false),
-        date: kwb("date", false),
+        faces: crate::packets::ClockFaces {
+            humidity: kwb("humidity", false),
+            weather: kwb("weather", false),
+            date: kwb("date", false),
+        },
         rgb,
     }
 }

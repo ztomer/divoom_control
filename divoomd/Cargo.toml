@@ -39,6 +39,7 @@ rusqlite = { version = "0.40", features = ["bundled"] }
 plist = "1"
 sysinfo = "0.30"
 md-5 = "0.10"
+sha1 = "0.10"
 hmac = "0.12"
 # LZO1X decompression for magic 18/26 cloud containers (parity with the Python
 # daemon's lzallright/liblzo2). Pure Rust port of minilzo.

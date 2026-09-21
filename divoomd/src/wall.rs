@@ -221,31 +221,23 @@ impl DivoomWall {
             } else {
                 slot.y * slot.size
             };
-            let width = slot.width.unwrap_or(slot.size);
-            let height = slot.height.unwrap_or(slot.size);
+            let cut = SlotCut {
+                width: slot.width.unwrap_or(slot.size),
+                height: slot.height.unwrap_or(slot.size),
+                left,
+                upper,
+                size: slot.size,
+                total_width: self.total_width,
+                total_height: self.total_height,
+                is_free_form: self.is_free_form,
+            };
 
             let data_vec = img_data.to_vec();
-            let total_w = self.total_width;
-            let total_h = self.total_height;
-            let is_ff = self.is_free_form;
-            let size = slot.size;
             let daemon_clone = daemon.clone();
 
             tasks.push(tokio::spawn(async move {
                 let frames = tokio::task::spawn_blocking(move || {
-                    process_wall_image(
-                        &data_vec,
-                        is_gif,
-                        width,
-                        height,
-                        left,
-                        upper,
-                        size,
-                        total_w,
-                        total_h,
-                        is_ff,
-                        default_time_ms,
-                    )
+                    process_wall_image(&data_vec, is_gif, &cut, default_time_ms)
                 })
                 .await
                 .map_err(|e| e.to_string())??;
@@ -408,20 +400,50 @@ fn dim(x: i32) -> u32 {
     u32::try_from(x).expect("wall geometry is non-negative")
 }
 
-#[expect(clippy::too_many_arguments)]
-fn process_wall_image(
-    data: &[u8],
-    is_gif: bool,
-    slot_width: i32,
-    slot_height: i32,
-    slot_left: i32,
-    slot_upper: i32,
-    slot_size: i32,
+/// One slot's cut of the wall image: the wall the image is scaled to, and the
+/// rectangle of it this device shows (resized to `size` square in a free-form
+/// wall).
+#[derive(Debug, Clone, Copy)]
+struct SlotCut {
+    width: i32,
+    height: i32,
+    left: i32,
+    upper: i32,
+    size: i32,
     total_width: i32,
     total_height: i32,
     is_free_form: bool,
+}
+
+impl SlotCut {
+    /// The wall-sized image cropped to this slot (and squared in a free-form
+    /// wall), as raw RGB.
+    fn cut(&self, img: &image::DynamicImage) -> Vec<u8> {
+        let scaled = img.resize_exact(
+            dim(self.total_width),
+            dim(self.total_height),
+            FilterType::Nearest,
+        );
+        let mut cropped = scaled.crop_imm(
+            dim(self.left),
+            dim(self.upper),
+            dim(self.width),
+            dim(self.height),
+        );
+        if self.is_free_form {
+            cropped = cropped.resize_exact(dim(self.size), dim(self.size), FilterType::Nearest);
+        }
+        cropped.to_rgb8().into_raw()
+    }
+}
+
+fn process_wall_image(
+    data: &[u8],
+    is_gif: bool,
+    cut: &SlotCut,
     default_time_ms: u16,
 ) -> Result<Vec<crate::image_proc::Frame>, String> {
+    let slot_size = cut.size;
     if is_gif {
         use image::codecs::gif::GifDecoder;
         use image::AnimationDecoder;
@@ -444,35 +466,12 @@ fn process_wall_image(
                     .unwrap_or(u16::MAX)
                     .max(50)
             };
-            let rgba = frame.into_buffer();
-            let mut img = image::DynamicImage::ImageRgba8(rgba);
-            img = img.resize_exact(dim(total_width), dim(total_height), FilterType::Nearest);
-            let mut cropped = img.crop_imm(
-                dim(slot_left),
-                dim(slot_upper),
-                dim(slot_width),
-                dim(slot_height),
-            );
-            if is_free_form {
-                cropped = cropped.resize_exact(dim(slot_size), dim(slot_size), FilterType::Nearest);
-            }
-            let rgb = cropped.to_rgb8().into_raw();
+            let rgb = cut.cut(&image::DynamicImage::ImageRgba8(frame.into_buffer()));
             out.push((rgb, slot_size, slot_size, time_ms));
         }
         Ok(out)
     } else {
-        let mut img = image::load_from_memory(data).map_err(|e| format!("image load: {e}"))?;
-        img = img.resize_exact(dim(total_width), dim(total_height), FilterType::Nearest);
-        let mut cropped = img.crop_imm(
-            dim(slot_left),
-            dim(slot_upper),
-            dim(slot_width),
-            dim(slot_height),
-        );
-        if is_free_form {
-            cropped = cropped.resize_exact(dim(slot_size), dim(slot_size), FilterType::Nearest);
-        }
-        let rgb = cropped.to_rgb8().into_raw();
-        Ok(vec![(rgb, slot_size, slot_size, default_time_ms)])
+        let img = image::load_from_memory(data).map_err(|e| format!("image load: {e}"))?;
+        Ok(vec![(cut.cut(&img), slot_size, slot_size, default_time_ms)])
     }
 }

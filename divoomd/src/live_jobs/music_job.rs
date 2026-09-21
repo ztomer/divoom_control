@@ -55,7 +55,7 @@ pub(super) async fn run_music(
         let connected = get_device_transport(&daemon, &mac).await.is_some();
         report_health(
             &daemon,
-            &health,
+            health.as_ref(),
             &mac,
             JOB_KIND,
             if connected {
@@ -70,7 +70,7 @@ pub(super) async fn run_music(
             Err(e) => {
                 report_health(
                     &daemon,
-                    &health,
+                    health.as_ref(),
                     &mac,
                     JOB_KIND,
                     health::JobState::Failed(format!("now-playing unavailable: {e}")),
@@ -85,7 +85,7 @@ pub(super) async fn run_music(
             Ok(Some(track)) if !track.is_playing => {
                 report_health(
                     &daemon,
-                    &health,
+                    health.as_ref(),
                     &mac,
                     JOB_KIND,
                     health::JobState::Failed(format!("paused: {}", track.display())),
@@ -102,7 +102,7 @@ pub(super) async fn run_music(
                         None => {
                             report_health(
                                 &daemon,
-                                &health,
+                                health.as_ref(),
                                 &mac,
                                 JOB_KIND,
                                 health::JobState::Failed(format!(
@@ -121,7 +121,7 @@ pub(super) async fn run_music(
                             Err(e) => {
                                 report_health(
                                     &daemon,
-                                    &health,
+                                    health.as_ref(),
                                     &mac,
                                     JOB_KIND,
                                     health::JobState::Failed(format!(
@@ -155,7 +155,7 @@ pub(super) async fn run_music(
                                             last_identity = identity;
                                             report_health(
                                                 &daemon,
-                                                &health,
+                                                health.as_ref(),
                                                 &mac,
                                                 JOB_KIND,
                                                 health::JobState::Running,

@@ -70,12 +70,10 @@ pub async fn run() -> std::io::Result<()> {
     Ok(())
 }
 
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "the result is moved into the reply object being built; borrowing it would mean cloning it straight back out"
-)]
 fn ok(id: &Value, result: Value) -> Value {
-    json!({ "jsonrpc": "2.0", "id": id, "result": result })
+    let mut reply = json!({ "jsonrpc": "2.0", "id": id });
+    reply["result"] = result;
+    reply
 }
 
 fn err(id: &Value, code: i64, message: &str) -> Value {
