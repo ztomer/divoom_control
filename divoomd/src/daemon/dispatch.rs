@@ -1,7 +1,7 @@
 //! The daemon's NDJSON command dispatcher. Split from daemon.rs to stay
 //! under the 500-LOC ground rule.
 
-use crate::daemon::Daemon;
+use crate::daemon::{notifications, Daemon};
 use crate::protocol::{err_reply, Request};
 use serde_json::{json, Value};
 
@@ -91,13 +91,13 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
         "set_topology" => daemon.cmd_set_topology(&req).await,
 
         // --- notification service stubs (macOS only, but wired for parity) ---
-        "start_notifications" => start_notifications(daemon).await,
+        "start_notifications" => notifications::start(daemon).await,
 
-        "stop_notifications" => stop_notifications().await,
+        "stop_notifications" => notifications::stop().await,
 
-        "notification_status" => notification_status().await,
+        "notification_status" => notifications::status().await,
 
-        "set_routing" => set_routing(req).await,
+        "set_routing" => notifications::set_routing(req).await,
 
         "fetch_gallery"
         | "save_credentials"
@@ -121,13 +121,7 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
     }
 }
 async fn get_status(daemon: &Daemon) -> Value {
-    #[cfg(target_os = "macos")]
-    let status = crate::macos_notifications::status_event().await;
-    #[cfg(not(target_os = "macos"))]
-    let status = json!({
-        "state": "idle",
-        "counters": {"seen": 0, "routed": 0, "dropped": 0}
-    });
+    let status = notifications::status_event().await;
 
     let mut res = json!({
         "success": true,
@@ -322,61 +316,4 @@ fn hot_update(daemon: &Daemon, req: &Request) -> Value {
     };
     let progress = daemon.hot_progress.clone();
     crate::art::cmd_hot_update(daemon_arc, &req.args, progress)
-}
-
-async fn start_notifications(daemon: &Daemon) -> Value {
-    #[cfg(target_os = "macos")]
-    {
-        if let Some(w) = daemon.self_weak.get().and_then(std::sync::Weak::upgrade) {
-            crate::macos_notifications::start_monitor(w).await;
-            let mut status = crate::macos_notifications::status_event().await;
-            status["success"] = json!(true);
-            return status;
-        }
-    }
-    json!({
-        "success": false,
-        "error": "notifications not available on this platform",
-        "state": "idle",
-        "counters": {"seen": 0, "routed": 0, "dropped": 0},
-        "unsupported": true
-    })
-}
-
-async fn stop_notifications() -> Value {
-    #[cfg(target_os = "macos")]
-    {
-        crate::macos_notifications::stop_monitor().await;
-        let mut status = crate::macos_notifications::status_event().await;
-        status["success"] = json!(true);
-        status
-    }
-    #[cfg(not(target_os = "macos"))]
-    json!({
-        "success": true,
-        "state": "idle",
-        "counters": {"seen": 0, "routed": 0, "dropped": 0}
-    })
-}
-
-async fn notification_status() -> Value {
-    #[cfg(target_os = "macos")]
-    {
-        crate::macos_notifications::notification_status().await
-    }
-    #[cfg(not(target_os = "macos"))]
-    json!({
-        "success": true,
-        "state": "idle",
-        "counters": {"seen": 0, "routed": 0, "dropped": 0}
-    })
-}
-
-async fn set_routing(req: Request) -> Value {
-    #[cfg(target_os = "macos")]
-    {
-        return crate::macos_notifications::set_routing(&req.args).await;
-    }
-    #[cfg(not(target_os = "macos"))]
-    json!({"success": true})
 }

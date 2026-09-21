@@ -26,6 +26,7 @@ use crate::central::BleCentral;
 use tokio::sync::Mutex;
 
 mod dispatch;
+mod notifications;
 
 pub(crate) const EXCLUSIVE_TIMEOUT: Duration = Duration::from_secs(30);
 pub(crate) const ITEM_TIMEOUT: Duration = Duration::from_secs(60);
