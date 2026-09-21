@@ -114,6 +114,28 @@ def balanced_body(src: str, start: int, hard_end: int) -> str:
     return src[start:hard_end]
 
 
+CALL_ARM_RE = re.compile(r"\s*(?:\w+::)*(\w+)\s*\(")
+
+
+def arm_body(src: str, start: int, hard_end: int) -> str:
+    """The code an arm runs: its brace-delimited block, or, for the thin
+    dispatch shape (`"name" => handler(ctx).await,`), the body of the named
+    fn in the same file. Without the second case an expression arm has no
+    braces, `balanced_body` runs to the end of the file, and every helper fn
+    after the match is attributed to the last arm."""
+    tail = src[start:hard_end]
+    if tail.lstrip().startswith("{"):
+        return balanced_body(src, start, hard_end)
+    m = CALL_ARM_RE.match(tail)
+    if m:
+        fn = re.search(r"\bfn\s+" + re.escape(m.group(1)) + r"\s*\(", src)
+        if fn:
+            return balanced_body(src, fn.end(), len(src))
+    # a bare expression arm: up to its comma
+    end = tail.find(",\n")
+    return tail if end < 0 else tail[:end]
+
+
 def rust_arms() -> list[tuple[str, list[str], set[int], Path]]:
     """(primary method, all aliases, compacted indices read, file)."""
     out = []
@@ -127,7 +149,7 @@ def rust_arms() -> list[tuple[str, list[str], set[int], Path]]:
             # the helper functions after the match, whose `args` reads then got
             # attributed to it.
             body_end = marks[i + 1][0] if i + 1 < len(marks) else len(src)
-            body = balanced_body(src, end, body_end)
+            body = arm_body(src, end, body_end)
             idxs = {int(g.group(1)) for g in GET_RE.finditer(body)}
             if FIRST_RE.search(body):
                 idxs.add(0)
