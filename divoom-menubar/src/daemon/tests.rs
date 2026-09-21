@@ -95,10 +95,6 @@ fn connection_state_is_none_when_daemon_unreachable() {
     assert_eq!(connection_state(), None);
 }
 
-#[expect(
-    clippy::significant_drop_tightening,
-    reason = "an RAII fixture, not a lock: dropping it early shuts the fake daemon down before the subscriber connects, which the ordering assertion below then fails on"
-)]
 #[test]
 fn subscribe_delivers_every_broadcast_event_in_order() {
     let events = vec![
@@ -125,6 +121,9 @@ fn subscribe_delivers_every_broadcast_event_in_order() {
 
     assert!(connected, "subscribe should report it connected");
     assert_eq!(*received.lock().unwrap(), events);
+    // The fake daemon is an RAII fixture: it must stay alive through the
+    // asserts above. Spelled out so the drop is a decision, not an accident.
+    drop(daemon);
 }
 
 /// Both snapshot tests mutate the process-global SNAPSHOT: hold the lock

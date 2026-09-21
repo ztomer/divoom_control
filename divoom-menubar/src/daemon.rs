@@ -14,12 +14,10 @@ pub fn socket_path() -> String {
 
 /// One request → one reply. `None` if the daemon is unreachable or the reply
 /// doesn't parse (the caller treats unreachable as "daemon offline").
+/// `args` is borrowed: every call site passes a short-lived `json!` value
+/// that is only ever serialised into the request.
 #[cfg(unix)]
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "the value is serialised into the request and never wanted again; borrowing puts an & on every call site to save a move of something the caller has finished with"
-)]
-pub fn request(command: &str, args: Value) -> Option<Value> {
+pub fn request(command: &str, args: &Value) -> Option<Value> {
     use std::io::{BufRead, BufReader, Write};
     use std::os::unix::net::UnixStream;
     use std::time::Duration;
@@ -45,7 +43,7 @@ pub fn request(command: &str, args: Value) -> Option<Value> {
 // Windows transport (daemon TCP+token) is deferred — same status as divoomd's own
 // Windows support. The menubar still runs; it just reports the daemon offline.
 #[cfg(not(unix))]
-pub fn request(_command: &str, _args: Value) -> Option<Value> {
+pub fn request(_command: &str, _args: &Value) -> Option<Value> {
     None
 }
 
@@ -56,18 +54,15 @@ pub enum Status {
     Active,
 }
 
-#[expect(
-    clippy::option_if_let_else,
-    reason = "a two-level lookup: the daemon answering at all, then what it said. `map_or_else` nests a closure in a closure to save one `match`"
-)]
 pub fn status() -> Status {
-    match request("get_status", json!({})) {
-        None => Status::Offline,
-        Some(v) => match v.get("state").and_then(|s| s.as_str()) {
+    // A two-level lookup — the daemon answering at all, then what it said —
+    // as combinators rather than nested matches.
+    request("get_status", &json!({})).map_or(Status::Offline, |v| {
+        match v.get("state").and_then(|s| s.as_str()) {
             Some("active") => Status::Active,
             _ => Status::Idle,
-        },
-    }
+        }
+    })
 }
 
 /// The daemon's honest device connection state (`device_status`'s
@@ -76,7 +71,7 @@ pub fn status() -> Status {
 /// Mirrors the Python GUI's `ScannerMixin.get_connection_state` (R61
 /// follow-up — the menubar previously never read this at all).
 pub fn connection_state() -> Option<String> {
-    let v = request("device_status", json!({}))?;
+    let v = request("device_status", &json!({}))?;
     v.get("connection_state")
         .and_then(|s| s.as_str())
         .map(str::to_string)
@@ -254,37 +249,43 @@ pub fn get_cached_snapshot() -> Option<DaemonSnapshot> {
     SNAPSHOT.lock().unwrap().clone()
 }
 
-#[expect(
-    clippy::significant_drop_tightening,
-    reason = "updates the cached DaemonSnapshot in place under the mutex lock"
-)]
 pub fn update_snapshot_from_event(ev: &Value) {
-    let mut guard = SNAPSHOT.lock().unwrap();
-    let snap = guard.get_or_insert_with(DaemonSnapshot::default);
-    snap.reachable = true;
-    snap.last_event_at = Some(std::time::Instant::now());
-
-    let Some(event_type) = ev
+    // Parse before locking: this reads only the event, so the mutex is held
+    // purely for the in-place mutation inside `apply_event`, never across a
+    // return. The lock is taken on a temporary — no named guard outlives the
+    // mutation it protects.
+    let event_type = ev
         .get("type")
         .or_else(|| ev.get("event"))
-        .and_then(Value::as_str)
-    else {
-        return;
-    };
-    match event_type {
-        "status" => snap.apply_status(ev),
-        "notification_status" => {
-            snap.notifications_running =
-                ev.get("running").and_then(Value::as_bool).unwrap_or(false);
-        }
-        "owned_devices" => snap.apply_owned_devices(ev),
-        "activity" => snap.apply_activity(ev),
-        "selection" => snap.apply_selection(ev.get("mac").and_then(Value::as_str)),
-        _ => {}
-    }
+        .and_then(Value::as_str);
+    SNAPSHOT
+        .lock()
+        .unwrap()
+        .get_or_insert_with(DaemonSnapshot::default)
+        .apply_event(ev, event_type);
 }
 
 impl DaemonSnapshot {
+    /// Fold one broadcast event into the cached snapshot. Runs under the
+    /// snapshot mutex (called on the lock temporary), so every field update
+    /// below is one atomic step — including the reachable/seen-at stamp,
+    /// which is set even for an event type this switch ignores.
+    fn apply_event(&mut self, ev: &Value, event_type: Option<&str>) {
+        self.reachable = true;
+        self.last_event_at = Some(std::time::Instant::now());
+        match event_type {
+            Some("status") => self.apply_status(ev),
+            Some("notification_status") => {
+                self.notifications_running =
+                    ev.get("running").and_then(Value::as_bool).unwrap_or(false);
+            }
+            Some("owned_devices") => self.apply_owned_devices(ev),
+            Some("activity") => self.apply_activity(ev),
+            Some("selection") => self.apply_selection(ev.get("mac").and_then(Value::as_str)),
+            _ => {}
+        }
+    }
+
     /// A `status` broadcast: per-device when it names a panel (`mac` or
     /// `lan_ip`), fleet-wide when it names nobody (a disconnect-all).
     fn apply_status(&mut self, ev: &Value) {
@@ -407,7 +408,7 @@ pub fn set_cached_snapshot(snap: DaemonSnapshot) {
 /// `get_device_activity`, which lists only panels with a live-widget
 /// record: with two idle panels linked the tray said "No active devices".
 pub fn owned_devices() -> Vec<DeviceView> {
-    let Some(v) = request("owned_devices", json!({})) else {
+    let Some(v) = request("owned_devices", &json!({})) else {
         return Vec::new();
     };
     let mut snap = DaemonSnapshot::default();

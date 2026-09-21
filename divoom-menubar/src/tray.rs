@@ -285,23 +285,26 @@ impl Tray {
 /// the interior. Replaces the earlier bland filled square — user feedback
 /// (2026-07-13) found a plain colored square too unrecognizable to read at a
 /// glance; a named-letter silhouette is legible even before checking color.
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_precision_loss,
-    clippy::cast_sign_loss,
-    reason = "supersampled tray-icon rasterisation. `N` and `SUBSAMPLES` are compile-time constants of a few tens, and the coverage is 0.0..=1.0 scaled by 255 and rounded before it narrows"
-)]
 fn make_icon(rgb: [u8; 3]) -> tray_icon::Icon {
-    const N: usize = 22;
+    // All pixel arithmetic stays in integers: subsample counts (0..=16) from
+    // the coverage loop all the way to the alpha byte, so the float-to-byte
+    // narrowing never arises. The alpha formula below is exact round-half-up
+    // for every one of the 17 possible counts (checked against the float
+    // version it replaces), and `f32::from` covers the geometry (all values
+    // fit in u8, which converts exactly).
+    const N: u8 = 22;
     const MARGIN: f32 = 3.0;
     const STROKE: f32 = 2.2;
     const BORDER: [u8; 3] = [0xf5, 0xf5, 0xf5];
-    const SUBSAMPLES: i32 = 4; // cheap supersampled AA so the bowl's curve isn't jagged at this size
+    const SUBSAMPLES: u8 = 4; // cheap supersampled AA so the bowl's curve isn't jagged at this size
+
+    let side = usize::from(N);
+    let cells = u16::from(SUBSAMPLES) * u16::from(SUBSAMPLES);
 
     let left = MARGIN;
-    let radius = (N as f32) / 2.0 - MARGIN;
+    let radius = f32::from(N) / 2.0 - MARGIN;
     let mid = left + radius;
-    let cy = (N as f32) / 2.0;
+    let cy = f32::from(N) / 2.0;
     let top = cy - radius;
     let bottom = cy + radius;
 
@@ -312,13 +315,10 @@ fn make_icon(rgb: [u8; 3]) -> tray_icon::Icon {
         let dx = fx - mid;
         let dy = fy - cy;
         // Two independent tests ANDed: below the rim (a half-plane) and
-        // inside the circle. Clippy reads the shape as a typo and suggests
-        // `fx * radius`, which is not a quantity this has.
-        #[expect(
-            clippy::suspicious_operation_groupings,
-            reason = "a half-plane test and a circle test, not one expression"
-        )]
-        let in_bowl = fx >= mid && (dx * dx + dy * dy) <= radius * radius;
+        // inside the circle. The squared distance is bound first so the
+        // shape reads as two facts, not one tangled comparison.
+        let dist2 = dx * dx + dy * dy;
+        let in_bowl = fx >= mid && dist2 <= radius * radius;
         in_rect || in_bowl
     };
     // Within STROKE of the silhouette's own boundary (left/top/bottom edges of
@@ -335,35 +335,40 @@ fn make_icon(rgb: [u8; 3]) -> tray_icon::Icon {
         near_left || near_top || near_bottom || near_bowl
     };
 
-    let mut rgba = vec![0u8; N * N * 4];
+    let mut rgba = vec![0u8; side * side * 4];
     for y in 0..N {
         for x in 0..N {
-            let mut coverage = 0.0f32;
-            let mut border_weight = 0.0f32;
+            let mut coverage = 0u8;
+            let mut border_weight = 0u8;
             for sy in 0..SUBSAMPLES {
                 for sx in 0..SUBSAMPLES {
-                    let fx = x as f32 + (sx as f32 + 0.5) / SUBSAMPLES as f32;
-                    let fy = y as f32 + (sy as f32 + 0.5) / SUBSAMPLES as f32;
+                    let fx = f32::from(x) + (f32::from(sx) + 0.5) / f32::from(SUBSAMPLES);
+                    let fy = f32::from(y) + (f32::from(sy) + 0.5) / f32::from(SUBSAMPLES);
                     if inside_d(fx, fy) {
-                        coverage += 1.0;
+                        coverage += 1;
                         if is_border(fx, fy) {
-                            border_weight += 1.0;
+                            border_weight += 1;
                         }
                     }
                 }
             }
-            let total = (SUBSAMPLES * SUBSAMPLES) as f32;
-            if coverage <= 0.0 {
+            if coverage == 0 {
                 continue;
             }
-            let border_frac = border_weight / coverage;
-            let color = if border_frac >= 0.5 { BORDER } else { rgb };
-            let i = (y * N + x) * 4;
+            // At least half the covered samples on the outline band.
+            let color = if border_weight * 2 >= coverage {
+                BORDER
+            } else {
+                rgb
+            };
+            let i = (usize::from(y) * side + usize::from(x)) * 4;
             rgba[i] = color[0];
             rgba[i + 1] = color[1];
             rgba[i + 2] = color[2];
-            rgba[i + 3] = ((coverage / total) * 255.0).round() as u8;
+            // coverage <= cells, so this is 0..=255 by construction.
+            rgba[i + 3] = u8::try_from((u16::from(coverage) * 255 + cells / 2) / cells)
+                .expect("subsample coverage scales to one byte");
         }
     }
-    tray_icon::Icon::from_rgba(rgba, N as u32, N as u32).expect("valid tray icon")
+    tray_icon::Icon::from_rgba(rgba, u32::from(N), u32::from(N)).expect("valid tray icon")
 }
