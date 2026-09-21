@@ -71,7 +71,7 @@ both are held to the same correctness tests (see *Testing*).
   targets (i686 / armv7) are not supported on any OS. (BLE via `bleak` in Python /
   `btleplug` in Rust — CoreBluetooth on macOS, BlueZ on Linux). The **GUI +
   menu-bar + now-playing sync are macOS-only** today.
-- **Python 3.10+** (uses `X | None` type syntax). CI and the shipped app build on
+- **Python 3.14** (uses `X | None` type syntax). CI and the shipped app build on
   **Python 3.14**.
 - Python deps in `requirements.txt` (`bleak`, `aiohttp`, `pillow`, `pywebview`, …).
 - **Rust** (stable, via `rustup`) to build the daemon (`divoomd`) + menu-bar —
@@ -186,7 +186,7 @@ divoom_gui/            Desktop Control Center (pywebview, macOS) — daemon clie
   gui_main.py            launcher + Python↔JS bridge; spawns divoomd + divoom-menubar
   daemon_bridge.py       re-exports ensure_daemon()/DaemonDeviceProxy for the GUI
   web_ui/                frontend (app.js, channels.js, widgets.js, …)
-divoom-menubar/        the menu-bar/tray agent, Rust (tao + tray-icon)
+divoom-menubar/        the menu-bar/tray agent, Rust (winit + tray-icon)
 build.sh / run.sh      build the Rust binaries / run the GUI (+ daemon + menubar)
 scripts/build_libdivoom.sh   cross-platform native (C accelerator) build
 scripts/build_release.sh     build the shippable Divoom.app + dmg (py2app)
