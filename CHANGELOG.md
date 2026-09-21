@@ -4,6 +4,73 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## Unreleased — MCP negotiation, Python 3.14 floor, menubar off tao (UNCOMMITTED, owner review pending)
+
+- **MCP `initialize` now negotiates the protocol version (SEP-2575,
+  latest `2026-07-28`).** Both live servers — the native `divoomd mcp`
+  (`divoomd/src/mcp.rs`) and the Python `divoom-control mcp-server`
+  (`divoom_lib/mcp_server.py`) — answer with the client's requested
+  version when it is one of `2024-11-05`, `2025-03-26`, `2025-06-18`,
+  `2025-11-25`, `2026-07-28`, else the latest `2026-07-28`; extra
+  `params` members such as `_meta` are tolerated. Fleet reference:
+  zinc's `engine_client.PROTOCOL_VERSION = "2026-07-28"`. Removed the
+  `MCPServer(protocol_version=...)` constructor override (no in-repo
+  callers; negotiation is now the single path). `docs/MCP_SERVER.md`
+  updated. Tests: the initialize pin moved to `2026-07-28` plus new
+  negotiation tests (echo-each-supported, unknown/missing-gets-latest,
+  `_meta`-tolerated) and a Rust `negotiate_protocol_version` unit test.
+  MCP pytest files green (110 passed, 1 skipped — the `divoomd mcp`
+  end-to-end skips: no built binary; the Rust side wants
+  `cargo build -p divoomd` + a re-run before commit).
+- **Python floor raised to 3.14, Pillow floored at 12.**
+  `requires-python` was `>=3.10` → `>=3.14` in `pyproject.toml`
+  (classifiers pruned to 3.14; `README.md`'s leftover "Python 3.10+"
+  line fixed to match), `pillow` → `pillow>=12` in both
+  `pyproject.toml` and `requirements.txt`, and the dead
+  `tomli; python_version < '3.11'` marker removed from both (nothing
+  imports tomli; `tests/` already imports stdlib `tomllib`, so 3.10
+  was already broken for the suite). Evidence: CI `setup-python` is
+  3.14 in both jobs, local is 3.14.7, `.buildvenv` is 3.14,
+  README/RELEASING say the shipped app builds on 3.14, and no
+  3.10–3.13 interpreter exists on this machine. Pillow rationale:
+  `get_flattened_data()` (the `getdata()` replacement — `getdata` is
+  removed in Pillow 14) exists only on 12+.
+- **Tray-icon default features trimmed (GTK edge, part 1).**
+  `tray-icon = { version = "0.24", default-features = false }` in
+  `divoom-menubar/Cargo.toml` drops the upstream `"gtk"`/`"libxdo"`
+  defaults, which forward only to Linux-target-gated deps (macOS
+  compiles to identical objc2/AppKit code either way). Lock shed
+  libappindicator, libappindicator-sys, libxdo, libxdo-sys and the
+  duplicate libloading 0.7.4 (405→400 crates); `cargo tree --target
+  all -i gtk` went from three parents to one (tao→divoom-menubar).
+- **Menubar event loop rewritten tao → winit (GTK edge, part 2 — the
+  last gtk/glib/proc-macro-error edge is gone).** `tao 0.37.0`
+  (latest) depended on `gtk ^0.18` non-optionally on Linux targets;
+  replaced with `winit 0.30.13` (latest stable; 0.31 is beta),
+  `default-features = false` (upstream defaults would have pulled the
+  x11rb/Wayland/adwaita stack, including unmaintained `ttf-parser`
+  RUSTSEC-2026-0192, for a macOS-only agent — no Linux job builds
+  this crate). `cargo tree --target all -i gtk/-glib/-
+  proc-macro-error` all print "did not match any packages";
+  lock 400→381 crates; `cargo audit` green with `ignore = []`, so all
+  11 stale GTK3-subtree entries were DELETED from
+  `.cargo/audit.toml`. Two semantic changes in the port (rest is
+  arm-for-arm): winit 0.30's `run()` closure is `#[deprecated]` (=
+  hard error under `-D warnings`), so the closure became
+  `ApplicationHandler<UserEvent>` (`tray`/`quitting` as struct
+  fields); ActivationPolicy moved builder-time
+  (`with_activation_policy`, tao set it post-build) — same net
+  effect. Known benign: the lock now holds objc2 0.2.x (winit's pin)
+  beside 0.3.x (tray-icon/muda/ours) — upstream-imposed, no type
+  crosses the boundary. Stale `tao` refs fixed where they stated the
+  stack (`ARCHITECTURE.md`, `README.md` tree, the keep-alive parity
+  test's docstring); dated audit prose left as written.
+- **Workflow comment corrected.** `.github/workflows/tests.yml`
+  rust-core still said menubar's "tao/tray-icon deps need GTK/glib";
+  now says the crate is macOS-only with Apple-target deps. Behaviour
+  unchanged (scoped `-p divoomd`; the macOS rust-ble job lints the
+  whole workspace).
+
 ## v0.38.0 — the direct-to-device library retired to examples/ (2026-09-14)
 
 Minor bump: a structural change to what the package ships, no behaviour

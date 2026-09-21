@@ -212,11 +212,11 @@ jobs:
         run: cargo fmt --all -- --check
       - name: cargo clippy (divoomd, all targets/features, deny warnings)
         # Scoped to divoomd deliberately: this is the LINUX job, and a
-        # workspace-wide clippy pulls in divoom-menubar, whose tao/tray-icon
-        # deps need GTK/glib. That crate is macOS-only and never ships on
-        # Linux, so installing a GTK toolchain here would be buying a
-        # dependency to lint a binary this platform does not build.
-        # The macOS rust-ble job lints the whole workspace instead.
+        # workspace-wide clippy pulls in divoom-menubar, which is macOS-only
+        # and never ships on Linux (its winit/tray-icon deps are Apple-target
+        # code; the tao→GTK edge they replaced is gone since 2026-09-20, but
+        # the crate still has no Linux build). The macOS rust-ble job lints
+        # the whole workspace instead.
         run: cargo clippy -p divoomd --all-targets --all-features -- -D warnings
       # Clippy reports only on the cfg it COMPILED for and is silent about
       # every other, so the no-BLE half was built and tested but never linted:
