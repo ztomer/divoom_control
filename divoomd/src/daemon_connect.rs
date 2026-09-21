@@ -226,6 +226,17 @@ pub(crate) async fn cmd_scan(daemon: &Daemon, req: &Request) -> Value {
     }
 }
 
+/// Adopt a connected transport into the fleet under `id`, announce it on the
+/// bus (status, then the owned-device list), and build the success reply;
+/// `id_key` names the reply field that carries `id` (`mac`, or `lan_ip` for
+/// a LAN device, whose caller then overwrites it with the bare address).
+async fn adopt(daemon: &Daemon, id: &str, id_key: &str, transport: DeviceTransport) -> Value {
+    daemon.fleet.adopt(id, Arc::new(transport)).await;
+    let _ = daemon.tx.send(status_payload(true, Some(id), None));
+    let _ = daemon.tx.send(owned_devices_payload(daemon).await);
+    json!({"success":true,"connected":true,"connection_state":"connected", id_key: id})
+}
+
 /// Handle `connect_device` command (BLE or LAN).
 pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
     // Reject a concurrent connect: two would clobber the one shared central and
@@ -259,11 +270,13 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
             .get("mac")
             .and_then(serde_json::Value::as_str)
             .unwrap_or("MOCK_MAC");
-        let transport = Arc::new(DeviceTransport::Mock(mock_transport));
-        daemon.fleet.adopt(mock_mac, transport).await;
-        let _ = daemon.tx.send(status_payload(true, Some(mock_mac), None));
-        let _ = daemon.tx.send(owned_devices_payload(daemon).await);
-        return json!({"success":true,"connected":true,"connection_state":"connected","mac":mock_mac});
+        return adopt(
+            daemon,
+            mock_mac,
+            "mac",
+            DeviceTransport::Mock(mock_transport),
+        )
+        .await;
     }
 
     let lan_ip = req.args.get("lan_ip").and_then(|v| v.as_str());
@@ -277,12 +290,15 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
         if !lan.probe().await {
             return err_reply(&format!("LAN device at {ip} unreachable"));
         }
-        let transport = Arc::new(DeviceTransport::Lan(lan));
-        let id_str = format!("LAN:{ip}");
-        daemon.fleet.adopt(&id_str, transport).await;
-        let _ = daemon.tx.send(status_payload(true, Some(&id_str), None));
-        let _ = daemon.tx.send(owned_devices_payload(daemon).await);
-        return json!({"success":true,"connected":true,"connection_state":"connected","lan_ip":ip});
+        let mut reply = adopt(
+            daemon,
+            &format!("LAN:{ip}"),
+            "lan_ip",
+            DeviceTransport::Lan(lan),
+        )
+        .await;
+        reply["lan_ip"] = json!(ip);
+        return reply;
     }
     let id = req
         .args
@@ -300,13 +316,7 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
         .unwrap_or(true);
     if !use_ios_le {
         match crate::spp::SppTransport::connect(&id, None, None).await {
-            Ok(t) => {
-                let transport = Arc::new(DeviceTransport::Spp(t));
-                daemon.fleet.adopt(&id, transport).await;
-                let _ = daemon.tx.send(status_payload(true, Some(&id), None));
-                let _ = daemon.tx.send(owned_devices_payload(daemon).await);
-                return json!({"success":true,"connected":true,"connection_state":"connected","mac":id});
-            }
+            Ok(t) => return adopt(daemon, &id, "mac", DeviceTransport::Spp(t)).await,
             Err(e) => return err_reply(&format!("connect SPP failed: {e}")),
         }
     }
@@ -319,13 +329,7 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
             result = run_connect(daemon, &id).await;
         }
         match result {
-            Ok(t) => {
-                let transport = Arc::new(DeviceTransport::Ble(t));
-                daemon.fleet.adopt(&id, transport).await;
-                let _ = daemon.tx.send(status_payload(true, Some(&id), None));
-                let _ = daemon.tx.send(owned_devices_payload(daemon).await);
-                json!({"success":true,"connected":true,"connection_state":"connected","mac":id})
-            }
+            Ok(t) => adopt(daemon, &id, "mac", DeviceTransport::Ble(t)).await,
             Err(e) => err_reply(&format!("connect failed: {e}")),
         }
     }
