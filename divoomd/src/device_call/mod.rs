@@ -33,7 +33,7 @@ pub mod tools;
 
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 
-pub(crate) use args::{pos_bool, pos_i64};
+pub(crate) use args::{pos_bool, pos_i64, rgb_triple};
 
 fn decode_blob_map(req: &Request) -> Result<std::collections::HashMap<usize, Vec<u8>>, String> {
     let mut map = std::collections::HashMap::new();

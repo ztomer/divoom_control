@@ -20,10 +20,6 @@ fn kw_i64(kw: Option<&Map<String, Value>>, name: &str) -> Option<i64> {
     clippy::too_many_lines,
     reason = "a device command dispatch table: one arm per protocol method and its aliases, each a few lines of argument shuffling before it builds a frame. The length is the number of COMMANDS the device answers, not complexity in any one of them, and splitting it puts a layer between a method name and the code that implements it -- which is the one thing a reader opens these files to find"
 )]
-#[expect(
-    clippy::option_if_let_else,
-    reason = "a command dispatch table: every arm is missing-argument outside and result-or-reason inside. As `map_or_else` each verb becomes two closures and the table stops looking like a table"
-)]
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let args = ctx.args;
@@ -177,8 +173,9 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let mut req = Vec::new();
             req.extend_from_slice(&le16(start));
             req.extend_from_slice(&le16(end));
-            match dev.send_command_and_wait(0x07, &req, to).await {
-                Some(r) => {
+            dev.send_command_and_wait(0x07, &req, to).await.map_or_else(
+                || json!({"success": true, "result": []}),
+                |r| {
                     let mut list = Vec::new();
                     let mut off = 0usize;
                     while off + 4 <= r.len() {
@@ -195,9 +192,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                         }
                     }
                     json!({"success": true, "result": list})
-                }
-                _ => json!({"success": true, "result": []}),
-            }
+                },
+            )
         }
         _ => err_reply("unimplemented music command"),
     }

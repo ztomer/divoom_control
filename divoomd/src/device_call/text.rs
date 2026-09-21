@@ -1,3 +1,4 @@
+use super::rgb_triple;
 use super::CallCtx;
 use crate::protocol::err_reply;
 use crate::wire::WireNarrow as _;
@@ -149,10 +150,6 @@ async fn scrolling_text(ctx: &CallCtx<'_>) -> Value {
     clippy::too_many_lines,
     reason = "a device command dispatch table: one arm per protocol method and its aliases, each a few lines of argument shuffling before it builds a frame. The length is the number of COMMANDS the device answers, not complexity in any one of them, and splitting it puts a layer between a method name and the code that implements it -- which is the one thing a reader opens these files to find"
 )]
-#[expect(
-    clippy::option_if_let_else,
-    reason = "a command dispatch table: every arm is missing-argument outside and result-or-reason inside. As `map_or_else` each verb becomes two closures and the table stops looking like a table"
-)]
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     if method.ends_with("show_scrolling_text") || method.ends_with("scrolling_text") {
         return scrolling_text(&ctx).await;
@@ -295,25 +292,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         5 => {
             // Color
             let color_val = raw_args.get(1).or_else(|| kw.and_then(|v| v.get("color")));
-            let [r, g, b] = if let Some(cv) = color_val {
-                if let Some(arr) = cv.as_array() {
-                    let ns: Vec<u8> = arr
-                        .iter()
-                        .filter_map(|x| x.as_u64().map(super::super::wire::WireNarrow::byte))
-                        .collect();
-                    if ns.len() >= 3 {
-                        [ns[0], ns[1], ns[2]]
-                    } else {
-                        [255, 255, 255]
-                    }
-                } else if let Some(s) = cv.as_str() {
-                    parse_hex_color(s).unwrap_or([255, 255, 255])
-                } else {
-                    [255, 255, 255]
-                }
-            } else {
-                [255, 255, 255]
-            };
+            let [r, g, b] = rgb_triple(color_val);
             let text_box_id = args
                 .get(2)
                 .copied()
@@ -400,17 +379,5 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     match dev.send_command(0x87, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
         Err(e) => err_reply(&format!("set_light_phone_word_attr failed: {e}")),
-    }
-}
-
-fn parse_hex_color(s: &str) -> Option<[u8; 3]> {
-    let s = s.trim_start_matches('#');
-    if s.len() == 6 {
-        let r = u8::from_str_radix(&s[0..2], 16).ok()?;
-        let g = u8::from_str_radix(&s[2..4], 16).ok()?;
-        let b = u8::from_str_radix(&s[4..6], 16).ok()?;
-        Some([r, g, b])
-    } else {
-        None
     }
 }

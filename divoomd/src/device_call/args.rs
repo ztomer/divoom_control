@@ -51,3 +51,33 @@ pub fn pos_bool(
         .or_else(|| kw.and_then(|m| m.get(name)).and_then(as_flag))
         .unwrap_or(default)
 }
+
+/// An RGB triple argument: an array of three numbers, or a hex string.
+///
+/// Four dispatch tables read a colour the same way — a JSON array wins, else a
+/// `"#rrggbb"` string, else white — and each used to spell the fallback chain
+/// inline as an `if let`/`else` the option combinators lint fires on. One
+/// early-return chain instead, shared. Hex parsing is the canonical
+/// [`crate::packets::parse_hex_color`].
+#[must_use]
+pub fn rgb_triple(color_val: Option<&Value>) -> [u8; 3] {
+    const FALLBACK: [u8; 3] = [255, 255, 255];
+    let Some(cv) = color_val else {
+        return FALLBACK;
+    };
+    let Some(arr) = cv.as_array() else {
+        return cv
+            .as_str()
+            .and_then(crate::packets::parse_hex_color)
+            .unwrap_or(FALLBACK);
+    };
+    let ns: Vec<u8> = arr
+        .iter()
+        .filter_map(|x| x.as_u64().map(crate::wire::WireNarrow::byte))
+        .collect();
+    if ns.len() >= 3 {
+        [ns[0], ns[1], ns[2]]
+    } else {
+        FALLBACK
+    }
+}

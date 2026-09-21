@@ -51,23 +51,13 @@ async fn send(dev: &DeviceTransport, cmd: u8, p: &[u8], label: &str) -> Value {
     clippy::too_many_lines,
     reason = "a device command dispatch table: one arm per protocol method and its aliases, each a few lines of argument shuffling before it builds a frame. The length is the number of COMMANDS the device answers, not complexity in any one of them, and splitting it puts a layer between a method name and the code that implements it -- which is the one thing a reader opens these files to find"
 )]
-#[expect(
-    clippy::option_if_let_else,
-    reason = "a command dispatch table: every arm is missing-argument outside and result-or-reason inside. As `map_or_else` each verb becomes two closures and the table stops looking like a table"
-)]
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let kw = ctx.kwargs;
     let i = |n: &str, d: i64| kw_i64(kw, n).unwrap_or(d);
     // big data may come as blob[0]
     let blob0 = ctx.blob_map.lock().unwrap().get(&0).cloned();
-    let data = |name: &str| -> Vec<u8> {
-        if let Some(b) = &blob0 {
-            b.clone()
-        } else {
-            kw_bytes(kw, name)
-        }
-    };
+    let data = |name: &str| -> Vec<u8> { blob0.clone().unwrap_or_else(|| kw_bytes(kw, name)) };
 
     match method {
         "drawing.set_light_pic" | "set_light_pic" => {

@@ -7,10 +7,6 @@ use serde_json::{json, Value};
     clippy::too_many_lines,
     reason = "a device command dispatch table: one arm per protocol method and its aliases, each a few lines of argument shuffling before it builds a frame. The length is the number of COMMANDS the device answers, not complexity in any one of them, and splitting it puts a layer between a method name and the code that implements it -- which is the one thing a reader opens these files to find"
 )]
-#[expect(
-    clippy::option_if_let_else,
-    reason = "a command dispatch table: every arm is missing-argument outside and result-or-reason inside. As `map_or_else` each verb becomes two closures and the table stops looking like a table"
-)]
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let args = ctx.args;
@@ -233,11 +229,11 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                         .and_then(serde_json::Value::as_i64)
                 })
                 .unwrap_or(0);
-            match dev
-                .send_command_and_wait(0x71, &[tool_type.byte()], ctx.timeout)
+            dev.send_command_and_wait(0x71, &[tool_type.byte()], ctx.timeout)
                 .await
-            {
-                Some(r) => {
+                .map_or_else(
+                    || json!({"success": true, "result": Value::Null}),
+                    |r| {
                     let result = match tool_type {
                         1 if r.len() >= 5 => json!({
                             "on_off": i64::from(r[0]),
@@ -252,9 +248,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                         _ => Value::Null,
                     };
                     json!({"success": true, "result": result})
-                }
-                None => json!({"success": true, "result": Value::Null}),
-            }
+                    },
+                )
         }
         // Generic tool setter (Python Tool.set_tool_info): 0x72 [game_mode_index,
         // *per-type args]. 0=timer[ctrl_flag] 1=score[on_off, red LE16, blue LE16]

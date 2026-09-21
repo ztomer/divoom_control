@@ -26,28 +26,23 @@ pub const DEFAULT_ROUTING: &[(&str, u8)] = &[
 ];
 
 #[must_use]
-#[expect(
-    clippy::option_if_let_else,
-    reason = "an ordered chain of environment lookups, not one optional value. The `else if` is the next place to look"
-)]
 pub fn get_routing_path() -> std::path::PathBuf {
+    // An ordered chain of places to look: an override, then the home config,
+    // then the working directory. Early returns keep each lookup on its own
+    // lines instead of nesting the next one inside the previous one's `else`.
     if let Ok(p) = std::env::var("DIVOOM_CONTROL_ROUTING") {
-        std::path::PathBuf::from(p)
-    } else if let Ok(home) = std::env::var("HOME") {
-        std::path::PathBuf::from(home)
+        return std::path::PathBuf::from(p);
+    }
+    if let Ok(home) = std::env::var("HOME") {
+        return std::path::PathBuf::from(home)
             .join(".config")
             .join("divoom-control")
-            .join("notification_routing.json")
-    } else {
-        std::path::PathBuf::from("notification_routing.json")
+            .join("notification_routing.json");
     }
+    std::path::PathBuf::from("notification_routing.json")
 }
 
 #[must_use]
-#[expect(
-    clippy::option_if_let_else,
-    reason = "the `Some` arm is a multi-line body, not an expression -- it decodes a reply, or builds a payload, before it decides. Hoisting it into a closure argument puts the substance of the function inside a call"
-)]
 pub fn load_routing_rules() -> Vec<(String, u8)> {
     let p = get_routing_path();
     if !p.exists() {
@@ -63,29 +58,27 @@ pub fn load_routing_rules() -> Vec<(String, u8)> {
             .collect();
     };
     let raw: Result<Vec<Vec<serde_json::Value>>, _> = serde_json::from_str(&data);
-    match raw {
-        Ok(entries) => {
-            let mut rules = Vec::new();
-            for entry in entries {
-                if entry.len() == 2 {
-                    if let (Some(s), Some(t)) = (entry[0].as_str(), entry[1].as_u64()) {
-                        rules.push((s.to_lowercase(), t.byte()));
-                    }
-                }
-            }
-            if rules.is_empty() {
-                DEFAULT_ROUTING
-                    .iter()
-                    .map(|(s, t)| (s.to_string(), *t))
-                    .collect()
-            } else {
-                rules
-            }
-        }
-        Err(_) => DEFAULT_ROUTING
+    let Ok(entries) = raw else {
+        return DEFAULT_ROUTING
             .iter()
             .map(|(s, t)| (s.to_string(), *t))
-            .collect(),
+            .collect();
+    };
+    let mut rules = Vec::new();
+    for entry in entries {
+        if entry.len() == 2 {
+            if let (Some(s), Some(t)) = (entry[0].as_str(), entry[1].as_u64()) {
+                rules.push((s.to_lowercase(), t.byte()));
+            }
+        }
+    }
+    if rules.is_empty() {
+        DEFAULT_ROUTING
+            .iter()
+            .map(|(s, t)| (s.to_string(), *t))
+            .collect()
+    } else {
+        rules
     }
 }
 

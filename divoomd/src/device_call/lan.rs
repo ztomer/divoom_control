@@ -47,10 +47,6 @@ fn get_arg_str(kw: Option<&serde_json::Map<String, Value>>, name: &str, default:
     clippy::too_many_lines,
     reason = "a device command dispatch table: one arm per protocol method and its aliases, each a few lines of argument shuffling before it builds a frame. The length is the number of COMMANDS the device answers, not complexity in any one of them, and splitting it puts a layer between a method name and the code that implements it -- which is the one thing a reader opens these files to find"
 )]
-#[expect(
-    clippy::option_if_let_else,
-    reason = "a command dispatch table: every arm is missing-argument outside and result-or-reason inside. As `map_or_else` each verb becomes two closures and the table stops looking like a table"
-)]
 pub(super) async fn handle_lan_call(
     lan: &crate::lan::LanTransport,
     method: &str,
@@ -89,14 +85,18 @@ pub(super) async fn handle_lan_call(
         }
         "lan.set_ambient_light" => {
             let brightness = get_arg_i64(args, kw, 0, "Brightness", 100);
-            let color = if let Some(c) = kw.and_then(|m| m.get("Color")).and_then(|v| v.as_str()) {
-                c.to_string()
-            } else {
-                let r = get_arg_i64(args, kw, 1, "r", 0).byte();
-                let g = get_arg_i64(args, kw, 2, "g", 0).byte();
-                let b = get_arg_i64(args, kw, 3, "b", 0).byte();
-                format!("#{r:02X}{g:02X}{b:02X}")
-            };
+            let color = kw
+                .and_then(|m| m.get("Color"))
+                .and_then(|v| v.as_str())
+                .map_or_else(
+                    || {
+                        let r = get_arg_i64(args, kw, 1, "r", 0).byte();
+                        let g = get_arg_i64(args, kw, 2, "g", 0).byte();
+                        let b = get_arg_i64(args, kw, 3, "b", 0).byte();
+                        format!("#{r:02X}{g:02X}{b:02X}")
+                    },
+                    str::to_string,
+                );
             let power = get_arg_i64(args, kw, 4, "Power", 1);
             lan.post(
                 "Channel/SetAmbientLight",
@@ -111,15 +111,18 @@ pub(super) async fn handle_lan_call(
         "lan.set_rgb_info" => {
             let mode = get_arg_i64(args, kw, 0, "RgbMode", 1);
             let speed = get_arg_i64(args, kw, 1, "RgbSpeed", 50);
-            let color = if let Some(c) = kw.and_then(|m| m.get("RgbColor")).and_then(|v| v.as_str())
-            {
-                c.to_string()
-            } else {
-                let r = get_arg_i64(args, kw, 2, "r", 0).byte();
-                let g = get_arg_i64(args, kw, 3, "g", 0).byte();
-                let b = get_arg_i64(args, kw, 4, "b", 0).byte();
-                format!("#{r:02X}{g:02X}{b:02X}")
-            };
+            let color = kw
+                .and_then(|m| m.get("RgbColor"))
+                .and_then(|v| v.as_str())
+                .map_or_else(
+                    || {
+                        let r = get_arg_i64(args, kw, 2, "r", 0).byte();
+                        let g = get_arg_i64(args, kw, 3, "g", 0).byte();
+                        let b = get_arg_i64(args, kw, 4, "b", 0).byte();
+                        format!("#{r:02X}{g:02X}{b:02X}")
+                    },
+                    str::to_string,
+                );
             lan.post(
                 "Channel/SetRGBInfo",
                 Some(json!({

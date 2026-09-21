@@ -81,10 +81,6 @@ pub fn resolve_preview_data_url(raw: &[u8]) -> Option<String> {
 /// GUI's `gallery_hot_api.get_animated_preview`.
 ///
 /// Only the small data-url crosses the socket; the raw binary never does.
-#[expect(
-    clippy::option_if_let_else,
-    reason = "the `Some` arm is a multi-line body, not an expression -- it decodes a reply, or builds a payload, before it decides. Hoisting it into a closure argument puts the substance of the function inside a call"
-)]
 pub async fn get_animated_preview(args: &Value) -> Value {
     let file_id = match args.get("file_id").and_then(|v| v.as_str()) {
         Some(f) if !f.is_empty() => f.to_string(),
@@ -94,13 +90,15 @@ pub async fn get_animated_preview(args: &Value) -> Value {
         Ok(b) => b,
         Err(e) => return err_reply(&format!("get_animated_preview: {e}")),
     };
-    match resolve_preview_data_url(&bytes) {
-        Some(url) => json!({"success": true, "file_id": file_id, "preview": url}),
-        None => err_reply(&format!(
-            "get_animated_preview: unrecognized container magic {}",
-            bytes[0]
-        )),
-    }
+    resolve_preview_data_url(&bytes).map_or_else(
+        || {
+            err_reply(&format!(
+                "get_animated_preview: unrecognized container magic {}",
+                bytes[0]
+            ))
+        },
+        |url| json!({"success": true, "file_id": file_id, "preview": url}),
+    )
 }
 
 pub async fn sync_artwork(daemon: &Daemon, args: &Value) -> Value {

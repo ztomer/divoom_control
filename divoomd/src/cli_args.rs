@@ -61,10 +61,6 @@ Each option also accepts the --flag=value form.";
 ///
 /// `env_token` is the `DIVOOM_DAEMON_TOKEN` value, passed in rather than read
 /// here so the parser stays pure and the environment is testable.
-#[expect(
-    clippy::option_if_let_else,
-    reason = "the `Some` arm ADVANCES the argument cursor as a side effect, which a closure argument would hide"
-)]
 pub fn parse(args: &[String], env_token: Option<String>) -> Outcome {
     // `divoomd mcp` is a subcommand, not a flag, and only in first position.
     if args.first().map(String::as_str) == Some("mcp") {
@@ -87,13 +83,11 @@ pub fn parse(args: &[String], env_token: Option<String>) -> Outcome {
             if let Some(v) = arg.strip_prefix(&format!("{name}=")) {
                 return Ok(v.to_string());
             }
-            match args.get(i + 1) {
-                Some(v) => {
-                    i += 1;
-                    Ok(v.clone())
-                }
-                None => Err(format!("divoomd: {name} requires a value")),
-            }
+            let Some(v) = args.get(i + 1) else {
+                return Err(format!("divoomd: {name} requires a value"));
+            };
+            i += 1;
+            Ok(v.clone())
         };
 
         let outcome = if arg == "--version" || arg == "-V" {

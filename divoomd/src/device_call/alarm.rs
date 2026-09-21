@@ -7,10 +7,6 @@ use serde_json::{json, Value};
     clippy::too_many_lines,
     reason = "a device command dispatch table: one arm per protocol method and its aliases, each a few lines of argument shuffling before it builds a frame. The length is the number of COMMANDS the device answers, not complexity in any one of them, and splitting it puts a layer between a method name and the code that implements it -- which is the one thing a reader opens these files to find"
 )]
-#[expect(
-    clippy::option_if_let_else,
-    reason = "a command dispatch table: every arm is missing-argument outside and result-or-reason inside. As `map_or_else` each verb becomes two closures and the table stops looking like a table"
-)]
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let args = ctx.args;
@@ -19,9 +15,12 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     let timeout = ctx.timeout;
 
     match method {
-        "alarm.get_alarm_time" | "get_alarm_time" => {
-            match dev.send_command_and_wait(0x42, &[], timeout).await {
-                Some(p) => {
+        "alarm.get_alarm_time" | "get_alarm_time" => dev
+            .send_command_and_wait(0x42, &[], timeout)
+            .await
+            .map_or_else(
+                || json!({"success": true, "result": Value::Null}),
+                |p| {
                     let record_len = 10;
                     let count = std::cmp::min(10, p.len() / record_len);
                     let mut alarms = Vec::with_capacity(count);
@@ -40,10 +39,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                         }));
                     }
                     json!({"success": true, "result": alarms})
-                }
-                _ => json!({"success": true, "result": Value::Null}),
-            }
-        }
+                },
+            ),
         "alarm.set_alarm" | "set_alarm" => {
             let alarm_index = args
                 .first()
@@ -193,9 +190,12 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 Err(e) => err_reply(&format!("set_alarm_gif failed: {e}")),
             }
         }
-        "alarm.get_memorial_time" | "get_memorial_time" => {
-            match dev.send_command_and_wait(0x53, &[], timeout).await {
-                Some(p) => {
+        "alarm.get_memorial_time" | "get_memorial_time" => dev
+            .send_command_and_wait(0x53, &[], timeout)
+            .await
+            .map_or_else(
+                || json!({"success": true, "result": Value::Null}),
+                |p| {
                     let record_len = 39;
                     let count = std::cmp::min(10, p.len() / record_len);
                     let mut memorials = Vec::with_capacity(count);
@@ -217,10 +217,8 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                         }));
                     }
                     json!({"success": true, "result": memorials})
-                }
-                _ => json!({"success": true, "result": Value::Null}),
-            }
-        }
+                },
+            ),
         "alarm.set_memorial_time" | "set_memorial_time" => {
             let dialy_id = args
                 .first()

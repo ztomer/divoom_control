@@ -13,10 +13,6 @@ mod display;
     clippy::too_many_lines,
     reason = "a device command dispatch table: one arm per protocol method and its aliases, each a few lines of argument shuffling before it builds a frame. The length is the number of COMMANDS the device answers, not complexity in any one of them, and splitting it puts a layer between a method name and the code that implements it -- which is the one thing a reader opens these files to find"
 )]
-#[expect(
-    clippy::option_if_let_else,
-    reason = "a command dispatch table: every arm is missing-argument outside and result-or-reason inside. As `map_or_else` each verb becomes two closures and the table stops looking like a table"
-)]
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     // The `display.*`/`show_*` (0x45 channel payloads + image streaming) family
     // lives in `display.rs`; keep this dispatcher for the rest.
@@ -59,24 +55,24 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                     return json!({"success": true, "result": name});
                 }
             }
-            match dev.send_command_and_wait(0x76, &[], timeout).await {
-                Some(p) if !p.is_empty() => {
-                    let name_len = p[0] as usize;
-                    if p.len() > name_len {
-                        let name_bytes = &p[1..=name_len];
-                        match std::str::from_utf8(name_bytes) {
-                            Ok(name) => {
-                                dev.set_cached_device_name(name.to_string());
-                                json!({"success": true, "result": name})
-                            }
-                            Err(_) => json!({"success": true, "result": Value::Null}),
+            dev.send_command_and_wait(0x76, &[], timeout)
+                .await
+                .filter(|p| !p.is_empty())
+                .map_or_else(
+                    || json!({"success": true, "result": Value::Null}),
+                    |p| {
+                        let name_len = p[0] as usize;
+                        if p.len() <= name_len {
+                            return json!({"success": true, "result": Value::Null});
                         }
-                    } else {
-                        json!({"success": true, "result": Value::Null})
-                    }
-                }
-                _ => json!({"success": true, "result": Value::Null}),
-            }
+                        let name_bytes = &p[1..=name_len];
+                        let Ok(name) = std::str::from_utf8(name_bytes) else {
+                            return json!({"success": true, "result": Value::Null});
+                        };
+                        dev.set_cached_device_name(name.to_string());
+                        json!({"success": true, "result": name})
+                    },
+                )
         }
         "system.set_device_name" | "device.set_device_name" | "set_device_name" => {
             let name = raw_args

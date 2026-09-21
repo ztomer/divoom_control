@@ -1,3 +1,4 @@
+use super::rgb_triple;
 use super::CallCtx;
 use crate::protocol::err_reply;
 use crate::wire::WireNarrow as _;
@@ -6,10 +7,6 @@ use serde_json::{json, Value};
 #[expect(
     clippy::too_many_lines,
     reason = "a device command dispatch table: one arm per protocol method and its aliases, each a few lines of argument shuffling before it builds a frame. The length is the number of COMMANDS the device answers, not complexity in any one of them, and splitting it puts a layer between a method name and the code that implements it -- which is the one thing a reader opens these files to find"
-)]
-#[expect(
-    clippy::option_if_let_else,
-    reason = "a command dispatch table: every arm is missing-argument outside and result-or-reason inside. As `map_or_else` each verb becomes two closures and the table stops looking like a table"
 )]
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
@@ -36,25 +33,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             let frequency = pos_i64(raw_args, 6, kw, "frequency", 0).word();
             let on = pos_i64(raw_args, 7, kw, "on", 1).byte();
             let color_val = kw.and_then(|v| v.get("color")).or_else(|| raw_args.get(4));
-            let [r, g, b] = if let Some(cv) = color_val {
-                if let Some(arr) = cv.as_array() {
-                    let ns: Vec<u8> = arr
-                        .iter()
-                        .filter_map(|x| x.as_u64().map(super::super::wire::WireNarrow::byte))
-                        .collect();
-                    if ns.len() >= 3 {
-                        [ns[0], ns[1], ns[2]]
-                    } else {
-                        [255, 255, 255]
-                    }
-                } else if let Some(s) = cv.as_str() {
-                    parse_hex_color(s).unwrap_or([255, 255, 255])
-                } else {
-                    [255, 255, 255]
-                }
-            } else {
-                [255, 255, 255]
-            };
+            let [r, g, b] = rgb_triple(color_val);
             let brightness = pos_i64(raw_args, 5, kw, "brightness", 100).byte();
 
             let mut payload = Vec::with_capacity(10);
@@ -142,25 +121,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         }
         "sound.set_sleep_color" | "sleep.set_sleep_color" | "set_sleep_color" => {
             let color_val = raw_args.first().or_else(|| kw.and_then(|v| v.get("color")));
-            let [r, g, b] = if let Some(cv) = color_val {
-                if let Some(arr) = cv.as_array() {
-                    let ns: Vec<u8> = arr
-                        .iter()
-                        .filter_map(|x| x.as_u64().map(super::super::wire::WireNarrow::byte))
-                        .collect();
-                    if ns.len() >= 3 {
-                        [ns[0], ns[1], ns[2]]
-                    } else {
-                        [255, 255, 255]
-                    }
-                } else if let Some(s) = cv.as_str() {
-                    parse_hex_color(s).unwrap_or([255, 255, 255])
-                } else {
-                    [255, 255, 255]
-                }
-            } else {
-                [255, 255, 255]
-            };
+            let [r, g, b] = rgb_triple(color_val);
             match dev.send_command(0xad, &[r, g, b], true).await {
                 Ok(()) => json!({"success": true, "result": true}),
                 Err(e) => err_reply(&format!("set_sleep_color failed: {e}")),
@@ -208,25 +169,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             };
             let volume = pos_i64(raw_args, 3, kw, "volume", 0).byte();
             let color_val = raw_args.get(4).or_else(|| kw.and_then(|v| v.get("color")));
-            let [r, g, b] = if let Some(cv) = color_val {
-                if let Some(arr) = cv.as_array() {
-                    let ns: Vec<u8> = arr
-                        .iter()
-                        .filter_map(|x| x.as_u64().map(super::super::wire::WireNarrow::byte))
-                        .collect();
-                    if ns.len() >= 3 {
-                        [ns[0], ns[1], ns[2]]
-                    } else {
-                        [255, 255, 255]
-                    }
-                } else if let Some(s) = cv.as_str() {
-                    parse_hex_color(s).unwrap_or([255, 255, 255])
-                } else {
-                    [255, 255, 255]
-                }
-            } else {
-                [255, 255, 255]
-            };
+            let [r, g, b] = rgb_triple(color_val);
             let light = pos_i64(raw_args, 5, kw, "light", 0).byte();
 
             let mut payload = Vec::with_capacity(9);
@@ -245,17 +188,5 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
         }
         _ => err_reply("unimplemented sleep command"),
-    }
-}
-
-fn parse_hex_color(s: &str) -> Option<[u8; 3]> {
-    let s = s.trim_start_matches('#');
-    if s.len() == 6 {
-        let r = u8::from_str_radix(&s[0..2], 16).ok()?;
-        let g = u8::from_str_radix(&s[2..4], 16).ok()?;
-        let b = u8::from_str_radix(&s[4..6], 16).ok()?;
-        Some([r, g, b])
-    } else {
-        None
     }
 }

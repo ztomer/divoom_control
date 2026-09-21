@@ -310,10 +310,6 @@ impl CommandQueue {
         self.notify.notify_one();
     }
 
-    #[expect(
-        clippy::option_if_let_else,
-        reason = "the `Some` arm mutates the queue state before deciding what the caller should do next"
-    )]
     fn next_step(&self) -> Step {
         let mut g = self.inner.lock().unwrap();
         if g.stopped {
@@ -345,18 +341,16 @@ impl CommandQueue {
                 return Step::Run(g.pending.remove(idx).unwrap());
             }
             // No item for the owner: honor the idle deadline, else wait for it.
-            match g.deadline {
-                Some(dl) => {
-                    let rem = dl.saturating_duration_since(now);
-                    if rem.is_zero() {
-                        g.owner = None;
-                        g.deadline = None;
-                        Step::Again
-                    } else {
-                        Step::Wait(Some(rem))
-                    }
-                }
-                None => Step::Wait(None),
+            let Some(dl) = g.deadline else {
+                return Step::Wait(None);
+            };
+            let rem = dl.saturating_duration_since(now);
+            if rem.is_zero() {
+                g.owner = None;
+                g.deadline = None;
+                Step::Again
+            } else {
+                Step::Wait(Some(rem))
             }
         } else {
             Step::Run(g.pending.pop_front().unwrap())
