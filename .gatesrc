@@ -73,3 +73,9 @@ GOH_LINE_UNBOUNDED='docs/divoom_docs/'
 # re-litigated.
 export GOH_DIR="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
 GOH_CI_STEPS='"$GOH_DIR/gates/structural.sh" --full:python3 tools/check_scripts.py:python3 tools/check_test_placement.py:python3 tools/check_examples.py:python3 tools/check_version_consistency.py:python3 tools/check_positional_args.py:python3 tools/check_bounded_writes.py:python3 tools/check_weather_parity.py:python3 tools/check_hotchannel_parity.py:python3 tools/capability_census.py:python3 tools/check_gui_is_a_client.py:python3 tools/check_gui_api_reachable.py:python3 tools/check_hw_verify_methods.py:python3 tools/check_applescript_launch.py:"$GOH_DIR/gates/rust_gate.sh":cargo audit:cargo clippy -p divoomd --no-default-features --all-targets --locked -- -D warnings:cargo build -p divoomd --no-default-features --locked:cargo test -p divoomd --no-default-features --locked:./scripts/check_linux_build.sh:cargo test --locked:python3 tools/check_built_binaries.py:./scripts/rust_coverage.sh'
+
+# No process kill by name (gates_of_heck check_no_kill_by_name.py, 2026-09-23).
+# A name matches processes this repo does not own. Today's survivors are in
+# kill_by_name_allow.json (8 entries, 8 unreviewed); a new kill by
+# name fails, and a fixed one must take its entry with it.
+GOH_NO_KILL_BY_NAME=1

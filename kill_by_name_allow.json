@@ -1,0 +1,52 @@
+{
+ "entries": [
+  {
+   "path": "divoom_gui/gui_main.py",
+   "line": "subprocess.run([\"pkill\", \"-f\", \"divoom-menubar\"],",
+   "status": "unreviewed",
+   "reason": "seeded 2026-09-23 when the gate landed (pkill matches by name); not yet reviewed"
+  },
+  {
+   "path": "install.sh",
+   "line": "pkill -f \"$pat\" 2>/dev/null || true",
+   "status": "unreviewed",
+   "reason": "seeded 2026-09-23 when the gate landed (pkill matches by name); not yet reviewed"
+  },
+  {
+   "path": "install.sh",
+   "line": "pkill -9 -f \"$pat\" 2>/dev/null || true",
+   "status": "unreviewed",
+   "reason": "seeded 2026-09-23 when the gate landed (pkill matches by name); not yet reviewed"
+  },
+  {
+   "path": "scripts/install_local.sh",
+   "line": "pkill -f \"Divoom.app/Contents/Frameworks/bin/\" >/dev/null 2>&1 || true",
+   "status": "unreviewed",
+   "reason": "seeded 2026-09-23 when the gate landed (pkill matches by name); not yet reviewed"
+  },
+  {
+   "path": "scripts/install_local.sh",
+   "line": "pkill -f \"Divoom.app/Contents/MacOS/Divoom\" >/dev/null 2>&1 || true",
+   "status": "unreviewed",
+   "reason": "seeded 2026-09-23 when the gate landed (pkill matches by name); not yet reviewed"
+  },
+  {
+   "path": "scripts/linux_remote/test_host.sh",
+   "line": "pkill -f target/release/divoomd 2>/dev/null",
+   "status": "unreviewed",
+   "reason": "seeded 2026-09-23 when the gate landed (pkill matches by name); not yet reviewed"
+  },
+  {
+   "path": "tests/test_gui_main_bootstrap.py",
+   "line": "assert seen[\"args\"] == [\"pkill\", \"-f\", \"divoom-menubar\"]",
+   "status": "unreviewed",
+   "reason": "seeded 2026-09-23 when the gate landed (pkill matches by name); not yet reviewed"
+  },
+  {
+   "path": "tests/test_gui_main_bootstrap.py",
+   "line": "raise subprocess.TimeoutExpired(cmd=\"pkill\", timeout=3)",
+   "status": "unreviewed",
+   "reason": "seeded 2026-09-23 when the gate landed (pkill matches by name); not yet reviewed"
+  }
+ ]
+}
