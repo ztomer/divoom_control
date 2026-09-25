@@ -66,9 +66,14 @@ SIZE_32 = [(32, 32)]
 def _load() -> ctypes.CDLL:
     if not LIB.exists():
         sys.exit(
-            f"✗ {LIB} is gone. This generator captures the C's own bytes, so the C "
-            "has to exist to run it — that is the whole point of the file. Build "
-            "it with scripts/build_libdivoom.sh."
+            f"✗ {LIB} is gone, and it cannot be rebuilt from this tree: the C "
+            "encoder was deleted in L4 (9a1cade) because the daemon encodes in "
+            "Rust. The committed divoomd/tests/image_vectors.json is the "
+            "generator's output and stays authoritative — do not regenerate it "
+            "from a reimplementation.\n"
+            "  To re-derive the vectors you need the original C: it is in git "
+            "at 9a1cade^ (divoom_lib/native_src/) and its compiled form survives "
+            "in dist/Divoom/_internal/divoom_lib/native_src/."
         )
     lib = ctypes.CDLL(str(LIB))
     lib.divoom_encode_animation_frame.argtypes = [U8P, ctypes.c_int, ctypes.c_int, ctypes.c_uint16, U8P, ctypes.c_int]

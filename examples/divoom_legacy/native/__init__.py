@@ -17,8 +17,11 @@ The three C sources that make up libdivoom_compact.dylib:
                                               the pure-Python encoder in
                                               `divoom_legacy.utils.divoom_image_encode`.
 
-The dylib is built by `scripts/build_libdivoom.sh` and lives at
-`divoom_lib/libdivoom_compact.dylib`.
+ARCHIVED (2026-09-25, L4 / 9a1cade): the C sources, the dylib, and
+`scripts/build_libdivoom.sh` are all gone from this tree — the daemon encodes in
+Rust. This module survives only as part of the retired `divoom_legacy` library,
+where every entry point already falls back to the pure-Python encoder when the
+dylib is absent, which is now always. Nothing here can load a dylib any more.
 
 Public API
 ----------

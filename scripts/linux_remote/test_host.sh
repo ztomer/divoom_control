@@ -19,9 +19,6 @@ uname -srm; (lsb_release -ds 2>/dev/null || true); cargo --version
 sect "Rust core (--no-default-features)"
 ( cd divoomd && cargo test --no-default-features 2>&1 | grep -E '^error|test result|FAILED' ) || RC=1
 
-sect "build libdivoom (.so)"
-bash scripts/build_libdivoom.sh 2>&1 | tail -2
-
 sect "Rust full (ble / BlueZ backend)"
 ( cd divoomd && cargo test 2>&1 | grep -E '^error|test result|FAILED' ) || RC=1
 

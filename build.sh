@@ -33,16 +33,6 @@ require_commands cargo
 
 section "Native Rust binaries ($PROFILE)"
 
-# C encoder dylib (image / pixel-art / text encoding via FFI). macOS → .dylib.
-if [[ "$(uname -s)" == "Darwin" ]]; then
-  info "building C encoder dylib"
-  if bash scripts/build_libdivoom.sh >/dev/null 2>&1; then
-    ok "libdivoom_compact.dylib"
-  else
-    warn "encoder dylib build failed — image push won't encode (UI/control still work)"
-  fi
-fi
-
 # The MediaRemote helper the daemon shells out to for now-playing + album art.
 if [[ "$(uname -s)" == "Darwin" ]]; then
   if bash scripts/build_nowplaying_helper.sh >/dev/null 2>&1; then

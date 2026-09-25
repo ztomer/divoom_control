@@ -166,12 +166,69 @@ def check_api_method_refs(failures: list[str]) -> None:
                         f"DivoomGuiAPI.{name}(), which does not exist")
 
 
+SCRIPT_PATH_RE = re.compile(
+    r"(?<![\w./-])(\.?/?scripts/[\w./-]+\.(?:sh|py))"
+)
+
+
+def _caller_files() -> list[Path]:
+    """Files that EXECUTE a repo script, as opposed to describing one.
+
+    The workflow files and .gatesrc matter as much as the scripts themselves:
+    L4 deleted scripts/build_libdivoom.sh and three CI jobs plus the Linux test
+    host kept calling it, so the pre-push gate went 24/24 green on a push whose
+    CI could not start. A caller is the thing that breaks when a script goes.
+    """
+    out: list[Path] = []
+    wf = REPO / ".github" / "workflows"
+    if wf.is_dir():
+        out += sorted(wf.glob("*.yml")) + sorted(wf.glob("*.yaml"))
+    gatesrc = REPO / ".gatesrc"
+    if gatesrc.is_file():
+        out.append(gatesrc)
+    return out
+
+
+def check_script_path_refs(failures: list[str]) -> None:
+    """No caller may run a repo script that does not exist.
+
+    The shell analogue of check_module_refs. That one asks "does this script run
+    a module that is gone"; this asks "does this caller run a script that is
+    gone". Deleting a script is the ordinary way to retire code, and every
+    caller of it then fails at RUN time -- in CI, on the Linux test host, or in
+    the local mirror -- never at parse time, so nothing catches it locally.
+
+    HONEST SCOPE: it sees paths that LOOK like `scripts/...`, so it cannot catch
+    a caller that builds the path at runtime, and a prose mention in a doc is
+    out of scope by design (a document may legitimately describe a script from
+    a deleted commit). It flagged its own generator's error message, which is
+    the intended behaviour: that string told a reader to run a script that no
+    longer existed.
+    """
+    callers = _caller_files() + [p for p in tracked_scripts() if p.is_file()]
+    for path in callers:
+        rel = path.relative_to(REPO)
+        for line_no, line in enumerate(
+            path.read_text(encoding="utf-8", errors="replace").splitlines(), 1
+        ):
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                continue
+            for m in SCRIPT_PATH_RE.finditer(line):
+                target = (REPO / m.group(1).lstrip("./")).resolve()
+                if not target.exists():
+                    failures.append(
+                        f"{rel}:{line_no}: references {m.group(1)}, which does "
+                        f"not exist in this repo")
+
+
 def main() -> int:
     failures: list[str] = []
     check_shell(failures)
     check_python(failures)
     check_module_refs(failures)
     check_api_method_refs(failures)
+    check_script_path_refs(failures)
 
     n = len(tracked_scripts())
     if scope_is_empty("scripts", n, unit="scripts"):
@@ -181,7 +238,8 @@ def main() -> int:
         for f in failures:
             info(f)
         return 1
-    ok(f"[scripts] OK — {n} scripts parse, lint, and reference live modules and API methods")
+    ok(f"[scripts] OK — {n} scripts parse, lint, and reference live modules, "
+       f"API methods, and scripts")
     return 0
 
 

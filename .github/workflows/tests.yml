@@ -159,9 +159,6 @@ jobs:
       - name: Every GUI API method has a caller (R70)
         run: python3 tools/check_gui_api_reachable.py
 
-      - name: Build native dylib
-        run: bash scripts/build_libdivoom.sh
-
       - uses: dtolnay/rust-toolchain@stable
       - name: Build native divoomd (ble) for the Rust-daemon parity suite
         # Without this, tests/test_rust_daemon_parity.py skips (no binary) so the
@@ -232,8 +229,6 @@ jobs:
         run: cargo clippy -p divoomd --no-default-features --all-targets --locked -- -D warnings
       - name: Build core without BLE
         run: cargo build -p divoomd --no-default-features --locked
-      - name: Build the native encoder (.so on Linux; the frame tests need it)
-        run: bash scripts/build_libdivoom.sh
       - name: Test core without BLE
         run: cargo test -p divoomd --no-default-features --locked
       - name: Built binaries report the app version (house gate)
@@ -244,14 +239,13 @@ jobs:
 
   rust-ble:
     # Full native daemon build with the `ble` feature (btleplug against
-    # CoreBluetooth). macOS so clang builds the libdivoom dylib and the FFI
-    # encoder-parity test runs instead of skipping.
+    # CoreBluetooth). macOS because it is the only platform where the
+    # workspace-wide lint runs: divoom-menubar (tao/tray-icon) needs system
+    # packages no Linux runner image ships.
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-      - name: Build native dylib (FFI encoder parity test dependency)
-        run: bash scripts/build_libdivoom.sh
       - name: cargo clippy (whole workspace, all targets/features, deny warnings)
         # macOS owns the workspace-wide lint: it is the only platform where
         # divoom-menubar (tao/tray-icon) builds without extra system packages.
