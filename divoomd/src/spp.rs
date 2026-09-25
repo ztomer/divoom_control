@@ -179,27 +179,20 @@ impl SppTransport {
         args: &[u8],
         _write_with_response: bool,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let mut payload = Vec::with_capacity(1 + args.len());
-        payload.push(command_id);
-        payload.extend_from_slice(args);
-
         // Copied out under the lock; the guard is gone before the send.
         let protocol = *self.protocol.lock().unwrap();
-        let framing_str = match protocol {
-            Protocol::Basic => "basic",
-            Protocol::IosLe => "ios_le",
-        };
 
-        let msg = json!({
-            "command": "write",
-            "payload": payload,
-            "framing": framing_str,
-            "packet_number": 0
-        });
+        // The daemon frames, not the bridge: the bridge writes bytes, and the
+        // encoder is this crate's, shared with the BLE path. See
+        // `spp_bridge_protocol` for why that moved and what it deleted.
+        let line = crate::spp_bridge_protocol::write_command_line(command_id, args, protocol)
+            .map_err(|why| -> Box<dyn std::error::Error + Send + Sync> {
+                format!("framing {command_id:#04x} for {protocol:?} failed: {why}").into()
+            })?;
 
         // As above: the lock covers write+flush, released before the return.
         let mut stdin = self.child_stdin.lock().await;
-        stdin.write_all(format!("{msg}\n").as_bytes()).await?;
+        stdin.write_all(line.as_bytes()).await?;
         stdin.flush().await?;
         drop(stdin);
         Ok(())

@@ -6,6 +6,37 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **L4 cutover, step 1: the daemon frames, the bridge writes bytes.** The
+  classic-SPP path no longer sends a payload across a process boundary for
+  Python to frame. `divoomd` frames with `crate::framing` — the same encoder
+  the BLE path uses — and the co-process writes the exact bytes
+  (`divoomd/src/spp_bridge_protocol.rs`, new; `BTSppTransport.send_frame`,
+  new). That matters because the C library's only remaining live caller was
+  this one hop: `libdivoom_compact.dylib` existed, and
+  `scripts/build_libdivoom.sh` had to keep working, so a compiled artifact
+  stayed in the tree, so a second encoder had to keep agreeing with the first.
+  New `spp_bridge_protocol` tests assert every frame against the 550 committed
+  C-derived vectors through this path, and the two framings of the same command
+  are asserted identical so a device cannot behave differently depending on
+  which radio reached it.
+  Three things went with it, each stated rather than left implied:
+  `BTSppTransport.send_command` / `send_payload` /
+  `send_command_and_wait_for_response` are DELETED — honouring them requires a
+  Python encoder, which is the second implementation this removes; they had no
+  in-tree caller outside tests. `DeviceTransport` now declares `send_frame`
+  instead. And the old `payload`+`framing` message is REFUSED BY NAME by the
+  bridge: a bridge old enough to receive it is a bridge from an install that
+  does not match the daemon, and ignoring the fields would write nothing while
+  reporting success. The retry loop inside the old `send_payload` went with it;
+  the live SPP path never had one (the bridge called `send` directly), so this
+  is not a regression, but a retry now belongs on `send_frame` or the daemon if
+  anyone wants one.
+  Lesson recorded in the tests: three of my own new expectations were wrong
+  (the basic frame of a bare 0x46, the four-byte `FE EF AA 55` ios_le header,
+  and a 64 KB payload being MASKED to 16 bits rather than refused). They are now
+  read off the committed vectors instead of computed in the test file.
+- **L4 groundwork: the framing vectors outlive the C.** The committed
+
 - **L4 groundwork: the framing vectors outlive the C.** The committed
   `divoomd/tests/framing_vectors.json` was 18 hand-picked cases; it is now 550,
   all captured from the C library that L4 deletes: a dense length sweep

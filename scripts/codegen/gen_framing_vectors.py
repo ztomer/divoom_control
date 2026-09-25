@@ -164,7 +164,27 @@ def main():
         / "divoomd" / "tests" / "framing_vectors.json"
     )
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(json.dumps(out, indent=2))
+    # One line per case, hand-laid-out rather than `json.dumps(indent=2)`.
+    # Two reasons, both learned here: `indent=2` put every case across ten lines
+    # and 550 cases became 23,895 lines -- past the repo's own 15,000-line
+    # corruption ceiling (tests/test_no_runaway_file_growth.py), which is a real
+    # gate catching a real shape; and a vector file whose diff is one line per
+    # case is reviewable, where ten lines per case is not. The payload lists are
+    # still JSON arrays; the hex is still hex.
+    lines = ["{"]
+    keys = list(out)
+    for index, key in enumerate(keys):
+        comma = "," if index < len(keys) - 1 else ""
+        lines.append(f'"{key}": [')
+        cases = out[key]
+        for position, case in enumerate(cases):
+            tail = "," if position < len(cases) - 1 else ""
+            lines.append(
+                json.dumps(case, separators=(",", ":"), sort_keys=True) + tail
+            )
+        lines.append(f"]{comma}")
+    lines.append("}")
+    dest.write_text("\n".join(lines) + "\n")
     n = sum(len(v) for v in out.values())
     print(f"wrote {n} vectors -> {dest}")
 

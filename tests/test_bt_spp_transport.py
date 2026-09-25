@@ -178,36 +178,54 @@ class _StubChannel:
         pass
 
 
-class TestSendFraming:
+class TestSendFrame:
+    """The transport writes bytes; the daemon frames them (L4).
+
+    There is deliberately no framing test here any more. `send(payload,
+    framing=...)` is gone, and a test that reconstructed a frame to check the
+    transport "frames correctly" would be testing an encoder this process no
+    longer has. What is left to prove is that the frame arrives untouched --
+    which is the whole contract now -- and that the bytes the daemon sends for a
+    given command are the C library's, which `divoomd`'s
+    `spp_bridge_protocol` tests assert against 550 committed vectors.
+    """
+
     @pytest.mark.asyncio
-    async def test_send_basic_spp(self):
+    async def test_send_frame_writes_the_bytes_it_was_given(self):
         t = BTSppTransport(mac_address="11-75-58-54-b9-13", channel_id=2)
         t._channel = _StubChannel()
         t._open_event.set()
-        await t.send([0x45], framing=BTSppTransport.FRAMING_BASIC)
+        # The C library's own bytes for a bare 0x45 in basic framing.
+        frame = bytes.fromhex("01030046490002")
+        await t.send_frame(frame)
         assert len(t._channel.written) == 1
-        # Use the encoder as the source of truth — the test is that the
-        # transport forwards whatever the encoder produces.
-        assert t._channel.written[0] == framing.encode_basic_payload([0x45])
+        assert t._channel.written[0] == frame
 
     @pytest.mark.asyncio
-    async def test_send_ios_le(self):
+    async def test_send_frame_writes_every_byte_value_untouched(self):
         t = BTSppTransport(mac_address="11-75-58-54-b9-13", channel_id=2)
         t._channel = _StubChannel()
         t._open_event.set()
-        await t.send([0x45], framing=BTSppTransport.FRAMING_IOS_LE)
-        written = t._channel.written[0]
-        # Should start with the iOS-LE header
-        assert written[:4] == b"\xfe\xef\xaa\x55"
-        assert written[-1] == 0x02
-        # The command byte should appear once, not twice
-        assert written.count(b"\x45") == 1
+        frame = bytes(range(256))
+        await t.send_frame(frame)
+        assert t._channel.written[0] == frame
 
     @pytest.mark.asyncio
-    async def test_send_raises_when_not_connected(self):
+    async def test_send_frame_raises_when_not_connected(self):
         t = BTSppTransport(mac_address="11-75-58-54-b9-13", channel_id=2)
         with pytest.raises(BtSppTransportError, match="not connected"):
-            await t.send([0x45])
+            await t.send_frame(b"\x01\x03\x00\x46\x49\x00\x02")
+
+    @pytest.mark.asyncio
+    async def test_send_frame_refuses_an_empty_frame(self):
+        # An empty write is a caller bug that would otherwise reach the device
+        # as a zero-length SPP write, which some stacks answer with a silent
+        # disconnect.
+        t = BTSppTransport(mac_address="11-75-58-54-b9-13", channel_id=2)
+        t._channel = _StubChannel()
+        t._open_event.set()
+        with pytest.raises(ValueError, match="empty frame"):
+            await t.send_frame(b"")
 
     @pytest.mark.asyncio
     async def test_failed_open_tears_down(self, monkeypatch):
@@ -231,14 +249,6 @@ class TestSendFraming:
         assert disc["n"] == 1   # failed connect cleaned up
 
     @pytest.mark.asyncio
-    async def test_send_raises_on_unknown_framing(self):
-        t = BTSppTransport(mac_address="11-75-58-54-b9-13", channel_id=2)
-        t._channel = _StubChannel()
-        t._open_event.set()
-        with pytest.raises(ValueError, match="unknown framing"):
-            await t.send([0x45], framing="custom")
-
-    @pytest.mark.asyncio
     async def test_send_translates_non_zero_write_rc(self):
         t = BTSppTransport(mac_address="11-75-58-54-b9-13", channel_id=2)
         stub = _StubChannel()
@@ -246,7 +256,7 @@ class TestSendFraming:
         t._channel = stub
         t._open_event.set()
         with pytest.raises(BtSppTransportError, match="writeSync_length_ returned"):
-            await t.send([0x45])
+            await t.send_frame(bytes.fromhex("01030046490002"))
 
     @pytest.mark.asyncio
     async def test_send_raises_if_channel_closes_during_write(self):
@@ -257,7 +267,7 @@ class TestSendFraming:
         t._channel = None
         t._open_event.set()
         with pytest.raises(BtSppTransportError, match="not connected"):
-            await t.send([0x45])
+            await t.send_frame(bytes.fromhex("01030046490002"))
 
 
 # ── Error type ───────────────────────────────────────────────────────────────
@@ -363,10 +373,11 @@ class TestSerialFallback:
             assert t.is_connected is True
             assert t.mtu == 200
             
-            # Test send
-            payload = [0x45, 0x01]
-            await t.send(payload, framing=BTSppTransport.FRAMING_BASIC)
-            mock_port.write.assert_called_once()
+            # Test send: the frame arrives already framed (L4), and the serial
+            # fallback must write those exact bytes.
+            frame = bytes.fromhex("01030046490002")
+            await t.send_frame(frame)
+            mock_port.write.assert_called_once_with(frame)
             
             # Test disconnect
             await t.disconnect()

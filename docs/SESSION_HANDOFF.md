@@ -21,6 +21,45 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-25 — L4 cutover step 1 DONE (uncommitted): the daemon frames, the
+  bridge writes bytes.** `divoomd/src/spp_bridge_protocol.rs` (new) owns the
+  co-process message contract; `spp.rs::send_command` now calls
+  `write_command_line`, which frames with `crate::framing` and hex-encodes;
+  `divoom_client/spp_bridge.py` reads `{"command":"write","frame":"<hex>"}` and
+  calls the new `BTSppTransport.send_frame(bytes)`. The old
+  `payload`+`framing`+`packet_number` form is refused by name in the bridge
+  (a bridge old enough to get it is a mismatched install; ignoring it would
+  write nothing and report success). DELETED as unable to exist without a
+  Python encoder: `BTSppTransport.send_command`/`send_payload`/
+  `send_command_and_wait_for_response` (no in-tree caller outside tests) and
+  their `DeviceTransport` declarations; the tests that covered only them went
+  with them, and the `wait_for_response` tests were kept. The `send_payload`
+  retry loop also went: the live SPP path never had one, so no regression, but
+  a retry now belongs on `send_frame` or the daemon if anyone wants one —
+  recorded rather than smuggled in. Proof: every frame asserted against the 550
+  committed C-derived vectors through the new path, both framings of the same
+  command asserted identical, all 256 byte values through the hex, 317 Rust
+  tests, 101 SPP Python tests, 1606 Python tests overall (3 pre-existing
+  failures: camoufox browser drifted to beta.30 against a beta.29 pin, and two
+  that were MINE and are now fixed — see below). 7 red-once perturbations along
+  the way, including three of my own new test expectations that were wrong.
+  **Fixture-format defect found and fixed:** the 550-vector JSON was written
+  with `indent=2`, i.e. 23,895 lines, past the repo's own 15,000-line
+  corruption ceiling (`test_no_runaway_file_growth.py` — a real gate catching a
+  real shape). One line per case now: 560 lines, and a diff a human can read.
+  Next: step 2 — the content gate (no `.dylib`/`.so`/`.c` tracked for this
+  chain), then delete `divoom_lib/native_src/`, the committed dylib,
+  `scripts/build_libdivoom.sh`, the ctypes block and the two encoders in
+  `divoom_lib/framing.py` (the PARSE side stays — the bridge reads
+  notifications), and the `pyproject.toml` package-data entry. Note for that
+  step: `nowplaying/native/libnp_helper.dylib` is ALSO tracked, so a
+  tree-wide "no .dylib" gate is red for a different crate's reason — scope the
+  gate to this chain and say so, or fold nowplaying in deliberately.
+  Also: the kill criterion is ANSWERED, not assumed — the live framing
+  functions are scalar C with no SIMD; the only NEON is a 48-byte row copy in
+  `compact_tiles` (NEON vs `memcpy`, byte-identical by construction) which has
+  no live caller at all.
+
 - **2026-09-25 — L2 commands as a type DONE (uncommitted).**
   Three generated files: `commands.rs` (the name→id table callers use today,
   plus the counts), `command_model.rs` (a `Command` enum — 105 variants, one per

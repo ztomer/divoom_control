@@ -67,8 +67,12 @@ class FakeTransport:
         self.disconnect_called = False
         self.connect_error = None
 
-    async def send(self, payload, framing="basic", packet_number=0):
-        self.sent.append({"payload": payload, "framing": framing, "packet_number": packet_number})
+    async def send_frame(self, frame: bytes):
+        # The bridge moves bytes; the daemon framed them (L4). A fake that
+        # accepted `payload`/`framing` would let the old contract pass a test
+        # written for the new one, which is the mistake this file exists to
+        # catch in the real bridge.
+        self.sent.append(bytes(frame))
 
     async def connect(self):
         self.connect_called = True
@@ -97,23 +101,62 @@ def patch_stdin(monkeypatch):
 # ── read_stdin_loop ──────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_write_command_dispatches_to_transport_send(patch_stdin):
+async def test_write_command_writes_the_frames_bytes_verbatim(patch_stdin):
     transport = FakeTransport()
-    patch_stdin([{"command": "write", "payload": [1, 2, 3], "framing": "extended", "packet_number": 7}])
+    # 01030046490002 is the C library's own output for a bare 0x46 in basic
+    # framing, read off divoomd/tests/framing_vectors.json -- so this test fails
+    # if the bridge ever re-frames, re-orders or re-encodes a byte.
+    patch_stdin([{"command": "write", "frame": "01030046490002"}])
 
     await spp_bridge.read_stdin_loop(transport)
 
-    assert transport.sent == [{"payload": [1, 2, 3], "framing": "extended", "packet_number": 7}]
+    assert transport.sent == [bytes.fromhex("01030046490002")]
 
 
 @pytest.mark.asyncio
-async def test_write_command_uses_defaults_when_fields_missing(patch_stdin):
+async def test_a_write_with_every_byte_value_survives(patch_stdin):
+    transport = FakeTransport()
+    frame = bytes(range(256))
+    patch_stdin([{"command": "write", "frame": frame.hex()}])
+
+    await spp_bridge.read_stdin_loop(transport)
+
+    assert transport.sent == [frame]
+
+
+@pytest.mark.asyncio
+async def test_the_old_payload_form_is_refused_by_name(patch_stdin, capsys):
+    # A bridge old enough to be sent `payload` + `framing` is a bridge from an
+    # install that does not match the daemon. Ignoring the fields would write
+    # NOTHING and report success, which is how a command disappears instead of
+    # erroring; so the refusal names the mismatch.
+    transport = FakeTransport()
+    patch_stdin([{"command": "write", "payload": [1, 2, 3], "framing": "basic"}])
+
+    await spp_bridge.read_stdin_loop(transport)
+
+    assert transport.sent == []
+    out = capsys.readouterr().out
+    errors = [json.loads(l) for l in out.strip().splitlines() if l.strip()]
+    assert any(
+        e.get("type") == "error" and "older than the daemon" in e.get("error", "")
+        for e in errors
+    ), errors
+
+
+@pytest.mark.asyncio
+async def test_a_write_without_a_frame_is_refused(patch_stdin, capsys):
     transport = FakeTransport()
     patch_stdin([{"command": "write"}])
 
     await spp_bridge.read_stdin_loop(transport)
 
-    assert transport.sent == [{"payload": [], "framing": "basic", "packet_number": 0}]
+    assert transport.sent == []
+    out = capsys.readouterr().out
+    errors = [json.loads(l) for l in out.strip().splitlines() if l.strip()]
+    assert any(
+        e.get("type") == "error" and "frame" in e.get("error", "") for e in errors
+    ), errors
 
 
 @pytest.mark.asyncio
@@ -122,7 +165,7 @@ async def test_disconnect_command_breaks_loop_without_sending(patch_stdin):
     # A write AFTER disconnect must never be reached.
     patch_stdin([
         {"command": "disconnect"},
-        {"command": "write", "payload": [9]},
+        {"command": "write", "frame": "01030046490002"},
     ])
 
     await spp_bridge.read_stdin_loop(transport)
@@ -135,12 +178,12 @@ async def test_unknown_command_is_ignored_and_loop_continues(patch_stdin):
     transport = FakeTransport()
     patch_stdin([
         {"command": "ping"},
-        {"command": "write", "payload": [5]},
+        {"command": "write", "frame": "01030046490002"},
     ])
 
     await spp_bridge.read_stdin_loop(transport)
 
-    assert transport.sent == [{"payload": [5], "framing": "basic", "packet_number": 0}]
+    assert transport.sent == [bytes.fromhex("01030046490002")]
 
 
 @pytest.mark.asyncio
@@ -148,7 +191,7 @@ async def test_malformed_json_line_reports_error_and_continues(patch_stdin, caps
     transport = FakeTransport()
     patch_stdin([
         b"not json at all\n",
-        {"command": "write", "payload": [1]},
+        {"command": "write", "frame": "01030046490002"},
     ])
 
     await spp_bridge.read_stdin_loop(transport)
@@ -159,18 +202,18 @@ async def test_malformed_json_line_reports_error_and_continues(patch_stdin, caps
     assert len(errors) == 1
     assert "error" in errors[0]
     # Loop kept going after the bad line and still handled the next command.
-    assert transport.sent == [{"payload": [1], "framing": "basic", "packet_number": 0}]
+    assert transport.sent == [bytes.fromhex("01030046490002")]
 
 
 @pytest.mark.asyncio
 async def test_transport_send_exception_is_caught_and_reported(patch_stdin, capsys):
     transport = FakeTransport()
 
-    async def _boom(payload, framing="basic", packet_number=0):
+    async def _boom(frame):
         raise RuntimeError("send failed")
 
-    transport.send = _boom
-    patch_stdin([{"command": "write", "payload": [1]}])
+    transport.send_frame = _boom
+    patch_stdin([{"command": "write", "frame": "01030046490002"}])
 
     await spp_bridge.read_stdin_loop(transport)
 

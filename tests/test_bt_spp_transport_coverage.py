@@ -259,7 +259,7 @@ class TestDisconnectCleanup:
         assert t._runloop_thread is None
 
 
-# ── send(): race-condition guards inside the executor closures ─────────────
+# ── send_frame(): race-condition guards inside the executor closures ─────────
 
 
 class TestSendRaceGuards:
@@ -276,7 +276,7 @@ class TestSendRaceGuards:
 
         monkeypatch.setattr("divoom_lib.bt_spp_transport.asyncio.to_thread", _racy_to_thread)
         with pytest.raises(BtSppTransportError, match="serial port closed during write"):
-            await t.send([0x45])
+            await t.send_frame(bytes.fromhex("01030046490002"))
 
     @pytest.mark.asyncio
     async def test_channel_closes_during_write_raises(self, monkeypatch):
@@ -290,7 +290,7 @@ class TestSendRaceGuards:
 
         monkeypatch.setattr("divoom_lib.bt_spp_transport.asyncio.to_thread", _racy_to_thread)
         with pytest.raises(BtSppTransportError, match="channel closed during write"):
-            await t.send([0x45])
+            await t.send_frame(bytes.fromhex("01030046490002"))
 
 
 # ── read_notification / _rx_loop ─────────────────────────────────────────────
@@ -356,35 +356,18 @@ class TestReadNotificationAndRxLoop:
 # ── send_command / send_command_and_wait_for_response / wait_for_response ──
 
 
-class TestCommandChain:
-    @pytest.mark.asyncio
-    async def test_send_command_resolves_string_name_and_defaults_args(self, monkeypatch):
-        t = _t()
-        captured = {}
+# ── wait_for_response: the notification-queue matcher ───────────────────────
+#
+# The rest of the old `TestCommandChain` class is GONE with the methods it
+# covered: `send_command` / `send_payload` /
+# `send_command_and_wait_for_response` could not survive the framing move,
+# because honouring them needs a Python encoder and having one is the thing
+# L4 deleted (two encoders for one protocol is a device that behaves
+# differently depending on which radio reached it). `wait_for_response` is
+# untouched by that and is still on the transport.
 
-        async def _fake_send_payload(payload_bytes, **kwargs):
-            captured["payload"] = payload_bytes
-            return True
 
-        monkeypatch.setattr(t, "send_payload", _fake_send_payload)
-        ok = await t.send_command("set volume")
-        assert ok is True
-        assert captured["payload"] == [models.COMMANDS["set volume"]]
-
-    @pytest.mark.asyncio
-    async def test_send_command_accepts_int_id_and_extra_args(self, monkeypatch):
-        t = _t()
-        captured = {}
-
-        async def _fake_send_payload(payload_bytes, **kwargs):
-            captured["payload"] = payload_bytes
-            return True
-
-        monkeypatch.setattr(t, "send_payload", _fake_send_payload)
-        ok = await t.send_command(0x08, args=[0x32])
-        assert ok is True
-        assert captured["payload"] == [0x08, 0x32]
-
+class TestWaitForResponse:
     @pytest.mark.asyncio
     async def test_wait_for_response_returns_matching_payload_immediately(self):
         t = _t()
@@ -417,56 +400,3 @@ class TestCommandChain:
         t = _t()
         result = await t.wait_for_response(0x99, timeout=-1.0)
         assert result is None
-
-    @pytest.mark.asyncio
-    async def test_wait_for_response_ignores_stray_notification_then_matches(self):
-        """A notification matching neither the expected command nor a generic
-        ack must be silently ignored (loop back to the top), not treated as a
-        match or an ack."""
-        t = _t()
-        cmd_id = models.COMMANDS["set light mode"]
-        await t.notification_queue.put({"command_id": 0xFE, "payload": b"unrelated"})
-        await t.notification_queue.put({"command_id": cmd_id, "payload": b"\x05"})
-        result = await t.wait_for_response(cmd_id, timeout=1.0)
-        assert result == b"\x05"
-
-    @pytest.mark.asyncio
-    async def test_send_command_and_wait_for_response_full_success(self, monkeypatch):
-        t = _t()
-        cmd_id = models.COMMANDS["set light mode"]
-
-        async def _fake_send_command(command, args=None):
-            await t.notification_queue.put({"command_id": cmd_id, "payload": b"\x07"})
-            return True
-
-        monkeypatch.setattr(t, "send_command", _fake_send_command)
-        result = await t.send_command_and_wait_for_response("set light mode", timeout=1.0)
-        assert result == b"\x07"
-        # wait_for_response clears _expected_response_command back to None once a
-        # matching response is found — it's a "waiting" marker, not a sticky record.
-        assert t._expected_response_command is None
-
-    @pytest.mark.asyncio
-    async def test_send_command_and_wait_for_response_returns_none_when_send_fails(self, monkeypatch):
-        t = _t()
-
-        async def _fake_send_command(command, args=None):
-            return False
-
-        monkeypatch.setattr(t, "send_command", _fake_send_command)
-        result = await t.send_command_and_wait_for_response("set light mode", timeout=1.0)
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_send_command_and_wait_for_response_drains_stale_queue(self, monkeypatch):
-        t = _t()
-        cmd_id = models.COMMANDS["set light mode"]
-        await t.notification_queue.put({"command_id": 0xFF, "payload": b"stale"})
-
-        async def _fake_send_command(command, args=None):
-            await t.notification_queue.put({"command_id": cmd_id, "payload": b"\x09"})
-            return True
-
-        monkeypatch.setattr(t, "send_command", _fake_send_command)
-        result = await t.send_command_and_wait_for_response("set light mode", timeout=1.0)
-        assert result == b"\x09"

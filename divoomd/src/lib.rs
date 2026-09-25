@@ -81,6 +81,7 @@ pub mod socket_bind;
 pub mod socket_owner;
 pub mod socket_server;
 pub mod spp;
+pub mod spp_bridge_protocol;
 pub mod subscriptions;
 pub mod sync_artwork;
 pub mod transport;

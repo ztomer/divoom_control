@@ -27,48 +27,20 @@ def _t():
     return BTSppTransport("AA:BB:CC:DD:EE:FF", logger=logging.getLogger("spp_rob"))
 
 
-# ── send_payload retries ────────────────────────────────────────────────────
-
-def test_send_payload_retries_then_succeeds():
-    t = _t()
-    t._serial_port = _FakePort(is_open=True)        # is_connected → True
-    calls = {"n": 0}
-
-    async def flaky(payload, framing=None, packet_number=0):
-        calls["n"] += 1
-        if calls["n"] < 3:
-            raise OSError("EAGAIN")
-
-    t.send = flaky
-    assert asyncio.run(t.send_payload([0x44], max_retries=3)) is True
-    assert calls["n"] == 3                            # retried until it stuck
-
-
-def test_send_payload_gives_up_after_max_retries():
-    t = _t()
-    t._serial_port = _FakePort(is_open=True)
-    calls = {"n": 0}
-
-    async def always_fail(payload, framing=None, packet_number=0):
-        calls["n"] += 1
-        raise OSError("dead")
-
-    t.send = always_fail
-    assert asyncio.run(t.send_payload([0x44], max_retries=2)) is False
-    assert calls["n"] == 2                            # exactly max_retries attempts
-
-
-def test_send_payload_bails_immediately_when_disconnected():
-    t = _t()                                          # no port/channel → not connected
-    calls = {"n": 0}
-
-    async def fail(payload, framing=None, packet_number=0):
-        calls["n"] += 1
-        raise OSError("x")
-
-    t.send = fail
-    assert asyncio.run(t.send_payload([0x44], max_retries=5)) is False
-    assert calls["n"] == 1                            # no point retrying a dead link
+# ── send_payload retries: GONE with the method ─────────────────────────────
+#
+# These three tests covered the retry loop inside `send_payload`, which could
+# not survive the L4 framing move: retrying a write means calling it again, and
+# a caller that re-frames on each attempt needs a Python encoder — the exact
+# second implementation the move deleted. So the tests went with the method.
+#
+# Worth stating plainly, because "deleted" reads like "lost": the LIVE SPP path
+# never had this retry. The bridge called `transport.send(...)` directly, which
+# retried nothing, and it calls `send_frame` now, which retries nothing. If a
+# retry is wanted on a Bluetooth write it belongs on the path that is actually
+# used — `send_frame`, or the daemon's send above it — and it should be a
+# deliberate change with its own evidence, not a resurrection of a loop whose
+# only callers were dead.
 
 
 # ── RX parser resync on corrupt length ──────────────────────────────────────

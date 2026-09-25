@@ -9,7 +9,6 @@ from typing import Optional, Any
 
 from . import models, framing
 from .transport_interface import DeviceTransport
-from .framing import encode_basic_payload, encode_ios_le_payload
 # BtSppNotification + the IOBluetooth RFCOMM backend live in bt_spp_rfcomm (R53.12);
 # re-export BtSppNotification so existing `from .bt_spp_transport import ...` keeps working.
 from .bt_spp_rfcomm import _SppRfcommMixin, BtSppNotification
@@ -231,21 +230,24 @@ class BTSppTransport(_SppRfcommMixin, DeviceTransport):
         self._runloop = None
         self._open_event.clear()
 
-    async def send(
-        self,
-        payload: list[int],
-        framing: str = FRAMING_BASIC,
-        packet_number: int = 0,
-    ) -> None:
+    async def send_frame(self, frame: bytes) -> None:
+        """Write an ALREADY-FRAMED message to the device.
+
+        The framing happens in `divoomd` (`spp_bridge_protocol::frame_command`,
+        the same `crate::framing` the BLE path uses, pinned against the C
+        library's own bytes by 550 vectors). This process exists only because
+        classic SPP needs PyObjC; it moves bytes, it does not build them.
+
+        So there is no `framing=` or `payload=` argument here, and adding one
+        back would recreate the two-implementations problem this removed: a
+        second encoder in Python that can disagree with the daemon's on the same
+        command, and the disagreement would show up as a device that behaves
+        differently depending on which radio reached it.
+        """
         if not self.is_connected:
             raise BtSppTransportError("not connected; call connect() first")
-        
-        if framing == self.FRAMING_BASIC:
-            frame = encode_basic_payload(payload)
-        elif framing == self.FRAMING_IOS_LE:
-            frame = encode_ios_le_payload(payload, packet_number=packet_number)
-        else:
-            raise ValueError(f"unknown framing: {framing!r}")
+        if not frame:
+            raise ValueError("refusing to write an empty frame")
 
         if self._serial_port and self._serial_port.is_open:
             def _do_serial_write():
@@ -256,7 +258,7 @@ class BTSppTransport(_SppRfcommMixin, DeviceTransport):
                     self._serial_port.flush()
 
             await asyncio.to_thread(_do_serial_write)
-            self.logger.debug(f"[BT-SPP-Serial ] sent ({framing}): {frame.hex()}")
+            self.logger.debug(f"[BT-SPP-Serial ] sent {len(frame)}B: {frame.hex()}")
             return
 
         def _do_write():
@@ -268,7 +270,7 @@ class BTSppTransport(_SppRfcommMixin, DeviceTransport):
                     raise BtSppTransportError(f"writeSync_length_ returned {rc}")
 
         await asyncio.to_thread(_do_write)
-        self.logger.debug(f"[BT-SPP ] sent ({framing}): {frame.hex()}")
+        self.logger.debug(f"[BT-SPP ] sent {len(frame)}B: {frame.hex()}")
 
     async def read_notification(
         self, timeout: float = DEFAULT_READ_TIMEOUT_S
@@ -298,44 +300,6 @@ class BTSppTransport(_SppRfcommMixin, DeviceTransport):
             except Exception as e:
                 self.logger.error(f"Error in SPP notification loop: {e}")
                 break
-
-    # DeviceTransport methods mapping
-    async def send_command(self, command: int | str, args: list | None = None, write_with_response: bool = False) -> bool:
-        if args is None:
-            args = []
-        if isinstance(command, str):
-            command = models.COMMANDS[command]
-        payload_bytes = [command] + args
-        return await self.send_payload(payload_bytes)
-
-    async def send_payload(self, payload_bytes: list, max_retries: int = 3, **kwargs) -> bool:
-        # max_retries was accepted but ignored — a single transient write failure
-        # (busy channel, momentary EAGAIN) failed the whole op. Retry with a short
-        # backoff; bail early once disconnected (no point retrying a dead link).
-        attempts = max(1, int(max_retries))
-        for attempt in range(1, attempts + 1):
-            try:
-                await self.send(payload_bytes, framing=self.FRAMING_BASIC)
-                return True
-            except Exception as e:
-                if attempt >= attempts or not self.is_connected:
-                    self.logger.error(
-                        "SPP send_payload failed after %d attempt(s): %s", attempt, e)
-                    return False
-                self.logger.warning(
-                    "SPP send_payload attempt %d/%d failed: %s; retrying",
-                    attempt, attempts, e)
-                await asyncio.sleep(0.1 * attempt)
-        return False
-
-    async def send_command_and_wait_for_response(self, command: int | str, args: list | None = None, timeout: float = 10.0) -> bytes | None:
-        command_id = models.COMMANDS.get(command, command) if isinstance(command, str) else command
-        while not self.notification_queue.empty():
-            self.notification_queue.get_nowait()
-        self._expected_response_command = command_id
-        if await self.send_command(command, args):
-            return await self.wait_for_response(command_id, timeout)
-        return None
 
     async def wait_for_response(self, command_id: int, timeout: float = 10.0) -> Optional[bytes]:
         self.logger.debug(f"Waiting for SPP response to command ID 0x{command_id:02x} for {timeout}s...")

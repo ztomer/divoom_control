@@ -22,20 +22,17 @@ class DeviceTransport(Protocol):
         """ Terminates connection and clean up resources. """
         ...
 
-    async def send_command(
-        self, command: int | str, args: list | None = None, write_with_response: bool = False
-    ) -> bool:
-        """ Format and send command to the device. """
-        ...
+    async def send_frame(self, frame: bytes) -> None:
+        """ Write an ALREADY-FRAMED message to the device.
 
-    async def send_payload(self, payload_bytes: list, max_retries: int = 3, **kwargs) -> bool:
-        """ Sends a framed command payload. """
-        ...
-
-    async def send_command_and_wait_for_response(
-        self, command: int | str, args: list | None = None, timeout: float = 10.0
-    ) -> Optional[bytes]:
-        """ Send command and await notification response from the device. """
+        Deliberately not `send_command(command, args)`: framing is the daemon's
+        job (`divoomd::spp_bridge_protocol`, the same encoder the BLE path
+        uses, pinned against the C library's own bytes by 550 vectors in
+        `divoomd/tests/framing_vectors.json`). A transport interface whose send
+        takes a command name and args has to own a second encoder to honour it,
+        and two encoders for one protocol is a device that behaves differently
+        depending on which radio reached it. This one moves bytes.
+        """
         ...
 
     async def wait_for_response(self, command_id: int, timeout: float = 10.0) -> Optional[bytes]:

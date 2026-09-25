@@ -32,10 +32,23 @@ async def read_stdin_loop(transport: BTSppTransport):
             req = json.loads(line.decode().strip())
             cmd = req.get("command")
             if cmd == "write":
-                payload = req.get("payload", [])
-                framing = req.get("framing", "basic")
-                packet_number = req.get("packet_number", 0)
-                await transport.send(payload, framing=framing, packet_number=packet_number)
+                # The frame arrives ALREADY framed (L4: the daemon owns the
+                # encoder, this process only moves bytes). `payload` +
+                # `framing` is the shape that used to arrive, and it is refused
+                # by name rather than quietly ignored: a bridge old enough to
+                # receive it is a bridge from an install that does not match the
+                # daemon speaking to it, and the failure to say so is how a
+                # command disappears instead of erroring.
+                if "payload" in req or "framing" in req:
+                    raise ValueError(
+                        "bridge is older than the daemon: it was sent "
+                        f"{sorted(req)} instead of a pre-framed `frame`; "
+                        "reinstall so divoom_client/ and divoomd/ match"
+                    )
+                frame_hex = req.get("frame")
+                if not isinstance(frame_hex, str):
+                    raise ValueError(f"write without a `frame` string: {sorted(req)}")
+                await transport.send_frame(bytes.fromhex(frame_hex))
             elif cmd == "disconnect":
                 break
         except Exception as e:
