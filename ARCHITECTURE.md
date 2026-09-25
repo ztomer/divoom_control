@@ -15,11 +15,12 @@ divoomd/          THE DAEMON (Rust). Single owner of the device connection;
                   macOS + Linux. This is the runtime core.
 divoom-menubar/   The menu-bar/tray agent (Rust, winit + tray-icon). A daemon
                   client. macOS. Bundled in the shipped .app.
-divoom_lib/       Protocol core (framing, models, transport interface, auth,
-                  native_lib) + CLI + MCP + weather. The direct-to-device
+divoom_lib/       Protocol core (framing PARSING, models, transport interface,
+                  auth) + CLI + MCP + weather. The direct-to-device
                   library is examples/divoom_legacy/ (retired 2026-09-14).
-                  The native accelerator (libdivoom_compact.{dylib|so}) and the
-                  device bitmap font (divoom_lib/fonts/, R28) live here. No
+                  The device bitmap font (divoom_lib/fonts/, R28) lives here.
+                  Framing is the daemon's job now (divoomd::framing) — the C
+                  library and the Python encoders went with it (L4). No
                   host/OS/GUI deps beyond bleak. macOS + Linux.
 divoom_client/    Daemon CLIENT library (Python) — spawn/find/talk to divoomd.
                   DaemonClient, DaemonDeviceProxy, ensure_daemon, the NDJSON wire
@@ -92,16 +93,27 @@ graph LR
 
 `divoom_lib` + `divoomd` run on **macOS (Apple silicon) and Linux
 (x86_64 / aarch64)** (BLE via bleak/BlueZ;
-the network server is platform-neutral). The native lib builds per-platform via
-`scripts/build_libdivoom.sh` (`.dylib`/`.so`), resolved by
-`divoom_lib/native_lib.py`. macOS-only features degrade cleanly on Linux:
+the network server is platform-neutral). There is no native library to build
+per-platform any more — the C encoders are Rust in the daemon binary, so the
+platform surface is just the daemon binary itself. macOS-only features degrade
+cleanly on Linux:
 notification monitoring → idle/"unsupported", now-playing/cover-art → no-op, the
 menu-bar agent is macOS-only.
 
 **Intel Macs are not supported** (R66) — Apple dropped them, so did we. 32-bit
-targets are not supported on any OS. `scripts/build_libdivoom.sh` hard-fails on
-both rather than silently building something untested;
-`tests/test_build_platform_gate.py` pins it.
+targets are not supported on any OS.
+
+This was pinned by `scripts/build_libdivoom.sh` (a hard `exit 1` per reject
+branch, driven by `DIVOOM_BUILD_OS`/`DIVOOM_BUILD_ARCH` so both directions were
+testable) with `tests/test_build_platform_gate.py` on top. Both went with the C
+encoder library on 2026-09-25 (phase L4) — a gate whose subject no longer exists
+cannot run. What enforces the policy now: `scripts/release.sh` constrains the
+cask to `arch: :arm64` (without it Homebrew installs the arm64 DMG on an Intel
+Mac), `scripts/check_linux_build.sh` pins the Linux target triple, and CI builds
+on declared runners. **A new native build script needs the gate back** — the
+house policy is in the `target-platform-policy` skill, and the shape that
+worked is a hard failure per reject branch with an overridable `OS`/`ARCH` seam,
+never an `arch` `case` whose `*)` warns and builds anyway.
 
 ## Library system overview
 

@@ -41,11 +41,7 @@ VERSION="$(grep -m1 '^version' pyproject.toml | sed -E 's/.*"(.*)".*/\1/')"
 export DIVOOM_BUILD_VERSION="${VERSION}"
 echo "Building Divoom Control v${VERSION} (PyInstaller)"
 
-# 1. Native C encoder dylib (palette encoder / downsampler / framing).
-echo "→ building native dylib"
-bash scripts/build_libdivoom.sh
-
-# 1b. Native Rust daemon + menubar — bundled INSIDE the .app (divoom.spec collects
+# 1. Native Rust daemon + menubar — bundled INSIDE the .app (divoom.spec collects
 #     them under bin/); the GUI spawns them at runtime.
 if ! command -v cargo >/dev/null 2>&1 && [ -x "${HOME}/.cargo/bin/cargo" ]; then
   export PATH="${HOME}/.cargo/bin:${PATH}"

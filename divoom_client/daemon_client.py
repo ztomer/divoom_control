@@ -88,8 +88,7 @@ def _spawn_disclaimed_macos(cmd: list[str], log_path: str,
     *inherited* responsibility with no usage description (Terminal, Claude
     Desktop) SIGABRTs the daemon the instant CoreBluetooth starts.
 
-    ``env`` overrides the spawned process environment (defaults to ``os.environ``);
-    the native daemon needs ``DIVOOMD_ENCODER_LIB`` propagated this way.
+    ``env`` overrides the spawned process environment (defaults to ``os.environ``).
 
     Uses posix_spawn (libc) with `responsibility_spawnattrs_setdisclaim` +
     POSIX_SPAWN_SETSID, redirecting stdout/stderr to ``log_path``.
@@ -174,24 +173,10 @@ def spawn_daemon(
     resolved = binary_resolver.resolve(
         "divoomd", override=os.environ.get("DIVOOM_RUST_BINARY"))
     rust_bin = str(resolved) if resolved else None
-    rust_env_extra: dict[str, str] = {}
-    if rust_bin:
-        # The bundled daemon can't find the encoder dylib by relative path —
-        # point it at the copy shipped alongside it. PyInstaller collects it
-        # under <_MEIPASS>/divoom_lib; py2app lands it in Resources.
-        _mei = getattr(sys, "_MEIPASS", None)
-        _rp = os.environ.get("RESOURCEPATH")
-        _dylib_dirs = [d for d in (
-            Path(_mei) / "divoom_lib" if _mei else None,
-            Path(_mei).parent / "Resources" / "divoom_lib" if _mei else None,
-            Path(_rp) if _rp else None,
-        ) if d is not None]
-        from divoom_lib.native_lib import platform_libname
-        for _dir in _dylib_dirs:
-            _dy = _dir / platform_libname()  # .dylib on macOS, .so on Linux
-            if _dy.exists():
-                rust_env_extra["DIVOOMD_ENCODER_LIB"] = str(_dy)
-                break
+    # No encoder library to hand over any more. The daemon used to be pointed at
+    # a bundled `libdivoom_compact` through DIVOOMD_ENCODER_LIB because its
+    # image encoders lived in C; they are Rust in the binary now (phase L4), so
+    # there is nothing to find and nothing to propagate.
     # The Rust daemon is the sole shipping daemon (the Python reference server was
     # archived 2026-07-13 — see divoom_client/__init__.py); there is no longer a
     # Python-daemon spawn fallback. Raise clearly rather than emitting a
@@ -232,7 +217,7 @@ def spawn_daemon(
     # __TEXT,__info_plist).
     if sys.platform == "darwin":
         try:
-            disclaim_env = {**os.environ, **rust_env_extra}
+            disclaim_env = dict(os.environ)
             pid = _spawn_disclaimed_macos(cmd, log_path, env=disclaim_env)
             logger.info("Spawned daemon (TCC-disclaimed) pid=%s", pid)
             return pid
@@ -246,7 +231,6 @@ def spawn_daemon(
         _out = _err = subprocess.DEVNULL
     logger.info("Spawning daemon (Popen, detach=%s): %s", detach, " ".join(cmd))
     spawn_env = os.environ.copy()
-    spawn_env.update(rust_env_extra)  # e.g. DIVOOMD_ENCODER_LIB for the bundled daemon
     return subprocess.Popen(
         cmd, stdout=_out, stderr=_err, stdin=subprocess.DEVNULL,
         start_new_session=detach, env=spawn_env,

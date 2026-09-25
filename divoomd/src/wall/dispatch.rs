@@ -66,11 +66,7 @@ impl Daemon {
                     Err(e) => return err_reply(&format!("wall show_image: read {path}: {e}")),
                 };
                 let time_ms = num(1, "time", 100).word();
-                let Some(daemon_arc) = self.self_weak.get().and_then(std::sync::Weak::upgrade)
-                else {
-                    return err_reply("daemon self reference unavailable");
-                };
-                wall.show_image(daemon_arc, &img_data, time_ms).await
+                wall.show_image(&img_data, time_ms).await
             }
             "show_light" | "set_light" => {
                 let color = text(0, "color").unwrap_or_else(|| "#FFFFFF".to_string());

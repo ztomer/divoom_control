@@ -2,7 +2,7 @@
 //! `process_image()`.
 //!
 //! Takes raw file bytes, returns per-frame `(rgb, w, h, time_ms)` tuples ready
-//! to be encoded by `NativeEncoder` and streamed via 0x8B.
+//! to be encoded by `image_encode` and streamed via 0x8B.
 //!
 //! NEAREST resampling matches the Python `Image.Resampling.NEAREST` used there;
 //! keeping the same filter keeps pixel art crisp and avoids blurring on upscale.

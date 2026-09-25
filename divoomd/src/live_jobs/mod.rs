@@ -75,8 +75,12 @@ async fn now_playing_track_async() -> Result<Option<nowplaying::Track>, String> 
 
 // --- Device Helpers ---
 
+/// Push one already-decoded RGB frame to a device.
+///
+/// No `daemon` parameter any more: it existed only to reach the encoder, and
+/// the encoder is a free function now. A parameter that exists to reach a
+/// singleton is a dependency the caller cannot see.
 pub(super) async fn push_rgb_to_device(
-    daemon: &Daemon,
     dev: &DeviceTransport,
     rgb: &[u8],
     w: i32,
@@ -87,13 +91,8 @@ pub(super) async fn push_rgb_to_device(
         return Err("LAN image push not supported".into());
     }
 
-    let enc = daemon.encoder().ok_or("encoder not available")?;
-    let frame_body = if w == 32 && h == 32 {
-        enc.encode_animation_frame_32(rgb, w, h, time_ms)
-    } else {
-        enc.encode_animation_frame(rgb, w, h, time_ms)
-    };
-    let blob = frame_body.ok_or("encode failed")?;
+    let blob = crate::image_encode::encode_animation_frame(rgb, w, h, time_ms)
+        .map_err(|why| format!("encode {w}x{h} failed: {why}"))?;
 
     dev.send_command(0x45, &[0x05, 0, 0, 0, 0, 0, 0, 0, 0, 0], false)
         .await

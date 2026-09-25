@@ -17,13 +17,16 @@ forward-looking one. Recover a round plan with
   `divoom_lib/framing.py` is parse-only. Round-trip coverage moved with the
   implementation (`divoomd/tests/framing_round_trip.rs`), and test fixtures read
   device bytes from the C's record rather than from hex typed by hand.
-  **Still open, and ordered in `tests/test_no_native_encoder_chain.py`'s failure
-  message:** the daemon's image path (`divoomd/src/native_encode.rs`) has no
-  pure-Rust fallback, so the 16x16 palette encoder, the 32x32 encoder, the 0x8B
-  chunker and LANCZOS3 downsampling must be ported and proven against
-  `divoomd/tests/image_vectors.json` before the C, its sources and its build
-  script can be deleted. This round tried that deletion, found it broke image
-  display, and restored it.
+  **Then finished (same day):** the image half followed. The 0x49 frame, 0x44
+  static and 32x32 encoders are `divoomd::image_encode`, byte-exact against 192
+  vectors captured from the C across 13 sizes and 6 colour counts (including the
+  one case where the C and its Python reference differed: a zero dimension, which
+  the C refuses). The 0x8B chunker and the pre-frame writers turned out to be
+  unreachable from the product, so nothing needed porting for them. The library,
+  its sources, the loader, the build script and the wheel's native globs are
+  deleted, and `tests/test_no_native_encoder_chain.py` holds the finished state.
+  Three implementations of one protocol (C, Python, and an FFI wrapper choosing
+  between them) are now one.
 
 - **Autonomous rustification (2026-09-25), phase L2 — commands as a type**:
   `divoomd/src/commands.rs` carries a `Command` enum beside the name→id table

@@ -21,6 +21,35 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-25 — L4 COMPLETE (uncommitted): the C encoder chain is deleted, the
+  daemon encodes in Rust.** `divoomd::image_encode` (0x49 frame, 0x44 static,
+  32x32) and `divoomd::framing` (0x49/basic) replaced the library; the port is
+  byte-exact against 192 + 550 vectors captured FROM the C, and every unit was
+  red-once proven. `native_encode.rs`, `Daemon::encoder()`, the dylib, the six C
+  sources, `native_lib.py`, `build_libdivoom.sh`, the `DIVOOMD_ENCODER_LIB`
+  hand-off, the wheel's native globs, the Makefile `native` target, the release
+  script's step 1 and py_ci's dylib step are ALL gone.
+  Three things the next session should know rather than re-derive:
+  (1) `test_build_platform_gate.py` was deleted WITH its subject — it drove the C
+  script's arch gate. The policy now lives in `scripts/release.sh` (`arch:
+  :arm64` on the cask) and `scripts/check_linux_build.sh` (Linux triple); a NEW
+  native build script needs that gate back, and ARCHITECTURE.md says so.
+  (2) `multi_device_routing.rs` used to wrap its real assertion in
+  `if d.encoder().is_some()` and so asserted NOTHING on any machine without the
+  C built. It is unconditional now. Worth remembering as a class: a guard added
+  for a missing dependency silently removes the test that depended on it.
+  (3) The Python-side image encoders in `examples/divoom_legacy` are still
+  there and are now the ONLY Python implementation of the encoders. They are not
+  shipped (pyproject excludes `examples*`) and nothing in the product calls them;
+  they survive as the cross-check the image-vector generator compares the C
+  against. When the C is gone that cross-check has nothing to compare, so the
+  generator will fail loudly rather than silently — expected, and the file's
+  docstring says why.
+  Verified: 331 Rust tests, 25 menubar, clippy 0, 1548 Python tests (1
+  pre-existing camoufox browser drift). L1–L4 of the rustification roadmap are
+  now done in this repo; what remains for it is L5 (thin CLI/MCP over the daemon
+  socket) and the repo's own K-style JNI work in `koffee_big`.
+
 - **2026-09-25 — L4 step 2 DONE (uncommitted): the Python framing half is gone;
   the C stays, and the gate now says which is which.** `divoom_lib/framing.py` is
   parse-only (its two encoders and the ctypes loader deleted);

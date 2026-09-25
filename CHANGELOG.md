@@ -6,6 +6,54 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **L4 COMPLETE: the C encoder chain is deleted and the daemon no longer knows
+  it existed.** The daemon's image encoders are Rust (`divoomd::image_encode`),
+  so `divoomd/src/native_encode.rs` — the `libloading` wrapper that dlopened
+  `libdivoom_compact` — is gone, along with `Daemon::encoder()`, the
+  `OnceLock<Option<NativeEncoder>>` behind it, and `DIVOOMD_ENCODER_LIB` in the
+  daemon client. Deleted from the tree: `divoom_lib/libdivoom_compact.dylib`,
+  all six `divoom_lib/native_src/*.c`, `divoom_lib/native_lib.py`,
+  `scripts/build_libdivoom.sh`, the `*.dylib`/`*.so`/`*.dll` package-data globs in
+  `pyproject.toml`, the Makefile's `native` target, the release script's step 1
+  and `py_ci.sh`'s dylib step.
+  **What that removed beyond the files.** Three `daemon: &Daemon`/`Arc<Daemon>`
+  parameters existed only to reach the encoder and are gone with it
+  (`Wall::show_image`, `live_jobs::push_rgb_to_device`,
+  `download_and_encode_art`), plus a `Weak` upgrade in `push_live_frame` and
+  another in the wall dispatch that existed to make those calls. One did NOT go:
+  `push_live_frame`'s own `daemon` parameter, because that one also does the
+  fleet lookup and the progress report — a compiler warning about an unused
+  variable is not a licence to delete a parameter the function still needs.
+  `display.rs` no longer answers "encoder not available (DIVOOMD_ENCODER_LIB)".
+  That string was a real failure mode, not ceremony: a correct install with no
+  dylib built could not show an image, and the message pointed at an env var for
+  a library the product no longer has.
+  **A test got stronger, not weaker.** `multi_device_routing.rs` wrapped its
+  "DEV_A keeps receiving live frames" assertion in `if d.encoder().is_some()`, so
+  on any machine without the C built it asserted nothing and still passed green.
+  That condition is now unconditionally true and the assertion runs.
+  `fleet_routing` and `live_jobs_stress` had preconditions whose subject ("build
+  the dylib first") no longer exists; they are gone rather than left vacuous.
+  `test_pyproject`'s package-data test is INVERTED: it now asserts no native
+  binary glob is shipped, because a per-platform binary in a wheel is wrong on
+  every platform but the one that built it.
+  `tests/test_build_platform_gate.py` is deleted WITH ITS SUBJECT — it drove the
+  C script's 64-bit/arm64-only gate, and a gate whose script no longer exists
+  cannot run. The policy is not dropped: `scripts/release.sh` constrains the cask
+  to `arch: :arm64` and `scripts/check_linux_build.sh` pins the Linux triple, and
+  ARCHITECTURE.md now says where the policy lives and that a NEW native build
+  script needs the gate back.
+  `tests/test_no_native_encoder_chain.py` is rewritten to assert the finished
+  state (no C, no binary, no loader, no `DIVOOMD_ENCODER_LIB` in shipped code, no
+  native glob in the wheel, both vector records present and dense, and the
+  "encoder not available" refusal staying gone), with its history written down:
+  that file was wrong twice, first demanding a deletion that broke image display
+  and then passing with the dylib deleted because it asserted what depended on
+  the library without asserting the library was there.
+  331 Rust tests, 25 menubar, 1548 Python; clippy 0. The one Python failure is
+  pre-existing and environmental (camoufox drifted to beta.30 against a beta.29
+  pin).
+
 - **L4 port, unit 3: the 32x32 encoder, which turned out to be the same
   function.** `encode_animation_frame_32` reproduces all 10 recorded 32x32
   vectors byte for byte. It is four lines, because the C's

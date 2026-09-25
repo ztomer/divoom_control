@@ -70,20 +70,14 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 Err(e) => return err_reply(&format!("image decode task: {e}")),
             };
 
-            let Some(enc) = ctx.daemon.encoder() else {
-                return err_reply("encoder not available (DIVOOMD_ENCODER_LIB)");
-            };
             let mut blob = Vec::new();
             for (rgb, w, h, t) in &frames {
-                let frame_body = if *w == 32 && *h == 32 {
-                    enc.encode_animation_frame_32(rgb, *w, *h, *t)
-                } else {
-                    enc.encode_animation_frame(rgb, *w, *h, *t)
-                };
-                match frame_body {
-                    Some(b) => blob.extend_from_slice(&b),
-                    None => {
-                        return err_reply(&format!("encode_animation_frame failed (frame {w}x{h})"))
+                // The Rust encoder, no dylib and no 32x32 branch: it emits the
+                // same bytes for a 32x32 panel as the 32x32 entry point did.
+                match crate::image_encode::encode_animation_frame(rgb, *w, *h, *t) {
+                    Ok(b) => blob.extend_from_slice(&b),
+                    Err(why) => {
+                        return err_reply(&format!("encode failed for frame {w}x{h}: {why}"))
                     }
                 }
             }
@@ -169,11 +163,11 @@ async fn show_image(ctx: CallCtx<'_>) -> Value {
             rgb.len()
         ));
     }
-    let Some(enc) = ctx.daemon.encoder() else {
-        return err_reply("encoder not available");
-    };
-    let Some(blob) = enc.encode_animation_frame(&rgb, w, h, time_ms) else {
-        return err_reply("encode_animation_frame failed");
+    // The refusal now names itself, so the reply does too: "more than 256
+    // unique colours" is an answer, "encode_animation_frame failed" was not.
+    let blob = match crate::image_encode::encode_animation_frame(&rgb, w, h, time_ms) {
+        Ok(b) => b,
+        Err(why) => return err_reply(&format!("encode failed for frame {w}x{h}: {why}")),
     };
     match dev.stream_animation_8b(&blob).await {
         Ok(true) => json!({"success": true, "result": true}),

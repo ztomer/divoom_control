@@ -62,7 +62,6 @@ mod mock_scrolling_text_tests;
 pub mod mock_transport;
 pub mod models;
 pub mod monthly_best;
-pub mod native_encode;
 #[cfg(target_os = "macos")]
 pub mod notification_db;
 #[cfg(target_os = "macos")]

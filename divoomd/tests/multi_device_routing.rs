@@ -180,8 +180,13 @@ async fn test_live_job_persists_across_device_switch() {
     // Wait 1.5s for sysmon loop to tick on DEV_A
     tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
 
-    // 5. Verify DEV_A's mock transport received sysmon frames (when native encoder is available)
-    if d.encoder().is_some() {
+    // 5. Verify DEV_A's mock transport received sysmon frames.
+    //
+    // Unconditional now, and that is the point of the cutover: this used to be
+    // wrapped in `if d.encoder().is_some()`, so on any machine without the C
+    // dylib built it asserted NOTHING and still passed green. The encoder is
+    // Rust inside the binary, so the excuse is gone and the check runs.
+    {
         let trans_a = transport_of(&d, "DEV_A").await;
         if let DeviceTransport::Mock(ref mock_a) = &*trans_a {
             let sent_any = !mock_a.sent_commands.lock().unwrap().is_empty();

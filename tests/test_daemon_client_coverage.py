@@ -24,10 +24,6 @@ import sys
 from pathlib import Path
 from unittest.mock import ANY, MagicMock
 
-from divoom_lib.native_lib import platform_libname
-
-_LIBNAME = platform_libname()  # .dylib on macOS, .so on Linux -- the client hands the daemon this platform's library
-
 import pytest
 
 from divoom_client import daemon_client
@@ -137,13 +133,19 @@ def test_spawn_daemon_raises_when_no_rust_binary_resolves(monkeypatch, tmp_path)
         daemon_client.spawn_daemon(str(tmp_path / "sock"))
 
 
-def test_spawn_daemon_meipass_resolves_binary_and_dylib(monkeypatch, tmp_path):
+def test_spawn_daemon_meipass_resolves_the_binary(monkeypatch, tmp_path):
+    """PyInstaller bundle: the daemon is found under `<_MEIPASS>/bin`.
+
+    The dylib half of this test is gone with the C (phase L4): the daemon used
+    to be handed a bundled `libdivoom_compact` through DIVOOMD_ENCODER_LIB
+    because its image encoders lived there, and there is nothing to hand over
+    now. What remains is the part that was never about the dylib — finding the
+    binary in a bundle and spawning it disclaimed, which is what keeps the
+    daemon's Bluetooth grant off whoever launched the app.
+    """
     bindir = tmp_path / "bin"
     bindir.mkdir()
     (bindir / "divoomd").write_text("")
-    libdir = tmp_path / "divoom_lib"
-    libdir.mkdir()
-    (libdir / _LIBNAME).write_text("")
 
     monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path), raising=False)
     seen = {}
@@ -157,12 +159,15 @@ def test_spawn_daemon_meipass_resolves_binary_and_dylib(monkeypatch, tmp_path):
     pid = daemon_client.spawn_daemon(str(tmp_path / "sock"))
     assert pid == 111
     assert seen["cmd"][0] == str(bindir / "divoomd")
-    assert seen["env"]["DIVOOMD_ENCODER_LIB"] == str(libdir / _LIBNAME)
 
 
-def test_spawn_daemon_resourcepath_resolves_binary_and_dylib(monkeypatch, tmp_path):
+def test_spawn_daemon_resourcepath_resolves_the_binary(monkeypatch, tmp_path):
+    """py2app layout: the daemon sits at `$RESOURCEPATH`.
+
+    Same subject as the `_MEIPASS` case above and for the same reason — the
+    dylib hand-off is gone, the binary resolution is not.
+    """
     (tmp_path / "divoomd").write_text("")
-    (tmp_path / _LIBNAME).write_text("")
     monkeypatch.setenv("RESOURCEPATH", str(tmp_path))
 
     seen = {}
@@ -176,7 +181,6 @@ def test_spawn_daemon_resourcepath_resolves_binary_and_dylib(monkeypatch, tmp_pa
     pid = daemon_client.spawn_daemon(str(tmp_path / "sock"))
     assert pid == 222
     assert seen["cmd"][0] == str(tmp_path / "divoomd")
-    assert seen["env"]["DIVOOMD_ENCODER_LIB"] == str(tmp_path / _LIBNAME)
 
 
 def test_spawn_daemon_rust_path_with_mac(monkeypatch, tmp_path):

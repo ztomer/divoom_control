@@ -37,10 +37,9 @@ async fn daemon_with_mock(mac: &str) -> Arc<Daemon> {
         ))
         .await;
     assert_eq!(conn["success"], json!(true), "mock connect: {conn}");
-    assert!(
-        d.encoder().is_some(),
-        "these scenarios need the frame encoder: run scripts/build_libdivoom.sh"
-    );
+    // No encoder precondition any more: the encoder is Rust inside this binary,
+    // so "is it available" is not a question about the machine any more. The
+    // assertion it guarded (build the dylib first) has no subject left.
     d
 }
 

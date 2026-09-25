@@ -135,15 +135,26 @@ def test_pyproject_packages_include_divoom_lib() -> None:
     assert any("gui" in pat for pat in include)
 
 
-def test_pyproject_package_data_includes_dylib_and_web_ui() -> None:
+def test_pyproject_package_data_ships_web_ui_and_no_native_binary() -> None:
+    """The wheel ships the web UI, and no compiled artifact.
+
+    Inverted on 2026-09-25 (phase L4). This used to assert `*.dylib` and `*.so`
+    were shipped as package data for `divoom_lib` — the C encoder library, built
+    per platform and committed to the tree. Those globs are gone with the library,
+    and the assertion is now that they STAY gone: a per-platform binary in a
+    wheel is wrong on every platform but the one that built it, which is the
+    whole reason the C left.
+    """
     p = REPO_ROOT / "pyproject.toml"
     data = tomllib.loads(p.read_text())
     pd = data.get("tool", {}).get("setuptools", {}).get("package-data", {})
-    # R17: the native lib ships with divoom_lib (its true home); web_ui with gui.
-    # R20: per-platform extensions are all shipped (.dylib/.so/.dll).
-    assert "*.dylib" in pd.get("divoom_lib", [])
-    assert "*.so" in pd.get("divoom_lib", [])
     assert "web_ui/*" in pd.get("divoom_gui", [])
+    shipped = " ".join(pd.get("divoom_lib", []))
+    for glob in ("*.dylib", "*.so", "*.dll"):
+        assert glob not in shipped, (
+            f"pyproject still ships {glob} as package data: the C encoder library "
+            "is deleted and a compiled artifact has no place in a wheel"
+        )
 
 
 # ── legacy shell wrapper ──────────────────────────────────────────────

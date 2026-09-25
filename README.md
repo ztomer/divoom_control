@@ -33,10 +33,16 @@ and the menu-bar agent), and a native accelerator:
    tools/settings area. It is a **thin client of the daemon** — it owns no BLE
    connection and auto-spawns the daemon if one isn't running.
 
-The **native accelerator** `divoom_lib/libdivoom_compact.{dylib|so}` (palette
-encoder, LANCZOS downsampler, frame escaping) is built from
-`divoom_lib/native_src/`. Every accelerated path has a pure-Python fallback, and
-both are held to the same correctness tests (see *Testing*).
+**There is no native library any more.** `divoom_lib/libdivoom_compact.{dylib|so}`
+— the palette encoder, the downsampler, the frame escaping, built from
+`divoom_lib/native_src/` — was deleted on 2026-09-25, and with it the Python
+encoders beside it. Both live in the Rust daemon now (`divoomd::framing`,
+`divoomd::image_encode`), and what the C produced byte for byte is recorded in
+`divoomd/tests/{framing,image}_vectors.json`, which the Rust side asserts
+against. The old arrangement had three implementations of one protocol — C,
+Python, and the FFI wrapper that chose between them — and the C had to exist,
+be rebuilt per platform, and be committed to the tree so the Python side could
+call it.
 
 > Unofficial project, not affiliated with Divoom. Use at your own risk.
 
@@ -107,8 +113,9 @@ pip install -r requirements.txt        # or: pip install -e .
 ```
 
 `./build.sh --debug` for a debug build; `./run.sh --menubar` runs just the tray
-agent for a quick smoke. (Library-only? `bash scripts/build_libdivoom.sh` builds
-just the C accelerator — the Python fallback works without it.)
+agent for a quick smoke. (Rust only? `cargo build -p divoomd --no-default-features`
+builds just the daemon, without the Bluetooth radio — safe in a terminal with no
+TCC grant.)
 
 ## Run the daemon (headless)
 
@@ -165,10 +172,7 @@ divoom_lib/            Shared protocol core (macOS + Linux)
   models/                command tables, capabilities, constants
   transport.py           transport interface + command routing map
   divoom_auth.py         cloud credentials (Keychain-backed)
-  native_lib.py          resolves libdivoom_compact.{dylib|so|dll}
-  native_src/            C sources for encoders/downsampler (divoomd FFIs them)
   fonts/                 the device bitmap font blobs (divoomd include_bytes!)
-  libdivoom_compact.*    built native library (.dylib / .so)
   cli.py mcp_server.py   the `divoom-control` CLI and MCP server (daemon
                           clients: need a running divoomd, open no Bluetooth)
 examples/              The retired direct-to-device library, standalone
@@ -188,7 +192,6 @@ divoom_gui/            Desktop Control Center (pywebview, macOS) — daemon clie
   web_ui/                frontend (app.js, channels.js, widgets.js, …)
 divoom-menubar/        the menu-bar/tray agent, Rust (winit + tray-icon)
 build.sh / run.sh      build the Rust binaries / run the GUI (+ daemon + menubar)
-scripts/build_libdivoom.sh   cross-platform native (C accelerator) build
 scripts/build_release.sh     build the shippable Divoom.app + dmg (py2app)
 docs/                  SESSION_HANDOFF, protocol refs, release docs
 tests/                 pytest suite

@@ -51,32 +51,9 @@ pub(crate) const fn device_type_for_size(size: u32) -> u32 {
 
 use crate::art_codec::{decode_cloud_magic9, decode_hot_file, decode_magic43};
 
-#[cfg(feature = "ble")]
-fn encode_frame(daemon: &Daemon, rgb: &[u8], w: i32, h: i32, time_ms: u16) -> Option<Vec<u8>> {
-    let enc = daemon.encoder()?;
-    if w == 32 && h == 32 {
-        enc.encode_animation_frame_32(rgb, w, h, time_ms)
-    } else {
-        enc.encode_animation_frame(rgb, w, h, time_ms)
-    }
-}
-
-/// With `ble` off there is no encoder to reach: the stub keeps the BLE
-/// build's signature and answers `None`.
-#[cfg(not(feature = "ble"))]
-const fn encode_frame(
-    _daemon: &Daemon,
-    _rgb: &[u8],
-    _w: i32,
-    _h: i32,
-    _time_ms: u16,
-) -> Option<Vec<u8>> {
-    None
-}
-
 // ── download + resolve cloud file to 16x16 RGB frame ─────────────────────
 
-async fn download_and_encode_art(daemon: Arc<Daemon>, fid: String) -> Option<Vec<u8>> {
+async fn download_and_encode_art(fid: String) -> Option<Vec<u8>> {
     let url = format!("{CDN_BASE}{fid}");
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(HTTP_TIMEOUT_SECS))
@@ -94,10 +71,9 @@ async fn download_and_encode_art(daemon: Arc<Daemon>, fid: String) -> Option<Vec
 
     // Resolve to 768-byte RGB in a blocking thread (image decoding is CPU-bound).
     let raw_vec = raw.to_vec();
-    let daemon_arc = daemon.clone();
     tokio::task::spawn_blocking(move || {
         let rgb = resolve_to_rgb16x16(&raw_vec)?;
-        encode_frame(&daemon_arc, &rgb, 16, 16, 500)
+        crate::image_encode::encode_animation_frame(&rgb, 16, 16, 500).ok()
     })
     .await
     .ok()
@@ -255,7 +231,7 @@ pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
     // Download + encode all files
     let mut frames: Vec<Vec<u8>> = vec![Vec::new(); SLOTS_PER_PAGE];
     for (idx, fid) in &slot_map {
-        let encoded = download_and_encode_art(daemon.clone(), fid.clone()).await;
+        let encoded = download_and_encode_art(fid.clone()).await;
         match encoded {
             Some(e) => frames[*idx] = e,
             None => {

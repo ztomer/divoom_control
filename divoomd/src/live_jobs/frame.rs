@@ -26,6 +26,12 @@ pub(super) struct LiveFrame {
     pub time_ms: u16,
 }
 
+/// Push one live-preview frame to a device.
+///
+/// The `daemon` parameter stays — it is how the fleet is looked up and how
+/// progress is reported — but the `Weak` upgrade that used to sit inside it is
+/// gone: that existed only to reach the C encoder through
+/// `Daemon::encoder()`, and the encoder is a free function now.
 pub(super) async fn push_live_frame(
     daemon: &Arc<Daemon>,
     mac: &str,
@@ -40,7 +46,6 @@ pub(super) async fn push_live_frame(
     let Some(link) = device.link().await else {
         return false;
     };
-    let d_weak = Arc::downgrade(daemon);
     let alive = alive.clone();
     let link_in = link.clone();
     let preview = frame_preview_data_url(&rgb, w, h);
@@ -49,10 +54,7 @@ pub(super) async fn push_live_frame(
             if !alive.load(Ordering::SeqCst) || link_in.is_retired() {
                 return false;
             }
-            let Some(d) = d_weak.upgrade() else {
-                return false;
-            };
-            push_rgb_to_device(&d, &link_in.transport, &rgb, w, h, time_ms)
+            push_rgb_to_device(&link_in.transport, &rgb, w, h, time_ms)
                 .await
                 .is_ok()
         })

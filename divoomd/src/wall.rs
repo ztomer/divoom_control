@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::daemon::{Daemon, DeviceTransport};
+use crate::image_encode;
 
 mod bounds;
 mod cmds;
@@ -188,18 +189,12 @@ impl DivoomWall {
             .collect()
     }
 
-    pub async fn show_image(
-        &self,
-        daemon: Arc<Daemon>,
-        img_data: &[u8],
-        default_time_ms: u16,
-    ) -> bool {
+    /// Show an image on every panel in this wall.
+    ///
+    /// The `daemon` parameter is gone: it existed to reach the C encoder
+    /// through `Daemon::encoder()`, and `image_encode` is a free function now.
+    pub async fn show_image(&self, img_data: &[u8], default_time_ms: u16) -> bool {
         let is_gif = img_data.len() >= 3 && &img_data[0..3] == b"GIF";
-
-        // Ensure encoder exists before spawning tasks
-        if daemon.encoder().is_none() {
-            return false;
-        }
 
         let mut tasks = Vec::new();
         for slot in &self.devices {
@@ -230,7 +225,6 @@ impl DivoomWall {
             };
 
             let data_vec = img_data.to_vec();
-            let daemon_clone = daemon.clone();
 
             tasks.push(tokio::spawn(async move {
                 let frames = tokio::task::spawn_blocking(move || {
@@ -239,22 +233,16 @@ impl DivoomWall {
                 .await
                 .map_err(|e| e.to_string())??;
 
-                let Some(enc) = daemon_clone.encoder() else {
-                    return Err("encoder not available".to_string());
-                };
-
                 let mut blob = Vec::new();
                 for (rgb, w, h, t) in &frames {
-                    let frame_body = if *w == 32 && *h == 32 {
-                        enc.encode_animation_frame_32(rgb, *w, *h, *t)
-                    } else {
-                        enc.encode_animation_frame(rgb, *w, *h, *t)
-                    };
-                    if let Some(b) = frame_body {
-                        blob.extend_from_slice(&b);
-                    } else {
-                        return Err("Encode failed".to_string());
-                    }
+                    // No 32x32 branch, and no dylib: the Rust encoder emits the
+                    // same bytes for a 32x32 panel as the 32x32 entry point did
+                    // (`image_encode::encode_animation_frame_32` delegates to
+                    // this very function, and the recorded vectors pin both
+                    // against the C), so choosing between them was ceremony.
+                    let frame_body = image_encode::encode_animation_frame(rgb, *w, *h, *t)
+                        .map_err(|why| format!("encode {w}x{h} failed: {why}"))?;
+                    blob.extend_from_slice(&frame_body);
                 }
 
                 if let DeviceTransport::Lan(_) = &*dev {

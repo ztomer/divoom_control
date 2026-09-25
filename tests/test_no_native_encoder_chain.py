@@ -1,42 +1,35 @@
-"""The Python-side FRAMING half of the C chain is gone, and cannot come back quietly.
+"""L4 is finished: the C encoder chain is out of the tree, and stays out.
 
 `divoom_lib/libdivoom_compact.dylib` and `divoom_lib/native_src/*.c` were a
 compiled artifact plus its sources, committed to the repository and rebuilt by
-`scripts/build_libdivoom.sh`. On 2026-09-25 the last live caller of the library's
-FRAMING half went away: `divoomd` frames with `crate::framing` — the same
-encoder the BLE path uses, pinned against this C library's own bytes by 550
-vectors in `divoomd/tests/framing_vectors.json` — and
-`divoom_client/spp_bridge.py` writes the exact bytes it is handed. So
-`divoom_lib/framing.py` is a parse-only module now and the Python encoders are
-gone from it.
+`scripts/build_libdivoom.sh`. Both are gone as of 2026-09-25, and so is the
+loader (`divoom_lib/native_lib.py`), the `DIVOOMD_ENCODER_LIB` hand-off in the
+daemon client, and the `pyproject.toml` globs that shipped a per-platform binary
+inside the wheel.
 
-**The IMAGE half of the same library is still here, deliberately, and this file
-must not pretend otherwise.** The daemon's image path has no fallback: with the
-encoder absent, `wall.rs` silently returns false and
-`device_call/basic/display.rs` answers "encoder not available"
-(`divoomd/src/native_encode.rs`, loaded through `libloading`). Deleting the C
-before porting the 16x16 palette encoder, the 32x32 encoder, the 0x8B chunker
-and LANCZOS3 downsampling would break image display — which is exactly what
-happened when this round first tried, and the dylib was restored.
+What replaced them, and what this file holds them to:
 
-So this gate asserts the part that is true, and names the part that is not:
+* the framing half by `divoomd::framing` — the same encoder the BLE path uses,
+  asserted against 550 vectors captured from the C library itself;
+* the image half by `divoomd::image_encode` — palette dedup and LSB-first
+  packing, asserted against 192 vectors captured from the C, across 13 sizes and
+  6 colour counts, with the one case where the C and its Python reference
+  differed (a zero dimension, which the C refuses) recorded as a refusal;
+* the refusal that came with it: `display.rs` used to answer "encoder not
+  available" whenever the library was missing, so a working install could not
+  show an image. There is nothing to be missing now, and this asserts the
+  refusal does not come back.
 
-* no Python framing encoder remains, and nothing in a shipped package names the
-  library's framing entry points;
-* the record of what the framing half produced is present and dense (550
-  vectors), because a "the C is gone" claim with a 4-case fixture would pass a
-  tree that lost both halves;
-* the image half is called out by name, with the file that consumes it and the
-  port that replaces it. If someone deletes the C while the port is unmade,
-  `test_the_image_half_is_still_c_on_purpose` fails and says what breaks.
+How this gate got here is worth recording, because it was wrong twice. It was
+first written to demand the whole C be gone, which was false — the daemon's image
+path had no fallback, and deleting the library broke image display. It was then
+written to demand the C STAY, and that version passed with the dylib deleted
+from the index, because it asserted what depends on the library without asserting
+the library was there. Both versions were red-once proven. This one asserts the
+state that is actually true, and each of its assertions has been watched fail.
 
 `nowplaying/native/libnp_helper.dylib` is also tracked: a different crate's
 native helper, not on this chain, and its removal is its own round.
-
-Proven red-once: written while all eight chain files were tracked, it named
-every one of them; the framing assertions have been red since before the
-encoders were removed, and the image assertion goes red the moment the dylib
-disappears without the port.
 """
 
 from __future__ import annotations
@@ -149,60 +142,82 @@ def test_the_record_of_what_the_c_framed_is_present_and_dense() -> None:
     assert len(vectors["encode_ios_le"]) >= 300, "the ios_le sweep shrank"
 
 
-def test_the_c_library_the_image_path_needs_is_actually_present() -> None:
-    """The half that is still C must be THERE, not merely referenced.
+def test_the_c_is_gone_and_nothing_can_reach_for_it() -> None:
+    """L4 finished: no C, no binary, no loader, anywhere.
 
-    Added because this file passed with the dylib deleted from the index: it
-    asserted that the consumers still name the library and never that the
-    library exists. That is precisely the mistake this round made — deleting the
-    C before the image encoders were ported — and the gate that was written to
-    prevent it waved it through. An assertion about what depends on something
-    is not an assertion that the something is there.
+    Every one of these was a way back to the C, and each is a thing that
+    silently comes back: a `.c` file re-added "just to compare", a prebuilt
+    dylib committed so nobody has to build it, a `native_lib` import that still
+    resolves on a machine with an old install. The gate that stopped the
+    halfway deletion is this one.
     """
     present = set(tracked())
-    required = {
-        "divoom_lib/libdivoom_compact.dylib": "image display: wall.rs returns false, display.rs errors",
-        "divoom_lib/native_src/image_encode.c": "the 16x16 palette encoder's source",
-        "divoom_lib/native_src/image_encode_32.c": "the 32x32 encoder and 0x8B chunker",
-        "divoom_lib/native_src/downsample.c": "LANCZOS3 downscaling",
-        "scripts/build_libdivoom.sh": "how the dylib is rebuilt when the C changes",
-    }
-    gone = {path: why for path, why in required.items() if path not in present}
-    assert not gone, (
-        "the C the image path still needs is GONE, and there is no pure-Rust "
-        "fallback:\n"
-        + "\n".join(f"  {path}: {why}" for path, why in sorted(gone.items()))
-        + "\nPort the encoders first (divoomd/tests/image_vectors.json is the "
-        "oracle), then delete the C -- and delete THIS test with it."
-    )
+    gone = [
+        path
+        for path in present
+        if path.endswith((".c", ".h"))
+        or (path.startswith("divoom_lib/") and path.endswith((".dylib", ".so", ".dll")))
+        or path in ("scripts/build_libdivoom.sh", "divoom_lib/native_lib.py")
+    ]
+    assert not gone, "the C encoder chain is back:\n" + "\n".join(f"  {p}" for p in sorted(gone))
 
 
-def test_the_image_half_is_still_c_on_purpose() -> None:
-    """The C is STILL HERE, for images, and this test says so out loud.
+def test_nothing_shipped_mentions_the_library() -> None:
+    pattern = re.compile(r"libdivoom_compact|DIVOOMD_ENCODER_LIB|native_lib|platform_libname")
+    hits: list[str] = []
+    for package in SHIPPED_PACKAGES:
+        for path in sorted((REPO / package).rglob("*.py")):
+            for number, line in enumerate(code_only(path.read_text()).splitlines(), 1):
+                if pattern.search(line):
+                    hits.append(f"{path.relative_to(REPO)}:{number}: {line.strip()}")
+    assert not hits, "shipped code still names the deleted library:\n" + "\n".join(hits)
 
-    Written after this round deleted the dylib and broke image display: the
-    daemon has no pure-Rust fallback for the palette encoders, the 32x32
-    encoder, the 0x8B chunker or the downscaler. Whoever finishes L4 has to
-    port those first, prove them against `divoomd/tests/image_vectors.json` and
-    `divoomd/tests/native_encode_parity.rs`, and only then delete
-    `divoom_lib/native_src/` and the dylib. This test is the reminder that turns
-    "delete the C" from an obvious next step into a port first.
+
+def test_pyproject_ships_no_native_binary() -> None:
+    globs = re.findall(r'"\*\.(?:dylib|so|dll)"', (REPO / "pyproject.toml").read_text())
+    assert not globs, f"pyproject still globs native binaries into the wheel: {globs}"
+
+
+def test_the_recording_that_replaced_the_c_is_present_and_dense() -> None:
+    """The evidence the port stands on, and both halves of it.
+
+    `image_vectors.json` is the C's recorded image output — 192 cases, asserted
+    byte for byte by `image_encode.rs`. `framing_vectors.json` is the C's
+    recorded framing, asserted by `framing_parity.rs` and `framing_round_trip.rs`.
+    A "the C is gone" rule with thin fixtures would pass a tree that lost both
+    halves, so the density is asserted, not just the presence.
     """
-    for path in IMAGE_HALF_CONSUMERS:
-        assert path in tracked(), (
-            f"{path} disappeared: it is what still loads the C image encoders, "
-            "and its absence means the port replaced it — say so here"
+    for relative, direction, floor in (
+        ("divoomd/tests/image_vectors.json", "frame", 100),
+        ("divoomd/tests/framing_vectors.json", "encode_basic", 200),
+    ):
+        assert relative in tracked(), f"{relative} records what the C produced and must be tracked"
+        vectors = json.loads((REPO / relative).read_text())
+        assert len(vectors[direction]) >= floor, (
+            f"{relative}: {direction} has {len(vectors[direction])} cases, expected "
+            f"at least {floor}"
         )
-    native_encode = (REPO / "divoomd" / "src" / "native_encode.rs").read_text()
-    assert "libdivoom_compact" in native_encode, (
-        "divoomd/src/native_encode.rs no longer names the library it loads"
-    )
-    # The fallback that does NOT exist, stated as an assertion so nobody
-    # assumes it: with the encoder gone, display.rs errors out.
+
+
+def test_the_image_path_no_longer_refuses_for_a_missing_encoder() -> None:
+    """The refusal existed only because the encoder could be absent.
+
+    `display.rs` answered "encoder not available (DIVOOMD_ENCODER_LIB)" whenever
+    the C library was not found, which is how a perfectly good install could not
+    show an image. With the encoders in the binary there is nothing to be
+    missing, so the refusal is the thing that should be gone -- and this asserts
+    it stays gone, because putting it back would be a way to reintroduce the
+    dependency without anyone noticing.
+    """
     display = (REPO / "divoomd" / "src" / "device_call" / "basic" / "display.rs").read_text()
-    assert "encoder not available" in display, (
-        "the no-encoder path changed: if the image encoders are now ported, "
-        "this refusal is the thing to delete, and this test with it"
+    assert "encoder not available" not in display, (
+        "display.rs refuses again for a missing encoder, but the encoder is Rust "
+        "in this binary and cannot be missing"
+    )
+    daemon = (REPO / "divoomd" / "src" / "daemon.rs").read_text()
+    assert "encoder" not in daemon, (
+        "Daemon::encoder() is back: there is no library to load and no lazy init "
+        "to do"
     )
 
 

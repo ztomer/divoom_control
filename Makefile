@@ -1,12 +1,12 @@
-.PHONY: native test test-hardware clean-native
+.PHONY: test test-hardware
 
-# Build the native dylib (palette encoder, downsampler, framing).
-native:
-	bash scripts/build_libdivoom.sh
-
-# Run the unit suite. conftest auto-rebuilds the dylib if missing/stale, so the
-# dual-impl encoder tests (test_encoder_both_impls.py) exercise BOTH C + Python.
-test: native
+# Run the unit suite.
+#
+# There is no `native` target any more: the C encoder dylib it built is gone
+# (phase L4), and the encoders it held are Rust inside the daemon binary, so
+# there is nothing to compile before running the tests. `cargo test` covers
+# those.
+test:
 	python3 -m pytest -q
 
 # Include the BLE hardware-integration tests (needs a real device + BT grant).

@@ -14,12 +14,8 @@ cd "$ROOT"
 # shellcheck source=/Users/ztomer/Projects/gates_of_heck/tui/lib.sh
 source "${GOH_DIR:-$HOME/Projects/gates_of_heck}/tui/lib.sh"
 
-info "build native dylib"
-if ! bash scripts/build_libdivoom.sh >/tmp/py_ci_dylib.log 2>&1; then
-    tail -30 /tmp/py_ci_dylib.log >&2
-    exit 1
-fi
-ok "native dylib built"
+# No native dylib to build: the C encoders it produced are Rust in the daemon
+# binary now (phase L4), built by the cargo step below.
 
 have_camoufox=0
 if python3 tools/camoufox_installed.py >/tmp/py_ci_camoufox.log 2>&1; then

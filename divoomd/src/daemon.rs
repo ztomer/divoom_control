@@ -17,7 +17,6 @@ use serde_json::{json, Value};
 
 use std::sync::{Arc, OnceLock, Weak};
 
-use crate::native_encode::NativeEncoder;
 use crate::protocol::{err_reply, Request};
 use crate::socket_server::Handler;
 
@@ -59,8 +58,6 @@ pub struct Daemon {
     /// silently returns 0 devices until it resets).
     #[cfg(feature = "ble")]
     pub(crate) last_scan: Mutex<Option<(Instant, Vec<Value>)>>,
-    // C image encoder (libdivoom_compact FFI); loaded once, cached for lifetime.
-    encoder: OnceLock<Option<NativeEncoder>>,
     pub(crate) tx: tokio::sync::broadcast::Sender<Value>,
     pub live_jobs: Arc<crate::live_jobs::LiveJobCoordinator>,
     pub(crate) self_weak: OnceLock<Weak<Self>>,
@@ -99,7 +96,6 @@ impl Daemon {
             connecting: std::sync::atomic::AtomicBool::new(false),
             #[cfg(feature = "ble")]
             last_scan: Mutex::new(None),
-            encoder: OnceLock::new(),
             tx,
             self_weak: OnceLock::new(),
             // R67/C6: wired to the event bus, so every phase change is
@@ -119,16 +115,6 @@ impl Daemon {
             Ok(d) => d.transport().await,
             Err(_) => None,
         }
-    }
-
-    /// Get (or lazy-init) the cached `NativeEncoder`. Returns None if the dylib is absent.
-    #[must_use]
-    pub fn encoder(&self) -> Option<&NativeEncoder> {
-        self.encoder
-            .get_or_init(|| {
-                crate::native_encode::find_encoder_lib().and_then(|p| NativeEncoder::load(p).ok())
-            })
-            .as_ref()
     }
 
     pub fn initialize_self_weak(&self, weak: Weak<Self>) {
