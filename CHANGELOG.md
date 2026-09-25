@@ -6,6 +6,29 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **L4 groundwork: the framing vectors outlive the C.** The committed
+  `divoomd/tests/framing_vectors.json` was 18 hand-picked cases; it is now 550,
+  all captured from the C library that L4 deletes: a dense length sweep
+  (0..=80 bytes) in both escape modes, each escape byte (0x01/0x02/0x03) at
+  every position of a 12-byte payload, and four awkward packet numbers per
+  length. Ten cases say what someone thought to try; the sweep says what the
+  encoder does at *every* length, which is where a length-dependent bug —
+  a 16-bit length off-by-one, a checksum that wraps at 255, an escape that
+  fires a byte early — would live. All 550 reproduce byte-for-byte in Rust
+  (red-once: perturbing the start byte fails `encode_basic_matches_python`).
+  Provenance verified directly against the dylib: all 18 pre-existing vectors
+  were already byte-identical to the C, so the chain
+  C → `framing.py` → generator → JSON → Rust was sound.
+  **Bug found and fixed:** `scripts/codegen/gen_framing_vectors.py` wrote to
+  `scripts/divoomd/tests/` — two parents up, a path that does not exist. It
+  `mkdir -p`'d it, printed a success line, and produced a file no test has ever
+  read. Same stale-path bug `gen_commands.py` had. A generator whose output
+  path is wrong is indistinguishable from one nobody runs.
+  Kill criterion answered with evidence, not assertion: the live framing
+  functions are scalar C with no SIMD at all; the only NEON in the library is a
+  48-byte row copy in `compact_tiles` (NEON vs `memcpy` — byte-identical by
+  construction) which has no live caller.
+
 - **L2 commands as a type.** Three generated files —
   `divoomd/src/commands.rs` (the name→id table, unchanged for callers),
   `command_model.rs` and `command_names.rs` — split at the 500-line cap. The

@@ -31,6 +31,26 @@ def encode_basic_cases():
         # a larger payload whose checksum overflows 16 bits (mask path)
         ([0xFF] * 600, False),
     ]
+    # A DENSE length sweep, added when the C library was about to be deleted
+    # (L4) and these vectors became the only surviving evidence of what the C
+    # produced. The ten hand-picked cases above say what someone thought to try;
+    # the sweep says what the encoder does at EVERY length up to a full escape
+    # window, which is where a length-dependent bug would live -- an off-by-one
+    # in the 16-bit length field, a checksum that wraps at 255/256, an escape
+    # that fires one byte early. It is 81 more cases per direction, cheap to
+    # assert forever, and it is generated from the same C bytes as the rest.
+    for length in range(0, 81):
+        payload = [(i * 7 + length) % 256 for i in range(length)]
+        for escape in (False, True):
+            inputs.append((payload, escape))
+    # And the escape bytes at EVERY position in a short payload, because escape
+    # framing is position-sensitive: 0x01/0x02/0x03 become 0x01 0x01 / 0x02 0x02
+    # / 0x03 0x03, and an off-by-one there corrupts a frame silently.
+    for pos in range(0, 12):
+        for trigger in (0x01, 0x02, 0x03):
+            payload = [0x46] * 12
+            payload[pos] = trigger
+            inputs.append((payload, True))
     for payload, escape in inputs:
         out = framing.encode_basic_payload(payload, escape=escape)
         cases.append({"payload": payload, "escape": escape, "out": _h(out)})
@@ -48,6 +68,18 @@ def encode_ios_le_cases():
         ([0x46], 0xFF),
         (list(range(0x40, 0x60)), 7),
     ]
+    # The same dense length sweep as `encode_basic_cases`, for the same reason:
+    # the length field is computed from the payload and the packet number rides
+    # in one byte of it, so length and packet interact. Every length 0..=80 with
+    # a packet number that is deliberately awkward (0, 1, 0xFF, and one that
+    # forces a length-byte carry) rather than a single lucky value.
+    for length in range(1, 81):
+        # From 1, not 0: this encoder REFUSES an empty payload (no command id to
+        # frame), which is a refusal rather than a byte string and so cannot be a
+        # vector. The refusal itself is pinned in the Rust test.
+        payload = [(i * 11 + length) % 256 for i in range(length)]
+        for packet in (0, 1, 0xFF, 0x1234):
+            inputs.append((payload, packet))
     for payload, packet in inputs:
         out = framing.encode_ios_le_payload(payload, packet_number=packet)
         cases.append({"payload": payload, "packet": packet, "out": _h(out)})
@@ -121,7 +153,16 @@ def main():
         "parse_ios_le": parse_ios_le_cases(),
         "parse_basic": parse_basic_cases(),
     }
-    dest = Path(__file__).parent.parent / "divoomd" / "tests" / "framing_vectors.json"
+    # scripts/codegen/gen_framing_vectors.py -> repo root is three parents up.
+    # It was two, which resolved to scripts/divoomd/ -- a directory that does
+    # not exist, created by mkdir and written into: the generator printed a
+    # success line and produced a file no test has ever read. Same bug and the
+    # same fix as gen_commands.py; a generator whose output path is wrong is
+    # indistinguishable from one that is not being run.
+    dest = (
+        Path(__file__).resolve().parent.parent.parent
+        / "divoomd" / "tests" / "framing_vectors.json"
+    )
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(json.dumps(out, indent=2))
     n = sum(len(v) for v in out.values())
