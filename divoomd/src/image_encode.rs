@@ -45,6 +45,9 @@ pub const FRAME_HEADER_SIZE: usize = 7;
 /// Colours the protocol's `NN` byte can address.
 pub const PALETTE_MAX: usize = 256;
 
+/// The only panel size the 32x32 encoder accepts, in pixels per side.
+pub const SCREEN_SIZE_32: usize = 32;
+
 /// Largest frame the C accepts, in pixels (`w * h > 65535` → refuse).
 ///
 /// The bound is the C's, and it is a refusal rather than a clamp: past it the
@@ -62,6 +65,8 @@ pub enum Refusal {
     TooManyPixels,
     /// More than 256 unique colours, which the palette cannot address.
     PaletteFull,
+    /// The 32x32 encoder's own gate: it accepts 32x32 and nothing else.
+    NotA32x32Panel,
 }
 
 impl core::fmt::Display for Refusal {
@@ -70,6 +75,7 @@ impl core::fmt::Display for Refusal {
             Self::EmptyPanel => "the panel has a zero dimension",
             Self::TooManyPixels => "more than 65535 pixels",
             Self::PaletteFull => "more than 256 unique colours",
+            Self::NotA32x32Panel => "the 32x32 encoder only accepts a 32x32 panel",
         };
         f.write_str(why)
     }
@@ -165,6 +171,35 @@ const fn bits_per_index(colours: usize) -> usize {
     } else {
         1
     }
+}
+
+/// Encode one 32x32 animation frame body — the same bytes as
+/// [`encode_animation_frame`] for a 32x32 panel, and refused for anything else.
+///
+/// The C's `divoom_encode_animation_frame_32` is the 0x49 algorithm with one
+/// extra guard: `if (w != 32 || h != 32) return -1`. Its comment says the header
+/// is the `standard AA format matching APK's pixelEncode() for ALL screen
+/// sizes`, which is why this delegates instead of re-deriving: a third copy of
+/// the packer is a third thing to keep in step, and the recorded 32x32 vectors
+/// are what says the two really are the same function.
+///
+/// # Errors
+///
+/// [`Refusal::NotA32x32Panel`] for any other size — the C's own gate, which
+/// exists because a 32x32 frame body is only meaningful for a 32x32 panel — and
+/// otherwise whatever [`pack`] refuses.
+pub fn encode_animation_frame_32(
+    rgb: &[u8],
+    w: i32,
+    h: i32,
+    time_ms: u16,
+) -> Result<Vec<u8>, Refusal> {
+    if w != i32::try_from(SCREEN_SIZE_32).unwrap_or(i32::MAX)
+        || h != i32::try_from(SCREEN_SIZE_32).unwrap_or(i32::MAX)
+    {
+        return Err(Refusal::NotA32x32Panel);
+    }
+    encode_animation_frame(rgb, w, h, time_ms)
 }
 
 /// Assemble `[AA LLLL(2) header-tail][palette][pixels]`.
@@ -320,6 +355,56 @@ mod tests {
             "only {checked} static vectors: the sweep shrank"
         );
         assert_eq!(refusals, 1, "expected exactly the zero-dimension refusal");
+    }
+
+    #[test]
+    fn every_recorded_32x32_frame_reproduces() {
+        let cases = vectors()["frame32"]
+            .as_array()
+            .expect("frame32 cases")
+            .clone();
+        assert!(cases.len() >= 8, "the 32x32 sweep shrank");
+        for case in &cases {
+            let w = i32::try_from(case["w"].as_i64().expect("w")).expect("w fits i32");
+            let h = i32::try_from(case["h"].as_i64().expect("h")).expect("h fits i32");
+            let t = u16::try_from(case["time"].as_u64().expect("time")).expect("time fits u16");
+            let rgb = rgb_of(case["rgb"].as_str().expect("rgb"));
+            assert_eq!(
+                crate::wire::hex(&encode_animation_frame_32(&rgb, w, h, t).expect("encodes")),
+                case["out"].as_str().expect("out hex"),
+                "32x32 frame t={t} diverged from the C"
+            );
+        }
+    }
+
+    #[test]
+    fn the_32x32_encoder_refuses_every_other_size() {
+        // The C's gate, and the reason it exists: a 32x32 frame body is only
+        // meaningful for a 32x32 panel, so a 16x16 image handed here is a caller
+        // bug rather than something to resize on the way through.
+        let rgb = vec![0x20u8; 3 * 32 * 32];
+        assert!(encode_animation_frame_32(&rgb, 32, 32, 500).is_ok());
+        for (w, h) in [(16, 16), (31, 32), (32, 31), (64, 64), (0, 32), (32, 0)] {
+            assert_eq!(
+                encode_animation_frame_32(&rgb, w, h, 500).unwrap_err(),
+                Refusal::NotA32x32Panel,
+                "{w}x{h} should be refused"
+            );
+        }
+    }
+
+    #[test]
+    fn a_32x32_frame_is_the_same_bytes_as_the_general_encoder() {
+        // The claim the delegation rests on, asserted directly: for a 32x32 panel
+        // the two encoders produce identical output. If they ever stop agreeing,
+        // the delegation is wrong and this is what says so.
+        let rgb: Vec<u8> = (0..(32 * 32 * 3))
+            .map(|i| u8::try_from(i % 251).unwrap_or(0))
+            .collect();
+        assert_eq!(
+            encode_animation_frame_32(&rgb, 32, 32, 777).expect("encodes"),
+            encode_animation_frame(&rgb, 32, 32, 777).expect("encodes"),
+        );
     }
 
     #[test]

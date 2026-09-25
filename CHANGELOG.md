@@ -6,6 +6,25 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **L4 port, unit 3: the 32x32 encoder, which turned out to be the same
+  function.** `encode_animation_frame_32` reproduces all 10 recorded 32x32
+  vectors byte for byte. It is four lines, because the C's
+  `divoom_encode_animation_frame_32` is the 0x49 algorithm plus one guard —
+  `if (w != 32 || h != 32) return -1` — and its own comment calls the header
+  "the standard AA format matching APK's pixelEncode() for ALL screen sizes".
+  So it delegates to `encode_animation_frame` rather than becoming a third copy
+  of the packer, with a test asserting the two produce identical bytes for a
+  32x32 panel: if they ever stop agreeing, the delegation is what fails, and it
+  fails on the claim rather than on a symptom.
+  Red-once: removing the size gate fails the refusal test.
+  **Also established while porting:** `divoom_encode_animation_8b` (the 0x8B
+  three-phase chunker), `divoom_write_pre_frame_1` and `_2` are unreachable
+  from the product — no Rust, Python, or test caller anywhere. They are part of
+  the C to delete, and nothing needs porting for them.
+  All three encoders the FFI actually loads are now in Rust: 332 tests, clippy
+  clean. Nothing calls them yet — the daemon still prefers the dylib, which is
+  the next step.
+
 - **L4 port, unit 2: the 0x44 static image encoder — and one implementation, not
   two.** `encode_static_image` joins `encode_animation_frame` in
   `divoomd/src/image_encode.rs`, reproducing all 78 non-refusal static vectors
