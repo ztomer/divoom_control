@@ -21,6 +21,7 @@ import pytest
 
 from divoom_lib import cli as cli_module
 from divoom_lib import cli_commands
+from divoom_lib import cli_device_verbs
 from divoom_lib.models.capabilities import DeviceRegistry
 from tests.support.cli_common import _parse
 
@@ -72,9 +73,9 @@ def test_print_dict_non_json(capsys) -> None:
 
 
 async def test_resolve_device_bypasses_connect_for_pair_and_identify() -> None:
-    d, mac = await cli_commands._resolve_device(SimpleNamespace(command="pair", mac="AA:BB"))
+    d, mac = await cli_device_verbs._resolve_device(SimpleNamespace(command="pair", mac="AA:BB"))
     assert d is None and mac == "AA:BB"
-    d, mac = await cli_commands._resolve_device(SimpleNamespace(command="identify", mac=None))
+    d, mac = await cli_device_verbs._resolve_device(SimpleNamespace(command="identify", mac=None))
     assert d is None and mac == ""
 
 
@@ -109,14 +110,17 @@ class _FakeClient:
 
 
 def _use_client(monkeypatch, client):
-    monkeypatch.setattr(cli_commands, "_daemon_client", lambda: client)
+    # `_daemon_client` takes the parsed args now (it reads `--socket`), so the
+    # stand-in accepts and ignores them. The `args` shape reaching it is
+    # asserted by the `--socket` tests, not here.
+    monkeypatch.setattr(cli_commands, "_daemon_client", lambda *a, **k: client)
     return client
 
 
 async def test_resolve_device_explicit_mac_connects_through_the_daemon(monkeypatch) -> None:
     client = _use_client(monkeypatch, _FakeClient())
     ns = SimpleNamespace(command="set-volume", mac="AA:BB", timeout=1.0, device_type=None)
-    d, mac = await cli_commands._resolve_device(ns)
+    d, mac = await cli_device_verbs._resolve_device(ns)
     assert mac == "AA:BB"
     assert ("connect", "AA:BB") in client.calls, "not linked yet: the daemon connects it"
     assert ("scan", 1.0) not in client.calls, "an explicit mac never scans"
@@ -129,7 +133,7 @@ async def test_resolve_device_uses_the_single_linked_panel(monkeypatch) -> None:
         per_mac={"CC:DD": {"success": True, "connected": True, "mac": "CC:DD"}},
     ))
     ns = SimpleNamespace(command="set-volume", mac=None, timeout=1.0, device_type=None)
-    d, mac = await cli_commands._resolve_device(ns)
+    d, mac = await cli_device_verbs._resolve_device(ns)
     assert mac == "CC:DD"
     assert not any(c[0] in ("scan", "connect") for c in client.calls)
 
@@ -141,7 +145,7 @@ async def test_resolve_device_refuses_to_guess_between_several_panels(monkeypatc
     ))
     ns = SimpleNamespace(command="set-volume", mac=None, timeout=1.0, device_type=None)
     with pytest.raises(SystemExit) as exc:
-        await cli_commands._resolve_device(ns)
+        await cli_device_verbs._resolve_device(ns)
     assert exc.value.code == 2
 
 
@@ -150,7 +154,7 @@ async def test_resolve_device_scans_through_the_daemon_when_nothing_is_linked(mo
         scan={"success": True, "devices": [{"address": "EE:FF", "name": "Pixoo"}]},
     ))
     ns = SimpleNamespace(command="set-volume", mac=None, timeout=2.5, device_type=None)
-    d, mac = await cli_commands._resolve_device(ns)
+    d, mac = await cli_device_verbs._resolve_device(ns)
     assert mac == "EE:FF"
     assert ("scan", 2.5) in client.calls and ("connect", "EE:FF") in client.calls
 
@@ -159,7 +163,7 @@ async def test_resolve_device_errors_when_no_devices_found(monkeypatch) -> None:
     _use_client(monkeypatch, _FakeClient())
     ns = SimpleNamespace(command="set-volume", mac=None, timeout=0.1, device_type=None)
     with pytest.raises(SystemExit) as exc:
-        await cli_commands._resolve_device(ns)
+        await cli_device_verbs._resolve_device(ns)
     assert exc.value.code == 1
 
 
@@ -208,7 +212,7 @@ async def test_a_refused_scan_is_an_error_not_an_empty_list(monkeypatch, capsys)
     assert "scan already in progress" in capsys.readouterr().err
     ns = SimpleNamespace(command="set-volume", mac=None, timeout=1.0, device_type=None)
     with pytest.raises(SystemExit) as exc:
-        await cli_commands._resolve_device(ns)
+        await cli_device_verbs._resolve_device(ns)
     assert exc.value.code == 1
     assert "scan already in progress" in capsys.readouterr().err
 
@@ -250,67 +254,15 @@ async def test_cmd_capabilities_prints_notes(monkeypatch, capsys) -> None:
         async def disconnect(self):
             pass
 
-    monkeypatch.setattr(cli_commands, "_capabilities", lambda a, m: Caps())
+    monkeypatch.setattr(cli_device_verbs, "_capabilities", lambda a, m: Caps())
 
     async def fake_resolve(args):
         return D(), "AA:BB:CC:DD:EE:FF"
 
-    monkeypatch.setattr(cli_commands, "_resolve_device", fake_resolve)
-    rc = await cli_commands.cmd_capabilities(_parse("capabilities"))
+    monkeypatch.setattr(cli_device_verbs, "_resolve_device", fake_resolve)
+    rc = await cli_device_verbs.cmd_capabilities(_parse("capabilities"))
     assert rc == 0
     assert "quirk-a; quirk-b" in capsys.readouterr().out
-
-
-# ── cmd_set_volume / cmd_set_brightness ────────────────────────────────
-
-
-async def test_cmd_set_volume_happy_path(monkeypatch, capsys) -> None:
-    fake = FakeDivoom()
-    monkeypatch.setattr(
-        cli_commands, "_resolve_device", AsyncMock(return_value=(fake, "AA:BB"))
-    )
-    rc = await cli_commands.cmd_set_volume(_parse("set-volume", "7", "--mac", "AA:BB"))
-    assert rc == 0
-    fake.music.set_volume.assert_awaited_once_with(7)
-    fake.disconnect.assert_not_awaited()  # the daemon keeps the link
-    assert "set volume to 7/15" in capsys.readouterr().out
-
-
-async def test_cmd_set_volume_device_reports_failure(monkeypatch) -> None:
-    fake = FakeDivoom()
-    fake.music.set_volume = AsyncMock(return_value=False)
-    monkeypatch.setattr(
-        cli_commands, "_resolve_device", AsyncMock(return_value=(fake, "AA:BB"))
-    )
-    rc = await cli_commands.cmd_set_volume(_parse("set-volume", "7", "--mac", "AA:BB"))
-    assert rc == 1
-    fake.disconnect.assert_not_awaited()  # the daemon keeps the link
-
-
-async def test_cmd_set_brightness_happy_path(monkeypatch, capsys) -> None:
-    fake = FakeDivoom()
-    monkeypatch.setattr(
-        cli_commands, "_resolve_device", AsyncMock(return_value=(fake, "AA:BB"))
-    )
-    rc = await cli_commands.cmd_set_brightness(
-        _parse("set-brightness", "50", "--mac", "AA:BB")
-    )
-    assert rc == 0
-    fake.device.set_brightness.assert_awaited_once_with(50)
-    assert "set brightness to 50%" in capsys.readouterr().out
-
-
-async def test_cmd_set_brightness_device_reports_failure(monkeypatch) -> None:
-    fake = FakeDivoom()
-    fake.device.set_brightness = AsyncMock(return_value=False)
-    monkeypatch.setattr(
-        cli_commands, "_resolve_device", AsyncMock(return_value=(fake, "AA:BB"))
-    )
-    rc = await cli_commands.cmd_set_brightness(
-        _parse("set-brightness", "50", "--mac", "AA:BB")
-    )
-    assert rc == 1
-    fake.disconnect.assert_not_awaited()  # the daemon keeps the link
 
 
 # ── cmd_set_radio ────────────────────────────────────────────────────────
@@ -319,12 +271,12 @@ async def test_cmd_set_brightness_device_reports_failure(monkeypatch) -> None:
 async def test_cmd_set_radio_rejects_when_no_fm_capability(monkeypatch) -> None:
     fake = FakeDivoom()
     fake.capabilities.has_fm = False
-    monkeypatch.setattr(cli_commands, "_capabilities", lambda a, m: fake.capabilities)
+    monkeypatch.setattr(cli_device_verbs, "_capabilities", lambda a, m: fake.capabilities)
     monkeypatch.setattr(
-        cli_commands, "_resolve_device", AsyncMock(return_value=(fake, "AA:BB"))
+        cli_device_verbs, "_resolve_device", AsyncMock(return_value=(fake, "AA:BB"))
     )
     with pytest.raises(SystemExit) as exc:
-        await cli_commands.cmd_set_radio(_parse("set-radio", "875", "--mac", "AA:BB"))
+        await cli_device_verbs.cmd_set_radio(_parse("set-radio", "875", "--mac", "AA:BB"))
     assert exc.value.code == 1
     fake.disconnect.assert_not_awaited()  # the daemon keeps the link
 
@@ -332,11 +284,11 @@ async def test_cmd_set_radio_rejects_when_no_fm_capability(monkeypatch) -> None:
 async def test_cmd_set_radio_happy_path(monkeypatch, capsys) -> None:
     fake = FakeDivoom()
     fake.capabilities.has_fm = True
-    monkeypatch.setattr(cli_commands, "_capabilities", lambda a, m: fake.capabilities)
+    monkeypatch.setattr(cli_device_verbs, "_capabilities", lambda a, m: fake.capabilities)
     monkeypatch.setattr(
-        cli_commands, "_resolve_device", AsyncMock(return_value=(fake, "AA:BB"))
+        cli_device_verbs, "_resolve_device", AsyncMock(return_value=(fake, "AA:BB"))
     )
-    rc = await cli_commands.cmd_set_radio(_parse("set-radio", "875", "--mac", "AA:BB"))
+    rc = await cli_device_verbs.cmd_set_radio(_parse("set-radio", "875", "--mac", "AA:BB"))
     assert rc == 0
     fake.radio.set_radio_frequency.assert_awaited_once_with(875)
     assert "87.5 MHz" in capsys.readouterr().out
@@ -347,7 +299,7 @@ async def test_cmd_set_radio_happy_path(monkeypatch, capsys) -> None:
 
 async def test_cmd_set_alarm_rejects_bad_time_format() -> None:
     with pytest.raises(SystemExit) as exc:
-        await cli_commands.cmd_set_alarm(
+        await cli_device_verbs.cmd_set_alarm(
             _parse("set-alarm", "not-a-time", "--mac", "AA:BB")
         )
     assert exc.value.code == 2
@@ -356,69 +308,163 @@ async def test_cmd_set_alarm_rejects_bad_time_format() -> None:
 async def test_cmd_set_alarm_rejects_when_no_alarm_capability(monkeypatch) -> None:
     fake = FakeDivoom()
     fake.capabilities.has_alarm = False
-    monkeypatch.setattr(cli_commands, "_capabilities", lambda a, m: fake.capabilities)
+    monkeypatch.setattr(cli_device_verbs, "_capabilities", lambda a, m: fake.capabilities)
     monkeypatch.setattr(
-        cli_commands, "_resolve_device", AsyncMock(return_value=(fake, "AA:BB"))
+        cli_device_verbs, "_resolve_device", AsyncMock(return_value=(fake, "AA:BB"))
     )
     with pytest.raises(SystemExit) as exc:
-        await cli_commands.cmd_set_alarm(_parse("set-alarm", "07:30", "--mac", "AA:BB"))
+        await cli_device_verbs.cmd_set_alarm(_parse("set-alarm", "07:30", "--mac", "AA:BB"))
     assert exc.value.code == 1
 
 
 async def test_cmd_set_alarm_happy_path(monkeypatch, capsys) -> None:
     fake = FakeDivoom()
     fake.capabilities.has_alarm = True
-    monkeypatch.setattr(cli_commands, "_capabilities", lambda a, m: fake.capabilities)
+    monkeypatch.setattr(cli_device_verbs, "_capabilities", lambda a, m: fake.capabilities)
     monkeypatch.setattr(
-        cli_commands, "_resolve_device", AsyncMock(return_value=(fake, "AA:BB"))
+        cli_device_verbs, "_resolve_device", AsyncMock(return_value=(fake, "AA:BB"))
     )
-    rc = await cli_commands.cmd_set_alarm(_parse("set-alarm", "07:30", "--mac", "AA:BB"))
+    rc = await cli_device_verbs.cmd_set_alarm(_parse("set-alarm", "07:30", "--mac", "AA:BB"))
     assert rc == 0
     fake.alarm.set_alarm.assert_awaited_once_with(0, 1, 7, 30, 127, 0, 0)
     assert "07:30" in capsys.readouterr().out
 
 
-# ── cmd_push_image / cmd_push_gif ───────────────────────────────────────
+# ── cmd_set_volume / cmd_set_brightness ────────────────────────────────────
+#
+# Rewritten 2026-09-25 (L5 item 2): these two verbs now hand the device command
+# to `divoomd` and the process IS the native verb. The subjects are unchanged —
+# the right argv reaches the right binary, and a bad value is refused before
+# anything is resolved — but the instrument changed from a fake device proxy to
+# a fake execv, because there is no Python device call left to fake. The
+# end-to-end proof that the native verb really performs the call, against a real
+# daemon, is tests/test_cli_device_verbs.py; the wire assertions are in
+# divoomd/src/verbs_tests.rs.
+
+
+def _recorded_exec(monkeypatch) -> list:
+    """Capture the exec instead of performing it, and record the argv.
+
+    Patching `os.execv` and `cli_commands._divoomd_binary` — the definition
+    sites — is enough for every device verb. They are called module-qualified on
+    purpose (see divoom_lib/cli_device_verbs.py), so there is exactly one place
+    each can be replaced.
+    """
+    calls: list = []
+
+    def _execv(path, argv):
+        calls.append((path, argv))
+        raise SystemExit(0)  # execv never returns
+
+    monkeypatch.setattr(os, "execv", _execv)  # the delegate execs in this module
+    return calls
+
+
+async def test_cmd_set_volume_hands_off_to_the_native_verb(monkeypatch) -> None:
+    monkeypatch.setattr(cli_device_verbs, "resolve_target_mac", AsyncMock(return_value="AA:BB"))
+    monkeypatch.setattr(cli_commands, "_divoomd_binary", lambda: "/opt/divoomd")
+    calls = _recorded_exec(monkeypatch)
+
+    with pytest.raises(SystemExit):
+        await cli_device_verbs.cmd_set_volume(_parse("set-volume", "7", "--mac", "AA:BB"))
+
+    assert calls == [("/opt/divoomd", ["/opt/divoomd", "set-volume", "7", "--mac", "AA:BB"])]
+
+
+async def test_cmd_set_brightness_hands_off_with_json_when_asked(monkeypatch) -> None:
+    monkeypatch.setattr(cli_device_verbs, "resolve_target_mac", AsyncMock(return_value="AA:BB"))
+    monkeypatch.setattr(cli_commands, "_divoomd_binary", lambda: "/opt/divoomd")
+    calls = _recorded_exec(monkeypatch)
+
+    with pytest.raises(SystemExit):
+        await cli_device_verbs.cmd_set_brightness(
+            _parse("set-brightness", "50", "--mac", "AA:BB", "--json")
+        )
+
+    assert calls == [
+        ("/opt/divoomd", ["/opt/divoomd", "set-brightness", "50", "--mac", "AA:BB", "--json"])
+    ]
+
+
+@pytest.mark.parametrize("command,value,message", [
+    ("cmd_set_volume", "16", "volume must be 0..15"),
+    ("cmd_set_volume", "-1", "volume must be 0..15"),
+    ("cmd_set_brightness", "101", "brightness must be 0..100"),
+    ("cmd_set_brightness", "-1", "brightness must be 0..100"),
+])
+async def test_an_out_of_range_value_is_refused_before_anything_is_resolved(
+    monkeypatch, capsys, command, value, message
+) -> None:
+    """The ordering, which is why the check stayed in Python at all.
+
+    Resolving a target can scan and can CONNECT. A user who typed 16 must be
+    told so without the CLI reaching for the radio first, so the resolution mock
+    is asserted to be untouched — and the exec, which is the thing that would
+    have carried the bad value to the device.
+    """
+    resolve = AsyncMock(return_value="AA:BB")
+    monkeypatch.setattr(cli_device_verbs, "resolve_target_mac", resolve)
+    calls = _recorded_exec(monkeypatch)
+
+    verb, flag = command.removeprefix("cmd_").split("_", 1)
+    with pytest.raises(SystemExit) as exc:
+        await getattr(cli_device_verbs, command)(_parse(f"{verb}-{flag}", value, "--mac", "AA:BB"))
+
+    assert exc.value.code == 2
+    # The text goes to stderr; SystemExit only carries the code, which is why
+    # this reads the stream rather than the exception.
+    assert message in capsys.readouterr().err, "the message must still name the range"
+    resolve.assert_not_awaited()
+    assert calls == []
+
+
+# ── cmd_push_image / cmd_push_gif ───────────────────────────────────────────
 
 
 async def test_cmd_push_image_file_not_found(tmp_path) -> None:
     missing = tmp_path / "missing.png"
     with pytest.raises(SystemExit) as exc:
-        await cli_commands.cmd_push_image(_parse("push-image", str(missing)))
+        await cli_device_verbs.cmd_push_image(_parse("push-image", str(missing)))
     assert exc.value.code == 2
 
 
-async def test_cmd_push_image_happy_path(monkeypatch, tmp_path, capsys) -> None:
+async def test_cmd_push_image_hands_the_path_to_the_native_verb(monkeypatch, tmp_path) -> None:
+    # The PATH, not pixels: the daemon sizes the image to the panel, which is
+    # why this verb deliberately does not go through the MCP show_image tool
+    # (that one resizes to 16x16 in the client).
     f = tmp_path / "pic.png"
     f.write_bytes(b"fake-png-bytes")
-    fake = FakeDivoom()
-    monkeypatch.setattr(
-        cli_commands, "_resolve_device", AsyncMock(return_value=(fake, "AA:BB"))
-    )
-    rc = await cli_commands.cmd_push_image(
-        _parse("push-image", str(f), "--mac", "AA:BB")
-    )
-    assert rc == 0
-    fake.display.show_image.assert_awaited_once_with(str(f))
-    fake.disconnect.assert_not_awaited()  # the daemon keeps the link
-    assert "pic.png" in capsys.readouterr().out
+    monkeypatch.setattr(cli_device_verbs, "resolve_target_mac", AsyncMock(return_value="AA:BB"))
+    monkeypatch.setattr(cli_commands, "_divoomd_binary", lambda: "/opt/divoomd")
+    calls = _recorded_exec(monkeypatch)
+
+    with pytest.raises(SystemExit):
+        await cli_device_verbs.cmd_push_image(_parse("push-image", str(f), "--mac", "AA:BB"))
+
+    assert calls == [
+        ("/opt/divoomd", ["/opt/divoomd", "push-image", str(f), "--mac", "AA:BB"])
+    ]
 
 
 async def test_cmd_push_gif_file_not_found(tmp_path) -> None:
     missing = tmp_path / "missing.gif"
     with pytest.raises(SystemExit) as exc:
-        await cli_commands.cmd_push_gif(_parse("push-gif", str(missing)))
+        await cli_device_verbs.cmd_push_gif(_parse("push-gif", str(missing)))
     assert exc.value.code == 2
 
 
-async def test_cmd_push_gif_device_reports_failure(monkeypatch, tmp_path) -> None:
+async def test_cmd_push_gif_keeps_its_name_and_the_same_call(monkeypatch, tmp_path) -> None:
+    # Scripts call `push-gif`, so the name stays; it is the same verb with the
+    # same argument, because it always was — both pushed the file by path.
     f = tmp_path / "anim.gif"
     f.write_bytes(b"fake-gif-bytes")
-    fake = FakeDivoom()
-    fake.display.show_image = AsyncMock(return_value=False)
-    monkeypatch.setattr(
-        cli_commands, "_resolve_device", AsyncMock(return_value=(fake, "AA:BB"))
-    )
-    rc = await cli_commands.cmd_push_gif(_parse("push-gif", str(f), "--mac", "AA:BB"))
-    assert rc == 1
-    fake.disconnect.assert_not_awaited()  # the daemon keeps the link
+    monkeypatch.setattr(cli_device_verbs, "resolve_target_mac", AsyncMock(return_value="AA:BB"))
+    monkeypatch.setattr(cli_commands, "_divoomd_binary", lambda: "/opt/divoomd")
+    calls = _recorded_exec(monkeypatch)
+
+    with pytest.raises(SystemExit):
+        await cli_device_verbs.cmd_push_gif(_parse("push-gif", str(f), "--mac", "AA:BB"))
+
+    assert calls == [
+        ("/opt/divoomd", ["/opt/divoomd", "push-gif", str(f), "--mac", "AA:BB"])
+    ]

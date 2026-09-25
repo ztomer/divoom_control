@@ -47,6 +47,12 @@ MAX_REPLY_BYTES = 16 * 1024 * 1024
 ENV_HOST = "DIVOOM_DAEMON_HOST"
 ENV_PORT = "DIVOOM_DAEMON_PORT"
 ENV_TOKEN = "DIVOOM_DAEMON_TOKEN"
+# The local-socket counterpart, read by the Rust clients (`DaemonTarget::from_env`)
+# and written by both handoffs. It was a bare literal in two places, which is how
+# `divoom-control mcp-server --socket X` and `set-volume --socket X` could end up
+# disagreeing about which daemon they meant; `tests/test_daemon_env_parity.py`
+# pins every name here against the Rust source.
+ENV_SOCKET = "DIVOOM_SOCKET"
 
 # Event types streamed to subscribers.
 EVENT_STATUS = "status"

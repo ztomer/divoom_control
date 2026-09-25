@@ -87,6 +87,7 @@ pub mod spp_bridge_protocol;
 pub mod subscriptions;
 pub mod sync_artwork;
 pub mod transport;
+pub mod verbs;
 pub mod wall;
 pub mod weather;
 pub mod wire;

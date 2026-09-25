@@ -6,19 +6,11 @@ coroutines and their helpers. Imported back into cli.py to build COMMANDS.
 from __future__ import annotations
 
 import argparse
-import asyncio
 import json
-import logging
 import sys
-from pathlib import Path
 from typing import Any
 
-from divoom_lib.models.capabilities import (
-    Capabilities,
-    DEVICE_CAPABILITIES,
-    DeviceRegistry,
-    capabilities_for,
-)
+from divoom_lib.models.capabilities import DEVICE_CAPABILITIES, DeviceRegistry
 
 
 def _print(data: Any, *, as_json: bool = False) -> None:
@@ -43,7 +35,20 @@ def _err(msg: str, code: int = 1) -> None:
     sys.exit(code)
 
 
-def _daemon_client():
+def _socket_path(args: argparse.Namespace | None = None) -> str:
+    """Which daemon this invocation talks to.
+
+    `--socket` reaches every verb through the shared parser. It was on
+    `mcp-server` and `daemon` only, which meant every DEVICE verb was pinned to
+    the default path: a dev daemon on its own socket could not be reached, and a
+    test could not point at a scratch daemon without aiming at the user's own.
+    """
+    from divoom_client.daemon_protocol import DEFAULT_SOCKET_PATH
+
+    return (getattr(args, "socket", None) or DEFAULT_SOCKET_PATH) if args else DEFAULT_SOCKET_PATH
+
+
+def _daemon_client(args: argparse.Namespace | None = None):
     """The running daemon, or a clear refusal.
 
     The CLI is a DAEMON CLIENT (2026-09-12, user correction): the daemon is the
@@ -53,21 +58,12 @@ def _daemon_client():
     so with nothing running it says what to start.
     """
     from divoom_client.daemon_client import ensure_daemon
-    client = ensure_daemon(spawn=False)
+    client = ensure_daemon(_socket_path(args), spawn=False)
     if client is None:
         _err("no divoomd daemon is running. Start the Divoom app (it owns the "
              "Bluetooth grant) or the dev daemon bundle "
              "(scripts/make_dev_daemon_app.sh), then retry.", 3)
     return client
-
-
-def _capabilities(args: argparse.Namespace, mac: str) -> Capabilities:
-    """The capability table for this panel: explicit --type, else the MAC
-    registry, else the baseline. Pure data -- no device I/O."""
-    if getattr(args, "device_type", None):
-        return capabilities_for(args.device_type)
-    caps = DeviceRegistry().lookup(mac)
-    return caps if caps is not None else capabilities_for(None)
 
 
 def _scan(client, timeout) -> list:
@@ -82,38 +78,6 @@ def _scan(client, timeout) -> list:
     if not reply.get("success", True):
         _err(f"scan failed: {reply.get('error') or reply}", 1)
     return reply.get("devices") or []
-
-
-async def _resolve_device(args: argparse.Namespace):
-    """Return (device proxy, id). The proxy speaks to the daemon for ONE
-    panel: `--mac` names it; without it, the daemon's own resolver answers
-    for a single linked panel and refuses when several are linked.
-    """
-    if args.command == "pair" or args.command == "identify":
-        # These commands don't need a connected device.
-        return None, (args.mac or "")
-    from divoom_client.daemon_proxy import DaemonDeviceProxy
-    client = _daemon_client()
-    mac = args.mac
-    if not mac:
-        st = client.device_status()
-        if st.get("mac"):
-            mac = st["mac"]
-        elif len(st.get("devices") or []) > 1:
-            _err("several panels are connected and none is the active one; pass --mac, "
-                 "or `select --mac` one: " + ", ".join(d["mac"] for d in st["devices"]), 2)
-        else:
-            # Nothing linked: scan through the daemon and take the first.
-            results = _scan(client, args.timeout)
-            if not results:
-                _err("no Divoom devices found", 1)
-            mac = results[0]["address"]
-    st = client.device_status(mac=mac)
-    if not st.get("connected"):
-        reply = client.connect_device(mac=mac, use_ios_le_protocol=True)
-        if not reply.get("connected"):
-            _err(f"could not connect {mac}: {reply.get('error') or reply.get('message') or reply}", 1)
-    return DaemonDeviceProxy(client, target="device", mac=mac), mac
 
 
 # ── Commands ──────────────────────────────────────────────────────────
@@ -147,163 +111,6 @@ async def cmd_select(args: argparse.Namespace) -> int:
     else:
         print(f"active panel: {args.mac}")
     return 0
-
-
-async def cmd_capabilities(args: argparse.Namespace) -> int:
-    d, mac = await _resolve_device(args)
-    try:
-        caps = _capabilities(args, mac)
-        if args.json:
-            _print({
-                "mac": mac,
-                "panel_resolution": caps.panel_resolution,
-                "has_fm": caps.has_fm,
-                "has_sd": caps.has_sd,
-                "has_scoreboard": caps.has_scoreboard,
-                "has_anim_8b": caps.has_anim_8b,
-                "has_orientation": caps.has_orientation,
-                "has_screen_mirror": caps.has_screen_mirror,
-                "has_alarm": caps.has_alarm,
-                "has_sleep": caps.has_sleep,
-                "has_weather": caps.has_weather,
-                "has_mic": caps.has_mic,
-                "notes": list(caps.notes),
-            }, as_json=True)
-        else:
-            print(f"Device: {mac}")
-            print(f"  panel_resolution: {caps.panel_resolution}×{caps.panel_resolution}")
-            print(f"  has_fm:           {caps.has_fm}")
-            print(f"  has_sd:           {caps.has_sd}")
-            print(f"  has_scoreboard:   {caps.has_scoreboard}")
-            print(f"  has_anim_8b:      {caps.has_anim_8b}")
-            print(f"  has_orientation:  {caps.has_orientation}")
-            print(f"  has_screen_mirror:{caps.has_screen_mirror}")
-            print(f"  has_alarm:        {caps.has_alarm}")
-            print(f"  has_sleep:        {caps.has_sleep}")
-            print(f"  has_weather:      {caps.has_weather}")
-            print(f"  has_mic:          {caps.has_mic}")
-            if caps.notes:
-                print(f"  notes: {'; '.join(caps.notes)}")
-        return 0
-    finally:
-        pass  # the daemon keeps the link; the CLI never hangs up a panel
-
-
-async def cmd_set_volume(args: argparse.Namespace) -> int:
-    if not (0 <= args.value <= 15):
-        _err("volume must be 0..15", 2)
-    d, mac = await _resolve_device(args)
-    try:
-        ok = await d.music.set_volume(args.value)
-        _print(f"set volume to {args.value}/15 (ok={ok})", as_json=args.json)
-        return 0 if ok else 1
-    finally:
-        pass  # the daemon keeps the link; the CLI never hangs up a panel
-
-
-async def cmd_set_brightness(args: argparse.Namespace) -> int:
-    if not (0 <= args.value <= 100):
-        _err("brightness must be 0..100", 2)
-    d, mac = await _resolve_device(args)
-    try:
-        ok = await d.device.set_brightness(args.value)
-        _print(f"set brightness to {args.value}% (ok={ok})", as_json=args.json)
-        return 0 if ok else 1
-    finally:
-        pass  # the daemon keeps the link; the CLI never hangs up a panel
-
-
-async def cmd_set_radio(args: argparse.Namespace) -> int:
-    d, mac = await _resolve_device(args)
-    try:
-        if not _capabilities(args, mac).has_fm:
-            _err(f"device {mac} has no FM radio (capabilities.has_fm=False)", 1)
-        ok = await d.radio.set_radio_frequency(args.freq_x10)
-        mhz = args.freq_x10 / 10.0
-        _print(f"tuned FM to {mhz:.1f} MHz (ok={ok})", as_json=args.json)
-        return 0 if ok else 1
-    finally:
-        pass  # the daemon keeps the link; the CLI never hangs up a panel
-
-
-async def cmd_set_alarm(args: argparse.Namespace) -> int:
-    """Set alarm 0 to HH:MM on every day (127 = all days).
-    Note: a full alarm editor is the GUI's job; this is the scriptable path."""
-    try:
-        hh, mm = args.time.split(":")
-        hh, mm = int(hh), int(mm)
-    except ValueError:
-        _err("time must be HH:MM (24h)", 2)
-    d, mac = await _resolve_device(args)
-    try:
-        if not _capabilities(args, mac).has_alarm:
-            _err(f"device {mac} has no alarm (capabilities.has_alarm=False)", 1)
-        # Signature: set_alarm(alarm_index, status, hour, minute, week, mode, trigger_mode, fm_freq, volume)
-        # week=127 = all days, mode=0=default, trigger_mode=0=default, fm_freq=0=off, volume=0=default
-        ok = await d.alarm.set_alarm(0, 1, hh, mm, 127, 0, 0)
-        _print(f"set alarm 0 to {hh:02d}:{mm:02d} every day (ok={ok})", as_json=args.json)
-        return 0 if ok else 1
-    finally:
-        pass  # the daemon keeps the link; the CLI never hangs up a panel
-
-
-# R14 §1 — weather command (0x5F).
-WEATHER_NAME_TO_ID = {
-    "clear":        1,
-    "cloudy":       3,
-    "thunderstorm": 5,
-    "rain":         6,
-    "snow":         8,
-    "fog":          9,
-}
-
-
-async def cmd_set_temperature(args: argparse.Namespace) -> int:
-    """Set the device's weather channel: temperature + icon (0x5F)."""
-    # Validate BEFORE connecting (mirrors set-volume / set-brightness): an
-    # out-of-range temp otherwise opened the BLE link, then died with a raw
-    # ValueError traceback from Weather.set instead of a clean usage error.
-    if not (-127 <= args.temperature <= 128):
-        _err("temperature must be -127..128", 2)
-    d, mac = await _resolve_device(args)
-    try:
-        if not _capabilities(args, mac).has_weather:
-            _err(f"device {mac} has no weather channel (capabilities.has_weather=False)", 1)
-        weather_id = WEATHER_NAME_TO_ID[args.weather]
-        ok = await d.weather.set(args.temperature, weather_id)
-        _print(
-            f"set weather: temperature={args.temperature}°C, weather={args.weather} ({weather_id}) (ok={ok})",
-            as_json=args.json,
-        )
-        return 0 if ok else 1
-    finally:
-        pass  # the daemon keeps the link; the CLI never hangs up a panel
-
-
-async def cmd_push_image(args: argparse.Namespace) -> int:
-    path: Path = args.path
-    if not path.exists():
-        _err(f"file not found: {path}", 2)
-    d, mac = await _resolve_device(args)
-    try:
-        ok = await d.display.show_image(str(path))
-        _print(f"pushed {path.name} to {mac} (ok={ok})", as_json=args.json)
-        return 0 if ok else 1
-    finally:
-        pass  # the daemon keeps the link; the CLI never hangs up a panel
-
-
-async def cmd_push_gif(args: argparse.Namespace) -> int:
-    path: Path = args.path
-    if not path.exists():
-        _err(f"file not found: {path}", 2)
-    d, mac = await _resolve_device(args)
-    try:
-        ok = await d.display.show_image(str(path))
-        _print(f"pushed animated {path.name} to {mac} (ok={ok})", as_json=args.json)
-        return 0 if ok else 1
-    finally:
-        pass  # the daemon keeps the link; the CLI never hangs up a panel
 
 
 async def cmd_pair(args: argparse.Namespace) -> int:
@@ -357,14 +164,15 @@ async def cmd_identify(args: argparse.Namespace) -> int:
     return 0
 
 
-def _native_mcp_binary() -> str:
-    """The ``divoomd`` that provides the MCP server, or a hard, named failure.
+def _divoomd_binary() -> str:
+    """The ``divoomd`` binary that now provides the server and the device verbs.
 
     Split out of :func:`cmd_mcp_server` so the "not built" branch is testable.
-    It is the one failure the handoff introduces — before it, this command
+    It is the one failure the handoffs introduce — before them, these commands
     needed no Rust binary at all — and a branch that can only be reached on a
     machine without a toolchain is exactly the branch that ships untested and
-    mis-worded.
+    mis-worded. Named for the binary rather than for its first caller, because
+    it now has two.
     """
     from divoom_client import binary_resolver
 
@@ -409,7 +217,7 @@ async def cmd_mcp_server(args: argparse.Namespace) -> int:
     A second mapping would be a second thing to keep in sync with the first.
     """
     import os
-    from divoom_client.daemon_protocol import ENV_HOST, ENV_PORT, ENV_TOKEN
+    from divoom_client.daemon_protocol import ENV_HOST, ENV_PORT, ENV_SOCKET, ENV_TOKEN
     from divoom_client.daemon_client import ensure_daemon
 
     # A remote daemon is selected purely via env (DaemonClient.from_env /
@@ -431,9 +239,9 @@ async def cmd_mcp_server(args: argparse.Namespace) -> int:
     # The native server reads the same variable for the local case, so an
     # explicit --socket has to be in the environment too — otherwise the handoff
     # silently connects to /tmp/divoom.sock and reports the daemon as down.
-    os.environ["DIVOOM_SOCKET"] = socket_path
+    os.environ[ENV_SOCKET] = socket_path
 
-    exe = _native_mcp_binary()
+    exe = _divoomd_binary()
     where = f"{host}:{getattr(args, 'port', 9009)}" if host else socket_path
     sys.stderr.write(f"MCP server: handing off to {exe} (daemon={where})\n")
     sys.stderr.flush()

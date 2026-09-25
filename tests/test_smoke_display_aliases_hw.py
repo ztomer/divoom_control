@@ -15,7 +15,7 @@ python3 tests/test_smoke_display_aliases_hw.py [mac_address]
 import os
 import sys, socket, json, time
 
-SOCK = "/tmp/divoomd.sock"
+SOCK = "/tmp/divoom.sock"
 TEST_MAC = os.environ.get("DIVOOM_TEST_MAC")
 
 

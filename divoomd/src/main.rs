@@ -1,14 +1,15 @@
 //! divoomd — the native daemon binary. Owns a unix socket and serves the NDJSON
 //! protocol; it is the sole shipping daemon.
 //!
-//! The default socket is `/tmp/divoomd.sock`. It differs from the app's
-//! `/tmp/divoom.sock` for historical reasons: the two paths let this daemon run
-//! alongside the Python one during the port. That Python daemon server was
-//! archived on 2026-07-13 and removed from the tree in R66 — only the client
-//! side survives, in `divoom_client/` — so the distinct default is now just a
-//! default, not a coexistence mechanism. See docs/ROADMAP.md.
+//! The default socket is `/tmp/divoom.sock`, the same path every client uses.
+//! It was `/tmp/divoomd.sock`, deliberately different so a Rust daemon could run
+//! alongside the Python one during the port; that daemon was archived on
+//! 2026-07-13 and removed in R66, so the divergence outlived its reason and left
+//! a hand-started `divoomd` on a socket nothing could reach.
+//! `tests/test_daemon_env_parity.py` compares the two defaults now.
 //!
 //!   divoomd [--socket /path/to.sock]
+//!   divoomd <verb> [args]      set-volume, set-brightness, push-image, push-gif
 //!
 //! Argument parsing lives in `divoomd::cli_args` so it can be unit-tested in
 //! both directions; this file is the shell that acts on the outcome.
@@ -133,6 +134,31 @@ async fn main() {
             if let Err(e) = divoomd::mcp::run().await {
                 eprintln!("divoomd mcp: {e}");
                 std::process::exit(1);
+            }
+            return;
+        }
+        // Device verbs are a CLIENT of a running daemon, like `mcp`: they
+        // connect over the same target resolution and never open the radio.
+        // Rendering lives here rather than in `verbs` so the module stays a
+        // pure function of (request, target) and every output decision is in
+        // one place.
+        Outcome::Verb(request) => {
+            let target = divoomd::daemon_target::DaemonTarget::from_env();
+            match divoomd::verbs::run(&request, &target).await {
+                Ok(outcome) => {
+                    if request.json {
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&outcome.value).unwrap_or_default()
+                        );
+                    } else {
+                        println!("{}", outcome.human);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("divoomd {}: {e}", request.verb.name());
+                    std::process::exit(1);
+                }
             }
             return;
         }

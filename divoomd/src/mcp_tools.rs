@@ -297,7 +297,13 @@ async fn get_device_state(a: &Value, target: &DaemonTarget) -> Result<Value, Str
 
 // --- helpers -----------------------------------------------------------------
 
-fn need_int(a: &Value, key: &str, lo: i64, hi: i64) -> Result<i64, String> {
+/// Read a bounded integer out of a tool's arguments.
+///
+/// `pub(crate)` because the CLI verbs share these bounds rather than restating
+/// them: a range that lives in two places is a range that gets changed in one.
+/// The error text is phrased for a tool call, which is also how the CLI reports
+/// it, so the bound reads the same on both surfaces.
+pub(crate) fn need_int(a: &Value, key: &str, lo: i64, hi: i64) -> Result<i64, String> {
     let v = a
         .get(key)
         .and_then(serde_json::Value::as_i64)

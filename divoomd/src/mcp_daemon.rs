@@ -166,6 +166,18 @@ pub(crate) mod fake {
     impl FakeDaemon {
         /// Answer every request with `{"success": true, "result": <result>}`.
         pub async fn start(result: Value, token: Option<&str>) -> Self {
+            Self::replying(json!({ "success": true, "result": result }), token).await
+        }
+
+        /// Answer every request with exactly `reply`.
+        ///
+        /// Needed because a daemon that REFUSES is a different case from an
+        /// unreachable one, and it is the case users actually hit: the socket is
+        /// right there answering `{"success": false, "error": "no device
+        /// connected"}`. Nothing covered it until a verb test needed it — a
+        /// client that treats any parseable reply as success would pass every
+        /// test written against the success shape.
+        pub async fn replying(reply: Value, token: Option<&str>) -> Self {
             let listener = TcpListener::bind("127.0.0.1:0")
                 .await
                 .expect("bind an ephemeral port");
@@ -187,9 +199,7 @@ pub(crate) mod fake {
                             guard.push(v);
                         }
                     }
-                    let mut bytes =
-                        serde_json::to_vec(&json!({ "success": true, "result": result }))
-                            .unwrap_or_default();
+                    let mut bytes = serde_json::to_vec(&reply).unwrap_or_default();
                     bytes.push(b'\n');
                     // A client that hung up mid-reply ends the connection on
                     // its own; there is nothing to recover and nothing to report.

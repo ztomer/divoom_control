@@ -235,13 +235,13 @@ def test_a_missing_daemon_binary_says_so_instead_of_silently_serving(
     by the three tests above.
     """
     from divoom_client import binary_resolver
-    from divoom_lib.cli_commands import _native_mcp_binary
+    from divoom_lib.cli_commands import _divoomd_binary
 
     monkeypatch.setattr(binary_resolver, "resolve", lambda *a, **k: None)
     monkeypatch.setattr(binary_resolver, "stale_report", lambda *a, **k: [])
 
     with pytest.raises(SystemExit) as exit_info:
-        _native_mcp_binary()
+        _divoomd_binary()
     assert exit_info.value.code != 0, "a missing binary is a failure, not a no-op"
     err = capsys.readouterr().err
     assert "divoomd" in err, err
@@ -258,7 +258,7 @@ def test_a_stale_binary_is_named_rather_than_reported_as_missing(monkeypatch, ca
     old code. When the resolver can see one, the message has to include it.
     """
     from divoom_client import binary_resolver
-    from divoom_lib.cli_commands import _native_mcp_binary
+    from divoom_lib.cli_commands import _divoomd_binary
 
     monkeypatch.setattr(binary_resolver, "resolve", lambda *a, **k: None)
     monkeypatch.setattr(
@@ -267,7 +267,7 @@ def test_a_stale_binary_is_named_rather_than_reported_as_missing(monkeypatch, ca
         lambda *a, **k: [("/opt/divoom/target/release/divoomd", "0.38.0")],
     )
     with pytest.raises(SystemExit):
-        _native_mcp_binary()
+        _divoomd_binary()
     err = capsys.readouterr().err
     assert "0.38.0" in err, f"the stale version must be reported: {err}"
     assert "release/divoomd" in err, f"and the path that had it: {err}"
@@ -296,7 +296,7 @@ def test_the_handoff_reaches_the_binary_the_resolver_named(monkeypatch) -> None:
         raise SystemExit(0)  # execv never returns; this stands in for success
 
     monkeypatch.setattr(os_mod, "execv", fake_execv)
-    monkeypatch.setattr(cli_commands, "_native_mcp_binary", lambda: "/opt/divoomd")
+    monkeypatch.setattr(cli_commands, "_divoomd_binary", lambda: "/opt/divoomd")
 
     args = argparse.Namespace(
         host=None, port=9009, token=None, socket="/tmp/divoom-x.sock", mac=None

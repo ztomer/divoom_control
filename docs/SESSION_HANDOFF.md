@@ -21,6 +21,46 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-25 — L5 unit 3 DONE: the CLI's device verbs run in `divoomd`.**
+  `divoomd` gained `set-volume`, `set-brightness`, `push-image` and `push-gif`
+  (`divoomd/src/verbs.rs` + `verbs_tests.rs`, 17 tests), and the four
+  `divoom-control` verbs now `execv` them. The two numeric verbs reuse the MCP
+  tool's bounds and `device_call`; the image verbs send the PATH to the daemon
+  instead, on purpose — the MCP `show_image` tool resizes to 16x16 in the client
+  and the daemon's handler sizes to the panel, so sharing the tool would have
+  quietly degraded every 64x64 push. `tests/test_cli_device_verbs.py` (6 tests)
+  runs the real entry point against a real BLE-free daemon, calibrated red-once
+  against the Python implementation.
+  What the next session should know rather than re-derive:
+  - **The capability-gated verbs stayed in Python on purpose.** `set-radio`,
+    `set-alarm` and `set-temperature` refuse on panels without the feature, and
+    `divoom_lib/models/capabilities.py` is the only table that knows which. The
+    daemon has no capability table at all. Moving them means porting the table
+    and adding a parity gate — that is the decision to make, not a detail.
+  - **The Python side keeps one thing: `resolve_target_mac`.** The daemon's own
+    `resolve_target` refuses helpfully when several panels are linked, but it
+    does NOT scan when none is linked and does NOT connect one that is known but
+    down. Both are conveniences the CLI has always provided, so they stayed; the
+    verbs hand the resolved `--mac` to `divoomd`.
+  - **Three real bugs the tests caught while being written**, all of which would
+    otherwise have shipped: `--mac` was silently dropped for the tool-backed
+    verbs (the call went to whichever panel was active); `-1` parsed as an
+    unknown OPTION, so `set-brightness -1` said "unknown option" instead of
+    naming the range; and the delegation did not export the socket, so the child
+    talked to `/tmp/divoom.sock` whatever `--socket` said.
+  - **Two structural cleanups with teeth**: `divoom_lib/cli_commands.py` split
+    into `cli_device_verbs.py` + itself when it crossed the 500-line cap again,
+    and the shared helpers are called module-qualified (`cli_commands._err`)
+    deliberately — do not "tidy" them into from-imports; that breaks every test
+    of the device verbs silently, because a from-import binds at import time and
+    leaves the tests patching a name nothing calls.
+  **Verified:** `cargo test -p divoomd --no-default-features` 300 passed;
+    `divoom-menubar` 25 passed; clippy `-D warnings` clean; `pytest` 1478 passed
+    / 125 skipped; gate 23/24, the one failure being the pre-existing camoufox
+    beta.30-installed / beta.29-pinned drift.
+  **Next for L5:** `set-radio` / `set-alarm` / `set-temperature`, which needs
+  the capability-table decision above before any code moves.
+
 - **2026-09-25 — L5 unit 2 DONE: the Python MCP server is DELETED.**
   `divoom-control mcp-server` — the command every MCP client config names — now
   ensures a daemon and then `execv`s `divoomd mcp`, so it and the GUI run the

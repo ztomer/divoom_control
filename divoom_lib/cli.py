@@ -51,6 +51,10 @@ def build_parser() -> argparse.ArgumentParser:
     # subcommand position, so users can write either order.
     shared = argparse.ArgumentParser(add_help=False)
     shared.add_argument("--mac", help="Target device MAC (default: first discovered).")
+    shared.add_argument("--socket", default=None,
+                        help="Daemon Unix socket to talk to (default: /tmp/divoom.sock). "
+                             "Needed to reach a dev daemon on its own path; the "
+                             "device verbs had no way to say this before.")
     shared.add_argument("--timeout", type=float, default=10.0,
                         help="BLE scan timeout in seconds (default: 10).")
     shared.add_argument("--type", dest="device_type",
@@ -113,9 +117,8 @@ def build_parser() -> argparse.ArgumentParser:
         "mcp-server", parents=[shared],
         help="Start the MCP stdio JSON-RPC server (routes through the daemon).",
     )
-    p_mcp.add_argument("--socket", default="/tmp/divoom.sock",
-                       help="Daemon Unix socket to connect to (auto-spawns a "
-                            "local daemon if none is running).")
+    # --socket comes from `shared` now, so it works on every verb rather than
+    # only this one. The auto-spawn note moved to the shared help text.
     p_mcp.add_argument("--host", default=None,
                        help="Connect to a remote daemon on this TCP host "
                             "instead of the local socket (sets DIVOOM_DAEMON_HOST).")
@@ -132,7 +135,6 @@ def build_parser() -> argparse.ArgumentParser:
         "daemon", parents=[shared],
         help="Run the headless daemon (device + macOS notification routing + event socket).",
     )
-    p_daemon.add_argument("--socket", default="/tmp/divoom.sock", help="Unix socket path.")
     p_daemon.add_argument("--host", default=None,
                           help="Also listen on this TCP host (e.g. 0.0.0.0 for LAN). "
                                "Requires --token or DIVOOM_DAEMON_TOKEN.")
@@ -155,24 +157,27 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 from divoom_lib.cli_commands import (
-    _print,
     _err,
-    _resolve_device,
-    cmd_scan,
-    cmd_select,
-    cmd_capabilities,
-    cmd_set_volume,
-    cmd_set_brightness,
-    cmd_set_radio,
-    cmd_set_alarm,
-    cmd_set_temperature,
-    cmd_push_image,
-    cmd_push_gif,
-    cmd_pair,
+    _print,
+    cmd_daemon,
     cmd_identify,
     cmd_mcp_server,
-    cmd_daemon,
     cmd_menubar,
+    cmd_pair,
+    cmd_scan,
+    cmd_select,
+)
+# The device verbs live in their own module (they act on a panel; the rest do
+# not), and four of them are `divoomd` subcommands now.
+from divoom_lib.cli_device_verbs import (
+    cmd_capabilities,
+    cmd_push_gif,
+    cmd_push_image,
+    cmd_set_alarm,
+    cmd_set_brightness,
+    cmd_set_radio,
+    cmd_set_temperature,
+    cmd_set_volume,
 )
 
 

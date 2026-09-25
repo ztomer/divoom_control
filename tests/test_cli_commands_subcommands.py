@@ -107,7 +107,7 @@ async def test_cmd_mcp_server_local_happy_path(monkeypatch) -> None:
     monkeypatch.setattr(
         "divoom_client.daemon_client.ensure_daemon", lambda *a, **k: fake_client
     )
-    monkeypatch.setattr(cli_commands, "_native_mcp_binary", lambda: "/opt/divoomd")
+    monkeypatch.setattr(cli_commands, "_divoomd_binary", lambda: "/opt/divoomd")
     monkeypatch.setattr(os, "environ", os.environ.copy())
     execs: list = []
     monkeypatch.setattr(os, "execv", _fake_execv(execs))
@@ -132,7 +132,7 @@ async def test_cmd_mcp_server_remote_host_sets_env(monkeypatch) -> None:
     monkeypatch.setattr(
         "divoom_client.daemon_client.ensure_daemon", lambda *a, **k: fake_client
     )
-    monkeypatch.setattr(cli_commands, "_native_mcp_binary", lambda: "/opt/divoomd")
+    monkeypatch.setattr(cli_commands, "_divoomd_binary", lambda: "/opt/divoomd")
     execs: list = []
     monkeypatch.setattr(os, "execv", _fake_execv(execs))
 
@@ -162,7 +162,7 @@ async def test_cmd_mcp_server_passes_mac_to_the_daemon_it_may_spawn(monkeypatch)
         return object()
 
     monkeypatch.setattr("divoom_client.daemon_client.ensure_daemon", fake_ensure)
-    monkeypatch.setattr(cli_commands, "_native_mcp_binary", lambda: "/opt/divoomd")
+    monkeypatch.setattr(cli_commands, "_divoomd_binary", lambda: "/opt/divoomd")
     monkeypatch.setattr(os, "environ", os.environ.copy())
     monkeypatch.setattr(os, "execv", _fake_execv([]))
 

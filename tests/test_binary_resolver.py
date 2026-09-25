@@ -96,7 +96,7 @@ def test_the_probe_never_touches_the_default_socket(tmp_path):
     binary_resolver.binary_version(b)
     argv = log.read_text()
     assert "--socket" in argv
-    assert "/tmp/divoomd.sock" not in argv
+    assert "/tmp/divoom.sock" not in argv
 
 
 def test_the_menubar_is_probed_without_a_socket_argument(tmp_path):

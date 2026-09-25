@@ -6,6 +6,52 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **The CLI's device verbs run in `divoomd`, so a device command has one
+  implementation.** `divoomd set-volume N`, `set-brightness N`, `push-image PATH`
+  and `push-gif PATH` are subcommands of the daemon binary, and the four
+  `divoom-control` verbs `execv` them — the same handoff shape the MCP server
+  uses, and the reason both are in one place. The two numeric verbs share the MCP
+  tool's argument bounds and its `device_call` rather than restating them, so the
+  range a user can reach a panel with is defined once. The image verbs
+  deliberately do NOT go through the MCP `show_image` tool: that tool decodes in
+  the client and resizes to a hardcoded 16x16, while the daemon's handler takes
+  the path and sizes to the panel's native resolution. Sharing it would have
+  quietly turned every 64x64 push into a 16x16 one, so a test asserts the
+  argument is the path — calibrated red by routing them through the tool and
+  watching it fail.
+  `set-radio`, `set-alarm` and `set-temperature` stayed in Python deliberately.
+  They refuse on panels that lack the feature, and the table that knows which
+  panels lack it exists only in Python; the daemon has no capability table.
+  Porting them means porting the table, and two tables is exactly what
+  `tools/check_weather_parity.py` was written to prevent.
+  Proof: `tests/test_cli_device_verbs.py` runs the real entry point against a
+  real BLE-free daemon and asserts the native output, calibrated RED against the
+  Python implementation. Writing it found what the handoff had to get right — the
+  delegation must export the socket the Python side just used, or the child talks
+  to a different daemon, which on a user's machine is either a confusing "not
+  reachable" or the wrong one.
+  Three bugs the new tests caught while being written, each of which would have
+  shipped: `--mac` was silently dropped for the tool-backed verbs, so the call
+  went to whichever panel happened to be active; `-1` parsed as an unknown
+  OPTION, so `set-brightness -1` answered "unknown option" instead of naming the
+  range; and `push-gif` was a second name for a call that had never been
+  special.
+  Two pre-existing defects fixed on the way:
+  - **`--socket` now works on every verb.** It was on `mcp-server` and `daemon`
+    only, which pinned every device verb to `/tmp/divoom.sock`: a dev daemon on
+    its own path was unreachable, and no test could point at a scratch daemon
+    without risking the user's own.
+  - **A bare `divoomd` served a socket nothing could read.** It defaulted to
+    `/tmp/divoomd.sock` while every client looks at `/tmp/divoom.sock`. The
+    divergence was deliberate — so a Rust daemon could run beside the Python one
+    during the port — but that daemon was archived in 2026-07-13, so the reason
+    expired while the trap remained. `tests/test_daemon_env_parity.py` now
+    compares both defaults and every environment name across the language
+    boundary, so they cannot drift apart again.
+  `divoom_lib/cli_commands.py` crossed the 500-line cap doing this and split at
+  the seam the migration created: `cli_device_verbs.py` holds the verbs that act
+  on a panel, `cli_commands.py` the rest.
+
 - **The Python MCP server is deleted. There is one MCP server, and it is the
   Rust one.** `divoom-control mcp-server` — the command every MCP client config
   names — now ensures a daemon is running and then `execv`s `divoomd mcp`, so

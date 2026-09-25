@@ -22,6 +22,8 @@ pub enum Outcome {
     Run(Box<ConfigArgs>),
     /// Run the MCP stdio server (`divoomd mcp`).
     Mcp,
+    /// Run a device verb (`divoomd set-volume 5`).
+    Verb(Box<crate::verbs::VerbRequest>),
     /// Print `divoomd <version>` and exit 0.
     Version,
     /// Print usage and exit 0.
@@ -38,7 +40,16 @@ pub struct ConfigArgs {
     pub token: Option<String>,
 }
 
-pub const DEFAULT_SOCKET_PATH: &str = "/tmp/divoomd.sock";
+/// Where a bare `divoomd` serves, when no `--socket` is given.
+///
+/// This was `/tmp/divoomd.sock` while every client — `divoom_client`'s
+/// `DEFAULT_SOCKET_PATH` and this crate's own `DaemonTarget::from_env` — looks
+/// at `/tmp/divoom.sock`. The two defaults were introduced years apart and never
+/// compared, so a hand-started `divoomd` bound a socket that no client, script
+/// or test could reach: it looked like a daemon that started and was never
+/// there. `tests/test_daemon_env_parity.py` now compares them, so the two cannot
+/// drift apart again.
+pub const DEFAULT_SOCKET_PATH: &str = "/tmp/divoom.sock";
 
 pub const USAGE: &str = "\
 divoomd — the native Divoom daemon (unix-socket NDJSON protocol).
@@ -46,6 +57,13 @@ divoomd — the native Divoom daemon (unix-socket NDJSON protocol).
 USAGE:
     divoomd [OPTIONS]
     divoomd mcp                 run the MCP stdio server against a live daemon
+    divoomd set-volume <0-15>
+    divoomd set-brightness <0-100>
+    divoomd push-image <PATH>
+    divoomd push-gif <PATH>
+
+    Every verb takes --mac <MAC> to target one panel and --json to print the
+    structured result. A verb talks to a running daemon; it does not start one.
 
 OPTIONS:
     --socket <PATH>             unix socket to serve on [default: /tmp/divoomd.sock]
@@ -65,6 +83,16 @@ pub fn parse(args: &[String], env_token: Option<String>) -> Outcome {
     // `divoomd mcp` is a subcommand, not a flag, and only in first position.
     if args.first().map(String::as_str) == Some("mcp") {
         return Outcome::Mcp;
+    }
+
+    // Device verbs, likewise only in first position. An unrecognised first
+    // word stays a daemon-argument error, so a typo (`divoomd set-vol 5`) can
+    // never quietly start a daemon on the default socket.
+    if let Some(parsed) = crate::verbs::parse(args) {
+        return match parsed {
+            Ok(request) => Outcome::Verb(Box::new(request)),
+            Err(msg) => Outcome::Error(msg),
+        };
     }
 
     let mut cfg = ConfigArgs {
