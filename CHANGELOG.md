@@ -4,6 +4,16 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## Unreleased
+
+- **G0 bridge-IDL freeze.** New `divoom_gui/bridge_idl.json` (v1) pins the
+  JS↔Python seam: 113 bridge methods (65 called from `web_ui/*.js`), the
+  5-method window-only denylist, 7 daemon push events and their
+  `window.Divoom.*` handlers, and the shutdown/daemon-down lifecycle edges.
+  New `tests/test_bridge_idl.py` (6 tests) fails on any seam drift; proven
+  red once and green (6 passed; neighboring control-server/event suites
+  39 passed).
+
 ## v0.39.0 — MCP negotiation, Python 3.14 floor, menubar off tao (2026-09-21)
 
 - **MCP `initialize` now negotiates the protocol version (SEP-2575,
