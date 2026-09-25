@@ -42,6 +42,7 @@ pub mod device_call;
 pub mod framing;
 pub mod hot_progress;
 pub mod hot_state;
+pub mod image_encode;
 pub mod image_proc;
 pub mod lan;
 pub mod live_jobs;

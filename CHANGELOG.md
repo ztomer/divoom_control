@@ -6,6 +6,24 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **L4 port, unit 1: the 0x49 animation-frame encoder in Rust.**
+  `divoomd/src/image_encode.rs` replaces `divoom_encode_animation_frame` from
+  `image_encode.c` — palette dedup, `ceil(log2(n))` bit width, LSB-first pixel
+  packing, the 7-byte `AA LLLL TTTT RR NN` header — and reproduces all 102
+  non-refusal cases in the C's own record byte for byte, plus the zero-dimension
+  refusal. Nothing calls it yet: the FFI wrapper still prefers the dylib, and
+  switching the daemon over is the next step, not this one.
+  Two details of the original are load-bearing and are documented at the port:
+  the palette is in FIRST-APPEARANCE order (the C's 512-slot hash table is a
+  lookup accelerator — `palette_n++` decides the index — so `hash32` cannot
+  affect one output byte and this port does not reproduce it), and the per-pixel
+  indices must live outside the output buffer, which the C comment records as a
+  bug it once had. Refusals are named (`EmptyPanel`, `TooManyPixels`,
+  `PaletteFull`) rather than collapsed into the C's `-1`, so "the encoder said
+  no" is a sentence.
+  Red-once twice: flipping the `RR` header byte fails the vector test, and
+  swapping the packer from LSB-first to MSB-first fails three.
+
 - **L4 groundwork: an oracle captured from the C, not from its Python twin.**
   `divoomd/tests/image_vectors.json` goes from 21 cases to 192, and — the part
   that matters — every one is now captured from `libdivoom_compact` ITSELF.
