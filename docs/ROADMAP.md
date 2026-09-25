@@ -76,6 +76,21 @@ forward-looking one. Recover a round plan with
   **Still open in L5:** clap verbs for `cli_commands.py` (444 lines) where a verb
   is a device command — the same additive-then-delete shape, and the same
   obligation to prove the entry point still works afterwards.
+  **Closed 2026-09-25 as the last item before v0.40.0:** the seven device verbs
+  are `divoomd` subcommands, so what remains in `cli_commands.py` is policy and
+  process control, not device code. The clap port is therefore optional future
+  work, not an open thread on the rustification.
+- **v0.40.0 shipped the L-series (2026-09-25).** The whole device path is Rust
+  — decode, resize, encode, stream — and the C chain, the Python framing
+  encoders, and the Python MCP server are gone from the installed package. The
+  release notes carry the BREAKING list (five `divoom_lib.framing` encode
+  helpers, `divoom_lib.native_lib`, `native_src/`, `mcp_server`, `mcp_tools`).
+  **The lesson recorded in the handoff, because it is the transferable part:** a
+  deletion is only as safe as its consumer list, and the list is never the one
+  you remember. Two consumers were missed — the archived `examples/tests/` suite
+  and the *callers that execute things* (CI workflows, the Linux test host,
+  `build.sh`) — and the second one shipped a green local gate on a push whose CI
+  could not start. `tools/check_scripts.py` check 4 is the gate for that class.
 - **Autonomous rustification (2026-09-25), phase L4 — the daemon frames, the
   Python half of the C chain is gone, the image half is not**:
   `divoom_client/spp_bridge.py` no longer receives a payload to frame — the

@@ -444,6 +444,61 @@ shipped milestone (per the project planning docs).
   once (1 failed on a flipped byte; 5 passed restored). Rust `framing_parity`
   4 passed on the same file — both suites now consume one vector source.
 
+## v0.40.0 — the device stack is Rust: C encoder chain and Python MCP retired (2026-09-25)
+
+- **BREAKING — removed from the installed `divoom_lib` package** (all present
+  in v0.39.0): `divoom_lib.framing.encode_ios_le_payload`,
+  `encode_basic_payload`, `escape_payload`, `get_checksum`, `int2hexlittle`;
+  the `divoom_lib.native_lib` module and `divoom_lib/native_src/`; and
+  `divoom_lib.mcp_server` / `divoom_lib.mcp_tools`. Callers that went through
+  the CLI, the GUI, or `divoom_client` are unaffected — the daemon does all of
+  this now. `divoom-control mcp-server` still exists and hands off to
+  `divoomd mcp` via `execv`, so the entry point an MCP client config names is
+  unchanged. `framing` keeps both read-side functions.
+- **The whole device path now runs in Rust.** Seven verbs, one daemon
+  (`divoomd`), and one MCP server — the native `divoomd mcp`. The Python
+  MCP server (`divoom_lib/mcp_server.py`) is deleted, and so is the C encoder
+  chain: `libdivoom_compact.dylib`, its three sources, and the Python
+  `divoom_lib/native_lib.py` FFI wrapper that loaded them. The app decodes,
+  resizes, encodes, and streams in Rust (`image` crate 0.25 →
+  `image_encode.rs` → `stream_animation_8b`); Python keeps the read side
+  (`divoom_lib/framing.py` is parse-only) and the socket client that hands the
+  daemon a file path. A `grep` for the retired library across
+  `divoom_gui/`, `divoom_client/`, and `divoom_lib/` finds no importer: the only
+  consumer was the archived `examples/` library, so nothing shipped ever
+  called the C.
+- **The C's recorded behaviour is kept as data, not as code.** 550 framing
+  vectors and 192 image vectors, captured from the C itself, are committed and
+  asserted byte for byte by `divoomd/tests/framing_parity.rs` — including 327
+  cases for `encode_ios_le` and a dense length sweep, because that is where a
+  framing bug lives. Regenerating them needs the C: git at `9a1cade^`, or the
+  compiled sources under `dist/Divoom/_internal/`.
+- **22 test modules under `examples/tests/` stopped testing the deleted
+  chain.** 3 files removed outright, 29 dead test functions removed from 6
+  mixed files, chosen by name from the real failures so the live coverage in
+  them survives (`test_ble_transport_coverage` keeps 14 of 17,
+  `test_animation_8b_stream` 27 of 28, and the mock-device E2E that
+  `AGENTS.md` names for wire checks keeps its 4). 1022 pass there now.
+- **`tools/check_scripts.py` gained check 4: no caller may run a script that
+  does not exist.** L4 deleted `scripts/build_libdivoom.sh` and three CI jobs,
+  the Linux test host, and `build.sh` all still called it — a green 24/24 local
+  gate on a push whose CI could not start. The new check reads every `scripts/`
+  path named by a workflow, a script, or `GOH_CI_STEPS` and fails when the file
+  is gone; calibrated by breaking it, and it found `build.sh:39` on its first
+  run. `build.sh` also no longer warns that image push "won't encode" on a
+  failure that can no longer happen — Rust encodes.
+- **Cascade of the same miss, all fixed:** `scripts/linux_remote/test_host.sh`
+  (the one path that exists to catch what macOS cannot had a dead step),
+  `scripts/codegen/gen_image_vectors.py` (its error message pointed at a deleted
+  script; it now names where the C survives), and
+  `examples/divoom_legacy/native/__init__.py` (described the dylib in the
+  present tense as buildable).
+- **One daemon, and it is the only MCP server.** The Python server's
+  registration path is gone; `divoomd mcp` is the single entry point, and the
+  two servers could previously disagree about the protocol version.
+- Verification: local gate 24/24 (Python 1484 passed / 125 skipped; Rust 307
+  BLE-free tests, 25 menubar); GitHub CI green on `9ad5367`.
+
 ## v0.39.0 — MCP negotiation, Python 3.14 floor, menubar off tao (2026-09-21)
 
 - **MCP `initialize` now negotiates the protocol version (SEP-2575,

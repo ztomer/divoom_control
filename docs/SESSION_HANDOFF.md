@@ -21,6 +21,36 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-25 — v0.40.0 bumped and staged for release; the L-series is done
+  and the C chain is gone from the installed package.** Version 0.39.0 → 0.40.0
+  in `pyproject.toml` + both product crates, `CHANGELOG.md` stanza, and
+  `docs/release_notes_v0.40.0.md`. The release notes carry a **BREAKING**
+  section, because v0.39.0 did ship the names v0.40.0 removes:
+  `divoom_lib.framing.{encode_ios_le_payload, encode_basic_payload,
+  escape_payload, get_checksum, int2hexlittle}`, the `divoom_lib.native_lib`
+  module, `divoom_lib/native_src/`, and `divoom_lib.{mcp_server, mcp_tools}`.
+  `divoom-control mcp-server` still exists and `execv`s to `divoomd mcp`, so the
+  name an MCP client config uses is unchanged.
+  **Verified this round that production is Rust end to end** (asked mid-release):
+  decode `image` 0.25 → `resize_exact(Nearest)` in `image_proc.rs`/`wall.rs` →
+  `image_encode.rs` → `stream_animation_8b`, reached via
+  `device_call/basic/display.rs:143`. `grep divoom_legacy` across
+  `divoom_gui/`, `divoom_client/`, `divoom_lib/` returns nothing, which is why
+  deleting the C had no shipped caller. Python is read-side + transport only.
+  Nearest-neighbour on the device path is deliberate, not drift from the C's
+  LANCZOS3 — `media_sync.py:101` records LANCZOS-on-device as the fixed bug.
+- **2026-09-25 — two deletion-completeness misses, both from L4, both now
+  gated.** The consumer enumeration that made deleting the C safe walked
+  `tests/` and stopped. (1) 22 modules under `examples/tests/` still imported
+  the deleted encoders — invisible because `py_ci` aborted earlier on unrelated
+  camoufox drift, so that step never ran; fixed camoufox and 13 collection
+  errors plus 50 failures appeared. 3 files deleted, 29 dead test functions
+  removed by name from 6 mixed files, 1022 pass. (2) `scripts/build_libdivoom.sh`
+  was still called by three CI jobs, `scripts/linux_remote/test_host.sh`, and
+  `build.sh` — a 24/24 green local gate on a push whose CI could not start;
+  `tools/check_scripts.py` check 4 now fails on any caller naming a missing
+  `scripts/` path, calibrated by breaking it, and it found `build.sh:39` on its
+  first run.
 - **2026-09-25 — L5 COMPLETE: every device verb is a `divoomd` subcommand.**
   `set-radio`, `set-alarm` and `set-temperature` joined the other four, so the
   phase is done: one MCP server (Rust) and seven device verbs (Rust). The
