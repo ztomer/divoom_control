@@ -6,6 +6,21 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **The generic-ACK command set is typed.** `models::GENERIC_ACK_COMMANDS` was
+  `[0x45, 0x05, 0x8A, 0x46, 0x42]` — hand-typed bytes sitting beside a generated
+  model of the same protocol, with nothing comparing the two, where a typo is a
+  command that silently stops matching its response and the only symptom is a
+  device that stops answering. It is now five `Command` variants (the typed
+  model's first load-bearing use), so a wrong id cannot be written at all, and
+  `command_model_tests` pins the set: no duplicate ids, every id in the model,
+  and the same five bytes as before for anyone comparing against history.
+  Red-once: substituting `GetLightMode` for `GetAlarmTime` — a duplicate 0x46 —
+  fails with "0x46 is listed twice".
+  `response.rs`'s hot path converts the awaited id once per frame
+  (`Command::try_from(e).is_ok_and(...)`), so an id outside the model is
+  simply not a generic-ACK command, which is the same answer the old `contains`
+  gave.
+
 - **L4 COMPLETE: the C encoder chain is deleted and the daemon no longer knows
   it existed.** The daemon's image encoders are Rust (`divoomd::image_encode`),
   so `divoomd/src/native_encode.rs` — the `libloading` wrapper that dlopened

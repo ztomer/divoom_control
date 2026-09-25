@@ -69,6 +69,35 @@ fn the_aliased_ids_are_one_command_spelled_two_ways() {
 }
 
 #[test]
+fn the_generic_ack_set_is_commands_and_nothing_else() {
+    // The set that was `[0x45, 0x05, 0x8A, 0x46, 0x42]` — hand-typed bytes
+    // sitting beside a generated model of the same protocol, with nothing
+    // comparing them. Two things are worth pinning now that it is spelled as
+    // variants: every entry resolves to a real command (a typo would be a
+    // command that never matches), and no command is listed twice (a
+    // duplicate would look like coverage and be one entry short).
+    let mut seen: BTreeMap<u8, &str> = BTreeMap::new();
+    for command in crate::models::GENERIC_ACK_COMMANDS {
+        let id = command.id();
+        assert!(
+            seen.insert(id, command.name()).is_none(),
+            "0x{id:02x} is listed twice as a generic-ACK command"
+        );
+        // Round-tripping proves the variant's id is in the model, not just that
+        // the name compiles.
+        assert_eq!(Command::try_from(id), Ok(command));
+    }
+    assert_eq!(seen.len(), 5, "the generic-ACK set changed size");
+    // And the ids are the ones the daemon has always used: a reader comparing
+    // against git history should find the same five bytes.
+    assert_eq!(
+        seen.keys().copied().collect::<Vec<u8>>(),
+        vec![0x05, 0x42, 0x45, 0x46, 0x8A],
+        "the generic-ACK id set changed"
+    );
+}
+
+#[test]
 fn an_unknown_name_and_an_unknown_id_both_refuse() {
     assert_eq!(command("set nothing"), None);
     assert_eq!(command(""), None);

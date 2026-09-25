@@ -4,6 +4,8 @@
 //! Values are pinned by the framing parity tests against Python-generated
 //! vectors.
 
+use crate::command_model::Command;
+
 pub const MESSAGE_START_BYTE: u8 = 0x01;
 pub const MESSAGE_END_BYTE: u8 = 0x02;
 pub const MESSAGE_CHECKSUM_LENGTH: usize = 2;
@@ -31,7 +33,24 @@ pub const ACK_PATTERN_BYTE_3: u8 = 0x55;
 
 // Response correlation (used by the notify/response layer, Phase 2 next step).
 pub const GENERIC_ACK_COMMAND_ID: u8 = 0x33;
-pub const GENERIC_ACK_COMMANDS: [u8; 5] = [0x45, 0x05, 0x8A, 0x46, 0x42];
+
+/// The commands whose reply is the generic ACK (`0x33`) rather than their own
+/// echo — which is why a caller waiting on one of them has to accept it.
+///
+/// Spelled as VARIANTS, not as the byte values this used to be
+/// (`[0x45, 0x05, 0x8A, 0x46, 0x42]`): the ids were hand-typed next to a
+/// generated model of the same protocol, so a typo here would have been a
+/// command that silently never matches — and nothing compared the two, because
+/// the list looked like data. As variants it cannot be a wrong id, and
+/// `command_model_tests` checks the set is exactly the commands the daemon
+/// treats as generic-ACK.
+pub const GENERIC_ACK_COMMANDS: [Command; 5] = [
+    Command::SetLightMode,      // 0x45
+    Command::SetWorkMode,       // 0x05
+    Command::SetPoweronChannel, // 0x8A
+    Command::GetLightMode,      // 0x46
+    Command::GetAlarmTime,      // 0x42
+];
 
 // Upper bound on a single basic RX frame; a larger decoded length is a corrupt
 // length field and triggers a resync (drop the start byte) instead of stalling.

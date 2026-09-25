@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 
 use tokio::sync::mpsc;
 
+use crate::command_model::Command;
 use crate::models::{GENERIC_ACK_COMMANDS, GENERIC_ACK_COMMAND_ID};
 
 /// One parsed inbound frame (command id + data), regardless of framing.
@@ -51,9 +52,10 @@ pub fn route_notification(cmd: u8, expected: Option<u8>, listen: &[u8]) -> Handl
         return HandlerAction::Queue;
     }
     let is_expected = expected == Some(cmd);
-    let is_generic_ack = expected.is_some()
-        && cmd == GENERIC_ACK_COMMAND_ID
-        && expected.is_some_and(|e| GENERIC_ACK_COMMANDS.contains(&e));
+    let is_generic_ack = expected.is_some_and(|e| {
+        cmd == GENERIC_ACK_COMMAND_ID
+            && Command::try_from(e).is_ok_and(|c| GENERIC_ACK_COMMANDS.contains(&c))
+    });
     if is_expected || is_generic_ack {
         HandlerAction::QueueAndClear
     } else {
