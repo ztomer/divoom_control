@@ -13,6 +13,12 @@ shipped milestone (per the project planning docs).
   New `tests/test_bridge_idl.py` (6 tests) fails on any seam drift; proven
   red once and green (6 passed; neighboring control-server/event suites
   39 passed).
+- **L1 protocol lock, Python side.** New `tests/test_framing_vectors.py`
+  (5 tests) makes Python reproduce every committed vector in
+  `divoomd/tests/framing_vectors.json` (encode_basic/ios_le, parse both),
+  plus a pin that the corrupt-length resync vector stays present. Proven red
+  once (1 failed on a flipped byte; 5 passed restored). Rust `framing_parity`
+  4 passed on the same file — both suites now consume one vector source.
 
 ## v0.39.0 — MCP negotiation, Python 3.14 floor, menubar off tao (2026-09-21)
 
