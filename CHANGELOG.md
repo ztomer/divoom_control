@@ -6,6 +6,31 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **L4 groundwork: an oracle captured from the C, not from its Python twin.**
+  `divoomd/tests/image_vectors.json` goes from 21 cases to 192, and — the part
+  that matters — every one is now captured from `libdivoom_compact` ITSELF.
+  The old generator took its bytes from the Python reference in
+  `examples/divoom_legacy`, retired from the product on 2026-09-14, and called
+  it "the SPEC". That is a fine cross-check and a poor oracle for a phase whose
+  job is replacing the C: the thing being replaced is the C, so the C's bytes
+  are the behaviour to preserve. The Python reference is now checked AGAINST the
+  C, and `gen_image_vectors.py` refuses to write the file if they disagree on
+  any case — so it is a two-implementation gate, not a recorder.
+  The case set is chosen for what stresses an encoder rather than for looking
+  tidy: 13 sizes including non-square (5x7, 17x13), single-pixel (3x1, 1x3) and
+  larger-than-panel (32x32, 64x64, which is the only way the LANCZOS3 downscaler
+  is on the path at all), 6 colour counts from 1 to 256, and a time sweep
+  (0, 1, 500, 1000, 65535) because `time_ms` only reaches the duration field.
+  **Probed, not assumed:** 140 comparisons across 13 sizes x 5 colour counts
+  found exactly one divergence between the C and the Python reference — at a
+  ZERO dimension the C refuses while Python emits a degenerate frame. The C's
+  refusal is what gets recorded, and it is now a first-class case shape
+  (`"refused": true`) rather than an absent `out` field, because a Rust port
+  that emitted a frame there would have invented behaviour, and a refusal is not
+  the same fact as a zero-byte success.
+  `native_encode_parity.rs` asserts all 192 against the C through the FFI, with
+  the refusals asserted as refusals; clippy clean at 0.
+
 - **L4 step 2, and a mistake worth reading: the C is NOT gone, and the gate
   now says so.** The Python half of the framing chain is finished —
   `divoom_lib/framing.py` is parse-only, its two encoders and the ctypes loader
