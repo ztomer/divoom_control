@@ -357,21 +357,60 @@ async def cmd_identify(args: argparse.Namespace) -> int:
     return 0
 
 
+def _native_mcp_binary() -> str:
+    """The ``divoomd`` that provides the MCP server, or a hard, named failure.
+
+    Split out of :func:`cmd_mcp_server` so the "not built" branch is testable.
+    It is the one failure the handoff introduces — before it, this command
+    needed no Rust binary at all — and a branch that can only be reached on a
+    machine without a toolchain is exactly the branch that ships untested and
+    mis-worded.
+    """
+    from divoom_client import binary_resolver
+
+    exe = binary_resolver.resolve("divoomd")
+    if exe is not None:
+        return str(exe)
+    stale = binary_resolver.stale_report("divoomd")
+    detail = f" ({'; '.join(f'{p} reports {v}' for p, v in stale)})" if stale else ""
+    _err(
+        f"could not find the divoomd binary that provides the MCP server{detail}. "
+        f"{binary_resolver.rebuild_hint('divoomd')}"
+    )
+    raise AssertionError("_err exits; this line is unreachable")
+
+
 async def cmd_mcp_server(args: argparse.Namespace) -> int:
-    """Start the MCP stdio JSON-RPC server (R15 §5; R28 routes through the daemon).
+    """Hand off to the native MCP server: ``divoomd mcp``.
 
-    The MCP server does NOT open its own BLE connection — the daemon is the sole
-    device owner (R17), so this builds the tool catalog against a
-    ``DaemonDeviceProxy`` that routes every tool call through the daemon's
-    ``device_call`` RPC. It connects to the local daemon socket (auto-spawning
-    one if needed), or to a remote daemon over TCP when ``--host`` is given.
+    The server is Rust now (2026-09-25, phase L5). This command is still the
+    documented entry point — it is what an MCP client's config names — so it has
+    to keep working, but it no longer *implements* a server. The GUI has spawned
+    ``divoomd mcp`` directly since R70 P4.2 (``divoom_gui/mcp_control.py``); this
+    is the same handoff for the config-file path, and it is what lets
+    ``mcp_server.py``/``mcp_tools.py`` go: the Python catalog (13 tools) was a
+    strict SUBSET of the native one (14, adding ``list_screens``), so nothing
+    reachable is lost.
 
-    Exits cleanly when the parent process closes stdin. The proxy is stateless,
-    so there is nothing to disconnect on exit (the daemon keeps owning the
-    device for the GUI/menubar)."""
+    Two steps, and both are load-bearing:
+
+    1. The daemon is ensured first. ``divoomd mcp`` connects to a daemon; it
+       does not start one, so dropping this step would turn "works on a fresh
+       machine" into "fails unless the GUI happens to be running".
+    2. The process image is REPLACED (``os.execv``), not spawned-and-waited. An
+       MCP stdio server is a pipe: the client owns our stdin and stdout, and
+       anything interposed between the client and the server is a place for the
+       protocol to be mangled, a signal to be swallowed, or the exit code to be
+       laundered. exec hands all three to the real server directly.
+
+    The flags reach the daemon target through the environment, and the variable
+    names are identical on both sides (``DIVOOM_DAEMON_HOST``/``_PORT``/
+    ``_TOKEN``, ``DIVOOM_SOCKET``) precisely so this needs no translation layer.
+    A second mapping would be a second thing to keep in sync with the first.
+    """
     import os
     from divoom_client.daemon_protocol import ENV_HOST, ENV_PORT, ENV_TOKEN
-    from divoom_client.daemon_client import ensure_daemon, DaemonDeviceProxy
+    from divoom_client.daemon_client import ensure_daemon
 
     # A remote daemon is selected purely via env (DaemonClient.from_env /
     # ensure_daemon read these); mirror the CLI flags into the environment so a
@@ -389,21 +428,23 @@ async def cmd_mcp_server(args: argparse.Namespace) -> int:
     if client is None:
         _err("could not reach or start the divoom daemon", 1)
 
-    from divoom_lib.mcp_server import MCPServer
-    from divoom_lib.mcp_tools import build_tool_catalog
+    # The native server reads the same variable for the local case, so an
+    # explicit --socket has to be in the environment too — otherwise the handoff
+    # silently connects to /tmp/divoom.sock and reports the daemon as down.
+    os.environ["DIVOOM_SOCKET"] = socket_path
 
-    proxy = DaemonDeviceProxy(client)
-    server = MCPServer(
-        server_info={"name": "divoom-control", "version": "0.15.0"},
-    )
-    server.tools = build_tool_catalog(proxy)
+    exe = _native_mcp_binary()
     where = f"{host}:{getattr(args, 'port', 9009)}" if host else socket_path
-    sys.stderr.write(
-        f"MCP server starting: daemon={where}, tools={len(server.tools)}\n"
-    )
+    sys.stderr.write(f"MCP server: handing off to {exe} (daemon={where})\n")
     sys.stderr.flush()
-    await server.run_stdio()
-    return 0
+
+    # Replaces this process; there is no return. On success the native server
+    # owns stdin/stdout/exit status until the client closes the pipe.
+    os.execv(str(exe), [str(exe), "mcp"])
+    # Only reachable if exec failed. execv raises OSError on a real failure
+    # (missing file, not executable), so reaching here means it returned, which
+    # it does not do — but a command that must not silently do nothing says so.
+    _err(f"could not execute {exe}", 1)
 
 
 async def cmd_daemon(args: argparse.Namespace) -> int:

@@ -438,11 +438,13 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
 
     # ── Round 15 §5 (R28: routes through the daemon) ──────────────────
     #
-    # The GUI spawns ``python -m divoom_lib.cli mcp-server`` as a subprocess and
-    # tracks it via MCPController. pywebview's event loop and the MCP server's
-    # stdio loop would otherwise fight over file descriptors — subprocess
-    # isolation is the clean fix. The MCP server no longer opens its own BLE
-    # connection: it's a daemon client, so no MAC is required.
+    # The GUI spawns ``divoomd mcp`` (R70 P4.2; it used to spawn
+    # ``python -m divoom_lib.cli mcp-server``) and tracks it via MCPController.
+    # pywebview's event loop and the MCP server's stdio loop would otherwise
+    # fight over file descriptors — subprocess isolation is the clean fix. The
+    # MCP server no longer opens its own BLE connection: it's a daemon client, so
+    # no MAC is required, and since L5 the server itself is the Rust binary the
+    # ``divoom-control mcp-server`` entry point also hands off to.
 
     def start_mcp_server(self, mac: str = "") -> dict:
         """Start the MCP stdio server subprocess (R15 §5; R28 daemon-routed).

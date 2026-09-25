@@ -365,3 +365,32 @@ def test_the_spawned_process_really_answers_json_rpc(tmp_path) -> None:
     assert len(tools) >= 13, f"only {len(tools)} tools"
     names = {t["name"] for t in tools}
     assert {"set_brightness", "set_volume"} <= names, names
+
+
+# ── moved from test_mcp_server_cli_stdio.py (deleted 2026-09-25, phase L5) ──
+#
+# This test is about MCPController, which STAYS, so it moved here rather than
+# dying with the Python MCP implementation it happened to sit beside. The sample
+# log text is the native server's now: the point of the test is that a stale
+# traceback is not surfaced, not which module wrote it.
+
+def test_mcp_controller_hides_stale_log_on_fresh_launch(tmp_path) -> None:
+    """The card must not show a log left over from a previous session.
+
+    This was the "traceback shown when the toggle is off" bug: `status()` only
+    tails the log for a server this session started, so anything left in the file
+    is invisible until you press Start.
+    """
+    from divoom_gui.mcp_control import MCPController, status_to_dict
+
+    log_path = tmp_path / "mcp-server.log"
+    log_path.write_text(
+        "thread 'main' panicked at 'called `Result::unwrap()` on an `Err` value',\n"
+        "MCP server: stdin/stdout are not connected to an MCP client.\n"
+    )
+
+    ctl = MCPController(log_path=log_path)  # nothing started this session
+    status = status_to_dict(ctl.status())
+
+    assert status["running"] is False
+    assert status["last_log_lines"] == []

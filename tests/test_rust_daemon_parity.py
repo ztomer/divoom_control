@@ -379,39 +379,58 @@ def test_rust_set_clock_rich(rust_daemon_ctx):
 
 
 def test_rust_mcp_via_daemon(rust_daemon_ctx):
-    """Phase 4 Tier A: MCP server -> DaemonDeviceProxy -> Rust daemon (mock device).
+    """MCP -> Rust daemon (mock device), driven through the SHIPPING server.
 
-    Drives the MCP layer end-to-end against the *Rust* daemon, hardware-free:
-    tools/list builds the catalog over a daemon-routing proxy, and a tools/call
-    round-trips through the Rust daemon's device_call to a mock device. (Exact wire
-    bytes are asserted in the Rust mock_device_tests; over the socket we can only
-    observe success, which is what this verifies.)
+    Rewritten 2026-09-25 (phase L5). This used to build a Python ``MCPServer``
+    over a ``DaemonDeviceProxy``, which meant the integration it covered — the
+    MCP layer reaching a daemon and landing on a device — was covered only for
+    the implementation that no longer ships. It now spawns ``divoomd mcp``, the
+    process an MCP client actually launches, pointed at the same mock-device
+    daemon. (Exact wire bytes are asserted in the Rust mock_device_tests; over
+    the socket we can only observe success, which is what this verifies.)
     """
-    import asyncio
-    from divoom_client.daemon_client import DaemonDeviceProxy
-    from divoom_lib.mcp_server import MCPServer
-    from divoom_lib.mcp_tools import build_tool_catalog
+    import json
+    import subprocess
 
     client = rust_daemon_ctx
     conn = client.send_command("connect", {"mock": True})
     assert conn.get("success") is True, conn
 
-    proxy = DaemonDeviceProxy(client)
-    server = MCPServer(server_info={"name": "divoom-control", "version": "test"})
-    server.tools = build_tool_catalog(proxy)
+    env = dict(os.environ)
+    env["DIVOOM_SOCKET"] = client.socket_path
+    for var in ("DIVOOM_DAEMON_HOST", "DIVOOM_DAEMON_PORT", "DIVOOM_DAEMON_TOKEN"):
+        env.pop(var, None)
 
-    async def drive():
-        listed = await server.handle(
-            {"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
-        names = {t["name"] for t in listed["result"]["tools"]}
-        assert "set_volume" in names and "set_brightness" in names, names
+    from tests.support.daemon_binary import require_divoomd
 
-        return await server.handle({
+    proc = subprocess.Popen(
+        [str(require_divoomd()), "mcp"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+    )
+    requests = (
+        json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}) + "\n"
+        + json.dumps({
             "jsonrpc": "2.0", "id": 2, "method": "tools/call",
             "params": {"name": "set_volume", "arguments": {"level": 8}},
-        })
+        }) + "\n"
+    )
+    try:
+        out, _err = proc.communicate(requests, timeout=30)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        raise
 
-    called = asyncio.run(drive())
+    replies = [json.loads(line) for line in out.splitlines() if line.strip()]
+    assert len(replies) >= 2, f"expected a handshake, got: {out!r}"
+
+    names = {t["name"] for t in replies[0]["result"]["tools"]}
+    assert "set_volume" in names and "set_brightness" in names, names
+
+    called = replies[1]
     assert "result" in called, called
     assert called["result"].get("isError") in (None, False), called
 

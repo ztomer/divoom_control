@@ -73,17 +73,23 @@ async def test_cmd_identify_text(monkeypatch, capsys) -> None:
     assert "service_uuid: 1234" in out
 
 
-# ── cmd_mcp_server ───────────────────────────────────────────────────────
+# ── cmd_mcp_server ───────────────────────────────────────────────────────────
+#
+# Rewritten 2026-09-25 (phase L5): the command no longer builds a Python MCP
+# server, it hands the process to `divoomd mcp`. These three tests kept their
+# subjects — an unreachable daemon, the local path, the remote env — and changed
+# their instrument from a fake MCPServer to a fake execv. The end-to-end proof
+# that the native server really answers lives in tests/test_mcp_delegation.py;
+# what matters here is the wiring, which is what these three were actually
+# written for.
 
 
-class _FakeMCPServer:
-    def __init__(self, server_info) -> None:
-        self.server_info = server_info
-        self.tools = []
-        self.ran = False
+def _fake_execv(recorded: list):
+    def _execv(path, argv):
+        recorded.append((path, argv))
+        raise SystemExit(0)  # execv never returns
 
-    async def run_stdio(self) -> None:
-        self.ran = True
+    return _execv
 
 
 async def test_cmd_mcp_server_errors_when_daemon_unreachable(monkeypatch) -> None:
@@ -96,24 +102,25 @@ async def test_cmd_mcp_server_errors_when_daemon_unreachable(monkeypatch) -> Non
 
 
 async def test_cmd_mcp_server_local_happy_path(monkeypatch) -> None:
+    """The local path: the daemon is ensured, then the native server is exec'd."""
     fake_client = object()
     monkeypatch.setattr(
         "divoom_client.daemon_client.ensure_daemon", lambda *a, **k: fake_client
     )
+    monkeypatch.setattr(cli_commands, "_native_mcp_binary", lambda: "/opt/divoomd")
+    monkeypatch.setattr(os, "environ", os.environ.copy())
+    execs: list = []
+    monkeypatch.setattr(os, "execv", _fake_execv(execs))
 
-    class FakeProxy:
-        def __init__(self, client) -> None:
-            self.client = client
+    with pytest.raises(SystemExit):
+        await cli_commands.cmd_mcp_server(
+            _parse("mcp-server", "--socket", "/tmp/fake-divoom-test.sock")
+        )
 
-    monkeypatch.setattr("divoom_client.daemon_client.DaemonDeviceProxy", FakeProxy)
-    monkeypatch.setattr("divoom_lib.mcp_server.MCPServer", _FakeMCPServer)
-    monkeypatch.setattr(
-        "divoom_lib.mcp_tools.build_tool_catalog", lambda proxy: ["t1", "t2", "t3"]
-    )
-    rc = await cli_commands.cmd_mcp_server(
-        _parse("mcp-server", "--socket", "/tmp/fake-divoom-test.sock")
-    )
-    assert rc == 0
+    assert execs == [("/opt/divoomd", ["/opt/divoomd", "mcp"])]
+    # The child inherits the daemon target; without this it would silently
+    # connect to /tmp/divoom.sock and report the daemon as down.
+    assert os.environ["DIVOOM_SOCKET"] == "/tmp/fake-divoom-test.sock"
 
 
 async def test_cmd_mcp_server_remote_host_sets_env(monkeypatch) -> None:
@@ -125,19 +132,43 @@ async def test_cmd_mcp_server_remote_host_sets_env(monkeypatch) -> None:
     monkeypatch.setattr(
         "divoom_client.daemon_client.ensure_daemon", lambda *a, **k: fake_client
     )
+    monkeypatch.setattr(cli_commands, "_native_mcp_binary", lambda: "/opt/divoomd")
+    execs: list = []
+    monkeypatch.setattr(os, "execv", _fake_execv(execs))
 
-    class FakeProxy:
-        def __init__(self, client) -> None:
-            self.client = client
+    with pytest.raises(SystemExit):
+        await cli_commands.cmd_mcp_server(
+            _parse("mcp-server", "--host", "1.2.3.4", "--port", "9100", "--token", "secret")
+        )
 
-    monkeypatch.setattr("divoom_client.daemon_client.DaemonDeviceProxy", FakeProxy)
-    monkeypatch.setattr("divoom_lib.mcp_server.MCPServer", _FakeMCPServer)
-    monkeypatch.setattr("divoom_lib.mcp_tools.build_tool_catalog", lambda proxy: [])
-
-    rc = await cli_commands.cmd_mcp_server(
-        _parse("mcp-server", "--host", "1.2.3.4", "--port", "9100", "--token", "secret")
-    )
-    assert rc == 0
+    assert execs, "the remote path must still hand off to the native server"
     assert os.environ["DIVOOM_DAEMON_HOST"] == "1.2.3.4"
     assert os.environ["DIVOOM_DAEMON_PORT"] == "9100"
     assert os.environ["DIVOOM_DAEMON_TOKEN"] == "secret"
+
+
+async def test_cmd_mcp_server_passes_mac_to_the_daemon_it_may_spawn(monkeypatch) -> None:
+    """`--mac` exists so a freshly spawned daemon binds the right device.
+
+    It is consumed by `ensure_daemon` and is NOT an argument to `divoomd mcp`,
+    which connects to whatever daemon is already there. Dropping the hand-off
+    would make the flag silently do nothing on a fresh machine.
+    """
+    seen: dict = {}
+
+    def fake_ensure(socket_path, *, mac=None, **kwargs):
+        seen["socket_path"] = socket_path
+        seen["mac"] = mac
+        return object()
+
+    monkeypatch.setattr("divoom_client.daemon_client.ensure_daemon", fake_ensure)
+    monkeypatch.setattr(cli_commands, "_native_mcp_binary", lambda: "/opt/divoomd")
+    monkeypatch.setattr(os, "environ", os.environ.copy())
+    monkeypatch.setattr(os, "execv", _fake_execv([]))
+
+    with pytest.raises(SystemExit):
+        await cli_commands.cmd_mcp_server(
+            _parse("mcp-server", "--socket", "/tmp/x.sock", "--mac", "11:22:33:44:55:66")
+        )
+
+    assert seen["mac"] == "11:22:33:44:55:66"

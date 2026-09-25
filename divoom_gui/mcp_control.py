@@ -3,8 +3,10 @@ R15 §5 — MCP subprocess controller for the GUI.
 
 The GUI doesn't run the MCP server inline (that would tie the
 pywebview event loop to a long-running stdio server). Instead it
-spawns ``divoom-control mcp-server --mac <MAC>`` as a subprocess
-and tracks the PID.
+spawns ``divoomd mcp`` as a subprocess and tracks the PID. (Before R70
+P4.2 it spawned ``divoom-control mcp-server --mac <MAC>``; since L5 that
+entry point is itself a handoff to the same binary, so an MCP client's
+config file and the GUI now run identical processes.)
 
 Why subprocess, not in-process:
   - pywebview's event loop and the MCP server's stdin/stdout loop

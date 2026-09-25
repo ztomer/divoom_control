@@ -6,6 +6,56 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **The Python MCP server is deleted. There is one MCP server, and it is the
+  Rust one.** `divoom-control mcp-server` — the command every MCP client config
+  names — now ensures a daemon is running and then `execv`s `divoomd mcp`, so
+  the config-file path and the GUI run the identical process. `execv` rather
+  than spawn-and-wait because an MCP stdio server IS a pipe: anything interposed
+  between the client and the server is a place for the protocol to be mangled, a
+  signal swallowed, or the exit code laundered through a supervisor. The
+  `--host`/`--port`/`--token`/`--socket` flags reach the daemon target through
+  the environment, and those variable names were already identical on both
+  sides (`DIVOOM_DAEMON_HOST`/`_PORT`/`_TOKEN`, `DIVOOM_SOCKET`), so the
+  handoff needs no translation layer that could drift out of sync.
+  Deleted: `divoom_lib/mcp_server.py` (422 lines), `divoom_lib/mcp_tools.py`
+  (440), and **81 Python tests** across four modules plus the shared test
+  helper. The 81 is 19 more than the roadmap estimated — two of the test modules
+  were not in the count.
+  The deletion was only safe because the behaviour was taken with it:
+  - **The stdio pipe guard moved to Rust.** The Python server refused to serve
+    when stdin/stdout were not a client-owned pipe; asyncio otherwise died with
+    "Pipe transport is only for pipes, sockets and character devices" — a
+    traceback into the very log the GUI's status card surfaces. `divoomd mcp`
+    now makes the same `fstat` check (a terminal is a character device, so an
+    interactive run still serves, as before) and prints one clean sentence.
+  - **Native coverage grew before Python coverage was removed: 6 tests → 33.**
+    The JSON-RPC envelope (parse error, invalid request, method-not-found, a
+    notification getting NO reply, ping), the error contract (an unknown tool is
+    `isError: true`, not -32601, per MCP), and every bounded argument checked at
+    both ends *and* at its own edge — including 45 degrees, which is inside the
+    numeric range and still nonsense. The 13 Python tool names are pinned in a
+    Rust test as a receipt, so a tool cannot vanish from the catalog unnoticed.
+  - **Every consumer was enumerated before cutting.** The MCP→daemon→device
+    end-to-end test was rewritten against `divoomd mcp` instead of deleted (it
+    was the only coverage of that path); the `mcp_control` test that happened to
+    live in a doomed file moved to `test_mcp_control.py`, since that module
+    stays; the three `cmd_mcp_server` tests were rewritten from a fake
+    `MCPServer` to a fake `execv`; and the `SIGNATURE_EXCLUDE` allowlist entry in
+    `tools/check_positional_args.py` was removed instead of left to rot.
+  **A user-visible bug died with it:** the Python server raised
+  `NotImplementedError` from `asyncio/streams.py` whenever stdin reached EOF —
+  that is, every time an MCP client disconnected — and exited non-zero with a
+  traceback. The native server exits 0. The delegation e2e hit this on its first
+  calibrated run, which is what a red-once gate is for.
+  Proof: `tests/test_mcp_delegation.py` runs the REAL entry point
+  (`python3 -m divoom_lib.cli mcp-server`) against a real BLE-free `divoomd` on
+  a real socket and requires the 14-tool native catalog back — calibrated RED
+  against the old implementation, which served 13 and had no `list_screens`. It
+  also proves the handoff is diagnosable (the log names the binary and the
+  daemon), that a redirected stdout gets the diagnosis instead of a traceback,
+  and — the one assertion that a delegation actually happened — that `execv` is
+  called with `divoomd mcp`.
+
 - **The native MCP server can reach a daemon on another machine — the one
   capability the Python shell had.** Measured before writing it: the native
   catalog is a strict superset (14 tools against the Python shell's 13, which is

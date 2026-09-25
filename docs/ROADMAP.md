@@ -9,6 +9,24 @@ forward-looking one. Recover a round plan with
 
 ## Shipped
 
+- **Autonomous rustification (2026-09-25), phase L5 — ONE MCP server, and it is
+  the Rust one.** `divoom-control mcp-server` (the command every MCP client config
+  names) now ensures a daemon and then `execv`s `divoomd mcp`, so the config
+  path and the GUI run the identical process; `divoom_lib/mcp_server.py` (422
+  lines), `divoom_lib/mcp_tools.py` (440) and 81 Python tests are deleted. Two
+  things were taken with them rather than dropped: the **stdio pipe guard**
+  (asyncio used to traceback into the GUI's own status log when stdout was not a
+  client-owned pipe) and the **coverage** (native MCP tests went 6 → 33, and the
+  13 Python tool names are pinned in Rust as a receipt against silent catalog
+  shrinkage). The MCP→daemon→device e2e was rewritten against `divoomd mcp`
+  rather than deleted, because it was the only test of that path.
+  `tests/test_mcp_delegation.py` proves it with the real entry point and a real
+  BLE-free daemon, and was calibrated RED against the old implementation (13
+  tools, no `list_screens`). A user-visible bug died with the Python server: it
+  raised `NotImplementedError` from asyncio on every client disconnect.
+  **Still open in L5:** clap verbs for `cli_commands.py` (444 lines) where a verb
+  is a device command — the same additive-then-delete shape, and the same
+  obligation to prove the entry point still works afterwards.
 - **Autonomous rustification (2026-09-25), phase L4 — the daemon frames, the
   Python half of the C chain is gone, the image half is not**:
   `divoom_client/spp_bridge.py` no longer receives a payload to frame — the

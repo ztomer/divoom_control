@@ -173,8 +173,11 @@ divoom_lib/            Shared protocol core (macOS + Linux)
   transport.py           transport interface + command routing map
   divoom_auth.py         cloud credentials (Keychain-backed)
   fonts/                 the device bitmap font blobs (divoomd include_bytes!)
-  cli.py mcp_server.py   the `divoom-control` CLI and MCP server (daemon
-                          clients: need a running divoomd, open no Bluetooth)
+  cli.py                 the `divoom-control` CLI. `cli mcp-server` is the
+                          documented MCP entry point and hands off to
+                          `divoomd mcp` (the server is Rust; see
+                          docs/MCP_SERVER.md). Daemon clients: need a running
+                          divoomd, open no Bluetooth.
 examples/              The retired direct-to-device library, standalone
   divoom_legacy/         Divoom facade, BLE/LAN/SPP transports, display/ system/
                           scheduling/ media/ tools/, Python encoders (77 modules)

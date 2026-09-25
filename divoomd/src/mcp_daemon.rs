@@ -125,3 +125,92 @@ pub(crate) async fn cmd(
         .map_err(|e| e.to_string())?;
     serde_json::from_str(&line).map_err(|e| format!("bad reply: {e}"))
 }
+
+#[cfg(test)]
+pub(crate) mod fake {
+    //! A real socket that speaks the daemon's NDJSON, for headless tests.
+    //!
+    //! Real listener, real framing, canned replies — and it RECORDS what it was
+    //! sent, so a test can assert the bytes rather than only that a call
+    //! returned. This is as close as a test without a device gets to a daemon,
+    //! and it is what turns "the tool reached the wire" into a check instead of
+    //! a hope.
+    //!
+    //! It serves indefinitely rather than for a declared number of requests, and
+    //! [`FakeDaemon::requests`] never waits on the server task. The first
+    //! version took a request count and joined the task, which meant a test that
+    //! made one call fewer than it declared hung until the harness timed out
+    //! rather than failing — the worst possible failure mode, because the
+    //! assertion that would have explained it never ran.
+
+    use super::DaemonTarget;
+    use serde_json::{json, Value};
+    use std::sync::{Arc, Mutex};
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    use tokio::net::TcpListener;
+
+    /// A target nothing is listening on, for the paths that must reject input
+    /// BEFORE any I/O. Validation has to be provable without a daemon, or it is
+    /// only provable when a device is plugged in — and a test that reaches the
+    /// network instead of failing locally is testing the wrong thing.
+    pub fn unreachable() -> DaemonTarget {
+        DaemonTarget::Unix("/nonexistent/divoom-test.sock".to_string())
+    }
+
+    pub struct FakeDaemon {
+        /// A target pointing at this fake, ready to hand to `call_tool`.
+        pub target: DaemonTarget,
+        seen: Arc<Mutex<Vec<Value>>>,
+    }
+
+    impl FakeDaemon {
+        /// Answer every request with `{"success": true, "result": <result>}`.
+        pub async fn start(result: Value, token: Option<&str>) -> Self {
+            let listener = TcpListener::bind("127.0.0.1:0")
+                .await
+                .expect("bind an ephemeral port");
+            let port = listener.local_addr().expect("local addr").port();
+            let seen = Arc::new(Mutex::new(Vec::new()));
+            let sink = Arc::clone(&seen);
+            tokio::spawn(async move {
+                while let Ok((stream, _)) = listener.accept().await {
+                    let (read, mut write) = stream.into_split();
+                    let mut reader = BufReader::new(read);
+                    let mut line = String::new();
+                    if reader.read_line(&mut line).await.is_err() {
+                        continue;
+                    }
+                    if let Ok(v) = serde_json::from_str(line.trim()) {
+                        // Recorded BEFORE the reply: once a call has returned, its
+                        // request is guaranteed to be visible to `requests()`.
+                        if let Ok(mut guard) = sink.lock() {
+                            guard.push(v);
+                        }
+                    }
+                    let mut bytes =
+                        serde_json::to_vec(&json!({ "success": true, "result": result }))
+                            .unwrap_or_default();
+                    bytes.push(b'\n');
+                    // A client that hung up mid-reply ends the connection on
+                    // its own; there is nothing to recover and nothing to report.
+                    let _ = write.write_all(&bytes).await;
+                }
+            });
+            Self {
+                target: DaemonTarget::Remote {
+                    host: "127.0.0.1".to_string(),
+                    port,
+                    token: token.map(str::to_string),
+                },
+                seen,
+            }
+        }
+
+        /// What the daemon actually received, in order. Synchronous, and never
+        /// blocks: the answer to everything this daemon was sent.
+        #[must_use]
+        pub fn requests(&self) -> Vec<Value> {
+            self.seen.lock().map(|g| g.clone()).unwrap_or_default()
+        }
+    }
+}

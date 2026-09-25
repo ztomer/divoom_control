@@ -49,11 +49,14 @@ PY_DIR = REPO / "examples" / "divoom_legacy"
 # A gate that cries wolf stops being read.
 NON_NUMERIC = ("str", "bytes", "bool", "list", "dict", "Path", "tuple")
 
-# MCP tool wrappers share method NAMES with device methods but have their own
-# signatures (`set_alarm(enabled: bool, ...)` vs the device layer's all-int
-# form). Matching against the wrapper produced a false positive, so the device
-# layer is the authority.
-SIGNATURE_EXCLUDE = ("mcp_tools.py", "mcp_server.py")
+# The MCP tool wrappers used to need an exclusion here: they share method NAMES
+# with device methods but have their own signatures (`set_alarm(enabled: bool,
+# ...)` vs the device layer's all-int form), so matching a call against the
+# wrapper produced a false positive. They are Rust now (phase L5) and the Python
+# files are deleted, so the exclusion is deleted with them — an allowlist entry
+# for a file that no longer exists is worse than no entry, because it keeps
+# suppressing a class of finding for a reason nobody can re-check.
+SIGNATURE_EXCLUDE: tuple[str, ...] = ()
 
 
 def python_signatures() -> dict[str, list[tuple[str, str]]]:

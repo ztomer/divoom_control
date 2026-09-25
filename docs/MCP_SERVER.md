@@ -1,6 +1,6 @@
 # MCP Server
 
-The `divoom-control` project ships a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server speaking JSON-RPC 2.0 over standard I/O (stdio) and exposing 13 device-control tools, allowing AI coding assistants and automation clients to monitor and control Divoom devices. Protocol negotiation follows SEP-2575: the server answers `initialize` with the client's requested `protocolVersion` when it is one it supports (`2024-11-05`, `2025-03-26`, `2025-06-18`, `2025-11-25`, `2026-07-28`), else the latest (`2026-07-28`). Extra `params` members such as `_meta` are tolerated.
+The `divoom-control` project ships a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server speaking JSON-RPC 2.0 over standard I/O (stdio) and exposing 14 device-control tools, allowing AI coding assistants and automation clients to monitor and control Divoom devices. Protocol negotiation follows SEP-2575: the server answers `initialize` with the client's requested `protocolVersion` when it is one it supports (`2024-11-05`, `2025-03-26`, `2025-06-18`, `2025-11-25`, `2026-07-28`), else the latest (`2026-07-28`). Extra `params` members such as `_meta` are tolerated.
 
 ## Architecture
 
@@ -8,27 +8,31 @@ The MCP server operates as a thin client to the `divoomd` background daemon:
 - **Single-Owner Device Model**: The daemon owns the active Bluetooth (BLE/SPP) or LAN connection. The MCP server does not open its own Bluetooth connection.
 - **Daemon Routing**: Every MCP tool call is forwarded to the daemon socket (Unix domain socket `/tmp/divoom.sock` by default, or remote TCP via `--host`/`--port`/`--token`).
 - **Device Targeting**: Because the daemon manages the active connection, specifying a MAC address is not required during normal operation.
-- **Implementations**:
-  - **Native (`divoomd mcp`)**: Compiled Rust implementation bundled within the application. Minimal resource footprint and fast startup.
-  - **Python (`divoom-control mcp-server`)**: Python CLI implementation routing through `DaemonDeviceProxy`.
+- **One Implementation**: the server is the Rust binary `divoomd mcp`, bundled with the application. There was a second, Python implementation (`divoom-control mcp-server`, routing through `DaemonDeviceProxy`) until 2026-09-25; it was deleted because the native catalog is a strict superset of it — same 13 tools plus `list_screens` — and two implementations of one MCP surface drift (they already had). The `divoom-control mcp-server` command still exists and is still what MCP client configs name, but it is now a handoff: it ensures a daemon is running and then `execv`s `divoomd mcp`, so a client config needs no change.
 
 ## Quick Start
 
-### Running the Native Server (Recommended)
+### Running the Server
+
+Either of these is the same process:
+
 ```bash
-divoomd mcp
+divoomd mcp                          # the server itself
+
+divoom-control mcp-server            # ensures a daemon, then hands off to it
 ```
 
-### Running the Python CLI Server
-```bash
-# Connect to local daemon (auto-spawns daemon if not running):
-divoom-control mcp-server
+The second form is what an MCP client config should name, because it also
+auto-spawns the daemon when none is running (`divoomd mcp` connects to a daemon
+and does not start one). It `execv`s the native binary, so the daemon target
+below reaches the server through the environment.
 
+```bash
 # Connect to a remote daemon over TCP:
 divoom-control mcp-server --host 192.168.1.50 --port 9009 --token <secret>
 ```
 
-Command-line options (Python CLI):
+Command-line options:
 - `--socket <path>`: Path to local daemon Unix domain socket (default: `/tmp/divoom.sock`).
 - `--host <ip_or_name>`: Remote daemon TCP host (sets `DIVOOM_DAEMON_HOST`).
 - `--port <number>`: Remote daemon TCP port (default: `9009`).
@@ -36,7 +40,7 @@ Command-line options (Python CLI):
 
 ## Tool Catalog
 
-The server exposes 13 tools via `tools/list`:
+The server exposes 14 tools via `tools/list`:
 
 | Tool | Arguments | Description / Returns |
 |------|-----------|------------------------|
@@ -52,7 +56,8 @@ The server exposes 13 tools via `tools/list`:
 | `push_animation` | `{file?: string, data?: string}` | Push an animation or image via local file path or base64-encoded data. |
 | `play_sound` | `{duration_ms: int (100..3000)}` | Trigger hardware buzzer alert tone. Returns `{ok, duration_ms}`. |
 | `get_capabilities` | `{}` | Query device connection state, transport type, and MAC address. |
-| `get_device_state` | `{}` | Read current volume, brightness, active light mode, orientation, and mirror settings. |
+| `get_device_state` | `{}` | Read current volume, brightness, active light mode, orientation, and mirror settings. Values are `null` when the daemon cannot be reached, so absent data is never shown as a real reading. |
+| `list_screens` | `{}` | List every known display screen: resolution, spatial coordinates, room, and wall grouping. The one tool the Python server never had. |
 
 ### Validation and Error Handling
 - Protocol-level validation errors (missing arguments, invalid JSON) return standard JSON-RPC error codes (`-32602`, `-32700`, etc.).

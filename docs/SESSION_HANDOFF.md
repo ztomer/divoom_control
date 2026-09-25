@@ -21,6 +21,67 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-25 — L5 unit 2 DONE: the Python MCP server is DELETED.**
+  `divoom-control mcp-server` — the command every MCP client config names — now
+  ensures a daemon and then `execv`s `divoomd mcp`, so it and the GUI run the
+  identical process. `execv` rather than spawn-and-wait because an MCP stdio
+  server IS a pipe: anything interposed between the client and the server is a
+  place for the protocol to be mangled, a signal swallowed, or the exit code
+  laundered. The flags reach the daemon target through the environment, whose
+  names are already identical on both sides, so the handoff has no translation
+  layer to keep in sync. Deleted: `divoom_lib/mcp_server.py` (422 lines),
+  `divoom_lib/mcp_tools.py` (440), and 81 Python tests across four modules plus
+  the shared helper. **The 81 is larger than the 62 the plan estimated** — there
+  were two more test modules (`test_mcp_server_cli_stdio.py`,
+  `test_mcp_server_handle_edges.py`) than the plan knew about.
+  What made the deletion safe, in order:
+  1. **The one behavior the native server lacked was ported first**: the
+     stdin/stdout pipe guard. The Python server refused to serve when stdio was
+     not a client-owned pipe, because asyncio otherwise died with "Pipe
+     transport is only for pipes, sockets and character devices" — a traceback
+     into the log the GUI's status card shows. `divoomd/src/mcp.rs` now does the
+     same check via `fstat` (a terminal is a char device, so an interactive run
+     still serves, exactly as before).
+  2. **Native coverage was added before a line was deleted**: 6 MCP tests → 33.
+     The JSON-RPC envelope (parse error, invalid request, method-not-found,
+     notifications get no reply, ping), the error contract (an unknown tool is
+     `isError`, NOT -32601), and every bounded argument at BOTH ends plus its
+     own edge — including 45 degrees, which is inside the numeric range and
+     still nonsense.
+  3. **Every consumer was enumerated per module before cutting** (the L4 lesson):
+     `test_rust_daemon_parity.py::test_rust_mcp_via_daemon` was REWRITTEN
+     against `divoomd mcp` rather than dropped, because it was the only test
+     covering MCP→daemon→device end to end; the `mcp_control` test that happened
+     to sit in a doomed file was MOVED to `test_mcp_control.py` (that module
+     stays); the 3 `cmd_mcp_server` tests in `test_cli_commands_subcommands.py`
+     were rewritten from a fake `MCPServer` to a fake `execv`; and
+     `tools/check_positional_args.py`'s `SIGNATURE_EXCLUDE` allowlist entry for
+     the two deleted files was removed rather than left to rot.
+  Three findings worth keeping:
+  - **The Python server crashed on client disconnect.** With stdin at EOF it
+    raised `NotImplementedError` from `asyncio/streams.py: _get_close_waiter`
+    (Python 3.14) and exited non-zero — a traceback every time an MCP client
+    quit. The native server exits 0. This was not a test artifact; the
+    delegation e2e hit it on the first calibrated run.
+  - **A test that patches the parent cannot test the child.** The first version
+    of the missing-binary test ran the entry point as a subprocess with
+    `resolve` monkeypatched, and passed for the wrong reason: the patch was in
+    the parent, the resolution happened in the child, the child found the binary
+    and served. It now calls the branch in-process, and the reason is in the
+    docstring so the next person does not "fix" it back.
+  - **A fixture's socket path must be short.** `tmp_path` under pytest is ~129
+    characters and `sun_path` is capped at 104, so the daemon silently failed to
+    bind and the fixture reported "never bound" — which reads like a daemon bug.
+  **Verified:** `cargo test -p divoomd --no-default-features` 283 passed;
+    `divoom-menubar` 25 passed; clippy `-D warnings` clean; `pytest` 1467
+    passed / 125 skipped (the 81-test drop is the deleted Python MCP's).
+    `test_camoufox_install_check` still fails on the pre-existing
+    beta.30-installed/beta.29-pinned drift — unrelated to this round.
+  **Next for L5:** clap verbs for `cli_commands.py` (444 lines), where a verb is
+  a device command. Keep proving the delegation with the e2e in
+  `tests/test_mcp_delegation.py` (real entry point, real daemon, 14-tool
+  catalog) rather than by asserting a module is absent.
+
 - **2026-09-25 — L5 unit 1 DONE (uncommitted): the native MCP reaches a remote
   daemon, so the Python shell's last unique capability is closed.** Measured
   first: the native catalog is a strict superset of the Python one (14 vs 13 =
