@@ -1,4 +1,13 @@
-//! One animation frame (0x49 body): palette dedup, then LSB-first bit packing.
+//! Panel image bodies: palette dedup, then LSB-first bit packing.
+//!
+//! Two commands share this body and differ only in their header, so they share
+//! one implementation here exactly as they share one in the C (`image_encode.c`:
+//! "Palette dedup (same as animation frame)"):
+//!
+//! * `encode_animation_frame` — 0x49, header `AA LLLL(2) TTTT(2) RR NN`, where
+//!   `TTTT` is the frame duration in ms and `RR` is the palette-reset flag.
+//! * `encode_static_image` — 0x44, header `AA LLLL(2) 00 00 00 NN`, where the
+//!   three zero bytes stand in for `TTTT`+`RR` (no duration, no reset).
 //!
 //! Ported from `divoom_lib/native_src/image_encode.c` (phase L4), op for op, and
 //! asserted byte-for-byte against that C library's own recorded output — 103
@@ -66,7 +75,15 @@ impl core::fmt::Display for Refusal {
     }
 }
 
-/// Encode one 0x49 frame body from packed RGB.
+/// The palette and the packed pixels, before any header.
+struct Packed {
+    /// Distinct colours in first-appearance order.
+    palette: Vec<[u8; 3]>,
+    /// Packed pixel bytes, LSB-first.
+    pixels: Vec<u8>,
+}
+
+/// The body both commands share: validate, dedup the palette, pack the pixels.
 ///
 /// # Errors
 ///
@@ -75,12 +92,7 @@ impl core::fmt::Display for Refusal {
 /// [`Refusal::PaletteFull`] on the 257th unique colour. Every one of those is a
 /// refusal rather than a clamp, because a clamped frame is a device showing
 /// something nobody asked for.
-pub fn encode_animation_frame(
-    rgb: &[u8],
-    w: i32,
-    h: i32,
-    time_ms: u16,
-) -> Result<Vec<u8>, Refusal> {
+fn pack(rgb: &[u8], w: i32, h: i32) -> Result<Packed, Refusal> {
     if w <= 0 || h <= 0 {
         return Err(Refusal::EmptyPanel);
     }
@@ -103,8 +115,6 @@ pub fn encode_animation_frame(
     let mut palette: Vec<[u8; 3]> = Vec::new();
     let mut seen: std::collections::HashMap<[u8; 3], u8> = std::collections::HashMap::new();
     let mut indices: Vec<u8> = Vec::with_capacity(num_pixels);
-    // Indexed rather than `chunks_exact`: a pixel is three bytes by definition,
-    // so the stride is a constant of the format, not a chunk size to discover.
     for i in 0..num_pixels {
         let key = [rgb[i * 3], rgb[i * 3 + 1], rgb[i * 3 + 2]];
         let index = if let Some(&found) = seen.get(&key) {
@@ -121,40 +131,8 @@ pub fn encode_animation_frame(
         indices.push(index);
     }
 
-    let n = palette.len();
-    // ceil(log2(n)) without libm, as the C does it: the bit length of n-1, and
-    // 1 for a single colour (which needs no bits but still occupies one, because
-    // `nb_bits` of 0 would make the packer emit nothing).
-    let bits = if n > 1 {
-        usize::BITS as usize - (n - 1).leading_zeros() as usize
-    } else {
-        1
-    };
-    debug_assert!((1..=8).contains(&bits), "nb_bits is in [1, 8]");
-
-    let pixel_data_bytes = (num_pixels * bits).div_ceil(8);
-    let color_data_bytes = n * 3;
-    let llll = FRAME_HEADER_SIZE + color_data_bytes + pixel_data_bytes;
-
-    // ---- header: AA LLLL(2) TTTT(2) RR NN ----
-    let mut out = Vec::with_capacity(llll);
-    out.push(0xAA);
-    // Every one of these is a value already bounded by a check above, so the
-    // narrowing is total; `try_from` with a stated fallback rather than `as`,
-    // which would be a silent truncation if a bound ever moved.
-    let low = |value: usize| u8::try_from(value & 0xFF).unwrap_or(0);
-    let high = |value: usize| u8::try_from((value >> 8) & 0xFF).unwrap_or(0);
-    out.push(low(llll));
-    out.push(high(llll));
-    out.push(low(usize::from(time_ms)));
-    out.push(high(usize::from(time_ms)));
-    out.push(0x00); // RR = reset palette
-                    // NN is the colour count, except 256 which the protocol spells 0.
-    out.push(u8::try_from(n).unwrap_or(0));
-
-    for colour in &palette {
-        out.extend_from_slice(colour);
-    }
+    let bits = bits_per_index(palette.len());
+    let mut pixels = Vec::with_capacity(num_pixels * bits / 8 + 1);
 
     // ---- pixels, LSB-first into LSB-first bytes ----
     let mask = (1u32 << bits) - 1;
@@ -164,17 +142,94 @@ pub fn encode_animation_frame(
         acc |= u32::from(index & u8::try_from(mask).unwrap_or(u8::MAX)) << acc_bits;
         acc_bits += u32::try_from(bits).unwrap_or(0);
         while acc_bits >= 8 {
-            out.push(u8::try_from(acc & 0xFF).unwrap_or(0));
+            pixels.push(u8::try_from(acc & 0xFF).unwrap_or(0));
             acc >>= 8;
             acc_bits -= 8;
         }
     }
     if acc_bits > 0 {
-        out.push(u8::try_from(acc & 0xFF).unwrap_or(0));
+        pixels.push(u8::try_from(acc & 0xFF).unwrap_or(0));
     }
 
+    Ok(Packed { palette, pixels })
+}
+
+/// Bits per palette index: `ceil(log2(n))`, and 1 for a single colour.
+///
+/// The `n == 1` case is not an optimisation, it is required: `ceil(log2(1))` is
+/// 0, and a zero-width index would make the packer emit no pixel bytes at all.
+/// The C special-cases it the same way.
+const fn bits_per_index(colours: usize) -> usize {
+    if colours > 1 {
+        usize::BITS as usize - (colours - 1).leading_zeros() as usize
+    } else {
+        1
+    }
+}
+
+/// Assemble `[AA LLLL(2) header-tail][palette][pixels]`.
+///
+/// `LLLL` is computed here rather than passed in, because it is a function of
+/// what follows: header + palette + pixels. A caller that supplied it would be
+/// able to disagree with the bytes it is describing, which is the bug the C's
+/// own comment records for the 0x44 header (it was 6 bytes, so `NN` got
+/// clobbered by the palette copy and `LLLL` undercounted by one).
+fn assemble(tail: [u8; 4], packed: &Packed) -> Vec<u8> {
+    let color_data_bytes = packed.palette.len() * 3;
+    let llll = FRAME_HEADER_SIZE + color_data_bytes + packed.pixels.len();
+
+    let mut out = Vec::with_capacity(llll);
+    out.push(0xAA);
+    out.push(u8::try_from(llll & 0xFF).unwrap_or(0));
+    out.push(u8::try_from((llll >> 8) & 0xFF).unwrap_or(0));
+    out.extend_from_slice(&tail);
+    for colour in &packed.palette {
+        out.extend_from_slice(colour);
+    }
+    out.extend_from_slice(&packed.pixels);
     debug_assert_eq!(out.len(), llll, "header length must match what was written");
-    Ok(out)
+    out
+}
+
+/// Encode one 0x49 animation frame body from packed RGB.
+///
+/// # Errors
+///
+/// Whatever [`pack`] refuses, for the same reasons.
+pub fn encode_animation_frame(
+    rgb: &[u8],
+    w: i32,
+    h: i32,
+    time_ms: u16,
+) -> Result<Vec<u8>, Refusal> {
+    let packed = pack(rgb, w, h)?;
+    // AA LLLL(2) TTTT(2) RR NN — TTTT is the frame duration, RR resets the
+    // palette. NN is filled in by `assemble`'s caller contract below.
+    let tail = [
+        u8::try_from(time_ms & 0xFF).unwrap_or(0),
+        u8::try_from((time_ms >> 8) & 0xFF).unwrap_or(0),
+        0x00, // RR = reset palette
+        u8::try_from(packed.palette.len()).unwrap_or(0),
+    ];
+    Ok(assemble(tail, &packed))
+}
+
+/// Encode one 0x44 static image body from packed RGB.
+///
+/// # Errors
+///
+/// Whatever [`pack`] refuses, for the same reasons.
+pub fn encode_static_image(rgb: &[u8], w: i32, h: i32) -> Result<Vec<u8>, Refusal> {
+    let packed = pack(rgb, w, h)?;
+    // AA LLLL(2) 00 00 00 NN — the three zeros stand in for TTTT(2)+RR(1): a
+    // static image has no duration and no palette reset.
+    let tail = [
+        0x00,
+        0x00,
+        0x00,
+        u8::try_from(packed.palette.len()).unwrap_or(0),
+    ];
+    Ok(assemble(tail, &packed))
 }
 
 #[cfg(test)]
@@ -229,6 +284,61 @@ mod tests {
             "only {checked} frame vectors: the sweep shrank"
         );
         assert_eq!(refusals, 1, "expected exactly the zero-dimension refusal");
+    }
+
+    #[test]
+    fn every_recorded_static_image_reproduces() {
+        let cases = vectors()["static"]
+            .as_array()
+            .expect("static cases")
+            .clone();
+        let mut checked = 0;
+        let mut refusals = 0;
+        for case in &cases {
+            let w = i32::try_from(case["w"].as_i64().expect("w")).expect("w fits i32");
+            let h = i32::try_from(case["h"].as_i64().expect("h")).expect("h fits i32");
+            let rgb = rgb_of(case["rgb"].as_str().expect("rgb"));
+            let got = encode_static_image(&rgb, w, h);
+            if case.get("refused").is_some() {
+                assert!(
+                    got.is_err(),
+                    "{w}x{h}: the C refused this case and the port emitted {} bytes",
+                    got.as_ref().map_or(0, Vec::len)
+                );
+                refusals += 1;
+                continue;
+            }
+            assert_eq!(
+                crate::wire::hex(&got.expect("static encodes")),
+                case["out"].as_str().expect("out hex"),
+                "static {w}x{h} diverged from the C"
+            );
+            checked += 1;
+        }
+        assert!(
+            checked >= 75,
+            "only {checked} static vectors: the sweep shrank"
+        );
+        assert_eq!(refusals, 1, "expected exactly the zero-dimension refusal");
+    }
+
+    #[test]
+    fn the_two_commands_differ_only_in_their_header_tail() {
+        // The claim the shared `pack` rests on: same body, different header. If
+        // this ever fails, the two commands have genuinely diverged and one
+        // shared implementation is no longer the right shape.
+        let rgb: Vec<u8> = (0..(7 * 5 * 3))
+            .map(|i| u8::try_from(i % 251).unwrap_or(0))
+            .collect();
+        let frame = encode_animation_frame(&rgb, 7, 5, 0x1234).expect("frame encodes");
+        let still = encode_static_image(&rgb, 7, 5).expect("static encodes");
+        assert_eq!(frame.len(), still.len(), "the body is the same size");
+        assert_eq!(frame[0], still[0], "AA");
+        assert_eq!(frame[1..3], still[1..3], "LLLL");
+        // Bytes 3.. are the only difference: TTTT+RR against three zeros.
+        assert_eq!(frame[3..7], [0x34, 0x12, 0x00, frame[6]]);
+        assert_eq!(still[3..7], [0x00, 0x00, 0x00, still[6]]);
+        assert_eq!(frame[7..], still[7..], "palette and pixels are identical");
     }
 
     #[test]

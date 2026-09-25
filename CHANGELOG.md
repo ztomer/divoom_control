@@ -6,6 +6,23 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **L4 port, unit 2: the 0x44 static image encoder — and one implementation, not
+  two.** `encode_static_image` joins `encode_animation_frame` in
+  `divoomd/src/image_encode.rs`, reproducing all 78 non-refusal static vectors
+  from the C's record byte for byte plus the zero-dimension refusal. The C
+  writes the two as separate functions that share everything but a header
+  ("Palette dedup (same as animation frame)"), and a port that copied that
+  shape would have shipped two implementations of a packer to differ in a year.
+  So the body is one `pack()` and the commands are header writers over it, with
+  a test that asserts they differ in exactly bytes 3..6 and agree everywhere
+  else — so if they ever genuinely diverge, the shared shape is what fails.
+  `LLLL` is computed where the bytes are assembled rather than passed in, for
+  the reason the C's own comment records: a header length that can disagree with
+  the header it describes is how the 0x44 encoder once shipped a 6-byte header
+  that let the palette copy clobber `NN`.
+  Red-once: hardcoding the static `NN` byte fails the static vectors; changing
+  the palette stride from 3 to 2 fails four tests.
+
 - **L4 port, unit 1: the 0x49 animation-frame encoder in Rust.**
   `divoomd/src/image_encode.rs` replaces `divoom_encode_animation_frame` from
   `image_encode.c` — palette dedup, `ceil(log2(n))` bit width, LSB-first pixel
