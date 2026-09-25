@@ -116,11 +116,17 @@ pub const COMMANDS: &[(&str, u8)] = &[
     ("get work mode", 0x13),
 ];
 
-/// Resolve a command NAME to its protocol id, or `None` if unknown.
-#[must_use]
-pub fn command_id(name: &str) -> Option<u8> {
-    COMMANDS.iter().find(|(n, _)| *n == name).map(|(_, id)| *id)
-}
-
-/// Number of known commands (parity check against Python).
+/// Number of known command NAMES, checked by
+/// `tests/test_command_model_parity.py` against `len(COMMANDS)`.
 pub const COMMAND_COUNT: usize = 109;
+
+/// Number of distinct protocol ids, which is fewer than the name count:
+/// four ids are spelled two ways.
+pub const COMMAND_ID_COUNT: usize = 105;
+
+// The name lookups moved to `command_names` when the model was split out
+// (they need the type), and they are RE-EXPORTED here rather than
+// moved: `commands::command_id` was this crate's public spelling and an
+// integration test imports it. Both paths now route through the enum, so
+// a name and its id cannot come from different sources.
+pub use crate::command_names::{command, command_id};

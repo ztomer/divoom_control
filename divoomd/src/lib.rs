@@ -27,6 +27,8 @@ mod cloud_dials;
 mod cloud_photo;
 mod cloud_playlist;
 pub mod cloud_store;
+pub mod command_model;
+pub mod command_names;
 pub mod command_queue;
 pub mod commands;
 pub mod daemon;

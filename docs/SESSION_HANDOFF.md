@@ -21,6 +21,45 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-25 — L2 commands as a type DONE (uncommitted).**
+  Three generated files: `commands.rs` (the name→id table callers use today,
+  plus the counts), `command_model.rs` (a `Command` enum — 105 variants, one per
+  protocol ID, covering 109 names — with `ALL`, `TryFrom<u8>`, `TryFrom<&str>`),
+  and `command_names.rs` (`CANONICAL_NAMES`, `COMMAND_NAMES`, `command()`,
+  `command_id()`). Split at the repo's 500-line cap, which the pre-commit
+  structural gate enforces: one file was 761 lines and the gate refused the
+  commit. `commands::command_id` is RE-EXPORTED from the new module rather than
+  moved — an integration test imports that path, and a public spelling that
+  silently disappears is its own outage. ID-FIRST is forced by the protocol: 109 names map to
+  105 ids and four ids are spelled two ways, so a variant per NAME would have
+  left four pairs with equal discriminants and a `TryFrom<u8>` that could not be
+  total. The second spelling rides as `#[doc(alias)]`. Both artefacts are
+  emitted by `scripts/codegen/gen_commands.py`, so Python is still the only
+  writer. `tests/test_command_model_parity.py` (9 tests) checks both
+  directions, the two counts, and the absence of `as u16` casts in the daemon;
+  red-once proven twice (delete a variant → 3 red; delete one `COMMAND_NAMES`
+  entry → only the currency test red, because the variant survives — the exact
+  hole a table-only lookup ships). Model tests are in
+  `divoomd/src/commands_tests.rs`, NOT in the generated file: a test module in
+  a generated file is erased by the next run without ever failing. Two
+  generated 105-arm matches were replaced with table lookups after clippy
+  flagged them (a function that grows with the protocol is what that file
+  exists to prevent), and the regen-comparison test ignores rustfmt's
+  whitespace and trailing commas so it is order-independent — proven from both
+  the formatted and the raw generated state. Verified: `cargo test -p divoomd
+  --no-default-features` 310 passed, `divoom-menubar` 25 passed + builds,
+  clippy `-p divoomd` clean (0 warnings, was 107), `cargo fmt` clean, pytest
+  `-k "command or framing or bridge"` 212 passed / 4 skipped.
+  Not done: no call site cut over to the enum (the table's `command_id()` is
+  unchanged and nothing in the daemon used it anyway — L4 is where the string
+  keying goes), and `docs/ROADMAP.md` carries no new stanza for L2 yet.
+  Next: L4 (`native_encode.rs` replacing `compact_tiles`/Lanczos/`encode_*`,
+  byte-parity vectors + a no-`.dylib`-in-tree gate), which is the first phase
+  that DELETES code; L2's remaining value is the type, not the cutover.
+
+- **2026-09-25 — G0 bridge-IDL freeze + L1 protocol lock DONE (committed as
+  `1ad0110` and `ac05135`; the entries below still say "uncommitted", which is
+  now stale).**
 - **2026-09-25 — G0 bridge-IDL freeze DONE (uncommitted).** First autonomous
   rustification step: `divoom_gui/bridge_idl.json` v1 pins the JS↔Python seam
   (113 bridge methods incl. 65 JS-called, 5-method window denylist, 7 push

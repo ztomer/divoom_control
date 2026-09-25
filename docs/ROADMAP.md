@@ -9,6 +9,15 @@ forward-looking one. Recover a round plan with
 
 ## Shipped
 
+- **Autonomous rustification (2026-09-25), phase L2 — commands as a type**:
+  `divoomd/src/commands.rs` carries a `Command` enum beside the name→id table
+  (105 variants over 109 names, id-first because four protocol ids are spelled
+  two ways), with `TryFrom<u8>`/`TryFrom<&str>`, `ALL`, and total conversions
+  that refuse an id outside the protocol instead of inventing one. Generated
+  from `divoom_lib.models.COMMANDS`; `tests/test_command_model_parity.py`
+  (9 tests) checks it in both directions and pins the counts. No call site
+  changed yet — L4 is where the string keying is deleted.
+
 - **v0.37.0 — The active panel, the Keychain, Now Playing per client, the CLI as a daemon client, clock faces with pictures (2026-09-13)**:
   - **Active panel** (`Fleet::selected`, `select_device`, `selection` broadcast): the bench highlight, the menubar's "(active)" row and "Active panel" switch, and `divoom-control select --mac` set ONE daemon-owned selection; a mac-less request goes to it while linked, else to the single linked panel, else is refused naming why. The first panel to link is active until the user picks another. "Whichever connected last" is gone.
   - **Password in the OS store** (`secret_store`): macOS Keychain through the Apple-signed `security` CLI (so the item's ACL does not key on the daemon's churning local signature), Linux `secret-tool`, else the 0600 file with a warning; migrated out of `config.ini` on first read; Settings says where it lives.

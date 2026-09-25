@@ -6,6 +6,26 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **L2 commands as a type.** Three generated files —
+  `divoomd/src/commands.rs` (the name→id table, unchanged for callers),
+  `command_model.rs` and `command_names.rs` — split at the 500-line cap. The
+  model carries a `Command` enum: 105 variants (one per protocol id)
+  over 109 names, `TryFrom<u8>` and `TryFrom<&str>`, `ALL` for iteration, and
+  the four doubly-spelled ids (`set light pic`/`set image`,
+  `set animation frame`/`set light phone gif`, `set light mode`/`set channel
+  light`, `set temp`/`send current temp`) as one command with a
+  `#[doc(alias)]` each. Both artefacts come out of `gen_commands.py`, so the
+  Python table is still the only writer. New
+  `tests/test_command_model_parity.py` (9 tests) checks the model against
+  `divoom_lib.models.COMMANDS` in both directions, pins `COMMAND_COUNT` and
+  `COMMAND_ID_COUNT` — the generated count nothing read until now — and fails on
+  any `as u16` cast in the daemon. Proven red twice: deleting a variant reds 3
+  tests, deleting one name-table entry reds the currency test alone (the
+  variant still exists, which is exactly the failure the table-only lookup
+  would have shipped). The model's tests live in `commands_tests.rs` because
+  `commands.rs` is generated and a test module inside it would be erased by the
+  next run. Every accessor is table-driven: clippy caught two 105-arm matches
+  growing with the protocol, which is the thing this file exists to avoid.
 - **G0 bridge-IDL freeze.** New `divoom_gui/bridge_idl.json` (v1) pins the
   JS↔Python seam: 113 bridge methods (65 called from `web_ui/*.js`), the
   5-method window-only denylist, 7 daemon push events and their
