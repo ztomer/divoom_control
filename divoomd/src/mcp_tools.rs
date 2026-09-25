@@ -1,13 +1,14 @@
 //! MCP tool catalog + dispatch.
 //!
-//! Ported from `divoom_lib/mcp_tools.py`. Each tool forwards to the daemon over
-//! the unix socket as a `device_call` (or top-level command); file-based tools
-//! decode locally (the `image` crate) and push rgb.
+//! Ported from `divoom_lib/mcp_tools.py`. Each tool forwards to the daemon as a
+//! `device_call` (or top-level command) over the local unix socket or a remote
+//! TCP connection (`crate::daemon_target`); file-based tools decode locally (the
+//! `image` crate) and push rgb.
 
 use base64::Engine;
 use serde_json::{json, Value};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::net::UnixStream;
+
+use crate::daemon_target::DaemonTarget;
 
 // name -> channel int (LIGHT_MODE_NAMES in mcp_tools.py).
 const LIGHT_MODES: [(&str, i64); 8] = [
@@ -94,44 +95,44 @@ fn tool(name: &str, desc: &str, schema: &Value) -> Value {
 /// # Panics
 ///
 /// If a mutex guarding shared tool state is poisoned.
-pub async fn call_tool(name: &str, a: &Value, sock: &str) -> Result<Value, String> {
+pub async fn call_tool(name: &str, a: &Value, target: &DaemonTarget) -> Result<Value, String> {
     let mac = a.get("mac").and_then(Value::as_str);
 
     match name {
         "set_volume" => {
             let level = need_int(a, "level", 0, 15)?;
-            dc(sock, "music.set_volume", json!([level]), mac).await?;
+            crate::mcp_daemon::dc(target, "music.set_volume", json!([level]), mac).await?;
             Ok(json!({ "ok": true, "level": level }))
         }
         "set_brightness" => {
             let level = need_int(a, "level", 0, 100)?;
-            dc(sock, "device.set_brightness", json!([level]), mac).await?;
+            crate::mcp_daemon::dc(target, "device.set_brightness", json!([level]), mac).await?;
             Ok(json!({ "ok": true, "level": level }))
         }
-        "set_light_mode" => set_light_mode(a, sock).await,
-        "set_weather" => set_weather(a, sock).await,
-        "set_alarm" => set_alarm(a, sock).await,
+        "set_light_mode" => set_light_mode(a, target).await,
+        "set_weather" => set_weather(a, target).await,
+        "set_alarm" => set_alarm(a, target).await,
         "set_radio" => {
             let freq = need_int(a, "freq_x10", 875, 1080)?;
-            dc(sock, "radio.set_radio_frequency", json!([freq]), mac).await?;
+            crate::mcp_daemon::dc(target, "radio.set_radio_frequency", json!([freq]), mac).await?;
             Ok(json!({ "ok": true, "freq_x10": freq }))
         }
-        "set_low_power" => set_low_power(a, sock).await,
-        "set_screen_orientation" => set_screen_orientation(a, sock).await,
-        "show_image" => show_image(a, sock).await,
-        "push_animation" => push_animation(a, sock).await,
+        "set_low_power" => set_low_power(a, target).await,
+        "set_screen_orientation" => set_screen_orientation(a, target).await,
+        "show_image" => show_image(a, target).await,
+        "push_animation" => push_animation(a, target).await,
         "play_sound" => {
             let dur = need_int(a, "duration_ms", 100, 3000)?;
-            dc(sock, "control.set_hot", json!([1]), mac).await?;
+            crate::mcp_daemon::dc(target, "control.set_hot", json!([1]), mac).await?;
             Ok(json!({ "ok": true, "duration_ms": dur }))
         }
-        "get_capabilities" => cmd(sock, "device_status", json!({})).await,
-        "get_device_state" => get_device_state(a, sock).await,
-        "list_screens" => cmd(sock, "get_topology", json!({})).await,
+        "get_capabilities" => crate::mcp_daemon::cmd(target, "device_status", json!({})).await,
+        "get_device_state" => get_device_state(a, target).await,
+        "list_screens" => crate::mcp_daemon::cmd(target, "get_topology", json!({})).await,
         other => Err(format!("unknown tool: {other}")),
     }
 }
-async fn set_light_mode(a: &Value, sock: &str) -> Result<Value, String> {
+async fn set_light_mode(a: &Value, target: &DaemonTarget) -> Result<Value, String> {
     let mac = a.get("mac").and_then(Value::as_str);
 
     let mode = a
@@ -148,11 +149,11 @@ async fn set_light_mode(a: &Value, sock: &str) -> Result<Value, String> {
                 LIGHT_MODES.iter().map(|(n, _)| *n).collect::<Vec<_>>()
             )
         })?;
-    dc(sock, "control.set_light_mode", json!([channel]), mac).await?;
+    crate::mcp_daemon::dc(target, "control.set_light_mode", json!([channel]), mac).await?;
     Ok(json!({ "ok": true, "mode": mode, "channel": channel }))
 }
 
-async fn set_weather(a: &Value, sock: &str) -> Result<Value, String> {
+async fn set_weather(a: &Value, target: &DaemonTarget) -> Result<Value, String> {
     let mac = a.get("mac").and_then(Value::as_str);
 
     let temp = need_int(a, "temperature_c", -127, 128)?;
@@ -170,11 +171,11 @@ async fn set_weather(a: &Value, sock: &str) -> Result<Value, String> {
                 WEATHER_TYPES.iter().map(|(n, _)| *n).collect::<Vec<_>>()
             )
         })?;
-    dc(sock, "weather.set", json!([temp, wt]), mac).await?;
+    crate::mcp_daemon::dc(target, "weather.set", json!([temp, wt]), mac).await?;
     Ok(json!({ "ok": true, "temperature_c": temp, "weather": weather }))
 }
 
-async fn set_alarm(a: &Value, sock: &str) -> Result<Value, String> {
+async fn set_alarm(a: &Value, target: &DaemonTarget) -> Result<Value, String> {
     let mac = a.get("mac").and_then(Value::as_str);
 
     let index = need_int(a, "index", 0, 9)?;
@@ -187,8 +188,8 @@ async fn set_alarm(a: &Value, sock: &str) -> Result<Value, String> {
         .unwrap_or(true);
     let status = i32::from(enabled);
     // set_alarm(index, status, hour, minute, week, mode=0, trigger_mode=1)
-    dc(
-        sock,
+    crate::mcp_daemon::dc(
+        target,
         "alarm.set_alarm",
         json!([index, status, hour, minute, week, 0, 1]),
         mac,
@@ -199,15 +200,15 @@ async fn set_alarm(a: &Value, sock: &str) -> Result<Value, String> {
     )
 }
 
-async fn set_low_power(a: &Value, sock: &str) -> Result<Value, String> {
+async fn set_low_power(a: &Value, target: &DaemonTarget) -> Result<Value, String> {
     let mac = a.get("mac").and_then(Value::as_str);
 
     let enabled = a
         .get("enabled")
         .and_then(serde_json::Value::as_bool)
         .ok_or("enabled must be a boolean")?;
-    dc(
-        sock,
+    crate::mcp_daemon::dc(
+        target,
         "device.set_low_power_switch",
         json!([i32::from(enabled)]),
         mac,
@@ -216,7 +217,7 @@ async fn set_low_power(a: &Value, sock: &str) -> Result<Value, String> {
     Ok(json!({ "ok": true, "enabled": enabled }))
 }
 
-async fn set_screen_orientation(a: &Value, sock: &str) -> Result<Value, String> {
+async fn set_screen_orientation(a: &Value, target: &DaemonTarget) -> Result<Value, String> {
     let mac = a.get("mac").and_then(Value::as_str);
 
     let degrees = need_int(a, "degrees", 0, 270)?;
@@ -231,12 +232,12 @@ async fn set_screen_orientation(a: &Value, sock: &str) -> Result<Value, String> 
         .get("mirror")
         .and_then(serde_json::Value::as_bool)
         .unwrap_or(false);
-    dc(sock, "design.set_screen_dir", json!([dir]), mac).await?;
-    dc(sock, "design.set_screen_mirror", json!([mirror]), mac).await?;
+    crate::mcp_daemon::dc(target, "design.set_screen_dir", json!([dir]), mac).await?;
+    crate::mcp_daemon::dc(target, "design.set_screen_mirror", json!([mirror]), mac).await?;
     Ok(json!({ "ok": true, "degrees": degrees, "mirror": mirror }))
 }
 
-async fn show_image(a: &Value, sock: &str) -> Result<Value, String> {
+async fn show_image(a: &Value, target: &DaemonTarget) -> Result<Value, String> {
     let mac = a.get("mac").and_then(Value::as_str);
 
     let file = a
@@ -245,11 +246,11 @@ async fn show_image(a: &Value, sock: &str) -> Result<Value, String> {
         .filter(|s| !s.is_empty())
         .ok_or("file must be a non-empty local path string")?;
     let bytes = std::fs::read(file).map_err(|e| format!("cannot read {file}: {e}"))?;
-    push_image_bytes(sock, &bytes, mac).await?;
+    push_image_bytes(target, &bytes, mac).await?;
     Ok(json!({ "ok": true, "file": file }))
 }
 
-async fn push_animation(a: &Value, sock: &str) -> Result<Value, String> {
+async fn push_animation(a: &Value, target: &DaemonTarget) -> Result<Value, String> {
     let mac = a.get("mac").and_then(Value::as_str);
 
     let file = a
@@ -270,20 +271,24 @@ async fn push_animation(a: &Value, sock: &str) -> Result<Value, String> {
             .decode(data.unwrap())
             .map_err(|e| format!("invalid base64: {e}"))?
     };
-    push_image_bytes(sock, &bytes, mac).await?;
+    push_image_bytes(target, &bytes, mac).await?;
     Ok(
         json!({ "ok": true, "note": "pushed first frame (full animation streaming is a follow-up)" }),
     )
 }
 
-async fn get_device_state(a: &Value, sock: &str) -> Result<Value, String> {
+async fn get_device_state(a: &Value, target: &DaemonTarget) -> Result<Value, String> {
     let mac = a.get("mac").and_then(Value::as_str);
 
-    let volume = dc_result(sock, "music.get_volume", json!([]), mac).await;
-    let brightness = dc_result(sock, "device.get_brightness", json!([]), mac).await;
-    let light_mode = dc_result(sock, "control.get_light_mode", json!([]), mac).await;
-    let screen_dir = dc_result(sock, "design.get_screen_dir", json!([]), mac).await;
-    let mirror = dc_result(sock, "design.get_screen_mirror", json!([]), mac).await;
+    let volume = crate::mcp_daemon::dc_result(target, "music.get_volume", json!([]), mac).await;
+    let brightness =
+        crate::mcp_daemon::dc_result(target, "device.get_brightness", json!([]), mac).await;
+    let light_mode =
+        crate::mcp_daemon::dc_result(target, "control.get_light_mode", json!([]), mac).await;
+    let screen_dir =
+        crate::mcp_daemon::dc_result(target, "design.get_screen_dir", json!([]), mac).await;
+    let mirror =
+        crate::mcp_daemon::dc_result(target, "design.get_screen_mirror", json!([]), mac).await;
     Ok(json!({
         "volume": volume, "brightness": brightness, "light_mode": light_mode,
         "screen_orientation": screen_dir, "mirror": mirror,
@@ -312,14 +317,18 @@ fn opt_int(a: &Value, key: &str, lo: i64, hi: i64, default: i64) -> Result<i64, 
 
 /// Decode image bytes (PNG/JPG/GIF first frame) to a 16x16 RGB frame and push it
 /// via the daemon's `show_image` (rgb kwargs). Device size is 16 for now.
-async fn push_image_bytes(sock: &str, bytes: &[u8], mac: Option<&str>) -> Result<(), String> {
+async fn push_image_bytes(
+    target: &DaemonTarget,
+    bytes: &[u8],
+    mac: Option<&str>,
+) -> Result<(), String> {
     let img = image::load_from_memory(bytes).map_err(|e| format!("decode failed: {e}"))?;
     let small = img
         .resize_exact(16, 16, image::imageops::FilterType::Nearest)
         .to_rgb8();
     let rgb: Vec<u8> = small.into_raw();
-    dc_kw(
-        sock,
+    crate::mcp_daemon::dc_kw(
+        target,
         "show_image",
         json!({ "w": 16, "h": 16, "time_ms": 100, "rgb": rgb }),
         mac,
@@ -328,78 +337,85 @@ async fn push_image_bytes(sock: &str, bytes: &[u8], mac: Option<&str>) -> Result
     Ok(())
 }
 
-/// `device_call` with positional args; errors if the daemon reports failure.
-async fn dc(sock: &str, method: &str, args: Value, mac: Option<&str>) -> Result<Value, String> {
-    let mut payload = json!({ "method": method, "args": args });
-    if let Some(m) = mac {
-        payload["mac"] = json!(m);
-    }
-    let reply = cmd(sock, "device_call", payload).await?;
-    check(reply)
-}
-
-async fn dc_kw(
-    sock: &str,
-    method: &str,
-    kwargs: Value,
-    mac: Option<&str>,
-) -> Result<Value, String> {
-    let mut payload = json!({ "method": method, "args": [], "kwargs": kwargs });
-    if let Some(m) = mac {
-        payload["mac"] = json!(m);
-    }
-    let reply = cmd(sock, "device_call", payload).await?;
-    check(reply)
-}
-
-/// `device_call` returning the `result` value (None on failure) — for read tools.
-async fn dc_result(sock: &str, method: &str, args: Value, mac: Option<&str>) -> Value {
-    let mut payload = json!({ "method": method, "args": args });
-    if let Some(m) = mac {
-        payload["mac"] = json!(m);
-    }
-    match cmd(sock, "device_call", payload).await {
-        Ok(v) if v.get("success").and_then(serde_json::Value::as_bool) == Some(true) => {
-            v.get("result").cloned().unwrap_or(Value::Null)
-        }
-        _ => Value::Null,
-    }
-}
-
-fn check(reply: Value) -> Result<Value, String> {
-    if reply.get("success").and_then(serde_json::Value::as_bool) == Some(true) {
-        Ok(reply)
-    } else {
-        Err(reply
-            .get("error")
-            .and_then(|e| e.as_str())
-            .unwrap_or("device call failed")
-            .to_string())
-    }
-}
-
-/// One NDJSON request/reply against the daemon socket.
-async fn cmd(sock: &str, command: &str, args: Value) -> Result<Value, String> {
-    let stream = UnixStream::connect(sock)
-        .await
-        .map_err(|e| format!("daemon not reachable: {e}"))?;
-    let (read, mut write) = stream.into_split();
-    let mut buf = serde_json::to_vec(&json!({ "command": command, "args": args })).unwrap();
-    buf.push(b'\n');
-    write.write_all(&buf).await.map_err(|e| e.to_string())?;
-    write.flush().await.map_err(|e| e.to_string())?;
-    let mut reader = BufReader::new(read);
-    let mut line = String::new();
-    reader
-        .read_line(&mut line)
-        .await
-        .map_err(|e| e.to_string())?;
-    serde_json::from_str(&line).map_err(|e| format!("bad reply: {e}"))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::io::{AsyncBufReadExt, BufReader};
+
+    /// The remote path, proven end to end without a daemon: a real TCP listener
+    /// in-process, one real connection, and the request line read off the wire.
+    ///
+    /// This is the capability the Python shell had and this server did not, so it
+    /// is the test that decides whether 800 lines of second implementation can
+    /// go. A unit test of the token's presence in a JSON object would not be
+    /// enough: what can be wrong is that the connection is never opened, or the
+    /// token never reaches the bytes.
+    #[tokio::test]
+    async fn a_remote_daemon_gets_the_token_on_the_wire() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind an ephemeral port");
+        let port = listener.local_addr().expect("local addr").port();
+
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.expect("accept");
+            let (read, mut write) = stream.into_split();
+            let mut reader = BufReader::new(read);
+            let mut line = String::new();
+            reader.read_line(&mut line).await.expect("read request");
+            tokio::io::AsyncWriteExt::write_all(
+                &mut write,
+                b"{\"command\":\"device_call\",\"success\":true}\n",
+            )
+            .await
+            .expect("write reply");
+            line
+        });
+
+        let target = DaemonTarget::Remote {
+            host: "127.0.0.1".to_string(),
+            port,
+            token: Some("secret".to_string()),
+        };
+        let reply = call_tool("set_brightness", &json!({ "level": 50 }), &target)
+            .await
+            .expect("the remote call succeeds");
+
+        let sent = server.await.expect("server task");
+        let parsed: Value = serde_json::from_str(sent.trim()).expect("the request is JSON");
+        // The envelope is `device_call` with the tool's method inside it, which
+        // is the daemon's RPC shape (`dc`) — the first draft of this test
+        // expected the method at the top level and was wrong about the layer.
+        assert_eq!(parsed["command"], json!("device_call"));
+        assert_eq!(parsed["args"]["method"], json!("device.set_brightness"));
+        assert_eq!(parsed["args"]["args"], json!([50]));
+        assert_eq!(
+            parsed["token"],
+            json!("secret"),
+            "the token must be on the wire, not merely in the config: {sent}"
+        );
+        assert_eq!(
+            reply["ok"],
+            json!(true),
+            "the tool result, not the raw reply"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_unreachable_daemon_says_which_one() {
+        // Port 1 is reserved and nothing listens there; the message has to name
+        // the address, because "daemon not reachable" with no address is the
+        // error that costs an afternoon when the daemon is on another machine.
+        let target = DaemonTarget::Remote {
+            host: "127.0.0.1".to_string(),
+            port: 1,
+            token: None,
+        };
+        let err = crate::mcp_daemon::cmd(&target, "ping", json!({}))
+            .await
+            .expect_err("nothing is listening");
+        assert!(err.contains("127.0.0.1:1"), "unhelpful error: {err}");
+    }
     #[test]
     fn catalog_has_all_fourteen_tools() {
         let c = catalog();

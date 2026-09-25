@@ -10,6 +10,8 @@
 //! tools/list, tools/call, ping. Tool catalog + dispatch live in `mcp_tools`.
 
 use serde_json::{json, Value};
+
+use crate::daemon_target::DaemonTarget;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 /// Latest SEP-2575 protocol version: the default answer and the fallback
@@ -48,7 +50,11 @@ fn negotiate_protocol_version(requested: Option<&str>) -> &'static str {
 /// From the transport it serves on: stdin closed, or a reply could not be
 /// written.
 pub async fn run() -> std::io::Result<()> {
-    let sock = std::env::var("DIVOOM_SOCKET").unwrap_or_else(|_| "/tmp/divoom.sock".to_string());
+    // One target for the process, chosen from the environment exactly as the
+    // Python shell chose it — so `DIVOOM_DAEMON_HOST`/`_PORT`/`_TOKEN` reach a
+    // daemon on another machine, which is the one thing this server could not do
+    // before and the reason a second implementation existed.
+    let target = DaemonTarget::from_env();
     let mut reader = BufReader::new(tokio::io::stdin());
     let mut stdout = tokio::io::stdout();
     let mut line = String::new();
@@ -60,7 +66,7 @@ pub async fn run() -> std::io::Result<()> {
         if line.trim().is_empty() {
             continue;
         }
-        if let Some(resp) = handle_line(&line, &sock).await {
+        if let Some(resp) = handle_line(&line, &target).await {
             let mut out = serde_json::to_vec(&resp).unwrap_or_default();
             out.push(b'\n');
             stdout.write_all(&out).await?;
@@ -80,7 +86,7 @@ fn err(id: &Value, code: i64, message: &str) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
 }
 
-async fn handle_line(line: &str, sock: &str) -> Option<Value> {
+async fn handle_line(line: &str, target: &DaemonTarget) -> Option<Value> {
     let req: Value = match serde_json::from_str(line) {
         Ok(v) => v,
         Err(e) => return Some(err(&Value::Null, -32700, &format!("parse error: {e}"))),
@@ -122,7 +128,7 @@ async fn handle_line(line: &str, sock: &str) -> Option<Value> {
                 .get("arguments")
                 .cloned()
                 .unwrap_or_else(|| json!({}));
-            match crate::mcp_tools::call_tool(name, &args, sock).await {
+            match crate::mcp_tools::call_tool(name, &args, target).await {
                 Ok(value) => Ok(tool_content(&value, false)),
                 // Tool-level errors are returned as a result with isError, per MCP.
                 Err(e) => Ok(tool_content(&json!({ "error": e }), true)),

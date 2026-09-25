@@ -37,6 +37,7 @@ pub mod daemon_ble;
 pub mod daemon_connect;
 pub mod daemon_mock;
 mod daemon_status;
+pub mod daemon_target;
 pub mod device;
 pub mod device_call;
 pub mod framing;
@@ -49,6 +50,7 @@ pub mod live_jobs;
 #[cfg(target_os = "macos")]
 pub mod macos_notifications;
 pub mod mcp;
+pub mod mcp_daemon;
 pub mod mcp_tools;
 pub mod media;
 #[cfg(test)]

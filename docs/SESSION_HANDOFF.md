@@ -21,6 +21,34 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-25 — L5 unit 1 DONE (uncommitted): the native MCP reaches a remote
+  daemon, so the Python shell's last unique capability is closed.** Measured
+  first: the native catalog is a strict superset of the Python one (14 vs 13 =
+  the same 13 plus `list_screens`), so transport was the only thing keeping
+  ~860 lines of second implementation alive. `divoomd/src/daemon_target.rs` now
+  selects the daemon exactly as `divoom_client/daemon_protocol.py` does
+  (`DIVOOM_DAEMON_HOST`/`_PORT`/`_TOKEN` over `DIVOOM_SOCKET`), and the token
+  rides in the request BYTES — proven by a test that binds a real
+  `TcpListener` in-process and reads the request back off the wire.
+  `mcp_tools.rs` hit the 500-line cap doing it, so it split into `mcp_tools.rs`
+  (the MCP surface) + `mcp_daemon.rs` (the request/reply plumbing). `libloading`
+  left `divoomd/Cargo.toml` — `cargo machete` in gate step 15 flagged it as unused
+  the moment the FFI wrapper went, and it was removed rather than exempted.
+  `gen_commands.py` now runs `cargo fmt` on its own output, because regenerating
+  used to leave the tree failing the workspace fmt gate.
+  **Next for L5, in order:** (1) make `divoom-control mcp-server` delegate to
+  `divoomd mcp` so the entry point and its `--host/--port/--token` flags keep
+  working, then delete `divoom_lib/mcp_server.py` + `mcp_tools.py` — the test
+  surgery is the real work: 30 tests in `test_mcp_server.py`, 32 in
+  `test_mcp_tools.py`, plus `test_mcp_server_cli_stdio.py` and
+  `test_mcp_server_handle_edges.py`, all of which test the Python implementation
+  rather than the contract; the native side has only 4 tests, so the
+  consolidation should add native coverage rather than just delete Python tests.
+  (2) clap verbs for `cli_commands.py` (444 lines). Guard against the obvious
+  mistake: the delegation must be proven by an e2e that runs the real
+  `divoom-control mcp-server`, sends `tools/list`, and gets the 14 tools — not
+  by asserting the module was deleted.
+
 - **2026-09-25 — L4 COMPLETE (uncommitted): the C encoder chain is deleted, the
   daemon encodes in Rust.** `divoomd::image_encode` (0x49 frame, 0x44 static,
   32x32) and `divoomd::framing` (0x49/basic) replaced the library; the port is

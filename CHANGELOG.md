@@ -6,6 +6,39 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **The native MCP server can reach a daemon on another machine — the one
+  capability the Python shell had.** Measured before writing it: the native
+  catalog is a strict superset (14 tools against the Python shell's 13, which is
+  the same 13 plus `list_screens`), so the ONLY thing keeping a second
+  implementation alive was transport, and by the roadmap's own kill criterion
+  that is the thing to name and close. `divoomd/src/daemon_target.rs` selects the
+  daemon the way `divoom_client/daemon_protocol.py` always has —
+  `DIVOOM_DAEMON_HOST` (+ `_PORT`, default 9009, + `_TOKEN`) wins over
+  `DIVOOM_SOCKET` — and the request line carries `token` when there is one and
+  omits the key entirely when there is not.
+  Proven on a real socket, not in a unit: `a_remote_daemon_gets_the_token_on_the_wire`
+  binds a `TcpListener` in-process, takes a real connection, and reads the
+  request back off the wire to assert the token is in the BYTES — a test that
+  only checked the token in a JSON object would pass with the connection never
+  opened. `an_unreachable_daemon_says_which_one` pins that the error names
+  `host:port`, because "daemon not reachable" with no address is the error that
+  costs an afternoon when the daemon is on another box. Red-once: dropping the
+  token from the request fails both.
+  `mcp_tools.rs` passed the 500-line cap doing this, so it is split at the seam
+  that had just become real: `mcp_daemon.rs` is the request/reply plumbing,
+  `mcp_tools.rs` is the MCP surface.
+  **`libloading` is gone from `divoomd/Cargo.toml`** — it existed only to
+  `dlopen` the C library, and `cargo machete` (step 15 of the gate) said so
+  unprompted. Removed rather than added to an ignore list: the dependency really
+  is unused, and an exemption for something that is gone is a hole with a
+  comment on it.
+  **And a papercut the gate caught:** `scripts/codegen/gen_commands.py` emitted
+  unformatted Rust, so the documented regeneration command always left the tree
+  failing `cargo fmt --all -- --check`. It now runs `cargo fmt -p divoomd` on
+  what it wrote, so "regenerate" is one command that leaves a tree that passes.
+  Gate: 23 of 24 steps green; the one failure is pre-existing and environmental
+  (camoufox drifted to beta.30 against a beta.29 pin).
+
 - **The generic-ACK command set is typed.** `models::GENERIC_ACK_COMMANDS` was
   `[0x45, 0x05, 0x8A, 0x46, 0x42]` — hand-typed bytes sitting beside a generated
   model of the same protocol, with nothing comparing the two, where a typo is a

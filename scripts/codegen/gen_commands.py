@@ -37,6 +37,8 @@ guarantee.
 """
 
 import keyword
+import subprocess
+import sys
 from pathlib import Path
 
 from divoom_lib import models
@@ -290,6 +292,23 @@ def main():
     )
     for filename, lines in artefacts:
         (src / filename).write_text("\n".join(lines))
+
+    # Format what we just wrote, in the crate, before saying we are done.
+    #
+    # The emitted text is not rustfmt-clean (a 105-arm enum and a 109-entry
+    # table both have lines that want wrapping), so regenerating without this
+    # left the tree failing `cargo fmt --all -- --check` — which is the gate the
+    # repo runs. "Regenerate" is a documented single command; it has to leave a
+    # tree that passes, or everyone learns to run two and then forget the second.
+    formatted = subprocess.run(
+        ["cargo", "fmt", "-p", "divoomd"],
+        cwd=src.parent.parent,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if formatted.returncode != 0:
+        print(f"warning: cargo fmt did not run: {formatted.stderr.strip()}", file=sys.stderr)
     print(
         f"wrote {len(models.COMMANDS)} commands / {len(model)} ids -> "
         + " ".join(name for name, _ in artefacts)
