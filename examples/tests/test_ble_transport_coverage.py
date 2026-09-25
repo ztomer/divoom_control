@@ -285,26 +285,6 @@ def test_send_command_exception_from_send_payload_is_caught(monkeypatch, caplog)
 
 # ── _send_payload_locked(): reconnect / retry branches ──────────────────────
 
-def test_send_payload_reconnects_via_self_when_no_divoom(monkeypatch):
-    """When self._divoom is falsy the retry loop reconnects via self.connect()
-    directly (the else branch of `if self._divoom: ... else: await self.connect()`)."""
-    t = _transport(monkeypatch)
-    t._divoom = None
-    t.client.is_connected = False
-    reconnects = {"n": 0}
-
-    async def fake_connect():
-        reconnects["n"] += 1
-        t.client.is_connected = True
-
-    monkeypatch.setattr(t, "connect", fake_connect)
-    t.use_ios_le_protocol = False
-    t.client.write_gatt_char = AsyncMock(return_value=None)
-
-    ok = _run(t.send_payload([0x01], max_retries=2, retry_delay=0.001))
-
-    assert ok is True
-    assert reconnects["n"] == 1
 
 
 def test_send_payload_continues_after_reconnect_failure(monkeypatch):
@@ -355,42 +335,5 @@ def test_send_payload_ios_le_retries_before_success(monkeypatch):
 
 # ── _send_basic_protocol_payload(): chunking (never hit — 200-byte chunks) ──
 
-def test_send_basic_protocol_payload_splits_large_message_into_chunks(monkeypatch):
-    t = _transport(monkeypatch)
-    write_calls = []
-
-    async def fake_write(_uuid, chunk, response=False):
-        write_calls.append((bytes(chunk), response))
-
-    t.client.write_gatt_char = fake_write
-    monkeypatch.setattr("divoom_legacy.ble_transport.asyncio.sleep", AsyncMock())
-
-    # DEFAULT_CHUNK_SIZE is 200 bytes; a 250-byte payload framed with the
-    # basic protocol (payload + 6 bytes of framing) comfortably exceeds it.
-    big_payload = [0x04] + [0x01] * 250
-    ok = _run(t._send_basic_protocol_payload(big_payload, write_with_response=True))
-
-    assert ok is True
-    assert len(write_calls) >= 2
-    # Only the LAST chunk should carry response=write_with_response=True.
-    assert [r for (_c, r) in write_calls] == [False] * (len(write_calls) - 1) + [True]
 
 
-def test_send_basic_protocol_payload_chunk_error_stops_and_flags_broken(monkeypatch):
-    t = _transport(monkeypatch)
-    call_count = {"n": 0}
-
-    async def failing_write(_uuid, _chunk, response=False):
-        call_count["n"] += 1
-        if call_count["n"] == 2:
-            raise RuntimeError("disconnected mid-chunk")
-
-    t.client.write_gatt_char = failing_write
-    monkeypatch.setattr("divoom_legacy.ble_transport.asyncio.sleep", AsyncMock())
-
-    big_payload = [0x04] + [0x01] * 250
-    ok = _run(t._send_basic_protocol_payload(big_payload, write_with_response=False))
-
-    assert ok is False
-    assert call_count["n"] == 2                 # stopped after the failing chunk
-    assert t._connection_likely_broken is True

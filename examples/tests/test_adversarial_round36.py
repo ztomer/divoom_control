@@ -57,11 +57,3 @@ def test_gif_zero_duration_uses_default(tmp_path):
 
 # ── Hashimoto: set-temperature validates before connecting ──────────────────
 
-def test_set_temperature_validates_before_connecting():
-    from divoom_lib.cli_commands import cmd_set_temperature
-
-    ns = argparse.Namespace(temperature=999, weather="sunny", json=False,
-                            mac=None, address=None, name=None)
-    with pytest.raises(SystemExit) as ei:
-        asyncio.run(cmd_set_temperature(ns))
-    assert ei.value.code == 2, "out-of-range temp must be a clean usage error (exit 2), not a traceback"

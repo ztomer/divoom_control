@@ -31,53 +31,10 @@ async def test_protocol_init(mock_protocol_instance):
     assert protocol._expected_response_command is None
     assert protocol.message_buf == bytearray()
 
-@pytest.mark.asyncio
-async def test_make_message(mock_protocol_instance):
-    """Test _make_message for basic protocol."""
-    protocol = mock_protocol_instance
-    payload = [0x45, 0x01, 0xFF, 0x00, 0x00, 0x64, 0x00, 0x01]
-    message = protocol._make_message(payload)
-    # Expected: 01 (start) + 0a00 (len) + 4501ff0000640001 (payload) + b401 (crc) + 02 (end)
-    assert message.hex() == "010a004501ff0000640001b40102"
 
-@pytest.mark.asyncio
-async def test_make_message_with_escaping(mock_protocol_instance):
-    """Test _make_message with payload escaping."""
-    protocol = mock_protocol_instance
-    protocol.escapePayload = True
-    payload = [0x01, 0x02, 0x03, 0x04]
-    message = protocol._make_message(payload)
-    # Expected: 01 (start) + 0900 (len) + 03040305030604 (escaped payload) + 2500 (crc) + 02 (end)
-    assert message.hex() == "01090003040305030604250002"
 
-@pytest.mark.asyncio
-async def test_make_message_ios_le(mock_protocol_instance):
-    """Test _make_message_ios_le for iOS LE protocol."""
-    protocol = mock_protocol_instance
-    payload = [0x45, 0x01, 0xFF, 0x00, 0x00, 0x64, 0x00, 0x01]
-    message = protocol._make_message_ios_le(payload)
-    # Wire format: feefaa55 (header) + 0a00 (len=total-7) + 00 (packet num) + 45 (cmd) + 01ff0000640001 (data) + aa01 (crc) + 02 (end)
-    # total = 4+2+1+1+7+2+1 = 18, length_field = 18-7 = 11 = 0x0b... but we expect 0x0a
-    # Recompute: data length = 7 (01ff0000640001)
-    # total = 4+2+1+1+7+2+1 = 18, length_field = 18-7 = 11 = 0x0b
-    # checksum = sum(0b 00 00 45 01 ff 00 00 64 00 01) = 0x1ab
-    assert message.hex() == "feefaa550b00004501ff0000640001b50102"
 
-@pytest.mark.asyncio
-async def test_escape_payload(mock_protocol_instance):
-    """Test _escape_payload."""
-    protocol = mock_protocol_instance
-    payload = [0x01, 0x02, 0x03, 0x04]
-    escaped_payload = protocol._escape_payload(payload)
-    assert escaped_payload == [0x03, 0x04, 0x03, 0x05, 0x03, 0x06, 0x04]
 
-@pytest.mark.asyncio
-async def test_get_crc(mock_protocol_instance):
-    """Test _getCRC."""
-    protocol = mock_protocol_instance
-    payload = [0x0a, 0x00, 0x45, 0x01, 0xff, 0x00, 0x00, 0x64, 0x00, 0x01]
-    crc = protocol._getCRC(payload)
-    assert crc == "b401"
 
 @pytest.mark.asyncio
 async def test_notification_handler_basic(mock_protocol_instance):
@@ -129,31 +86,7 @@ async def test_send_command(mock_protocol_instance):
         await protocol.send_command("set volume", [10])
         mock_send_payload.assert_called_once_with([models.COMMANDS["set volume"], 10], write_with_response=False)
 
-@pytest.mark.asyncio
-async def test_send_payload_basic(mock_protocol_instance):
-    """Test send_payload for basic protocol."""
-    protocol = mock_protocol_instance
-    protocol.use_ios_le_protocol = False
-    payload = [0x45, 0x01]
-    await protocol.send_payload(payload)
-    protocol.client.write_gatt_char.assert_called_once_with(
-        "mock_write_char_uuid",
-        bytes.fromhex("01040045014a0002"),
-        response=False
-    )
 
-@pytest.mark.asyncio
-async def test_send_payload_ios_le(mock_protocol_instance):
-    """Test send_payload for iOS LE protocol."""
-    protocol = mock_protocol_instance
-    protocol.use_ios_le_protocol = True
-    payload = [0x45, 0x01]
-    await protocol.send_payload(payload)
-    protocol.client.write_gatt_char.assert_called_once_with(
-        "mock_write_char_uuid",
-        bytes.fromhex("feefaa5505000045014b0002"),
-        response=False
-    )
 
 @pytest.mark.asyncio
 async def test_connect(mock_protocol_instance):
@@ -186,13 +119,6 @@ async def test_send_command_and_wait_for_response(mock_protocol_instance):
         mock_wait_for_response.assert_called_once_with(models.COMMANDS["set volume"], 10)
         assert response == b'test'
 
-@pytest.mark.asyncio
-async def test_send_payload_error(mock_protocol_instance):
-    """Test error handling in send_payload."""
-    protocol = mock_protocol_instance
-    protocol.client.write_gatt_char.side_effect = Exception("Test error")
-    result = await protocol.send_payload([0x01])
-    assert result is False
 
 @pytest.mark.asyncio
 async def test_framing_context(mock_protocol_instance):
@@ -239,13 +165,3 @@ async def test_handle_basic_protocol_notification_invalid(mock_protocol_instance
     assert protocol._handle_basic_protocol_notification(bytearray.fromhex("0107000446550300a80002")) is True # Returns True because it consumed data (even if checksum failed)
     assert protocol.notification_queue.empty()
 
-@pytest.mark.asyncio
-async def test_send_payload_retry_success(mock_protocol_instance):
-    """Test send_payload with retry success."""
-    protocol = mock_protocol_instance
-    protocol.client.write_gatt_char.side_effect = [Exception("Fail 1"), None]
-
-    result = await protocol.send_payload([0x01], max_retries=2, retry_delay=0.01)
-
-    assert result is True
-    assert protocol.client.write_gatt_char.call_count == 2

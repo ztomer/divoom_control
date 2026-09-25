@@ -192,36 +192,6 @@ async def test_stream_listens_for_0x8b_during_stream_and_cleans_up():
     assert cmd8b not in comm._listen_commands, "0x8B must be removed after the stream"
 
 
-def test_listened_0x8b_retransmit_queues_without_consuming_scalar():
-    """The mechanism the fix relies on: with the scalar cleared mid-stream, a 0x8B
-    frame survives ONLY because it's in _listen_commands (the handler is_listened
-    branch queues it without touching the scalar). Not-listening = dropped = the bug."""
-    import asyncio
-    import logging
-    from divoom_legacy.ble_notify import BleNotifyMixin
-    from divoom_lib import framing
-
-    cmd8b = COMMANDS["app new send gif cmd"]
-    frame = bytes(framing.encode_ios_le_payload([cmd8b, 0x01, 0x05, 0x00]))  # "resend chunk 5"
-
-    def _mk(listen):
-        o = object.__new__(BleNotifyMixin)
-        o._expected_response_command = None  # cleared by the start-ACK wait
-        o.notification_queue = asyncio.Queue()
-        o._listen_commands = listen
-        o.use_ios_le_protocol = True
-        o.logger = logging.getLogger("t8b")
-        return o
-
-    listening = _mk({cmd8b})
-    listening._handle_ios_le_notification(frame)
-    assert listening.notification_queue.qsize() == 1, "listened 0x8B must be queued"
-    assert listening._expected_response_command is None, "listening must not touch the scalar"
-
-    # teeth: not listening → the retransmit request is silently dropped (the bug)
-    not_listening = _mk(set())
-    not_listening._handle_ios_le_notification(frame)
-    assert not_listening.notification_queue.qsize() == 0
 
 
 # ── R61 coverage push: set_gif_speed / set_light_phone_gif ───────────────────

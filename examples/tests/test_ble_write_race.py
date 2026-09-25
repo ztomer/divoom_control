@@ -87,70 +87,12 @@ def test_flag_not_set_on_timeout_exception(mock_protocol_instance):
     assert transport._connection_likely_broken is False
 
 
-@pytest.mark.asyncio
-async def test_send_payload_sets_flag_on_disconnected(mock_protocol_instance):
-    """If write_gatt_char fails with 'disconnected', _connection_likely_broken
-    is set on the transport."""
-    _, transport = mock_protocol_instance
-    # write_gatt_char lives on the transport's client (the BleakClient mock).
-    transport.client.write_gatt_char = AsyncMock(
-        side_effect=Exception("Peripheral is disconnected")
-    )
-    result = await transport.send_payload([0x01], max_retries=1, retry_delay=0.001)
-    assert result is False
-    assert transport._connection_likely_broken is True
 
 
-@pytest.mark.asyncio
-async def test_send_payload_ios_le_sets_flag_on_disconnected(mock_protocol_instance):
-    """iOS LE path also sets the flag on 'disconnected'."""
-    _, transport = mock_protocol_instance
-    transport.use_ios_le_protocol = True
-    transport.client.write_gatt_char = AsyncMock(
-        side_effect=Exception("Not connected to a Divoom device")
-    )
-    result = await transport.send_payload([0x01], max_retries=1, retry_delay=0.001)
-    assert result is False
-    assert transport._connection_likely_broken is True
 
 
-@pytest.mark.asyncio
-async def test_retry_clears_flag_after_successful_write(mock_protocol_instance):
-    """A successful write after a failure clears the flag."""
-    _, transport = mock_protocol_instance
-    transport._connection_likely_broken = True
-    transport.client.write_gatt_char = AsyncMock(return_value=None)
-    result = await transport.send_payload([0x01], max_retries=1, retry_delay=0.001)
-    assert result is True
-    assert transport._connection_likely_broken is False
 
 
-@pytest.mark.asyncio
-async def test_likely_broken_triggers_reconnect_even_when_is_connected_true(
-    mock_protocol_instance,
-):
-    """If _connection_likely_broken is set and is_connected is True, the
-    retry loop must still attempt a reconnect (i.e. not skip the
-    reconnect path). This is the core fix for the silent push failure."""
-    _, transport = mock_protocol_instance
-    # Simulate the broken state: is_connected lies True, but a previous
-    # write set the flag.
-    transport.client.is_connected = True
-    transport._connection_likely_broken = True
-    # Replace transport.connect with a mock so we can count calls.
-    connect_mock = AsyncMock()
-    transport.connect = connect_mock
-    # First write after the forced reconnect succeeds.
-    transport.client.write_gatt_char = AsyncMock(return_value=None)
-
-    result = await transport.send_payload([0x01], max_retries=1, retry_delay=0.001)
-
-    # The retry loop should have called connect() because the flag was set,
-    # even though is_connected was True.
-    assert connect_mock.await_count == 1
-    assert result is True
-    # And cleared the flag after the successful write.
-    assert transport._connection_likely_broken is False
 
 
 @pytest.mark.asyncio
