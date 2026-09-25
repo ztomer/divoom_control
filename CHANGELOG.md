@@ -6,6 +6,50 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **L4 step 2, and a mistake worth reading: the C is NOT gone, and the gate
+  now says so.** The Python half of the framing chain is finished —
+  `divoom_lib/framing.py` is parse-only, its two encoders and the ctypes loader
+  are deleted, and no shipped module frames any more. The IMAGE half of the same
+  library is still C, deliberately.
+  What happened: this round deleted `libdivoom_compact.dylib`,
+  `divoom_lib/native_src/*.c` and `scripts/build_libdivoom.sh`, on the reasoning
+  that the framing cutover had removed the last live caller. That was true of
+  the FRAMING functions and false of the library. `divoomd/src/native_encode.rs`
+  loads the same dylib for the image encoders, and there is no fallback: with it
+  absent, `wall.rs` returns false and `display.rs` answers "encoder not
+  available", so image display would have stopped working. The dylib, the
+  sources and the build script are RESTORED, and the deletion is deferred until
+  the 16x16 palette encoder, the 32x32 encoder, the 0x8B chunker and LANCZOS3
+  downsampling are ported and proven against `divoomd/tests/image_vectors.json`.
+  `tests/test_no_native_encoder_chain.py` (new) now encodes exactly that state:
+  no Python framing encoder anywhere shipped, the 550-vector record present and
+  dense, the C's consumers still naming it — AND the dylib and sources actually
+  present, because the first version of that gate passed with the dylib deleted
+  from the index. It asserted what depends on the library without asserting the
+  library was there, which is the exact hole my own mistake fell through.
+  Proven red-once in both directions: putting a Python encoder back reds the
+  gate; deleting the dylib from the index reds it.
+- **Round-trip coverage moved with the implementation.**
+  `tests/test_framing_both_impls.py` is deleted (both its subjects went: the C
+  and the Python encoder) and `divoomd/tests/framing_round_trip.rs` takes its
+  place — encode here, parse there, across the same dense length sweep, plus
+  several frames in one buffer, a truncated tail that must be kept rather than
+  guessed, and the ACK-shaped frame whose command id is read from the second
+  byte. Two properties it pins that the vector parity test cannot see: an
+  escaped frame does NOT round-trip (nothing on this host un-escapes; the
+  DEVICE does, so the expansion is asserted directly instead), and a payload
+  comes back without its command byte, because `BasicMessage` splits that out.
+- **Test fixtures read device bytes from the C's record.**
+  `tests/support/framing_fixtures.py` (new) is the one place a test gets a
+  frame: `basic_frame`, `ios_le_frame`, `longest_recorded`, all reading
+  `divoomd/tests/framing_vectors.json`, and all REFUSING a payload nobody
+  recorded rather than inventing plausible bytes. The alternative — typing hex
+  in each test — produced three wrong literals in the first draft (a length
+  field, a checksum, an end byte), each of which is a test that passes for the
+  wrong reason. `tests/test_framing_vectors.py` keeps its parse-side tests; its
+  two encode tests lost their subject and moved to the Rust parity test that
+  now owns framing.
+
 - **L4 cutover, step 1: the daemon frames, the bridge writes bytes.** The
   classic-SPP path no longer sends a payload across a process boundary for
   Python to frame. `divoomd` frames with `crate::framing` — the same encoder

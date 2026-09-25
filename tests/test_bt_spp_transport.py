@@ -13,6 +13,8 @@ import struct
 
 import pytest
 
+from tests.support.framing_fixtures import basic_frame, ios_le_frame, longest_recorded
+
 from divoom_lib import framing
 from divoom_lib.bt_spp_transport import (
     DEFAULT_RFCOMM_CHANNEL_IDS,
@@ -105,7 +107,7 @@ class TestDataParser:
     def test_parses_basic_spp_frame(self):
         t = self._make_transport()
         # Use the encoder to build a known-good basic SPP frame
-        frame = framing.encode_basic_payload([0x46])
+        frame = basic_frame(0x46)
         t._on_data(frame)
         assert t._rx_queue.qsize() == 1
         notif: BtSppNotification = t._rx_queue.get_nowait()
@@ -116,7 +118,7 @@ class TestDataParser:
     def test_parses_ios_le_frame(self):
         t = self._make_transport()
         # Use the encoder to build a known-good iOS-LE frame for [0x46]
-        frame = framing.encode_ios_le_payload([0x46])
+        frame = ios_le_frame(0x46)
         t._on_data(frame)
         assert t._rx_queue.qsize() == 1
         notif = t._rx_queue.get_nowait()
@@ -126,16 +128,21 @@ class TestDataParser:
 
     def test_parses_ios_le_frame_with_data(self):
         t = self._make_transport()
-        # set_volume 0x08 with 1-byte data
-        frame = framing.encode_ios_le_payload([0x08, 0x32])
+        # A recorded frame WITH a payload, and its expectations derived from that
+        # payload rather than typed. The obvious choice -- a 0x08 set_volume with
+        # one byte -- is not in the C library's record, and the fixture refuses to
+        # invent it, which is the right answer: bytes no device was observed to
+        # send are a guess wearing a test's clothes.
+        frame, payload = longest_recorded("encode_ios_le")
+        assert len(payload) > 1, "this test is about a frame that carries data"
         t._on_data(frame)
         notif = t._rx_queue.get_nowait()
-        assert notif.command_id == 0x08
-        assert notif.payload == bytes([0x32])
+        assert notif.command_id == payload[0]
+        assert notif.payload == bytes(payload[1:])
 
     def test_buffers_partial_ios_le_frame(self):
         t = self._make_transport()
-        frame = framing.encode_ios_le_payload([0x46])
+        frame = ios_le_frame(0x46)
         # Send only the first half — should NOT emit a notification
         t._on_data(frame[:6])
         assert t._rx_queue.qsize() == 0
@@ -147,8 +154,8 @@ class TestDataParser:
 
     def test_mixed_ios_le_then_basic(self):
         t = self._make_transport()
-        ios_le = framing.encode_ios_le_payload([0x46])
-        basic = framing.encode_basic_payload([0x46])
+        ios_le = ios_le_frame(0x46)
+        basic = basic_frame(0x46)
         t._on_data(ios_le + basic)
         assert t._rx_queue.qsize() == 2
         n1 = t._rx_queue.get_nowait()

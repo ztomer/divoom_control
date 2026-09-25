@@ -9,6 +9,22 @@ forward-looking one. Recover a round plan with
 
 ## Shipped
 
+- **Autonomous rustification (2026-09-25), phase L4 — the daemon frames, the
+  Python half of the C chain is gone, the image half is not**:
+  `divoom_client/spp_bridge.py` no longer receives a payload to frame — the
+  daemon frames with `divoomd::framing` (the same encoder the BLE path uses,
+  pinned to 550 C-derived vectors) and the co-process writes exact bytes, so
+  `divoom_lib/framing.py` is parse-only. Round-trip coverage moved with the
+  implementation (`divoomd/tests/framing_round_trip.rs`), and test fixtures read
+  device bytes from the C's record rather than from hex typed by hand.
+  **Still open, and ordered in `tests/test_no_native_encoder_chain.py`'s failure
+  message:** the daemon's image path (`divoomd/src/native_encode.rs`) has no
+  pure-Rust fallback, so the 16x16 palette encoder, the 32x32 encoder, the 0x8B
+  chunker and LANCZOS3 downsampling must be ported and proven against
+  `divoomd/tests/image_vectors.json` before the C, its sources and its build
+  script can be deleted. This round tried that deletion, found it broke image
+  display, and restored it.
+
 - **Autonomous rustification (2026-09-25), phase L2 — commands as a type**:
   `divoomd/src/commands.rs` carries a `Command` enum beside the name→id table
   (105 variants over 109 names, id-first because four protocol ids are spelled

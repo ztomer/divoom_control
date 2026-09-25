@@ -13,8 +13,6 @@ hardware tests are skipped by default. Run them against a real device with::
     pytest --run-hardware
 """
 
-import os
-import subprocess
 import sys
 import threading
 import pathlib
@@ -25,47 +23,14 @@ import pytest
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
-from divoom_lib.native_lib import library_path as _native_library_path
-_DYLIB = _native_library_path()  # platform-aware (.dylib/.so/.dll)
-_BUILD_SCRIPT = _REPO_ROOT / "scripts" / "build_libdivoom.sh"
-_C_SOURCES = [
-    _REPO_ROOT / "divoom_lib" / "native_src" / "compact.c",
-    _REPO_ROOT / "divoom_lib" / "native_src" / "downsample.c",
-    _REPO_ROOT / "divoom_lib" / "native_src" / "downsample_kernel.c",
-    _REPO_ROOT / "divoom_lib" / "native_src" / "image_encode.c",
-    _REPO_ROOT / "divoom_lib" / "native_src" / "image_encode_32.c",
-]
-
-
-def _dylib_is_stale() -> bool:
-    """True if the dylib is missing or older than any C source."""
-    if not _DYLIB.exists():
-        return True
-    lib_mtime = _DYLIB.stat().st_mtime
-    return any(src.exists() and src.stat().st_mtime > lib_mtime for src in _C_SOURCES)
-
-
-def pytest_configure(config):
-    """Rebuild the native dylib if it's missing or stale, so the dual-impl
-    correctness suite (tests/test_encoder_both_impls.py) actually exercises the
-    C encoder instead of silently skipping it. This is the anti-drift guarantee:
-    a C-source change can't ship untested. No-ops cleanly if there's no compiler.
-    Set DIVOOM_SKIP_NATIVE_BUILD=1 to opt out.
-    """
-    if os.environ.get("DIVOOM_SKIP_NATIVE_BUILD"):
-        return
-    if not _BUILD_SCRIPT.exists() or not _dylib_is_stale():
-        return
-    try:
-        subprocess.run(
-            ["bash", str(_BUILD_SCRIPT)],
-            cwd=str(_REPO_ROOT), check=True,
-            capture_output=True, text=True, timeout=120,
-        )
-        print(f"conftest: rebuilt {_DYLIB.name} (was missing/stale)")
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
-        # No compiler / build failure: the native tests will skip; Python still runs.
-        print(f"conftest: native dylib build skipped ({type(e).__name__})")
+# The native dylib this conftest used to rebuild on every run is GONE, with
+# the C sources and the build script (phase L4, 2026-09-25). The dual-impl
+# anti-drift guarantee it provided is now structural instead: the daemon's
+# `divoomd::framing` is asserted byte-for-byte against 550 vectors captured from
+# that library (divoomd/tests/framing_vectors.json), and
+# tests/test_no_native_encoder_chain.py fails the build if the library, its
+# sources or a `native_lib` import come back. Nothing needs rebuilding, so
+# nothing runs here.
 
 
 # Modules whose tests require a physically present Divoom device (they call

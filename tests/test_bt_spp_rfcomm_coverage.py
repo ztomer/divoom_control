@@ -21,9 +21,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from tests.support.framing_fixtures import basic_frame, longest_recorded
+
 from divoom_lib import models
-from divoom_lib.framing import encode_basic_payload, encode_ios_le_payload
 from divoom_lib.bt_spp_transport import BTSppTransport
+
+# The framing encoders are gone from Python (L4), so the bytes a DEVICE would
+# send come from the shared fixture, which reads them out of the C library's
+# own record rather than being typed here.
 
 
 def _t():
@@ -270,7 +275,7 @@ class TestOpenBlocking:
         assert t._open_event.is_set()
 
         # Inbound data is routed through outer._on_data and lands on the rx queue.
-        frame = encode_basic_payload([0x46])
+        frame = basic_frame(0x46)
         delegate.rfcommChannelData_data_length_(dev.open_channel, frame, len(frame))
         assert t._rx_queue.qsize() == 1
 
@@ -367,7 +372,7 @@ class TestOnDataEdgeCases:
         partial-frame branch: len(rx_buf) >= MIN_DATA_LENGTH but still < frame_len
         (line 172's `break`)."""
         t = self._make()
-        frame = encode_ios_le_payload([0x08, 0x01, 0x02, 0x03, 0x04, 0x05])
+        frame, frame_payload = longest_recorded("encode_ios_le")
         assert len(frame) >= models.IOS_LE_MIN_DATA_LENGTH + 4
         # Feed enough to pass the MIN_DATA_LENGTH gate but not the whole frame.
         partial = frame[: models.IOS_LE_MIN_DATA_LENGTH + 1]
@@ -379,7 +384,7 @@ class TestOnDataEdgeCases:
         t._on_data(frame[len(partial):])
         assert t._rx_queue.qsize() == 1
         notif = t._rx_queue.get_nowait()
-        assert notif.command_id == 0x08
+        assert notif.command_id == frame_payload[0]
 
     def test_parse_failure_resyncs_by_dropping_one_byte(self):
         """A full-length frame with a valid header/length but a corrupted end
@@ -395,7 +400,7 @@ class TestOnDataEdgeCases:
         body = bytes([0, 0x46, 0, 0, 0, 0x99])
         bogus = header + length_field + body
         assert len(bogus) == frame_len
-        good = encode_basic_payload([0x44])
+        good = basic_frame(0x44, 0x00, 0x0A)
 
         t._on_data(bogus + good)
 

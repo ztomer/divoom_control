@@ -65,8 +65,8 @@ def test_on_data_recovers_real_frame_after_corrupt_prefix():
     t = _t()
     t._rx_buf = bytearray()
     t._rx_queue = queue.Queue()
-    from divoom_lib.framing import encode_basic_payload
-    good = encode_basic_payload([0x44, 0x01])
+    from tests.support.framing_fixtures import basic_frame
+    good = basic_frame(0x44, 0x00, 0x0A)
     # a bogus iOS-LE header with an absurd length, then a real basic frame
     t._on_data(bytes(models.IOS_LE_HEADER) + b"\xff\xff" + bytes(good))
     got = []

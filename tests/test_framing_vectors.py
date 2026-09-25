@@ -25,16 +25,13 @@ def _h(b) -> str:
     return bytes(b).hex()
 
 
-def test_encode_basic_vectors_reproduce():
-    for c in VECTORS["encode_basic"]:
-        got = framing.encode_basic_payload(c["payload"], escape=c["escape"])
-        assert _h(got) == c["out"], f"encode_basic({c['payload']}, escape={c['escape']})"
-
-
-def test_encode_ios_le_vectors_reproduce():
-    for c in VECTORS["encode_ios_le"]:
-        got = framing.encode_ios_le_payload(c["payload"], packet_number=c["packet"])
-        assert _h(got) == c["out"], f"encode_ios_le({c['payload']}, packet={c['packet']})"
+# The two ENCODE tests that lived here are gone with the encoders (L4: the
+# daemon frames, `divoom_lib/framing` is parse-only). Their subject moved rather
+# than vanished: `divoomd/tests/framing_parity.rs` asserts every one of these
+# vectors byte for byte against the Rust encoder, which is the implementation
+# that now owns framing. Keeping a Python test that re-implements framing to
+# check a Rust encoder would be a third implementation, which is the thing this
+# phase removed.
 
 
 def test_parse_ios_le_vectors_reproduce():

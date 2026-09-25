@@ -21,6 +21,42 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-25 — L4 step 2 DONE (uncommitted): the Python framing half is gone;
+  the C stays, and the gate now says which is which.** `divoom_lib/framing.py` is
+  parse-only (its two encoders and the ctypes loader deleted);
+  `tests/test_framing_both_impls.py` deleted, its round-trip coverage moved to
+  `divoomd/tests/framing_round_trip.rs`; test fixtures that need device bytes get
+  them from `tests/support/framing_fixtures.py`, which reads the C's own
+  550-vector record and REFUSES an unrecorded payload rather than inventing
+  bytes (three hand-typed literals in the first draft were wrong — a length
+  field, a checksum, an end byte).
+  **The mistake, since the next session will hit the same edge:** this round
+  deleted `libdivoom_compact.dylib`, `divoom_lib/native_src/*.c` and
+  `scripts/build_libdivoom.sh` because the framing cutover had removed the last
+  live caller — true of the framing functions, false of the library.
+  `divoomd/src/native_encode.rs` loads the SAME dylib for the image encoders and
+  there is no fallback: without it `wall.rs` returns false and `display.rs`
+  answers "encoder not available", so image display breaks. All of it is
+  RESTORED (the build script was re-verified by rebuilding; the committed binary
+  is unchanged, so the diff carries no artifact churn).
+  `tests/test_no_native_encoder_chain.py` encodes the true state and would have
+  caught it: no Python framing encoder shipped, the vector record present and
+  dense, the C's consumers still naming it, AND the dylib plus sources actually
+  present. The first version of that gate PASSED with the dylib removed from the
+  index — it asserted what depends on the library without asserting the library
+  was there, which is the hole the mistake fell through. Red-once proven both
+  ways since.
+  **What L4 still needs, in order:** port the 16x16 palette encoder, the 32x32
+  encoder, the 0x8B chunker and LANCZOS3 downsampling to Rust; prove them
+  against `divoomd/tests/image_vectors.json` and
+  `divoomd/tests/native_encode_parity.rs`; make `display.rs` stop refusing when
+  no encoder is present; THEN delete the C, the sources and the build script,
+  and delete `test_the_c_library_the_image_path_needs_is_actually_present` and
+  `test_the_image_half_is_still_c_on_purpose` with them. The gate names that
+  order in its failure message so the next session does not have to remember it.
+  Verified: 323 Rust tests, clippy 0, 1559 Python tests (1 pre-existing
+  environmental failure: camoufox drifted to beta.30 against a beta.29 pin).
+
 - **2026-09-25 — L4 cutover step 1 DONE (uncommitted): the daemon frames, the
   bridge writes bytes.** `divoomd/src/spp_bridge_protocol.rs` (new) owns the
   co-process message contract; `spp.rs::send_command` now calls
