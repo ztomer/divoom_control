@@ -6,6 +6,41 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **`divoom-control set-alarm` now sets a trigger the device understands.** The
+  CLI sent `trigger_mode = 0`, a value the reference implementation never
+  documents: `examples/divoom_legacy/scheduling/alarm.py` defines the field as
+  `ALARM_TRIGGER_MUSIC=1` / `ALARM_TRIGGER_GIF=4`, and its own usage example
+  passes `1`. The byte went on the wire either way, so this was a real
+  difference between the CLI and the MCP tool, which sends the documented `1`.
+  Routing the verb through the shared call fixes it: the CLI now sends `1`
+  (MUSIC), which is what the reference does. **This is a behaviour change, not a
+  refactor** — anyone who was relying on `0` gets `1`. The alarm time, the
+  index and the every-day mask are unchanged.
+  Two tests pin the byte: the verb's own and the tool's, both red-once against
+  `0`.
+- **The last three device verbs moved to `divoomd`, so all seven are Rust.**
+  `set-radio`, `set-alarm` and `set-temperature` join the other four. What stayed
+  behind is the **capability check**: the table that knows which panels have a
+  radio or an alarm is Python's alone, and the daemon has no capability table at
+  all. So the refusal is client policy and it is asserted to happen BEFORE the
+  handoff — after the handoff there would be no point in it, since the call would
+  already be on its way to a panel that cannot do it. The name→wire table for
+  weather icons moved to `divoomd/src/mcp_tools.rs` with the rest of the weather
+  mapping, and the CLI passes the icon NAME across; passing the number would have
+  frozen a second copy of that table in Python, which is the drift
+  `tools/check_weather_parity.py` exists to catch.
+  `divoomd` also learned to print an FM frequency without a lossy `as f64` cast
+  (`87.5` is exactly "87.5" in integer math), and the argument collector became
+  its own type so the flag loop is written once rather than seven times.
+  Tests split three ways by KIND, which is what kept every file under the
+  500-line cap: `test_cli_device_verbs.py` is the END TO END (real entry point,
+  real daemon), `test_cli_device_verb_units.py` is the UNITS (`os.execv`
+  instrumented — which binary, which argv, which refusals happen first), and
+  `test_cli_commands_coverage.py` keeps the shared helpers and the non-device
+  commands. A botched scripted move that duplicated content across the two was
+  caught by the cap and repaired by restoring from the commit and splitting on
+  section markers — the cap did its job.
+
 - **The CLI's device verbs run in `divoomd`, so a device command has one
   implementation.** `divoomd set-volume N`, `set-brightness N`, `push-image PATH`
   and `push-gif PATH` are subcommands of the daemon binary, and the four

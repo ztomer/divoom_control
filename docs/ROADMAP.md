@@ -9,26 +9,38 @@ forward-looking one. Recover a round plan with
 
 ## Shipped
 
-- **Autonomous rustification (2026-09-25), phase L5 unit 2 — the CLI's device
-  verbs run in `divoomd`.** `divoomd set-volume N`, `set-brightness N`,
-  `push-image PATH` and `push-gif PATH` are subcommands of the daemon binary, and
-  the four `divoom-control` verbs `execv` them, so a device command has ONE
-  implementation. The two numeric verbs share the MCP tool's argument bounds and
-  its `device_call` rather than restating them; the image verbs deliberately do
-  NOT go through the MCP `show_image` tool, because that one resizes to a
-  hardcoded 16x16 in the client while the daemon's handler takes the path and
-  sizes to the panel — routing them through it would quietly shrink every 64x64
-  push. A test asserts the argument is the path, red-once against the tool route.
-  `set-radio`, `set-alarm` and `set-temperature` deliberately stayed in Python:
-  they refuse on panels that lack the feature, and the table that knows which
-  panels lack it exists only in Python. Porting them means porting the table, and
-  two tables is what `tools/check_weather_parity.py` exists to prevent. That is a
-  decision to make on purpose, not an omission.
-  `tests/test_cli_device_verbs.py` proves it with the real entry point against a
-  real BLE-free daemon, calibrated RED against the Python implementation. It also
-  found what the handoff had to get right: the delegation must export the socket
-  the Python side just used, or the child talks to a different daemon — on a
-  user's machine, either a confusing "not reachable" or the wrong one.
+- **Autonomous rustification (2026-09-25), phases L5 units 2-3 — all seven of
+  the CLI's device verbs run in `divoomd`.**
+  `divoomd` gained `set-volume`, `set-brightness`, `push-image`, `push-gif`,
+  `set-radio`, `set-alarm` and `set-temperature` (`divoomd/src/verbs.rs` +
+  `verbs_tests.rs`), and the `divoom-control` verbs `execv` them, so a device
+  command has ONE implementation. The numeric verbs share the MCP tool's
+  argument bounds and its `device_call` rather than restating them.
+  The image verbs deliberately do NOT go through the MCP `show_image` tool:
+  that one decodes in the client and resizes to a hardcoded 16x16 while the
+  daemon's handler takes the path and sizes to the panel, so sharing it would
+  have quietly shrunk every 64x64 push. A test asserts the argument is the path,
+  red-once against the tool route.
+  **What stayed in Python is policy, not device code**: `resolve_target_mac`
+  (the daemon refuses helpfully when several panels are linked, but does not scan
+  when none is linked nor connect one that is known but down) and the
+  **capability check** for the radio/alarm/weather verbs — the table that knows
+  which panels lack a feature is Python's alone, and the daemon has no
+  capability table at all. Both refusals are asserted to happen BEFORE the
+  handoff, because after it there would be no point in them.
+  **One behaviour change, and it is a fix:** `set-alarm` used to send
+  `trigger_mode=0`, which the reference implementation never documents — it
+  defines the field as `ALARM_TRIGGER_MUSIC=1` / `ALARM_TRIGGER_GIF=4` and its
+  own usage example passes `1`. The byte went on the wire either way, so the CLI
+  and the MCP tool disagreed; the shared call now sends the documented `1`. Two
+  tests pin that byte, red-once against `0`.
+  Proof: `tests/test_cli_device_verbs.py` runs the real entry point against a
+  real BLE-free daemon, calibrated RED against the Python implementation, and it
+  found what the handoff had to get right — the delegation must export the
+  socket the Python side just used, or the child talks to a different daemon.
+  `tests/test_cli_device_verb_units.py` covers the handlers with `os.execv`
+  instrumented. The three test files are split BY KIND (end-to-end, units,
+  shared-helper coverage), which is what kept each under the 500-line cap.
   Two pre-existing defects fixed on the way:
   - **`--socket` now exists on every verb.** It was on `mcp-server` and `daemon`
     only, so every device verb was pinned to `/tmp/divoom.sock`: a dev daemon on

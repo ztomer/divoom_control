@@ -153,6 +153,23 @@ async fn set_light_mode(a: &Value, target: &DaemonTarget) -> Result<Value, Strin
     Ok(json!({ "ok": true, "mode": mode, "channel": channel }))
 }
 
+/// The wire value for a weather icon name.
+///
+/// `pub(crate)` because the `set-temperature` CLI verb validates the name with
+/// it, before a panel is resolved. One table, one place that can be wrong.
+pub(crate) fn weather_id(name: &str) -> Result<i64, String> {
+    WEATHER_TYPES
+        .iter()
+        .find(|(n, _)| *n == name)
+        .map(|(_, t)| *t)
+        .ok_or_else(|| {
+            format!(
+                "weather must be one of {:?}",
+                WEATHER_TYPES.iter().map(|(n, _)| *n).collect::<Vec<_>>()
+            )
+        })
+}
+
 async fn set_weather(a: &Value, target: &DaemonTarget) -> Result<Value, String> {
     let mac = a.get("mac").and_then(Value::as_str);
 
@@ -161,16 +178,7 @@ async fn set_weather(a: &Value, target: &DaemonTarget) -> Result<Value, String> 
         .get("weather")
         .and_then(|v| v.as_str())
         .ok_or("weather must be a string")?;
-    let wt = WEATHER_TYPES
-        .iter()
-        .find(|(n, _)| *n == weather)
-        .map(|(_, t)| *t)
-        .ok_or_else(|| {
-            format!(
-                "weather must be one of {:?}",
-                WEATHER_TYPES.iter().map(|(n, _)| *n).collect::<Vec<_>>()
-            )
-        })?;
+    let wt = weather_id(weather)?;
     crate::mcp_daemon::dc(target, "weather.set", json!([temp, wt]), mac).await?;
     Ok(json!({ "ok": true, "temperature_c": temp, "weather": weather }))
 }

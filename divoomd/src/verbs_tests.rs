@@ -53,6 +53,9 @@ fn every_advertised_verb_parses() {
         let argv: Vec<&str> = match *name {
             "set-volume" => vec![name, "5"],
             "set-brightness" => vec![name, "50"],
+            "set-radio" => vec![name, "875"],
+            "set-alarm" => vec![name, "07:30"],
+            "set-temperature" => vec![name, "20", "clear"],
             _ => vec![name, "/etc/hosts"],
         };
         let parsed = verb(&argv);
@@ -63,7 +66,7 @@ fn every_advertised_verb_parses() {
     }
     assert_eq!(
         VERB_NAMES.len(),
-        4,
+        7,
         "a verb was added without a test case above"
     );
 }
@@ -277,4 +280,146 @@ async fn an_unreachable_daemon_names_the_socket() {
         .await
         .expect_err("nothing is listening");
     assert!(err.contains("divoom-test.sock"), "unhelpful error: {err}");
+}
+
+// ── the capability-gated three ──────────────────────────────────────────
+//
+// These moved with the others even though the CAPABILITY check that guards them
+// stayed in Python: the table that knows which panels lack a radio lives only in
+// Python, and the daemon has no capability table. The check is client policy;
+// the device command is not.
+
+#[test]
+fn an_alarm_time_is_parsed_as_a_24_hour_clock() {
+    assert_eq!(
+        verb(&["set-alarm", "07:30"]).expect("07:30").verb,
+        Verb::SetAlarm {
+            time: "07:30".to_string(),
+            hour: 7,
+            minute: 30
+        }
+    );
+    // Single digits and midnight, the two forms a person actually types.
+    assert!(matches!(
+        verb(&["set-alarm", "7:05"]).expect("7:05").verb,
+        Verb::SetAlarm {
+            hour: 7,
+            minute: 5,
+            ..
+        }
+    ));
+    assert!(matches!(
+        verb(&["set-alarm", "00:00"]).expect("midnight").verb,
+        Verb::SetAlarm {
+            hour: 0,
+            minute: 0,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn a_malformed_alarm_time_says_what_the_format_is() {
+    // The user typed a time; the error has to show the format, not "invalid".
+    for (input, because) in [
+        ("7", "no colon"),
+        ("7:5:1", "too many parts"),
+        ("25:00", "hour out of range"),
+        ("07:60", "minute out of range"),
+        ("aa:bb", "not numbers"),
+        ("-1:00", "negative hour"),
+    ] {
+        let err = verb(&["set-alarm", input]).expect_err(&format!("{input:?}: {because}"));
+        assert!(!err.is_empty(), "{input:?} produced an empty error");
+    }
+    let err = verb(&["set-alarm", "7"]).expect_err("no colon");
+    assert!(err.contains("HH:MM"), "the format must be shown: {err}");
+    let err = verb(&["set-alarm", "25:00"]).expect_err("hour out of range");
+    assert!(err.contains("0..23"), "the range must be shown: {err}");
+    assert!(err.contains("25"), "and the value echoed back: {err}");
+}
+
+#[test]
+fn a_weather_icon_is_validated_before_anything_else() {
+    assert!(matches!(
+        verb(&["set-temperature", "20", "clear"])
+            .expect("clear is in the table")
+            .verb,
+        Verb::SetTemperature {
+            temperature: 20,
+            ..
+        }
+    ));
+    // An unknown icon is refused here, so the CLI never resolves a panel for it.
+    let err = verb(&["set-temperature", "20", "meteor-shower"]).expect_err("not in the table");
+    assert!(err.contains("weather must be one of"), "{err}");
+    let err = verb(&["set-temperature", "200", "clear"]).expect_err("out of range");
+    assert!(err.contains("-127..128"), "the range must be shown: {err}");
+}
+
+#[test]
+fn a_radio_frequency_is_bounded_like_the_tool() {
+    for (input, why) in [("874", "below the band"), ("1081", "above it")] {
+        let err = verb(&["set-radio", input]).expect_err(&format!("{input}: {why}"));
+        assert!(
+            err.contains("875..1080"),
+            "{input}: the band must be shown: {err}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn set_radio_sends_the_tools_call() {
+    let daemon = FakeDaemon::start(json!({}), None).await;
+    let request = verb(&["set-radio", "911"]).expect("parses");
+    let outcome = run(&request, &daemon.target)
+        .await
+        .expect("the call succeeds");
+    assert_eq!(outcome.human, "tuned FM to 91.1 MHz");
+    let sent = daemon.requests();
+    assert_eq!(
+        sent[0]["args"]["method"],
+        json!("radio.set_radio_frequency")
+    );
+    assert_eq!(sent[0]["args"]["args"], json!([911]));
+}
+
+#[tokio::test]
+async fn an_alarm_sends_alarm_zero_every_day() {
+    // Seven positional arguments in a fixed order, and the byte that changed:
+    // the CLI used to send trigger_mode 0, the reference documents 1 (MUSIC).
+    let daemon = FakeDaemon::start(json!({}), None).await;
+    let request = verb(&["set-alarm", "07:30"]).expect("parses");
+    let outcome = run(&request, &daemon.target)
+        .await
+        .expect("the call succeeds");
+    assert!(outcome.human.contains("07:30"), "{}", outcome.human);
+
+    let sent = daemon.requests();
+    assert_eq!(sent[0]["args"]["method"], json!("alarm.set_alarm"));
+    assert_eq!(
+        sent[0]["args"]["args"],
+        json!([0, 1, 7, 30, 127, 0, 1]),
+        "index, status(on), hour, minute, all-days, mode, trigger(MUSIC)"
+    );
+}
+
+#[tokio::test]
+async fn the_weather_verb_sends_the_temperature_and_the_icon() {
+    let daemon = FakeDaemon::start(json!({}), None).await;
+    let request = verb(&["set-temperature", "-5", "snow"]).expect("parses");
+    let outcome = run(&request, &daemon.target)
+        .await
+        .expect("the call succeeds");
+    assert!(outcome.human.contains("-5"), "{}", outcome.human);
+    assert!(outcome.human.contains("snow"), "{}", outcome.human);
+
+    let sent = daemon.requests();
+    assert_eq!(sent[0]["args"]["method"], json!("weather.set"));
+    // [temperature, icon] — and the icon is the WIRE value, not the name.
+    assert_eq!(
+        sent[0]["args"]["args"],
+        json!([-5, 8]),
+        "snow is icon 8 on the wire"
+    );
 }

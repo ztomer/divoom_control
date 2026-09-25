@@ -21,6 +21,48 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-09-25 — L5 COMPLETE: every device verb is a `divoomd` subcommand.**
+  `set-radio`, `set-alarm` and `set-temperature` joined the other four, so the
+  phase is done: one MCP server (Rust) and seven device verbs (Rust). The
+  `divoomd/src/verbs.rs` argument collector is its own `Invocation` type so the
+  flag loop is written once rather than seven times, and the FM text uses integer
+  math because `freq_x10 as f64` can lose precision.
+  **What stayed in Python is policy, not device code**, and this is the line to
+  remember: `resolve_target_mac` (scan-when-empty and connect-when-down, which
+  the daemon's `resolve_target` does not do) and the **capability check** for
+  the three gated verbs (the table that knows which panels lack a radio or an
+  alarm is Python's alone; the daemon has no capability table at all). Both
+  refusals are asserted to run BEFORE the handoff — after it they would be
+  pointless, the call already being on its way.
+  **One behaviour change, and it is a fix, not a refactor:** `set-alarm` used to
+  send `trigger_mode=0`. The reference implementation never documents that value
+  — `examples/divoom_legacy/scheduling/alarm.py` defines the field as
+  `ALARM_TRIGGER_MUSIC=1` / `ALARM_TRIGGER_GIF=4` and its own usage example
+  passes `1` — and the byte went on the wire either way, so the CLI and the MCP
+  tool disagreed about it. The shared call now sends the documented `1`. Two tests
+  pin that byte, each red-once against `0`.
+  The weather icon NAME crosses the boundary rather than its wire value, because
+  the name→id table moved into `divoomd/src/mcp_tools.rs` with the rest of the
+  weather mapping; passing the number would have frozen a second copy of that
+  table in Python, which is the drift `tools/check_weather_parity.py` exists to
+  catch. The CLI takes the icon as `--weather` and the native verb takes it
+  positionally — each surface keeps its own grammar, translated at the handoff.
+  **Test layout, which is worth copying:** three files split BY KIND, not by
+  accident. `test_cli_device_verbs.py` is END TO END (real entry point, real
+  BLE-free daemon); `test_cli_device_verb_units.py` is UNITS (`os.execv`
+  instrumented — which binary, which argv, which refusals happen first);
+  `test_cli_commands_coverage.py` keeps the shared helpers and the non-device
+  commands. A scripted move that duplicated content across the first two was
+  caught by the 500-line cap; the repair was to restore from the commit and split
+  on section markers. The cap has now caught this three times in two rounds and
+  has never been wrong.
+  **Verified:** `cargo test -p divoomd --no-default-features` 307 passed;
+    `divoom-menubar` 25; clippy `-D warnings` clean; `pytest` 1483 passed /
+    125 skipped; gate 23/24, the one failure being the pre-existing camoufox
+    beta.30-installed / beta.29-pinned drift.
+  **Next: L5 is done.** The plan's remaining items are koffee_big's JNI shims and
+  `EngineAvailability` (units 3-4), then the §5 survey-or-drop decision.
+
 - **2026-09-25 — L5 unit 3 DONE: the CLI's device verbs run in `divoomd`.**
   `divoomd` gained `set-volume`, `set-brightness`, `push-image` and `push-gif`
   (`divoomd/src/verbs.rs` + `verbs_tests.rs`, 17 tests), and the four

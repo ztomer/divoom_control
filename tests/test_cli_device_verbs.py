@@ -162,6 +162,46 @@ def test_an_out_of_range_value_is_refused_before_the_daemon_is_touched(live_daem
     )
 
 
+def test_the_weather_verb_reaches_the_native_verb(live_daemon) -> None:
+    # The baseline capability table has has_weather=True, so this needs no
+    # --type: it is the mock panel's documented default.
+    proc = _run("set-temperature", "18", "--weather", "clear", "--socket", live_daemon)
+    assert proc.returncode == 0, f"stderr:\n{proc.stderr}"
+    assert "18" in proc.stdout and "clear" in proc.stdout, proc.stdout
+
+
+def test_the_radio_verb_reaches_the_native_verb(live_daemon) -> None:
+    # FM is NOT in the baseline table, so the capability check refuses unless a
+    # type with a radio is named. That refusal is the point: it proves the check
+    # is still in Python and still runs BEFORE the handoff.
+    refused = _run("set-radio", "911", "--socket", live_daemon)
+    assert refused.returncode == 1, refused
+    assert "has no FM radio" in refused.stderr, refused.stderr
+    assert "handing off" not in refused.stderr, (
+        f"it must not have reached divoomd: {refused.stderr}"
+    )
+
+    # With a radio-capable type it goes through. DITOO is in the table.
+    proc = _run("set-radio", "911", "--type", "DITOO", "--socket", live_daemon)
+    assert proc.returncode == 0, f"stderr:\n{proc.stderr}"
+    assert "91.1 MHz" in proc.stdout, proc.stdout
+
+
+def test_the_alarm_verb_reaches_the_native_verb(live_daemon) -> None:
+    proc = _run("set-alarm", "07:30", "--socket", live_daemon)
+    assert proc.returncode == 0, f"stderr:\n{proc.stderr}"
+    assert "07:30" in proc.stdout, proc.stdout
+
+
+def test_a_malformed_alarm_time_is_refused_by_the_native_verb(live_daemon) -> None:
+    """`25:00` passes the CLI's own split-and-int check and is caught by the
+    native one, which knows the ranges. Both are needed: the CLI's catches a
+    non-number, the native's catches an impossible hour."""
+    proc = _run("set-alarm", "25:00", "--socket", live_daemon)
+    assert proc.returncode != 0, proc
+    assert "0..23" in proc.stderr, proc.stderr
+
+
 def test_a_missing_daemon_still_says_what_to_start(live_daemon, tmp_path) -> None:
     """The delegation must not cost the CLI its best error message.
 

@@ -181,41 +181,44 @@ async def cmd_set_brightness(args: argparse.Namespace) -> int:
 
 
 async def cmd_set_radio(args: argparse.Namespace) -> int:
-    d, mac = await _resolve_device(args)
-    try:
-        if not _capabilities(args, mac).has_fm:
-            cli_commands._err(f"device {mac} has no FM radio (capabilities.has_fm=False)", 1)
-        ok = await d.radio.set_radio_frequency(args.freq_x10)
-        mhz = args.freq_x10 / 10.0
-        cli_commands._print(f"tuned FM to {mhz:.1f} MHz (ok={ok})", as_json=args.json)
-        return 0 if ok else 1
-    finally:
-        pass  # the daemon keeps the link; the CLI never hangs up a panel
+    """Tune the FM radio. The band is checked in `divoomd`; the CAPABILITY is
+    checked here, because the table that knows which panels have a radio is
+    Python's alone."""
+    mac = await resolve_target_mac(args)
+    if not _capabilities(args, mac).has_fm:
+        cli_commands._err(f"device {mac} has no FM radio (capabilities.has_fm=False)", 1)
+    _delegate_device_verb("set-radio", [str(args.freq_x10)], mac, args)
 
 
 async def cmd_set_alarm(args: argparse.Namespace) -> int:
-    """Set alarm 0 to HH:MM on every day (127 = all days).
-    Note: a full alarm editor is the GUI's job; this is the scriptable path."""
+    """Set alarm 0 to HH:MM on every day.
+
+    Note: a full alarm editor is the GUI's job; this is the scriptable path.
+    The time is still validated here, before a panel is resolved, so a typo is
+    reported without reaching for the radio — `divoomd` validates it again for
+    anyone calling the verb directly.
+    """
     try:
         hh, mm = args.time.split(":")
         hh, mm = int(hh), int(mm)
     except ValueError:
         cli_commands._err("time must be HH:MM (24h)", 2)
-    d, mac = await _resolve_device(args)
-    try:
-        if not _capabilities(args, mac).has_alarm:
-            cli_commands._err(f"device {mac} has no alarm (capabilities.has_alarm=False)", 1)
-        # Signature: set_alarm(alarm_index, status, hour, minute, week, mode, trigger_mode, fm_freq, volume)
-        # week=127 = all days, mode=0=default, trigger_mode=0=default, fm_freq=0=off, volume=0=default
-        ok = await d.alarm.set_alarm(0, 1, hh, mm, 127, 0, 0)
-        cli_commands._print(f"set alarm 0 to {hh:02d}:{mm:02d} every day (ok={ok})", as_json=args.json)
-        return 0 if ok else 1
-    finally:
-        pass  # the daemon keeps the link; the CLI never hangs up a panel
+    mac = await resolve_target_mac(args)
+    if not _capabilities(args, mac).has_alarm:
+        cli_commands._err(f"device {mac} has no alarm (capabilities.has_alarm=False)", 1)
+    # BEHAVIOUR CHANGE: this used to send trigger_mode=0, which the reference
+    # implementation never documents — it defines the field as
+    # ALARM_TRIGGER_MUSIC=1 / ALARM_TRIGGER_GIF=4, and its own usage example
+    # passes 1. `divoomd set-alarm` sends the documented 1, matching the MCP
+    # tool. The byte on the wire changes; see the CHANGELOG stanza.
+    _delegate_device_verb("set-alarm", [args.time], mac, args)
 
 
-# R14 §1 — weather command (0x5F).
-WEATHER_NAME_TO_ID = {
+# R14 §1 — weather command (0x5F). The name->id table used to live here; it is
+# `WEATHER_TYPES` in divoomd/src/mcp_tools.rs now, and `divoomd set-temperature`
+# owns the mapping. Kept as a reference for the wire values, NOT used: a second
+# copy is what tools/check_weather_parity.py exists to prevent.
+WEATHER_NAME_TO_ID_REFERENCE = {
     "clear":        1,
     "cloudy":       3,
     "thunderstorm": 5,
@@ -227,24 +230,16 @@ WEATHER_NAME_TO_ID = {
 
 async def cmd_set_temperature(args: argparse.Namespace) -> int:
     """Set the device's weather channel: temperature + icon (0x5F)."""
-    # Validate BEFORE connecting (mirrors set-volume / set-brightness): an
-    # out-of-range temp otherwise opened the BLE link, then died with a raw
-    # ValueError traceback from Weather.set instead of a clean usage error.
+    # Validated BEFORE resolving a panel (mirrors set-volume): an out-of-range
+    # temperature otherwise opened the link, then died with a raw ValueError
+    # traceback from Weather.set instead of a clean usage error. The icon NAME
+    # is checked in divoomd, which owns the name->wire-value table now.
     if not (-127 <= args.temperature <= 128):
         cli_commands._err("temperature must be -127..128", 2)
-    d, mac = await _resolve_device(args)
-    try:
-        if not _capabilities(args, mac).has_weather:
-            cli_commands._err(f"device {mac} has no weather channel (capabilities.has_weather=False)", 1)
-        weather_id = WEATHER_NAME_TO_ID[args.weather]
-        ok = await d.weather.set(args.temperature, weather_id)
-        cli_commands._print(
-            f"set weather: temperature={args.temperature}°C, weather={args.weather} ({weather_id}) (ok={ok})",
-            as_json=args.json,
-        )
-        return 0 if ok else 1
-    finally:
-        pass  # the daemon keeps the link; the CLI never hangs up a panel
+    mac = await resolve_target_mac(args)
+    if not _capabilities(args, mac).has_weather:
+        cli_commands._err(f"device {mac} has no weather channel (capabilities.has_weather=False)", 1)
+    _delegate_device_verb("set-temperature", [str(args.temperature), args.weather], mac, args)
 
 
 async def cmd_push_image(args: argparse.Namespace) -> int:

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+from types import SimpleNamespace
 import subprocess
 import sys
 from pathlib import Path
@@ -249,21 +250,52 @@ class _FakeDivoomForWeather:
         self._disconnected = True
 
 
-async def test_cmd_set_temperature_calls_weather_set(monkeypatch) -> None:
-    fake = _FakeDivoomForWeather()
-    monkeypatch.setattr(cli_device_verbs, "_resolve_device",AsyncMock(return_value=(fake, "AA:BB:CC:DD:EE:FF")))
+async def test_cmd_set_temperature_hands_the_icon_name_to_divoomd(monkeypatch) -> None:
+    """Rewritten 2026-09-25 (L5): the weather push is a divoomd verb now.
+
+    The name crosses rather than the wire value, because the name->id table
+    moved into `divoomd/src/mcp_tools.rs` with the rest of the weather mapping.
+    Passing `1` here would leave a second copy of that table in Python, which is
+    the drift `tools/check_weather_parity.py` was written to catch.
+    """
+    execs: list = []
+
+    def _execv(path, argv):
+        execs.append((path, argv))
+        raise SystemExit(0)
+
+    monkeypatch.setattr(
+        cli_device_verbs, "resolve_target_mac", AsyncMock(return_value="AA:BB:CC:DD:EE:FF")
+    )
+    monkeypatch.setattr(cli_device_verbs, "_capabilities", lambda args, mac: SimpleNamespace(has_weather=True))
+    monkeypatch.setattr(cli_commands, "_divoomd_binary", lambda: "/opt/divoomd")
+    monkeypatch.setattr(os, "execv", _execv)
 
     p = cli_module.build_parser()
     ns = p.parse_args(["set-temperature", "18", "--mac", "AA:BB:CC:DD:EE:FF", "--weather", "clear"])
-    rc = await cli_module.cmd_set_temperature(ns)
-    assert rc == 0
-    fake.weather.set.assert_called_once_with(18, 1)  # clear=1
+    with pytest.raises(SystemExit):
+        await cli_module.cmd_set_temperature(ns)
+
+    assert execs == [
+        ("/opt/divoomd",
+         ["/opt/divoomd", "set-temperature", "18", "clear", "--mac", "AA:BB:CC:DD:EE:FF"])
+    ]
 
 
 async def test_cmd_set_temperature_rejects_when_no_capability(monkeypatch) -> None:
-    fake = _FakeDivoomForWeather(has_weather=False)
-    monkeypatch.setattr(cli_device_verbs, "_resolve_device",AsyncMock(return_value=(fake, "AA:BB:CC:DD:EE:FF")))
-    monkeypatch.setattr(cli_device_verbs, "_capabilities", lambda args, mac: fake.capabilities)
+    """The capability check stayed in Python, and it stays BEFORE the handoff."""
+    monkeypatch.setattr(
+        cli_device_verbs, "resolve_target_mac", AsyncMock(return_value="AA:BB:CC:DD:EE:FF")
+    )
+    monkeypatch.setattr(
+        cli_device_verbs, "_capabilities", lambda args, mac: SimpleNamespace(has_weather=False)
+    )
+    monkeypatch.setattr(cli_commands, "_divoomd_binary", lambda: "/opt/divoomd")
+
+    def _boom(*a, **k):
+        raise AssertionError("it must not hand off for a panel with no weather channel")
+
+    monkeypatch.setattr(os, "execv", _boom)
 
     p = cli_module.build_parser()
     ns = p.parse_args(["set-temperature", "18", "--mac", "AA:BB:CC:DD:EE:FF"])
@@ -273,9 +305,10 @@ async def test_cmd_set_temperature_rejects_when_no_capability(monkeypatch) -> No
 
 
 async def test_cmd_set_temperature_rejects_out_of_range(monkeypatch) -> None:
-    fake = _FakeDivoomForWeather()
-    monkeypatch.setattr(cli_device_verbs, "_resolve_device",AsyncMock(return_value=(fake, "AA:BB:CC:DD:EE:FF")))
-
+    """Before a panel is resolved, and so before any connection is opened."""
+    monkeypatch.setattr(
+        cli_device_verbs, "resolve_target_mac", AsyncMock(return_value="AA:BB:CC:DD:EE:FF")
+    )
     p = cli_module.build_parser()
     ns = p.parse_args(["set-temperature", "200", "--mac", "AA:BB:CC:DD:EE:FF"])
     with pytest.raises((SystemExit, ValueError)):

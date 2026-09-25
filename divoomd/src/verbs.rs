@@ -41,6 +41,19 @@ pub enum Verb {
     PushGif {
         path: String,
     },
+    SetRadio {
+        freq_x10: i64,
+    },
+    /// `HH:MM` on a 24h clock, kept as written so the error can quote it back.
+    SetAlarm {
+        time: String,
+        hour: i64,
+        minute: i64,
+    },
+    SetTemperature {
+        temperature: i64,
+        weather: String,
+    },
 }
 
 /// A parsed command line: the verb, plus the flags that apply to every verb.
@@ -68,6 +81,9 @@ impl Verb {
             Self::SetBrightness { .. } => "set-brightness",
             Self::PushImage { .. } => "push-image",
             Self::PushGif { .. } => "push-gif",
+            Self::SetRadio { .. } => "set-radio",
+            Self::SetAlarm { .. } => "set-alarm",
+            Self::SetTemperature { .. } => "set-temperature",
         }
     }
 }
@@ -76,7 +92,15 @@ impl Verb {
 ///
 /// One list: a verb that exists but is not named here cannot be found by someone
 /// who typed it wrong, which is the only moment the list is read.
-pub const VERB_NAMES: &[&str] = &["set-volume", "set-brightness", "push-image", "push-gif"];
+pub const VERB_NAMES: &[&str] = &[
+    "set-volume",
+    "set-brightness",
+    "push-image",
+    "push-gif",
+    "set-radio",
+    "set-alarm",
+    "set-temperature",
+];
 
 /// Parse `args` as a verb invocation, or say that it is not one.
 ///
@@ -103,38 +127,65 @@ pub fn parse(args: &[String]) -> Option<Result<VerbRequest, String>> {
     Some(parse_verb(verb, args))
 }
 
-fn parse_verb(verb: &str, args: &[String]) -> Result<VerbRequest, String> {
-    let mut positional: Vec<&str> = Vec::new();
-    let mut mac: Option<String> = None;
-    let mut as_json = false;
+/// The arguments of one invocation, split into the flags every verb takes and
+/// the values it is about.
+///
+/// Its own type because the split is a real step with its own errors — a missing
+/// `--mac` value, an unknown option — and folding it into each verb would put
+/// the same loop in seven places.
+struct Invocation<'a> {
+    positional: Vec<&'a str>,
+    mac: Option<String>,
+    json: bool,
+}
 
-    let mut i = 0;
-    while i < args.len() {
-        let arg = args[i].as_str();
-        if let Some(v) = arg.strip_prefix("--mac=") {
-            mac = Some(v.to_string());
-        } else if arg == "--mac" {
-            mac = Some(
-                args.get(i + 1)
-                    .cloned()
-                    .ok_or_else(|| format!("{verb}: --mac requires a value"))?,
-            );
+impl<'a> Invocation<'a> {
+    /// # Errors
+    ///
+    /// `--mac` with no value, or a flag no verb has. A `-1` is a VALUE, not an
+    /// option: `set-brightness -1` has to say "must be in [0..100]", not
+    /// "unknown option", or the user cannot discover the bound from the mistake.
+    fn collect(verb: &str, args: &'a [String]) -> Result<Self, String> {
+        let mut positional: Vec<&str> = Vec::new();
+        let mut mac: Option<String> = None;
+        let mut json = false;
+        let mut i = 0;
+        while i < args.len() {
+            let arg = args[i].as_str();
+            if let Some(v) = arg.strip_prefix("--mac=") {
+                mac = Some(v.to_string());
+            } else if arg == "--mac" {
+                mac = Some(
+                    args.get(i + 1)
+                        .cloned()
+                        .ok_or_else(|| format!("{verb}: --mac requires a value"))?,
+                );
+                i += 1;
+            } else if arg == "--json" {
+                json = true;
+            } else if arg.starts_with('-') && !is_negative_number(arg) {
+                return Err(format!(
+                    "{verb}: unknown option {arg:?}\n\nRun `divoomd --help` for usage."
+                ));
+            } else {
+                positional.push(arg);
+            }
             i += 1;
-        } else if arg == "--json" {
-            as_json = true;
-        } else if arg.starts_with('-') && !is_negative_number(arg) {
-            // `-1` is a VALUE, not an option: `set-brightness -1` has to say
-            // "must be in [0..100]", not "unknown option", or the user cannot
-            // discover the bound from the mistake. Only `--`-prefixed words and
-            // other dash-words are options.
-            return Err(format!(
-                "{verb}: unknown option {arg:?}\n\nRun `divoomd --help` for usage."
-            ));
-        } else {
-            positional.push(arg);
         }
-        i += 1;
+        Ok(Self {
+            positional,
+            mac,
+            json,
+        })
     }
+}
+
+fn parse_verb(verb: &str, args: &[String]) -> Result<VerbRequest, String> {
+    let Invocation {
+        positional,
+        mac,
+        json: as_json,
+    } = Invocation::collect(verb, args)?;
 
     let want = |n: usize| -> Result<(), String> {
         if positional.len() == n {
@@ -164,6 +215,43 @@ fn parse_verb(verb: &str, args: &[String]) -> Result<VerbRequest, String> {
                 .map_err(|e| format!("{verb}: {e}"))?;
             Verb::SetBrightness { value }
         }
+        "set-radio" => {
+            want(1)?;
+            let raw = number(positional[0], verb)?;
+            let freq_x10 =
+                crate::mcp_tools::need_int(&json!({ "freq_x10": raw }), "freq_x10", 875, 1080)
+                    .map_err(|e| format!("{verb}: {e}"))?;
+            Verb::SetRadio { freq_x10 }
+        }
+        "set-alarm" => {
+            want(1)?;
+            let (hour, minute) = parse_hh_mm(positional[0], verb)?;
+            Verb::SetAlarm {
+                time: positional[0].to_string(),
+                hour,
+                minute,
+            }
+        }
+        "set-temperature" => {
+            want(2)?;
+            let raw = number(positional[0], verb)?;
+            // Range and the icon name are the tool's, not this file's.
+            let temperature = crate::mcp_tools::need_int(
+                &json!({ "temperature_c": raw }),
+                "temperature_c",
+                -127,
+                128,
+            )
+            .map_err(|e| format!("{verb}: {e}"))?;
+            let weather = positional[1].to_string();
+            // Validate the name here so the refusal happens before a panel is
+            // resolved, and let the tool map it to the wire value.
+            crate::mcp_tools::weather_id(&weather).map_err(|e| format!("{verb}: {e}"))?;
+            Verb::SetTemperature {
+                temperature,
+                weather,
+            }
+        }
         "push-image" | "push-gif" => {
             want(1)?;
             let path = positional[0].to_string();
@@ -191,6 +279,29 @@ fn parse_verb(verb: &str, args: &[String]) -> Result<VerbRequest, String> {
 fn is_negative_number(arg: &str) -> bool {
     arg.strip_prefix('-')
         .is_some_and(|rest| !rest.is_empty() && rest.parse::<i64>().is_ok())
+}
+
+/// Split `HH:MM` on a 24h clock, refusing anything else with the input quoted.
+///
+/// The CLI has always taken `HH:MM` here, so the verb takes the same thing: a
+/// user with a script does not get a new format because the command moved.
+fn parse_hh_mm(raw: &str, verb: &str) -> Result<(i64, i64), String> {
+    let Some((h, m)) = raw.split_once(':') else {
+        return Err(format!("{verb}: time must be HH:MM (24h), got {raw:?}"));
+    };
+    let parse_part = |part: &str, what: &str| -> Result<i64, String> {
+        part.parse::<i64>()
+            .map_err(|_| format!("{verb}: {what} must be a number in HH:MM, got {raw:?}"))
+    };
+    let hour = parse_part(h, "hour")?;
+    let minute = parse_part(m, "minute")?;
+    if !(0..=23).contains(&hour) {
+        return Err(format!("{verb}: hour must be 0..23, got {hour}"));
+    }
+    if !(0..=59).contains(&minute) {
+        return Err(format!("{verb}: minute must be 0..59, got {minute}"));
+    }
+    Ok((hour, minute))
 }
 
 /// A positional that must be a whole number. A non-number is an error, never a
@@ -244,6 +355,55 @@ pub async fn run(request: &VerbRequest, target: &DaemonTarget) -> Result<VerbOut
             Ok(VerbOutcome {
                 human: format!("set brightness to {value}%"),
                 value: value_out,
+            })
+        }
+        Verb::SetRadio { freq_x10 } => {
+            let freq_x10 = *freq_x10;
+            let mut tool_args = json!({ "freq_x10": freq_x10 });
+            put_mac(&mut tool_args, mac);
+            let out = crate::mcp_tools::call_tool("set_radio", &tool_args, target).await?;
+            Ok(VerbOutcome {
+                // Integer math rather than `freq_x10 as f64 / 10.0`: the cast
+                // can lose precision, and `87.5` is exactly "87.5" this way.
+                human: format!("tuned FM to {}.{} MHz", freq_x10 / 10, freq_x10 % 10),
+                value: out,
+            })
+        }
+        Verb::SetAlarm { time, hour, minute } => {
+            // Alarm 0, every day (127), which is exactly what the CLI has always
+            // set: `set-alarm` is the scriptable path and a full editor is the
+            // GUI's job. `enabled` defaults to true in the tool, matching the
+            // status byte the CLI sent (1 = on).
+            //
+            // NOTE a behaviour change: the CLI used to send `trigger_mode = 0`,
+            // which the reference implementation never documents — it defines
+            // the field as ALARM_TRIGGER_MUSIC=1 / ALARM_TRIGGER_GIF=4, and its
+            // own usage example passes 1. The tool sends 1. So the byte on the
+            // wire changes for this verb, from an undocumented value to the
+            // documented one. See the CHANGELOG stanza.
+            let mut tool_args = json!({
+                "index": 0,
+                "hour": hour,
+                "minute": minute,
+                "weekday_mask": 127,
+            });
+            put_mac(&mut tool_args, mac);
+            let out = crate::mcp_tools::call_tool("set_alarm", &tool_args, target).await?;
+            Ok(VerbOutcome {
+                human: format!("set alarm 0 to {hour:02}:{minute:02} every day ({time})"),
+                value: out,
+            })
+        }
+        Verb::SetTemperature {
+            temperature,
+            weather,
+        } => {
+            let mut tool_args = json!({ "temperature_c": temperature, "weather": weather });
+            put_mac(&mut tool_args, mac);
+            let out = crate::mcp_tools::call_tool("set_weather", &tool_args, target).await?;
+            Ok(VerbOutcome {
+                human: format!("set weather: {temperature}°C, {weather}"),
+                value: out,
             })
         }
         // These two deliberately do NOT go through the MCP `show_image` tool.
