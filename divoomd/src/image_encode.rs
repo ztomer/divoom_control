@@ -22,11 +22,11 @@
 //!   The C keeps a
 //!   512-slot open-addressing table (Thomas Wang's `hash32`) purely to find an
 //!   existing colour fast; the index handed back is `palette_n++`, so the
-//!   emitted palette is the order pixels were first seen. The hash function
-//!   therefore cannot affect a single output byte, and this port does not
-//!   reproduce `hash32` — it uses a `HashMap` for the same lookup job. A reader
-//!   comparing this to the C and looking for the hash will not find it, and this
-//!   comment is why that is correct rather than a shortcut.
+//!   emitted palette is the order pixels were first seen. This port mirrors
+//!   that table slot for slot (`ColourTable`, same hash, same probing), so a
+//!   reader comparing the two finds the same shape — and the hash still
+//!   cannot affect a single output byte, because the indices are first-seen
+//!   either way.
 //! * **The per-pixel indices live in their own buffer.**
 //!
 //!   The C comment records
@@ -119,21 +119,14 @@ fn pack(rgb: &[u8], w: i32, h: i32) -> Result<Packed, Refusal> {
 
     // ---- palette dedup, in first-appearance order ----
     let mut palette: Vec<[u8; 3]> = Vec::new();
-    let mut seen: std::collections::HashMap<[u8; 3], u8> = std::collections::HashMap::new();
+    let mut table = crate::palette_table::ColourTable::new();
     let mut indices: Vec<u8> = Vec::with_capacity(num_pixels);
     for i in 0..num_pixels {
-        let key = [rgb[i * 3], rgb[i * 3 + 1], rgb[i * 3 + 2]];
-        let index = if let Some(&found) = seen.get(&key) {
-            found
-        } else {
-            if palette.len() >= PALETTE_MAX {
-                return Err(Refusal::PaletteFull);
-            }
-            let fresh = u8::try_from(palette.len()).map_err(|_| Refusal::PaletteFull)?;
-            palette.push(key);
-            seen.insert(key, fresh);
-            fresh
-        };
+        let rgb3 = [rgb[i * 3], rgb[i * 3 + 1], rgb[i * 3 + 2]];
+        let key = (u32::from(rgb3[0]) << 16) | (u32::from(rgb3[1]) << 8) | u32::from(rgb3[2]);
+        let index = table
+            .intern(key, rgb3, &mut palette, PALETTE_MAX)
+            .ok_or(Refusal::PaletteFull)?;
         indices.push(index);
     }
 
