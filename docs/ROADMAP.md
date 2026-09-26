@@ -318,8 +318,10 @@ are not restated.
   hardware tests gated/skip by default; 60 native-downscaler parity tests.
   The browser subset (150) opts in with `--run-browser`, runs in its own CI
   step, and was measured 150/150 twice under load (see the CLOSED item).
-- **C module**: `libdivoom` (LANCZOS downsampler) via `build_libdivoom.sh`;
-  normalize-then-quantize matches PIL byte-for-byte (60/60 parity tests).
+- **C module**: deleted 2026-09-25 (phase L4, shipped in v0.40.0) — `libdivoom`,
+  `native_lib.py`, and `scripts/build_libdivoom.sh` are all gone; the daemon
+  resizes (Nearest), encodes, and streams in Rust. The C's recorded behaviour
+  survives as 550 framing + 192 image vectors asserted byte for byte.
 
 ---
 
