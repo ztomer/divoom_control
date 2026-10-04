@@ -36,7 +36,30 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg",
 btleplug = { version = "0.12", optional = true }
 futures = { version = "0.3", optional = true }
 uuid = { version = "1", optional = true }
-reqwest = { version = "0.13", features = ["json", "rustls", "webpki-roots", "query", "charset"] }
+# `webpki-roots` is GONE and must not come back. reqwest 0.13.2 deleted that
+# optional dependency, which silently deleted the implicit feature of the same
+# name. Nothing errored: `cargo update` simply could not move reqwest past
+# 0.13.1 and said so only in a parenthetical ("available: v0.13.5") while
+# exiting 0. The repo sat on 0.13.1 for months believing it was current.
+# `tools/check_cargo_features.py` now fails on that class outright.
+#
+# `rustls` pulls `rustls-platform-verifier`, so trust anchors now come from the
+# OS trust store (the macOS Keychain) instead of a bundled Mozilla CA bundle.
+# That is upstream's intended migration, but it is a real behavioural change
+# for a daemon that signs requests to https://appin.divoom-gz.com, so it was
+# verified rather than assumed, on 2026-10-04, three ways through reqwest
+# 0.13.5 itself:
+#   verified   + the real vendor host        -> HTTP 200 (Keychain validates it)
+#   verified   + a self-signed cert          -> REJECTED, "certificate is not
+#                                              trusted: -67843" (macOS SecTrust)
+#   UNverified + that same self-signed cert  -> HTTP 200, so the rejection
+#                                              above was the certificate and
+#                                              not a dead port
+# The middle case is the one that counts: without it, the 200 on the left could
+# just as easily mean verification was switched off. To re-verify after a future
+# reqwest bump, repeat that three-way probe -- the positive half alone proves
+# nothing.
+reqwest = { version = "0.13", features = ["json", "rustls", "query", "charset"] }
 rusqlite = { version = "0.40", features = ["bundled"] }
 plist = "1"
 sysinfo = "0.30"

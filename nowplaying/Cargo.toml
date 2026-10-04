@@ -10,7 +10,10 @@ serde_json = "1"
 base64 = "0.23"
 # Feishin talks Subsonic over HTTP(S); blocking matches this crate's sync API
 # (divoomd already wraps the whole query in spawn_blocking).
-reqwest = { version = "0.13", default-features = false, features = ["blocking", "json", "rustls", "webpki-roots"] }
+# `webpki-roots` removed — reqwest 0.13.2 deleted the optional dependency and
+# with it the implicit feature, which is what silently pinned this crate at
+# 0.13.1. See the note on the same line in divoomd/Cargo.toml.
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "json", "rustls"] }
 
 [dev-dependencies]
 
