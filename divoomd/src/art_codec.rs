@@ -243,7 +243,7 @@ pub(crate) fn decode_hot_file(data: &[u8]) -> Option<Vec<(Vec<u8>, u32)>> {
             if x == 0 {
                 0
             } else {
-                (usize::BITS - x.leading_zeros()) as usize
+                x.ilog2() as usize + 1
             }
         };
         let indices: Vec<usize> = if bpp == 0 {
@@ -385,7 +385,7 @@ mod parity_tests {
             if x == 0 {
                 0
             } else {
-                (usize::BITS - x.leading_zeros()) as usize
+                x.ilog2() as usize + 1
             }
         };
         let mut body = vec![0u8; 2]; // flag, n_colors

@@ -201,7 +201,11 @@ async fn start_stop_churn_leaks_nothing_and_leaves_the_device_quiet() {
             json!(true)
         );
     }
-    assert!(d.live_jobs.list(Some("DEV_A")).await.is_empty());
+    assert_eq!(
+        d.live_jobs.list(Some("DEV_A")).await,
+        [] as [serde_json::Value; 0],
+        "disconnected device still has jobs"
+    );
     // Whatever landed during the churn is done; from here the device must
     // stay silent.
     tokio::time::sleep(Duration::from_millis(300)).await;
@@ -230,7 +234,11 @@ async fn disconnect_stops_jobs_and_a_reconnect_gets_no_ghost_frame() {
     tokio::time::sleep(Duration::from_millis(5200)).await; // one job interval
     let disc = d.handle(make_request("disconnect", None, None)).await;
     assert_eq!(disc["success"], json!(true), "{disc}");
-    assert!(d.live_jobs.list(Some("DEV_A")).await.is_empty());
+    assert_eq!(
+        d.live_jobs.list(Some("DEV_A")).await,
+        [] as [serde_json::Value; 0],
+        "disconnected device still has jobs"
+    );
     drop(permit);
 
     // Reconnect: a fresh mock with an empty command log.

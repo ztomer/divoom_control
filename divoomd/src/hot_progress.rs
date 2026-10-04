@@ -214,7 +214,14 @@ mod hot_progress_tests {
         p.set(&json!({"phase": "done"}));
         drain(&mut rx);
         p.clear_stuck_starting();
-        assert!(drain(&mut rx).is_empty());
+        // Held in a local so a failure prints WHICH progress messages were
+        // queued rather than just "some were".
+        let leftover = drain(&mut rx);
+        assert_eq!(
+            leftover,
+            [] as [serde_json::Value; 0],
+            "clear_stuck_starting must not queue a message"
+        );
         assert_eq!(p.get()["phase"], json!("done"));
     }
 

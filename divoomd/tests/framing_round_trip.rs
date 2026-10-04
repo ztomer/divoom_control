@@ -186,7 +186,7 @@ fn several_frames_in_one_buffer_parse_in_order() {
         );
         assert_eq!(message.command_id, payload[0]);
     }
-    assert!(buf.is_empty());
+    assert_eq!(buf, [] as [u8; 0], "leftover bytes after the final frame");
 }
 
 #[test]

@@ -26,7 +26,7 @@ fn encode_then_iter_round_trips() {
     let (msgs, rem) = iter_messages(&encode_message(&obj));
     assert_eq!(msgs.len(), 1);
     assert_eq!(msgs[0].as_ref().unwrap(), &obj);
-    assert!(rem.is_empty());
+    assert_eq!(rem, [] as [u8; 0], "no trailing bytes expected");
 }
 
 #[test]
@@ -60,7 +60,7 @@ fn iter_messages_multi_blank_and_malformed() {
         &json!({"b": 2}),
         "a bad frame must not swallow the frames after it"
     );
-    assert!(rem.is_empty());
+    assert_eq!(rem, [] as [u8; 0], "no trailing bytes expected");
 }
 
 #[test]
@@ -86,8 +86,8 @@ fn iter_messages_keeps_partial_trailing_frame_as_remainder() {
 #[test]
 fn iter_messages_empty_buffer() {
     let (msgs, rem) = iter_messages(b"");
-    assert!(msgs.is_empty());
-    assert!(rem.is_empty());
+    assert_eq!(msgs, [] as [_; 0], "empty input yields no messages");
+    assert_eq!(rem, [] as [u8; 0], "no trailing bytes expected");
 }
 
 // ── cross-language: parse bytes produced by the Python encoder ───────────────
@@ -98,7 +98,7 @@ fn parses_python_encoded_request() {
     //   make_request("scan", {"timeout": 5}, "tok"))
     let py = b"{\"command\":\"scan\",\"args\":{\"timeout\":5},\"token\":\"tok\"}\n";
     let (msgs, rem) = iter_messages(py);
-    assert!(rem.is_empty());
+    assert_eq!(rem, [] as [u8; 0], "no trailing bytes expected");
     assert_eq!(msgs.len(), 1);
     // parse into the typed Request
     let req: Request = serde_json::from_value(msgs[0].clone().unwrap()).unwrap();
