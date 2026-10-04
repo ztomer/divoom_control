@@ -1,7 +1,12 @@
 //! Divoom cloud API authentication and token caching.
 //! Ported from `divoom_lib/divoom_auth.py`.
 
-use hmac::{Hmac, Mac};
+// `KeyInit` is load-bearing, not decorative: digest 0.11 removed
+// `Mac::new_from_slice`, so `HmacMd5::new_from_slice` no longer resolves
+// through `Mac` alone. Deliberately NOT worked around by switching to
+// `HmacMd5::new(&key.into())`, which panics inside on a wrong key length
+// instead of returning InvalidLength.
+use hmac::{Hmac, KeyInit, Mac};
 use md5::{Digest, Md5};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};

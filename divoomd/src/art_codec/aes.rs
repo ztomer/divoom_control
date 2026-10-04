@@ -9,7 +9,7 @@
 /// length it knows, and a ciphertext that is not whole blocks is `None`.
 #[must_use]
 pub fn aes_cbc_decrypt(data: &[u8]) -> Option<Vec<u8>> {
-    use aes::cipher::{block_padding::NoPadding, BlockDecryptMut, KeyIvInit};
+    use aes::cipher::{block_padding::NoPadding, BlockModeDecrypt, KeyIvInit};
     if data.is_empty() {
         return None;
     }
@@ -17,7 +17,7 @@ pub fn aes_cbc_decrypt(data: &[u8]) -> Option<Vec<u8>> {
     let decryptor =
         cbc::Decryptor::<aes::Aes128>::new(b"78hrey23y28ogs89".into(), b"1234567890123456".into());
     let n = decryptor
-        .decrypt_padded_mut::<NoPadding>(&mut buf)
+        .decrypt_padded::<NoPadding>(&mut buf)
         .ok()?
         .len();
     buf.truncate(n);
