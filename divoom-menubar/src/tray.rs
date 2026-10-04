@@ -317,7 +317,7 @@ fn make_icon(rgb: [u8; 3]) -> tray_icon::Icon {
         // Two independent tests ANDed: below the rim (a half-plane) and
         // inside the circle. The squared distance is bound first so the
         // shape reads as two facts, not one tangled comparison.
-        let dist2 = dx * dx + dy * dy;
+        let dist2 = dy.mul_add(dy, dx * dx);
         let in_bowl = fx >= mid && dist2 <= radius * radius;
         in_rect || in_bowl
     };

@@ -19,14 +19,46 @@ path = "src/main.rs"
 # (x11rb, wayland, sctk-adwaita → ab_glyph → unmaintained ttf-parser) for a
 # product that is a macOS-only Accessory agent (no Linux job builds this crate
 # -- tests.yml scopes Ubuntu jobs `-p divoomd`). The macOS AppKit backend is
-# not feature-gated, so this compiles to identical code here while keeping
-# those crates out of Cargo.lock entirely.
-# tray-icon WITHOUT default features: upstream defaults ("gtk", "libxdo")
-# forward only to Linux-target-gated deps (macOS compiles to objc2/AppKit
-# code either way), for a product that is a macOS-only Accessory agent
-# (no Linux job builds this crate -- tests.yml scopes Ubuntu jobs `-p divoomd`).
+# not feature-gated, so this compiles to identical code here.
+#
+# tray-icon WITHOUT default features: upstream 0.26 defaults to
+# ["libappindicator"], which drags in the GTK StatusNotifierItem path -- for a
+# product that is a macOS-only Accessory agent (no Linux job builds this crate,
+# tests.yml scopes Ubuntu jobs to `-p divoomd`). Every macOS dependency
+# (objc2, objc2-app-kit, png, crossbeam-channel) is unconditional and
+# `cfg(target_os = "macos")`-targeted, so dropping the default selects the
+# identical objc2/AppKit source path. muda, which tray-icon re-exports, is
+# declared `default-features = false` upstream, so gtk stays out regardless.
+#
+# The invariant to state is the OBSERVABLE one, not the upstream default list,
+# because the latter rots: this comment named tray-icon 0.24's ("gtk",
+# "libxdo") for months after 0.26 deleted the `libxdo` feature outright and
+# renamed `gtk` to `libappindicator`. `libxdo` no longer exists in either
+# tray-icon 0.26 or muda 0.21. What actually holds, and what to re-check after
+# any bump, is: `cargo tree --target all -i gtk -i gtk3 -i libappindicator -i
+# libxdo` matches nothing. Note `dirs` IS legitimately in the lock, as a
+# non-optional Linux/BSD dep of tray-icon, so "out of the lock entirely" would
+# be the wrong claim -- it is the gtk family that must be absent.
+#
+# LATENT TRAP, verified in tray-icon 0.26's own source: that version adds a hard
+# `compile_error!("either the `libappindicator` or `ksni` feature must be enabled
+# on Linux and BSD")`, gated on `any(linux, dragonfly, freebsd, netbsd,
+# openbsd)` and `not(any(libappindicator, ksni))`. Our `default-features = false`
+# enables neither, so this crate CANNOT compile for Linux or BSD as configured.
+# Unreachable today -- every cargo step in tests.yml's Ubuntu jobs is scoped
+# `-p divoomd`, and the whole-workspace steps (`cargo fmt --all`,
+# `cargo clippy --all-targets --all-features`, `cargo test --locked`) all run on
+# macos-latest -- but it is one workspace-wide cargo step added to a Linux job
+# away from a red CI. If that happens the fix is a target-gated feature, NOT
+# re-enabling tray-icon's default and pulling libappindicator back into the lock:
+#
+#   [target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
+#   tray-icon = { version = "0.26", default-features = false, features = ["ksni"] }
+#
+# `ksni` is GTK-free (tray-icon 0.26's new StatusNotifierItem backend), so it
+# preserves the invariant above instead of defeating it.
 [dependencies]
-tray-icon = { version = "0.24", default-features = false }
+tray-icon = { version = "0.26", default-features = false }
 winit = { version = "0.30", default-features = false }
 serde_json = "1"
 # Panel tiles: decode the daemon's PNG frame previews into menu icons.

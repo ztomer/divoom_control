@@ -203,9 +203,11 @@ mod tests {
     #[test]
     fn an_empty_registry_is_not_an_error() {
         // Nothing has ever played this boot: a legitimate state, not a failure.
-        assert!(parse_players(r#"{"ok":true,"players":[]}"#)
-            .unwrap()
-            .is_empty());
+        assert_eq!(
+            parse_players(r#"{"ok":true,"players":[]}"#).unwrap(),
+            Vec::new(),
+            "an empty player list is the legitimate no-playback state"
+        );
     }
 
     #[test]

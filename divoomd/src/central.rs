@@ -137,7 +137,9 @@ mod tests {
         )
         .await;
         assert!(r.is_ok(), "0.13 answers promptly; it must not hang");
-        let err = r.unwrap().expect_err("PromptError central must fail the scan");
+        let err = r
+            .unwrap()
+            .expect_err("PromptError central must fail the scan");
 
         // Assert the narrowing is a DECISION. If a future btleplug rewords this
         // so it starts matching again, or if someone adds "Runtime Error" to

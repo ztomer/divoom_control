@@ -16,10 +16,7 @@ pub fn aes_cbc_decrypt(data: &[u8]) -> Option<Vec<u8>> {
     let mut buf = data.to_vec();
     let decryptor =
         cbc::Decryptor::<aes::Aes128>::new(b"78hrey23y28ogs89".into(), b"1234567890123456".into());
-    let n = decryptor
-        .decrypt_padded::<NoPadding>(&mut buf)
-        .ok()?
-        .len();
+    let n = decryptor.decrypt_padded::<NoPadding>(&mut buf).ok()?.len();
     buf.truncate(n);
     Some(buf)
 }

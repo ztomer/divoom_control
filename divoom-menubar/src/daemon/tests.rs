@@ -288,5 +288,9 @@ fn the_active_panel_follows_selection_and_owned_devices_broadcasts() {
     assert_eq!(active(&snap), vec!["CC"]);
     assert_eq!(snap.devices.len(), 3);
     snap.apply_selection(None);
-    assert!(active(&snap).is_empty());
+    assert_eq!(
+        active(&snap),
+        Vec::<String>::new(),
+        "clearing the selection must leave nothing active"
+    );
 }
