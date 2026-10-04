@@ -92,11 +92,19 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt || true
-          # Pinned for reproducibility. NOTE: this pin is not the one that
-          # decides whether the e2e suite passes -- the BROWSER BUILD is (see
-          # the fetch step below). camoufox accepts any build in [alpha.1, 1),
-          # so pinning the package alone still lets `fetch` take the newest.
-          pip install pytest pillow playwright 'camoufox==0.5.5'
+          # pytest + pillow are also in requirements.txt (which is installed
+          # with `|| true` above, so the authoritative install is this line).
+          #
+          # The browser drivers come from the DECLARED [e2e] extra, not from a
+          # literal here: playwright + camoufox were reachable only through this
+          # line, which is why scripts/py_ci.sh could only WARN when the browser
+          # was missing -- nothing declared the dependency. The camoufox pin now
+          # lives in pyproject.toml and has one copy.
+          # NOTE: the pip pin is not the one that decides whether the e2e suite
+          # passes -- the BROWSER BUILD is (see the fetch step below).
+          # camoufox accepts any build in [alpha.1, 1), so pinning the package
+          # alone still lets `fetch` take the newest.
+          pip install pytest pillow -e '.[e2e]'
 
       - name: Install the camoufox browser
         # The GUI e2e suites (15 modules) drive headless camoufox via

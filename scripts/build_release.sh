@@ -13,7 +13,7 @@
 #
 # Usage:
 #   python3 -m venv .buildvenv
-#   .buildvenv/bin/pip install -e '.[gui]' pyinstaller psutil
+#   .buildvenv/bin/pip install -e '.[gui]' pyinstaller
 #   scripts/build_release.sh [path-to-build-venv-python]
 set -euo pipefail
 
@@ -29,11 +29,11 @@ fi
 PYBUILD="${1:-${ROOT}/.buildvenv/bin/python}"
 if [[ ! -x "${PYBUILD}" ]]; then
   echo "Build venv python not found at ${PYBUILD}." >&2
-  echo "Create it:  python3 -m venv .buildvenv && .buildvenv/bin/pip install -e '.[gui]' pyinstaller psutil" >&2
+  echo "Create it:  python3 -m venv .buildvenv && .buildvenv/bin/pip install -e '.[gui]' pyinstaller" >&2
   exit 1
 fi
 if ! "${PYBUILD}" -c "import PyInstaller" 2>/dev/null; then
-  echo "PyInstaller not in the build venv: ${PYBUILD} -m pip install pyinstaller psutil" >&2
+  echo "PyInstaller not in the build venv: ${PYBUILD} -m pip install pyinstaller" >&2
   exit 1
 fi
 

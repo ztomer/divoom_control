@@ -12,7 +12,8 @@
 # Optional extras:
 #   pip install -e ".[gui]"        # pywebview (macOS GUI)
 #   pip install -e ".[test]"       # pytest + pytest-asyncio
-#   pip install -e ".[dev]"        # both
+#   pip install -e ".[e2e]"        # playwright + camoufox (browser suites)
+#   pip install -e ".[dev]"        # gui + test
 #
 # Entry points:
 #   divoom-control  → divoom_lib.cli:main
@@ -51,10 +52,15 @@ classifiers = [
 dependencies = [
     "bleak",
     "aiohttp",
-    # Floored at 12: `get_flattened_data()` (the `getdata()` replacement --
-    # `getdata` is removed in Pillow 14) exists only on 12+. Latest 12.3.0
-    # as of 2026-09-20; the float above the floor tracks CI (unpinned there).
-    "pillow>=12",
+    # Unpinned, deliberately. The floor that was here (`pillow>=12`) was
+    # justified by `get_flattened_data()` / `getdata()`, and NOTHING in this
+    # tree calls either one -- they were comments and CHANGELOG prose. The
+    # entire PIL surface of the shipped GUI is one call,
+    # `Image.frombytes("RGB", (size, size), raw)` in
+    # divoom_gui/widget_frames.py, which tools/check_gui_is_a_client.py pins as
+    # the ONLY legal `Image` attribute in divoom_gui/ (IMAGE_ALLOWED_ATTRS).
+    # A floor nothing in the code needs is decoration that only goes stale.
+    "pillow",
     "pycryptodome",
     "lzallright",
     "tomli-w",
@@ -69,6 +75,18 @@ gui = [
 test = [
     "pytest",
     "pytest-asyncio",
+]
+# Browser-driven suites: the 15 GUI e2e modules (tests/test_*.py with a
+# playwright import) and scripts/gui_pov.py, the harness AGENTS.md calls "does
+# the app actually work?". These were previously reachable only through a
+# literal in .github/workflows/tests.yml, which is why scripts/py_ci.sh could
+# only WARN when the browser was missing: nothing declared them, so nothing
+# could hold them. camoufox is pinned to the version CI installs; note the pin
+# is not what makes the suite pass -- the BROWSER BUILD is (see the `camoufox
+# fetch` step, pinned to official/152.0.4-beta.29).
+e2e = [
+    "playwright",
+    "camoufox==0.5.5",
 ]
 dev = [
     "divoom-control[gui,test]",

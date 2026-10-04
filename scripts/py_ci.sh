@@ -23,7 +23,7 @@ if python3 tools/camoufox_installed.py >/tmp/py_ci_camoufox.log 2>&1; then
     have_camoufox=1
 else
     warn "no camoufox browser — the 15 GUI e2e suites will SKIP, not run"
-    warn "  install with: python3 -m camoufox fetch"
+    warn "  install with: pip install -e '.[e2e]' && python3 -m camoufox fetch"
 fi
 
 # ── coverage floor (R70 P0.4) ────────────────────────────────────────────────

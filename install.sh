@@ -100,11 +100,11 @@ if [[ "$BUILD" == "1" ]]; then
     info "creating build venv (.buildvenv)"
     python3 -m venv .buildvenv
     "$PYBUILD" -m pip install --quiet --upgrade pip
-    "$PYBUILD" -m pip install --quiet -e '.[gui]' pyinstaller psutil \
+    "$PYBUILD" -m pip install --quiet -e '.[gui]' pyinstaller \
       || die "could not install build dependencies"
   fi
   "$PYBUILD" -c "import PyInstaller" 2>/dev/null \
-    || "$PYBUILD" -m pip install --quiet pyinstaller psutil
+    || "$PYBUILD" -m pip install --quiet pyinstaller
 
   info "building self-contained bundle (this takes a few minutes)"
   # build_release.sh owns the bundle: native dylib, divoomd, divoom-menubar,

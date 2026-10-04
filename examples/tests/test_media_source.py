@@ -1,4 +1,6 @@
 import json
+import sys
+import types
 from io import BytesIO
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -7,6 +9,23 @@ import pytest
 from PIL import Image
 
 from divoom_legacy.utils import media_source
+
+
+def _psutil_stub(**fns):
+    """A stub `psutil` module, injected into sys.modules for the block's scope.
+
+    `get_system_stats` imports psutil lazily inside the function, so this is all
+    it takes to drive the code. The alternative -- `patch("psutil.cpu_percent")`
+    -- required the AMBIENT package to be installed, which meant three tests
+    here were green or red depending on what happened to be in the interpreter:
+    psutil is not a declared dependency (its only real importer is this retired
+    module, which is excluded from the bundle and FORBIDDEN in divoom_gui/ by
+    tools/check_gui_is_a_client.py), so those tests only passed by accident.
+    """
+    module = types.ModuleType("psutil")
+    for name, fn in fns.items():
+        setattr(module, name, fn)
+    return patch.dict(sys.modules, {"psutil": module})
 
 
 
@@ -61,10 +80,12 @@ def test_render_stock_ticker_frame(tmp_path):
 
 
 def test_get_system_stats():
-    with patch("psutil.cpu_percent", return_value=12.5), \
-         patch("psutil.virtual_memory") as mock_mem, \
-         patch("psutil.sensors_battery", return_value=MagicMock(percent=85)):
-        mock_mem.return_value.percent = 45.2
+    mem = MagicMock(percent=45.2)
+    with _psutil_stub(
+        cpu_percent=MagicMock(return_value=12.5),
+        virtual_memory=MagicMock(return_value=mem),
+        sensors_battery=MagicMock(return_value=MagicMock(percent=85)),
+    ):
         stats = media_source.get_system_stats()
         assert stats == {"cpu": 12, "mem": 45, "battery": 85}
 
@@ -186,16 +207,17 @@ def test_render_stock_ticker_frame_size_32_down(tmp_path):
 
 
 def test_get_system_stats_battery_sensor_exception_returns_none_battery():
-    with patch("psutil.cpu_percent", return_value=10.0), \
-         patch("psutil.virtual_memory") as mock_mem, \
-         patch("psutil.sensors_battery", side_effect=RuntimeError("no battery")):
-        mock_mem.return_value.percent = 20.0
+    with _psutil_stub(
+        cpu_percent=MagicMock(return_value=10.0),
+        virtual_memory=MagicMock(return_value=MagicMock(percent=20.0)),
+        sensors_battery=MagicMock(side_effect=RuntimeError("no battery")),
+    ):
         stats = media_source.get_system_stats()
     assert stats == {"cpu": 10, "mem": 20, "battery": None}
 
 
 def test_get_system_stats_outer_exception_returns_defaults():
-    with patch("psutil.cpu_percent", side_effect=RuntimeError("boom")):
+    with _psutil_stub(cpu_percent=MagicMock(side_effect=RuntimeError("boom"))):
         stats = media_source.get_system_stats()
     assert stats == {"cpu": 0, "mem": 0, "battery": None}
 

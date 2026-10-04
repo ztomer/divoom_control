@@ -350,6 +350,29 @@ def main() -> int:
         print("  A gate that cannot check must not report success.")
         return 2
 
+    if checked == 0:
+        # A vacuous pass. This gate exists to check DECLARED FEATURES; finding
+        # none means it inspected nothing, and reporting "✓ 0 ... exist" is a
+        # claim of compliance with no work behind it. A renamed directory, a
+        # workspace restructure that moves every dependency behind
+        # `[workspace.dependencies]`, or being invoked where the member
+        # manifests are absent would all land here and retire the gate in
+        # silence.
+        #
+        # Found by the house `check_empty_scope.py`, which runs every gate over
+        # a skeleton repo holding the directory shape and the SHAPE_FILES but no
+        # content. The root Cargo.toml came along, so this tool parsed it, found
+        # no `[dependencies]` table (the root only carries `[workspace]` and
+        # `[workspace.lints]`), and cheerfully printed a pass. Exit 2, because
+        # "nothing to check" is not a finding -- it is an absence of evidence.
+        print()
+        print("✗ found no declared cargo features to check")
+        print("  This gate verified nothing, so it will not report success.")
+        print("  Expected: the workspace manifests declare dependencies with")
+        print("  `features = [...]`. If that has genuinely become empty, delete")
+        print("  this gate and the GOH_CI_STEPS entry rather than leave it inert.")
+        return 2
+
     print(f"✓ {checked} declared cargo feature(s) exist at the newest version each manifest allows")
     return 0
 

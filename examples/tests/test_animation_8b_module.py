@@ -8,7 +8,6 @@ and the Animation8B high-level `send()` wrapper (empty frames / all-phases-ok
 / mid-stream failure), which was entirely unexercised (0% on Animation8B).
 """
 
-import numpy as np
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
@@ -16,13 +15,14 @@ from divoom_legacy.display.animation_8b import Animation8B, build_8b_phases, CON
 from divoom_lib.models import COMMANDS
 
 
-def _flat(rgb_np):
-    return bytes(rgb_np)
-
-
 def _one_frame():
-    rgb = np.zeros((16, 16, 3), dtype=np.uint8)
-    return [(_flat(rgb), 16, 16, 100)]
+    # One 16x16 RGB frame of zeroes: 16 * 16 * 3 = 768 bytes. This was
+    # `np.zeros((16, 16, 3), dtype=np.uint8)` then `bytes(...)` -- numpy was
+    # here ONLY to spell "768 zero bytes", it was the sole importer in the whole
+    # tree, and numpy is a FORBIDDEN import in divoom_gui/
+    # (tools/check_gui_is_a_client.py), so it was a declared dependency whose
+    # only use is a construction the language spells for free.
+    return [(bytes(16 * 16 * 3), 16, 16, 100)]
 
 
 # ── build_8b_phases: empty input guard ───────────────────────────────────────

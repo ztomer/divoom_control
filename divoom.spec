@@ -63,18 +63,31 @@ for _src in ("target/release/divoomd",
         datas += [(_ex(_src), "bin")]
 
 # --- hidden imports ---------------------------------------------------------
+# Every entry here is a module PyInstaller's static walk cannot see. The test
+# for "can it be deleted" is an import of the real thing: importing
+# webview.platforms.cocoa pulls AppKit, Foundation, WebKit, objc and
+# PyObjCTools, and nothing else.
 hiddenimports = [
     "divoom_lib.cli",                      # spawned via -m
-    "objc", "Foundation", "AppKit", "WebKit", "CoreBluetooth", "Quartz",
-    "psutil",                             # system-stats widget
+    "objc", "Foundation", "AppKit", "WebKit",
 ]
-# R70 P5.1/P5.6: `bleak` is NOT bundled any more. The GUI process must never
-# own the radio — divoomd does — and after the dead `from bleak import
-# BleakScanner` came out of gui_main.py, importing the frozen entry point
-# loads zero bleak modules (verified, not assumed). `divoom_lib`'s BLE
-# transport still imports it, but that layer is reference-only and no GUI
-# path reaches it. Collecting it shipped a Bluetooth stack, and its macOS
-# TCC surface, into the one process that must not have either.
+# R70 P5.1/P5.6: `bleak` is NOT bundled any more, and neither is anything else
+# that opens a radio. The GUI process must never own the radio — divoomd does
+# it — and after the dead `from bleak import BleakScanner` came out of
+# gui_main.py, importing the frozen entry point loads zero bleak modules
+# (verified, not assumed). `divoom_lib`'s BLE transport still imports it, but
+# that layer is reference-only and no GUI path reaches it. Collecting it shipped
+# a Bluetooth stack, and its macOS TCC surface, into the one process that must
+# not have either.
+#
+# "CoreBluetooth" was on this list for the same reason and has been removed:
+# scripts/diagnose_ble.py is the only importer in the tree, it is excluded from
+# the bundle, and shipping a Bluetooth stack into the GUI is exactly the harm
+# tools/check_gui_is_a_client.py exists to prevent.
+#
+# "Quartz" had no importer anywhere in the repo at all. (Note that
+# pywebview still DEPENDS on pyobjc-framework-Quartz at install time; it just
+# never imports it on the Cocoa backend, so the bundle never collected it.)
 hiddenimports += collect_submodules("aiohttp")
 hiddenimports += collect_submodules("webview")
 # Cloud-container gallery decode (media_decoder) needs these; they are

@@ -1,12 +1,11 @@
 bleak
 aiohttp
-pillow>=12
+pillow
 pycryptodome
 lzallright
 pywebview; sys_platform == "darwin"   # desktop Control Center GUI (gui/ui_main.py)
+pyobjc-framework-Cocoa; sys_platform == "darwin"   # AppKit, the WKWebView host pywebview renders into
 tomli-w
 # test deps
 pytest
 pytest-asyncio
-numpy
-psutil
