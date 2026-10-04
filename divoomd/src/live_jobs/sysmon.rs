@@ -54,7 +54,25 @@ pub fn sample(sys: &System) -> SysmonSample {
     let total_mem = sys.total_memory();
     let used_mem = sys.used_memory();
     SysmonSample {
-        cpu: pct_u8(sys.global_cpu_info().cpu_usage()),
+        cpu: pct_u8(sys.global_cpu_usage()),
+        // `used_memory()` is not the same quantity across the sysinfo 0.30 ->
+        // 0.39 bump, and the widget now reads HIGHER than it used to. Measured
+        // on this machine, same moment, both versions built side by side:
+        //
+        //   sysinfo 0.30.13 -> 39,902,429,184 B (37.16 GiB) = 58.1%
+        //   sysinfo 0.39.6  -> 45,232,963,584 B (42.13 GiB) = 65.8%
+        //
+        // i.e. +4.97 GiB, +7.7 percentage points, with identical `total_memory`.
+        // Upstream changed the macOS page accounting between the two (0.38.3);
+        // the signature and the units are unchanged, so nothing catches it but
+        // a human comparing the widget against something else.
+        //
+        // The old figure is the one that matched Activity Monitor's "Memory
+        // Used" (independently reconstructed from `vm_stat` at 57.6%), so the
+        // widget now sits ~8 points ABOVE Activity Monitor. That is a known and
+        // accepted difference, not drift to be corrected -- do not "fix" it by
+        // reaching for `available_memory()` or a hand-rolled `vm_stat` sum
+        // without reading this first.
         mem: used_mem
             .saturating_mul(100)
             .checked_div(total_mem)
@@ -66,16 +84,16 @@ pub fn sample(sys: &System) -> SysmonSample {
 
 /// Sample once, for a caller with no long-lived `System`.
 ///
-/// `refresh_cpu` reports usage since the PREVIOUS refresh, so a fresh `System`
-/// asked immediately reports 0% -- a preview that always says the machine is
-/// idle, and one that looks like a plausible reading rather than a missing one.
-/// Hence two refreshes around `MINIMUM_CPU_UPDATE_INTERVAL`, which is what
-/// sysinfo itself documents as the shortest meaningful gap.
+/// CPU usage is reported as a delta since the PREVIOUS refresh, so a fresh
+/// `System` asked immediately reports 0% -- a preview that always says the
+/// machine is idle, and one that looks like a plausible reading rather than a
+/// missing one. Hence two refreshes around `MINIMUM_CPU_UPDATE_INTERVAL`, which
+/// is what sysinfo itself documents as the shortest meaningful gap.
 pub async fn sample_once() -> SysmonSample {
     let mut sys = System::new_all();
-    sys.refresh_cpu();
+    sys.refresh_cpu_all();
     tokio::time::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL).await;
-    sys.refresh_cpu();
+    sys.refresh_cpu_all();
     sys.refresh_memory();
     sample(&sys)
 }

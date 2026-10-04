@@ -145,7 +145,7 @@ async fn run_sysmon(daemon_weak: Weak<Daemon>, mac: String, params: Value, alive
         )
         .await;
 
-        sys.refresh_cpu();
+        sys.refresh_cpu_all();
         sys.refresh_memory();
 
         // Shared with the one-shot `sysmon` request, so the GUI's preview tile
