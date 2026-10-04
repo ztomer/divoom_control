@@ -1,9 +1,22 @@
-//! The BLE central, abstracted so tests can inject a *wedged* central.
+//! The BLE central, abstracted so tests can inject the two failure shapes a
+//! real central actually produces.
 //!
-//! In production `BleCentral::Real` wraps btleplug's `Adapter`. Under `#[cfg(test)]`
-//! a `Faulty` variant exists whose `start_scan`/`peripherals`/`stop_scan` never
-//! resolve — letting the wedge + self-heal logic be exercised deterministically
-//! without real Bluetooth hardware (see the `tests` module below).
+//! In production `BleCentral::Real` wraps btleplug's `Adapter`. Under
+//! `#[cfg(test)]` two doubles exist, because btleplug has TWO distinct failure
+//! modes and testing only one of them is how a behaviour change slips through
+//! unnoticed (see the `tests` module below):
+//!
+//!   `Faulty`         never resolves — a genuinely wedged `CoreBluetooth`
+//!                    session, so callers MUST wrap it in `tokio::time::timeout`.
+//!   `PromptError(m)`  fails immediately with `m`.
+//!
+//! The second one exists because btleplug 0.13 changed real behaviour here. In
+//! 0.12, several operations on a vanished peripheral or service had no reply
+//! branch at all and simply HUNG, so the daemon's timeout guard was what turned
+//! them into an error. 0.13 replies promptly instead — `discover_services` on
+//! an unknown peripheral is now `RuntimeError("Peripheral no longer available")`
+//! rather than a 20-second hang. That is strictly better for latency, but it
+//! changes which text the daemon sees, and the daemon classifies faults by text.
 
 use btleplug::api::Central;
 use btleplug::platform::{Adapter, Peripheral};
@@ -15,6 +28,10 @@ pub enum BleCentral {
     Real(Adapter),
     #[cfg(test)]
     Faulty,
+    /// Fails immediately with the given message instead of hanging. Models the
+    /// prompt-error family btleplug 0.13 introduced (see the module docs).
+    #[cfg(test)]
+    PromptError(&'static str),
 }
 
 impl BleCentral {
@@ -30,6 +47,8 @@ impl BleCentral {
             Self::Real(a) => a.start_scan(filter).await.map_err(std::convert::Into::into),
             #[cfg(test)]
             Self::Faulty => std::future::pending().await,
+            #[cfg(test)]
+            Self::PromptError(m) => Err(m.to_owned().into()),
         }
     }
 
@@ -44,6 +63,8 @@ impl BleCentral {
             Self::Real(a) => a.peripherals().await.map_err(std::convert::Into::into),
             #[cfg(test)]
             Self::Faulty => std::future::pending().await,
+            #[cfg(test)]
+            Self::PromptError(m) => Err(m.to_owned().into()),
         }
     }
 
@@ -58,6 +79,8 @@ impl BleCentral {
             Self::Real(a) => a.stop_scan().await.map_err(std::convert::Into::into),
             #[cfg(test)]
             Self::Faulty => std::future::pending().await,
+            #[cfg(test)]
+            Self::PromptError(m) => Err(m.to_owned().into()),
         }
     }
 }
@@ -91,6 +114,56 @@ mod tests {
         // central — retrying via reset_central would be wrong.
         assert!(!is_dead_central("device not found in scan"));
         assert!(!is_dead_central("no BLE adapter"));
+    }
+
+    /// Pins the behaviour CHANGE that btleplug 0.13 brings, in both directions.
+    ///
+    /// The existing tests above assert only on `is_dead_central`'s INPUTS, so
+    /// they would stay green while the set of errors reaching it narrowed. That
+    /// is the differential-blindness trap: a comparison against strings the code
+    /// itself supplies cannot see a change in which strings arrive. So this goes
+    /// through the real seam instead — a `BleCentral` that fails the way 0.13
+    /// actually fails — and asserts what the daemon then does.
+    #[tokio::test]
+    async fn prompt_runtime_errors_are_not_central_faults() {
+        // 0.12 HUNG here and our 20s guard turned it into "...central may be
+        // stale", which matched, so the central was rebuilt and the scan
+        // retried. 0.13 answers immediately with this instead.
+        let c = BleCentral::PromptError("Runtime Error: Peripheral no longer available");
+
+        let r = timeout(
+            Duration::from_secs(20),
+            ble::scan(&c, Duration::from_secs(2)),
+        )
+        .await;
+        assert!(r.is_ok(), "0.13 answers promptly; it must not hang");
+        let err = r.unwrap().expect_err("PromptError central must fail the scan");
+
+        // Assert the narrowing is a DECISION. If a future btleplug rewords this
+        // so it starts matching again, or if someone adds "Runtime Error" to
+        // `is_dead_central` to "restore" the old retry count, this goes red.
+        assert!(
+            !is_dead_central(&err.to_string()),
+            "a vanished peripheral is not a dead central; rebuilding it cannot \
+             help, so this must NOT be classified as one"
+        );
+    }
+
+    /// The other half: the case the self-heal was built for must STILL heal.
+    /// btleplug's `From<SendError>` renders "Channel closed" verbatim in 0.13,
+    /// but that is an upstream rendering detail, so it is asserted rather than
+    /// assumed — and asserting the exact text is what makes the first test's
+    /// `!is_dead_central` meaningful rather than vacuous.
+    #[tokio::test]
+    async fn a_genuinely_dead_central_still_heals() {
+        let c = BleCentral::PromptError("Channel closed");
+        let err = ble::scan(&c, Duration::from_secs(2))
+            .await
+            .expect_err("must fail");
+        assert!(
+            is_dead_central(&err.to_string()),
+            "a dead CoreBluetooth session must still trigger reset_central + retry"
+        );
     }
 
     #[tokio::test]

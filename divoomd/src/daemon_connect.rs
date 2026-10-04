@@ -97,6 +97,33 @@ pub(crate) fn is_dead_central(err: &str) -> bool {
     // hang `start_scan`/`peripherals` until our timeout guard turns it into a
     // "...timed out: central may be stale..." error. Match both so the daemon
     // rebuilds the central and retries either way.
+    //
+    // btleplug 0.13 NARROWED what reaches here, deliberately. It replaced a
+    // class of never-resolving futures with prompt `RuntimeError`s — 0.12's
+    // `discover_services` on an unknown peripheral had no reply branch and hung
+    // until our 20s guard produced "...timed out: central may be stale", which
+    // this function matched, so the daemon rebuilt the central and retried.
+    // 0.13 replies `RuntimeError("Peripheral no longer available")` instead.
+    //
+    // That text matches none of the four substrings, so retries happen LESS
+    // often after the bump. That is the correct outcome, not a regression: a
+    // vanished peripheral is not a dead central, and rebuilding the central
+    // cannot conjure the device back. Adding "Runtime Error" to this list to
+    // "restore" the old count would reinstate a pointless central rebuild.
+    //
+    // The case this function was actually BUILT for is untouched: btleplug's
+    // `From<SendError>` still renders "Channel closed" verbatim in 0.13, so a
+    // genuinely stale central still heals. `central.rs`'s `PromptError` double
+    // plus `prompt_runtime_errors_are_not_central_faults` pin both halves of
+    // that decision, because a test that only asserted the inputs would stay
+    // green while the behaviour silently narrowed.
+    //
+    // KNOWN LIMITATION, deliberately left: this matches on a DEPENDENCY'S prose.
+    // A future btleplug that rewords "Channel closed" silently stops the
+    // self-heal, and nothing here would notice. The fix is to classify while
+    // `btleplug::Error` is still a typed 13-variant enum, at the boundary in
+    // `ble.rs`, and match on OUR OWN fault enum. Tracked in docs/ROADMAP.md;
+    // antiknob's `permissions.rs` is the pattern to copy.
     err.contains("Channel closed")
         || err.contains("timed out")
         || err.contains("stale")

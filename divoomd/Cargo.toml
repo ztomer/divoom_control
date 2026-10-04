@@ -33,7 +33,7 @@ base64 = "0.23"
 # (while declaring image/jpeg — see nowplaying/src/artwork.rs). Without it
 # every real album cover fails to decode.
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "tiff"] }
-btleplug = { version = "0.12", optional = true }
+btleplug = { version = "0.13", optional = true }
 futures = { version = "0.3", optional = true }
 uuid = { version = "1", optional = true }
 # `webpki-roots` is GONE and must not come back. reqwest 0.13.2 deleted that
