@@ -143,8 +143,13 @@ async def test_apply_with_a_device_calls_set_clock_with_the_real_clock_id():
             await wait_js(page, "() => (window.__setClockCalls || []).length > 0")
             calls = await eval_js(page, "() => window.__setClockCalls")
             assert calls == [[26, "#ffffff"]]  # first row: Facebook Video, ClockId 26
-            await wait_js(page, 
-                "() => document.getElementById('toast')?.textContent.includes('Clock face applied')")
+            # `wait_toast`, not a poll of the live `#toast` element: this element
+            # is reused, so a toast the app raises on its own can overwrite the
+            # one under test between polls and the wait then never fires. That
+            # is not hypothetical -- it failed CI on 2026-10-05 in
+            # test_e2e_clock_faces.py, one run after the first toast wait in
+            # these files was converted and the SECOND one was left behind.
+            await wait_toast(page, "Clock face applied")
         finally:
             await browser.close()
 

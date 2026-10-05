@@ -137,7 +137,12 @@ async def test_play_with_a_device_calls_play_aid_sleep_with_the_real_sleep_id():
             await wait_js(page, "() => (window.__playAidSleepCalls || []).length > 0")
             calls = await eval_js(page, "() => window.__playAidSleepCalls")
             assert calls == [[256, 0]]  # first row: Gentle Rain, SleepId 256, type 0
-            await wait_js(page, 
-                "() => document.getElementById('toast')?.textContent.includes('Playing on device')")
+            # `wait_toast`, not a poll of the live `#toast` element: this element
+            # is reused, so a toast the app raises on its own can overwrite the
+            # one under test between polls and the wait then never fires. That
+            # is not hypothetical -- it failed CI on 2026-10-05 in
+            # test_e2e_clock_faces.py, one run after the first toast wait in
+            # these files was converted and the SECOND one was left behind.
+            await wait_toast(page, "Playing on device")
         finally:
             await browser.close()

@@ -115,7 +115,12 @@ async def test_play_with_a_device_calls_play_album_with_the_real_album_id():
             await wait_js(page, "() => (window.__playAlbumCalls || []).length > 0")
             calls = await eval_js(page, "() => window.__playAlbumCalls")
             assert calls == [7]  # first row: Trip, ClockId 7
-            await wait_js(page, 
-                "() => document.getElementById('toast')?.textContent.includes('Album playing')")
+            # `wait_toast`, not a poll of the live `#toast` element: this element
+            # is reused, so a toast the app raises on its own can overwrite the
+            # one under test between polls and the wait then never fires. That
+            # is not hypothetical -- it failed CI on 2026-10-05 in
+            # test_e2e_clock_faces.py, one run after the first toast wait in
+            # these files was converted and the SECOND one was left behind.
+            await wait_toast(page, "Album playing")
         finally:
             await browser.close()
