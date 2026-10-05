@@ -43,6 +43,21 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
+      # The tools structural.sh refuses to run without, from gates_of_heck's
+      # manifest rather than from the runner image happening to ship them:
+      # a hand-kept list drifted the day v0.20.0 made missing tools fatal.
+      # Fails closed -- the script failing, an empty list, or a tool still
+      # missing after apt all stop the step.
+      - name: Install the tools the structural gate requires
+        env:
+          GOH_DIR: ${{ github.workspace }}/goh
+        run: |
+          set -euo pipefail
+          names="$(python3 "$GOH_DIR/gates/required_tools.py" --layer structural --names)"
+          [ -n "$names" ]
+          missing="$(for t in $names; do command -v "$t" >/dev/null || echo "$t"; done)"
+          if [ -n "$missing" ]; then sudo apt-get update -qq && sudo apt-get install -y $missing; fi
+          for t in $names; do command -v "$t"; done
       - name: Structural house gates
         # The SAME entry the local gate list runs: structural.sh reads this
         # repo's .gatesrc (GOH_EXCLUDE for docs/divoom_docs/, the 500-line cap,

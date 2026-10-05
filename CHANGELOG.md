@@ -11,6 +11,10 @@ shipped milestone (per the project planning docs).
   gate's no-credential-in-git-config check (gates_of_heck v0.20.0) rightly
   refused it, turning the `no-emoji` job red on `62564db`. Every checkout now
   sets `persist-credentials: false`; no step does git network work afterwards.
+  The structural job also installs what `structural.sh` requires from
+  gates_of_heck's manifest (`gates/required_tools.py --layer structural
+  --names`, fed to apt) instead of trusting the runner image to ship it, and
+  fails closed if the list is empty or a tool is still missing.
 
 - **The roadmap is a phased plan a gate can read.** `docs/ROADMAP.md` went from
   ~1000 lines, half of it shipped narrative with SHIPPED, CLOSED and OPEN items
