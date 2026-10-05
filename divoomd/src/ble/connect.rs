@@ -6,8 +6,9 @@ use futures::StreamExt;
 use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, Mutex};
 
-use super::{BleCentral, BleResult, BleTransport, CONNECT_TIMEOUT};
+use super::{BleCentral, BleTransport, CONNECT_TIMEOUT};
 use crate::autoprobe::Protocol;
+use crate::ble_fault::BleError;
 use crate::framing;
 use crate::models::IOS_LE_HEADER;
 use crate::response::Frame;
@@ -16,7 +17,7 @@ use btleplug::platform::Peripheral;
 /// Connect to the device whose `id` matches a prior `scan()` result. Discovers
 /// services, subscribes to notifications, spawns the frame-parsing task, and
 /// runs the autoprobe to pick the framing.
-pub(super) async fn connect(central: &BleCentral, id: &str) -> BleResult<BleTransport> {
+pub(super) async fn connect(central: &BleCentral, id: &str) -> Result<BleTransport, BleError> {
     // Ensure the peripheral is known to the adapter. A single fixed scan window
     // intermittently misses a device on macOS (its next advertisement may not
     // land inside the window) — most visibly on RECONNECT after a disconnect.
@@ -44,34 +45,37 @@ pub(super) async fn connect(central: &BleCentral, id: &str) -> BleResult<BleTran
             if dbg_on {
                 eprintln!("[ble][connect] connect returned");
             }
-            r?;
+            r.map_err(|e| BleError::from_btle(&e))?;
         }
-        Err(_) => return Err("BLE connect timed out".into()),
+        Err(_) => return Err(BleError::dead_central("BLE connect timed out")),
     }
     if dbg_on {
         eprintln!("[ble][connect] discover_services");
     }
     match tokio::time::timeout(CONNECT_TIMEOUT, peripheral.discover_services()).await {
-        Ok(r) => r?,
-        Err(_) => return Err("BLE discover_services timed out".into()),
+        Ok(r) => r.map_err(|e| BleError::from_btle(&e))?,
+        Err(_) => return Err(BleError::dead_central("BLE discover_services timed out")),
     }
     let chars = peripheral.characteristics();
     let write_char = chars
         .iter()
         .find(|c| c.uuid == super::WRITE_UUID)
-        .ok_or("no write characteristic")?
+        .ok_or_else(|| BleError::other("no write characteristic"))?
         .clone();
     let notify_char = chars
         .iter()
         .find(|c| c.uuid == super::NOTIFY_UUID)
-        .ok_or("no notify characteristic")?
+        .ok_or_else(|| BleError::other("no notify characteristic"))?
         .clone();
 
     match tokio::time::timeout(CONNECT_TIMEOUT, peripheral.subscribe(&notify_char)).await {
-        Ok(r) => r?,
-        Err(_) => return Err("BLE subscribe timed out".into()),
+        Ok(r) => r.map_err(|e| BleError::from_btle(&e))?,
+        Err(_) => return Err(BleError::dead_central("BLE subscribe timed out")),
     }
-    let notifications = peripheral.notifications().await?;
+    let notifications = peripheral
+        .notifications()
+        .await
+        .map_err(|e| BleError::from_btle(&e))?;
     let tag = wire_tag(&peripheral.id().to_string());
     let rx = spawn_rx_pump(notifications, tag.clone());
     let dev_name = peripheral
@@ -106,13 +110,14 @@ fn wire_tag(id: &str) -> String {
 /// next advertisement may not land inside the window) -- most visibly on
 /// RECONNECT after a disconnect -- so the discovered set is polled,
 /// mirroring the Python daemon's reconnect-scan retries.
-async fn find_peripheral(central: &BleCentral, id: &str) -> BleResult<Peripheral> {
+async fn find_peripheral(central: &BleCentral, id: &str) -> Result<Peripheral, BleError> {
     // EVERY central await below is bounded by a timeout. On a dead
     // CoreBluetooth session `start_scan`/`peripherals`/`stop_scan` hang forever
     // with no error, which would wedge `connect` and defeat the caller's
     // `reset_central` self-heal (it only fires on an `Err`). Each timeout turns
-    // the hang into an `Err` matching `is_dead_central`, so the daemon rebuilds
-    // the central + retries instead of hanging.
+    // the hang into a `BleError::dead_central` — the fault is in the TYPE, so
+    // rewording these messages can no longer disarm the heal — and the daemon
+    // rebuilds the central + retries instead of hanging.
     match tokio::time::timeout(
         Duration::from_secs(5),
         central.start_scan(ScanFilter::default()),
@@ -121,7 +126,9 @@ async fn find_peripheral(central: &BleCentral, id: &str) -> BleResult<Peripheral
     {
         Ok(r) => r?,
         Err(_) => {
-            return Err("BLE scan start timed out: central may be stale (Channel closed)".into())
+            return Err(BleError::dead_central(
+                "BLE scan start timed out: central may be stale (Channel closed)",
+            ))
         }
     }
     let deadline = Instant::now() + Duration::from_secs(8);
@@ -149,12 +156,14 @@ async fn find_peripheral(central: &BleCentral, id: &str) -> BleResult<Peripheral
             }
         } else {
             let _ = tokio::time::timeout(Duration::from_secs(3), central.stop_scan()).await;
-            return Err("BLE discovery timed out: central may be stale (Channel closed)".into());
+            return Err(BleError::dead_central(
+                "BLE discovery timed out: central may be stale (Channel closed)",
+            ));
         }
         tokio::time::sleep(Duration::from_millis(400)).await;
     }
     let _ = tokio::time::timeout(Duration::from_secs(3), central.stop_scan()).await;
-    found.ok_or_else(|| "device not found in scan".into())
+    found.ok_or_else(|| BleError::other("device not found in scan"))
 }
 
 /// Parse inbound bytes into Frames on their own task, using the ported

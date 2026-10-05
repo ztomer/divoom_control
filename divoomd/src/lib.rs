@@ -15,6 +15,8 @@ pub mod autoprobe;
 pub mod bind_failure;
 #[cfg(feature = "ble")]
 pub mod ble;
+#[cfg(feature = "ble")]
+pub mod ble_fault;
 #[cfg(test)]
 mod c7_positional_tests;
 #[cfg(feature = "ble")]

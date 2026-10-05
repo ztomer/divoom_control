@@ -4,25 +4,26 @@
 use btleplug::api::Central;
 
 use crate::ble;
+use crate::ble_fault::BleError;
 use crate::central::BleCentral;
 use crate::daemon::Daemon;
 
 impl Daemon {
     /// Get (creating + caching once) the shared `CoreBluetooth` central.
     #[cfg(feature = "ble")]
-    pub(crate) async fn central(&self) -> Result<BleCentral, String> {
+    pub(crate) async fn central(&self) -> Result<BleCentral, BleError> {
         let mut g = self.central.lock().await;
         if g.is_none() {
-            *g = Some(ble::make_central().await.map_err(|e| e.to_string())?);
+            *g = Some(ble::make_central().await?);
         }
         Ok(g.as_ref().unwrap().clone())
     }
 
-    /// Drop the cached central so the next `central()` recreates it. btleplug
-    /// reports a dead `CoreBluetooth` session as "Channel closed" (the session ends
-    /// after a device disconnect or a Bluetooth toggle); the stale Adapter can't
-    /// recover, so every scan/connect fails until it's rebuilt. This lets the
-    /// daemon self-heal without a restart.
+    /// Drop the cached central so the next `central()` recreates it. A dead
+    /// `CoreBluetooth` session (the session ends after a device disconnect or a
+    /// Bluetooth toggle) leaves an Adapter that can't recover, so every
+    /// scan/connect fails until it's rebuilt. This lets the daemon self-heal
+    /// without a restart; `ble_fault` is what decides that a failure IS that.
     #[cfg(feature = "ble")]
     pub(crate) async fn reset_central(&self) {
         *self.central.lock().await = None;

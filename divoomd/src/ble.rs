@@ -16,6 +16,7 @@ use btleplug::api::{
 };
 use btleplug::platform::{Manager, Peripheral};
 
+use crate::ble_fault::BleError;
 use crate::central::BleCentral;
 
 /// The platform BLE adapter. On macOS the `CoreBluetooth` central manager it wraps
@@ -73,12 +74,15 @@ pub struct Discovered {
 ///
 /// When no Bluetooth adapter is present, or the platform's BLE manager cannot
 /// be created. A machine with Bluetooth turned off reaches this.
-pub async fn make_central() -> BleResult<BleCentral> {
-    let manager = Manager::new().await?;
-    let adapter =
-        manager.adapters().await?.into_iter().next().ok_or_else(
-            || -> Box<dyn std::error::Error + Send + Sync> { "no BLE adapter".into() },
-        )?;
+pub async fn make_central() -> Result<BleCentral, BleError> {
+    let manager = Manager::new().await.map_err(|e| BleError::from_btle(&e))?;
+    let adapter = manager
+        .adapters()
+        .await
+        .map_err(|e| BleError::from_btle(&e))?
+        .into_iter()
+        .next()
+        .ok_or_else(|| BleError::other("no BLE adapter"))?;
     Ok(BleCentral::Real(adapter))
 }
 
@@ -101,21 +105,23 @@ const SCAN_TIMEOUT_CAP: Duration = Duration::from_secs(90);
 /// When the scan cannot be started, and when it times out -- which usually
 /// means the central is stale rather than that nothing is nearby, and the
 /// message says so.
-pub async fn scan(central: &BleCentral, timeout: Duration) -> BleResult<Vec<Discovered>> {
+pub async fn scan(central: &BleCentral, timeout: Duration) -> Result<Vec<Discovered>, BleError> {
     let dur = timeout.min(SCAN_TIMEOUT_CAP);
     // Guard the whole scan in a timeout. A dead CoreBluetooth session (after a
     // disconnect / Bluetooth toggle) makes `start_scan`/`peripherals` hang
     // forever with no error — which would wedge the scan command and defeat the
     // caller's `reset_central` self-heal (it only fires on an `Err`). The timeout
-    // turns the hang into an `Err` matching `is_dead_central` so the daemon
-    // rebuilds the central and retries.
+    // turns the hang into an `Err` carrying a `BleFault`, so the daemon
+    // rebuilds the central and retries. The fault is stated in the TYPE, not in
+    // the wording: this message used to need four substring probes to be
+    // recognised, which made a reword of it silently disable the self-heal.
     let work = async {
         central.start_scan(ScanFilter::default()).await?;
         tokio::time::sleep(dur).await;
         central.stop_scan().await?;
         let mut out = Vec::new();
         for p in central.peripherals().await? {
-            let props = p.properties().await?;
+            let props = p.properties().await.map_err(|e| BleError::from_btle(&e))?;
             let name = props
                 .as_ref()
                 .and_then(|pr| pr.local_name.clone())
@@ -146,7 +152,11 @@ pub async fn scan(central: &BleCentral, timeout: Duration) -> BleResult<Vec<Disc
     };
     tokio::time::timeout(dur + Duration::from_secs(10), work)
         .await
-        .unwrap_or_else(|_| Err("scan timed out: central may be stale (Channel closed)".into()))
+        .unwrap_or_else(|_| {
+            Err(BleError::dead_central(
+                "scan timed out: central may be stale (Channel closed)",
+            ))
+        })
 }
 
 /// An owned connection to one device: serialized writes + a parsed-frame channel.
@@ -173,7 +183,7 @@ impl BleTransport {
     ///
     /// From the BLE stack below: the adapter is gone, the peripheral is not
     /// connected, or the write did not complete.
-    pub async fn connect(central: &BleCentral, id: &str) -> BleResult<Self> {
+    pub async fn connect(central: &BleCentral, id: &str) -> Result<Self, BleError> {
         connect::connect(central, id).await
     }
 
@@ -247,7 +257,9 @@ impl BleTransport {
         payload.extend_from_slice(args);
         let frame = match self.protocol {
             Protocol::Basic => framing::encode_basic_payload(&payload, false),
-            Protocol::IosLe => framing::encode_ios_le_payload(&payload, 0)?,
+            Protocol::IosLe => {
+                framing::encode_ios_le_payload(&payload, 0).map_err(BleError::other)?
+            }
         };
         let wtype = if write_with_response {
             WriteType::WithResponse
@@ -268,8 +280,13 @@ impl BleTransport {
         )
         .await
         {
-            Ok(res) => res?, // write finished (Ok, or a real BLE error to propagate)
-            Err(_) => return Err("BLE write timed out (device unreachable)".into()),
+            // write finished (Ok, or a real BLE error to propagate)
+            Ok(res) => res.map_err(|e| BleError::from_btle(&e))?,
+            Err(_) => {
+                return Err(
+                    BleError::dead_central("BLE write timed out (device unreachable)").into(),
+                )
+            }
         }
         Ok(())
     }
@@ -440,7 +457,10 @@ impl BleTransport {
     /// From the BLE stack below: the adapter is gone, the peripheral is not
     /// connected, or the write did not complete.
     pub async fn disconnect(&self) -> BleResult<()> {
-        self.peripheral.disconnect().await?;
+        self.peripheral
+            .disconnect()
+            .await
+            .map_err(|e| BleError::from_btle(&e))?;
         Ok(())
     }
 }

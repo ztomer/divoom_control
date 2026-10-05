@@ -2,6 +2,7 @@
 //! `daemon_connect.rs` to stay under the 500-LOC ground rule.
 
 use super::{cmd_connect, cmd_disconnect, cmd_scan, is_dead_central, ScanGuard};
+use crate::ble_fault::BleError;
 use crate::daemon::Daemon;
 use crate::protocol::make_request;
 use serde_json::json;
@@ -14,12 +15,23 @@ use std::time::Instant;
 // anti-throttle behavior that stops rapid re-scans wedging CoreBluetooth.
 #[test]
 fn detects_dead_central_error() {
-    // "Channel closed" (from either scan or connect) → recreate the central.
-    assert!(is_dead_central("connect failed: Channel closed"));
-    assert!(is_dead_central("scan failed: Channel closed"));
+    // The dead-CoreBluetooth-session error, whichever command hit it → recreate
+    // the central. Note what the classifier does NOT see: `cmd_scan` and
+    // `cmd_connect` add their own `"scan failed: "` / `"connect failed: "` prefix
+    // only when they build the reply, AFTER this decision. It used to classify
+    // the prefixed string, which made the verdict depend on caller-side wording
+    // for no gain.
+    let closed = btleplug::Error::Other("Channel closed".into());
+    assert!(is_dead_central(&BleError::from_btle(&closed)));
     // Ordinary failures must NOT trigger a central rebuild.
-    assert!(!is_dead_central("device not found in scan"));
-    assert!(!is_dead_central("no BLE adapter"));
+    let vanished = btleplug::Error::RuntimeError("Peripheral no longer available".into());
+    for err in [
+        BleError::other("device not found in scan"),
+        BleError::other("no BLE adapter"),
+        BleError::from_btle(&vanished),
+    ] {
+        assert!(!is_dead_central(&err), "{}", err.text());
+    }
 }
 
 #[tokio::test]

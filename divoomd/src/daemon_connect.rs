@@ -14,6 +14,8 @@ const MIN_RESCAN_INTERVAL: Duration = Duration::from_secs(3);
 
 #[cfg(feature = "ble")]
 use crate::ble::{self, BleTransport, Discovered};
+#[cfg(feature = "ble")]
+use crate::ble_fault::{BleError, BleFault};
 use crate::daemon::{Daemon, DeviceTransport};
 use crate::protocol::{err_reply, Request};
 
@@ -88,62 +90,35 @@ pub(crate) async fn cmd_select_device(daemon: &Daemon, req: &Request) -> Value {
     json!({ "success": true, "selected": mac })
 }
 
-/// btleplug surfaces a dead `CoreBluetooth` central (its session ended after a
-/// device disconnect or a Bluetooth toggle) as "Channel closed". The cached
-/// Adapter can't recover, so we drop it and retry once with a fresh one.
+/// Is this failure worth dropping the cached central and trying once more?
+///
+/// The decision is a match on [`BleFault`] — an enum this crate owns — because
+/// every BLE error is classified at the boundary that produces it, while
+/// `btleplug::Error` is still typed (`ble_fault::BleError::from_btle`). It used
+/// to be four `contains` probes against a dependency's `Display` output, which
+/// meant a reword upstream silently stopped the self-heal with nothing to notice:
+/// `ble_fault`'s module docs carry the reasoning, its `Other` arm carries the one
+/// place the type is already gone, and `central.rs` pins both directions of the
+/// decision (`prompt_runtime_errors_are_not_central_faults`,
+/// `a_genuinely_dead_central_still_heals`).
 #[cfg(feature = "ble")]
-pub(crate) fn is_dead_central(err: &str) -> bool {
-    // A dead CoreBluetooth session surfaces as "Channel closed", but can also
-    // hang `start_scan`/`peripherals` until our timeout guard turns it into a
-    // "...timed out: central may be stale..." error. Match both so the daemon
-    // rebuilds the central and retries either way.
-    //
-    // btleplug 0.13 NARROWED what reaches here, deliberately. It replaced a
-    // class of never-resolving futures with prompt `RuntimeError`s — 0.12's
-    // `discover_services` on an unknown peripheral had no reply branch and hung
-    // until our 20s guard produced "...timed out: central may be stale", which
-    // this function matched, so the daemon rebuilt the central and retried.
-    // 0.13 replies `RuntimeError("Peripheral no longer available")` instead.
-    //
-    // That text matches none of the four substrings, so retries happen LESS
-    // often after the bump. That is the correct outcome, not a regression: a
-    // vanished peripheral is not a dead central, and rebuilding the central
-    // cannot conjure the device back. Adding "Runtime Error" to this list to
-    // "restore" the old count would reinstate a pointless central rebuild.
-    //
-    // The case this function was actually BUILT for is untouched: btleplug's
-    // `From<SendError>` still renders "Channel closed" verbatim in 0.13, so a
-    // genuinely stale central still heals. `central.rs`'s `PromptError` double
-    // plus `prompt_runtime_errors_are_not_central_faults` pin both halves of
-    // that decision, because a test that only asserted the inputs would stay
-    // green while the behaviour silently narrowed.
-    //
-    // KNOWN LIMITATION, deliberately left: this matches on a DEPENDENCY'S prose.
-    // A future btleplug that rewords "Channel closed" silently stops the
-    // self-heal, and nothing here would notice. The fix is to classify while
-    // `btleplug::Error` is still a typed 13-variant enum, at the boundary in
-    // `ble.rs`, and match on OUR OWN fault enum. Tracked in docs/ROADMAP.md;
-    // antiknob's `permissions.rs` is the pattern to copy.
-    err.contains("Channel closed")
-        || err.contains("timed out")
-        || err.contains("stale")
-        || err.contains("central")
+pub(crate) const fn is_dead_central(err: &BleError) -> bool {
+    matches!(err.fault(), BleFault::DeadCentral)
 }
 
-/// Get the (cached) central and run one scan; error as a String for retry logic.
+/// Get the (cached) central and run one scan, keeping the classified fault for
+/// the retry decision below.
 #[cfg(feature = "ble")]
-async fn run_scan(daemon: &Daemon, dur: Duration) -> Result<Vec<Discovered>, String> {
+async fn run_scan(daemon: &Daemon, dur: Duration) -> Result<Vec<Discovered>, BleError> {
     let central = daemon.central().await?;
-    ble::scan(&central, dur).await.map_err(|e| e.to_string())
+    ble::scan(&central, dur).await
 }
 
-/// Get the (cached) central and run one connect; error as a String for retry.
+/// Get the (cached) central and run one connect, keeping the classified fault.
 #[cfg(feature = "ble")]
-async fn run_connect(daemon: &Daemon, id: &str) -> Result<BleTransport, String> {
+async fn run_connect(daemon: &Daemon, id: &str) -> Result<BleTransport, BleError> {
     let central = daemon.central().await?;
-    BleTransport::connect(&central, id)
-        .await
-        .map_err(|e| e.to_string())
+    BleTransport::connect(&central, id).await
 }
 
 /// Handle `probe_lan` — check whether the connected device is reachable over its
