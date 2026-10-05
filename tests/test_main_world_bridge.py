@@ -91,7 +91,172 @@ def test_main_world_timeout_is_an_assertion_error():
     assert issubclass(B.MainWorldTimeout, AssertionError)
 
 
+# ── the toast wait: keyed on identity, never on a count ───────────────────────
+
+def test_toast_condition_matches_the_RECORDED_render():
+    """The claim these waits exist for is about the SCREEN.
+
+    `showToast`'s arguments are what the app asked for; `rendered` is what it
+    wrote into `#toast`. Matching on the record means a call with no element to
+    land in can never satisfy a wait — a post-load spy reports that call anyway.
+    """
+    out = B.toast_condition("Bluetooth")
+    assert "window.__divoomToasts" in out
+    assert "t.rendered.text.indexOf(needle) >= 0" in out
+
+
+def test_toast_condition_keys_on_identity_not_on_a_count():
+    """The order-dependent bug, pinned as a property of the CONDITION.
+
+    The app raises toasts no test asked for (`app_init.js:281` fires one about a
+    second after load, and every e2e page loads that script), so any wait on "a
+    toast exists", on a counter, or on the `show` class is satisfiable by app
+    noise — measured 2026-10-04: `window.__toasts.length > 0` went true with no
+    click in the test at all. If this test ever needs relaxing, the wait has
+    regressed to a proxy.
+    """
+    out = B.toast_condition("Bluetooth", kind="error")
+    assert json.dumps("Bluetooth") in out
+    assert "length" not in out
+    assert "'show'" not in out
+    assert ".find(" in out
+
+
+def test_toast_condition_narrows_only_on_what_it_is_given():
+    assert '.indexOf("error") >= 0' in B.toast_condition("x", kind="error")
+    assert "className" not in B.toast_condition("x")
+    assert 't.rendered.transport === "LAN"' in B.toast_condition("x", transport="LAN")
+    assert "transport" not in B.toast_condition("x")
+
+
+def test_toast_condition_survives_quotes_in_the_needle():
+    needle = 'Scan failed ("device backend unavailable")'
+    assert json.dumps(needle) in B.toast_condition(needle)
+
+
+def test_toast_condition_returns_the_record_not_a_boolean():
+    """The wait hands back what it matched, so the assert reads the same thing."""
+    assert "return hit || null" in B.toast_condition("x")
+
+
+def test_recorder_is_installed_before_the_app_defines_showtoast():
+    """A spy assigned after load cannot see a `showToast` captured earlier.
+
+    `app_globals.js` assigns `window.showToast` at load, so the trap has to be an
+    init script -- hence `install_toast_recorder` being documented as
+    before-goto, and `wait_toast` raising rather than timing out when it is
+    missing.
+    """
+    src = B.TOAST_RECORDER_JS
+    assert "Object.defineProperty(window, 'showToast'" in src
+    assert "window.__divoomToasts = history" in src
+    assert "document.getElementById(\"toast\")" in src
+
+
+def test_toast_recorder_missing_is_an_assertion_error():
+    assert issubclass(B.ToastRecorderMissing, AssertionError)
+
+
 # ── the real thing, against the real browser ──────────────────────────────────
+
+#: The shape `showToast` actually writes (`app_globals.js:30`): one element, its
+#: class replaced with the kind, its innerHTML replaced with the message plus an
+#: optional transport marker. Reproduced here so this file does not need the app.
+TOAST_PAGE = (
+    "data:text/html,<div id='toast' class='toast'></div><script>"
+    "window.showToast = function (message, type, transport) {"
+    "  const el = document.getElementById(\"toast\");"
+    "  if (!el) return;"
+    "  el.className = \"toast \" + (type || \"success\") + \" show\";"
+    "  el.innerHTML = message + (transport ?"
+    "    \"<span class='toast-transport'>\" + transport + \"</span>\" : \"\");"
+    "};"
+    "</script>"
+)
+
+
+@pytest.mark.asyncio
+async def test_wait_toast_ignores_a_foreign_toast():
+    """A toast this test did not create must not end the wait.
+
+    Asserted in both directions, because either half alone is a lie: a wait that
+    never returns passes the first assertion, and one that returns on anything
+    passes the second.
+    """
+    B.require_browser()
+    from playwright.async_api import async_playwright
+
+    async with async_playwright() as p:
+        b = await B.launch(p)
+        try:
+            page = await b.new_page()
+            await B.install_toast_recorder(page)
+            await page.goto(TOAST_PAGE)
+            # A toast the app raises on its own, on a timer no test controls.
+            await B.eval_js(
+                page, "() => window.showToast('Startup: Auto-scanning screens...',"
+                      " 'success')")
+            # ...which does not satisfy a wait for this test's toast.
+            assert await B.eval_js(page, B.toast_condition("Bluetooth", kind="error")) is None
+            with pytest.raises(B.MainWorldTimeout):
+                await B.wait_toast(page, "Bluetooth", kind="error", timeout=300)
+
+            # The toast this test is about does satisfy it, and the record is
+            # what was RENDERED, kind and transport marker included.
+            await B.eval_js(
+                page, "() => window.showToast('no LAN API on this device', 'error', ' LAN')")
+            toast = await B.wait_toast(page, "no LAN API", kind="error", timeout=300)
+            assert toast["rendered"]["text"] == "no LAN API on this device LAN"
+            assert "error" in toast["rendered"]["className"].split()
+            assert toast["rendered"]["transport"] == "LAN"
+        finally:
+            await b.close()
+
+
+@pytest.mark.asyncio
+async def test_wait_toast_ignores_a_toast_that_never_reached_the_screen():
+    """The hole a `showToast` spy leaves open, closed.
+
+    With no `#toast` element the app's `showToast` returns early, so nothing was
+    shown -- but the call still happened, and a spy-based wait would report it.
+    """
+    B.require_browser()
+    from playwright.async_api import async_playwright
+
+    async with async_playwright() as p:
+        b = await B.launch(p)
+        try:
+            page = await b.new_page()
+            await B.install_toast_recorder(page)
+            await page.goto(TOAST_PAGE)
+            await B.eval_js(
+                page, "() => { document.getElementById('toast').remove();"
+                      " window.showToast('no LAN API on this device', 'error', ' LAN'); }")
+            assert await B.eval_js(page, "() => window.__divoomToasts.length") == 1
+            assert await B.eval_js(page, B.toast_condition("no LAN API")) is None
+            with pytest.raises(B.MainWorldTimeout):
+                await B.wait_toast(page, "no LAN API", timeout=300)
+        finally:
+            await b.close()
+
+
+@pytest.mark.asyncio
+async def test_wait_toast_says_so_when_the_recorder_is_missing():
+    """A forgotten `install_toast_recorder` must not read as a 60s timeout."""
+    B.require_browser()
+    from playwright.async_api import async_playwright
+
+    async with async_playwright() as p:
+        b = await B.launch(p)
+        try:
+            page = await b.new_page()
+            await page.goto(TOAST_PAGE)
+            with pytest.raises(B.ToastRecorderMissing) as exc:
+                await B.wait_toast(page, "no LAN API", timeout=300)
+            assert "install_toast_recorder" in str(exc.value)
+        finally:
+            await b.close()
+
 
 @pytest.mark.asyncio
 async def test_bridge_reaches_the_main_world_and_plain_evaluate_does_not():

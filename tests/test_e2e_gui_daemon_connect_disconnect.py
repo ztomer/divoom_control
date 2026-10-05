@@ -51,9 +51,11 @@ from tests.support.gui_daemon_stack import IsolatedStack
 from tests.support.browser import (
     add_init_js,
     eval_js,
+    install_toast_recorder,
     launch as launch_browser,
     require_browser,
     wait_js,
+    wait_toast,
 )
 
 REPO_ROOT = Path(__file__).parent.parent
@@ -161,6 +163,9 @@ async def _open(p, stack):
     page = await browser.new_page()
     await add_init_js(page, 
         f"window.__BRIDGE_URL__ = {json.dumps(stack.bridge_url)};\n" + _REAL_BRIDGE_API)
+    # Before goto: the recorder has to predate the app's own assignment of
+    # window.showToast, or it misses toasts.
+    await install_toast_recorder(page)
     await page.goto(f"file://{INDEX_HTML}")
     await page.wait_for_load_state("domcontentloaded")
     await wait_js(page, "() => !!window.DivoomState && !!window.refreshConnectionState")
@@ -349,15 +354,13 @@ async def test_real_connect_single_device_failure_unreachable_lan(gui_daemon_sta
             #
             # Waiting on the real signal does not weaken the test -- if the app
             # never raises the error toast, this times out and fails, which is
-            # exactly the regression worth catching.
-            await wait_js(page, 
-                "() => document.getElementById('toast').className.split(' ')"
-                ".includes('error')", timeout=8000)
-            toast = await eval_js(page, 
-                "() => ({c: document.getElementById('toast').className,"
-                "        t: document.getElementById('toast').textContent})")
-            assert "error" in toast["c"].split()
-            assert "Unreachable" in toast["t"]
+            # exactly the regression worth catching. Keyed on this toast's own
+            # words as well as its kind: the ERROR class alone is a proxy the
+            # app satisfies on its own (app_init.js:281 raises an unasked scan
+            # failure), and a proxy here is the bug that was just fixed.
+            toast = await wait_toast(page, "Unreachable", kind="error", timeout=8000)
+            assert "error" in toast["rendered"]["className"].split(), toast
+            assert "Unreachable" in toast["rendered"]["text"]
             # The dot must still settle inactive — kept as a separate assertion
             # rather than as the (mis-used) synchronisation signal.
             await wait_js(page, 

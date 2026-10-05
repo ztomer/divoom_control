@@ -9,9 +9,11 @@ from pathlib import Path
 from tests.support.browser import (
     add_init_js,
     eval_js,
+    install_toast_recorder,
     launch as launch_browser,
     require_browser,
     wait_js,
+    wait_toast,
 )
 
 INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.html"
@@ -40,6 +42,9 @@ async def _open(p):
     browser = await launch_browser(p)
     page = await browser.new_page()
     await add_init_js(page, _MOCK_API)
+    # Before goto: the recorder has to predate the app's own
+    # assignment of window.showToast, or it misses toasts.
+    await install_toast_recorder(page)
     await page.goto(f"file://{INDEX_HTML}")
     await page.wait_for_load_state("domcontentloaded")
     await wait_js(page, "() => !!window.DivoomState && !!window.renderDeviceDots")
@@ -103,10 +108,13 @@ async def test_apply_without_a_device_shows_connect_prompt_and_does_not_call_set
             await wait_js(page, 
                 "() => document.querySelectorAll('#cloud-clock-list .cloud-clock-row').length > 0")
             await page.click("#cloud-clock-list .cloud-clock-apply-btn")
-            await wait_js(page, 
-                "() => document.getElementById('toast')?.classList.contains('show')")
-            toast = await eval_js(page, "() => document.getElementById('toast').textContent")
-            assert "Connect a device first" in toast
+            # On the guard toast's own words and kind, not on "a toast is
+            # showing": this page raises its own on a timer (app_init.js:281),
+            # so `show` is satisfiable by app noise and the read below would
+            # catch that one instead.
+            toast = await wait_toast(page, "Connect a device first", kind="error")
+            assert "Connect a device first" in toast["rendered"]["text"]
+            assert "error" in toast["rendered"]["className"].split(), toast
             calls = await eval_js(page, "() => window.__setClockCalls")
             assert calls == []
         finally:

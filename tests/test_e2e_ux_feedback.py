@@ -13,9 +13,11 @@ from pathlib import Path
 from tests.support.browser import (
     add_init_js,
     eval_js,
+    install_toast_recorder,
     launch as launch_browser,
     require_browser,
     wait_js,
+    wait_toast,
 )
 
 INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.html"
@@ -37,6 +39,9 @@ async def _open(p):
     browser = await launch_browser(p)
     page = await browser.new_page()
     await add_init_js(page, _MOCK_API)
+    # Before goto: the recorder has to predate the app's own
+    # assignment of window.showToast, or it misses toasts.
+    await install_toast_recorder(page)
     await page.goto(f"file://{INDEX_HTML}")
     await page.wait_for_load_state("domcontentloaded")
     await wait_js(page, "() => !!window.DivoomState && !!window.renderDeviceDots")
@@ -135,15 +140,14 @@ async def test_connect_failure_surfaces_the_reason():
                 window.renderDeviceDots();
                 window.connectDevice('Ditoo', 'AA');
             }""")
-            await wait_js(page, 
-                "() => /Asleep or out of range/.test(document.getElementById('toast').textContent)",
-                timeout=4000)
+            # On the toast this connect raised, by its own words and kind.
+            toast = await wait_toast(page, "Asleep or out of range", kind="error",
+                                     timeout=4000)
             res = await eval_js(page, """() => ({
-                toastClass: document.getElementById('toast').className,
                 banner: document.getElementById('banner-device-name').textContent,
                 connected: window.DivoomState.appConnected
             })""")
-            assert "error" in res["toastClass"]
+            assert "error" in toast["rendered"]["className"].split(), toast
             assert res["banner"] == "None"          # nothing looks connected
             assert res["connected"] is False
         finally:
@@ -223,14 +227,16 @@ async def test_scan_failure_is_surfaced_not_silent():
                 window.__api.scan_devices = () => Promise.reject(new Error('backend gone'));
                 window.runBleScan();
             }""")
-            await wait_js(page, 
-                "() => /Scan failed/i.test(document.getElementById('toast').textContent)",
-                timeout=4000)
+            # Keyed on the error kind, and read off the record rather than off the
+            # live element: this test's own failure and the app's startup
+            # auto-scan failure carry the SAME words ("Scan failed (device
+            # backend unavailable)"), so what this test can claim is that the
+            # user was told and the spinner cleared — not which scan told them.
+            toast = await wait_toast(page, "Scan failed", kind="error", timeout=4000)
             res = await eval_js(page, """() => ({
-                cls: document.getElementById('toast').className,
                 spinnerHidden: document.getElementById('scan-indicator').hidden
             })""")
-            assert "error" in res["cls"]
+            assert "error" in toast["rendered"]["className"].split(), toast
             assert res["spinnerHidden"] is True   # not stuck "scanning…"
         finally:
             await browser.close()

@@ -273,6 +273,175 @@ async def wait_js(page, script: str, *, timeout: int | None = None):
         await asyncio.sleep(POLL_INTERVAL_MS / 1000)
 
 
+# ── Waiting on ONE toast ─────────────────────────────────────────────────────
+
+#: The id of the app's one toast element (``index.html:603``).
+TOAST_ELEMENT_ID = "toast"
+
+#: Records every toast the app raises, from ``document_start``, with what the
+#: element held immediately afterwards.
+#:
+#: ``showToast`` (``divoom_gui/web_ui/app_globals.js:30``) takes ``(message,
+#: type, transport)`` and writes ONE element every time — ``className = "toast
+#: <type> show"``, ``innerHTML = message + <span class="toast-transport">``,
+#: then a 3s timer drops ``show``. It has no id, no history, and no queue, and
+#: it is the only writer of that element in the whole app. So a toast's identity
+#: is its rendered text plus its kind class plus its transport marker, and
+#: nothing about "a toast exists" identifies one: ``app_init.js:281`` raises
+#: "Startup: Auto-scanning screens..." about a second after load and the scan
+#: behind it answers with its own failure, on timers no test controls, in every
+#: e2e page.
+#:
+#: A ``defineProperty`` trap rather than a spy assignment, because it is in place
+#: BEFORE ``app_globals.js`` defines the real function: a spy installed after
+#: load is invisible to any code that captured ``window.showToast`` into a local
+#: first, which is not a hypothetical (that is how ``.catch(showToast)``-shaped
+#: code behaves).
+#:
+#: Each entry snapshots the element AFTER the app wrote it, so the record is what
+#: the user saw rather than what the caller asked for — a call with no ``#toast``
+#: to render into records ``rendered: null`` and can never satisfy a wait.
+TOAST_RECORDER_JS = """
+(() => {
+  const history = [];
+  let real = null;
+  const mark = (fn) => { try { fn.__divoomToastRecorder = true; } catch (e) {} };
+  const snapshot = () => {
+    const el = document.getElementById(%(element)s);
+    if (!el) return null;
+    const span = el.querySelector('.toast-transport');
+    return {
+      text: el.textContent || '',
+      className: el.className || '',
+      transport: span ? (span.textContent || '').trim() : '',
+    };
+  };
+  Object.defineProperty(window, 'showToast', {
+    configurable: true,
+    get() { return real; },
+    set(fn) {
+      mark(fn);
+      real = function (...args) {
+        const out = fn.apply(this, args);
+        history.push({
+          message: args.length ? String(args[0]) : '',
+          type: args.length > 1 && args[1] !== undefined ? String(args[1]) : 'success',
+          transport: args.length > 2 && args[2] != null ? String(args[2]).trim() : '',
+          rendered: snapshot(),
+        });
+        return out;
+      };
+      mark(real);
+    },
+  });
+  window.__divoomToasts = history;
+})();
+""" % {"element": json.dumps(TOAST_ELEMENT_ID)}
+
+
+class ToastRecorderMissing(AssertionError):
+    """A toast wait ran on a page with no recorder installed.
+
+    An ``AssertionError`` like :class:`MainWorldTimeout`: the test asked for
+    something the harness was not in a position to see. Named rather than left
+    to time out, because "condition never became true" for a wait whose
+    recorder does not exist is a 60s lie about a one-line omission.
+    """
+
+
+async def install_toast_recorder(page):
+    """Record this page's toasts. Call BEFORE ``page.goto``.
+
+    The recorder has to exist before the app's scripts run, so this is an init
+    script (main world, via :func:`add_init_js`) rather than an assignment made
+    after load — see :data:`TOAST_RECORDER_JS`. Idempotent in the sense that
+    matters: it must be called once per page, before navigation.
+    """
+    await add_init_js(page, TOAST_RECORDER_JS)
+
+
+def toast_condition(
+    needle: str,
+    *,
+    kind: str | None = None,
+    transport: str | None = None,
+) -> str:
+    """The main-world script :func:`wait_toast` polls, as source text.
+
+    Split out from the wait so the CONDITION can be asserted on without a
+    browser (``test_main_world_bridge.py``): the failure being fixed here is a
+    wrong condition, and a wrong condition is only catchable if something can
+    read it.
+
+    Matches on the RECORDED, RENDERED toast — its text, its kind class, its
+    transport marker — and never on how many toasts there are. Returns the
+    matching entry (truthy, so :func:`wait_js` hands it straight back and the
+    caller asserts on the same thing the wait matched) or ``null``.
+    """
+    parts = [
+        "() => {",
+        "  const h = window.__divoomToasts;",
+        "  if (!Array.isArray(h)) return null;",
+        f"  const needle = {json.dumps(needle)};",
+        "  const hit = h.find(t => t.rendered",
+        "    && t.rendered.text.indexOf(needle) >= 0",
+    ]
+    if kind is not None:
+        parts += [
+            "    && String(t.rendered.className).split(/\\s+/)",
+            f"        .indexOf({json.dumps(kind)}) >= 0",
+        ]
+    if transport is not None:
+        parts.append(f"    && t.rendered.transport === {json.dumps(transport)}")
+    parts += ["  );", "  return hit || null;", "}"]
+    return "".join(parts)
+
+
+async def wait_toast(
+    page,
+    needle: str,
+    *,
+    kind: str | None = None,
+    transport: str | None = None,
+    timeout: int | None = None,
+):
+    """Wait for THIS test's toast, and return its record.
+
+    ``needle`` is a substring the awaited toast's RENDERED text must carry, so a
+    toast this test did not create cannot satisfy the wait; ``kind`` and
+    ``transport`` narrow it further where the claim is about those. ``kind`` is
+    one of the classes ``showToast`` writes — ``success`` (its default),
+    ``error``, ``warning``.
+
+    Returns ``{message, type, transport, rendered}`` where ``rendered`` is
+    ``{text, className, transport}`` — the element as the user saw it the moment
+    this toast fired, captured inside the call rather than sampled afterwards.
+
+    Why not wait on the live element: it is one element reused for every toast,
+    so a later toast overwrites it. Polling it is a SAMPLING race — the toast
+    being waited for can arrive and be replaced inside one poll interval, and the
+    wait then times out on a toast that was genuinely shown. Measured 2026-10-04,
+    the app's own scan toasts land 1.0-2.9s after load while the awaited one
+    lands 0-50ms after its click, so that window is routinely inside the span
+    where a test's click happens.
+
+    Why not count them, or wait for the ``show`` class: both are satisfied by the
+    toasts the app raises on its own, which is what made these waits
+    order-dependent — green in isolation, red in a full run.
+
+    Requires :func:`install_toast_recorder` on the page; without it this raises
+    :class:`ToastRecorderMissing` naming the omission rather than timing out.
+    """
+    if await eval_js(page, "() => Array.isArray(window.__divoomToasts)") is not True:
+        raise ToastRecorderMissing(
+            "no toast recorder on this page — call "
+            "await install_toast_recorder(page) before page.goto() "
+            "(tests.support.browser)")
+    return await wait_js(
+        page, toast_condition(needle, kind=kind, transport=transport), timeout=timeout
+    )
+
+
 def _timeout_message(script: str, budget_ms: int, last_error: Exception | None) -> str:
     condition = " ".join(script.split())
     if len(condition) > 200:

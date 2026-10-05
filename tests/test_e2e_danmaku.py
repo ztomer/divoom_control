@@ -14,9 +14,12 @@ from pathlib import Path
 from tests.support.browser import (
     add_init_js,
     eval_js,
+    install_toast_recorder,
     launch as launch_browser,
     require_browser,
+    toast_condition,
     wait_js,
+    wait_toast,
 )
 
 INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.html"
@@ -43,6 +46,9 @@ async def _open(p, *, with_device=True):
     browser = await launch_browser(p)
     page = await browser.new_page()
     await add_init_js(page, _MOCK_API)
+    # Before goto: the recorder has to predate the app's own
+    # assignment of window.showToast, or it misses toasts.
+    await install_toast_recorder(page)
     await page.goto(f"file://{INDEX_HTML}")
     await page.wait_for_load_state("domcontentloaded")
     await wait_js(page, "() => !!window.DivoomState && !!window.requireDevice")
@@ -147,17 +153,14 @@ async def test_a_failed_send_is_reported_as_a_failure():
         browser, page = await _open(p)
         try:
             await eval_js(page, "() => { window.__result = false; }")
-            await eval_js(page, "() => { window.__toasts = []; "
-                                "const o = window.showToast; "
-                                "window.showToast = (m, k) => { "
-                                "window.__toasts.push([m, k]); return o && o(m, k); }; }")
             await page.fill("#text-content-input", "hello")
             await page.click("#send-danmaku-btn")
-            await wait_js(page, "() => (window.__toasts || []).length > 0")
+            # Keyed on THIS toast's own message + kind, not on "a toast exists":
+            # the app raises its own unasked (see the last test in this file).
+            toast = await wait_toast(page, "Failed to send overlay", kind="error")
 
-            toast = await eval_js(page, "() => window.__toasts[0]")
-            assert toast[1] == "error", toast
-            assert "Failed" in toast[0], toast
+            assert "error" in toast["rendered"]["className"].split(), toast
+            assert "Failed" in toast["rendered"]["text"], toast
         finally:
             await browser.close()
 
@@ -202,22 +205,113 @@ async def test_a_missing_capability_says_so_on_the_screen():
                                 "error: 'Could not send the overlay: this device is "
                                 "connected over Bluetooth, which has no LAN API', "
                                 "cause: 'no_lan_capability' }; }")
-            await eval_js(page, "() => { window.__toasts = []; "
-                                "const o = window.showToast; "
-                                "window.showToast = (m, k) => { "
-                                "window.__toasts.push([m, k]); return o && o(m, k); }; }")
             await page.fill("#text-content-input", "hello")
             await page.click("#send-danmaku-btn")
-            await wait_js(page, "() => (window.__toasts || []).length > 0")
+            # On the toast THIS click raises, keyed on the reason rather than on
+            # a count: the app raises toasts nobody asked for, so "a toast
+            # exists" is not a condition this test's claim can rest on.
+            toast = await wait_toast(page, "Bluetooth", kind="error")
 
-            message = (await eval_js(page, "() => window.__toasts[0]"))[0]
+            # What the screen held when this toast fired.
+            rendered = toast["rendered"]
+            message = rendered["text"]
             # The REASON, in the user's words, not a generic failure.
             assert "Bluetooth" in message, message
             assert "no LAN API" in message, message
             # ...and what to do about it, from the shared HINTS table.
             assert "WiFi-capable" in message, message
+            # ...raised as an ERROR, not dressed as a success.
+            assert "error" in rendered["className"].split(), toast
+            # ...and carrying the TRANSPORT marker, which is the half that stops
+            # a Bluetooth-only device reading as a broken feature: the reason is
+            # "this device has no LAN API", so the toast has to say LAN.
+            assert rendered["transport"] == "LAN", toast
             # The old generic text must be gone: it is what made a missing
             # capability indistinguishable from a bug.
             assert message != "Failed to send overlay", message
+        finally:
+            await browser.close()
+
+
+#: The old wait, verbatim, kept as the thing this file must not do again.
+_COUNT_WAIT = "() => (window.__toasts || []).length > 0"
+
+#: The old instrumentation, verbatim too. Note what it drops: ``showToast`` takes
+#: three arguments and this forwards two, so the transport marker never reaches
+#: the screen for the rest of the test — the LAN that says "this is a LAN-only
+#: command", which is the whole claim of the test below.
+_SPY_TWO_ARGS = """
+window.__toasts = [];
+const o = window.showToast;
+window.showToast = (m, k) => {
+    window.__toasts.push([m, k]);
+    return o && o(m, k);
+};
+"""
+
+#: Makes the app raise a toast of its own, on demand, through its own code path:
+#: a BLE scan whose backend dies is exactly what ``app_init.js`` triggers on its
+#: own at startup, and it lands wherever this is called instead of on a timer.
+_RAISE_APP_TOAST = """
+() => {
+    window.__api.scan_devices = () => Promise.reject(new Error("backend gone"));
+    window.runBleScan();
+}
+"""
+
+
+@pytest.mark.asyncio
+async def test_a_toast_this_test_did_not_create_cannot_satisfy_its_wait():
+    """The order-dependent failure, made deterministic.
+
+    The page raises toasts nobody asked for — ``app_init.js`` fires "Startup:
+    Auto-scanning screens..." after load and the scan behind it answers with its
+    own failure — on timers no test controls, in every e2e page. The wait these
+    two tests used counted ``showToast`` calls, so any of those satisfied it and
+    the test asserted on a toast it had never made: green in isolation, red in a
+    full browser run, where the click's own toast loses the race to that noise.
+
+    So force the race instead of hoping for it. This click's own toast is slow
+    (a slow backend promise is what a loaded page looks like from in here) and
+    the app raises one of its own toasts in between. The count goes true on the
+    app's toast; the condition this file waits on does not move until the reason
+    this click produced is on screen.
+    """
+    require_browser()
+    from playwright.async_api import async_playwright
+
+    async with async_playwright() as p:
+        browser, page = await _open(p)
+        try:
+            await eval_js(page, "() => { window.__result = { ok: false, "
+                                "error: 'Could not send the overlay: this device is "
+                                "connected over Bluetooth, which has no LAN API', "
+                                "cause: 'no_lan_capability' }; }")
+            await eval_js(page, _SPY_TWO_ARGS)
+            await eval_js(page, "() => { window.__api.send_danmaku_text = (text, color) =>"
+                                " new Promise(r => setTimeout("
+                                " () => r(window.__result), 3000)); }")
+            await page.fill("#text-content-input", "hello")
+            await page.click("#send-danmaku-btn")
+            # The app's own toast, raised while this click's toast is still in
+            # flight. Same code path, same message as its startup auto-scan.
+            await eval_js(page, _RAISE_APP_TOAST)
+
+            # The old wait: satisfied — and not by anything this test did.
+            await wait_js(page, _COUNT_WAIT)
+            recorded = await eval_js(page, "() => window.__toasts.map(t => String(t[0]))")
+            assert any("Scan failed" in m for m in recorded), recorded
+            assert not any("Bluetooth" in m for m in recorded), recorded
+            # The condition this file now waits on, at that same moment: false.
+            assert await eval_js(page, toast_condition("Bluetooth", kind="error")) is None
+
+            # The new wait: still patient, and it lands on the right toast.
+            toast = await wait_toast(page, "Bluetooth", kind="error")
+            assert "no LAN API" in toast["rendered"]["text"], toast
+            # ...and under the OLD instrumentation the transport marker never
+            # reached the screen at all, so that shape could not have checked it
+            # even if it had tried: the reason says "no LAN API" while the toast
+            # beside it says nothing about which transport failed.
+            assert toast["rendered"]["transport"] == "", toast
         finally:
             await browser.close()
