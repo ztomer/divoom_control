@@ -354,13 +354,23 @@ are not restated.
    16/16 calibrations watched red. Corrects a premise: `Error::TimedOut` renders
    "Timed out after 10s" with a capital T, so the lowercase probe it replaced
    never matched it and it has never triggered a rebuild.
-2. **SHIPPED — the e2e toast wait no longer accepts a foreign toast.** Nine waits
-   across six modules counted `showToast` calls or waited on `classList
-   .contains('show')`, a condition the APP satisfies by itself: `app_init.js:281`
-   raises "Startup: Auto-scanning screens..." a second after load with no click in
-   the test. Forced a reproduction with the original test to confirm the symptom.
-   Also found the 2-arg spy swallowed its third argument, so the transport half
-   of one claim was unverifiable by construction. Browser subset 165/1 -> 177/0.
+2. **SHIPPED, THEN SHIPPED AGAIN — the e2e toast waits.** Nine waits across six
+   modules counted `showToast` calls or waited on `classList.contains('show')`, a
+   condition the APP satisfies by itself: `app_init.js:281` raises "Startup:
+   Auto-scanning screens..." a second after load with no click in the test.
+   Forced a reproduction with the original test to confirm the symptom. Also found
+   the 2-arg spy swallowed its third argument, so the transport half of one claim
+   was unverifiable by construction.
+
+   **The first pass was incomplete and CI proved it.** It converted the FIRST
+   toast wait in four files and left the SECOND in each — still polling the live
+   `#toast` element, which is reused, so an app toast can overwrite the one under
+   test between polls. GitHub CI's `test` job went red on `ecc5d50` an hour after
+   that fix shipped, on `test_e2e_clock_faces.py:146`. All four closed;
+   browser subset 165/1 -> 177/0. **A partial fix of a class is the class still
+   alive** — worth remembering as a rule, because the grep that would have caught
+   it (`getElementById('toast')` across `tests/*.py`) is one command and the
+   agent had already written the reasoning down.
 3. **SHIPPED (partly provable here) — `divoom-menubar` gets a target-gated
    `ksni`.** Satisfies tray-icon 0.26's Linux/BSD `compile_error!` without
    pulling gtk back into the lock, calibrated both ways against a real Linux
