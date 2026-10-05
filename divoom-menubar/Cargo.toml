@@ -69,5 +69,19 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-core-foundation = { version = "0.3", features = ["CFRunLoop"] }
 
+# Linux/BSD: tray-icon 0.26 hard-fails to compile there unless `libappindicator`
+# or `ksni` is enabled, and the macOS `[dependencies]` entry above deliberately
+# enables neither. Unreachable today -- every cargo step in tests.yml's Ubuntu
+# jobs is scoped `-p divoomd`, and the whole-workspace steps are macos-latest
+# only -- so this is the fix BEFORE the CI job that needs it, not after.
+#
+# `ksni`, not `libappindicator`: `ksni` is tray-icon 0.26's GTK-free
+# StatusNotifierItem backend, so it satisfies the compile_error WITHOUT pulling
+# gtk/libappindicator/libxdo back into the lock. `libappindicator` would unblock
+# the build and quietly break the invariant the macOS entry exists to hold, and
+# the only symptom would be a lockfile nobody reads.
+[target.'cfg(any(target_os = "linux", target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
+tray-icon = { version = "0.26", default-features = false, features = ["ksni"] }
+
 [lints]
 workspace = true
