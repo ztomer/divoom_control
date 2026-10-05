@@ -126,6 +126,6 @@ mod tests {
             .await;
         assert!(!res["success"].as_bool().unwrap(), "{res}");
 
-        assert!(sent(&d).await.is_empty(), "a refused call sent bytes");
+        assert_eq!(sent(&d).await.len(), 0, "a refused call sent bytes");
     }
 }

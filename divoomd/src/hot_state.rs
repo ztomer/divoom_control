@@ -127,7 +127,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let path = tmp.path().join("hot_update_state.json");
         record_check_at(&path, "", &json!({"manifest": 5})).unwrap();
-        assert!(load_map(&path).is_empty());
+        assert_eq!(load_map(&path).len(), 0);
     }
 
     #[test]

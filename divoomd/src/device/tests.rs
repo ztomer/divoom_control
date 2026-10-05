@@ -106,7 +106,7 @@ async fn detach_keeps_identity_and_only_that_panel_goes_unlinked() {
     assert!(f.connected("A").await.is_none());
     assert!(f.connected("B").await.is_some());
     f.detach("b").await;
-    assert!(f.linked().await.is_empty());
+    assert_eq!(f.linked().await.len(), 0);
     assert_eq!(f.status_now(), (false, None));
 }
 

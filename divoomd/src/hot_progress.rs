@@ -187,8 +187,9 @@ mod hot_progress_tests {
         assert!(p.try_begin());
         drain(&mut rx);
         assert!(!p.try_begin(), "a second concurrent update must be refused");
-        assert!(
-            drain(&mut rx).is_empty(),
+        assert_eq!(
+            drain(&mut rx).len(),
+            0,
             "a refused claim is not a phase change"
         );
     }

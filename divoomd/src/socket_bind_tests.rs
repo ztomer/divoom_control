@@ -303,7 +303,7 @@ fn every_failure_says_what_to_do() {
         BindFailure::Io { err: "e".into() },
     ];
     for c in cases {
-        assert!(!c.reason(p).is_empty(), "reason must not be empty");
+        assert_ne!(c.reason(p).len(), 0, "reason must not be empty");
         assert!(c.remedy().len() > 20, "remedy must be actionable: {c:?}");
     }
 }

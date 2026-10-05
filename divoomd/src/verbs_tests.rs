@@ -330,7 +330,7 @@ fn a_malformed_alarm_time_says_what_the_format_is() {
         ("-1:00", "negative hour"),
     ] {
         let err = verb(&["set-alarm", input]).expect_err(&format!("{input:?}: {because}"));
-        assert!(!err.is_empty(), "{input:?} produced an empty error");
+        assert_ne!(err.len(), 0, "{input:?} produced an empty error");
     }
     let err = verb(&["set-alarm", "7"]).expect_err("no colon");
     assert!(err.contains("HH:MM"), "the format must be shown: {err}");

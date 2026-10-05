@@ -290,7 +290,7 @@ mod tests {
         let lit_rows: Vec<usize> = (0..16)
             .filter(|&y| (0..16).any(|x| rgb[(y * 16 + x) * 3] > 0))
             .collect();
-        assert!(!lit_rows.is_empty(), "nothing drawn");
+        assert_ne!(lit_rows.len(), 0, "nothing drawn");
         assert!(lit_rows[0] > 0, "text still starts at row 0");
         assert!(
             *lit_rows.last().unwrap() < 15,

@@ -77,7 +77,7 @@ fn basic_frames_survive_their_own_parser() {
                 "payload changed across the round trip (escape={escape}): payload={payload:?} frame={frame:02x?} message={message:?}"
             );
             assert_eq!(message.command_id, payload[0]);
-            assert!(buf.is_empty(), "the parser left {} bytes behind", buf.len());
+            assert_eq!(buf.len(), 0, "the parser left {} bytes behind", buf.len());
         }
     }
 }
@@ -160,8 +160,9 @@ fn an_ack_shaped_frame_parses_as_an_ack() {
         messages[0].command_id, 0x46,
         "an ACK frame's id is the middle byte"
     );
-    assert!(
-        messages[0].payload.is_empty(),
+    assert_eq!(
+        messages[0].payload.len(),
+        0,
         "an ACK frame carries no payload"
     );
 }
@@ -198,12 +199,14 @@ fn a_truncated_trailing_frame_is_kept_not_guessed() {
     let frame = encode_basic_payload(&payload, false);
     let mut buf = frame[..frame.len() - 2].to_vec();
     let messages = parse_basic_protocol_frames(&mut buf);
-    assert!(
-        messages.is_empty(),
+    assert_eq!(
+        messages.len(),
+        0,
         "a truncated frame parsed as {messages:?}"
     );
-    assert!(
-        !buf.is_empty(),
+    assert_ne!(
+        buf.len(),
+        0,
         "the partial frame was dropped instead of kept"
     );
     // ...and it parses once the rest arrives.

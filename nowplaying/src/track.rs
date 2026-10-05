@@ -122,7 +122,24 @@ mod tests {
 
     #[test]
     fn an_all_empty_track_is_empty() {
-        assert!(track(None, None, None).is_empty());
-        assert!(!track(None, Some("T"), None).is_empty());
+        // Messages interpolate the track on purpose. `Track::is_empty` is a
+        // domain predicate over three Options, not a collection, so it has no
+        // `len()` for `assert_eq!(x.len(), 0)` to compare -- and
+        // `assert_eq!(x.is_empty(), true)` is refused by clippy's
+        // `bool_assert_comparison`. The house no_empty_assert check exempts a
+        // message that prints the value for exactly this reason (fixed in
+        // gates_of_heck 2026-10-04), so the failure line says WHICH track was
+        // wrongly called empty rather than just "assertion failed".
+        let blank = track(None, None, None);
+        assert!(
+            blank.is_empty(),
+            "an all-None track must read as empty: {blank:?}"
+        );
+
+        let titled = track(None, Some("T"), None);
+        assert!(
+            !titled.is_empty(),
+            "a titled track must not read as empty: {titled:?}"
+        );
     }
 }

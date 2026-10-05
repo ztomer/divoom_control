@@ -438,7 +438,7 @@ async fn test_disconnect_stops_live_jobs_and_drains_devices() {
 
     // Assert live jobs were cleanly stopped and devices cleared
     assert_eq!(d.live_jobs.list(None).await.len(), 0);
-    assert!(d.fleet.linked().await.is_empty());
+    assert_eq!(d.fleet.linked().await.len(), 0);
     let st = d.handle(make_request("device_status", None, None)).await;
     assert_eq!(st["connected"], json!(false));
 }

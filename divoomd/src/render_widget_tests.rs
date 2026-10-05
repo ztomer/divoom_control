@@ -238,7 +238,7 @@ async fn colour_is_honoured() {
     .await;
     let px = frame_bytes(&red);
     let lit: Vec<&[u8]> = px.chunks(3).filter(|c| c.iter().any(|&b| b > 0)).collect();
-    assert!(!lit.is_empty(), "nothing was drawn");
+    assert_ne!(lit.len(), 0, "nothing was drawn");
     assert!(lit.iter().all(|c| c == &[255u8, 0, 0]), "text is not red");
 }
 

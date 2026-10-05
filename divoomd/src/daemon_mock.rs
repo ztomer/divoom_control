@@ -102,7 +102,7 @@ mod tests {
         // device, nothing connected -- but the identity is kept so a live
         // job can wait for the panel to come back.
         assert!(daemon.fleet.resolve_target(None).await.is_err());
-        assert!(daemon.fleet.linked().await.is_empty());
+        assert_eq!(daemon.fleet.linked().await.len(), 0);
         assert!(daemon.fleet.get("MOCK_MAC").await.is_some());
 
         // First broadcast: degraded, still "connected" (link unhealthy but owned).

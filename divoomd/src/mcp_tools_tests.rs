@@ -162,10 +162,7 @@ async fn a_non_numeric_or_missing_argument_is_rejected_by_name() {
         let err = call_tool(tool, &args, &unreachable())
             .await
             .expect_err(&format!("{tool} {args} must be rejected"));
-        assert!(
-            !err.is_empty(),
-            "{tool} {args}: an empty error helps nobody"
-        );
+        assert_ne!(err.len(), 0, "{tool} {args}: an empty error helps nobody");
     }
 }
 
