@@ -285,26 +285,50 @@ impl Tray {
 /// the interior. Replaces the earlier bland filled square — user feedback
 /// (2026-07-13) found a plain colored square too unrecognizable to read at a
 /// glance; a named-letter silhouette is legible even before checking color.
-fn make_icon(rgb: [u8; 3]) -> tray_icon::Icon {
+///
+/// Returns raw RGBA plus its dimensions. Split from `make_icon` so the drawing
+/// can be rendered and compared WITHOUT a tray: `tools/render_tray_icon.py`
+/// compiles THIS function to check its offscreen preview is the real glyph,
+/// byte for byte. Wrapping the bytes in a `tray_icon::Icon` is the only
+/// tray-specific part.
+///
+/// SIZE. tray-icon takes the bitmap's pixel height as its height in points,
+/// shrinking anything taller than its 22pt cap to fit (0.26; 0.24 forced every
+/// icon to 18pt instead). A 1x bitmap is therefore resampled on every Retina
+/// display, and the 22 px glyph this used to be grew from 18pt to 22pt when the
+/// cap changed -- larger than any neighbouring item, filling the status item's
+/// whole height (`NSStatusBar.system.thickness` measured 22.0pt, 2026-10-05).
+/// So the canvas is `W` x `H` = 36 x 44 px: the 22pt cap makes that exactly 2x,
+/// crisp on Retina, and the status item keeps the 18pt width and the glyph the
+/// optical size it had through v0.40. The geometry is still
+/// authored in the original 22-unit square and scaled by `W / UNITS`, so the
+/// letterform did not change, only its resolution.
+fn draw_icon(rgb: [u8; 3]) -> (Vec<u8>, u32, u32) {
     // All pixel arithmetic stays in integers: subsample counts (0..=16) from
     // the coverage loop all the way to the alpha byte, so the float-to-byte
     // narrowing never arises. The alpha formula below is exact round-half-up
     // for every one of the 17 possible counts (checked against the float
     // version it replaces), and `f32::from` covers the geometry (all values
     // fit in u8, which converts exactly).
-    const N: u8 = 22;
+    const UNITS: f32 = 22.0; // the design square the geometry is authored in
+    const W: u8 = 36; // 18pt at 2x
+    const H: u8 = 44; // 22pt at 2x -- exactly tray-icon's height cap
     const MARGIN: f32 = 3.0;
     const STROKE: f32 = 2.2;
     const BORDER: [u8; 3] = [0xf5, 0xf5, 0xf5];
     const SUBSAMPLES: u8 = 4; // cheap supersampled AA so the bowl's curve isn't jagged at this size
 
-    let side = usize::from(N);
+    let width = usize::from(W);
     let cells = u16::from(SUBSAMPLES) * u16::from(SUBSAMPLES);
 
-    let left = MARGIN;
-    let radius = f32::from(N) / 2.0 - MARGIN;
+    // Design units to pixels. The glyph fills a W x W square centred in the
+    // taller canvas; the rows above and below it stay transparent.
+    let k = f32::from(W) / UNITS;
+    let stroke = STROKE * k;
+    let left = MARGIN * k;
+    let radius = (UNITS / 2.0 - MARGIN) * k;
     let mid = left + radius;
-    let cy = f32::from(N) / 2.0;
+    let cy = f32::from(H) / 2.0;
     let top = cy - radius;
     let bottom = cy + radius;
 
@@ -328,16 +352,16 @@ fn make_icon(rgb: [u8; 3]) -> tray_icon::Icon {
         let dy = fy - cy;
         let dist_from_arc = radius - dx.hypot(dy);
         let near_left =
-            fx <= mid && (fx - left).abs() <= STROKE && fy >= top - STROKE && fy <= bottom + STROKE;
-        let near_top = fx <= mid && (fy - top).abs() <= STROKE;
-        let near_bottom = fx <= mid && (fy - bottom).abs() <= STROKE;
-        let near_bowl = fx >= mid && dist_from_arc.abs() <= STROKE;
+            fx <= mid && (fx - left).abs() <= stroke && fy >= top - stroke && fy <= bottom + stroke;
+        let near_top = fx <= mid && (fy - top).abs() <= stroke;
+        let near_bottom = fx <= mid && (fy - bottom).abs() <= stroke;
+        let near_bowl = fx >= mid && dist_from_arc.abs() <= stroke;
         near_left || near_top || near_bottom || near_bowl
     };
 
-    let mut rgba = vec![0u8; side * side * 4];
-    for y in 0..N {
-        for x in 0..N {
+    let mut rgba = vec![0u8; width * usize::from(H) * 4];
+    for y in 0..H {
+        for x in 0..W {
             let mut coverage = 0u8;
             let mut border_weight = 0u8;
             for sy in 0..SUBSAMPLES {
@@ -361,7 +385,7 @@ fn make_icon(rgb: [u8; 3]) -> tray_icon::Icon {
             } else {
                 rgb
             };
-            let i = (usize::from(y) * side + usize::from(x)) * 4;
+            let i = (usize::from(y) * width + usize::from(x)) * 4;
             rgba[i] = color[0];
             rgba[i + 1] = color[1];
             rgba[i + 2] = color[2];
@@ -370,5 +394,10 @@ fn make_icon(rgb: [u8; 3]) -> tray_icon::Icon {
                 .expect("subsample coverage scales to one byte");
         }
     }
-    tray_icon::Icon::from_rgba(rgba, u32::from(N), u32::from(N)).expect("valid tray icon")
+    (rgba, u32::from(W), u32::from(H))
+}
+
+fn make_icon(rgb: [u8; 3]) -> tray_icon::Icon {
+    let (rgba, w, h) = draw_icon(rgb);
+    tray_icon::Icon::from_rgba(rgba, w, h).expect("valid tray icon")
 }
