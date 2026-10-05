@@ -55,24 +55,23 @@ pub fn sample(sys: &System) -> SysmonSample {
     let used_mem = sys.used_memory();
     SysmonSample {
         cpu: pct_u8(sys.global_cpu_usage()),
-        // `used_memory()` is not the same quantity across the sysinfo 0.30 ->
-        // 0.39 bump, and the widget now reads HIGHER than it used to. Measured
-        // on this machine, same moment, both versions built side by side:
+        // `used_memory()` is Activity Monitor's App + Wired + Compressed. On
+        // macOS sysinfo 0.39.6 computes (sysinfo-0.39.6/src/unix/apple/system.rs:200-204)
         //
-        //   sysinfo 0.30.13 -> 39,902,429,184 B (37.16 GiB) = 58.1%
-        //   sysinfo 0.39.6  -> 45,232,963,584 B (42.13 GiB) = 65.8%
+        //   (internal_page_count - purgeable_count + wire_count + compressor_page_count) * page
         //
-        // i.e. +4.97 GiB, +7.7 percentage points, with identical `total_memory`.
-        // Upstream changed the macOS page accounting between the two (0.38.3);
-        // the signature and the units are unchanged, so nothing catches it but
-        // a human comparing the widget against something else.
+        // and `internal - purgeable` IS Activity Monitor's "App Memory" (matched
+        // its footer to 0.003 GiB over 9 paired samples). The 0.30 formula,
+        // `active + wire + compressor + speculative`, was NOT that quantity: it
+        // read 4.2 pp low on average. The 0.30 -> 0.39 difference is roughly
+        // `inactive_internal - active_external - purgeable - speculative`, i.e.
+        // workload (measured -3.7 to +6.1 pp), so no single snapshot of it means
+        // anything. Activity Monitor's HEADER "Memory Used" runs ~2 pp above
+        // this; it also runs ~1.2 GiB above the sum of its own three footer
+        // fields, so that gap is Activity Monitor's, not ours.
         //
-        // The old figure is the one that matched Activity Monitor's "Memory
-        // Used" (independently reconstructed from `vm_stat` at 57.6%), so the
-        // widget now sits ~8 points ABOVE Activity Monitor. That is a known and
-        // accepted difference, not drift to be corrected -- do not "fix" it by
-        // reaching for `available_memory()` or a hand-rolled `vm_stat` sum
-        // without reading this first.
+        // The call is correct. Re-derive it after any sysinfo bump with
+        // `python3 tools/mem_gauge_compare.py` (tests/test_mem_gauge_parity.py).
         mem: used_mem
             .saturating_mul(100)
             .checked_div(total_mem)

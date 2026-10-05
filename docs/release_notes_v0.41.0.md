@@ -24,6 +24,18 @@ The old figure matched Activity Monitor (independently reconstructed from
 The measurement and the reasoning are recorded at the call site so a later
 session does not "correct" it back into a hand-rolled `vm_stat` sum.
 
+> **Correction (2026-10-05, after release).** The interpretation above is wrong;
+> the number is right. sysinfo 0.39.6 computes exactly Activity Monitor's
+> App + Wired + Compressed -- an independent reconstruction from the kernel's
+> raw page counters differs by 0 bytes when read at the same instant. It was the
+> OLD figure that did not match: 0.30 read 4.2 percentage points low on average.
+> The difference between the two versions depends on what the machine is doing
+> (measured between -3.7 and +6.1 points), so the table above is one moment, not
+> a property of either version. Activity Monitor's header "Memory Used" reads
+> about 2 points above the widget, and also above the sum of its own footer
+> fields, so that gap is Activity Monitor's. The widget is correct; do not change
+> it to chase the header.
+
 **The menu bar icon is about 22% larger.** `tray-icon` 0.26 raised the macOS
 status-item height cap from 18pt to 22pt, and this app's glyph renders at its
 natural 22pt where it used to be forced to 18pt. No test can see this; if it
