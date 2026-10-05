@@ -6,7 +6,78 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
-_(nothing yet)_
+- **The roadmap is a phased plan a gate can read.** `docs/ROADMAP.md` went from
+  ~1000 lines, half of it shipped narrative with SHIPPED, CLOSED and OPEN items
+  side by side, to a Plan of 32 items in seven phases (correctness drift ->
+  daemon liveness -> device facts -> MCP display surface -> per-panel GUI -> wall
+  -> owner decisions, plus a parked list), each with a status, a reason and a
+  checkable **Done when**. Every premise was re-audited against the code with
+  file:line evidence first, which corrected several: `list_screens` had shipped
+  five releases before the item asking for it; wall slicing already works (only
+  snapping is missing); the Python coverage floor is 88.5, not 89.2; PyInstaller
+  is not "deliberately not taken" but unpinned, so the next build takes it
+  silently. It also found three defects nobody had listed: one brightness drag
+  sends two device writes, the daemon socket is owner-only only because of the
+  umask, and a reconnecting subscriber cannot reclaim its own slot.
+  `tests/test_roadmap_shape.py` keeps it that way: every item has a status and a
+  Done-when, no dependency points at a later phase, SHIPPED is refused as a
+  status, and every repo path the file cites must exist -- 49 of 119 did not.
+  Watched failing on fixtures for each rule and on the real file.
+
+- **Repo-wide test scans read what git would commit, not the filesystem.**
+  `test_applescript_launch_gate` walked the tree with `rglob` and failed the
+  moment an agent's `.claude/worktrees/` checkout sat inside the repo: it found
+  its own marker twice. `test_no_emojis` had the same walk and was silently
+  scanning the whole second copy. Both now use `tests/support/repo_files.py`
+  (`git ls-files --cached --others --exclude-standard`), so ignored trees are
+  out and a brand-new unstaged file is still caught (watched failing on one).
+
+- **`docs/SESSION_HANDOFF.md` is folded into `docs/ROADMAP.md` and deleted**
+  (owner decision, 2026-10-05). It carried a second "Open threads" backlog
+  beside the roadmap, against the one-backlog rule, and `AGENTS.md`/`CLAUDE.md`
+  required updating both. Every open thread was either already on the roadmap
+  or already shipped; the durable facts (hardware reference, two standing
+  constraints) moved to the roadmap, and per-round narrative stays in this
+  file and git history (`git log -p -- docs/SESSION_HANDOFF.md`). The rule files
+  also hard-coded an opencode session id that no longer existed; they now say
+  `opencode session list`, and `tests/test_agent_docs_no_session_ids.py` fails on
+  a session id or a handoff reference in either file (watched failing).
+
+- **The memory gauge is re-derivable in one command, and the v0.41.0 claim
+  about it is corrected.** `tools/mem_gauge_compare.py` compiles a probe against
+  the exact `sysinfo` in `Cargo.lock`, rebuilds Activity Monitor's App + Wired +
+  Compressed independently from `host_statistics64`, and exits non-zero beyond
+  1.0 pp (about 3.4x the observed 0.29 pp spread, a quarter of the old
+  formula's 4.2 pp gap). It measures 0 bytes of difference; the old 0.30 crate
+  measures -10.2 pp. `tests/test_mem_gauge_parity.py` runs it on macOS and, on
+  every platform, requires the `sysmon.rs` comment to cite the locked sysinfo
+  version's formula, so a bump goes red until someone re-measures. Both checks
+  were watched failing. The call site did not change -- it was right; the
+  comment, this file's v0.41.0 stanza and the release notes were wrong, and
+  carry dated corrections.
+
+- **The menu bar glyph is back to its v0.40 size, and sharp on Retina.**
+  v0.41.0 shipped it about 22% larger: `tray-icon` 0.26 stopped forcing every
+  status-item bitmap to 18pt and instead takes its pixel height as points, up to
+  a 22pt cap, so the 22 px glyph rendered at 22pt -- larger than its neighbours
+  and filling the status item edge to edge (`NSStatusBar.system.thickness` is
+  22.0pt, measured) -- and, being a 1x bitmap, was resampled
+  on every Retina display. `draw_icon` now draws the same letterform (still
+  authored in the original 22-unit square) on a 36 x 44 px canvas: the cap
+  turns that into exactly 18 x 22pt at 2x, so the item keeps v0.40's width and
+  optical size with no resampling. Judged on rendered light and dark sheets,
+  not on the live bar, which is too full to A/B.
+  `tools/render_tray_icon.py` renders that sheet in one command: v0.40,
+  v0.41.0 and the current glyph side by side, composited at 2 device pixels per
+  point. Its Python reproduction is checked byte for byte against the real
+  `draw_icon`, which `--verify-against-rust` compiles straight out of `tray.rs`;
+  `tests/test_tray_icon_render.py` keeps that check green, pins the 18pt / 2x
+  size, and was watched failing from both the Rust and the Python side. The
+  verifier first shipped unable to pass (it sliced a fixed-width state name,
+  then looked for a payload prefix the probe never printed), and its resampler
+  interpolated straight alpha, which drew a dark outline round the glyph on
+  light sheets that no menu bar shows -- the near-white border is in fact
+  invisible on a light bar, at every size, since v0.40.
 
 ## v0.41.0 — every dependency current, and the gates that were lying about it (2026-10-05)
 
@@ -105,6 +176,21 @@ _(nothing yet)_
   widget now sits ~8 points ABOVE it. The measurement and the reasoning are
   recorded at the call site so a later session does not "correct" it back into a
   hand-rolled `vm_stat` sum.
+
+  **Correction (2026-10-05, after release): the conclusion above is wrong;
+  the code is right.** sysinfo 0.39.6's macOS formula, `(internal - purgeable +
+  wire + compressor) * page`, IS Activity Monitor's App + Wired + Compressed:
+  `tools/mem_gauge_compare.py` rebuilds that definition from the raw
+  `host_statistics64` counters and finds a 0-byte difference when both are read
+  at the same instant. The OLD 0.30 figure was the one that did not match -- it
+  read 4.2 pp low on average and 10.2 pp low on a later run, because the gap
+  between the two formulas is workload, not a constant (measured -3.7 to +6.1
+  pp), so the two snapshots above described a moment, not the code. Activity
+  Monitor's header "Memory Used" runs about 2 pp above the widget, and also
+  about 1.2 GiB above the sum of its own three footer fields, so that gap is
+  Activity Monitor's. The call-site comment now says this, and
+  `tests/test_mem_gauge_parity.py` re-measures it on macOS and fails on Linux
+  CI too if sysinfo moves without the comment being re-derived.
 
 - **`btleplug` 0.12 -> 0.13.** Zero source changes — all 53 call sites are
   signature-identical. The consequence is behavioural: 0.13 replaces several

@@ -11,9 +11,11 @@ conversation stores), so the handoff is file-based. **On entry, read
 After **each round of work**, before you stop, leave the tree so the *next*
 session can pick up without re-deriving state:
 
-1. **docs/ROADMAP.md** — record what shipped and what is still open. This is the
-   ONE forward-looking document: there is no separate handoff file and no
-   second backlog. Per-round plans are pruned to git history once their round
+1. **docs/ROADMAP.md** — add open work as a Plan item (status, why, **Done
+   when**, optional **Depends on**; the file's header defines the format and
+   `tests/test_roadmap_shape.py` enforces it) and DELETE items that shipped.
+   This is the ONE forward-looking document: there is no separate handoff file
+   and no second backlog. Per-round plans are pruned to git history once their round
    ships (house rule: a per-feature plan graveyard rots and misleads later
    sessions). Write a round plan while a round is in flight if it helps, then
    prune it on the way out.
