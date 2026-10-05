@@ -6,6 +6,12 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **CI no longer leaves the job token in git config.** `actions/checkout`
+  persists it as `http.<host>.extraheader` by default, and the structural
+  gate's no-credential-in-git-config check (gates_of_heck v0.20.0) rightly
+  refused it, turning the `no-emoji` job red on `62564db`. Every checkout now
+  sets `persist-credentials: false`; no step does git network work afterwards.
+
 - **The roadmap is a phased plan a gate can read.** `docs/ROADMAP.md` went from
   ~1000 lines, half of it shipped narrative with SHIPPED, CLOSED and OPEN items
   side by side, to a Plan of 32 items in seven phases (correctness drift ->

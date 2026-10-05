@@ -11,7 +11,13 @@ jobs:
     # consumed via GOH_DIR). Fast, no build needed.
     runs-on: ubuntu-latest
     steps:
+      # persist-credentials: false on EVERY checkout in this file: by default
+      # checkout leaves the job token in git config (http.<host>.extraheader),
+      # which the structural gate's no-credential-in-git-config check refuses,
+      # and no step here does git network work after the clone (2026-10-05).
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       # Canonical house gates live in the gates_of_heck repo, consumed via
       # GOH_DIR. Never vendored here — a copy of a checker is a copy that rots
       # (CLAUDE.md, standing rule).
@@ -30,6 +36,7 @@ jobs:
       - name: Check out gates_of_heck
         uses: actions/checkout@v7
         with:
+          persist-credentials: false
           repository: ztomer/gates_of_heck
           path: goh
           token: ${{ secrets.GOH_TOKEN || github.token }}
@@ -78,6 +85,8 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@v7
         with:
@@ -197,12 +206,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - name: Check out gates_of_heck
         uses: actions/checkout@v7
         with:
+          persist-credentials: false
           repository: ztomer/gates_of_heck
           path: goh
           token: ${{ secrets.GOH_TOKEN || github.token }}
@@ -253,6 +265,8 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
       - name: cargo clippy (whole workspace, all targets/features, deny warnings)
         # macOS owns the workspace-wide lint: it is the only platform where
@@ -275,6 +289,8 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
       - name: Install BlueZ/D-Bus headers (btleplug build dep)
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
