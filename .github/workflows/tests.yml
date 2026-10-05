@@ -146,8 +146,8 @@ jobs:
             # first." -- and there is no `sync` subcommand, so that advice is
             # unfollowable. Fetching only the pinned build makes it the active
             # one; `set` afterwards is belt-and-braces if anything else exists.
-            python -m camoufox fetch official/152.0.4-beta.29 || true
-            python -m camoufox set official/stable/152.0.4-beta.29 || true
+            python -m camoufox fetch official/156.0.1-beta.34 || true
+            python -m camoufox set official/stable/156.0.1-beta.34 || true
             if python3 tools/camoufox_installed.py; then
               exit 0
             fi

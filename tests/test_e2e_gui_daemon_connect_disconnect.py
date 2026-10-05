@@ -195,7 +195,18 @@ async def test_real_connect_then_refresh_shows_active_dot(gui_daemon_stack):
             state = await eval_js(page, 
                 "() => window.pywebview.api.get_connection_state()"
                 ".then(r => JSON.parse(r))")
-            assert state == {"connected": True, "state": "connected"}
+            # The fields this test is ABOUT, not the whole response shape. The
+            # state legitimately grew a `selected` key (the daemon reports which
+            # panel is active -- tests/test_device_status.py asserts the
+            # three-key shape), and this assertion had been the two-key form
+            # since 2026-09-04, so it broke on an unrelated field arriving rather
+            # than on anything about connecting. Asserting the whole dict couples
+            # the test to every field the daemon will ever add.
+            assert state["connected"] is True, state
+            assert state["state"] == "connected", state
+            assert state["selected"] == "MOCK_MAC", (
+                "the device just connected must be the selected one", state
+            )
         finally:
             await browser.close()
 

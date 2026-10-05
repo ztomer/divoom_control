@@ -12,7 +12,9 @@ It also checks WHICH build is active, because the build is load-bearing.
 From 152.0.4-beta.29 page scripting runs in an ISOLATED WORLD, so the app's
 globals read as `undefined` unless the suite explicitly reaches the main world
 (tests/support/browser.py). That transition turned CI red once already, with 60
-failures and no code change. Pinning the pip package does not prevent it --
+failures and no code change -- before the bridge existed. Later builds, including
+the current pin, pass; see EXPECTED_BUILD below. Pinning the pip package does
+not prevent the class of problem --
 camoufox accepts any build in [alpha.1, 1), so a bare `fetch` takes the newest.
 Checking only that *a* browser exists would let the next such change drift in
 silently, which is the same failure this file was written for one level down.
@@ -36,7 +38,23 @@ import sys
 
 # Keep in step with `camoufox set` in .github/workflows/tests.yml and the
 # rationale in tests/support/browser.py.
-EXPECTED_BUILD = os.environ.get("CAMOUFOX_EXPECTED_BUILD", "152.0.4-beta.29")
+# KEEP THIS CURRENT. The pin exists for DETERMINISM -- a specific build, so a
+# red run means a code change and not "the browser moved under you" -- NOT to
+# hold the browser back. It was last moved off 152.0.4-beta.29 on 2026-10-04,
+# two releases late: beta.29 was superseded by 152.0.4-beta.31 (2026-09-24) and
+# then by this one (2026-10-03), and by then the pin named a build that was no
+# longer installed on the machine running the suite.
+#
+# The move was verified, not assumed: on 156.0.1-beta.34 the browser suites run
+# 165 passed / 1 failed and tests/test_main_world_bridge.py is 14/14, so the
+# `mw:` bridge absorbs the world split exactly as tests/support/browser.py
+# claims it would ("when the browser next moves the goalposts, it is one
+# function again"). The one failure is unrelated stale test drift.
+#
+# So the claim that a newer build "fails ~60 tests" is HISTORICAL: it was true
+# of beta.29, which is the build that INTRODUCED the isolated world, before the
+# three holes below were closed. Do not use it to justify staying behind again.
+EXPECTED_BUILD = os.environ.get("CAMOUFOX_EXPECTED_BUILD", "156.0.1-beta.34")
 
 
 def installed_version() -> str | None:

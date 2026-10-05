@@ -15,11 +15,22 @@ Before R66 each of the 15 e2e modules called
 2. **The engine was copy-pasted 17 times.** Swapping it meant touching every
    file, which is why it never happened. It is now one function.
 
-Version: CI pins the **browser build** to ``official/stable/152.0.4-beta.29``
+Version: CI pins the **browser build** to ``official/stable/156.0.1-beta.34``
 (the current latest on that channel) via ``camoufox set``, with the pip package
 at 0.5.5. Pinning the package is NOT sufficient on its own -- camoufox accepts
 any build in ``[alpha.1, 1)``, so a bare ``camoufox fetch`` takes the newest one
 regardless, and the build is the half that decides whether the suite passes.
+
+**Keep the pin, keep it CURRENT.** The pin buys determinism -- a red run means a
+code change, not "the browser moved" -- and determinism comes from naming a
+SPECIFIC build, not from naming an OLD one. It was moved off 152.0.4-beta.29 on
+2026-10-04, two releases late: by then beta.29 had been superseded twice and was
+no longer even installed on the machine running the suite, so the pin had stopped
+describing reality. Verified on 156.0.1-beta.34: 165 passed / 1 failed across the browser
+suites and 14/14 in ``test_main_world_bridge.py``, which is this module's own
+claim working -- "when the browser next moves the goalposts, it is one function
+again". Move it forward in its own commit when the channel moves, with the
+suites run against the candidate first.
 
 **The isolated world.** From build 152.0.4-beta.29 (2026-08-20) page scripting
 runs in an ISOLATED WORLD, so main-world globals the app defines --
@@ -28,6 +39,12 @@ page itself is fine: probed on 2026-08-30, all 29 scripts fetch 200, the DOM
 builds, and there is not a single console or page error. Only the *view*
 changed, which is why that upgrade turned CI red on 2026-08-25 with 60 failures
 and no code change.
+
+That 60 is HISTORY, not a standing cost. It is what the transition cost BEFORE
+the three bridges below existed, and it is the reason they were written. Later
+builds -- including the current pin -- cost nothing: the suites pass on them. Do
+not cite it as evidence that moving forward is expensive; measure it, which is
+one ``pytest --run-browser`` run against the candidate build.
 
 Three separate holes had to be closed, and only the first was known:
 
