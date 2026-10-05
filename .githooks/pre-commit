@@ -1,11 +1,20 @@
 #!/bin/bash
-# pre-commit — layer-1 structural gate, STAGED scope.
+# pre-commit — the repo's gate in STAGED scope (tools/gate.sh --staged), which
+# runs layer 1 (structural) plus whatever staged language layers the repo
+# declares; without a tools/gate.sh the structural gate runs alone.
 # Installed by gates_of_heck/install.sh. Delegates to the shared checkout;
 # there is exactly ONE copy of every checker (this hook vendors nothing).
+# The pre-push hook goes through tools/gate.sh --full the same way: a
+# commit hook that bypassed gate.sh made every staged layer decorative.
+{ # parse-guard -- bash reads this group whole before running it (tests/test_parse_guard.py)
 set -euo pipefail
 
 GOH="${GOH_DIR:-${GOH:-$HOME/Projects/gates_of_heck}}"
 root="$(git rev-parse --show-toplevel)"
+gate="$root/tools/gate.sh"
+if [ -f "$gate" ]; then
+    exec bash "$gate" --staged
+fi
 structural="$GOH/gates/structural.sh"
 
 if [ ! -f "$structural" ] && [ -f "$root/checks/check_no_emoji.py" ]; then
@@ -17,4 +26,8 @@ if [ ! -f "$structural" ]; then
     exit 1
 fi
 
-exec "$structural" --staged
+# `bash <path>`, not `exec <path>`: executing the file directly also needs its exec bit, which lives
+# in another repo and is what a clone or tarball silently loses (upstreamed from ztools, 2026-10-05).
+exec bash "$structural" --staged
+exit
+} # parse-guard
