@@ -367,16 +367,39 @@ are not restated.
    target. A full `divoom-menubar` Linux build is NOT provable on this machine —
    winit 0.30 supports neither installed Linux target — so the proof covers the
    dependency's requirement, not this crate's build.
-4. **OPEN — a genuinely dead central is MISSED on one path. Found while doing #1.**
-   `btleplug-0.13.4/src/corebluetooth/adapter.rs:236` does
-   `.map_err(|e| Error::Other(Box::new(e)))` on its event-channel send, keeping the
-   real `futures::channel::mpsc::SendError` instead of going through
-   `From<SendError>`. Its `Display` is "send failed because receiver is gone",
-   which matches none of the four old markers — so the self-heal does not fire
-   there today. Pre-existing, and now a ONE-LINE structural fix rather than a
-   fragile one: the boxed type is nameable at that site, so it can classify by
-   type instead of by prose. `central.rs`'s `stop_scan` route is the likely
-   trigger. Deliberately not folded into #1, because it changes which cases retry.
+4. **SHIPPED, after correcting my own over-claim — a dead central rendered the
+   OTHER way.** I first reported this as an active bug and named
+   `central.rs`'s `stop_scan` as "the likely trigger". **That was wrong**, and
+   auditing it properly is what made it right:
+   `corebluetooth/adapter.rs:236` does `.map_err(|e| Error::Other(Box::new(e)))`
+   on its event-channel send, bypassing btleplug's own
+   `From<SendError> for Error` — which DISCARDS the send error and substitutes a
+   bare `"Channel closed"` string. So the same dead session arrives two ways, and
+   only one of them was recognised. Measured across the backend: **15 of 16**
+   sends use `?` and are fine; the one that bypasses is inside
+   `clear_peripherals`, which **this crate does not call**. Every path divoomd
+   uses (`start_scan`, `stop_scan`, `peripherals`, `connect`, `disconnect`,
+   `discover_services`, `subscribe`, `write`) goes through the conversion.
+   So the gap was LATENT, not live — and the honest severity is "one call away",
+   not "the self-heal is broken".
+
+   Closed anyway, because the trap is cheap to remove and expensive to trip: the
+   first `clear_peripherals()` call, or the first new btleplug site written like
+   adapter.rs:236, would have silently stopped the self-heal for a central that
+   is genuinely gone. `SendError` cannot be downcast to — its `T` is
+   `CoreBluetoothMessage`, private to btleplug — so extending the prose probe is
+   the correct move here rather than a compromise, and it is documented as such
+   next to the markers. Pinned by two tests that BUILD the real
+   `SendError` (a send into a dropped channel) rather than writing its text, so
+   they fail if upstream rewords it, and one of them asserts the two renderings
+   classify identically — which is the actual invariant, since either one alone
+   could pass while the other rotted.
+
+   **The transferable lesson**: I relayed a subagent's finding as a fact and
+   added a plausible-sounding trigger to it. One grep of the actual call sites
+   would have caught it, and the correction cost a release-notes paragraph worth
+   more than the finding.
+
 5. **OPEN — two user-visible changes need a HUMAN, not a gate.** The sysmon `mem`
    gauge now reads ~8 points ABOVE Activity Monitor's "Memory Used" (sysinfo
    0.38.3 changed the macOS page accounting; measured both ways, recorded at the

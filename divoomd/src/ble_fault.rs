@@ -181,17 +181,47 @@ impl std::error::Error for BleError {}
 /// SILENTLY: `the_shape_btleplug_actually_produces_is_still_recognised` builds
 /// the error through btleplug's own conversion and fails if the wording moves.
 ///
-/// `"Channel closed"` is the only marker any real btleplug 0.13.4 backend emits.
-/// The other three are the wording of this crate's own timeout guards, which no
-/// longer travel as prose at all — they are kept because this arm has always
-/// accepted them, and a backend that reports a dead session in its own words
-/// must still heal.
+/// `"Channel closed"` is the only marker any real btleplug 0.13.4 backend emits
+/// on a path this crate calls, and the other three are the wording of this
+/// crate's own timeout guards, which no longer travel as prose at all. They are
+/// kept because this arm has always accepted them, and a backend that reports a
+/// dead session in its own words must still heal.
 const DEAD_SESSION_MARKERS: &[&str] = &["Channel closed", "timed out", "stale", "central"];
+
+/// The SAME dead session, rendered the other way.
+///
+/// btleplug has a `From<SendError> for Error` that DISCARDS the send error and
+/// substitutes a bare `"Channel closed"` string — so on 15 of the 16 event-channel
+/// sends in its `CoreBluetooth` backend the type is gone and only that text remains.
+/// One site bypasses its own conversion:
+///
+/// at `corebluetooth/adapter.rs:236` it calls `.map_err` to build
+/// `Error::Other` from the `SendError` directly, skipping that conversion.
+///
+/// which keeps the real `futures::channel::mpsc::SendError`, whose `Display` is
+/// "send failed because receiver is gone" — an upstream INCONSISTENCY: the same
+/// condition, two different error values, one of them unrecognised. That site is
+/// in `clear_peripherals`, which this crate does not call, so the gap is LATENT
+/// rather than live: verified by audit, all 15 sends on the paths we do call
+/// (`start_scan`, `stop_scan`, `peripherals`, `connect`, `disconnect`,
+/// `discover_services`, `subscribe`, `write`) go through the `?` and so through
+/// the conversion.
+///
+/// It is handled here anyway, because the trap is one call away: the first
+/// `clear_peripherals()` call, or the first new btleplug site written like
+/// adapter.rs:236, would silently stop the self-heal for a central that is
+/// genuinely gone. `SendError` cannot be downcast to — its `T` is
+/// `CoreBluetoothMessage`, which is private to btleplug — so this is the one
+/// place where extending the prose probe is the correct move rather than a
+/// compromise. It is pinned by a test that builds the exact value
+/// adapter.rs:236 produces.
+const DEAD_SESSION_ALT_MARKERS: &[&str] = &["send failed because receiver is gone"];
 
 fn is_dead_session(inner: &(dyn std::error::Error + 'static)) -> bool {
     let text = inner.to_string();
     DEAD_SESSION_MARKERS
         .iter()
+        .chain(DEAD_SESSION_ALT_MARKERS)
         .any(|marker| text.contains(marker))
 }
 

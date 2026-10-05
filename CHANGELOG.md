@@ -41,14 +41,18 @@ _(nothing yet)_
   `ksni` (GTK-free) satisfies it without losing that invariant, calibrated both
   ways against a real Linux target.
 
-- **A genuinely dead CoreBluetooth central is MISSED on one code path.** Found
-  while doing the classification work above, and deliberately NOT fixed in the
-  same commit: btleplug's `corebluetooth/adapter.rs` keeps the raw
-  `SendError` on its event-channel send instead of going through its own
-  conversion, and that error's text matches none of the four markers, so the
-  self-heal does not fire there today. Pre-existing. It is now a one-line
-  structural fix rather than a fragile one, and it changes which cases retry —
-  which is exactly what a refactor commit must not do quietly.
+- **A dead CoreBluetooth central rendered the "other" way is now recognised
+  too.** btleplug's own `From<SendError> for Error` throws the send error away
+  and substitutes a bare `"Channel closed"` string — so the type is gone and only
+  that text is left to read. One site in its CoreBluetooth backend bypasses that
+  conversion and keeps the real `SendError`, whose wording matches none of the
+  markers. Audited across the backend: 15 of 16 event-channel sends go through
+  the conversion, and the one that does not is in `clear_peripherals`, which this
+  crate does not call — so the gap was one call away rather than live, and the
+  self-heal was never broken on any path this app uses. Closed anyway, because
+  the first `clear_peripherals()` call would have turned it into a silent
+  regression. Two tests build the real `SendError` rather than writing its text,
+  and assert that both renderings of one dead session classify identically.
 
 - **Dependency currency round: every direct dependency is now at its newest
   released version.** Five Rust majors plus the lockfile refresh that had been

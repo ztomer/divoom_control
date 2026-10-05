@@ -278,3 +278,84 @@ fn the_shape_btleplug_actually_produces_is_still_recognised() {
         "the dead session must still trigger reset_central + retry"
     );
 }
+
+/// btleplug renders the SAME dead session two different ways, and only one of
+/// them used to heal.
+///
+/// Its `From<SendError> for Error` throws the send error away and substitutes a
+/// bare `"Channel closed"`, so `start_scan`/`stop_scan`/`peripherals`/`connect`/
+/// `write` all produce text this crate recognises. `corebluetooth/adapter.rs:236`
+/// bypasses that conversion with `.map_err(|e| Error::Other(Box::new(e)))` and
+/// keeps the real `futures::channel::mpsc::SendError`, whose `Display` is
+/// "send failed because receiver is gone".
+///
+/// The error is BUILT here rather than written as a string, so this test fails
+/// if `SendError`'s wording ever changes — which is the point: the alternative
+/// would be a test asserting our own constant matches itself.
+#[tokio::test]
+async fn a_dead_session_surfaced_the_other_way_still_heals() {
+    // Exactly what adapter.rs:236 builds: a send into a channel whose receiver
+    // has been dropped, boxed as the error.
+    let err = dropped_receiver_send_error().await;
+
+    // Sanity: this really is the rendering that used to be missed.
+    let text = err.to_string();
+    assert_eq!(text, "send failed because receiver is gone", "{text}");
+    for stale in crate::ble_fault::DEAD_SESSION_MARKERS {
+        assert!(
+            !text.contains(stale),
+            "this case is only interesting while NONE of the primary markers \
+             match it -- {stale:?} started matching, so the alternative \
+             rendering may no longer exist"
+        );
+    }
+
+    assert_eq!(
+        crate::ble_fault::BleError::from_btle(&err).fault(),
+        crate::ble_fault::BleFault::DeadCentral,
+        "a dropped event-channel receiver IS a dead CoreBluetooth session; it \
+         must rebuild the central and retry, exactly as the 'Channel closed' \
+         rendering of the same condition does"
+    );
+}
+
+/// The two renderings must agree, which is the actual invariant.
+///
+/// One of them reaching `DeadCentral` is not enough: if only the alternative
+/// matched, the primary arm could have rotted and every existing test would
+/// still pass.
+#[tokio::test]
+async fn both_renderings_of_one_dead_session_classify_the_same() {
+    let primary = btleplug::Error::Other("Channel closed".to_string().into());
+    assert_eq!(
+        crate::ble_fault::BleError::from_btle(&primary).fault(),
+        crate::ble_fault::BleFault::DeadCentral,
+        "btleplug's own From<SendError> rendering"
+    );
+
+    let alt = dropped_receiver_send_error().await;
+    assert_eq!(
+        crate::ble_fault::BleError::from_btle(&alt).fault(),
+        crate::ble_fault::BleError::from_btle(&primary).fault(),
+        "the same dead session, rendered two ways by upstream, must not \
+         classify two ways here"
+    );
+}
+
+/// Build the error `corebluetooth/adapter.rs:236` produces.
+///
+/// A send into a channel whose receiver has been dropped, boxed as the error
+/// without passing through btleplug's own `From<SendError>` conversion. Going
+/// through the real type rather than writing the string by hand is what makes
+/// these tests able to notice if `SendError`'s wording changes.
+async fn dropped_receiver_send_error() -> btleplug::Error {
+    use futures::SinkExt;
+    let (tx, rx) = futures::channel::mpsc::channel::<u8>(1);
+    drop(rx);
+    let mut tx = tx;
+    let raw = tx
+        .send(1)
+        .await
+        .expect_err("receiver is dropped, so this fails");
+    btleplug::Error::Other(Box::new(raw))
+}
