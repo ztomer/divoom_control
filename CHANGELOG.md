@@ -6,6 +6,123 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **Dependency currency round: every direct dependency is now at its newest
+  released version.** Five Rust majors plus the lockfile refresh that had been
+  blocked for months, and a Python layer that was declaring two packages nothing
+  imported. `cargo update --dry-run` now reports `Locking 0 packages`.
+
+- **A dependency feature had been DELETED upstream and the repo was pinned to
+  the last version that still had it.** `divoomd` and `nowplaying` declared
+  reqwest's `webpki-roots`; reqwest **0.13.2 removed that optional dependency**,
+  so the implicit feature went with it and `cargo update` could no longer move
+  reqwest — while printing `Unchanged reqwest v0.13.1 (available: v0.13.5)` and
+  **exiting 0**. Nothing in 23 gate steps printed that line, and the crate sat
+  there for months with comments implying currency. Dropping the feature unblocked
+  0.13.5 immediately and released a 43-package `cargo update` that had been stuck
+  behind it (the dependency graph shrank 387 -> 372 crates).
+  `tools/check_cargo_features.py` now fails on the whole class — a declared
+  feature that does not exist at the newest version its manifest allows, which is
+  where the bug actually lives; checking the *locked* version reports it as
+  healthy. Two traps found while building it, both of which produced confident
+  wrong answers first: the crates.io index splits features across `features` and
+  `features2` (6 vs 24 on reqwest 0.13.5), and an implicit feature is absent from
+  that map entirely, so `webpki-roots` looks deleted even where it exists.
+
+- **TLS trust anchors moved from a bundled Mozilla CA store to the macOS
+  Keychain**, because reqwest's `rustls` now pulls `rustls-platform-verifier`.
+  For a daemon that signs requests to `appin.divoom-gz.com` that is a real
+  behavioural change, so it was measured three ways rather than assumed: verified
+  + the real vendor host -> HTTP 200; verified + a self-signed certificate ->
+  REJECTED (macOS SecTrust -67843); UNverified + that same certificate -> HTTP
+  200. The middle row is what carries the proof — without it the 200 is equally
+  consistent with verification being switched off.
+
+- **RustCrypto majors: `aes` 0.9, `cbc` 0.2, `hmac` 0.13, `md-5` 0.11,
+  `sha1` 0.11.** These sign cloud requests and decrypt cloud containers, so a
+  green compile is not the question. All four existing INDEPENDENT oracles still
+  pass — md5/hmac recomputed against CPython `hashlib`, an OpenSSL-produced
+  AES-128-CBC vector, and real vendor fixtures byte-compared against the retired
+  Python daemon. The goldens were calibrated (flipping one byte of the HMAC key
+  reds the test) rather than trusted. `sha1` 0.11 adds an aarch64 backend, so
+  this machine executes ARMv8 hardware SHA-1 for the first time; confirmed by
+  disassembly (78 SHA-1 instructions in the binary) and validated by the RFC
+  3174 vectors, neither of which an x86_64 CI run would have covered.
+
+- **`sysinfo` 0.30 -> 0.39, and the macOS memory figure now reads higher.**
+  Upstream 0.38.3 changed the page accounting behind `used_memory()`: same
+  signature, same units, different number, invisible to every test in the repo.
+  Measured by building both versions side by side against the same machine:
+  58.1% -> 65.8% of 64 GiB. The old figure matched Activity Monitor's "Memory
+  Used" (independently reconstructed from `vm_stat` at 57.6%), so the sysmon
+  widget now sits ~8 points ABOVE it. The measurement and the reasoning are
+  recorded at the call site so a later session does not "correct" it back into a
+  hand-rolled `vm_stat` sum.
+
+- **`btleplug` 0.12 -> 0.13.** Zero source changes — all 53 call sites are
+  signature-identical. The consequence is behavioural: 0.13 replaces several
+  never-resolving futures with prompt `RuntimeError`s, and this daemon classifies
+  BLE faults by substring-matching a dependency's error prose, so retries now
+  fire *less* often. That narrowing is correct (a vanished peripheral is not a
+  dead central, and rebuilding the central cannot help) and is now pinned by two
+  calibrated tests instead of happening by accident. `"Channel closed"` — the
+  case the self-heal was built for — still renders verbatim in 0.13.
+
+- **`tray-icon` 0.24 -> 0.26**, which drags muda 0.19 -> 0.21 invisibly (two
+  minors, no manifest line, since every menu type is reached through tray-icon's
+  re-export). The crate's `default-features = false` justification was naming
+  tray-icon 0.24's upstream defaults, and 0.26 renamed `gtk` to `libappindicator`
+  and deleted `libxdo` outright — so the comment described a version of upstream
+  that no longer exists. Rewritten to state the observable invariant (the gtk
+  family is absent from the lock) instead of a list that rots on the next rename.
+
+- **Python: `requirements.txt` declared two packages nothing imported.** `psutil`
+  had zero importers repo-wide AND was force-collected into the shipped `.app` by
+  `divoom.spec` while `tools/check_gui_is_a_client.py` lists it as FORBIDDEN in
+  the GUI — the spec was shipping the very package the R70 gate forbids. `numpy`
+  was used once, for `np.zeros((16,16,3))` where `bytes(768)` does. Both removed,
+  and the one real gap closed: `pyobjc-framework-Cocoa` (AppKit, the host
+  pywebview renders into) was in pyproject's `gui` extra and missing here.
+  `test_requirements_txt_still_in_sync` was **one-directional** — "requirements.txt
+  is a superset" — so it passed on all three defects; it is now a two-way
+  comparison with a ratcheting allowlist. Calibrated four ways.
+  The `pillow>=12` floor is gone: its comment made three claims and all were
+  false, the load-bearing one being that the repo calls `getdata()` or
+  `get_flattened_data()`, which nothing does — the entire PIL surface of the
+  shipped GUI is one `Image.frombytes`, which the R70 gate pins as the only legal
+  `Image` attribute. `playwright`/`camoufox` are now declared in an `[e2e]`
+  extra instead of existing only as a literal in a CI step.
+
+- **The camoufox browser pin had fallen off the end.** It named
+  `152.0.4-beta.29`, superseded twice and no longer installed on the machine
+  running the suite, so `test_camoufox_install_check` was red on arrival. Its
+  purpose is DETERMINISM — a red run should mean a code change — and determinism
+  comes from naming a *specific* build, not an *old* one. Moved to
+  `156.0.1-beta.34` after measuring: 165 passed / 1 failed across all 28 browser
+  modules and **14/14** in `tests/test_main_world_bridge.py`. The three `mw:`
+  bridges absorbed the move exactly as `tests/support/browser.py` predicted. The
+  "60 failures" in two docstrings is now marked HISTORICAL — it was the cost of
+  beta.29 *before* those bridges existed, and was being cited to justify lag.
+  The one failure it exposed was unrelated: an e2e test asserting a two-key
+  connection-state dict when the state has legitimately carried `selected` since
+  2026-09-04.
+
+- **Four gates were RED on arrival and are now green**, none of it caused by
+  this round: clippy under rustc 1.99 (three new pedantic lints, 10 sites — and
+  `GOH_CI_STEPS` only clippy's `-p divoomd`, so `divoom-menubar` and `nowplaying`
+  were never reached locally), `cargo fmt --check`, and the house
+  `no emptiness asserts` check (28 findings at session start -> 0). No `#[allow]`
+  or `#[expect]` was added; every finding was fixed.
+
+- **`gates_of_heck`: `no_empty_assert` no longer demands the author delete the
+  value from the failure message.** It exists because "a failure line which says
+  which value was empty is worth having", then flagged
+  `assert!(v.is_empty(), "left {v:?} over")`, which is that improvement already
+  made. Found by `nowplaying/src/track.rs`, where `Track::is_empty()` is a domain
+  predicate over three Options with no `len()` to compare and
+  `assert_eq!(x.is_empty(), true)` is refused by clippy — so the assertion was
+  correct and had no acceptable spelling. A message that interpolates the value
+  is now exempt; a static one still fails.
+
 - **`divoom-control set-alarm` now sets a trigger the device understands.** The
   CLI sent `trigger_mode = 0`, a value the reference implementation never
   documents: `examples/divoom_legacy/scheduling/alarm.py` defines the field as

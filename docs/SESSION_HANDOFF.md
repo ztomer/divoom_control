@@ -21,6 +21,49 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-10-04 — dependency currency round: every direct Rust and Python
+  dependency is now at its newest released version, in BOTH repos.** Nine Rust
+  majors moved in divoom-control and two in antiknob, each in its own commit:
+  `reqwest` un-pinned (0.13.1 -> 0.13.5), RustCrypto (`aes` 0.9, `cbc` 0.2,
+  `hmac` 0.13, `md-5` 0.11, `sha1` 0.11), `sysinfo` 0.30 -> 0.39, `btleplug`
+  0.12 -> 0.13, `tray-icon` 0.24 -> 0.26, and in antiknob `tray-icon` 0.25 ->
+  0.26 with `muda` 0.20 -> 0.21 (hard-coupled: tray-icon 0.26 needs muda ^0.21).
+  Plus a plain 43-package `cargo update` that had been BLOCKED for months.
+  `cargo update --dry-run` now reports `Locking 0 packages` in both repos.
+
+  **The thing that was actually broken: a silent pin.** `divoomd` and
+  `nowplaying` declared reqwest's `webpki-roots` feature. reqwest **0.13.2
+  deleted that optional dependency**, so the implicit feature of the same name
+  vanished, and `cargo update` could no longer move reqwest — while printing
+  `Unchanged reqwest v0.13.1 (available: v0.13.5)` and **exiting 0**. No gate
+  printed that line. Dropping two strings unblocked it immediately.
+  `tools/check_cargo_features.py` now fails on the class, and `rustls` pulling
+  `rustls-platform-verifier` instead (OS trust store, not a bundled Mozilla
+  bundle) was verified three ways against the real vendor host.
+
+  **Gates that were RED on arrival, now green** (all pre-existing, none caused
+  by this round): clippy under rustc 1.99 (`manual_bit_width`, `assert_is_empty`,
+  `suboptimal_flops` — 10 sites across all three crates, and
+  `GOH_CI_STEPS` only clippy's `-p divoomd` so two crates were never reached
+  locally); `cargo fmt --check`; the house `no emptiness asserts` check (28
+  findings at session start -> 0, and antiknob's 20 -> 0).
+
+  **Verified, not assumed**: the RustCrypto moves are wire-format code, so the
+  four existing independent oracles (CPython `hashlib` md5/hmac, an
+  OpenSSL-produced AES-CBC vector, real vendor fixtures byte-compared against
+  the retired Python daemon) all had to pass, and `sha1` 0.11's new aarch64
+  hardware backend was confirmed live on this machine by disassembly (78
+  ARMv8 SHA-1 instructions in the binary) and validated by RFC 3174 vectors.
+  Both new btleplug tests were calibrated by breaking them.
+
+  **Known user-visible change**: sysinfo 0.38.3 changed the macOS
+  `used_memory()` formula. Measured on this machine, both versions built side
+  by side: 58.1% -> 65.8% of 64 GiB, so the sysmon widget now reads ~8 points
+  ABOVE Activity Monitor's "Memory Used". Recorded at the call site with the
+  measurement and the reasoning. **The menubar tray glyph also grows ~22%**
+  (tray-icon 0.26 raised the macOS status-item cap from 18pt to 22pt) in BOTH
+  repos — invisible to every gate, needs a human screenshot in light AND dark.
+
 - **2026-09-25 — v0.40.0 bumped and staged for release; the L-series is done
   and the C chain is gone from the installed package.** Version 0.39.0 → 0.40.0
   in `pyproject.toml` + both product crates, `CHANGELOG.md` stanza, and
@@ -439,22 +482,62 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Open threads / next up
 
-1. **Browser suites run in CI** (own step, `--run-browser`): 3 runs green,
-   1 with a single timeout in the gallery-overflow test that did not
-   recur; that test now reports its layout on timeout. Watch for a repeat.
-2. **`examples/` decision CLOSED 2026-09-15** — keep as the retired-library
-   archive with daemon-client counterparts alongside: `examples/README.md`
-   already states the retired status + the `divoom-control` CLI as the
-   scriptable daemon-client path; production-import ban green
-   (`test_no_direct_facade_in_production` 5 passed) and capability census
-   0 DIRECT / 0 WRAPPED. No further retire — deleting it would orphan the
-   only executable spec for the daemon's device_call arms.
-3. **Menubar tile visual check**: the rows and the switch were read through
-   System Events (NotchNook covers that part of the menu bar for a click
-   tool); the tile ICON itself is proven up to the `Icon` handed to
-   `NSMenu`, not by eye.
-4. **Release hygiene**: a new machine needs `scripts/make_signing_identity.sh`
-   once (one keychain prompt, user present) or every install prompts.
+0. **NEW — camoufox browser pin moved off a build that no longer existed.**
+   The pin was `152.0.4-beta.29`, superseded twice (beta.31 on 09-24, then
+   `156.0.1-beta.34` on 10-03) and no longer installed here, so
+   `test_camoufox_install_check` was red on arrival. The pin's stated purpose
+   is DETERMINISM ("a red run means a code change"), which argues for naming a
+   SPECIFIC build, not an OLD one — so it moved to `156.0.1-beta.34` after
+   measuring: 165 passed / 1 failed across all 28 browser modules and **14/14**
+   in `tests/test_main_world_bridge.py`, i.e. the three `mw:` bridges absorbed
+   the move exactly as `tests/support/browser.py` predicted. The "60 failures"
+   figure in two docstrings is now marked HISTORICAL — it was the cost of
+   beta.29 *before* those bridges existed, and was being cited to justify lag.
+   Also fixed the stale assertion the move exposed (see thread 1).
+1. **NEW — `tests/test_e2e_danmaku.py::test_a_missing_capability_says_so_on_the_screen`
+   is order-dependent and fails intermittently in a full browser run.** It waits
+   on `(window.__toasts || []).length > 0`, which a toast the test did NOT
+   create can satisfy, so it proceeds too early. Passes 7/7 in isolation across
+   three runs. The fix is to wait on the specific toast's identity, not a count
+   — a different claim from the pin move, so deliberately left for its own commit.
+2. **NEW — `divoomd`'s BLE fault classification still matches a dependency's
+   error prose.** `daemon_connect.rs::is_dead_central` substring-matches
+   `"Channel closed" | "timed out" | "stale" | "central"`, so a future btleplug
+   rewording silently stops the self-heal. btleplug 0.13 makes this sharper: it
+   replaces hanging futures with prompt `RuntimeError`s, which do NOT match, so
+   retries fire less often. That narrowing is CORRECT (a vanished peripheral is
+   not a dead central) and is now pinned by two calibrated tests — but the
+   structural fix is to classify while `btleplug::Error` is still a typed
+   13-variant enum, at the `ble.rs` boundary, and match on OUR OWN fault enum.
+   **antiknob already does the better thing**: `permissions.rs` asks macOS
+   (`AXIsProcessTrusted`, `IOHIDCheckAccess`) and matches two booleans it owns,
+   so a dependency rename cannot break it. That is the pattern to copy.
+3. **`divoom-menubar` cannot compile for Linux/BSD** and is one workspace-wide
+   cargo step on a Linux job away from a red CI: tray-icon 0.26 added a
+   `compile_error!` unless `libappindicator` or `ksni` is enabled, and
+   `default-features = false` enables neither. Unreachable today (every Ubuntu
+   step in tests.yml is `-p divoomd`). The fix — a target-gated `ksni` feature,
+   GTK-free — is written out at `divoom-menubar/Cargo.toml`.
+4. **`pyinstaller` 6.21.0 -> 6.22.3 is deliberately NOT taken.** It changes the
+   PyInstaller bundle and wants its own commit with a bundle diff. `playwright`
+   also resolved DOWN to 1.60.0 because `camoufox` 0.5.5 caps `<1.61` — a third
+   unreachable "major" after multidict 7 (aiohttp caps `<7`) and pyee 14
+   (playwright caps `<14`).
+5. **antiknob has NO CI at all** — no `.github/`, so its whole gate suite is two
+   git hooks on one machine and `git push --no-verify` skips all of it. Its
+   cargo steps also omit `--locked`, which is the same laundering channel that
+   hid divoom-control's reqwest pin. divoom-control's 23-step `.gatesrc` is the
+   template.
+6. **antiknob's Swift model duplicates the Rust one with no gate.**
+   `ui/Sources/AntiknobUI/Core/Models.swift` models layers/gestures/LED modes that
+   `src/vocabulary.rs`, `src/led.rs` and `src/config.rs` also model. CLI/MCP drift
+   is gated by `tests/surface_parity.rs`; Swift<->Rust drift is not gated at all.
+   divoom-control needed `tools/check_gui_is_a_client.py` for exactly this class.
+7. **antiknob's byte goldens are oracle-backed in PROSE only.** 13 of 15 are
+   better-proven than divoom-control's ratio, but the oracle is a comment, and
+   `VENDOR_UI_MAP.md` (the derivation) is read by no test. One real
+   `antiknob raw` capture fixture that a test decodes would make the suite
+   structurally stronger rather than merely well documented.
 
 **Environment notes that recur** (not repo defects):
 

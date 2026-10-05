@@ -9,6 +9,23 @@ forward-looking one. Recover a round plan with
 
 ## Shipped
 
+- **Dependency currency round (2026-10-04) — both repos fully current.**
+  Nine Rust majors in divoom-control and two in antiknob, each in its own
+  commit, plus a Python layer that declared two packages nothing imported. The
+  substantive find was not a version but a **silent pin**: reqwest 0.13.2 deleted
+  the optional dependency behind the `webpki-roots` feature the repo declared, so
+  `cargo update` could not move past 0.13.1 while exiting 0 and saying so only in a
+  parenthetical — and a plain 43-package `cargo update` had been stuck behind it
+  for months. `tools/check_cargo_features.py` now gates that class.
+  The RustCrypto move is the one that mattered to get right (it signs cloud
+  requests) and leaned on four independent oracles rather than a green compile;
+  `sha1` 0.11's new ARMv8 backend was proven live by disassembly and validated
+  by RFC vectors, which an x86_64 CI run would not have covered. Also fixed four
+  gates that were red on arrival, moved the camoufox browser pin off a build that
+  no longer existed, and shipped a `gates_of_heck` fix so the house
+  `no_empty_assert` check stops demanding the value be deleted from a failure
+  message.
+
 - **Autonomous rustification (2026-09-25), phases L5 units 2-3 — all seven of
   the CLI's device verbs run in `divoomd`.**
   `divoomd` gained `set-volume`, `set-brightness`, `push-image`, `push-gif`,
