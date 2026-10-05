@@ -31,6 +31,8 @@ sys.path.insert(0, str(REPO / "tools"))
 
 gate = pytest.importorskip("check_applescript_launch")
 
+from tests.support.repo_files import repo_files  # noqa: E402
+
 
 # ---------------------------------------------------------------- calibration
 
@@ -177,9 +179,8 @@ def test_this_file_is_the_only_marked_file():
     """If a second file ever claims the exemption, that is a decision to see."""
     marked = [
         p.relative_to(REPO).as_posix()
-        for p in REPO.rglob("*.py")
-        if ".venv" not in p.parts and "target" not in p.parts
-        and gate.FIXTURE_MARKER in p.read_text(errors="replace")
+        for p in repo_files(REPO, (".py",))
+        if gate.FIXTURE_MARKER in p.read_text(errors="replace")
         and p.name != "check_applescript_launch.py"
     ]
     assert marked == ["tests/test_applescript_launch_gate.py"], marked

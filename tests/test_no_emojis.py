@@ -19,6 +19,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.support.repo_files import repo_files
+
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EXTS = {".py", ".js", ".css", ".html", ".md", ".txt", ".toml", ".cfg", ".ini", ".sh", ".yml", ".yaml"}
@@ -83,9 +85,7 @@ EXEMPT_FILES = {
 
 def _scannable_files() -> list[Path]:
     out: list[Path] = []
-    for p in REPO_ROOT.rglob("*"):
-        if not p.is_file() or p.suffix not in EXTS:
-            continue
+    for p in repo_files(REPO_ROOT, tuple(EXTS)):
         if any(part in EXEMPT_DIRS for part in p.parts):
             continue
         if p.relative_to(REPO_ROOT).as_posix() in EXEMPT_FILES:
