@@ -316,13 +316,15 @@ are not restated.
 
 ## Current debt & quality
 
-- **Gates**: 27 steps (28 full), run by `pre-push` since R71 P0 — they used to run only
-  when someone typed the command. Local and CI are kept identical on purpose.
+- **Gates**: 24 `GOH_CI_STEPS` + `scripts/py_ci.sh`, which `ci_local.sh` injects,
+  so 25 as run — run by `pre-push` since R71 P0, and they used to run only when
+  someone typed the command. Local and CI are kept identical on purpose.
   `check_applescript_launch.py` joined the list on 2026-09-07: no source may
   address an application by LaunchServices NAME in AppleScript without an
   `is running` guard. It exists because `tell application "Python" to activate`
   in the GUI's focus path launched a stranger's Python.app and crashed it in
   dyld, four times, for a user.
+  `tools/check_cargo_features.py` joined on 2026-10-04 (see the round below).
 - **500-LOC rule**: enforced, allowlist empty (R23).
 - **Coverage**: Python floor 89.2 (measured 89.30), and it now enforces the
   number it advertises — it was claiming 90 and enforcing ">= 89.5", because
@@ -331,14 +333,75 @@ are not restated.
   against 443 daemon commands, and fails the build on a new one. Parity gates
   hold the two files that legitimately have two readers
   (`check_weather_parity.py`, `check_hotchannel_parity.py`).
-- **Tests**: ~3200 Python (default suite 3213, 209 skipped), ~260 Rust;
-  hardware tests gated/skip by default; 60 native-downscaler parity tests.
-  The browser subset (150) opts in with `--run-browser`, runs in its own CI
-  step, and was measured 150/150 twice under load (see the CLOSED item).
+- **Tests** (measured 2026-10-04): **1610** in the default suite, **1095** in
+  `examples/tests`, **166** in the browser subset, **486** Rust. Hardware tests
+  gated/skip by default; 60 native-downscaler parity tests. The browser subset
+  opts in with `--run-browser` and runs in its own CI step. Three numbers here
+  were stale until this round and are now corrected — a backlog that miscounts
+  its own gates cannot be trusted to say which ones are missing.
 - **C module**: deleted 2026-09-25 (phase L4, shipped in v0.40.0) — `libdivoom`,
   `native_lib.py`, and `scripts/build_libdivoom.sh` are all gone; the daemon
   resizes (Nearest), encodes, and streams in Rust. The C's recorded behaviour
   survives as 550 framing + 192 image vectors asserted byte for byte.
+
+### Follow-ups from the dependency-currency round (2026-10-04)
+
+Ordered by what blocks someone else, not by effort.
+
+1. **OPEN — `divoomd` still classifies BLE faults by substring-matching a
+   dependency's error prose.** `daemon_connect.rs::is_dead_central` matches
+   `"Channel closed" | "timed out" | "stale" | "central"`, so a future btleplug
+   that rewords any of those silently stops the self-heal, and nothing notices.
+   btleplug 0.13 sharpened this: it replaces hanging futures with prompt
+   `RuntimeError`s, which match none of the four, so retries fire *less* often.
+   That narrowing is CORRECT and is now pinned by two calibrated tests — but the
+   structural fix is to classify while `btleplug::Error` is still a typed
+   13-variant enum, at the `ble.rs` boundary, and match on OUR OWN fault enum.
+   **The pattern to copy is antiknob's**: `permissions.rs` asks macOS
+   (`AXIsProcessTrusted`, `IOHIDCheckAccess`) and matches two booleans it owns,
+   so a dependency rename cannot break it. Cross-repo, deliberately.
+2. **OPEN — `tests/test_e2e_danmaku.py::test_a_missing_capability_says_so_on_the_screen`
+   is order-dependent.** It waits on `(window.__toasts || []).length > 0`, which
+   a toast the test did NOT create can satisfy, so it proceeds too early. Passes
+   7/7 in isolation, three runs over; fails intermittently in a full browser run.
+   The fix is to wait on the specific toast's identity rather than a count.
+3. **OPEN — `divoom-menubar` cannot compile for Linux or BSD, and is one
+   workspace-wide cargo step on a Linux job away from a red CI.** tray-icon 0.26
+   added `compile_error!` unless `libappindicator` or `ksni` is enabled, and
+   `default-features = false` — which both repos need to keep the gtk family out
+   of the lock — enables neither. Unreachable today: every cargo step in
+   tests.yml's Ubuntu jobs is scoped `-p divoomd`. The fix is written out at
+   `divoom-menubar/Cargo.toml`: a target-gated `ksni` feature, which is GTK-free
+   and so preserves the invariant instead of defeating it.
+4. **OPEN — two user-visible changes from this round need a HUMAN, not a gate.**
+   The sysmon `mem` gauge now reads ~8 points ABOVE Activity Monitor's "Memory
+   Used" (sysinfo 0.38.3 changed the macOS page accounting; measured both ways,
+   recorded at the call site). And the menubar tray glyph grows ~22% in BOTH
+   repos, because tray-icon 0.26 raised the macOS status-item cap from 18pt to
+   22pt. No test can see either. Needs a screenshot of each menu bar in light AND
+   dark.
+5. **OPEN — `pyinstaller` 6.21.0 -> 6.22.3 is deliberately not taken.** It
+   changes the PyInstaller bundle and wants its own commit with a bundle diff.
+   Three Python "majors" are UNREACHABLE rather than declined: `multidict` 7.0.0
+   (aiohttp caps `<7`), `pyee` 14 (playwright caps `<14`), `playwright` 1.63
+   (camoufox 0.5.5 caps `<1.61`, which is why installing the declared set
+   DOWNGRADED playwright to 1.60.0). Revisit when a parent widens.
+6. **OPEN — camoufox pins must move with the channel, and now there is a habit
+   to keep.** The pin went stale twice before this round caught it, because a pin
+   looks like discipline and staleness looks identical. The rule, now written into
+   `tools/camoufox_installed.py` and `tests/support/browser.py`: move it forward
+   in its own commit when the channel moves, having run the browser suites
+   against the candidate first, and never cite the historical "60 failures"
+   figure as evidence that moving forward is expensive — measure it.
+7. **CARRIED — sibling debt in `antiknob`, which has no CI at all.** Its whole
+   gate suite is two git hooks on one machine, so `git push --no-verify` skips
+   all of it, and its cargo steps omit `--locked` — the same laundering channel
+   that hid divoom-control's reqwest pin. Its Swift `Models.swift` duplicates
+   the Rust model with no gate (divoom-control needed
+   `check_gui_is_a_client.py` for exactly this class), and its 13-of-15
+   oracle-backed byte goldens rest on PROSE: `VENDOR_UI_MAP.md` is read by no
+   test, so one real `antiknob raw` capture fixture that a test decodes would
+   make the suite structurally stronger rather than merely well documented.
 
 ---
 
