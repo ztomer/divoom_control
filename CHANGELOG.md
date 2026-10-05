@@ -6,6 +6,10 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+_(nothing yet)_
+
+## v0.41.0 — every dependency current, and the gates that were lying about it (2026-10-05)
+
 - **BLE faults are now classified from the typed error, not from its wording.**
   `is_dead_central` decided whether to rebuild the CoreBluetooth central by
   substring-matching btleplug's `Display` output against four markers, which made

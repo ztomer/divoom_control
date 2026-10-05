@@ -21,6 +21,30 @@ shared memory. Read this on entry and **update it at the end of every round**
 
 ## Current state — _update this section each round_
 
+- **2026-10-05 — v0.41.0 cut.** Version 0.40.0 -> 0.41.0 in `pyproject.toml` +
+  both product crates, a `## v0.41.0` CHANGELOG stanza, and
+  `docs/release_notes_v0.41.0.md`. Minor rather than patch because two things are
+  user-visible: the sysmon `mem` gauge reads ~8 points above Activity Monitor
+  (sysinfo's own formula change, measured both ways), and the menu bar glyph is
+  ~22% larger (tray-icon 0.26 raised the macOS cap from 18pt to 22pt). Neither is
+  breaking and neither is testable. CI was RED on the commit this session started
+  from (`907b9ff`, run 36209418756) and green on every commit this round pushed;
+  the four gate failures that caused it are fixed.
+
+  The round's three follow-ups shipped after the dependency work: BLE faults are
+  classified from the typed `btleplug::Error` with no wildcard arm (behaviour
+  proven unchanged by a 30-row old-vs-new table, 16/16 calibrations); the e2e
+  toast waits key on the specific toast (browser suite 165/1 -> 177/0, and a 2-arg
+  spy was swallowing its third argument so one claim was unverifiable by
+  construction); and `divoom-menubar` has a target-gated `ksni` so it can compile
+  for Linux.
+
+  **Found and deliberately NOT fixed:** btleplug's `corebluetooth/adapter.rs`
+  keeps a raw `SendError` whose text matches none of the four old markers, so a
+  genuinely dead central is missed on that path today. It is now a one-line
+  structural fix rather than a fragile one, and it changes which operations
+  retry — which is exactly what a refactor commit must not do quietly.
+
 - **2026-10-04 — dependency currency round: every direct Rust and Python
   dependency is now at its newest released version, in BOTH repos.** Nine Rust
   majors moved in divoom-control and two in antiknob, each in its own commit:
