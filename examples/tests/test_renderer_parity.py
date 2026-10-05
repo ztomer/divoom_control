@@ -42,8 +42,8 @@ def daemon_socket():
     """A real `divoomd` on a private socket.
 
     `render_widget` touches no Bluetooth, but a BLE-linked daemon started from a
-    shell has no macOS TCC grant and dies on its first scan — see the hardware
-    note in docs/SESSION_HANDOFF.md. Nothing here scans, so the ordinary binary
+    shell has no macOS TCC grant and dies on its first scan — see the Hardware
+    bullet in AGENTS.md. Nothing here scans, so the ordinary binary
     is fine; it is resolved BY VERSION (R69) rather than by path.
     """
     from tests.support.daemon_binary import require_divoomd

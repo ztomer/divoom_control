@@ -2,39 +2,42 @@
 
 Shared rules for any coding agent working in this repo (opencode, Claude, etc.).
 
-## CORE RULE: keep the session handoff updated after every round
+## CORE RULE: keep the roadmap and changelog current after every round
 
 This project is worked across multiple agents/sessions (opencode + Claude) that
 **share this git working tree**. They CANNOT share a live session (separate
 conversation stores), so the handoff is file-based. **On entry, read
-`docs/SESSION_HANDOFF.md`.** After **each round of work**, before you stop, you
-MUST update the handoff so the *next* session — including the opencode session
-`ses_f6a64811fffeYyM9ixX43QtgDz` — can pick up without re-deriving state:
+`docs/ROADMAP.md`** (what is open) and `git log --oneline` (what just landed).
+After **each round of work**, before you stop, leave the tree so the *next*
+session can pick up without re-deriving state:
 
-1. **docs/SESSION_HANDOFF.md** — update "Current state" + "Open threads / next
-   up". This is the canonical living state both tools read first.
+1. **docs/ROADMAP.md** — record what shipped and what is still open. This is the
+   ONE forward-looking document: there is no separate handoff file and no
+   second backlog. Per-round plans are pruned to git history once their round
+   ships (house rule: a per-feature plan graveyard rots and misleads later
+   sessions). Write a round plan while a round is in flight if it helps, then
+   prune it on the way out.
 2. **CHANGELOG.md** — add/extend the round's entry (what shipped, where, why).
-3. **docs/ROADMAP.md** — record what shipped and what is still open. This is the
-   ONE forward-looking document; per-round `PLANNING_ROUNDn.md` files are pruned
-   to git history once their round ships (house rule: a per-feature plan
-   graveyard rots and misleads later sessions). Write a round plan while a round
-   is in flight if it helps, then prune it on the way out.
-4. **Commit** the work with a clear, scoped message (one logical change per
+   Per-round narrative belongs here, not in the roadmap.
+3. **Commit** the work with a clear, scoped message (one logical change per
    commit) so `git log` is a faithful, readable history of the round.
-5. **Tests green** before you call a round done (`python3 -m pytest`), and state
-   the pass/skip counts in the handoff + CHANGELOG.
+4. **Tests green** before you call a round done (`python3 -m pytest`), and state
+   the pass/skip counts in the CHANGELOG entry.
 
-The git history + `docs/SESSION_HANDOFF.md` + CHANGELOG ARE the cross-session
-memory. Treat them as the source of truth; do not rely on conversation context
+The git history + `docs/ROADMAP.md` + CHANGELOG ARE the cross-session memory.
+Treat them as the source of truth; do not rely on conversation context
 surviving. (Claude Code reads `CLAUDE.md` which points here; opencode reads this
-`AGENTS.md` directly.)
+`AGENTS.md` directly.) To recover pruned plans and older handoff prose, see the
+"Historical" section of `docs/README.md`.
 
 **Also read `docs/CHANNEL_ARCHITECTURE.md` on entry** — hard-won invariants (image
 pipeline, 0x8B protocol, dual-impl anti-drift, "ACK ≠ success", when to use C).
 These are lessons paid for in real shipped bugs; don't relearn them.
 
-> To resume the opencode session for context: `opencode export <sessionID>`
-> dumps it as JSON (`info` + `messages`).
+> To read an opencode session for context: `opencode session list` (newest
+> first), then `opencode export <id>` dumps the one you want as JSON (`info` +
+> `messages`). Never write a session id into these docs — ids are deleted with
+> their sessions, and `tests/test_agent_docs_no_session_ids.py` fails on one.
 
 ## Project conventions
 
@@ -58,7 +61,8 @@ These are lessons paid for in real shipped bugs; don't relearn them.
   terminal is a code finding: production is touching the radio on a path that
   does not need it. `cargo test` rebuilds
   `target/debug/divoomd` WITH default features, so redo the BLE-free build after
-  any test run.
+  any test run. The hardware packet, the traced dev daemon and how to read a wire
+  trace: "Hardware reference" in `docs/ROADMAP.md`.
 - **Tests**: hardware tests are gated/skip by default (`tests/conftest.py`);
   prefer the mock-device E2E (`examples/tests/test_e2e_mock_device.py`, the retired library's suite) for wire checks.
 - **Does the app actually work?** `scripts/gui_pov.py` drives the REAL web UI

@@ -196,13 +196,13 @@ divoom_gui/            Desktop Control Center (pywebview, macOS) — daemon clie
 divoom-menubar/        the menu-bar/tray agent, Rust (winit + tray-icon)
 build.sh / run.sh      build the Rust binaries / run the GUI (+ daemon + menubar)
 scripts/build_release.sh     build the shippable Divoom.app + dmg (py2app)
-docs/                  SESSION_HANDOFF, protocol refs, release docs
+docs/                  ROADMAP, protocol refs, release docs
 tests/                 pytest suite
 ```
 
 ## Contributing / working notes
 
  This repo is worked by multiple agents and sessions sharing one git tree. See
-**`AGENTS.md`** for conventions, **`docs/SESSION_HANDOFF.md`** for current state +
-open threads, and **`ARCHITECTURE.md`** for the system map. Keep
-tests green and update the handoff each round.
+**`AGENTS.md`** for conventions, **`docs/ROADMAP.md`** for what is open,
+**`CHANGELOG.md`** for what shipped, and **`ARCHITECTURE.md`** for the system map.
+Keep tests green and update the roadmap and changelog each round.
