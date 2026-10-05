@@ -346,62 +346,68 @@ are not restated.
 
 ### Follow-ups from the dependency-currency round (2026-10-04)
 
-Ordered by what blocks someone else, not by effort.
-
-1. **OPEN — `divoomd` still classifies BLE faults by substring-matching a
-   dependency's error prose.** `daemon_connect.rs::is_dead_central` matches
-   `"Channel closed" | "timed out" | "stale" | "central"`, so a future btleplug
-   that rewords any of those silently stops the self-heal, and nothing notices.
-   btleplug 0.13 sharpened this: it replaces hanging futures with prompt
-   `RuntimeError`s, which match none of the four, so retries fire *less* often.
-   That narrowing is CORRECT and is now pinned by two calibrated tests — but the
-   structural fix is to classify while `btleplug::Error` is still a typed
-   13-variant enum, at the `ble.rs` boundary, and match on OUR OWN fault enum.
-   **The pattern to copy is antiknob's**: `permissions.rs` asks macOS
-   (`AXIsProcessTrusted`, `IOHIDCheckAccess`) and matches two booleans it owns,
-   so a dependency rename cannot break it. Cross-repo, deliberately.
-2. **OPEN — `tests/test_e2e_danmaku.py::test_a_missing_capability_says_so_on_the_screen`
-   is order-dependent.** It waits on `(window.__toasts || []).length > 0`, which
-   a toast the test did NOT create can satisfy, so it proceeds too early. Passes
-   7/7 in isolation, three runs over; fails intermittently in a full browser run.
-   The fix is to wait on the specific toast's identity rather than a count.
-3. **OPEN — `divoom-menubar` cannot compile for Linux or BSD, and is one
-   workspace-wide cargo step on a Linux job away from a red CI.** tray-icon 0.26
-   added `compile_error!` unless `libappindicator` or `ksni` is enabled, and
-   `default-features = false` — which both repos need to keep the gtk family out
-   of the lock — enables neither. Unreachable today: every cargo step in
-   tests.yml's Ubuntu jobs is scoped `-p divoomd`. The fix is written out at
-   `divoom-menubar/Cargo.toml`: a target-gated `ksni` feature, which is GTK-free
-   and so preserves the invariant instead of defeating it.
-4. **OPEN — two user-visible changes from this round need a HUMAN, not a gate.**
-   The sysmon `mem` gauge now reads ~8 points ABOVE Activity Monitor's "Memory
-   Used" (sysinfo 0.38.3 changed the macOS page accounting; measured both ways,
-   recorded at the call site). And the menubar tray glyph grows ~22% in BOTH
-   repos, because tray-icon 0.26 raised the macOS status-item cap from 18pt to
-   22pt. No test can see either. Needs a screenshot of each menu bar in light AND
-   dark.
-5. **OPEN — `pyinstaller` 6.21.0 -> 6.22.3 is deliberately not taken.** It
-   changes the PyInstaller bundle and wants its own commit with a bundle diff.
-   Three Python "majors" are UNREACHABLE rather than declined: `multidict` 7.0.0
+1. **SHIPPED — BLE faults are classified from the typed error, not its prose.**
+   `divoomd/src/ble_fault.rs` decides `DeadCentral` once, while `btleplug::Error`
+   is still its 13-variant enum, and the answer travels as an enum the crate
+   owns. The match has no wildcard, so an upstream variant change is a COMPILE
+   error. Behaviour proven unchanged by a 30-row old-vs-new agreement table, and
+   16/16 calibrations watched red. Corrects a premise: `Error::TimedOut` renders
+   "Timed out after 10s" with a capital T, so the lowercase probe it replaced
+   never matched it and it has never triggered a rebuild.
+2. **SHIPPED — the e2e toast wait no longer accepts a foreign toast.** Nine waits
+   across six modules counted `showToast` calls or waited on `classList
+   .contains('show')`, a condition the APP satisfies by itself: `app_init.js:281`
+   raises "Startup: Auto-scanning screens..." a second after load with no click in
+   the test. Forced a reproduction with the original test to confirm the symptom.
+   Also found the 2-arg spy swallowed its third argument, so the transport half
+   of one claim was unverifiable by construction. Browser subset 165/1 -> 177/0.
+3. **SHIPPED (partly provable here) — `divoom-menubar` gets a target-gated
+   `ksni`.** Satisfies tray-icon 0.26's Linux/BSD `compile_error!` without
+   pulling gtk back into the lock, calibrated both ways against a real Linux
+   target. A full `divoom-menubar` Linux build is NOT provable on this machine —
+   winit 0.30 supports neither installed Linux target — so the proof covers the
+   dependency's requirement, not this crate's build.
+4. **OPEN — a genuinely dead central is MISSED on one path. Found while doing #1.**
+   `btleplug-0.13.4/src/corebluetooth/adapter.rs:236` does
+   `.map_err(|e| Error::Other(Box::new(e)))` on its event-channel send, keeping the
+   real `futures::channel::mpsc::SendError` instead of going through
+   `From<SendError>`. Its `Display` is "send failed because receiver is gone",
+   which matches none of the four old markers — so the self-heal does not fire
+   there today. Pre-existing, and now a ONE-LINE structural fix rather than a
+   fragile one: the boxed type is nameable at that site, so it can classify by
+   type instead of by prose. `central.rs`'s `stop_scan` route is the likely
+   trigger. Deliberately not folded into #1, because it changes which cases retry.
+5. **OPEN — two user-visible changes need a HUMAN, not a gate.** The sysmon `mem`
+   gauge now reads ~8 points ABOVE Activity Monitor's "Memory Used" (sysinfo
+   0.38.3 changed the macOS page accounting; measured both ways, recorded at the
+   call site). And the menubar tray glyph grows ~22% in BOTH repos, because
+   tray-icon 0.26 raised the macOS status-item cap from 18pt to 22pt. No test can
+   see either. Needs a screenshot of each menu bar in light AND dark.
+6. **OPEN — `pyinstaller` 6.21.0 -> 6.22.3 is deliberately not taken.** It changes
+   the PyInstaller bundle and wants its own commit with a bundle diff. Three
+   Python "majors" are UNREACHABLE rather than declined: `multidict` 7.0.0
    (aiohttp caps `<7`), `pyee` 14 (playwright caps `<14`), `playwright` 1.63
    (camoufox 0.5.5 caps `<1.61`, which is why installing the declared set
    DOWNGRADED playwright to 1.60.0). Revisit when a parent widens.
-6. **OPEN — camoufox pins must move with the channel, and now there is a habit
-   to keep.** The pin went stale twice before this round caught it, because a pin
-   looks like discipline and staleness looks identical. The rule, now written into
-   `tools/camoufox_installed.py` and `tests/support/browser.py`: move it forward
-   in its own commit when the channel moves, having run the browser suites
-   against the candidate first, and never cite the historical "60 failures"
-   figure as evidence that moving forward is expensive — measure it.
-7. **CARRIED — sibling debt in `antiknob`, which has no CI at all.** Its whole
-   gate suite is two git hooks on one machine, so `git push --no-verify` skips
-   all of it, and its cargo steps omit `--locked` — the same laundering channel
-   that hid divoom-control's reqwest pin. Its Swift `Models.swift` duplicates
-   the Rust model with no gate (divoom-control needed
-   `check_gui_is_a_client.py` for exactly this class), and its 13-of-15
-   oracle-backed byte goldens rest on PROSE: `VENDOR_UI_MAP.md` is read by no
-   test, so one real `antiknob raw` capture fixture that a test decodes would
-   make the suite structurally stronger rather than merely well documented.
+7. **OPEN — camoufox pins move with the channel; there is now a habit to keep.**
+   The pin went stale twice before this round caught it, because a pin looks like
+   discipline and staleness looks identical. The rule, written into
+   `tools/camoufox_installed.py` and `tests/support/browser.py`: move it forward in
+   its own commit when the channel moves, having run the browser suites against
+   the candidate first, and never cite the historical "60 failures" as evidence
+   that moving forward is expensive — measure it.
+8. **CARRIED — residual `antiknob` debt.** Four items shipped on 2026-10-04:
+   `--locked` on every cargo gate step (calibrated by showing the old gate
+   silently DOWNGRADED `Cargo.lock` while exiting 0 with every test passing), its
+   first GitHub Actions workflow (never run — correctness unverified), a
+   Swift<->Rust model parity gate, and a machine-checked byte oracle. The parity
+   gate immediately paid for itself: the Swift side was writing `openURL` and
+   `bundleId` where Rust reads `openUrl` and `bundle_id`, so `host.json` was
+   UNDECODABLE and `load_json` silently substituted defaults — **every layer
+   lost, with nothing anywhere saying so.** Still open there: `rust_gate.sh` in
+   gates_of_heck still omits `--locked`; `swiftlint` and `cargo-machete` warn
+   rather than fail when absent; and the 0x1189 CH57x gesture mapping and byte 5
+   of a chained record remain unverified for want of hardware.
 
 ---
 

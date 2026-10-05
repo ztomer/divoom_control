@@ -6,6 +6,46 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **BLE faults are now classified from the typed error, not from its wording.**
+  `is_dead_central` decided whether to rebuild the CoreBluetooth central by
+  substring-matching btleplug's `Display` output against four markers, which made
+  a dependency's prose load-bearing — a reword upstream would have silently
+  stopped the self-heal. The decision is now made once, while
+  `btleplug::Error` is still its typed 13-variant enum, and travels as an enum
+  this crate owns. The match has no wildcard arm, so an upstream variant change
+  is a compile error. Behaviour is proven unchanged by a 30-row old-vs-new
+  agreement table against the previous implementation, kept in-tree as the
+  specification. Corrects a premise along the way: `Error::TimedOut` renders
+  "Timed out after 10s" with a capital T, so the lowercase probe never matched
+  it and it has never triggered a rebuild.
+
+- **The e2e toast wait no longer accepts a toast the test did not create.** Nine
+  waits across six browser modules counted `showToast` calls or waited on
+  `classList.contains('show')` — a condition the APP satisfies by itself, since
+  `app_init.js:281` raises "Startup: Auto-scanning screens..." about a second
+  after load with no click in the test. That is why
+  `test_a_missing_capability_says_so_on_the_screen` failed intermittently in a
+  full run while passing in isolation. Every wait now keys on the specific toast
+  it is about, and the browser suite went from 165 passed / 1 failed to **177
+  passed**. Also found that a 2-argument spy swallowed its third argument, so one
+  test's claim about which transport was in use was unverifiable by construction;
+  it is now actually asserted.
+
+- **`divoom-menubar` cannot compile for Linux or BSD** — tray-icon 0.26
+  `compile_error!`s there unless `libappindicator` or `ksni` is enabled, and this
+  crate deliberately enables neither to keep gtk out of the lock. A target-gated
+  `ksni` (GTK-free) satisfies it without losing that invariant, calibrated both
+  ways against a real Linux target.
+
+- **A genuinely dead CoreBluetooth central is MISSED on one code path.** Found
+  while doing the classification work above, and deliberately NOT fixed in the
+  same commit: btleplug's `corebluetooth/adapter.rs` keeps the raw
+  `SendError` on its event-channel send instead of going through its own
+  conversion, and that error's text matches none of the four markers, so the
+  self-heal does not fire there today. Pre-existing. It is now a one-line
+  structural fix rather than a fragile one, and it changes which cases retry —
+  which is exactly what a refactor commit must not do quietly.
+
 - **Dependency currency round: every direct dependency is now at its newest
   released version.** Five Rust majors plus the lockfile refresh that had been
   blocked for months, and a Python layer that was declaring two packages nothing
