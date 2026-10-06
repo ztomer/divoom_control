@@ -15,6 +15,11 @@ shipped milestone (per the project planning docs).
   gates_of_heck's manifest (`gates/required_tools.py --layer structural
   --names`, fed to apt) instead of trusting the runner image to ship it, and
   fails closed if the list is empty or a tool is still missing.
+  Following gates_of_heck v0.24.0 (native binary is the only tier), the
+  structural job drops the retired `GOH_NO_NATIVE=1`, and the `no-allow` check
+  runs through `goh.sh` rather than the retired by-path Python checker; both
+  commands were rehearsed against a fresh gates_of_heck clone, which builds
+  `bin/goh` from source exactly as CI must.
 
 - **The roadmap is a phased plan a gate can read.** `docs/ROADMAP.md` went from
   ~1000 lines, half of it shipped narrative with SHIPPED, CLOSED and OPEN items

@@ -64,7 +64,10 @@ jobs:
         # the length baseline) and runs emoji, markers, length, shell lint and
         # secrets. R67's lesson stands: a gate whose two invocations disagree
         # is not one gate, so CI and local share one command and one config.
-        run: GOH_DIR="$GITHUB_WORKSPACE/goh" GOH_NO_NATIVE=1 bash goh/gates/structural.sh --full
+        # The native goh binary is the only tier since gates_of_heck v0.24.0
+        # (GOH_NO_NATIVE is retired and ignored); structural.sh builds it from
+        # the checkout with cargo, which the manifest step above guarantees.
+        run: GOH_DIR="$GITHUB_WORKSPACE/goh" bash goh/gates/structural.sh --full
       # R67: these ran ONLY in the local gate list, so local and CI disagreed
       # about what "green" means — the same divergence the house rules name,
       # pointing the other way. They resolve the TUI via tools/_tui.py, which
@@ -234,7 +237,9 @@ jobs:
           path: goh
           token: ${{ secrets.GOH_TOKEN || github.token }}
       - name: No #[allow] in tracked Rust source (house gate)
-        run: python3 goh/checks/check_no_allow.py
+        # Through goh.sh, the one entry for a house check: the by-path Python
+        # checkers are retired forwarders since gates_of_heck v0.24.0.
+        run: GOH_DIR="$GITHUB_WORKSPACE/goh" bash goh/gates/goh.sh no-allow
       - name: Install D-Bus headers
         # clippy --all-features enables `ble` → btleplug → dbus → libdbus-sys,
         # which needs the system dbus-1.pc. Without this the clippy step fails
