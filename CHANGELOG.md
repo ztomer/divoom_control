@@ -6,6 +6,8 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+## v0.41.1 — the menu bar icon is back to its size, and a v0.41.0 claim corrected (2026-10-08)
+
 - **The release build's leaked-references guard could not catch a big leak.**
   `find ... | grep -q .` under `set -o pipefail` reads a SIGPIPE'd `find` as "no
   match": a fake bundle holding 20,000 planted `.smali` files PASSED the old
