@@ -104,7 +104,10 @@ for b in divoomd divoom-menubar; do
 done
 
 # 3. Guard: the reverse-engineered APK / references must never be in the bundle.
-if find "${APP}" \( -iname '*smali*' -o -path '*references*' -o -iname '*.apk' \) | grep -q .; then
+# `-print -quit`, not `| grep -q .`: under pipefail grep's early exit SIGPIPEs
+# find, the pipeline reads as false, and a bundle full of leaks passed (proven
+# 2026-10-08 against 20,000 planted files).
+if [ -n "$(find "${APP}" \( -iname '*smali*' -o -path '*references*' -o -iname '*.apk' \) -print -quit)" ]; then
   echo "ERROR: reverse-engineered references leaked into the bundle — aborting." >&2
   exit 1
 fi
