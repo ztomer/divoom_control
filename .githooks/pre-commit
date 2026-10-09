@@ -11,6 +11,20 @@ set -euo pipefail
 
 GOH="${GOH_DIR:-${GOH:-$HOME/Projects/gates_of_heck}}"
 root="$(git rev-parse --show-toplevel)"
+# git binds this hook to its repository (GIT_DIR, GIT_INDEX_FILE -- absolute from a linked
+# worktree), and a test suite the gate runs that builds a scratch repo would act on THIS one
+# (media_server, 2026-10-08: core.bare=true, a stray commit, three stashes). Dropped before anything
+# is spawned; the index being committed travels as GOH_HOOK_INDEX_FILE (contract #12).
+env_lib="$GOH/gates/_git_env.sh"
+[ -f "$env_lib" ] || env_lib="$root/gates/_git_env.sh"   # self-hosted: this IS gates_of_heck
+if [ -f "$env_lib" ]; then
+    # shellcheck source=/dev/null
+    . "$env_lib"
+    goh_hook_unbind || exit $?
+else
+    echo "⚠ pre-commit: $GOH predates gates/_git_env.sh -- git's repository variables reach" \
+        "everything the gate runs" >&2
+fi
 gate="$root/tools/gate.sh"
 if [ -f "$gate" ]; then
     exec bash "$gate" --staged
