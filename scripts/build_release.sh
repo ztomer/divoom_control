@@ -122,11 +122,14 @@ divoom_codesign "${APP}" 2>/dev/null \
 # 5. .dmg (plain folder image with an /Applications symlink for drag-install).
 DMG="dist/Divoom-v${VERSION}.dmg"
 echo "→ packaging ${DMG}"
+# `diskutil image create from`, not `hdiutil create`: macOS 27 deprecates the
+# latter, and the warning is the only notice before it becomes unavailable.
 STAGE="$(mktemp -d)"
 cp -R "${APP}" "${STAGE}/"
 ln -s /Applications "${STAGE}/Applications"
 rm -f "${DMG}"
-hdiutil create -volname "Divoom Control" -srcfolder "${STAGE}" -ov -format UDZO "${DMG}" >/dev/null
+diskutil image create from --format UDZO --volumeName "Divoom Control" \
+  "${STAGE}" "${DMG}" >/dev/null
 rm -rf "${STAGE}"
 
 # 6. sha256 for the cask.
