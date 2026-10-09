@@ -122,7 +122,7 @@ SRC="$ROOT/dist/$APP_NAME"
 # it, or the installed app would reach back into this checkout's target/release
 # and silently run whatever is there.
 for b in divoomd divoom-menubar; do
-  found="$(find "$SRC" -name "$b" -type f -perm -u+x 2>/dev/null | head -1)"
+  found="$(find "$SRC" -name "$b" -type f -perm -u+x -print -quit 2>/dev/null)"
   [[ -n "$found" ]] || die "bundle is missing $b — it would fall back to the source tree"
   info "bundled $b: ${found#"$SRC"/}"
 done

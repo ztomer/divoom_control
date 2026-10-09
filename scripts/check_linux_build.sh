@@ -36,7 +36,7 @@ if ! command -v cargo-zigbuild >/dev/null 2>&1 || ! command -v zig >/dev/null 2>
     warn "[linux] skipped — cargo-zigbuild + zig not installed (CI still covers Linux)"
     exit 0
 fi
-if ! rustup target list --installed 2>/dev/null | grep -qx "$TARGET"; then
+if ! grep -qx "$TARGET" <<<"$(rustup target list --installed 2>/dev/null)"; then
     warn "[linux] skipped — rust target $TARGET not installed (rustup target add $TARGET)"
     exit 0
 fi

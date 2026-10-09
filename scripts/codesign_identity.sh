@@ -23,7 +23,7 @@ divoom_codesign_identity() {
         echo "-"
         return
     fi
-    if security find-identity -v -p codesigning 2>/dev/null | grep -q "\"$DIVOOM_CODESIGN_IDENTITY\""; then
+    if grep -q "\"$DIVOOM_CODESIGN_IDENTITY\"" <<<"$(security find-identity -v -p codesigning 2>/dev/null)"; then
         echo "$DIVOOM_CODESIGN_IDENTITY"
     else
         echo "-"

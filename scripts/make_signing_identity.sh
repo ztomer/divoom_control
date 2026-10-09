@@ -5,7 +5,7 @@
 set -euo pipefail
 NAME="${DIVOOM_CODESIGN_IDENTITY:-Divoom Local Signing}"
 KEYCHAIN="$HOME/Library/Keychains/login.keychain-db"
-if security find-identity -v -p codesigning 2>/dev/null | grep -q "\"$NAME\""; then
+if grep -q "\"$NAME\"" <<<"$(security find-identity -v -p codesigning 2>/dev/null)"; then
     echo "identity '$NAME' already present and valid for code signing"
     exit 0
 fi
