@@ -25,6 +25,13 @@ GOH_LINE_BASELINE=.gates_loc_baseline.txt
 # author. Every OTHER length exemption added here must be paired with a ceiling.
 GOH_LINE_UNBOUNDED='docs/divoom_docs/'
 
+# Where a release's version is declared, for the pre-push tag check. The root
+# Cargo.toml is a workspace with no version, so the defaults (VERSION, Cargo.toml)
+# read nothing and the v0.41.1 tag push was refused. All three must agree;
+# tools/check_version_consistency.py holds them together, and scripts/release.sh
+# dry-runs this check before it builds anything.
+GOH_TAG_VERSION_SOURCES='pyproject:pyproject.toml cargo:divoomd/Cargo.toml cargo:divoom-menubar/Cargo.toml'
+
 # ── Local CI steps (consumed by $GOH/gates/local_ci.sh via ci_local.sh) ────
 # Mirrors .github/workflows/tests.yml job-for-job.
 #

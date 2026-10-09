@@ -109,6 +109,20 @@ fi
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 [ "$BRANCH" = "main" ] || echo "⚠ tagging from branch '${BRANCH}', not main (the tag captures HEAD regardless)."
 
+# Dry-run the push gate's tag check NOW, before the CI wait and the build. The
+# pre-push hook refuses a tag whose commit declares no matching version, and it
+# only finds out at `git push origin <tag>` -- step 3, after everything slow.
+# v0.41.1 hit exactly that: the root Cargo.toml is a workspace with no version,
+# and .gatesrc did not say where the version lives. Same check, same .gatesrc,
+# read in a child shell so its keys do not leak into this one.
+GOH="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
+NULL_SHA=0000000000000000000000000000000000000000
+printf 'refs/tags/%s %s refs/tags/%s %s\n' "$TAG" "$(git rev-parse HEAD)" "$TAG" "$NULL_SHA" \
+  | (set -a; [ ! -f .gatesrc ] || . ./.gatesrc; set +a
+     bash "$GOH/gates/goh.sh" tag-version --root . --refs-file -) \
+  || { echo "ERROR: the pre-push tag check would refuse ${TAG}; declare the version" >&2
+       echo "  sources in .gatesrc (GOH_TAG_VERSION_SOURCES) -- nothing built or tagged." >&2; exit 1; }
+
 # Release rule: only cut when GitHub CI is green for the commit being tagged
 # (exception: credit depletion). Abort otherwise — see ci_gate above.
 if [ "$CHECK_CI" -eq 1 ]; then
