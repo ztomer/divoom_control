@@ -6,6 +6,17 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **The release build's leaked-references guard could not catch a big leak.**
+  `find ... | grep -q .` under `set -o pipefail` reads a SIGPIPE'd `find` as "no
+  match": a fake bundle holding 20,000 planted `.smali` files PASSED the old
+  guard. It now tests `find -print -quit`. The same class was fixed in its
+  siblings: `codesign_identity.sh` (a false miss there signs ad hoc and loses
+  the Bluetooth grant), `make_signing_identity.sh`, `check_linux_build.sh` and
+  `install.sh`. The DMG is now made with `diskutil image create from`;
+  `hdiutil create` is deprecated on macOS 27, and
+  `tests/test_no_deprecated_disk_image_cli.py` keeps every committed script off
+  the deprecated `hdiutil` verbs.
+
 - **CI no longer leaves the job token in git config.** `actions/checkout`
   persists it as `http.<host>.extraheader` by default, and the structural
   gate's no-credential-in-git-config check (gates_of_heck v0.20.0) rightly
