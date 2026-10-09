@@ -6,6 +6,18 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **Builds no longer dirty the tree.** `nowplaying/native/libnp_helper.dylib`
+  was committed AND rebuilt in place by every build. The committed copy did not
+  even match its own source: two builds of `np_helper.m` are byte-identical,
+  and the committed copy differed from them in 9,931 bytes. It is now an ignored
+  build output, made by `build.sh`. `tests/test_no_tracked_build_outputs.py`
+  refuses any tracked compiled binary, by suffix and by Mach-O/ELF magic.
+- **`scripts/release.sh` checks the tag before anything slow.** The v0.41.1 tag
+  push was refused by the pre-push tag-version check, because the root
+  `Cargo.toml` is a workspace with no version. `.gatesrc` now declares
+  `GOH_TAG_VERSION_SOURCES`, and `release.sh` runs that check before the CI wait
+  and the build.
+
 ## v0.41.1 — the menu bar icon is back to its size, and a v0.41.0 claim corrected (2026-10-08)
 
 - **The release build's leaked-references guard could not catch a big leak.**
