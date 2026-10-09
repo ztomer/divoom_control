@@ -82,3 +82,8 @@ report.json
 
 # gates_of_heck checkout CI drops beside the tree (see .github/workflows)
 /goh/
+
+# Now-playing helper: a BUILD OUTPUT of scripts/build_nowplaying_helper.sh (run
+# by build.sh and build_release.sh), never committed -- a tracked copy drifted
+# from np_helper.m and dirtied the tree on every build. tests/test_no_tracked_build_outputs.py
+nowplaying/native/*.dylib

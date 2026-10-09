@@ -28,8 +28,9 @@ from the index, because it asserted what depends on the library without assertin
 the library was there. Both versions were red-once proven. This one asserts the
 state that is actually true, and each of its assertions has been watched fail.
 
-`nowplaying/native/libnp_helper.dylib` is also tracked: a different crate's
-native helper, not on this chain, and its removal is its own round.
+`nowplaying/native/libnp_helper.dylib` (a different crate's helper, not on this
+chain) was once tracked and exempted here; it is now an ignored build output,
+and `test_no_tracked_build_outputs.py` keeps every compiled binary out of git.
 """
 
 from __future__ import annotations
@@ -52,11 +53,7 @@ VECTORS = "divoomd/tests/framing_vectors.json"
 
 # Native artifacts NOT on this chain, listed rather than ignored: an exemption
 # nobody reads is how a second one sneaks in.
-ALLOWED_ELSEWHERE = {
-    "nowplaying/native/libnp_helper.dylib": (
-        "a different crate's native helper, not on the divoom_lib chain"
-    ),
-}
+ALLOWED_ELSEWHERE: dict[str, str] = {}
 
 # What still legitimately needs the C, and who says so in the code.
 IMAGE_HALF_CONSUMERS = ("divoomd/src/native_encode.rs", "divoomd/src/daemon.rs")

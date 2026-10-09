@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # build_nowplaying_helper.sh — compile the MediaRemote entitled-host helper.
 #
-# Produces nowplaying/native/libnp_helper.dylib from np_helper.m. The dylib is
+# Produces nowplaying/native/libnp_helper.dylib from np_helper.m -- an IGNORED
+# build output, not a committed file (a fresh clone has none until build.sh or
+# this script runs; the daemon then reports the helper as not installed). The dylib is
 # loaded by /usr/bin/perl (see nowplaying/native/np_load.pl) because the
 # now-playing read API has been entitlement-gated since macOS 15.4 and perl
 # carries that entitlement — a dylib in its process inherits it.
