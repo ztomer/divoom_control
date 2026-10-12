@@ -21,15 +21,25 @@ means in terms someone can check, and where the evidence is. Statuses:
 anywhere in this file exists. Shipped items are deleted from the Plan, not
 marked SHIPPED -- that marker is refused.
 
-Premises were last checked against the code on **2026-10-05** (commit
-`6a0ea79`), item by item, with file:line evidence; the evidence column of each
-item is what that audit found.
+Premises were last checked against the code on **2026-10-12** (commit
+`8564d1f`, after v0.41.1), item by item: every OPEN item below was re-grepped
+and still holds; two premises were corrected (P0.2's install line, P9.4's
+versions) and four items were added from the session consolidation (P0.6,
+P0.7, P0.8, P9.6). Each phase states its goal, exit criterion and rough size in
+sessions (S = under one, M = one or two, L = three or more).
 
 ---
 
 ## Plan
 
 ### Phase 0 — correctness defects and drift (small, independent)
+
+**Goal:** no known defect or gate hole stays open while feature work starts.
+**Exit:** every P0 item's *Done when* is a test or gate that was watched red
+first. **Size:** M (eight items, each S, no hardware needed). P0.8 first: the
+push gate is red until it lands.
+**Risk:** P0.6 touches every build entry point; a gate that rejects the
+supported arm64 Mac breaks the release, so both directions are tested.
 
 #### P0.1 — One brightness change sends two `set_brightness` calls
 **Status:** OPEN
@@ -42,16 +52,20 @@ a browser test that counts calls (watched failing on today's code).
 
 #### P0.2 — PyInstaller is unpinned, so a release build takes whatever is newest
 **Status:** OPEN
-**Why:** `scripts/build_release.sh` runs a bare `pip install pyinstaller`. The
-previous roadmap said 6.21.0 -> 6.22.3 was "deliberately not taken"; in fact
-nothing holds it, and the next clean build changes the bundle silently.
+**Why:** `scripts/build_release.sh` builds with whatever PyInstaller the
+`.buildvenv` holds, and the venv recipe it prints (its usage comment and its
+"not found" error) is a bare `pip install ... pyinstaller` (re-checked
+2026-10-12). The previous roadmap said 6.21.0 -> 6.22.3 was "deliberately not
+taken"; in fact nothing holds it, and the next clean venv changes the bundle
+silently.
 **Done when:** the build installs a pinned version from a committed file, and
 moving it is its own commit carrying a bundle diff (file list + sizes).
 
 #### P0.3 — CI comments still describe the menubar's `tao` era
 **Status:** OPEN
-**Why:** `.github/workflows/tests.yml` (the `rust-ble` job, about lines 251 and
-259) says the menubar needs system packages no Linux runner ships; the lock has
+**Why:** `.github/workflows/tests.yml` (the `rust-ble` job comments, about lines
+283 and 293 on 2026-10-12) says the menubar (`tao/tray-icon`) needs system
+packages no Linux runner ships; the lock has
 no `tao` since 2026-09-20 and the menubar is on winit plus a target-gated
 `ksni`. A wrong comment next to a CI job decides what the next person skips.
 **Done when:** the comments name the real dependency, and the system-packages
@@ -71,8 +85,75 @@ import, so `pytest_addoption` registers `--run-hardware` twice and pytest aborts
 before collecting. CI runs the two separately (`scripts/py_ci.sh`), so this
 bites only a person running both -- but the error names an option, not the cause.
 **Done when:** `python3 -m pytest tests examples/tests --collect-only` succeeds.
+(Re-measured 2026-10-12: still `ValueError: option names {'--run-hardware'}
+already added`.)
+
+#### P0.6 — The build scripts accept an Intel Mac; the arch gate was deleted with the C
+**Status:** OPEN
+**Why:** house rule (64-bit only, macOS = Apple silicon only, every unsupported
+OS/arch a HARD failure behind an overridable `OS`/`ARCH` seam). This repo was
+the rule's reference implementation -- scripts/build_libdivoom.sh plus
+tests/test_build_platform_gate.py (paths unquoted: they no longer exist) --
+and both were deleted with the C encoder
+chain in `9a1cade` (2026-09-25), so the class lost its gate here. Today
+`scripts/build_release.sh`, `scripts/make_app_bundle.sh`,
+`scripts/make_dev_daemon_app.sh`, `scripts/build_nowplaying_helper.sh`,
+`build.sh` and `install.sh` check `uname -s` only: an x86_64 Mac builds and
+ships a bundle nobody tested. Linux x86_64 stays supported for the
+`divoomd` core build (the `rust-core` CI job), so the gate is per script, not
+global.
+**Done when:** one shared platform check (OS and ARCH, both overridable)
+guards every build/install entry point; a test drives each script's seam with
+`Darwin/x86_64` (refused, non-zero, names the arch) and `Darwin/arm64`
+(accepted), plus `Linux/x86_64` accepted for the core build only; the test is
+watched red by deleting the check from one script. The old implementation is at
+`git show 9a1cade^:scripts/build_libdivoom.sh`.
+
+#### P0.7 — The RX frame parser drops real frames behind a spurious start byte
+**Status:** OPEN
+**Why:** `parse_basic_protocol_frames` (`divoomd/src/framing.rs`) resyncs by
+one byte only when the decoded length exceeds `MAX_BASIC_FRAME` (8192). A stray
+`0x01` whose fake length is <= 8192 makes it WAIT for that many bytes (replies
+stall until enough traffic arrives), and when the fake frame then fails the
+end-byte or checksum test the whole fake span is drained -- every genuine
+frame inside it is lost, not re-scanned. Carried from the June 2026 adversarial
+review (Python era, "low, self-healing"); the Rust port kept the shape, and
+so does the Python reference `divoom_lib/framing.py` that the parity vectors
+compare against -- both change in one commit or the parity gate goes red for
+the wrong reason. Pure function, no hardware needed.
+**Done when:** a frame that fails validation advances the buffer by one byte
+and re-scans, and a unit test feeding `[0x01, len<=8192, ...]` followed by two
+valid frames gets both back (watched red on today's parser); the parity
+vectors (`tests/test_framing_vectors.py`, `divoomd/tests/framing_parity.rs`)
+still pass.
+
+#### P0.8 — The push gate is red: another tool moved the machine's camoufox build
+**Status:** OPEN
+**Why:** measured 2026-10-12, pre-push on the session-consolidation commit: 24 of 25 steps green,
+`scripts/py_ci.sh` red on one test,
+`tests/test_camoufox_install_check.py::test_passes_when_a_browser_is_really_installed`:
+"camoufox browser is 156.0.1-beta.36, expected 156.0.1-beta.34"
+(`tools/camoufox_installed.py` `EXPECTED_BUILD`). The machine-wide camoufox
+cache switched its active build to beta.36 on 2026-10-10 and no longer holds
+beta.34, so EVERY push from this repo has been refused since then. This is the
+third time the pin went stale (Standing rules: "Pins move with their
+channel"), and the class is not the pin: the gate reads machine-global state
+that other projects (the house Gemini transport uses camoufox too) are free to
+change. Do not fix it by switching the shared cache back.
+**Done when:** the browser suites are run against beta.36; if they pass, the pin
+moves in its own commit (per the standing rule); and the repo stops depending
+on the shared active build -- either a repo-scoped camoufox install the gate
+selects explicitly, or a check that names the shared cache as the cause and is
+proven red by switching builds. The consolidation commit then pushes.
 
 ### Phase 1 — daemon liveness and safety
+
+**Goal:** the daemon can say who holds it, never hangs on one peer, and
+notices its own wedge. **Exit:** P1.1-P1.6 each pinned by a test that stalls,
+floods or wedges the real socket server; P1.7 has a trace or is gone.
+**Size:** L (P1.5 and P1.6 are each M). **Risk:** P1.3's deadlines must not
+cut a legitimately slow `sync_artwork`; per-command budgets, not one global.
+P1.7 needs a panel and the GUI's Bluetooth grant (Hardware reference below).
 
 #### P1.1 — The socket's access rule comes from the umask, not the code
 **Status:** OPEN
@@ -143,6 +224,12 @@ first and the symptom is gone.
 
 ### Phase 2 — the daemon knows what each panel is
 
+**Goal:** one owner (the daemon) for each panel's model, size and failure
+codes. **Exit:** `device_status` carries model/size and errors carry codes,
+with tests per model class. **Size:** M. **Risk:** P2.3 changes what the
+weather widget looks like on every panel; it needs the R12-style visual pass
+on hardware before release.
+
 #### P2.1 — `device_status` carries model and panel resolution
 **Status:** OPEN
 **Why:** `divoomd/src/daemon_status.rs` reports link state per mac and nothing
@@ -174,9 +261,14 @@ pushes frames, and the device's own face is no longer selected.
 
 ### Phase 3 — MCP as a display surface
 
-Goal: an external agent can discover each panel, draw on it at its real
+**Goal:** an external agent can discover each panel, draw on it at its real
 resolution, and share it with background jobs without collisions. Today
 `divoomd/src/mcp_tools.rs` has 14 tools.
+**Exit:** an MCP client draws a full-resolution multi-frame image on a 64x64
+panel while a live job runs, and the panel returns to the job when the lease
+expires (e2e over the real `divoomd mcp` entry point). **Size:** L.
+**Risk:** P3.6 is a new concurrency primitive on the command queue; it
+inherits the per-device rule below and its stress gate.
 
 #### P3.1 — `get_capabilities` describes the panel
 **Status:** OPEN
@@ -235,6 +327,10 @@ previous content, using the lease from P3.6.
 
 ### Phase 4 — the GUI models each panel, not "the" panel
 
+**Goal:** every per-panel fact the GUI shows is read from and written to the
+daemon by mac. **Exit:** browser tests across two panels for P4.1/P4.2; the
+menubar no longer closes on a status change. **Size:** M.
+
 #### P4.1 — Connection, brightness and volume are per panel
 **Status:** OPEN
 **Why:** `window.DivoomState.appConnected` (`divoom_gui/web_ui/app_globals.js`)
@@ -266,6 +362,10 @@ happens only when the set of rows changes.
 
 ### Phase 5 — the multi-panel wall
 
+**Goal:** a wall is placed by snapping, and LAN panels can join it.
+**Exit:** P5.1's *Done when*. **Size:** M. Needs two panels for the final
+check.
+
 #### P5.1 — Snap adjacent panels into one surface
 **Status:** OPEN
 **Why:** slicing an image across a wall already works (`divoomd/src/wall.rs`
@@ -277,6 +377,9 @@ LAN panel can be a wall slot (or the refusal is shown in the UI with its reason)
 
 ### Phase 6 — decisions for the owner
 
+**Goal:** the owner's calls, each with the evidence needed to make it.
+**Exit:** a recorded ruling per item. **Size:** S once decided.
+
 #### P6.1 — The tray glyph tells states apart by colour alone
 **Status:** DECISION (owner)
 **Why:** Offline / Online / Error differ only in fill (grey / green / red); green
@@ -287,6 +390,8 @@ menu bar at every size, so there the glyph is only its fill.
 the states differ in greyscale on `tools/render_tray_icon.py` sheets.
 
 ### Phase 9 — parked on something outside this repo
+
+**Goal:** none until the named trigger fires; each item says what unparks it.
 
 #### P9.1 — `search_weather_city` fails server-side
 **Status:** BLOCKED (on a capture of the official app's city search)
@@ -314,9 +419,26 @@ round's notes.
 
 #### P9.4 — Two `objc2` majors in the lock
 **Status:** WATCH
-**Why:** winit 0.30 pins `objc2` 0.5.2; everything else is on 0.6.4. No type
-crosses between them, so it costs build time only.
-**Done when:** a stable winit on `objc2` 0.6 is taken and the lock holds one.
+**Why:** winit 0.30 pins `objc2` 0.5 (0.5.3 in the lock on 2026-10-12);
+everything else is on 0.6 (0.6.5). No type crosses between them, so it costs
+build time only.
+**Done when:** a stable winit on `objc2` 0.6 is taken and the lock holds one
+(`cargo tree -i objc2` prints one version).
+
+#### P9.6 — The June 2026 hardware deferrals, re-checked on the Rust daemon
+**Status:** BLOCKED (on a hardware session with an SPP panel and the 4-panel rig)
+**Why:** the June 2026 adversarial review loop (Python era) closed with five
+items it could not settle without hardware. One is gone (the C static encoder
+was deleted in v0.40.0) and one is P0.7. The other three were never re-checked
+after the port: (a) SPP framing vs BLE (escaping, packet number, write pacing,
+response-timeout clearing) now that `divoom_client/spp_bridge.py` carries bytes
+the daemon frames; (b) a 0x8B retransmit request arriving in the re-arm window
+of the animation stream (`divoomd/src/ble.rs` phase 3); (c) a custom-art ACK
+treated as success while the 0x8E read-back is unreliable
+(`divoomd/src/device_call/animation.rs`).
+**Done when:** each of (a)-(c) has a `DIVOOMD_BLE_DEBUG` trace read with the
+A/B rule (Hardware reference below) and is either closed with the trace cited
+or becomes its own OPEN item with a reproduction.
 
 #### P9.5 — Python majors that cannot be taken yet
 **Status:** WATCH
@@ -498,7 +620,8 @@ capabilities above.
 
 | Release | Date | Theme |
 |---|---|---|
-| Unreleased | 2026-10-05 | tray glyph back to 18pt at 2x; memory-gauge harness and v0.41.0 correction; handoff folded into this file; roadmap rephased and gated |
+| Unreleased | 2026-10-08 | release.sh dry-runs the tag check; `libnp_helper.dylib` untracked (a build output); lock refreshed; agent sessions folded into this file (2026-10-12) |
+| v0.41.1 | 2026-10-08 | tray glyph back to 18pt at 2x; memory-gauge harness and v0.41.0 correction; handoff folded into this file; roadmap rephased and gated; DMG via `diskutil` |
 | v0.41.0 | 2026-10-05 | every dependency current; the gates that were lying about it |
 | v0.40.0 | 2026-09-25 | the device stack is Rust; C encoder chain and Python MCP retired |
 | v0.39.0 | 2026-09-21 | MCP negotiation, Python 3.14 floor, menubar off tao |
@@ -509,3 +632,23 @@ capabilities above.
 | v0.34.0 | 2026-09-07 | the invisible weather widget, and a harness that could not have found it |
 | v0.30.0-v0.33.0 | 2026-08-31/09-07 | gates made real; unreachable daemon fixed; residuals |
 | v0.28.0-v0.29.0 | 2026-08-30 | version parity structural; the GUI is a client |
+
+---
+
+## Sources consolidated (2026-10-12)
+
+Every agent session that ever worked on this repo, read and given a
+disposition before it was removed. Nothing below is a plan any more; this file
+is.
+
+| Source | What it held | Disposition |
+|---|---|---|
+| opencode loop (`.opencode/`, git-ignored): 18 job files + 1 goal report + `loop.log` | one goal, 2026-09-12: the test re-arrangement (its plan, PLANNING_TEST_REORG, is in git history), status `completed`; 17 empty job files; ENOSPC heartbeat errors from 2026-10-05 | superseded: its four commits (`5d92643`, `3f37b6c`, `245c961`, `0a5cd70`) are all on `main`; its "release decision" was v0.38.0+. Directory trashed. |
+| Antigravity, 7 conversations (May-June 2026: cloud API x2, protocol audit, live widgets, settings tab, monthly-best gallery, transport badges) | research sub-agents of two parent conversations, against `gui/`, `native-port/`, `divoom_daemon/` -- paths that no longer exist | superseded. The one open question (does 0x35 exist?) was settled in R73 (`divoomd/src/device_call/drawing.rs`: it is `SPP_SCROLL`). Brain dirs trashed; DB rows left to the coordinator. |
+| Antigravity IDE, 1 conversation (2025-11-18) | Python-library docstrings, `ARCHITECTURE.md`, a mock device; a derived knowledge item ("Divoom Control Library") | superseded by the Rust daemon; brain, `.pb`, knowledge item and their backup copies trashed. |
+| Gemini CLI, `divoom-control` + its hash-named twin (Nov 2025, plus two context-only stubs in June 2026) | ~150 chats on the Python `divoom_lib` era; `api_test_output*.log` (identical in both dirs) | superseded: every file they discuss was retired or ported. Both dirs trashed. |
+| Claude desktop, 3 sessions "Divoom ble adversarial loop" (2026-06-21/22) | runs of a one-time scheduled task; transcripts already cleaned up. The task prompt listed five hardware deferrals | carried: the RX-parser stall as P0.7, three as P9.6, the C encoder one closed (deleted in v0.40.0). Session ids reported for deletion. |
+| Claude memory (`~/.claude/projects/...divoom-control/memory/`, 7 notes) | facts plus procedures (TCC harness recipe, ack calibration, BLE trace setup, commit-before-prove-red, doctest masking, pytest shutdown dump) | kept in place (memory is not a session); the procedures are flagged for moving into skills. The Hardware reference below already carries the TCC and A/B-trace rules. |
+| Claude worktree `quirky-cori-d3f3e2` + branch `claude/quirky-cori-d3f3e2` | one commit, `360543e` (2026-10-05) | landed on `main` (patch-equivalent); worktree clean, removed with the branch. |
+| `~/Projects/RUSTIFICATION_ROADMAP.md` (cross-project) | G0, L1, L2, L4, L5 for this repo | all shipped (programme closed 2026-09-25); its dropped-as-non-autonomous G1/G2/L3 are not carried -- L3's "bytes to a real panel" is covered by P9.6 and the hw packet. |
+| `~/Projects/ROADMAP-consolidated.md` (cross-project) | nothing for this repo | no disposition needed. |
