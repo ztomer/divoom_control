@@ -4,7 +4,12 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
-## Unreleased
+## v0.41.2 — builds stop dirtying the tree, and the release script checks the tag before the slow parts (2026-10-14)
+
+Patch release: three fixes and the goh 0.27.0 Phase 0 sweep, none of it a new
+capability. The one that mattered most was invisible — the committed dylib did not
+match its own source, so every build made the tree dirty and every review of the
+generated file was a review of the wrong bytes.
 
 - **Builds no longer dirty the tree.** `nowplaying/native/libnp_helper.dylib`
   was committed AND rebuilt in place by every build. The committed copy did not
@@ -33,6 +38,7 @@ shipped milestone (per the project planning docs).
   landed in the commits waiting to be pushed while the statuses still read OPEN,
   which is the repo's own core rule failing in the direction that hides work.
   Full gate green; 1529 passed, 129 skipped (hardware suites), structural clean.
+
 
 ## v0.41.1 — the menu bar icon is back to its size, and a v0.41.0 claim corrected (2026-10-08)
 
