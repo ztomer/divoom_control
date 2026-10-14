@@ -1,12 +1,9 @@
 #!/usr/bin/env bash
-# Divoom-specific local-CI step: the Python suite (build the native dylib,
-# honestly report camoufox availability, run pytest). Kept as its own script
-# because scripts/ci_local.sh is now a thin driver over gates_of_heck's
-# local_ci.sh, and this job carries behavior a generic runner cannot know:
-# a missing camoufox browser is NOT a failing gate (CI fetches it; a dev
-# machine may legitimately skip the ~150 MB download), but the 15 GUI e2e
-# suites SKIP silently without it — so the absence must be said out loud,
-# never reported green by omission.
+# Divoom-specific local-CI step: the Python suite under its coverage floor,
+# then the retired library's suite. Kept as its own script because
+# scripts/ci_local.sh is a thin driver over gates_of_heck's local_ci.sh, and
+# the floor's scope (two packages, not three) is something a generic runner
+# cannot express.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -16,15 +13,6 @@ source "${GOH_DIR:-$HOME/Projects/gates_of_heck}/tui/lib.sh"
 
 # No native dylib to build: the C encoders it produced are Rust in the daemon
 # binary now (phase L4), built by the cargo step below.
-
-have_camoufox=0
-if python3 tools/camoufox_installed.py >/tmp/py_ci_camoufox.log 2>&1; then
-    ok "camoufox browser present ($(cat /tmp/py_ci_camoufox.log))"
-    have_camoufox=1
-else
-    warn "no camoufox browser — the 15 GUI e2e suites will SKIP, not run"
-    warn "  install with: pip install -e '.[e2e]' && python3 -m camoufox fetch"
-fi
 
 # ── coverage floor (R70 P0.4) ────────────────────────────────────────────────
 #
@@ -40,11 +28,16 @@ fi
 # --cov to a single pkg_dir, which cannot express "these two packages, not that
 # third one".
 #
-# The floor only BINDS when camoufox is present. Without it 15 e2e suites skip,
-# coverage drops for a reason that has nothing to do with the change under
-# test, and a red floor would be punishing the wrong thing. Not enforcing it is
-# said out loud rather than passed over in silence — the same rule this script
-# already applies to the skipping suites themselves.
+# The floor binds on EVERY run (2026-10-14). It used to bind only when
+# tools/camoufox_installed.py exited 0, on the theory that the browser suites
+# feed this number. They do not: this pytest never passes --run-browser, so
+# tests/support/browser.py:require_browser skips every browser test here
+# whether or not a browser exists, and the number is the same either way. The
+# browser suites run in CI's own step (.github/workflows/tests.yml, "Run the
+# browser e2e suites"). Meanwhile the probe answered "is the PINNED build the
+# active one", so when another project moved the machine-wide camoufox cache
+# to 156.0.1-beta.36 this script printed "no camoufox browser" over an
+# installed browser and enforced no floor at all -- a gate that could not fail.
 # Raised 89 -> 90 by R70 P5.5. The deletions removed more uncovered code
 # than covered: the dead audio visualizer had 100% coverage, but the
 # cloud panels (38-50%) and media_sync (31%) shrank far more. Stated out
@@ -112,17 +105,13 @@ fi
 COV_MIN="${DIVOOM_PY_COV_MIN:-88.5}"
 COV_PRECISION=2
 
-if [ "$have_camoufox" -eq 1 ]; then
-    info "pytest (coverage floor ${COV_MIN}% over divoom_gui + divoom_client)"
-    python3 -m pytest -q \
-        --cov=divoom_gui --cov=divoom_client \
-        --cov-report=term-missing:skip-covered \
-        --cov-precision="$COV_PRECISION" \
-        --cov-fail-under="$COV_MIN"
-else
-    warn "coverage floor NOT enforced — needs camoufox for a comparable number"
-    python3 -m pytest -q
-fi
+info "pytest (coverage floor ${COV_MIN}% over divoom_gui + divoom_client;" \
+    "browser suites run in CI's --run-browser step)"
+python3 -m pytest -q \
+    --cov=divoom_gui --cov=divoom_client \
+    --cov-report=term-missing:skip-covered \
+    --cov-precision="$COV_PRECISION" \
+    --cov-fail-under="$COV_MIN"
 
 # The retired library's own suite (examples/divoom_legacy + examples/tests,
 # standalone since 2026-09-14). Not in the coverage floor -- nothing in the

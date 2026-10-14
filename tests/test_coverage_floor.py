@@ -112,3 +112,32 @@ def test_floor_is_not_quietly_lowered_to_nothing():
         "deliberate, say the number out loud in the CHANGELOG and move this "
         "bound with it"
     )
+
+
+def test_the_floor_binds_on_every_run():
+    """No branch of py_ci.sh runs the main suite without the floor.
+
+    Until 2026-10-14 the floored pytest sat in `if have_camoufox`, with a
+    floor-less `python3 -m pytest -q` in the else. The probe behind it asked
+    whether the PINNED camoufox build was active, so when another project moved
+    the machine-wide cache to a newer build the script reported "no camoufox
+    browser" over an installed one and enforced nothing. The browser suites
+    never fed this number anyway (no --run-browser here). So: exactly one
+    main-suite invocation, unindented (not inside any branch), carrying the
+    floor.
+    """
+    lines = _py_ci_text().splitlines()
+    main = [
+        (i, ln) for i, ln in enumerate(lines)
+        if re.search(r"\bpython3 -m pytest\b", ln) and "examples/tests" not in ln
+    ]
+    assert len(main) == 1, f"one main-suite pytest, got: {[ln for _, ln in main]}"
+    i, line = main[0]
+    assert not line[:1].isspace(), f"the floored pytest is inside a branch: {line!r}"
+    invocation = []
+    while True:
+        invocation.append(lines[i])
+        if not lines[i].rstrip().endswith("\\"):
+            break
+        i += 1
+    assert '--cov-fail-under="$COV_MIN"' in "\n".join(invocation), invocation
