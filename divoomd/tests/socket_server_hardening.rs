@@ -18,6 +18,9 @@ use tokio::sync::broadcast;
 use divoomd::protocol::{encode_message, Request};
 use divoomd::socket_server::{serve, Handler};
 
+mod ndjson;
+use ndjson::next_line;
+
 struct Stub;
 
 impl Handler for Stub {
@@ -127,12 +130,9 @@ async fn at_capacity_the_daemon_answers_instead_of_going_silent() {
     b.write_all(encode_message(&json!({ "command": "ping" })).as_slice())
         .await
         .unwrap();
-    let n = tokio::time::timeout(Duration::from_secs(1), b.read(&mut buf))
+    let reply = next_line(&mut b, Duration::from_secs(1))
         .await
-        .expect("a daemon at capacity must still ANSWER — silence is the bug this replaced")
-        .expect("B read should succeed");
-    let reply: Value = serde_json::from_slice(&buf[..n])
-        .unwrap_or_else(|e| panic!("refusal must be a parseable reply line: {e}"));
+        .expect("a daemon at capacity must still ANSWER — silence is the bug this replaced");
     assert_eq!(reply["success"], json!(false), "refusal says it failed");
     assert!(
         reply["error"]
@@ -164,11 +164,9 @@ async fn at_capacity_the_daemon_answers_instead_of_going_silent() {
     c.write_all(encode_message(&json!({ "command": "ping" })).as_slice())
         .await
         .unwrap();
-    let n = tokio::time::timeout(Duration::from_secs(3), c.read(&mut buf))
+    let reply = next_line(&mut c, Duration::from_secs(3))
         .await
-        .expect("service must resume once a slot frees")
-        .expect("C read should succeed");
-    let reply: Value = serde_json::from_slice(&buf[..n]).unwrap();
+        .expect("service must resume once a slot frees");
     assert_eq!(reply["success"], json!(true), "C should be served normally");
     let _ = std::fs::remove_file(&path);
 }
@@ -242,17 +240,14 @@ async fn subscribers_cannot_starve_request_handling() {
     // count is asserted below so the budget the third subscribe hits is the
     // one this test built.
     let mut subs = Vec::new();
-    let mut buf = [0u8; 512];
     for i in 0..2 {
         let mut s = UnixStream::connect(&path).await.unwrap();
         s.write_all(encode_message(&json!({ "command": "subscribe" })).as_slice())
             .await
             .unwrap();
-        let n = tokio::time::timeout(Duration::from_secs(2), s.read(&mut buf))
+        let v = next_line(&mut s, Duration::from_secs(2))
             .await
-            .unwrap_or_else(|_| panic!("subscriber {i} got no initial status"))
-            .unwrap();
-        let v: Value = serde_json::from_slice(&buf[..n]).unwrap();
+            .unwrap_or_else(|| panic!("subscriber {i} got no initial status"));
         assert_eq!(v["type"], json!("status"), "subscriber {i}: {v}");
         subs.push(s);
     }
@@ -264,11 +259,9 @@ async fn subscribers_cannot_starve_request_handling() {
         .write_all(encode_message(&json!({ "command": "subscribe" })).as_slice())
         .await
         .unwrap();
-    let n = tokio::time::timeout(Duration::from_secs(2), extra.read(&mut buf))
+    let v = next_line(&mut extra, Duration::from_secs(2))
         .await
-        .expect("an over-budget subscriber must be told, not hung")
-        .unwrap();
-    let v: Value = serde_json::from_slice(&buf[..n]).unwrap();
+        .expect("an over-budget subscriber must be told, not hung");
     assert_eq!(v["success"], json!(false), "{v}");
     assert!(
         v["error"].as_str().unwrap_or("").contains("subscriptions"),
@@ -281,11 +274,9 @@ async fn subscribers_cannot_starve_request_handling() {
         .write_all(encode_message(&json!({ "command": "ping" })).as_slice())
         .await
         .unwrap();
-    let n = tokio::time::timeout(Duration::from_secs(2), extra.read(&mut buf))
+    let v = next_line(&mut extra, Duration::from_secs(2))
         .await
-        .expect("requests must still be served while every subscription slot is taken")
-        .unwrap();
-    let v: Value = serde_json::from_slice(&buf[..n]).unwrap();
+        .expect("requests must still be served while every subscription slot is taken");
     assert_eq!(v["success"], json!(true), "{v}");
 
     let _ = std::fs::remove_file(&path);
@@ -306,12 +297,9 @@ async fn subscribe(path: &std::path::Path) -> UnixStream {
     s.write_all(encode_message(&json!({ "command": "subscribe" })).as_slice())
         .await
         .unwrap();
-    let mut buf = [0u8; 512];
-    let n = tokio::time::timeout(Duration::from_secs(2), s.read(&mut buf))
+    let v = next_line(&mut s, Duration::from_secs(2))
         .await
-        .expect("initial status")
-        .unwrap();
-    let v: Value = serde_json::from_slice(&buf[..n]).unwrap();
+        .expect("initial status");
     assert_eq!(v["type"], json!("status"));
     s
 }
@@ -346,11 +334,9 @@ async fn a_quiet_subscription_yields_its_slot_and_an_active_one_keeps_it() {
         .await
         .unwrap();
     let mut buf = [0u8; 512];
-    let n = tokio::time::timeout(Duration::from_secs(2), third.read(&mut buf))
+    let v = next_line(&mut third, Duration::from_secs(2))
         .await
-        .expect("the newcomer must be answered, not hung")
-        .unwrap();
-    let v: Value = serde_json::from_slice(&buf[..n]).unwrap();
+        .expect("the newcomer must be answered, not hung");
     assert_eq!(v["success"], json!(false), "{v}");
     assert!(
         v["error"].as_str().unwrap_or("").contains("subscriptions"),
