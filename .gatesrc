@@ -86,3 +86,21 @@ GOH_CI_STEPS='"$GOH_DIR/gates/structural.sh" --full:python3 tools/check_scripts.
 # kill_by_name_allow.json (8 entries, 8 unreviewed); a new kill by
 # name fails, and a fixed one must take its entry with it.
 GOH_NO_KILL_BY_NAME=1
+
+# Every scanner's floor (goh v0.27.0, docs/config.md): a full-scope scan that
+# reads less than this has lost its subject and is red, not clean. Nine tenths
+# of what each read on 2026-10-14 (the house rule); lower one with the tree in
+# the same commit, never to absorb a scan that went blind.
+GOH_EMOJI_MIN_FILES=703               # read 782
+GOH_CONFLICT_MARKERS_MIN_FILES=786    # read 874
+GOH_FILE_LENGTH_MIN_FILES=615         # read 684
+GOH_SECRETS_MIN_FILES=716             # read 796
+GOH_SHELL_LINT_MIN_FILES=19           # read 22
+GOH_EARLY_EXIT_PIPE_MIN_FILES=24      # read 27
+GOH_DEAD_AFTER_EXEC_MIN_FILES=24      # read 27
+GOH_BARE_HOOK_INDEX_MIN_FILES=24      # read 27
+GOH_BARE_PYTHON_MIN_FILES=5           # read 6
+GOH_CHECKOUT_CREDENTIALS_MIN_FILES=1  # read 1
+GOH_MD_LINKS_MIN_LINKS=35             # read 39
+GOH_UNREAPED_SPAWN_MIN_FILES=321      # read 357
+GOH_SUBPROCESS_STDIN_MIN_CALLS=54     # read 60, every one declared
