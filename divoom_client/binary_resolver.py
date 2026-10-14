@@ -122,9 +122,11 @@ def _expected_version() -> str | None:
         return None
 
 
-def built_candidates(name: str = "divoomd") -> list[Path]:
-    """Every built copy of `name` in the dev tree, newest first."""
-    found = [REPO_ROOT / "target" / flavour / name for flavour in ("release", "debug")]
+def built_candidates(name: str = "divoomd", root: Path | None = None) -> list[Path]:
+    """Every built copy of `name` in the dev tree (`root`, else this package's
+    own checkout), newest first."""
+    base = REPO_ROOT if root is None else root
+    found = [base / "target" / flavour / name for flavour in ("release", "debug")]
     found = [p for p in found if p.exists()]
     return sorted(found, key=lambda p: p.stat().st_mtime, reverse=True)
 

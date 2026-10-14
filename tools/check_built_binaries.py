@@ -56,7 +56,11 @@ def main() -> int:
     failures: list[str] = []
     checked = 0
     for name in PRODUCT_BINARIES:
-        for path in built_candidates(name):
+        # THIS tree's target/, not the imported package's: divoom_client is an
+        # editable install of the main checkout, so from any other tree (a
+        # pre-push export, goh's empty-scope skeleton) its REPO_ROOT names a
+        # different checkout, and the verdict became that checkout's build state.
+        for path in built_candidates(name, root=REPO):
             checked += 1
             got = binary_version(path)
             if got == expected:

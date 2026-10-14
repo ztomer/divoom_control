@@ -304,12 +304,12 @@ def test_the_gate_passes_when_every_built_binary_is_current(tmp_path, monkeypatc
     worktree (no target/) never saw it. The real tree is the gate step's
     subject (GOH_CI_STEPS), not this test's.
     """
-    monkeypatch.setattr(binary_resolver, "REPO_ROOT", tmp_path)
     for name in binary_resolver.PRODUCT_BINARIES:
         for flavour in ("release", "debug"):
             stub_binary(tmp_path / "target" / flavour / name, prints=f"{name} 0.28.2")
 
     gate = _load_gate()
+    monkeypatch.setattr(gate, "REPO", tmp_path)
     monkeypatch.setattr(gate, "expected_daemon_version", lambda: "0.28.2")
     assert gate.main() == 0
 
@@ -322,10 +322,10 @@ def test_the_gate_fails_when_a_built_binary_is_stale(tmp_path, monkeypatch, caps
     this one's whole job is to notice a condition that looked green for two
     releases.
     """
-    monkeypatch.setattr(binary_resolver, "REPO_ROOT", tmp_path)
     stub_binary(tmp_path / "target" / "release" / "divoomd", prints="divoomd 0.27.0")
 
     gate = _load_gate()
+    monkeypatch.setattr(gate, "REPO", tmp_path)
     monkeypatch.setattr(gate, "expected_daemon_version", lambda: "0.28.2")
     assert gate.main() == 1
     # The failure names the stale build and the command that makes it current.
@@ -338,8 +338,27 @@ def test_the_gate_fails_when_a_built_binary_is_stale(tmp_path, monkeypatch, caps
 def test_the_gate_skips_rather_than_fails_when_nothing_is_built(tmp_path, monkeypatch):
     """CI builds only what a job needs, and a fresh checkout has nothing. Failing
     there would fire the gate on the absence of a problem."""
-    monkeypatch.setattr(binary_resolver, "REPO_ROOT", tmp_path)
-
     gate = _load_gate()
+    monkeypatch.setattr(gate, "REPO", tmp_path)
     monkeypatch.setattr(gate, "expected_daemon_version", lambda: "0.28.2")
     assert gate.main() == 0
+
+
+def test_the_gate_judges_its_own_tree_not_the_imported_packages(tmp_path, monkeypatch):
+    """divoom_client is an editable install of the main checkout, so from any
+    other tree -- a pre-push export, goh's empty-scope skeleton -- the imported
+    package's REPO_ROOT names a DIFFERENT checkout. The gate read that one, and
+    its verdict over an empty skeleton became the main checkout's build state:
+    red while a binary there was stale, "4 built binaries" (a pass over nothing)
+    once it was rebuilt.
+    """
+    elsewhere = tmp_path / "main-checkout"
+    stub_binary(elsewhere / "target" / "release" / "divoomd", prints="divoomd 0.27.0")
+    monkeypatch.setattr(binary_resolver, "REPO_ROOT", elsewhere)
+    here = tmp_path / "this-tree"
+    stub_binary(here / "target" / "debug" / "divoomd", prints="divoomd 0.28.2")
+
+    gate = _load_gate()
+    monkeypatch.setattr(gate, "REPO", here)
+    monkeypatch.setattr(gate, "expected_daemon_version", lambda: "0.28.2")
+    assert gate.main() == 0, "the stale binary is in another checkout, not this tree"
