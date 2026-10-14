@@ -21,27 +21,131 @@ means in terms someone can check, and where the evidence is. Statuses:
 anywhere in this file exists. Shipped items are deleted from the Plan, not
 marked SHIPPED -- that marker is refused.
 
-Premises were last checked against the code on **2026-10-12** (commit
-`8564d1f`, after v0.41.1), item by item: every OPEN item below was re-grepped
-and still holds; two premises were corrected (P0.2's install line, P9.4's
-versions) and four items were added from the session consolidation (P0.6,
-P0.7, P0.8, P9.6). Each phase states its goal, exit criterion and rough size in
-sessions (S = under one, M = one or two, L = three or more).
-
+Premises were last checked against the code on **2026-10-14** (HEAD
+`a38e2df`, the goh 0.27.0 hook reinstall on top of the unpushed 2026-10-12
+plan commit `a8a848d`): nothing has landed since 2026-10-12, so every OPEN item
+still holds. Phase 0 is new (goh 0.27.0's fallout, measured); the old Phase 0
+became Phase 1 and every later phase moved up by one (P9 unchanged), and the old
+P0.8 (camoufox) is now P0.2. Each phase states its goal, exit criterion and
+rough size in sessions (S = under one, M = one or two, L = three or more).
 ---
 
 ## Plan
 
-### Phase 0 — correctness defects and drift (small, independent)
+### Phase 0 — wire in goh 0.27.0
+
+**Goal:** `tools/gate.sh --full` green at HEAD and pushed (`a8a848d` and the
+hook reinstall `a38e2df` are waiting on it). **Exit:** the pre-push gate
+accepts `git push`; each item's named step is green and was seen red.
+**Size:** M (one session; P0.1 is the bulk). Measured 2026-10-14 on
+`a38e2df`: structural stops at its first red (stdin), so the rest was read
+with `GOH_SUBPROCESS_STDIN=off` written into a scratch `.gatesrc` (not
+committed): 22 of 25 steps green in 7 min 59 s at load ~140, three red.
+
+#### P0.1 — 52 child processes inherit stdin undeclared
+**Status:** OPEN
+**Why:** goh 3.4 (`0c93f4d`) turned the stdin check on by default; structural
+step `every child process names its stdin` is red at both scopes, and it is
+the first structural red, so it hides every step after it. Of the 40 sites the
+check prints, 28 are in `tests/`, 5 in `scripts/`, 5 in `divoom_gui/`, 1 in
+`divoom_client/`, 1 in `examples/` (e.g. `tests/test_cli.py:50`,
+`tests/test_rust_daemon_parity.py:37`, `tests/test_daemon_event_broadcast.py:90`).
+The product calls (`divoom_gui/`, `divoom_client/`) are judged one by one:
+a child that must read the caller's stdin says `stdin=None`.
+**Done when:** every call names `stdin=subprocess.DEVNULL`, `input=` or
+`stdin=None` (declare; `goh subprocess-stdin --seed` only for what cannot be
+judged this session, each entry with its reason), the step is green, and
+`GOH_SUBPROCESS_STDIN_MIN_CALLS` is set (P0.5). Size: M.
+
+#### P0.2 — The push gate is red: another tool moved the machine's camoufox build
+**Status:** OPEN
+**Why:** measured 2026-10-12 on pre-push and again 2026-10-14 (still beta.36),
+`scripts/py_ci.sh` red on
+`tests/test_camoufox_install_check.py::test_passes_when_a_browser_is_really_installed`:
+"camoufox browser is 156.0.1-beta.36, expected 156.0.1-beta.34"
+(`tools/camoufox_installed.py` `EXPECTED_BUILD`). The machine-wide camoufox
+cache switched its active build to beta.36 on 2026-10-10 and no longer holds
+beta.34, so EVERY push from this repo has been refused since then. This is the
+third time the pin went stale (Standing rules: "Pins move with their
+channel"), and the class is not the pin: the gate reads machine-global state
+that other projects (the house Gemini transport uses camoufox too) are free to
+change. Do not fix it by switching the shared cache back.
+**Done when:** the browser suites are run against beta.36; if they pass, the pin
+moves in its own commit (per the standing rule); and the repo stops depending
+on the shared active build -- either a repo-scoped camoufox install the gate
+selects explicitly, or a check that names the shared cache as the cause and is
+proven red by switching builds. Also on 2026-10-14, in the same run,
+`scripts/py_ci.sh` printed "no camoufox browser -- the 15 GUI e2e suites will
+SKIP" and "coverage floor NOT enforced": its own probe and
+`tools/camoufox_installed.py` disagree about whether a browser exists, so the
+Python floor (P1.4) is currently not enforced at all. One probe, shared.
+Size: S (M if the suites fail on beta.36).
+
+#### P0.3 — A stale local binary turns the gate red in the dev tree
+**Status:** OPEN
+**Why:** step `python3 tools/check_built_binaries.py` and
+`tests/test_binary_resolver.py::test_the_gate_passes_on_this_tree` (inside
+`scripts/py_ci.sh`) both failed 2026-10-14: `target/debug/divoom-menubar
+reports 0.41.0, but this tree is 0.41.1`. The binary predates the version
+bump; the pre-push worktree has no `target/`, which is why pre-push did not
+see it on 2026-10-12. One machine state reds two steps, and the test asserts
+the dev tree's build state rather than the checker's behaviour.
+**Done when:** `cargo build -p divoom-menubar` clears it today, and the test
+drives the checker over a fixture tree (stale and fresh) instead of this
+checkout, watched red with a stale fixture. Size: S.
+
+#### P0.4 — The slow-consumer test reads two events as one line under load
+**Status:** OPEN
+**Why:** `scripts/rust_coverage.sh` went red 2026-10-14 at load ~140:
+`a_subscriber_that_stops_reading_is_dropped_and_frees_its_slot`
+(`divoomd/tests/socket_server_slow_consumer.rs:117`) panicked with
+`Error("trailing characters", line: 2, column: 1)` -- the read it parses held
+two NDJSON lines. The plain `cargo test --locked` step passed it in the same
+run, and it passed 3/3 alone. A test that parses a read as one message is
+load-dependent by construction; every coverage export behind it was lost.
+**Done when:** the test reads line by line (a `BufReader::lines`, or splits
+on `\n` and parses each), and a test that writes two events in one chunk is
+watched red on today's reader. Add the flake to the ledger below. Size: S.
+
+#### P0.5 — Scanner floors are unset, so a scan that stops reading passes
+**Status:** OPEN
+**Why:** goh 4.3 (`831d686`): structural's last step,
+`every scanner read its declared subject`, printed on 2026-10-14:
+`GOH_EMOJI_MIN_FILES=781 GOH_CONFLICT_MARKERS_MIN_FILES=873
+GOH_FILE_LENGTH_MIN_FILES=683 GOH_SECRETS_MIN_FILES=795
+GOH_SHELL_LINT_MIN_FILES=22 GOH_EARLY_EXIT_PIPE_MIN_FILES=27
+GOH_DEAD_AFTER_EXEC_MIN_FILES=27 GOH_BARE_HOOK_INDEX_MIN_FILES=27
+GOH_BARE_PYTHON_MIN_FILES=6 GOH_CHECKOUT_CREDENTIALS_MIN_FILES=1
+GOH_MD_LINKS_MIN_LINKS=39 GOH_UNREAPED_SPAWN_MIN_FILES=356`. Advisory today.
+**Done when:** `.gatesrc` sets each at or a little under its re-read count,
+plus `GOH_SUBPROCESS_STDIN_MIN_CALLS` after P0.1; the `[subject]` line is
+gone; one floor raised one past its count turns the step red naming the key
+(then put back). Size: XS.
+**Depends on:** P0.1
+
+#### P0.6 — Four rustls advisories published 2026-10-14
+**Status:** OPEN
+**Why:** RustSec published RUSTSEC-2026-0346..0349 against `rustls` 0.23.45
+(the version in `Cargo.lock`) the same day as goh 0.27.0, after the gate run
+above: `Debug` impls expose TLS secrets; buffered data reaches the outer
+server after an ECH rejection; Brotli certificate decompression allocates up
+to 1 GiB before authentication; an unauthenticated ServerHello downgrades
+later connections to classical key exchange. `cargo audit` reads 4
+vulnerabilities, so the `cargo audit` step and the Rust gate's advisory step
+are red. Fixed in 0.23.46, which `cargo update -p rustls` takes.
+**Done when:** the lock holds `rustls` 0.23.46 or later in its own commit and
+both audit steps are green with no ignore entry. Size: XS.
+
+### Phase 1 — correctness defects and drift (small, independent)
 
 **Goal:** no known defect or gate hole stays open while feature work starts.
-**Exit:** every P0 item's *Done when* is a test or gate that was watched red
-first. **Size:** M (eight items, each S, no hardware needed). P0.8 first: the
-push gate is red until it lands.
-**Risk:** P0.6 touches every build entry point; a gate that rejects the
+**Exit:** every P1 item's *Done when* is a test or gate that was watched red
+first. **Size:** M (ten items, each S, no hardware needed). Depends on Phase 0
+(nothing pushes until it lands).
+**Risk:** P1.6 touches every build entry point; a gate that rejects the
 supported arm64 Mac breaks the release, so both directions are tested.
 
-#### P0.1 — One brightness change sends two `set_brightness` calls
+#### P1.1 — One brightness change sends two `set_brightness` calls
 **Status:** OPEN
 **Why:** two listeners sit on the same slider: `divoom_gui/web_ui/spatial_stage.js`
 sends on every `input` event and `divoom_gui/web_ui/app_init.js` sends again on
@@ -50,7 +154,7 @@ disagree about which panel they mean (neither passes a mac).
 **Done when:** one slider gesture produces one device call per value, pinned by
 a browser test that counts calls (watched failing on today's code).
 
-#### P0.2 — PyInstaller is unpinned, so a release build takes whatever is newest
+#### P1.2 — PyInstaller is unpinned, so a release build takes whatever is newest
 **Status:** OPEN
 **Why:** `scripts/build_release.sh` builds with whatever PyInstaller the
 `.buildvenv` holds, and the venv recipe it prints (its usage comment and its
@@ -61,7 +165,7 @@ silently.
 **Done when:** the build installs a pinned version from a committed file, and
 moving it is its own commit carrying a bundle diff (file list + sizes).
 
-#### P0.3 — CI comments still describe the menubar's `tao` era
+#### P1.3 — CI comments still describe the menubar's `tao` era
 **Status:** OPEN
 **Why:** `.github/workflows/tests.yml` (the `rust-ble` job comments, about lines
 283 and 293 on 2026-10-12) says the menubar (`tao/tray-icon`) needs system
@@ -71,14 +175,14 @@ no `tao` since 2026-09-20 and the menubar is on winit plus a target-gated
 **Done when:** the comments name the real dependency, and the system-packages
 claim is either proven by a Linux build or deleted.
 
-#### P0.4 — The Python coverage floor dropped and was never ratcheted back
+#### P1.4 — The Python coverage floor dropped and was never ratcheted back
 **Status:** OPEN
 **Why:** `scripts/py_ci.sh` enforces 88.5 (lowered in v0.35.4 at a measured
 88.74). A floor that only moves down stops protecting anything.
 **Done when:** the floor equals the current measurement rounded down to 0.1, and
 the script says when and at what value it was last measured.
 
-#### P0.5 — `tests/` and `examples/tests/` cannot be collected in one run
+#### P1.5 — `tests/` and `examples/tests/` cannot be collected in one run
 **Status:** OPEN
 **Why:** `examples/tests/conftest.py` re-exports `tests/conftest.py` with a star
 import, so `pytest_addoption` registers `--run-hardware` twice and pytest aborts
@@ -88,7 +192,7 @@ bites only a person running both -- but the error names an option, not the cause
 (Re-measured 2026-10-12: still `ValueError: option names {'--run-hardware'}
 already added`.)
 
-#### P0.6 — The build scripts accept an Intel Mac; the arch gate was deleted with the C
+#### P1.6 — The build scripts accept an Intel Mac; the arch gate was deleted with the C
 **Status:** OPEN
 **Why:** house rule (64-bit only, macOS = Apple silicon only, every unsupported
 OS/arch a HARD failure behind an overridable `OS`/`ARCH` seam). This repo was
@@ -109,7 +213,7 @@ guards every build/install entry point; a test drives each script's seam with
 watched red by deleting the check from one script. The old implementation is at
 `git show 9a1cade^:scripts/build_libdivoom.sh`.
 
-#### P0.7 — The RX frame parser drops real frames behind a spurious start byte
+#### P1.7 — The RX frame parser drops real frames behind a spurious start byte
 **Status:** OPEN
 **Why:** `parse_basic_protocol_frames` (`divoomd/src/framing.rs`) resyncs by
 one byte only when the decoded length exceeds `MAX_BASIC_FRAME` (8192). A stray
@@ -127,35 +231,55 @@ valid frames gets both back (watched red on today's parser); the parity
 vectors (`tests/test_framing_vectors.py`, `divoomd/tests/framing_parity.rs`)
 still pass.
 
-#### P0.8 — The push gate is red: another tool moved the machine's camoufox build
+#### P1.8 — 52 hand-rolled status markers
 **Status:** OPEN
-**Why:** measured 2026-10-12, pre-push on the session-consolidation commit: 24 of 25 steps green,
-`scripts/py_ci.sh` red on one test,
-`tests/test_camoufox_install_check.py::test_passes_when_a_browser_is_really_installed`:
-"camoufox browser is 156.0.1-beta.36, expected 156.0.1-beta.34"
-(`tools/camoufox_installed.py` `EXPECTED_BUILD`). The machine-wide camoufox
-cache switched its active build to beta.36 on 2026-10-10 and no longer holds
-beta.34, so EVERY push from this repo has been refused since then. This is the
-third time the pin went stale (Standing rules: "Pins move with their
-channel"), and the class is not the pin: the gate reads machine-global state
-that other projects (the house Gemini transport uses camoufox too) are free to
-change. Do not fix it by switching the shared cache back.
-**Done when:** the browser suites are run against beta.36; if they pass, the pin
-moves in its own commit (per the standing rule); and the repo stops depending
-on the shared active build -- either a repo-scoped camoufox install the gate
-selects explicitly, or a check that names the shared cache as the cause and is
-proven red by switching builds. The consolidation commit then pushes.
+**Why:** goh 4.9 (`51109d6`): `goh.sh status-markers` reads 681 files and
+finds 52 sites in 11 files (2026-10-14): `divoomd/src/monthly_best.rs` 14,
+`scripts/hw_walk_modes.py` 7, `scripts/hw_smoke.py` 7, four each in
+`examples/tests/test_watchface_roundtrip.py`,
+`examples/tests/test_logger_utils.py`,
+`examples/divoom_legacy/utils/logger_utils.py`,
+`examples/divoom_legacy/monthly_best_daemon.py` and
+`divoom_lib/divoom_auth.py`, two in `run_gui.sh`, one each in
+`tests/test_divoom_auth_coverage.py` and `divoomd/src/art.rs`. Not wired, so
+not red.
+**Done when:** the check is a `GOH_CI_STEPS` step; the cheap sites print
+through goh's `tui.lib`, its shell TUI library or goh-tui, the rest are `--seed`ed with
+reasons (the `examples/` oracle is a spec: seed, do not rewrite); a new marker
+in a fixture turns the step red. Size: S.
 
-### Phase 1 — daemon liveness and safety
+#### P1.9 — The release pushes the tap bump around the tap's gate
+**Status:** OPEN
+**Why:** goh 6.8 (`bfac28b`): `scripts/release.sh` (lines 189-216) rewrites
+the cask through `gh api -X PUT repos/ztomer/homebrew-tap/contents/...`, so
+the tap's own gate never runs on the bump.
+**Done when:** that block is one call to
+`$GOH_DIR/tools/release-kit/tap_bump.sh --tap ztomer/homebrew-tap --cask
+divoom-control --tag vX.Y.Z --artifact <dmg>`, and `--dry-run` of a release
+shows the tap gate step. Size: S.
+
+#### P1.10 — CI pins Python 3.14 and installs gate tools by hand
+**Status:** OPEN
+**Why:** the house moved to Python 3.15 (2026-10-10); `.github/workflows/tests.yml`
+lines 45 and 111 still pin `3.14` for jobs that run this repo's gates (the
+local gate already runs 3.15). The structural job installs tools with
+`required_tools.py --layer structural --names` plus apt (line 56) instead of
+the house `--repo . --install`. CI was last green 2026-10-09; it is not red
+for this, so it is not Phase 0.
+**Done when:** both jobs read the version from one committed source the local
+gate also reads (not a hand-kept literal), the install step is
+`required_tools.py --repo . --install`, and CI is green on it. Size: S.
+
+### Phase 2 — daemon liveness and safety
 
 **Goal:** the daemon can say who holds it, never hangs on one peer, and
-notices its own wedge. **Exit:** P1.1-P1.6 each pinned by a test that stalls,
-floods or wedges the real socket server; P1.7 has a trace or is gone.
-**Size:** L (P1.5 and P1.6 are each M). **Risk:** P1.3's deadlines must not
+notices its own wedge. **Exit:** P2.1-P2.6 each pinned by a test that stalls,
+floods or wedges the real socket server; P2.7 has a trace or is gone.
+**Size:** L (P2.5 and P2.6 are each M). **Risk:** P2.3's deadlines must not
 cut a legitimately slow `sync_artwork`; per-command budgets, not one global.
-P1.7 needs a panel and the GUI's Bluetooth grant (Hardware reference below).
+P2.7 needs a panel and the GUI's Bluetooth grant (Hardware reference below).
 
-#### P1.1 — The socket's access rule comes from the umask, not the code
+#### P2.1 — The socket's access rule comes from the umask, not the code
 **Status:** OPEN
 **Why:** `divoomd/src/socket_bind.rs` binds `/tmp/divoom.sock` and never sets a
 mode; it is owner-only today (`srwxr-xr-x`) only because the umask is 022. A
@@ -165,7 +289,7 @@ socket path has no token check (`require_auth=false` in
 **Done when:** the socket is created owner-only explicitly (mode or a 0700
 parent directory), and a test binds under umask 000 and asserts the mode.
 
-#### P1.2 — `get_status` cannot say who is connected
+#### P2.2 — `get_status` cannot say who is connected
 **Status:** OPEN
 **Why:** the 2026-09-07 wedge (64 subscriptions) is now impossible by
 construction, but its CAUSE was never found because killing the daemon
@@ -174,7 +298,7 @@ no connection counts; the semaphore and the registry's `len()` are never read.
 **Done when:** `get_status` returns connections by kind (request, subscription)
 with ages, and a test opens N of each and reads them back.
 
-#### P1.3 — A slow command holds its connection with no deadline
+#### P2.3 — A slow command holds its connection with no deadline
 **Status:** OPEN
 **Why:** `handler.handle(req).await` in `divoomd/src/socket_server.rs` has no
 timeout and does not read the socket while it runs, so a peer that hangs up is
@@ -182,9 +306,9 @@ invisible. `device_call` bounds itself; cloud calls, `sync_artwork` and
 `render_widget` do not.
 **Done when:** every command runs under a deadline (per-command where needed),
 and a test with a stalled handler sees the connection released.
-**Depends on:** P1.2
+**Depends on:** P2.2
 
-#### P1.4 — A reconnecting subscriber cannot replace its own slot
+#### P2.4 — A reconnecting subscriber cannot replace its own slot
 **Status:** OPEN
 **Why:** `divoomd/src/subscriptions.rs` keys entries by a counter, not a client
 identity, so a client that crashed and reconnected is a stranger: admitted only
@@ -193,7 +317,7 @@ takeover should run BEFORE staleness eviction (MQTT 5.0 reason 0x8E).
 **Done when:** a subscribe that names an identity replaces that identity's
 entry immediately, pinned by a test that fills the registry and reconnects.
 
-#### P1.5 — Status fan-out drops events instead of keeping the latest
+#### P2.5 — Status fan-out drops events instead of keeping the latest
 **Status:** OPEN
 **Why:** subscribers share a `broadcast::channel(32)` (`divoomd/src/daemon.rs`);
 a lagging one is told and dropped past 64 lost events
@@ -203,7 +327,7 @@ lossy ring.
 **Done when:** a slow subscriber receives the latest state for every key it
 missed rather than a hole or a disconnect, under a test that stalls one reader.
 
-#### P1.6 — Nothing notices the daemon has stopped serving
+#### P2.6 — Nothing notices the daemon has stopped serving
 **Status:** OPEN
 **Why:** launchd has no watchdog (verified as an absence), and the protocol has
 no heartbeat -- only a client-sent `ping`. A wedge detector on macOS has to live
@@ -211,9 +335,9 @@ in-process and be pinged from INSIDE the serving loop; a side-channel check is
 exactly the gray-failure blind spot.
 **Done when:** a stalled serving loop is detected and reported (log + exit for
 relaunch) within a stated bound, proven by a test that wedges the loop.
-**Depends on:** P1.2
+**Depends on:** P2.2
 
-#### P1.7 — The panel does not always come back after a daemon restart
+#### P2.7 — The panel does not always come back after a daemon restart
 **Status:** OPEN
 **Why:** seen repeatedly on 2026-09-07: `scan` times out while `connect` with
 the saved identifier succeeds at once. Unexplained; it costs every hardware
@@ -222,23 +346,23 @@ round time, and nobody knows whether normal use (no restarts) is affected.
 captured and the cause named, or the reconnect path uses the saved identifier
 first and the symptom is gone.
 
-### Phase 2 — the daemon knows what each panel is
+### Phase 3 — the daemon knows what each panel is
 
 **Goal:** one owner (the daemon) for each panel's model, size and failure
 codes. **Exit:** `device_status` carries model/size and errors carry codes,
-with tests per model class. **Size:** M. **Risk:** P2.3 changes what the
+with tests per model class. **Size:** M. **Risk:** P3.3 changes what the
 weather widget looks like on every panel; it needs the R12-style visual pass
 on hardware before release.
 
-#### P2.1 — `device_status` carries model and panel resolution
+#### P3.1 — `device_status` carries model and panel resolution
 **Status:** OPEN
 **Why:** `divoomd/src/daemon_status.rs` reports link state per mac and nothing
 about the panel itself, so every client (MCP, GUI, menubar) guesses size. It is
-the root of P3.1-P3.3.
+the root of P4.1-P4.3.
 **Done when:** each device entry has `model`, `width`, `height` (and battery
 where the device reports one), with a test per supported model class.
 
-#### P2.2 — Typed error codes on device failures
+#### P3.2 — Typed error codes on device failures
 **Status:** OPEN
 **Why:** a push to an unlinked panel fails at once but as prose
 (`device '{id}' not connected`); `err_reply` in `divoomd/src/protocol.rs` carries
@@ -247,7 +371,7 @@ wording load-bearing -- the class `divoomd/src/ble_fault.rs` was written to end.
 **Done when:** errors carry a stable `code` (`DEVICE_DISCONNECTED`, ...) beside
 the message, and clients branch on the code.
 
-#### P2.3 — Weather is drawn by the firmware, not by us
+#### P3.3 — Weather is drawn by the firmware, not by us
 **Status:** OPEN
 **Why:** `push_weather` (`divoomd/src/live_jobs/mod.rs`) configures the device's
 own clock face (0x5F data + a ClockPacket) and inherits its cycling and panel
@@ -259,7 +383,7 @@ custom-image path Phase 3 exposes.
 `divoomd/src/live_jobs/render.rs` and `divoomd/src/live_jobs/font.rs`, the weather job
 pushes frames, and the device's own face is no longer selected.
 
-### Phase 3 — MCP as a display surface
+### Phase 4 — MCP as a display surface
 
 **Goal:** an external agent can discover each panel, draw on it at its real
 resolution, and share it with background jobs without collisions. Today
@@ -267,39 +391,39 @@ resolution, and share it with background jobs without collisions. Today
 **Exit:** an MCP client draws a full-resolution multi-frame image on a 64x64
 panel while a live job runs, and the panel returns to the job when the lease
 expires (e2e over the real `divoomd mcp` entry point). **Size:** L.
-**Risk:** P3.6 is a new concurrency primitive on the command queue; it
+**Risk:** P4.6 is a new concurrency primitive on the command queue; it
 inherits the per-device rule below and its stress gate.
 
-#### P3.1 — `get_capabilities` describes the panel
+#### P4.1 — `get_capabilities` describes the panel
 **Status:** OPEN
 **Why:** it forwards `device_status`, so it returns link state only -- no size,
 model, battery or feature flags (speaker, radio, clock).
-**Done when:** it returns what P2.1 provides plus feature flags from one table.
-**Depends on:** P2.1
+**Done when:** it returns what P3.1 provides plus feature flags from one table.
+**Depends on:** P3.1
 
-#### P3.2 — `list_screens` derives resolution and live status
+#### P4.2 — `list_screens` derives resolution and live status
 **Status:** OPEN
 **Why:** it forwards `get_topology`: stored names and x/y, `current_device`, no
 resolution and no per-panel connection state.
 **Done when:** each screen entry carries resolution and live link state.
-**Depends on:** P2.1
+**Depends on:** P3.1
 
-#### P3.3 — `show_image` draws at the panel's size, with a stated policy
+#### P4.3 — `show_image` draws at the panel's size, with a stated policy
 **Status:** OPEN
 **Why:** `push_image_bytes` always resizes to 16x16 ("Device size is 16 for
 now"), so a 64x64 panel gets a quarter of its pixels.
 **Done when:** the tool takes a resize policy (`fit`, `fill`, `exact`, `none`),
 sizes to the target panel, and `none` with the wrong size is a clear error.
-**Depends on:** P2.1
+**Depends on:** P3.1
 
-#### P3.4 — `push_animation` streams every frame
+#### P4.4 — `push_animation` streams every frame
 **Status:** OPEN
 **Why:** it pushes the first frame and says so ("full animation streaming is a
 follow-up").
 **Done when:** multi-frame animations play on the panel, frame timing honoured.
-**Depends on:** P3.3
+**Depends on:** P4.3
 
-#### P3.5 — Text, live jobs and the built-in tools over MCP
+#### P4.5 — Text, live jobs and the built-in tools over MCP
 **Status:** OPEN
 **Why:** the daemon already has `render_widget` text, `live_job_start/stop/list`,
 and `scoreboard.set_scoreboard` / `timer.set_timer` /
@@ -308,7 +432,7 @@ socket for them.
 **Done when:** each is an MCP tool generated from the same registry as the
 others, with the arguments' bounds shared rather than restated.
 
-#### P3.6 — Screen leases, so agents and background jobs do not collide
+#### P4.6 — Screen leases, so agents and background jobs do not collide
 **Status:** OPEN
 **Why:** the nearest thing is `exclusive_start`/`exclusive_end` on the command
 queue. An agent drawing on a panel while sysmon runs gets overwritten, and a
@@ -316,22 +440,22 @@ crashed agent leaves a stale frame forever.
 **Done when:** a caller acquires a lease with a mandatory TTL and renewal; on
 expiry the panel returns to what it showed before; continuous pushes for one
 panel are conflated (latest frame wins) on slow links.
-**Depends on:** P1.5, P3.3
+**Depends on:** P2.5, P4.3
 
-#### P3.7 — Transient notifications as a tool
+#### P4.7 — Transient notifications as a tool
 **Status:** OPEN
 **Why:** no MCP tool shows an alert and then gives the panel back.
 **Done when:** a notification tool shows for a bounded time and restores the
-previous content, using the lease from P3.6.
-**Depends on:** P3.6
+previous content, using the lease from P4.6.
+**Depends on:** P4.6
 
-### Phase 4 — the GUI models each panel, not "the" panel
+### Phase 5 — the GUI models each panel, not "the" panel
 
 **Goal:** every per-panel fact the GUI shows is read from and written to the
-daemon by mac. **Exit:** browser tests across two panels for P4.1/P4.2; the
+daemon by mac. **Exit:** browser tests across two panels for P5.1/P5.2; the
 menubar no longer closes on a status change. **Size:** M.
 
-#### P4.1 — Connection, brightness and volume are per panel
+#### P5.1 — Connection, brightness and volume are per panel
 **Status:** OPEN
 **Why:** `window.DivoomState.appConnected` (`divoom_gui/web_ui/app_globals.js`)
 is one boolean and still gates brightness and volume; `set_brightness` and
@@ -340,9 +464,9 @@ only a memory of what the slider last sent. The per-device rule below says
 every per-panel fact has one owner -- the daemon -- and these do not.
 **Done when:** the GUI reads and writes these per mac through the daemon, and
 switching panels shows that panel's values (browser test across two panels).
-**Depends on:** P2.1
+**Depends on:** P3.1
 
-#### P4.2 — Channel settings are written per display
+#### P5.2 — Channel settings are written per display
 **Status:** OPEN
 **Why:** `syncChannelControlsToDisplay` (`divoom_gui/web_ui/channel_preview.js`)
 fixed the READ side, but the write path still uses globals
@@ -352,7 +476,7 @@ the previous display's value when the new one is on another channel.
 **Done when:** every channel control writes to the selected display's state,
 and changing display A's clock style leaves B's untouched (browser test).
 
-#### P4.3 — The menubar updates rows in place
+#### P5.3 — The menubar updates rows in place
 **Status:** OPEN
 **Why:** any change of rows, names, kinds or the active panel rebuilds the root
 `Menu` (`divoom-menubar/src/tray.rs`), which dismisses it if it is open; only
@@ -360,13 +484,13 @@ row icons update in place.
 **Done when:** labels and the "Active panel" check update in place; a rebuild
 happens only when the set of rows changes.
 
-### Phase 5 — the multi-panel wall
+### Phase 6 — the multi-panel wall
 
 **Goal:** a wall is placed by snapping, and LAN panels can join it.
-**Exit:** P5.1's *Done when*. **Size:** M. Needs two panels for the final
+**Exit:** P6.1's *Done when*. **Size:** M. Needs two panels for the final
 check.
 
-#### P5.1 — Snap adjacent panels into one surface
+#### P6.1 — Snap adjacent panels into one surface
 **Status:** OPEN
 **Why:** slicing an image across a wall already works (`divoomd/src/wall.rs`
 cuts per slot by x/y), but placing panels is free-form: dragging only clamps to
@@ -375,12 +499,12 @@ wall images.
 **Done when:** dragged panels snap edge-to-edge into a contiguous group, and a
 LAN panel can be a wall slot (or the refusal is shown in the UI with its reason).
 
-### Phase 6 — decisions for the owner
+### Phase 7 — decisions for the owner
 
 **Goal:** the owner's calls, each with the evidence needed to make it.
 **Exit:** a recorded ruling per item. **Size:** S once decided.
 
-#### P6.1 — The tray glyph tells states apart by colour alone
+#### P7.1 — The tray glyph tells states apart by colour alone
 **Status:** DECISION (owner)
 **Why:** Offline / Online / Error differ only in fill (grey / green / red); green
 vs red is the pair about 1 in 12 men cannot separate (house rule: colour
@@ -429,7 +553,7 @@ build time only.
 **Status:** BLOCKED (on a hardware session with an SPP panel and the 4-panel rig)
 **Why:** the June 2026 adversarial review loop (Python era) closed with five
 items it could not settle without hardware. One is gone (the C static encoder
-was deleted in v0.40.0) and one is P0.7. The other three were never re-checked
+was deleted in v0.40.0) and one is P1.7. The other three were never re-checked
 after the port: (a) SPP framing vs BLE (escaping, packet number, write pacing,
 response-timeout clearing) now that `divoom_client/spp_bridge.py` carries bytes
 the daemon frames; (b) a 0x8B retransmit request arriving in the re-arm window
@@ -572,7 +696,7 @@ is judged against; when one moves, change it here in the same commit.
 | `examples/tests` | 1095 (2026-10-04) | `scripts/py_ci.sh` |
 | Browser subset | 177, all passing (opt-in `--run-browser`, own CI step) | `.github/workflows/tests.yml` |
 | Rust tests | 486 (2026-10-04) | `cargo test --locked` |
-| Python coverage floor | 88.5 (see P0.4) | `scripts/py_ci.sh` |
+| Python coverage floor | 88.5 (see P1.4) | `scripts/py_ci.sh` |
 | Rust coverage floor | 42 | `scripts/rust_coverage.sh` |
 | File length | 500 lines, allowlist empty | gates_of_heck structural layer |
 | Daemon/client duplication | 0 DIRECT, 0 WRAPPED | `tools/capability_census.py` |
@@ -581,6 +705,9 @@ is judged against; when one moves, change it here in the same commit.
 - 2026-09-13, full gate at load ~20: `socket_bind::tests::clears_a_stale_socket`
   saw `UnresponsiveListener` (a connect to a dropped listener's file succeeded,
   then silence). 5/5 green alone.
+- 2026-10-14, full gate at load ~140, under `cargo llvm-cov` only:
+  `a_subscriber_that_stops_reading_is_dropped_and_frees_its_slot` parsed two
+  NDJSON lines as one (P0.4). 3/3 green alone.
 
 ---
 
@@ -595,7 +722,7 @@ monitor and app_updates; each belongs to the repo named.
   `app_updates` shows the fix: after copying, ask the binary its identity and
   confirm `command -v` resolves to the copy just written. The user's `.zshrc`
   PATH entry for routines is theirs to change, not this repo's.
-- **`routines` needs an in-process self-watchdog** for the same reason as P1.6.
+- **`routines` needs an in-process self-watchdog** for the same reason as P2.6.
 - **antiknob** shares the tray-icon question (fixed the same way, 2026-10-05) and
   keeps its own plan in its `PLAN.md`.
 
@@ -615,40 +742,15 @@ HTTP, and Classic SPP through the co-process above.
 `HttpCommand.java` implemented; the backend-only ones are the gated
 capabilities above.
 
-**Shipped, by release** (detail in `CHANGELOG.md`; older rounds R3-R67 in
-`git log -p -- docs/ROADMAP.md`):
-
-| Release | Date | Theme |
-|---|---|---|
-| Unreleased | 2026-10-08 | release.sh dry-runs the tag check; `libnp_helper.dylib` untracked (a build output); lock refreshed; agent sessions folded into this file (2026-10-12) |
-| v0.41.1 | 2026-10-08 | tray glyph back to 18pt at 2x; memory-gauge harness and v0.41.0 correction; handoff folded into this file; roadmap rephased and gated; DMG via `diskutil` |
-| v0.41.0 | 2026-10-05 | every dependency current; the gates that were lying about it |
-| v0.40.0 | 2026-09-25 | the device stack is Rust; C encoder chain and Python MCP retired |
-| v0.39.0 | 2026-09-21 | MCP negotiation, Python 3.14 floor, menubar off tao |
-| v0.38.0 | 2026-09-14 | the direct-to-device library retired to `examples/` |
-| v0.37.0 | 2026-09-12 | active panel, Keychain, Now Playing per client, CLI as a daemon client |
-| v0.36.0 | 2026-09-12 | one struct per panel; six user-reported defects; prompt-free rebuilds |
-| v0.35.0-v0.35.4 | 2026-09-11/12 | spatial stage, per-display previews, virtual wall, queue serialization |
-| v0.34.0 | 2026-09-07 | the invisible weather widget, and a harness that could not have found it |
-| v0.30.0-v0.33.0 | 2026-08-31/09-07 | gates made real; unreachable daemon fixed; residuals |
-| v0.28.0-v0.29.0 | 2026-08-30 | version parity structural; the GUI is a client |
+**Shipped, by release:** `CHANGELOG.md`; the release table this file carried
+until 2026-10-14 is `git show a8a848d:docs/ROADMAP.md`.
 
 ---
 
 ## Sources consolidated (2026-10-12)
 
-Every agent session that ever worked on this repo, read and given a
-disposition before it was removed. Nothing below is a plan any more; this file
-is.
-
-| Source | What it held | Disposition |
-|---|---|---|
-| opencode loop (`.opencode/`, git-ignored): 18 job files + 1 goal report + `loop.log` | one goal, 2026-09-12: the test re-arrangement (its plan, PLANNING_TEST_REORG, is in git history), status `completed`; 17 empty job files; ENOSPC heartbeat errors from 2026-10-05 | superseded: its four commits (`5d92643`, `3f37b6c`, `245c961`, `0a5cd70`) are all on `main`; its "release decision" was v0.38.0+. Directory trashed. |
-| Antigravity, 7 conversations (May-June 2026: cloud API x2, protocol audit, live widgets, settings tab, monthly-best gallery, transport badges) | research sub-agents of two parent conversations, against `gui/`, `native-port/`, `divoom_daemon/` -- paths that no longer exist | superseded. The one open question (does 0x35 exist?) was settled in R73 (`divoomd/src/device_call/drawing.rs`: it is `SPP_SCROLL`). Brain dirs trashed; DB rows left to the coordinator. |
-| Antigravity IDE, 1 conversation (2025-11-18) | Python-library docstrings, `ARCHITECTURE.md`, a mock device; a derived knowledge item ("Divoom Control Library") | superseded by the Rust daemon; brain, `.pb`, knowledge item and their backup copies trashed. |
-| Gemini CLI, `divoom-control` + its hash-named twin (Nov 2025, plus two context-only stubs in June 2026) | ~150 chats on the Python `divoom_lib` era; `api_test_output*.log` (identical in both dirs) | superseded: every file they discuss was retired or ported. Both dirs trashed. |
-| Claude desktop, 3 sessions "Divoom ble adversarial loop" (2026-06-21/22) | runs of a one-time scheduled task; transcripts already cleaned up. The task prompt listed five hardware deferrals | carried: the RX-parser stall as P0.7, three as P9.6, the C encoder one closed (deleted in v0.40.0). Session ids reported for deletion. |
-| Claude memory (`~/.claude/projects/...divoom-control/memory/`, 7 notes) | facts plus procedures (TCC harness recipe, ack calibration, BLE trace setup, commit-before-prove-red, doctest masking, pytest shutdown dump) | kept in place (memory is not a session); the procedures are flagged for moving into skills. The Hardware reference below already carries the TCC and A/B-trace rules. |
-| Claude worktree `quirky-cori-d3f3e2` + branch `claude/quirky-cori-d3f3e2` | one commit, `360543e` (2026-10-05) | landed on `main` (patch-equivalent); worktree clean, removed with the branch. |
-| `~/Projects/RUSTIFICATION_ROADMAP.md` (cross-project) | G0, L1, L2, L4, L5 for this repo | all shipped (programme closed 2026-09-25); its dropped-as-non-autonomous G1/G2/L3 are not carried -- L3's "bytes to a real panel" is covered by P9.6 and the hw packet. |
-| `~/Projects/ROADMAP-consolidated.md` (cross-project) | nothing for this repo | no disposition needed. |
+Every agent session that ever worked on this repo was read and given a
+disposition on 2026-10-12, then removed; nothing in them is open beyond the
+items above. The table (opencode loop, Antigravity, Gemini CLI, Claude
+desktop and memory, the landed worktree, the cross-project plans) is
+`git show a8a848d:docs/ROADMAP.md`.
