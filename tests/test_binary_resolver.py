@@ -295,13 +295,26 @@ def test_the_real_binaries_reject_an_unknown_argument(name):
     assert "--help" in proc.stderr
 
 
-def test_the_gate_passes_on_this_tree():
-    proc = subprocess.run([sys.executable, "tools/check_built_binaries.py"],
-                          cwd=REPO, capture_output=True, text=True, timeout=120, stdin=subprocess.DEVNULL)
-    assert proc.returncode == 0, proc.stdout + proc.stderr
+def test_the_gate_passes_when_every_built_binary_is_current(tmp_path, monkeypatch):
+    """The accept direction, over a fixture tree rather than this checkout.
+
+    It used to run the gate over the dev tree's own target/, which made a
+    BEHAVIOUR test assert the machine's build state: after the 0.41.1 bump an
+    unrebuilt target/debug/divoom-menubar turned it red, and the pre-push
+    worktree (no target/) never saw it. The real tree is the gate step's
+    subject (GOH_CI_STEPS), not this test's.
+    """
+    monkeypatch.setattr(binary_resolver, "REPO_ROOT", tmp_path)
+    for name in binary_resolver.PRODUCT_BINARIES:
+        for flavour in ("release", "debug"):
+            stub_binary(tmp_path / "target" / flavour / name, prints=f"{name} 0.28.2")
+
+    gate = _load_gate()
+    monkeypatch.setattr(gate, "expected_daemon_version", lambda: "0.28.2")
+    assert gate.main() == 0
 
 
-def test_the_gate_fails_when_a_built_binary_is_stale(tmp_path, monkeypatch):
+def test_the_gate_fails_when_a_built_binary_is_stale(tmp_path, monkeypatch, capsys):
     """Proof the gate BITES, driven through its own module rather than by
     deleting a real binary.
 
@@ -315,6 +328,11 @@ def test_the_gate_fails_when_a_built_binary_is_stale(tmp_path, monkeypatch):
     gate = _load_gate()
     monkeypatch.setattr(gate, "expected_daemon_version", lambda: "0.28.2")
     assert gate.main() == 1
+    # The failure names the stale build and the command that makes it current.
+    said = capsys.readouterr()
+    said = said.out + said.err
+    assert "reports 0.27.0, but this tree is 0.28.2" in said
+    assert "Rebuild: cargo build -p divoomd" in said
 
 
 def test_the_gate_skips_rather_than_fails_when_nothing_is_built(tmp_path, monkeypatch):
