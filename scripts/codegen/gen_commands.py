@@ -305,7 +305,7 @@ def main():
         cwd=src.parent.parent,
         check=False,
         capture_output=True,
-        text=True,
+        text=True, stdin=subprocess.DEVNULL,
     )
     if formatted.returncode != 0:
         print(f"warning: cargo fmt did not run: {formatted.stderr.strip()}", file=sys.stderr)

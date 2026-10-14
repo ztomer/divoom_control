@@ -46,7 +46,7 @@ def _run_checker_under(preamble: str) -> subprocess.CompletedProcess[str]:
         '''
     )
     return subprocess.run(
-        [sys.executable, "-c", src], capture_output=True, text=True, cwd=REPO_ROOT, timeout=120
+        [sys.executable, "-c", src], capture_output=True, text=True, cwd=REPO_ROOT, timeout=120, stdin=subprocess.DEVNULL
     )
 
 

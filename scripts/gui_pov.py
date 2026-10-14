@@ -83,7 +83,7 @@ def _free_port() -> int:
 def _links_corebluetooth(binary: Path) -> bool:
     try:
         out = subprocess.run(["otool", "-L", str(binary)],
-                             capture_output=True, text=True, timeout=10).stdout
+                             capture_output=True, text=True, timeout=10, stdin=subprocess.DEVNULL).stdout
     except Exception:
         return False
     return "corebluetooth" in out.lower()
@@ -132,13 +132,13 @@ class Stack:
             stdout=subprocess.DEVNULL, stderr=self._daemon_log_fh, text=True,
             # A backtrace costs nothing here and is the difference between
             # "the daemon died" and knowing which call killed it.
-            env={**os.environ, "RUST_BACKTRACE": os.environ.get("RUST_BACKTRACE", "full")})
+            env={**os.environ, "RUST_BACKTRACE": os.environ.get("RUST_BACKTRACE", "full")}, stdin=subprocess.DEVNULL)
         self._await_socket()
 
         self.bridge = subprocess.Popen(
             [sys.executable, str(BRIDGE), "--socket-path", self.socket_path,
              "--port", str(self.port), "--fake-home", self.home],
-            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, stdin=subprocess.DEVNULL)
         self._await_http()
 
     def _await_socket(self, timeout: float = 15.0) -> None:

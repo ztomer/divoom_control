@@ -38,7 +38,7 @@ def rust_daemon_ctx():
         [str(bin_path), "--socket", sp],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True
+        text=True, stdin=subprocess.DEVNULL
     )
 
     # Wait for the socket to be bound
@@ -145,7 +145,7 @@ def test_rust_tcp_token_auth():
         [str(bin_path), "--socket", sp, "--host", host, "--port", str(port), "--token", token],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True
+        text=True, stdin=subprocess.DEVNULL
     )
 
     # Wait for the Unix socket (and TCP port) to be bound
@@ -210,7 +210,7 @@ def test_rust_status_with_nothing_connected_reports_nothing():
         [str(bin_path), "--socket", sp],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True
+        text=True, stdin=subprocess.DEVNULL
     )
     try:
         for _ in range(50):

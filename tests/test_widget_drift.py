@@ -134,7 +134,7 @@ def test_the_gui_package_constructs_no_pixels():
 
     result = subprocess.run(
         [sys.executable, str(REPO / "tools" / "check_gui_is_a_client.py")],
-        capture_output=True, text=True, cwd=REPO)
+        capture_output=True, text=True, cwd=REPO, stdin=subprocess.DEVNULL)
     assert result.returncode == 0, result.stdout + result.stderr
 
 

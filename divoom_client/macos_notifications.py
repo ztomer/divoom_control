@@ -68,7 +68,7 @@ def find_notification_db_path() -> Optional[Path]:
         return None
     try:
         r = subprocess.run(
-            ["getconf", "DARWIN_USER_DIR"], capture_output=True, text=True, timeout=2,
+            ["getconf", "DARWIN_USER_DIR"], capture_output=True, text=True, timeout=2, stdin=subprocess.DEVNULL,
         )
         base = Path(r.stdout.strip()) if r.returncode == 0 else None
     except (FileNotFoundError, subprocess.TimeoutExpired):

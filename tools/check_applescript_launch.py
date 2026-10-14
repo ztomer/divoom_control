@@ -180,7 +180,7 @@ def _split(out: bytes) -> list[str]:
 def _files(root: Path, staged: bool) -> list[Path]:
     cmd = (["git", "-C", str(root), "diff", "--cached", "--name-only", "-z", "--diff-filter=ACM"]
            if staged else ["git", "-C", str(root), "ls-files", "-z"])
-    out = subprocess.run(cmd, capture_output=True, check=True)
+    out = subprocess.run(cmd, capture_output=True, check=True, stdin=subprocess.DEVNULL)
     return [root / f for f in _split(out.stdout) if f.endswith((".py", ".rs", ".sh"))]
 
 

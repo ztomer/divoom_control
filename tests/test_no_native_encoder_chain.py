@@ -84,7 +84,7 @@ def code_only(source: str) -> str:
 
 def tracked() -> list[str]:
     out = subprocess.run(
-        ["git", "ls-files"], cwd=REPO, check=True, capture_output=True, text=True
+        ["git", "ls-files"], cwd=REPO, check=True, capture_output=True, text=True, stdin=subprocess.DEVNULL
     )
     return out.stdout.splitlines()
 

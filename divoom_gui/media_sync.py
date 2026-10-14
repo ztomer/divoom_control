@@ -272,7 +272,7 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
             import subprocess
             out = subprocess.run(
                 ["defaults", "read", "com.apple.stocks"],
-                capture_output=True, text=True, timeout=4)
+                capture_output=True, text=True, timeout=4, stdin=subprocess.DEVNULL)
             import re
             syms = re.findall(r'"?symbol"?\s*=\s*"?([A-Z][A-Z0-9.\-]{0,9})"?', out.stdout)
             cleaned = []

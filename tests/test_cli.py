@@ -47,7 +47,7 @@ def _run_help(sub: str | None = None) -> str:
     if sub is not None:
         cmd.append(sub)
     cmd.append("--help")
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=15, stdin=subprocess.DEVNULL)
     assert r.returncode == 0, (r.stdout, r.stderr)
     return r.stdout
 
@@ -90,7 +90,7 @@ def test_cli_pair_writes_to_registry(tmp_path: Path) -> None:
     env["HOME"] = str(tmp_path)
     r = subprocess.run(
         CLI_CMD + ["pair", "--mac", "AA:BB:CC:DD:EE:FF", "--type", "TivooMax"],
-        capture_output=True, text=True, env=env, timeout=15,
+        capture_output=True, text=True, env=env, timeout=15, stdin=subprocess.DEVNULL,
     )
     assert r.returncode == 0, r.stderr
     assert "registered" in r.stdout.lower()
@@ -105,7 +105,7 @@ def test_cli_pair_rejects_unknown_device_type(tmp_path: Path) -> None:
     env["HOME"] = str(tmp_path)
     r = subprocess.run(
         CLI_CMD + ["pair", "--mac", "AA:BB:CC:DD:EE:FF", "--type", "NotARealDevice"],
-        capture_output=True, text=True, env=env, timeout=15,
+        capture_output=True, text=True, env=env, timeout=15, stdin=subprocess.DEVNULL,
     )
     assert r.returncode == 2, (r.stdout, r.stderr)
     assert "unknown device_type" in r.stderr

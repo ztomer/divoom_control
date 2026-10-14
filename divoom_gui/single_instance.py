@@ -106,6 +106,6 @@ def focus_running_gui(pid: int | None) -> None:
     try:
         import subprocess
         subprocess.run(["osascript", "-e", script],
-                       check=False, capture_output=True, timeout=5)
+                       check=False, capture_output=True, timeout=5, stdin=subprocess.DEVNULL)
     except Exception as e:
         logger.debug("focus of pid %s skipped: %s", pid, e)

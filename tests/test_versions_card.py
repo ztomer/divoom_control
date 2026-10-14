@@ -67,7 +67,7 @@ def test_the_card_renders_a_mismatch_as_a_note_and_a_missing_daemon_honestly():
         ["stale", {"app": "0.38.0", "daemon": "0.37.0", "protocol": "1.1", "daemon_reachable": True}],
         ["down", {"app": "0.37.0", "daemon": None, "protocol": None, "daemon_reachable": False}],
     ]
-    r = subprocess.run(["node", "-e", _HARNESS, "--", str(SETTINGS_JS), json.dumps(cases)], capture_output=True, text=True, check=True)
+    r = subprocess.run(["node", "-e", _HARNESS, "--", str(SETTINGS_JS), json.dumps(cases)], capture_output=True, text=True, check=True, stdin=subprocess.DEVNULL)
     out = json.loads(r.stdout)
     assert out["same"] == {"app": "0.37.0", "daemon": "0.37.0", "proto": "1.1", "noteHidden": True, "note": ""}
     assert out["stale"]["noteHidden"] is False and "0.37.0" in out["stale"]["note"] and "0.38.0" in out["stale"]["note"]

@@ -89,12 +89,12 @@ def check_shell(failures: list[str]) -> None:
     have_shellcheck = shutil.which("shellcheck") is not None
     for sh in [p for p in tracked_scripts() if p.suffix == ".sh"]:
         rel = sh.relative_to(REPO)
-        if subprocess.run(["bash", "-n", str(sh)], capture_output=True).returncode != 0:
+        if subprocess.run(["bash", "-n", str(sh)], capture_output=True, stdin=subprocess.DEVNULL).returncode != 0:
             failures.append(f"{rel}: bash syntax error")
             continue
         if have_shellcheck:
             r = subprocess.run(["shellcheck", "-S", "warning", str(sh)],
-                               capture_output=True, text=True)
+                               capture_output=True, text=True, stdin=subprocess.DEVNULL)
             if r.returncode != 0:
                 failures.append(f"{rel}: shellcheck\n{r.stdout.strip()}")
 

@@ -354,7 +354,7 @@ fn main() {
             '[package]\nname = "probe"\nversion = "0.0.0"\nedition = "2024"\n'
         )
         r = subprocess.run(
-            ["cargo", "run", "--quiet"], capture_output=True, text=True, cwd=d, timeout=900
+            ["cargo", "run", "--quiet"], capture_output=True, text=True, cwd=d, timeout=900, stdin=subprocess.DEVNULL
         )
         if r.returncode != 0:
             err("the Rust probe did not build:\n" + r.stderr[-2000:])

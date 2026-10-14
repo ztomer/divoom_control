@@ -89,7 +89,7 @@ def mock_daemon():
     path = Path(tmpdir) / "daemon.sock"
     proc = subprocess.Popen(
         [str(_DIVOOMD), "--socket", str(path)],
-        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
+        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, stdin=subprocess.DEVNULL,
     )
     try:
         _wait_for_socket(path, proc=proc)

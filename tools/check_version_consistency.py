@@ -66,7 +66,7 @@ def newest_tag_version() -> str | None:
     try:
         out = subprocess.run(
             ["git", "-C", str(REPO), "tag", "--list", "v*", "--sort=-v:refname"],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True, text=True, timeout=15, stdin=subprocess.DEVNULL,
         ).stdout
     except (OSError, subprocess.SubprocessError):
         return None

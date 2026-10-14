@@ -174,7 +174,7 @@ def build_probe(version: str) -> Path:
     shutil.copyfile(ROOT / "Cargo.lock", PROBE_DIR / "Cargo.lock")
     r = subprocess.run(
         ["cargo", "build", "--release", "--quiet", "--message-format=json"],
-        capture_output=True, text=True, cwd=PROBE_DIR, timeout=900,
+        capture_output=True, text=True, cwd=PROBE_DIR, timeout=900, stdin=subprocess.DEVNULL,
     )
     if r.returncode != 0:
         raise RuntimeError("the sysinfo probe did not build:\n" + r.stderr[-2000:])
@@ -188,7 +188,7 @@ def build_probe(version: str) -> Path:
 
 
 def run_probe(exe: Path) -> tuple[int, int]:
-    out = subprocess.run([str(exe)], capture_output=True, text=True, timeout=30, check=True).stdout
+    out = subprocess.run([str(exe)], capture_output=True, text=True, timeout=30, check=True, stdin=subprocess.DEVNULL).stdout
     line = next((s for s in out.splitlines() if s.startswith("MEMPROBE ")), None)
     if line is None:
         raise RuntimeError(f"probe printed no MEMPROBE line: {out!r}")

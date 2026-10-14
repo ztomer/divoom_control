@@ -297,7 +297,7 @@ def test_the_real_binaries_reject_an_unknown_argument(name):
 
 def test_the_gate_passes_on_this_tree():
     proc = subprocess.run([sys.executable, "tools/check_built_binaries.py"],
-                          cwd=REPO, capture_output=True, text=True, timeout=120)
+                          cwd=REPO, capture_output=True, text=True, timeout=120, stdin=subprocess.DEVNULL)
     assert proc.returncode == 0, proc.stdout + proc.stderr
 
 

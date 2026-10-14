@@ -257,7 +257,7 @@ def test_the_codegen_output_is_current() -> None:
         cwd=REPO,
         check=True,
         capture_output=True,
-        env={**os.environ, "PYTHONPATH": str(REPO)},
+        env={**os.environ, "PYTHONPATH": str(REPO)}, stdin=subprocess.DEVNULL,
     )
     stale = [
         path.name

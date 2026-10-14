@@ -37,7 +37,7 @@ BUILD_OUTPUTS = ("nowplaying/native/libnp_helper.dylib",)
 
 def tracked() -> list[str]:
     out = subprocess.run(["git", "ls-files", "-z"], cwd=REPO, check=True,
-                         capture_output=True).stdout.decode()
+                         capture_output=True, stdin=subprocess.DEVNULL).stdout.decode()
     paths = [p for p in out.split("\0") if p]
     assert paths, "git lists no tracked files: the scan would pass over nothing"
     return paths
@@ -73,7 +73,7 @@ def test_every_build_output_is_ignored() -> None:
     for rel in BUILD_OUTPUTS:
         assert rel not in tracked(), f"{rel} is a build output but is tracked"
         ignored = subprocess.run(["git", "check-ignore", "-q", "--no-index", rel],
-                                 cwd=REPO).returncode == 0
+                                 cwd=REPO, stdin=subprocess.DEVNULL).returncode == 0
         assert ignored, f"{rel} is a build output but .gitignore does not ignore it"
 
 

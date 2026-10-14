@@ -53,7 +53,7 @@ def daemon_socket():
     if os.path.exists(sock):
         os.remove(sock)
     proc = subprocess.Popen([str(bin_path), "--socket", sock],
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL)
     try:
         for _ in range(60):
             if os.path.exists(sock):

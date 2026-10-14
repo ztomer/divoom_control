@@ -23,7 +23,7 @@ def repo_files(root: Path, suffixes: tuple[str, ...] | None = None) -> list[Path
     """
     out = subprocess.run(
         ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
-        cwd=root, capture_output=True, check=True,
+        cwd=root, capture_output=True, check=True, stdin=subprocess.DEVNULL,
     ).stdout.decode()
     paths = [root / rel for rel in out.split("\0") if rel]
     if not paths:

@@ -19,7 +19,7 @@ _JS = sorted(_WEB_UI.glob("*.js"))
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
 @pytest.mark.parametrize("js", _JS, ids=lambda p: p.name)
 def test_web_ui_js_parses(js: Path):
-    r = subprocess.run(["node", "--check", str(js)], capture_output=True, text=True)
+    r = subprocess.run(["node", "--check", str(js)], capture_output=True, text=True, stdin=subprocess.DEVNULL)
     assert r.returncode == 0, f"{js.name} has a JS syntax error:\n{r.stderr}"
 
 

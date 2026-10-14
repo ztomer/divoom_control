@@ -51,7 +51,7 @@ ATTR_RE = re.compile(r"^\s*#\[")
 def tracked(pattern: str) -> list[str]:
     r = subprocess.run(
         ["git", "ls-files", pattern],
-        cwd=str(REPO), capture_output=True, text=True,
+        cwd=str(REPO), capture_output=True, text=True, stdin=subprocess.DEVNULL,
     )
     if r.returncode != 0:
         return []

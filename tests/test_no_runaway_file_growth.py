@@ -33,7 +33,7 @@ TEXT_SUFFIXES = {".md", ".py", ".rs", ".js", ".html", ".css", ".sh",
 
 def tracked_text_files() -> list[Path]:
     out = subprocess.run(["git", "ls-files", "-z"], cwd=REPO,
-                         capture_output=True, text=True, timeout=60)
+                         capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
     files = []
     for rel in out.stdout.split("\0"):
         if not rel:

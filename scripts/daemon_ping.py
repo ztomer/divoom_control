@@ -65,7 +65,7 @@ def live_daemons() -> list[tuple[int, str]]:
     is alias-rewritten on this machine and mangles the flags."""
     try:
         out = subprocess.run(["/bin/ps", "-Ao", "pid,command"],
-                             capture_output=True, text=True, timeout=10).stdout
+                             capture_output=True, text=True, timeout=10, stdin=subprocess.DEVNULL).stdout
     except (OSError, subprocess.SubprocessError):
         return []
     found = []

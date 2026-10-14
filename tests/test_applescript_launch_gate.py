@@ -192,7 +192,7 @@ def test_gate_refuses_to_pass_over_an_empty_scope(tmp_path):
     """Inspecting nothing is abstaining, not passing -- a rename would otherwise
     retire this gate in silence. `--staged` is exempt: a commit touching no
     .py/.rs/.sh really does have an empty scope."""
-    subprocess.run(["git", "init", "-q", "."], cwd=tmp_path, check=True)
+    subprocess.run(["git", "init", "-q", "."], cwd=tmp_path, check=True, stdin=subprocess.DEVNULL)
     (tmp_path / "tools").mkdir()
     # Copy the gate plus EVERY shared `tools/_*.py` helper, not a hardcoded
     # pair. Naming them individually broke the moment the gate started importing
@@ -203,18 +203,18 @@ def test_gate_refuses_to_pass_over_an_empty_scope(tmp_path):
         (tmp_path / "tools" / src.name).write_bytes(src.read_bytes())
     gate_py = "tools/check_applescript_launch.py"
 
-    full = subprocess.run([sys.executable, gate_py], cwd=tmp_path, capture_output=True, text=True)
+    full = subprocess.run([sys.executable, gate_py], cwd=tmp_path, capture_output=True, text=True, stdin=subprocess.DEVNULL)
     assert full.returncode == 1, full.stdout
     assert "0 files" in full.stdout
 
     staged = subprocess.run([sys.executable, gate_py, "--staged"], cwd=tmp_path,
-                            capture_output=True, text=True)
+                            capture_output=True, text=True, stdin=subprocess.DEVNULL)
     assert staged.returncode == 0, staged.stdout
 
 
 def test_gate_passes_on_current_tree():
     r = subprocess.run(
         [sys.executable, "tools/check_applescript_launch.py"],
-        cwd=REPO, capture_output=True, text=True,
+        cwd=REPO, capture_output=True, text=True, stdin=subprocess.DEVNULL,
     )
     assert r.returncode == 0, r.stdout + r.stderr

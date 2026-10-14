@@ -432,7 +432,7 @@ def _spawn_menubar_agent() -> None:
         # matches only a real `divoom-menubar` process, path-independent.
         existing = subprocess.run(
             ["pgrep", "-x", "divoom-menubar"],
-            capture_output=True, text=True,
+            capture_output=True, text=True, stdin=subprocess.DEVNULL,
         )
         if existing.returncode == 0 and existing.stdout.strip():
             logger.info("Menu-bar agent already running; not spawning another.")
@@ -476,7 +476,7 @@ def _terminate_menubar_agent() -> None:
         import subprocess
         subprocess.run(["pkill", "-f", "divoom-menubar"],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                       check=False, timeout=3)
+                       check=False, timeout=3, stdin=subprocess.DEVNULL)
         logger.info("Terminated menu-bar agent (shared-lifecycle quit).")
     except Exception as e:
         logger.debug(f"menu-bar terminate skipped: {e}")

@@ -46,7 +46,7 @@ process.stdout.write(JSON.stringify(out));
 def _render(cases):
     r = subprocess.run(
         ["node", "-e", _HARNESS, "--", str(SETTINGS_JS), json.dumps(cases)],
-        capture_output=True, text=True, check=True,
+        capture_output=True, text=True, check=True, stdin=subprocess.DEVNULL,
     )
     return json.loads(r.stdout)
 

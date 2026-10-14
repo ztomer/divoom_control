@@ -109,7 +109,7 @@ class IsolatedStack:
 
         self.daemon_proc = subprocess.Popen(
             [str(bin_path), "--socket", self.socket_path],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, stdin=subprocess.DEVNULL,
         )
         self._wait_for_socket(self.socket_path, socket_timeout)
 
@@ -118,7 +118,7 @@ class IsolatedStack:
              "--socket-path", self.socket_path,
              "--port", str(self.bridge_port),
              "--fake-home", self.fake_home],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, stdin=subprocess.DEVNULL,
         )
         self._wait_for_http(self.bridge_port, http_timeout)
 
