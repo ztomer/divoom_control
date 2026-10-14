@@ -42,99 +42,25 @@ accepts `git push`; each item's named step is green and was seen red.
 with `GOH_SUBPROCESS_STDIN=off` written into a scratch `.gatesrc` (not
 committed): 22 of 25 steps green in 7 min 59 s at load ~140, three red.
 
-#### P0.1 — 52 child processes inherit stdin undeclared
-**Status:** OPEN
-**Why:** goh 3.4 (`0c93f4d`) turned the stdin check on by default; structural
-step `every child process names its stdin` is red at both scopes, and it is
-the first structural red, so it hides every step after it. Of the 40 sites the
-check prints, 28 are in `tests/`, 5 in `scripts/`, 5 in `divoom_gui/`, 1 in
-`divoom_client/`, 1 in `examples/` (e.g. `tests/test_cli.py:50`,
-`tests/test_rust_daemon_parity.py:37`, `tests/test_daemon_event_broadcast.py:90`).
-The product calls (`divoom_gui/`, `divoom_client/`) are judged one by one:
-a child that must read the caller's stdin says `stdin=None`.
-**Done when:** every call names `stdin=subprocess.DEVNULL`, `input=` or
-`stdin=None` (declare; `goh subprocess-stdin --seed` only for what cannot be
-judged this session, each entry with its reason), the step is green, and
-`GOH_SUBPROCESS_STDIN_MIN_CALLS` is set (P0.5). Size: M.
+#### Phase 0 ships in `a8a848d..229c96d`; what is left
 
-#### P0.2 — The push gate is red: another tool moved the machine's camoufox build
-**Status:** OPEN
-**Why:** measured 2026-10-12 on pre-push and again 2026-10-14 (still beta.36),
-`scripts/py_ci.sh` red on
-`tests/test_camoufox_install_check.py::test_passes_when_a_browser_is_really_installed`:
-"camoufox browser is 156.0.1-beta.36, expected 156.0.1-beta.34"
-(`tools/camoufox_installed.py` `EXPECTED_BUILD`). The machine-wide camoufox
-cache switched its active build to beta.36 on 2026-10-10 and no longer holds
-beta.34, so EVERY push from this repo has been refused since then. This is the
-third time the pin went stale (Standing rules: "Pins move with their
-channel"), and the class is not the pin: the gate reads machine-global state
-that other projects (the house Gemini transport uses camoufox too) are free to
-change. Do not fix it by switching the shared cache back.
-**Done when:** the browser suites are run against beta.36; if they pass, the pin
-moves in its own commit (per the standing rule); and the repo stops depending
-on the shared active build -- either a repo-scoped camoufox install the gate
-selects explicitly, or a check that names the shared cache as the cause and is
-proven red by switching builds. Also on 2026-10-14, in the same run,
-`scripts/py_ci.sh` printed "no camoufox browser -- the 15 GUI e2e suites will
-SKIP" and "coverage floor NOT enforced": its own probe and
-`tools/camoufox_installed.py` disagree about whether a browser exists, so the
-Python floor (P1.4) is currently not enforced at all. One probe, shared.
-Size: S (M if the suites fail on beta.36).
+All six items landed and the full gate is green. They are deleted rather than
+annotated, per this file's header:
 
-#### P0.3 — A stale local binary turns the gate red in the dev tree
-**Status:** OPEN
-**Why:** step `python3 tools/check_built_binaries.py` and
-`tests/test_binary_resolver.py::test_the_gate_passes_on_this_tree` (inside
-`scripts/py_ci.sh`) both failed 2026-10-14: `target/debug/divoom-menubar
-reports 0.41.0, but this tree is 0.41.1`. The binary predates the version
-bump; the pre-push worktree has no `target/`, which is why pre-push did not
-see it on 2026-10-12. One machine state reds two steps, and the test asserts
-the dev tree's build state rather than the checker's behaviour.
-**Done when:** `cargo build -p divoom-menubar` clears it today, and the test
-drives the checker over a fixture tree (stale and fresh) instead of this
-checkout, watched red with a stale fixture. Size: S.
+- **P0.1** — `56a6a2b` — every call names its stdin, declared not seeded
+- **P0.2** — `439fdcd` — the check names the shared cache as the cause and the tests fake the active build
+- **P0.3** — `c0bce0a` + `4c4828e` — the gate judges its own tree, and the accept test drives a fixture
+- **P0.4** — `20b3df2` + `6aa6f5c` — the reader frames by line; a two-events-in-one-chunk case is watched red
+- **P0.5** — `229c96d` — all floors set, the `[subject]` line is gone
+- **P0.6** — `f70919b` — rustls 0.23.46, no ignore entry
 
-#### P0.4 — The slow-consumer test reads two events as one line under load
-**Status:** OPEN
-**Why:** `scripts/rust_coverage.sh` went red 2026-10-14 at load ~140:
-`a_subscriber_that_stops_reading_is_dropped_and_frees_its_slot`
-(`divoomd/tests/socket_server_slow_consumer.rs:117`) panicked with
-`Error("trailing characters", line: 2, column: 1)` -- the read it parses held
-two NDJSON lines. The plain `cargo test --locked` step passed it in the same
-run, and it passed 3/3 alone. A test that parses a read as one message is
-load-dependent by construction; every coverage export behind it was lost.
-**Done when:** the test reads line by line (a `BufReader::lines`, or splits
-on `\n` and parses each), and a test that writes two events in one chunk is
-watched red on today's reader. Add the flake to the ledger below. Size: S.
+Two things the phase found that are NOT its items, tracked where they belong:
 
-#### P0.5 — Scanner floors are unset, so a scan that stops reading passes
-**Status:** OPEN
-**Why:** goh 4.3 (`831d686`): structural's last step,
-`every scanner read its declared subject`, printed on 2026-10-14:
-`GOH_EMOJI_MIN_FILES=781 GOH_CONFLICT_MARKERS_MIN_FILES=873
-GOH_FILE_LENGTH_MIN_FILES=683 GOH_SECRETS_MIN_FILES=795
-GOH_SHELL_LINT_MIN_FILES=22 GOH_EARLY_EXIT_PIPE_MIN_FILES=27
-GOH_DEAD_AFTER_EXEC_MIN_FILES=27 GOH_BARE_HOOK_INDEX_MIN_FILES=27
-GOH_BARE_PYTHON_MIN_FILES=6 GOH_CHECKOUT_CREDENTIALS_MIN_FILES=1
-GOH_MD_LINKS_MIN_LINKS=39 GOH_UNREAPED_SPAWN_MIN_FILES=356`. Advisory today.
-**Done when:** `.gatesrc` sets each at or a little under its re-read count,
-plus `GOH_SUBPROCESS_STDIN_MIN_CALLS` after P0.1; the `[subject]` line is
-gone; one floor raised one past its count turns the step red naming the key
-(then put back). Size: XS.
-**Depends on:** P0.1
-
-#### P0.6 — Four rustls advisories published 2026-10-14
-**Status:** OPEN
-**Why:** RustSec published RUSTSEC-2026-0346..0349 against `rustls` 0.23.45
-(the version in `Cargo.lock`) the same day as goh 0.27.0, after the gate run
-above: `Debug` impls expose TLS secrets; buffered data reaches the outer
-server after an ECH rejection; Brotli certificate decompression allocates up
-to 1 GiB before authentication; an unauthenticated ServerHello downgrades
-later connections to classical key exchange. `cargo audit` reads 4
-vulnerabilities, so the `cargo audit` step and the Rust gate's advisory step
-are red. Fixed in 0.23.46, which `cargo update -p rustls` takes.
-**Done when:** the lock holds `rustls` 0.23.46 or later in its own commit and
-both audit steps are green with no ignore entry. Size: XS.
+- `tests/test_empty_scope_guard.py`'s ratchet asserted `legitimate` must be
+  empty, which is not what that section means (see the entry's own header);
+  rewritten, with both directions proven red.
+- The py_ci coverage floor now binds on every run (`23b512f`) — it was
+  reporting "NOT enforced" because the two camoufox probes disagreed.
 
 ### Phase 1 — correctness defects and drift (small, independent)
 

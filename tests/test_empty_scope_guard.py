@@ -11,6 +11,7 @@ nothing to inspect).
 """
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -30,6 +31,17 @@ GUARDED = [
     "check_scripts.py",
     "check_applescript_launch.py",
 ]
+
+#: The gates that are EXCUSED instead of guarded, and why each is a different thing. Kept beside
+#: GUARDED because the two lists must not be confused: a gate in neither is either a gate nobody
+#: added a decision about, or one whose decision was lost.
+EXCUSED = {
+    "check_built_binaries.py": (
+        "its subject is build OUTPUT -- a fresh clone and a CI job that builds only what it "
+        "needs both legitimately have none, so passing over an empty tree is the correct answer "
+        "there, not compliance over an empty set"
+    ),
+}
 
 
 def test_a_real_scope_is_not_empty():
@@ -72,14 +84,40 @@ def test_each_guarded_gate_still_passes_on_the_real_tree(gate):
     assert r.returncode == 0, r.stdout + r.stderr
 
 
-def test_camoufox_is_the_only_excused_gate():
-    """The allowlist is a ratchet. `known_blind` must stay empty — the six gates
-    that were blind were FIXED, not excused, and an entry here is how that
-    would quietly reverse."""
-    import json
+def test_the_blind_list_is_empty():
+    """`known_blind` may only ever SHRINK, so it is asserted empty.
 
+    Every gate that was blind on 2026-09-07 was FIXED the same day with `tools/_empty_scope.py`
+    rather than excused. An entry here is how that would quietly reverse, which is why this one
+    keeps the strict form and `legitimate` below does not."""
+    data = json.loads((REPO / "tools" / "empty_scope_allow.json").read_text())
+    blind = {k for k in data["known_blind"] if not k.startswith("_")}
+    assert blind == set(), (
+        f"a blind gate is excused instead of guarded: {sorted(blind)}. It belongs in GUARDED with "
+        "tools/_empty_scope.scope_is_empty, not in the allowlist."
+    )
+
+
+def test_every_excused_gate_is_excused_deliberately():
+    """`legitimate` is NOT a burn-down list, and this is the property that keeps it honest.
+
+    The file's own header: "`legitimate` is a gate that SHOULD pass over an empty tree and always
+    will; `known_blind` is a defect with a name on it, awaiting a guard, and may only ever
+    SHRINK." So the assertion is not "the section is empty" -- that was the ratchet before
+    2026-10-14, and it was simply wrong about what the section means. It is that every entry
+    matches a decision recorded here WITH its reason, and that a gate cannot excuse itself by
+    being the only one that thinks so.
+    """
     data = json.loads((REPO / "tools" / "empty_scope_allow.json").read_text())
     legit = {k for k in data["legitimate"] if not k.startswith("_")}
-    blind = {k for k in data["known_blind"] if not k.startswith("_")}
-    assert legit == set(), f"a gate is excused; the last legitimate excuse turned out to be host-dependent: {legit}"
-    assert blind == set(), f"a gate is excused instead of guarded: {blind}"
+    reasons = {k: v for k, v in data["legitimate"].items() if not k.startswith("_")}
+    assert legit == set(EXCUSED), (
+        f"an excused gate is not a decision this file records: {sorted(legit - set(EXCUSED))}; "
+        f"and {sorted(set(EXCUSED) - legit)} are decided here but no longer excused. "
+        "A gate moves between GUARDED and EXCUSED deliberately, in one commit, both lists."
+    )
+    for name in sorted(legit):
+        assert len(reasons[name].split()) >= 15, (
+            f"{name} is excused with no reason; an excuse without a reason is a permanent "
+            "permission, which is what this file is for"
+        )

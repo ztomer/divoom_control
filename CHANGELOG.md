@@ -18,6 +18,22 @@ shipped milestone (per the project planning docs).
   `GOH_TAG_VERSION_SOURCES`, and `release.sh` runs that check before the CI wait
   and the build.
 
+- **The empty-scope allowlist's ratchet asserted the wrong thing.** It demanded
+  `legitimate` be empty, so adding `check_built_binaries.py` (a gate whose subject is
+  build OUTPUT, and which CI legitimately runs without building) turned the pre-push
+  gate red — while the allowlist's own header defines `legitimate` as "a gate that
+  SHOULD pass over an empty tree and always will", and its `known_blind` prose says
+  not to add an entry to make a red run green. Two rules disagreed, so the test was
+  the one that was wrong: it is split into the assertion that must hold (`known_blind`
+  is empty) and the one that must hold for the other section (every excuse is a
+  decision this file records, WITH its reason). Both proven red — a blind gate moved
+  into `legitimate`, and an excuse written as the single word "because".
+
+  Also: Phase 0's six items are closed and pruned from `docs/ROADMAP.md`. They had
+  landed in the commits waiting to be pushed while the statuses still read OPEN,
+  which is the repo's own core rule failing in the direction that hides work.
+  Full gate green; 1529 passed, 129 skipped (hardware suites), structural clean.
+
 ## v0.41.1 — the menu bar icon is back to its size, and a v0.41.0 claim corrected (2026-10-08)
 
 - **The release build's leaked-references guard could not catch a big leak.**
