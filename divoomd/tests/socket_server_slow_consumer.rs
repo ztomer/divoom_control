@@ -110,11 +110,15 @@ async fn a_subscriber_that_stops_reading_is_dropped_and_frees_its_slot() {
             .write_all(encode_message(&json!({ "command": "subscribe" })).as_slice())
             .await
             .unwrap();
-        let n = match tokio::time::timeout(Duration::from_secs(2), fresh.read(&mut buf)).await {
-            Ok(Ok(n)) if n > 0 => n,
-            _ => continue,
+        // One LINE, not one read: once subscribed, the status and the first
+        // ticks can arrive in a single chunk (seen at load ~140, where a
+        // `read` + parse died on "trailing characters").
+        let Some(v) = NdjsonReader::new(&mut fresh)
+            .next(Duration::from_secs(2))
+            .await
+        else {
+            continue;
         };
-        let v: Value = serde_json::from_slice(&buf[..n]).unwrap();
         if v["type"] == json!("status") {
             break; // slot reclaimed, we are subscribed
         }
@@ -124,26 +128,79 @@ async fn a_subscriber_that_stops_reading_is_dropped_and_frees_its_slot() {
     drop(deaf);
 }
 
-/// Read one whole NDJSON line. A reply here is 64 KB, so a single `read` into a
-/// fixed buffer returns a TRUNCATED line -- which parses as an error and reads
-/// exactly like the server having failed. Frame properly or the test reports on
-/// its own buffer size.
-async fn read_line(stream: &mut UnixStream, limit: Duration) -> Option<Value> {
-    let mut acc: Vec<u8> = Vec::new();
-    let mut chunk = [0u8; 8192];
-    let deadline = tokio::time::Instant::now() + limit;
-    loop {
-        let left = deadline.checked_duration_since(tokio::time::Instant::now())?;
-        // EOF, read error and deadline are all "no line is coming".
-        let n = match tokio::time::timeout(left, stream.read(&mut chunk)).await {
-            Ok(Ok(n)) if n > 0 => n,
-            _ => return None,
-        };
-        acc.extend_from_slice(&chunk[..n]);
-        if let Some(i) = acc.iter().position(|b| *b == b'\n') {
-            return serde_json::from_slice(&acc[..i]).ok();
+/// Reads a stream as NDJSON: one `Value` per `\n`-terminated line, keeping
+/// whatever follows the line for the next call.
+///
+/// A single `read` is neither one message nor a whole one. A 64 KB reply comes
+/// back TRUNCATED from a fixed buffer, and under load two small events come
+/// back in ONE chunk -- either way a read-then-parse reports on the test's own
+/// framing rather than on the server. Frame by line, or the test is measuring
+/// its buffer and the scheduler.
+struct NdjsonReader<'s> {
+    stream: &'s mut UnixStream,
+    acc: Vec<u8>,
+}
+
+impl<'s> NdjsonReader<'s> {
+    const fn new(stream: &'s mut UnixStream) -> Self {
+        Self {
+            stream,
+            acc: Vec::new(),
         }
     }
+
+    /// The next whole line as JSON; `None` when EOF, a read error or the
+    /// deadline comes first ("no line is coming"). A line that is not JSON
+    /// panics with the line: that is a server defect, not "nothing yet".
+    async fn next(&mut self, limit: Duration) -> Option<Value> {
+        let deadline = tokio::time::Instant::now() + limit;
+        let mut chunk = [0u8; 8192];
+        loop {
+            if let Some(i) = self.acc.iter().position(|b| *b == b'\n') {
+                let line: Vec<u8> = self.acc.drain(..=i).collect();
+                let line = &line[..i];
+                return Some(serde_json::from_slice(line).unwrap_or_else(|e| {
+                    panic!("not one JSON line ({e}): {}", String::from_utf8_lossy(line))
+                }));
+            }
+            let left = deadline.checked_duration_since(tokio::time::Instant::now())?;
+            let n = match tokio::time::timeout(left, self.stream.read(&mut chunk)).await {
+                Ok(Ok(n)) if n > 0 => n,
+                _ => return None,
+            };
+            self.acc.extend_from_slice(&chunk[..n]);
+        }
+    }
+}
+
+/// The framing the two slow-consumer tests rely on: two events written in ONE
+/// chunk come back as two values, in order, and a line split across chunks
+/// comes back whole. The read-then-parse this replaced fails the first half
+/// with "trailing characters", which is how it went red under load.
+#[tokio::test]
+async fn ndjson_reader_splits_one_chunk_into_its_lines_and_joins_a_split_line() {
+    let (mut a, mut b) = UnixStream::pair().unwrap();
+    let mut two = encode_message(&json!({ "type": "status" }));
+    two.extend_from_slice(encode_message(&json!({ "type": "tick", "i": 0 })).as_slice());
+    a.write_all(&two).await.unwrap();
+    let half = encode_message(&json!({ "type": "tick", "i": 1 }));
+    let (head, tail) = half.split_at(half.len() / 2);
+    a.write_all(head).await.unwrap();
+
+    let mut lines = NdjsonReader::new(&mut b);
+    let limit = Duration::from_secs(5);
+    assert_eq!(lines.next(limit).await, Some(json!({ "type": "status" })));
+    assert_eq!(
+        lines.next(limit).await,
+        Some(json!({ "type": "tick", "i": 0 }))
+    );
+    a.write_all(tail).await.unwrap();
+    assert_eq!(
+        lines.next(limit).await,
+        Some(json!({ "type": "tick", "i": 1 }))
+    );
+    drop(a);
+    assert_eq!(lines.next(limit).await, None, "EOF is no line");
 }
 
 /// Handler whose replies are large, so a client that stops reading fills the
@@ -201,7 +258,8 @@ async fn a_request_client_that_stops_reading_frees_its_connection_slot() {
         .write_all(encode_message(&json!({ "command": "ping" })).as_slice())
         .await
         .unwrap();
-    let v = read_line(&mut refused, Duration::from_secs(5))
+    let v = NdjsonReader::new(&mut refused)
+        .next(Duration::from_secs(5))
         .await
         .expect("a full daemon must still answer");
     assert_eq!(v["code"], json!("resource_exhausted"), "got {v}");
@@ -220,7 +278,10 @@ async fn a_request_client_that_stops_reading_frees_its_connection_slot() {
             .write_all(encode_message(&json!({ "command": "ping" })).as_slice())
             .await
             .unwrap();
-        let Some(v) = read_line(&mut fresh, Duration::from_secs(5)).await else {
+        let Some(v) = NdjsonReader::new(&mut fresh)
+            .next(Duration::from_secs(5))
+            .await
+        else {
             continue;
         };
         if v["success"] == json!(true) {
