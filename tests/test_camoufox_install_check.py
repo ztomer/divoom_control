@@ -85,21 +85,49 @@ def test_fails_when_the_camoufox_package_is_absent() -> None:
     assert "NOT installed" in result.stderr
 
 
-def test_passes_when_a_browser_is_really_installed() -> None:
-    """It must not over-reject: a real install reports the version and exits 0.
+# The active build is faked through camoufox's own pkgman, not by stubbing the
+# checker: these tests are about the checker's verdict on a build, and they must
+# not depend on which build the MACHINE-WIDE cache happens to have active. The
+# old accept test asked the real cache, so when another project switched it to
+# 156.0.1-beta.36 on 2026-10-10 every push from this repo was refused.
+_ACTIVE_BUILD = """
+import camoufox.pkgman as pkgman
+pkgman.installed_verstr = lambda: {build!r}
+"""
 
-    Without this the checker could hard-fail every run and still look like a
-    working gate -- which would block CI permanently instead of catching a
-    silent install.
-    """
+
+def _pinned_build() -> str:
     import importlib.util
 
     spec = importlib.util.spec_from_file_location("_camoufox_check", CHECKER)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)  # loaded by path: tools/ is not a package
+    return module.EXPECTED_BUILD
 
-    if module.installed_version() is None:
-        pytest.skip("no camoufox browser on this machine — nothing to assert")
-    result = _run_checker_under("pass\n")
-    assert result.returncode == 0, f"a real install must pass: {result.stderr}"
+
+def test_passes_when_the_pinned_build_is_active() -> None:
+    """It must not over-reject: the pinned build reports its version and exits 0.
+
+    Without this the checker could hard-fail every run and still look like a
+    working gate -- which would block CI permanently instead of catching a
+    silent install.
+    """
+    pytest.importorskip("camoufox.pkgman")
+    result = _run_checker_under(_ACTIVE_BUILD.format(build=_pinned_build()))
+    assert result.returncode == 0, f"the pinned build must pass: {result.stderr}"
     assert "camoufox browser present" in result.stdout
+
+
+def test_fails_when_another_build_is_active_and_names_the_shared_cache() -> None:
+    """A switched build is refused, and the refusal says whose state it is.
+
+    The active build is machine-wide, so the message names the cache and both
+    ways out (move the pin after running the suites, or restore the build for
+    every project), instead of reading as this repo's regression.
+    """
+    pytest.importorskip("camoufox.pkgman")
+    result = _run_checker_under(_ACTIVE_BUILD.format(build="0.0.0-beta.0"))
+    assert result.returncode != 0, "a build other than the pin must fail the check"
+    assert f"camoufox browser is 0.0.0-beta.0, expected {_pinned_build()}" in result.stderr
+    assert "machine-wide" in result.stderr
+    assert f"camoufox set official/stable/{_pinned_build()}" in result.stderr

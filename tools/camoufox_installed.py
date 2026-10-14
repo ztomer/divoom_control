@@ -26,9 +26,16 @@ Exit 0 when the expected browser is active (prints the version), non-zero
 otherwise.
 
 Used by .github/workflows/tests.yml (as the retry's loop condition, so a
-transient rate limit retries instead of poisoning the run) and reported by
-scripts/ci_local.sh so a local green does not silently mean "all 15 e2e suites
-skipped".
+transient rate limit retries instead of poisoning the run). scripts/py_ci.sh
+consulted it until 2026-10-14 to decide whether to enforce the coverage floor;
+the browser suites never fed that number, and a wrong build read as "no
+browser" and switched the floor off, so it no longer does.
+
+The active build is MACHINE-WIDE state (camoufox's cache under the user's
+cache directory). Any project that uses camoufox -- the house Gemini transport
+does -- can switch it with `camoufox set`, so a wrong build here is usually
+another project's doing, and the message says so rather than implying this
+repo broke something.
 """
 
 from __future__ import annotations
@@ -74,6 +81,15 @@ def installed_version() -> str | None:
         return None
 
 
+def cache_dir() -> str:
+    """Where camoufox keeps its builds and its active-build choice."""
+    try:
+        from camoufox.pkgman import INSTALL_DIR
+    except ImportError:
+        return "camoufox's cache"
+    return str(INSTALL_DIR)
+
+
 def main() -> int:
     version = installed_version()
     if version is None:
@@ -86,11 +102,16 @@ def main() -> int:
         return 1
     if EXPECTED_BUILD and version != EXPECTED_BUILD:
         print(
-            f"camoufox browser is {version}, expected {EXPECTED_BUILD}. The e2e "
-            f"suite is pinned to a build whose page.evaluate reaches the MAIN "
-            f"world; a newer build isolates it and fails ~60 tests with the app "
-            f"working fine. Run: python -m camoufox set "
-            f"official/stable/{EXPECTED_BUILD}  (see tests/support/browser.py)",
+            f"camoufox browser is {version}, expected {EXPECTED_BUILD}. The active "
+            f"build is machine-wide ({cache_dir()}): any project using camoufox can "
+            f"switch it, and the browser suites are pinned to one build so a red run "
+            f"means a code change. Either run them on {version} "
+            f"(pytest --run-browser) and move the pin in its own commit "
+            f"(tools/camoufox_installed.py, .github/workflows/tests.yml, "
+            f"tests/support/browser.py), or restore the pinned build -- for every "
+            f"project on this machine: python3 -m camoufox fetch "
+            f"official/stable/{EXPECTED_BUILD} && python3 -m camoufox set "
+            f"official/stable/{EXPECTED_BUILD}",
             file=sys.stderr,
         )
         return 1
