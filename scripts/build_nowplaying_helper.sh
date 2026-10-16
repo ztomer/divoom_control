@@ -11,15 +11,18 @@
 # macOS only, and hard-fails elsewhere rather than producing something
 # untested: MediaRemote is a macOS private framework and there is nothing to
 # build on any other platform (house policy — an unsupported target is a hard
-# failure, never a fallback build).
+# failure, never a fallback build). The refusal is the shared gate now, so this
+# script and the .app scripts cannot drift apart on what "supported" means.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# shellcheck source=scripts/lib/platform_gate.sh
+. "$ROOT/scripts/lib/platform_gate.sh"
+divoom_platform_gate macos "the MediaRemote helper is macOS-only"
+
 # shellcheck source=/dev/null
 . "${GOH_DIR:-$HOME/Projects/gates_of_heck}/tui/lib.sh"
-
-OS="${DIVOOM_BUILD_OS:-$(uname -s)}"
-[[ "$OS" == "Darwin" ]] || die "the now-playing helper is macOS-only (got ${OS})"
 
 SRC="$ROOT/nowplaying/native/np_helper.m"
 OUT="$ROOT/nowplaying/native/libnp_helper.dylib"

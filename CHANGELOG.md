@@ -4,6 +4,57 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P1.6 — the platform gate is back, once, and every build entry point calls it (2026-10-16)
+
+House policy is 64-bit only and macOS Apple silicon only, every unsupported
+OS/arch a HARD failure. This repo was the rule's reference implementation —
+`scripts/build_libdivoom.sh` carried the check inline with
+`tests/test_build_platform_gate.py` beside it — and the C encoder chain took both
+off the tree (`9a1cade`, 2026-09-25), leaving six entry points checking
+`uname -s` alone. An Intel Mac built and shipped a bundle nobody had run, and
+nothing failed, because no test asked two of them the same question.
+
+- **One check, six callers.** `scripts/lib/platform_gate.sh` is sourced and
+  called with a policy: `core` (the cross-platform daemon core — Darwin/arm64,
+  Linux x86_64/amd64/aarch64) or `macos` (anything that produces a macOS
+  artifact). `build.sh`, `install.sh`, `scripts/build_release.sh`,
+  `scripts/build_nowplaying_helper.sh`, `scripts/make_app_bundle.sh` and
+  `scripts/make_dev_daemon_app.sh` go through it, and they call it *before* the
+  house TUI library, so a refused host is refused whether or not `GOH_DIR` is
+  set up.
+- **The seam is the predecessor's, kept deliberately.** `DIVOOM_BUILD_OS` /
+  `DIVOOM_BUILD_ARCH` stand in for `uname` and `DIVOOM_BUILD_GATE_ONLY` stops a
+  caller immediately after the gate, so the reject *and* the accept direction are
+  testable on one machine rather than only on the one nobody has.
+- **`build.sh` is the core build, and now says so.** On Linux it builds `divoomd`
+  and skips the two macOS-only members (the menubar crate has no Linux build — CI
+  lints `divoomd` alone for that reason) instead of dying at the menubar step.
+  Its header no longer advertises the C encoder dylib that L4 deleted.
+- **A rule about every script, not rows about six.** `uname` may be read in the
+  gate and nowhere else; `scripts/linux_remote/test_host.sh` is allowlisted
+  because it *reports* the remote host's identity to the operator and decides
+  nothing, and an allowance that has gone stale fails the test. That is what
+  keeps the class closed when the seventh build script arrives.
+- **Watched red five ways before it was trusted:** the Intel branch's `exit 1`
+  deleted (12 red), the unsupported-OS branch deleted (24), the accepted-arch
+  list narrowed (6), the macOS-only branch deleted (15), and the gate call
+  dropped from `build_nowplaying_helper.sh` (21 — and it went on to really
+  compile the helper 21 times, which is the shape the gate prevents).
+- **End to end on this machine:** `./build.sh` builds all three binaries on the
+  real host (the gate does not over-reject the supported arm64 Mac); under the
+  Linux seam it builds `divoomd` alone (rc 0, zero menubar/helper lines); an
+  Intel Mac is refused by `install.sh` (rc 1, naming the arch, with the
+  "Linux x86_64 remains supported" note); and `make_app_bundle.sh` handed Linux
+  refuses and writes no `Divoom.app`.
+- **What this does not prove:** the Linux half of `build.sh`'s core policy is
+  exercised here by the gate's seam; CI's `rust-core` job builds `divoomd`
+  directly and owns the real Linux build. `scripts/install_local.sh`,
+  `scripts/make_icns.sh` and `scripts/make_signing_identity.sh` are ungated on
+  purpose — they drive macOS-only binaries (`codesign`, `sips`, `iconutil`) over
+  artifacts a gated script produced, so they cannot fabricate an untested one.
+- Tests: `tests/test_build_platform_gate.py` (128 cases). Python suite 1657
+  passed / 132 skipped.
+
 ## v0.41.2 — builds stop dirtying the tree, and the release script checks the tag before the slow parts (2026-10-14)
 
 Patch release: three fixes and the goh 0.27.0 Phase 0 sweep, none of it a new

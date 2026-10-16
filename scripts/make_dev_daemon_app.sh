@@ -27,6 +27,11 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# shellcheck source=scripts/lib/platform_gate.sh
+. "$REPO/scripts/lib/platform_gate.sh"
+divoom_platform_gate macos "the .app bundle is a macOS TCC artifact"
+
 # shellcheck source=/dev/null
 . "${GOH_DIR:-$HOME/Projects/gates_of_heck}/tui/lib.sh"
 
@@ -38,7 +43,6 @@ SOCK="${DIVOOM_DEV_SOCKET:-/tmp/divoom.sock}"
 TRACE_LOG="${DIVOOM_TRACE_LOG:-/tmp/divoom_dev_daemon.log}"
 DAEMON="$REPO/target/release/divoomd"
 
-[[ "$(uname -s)" == "Darwin" ]] || die "macOS-only (the .app bundle is a macOS TCC artifact)"
 [[ -x "$DAEMON" ]] || die "daemon not built: $DAEMON — run ./build.sh first"
 
 section "Divoom Dev Daemon.app"

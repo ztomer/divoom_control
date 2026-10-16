@@ -27,6 +27,11 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
+
+# shellcheck source=scripts/lib/platform_gate.sh
+. "$ROOT/scripts/lib/platform_gate.sh"
+divoom_platform_gate macos "the .app bundle is a macOS TCC artifact"
+
 # shellcheck source=/dev/null
 . "${GOH_DIR:-$HOME/Projects/gates_of_heck}/tui/lib.sh"
 
@@ -47,8 +52,6 @@ while [[ $# -gt 0 ]]; do
   esac
   shift
 done
-
-[[ "$(uname -s)" == "Darwin" ]] || die "install.sh is macOS-only (the .app bundle is a macOS TCC artifact)"
 
 # ── stop anything currently running ───────────────────────────────────────
 # Both paths need this: an upgrade must not leave the OLD daemon holding the

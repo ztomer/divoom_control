@@ -21,13 +21,16 @@ means in terms someone can check, and where the evidence is. Statuses:
 anywhere in this file exists. Shipped items are deleted from the Plan, not
 marked SHIPPED -- that marker is refused.
 
-Premises were last checked against the code on **2026-10-14** (HEAD
-`a38e2df`, the goh 0.27.0 hook reinstall on top of the unpushed 2026-10-12
-plan commit `a8a848d`): nothing has landed since 2026-10-12, so every OPEN item
-still holds. Phase 0 is new (goh 0.27.0's fallout, measured); the old Phase 0
-became Phase 1 and every later phase moved up by one (P9 unchanged), and the old
-P0.8 (camoufox) is now P0.2. Each phase states its goal, exit criterion and
-rough size in sessions (S = under one, M = one or two, L = three or more).
+Premises were last checked against the code on **2026-10-14** (HEAD `a38e2df`,
+the goh 0.27.0 hook reinstall on top of the 2026-10-12 plan commit `a8a848d`).
+Two items have landed since (P1.1 `15ff359` on 2026-10-15, and P1.6, which
+restored the build/install platform gate, on 2026-10-16), so the items below have
+NOT been re-derived against a later HEAD -- check an item against the code before
+working it. Phase 0 is new (goh 0.27.0's fallout,
+measured); the old Phase 0 became Phase 1 and every later phase moved up by one
+(P9 unchanged), and the old P0.8 (camoufox) is now P0.2. Each phase states its
+goal, exit criterion and rough size in sessions (S = under one, M = one or two,
+L = three or more).
 ---
 
 ## Plan
@@ -66,10 +69,11 @@ Two things the phase found that are NOT its items, tracked where they belong:
 
 **Goal:** no known defect or gate hole stays open while feature work starts.
 **Exit:** every P1 item's *Done when* is a test or gate that was watched red
-first. **Size:** M (nine items, each S, no hardware needed). Depends on Phase 0
+first. **Size:** M (eight items, each S, no hardware needed). Depends on Phase 0
 (nothing pushes until it lands).
-**Risk:** P1.6 touches every build entry point; a gate that rejects the
-supported arm64 Mac breaks the release, so both directions are tested.
+**Risk:** P1.7 changes the frame parser that the Rust daemon and the Python
+reference share; a fix to one without the other turns the parity gate red for
+the wrong reason, so both move in one commit.
 
 #### P1.2 — PyInstaller is unpinned, so a release build takes whatever is newest
 **Status:** OPEN
@@ -108,27 +112,6 @@ bites only a person running both -- but the error names an option, not the cause
 **Done when:** `python3 -m pytest tests examples/tests --collect-only` succeeds.
 (Re-measured 2026-10-12: still `ValueError: option names {'--run-hardware'}
 already added`.)
-
-#### P1.6 — The build scripts accept an Intel Mac; the arch gate was deleted with the C
-**Status:** OPEN
-**Why:** house rule (64-bit only, macOS = Apple silicon only, every unsupported
-OS/arch a HARD failure behind an overridable `OS`/`ARCH` seam). This repo was
-the rule's reference implementation -- scripts/build_libdivoom.sh plus
-tests/test_build_platform_gate.py (paths unquoted: they no longer exist) --
-and both were deleted with the C encoder
-chain in `9a1cade` (2026-09-25), so the class lost its gate here. Today
-`scripts/build_release.sh`, `scripts/make_app_bundle.sh`,
-`scripts/make_dev_daemon_app.sh`, `scripts/build_nowplaying_helper.sh`,
-`build.sh` and `install.sh` check `uname -s` only: an x86_64 Mac builds and
-ships a bundle nobody tested. Linux x86_64 stays supported for the
-`divoomd` core build (the `rust-core` CI job), so the gate is per script, not
-global.
-**Done when:** one shared platform check (OS and ARCH, both overridable)
-guards every build/install entry point; a test drives each script's seam with
-`Darwin/x86_64` (refused, non-zero, names the arch) and `Darwin/arm64`
-(accepted), plus `Linux/x86_64` accepted for the core build only; the test is
-watched red by deleting the check from one script. The old implementation is at
-`git show 9a1cade^:scripts/build_libdivoom.sh`.
 
 #### P1.7 — The RX frame parser drops real frames behind a spurious start byte
 **Status:** OPEN

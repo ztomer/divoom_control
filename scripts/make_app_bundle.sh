@@ -16,15 +16,15 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# shellcheck source=scripts/lib/platform_gate.sh
+. "${REPO_ROOT}/scripts/lib/platform_gate.sh"
+divoom_platform_gate macos "the .app bundle is a macOS TCC artifact"
+
 APP="${REPO_ROOT}/Divoom.app"
 PYTHON="$(command -v python3)"
 BT_DESC="Divoom Control uses Bluetooth to discover and control your Divoom pixel display."
 AE_DESC="Divoom Control reads the now-playing track from Music and Spotify to show album art on your screen."
-
-if [[ "$(uname -s)" != "Darwin" ]]; then
-  echo "make_app_bundle.sh is macOS-only (the .app bundle is a macOS TCC artifact)." >&2
-  exit 1
-fi
 
 echo "Building ${APP}"
 echo "  python: ${PYTHON}"

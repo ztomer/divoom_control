@@ -3,18 +3,26 @@
 # companions.
 #
 # The desktop UI is the Python pywebview GUI (run it with ./run.sh). At runtime
-# the GUI spawns two native Rust binaries — this script builds them, plus the C
-# encoder dylib they use:
-#   - divoomd        (the daemon)
-#   - divoom-menubar (the menubar/tray agent)
-#   - libdivoom_compact.dylib (C image encoder, macOS, via FFI)
+# the GUI spawns two native Rust binaries, and this script builds them:
+#   - divoomd        (the daemon — cross-platform; Linux builds it too)
+#   - divoom-menubar (the menubar/tray agent — macOS only, no Linux build)
 #
-# For a shippable Python .app bundle, use scripts/build_release.sh (py2app).
+# The C encoder dylib that used to be built here went with the C chain (L4,
+# 2026-09-25): the daemon encodes in Rust now.
 #
-#   ./build.sh           release binaries + encoder dylib
+# For a shippable Python .app bundle, use scripts/build_release.sh.
+#
+#   ./build.sh           release binaries
 #   ./build.sh --debug   debug build (faster compile, slower runtime)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# The platform gate comes first, and ahead of the house TUI library: a host this
+# script does not build for is refused whether or not GOH_DIR is set up.
+# shellcheck source=scripts/lib/platform_gate.sh
+. "$ROOT/scripts/lib/platform_gate.sh"
+divoom_platform_gate core "builds the cross-platform daemon core (divoomd)"
+
 # shellcheck source=/Users/ztomer/Projects/gates_of_heck/tui/lib.sh
 GOH="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
 source "$GOH/tui/lib.sh"
@@ -34,7 +42,7 @@ require_commands cargo
 section "Native Rust binaries ($PROFILE)"
 
 # The MediaRemote helper the daemon shells out to for now-playing + album art.
-if [[ "$(uname -s)" == "Darwin" ]]; then
+if [[ "$DIVOOM_BUILD_OS" == "Darwin" ]]; then
   if bash scripts/build_nowplaying_helper.sh >/dev/null 2>&1; then
     ok "now-playing helper"
   else
@@ -46,9 +54,15 @@ info "cargo build ${FLAG:-(debug)} — divoomd"
 cargo build $FLAG -p divoomd
 ok "divoomd"
 
-info "cargo build ${FLAG:-(debug)} — divoom-menubar"
-cargo build $FLAG -p divoom-menubar
-ok "divoom-menubar"
+# divoom-menubar is macOS-only: its tray deps are Apple-target code and the
+# crate has no Linux build (which is also why CI's Linux job lints divoomd
+# alone). On Linux this script builds the daemon core, which is what Linux
+# supports — see the policy at the top.
+if [[ "$DIVOOM_BUILD_OS" == "Darwin" ]]; then
+  info "cargo build ${FLAG:-(debug)} — divoom-menubar"
+  cargo build $FLAG -p divoom-menubar
+  ok "divoom-menubar"
+fi
 
 section "Done"
 ok "binaries under target/$PROFILE/"

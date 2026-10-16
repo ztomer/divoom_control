@@ -21,10 +21,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${ROOT}"
 
-if [[ "$(uname -s)" != "Darwin" ]]; then
-  echo "build_release.sh is macOS-only." >&2
-  exit 1
-fi
+# shellcheck source=scripts/lib/platform_gate.sh
+. "${ROOT}/scripts/lib/platform_gate.sh"
+divoom_platform_gate macos "the signed .app and .dmg are macOS artifacts"
 
 PYBUILD="${1:-${ROOT}/.buildvenv/bin/python}"
 if [[ ! -x "${PYBUILD}" ]]; then
