@@ -4,6 +4,38 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P1.12 — the framing-vector generator runs again, and is byte-stable (2026-10-16)
+
+`scripts/codegen/gen_framing_vectors.py` had been dead since phase L4 (2026-09-25)
+deleted the Python encoders with the C library: it imported `divoom_lib.framing`
+and called `encode_basic_payload` / `encode_ios_le_payload`, so it died with
+`AttributeError` before writing a byte — while `tests/test_framing_vectors.py`
+still told the reader to "regenerate with gen_framing_vectors.py". A tool whose
+regeneration path is a crash is worse than none: the failure stays invisible
+until the day the vectors need to move. Filed while landing P1.7.
+
+- **The tool now owns only what Python still owns.** `build()` reads the
+  committed file for the frozen ENCODE vectors and the frozen PARSE inputs, and
+  recomputes exactly one thing — the parser's expected OUTPUT for each frozen
+  input, via `divoom_lib.framing`. The encode bytes are carried forward verbatim:
+  they are the deleted C library's recorded behaviour, and re-deriving them would
+  mean writing the second encoder L4 deliberately removed (and one that agreed
+  with itself would be blind to its own bugs). Building a valid *input* likewise
+  needs an encoder Python no longer has, so the parse inputs stay frozen too.
+- **`build()` / `render()` split, so "a run leaves the file byte-identical" is a
+  testable claim.** `render()` is the exact serializer (one case per line,
+  `sort_keys`); `main()` is `write_text(render(build()))`.
+  `tests/test_framing_vector_generator.py` asserts both `build(vectors) ==
+  committed` and `render(build(vectors)) == committed.read_text()` — the second
+  catches a formatting drift the first cannot. Watched red first (no `build` /
+  `render`), then each assertion calibrated on its own: recomputation drift turned
+  both red, a one-newline render drift turned only the byte-for-byte test red.
+- **Run for real: no diff.** `PYTHONPATH=. python3
+  scripts/codegen/gen_framing_vectors.py` rewrites the 550 committed vectors and
+  `git diff` is empty.
+- Tests: `tests/test_framing_vector_generator.py` added (2). Python suite 1661
+  passed / 132 skipped. Full pre-push gate 25/25.
+
 ## P1.7 — the RX frame parser resyncs by a byte, and stops swallowing real frames (2026-10-16)
 
 `parse_basic_protocol_frames` resynced by one byte only when the decoded length
