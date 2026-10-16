@@ -66,19 +66,10 @@ Two things the phase found that are NOT its items, tracked where they belong:
 
 **Goal:** no known defect or gate hole stays open while feature work starts.
 **Exit:** every P1 item's *Done when* is a test or gate that was watched red
-first. **Size:** M (ten items, each S, no hardware needed). Depends on Phase 0
+first. **Size:** M (nine items, each S, no hardware needed). Depends on Phase 0
 (nothing pushes until it lands).
 **Risk:** P1.6 touches every build entry point; a gate that rejects the
 supported arm64 Mac breaks the release, so both directions are tested.
-
-#### P1.1 — One brightness change sends two `set_brightness` calls
-**Status:** OPEN
-**Why:** two listeners sit on the same slider: `divoom_gui/web_ui/spatial_stage.js`
-sends on every `input` event and `divoom_gui/web_ui/app_init.js` sends again on
-`change`. Every drag ends with a duplicate device write, and the two paths
-disagree about which panel they mean (neither passes a mac).
-**Done when:** one slider gesture produces one device call per value, pinned by
-a browser test that counts calls (watched failing on today's code).
 
 #### P1.2 — PyInstaller is unpinned, so a release build takes whatever is newest
 **Status:** OPEN

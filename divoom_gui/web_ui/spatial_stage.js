@@ -117,7 +117,11 @@
                 const val = parseInt(e.target.value);
                 if (bVal) bVal.textContent = val + '%';
                 if (selectedMac) { deviceBrightness[selectedMac] = val; try { localStorage.setItem('divoom_stage_brightness', JSON.stringify(deviceBrightness)); } catch (_) {} }
-                if (window.pywebview?.api?.set_brightness) window.pywebview.api.set_brightness(val);
+                // P1.1: NO device write here. `input` fires per value, so sending here wrote the
+                // device on every intermediate step of a drag -- and `app_init.js`'s `change`
+                // handler then wrote the settled value as well, so every gesture ended in a
+                // duplicate. That handler is the one sender (it is also the one that refuses to
+                // write when no panel is linked); caption and cached brightness stay here.
             });
         }
         const vSlider = document.getElementById('appbar-volume-slider'), vVal = document.getElementById('appbar-volume-value');
