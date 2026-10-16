@@ -23,10 +23,10 @@ marked SHIPPED -- that marker is refused.
 
 Premises were last checked against the code on **2026-10-14** (HEAD `a38e2df`,
 the goh 0.27.0 hook reinstall on top of the 2026-10-12 plan commit `a8a848d`).
-Four items have landed since (P1.1 `15ff359` on 2026-10-15; P1.6, which
-restored the build/install platform gate, and P1.7, the RX frame parser's
-one-byte resync, both on 2026-10-16; P1.12, the framing-vector generator
-restored to a runnable, byte-stable tool, also on 2026-10-16), so the items below have
+Five items have landed since (P1.1 `15ff359` on 2026-10-15; P1.6, the
+build/install platform gate, and P1.7, the RX frame parser's one-byte resync, on
+2026-10-16; P1.12, the framing-vector generator, and P1.5, the two-suite
+collection fix, also on 2026-10-16), so the items below have
 NOT been re-derived against a later HEAD -- check an item against the code before
 working it. Phase 0 is new (goh 0.27.0's fallout,
 measured); the old Phase 0 became Phase 1 and every later phase moved up by one
@@ -71,7 +71,7 @@ Two things the phase found that are NOT its items, tracked where they belong:
 
 **Goal:** no known defect or gate hole stays open while feature work starts.
 **Exit:** every P1 item's *Done when* is a test or gate that was watched red
-first. **Size:** M (eight items, each S, no hardware needed). Depends on Phase 0
+first. **Size:** M (seven items, each S, no hardware needed). Depends on Phase 0
 (nothing pushes until it lands).
 **Risk:** P1.11 is the frame parser the Rust daemon and the Python reference
 share; a fix to one without the other turns the parity gate red for the wrong
@@ -104,16 +104,6 @@ claim is either proven by a Linux build or deleted.
 88.74). A floor that only moves down stops protecting anything.
 **Done when:** the floor equals the current measurement rounded down to 0.1, and
 the script says when and at what value it was last measured.
-
-#### P1.5 — `tests/` and `examples/tests/` cannot be collected in one run
-**Status:** OPEN
-**Why:** `examples/tests/conftest.py` re-exports `tests/conftest.py` with a star
-import, so `pytest_addoption` registers `--run-hardware` twice and pytest aborts
-before collecting. CI runs the two separately (`scripts/py_ci.sh`), so this
-bites only a person running both -- but the error names an option, not the cause.
-**Done when:** `python3 -m pytest tests examples/tests --collect-only` succeeds.
-(Re-measured 2026-10-12: still `ValueError: option names {'--run-hardware'}
-already added`.)
 
 #### P1.8 — 52 hand-rolled status markers
 **Status:** OPEN

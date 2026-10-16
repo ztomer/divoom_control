@@ -4,6 +4,32 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P1.5 — `tests/` and `examples/tests/` collect in one invocation (2026-10-16)
+
+`examples/tests/conftest.py` re-exports `tests/conftest.py` with a star import so
+the legacy suite shares the opt-in flags and fixtures "imported, not copied".
+That also re-exported `pytest_addoption`, and pytest calls that hook once per
+loaded conftest, so a run naming both directories registered each flag twice and
+died before collecting a single test:
+
+    ValueError: option names {'--run-hardware'} already added
+
+CI runs the two directories separately (`scripts/py_ci.sh`), so only a person
+running both hit it — and the message named the OPTION, not the cause.
+
+- **Idempotent registration.** `tests/conftest.py` now adds the three opt-in
+  flags through `_add_option_once`, which swallows the one duplicate
+  `ValueError` and re-raises anything else (a bad option name must still fail).
+  The flags are process-wide, so the first registration wins.
+- **Watched red first.** `tests/test_single_pytest_invocation.py` shells out to
+  `pytest tests examples/tests --collect-only` and requires exit 0; it was red
+  with the exact `ValueError` above, and green after the fix. Calibrated on the
+  named reason by removing only the swallow — red again on the same duplicate.
+- **Done-when, directly.** `python3 -m pytest tests examples/tests --collect-only`
+  now collects 2889 tests in one process.
+- Tests: `tests/test_single_pytest_invocation.py` added (1). Python suite 1662
+  passed / 132 skipped. Full pre-push gate 25/25.
+
 ## P1.12 — the framing-vector generator runs again, and is byte-stable (2026-10-16)
 
 `scripts/codegen/gen_framing_vectors.py` had been dead since phase L4 (2026-09-25)

@@ -57,14 +57,38 @@ HARDWARE_TEST_MODULES = frozenset({
 })
 
 
+def _add_option_once(parser, *args, **kwargs):
+    """Register an opt-in flag unless a sibling conftest already did.
+
+    `examples/tests/conftest.py` imports this module with a star import so the
+    legacy suite shares these flags and fixtures. Pytest calls `pytest_addoption`
+    once per loaded conftest, so `pytest tests examples/tests` calls it twice and
+    the second `addoption` for the same name aborts the whole run before a single
+    test collects:
+
+        ValueError: option names {'--run-hardware'} already added
+
+    The flags are process-wide, so the first registration wins and the duplicate
+    is a no-op. Only that one ValueError is swallowed -- a bad option name must
+    still raise.
+    """
+    try:
+        parser.addoption(*args, **kwargs)
+    except ValueError as exc:
+        if "already added" not in str(exc):
+            raise
+
+
 def pytest_addoption(parser):
-    parser.addoption(
+    _add_option_once(
+        parser,
         "--run-hardware",
         action="store_true",
         default=False,
         help="Run integration tests that require a physically connected Divoom device.",
     )
-    parser.addoption(
+    _add_option_once(
+        parser,
         "--run-browser",
         action="store_true",
         default=False,
@@ -73,7 +97,8 @@ def pytest_addoption(parser):
              "are process-contention sensitive -- one of them fails under the "
              "full suite and passes alone (TargetClosedError, kill EPERM).",
     )
-    parser.addoption(
+    _add_option_once(
+        parser,
         "--run-cloud",
         action="store_true",
         default=False,
