@@ -64,6 +64,37 @@ def parse_ios_le_notification(data: bytes) -> dict | None:
     }
 
 
+def _parse_basic_message(message: bytes) -> "Tuple[int, bytes] | None":
+    """Validate one candidate Basic frame; return ``(command_id, payload)``.
+
+    ``None`` means the candidate is not a valid frame -- its end marker is wrong
+    or its checksum does not match -- and the caller must resync by one byte.
+    ``message`` is the whole candidate span (header + body + checksum + end).
+
+    Mirrored by ``parse_basic_message`` in ``divoomd/src/framing.rs``; the two
+    move together.
+    """
+    if message[-1] != models.MESSAGE_END_BYTE:
+        return None
+
+    if len(message) > 5 and message[3] == models.ACK_PATTERN_BYTE_1 and message[5] == models.ACK_PATTERN_BYTE_3:
+        command_id = message[4]
+        payload = message[6:-3]
+    else:
+        command_id = message[3]
+        payload = message[4:-3]
+
+    # Mask to 16 bits to match the encoder (encode_basic_payload uses
+    # `& 0xFFFF`); without this, large frames (e.g. images) whose checksum
+    # overflows 16 bits were wrongly rejected.
+    calculated_checksum = sum(message[1:-3]) & 0xFFFF
+    received_checksum = int.from_bytes(bytes(message[-3:-1]), byteorder='little')
+    if received_checksum != calculated_checksum:
+        return None
+
+    return command_id, payload
+
+
 def parse_basic_protocol_frames(buf: bytearray) -> Tuple[list, bytearray]:
     messages = []
 
@@ -96,27 +127,19 @@ def parse_basic_protocol_frames(buf: bytearray) -> Tuple[list, bytearray]:
             break
 
         message = bytes(buf[:total_message_len])
+
+        # Validate BEFORE consuming. A candidate that fails validation advances
+        # by ONE byte and re-scans, rather than draining the whole (possibly
+        # spurious) span: a stray start byte whose fake length covers real frames
+        # behind it used to swallow them, not re-scan past them. (Mirrors
+        # divoomd/src/framing.rs; the two move together.)
+        parsed = _parse_basic_message(message)
+        if parsed is None:
+            del buf[0]
+            continue
+
         del buf[:total_message_len]
-
-        if message[-1] != models.MESSAGE_END_BYTE:
-            continue
-
-        if len(message) > 5 and message[3] == models.ACK_PATTERN_BYTE_1 and message[5] == models.ACK_PATTERN_BYTE_3:
-            command_id = message[4]
-            payload = message[6:-3]
-        else:
-            command_id = message[3]
-            payload = message[4:-3]
-
-        checksum_input = message[1:-3]
-        # Mask to 16 bits to match the encoder (encode_basic_payload uses
-        # `& 0xFFFF`); without this, large frames (e.g. images) whose checksum
-        # overflows 16 bits were wrongly rejected.
-        calculated_checksum = sum(checksum_input) & 0xFFFF
-        received_checksum = int.from_bytes(bytes(message[-3:-1]), byteorder='little')
-        if received_checksum != calculated_checksum:
-            continue
-
+        command_id, payload = parsed
         messages.append({'command_id': command_id, 'payload': bytearray(payload)})
 
     return messages, buf

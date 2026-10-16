@@ -135,18 +135,58 @@ pub struct BasicMessage {
     pub payload: Vec<u8>,
 }
 
+/// Validate one candidate Basic frame, returning `(command_id, payload)`.
+///
+/// `None` means the candidate is not a valid frame -- its end marker is wrong
+/// or its checksum does not match -- and the caller must resync by one byte.
+/// `message` is the whole candidate span (header + body + checksum + end).
+///
+/// Mirrored by `_parse_basic_message` in `divoom_lib/framing.py`; the two move
+/// together.
+fn parse_basic_message(message: &[u8]) -> Option<(u8, Vec<u8>)> {
+    if *message.last()? != models::MESSAGE_END_BYTE {
+        return None;
+    }
+
+    let (command_id, payload): (u8, Vec<u8>) = if message.len() > 5
+        && message[3] == models::ACK_PATTERN_BYTE_1
+        && message[5] == models::ACK_PATTERN_BYTE_3
+    {
+        (message[4], message[6..message.len() - 3].to_vec())
+    } else {
+        (message[3], message[4..message.len() - 3].to_vec())
+    };
+
+    let calculated: u32 = message[1..message.len() - 3]
+        .iter()
+        .map(|&b| u32::from(b))
+        .sum::<u32>()
+        & 0xFFFF;
+    let received =
+        u32::from(message[message.len() - 3]) | (u32::from(message[message.len() - 2]) << 8);
+    if received != calculated {
+        return None;
+    }
+
+    Some((command_id, payload))
+}
+
 /// Parse zero or more Basic-protocol frames from `buf`, draining the consumed
 /// bytes.
 ///
 /// Whatever remains in `buf` after the call is the unconsumed remainder (an
 /// incomplete trailing frame, or empty). Mirrors `parse_basic_protocol_frames`:
-/// resync on the start byte, drop frames with a corrupt over-long length, and
-/// discard frames whose end byte or checksum don't validate.
+/// resync on the start byte, drop frames with a corrupt over-long length, and a
+/// candidate whose end byte or checksum does not validate is discarded by
+/// stepping over ONE byte and re-scanning, so genuine frames inside a spurious
+/// span are not lost.
 ///
 /// # Panics
 ///
-/// Never: the `last()` is reached only inside a branch that has already
-/// established the frame is non-empty.
+/// On a candidate that decodes to fewer than seven bytes (a length field below
+/// three) yet still passes the end-marker test: its payload slice inverts. The
+/// Python reference yields an empty payload instead of panicking, so this is a
+/// live divergence -- tracked as an OPEN item in `docs/ROADMAP.md`.
 pub fn parse_basic_protocol_frames(buf: &mut Vec<u8>) -> Vec<BasicMessage> {
     let mut messages = Vec::new();
 
@@ -173,32 +213,17 @@ pub fn parse_basic_protocol_frames(buf: &mut Vec<u8>) -> Vec<BasicMessage> {
             break;
         }
 
+        // Validate the candidate BEFORE consuming it. A candidate that fails
+        // validation resyncs by ONE byte and re-scans, rather than draining the
+        // whole (possibly spurious) span -- a stray start byte whose fake length
+        // covers real frames behind it used to swallow them, not re-scan past
+        // them. Mirrors `divoom_lib/framing.py::parse_basic_protocol_frames`.
         let message: Vec<u8> = buf[..total_message_len].to_vec();
-        buf.drain(0..total_message_len);
-
-        if *message.last().unwrap() != models::MESSAGE_END_BYTE {
+        let Some((command_id, payload)) = parse_basic_message(&message) else {
+            buf.remove(0); // resync past this start byte, one byte at a time
             continue;
-        }
-
-        let (command_id, payload): (u8, Vec<u8>) = if message.len() > 5
-            && message[3] == models::ACK_PATTERN_BYTE_1
-            && message[5] == models::ACK_PATTERN_BYTE_3
-        {
-            (message[4], message[6..message.len() - 3].to_vec())
-        } else {
-            (message[3], message[4..message.len() - 3].to_vec())
         };
-
-        let calculated: u32 = message[1..message.len() - 3]
-            .iter()
-            .map(|&b| u32::from(b))
-            .sum::<u32>()
-            & 0xFFFF;
-        let received =
-            u32::from(message[message.len() - 3]) | (u32::from(message[message.len() - 2]) << 8);
-        if received != calculated {
-            continue;
-        }
+        buf.drain(0..total_message_len);
 
         messages.push(BasicMessage {
             command_id,

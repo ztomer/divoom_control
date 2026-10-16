@@ -23,8 +23,9 @@ marked SHIPPED -- that marker is refused.
 
 Premises were last checked against the code on **2026-10-14** (HEAD `a38e2df`,
 the goh 0.27.0 hook reinstall on top of the 2026-10-12 plan commit `a8a848d`).
-Two items have landed since (P1.1 `15ff359` on 2026-10-15, and P1.6, which
-restored the build/install platform gate, on 2026-10-16), so the items below have
+Three items have landed since (P1.1 `15ff359` on 2026-10-15; P1.6, which
+restored the build/install platform gate, and P1.7, the RX frame parser's
+one-byte resync, both on 2026-10-16), so the items below have
 NOT been re-derived against a later HEAD -- check an item against the code before
 working it. Phase 0 is new (goh 0.27.0's fallout,
 measured); the old Phase 0 became Phase 1 and every later phase moved up by one
@@ -69,11 +70,11 @@ Two things the phase found that are NOT its items, tracked where they belong:
 
 **Goal:** no known defect or gate hole stays open while feature work starts.
 **Exit:** every P1 item's *Done when* is a test or gate that was watched red
-first. **Size:** M (eight items, each S, no hardware needed). Depends on Phase 0
+first. **Size:** M (nine items, each S, no hardware needed). Depends on Phase 0
 (nothing pushes until it lands).
-**Risk:** P1.7 changes the frame parser that the Rust daemon and the Python
-reference share; a fix to one without the other turns the parity gate red for
-the wrong reason, so both move in one commit.
+**Risk:** P1.11 is the frame parser the Rust daemon and the Python reference
+share; a fix to one without the other turns the parity gate red for the wrong
+reason, so both move in one commit.
 
 #### P1.2 — PyInstaller is unpinned, so a release build takes whatever is newest
 **Status:** OPEN
@@ -113,24 +114,6 @@ bites only a person running both -- but the error names an option, not the cause
 (Re-measured 2026-10-12: still `ValueError: option names {'--run-hardware'}
 already added`.)
 
-#### P1.7 — The RX frame parser drops real frames behind a spurious start byte
-**Status:** OPEN
-**Why:** `parse_basic_protocol_frames` (`divoomd/src/framing.rs`) resyncs by
-one byte only when the decoded length exceeds `MAX_BASIC_FRAME` (8192). A stray
-`0x01` whose fake length is <= 8192 makes it WAIT for that many bytes (replies
-stall until enough traffic arrives), and when the fake frame then fails the
-end-byte or checksum test the whole fake span is drained -- every genuine
-frame inside it is lost, not re-scanned. Carried from the June 2026 adversarial
-review (Python era, "low, self-healing"); the Rust port kept the shape, and
-so does the Python reference `divoom_lib/framing.py` that the parity vectors
-compare against -- both change in one commit or the parity gate goes red for
-the wrong reason. Pure function, no hardware needed.
-**Done when:** a frame that fails validation advances the buffer by one byte
-and re-scans, and a unit test feeding `[0x01, len<=8192, ...]` followed by two
-valid frames gets both back (watched red on today's parser); the parity
-vectors (`tests/test_framing_vectors.py`, `divoomd/tests/framing_parity.rs`)
-still pass.
-
 #### P1.8 — 52 hand-rolled status markers
 **Status:** OPEN
 **Why:** goh 4.9 (`51109d6`): `goh.sh status-markers` reads 681 files and
@@ -169,6 +152,41 @@ for this, so it is not Phase 0.
 **Done when:** both jobs read the version from one committed source the local
 gate also reads (not a hand-kept literal), the install step is
 `required_tools.py --repo . --install`, and CI is green on it. Size: S.
+
+#### P1.11 — The Rust Basic parser panics on a short candidate where Python returns a frame
+**Status:** DECISION (owner)
+**Why:** `parse_basic_message` (`divoomd/src/framing.rs`) slices the payload as
+`message[4..message.len() - 3]`; when a candidate decodes to fewer than seven
+bytes (a length field below three) yet still passes the end-marker test, that
+range inverts and the RX loop **panics** ("slice index starts at 4 but ends at
+1", reproduced 2026-10-16 by feeding `divoomd::framing` the buffer
+`01 00 00 02 aa bb cc`). The Python reference does not panic: its negative-index
+slice yields an empty payload and it emits a degenerate message whose
+`command_id` is the checksum low byte. Line noise that happens to form
+`01 00 00 02` reaches this, so it is not theoretical. Filed while landing P1.7
+(same function, a different defect).
+**Done when:** the owner rules which behavior is right -- (a) match the Python
+reference (no panic, emit the degenerate frame) or (b) treat a too-short
+candidate as one that fails validation and resync past it by one byte, moving
+the reference too -- and both implementations agree, with a red-first test on
+the chosen behavior.
+
+#### P1.12 — The framing-vector generator cannot run
+**Status:** OPEN
+**Why:** `scripts/codegen/gen_framing_vectors.py` imports `divoom_lib.framing`
+and calls `encode_basic_payload` / `encode_ios_le_payload`, but phase L4
+(2026-09-25) deleted the Python encoders with the C library. It now dies with
+`AttributeError: module 'divoom_lib.framing' has no attribute
+'encode_basic_payload'` before writing (reproduced 2026-10-16), so
+`divoomd/tests/framing_vectors.json` can no longer be regenerated -- yet
+`tests/test_framing_vectors.py` tells the reader to "regenerate with
+gen_framing_vectors.py". The committed vectors are the frozen record of the
+deleted C library's bytes, which is their documented job, but the tool claiming
+to produce them is dead. Filed while landing P1.7.
+**Done when:** the generator regenerates the PARSE vectors from
+`divoom_lib.framing` and either regenerates the ENCODE vectors or states in-file
+that they are frozen C-library ground truth (encoding is no longer Python's),
+and a run leaves the committed file byte-identical.
 
 ### Phase 2 — daemon liveness and safety
 
@@ -453,7 +471,8 @@ build time only.
 **Status:** BLOCKED (on a hardware session with an SPP panel and the 4-panel rig)
 **Why:** the June 2026 adversarial review loop (Python era) closed with five
 items it could not settle without hardware. One is gone (the C static encoder
-was deleted in v0.40.0) and one is P1.7. The other three were never re-checked
+was deleted in v0.40.0) and one was P1.7, landed 2026-10-16. The other three
+were never re-checked
 after the port: (a) SPP framing vs BLE (escaping, packet number, write pacing,
 response-timeout clearing) now that `divoom_client/spp_bridge.py` carries bytes
 the daemon frames; (b) a 0x8B retransmit request arriving in the re-arm window

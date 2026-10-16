@@ -4,6 +4,43 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P1.7 — the RX frame parser resyncs by a byte, and stops swallowing real frames (2026-10-16)
+
+`parse_basic_protocol_frames` resynced by one byte only when the decoded length
+overshot `MAX_BASIC_FRAME` (8192). A stray `0x01` whose *fake* length stayed
+inside that bound made the parser wait for that many bytes, and when the fake
+frame then failed the end-byte or checksum test the whole fake span was drained —
+every genuine frame sitting inside it was lost, not re-scanned. Carried from the
+June 2026 adversarial review (Python era, "low, self-healing"); the Rust port and
+the Python reference both kept the shape.
+
+- **Validate before consuming.** The Rust parser (`divoomd/src/framing.rs`) and
+  the Python reference (`divoom_lib/framing.py`) now share one shape: a helper
+  (`parse_basic_message` / `_parse_basic_message`) decides whether a candidate is
+  a real frame, and the caller consumes it on success or advances by ONE byte and
+  re-scans on failure — so a spurious start byte is stepped over, never swallowed
+  along with the frames behind it. Both moved in one commit because they are
+  pinned against each other by `framing_vectors.json`.
+- **Watched red first, on both sides.** `divoomd/tests/framing_resync.rs` and
+  `tests/test_framing_resync.py` feed a `0x01` with fake length 21 spanning two
+  valid frames; the unpatched parsers returned `[]` (both frames swallowed) and
+  both went green after the fix. Each was re-checked red a second time by
+  reverting only its own `del buf[0]` / `buf.remove(0)` back to the
+  span-draining line, so the check is proven to bite on the named reason.
+- **Parity held.** `cargo test -p divoomd --no-default-features --test
+  framing_parity --test framing_round_trip` (4 + 6) and
+  `tests/test_framing_vectors.py` stay green: the 550 committed vectors never
+  exercise a failed-then-real frame, which is why the bug survived them.
+- **Two defects found while here, filed not fixed** (both now OPEN items in
+  `docs/ROADMAP.md`): P1.11 — the Rust parser *panics* on a candidate shorter
+  than seven bytes, where Python returns an empty-payload frame (reproduced by
+  feeding `divoomd::framing` the buffer `01 00 00 02 aa bb cc`; line noise
+  reaches it, and it needs an owner ruling on which behavior is correct); and
+  P1.12 — `scripts/codegen/gen_framing_vectors.py` cannot run at all since L4
+  deleted the Python encoders, so the vectors are frozen and un-regenerable.
+- Tests: `tests/test_framing_resync.py` added (2). Python suite 1659 passed /
+  132 skipped.
+
 ## P1.6 — the platform gate is back, once, and every build entry point calls it (2026-10-16)
 
 House policy is 64-bit only and macOS Apple silicon only, every unsupported
