@@ -4,6 +4,26 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P1.2 — PyInstaller is pinned from a committed file (2026-10-16)
+
+`scripts/build_release.sh` built with whatever PyInstaller the `.buildvenv`
+held (`pip install ... pyinstaller`, no version), so a clean venv silently
+changed the bundle. The previous roadmap said 6.21.0 -> 6.22.3 was "deliberately
+not taken"; in fact nothing held it.
+
+- **Committed pin.** `requirements-build.txt` now pins `pyinstaller==6.21.0`
+  (the version actually in use). Moving it is its own commit carrying a bundle
+  diff (file list + sizes).
+- **Enforced at build time.** `build_release.sh` reads the pin from that file
+  and refuses to build when the venv's installed PyInstaller differs, so a stale
+  or upgraded venv can no longer produce a bundle silently.
+- **Watched red first.** `tests/test_build_pyinstaller_pin.py` asserts the pin
+  file exists and pins a concrete version, that the script names and reads it,
+  and that it compares the installed version against the pin. Calibrated by
+  reverting the script (2 red) and removing the pin file (1 red).
+- Tests: `tests/test_build_pyinstaller_pin.py` added (3). Python suite 1665
+  passed / 132 skipped. Full pre-push gate 26/26.
+
 ## P1.5 — `tests/` and `examples/tests/` collect in one invocation (2026-10-16)
 
 `examples/tests/conftest.py` re-exports `tests/conftest.py` with a star import so

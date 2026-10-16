@@ -23,10 +23,11 @@ marked SHIPPED -- that marker is refused.
 
 Premises were last checked against the code on **2026-10-14** (HEAD `a38e2df`,
 the goh 0.27.0 hook reinstall on top of the 2026-10-12 plan commit `a8a848d`).
-Five items have landed since (P1.1 `15ff359` on 2026-10-15; P1.6, the
+Six items have landed since (P1.1 `15ff359` on 2026-10-15; P1.6, the
 build/install platform gate, and P1.7, the RX frame parser's one-byte resync, on
-2026-10-16; P1.12, the framing-vector generator, and P1.5, the two-suite
-collection fix, also on 2026-10-16), so the items below have
+2026-10-16; P1.12, the framing-vector generator, P1.5, the two-suite
+collection fix, and P1.2, the PyInstaller pin from a committed file, also on
+2026-10-16), so the items below have
 NOT been re-derived against a later HEAD -- check an item against the code before
 working it. Phase 0 is new (goh 0.27.0's fallout,
 measured); the old Phase 0 became Phase 1 and every later phase moved up by one
@@ -71,22 +72,11 @@ Two things the phase found that are NOT its items, tracked where they belong:
 
 **Goal:** no known defect or gate hole stays open while feature work starts.
 **Exit:** every P1 item's *Done when* is a test or gate that was watched red
-first. **Size:** M (seven items, each S, no hardware needed). Depends on Phase 0
+first. **Size:** M (six items, each S, no hardware needed). Depends on Phase 0
 (nothing pushes until it lands).
 **Risk:** P1.11 is the frame parser the Rust daemon and the Python reference
 share; a fix to one without the other turns the parity gate red for the wrong
 reason, so both move in one commit.
-
-#### P1.2 — PyInstaller is unpinned, so a release build takes whatever is newest
-**Status:** OPEN
-**Why:** `scripts/build_release.sh` builds with whatever PyInstaller the
-`.buildvenv` holds, and the venv recipe it prints (its usage comment and its
-"not found" error) is a bare `pip install ... pyinstaller` (re-checked
-2026-10-12). The previous roadmap said 6.21.0 -> 6.22.3 was "deliberately not
-taken"; in fact nothing holds it, and the next clean venv changes the bundle
-silently.
-**Done when:** the build installs a pinned version from a committed file, and
-moving it is its own commit carrying a bundle diff (file list + sizes).
 
 #### P1.3 — CI comments still describe the menubar's `tao` era
 **Status:** OPEN

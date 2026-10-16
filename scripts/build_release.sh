@@ -13,7 +13,7 @@
 #
 # Usage:
 #   python3 -m venv .buildvenv
-#   .buildvenv/bin/pip install -e '.[gui]' pyinstaller
+#   .buildvenv/bin/pip install -e '.[gui]' -r requirements-build.txt
 #   scripts/build_release.sh [path-to-build-venv-python]
 set -euo pipefail
 
@@ -26,13 +26,27 @@ cd "${ROOT}"
 divoom_platform_gate macos "the signed .app and .dmg are macOS artifacts"
 
 PYBUILD="${1:-${ROOT}/.buildvenv/bin/python}"
+PYINSTALLER_PIN_FILE="${ROOT}/requirements-build.txt"
+[[ -f "${PYINSTALLER_PIN_FILE}" ]] || { echo "ERROR: PyInstaller pin file missing: ${PYINSTALLER_PIN_FILE}." >&2; exit 1; }
+PYINSTALLER_PIN="$(grep -i '^pyinstaller' "${PYINSTALLER_PIN_FILE}" | sed -n '1p' | tr -d '[:space:]')"
+[[ -n "${PYINSTALLER_PIN}" ]] || { echo "ERROR: no pyinstaller== pin in ${PYINSTALLER_PIN_FILE}." >&2; exit 1; }
 if [[ ! -x "${PYBUILD}" ]]; then
   echo "Build venv python not found at ${PYBUILD}." >&2
-  echo "Create it:  python3 -m venv .buildvenv && .buildvenv/bin/pip install -e '.[gui]' pyinstaller" >&2
+  echo "Create it:  python3 -m venv .buildvenv && .buildvenv/bin/pip install -e '.[gui]' -r requirements-build.txt" >&2
   exit 1
 fi
 if ! "${PYBUILD}" -c "import PyInstaller" 2>/dev/null; then
-  echo "PyInstaller not in the build venv: ${PYBUILD} -m pip install pyinstaller" >&2
+  echo "PyInstaller not in the build venv: ${PYBUILD} -m pip install -r ${PYINSTALLER_PIN_FILE}" >&2
+  exit 1
+fi
+# Enforce the pinned version: a venv carrying a different PyInstaller must not
+# silently produce a bundle whose file list and sizes differ from the pin.
+INSTALLED_PYINSTALLER="$("${PYBUILD}" -c "import PyInstaller; print(PyInstaller.__version__)")"
+PINNED_PYINSTALLER_VERSION="${PYINSTALLER_PIN#pyinstaller==}"
+PINNED_PYINSTALLER_VERSION="${PINNED_PYINSTALLER_VERSION#PyInstaller==}"
+if [[ "${INSTALLED_PYINSTALLER}" != "${PINNED_PYINSTALLER_VERSION}" ]]; then
+  echo "ERROR: PyInstaller ${INSTALLED_PYINSTALLER} != pinned ${PINNED_PYINSTALLER_VERSION}." >&2
+  echo "       Install the pinned version: ${PYBUILD} -m pip install -r ${PYINSTALLER_PIN_FILE}" >&2
   exit 1
 fi
 
