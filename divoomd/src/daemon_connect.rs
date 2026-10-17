@@ -267,6 +267,12 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
         .unwrap_or(false);
     if mock {
         let mock_transport = crate::mock_transport::MockTransport::new();
+        // The name the mock panel advertises: what a real panel's BLE name
+        // tells the daemon about its model (P3.1), settable so a test can
+        // stand in for each model class without the hardware.
+        if let Some(name) = req.args.get("name").and_then(serde_json::Value::as_str) {
+            mock_transport.set_cached_device_name(name.to_string());
+        }
         let mock_mac = req
             .args
             .get("mac")

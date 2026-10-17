@@ -43,11 +43,16 @@ impl Daemon {
             (id_val.map_or(Value::Null, Value::String), Value::Null)
         };
 
-        let devices: Vec<Value> = linked
-            .iter()
-            .map(|d| json!({"mac": d.id, "connected": true, "selected": self.fleet.is_selected(&d.id)}))
-            .collect();
-        json!({
+        // P3.1: what each panel IS, resolved here once from what it
+        // advertises, so no client has to guess size from a name again.
+        let mut devices: Vec<Value> = Vec::with_capacity(linked.len());
+        for d in &linked {
+            let mut e =
+                json!({"mac": d.id, "connected": true, "selected": self.fleet.is_selected(&d.id)});
+            merge(&mut e, &panel_of(d.transport().await.as_deref()).fields());
+            devices.push(e);
+        }
+        let mut reply = json!({
             "success": true,
             "connected": connected,
             "connection_state": if connected { "connected" } else { "disconnected" },
@@ -56,6 +61,24 @@ impl Daemon {
             "wall": false,
             "devices": devices,
             "selected": self.fleet.selected_id(),
-        })
+        });
+        if transport.is_some() {
+            merge(&mut reply, &panel_of(transport.as_deref()).fields());
+        }
+        reply
+    }
+}
+
+/// The model of the panel behind `transport`. A LAN panel advertises no name,
+/// so it is `unknown` rather than guessed.
+fn panel_of(transport: Option<&DeviceTransport>) -> crate::panel_model::Panel {
+    crate::panel_model::from_name(transport.and_then(DeviceTransport::device_name).as_deref())
+}
+
+fn merge(into: &mut Value, fields: &Value) {
+    if let (Some(dst), Some(src)) = (into.as_object_mut(), fields.as_object()) {
+        for (k, v) in src {
+            dst.insert(k.clone(), v.clone());
+        }
     }
 }

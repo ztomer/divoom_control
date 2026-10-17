@@ -78,6 +78,7 @@ pub mod packets;
 #[cfg(test)]
 mod packets_tests;
 pub mod palette_table;
+pub mod panel_model;
 pub mod paths;
 pub mod protocol;
 pub mod render_widget;

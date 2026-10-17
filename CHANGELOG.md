@@ -4,6 +4,39 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P3.1 — `device_status` says what each panel is (2026-10-17)
+
+`device_status` reported link state and nothing about the panel, so every
+client guessed size from the name -- each differently. The web UI's two
+heuristics disagreed with each other, and `divoom_lib`'s capability table
+disagreed with both and with the vendor app.
+
+- **The daemon owns it, from the APK.** `divoomd/src/panel_model.rs` ports the
+  decompiled app's `DeviceTypeEnum.setDeviceModel` (advertised-name prefix ->
+  model, first match, order kept, including one dead APK entry) and
+  `setDeviceMode` (model -> `DevicePixel16/32/64/128/256`). One addition, cited
+  in place: `Pixoo64`, which the APK learns through Wi-Fi setup rather than a
+  BLE name and would otherwise fall to the 16x16 `Pixoo`.
+- **Each entry, and the target.** Every `devices[]` entry -- and the top level
+  when the reply is about one linked panel -- carries `model`, `width`,
+  `height`, `model_source`. An unmatched name reports `model: null`, 16x16 and
+  `model_source: "default"` (the APK's starting point, not a fact); a panel
+  with no name (LAN) reports `null` sizes and `"unknown"` rather than a guess.
+  No panel reports a battery to the daemon today, so there is no battery field.
+- **A wrong table fixed, and held.** `divoom_lib/models/capabilities.py` had 18
+  of its 33 resolutions wrong (Tivoo, Tivoo-Max, Timoo, Timebox Evo, Planet 9
+  and the bags at 32 where the APK draws 16; CyberBag, Dipow 35 and Karaoke
+  low; the LCD panels at 32 instead of 128). The Python CLI printed them.
+  Corrected, and `tests/test_panel_model_parity.py` now fails on any row that
+  disagrees with the daemon's table (red with 18 rows before the fix).
+- **Watched red first.** `divoomd/tests/panel_model_status.rs`: mock panels
+  advertising a real name per class (16/32/64/128/256) plus an unmatched one,
+  read back through the real dispatcher -- red on the missing fields before.
+  Unit: `panel_model_tests.rs` (6). The mock `connect` takes a `name` so a test
+  can stand in for any model.
+- **Still guessing:** the GUI's `getDeviceDimensions` and `resolveDeviceSpec`;
+  moving them onto `device_status` is now part of P5.1.
+
 ## P2.6 — the daemon notices its own wedge (2026-10-17)
 
 launchd has no watchdog and the protocol has no heartbeat, so a daemon whose

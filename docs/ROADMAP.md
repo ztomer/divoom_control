@@ -115,13 +115,7 @@ with tests per model class. **Size:** M. **Risk:** P3.3 changes what the
 weather widget looks like on every panel; it needs the R12-style visual pass
 on hardware before release.
 
-#### P3.1 — `device_status` carries model and panel resolution
-**Status:** OPEN
-**Why:** `divoomd/src/daemon_status.rs` reports link state per mac and nothing
-about the panel itself, so every client (MCP, GUI, menubar) guesses size. It is
-the root of P4.1-P4.3.
-**Done when:** each device entry has `model`, `width`, `height` (and battery
-where the device reports one), with a test per supported model class.
+Landed (2026-10-17): P3.1, `device_status` carrying each panel's model and resolution from the APK's own tables (`divoomd/src/panel_model.rs`).
 
 #### P3.2 — Typed error codes on device failures
 **Status:** OPEN
@@ -160,14 +154,12 @@ inherits the per-device rule below and its stress gate.
 **Why:** it forwards `device_status`, so it returns link state only -- no size,
 model, battery or feature flags (speaker, radio, clock).
 **Done when:** it returns what P3.1 provides plus feature flags from one table.
-**Depends on:** P3.1
 
 #### P4.2 — `list_screens` derives resolution and live status
 **Status:** OPEN
 **Why:** it forwards `get_topology`: stored names and x/y, `current_device`, no
 resolution and no per-panel connection state.
 **Done when:** each screen entry carries resolution and live link state.
-**Depends on:** P3.1
 
 #### P4.3 — `show_image` draws at the panel's size, with a stated policy
 **Status:** OPEN
@@ -175,7 +167,6 @@ resolution and no per-panel connection state.
 now"), so a 64x64 panel gets a quarter of its pixels.
 **Done when:** the tool takes a resize policy (`fit`, `fill`, `exact`, `none`),
 sizes to the target panel, and `none` with the wrong size is a clear error.
-**Depends on:** P3.1
 
 #### P4.4 — `push_animation` streams every frame
 **Status:** OPEN
@@ -222,10 +213,14 @@ menubar no longer closes on a status change. **Size:** M.
 is one boolean and still gates brightness and volume; `set_brightness` and
 `set_volume` take no mac and are read once at startup; per-panel brightness is
 only a memory of what the slider last sent. The per-device rule below says
-every per-panel fact has one owner -- the daemon -- and these do not.
-**Done when:** the GUI reads and writes these per mac through the daemon, and
-switching panels shows that panel's values (browser test across two panels).
-**Depends on:** P3.1
+every per-panel fact has one owner -- the daemon -- and these do not. Panel
+SIZE is the same shape: `device_status` carries it since P3.1, yet
+`getDeviceDimensions` (`divoom_gui/web_ui/app_globals.js`) and
+`resolveDeviceSpec` (`divoom_gui/web_ui/spatial_stage.js`) still guess it from
+the name, differently (neither knows a 32x32 class).
+**Done when:** the GUI reads and writes these per mac through the daemon,
+reads panel size from `device_status` instead of the name, and switching panels
+shows that panel's values (browser test across two panels).
 
 #### P5.2 — Channel settings are written per display
 **Status:** OPEN
