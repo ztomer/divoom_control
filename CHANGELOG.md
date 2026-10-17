@@ -4,6 +4,42 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P3.2 — failures carry a stable code (2026-10-17)
+
+`err_reply` carried only `success` and `error`, so a client that had to act on
+a failure matched wording. One did, and the wording had already drifted: the
+Settings card offered the Full Disk Access prompt when the error text said
+`PermissionError`, `sqlite3.OperationalError` or `Full Disk Access` -- the
+retired Python daemon's words. The Rust daemon says "Database open failed: ..."
+and the prompt could never fire.
+
+- **One registry of codes.** `divoomd/src/error_code.rs`: `ErrorCode` with
+  lowercase `snake_case` wire names (matching the two codes already on the
+  wire, so the roadmap's `DEVICE_DISCONNECTED` is spelled
+  `device_disconnected`), `err_code()`, and `CodedError` for errors that travel
+  up a call chain. `bad_request`, `unknown_command`, `device_disconnected`,
+  `no_device`, `ambiguous_target`, `deadline_exceeded`, `resource_exhausted`,
+  `notification_db_missing`, `notification_db_unreadable`, `unsupported`. The
+  P2.3 deadline and the connection-cap refusal now take theirs from it.
+- **Device failures.** `Fleet::resolve_target` returns a `CodedError`
+  (named panel gone / nothing linked / several and none active), and every
+  reply built from it carries the code, as do `disconnect` of an unknown panel
+  and a link that vanished.
+- **The client branches on the code.** The notification monitor's status now
+  carries `error_code`; the GUI API passes it through; `settings_notifications.js`
+  decides the prompt with `window.macNotifNeedsPermission(s)` on
+  `error_code === "notification_db_unreadable"`. Its dialog also stopped
+  saying "the background Python runtime" needs Full Disk Access -- it is
+  divoomd.
+- **Watched red first.** `divoomd/tests/error_codes.rs` (dispatcher and socket:
+  missing panel vs no panel vs ambiguous, unknown command, two bad lines, and
+  distinct snake_case names) was red on every missing code; the ambiguous case
+  was re-checked red by mapping it to `no_device`.
+  `tests/test_notif_permission_by_code.py` drives the JS predicate under node
+  (the Rust daemon's real wording with the code -> prompt; the old trigger
+  words without it -> no prompt) and the GUI API pass-through; both red against
+  the previous GUI files. Unit: `a_reported_db_failure_carries_its_code`.
+
 ## P3.1 — `device_status` says what each panel is (2026-10-17)
 
 `device_status` reported link state and nothing about the panel, so every

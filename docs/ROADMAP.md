@@ -115,16 +115,8 @@ with tests per model class. **Size:** M. **Risk:** P3.3 changes what the
 weather widget looks like on every panel; it needs the R12-style visual pass
 on hardware before release.
 
-Landed (2026-10-17): P3.1, `device_status` carrying each panel's model and resolution from the APK's own tables (`divoomd/src/panel_model.rs`).
-
-#### P3.2 — Typed error codes on device failures
-**Status:** OPEN
-**Why:** a push to an unlinked panel fails at once but as prose
-(`device '{id}' not connected`); `err_reply` in `divoomd/src/protocol.rs` carries
-only `success` and `error`. Clients cannot branch on prose without making
-wording load-bearing -- the class `divoomd/src/ble_fault.rs` was written to end.
-**Done when:** errors carry a stable `code` (`DEVICE_DISCONNECTED`, ...) beside
-the message, and clients branch on the code.
+Landed (2026-10-17): P3.1, `device_status` carrying each panel's model and resolution from the APK's own tables (`divoomd/src/panel_model.rs`);
+P3.2, a stable `code` on every device failure, branched on by the Settings card (`divoomd/src/error_code.rs`).
 
 #### P3.3 — Weather is drawn by the firmware, not by us
 **Status:** OPEN

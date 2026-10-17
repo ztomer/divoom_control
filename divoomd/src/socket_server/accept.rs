@@ -12,7 +12,6 @@ use tokio::sync::Semaphore;
 
 use super::{serve_connection, subscription_budget, write_line, Handler, RETRY_AFTER_MS};
 use crate::connections::Connections;
-use crate::protocol::err_reply;
 use crate::subscriptions::{Registry, RENEGOTIATE_AFTER};
 
 /// Refuse one connection at capacity: say so in a reply line, then close.
@@ -32,9 +31,10 @@ async fn refuse_at_capacity<S>(mut stream: S, max_connections: usize)
 where
     S: tokio::io::AsyncWrite + Unpin,
 {
-    let mut reply = err_reply(&format!(
-        "daemon is at its connection cap ({max_connections}); try again shortly"
-    ));
+    let mut reply = crate::protocol::err_code(
+        crate::protocol::ErrorCode::ResourceExhausted,
+        &format!("daemon is at its connection cap ({max_connections}); try again shortly"),
+    );
     // A refusal a client can ACT on, not prose it has to string-match. Every
     // mature protocol pairs a machine-distinguishable transient class with
     // server-supplied retry timing: HTTP 503 + `Retry-After` (RFC 9110), gRPC
@@ -52,10 +52,6 @@ where
     // and a second daemon would refuse to start against a perfectly healthy one.
     // Being at capacity is a fact about load, never about identity.
     if let Some(obj) = reply.as_object_mut() {
-        obj.insert(
-            "code".into(),
-            Value::String("resource_exhausted".to_string()),
-        );
         obj.insert(
             "retry_after_ms".into(),
             Value::Number(RETRY_AFTER_MS.into()),

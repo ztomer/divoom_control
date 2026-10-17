@@ -1,5 +1,14 @@
 /* settings_notifications.js — macOS Notification Center Mirroring & MCP Server toggles */
 
+// Does this status/reply mean the daemon cannot read the Notification Center
+// database -- i.e. it needs Full Disk Access? Decided by the daemon's stable
+// `error_code` (P3.2), never by the prose: this used to look for the retired
+// Python daemon's "PermissionError"/"sqlite3.OperationalError" text, which the
+// Rust daemon never produces, so the prompt below could not fire.
+window.macNotifNeedsPermission = function(s) {
+    return !!s && s.error_code === "notification_db_unreadable";
+};
+
 document.addEventListener("DOMContentLoaded", () => {
     function api() { return window.pywebview && window.pywebview.api; }
     function dev() { return !window.requireDevice || window.requireDevice(); }
@@ -27,7 +36,7 @@ document.addEventListener("DOMContentLoaded", () => {
         popup.innerHTML = `
             <h3 style="font-family: var(--font-display); font-size:16px; margin-bottom:15px; color: var(--text-main);">macOS Notification Permissions Required</h3>
             <p style="font-size:12px; color:var(--text-main); margin-bottom:15px; line-height:1.4;">
-                To mirror macOS notifications to your Divoom screens, the background Python runtime needs Full Disk Access to read the Notification Center database.
+                To mirror macOS notifications to your Divoom screens, the background service (divoomd) needs Full Disk Access to read the Notification Center database.
             </p>
             <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:8px; padding:12px; margin-bottom:15px; font-size:11px; line-height:1.5; color:rgba(255,255,255,0.7);">
                 <strong style="display:block; margin-bottom:4px; color:#ef4444;">Step-by-step instructions:</strong>
@@ -67,12 +76,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         if (macToggle) macToggle.disabled = false;
 
-        const isPermissionError = s.error && (
-            s.error.includes("PermissionError") || 
-            s.error.includes("FULL DISK ACCESS") || 
-            s.error.includes("sqlite3.OperationalError") ||
-            s.error.includes("Full Disk Access")
-        );
+        const isPermissionError = window.macNotifNeedsPermission(s);
 
         if (s.running) {
             setMacPill("running");
@@ -150,11 +154,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (r && r.error) {
                         macToggle.checked = false;
                         toast(r.error, "Mirror failed");
-                        const isPermErr = r.error.includes("PermissionError") || 
-                                          r.error.includes("FULL DISK ACCESS") || 
-                                          r.error.includes("sqlite3.OperationalError") ||
-                                          r.error.includes("Full Disk Access");
-                        if (isPermErr) {
+                        if (window.macNotifNeedsPermission(r)) {
                             window.showMacPermissionsDialog(r.error);
                         }
                     }

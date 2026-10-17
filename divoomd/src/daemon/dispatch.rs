@@ -2,7 +2,7 @@
 //! under the 500-LOC ground rule.
 
 use crate::daemon::{notifications, Daemon};
-use crate::protocol::{err_reply, Request};
+use crate::protocol::{err_code, err_reply, ErrorCode, Request};
 use serde_json::{json, Value};
 
 pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
@@ -115,9 +115,10 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
         | "get_playlist_images"
         | "get_photo_albums" => crate::cloud_cmds::handle(&req.command, &req).await,
 
-        other => err_reply(&format!(
-            "command not implemented in the native daemon yet: {other}"
-        )),
+        other => err_code(
+            ErrorCode::UnknownCommand,
+            &format!("command not implemented in the native daemon yet: {other}"),
+        ),
     }
 }
 async fn get_status(daemon: &Daemon) -> Value {
@@ -237,7 +238,7 @@ async fn live_jobs_stop_for(daemon: &Daemon, req: Request) -> Value {
     let mac_str = req.args.get("mac").and_then(|v| v.as_str());
     let target = match daemon.fleet.resolve_target(mac_str).await {
         Ok(d) => d.id.clone(),
-        Err(e) => return err_reply(&format!("live_jobs_stop_for: {e}")),
+        Err(e) => return err_code(e.code, &format!("live_jobs_stop_for: {e}")),
     };
     let count = daemon.live_jobs.stop_all_for_device(daemon, &target).await;
     json!({"success": true, "count": count})

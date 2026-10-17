@@ -81,6 +81,7 @@ mod other {
         let mut v = idle_with(false);
         v["error"] = json!("notifications not available on this platform");
         v["unsupported"] = json!(true);
+        v["code"] = json!(crate::protocol::ErrorCode::Unsupported.as_str());
         ready(v)
     }
 

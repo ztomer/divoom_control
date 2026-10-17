@@ -266,13 +266,19 @@ where
             let msg = match msg {
                 Ok(v) => v,
                 Err(reason) => {
-                    let reply = err_reply(&format!("bad request: {reason}"));
+                    let reply = crate::protocol::err_code(
+                        crate::protocol::ErrorCode::BadRequest,
+                        &format!("bad request: {reason}"),
+                    );
                     write_line(&mut stream, &reply).await?;
                     continue;
                 }
             };
             let Ok(req) = serde_json::from_value::<Request>(msg) else {
-                let reply = err_reply("bad request: expected an object with a 'command' string");
+                let reply = crate::protocol::err_code(
+                    crate::protocol::ErrorCode::BadRequest,
+                    "bad request: expected an object with a 'command' string",
+                );
                 write_line(&mut stream, &reply).await?;
                 continue;
             };

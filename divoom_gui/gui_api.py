@@ -270,6 +270,11 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
         }
         if reply.get("error"):
             out["error"] = reply["error"]
+        # The class of the failure (P3.2): the Settings card branches on this,
+        # never on the prose -- the prose drifted once and the Full Disk
+        # Access prompt silently stopped firing.
+        if reply.get("error_code"):
+            out["error_code"] = reply["error_code"]
         return out
 
     def stop_notification_listener(self) -> dict:
@@ -293,6 +298,7 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
               "rules": [[substr, app_type], ...],
               "counters": {"seen": int, "routed": int, "dropped": int},
               "error": str | None,
+              "error_code": str | None,      # P3.2: branch on this, not on error
             }
         """
         from divoom_client.macos_notifications import (
@@ -331,6 +337,7 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
             "rules": [list(r) for r in load_routing_table()],
             "counters": status.get("counters") or {"seen": 0, "routed": 0, "dropped": 0},
             "error": status.get("error"),
+            "error_code": status.get("error_code"),
         }
 
     def save_notification_routing(self, json_text: str) -> dict:

@@ -182,7 +182,7 @@ impl Daemon {
         // together. A mac-less call with several panels linked is refused.
         let device = match self.fleet.resolve_target(target_mac).await {
             Ok(d) => d,
-            Err(e) => return err_reply(&e),
+            Err(e) => return e.reply(),
         };
         let target_id = device.id.clone();
         let link = match self.resolve_target_link(Some(&target_id)).await {
@@ -260,10 +260,13 @@ impl Daemon {
             .fleet
             .resolve_target(target_mac)
             .await
-            .map_err(|e| err_reply(&e))?;
-        d.link()
-            .await
-            .ok_or_else(|| err_reply(&format!("device '{}' not connected", d.id)))
+            .map_err(|e| e.reply())?;
+        d.link().await.ok_or_else(|| {
+            crate::protocol::err_code(
+                crate::protocol::ErrorCode::DeviceDisconnected,
+                &format!("device '{}' not connected", d.id),
+            )
+        })
     }
 
     async fn record_successful_call_activity(&self, req: &Request, target: &str) {

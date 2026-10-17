@@ -131,7 +131,9 @@ pub(crate) async fn probe_lan(daemon: &Daemon, mac: Option<&str>) -> Value {
                 return json!({"success": true, "reachable": false, "detail": "no device connected"})
             }
         },
-        Err(e) => return json!({"success": true, "reachable": false, "detail": e}),
+        Err(e) => {
+            return json!({"success": true, "reachable": false, "detail": e.message, "code": e.code.as_str()})
+        }
     };
     match dev.lan() {
         Some(lan) => {
@@ -363,7 +365,10 @@ async fn hang_up(t: &DeviceTransport) {
 /// radio hangs up, so nothing queued can land on the way out.
 pub(crate) async fn cmd_disconnect_one(daemon: &Daemon, mac: &str) -> Value {
     let Some(dev) = daemon.fleet.get(mac).await else {
-        return err_reply(&format!("device '{mac}' not connected"));
+        return crate::protocol::err_code(
+            crate::protocol::ErrorCode::DeviceDisconnected,
+            &format!("device '{mac}' not connected"),
+        );
     };
     daemon.live_jobs.stop_all_for_device(daemon, &dev.id).await;
     let link = daemon.fleet.remove(&dev.id).await;

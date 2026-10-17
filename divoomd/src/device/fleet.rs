@@ -12,6 +12,7 @@ use tokio::sync::Mutex;
 
 use super::{Activity, Device, Link};
 use crate::daemon::DeviceTransport;
+use crate::protocol::{CodedError, ErrorCode};
 
 fn key(id: &str) -> String {
     id.to_ascii_uppercase()
@@ -137,21 +138,25 @@ impl Fleet {
     ///
     /// # Errors
     ///
-    /// The three things a caller can act on: that panel is not connected,
-    /// nothing is connected, or several are and `mac` is required.
-    pub async fn resolve_target(&self, id: Option<&str>) -> Result<Arc<Device>, String> {
+    /// The three things a caller can act on, each with its code (P3.2):
+    /// that panel is not connected (`device_disconnected`), nothing is
+    /// connected (`no_device`), or several are and `mac` is required
+    /// (`ambiguous_target`).
+    pub async fn resolve_target(&self, id: Option<&str>) -> Result<Arc<Device>, CodedError> {
         if let Some(i) = id {
-            return self
-                .connected(i)
-                .await
-                .ok_or_else(|| format!("device '{i}' not connected"));
+            return self.connected(i).await.ok_or_else(|| {
+                CodedError::new(
+                    ErrorCode::DeviceDisconnected,
+                    format!("device '{i}' not connected"),
+                )
+            });
         }
         let mut linked = self.linked().await;
         if let Some(pos) = linked.iter().position(|d| self.is_selected(&d.id)) {
             return Ok(linked.remove(pos));
         }
         match linked.len() {
-            0 => Err("no device connected".to_string()),
+            0 => Err(CodedError::new(ErrorCode::NoDevice, "no device connected")),
             1 => Ok(linked.remove(0)),
             n => {
                 let names = linked
@@ -159,13 +164,13 @@ impl Fleet {
                     .map(|d| d.id.as_str())
                     .collect::<Vec<_>>()
                     .join(", ");
-                Err(self.selected_id().map_or_else(
+                Err(CodedError::new(ErrorCode::AmbiguousTarget, self.selected_id().map_or_else(
                     || format!("{n} panels connected and none active; pass 'mac' to say which ({names})"),
                     |sel| format!(
                         "the active panel '{sel}' is not connected and {n} others are; \
                          pass 'mac' to say which ({names})"
                     ),
-                ))
+                )))
             }
         }
     }

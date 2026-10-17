@@ -51,7 +51,9 @@ async fn the_selected_panel_takes_macless_requests_and_none_selected_refuses_wit
     // and with several others linked the caller is told which is which.
     f.adopt("C", mock()).await;
     f.select("Z");
-    let err = f.resolve_target(None).await.err().expect("refused");
+    let coded = f.resolve_target(None).await.err().expect("refused");
+    assert_eq!(coded.code, crate::protocol::ErrorCode::AmbiguousTarget);
+    let err = coded.message;
     assert!(
         err.starts_with("the active panel 'Z' is not connected and 2 others are"),
         "{err}"

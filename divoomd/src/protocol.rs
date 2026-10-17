@@ -97,6 +97,8 @@ pub fn protocol_capabilities() -> Vec<&'static str> {
     ]
 }
 
+pub use crate::error_code::{err_code, CodedError, ErrorCode};
+
 /// A client request: `{"command": ..., "args": {...}, "token"?: ...}`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Request {

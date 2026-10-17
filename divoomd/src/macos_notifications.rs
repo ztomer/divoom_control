@@ -35,6 +35,9 @@ struct MonitorState {
     last_seen_date: f64,
     db_error_streak: usize,
     last_db_error: Option<String>,
+    /// The class of `last_db_error` (P3.2): what the Settings card branches
+    /// on, so its Full Disk Access prompt never depends on wording again.
+    last_db_error_code: Option<crate::protocol::ErrorCode>,
     rules: Vec<(String, u8)>,
 }
 
@@ -50,6 +53,7 @@ impl MonitorState {
             last_seen_date: 0.0,
             db_error_streak: 0,
             last_db_error: None,
+            last_db_error_code: None,
             rules: load_routing_rules(),
         }
     }
@@ -76,6 +80,7 @@ pub async fn start_monitor(daemon: Arc<Daemon>) {
     // Probe database existence and accessibility
     let Some(db_path) = find_notification_db_path() else {
         guard.last_db_error = Some("macOS Notification Center DB not found".to_string());
+        guard.last_db_error_code = Some(crate::protocol::ErrorCode::NotificationDbMissing);
         guard.db_error_streak = 5;
         let _ = daemon.tx.send(notif_status_event(&guard));
         return;
@@ -89,6 +94,8 @@ pub async fn start_monitor(daemon: Arc<Daemon>) {
         Ok(conn) => {
             if let Err(e) = conn.execute("SELECT 1", []) {
                 guard.last_db_error = Some(format!("Database read failed (FDA permission?): {e}"));
+                guard.last_db_error_code =
+                    Some(crate::protocol::ErrorCode::NotificationDbUnreadable);
                 guard.db_error_streak = 5;
                 let _ = daemon.tx.send(notif_status_event(&guard));
                 return;
@@ -96,6 +103,7 @@ pub async fn start_monitor(daemon: Arc<Daemon>) {
         }
         Err(e) => {
             guard.last_db_error = Some(format!("Database open failed: {e}"));
+            guard.last_db_error_code = Some(crate::protocol::ErrorCode::NotificationDbUnreadable);
             guard.db_error_streak = 5;
             let _ = daemon.tx.send(notif_status_event(&guard));
             return;
@@ -107,6 +115,7 @@ pub async fn start_monitor(daemon: Arc<Daemon>) {
     guard.last_seen_date = initial_max_delivered_date(&db_path);
     guard.db_error_streak = 0;
     guard.last_db_error = None;
+    guard.last_db_error_code = None;
 
     let st_clone = st.clone();
     let daemon_clone = daemon.clone();
@@ -157,6 +166,9 @@ fn status_event_payload(guard: &MonitorState) -> Value {
     if let Some(ref err) = guard.last_db_error {
         if guard.db_error_streak >= 5 {
             ev["error"] = json!(err);
+            ev["error_code"] = json!(guard
+                .last_db_error_code
+                .map(crate::protocol::ErrorCode::as_str));
         }
     }
     ev
@@ -245,6 +257,7 @@ async fn monitor_loop(
                 let mut guard = st.lock().await;
                 guard.db_error_streak = 0;
                 guard.last_db_error = None;
+                guard.last_db_error_code = None;
 
                 for (raw, delivered) in records {
                     if delivered > guard.last_seen_date {
@@ -304,6 +317,8 @@ async fn monitor_loop(
                 let mut guard = st.lock().await;
                 guard.db_error_streak += 1;
                 guard.last_db_error = Some(e.clone());
+                guard.last_db_error_code =
+                    Some(crate::protocol::ErrorCode::NotificationDbUnreadable);
                 if guard.db_error_streak == 1 {
                     eprintln!("[macos_notifications] query error (streak 1): {e}");
                 }
@@ -379,4 +394,25 @@ fn forward_notification(
 ) -> impl std::future::Future<Output = bool> + Send {
     let _ = notification_payload(app_type, text);
     std::future::ready(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// P3.2: the Settings card decides whether to offer the Full Disk Access
+    /// prompt from `error_code`, never from the prose beside it.
+    #[test]
+    fn a_reported_db_failure_carries_its_code() {
+        let mut g = MonitorState::new();
+        g.last_db_error = Some("Database open failed: unable to open database file".into());
+        g.last_db_error_code = Some(crate::protocol::ErrorCode::NotificationDbUnreadable);
+        g.db_error_streak = 5;
+        let ev = status_event_payload(&g);
+        assert_eq!(ev["error_code"], "notification_db_unreadable", "{ev}");
+        assert!(ev["error"].is_string());
+
+        g.db_error_streak = 1; // below the reporting threshold: nothing yet
+        assert!(status_event_payload(&g).get("error_code").is_none());
+    }
 }

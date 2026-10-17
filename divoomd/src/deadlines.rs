@@ -64,12 +64,14 @@ pub(crate) fn exceeded(command: &str, budget: Duration) -> Value {
         "divoomd: `{command}` outran its {}ms deadline; answering for it",
         budget.as_millis()
     );
-    let mut reply = crate::protocol::err_reply(&format!(
-        "`{command}` did not finish within its {}ms deadline",
-        budget.as_millis()
-    ));
+    let mut reply = crate::protocol::err_code(
+        crate::protocol::ErrorCode::DeadlineExceeded,
+        &format!(
+            "`{command}` did not finish within its {}ms deadline",
+            budget.as_millis()
+        ),
+    );
     if let Some(obj) = reply.as_object_mut() {
-        obj.insert("code".into(), Value::String("deadline_exceeded".into()));
         obj.insert(
             "deadline_ms".into(),
             Value::from(u64::try_from(budget.as_millis()).unwrap_or(u64::MAX)),
