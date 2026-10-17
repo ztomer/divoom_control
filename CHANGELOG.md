@@ -4,6 +4,24 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P1.10 — CI reads the Python version from one committed source (2026-10-17)
+
+Both CI jobs pinned `python-version: "3.14"` by hand while the house (and the
+local gate) run 3.15, so CI tested a different interpreter than the code runs
+on. The version now lives in `.python-version` (3.15), which both jobs read via
+`python-version-file`, and `scripts/py_ci.sh` verifies `python3` matches it.
+
+- **Committed source.** `.python-version` holds `3.15`; pyproject requires
+  `>=3.15` and names 3.15.
+- **CI reads it.** Both setup-python steps use `python-version-file: .python-version`.
+- **Local gate reads it.** `py_ci.sh` compares `python3` to `.python-version`
+  and fails on mismatch.
+- **Watched red first.** `tests/test_ci_python_pin.py` (3) asserts the file
+  exists, CI reads it, and the local gate references it. Calibrated by
+  reverting the workflow (1 red) and removing the file (1 red).
+- Tests: `tests/test_ci_python_pin.py` added (3). Python suite 1664 passed /
+  132 skipped. Full pre-push gate 27/27.
+
 ## P1.11 — the Rust Basic parser no longer panics on a short candidate (2026-10-17)
 
 `parse_basic_message` sliced the payload as `message[4..message.len() - 3]`; when a

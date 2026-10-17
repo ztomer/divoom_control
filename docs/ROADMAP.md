@@ -23,13 +23,14 @@ marked SHIPPED -- that marker is refused.
 
 Premises were last checked against the code on **2026-10-14** (HEAD `a38e2df`,
 the goh 0.27.0 hook reinstall on top of the 2026-10-12 plan commit `a8a848d`).
-Ten items have landed since (P1.1 `15ff359` on 2026-10-15; P1.6, the
+Eleven items have landed since (P1.1 `15ff359` on 2026-10-15; P1.6, the
 build/install platform gate, and P1.7, the RX frame parser's one-byte resync, on
 2026-10-16; P1.12, the framing-vector generator, P1.5, the two-suite
 collection fix, P1.2, the PyInstaller pin from a committed file, P1.4, the
 coverage floor ratcheted to the measurement, P1.3, the stale `tao` comments
-in CI, and P1.11, the short-frame panic fixed on both sides, also on
-2026-10-17), so the items below have
+in CI, P1.8, the 52 hand-rolled status markers, P1.11, the short-frame panic
+fixed on both sides, and P1.10, CI reading Python from `.python-version`, also
+on 2026-10-17), so the items below have
 NOT been re-derived against a later HEAD -- check an item against the code before
 working it. Phase 0 is new (goh 0.27.0's fallout,
 measured); the old Phase 0 became Phase 1 and every later phase moved up by one
@@ -74,7 +75,7 @@ Two things the phase found that are NOT its items, tracked where they belong:
 
 **Goal:** no known defect or gate hole stays open while feature work starts.
 **Exit:** every P1 item's *Done when* is a test or gate that was watched red
-first. **Size:** M (two items, each S, no hardware needed). Depends on Phase 0
+first. **Size:** M (one item, each S, no hardware needed). Depends on Phase 0
 (nothing pushes until it lands).
 #### P1.9 — The release pushes the tap bump around the tap's gate
 **Status:** OPEN
@@ -85,18 +86,6 @@ the tap's own gate never runs on the bump.
 `$GOH_DIR/tools/release-kit/tap_bump.sh --tap ztomer/homebrew-tap --cask
 divoom-control --tag vX.Y.Z --artifact <dmg>`, and `--dry-run` of a release
 shows the tap gate step. Size: S.
-
-#### P1.10 — CI pins Python 3.14 and installs gate tools by hand
-**Status:** OPEN
-**Why:** the house moved to Python 3.15 (2026-10-10); `.github/workflows/tests.yml`
-lines 45 and 111 still pin `3.14` for jobs that run this repo's gates (the
-local gate already runs 3.15). The structural job installs tools with
-`required_tools.py --layer structural --names` plus apt (line 56) instead of
-the house `--repo . --install`. CI was last green 2026-10-09; it is not red
-for this, so it is not Phase 0.
-**Done when:** both jobs read the version from one committed source the local
-gate also reads (not a hand-kept literal), the install step is
-`required_tools.py --repo . --install`, and CI is green on it. Size: S.
 
 ### Phase 2 — daemon liveness and safety
 

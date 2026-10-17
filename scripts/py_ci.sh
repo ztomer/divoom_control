@@ -11,6 +11,16 @@ cd "$ROOT"
 # shellcheck source=/Users/ztomer/Projects/gates_of_heck/tui/lib.sh
 source "${GOH_DIR:-$HOME/Projects/gates_of_heck}/tui/lib.sh"
 
+# Python version must match the committed source (.python-version), the same
+# value CI reads via python-version-file. A mismatch means this gate is running
+# on a different interpreter than CI.
+EXPECTED_PY="$(tr -d '[:space:]' < "${ROOT}/.python-version")"
+ACTUAL_PY="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+[[ "${ACTUAL_PY}" == "${EXPECTED_PY}" ]] || {
+    echo "ERROR: python ${ACTUAL_PY} != committed .python-version ${EXPECTED_PY}" >&2
+    exit 1
+}
+
 # No native dylib to build: the C encoders it produced are Rust in the daemon
 # binary now (phase L4), built by the cargo step below.
 

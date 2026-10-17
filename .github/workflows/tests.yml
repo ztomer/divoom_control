@@ -42,7 +42,7 @@ jobs:
           token: ${{ secrets.GOH_TOKEN || github.token }}
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.14"
+          python-version-file: .python-version
       # The tools structural.sh refuses to run without, from gates_of_heck's
       # manifest rather than from the runner image happening to ship them:
       # a hand-kept list drifted the day v0.20.0 made missing tools fatal.
@@ -108,7 +108,7 @@ jobs:
 
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.14"
+          python-version-file: .python-version
 
       # R70 P5.2: the `brew install portaudio` step that used to sit here is
       # gone with the audio visualizer. pyaudio has no macOS-arm64 wheel, so

@@ -6,8 +6,8 @@
 # `divoom-control` CLI as a real entry point.
 #
 # Build backend: setuptools (most common, no extra deps).
-# Python: 3.14 (CI, the local venv and the shipped app all build on 3.14;
-# the floor matches reality -- nothing below 3.14 is tested anywhere).
+# Python: 3.15 (CI, the local venv and the shipped app all build on 3.15;
+# the floor matches reality -- nothing below 3.15 is tested anywhere).
 #
 # Optional extras:
 #   pip install -e ".[gui]"        # pywebview (macOS GUI)
@@ -31,7 +31,7 @@ version = "0.41.2"
 description = "macOS control surface for Divoom pixel displays (Pixoo / Tivoo / Ditoo / Timoo)"
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.14"
+requires-python = ">=3.15"
 authors = [
     { name = "Zach Tomer" },
 ]
@@ -43,7 +43,7 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: MacOS :: MacOS X",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
     "Topic :: Home Automation",
     "Topic :: Multimedia :: Graphics",
 ]
