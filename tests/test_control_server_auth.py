@@ -76,3 +76,32 @@ def test_the_unix_socket_is_0600_and_may_be_tokenless():
     finally:
         httpd.server_close()
         sock.unlink(missing_ok=True)
+
+
+def test_the_unix_socket_is_0600_before_it_listens(monkeypatch):
+    """The mode must be set BEFORE `listen`, not after (P2.1's sibling).
+
+    `ThreadingUnixStreamServer.__init__` binds and listens in one call, so a
+    chmod that follows it leaves a window in which the socket is connectable
+    with the umask's mode. Read the mode at the instant `server_activate`
+    (listen) runs: anything other than 0600 there is the window.
+    """
+    seen = {}
+    real = cs._UnixHTTPServer.server_activate
+
+    def spy(self):
+        seen["mode"] = stat.S_IMODE(os.stat(self.server_address).st_mode)
+        real(self)
+
+    monkeypatch.setattr(cs._UnixHTTPServer, "server_activate", spy)
+    sock = Path(f"/tmp/divoom_ctl_{uuid.uuid4().hex[:8]}.sock")
+    old = os.umask(0)
+    try:
+        httpd = cs.serve_unix(FakeApi(), str(sock))
+    finally:
+        os.umask(old)
+    try:
+        assert seen["mode"] == 0o600, f"listening at {oct(seen['mode'])}, chmod came after"
+    finally:
+        httpd.server_close()
+        sock.unlink(missing_ok=True)

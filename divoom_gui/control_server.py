@@ -239,10 +239,20 @@ def serve_unix(api, socket_path: str, token: str | None = None):
         token = os.environ.get("DIVOOM_CONTROL_TOKEN") or None
     if os.path.exists(socket_path):
         os.unlink(socket_path)
-    httpd = _UnixHTTPServer(socket_path, make_handler(api, token))
-    # 0600, explicitly rather than by grace of the caller's umask. This is what
-    # makes the tokenless Unix path defensible while the TCP one is not.
-    os.chmod(socket_path, 0o600)
+    # bind, chmod, THEN listen. The constructor would bind and listen in one
+    # call, leaving the socket connectable at the umask's mode until a later
+    # chmod; between bind and listen a connect is refused, so the mode is in
+    # place before anyone can get in. 0600, explicitly rather than by grace of
+    # the caller's umask: it is what makes the tokenless Unix path defensible
+    # while the TCP one is not (divoomd's socket does the same, P2.1).
+    httpd = _UnixHTTPServer(socket_path, make_handler(api, token), bind_and_activate=False)
+    try:
+        httpd.server_bind()
+        os.chmod(socket_path, 0o600)
+        httpd.server_activate()
+    except BaseException:
+        httpd.server_close()
+        raise
     logger.info("Divoom control server listening on unix:%s", socket_path)
     return httpd
 

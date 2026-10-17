@@ -4,6 +4,26 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P2.1 — the socket's access rule comes from the daemon, not the umask (2026-10-17)
+
+`/tmp/divoom.sock` has no token check (`require_auth=false`), so its file mode
+IS the access rule, and the daemon never set one: it was owner-only only
+because the umask was 022. Under umask 000 it came up `srwxrwxrwx` and any
+local user could drive every panel.
+
+- **bind, chmod, listen.** `socket_bind::acquire` now binds through `socket2`
+  in two steps and sets `SOCKET_MODE` (0600) between `bind` and `listen`,
+  when a `connect` is still refused, so there is no window at the umask's
+  mode. A mode that cannot be set fails the bind; it is never listened on.
+- **The sibling.** `divoom_gui/control_server.py`'s tokenless unix surface had
+  the same shape one step later: its server bound AND listened in the
+  constructor, then chmodded. It now binds, chmods, then activates.
+- **Watched red first.** `divoomd/tests/socket_mode.rs` (its own binary: the
+  umask is process-wide) binds under umask 000 and read mode 777 before the
+  fix, 600 after. `tests/test_control_server_auth.py::
+  test_the_unix_socket_is_0600_before_it_listens` reads the mode at the
+  instant `listen` runs and was red (the chmod came after) before the fix.
+
 ## P1.9 — the release bumps the cask through the tap's own gate (2026-10-17)
 
 `scripts/release.sh` rewrote the cask with `gh api -X PUT`, so the tap's gate

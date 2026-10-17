@@ -22,6 +22,10 @@ ble = ["dep:btleplug", "dep:futures", "dep:uuid"]
 
 [dependencies]
 libc = "0.2"
+# Binds the unix socket in two steps (bind, chmod, THEN listen) so its mode is
+# set before any peer can connect; std's `UnixListener::bind` listens at once
+# and leaves the mode to the umask (P2.1). Already in the graph via tokio.
+socket2 = "0.6"
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync", "time", "macros", "net", "io-util", "io-std", "signal", "process"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

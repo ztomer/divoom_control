@@ -366,7 +366,7 @@ pub fn acquire(socket_path: &str) -> Result<Acquired, BindFailure> {
         Occupant::Nothing => {}
     }
 
-    match UnixListener::bind(socket_path) {
+    match bind_owner_only(socket_path) {
         Ok(listener) => {
             clear_failure(socket_path);
             Ok(Acquired {
@@ -383,6 +383,37 @@ pub fn acquire(socket_path: &str) -> Result<Acquired, BindFailure> {
             _ => BindFailure::Io { err: e.to_string() },
         }),
     }
+}
+
+/// The socket's mode: owner read/write, nobody else.
+///
+/// The unix socket has no token check (`require_auth=false` in
+/// [`crate::socket_server`]), so this mode IS the access rule: whoever can
+/// `connect()` can drive every panel. It used to be whatever the umask left.
+pub const SOCKET_MODE: u32 = 0o600;
+
+/// `bind`, set [`SOCKET_MODE`], and only then `listen`.
+///
+/// `UnixListener::bind` binds and listens in one call, so the file is
+/// connectable with the umask's mode until a later `chmod` lands -- a window,
+/// and a daemon started under umask 000 accepted every local user. Between
+/// `bind` and `listen` a `connect` is refused, so setting the mode in that gap
+/// leaves no moment at which a stranger could get in. Fails closed: a socket
+/// whose mode could not be set is never listened on.
+fn bind_owner_only(socket_path: &str) -> std::io::Result<UnixListener> {
+    use socket2::{Domain, SockAddr, Socket, Type};
+    use std::os::unix::fs::PermissionsExt;
+    let sock = Socket::new(Domain::UNIX, Type::STREAM, None)?;
+    sock.bind(&SockAddr::unix(socket_path)?)?;
+    if let Err(e) =
+        std::fs::set_permissions(socket_path, std::fs::Permissions::from_mode(SOCKET_MODE))
+    {
+        let _ = std::fs::remove_file(socket_path);
+        return Err(e);
+    }
+    // std's own backlog for a unix listener on this platform.
+    sock.listen(128)?;
+    Ok(UnixListener::from(sock))
 }
 
 /// Write the reason somewhere the client can read it.

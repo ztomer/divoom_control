@@ -90,15 +90,8 @@ floods or wedges the real socket server; P2.7 has a trace or is gone.
 cut a legitimately slow `sync_artwork`; per-command budgets, not one global.
 P2.7 needs a panel and the GUI's Bluetooth grant (Hardware reference below).
 
-#### P2.1 — The socket's access rule comes from the umask, not the code
-**Status:** OPEN
-**Why:** `divoomd/src/socket_bind.rs` binds `/tmp/divoom.sock` and never sets a
-mode; it is owner-only today (`srwxr-xr-x`) only because the umask is 022. A
-daemon started under a looser umask would accept any local user, and the unix
-socket path has no token check (`require_auth=false` in
-`divoomd/src/socket_server.rs`).
-**Done when:** the socket is created owner-only explicitly (mode or a 0700
-parent directory), and a test binds under umask 000 and asserts the mode.
+Landed (2026-10-17): P2.1, the socket made owner-only by the daemon rather
+than the umask.
 
 #### P2.2 — `get_status` cannot say who is connected
 **Status:** OPEN
