@@ -74,6 +74,9 @@ def _parse_basic_message(message: bytes) -> "Tuple[int, bytes] | None":
     Mirrored by ``parse_basic_message`` in ``divoomd/src/framing.rs``; the two
     move together.
     """
+    if len(message) < 7:
+        return None
+
     if message[-1] != models.MESSAGE_END_BYTE:
         return None
 

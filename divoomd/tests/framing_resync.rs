@@ -46,6 +46,20 @@ fn spurious_start_byte_does_not_swallow_the_frames_behind_it() {
 }
 
 #[test]
+fn short_candidate_is_rejected_not_panicked() {
+    // P1.11: a candidate whose length field is below three (fewer than seven
+    // bytes total) used to panic the Rust parser (slice index inversion) and
+    // emit a degenerate frame on the Python side. Both now reject it and resync
+    // by one byte, so a stray `0x01 00 00 02` can never produce a frame.
+    let mut buf = vec![0x01, 0x00, 0x00, 0x02, 0xaa, 0xbb, 0xcc];
+    let messages = parse_basic_protocol_frames(&mut buf);
+    assert!(
+        messages.is_empty(),
+        "a short candidate must not produce a frame: {messages:?}"
+    );
+}
+
+#[test]
 fn the_real_frames_parse_identically_without_the_spurious_byte() {
     // Guards the test itself: the spurious header must be the ONLY difference,
     // so the same two frames parse from the bare concatenation.

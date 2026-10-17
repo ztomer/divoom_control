@@ -4,6 +4,31 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P1.11 — the Rust Basic parser no longer panics on a short candidate (2026-10-17)
+
+`parse_basic_message` sliced the payload as `message[4..message.len() - 3]`; when a
+candidate decoded to fewer than seven bytes (a length field below three) yet
+still passed the end-marker test, that range inverted and the RX loop panicked
+("slice index starts at 4 but ends at 1"). Reproduced by feeding
+`divoomd::framing` the buffer `01 00 00 02 aa bb cc`. The Python reference did
+not panic — its negative-index slice yielded an empty payload and it emitted a
+degenerate frame — so the two disagreed, and line noise forming `01 00 00 02`
+reaches this path.
+
+Ruling (owner): reject on both sides — a candidate shorter than a full frame
+can only be line noise, so treat it as failing validation and resync by one
+byte, moving the Python reference too.
+
+- **Guard added to both.** `parse_basic_message` (Rust) and `_parse_basic_message`
+  (Python) now return `None` when `len(message) < 7`.
+- **Watched red first, on both sides.** `divoomd/tests/framing_resync.rs` and
+  `tests/test_framing_resync.py` gained `short_candidate_is_rejected_not_panicked`;
+  both failed (Rust: panic; Python: degenerate frame) before the guard and pass
+  after. Each was re-checked red by reverting only its own guard.
+- **Parity held.** `framing_parity` / `framing_round_trip` and
+  `test_framing_vectors.py` stay green.
+- Tests: `tests/test_framing_resync.py` now 2 (was 1). Full pre-push gate 27/27.
+
 ## P1.3 — CI comments no longer describe the menubar's `tao` era (2026-10-16)
 
 The menubar moved off `tao`/`tray-icon` to winit + a target-gated `ksni`

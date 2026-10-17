@@ -144,6 +144,10 @@ pub struct BasicMessage {
 /// Mirrored by `_parse_basic_message` in `divoom_lib/framing.py`; the two move
 /// together.
 fn parse_basic_message(message: &[u8]) -> Option<(u8, Vec<u8>)> {
+    if message.len() < 7 {
+        return None;
+    }
+
     if *message.last()? != models::MESSAGE_END_BYTE {
         return None;
     }

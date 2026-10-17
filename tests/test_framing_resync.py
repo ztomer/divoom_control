@@ -50,7 +50,14 @@ def test_the_two_literal_frames_are_valid_on_their_own():
     assert remainder == b""
 
 
-def test_spurious_start_byte_does_not_swallow_the_frames_behind_it():
+def test_short_candidate_is_rejected_not_panicked():
+    # P1.11: a candidate whose length field is below three (fewer than seven
+    # bytes total) used to panic the Rust parser (slice index inversion) and
+    # emit a degenerate frame on the Python side. Both now reject it and resync
+    # by one byte, so a stray `0x01 00 00 02` can never produce a frame.
+    buf = bytearray(bytes.fromhex("01000002aabbcc"))
+    messages, remainder = framing.parse_basic_protocol_frames(buf)
+    assert messages == [], "a short candidate must not produce a frame"
     buf = bytearray(_spurious_header_over(fake_length=21))
     messages, remainder = framing.parse_basic_protocol_frames(buf)
     assert [m["command_id"] for m in messages] == [0x46, 0x74], (

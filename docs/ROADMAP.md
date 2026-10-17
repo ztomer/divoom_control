@@ -23,12 +23,13 @@ marked SHIPPED -- that marker is refused.
 
 Premises were last checked against the code on **2026-10-14** (HEAD `a38e2df`,
 the goh 0.27.0 hook reinstall on top of the 2026-10-12 plan commit `a8a848d`).
-Eight items have landed since (P1.1 `15ff359` on 2026-10-15; P1.6, the
+Ten items have landed since (P1.1 `15ff359` on 2026-10-15; P1.6, the
 build/install platform gate, and P1.7, the RX frame parser's one-byte resync, on
 2026-10-16; P1.12, the framing-vector generator, P1.5, the two-suite
 collection fix, P1.2, the PyInstaller pin from a committed file, P1.4, the
-coverage floor ratcheted to the measurement, and P1.3, the stale `tao` comments
-in CI, also on 2026-10-16), so the items below have
+coverage floor ratcheted to the measurement, P1.3, the stale `tao` comments
+in CI, and P1.11, the short-frame panic fixed on both sides, also on
+2026-10-17), so the items below have
 NOT been re-derived against a later HEAD -- check an item against the code before
 working it. Phase 0 is new (goh 0.27.0's fallout,
 measured); the old Phase 0 became Phase 1 and every later phase moved up by one
@@ -73,12 +74,8 @@ Two things the phase found that are NOT its items, tracked where they belong:
 
 **Goal:** no known defect or gate hole stays open while feature work starts.
 **Exit:** every P1 item's *Done when* is a test or gate that was watched red
-first. **Size:** M (four items, each S, no hardware needed). Depends on Phase 0
+first. **Size:** M (two items, each S, no hardware needed). Depends on Phase 0
 (nothing pushes until it lands).
-**Risk:** P1.11 is the frame parser the Rust daemon and the Python reference
-share; a fix to one without the other turns the parity gate red for the wrong
-reason, so both move in one commit.
-
 #### P1.9 — The release pushes the tap bump around the tap's gate
 **Status:** OPEN
 **Why:** goh 6.8 (`bfac28b`): `scripts/release.sh` (lines 189-216) rewrites
@@ -100,24 +97,6 @@ for this, so it is not Phase 0.
 **Done when:** both jobs read the version from one committed source the local
 gate also reads (not a hand-kept literal), the install step is
 `required_tools.py --repo . --install`, and CI is green on it. Size: S.
-
-#### P1.11 — The Rust Basic parser panics on a short candidate where Python returns a frame
-**Status:** DECISION (owner)
-**Why:** `parse_basic_message` (`divoomd/src/framing.rs`) slices the payload as
-`message[4..message.len() - 3]`; when a candidate decodes to fewer than seven
-bytes (a length field below three) yet still passes the end-marker test, that
-range inverts and the RX loop **panics** ("slice index starts at 4 but ends at
-1", reproduced 2026-10-16 by feeding `divoomd::framing` the buffer
-`01 00 00 02 aa bb cc`). The Python reference does not panic: its negative-index
-slice yields an empty payload and it emits a degenerate message whose
-`command_id` is the checksum low byte. Line noise that happens to form
-`01 00 00 02` reaches this, so it is not theoretical. Filed while landing P1.7
-(same function, a different defect).
-**Done when:** the owner rules which behavior is right -- (a) match the Python
-reference (no panic, emit the degenerate frame) or (b) treat a too-short
-candidate as one that fails validation and resync past it by one byte, moving
-the reference too -- and both implementations agree, with a red-first test on
-the chosen behavior.
 
 ### Phase 2 — daemon liveness and safety
 
