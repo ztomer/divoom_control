@@ -407,11 +407,11 @@ pub async fn run(request: &VerbRequest, target: &DaemonTarget) -> Result<VerbOut
             })
         }
         // These two deliberately do NOT go through the MCP `show_image` tool.
-        // That tool decodes in the client and resizes to a hardcoded 16x16
-        // (see `mcp_tools::push_image_bytes`); the daemon's own handler takes
-        // the PATH and sizes to the panel's native resolution, handling
-        // animation frames too. Routing the CLI through the tool would quietly
-        // turn every 64x64 push into a 16x16 one.
+        // That tool decodes in the client (it may be talking to a daemon on
+        // another machine, so it cannot hand over a path); the daemon's own
+        // handler takes the PATH, sizes to the panel's native resolution, and
+        // streams every animation frame. Until P4.3 the tool also resized to
+        // a hardcoded 16x16, which is how this note began.
         //
         // `push-gif` is not a special case: it is this same call under the name
         // scripts use, exactly as it was in Python.

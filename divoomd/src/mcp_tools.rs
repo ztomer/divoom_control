@@ -9,6 +9,7 @@ use base64::Engine;
 use serde_json::{json, Value};
 
 use crate::daemon_target::DaemonTarget;
+use crate::image_fit::Fit;
 
 // name -> channel int (LIGHT_MODE_NAMES in mcp_tools.py).
 const LIGHT_MODES: [(&str, i64); 8] = [
@@ -36,6 +37,11 @@ const WEATHER_TYPES: [(&str, i64); 6] = [
 #[must_use]
 pub fn catalog() -> Value {
     let int = |lo: i64, hi: i64| json!({ "type": "integer", "minimum": lo, "maximum": hi });
+    let resize = json!({
+        "type": "string",
+        "enum": Fit::ALL.iter().map(|(n, _)| *n).collect::<Vec<_>>(),
+        "default": "fit",
+    });
     json!([
         tool("set_volume", "Set the device's speaker volume (0-15).",
             &json!({"type":"object","properties":{"level":int(0,15)},"required":["level"]})),
@@ -53,10 +59,10 @@ pub fn catalog() -> Value {
             &json!({"type":"object","properties":{"enabled":{"type":"boolean"}},"required":["enabled"]})),
         tool("set_screen_orientation", "Rotate the device's display 0/90/180/270 degrees; optionally mirror/flip.",
             &json!({"type":"object","properties":{"degrees":{"type":"integer","enum":[0,90,180,270]},"mirror":{"type":"boolean"}},"required":["degrees"]})),
-        tool("show_image", "Push a local image file to the device.",
-            &json!({"type":"object","properties":{"file":{"type":"string","description":"Local filesystem path to the image."}},"required":["file"]})),
-        tool("push_animation", "Push a GIF/animation to the device. Provide 'file' (path) or 'data' (base64). First frame for now.",
-            &json!({"type":"object","properties":{"file":{"type":"string"},"data":{"type":"string"}},"oneOf":[{"required":["file"]},{"required":["data"]}]})),
+        tool("show_image", "Draw a local image file on the panel at the panel's own resolution (from its model; pass size when it has none). resize: fit (whole image, padded black), fill (cover, cropped), exact (stretched), none (must already be the panel's size, else an error). Colours are reduced to the panel's 256-colour palette only when the image has more.",
+            &json!({"type":"object","properties":{"file":{"type":"string","description":"Local filesystem path to the image."},"resize":resize,"size":int(8,128)},"required":["file"]})),
+        tool("push_animation", "Push a GIF/animation to the device. Provide 'file' (path) or 'data' (base64). First frame for now, at the panel's resolution under the same resize policy as show_image.",
+            &json!({"type":"object","properties":{"file":{"type":"string"},"data":{"type":"string"},"resize":resize,"size":int(8,128)},"oneOf":[{"required":["file"]},{"required":["data"]}]})),
         tool("play_sound", "Beep the device (best-effort; some firmware no-ops).",
             &json!({"type":"object","properties":{"duration_ms":int(100,3000)},"required":["duration_ms"]})),
         tool("get_capabilities", "Describe a panel: link state, model, width/height in pixels (how it was decided: model_source), and the features the vendor app enables for that model (speaker, sd_card, temp_sensor, wifi, clock_style; null for an unrecognised model). There is no FM-radio flag: the vendor app does not decide FM per model.",
@@ -252,15 +258,17 @@ async fn set_screen_orientation(a: &Value, target: &DaemonTarget) -> Result<Valu
 
 async fn show_image(a: &Value, target: &DaemonTarget) -> Result<Value, String> {
     let mac = a.get("mac").and_then(Value::as_str);
-
+    let (resize, policy) = resize_policy(a)?;
     let file = a
         .get("file")
         .and_then(|v| v.as_str())
         .filter(|s| !s.is_empty())
         .ok_or("file must be a non-empty local path string")?;
     let bytes = std::fs::read(file).map_err(|e| format!("cannot read {file}: {e}"))?;
-    push_image_bytes(target, &bytes, mac).await?;
-    Ok(json!({ "ok": true, "file": file }))
+    let size = panel_size(a, target, mac).await?;
+    let frames = decode(bytes, size, policy).await?;
+    push_frame(target, &frames[0], mac).await?;
+    Ok(json!({ "ok": true, "file": file, "size": size, "resize": resize }))
 }
 
 async fn push_animation(a: &Value, target: &DaemonTarget) -> Result<Value, String> {
@@ -284,10 +292,14 @@ async fn push_animation(a: &Value, target: &DaemonTarget) -> Result<Value, Strin
             .decode(data.unwrap())
             .map_err(|e| format!("invalid base64: {e}"))?
     };
-    push_image_bytes(target, &bytes, mac).await?;
-    Ok(
-        json!({ "ok": true, "note": "pushed first frame (full animation streaming is a follow-up)" }),
-    )
+    let (resize, policy) = resize_policy(a)?;
+    let size = panel_size(a, target, mac).await?;
+    let frames = decode(bytes, size, policy).await?;
+    push_frame(target, &frames[0], mac).await?;
+    Ok(json!({
+        "ok": true, "size": size, "resize": resize,
+        "note": "pushed first frame (full animation streaming is a follow-up)",
+    }))
 }
 
 async fn get_device_state(a: &Value, target: &DaemonTarget) -> Result<Value, String> {
@@ -334,22 +346,56 @@ fn opt_int(a: &Value, key: &str, lo: i64, hi: i64, default: i64) -> Result<i64, 
     }
 }
 
-/// Decode image bytes (PNG/JPG/GIF first frame) to a 16x16 RGB frame and push it
-/// via the daemon's `show_image` (rgb kwargs). Device size is 16 for now.
-async fn push_image_bytes(
+/// The `resize` argument: its wire name and policy, `fit` when absent.
+fn resize_policy(a: &Value) -> Result<(&str, Fit), String> {
+    let name = a.get("resize").and_then(Value::as_str).unwrap_or("fit");
+    Ok((name, Fit::parse(name)?))
+}
+
+/// The edge to draw at: `size` when the caller gives one, else the panel's
+/// own width from `device_status` (P3.1). A panel with no model to go on (a
+/// LAN panel advertises no name) has no known size, and guessing one is how
+/// a 64x64 panel came to get 16x16 images -- so the caller is asked instead.
+async fn panel_size(a: &Value, target: &DaemonTarget, mac: Option<&str>) -> Result<u32, String> {
+    if a.get("size").is_some_and(|v| !v.is_null()) {
+        let edge = need_int(a, "size", 8, 128)?;
+        return u32::try_from(edge).map_err(|e| e.to_string());
+    }
+    let args = mac.map_or_else(|| json!({}), |m| json!({ "mac": m }));
+    let status = crate::mcp_daemon::cmd(target, "device_status", args).await?;
+    status
+        .get("width")
+        .and_then(Value::as_u64)
+        .and_then(|w| u32::try_from(w).ok())
+        .ok_or_else(|| {
+            "the panel's size is unknown (it advertises no model name); pass size".to_string()
+        })
+}
+
+/// Decode and fit every frame, off the async runtime (it is CPU-bound).
+async fn decode(
+    bytes: Vec<u8>,
+    size: u32,
+    policy: Fit,
+) -> Result<Vec<crate::image_proc::Frame>, String> {
+    tokio::task::spawn_blocking(move || {
+        crate::image_proc::process_image_bytes_with(bytes, size, policy, 100)
+    })
+    .await
+    .map_err(|e| format!("decode task: {e}"))?
+}
+
+/// Push one fitted frame through the daemon's `show_image` (rgb kwargs).
+async fn push_frame(
     target: &DaemonTarget,
-    bytes: &[u8],
+    frame: &crate::image_proc::Frame,
     mac: Option<&str>,
 ) -> Result<(), String> {
-    let img = image::load_from_memory(bytes).map_err(|e| format!("decode failed: {e}"))?;
-    let small = img
-        .resize_exact(16, 16, image::imageops::FilterType::Nearest)
-        .to_rgb8();
-    let rgb: Vec<u8> = small.into_raw();
+    let (rgb, w, h, time_ms) = frame;
     crate::mcp_daemon::dc_kw(
         target,
         "show_image",
-        json!({ "w": 16, "h": 16, "time_ms": 100, "rgb": rgb }),
+        json!({ "w": w, "h": h, "time_ms": time_ms, "rgb": rgb }),
         mac,
     )
     .await?;
@@ -359,3 +405,7 @@ async fn push_image_bytes(
 #[cfg(test)]
 #[path = "mcp_tools_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "mcp_tools_image_tests.rs"]
+mod image_tests;

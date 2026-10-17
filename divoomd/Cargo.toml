@@ -37,6 +37,9 @@ base64 = "0.23"
 # (while declaring image/jpeg — see nowplaying/src/artwork.rs). Without it
 # every real album cover fails to decode.
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "tiff"] }
+# Reduces a frame to the 256 colours the 0x8B palette byte can address
+# (P4.3). Already in the graph through `image`'s GIF codec, at this version.
+color_quant = "1.1"
 btleplug = { version = "0.13", optional = true }
 futures = { version = "0.3", optional = true }
 uuid = { version = "1", optional = true }

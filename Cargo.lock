@@ -698,6 +698,7 @@ dependencies = [
  "base64",
  "btleplug",
  "cbc",
+ "color_quant",
  "futures",
  "hmac",
  "image",

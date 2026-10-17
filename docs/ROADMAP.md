@@ -131,14 +131,8 @@ expires (e2e over the real `divoomd mcp` entry point). **Size:** L.
 inherits the per-device rule below and its stress gate.
 
 Landed (2026-10-17): P4.1, `get_capabilities` describing the named panel with model, size and the vendor app's per-model features (`divoomd/src/panel_features.rs`, derived by `tools/derive_panel_features.py`);
-P4.2, `list_screens` listing every known or placed screen with its size, live link and place (`screens` in `get_topology`).
-
-#### P4.3 — `show_image` draws at the panel's size, with a stated policy
-**Status:** OPEN
-**Why:** `push_image_bytes` always resizes to 16x16 ("Device size is 16 for
-now"), so a 64x64 panel gets a quarter of its pixels.
-**Done when:** the tool takes a resize policy (`fit`, `fill`, `exact`, `none`),
-sizes to the target panel, and `none` with the wrong size is a clear error.
+P4.2, `list_screens` listing every known or placed screen with its size, live link and place (`screens` in `get_topology`);
+P4.3, `show_image` drawing at the panel's size under a `resize` policy, every decoded frame held to the 256-colour palette (`divoomd/src/image_fit.rs`).
 
 #### P4.4 — `push_animation` streams every frame
 **Status:** OPEN

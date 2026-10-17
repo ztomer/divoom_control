@@ -4,6 +4,43 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P4.3 — `show_image` draws at the panel's size, with a stated policy (2026-10-17)
+
+The MCP `show_image` resized every image to 16x16 ("Device size is 16 for
+now"), so a 64x64 panel got a quarter of its pixels. Measuring the fix found a
+second wall behind the first: the 0x8B frame addresses at most 256 colours and
+the encoder refuses more ("more than 256 unique colours"), and past 16 px a
+photograph always has more. Every image path that decoded a photo at 32/64 px
+-- this tool, `display.show_image`, album art -- would have handed the encoder
+a frame it refuses.
+
+- **`divoomd/src/image_fit.rs`.** `Fit` -- `fit` (whole image, padded black),
+  `fill` (cover, centred crop), `exact` (stretch), `none` (must already be the
+  panel's size, else an error naming both sizes) -- and `limit_palette`,
+  which maps a frame through a 256-colour `NeuQuant` palette only when it has
+  more than 256 colours, so pixel art that fits is left byte-for-byte alone.
+  `color_quant` is a new direct dependency at the version `image`'s GIF codec
+  already pulls in (one copy in the graph).
+- **One pipeline.** `image_proc::process_image_bytes_with(data, size, policy,
+  ...)` fits and palette-limits every frame, static or GIF;
+  `process_image_bytes` is it with `exact`, its old behaviour, so the album
+  art job and `display.show_image` gain the palette limit without changing
+  shape.
+- **The tool.** `show_image`/`push_animation` take `resize` (default `fit`)
+  and `size` (8..128). The size is the panel's `width` from `device_status`
+  (P3.1); a panel with no model to go on is an error asking for `size`, never
+  a guessed 16. `resize: none` with the wrong size fails before anything is
+  sent.
+- **Watched red first.** Four MCP tests against the recording fake daemon
+  (`mcp_tools_image_tests.rs`, split out by the line cap) were red before the
+  wiring and again with the size forced back to 16; `a_photograph_becomes_encodable`
+  was red with the palette limit disabled. Looked at: a 300x200 gradient
+  photo through the BLE-free daemon's `render_widget album_art` at 64 px came
+  back with 233 colours and its shapes intact.
+- **Not done here.** 256x256 panels (DigitalBadge, PhotoFrame) exceed the
+  encoder's 65535-pixel bound and are refused by the daemon with that reason;
+  `push_animation` still sends one frame (P4.4).
+
 ## P4.2 — `list_screens` says what each screen is and whether it is there (2026-10-17)
 
 `list_screens` forwards `get_topology`, which returned the saved layout
