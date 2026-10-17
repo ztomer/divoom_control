@@ -75,80 +75,66 @@ pub mod tests {
         }
     }
 
-    /// R12/hardware, 2026-09-07: the weather job set data for a face it never
-    /// selected.
+    /// P3.3: weather is a frame we draw, not the firmware's clock face.
     ///
-    /// `0x5F` updates the temperature and icon ON the weather face; it does not
-    /// bring that face forward. With the panel left in the Design channel by the
-    /// album-art job, the daemon answered `{"success": true}` and the operator
-    /// kept seeing album art. Every other live widget pushes frames into the
-    /// channel it selects and is self-sufficient; weather is the only one whose
-    /// output is owned by a DIFFERENT channel.
-    ///
-    /// So the ORDER is the property: the channel switch must precede the data.
+    /// The job used to select the panel's own clock face with its weather
+    /// panel on, then send the 0x5F temperature for the firmware to draw. That
+    /// face cycles clock -> temperature on its own and looks different on
+    /// every model (R12, R73). The job now pushes the same frame
+    /// `render_widget {kind: "weather"}` previews, into the Design channel
+    /// like every other live widget, and none of the old sequence may remain:
+    /// no 0x5F, no clock-face 0x45, and never the 0x32 that dimmed the screen.
     #[tokio::test]
-    async fn test_mock_weather_selects_the_clock_face_before_sending_data() {
+    async fn test_mock_weather_pushes_a_frame_not_the_firmware_face() {
         use crate::packets::WeatherType;
         use crate::weather::WeatherInfo;
+        use std::sync::atomic::AtomicBool;
+        use std::sync::Arc;
 
-        let d = setup_mock_daemon().await;
-        let transport = d.current_transport().await.expect("a mock device");
-        crate::live_jobs::push_weather(
-            &transport,
-            WeatherInfo {
+        let d = Arc::new(setup_mock_daemon().await);
+        let mac = d.fleet.selected_id().expect("the mock panel is selected");
+        let landed = crate::live_jobs::push_weather(
+            &d,
+            &mac,
+            &Arc::new(AtomicBool::new(true)),
+            &WeatherInfo {
                 temperature_c: 21,
-                weather: WeatherType::Clear,
+                weather: WeatherType::Rain,
                 location: String::new(),
             },
-            true,
+            16,
         )
         .await;
+        assert!(landed, "the weather frame did not reach the panel");
 
-        let device_lock = d.current_transport().await;
-        if let Some(ref transport_arc) = &device_lock {
-            if let DeviceTransport::Mock(ref mock) = **transport_arc {
-                let cmds = mock.sent_commands.lock().unwrap();
-                // NOT just "a 0x45 starting with 0x00". The first version of
-                // this test asserted exactly that, and PASSED while the code
-                // sent `channel_switch(Channel::Clock)` -- ten zero bytes, an
-                // INACTIVE clock face in BLACK, which reached the panel as a
-                // blank screen. A test that only checks the channel byte cannot
-                // see a malformed packet for that channel, so it must assert
-                // the fields that make the face visible.
-                let switch = cmds
-                    .iter()
-                    .position(|(id, p)| {
-                        *id == 0x45
-                            && p.first() == Some(&0x00)      // Clock channel
-                            && p.get(3) == Some(&0x01)       // active
-                            && p.get(5) == Some(&0x01)       // the weather panel
-                            && p[7..10] != [0x00, 0x00, 0x00] // not drawn in black
-                    })
-                    .expect("an ACTIVE clock face with the weather panel on, in a visible colour");
-                let data = cmds
-                    .iter()
-                    .position(|(id, _)| *id == 0x5F)
-                    .expect("the 0x5F weather packet");
-                // 0x32 is GONE and must stay gone. It was a dead opcode on
-                // both sides of the port, it dimmed the screen 80 -> 66 on
-                // every run, and it was the last variable standing between a
-                // sequence that cycles and one that sits on a static clock.
-                assert!(
-                    !cmds.iter().any(|(id, _)| *id == 0x32),
-                    "the unexplained 0x32 must not come back"
-                );
-                drop(cmds); // `switch`/`data` below are owned copies
-                assert!(
-                    switch < data,
-                    "the channel switch must come BEFORE the weather data, \
-                     or the data lands on a face the device is not showing"
-                );
-            } else {
-                panic!("Expected Mock transport");
-            }
-        } else {
-            panic!("Expected connected device");
-        }
+        let transport = d.current_transport().await.expect("a mock device");
+        let DeviceTransport::Mock(ref mock) = *transport else {
+            panic!("Expected Mock transport");
+        };
+        let cmds = mock.sent_commands.lock().unwrap().clone();
+        let design = cmds
+            .iter()
+            .position(|(id, p)| *id == 0x45 && p.first() == Some(&0x05))
+            .expect("the Design channel is selected for the frame");
+        let frame = cmds
+            .iter()
+            .position(|(id, _)| *id == 0x8B)
+            .expect("the frame is streamed");
+        assert!(design < frame, "{cmds:?}");
+        assert!(
+            !cmds.iter().any(|(id, _)| *id == 0x5F),
+            "the firmware's weather data must not be sent: {cmds:?}"
+        );
+        assert!(
+            !cmds
+                .iter()
+                .any(|(id, p)| *id == 0x45 && p.first() == Some(&0x00)),
+            "the device's own clock face must not be selected: {cmds:?}"
+        );
+        assert!(
+            !cmds.iter().any(|(id, _)| *id == 0x32),
+            "the unexplained 0x32 must not come back"
+        );
     }
 
     #[tokio::test]

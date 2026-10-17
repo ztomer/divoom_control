@@ -1,6 +1,6 @@
 use crate::wire::WireNarrow as _;
 use serde_json::Value;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
@@ -19,6 +19,7 @@ mod health;
 mod music_job;
 pub mod render;
 pub mod sysmon;
+pub(crate) mod weather_frame;
 
 pub use coordinator::LiveJobCoordinator;
 use frame::{push_live_frame, LiveFrame};
@@ -257,66 +258,36 @@ async fn run_stocks(daemon_weak: Weak<Daemon>, mac: String, params: Value, alive
     }
 }
 
-/// The weather job's device sequence, extracted so a test can watch it.
+/// Draw one weather reading and push it to `mac` as a live frame (P3.3).
 ///
-/// It lives apart from `run_weather` because that function fetches from
-/// wttr.in, and a test that has to reach the network to check a byte sequence
-/// is a test nobody trusts. This is the half worth pinning.
+/// The same pixels `render_widget {kind: "weather"}` previews, into the Design
+/// channel through the fence every live widget shares. It replaced a sequence
+/// that drove the panel's OWN clock face (a `ClockPacket` with its weather
+/// panel on, then the 0x5F temperature): that face cycles clock -> temperature
+/// by itself and draws differently per model, so weather was the one widget
+/// whose look we did not own. Split from `run_weather` so a test can watch the
+/// bytes without reaching wttr.in.
 pub(crate) async fn push_weather(
-    dev_t: &Arc<DeviceTransport>,
-    info: crate::weather::WeatherInfo,
-    select_face: bool,
-) {
-    // The 0x32 that used to open this sequence is GONE (2026-09-07).
-    //
-    // It was the only 0x32 in the daemon, a bare literal with no test and no
-    // note, sending `[01 00 FF FF FF 00]`. The opcode is a DEAD ENTRY on both
-    // sides of the port -- `divoom_lib/models/commands.py` and this crate's own
-    // `commands.rs` both map "set lightness" to 0x32 and neither map has a
-    // caller -- so nothing here had ever verified what it does.
-    //
-    // What the hardware showed: the clock packet below CYCLES clock ->
-    // temperature when sent on its own, and kept cycling when the 0x5F data was
-    // sent before it, after it, and with the panel dimmed. Every variable was
-    // eliminated except this send, which also dropped screen brightness 80 -> 66
-    // on every run while the music job left brightness alone.
-    // 0x5F updates the temperature and icon ON the weather face; it does not
-    // bring that face forward. Sent AFTER the 0x32 so that whatever that does
-    // to the channel, this wins.
-    if select_face {
-        // A ClockPacket, NOT `channel_switch(Channel::Clock)`. The bare helper
-        // is `[channel, 0 x 9]`, which for the clock means active=0 and an RGB
-        // of BLACK -- an inactive clock face drawn in black. Sent on hardware
-        // 2026-09-07 it turned "still seeing album art" into a blank screen,
-        // which is a different bug, not a fix. `switch_channel("clock")` had
-        // used the packet builder for exactly this reason; this send did not.
-        //
-        // `weather: true` is the point of the job: R73 established on hardware
-        // that the clock face's extra panels are what put weather on the
-        // screen. Selecting the channel alone would show a clock.
-        let face = crate::packets::ClockPacket {
-            faces: crate::packets::ClockFaces {
-                weather: true,
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-        let _ = dev_t
-            .send_command(crate::packets::CMD_SET_LIGHT_MODE, &face.to_bytes(), false)
-            .await;
-    }
-
-    let packet = crate::packets::WeatherPacket {
-        temperature_c: info.temperature_c,
-        weather: info.weather,
-    };
-    let _ = dev_t
-        .send_command(
-            crate::packets::CMD_SET_TEMP_WEATHER,
-            &packet.to_bytes(),
-            true,
-        )
-        .await;
+    daemon: &Arc<Daemon>,
+    mac: &str,
+    alive: &Arc<AtomicBool>,
+    info: &crate::weather::WeatherInfo,
+    size: u32,
+) -> bool {
+    let edge = i32::try_from(size).expect("panel edge fits i32");
+    push_live_frame(
+        daemon,
+        mac,
+        "weather",
+        alive,
+        LiveFrame {
+            rgb: weather_frame::render_weather(info.temperature_c, info.weather, size),
+            w: edge,
+            h: edge,
+            time_ms: 100,
+        },
+    )
+    .await
 }
 
 async fn run_weather(
@@ -331,6 +302,12 @@ async fn run_weather(
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
+    let size = sysmon::clamp_size(
+        params
+            .get("size")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(16),
+    );
     let client = reqwest::Client::new();
 
     // R67/C4: a job with no device used to push nothing, say nothing, and
@@ -341,32 +318,11 @@ async fn run_weather(
         .map(|d| health::JobHealth::new("weather", &mac, d.tx.clone()));
     let normal_interval = Duration::from_mins(15);
 
-    // Has this job selected the face its data is drawn on?
-    //
-    // 0x5F updates the temperature and icon ON the weather face; it does not
-    // bring that face forward. Every other live widget pushes frames into the
-    // channel it selects and is therefore self-sufficient — weather is the only
-    // one whose output is owned by a DIFFERENT channel, and it used to assume
-    // the device was already showing it. Verified on hardware 2026-09-07: with
-    // the panel left in Design by the album-art job, weather reported
-    // `{"success": true}` and the operator kept seeing album art.
-    //
-    // Asserted when the job starts and again whenever it re-acquires the device
-    // after a disconnect, but NOT on every 15-minute refresh: re-selecting the
-    // channel under someone who deliberately switched away would be the job
-    // fighting its user.
-    let mut face_selected = false;
-
     loop {
         let Some(daemon) = daemon_weak.upgrade() else {
             break;
         };
         let connected = get_device_transport(&daemon, &mac).await.is_some();
-        if !connected {
-            // The next successful push is a fresh acquisition, and the device
-            // may well have come back on a different channel.
-            face_selected = false;
-        }
         report_health(
             &daemon,
             health.as_ref(),
@@ -395,25 +351,8 @@ async fn run_weather(
                 .await;
             }
             Ok(info) => {
-                if let Some(link) = match daemon.fleet.get(&mac).await {
-                    Some(d) => d.link().await,
-                    None => None,
-                } {
-                    let select_face = !face_selected;
-                    let alive_in = alive.clone();
-                    let link_in = link.clone();
-                    let _ = link
-                        .run(None, async move {
-                            if !alive_in.load(Ordering::SeqCst) || link_in.is_retired() {
-                                return;
-                            }
-                            push_weather(&link_in.transport, info, select_face).await;
-                        })
-                        .await;
-                    // The face is selected for as long as this job keeps the
-                    // device. It is re-asserted only after a disconnect, not on
-                    // every refresh -- see the note on `face_selected`.
-                    face_selected = true;
+                if connected {
+                    let _ = push_weather(&daemon, &mac, &alive, &info, size).await;
                 }
             }
         }

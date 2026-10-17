@@ -111,24 +111,13 @@ first and the symptom is gone.
 
 **Goal:** one owner (the daemon) for each panel's model, size and failure
 codes. **Exit:** `device_status` carries model/size and errors carry codes,
-with tests per model class. **Size:** M. **Risk:** P3.3 changes what the
-weather widget looks like on every panel; it needs the R12-style visual pass
-on hardware before release.
+with tests per model class. **Size:** M. **Release check (needs a panel):**
+P3.3 changed what the weather widget looks like on every panel; it needs the
+R12-style visual pass on hardware before release.
 
 Landed (2026-10-17): P3.1, `device_status` carrying each panel's model and resolution from the APK's own tables (`divoomd/src/panel_model.rs`);
-P3.2, a stable `code` on every device failure, branched on by the Settings card (`divoomd/src/error_code.rs`).
-
-#### P3.3 — Weather is drawn by the firmware, not by us
-**Status:** OPEN
-**Why:** `push_weather` (`divoomd/src/live_jobs/mod.rs`) configures the device's
-own clock face (0x5F data + a ClockPacket) and inherits its cycling and panel
-semantics; that is why weather was the only widget that broke. Every other
-widget renders frames (`divoomd/src/render_widget.rs` `KINDS` = sysmon, stocks,
-album_art, text). Rendering weather also makes it the first consumer of the
-custom-image path Phase 3 exposes.
-**Done when:** `weather` is a `render_widget` kind drawn with
-`divoomd/src/live_jobs/render.rs` and `divoomd/src/live_jobs/font.rs`, the weather job
-pushes frames, and the device's own face is no longer selected.
+P3.2, a stable `code` on every device failure, branched on by the Settings card (`divoomd/src/error_code.rs`);
+P3.3, weather drawn by us as a `render_widget` frame and pushed like every other widget, the firmware's clock face no longer selected (`divoomd/src/live_jobs/weather_frame.rs`).
 
 ### Phase 4 — MCP as a display surface
 
@@ -231,6 +220,18 @@ and changing display A's clock style leaves B's untouched (browser test).
 row icons update in place.
 **Done when:** labels and the "Active panel" check update in place; a rebuild
 happens only when the set of rows changes.
+
+#### P5.4 — The weather card shows the frame the panel shows
+**Status:** OPEN
+**Why:** since P3.3 the panel shows a frame from `render_widget {kind:
+"weather"}`, but the GUI's weather card (`renderWeatherPreview` in
+`divoom_gui/web_ui/widgets.js`) still draws its own SVG icon and text from
+`get_weather` -- a second renderer for one widget, the class R70 removed for
+sysmon, stocks and album art. It predates P3.3 (the card never matched the
+firmware's face either), but now there is a frame to mirror.
+**Done when:** the card displays the PNG from `_widget_frame("weather", ...)`
+(with the reading as text beside it), and `tests/test_widget_drift.py`'s
+call-site check sees a `"weather"` caller.
 
 ### Phase 6 — the multi-panel wall
 

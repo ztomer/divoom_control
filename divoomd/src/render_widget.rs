@@ -38,7 +38,7 @@ use crate::protocol::err_reply;
 /// Widget kinds this command can render. The GUI enumerates these rather than
 /// hardcoding a list, so a kind added here is covered by the drift test without
 /// anyone remembering to add a case.
-pub const KINDS: &[&str] = &["sysmon", "stocks", "album_art", "text"];
+pub const KINDS: &[&str] = &["sysmon", "stocks", "album_art", "text", "weather"];
 
 /// One quote, as the stock widget needs it.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -165,36 +165,7 @@ pub async fn cmd_render_widget(args: &Value) -> Value {
             )
         }
 
-        "stocks" => {
-            let symbol = params
-                .get("symbol")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            let client = match reqwest::Client::builder()
-                .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
-                .build()
-            {
-                Ok(c) => c,
-                Err(e) => return err_reply(&format!("stocks: {e}")),
-            };
-            let quote = match fetch_quote(&client, &symbol).await {
-                Ok(q) => q,
-                Err(e) => return err_reply(&e),
-            };
-            let rgb = render_stock(&symbol, quote.price, quote.change, size);
-            frame_reply(
-                kind,
-                size,
-                &rgb,
-                &json!({
-                    "symbol": symbol.to_uppercase(),
-                    "price": quote.price,
-                    "change": quote.change,
-                    "pct_change": quote.pct_change(),
-                }),
-            )
-        }
+        "stocks" => stocks_reply(size, &params).await,
 
         "album_art" => {
             let Some(b64) = params.get("image_b64").and_then(|v| v.as_str()) else {
@@ -247,9 +218,104 @@ pub async fn cmd_render_widget(args: &Value) -> Value {
             )
         }
 
+        "weather" => weather_reply(size, &params).await,
+
         other => err_reply(&format!(
             "render_widget: unknown kind '{other}' (known: {})",
             KINDS.join(", ")
         )),
     }
+}
+
+/// `render_widget {kind: "weather"}`: the frame the weather job pushes.
+async fn weather_reply(size: u32, params: &Value) -> Value {
+    match weather_reading(params).await {
+        Ok(info) => {
+            let rgb = crate::live_jobs::weather_frame::render_weather(
+                info.temperature_c,
+                info.weather,
+                size,
+            );
+            frame_reply(
+                "weather",
+                size,
+                &rgb,
+                &json!({
+                    "temperature_c": info.temperature_c,
+                    "weather": info.weather as u8,
+                    "location": info.location,
+                }),
+            )
+        }
+        Err(reply) => reply,
+    }
+}
+
+/// The reading a weather frame shows: `params.temperature_c` and
+/// `params.weather` when the caller already holds one (the network-free seam
+/// tests use), else a fetch for `params.location` -- the same fetch the job
+/// makes, so the preview cannot show a different reading than the panel.
+async fn weather_reading(params: &Value) -> Result<crate::weather::WeatherInfo, Value> {
+    use crate::protocol::{err_code, ErrorCode};
+    if let Some(raw) = params.get("temperature_c") {
+        let temperature_c = raw
+            .as_i64()
+            .and_then(|t| i8::try_from(t).ok())
+            .ok_or_else(|| {
+                err_code(
+                    ErrorCode::BadRequest,
+                    &format!("weather: temperature_c {raw} is not a whole degree in -128..=127"),
+                )
+            })?;
+        let weather = crate::packets::WeatherType::from_i64(
+            params
+                .get("weather")
+                .and_then(serde_json::Value::as_i64)
+                .unwrap_or(1),
+        );
+        return Ok(crate::weather::WeatherInfo {
+            temperature_c,
+            weather,
+            location: String::new(),
+        });
+    }
+    let location = params
+        .get("location")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    crate::weather::fetch(&reqwest::Client::new(), location)
+        .await
+        .map_err(|e| err_reply(&format!("weather: {e}")))
+}
+
+/// `render_widget {kind: "stocks"}`: the frame the stocks job pushes.
+async fn stocks_reply(size: u32, params: &Value) -> Value {
+    let symbol = params
+        .get("symbol")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let client = match reqwest::Client::builder()
+        .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => return err_reply(&format!("stocks: {e}")),
+    };
+    let quote = match fetch_quote(&client, &symbol).await {
+        Ok(q) => q,
+        Err(e) => return err_reply(&e),
+    };
+    let rgb = render_stock(&symbol, quote.price, quote.change, size);
+    frame_reply(
+        "stocks",
+        size,
+        &rgb,
+        &json!({
+            "symbol": symbol.to_uppercase(),
+            "price": quote.price,
+            "change": quote.change,
+            "pct_change": quote.pct_change(),
+        }),
+    )
 }

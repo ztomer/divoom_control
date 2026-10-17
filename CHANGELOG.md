@@ -4,6 +4,49 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P3.3 — weather is a frame we draw (2026-10-17)
+
+The weather job drove the panel's OWN clock face: a `ClockPacket` with the
+weather panel switched on, then the 0x5F temperature and icon for the firmware
+to draw. That face cycles clock -> temperature by itself, looks different per
+model, and the 0x5F data lands on whatever face the device shows -- which is
+why weather was the one widget that broke (R12, R73). Every other widget
+renders frames.
+
+- **The frame.** `divoomd/src/live_jobs/weather_frame.rs`: six hand-drawn
+  12x8 icons (sun, cloud, cloud+rain, cloud+snow, cloud+bolt, fog bars) scaled
+  by whole multiples only (x1 at 16, x2 at 32, x4 at 64), the temperature
+  beneath in the device font (`font.rs`; half glyphs at 16, full from 32,
+  doubled at 64) with a drawn degree mark. The degree mark is dropped before a
+  digit is ever clipped; on a preview under 16 px the frame is the reading
+  when its digits fit and the icon when they do not -- never a cut-off "-1"
+  for -12.
+- **One call for preview and panel.** `render_widget` gained kind `weather`
+  (`KINDS` is now sysmon, stocks, album_art, text, weather). It takes
+  `params.temperature_c`/`params.weather` when the caller holds a reading (the
+  network-free seam) or fetches `params.location` with the job's own fetch; a
+  temperature outside -128..=127 is refused with code `bad_request` rather
+  than wrapped. `stocks_reply`/`weather_reply` were split out of
+  `cmd_render_widget` for the length lint.
+- **The job pushes frames.** `push_weather(daemon, mac, alive, info, size)`
+  renders and goes through `push_live_frame` -- the Design channel, the
+  `alive`/retired-link fence, the activity event -- like stocks. The
+  `ClockPacket`, the 0x5F send and the `face_selected` bookkeeping are gone.
+  Size is `params.size` (clamped 8..64), as for the other jobs.
+- **Watched red first.** `divoomd/tests/weather_widget.rs` was red on
+  "unknown kind 'weather'". The mock test that pinned the clock-face order was
+  replaced by `test_mock_weather_pushes_a_frame_not_the_firmware_face`
+  (Design 0x45 before the 0x8B stream; no 0x5F, no clock-face 0x45, no 0x32),
+  red with a 0x5F sneaked back in. `weather_frame_tests.rs`: icons distinct
+  with colour discarded at 16/32/64 (red with snow drawn as rain's shape), the
+  temperature moving only the digit rows, the degree-mark rule, and the tiny
+  preview (both red with the fit check removed).
+- **Looked at.** A contact sheet of all six conditions at 8/12/16/32/64,
+  rendered through the real BLE-free daemon's `render_widget`, on light and
+  dark backdrops. The hardware pass stays a release check in the roadmap.
+- **Follow-up recorded.** The GUI's weather card still draws its own SVG
+  (ROADMAP P5.4).
+
 ## P3.2 — failures carry a stable code (2026-10-17)
 
 `err_reply` carried only `success` and `error`, so a client that had to act on
