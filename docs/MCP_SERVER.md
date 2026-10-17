@@ -55,7 +55,7 @@ The server exposes 14 tools via `tools/list`:
 | `show_image` | `{file: string}` | Decode a local image file (PNG/JPEG/GIF) and display it on the panel. Returns `{ok, file}`. |
 | `push_animation` | `{file?: string, data?: string}` | Push an animation or image via local file path or base64-encoded data. |
 | `play_sound` | `{duration_ms: int (100..3000)}` | Trigger hardware buzzer alert tone. Returns `{ok, duration_ms}`. |
-| `get_capabilities` | `{}` | Query device connection state, transport type, and MAC address. |
+| `get_capabilities` | `{mac?}` | Describe one panel (the named one, else the active one): link state, `model`, `width`/`height` and how they were decided (`model_source`), and `features` -- what the vendor app enables for that model (`speaker`, `sd_card`, `temp_sensor`, `wifi`, `clock_style`), `null` for an unrecognised model. No FM-radio flag: the vendor app does not decide FM per model. |
 | `get_device_state` | `{}` | Read current volume, brightness, active light mode, orientation, and mirror settings. Values are `null` when the daemon cannot be reached, so absent data is never shown as a real reading. |
 | `list_screens` | `{}` | List every known display screen: resolution, spatial coordinates, room, and wall grouping. The one tool the Python server never had. |
 

@@ -445,3 +445,22 @@ fn tools_include_optional_mac_param() {
         }
     }
 }
+
+/// P4.1: `get_capabilities` describes the panel the caller NAMED. It used to
+/// send `device_status` with no arguments, so its advertised `mac` was
+/// dropped and every call described the active panel instead.
+#[tokio::test]
+async fn get_capabilities_asks_about_the_named_panel() {
+    let daemon = FakeDaemon::start(json!({}), None).await;
+    call_tool(
+        "get_capabilities",
+        &json!({ "mac": "AA:BB" }),
+        &daemon.target,
+    )
+    .await
+    .expect("the call succeeds");
+    let seen = daemon.requests();
+    let req = seen.first().expect("one request");
+    assert_eq!(req["command"], json!("device_status"), "{req}");
+    assert_eq!(req["args"]["mac"], json!("AA:BB"), "{req}");
+}

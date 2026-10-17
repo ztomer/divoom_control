@@ -59,7 +59,7 @@ pub fn catalog() -> Value {
             &json!({"type":"object","properties":{"file":{"type":"string"},"data":{"type":"string"}},"oneOf":[{"required":["file"]},{"required":["data"]}]})),
         tool("play_sound", "Beep the device (best-effort; some firmware no-ops).",
             &json!({"type":"object","properties":{"duration_ms":int(100,3000)},"required":["duration_ms"]})),
-        tool("get_capabilities", "Read the device's static capabilities / connection state.",
+        tool("get_capabilities", "Describe a panel: link state, model, width/height in pixels (how it was decided: model_source), and the features the vendor app enables for that model (speaker, sd_card, temp_sensor, wifi, clock_style; null for an unrecognised model). There is no FM-radio flag: the vendor app does not decide FM per model.",
             &json!({"type":"object","properties":{},"additionalProperties":false})),
         tool("get_device_state", "Read the device's current volume, brightness, channel, orientation, mirror.",
             &json!({"type":"object","properties":{},"additionalProperties":false})),
@@ -126,7 +126,12 @@ pub async fn call_tool(name: &str, a: &Value, target: &DaemonTarget) -> Result<V
             crate::mcp_daemon::dc(target, "control.set_hot", json!([1]), mac).await?;
             Ok(json!({ "ok": true, "duration_ms": dur }))
         }
-        "get_capabilities" => crate::mcp_daemon::cmd(target, "device_status", json!({})).await,
+        "get_capabilities" => {
+            let args = a
+                .get("mac")
+                .map_or_else(|| json!({}), |m| json!({ "mac": m }));
+            crate::mcp_daemon::cmd(target, "device_status", args).await
+        }
         "get_device_state" => get_device_state(a, target).await,
         "list_screens" => crate::mcp_daemon::cmd(target, "get_topology", json!({})).await,
         other => Err(format!("unknown tool: {other}")),

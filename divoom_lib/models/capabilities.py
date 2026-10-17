@@ -110,6 +110,15 @@ BASELINE = Capabilities(
 # table had 18 of them wrong (a Tivoo-Max at 32x32; the vendor app draws 16).
 # The group comments below are the order rows were first written in, not a
 # size class -- the size is the field.
+#
+# `has_sd` is held the same way, to the daemon's `sd_card`
+# (`divoomd/src/panel_features.rs`, derived by running the app's
+# `setDeviceMode` -- `tools/derive_panel_features.py`), by
+# `tests/test_panel_features_parity.py`; seven rows were wrong (2026-10-17).
+# `has_fm`, `has_mic` and `has_alarm` are NOT sourced: the app has no
+# per-model switch meaning "has an FM radio" (its `FmModeEnum` only allows FM
+# as an alarm sound), and its `AlarmEnum`/`MicEnum` gate next to nothing.
+# Treat them as this table's assertions, not the vendor's.
 
 DEVICE_CAPABILITIES: dict[str, Capabilities] = {
     # first written as the 16×16 group
@@ -128,17 +137,17 @@ DEVICE_CAPABILITIES: dict[str, Capabilities] = {
 
     # first written as the 32×32 group (most were 16×16; see the header)
     "Tivoo":          replace(BASELINE, panel_resolution=16, has_fm=True, has_sd=True, has_scoreboard=True, has_orientation=True, has_screen_mirror=True, has_factory_reset=True, has_mic=True, notes=("Tivoo (16×16 retro TV).",)),
-    "TimeboxEvo":     replace(BASELINE, panel_resolution=16, has_fm=True, has_sd=True, has_scoreboard=True, has_orientation=True, has_screen_mirror=True, has_factory_reset=True, has_mic=True, notes=("Timebox Evo (16×16 cube).",)),
+    "TimeboxEvo":     replace(BASELINE, panel_resolution=16, has_fm=True, has_sd=False, has_scoreboard=True, has_orientation=True, has_screen_mirror=True, has_factory_reset=True, has_mic=True, notes=("Timebox Evo (16×16 cube).",)),
     "TivooMax":       replace(BASELINE, panel_resolution=16, has_fm=True, has_sd=True, has_scoreboard=True, has_orientation=True, has_screen_mirror=True, has_factory_reset=True, has_mic=True, notes=("Tivoo Max (16×16 retro TV, large).",)),
     "TIMOO":          replace(BASELINE, panel_resolution=16, has_fm=True, has_sd=True, has_scoreboard=True, has_orientation=True, has_screen_mirror=True, has_factory_reset=True, has_mic=True, notes=("Timoo (16×16 clock).",)),
-    "Planet9":        replace(BASELINE, panel_resolution=16, has_fm=True, has_sd=True, has_scoreboard=True, has_orientation=True, has_screen_mirror=True, has_factory_reset=True, has_mic=True, notes=("Planet 9 (16×16 round).",)),
-    "PIXOO_MAX":      replace(BASELINE, panel_resolution=32, has_fm=True, has_sd=True, has_scoreboard=True, has_orientation=True, has_screen_mirror=True, has_factory_reset=True, has_mic=True, notes=("Pixoo Max (32×32).",)),
+    "Planet9":        replace(BASELINE, panel_resolution=16, has_fm=True, has_sd=False, has_scoreboard=True, has_orientation=True, has_screen_mirror=True, has_factory_reset=True, has_mic=True, notes=("Planet 9 (16×16 round).",)),
+    "PIXOO_MAX":      replace(BASELINE, panel_resolution=32, has_fm=True, has_sd=False, has_scoreboard=True, has_orientation=True, has_screen_mirror=True, has_factory_reset=True, has_mic=True, notes=("Pixoo Max (32×32).",)),
     "PIXOO_VJ":       replace(BASELINE, panel_resolution=16, has_fm=False, has_sd=False, has_scoreboard=True, has_orientation=True, has_screen_mirror=True, has_factory_reset=True, has_mic=False, notes=("Pixoo VJ effects panel (16×16).",)),
     "TivooLit":       replace(BASELINE, panel_resolution=16, has_fm=True, has_sd=True, has_scoreboard=True, has_orientation=True, has_screen_mirror=True, has_factory_reset=True, has_mic=True, notes=("Tivoo Lit (16×16 with light).",)),
-    "TivoomMax32":    replace(BASELINE, panel_resolution=32, has_fm=True, has_sd=True, has_scoreboard=True, has_orientation=True, has_screen_mirror=True, has_factory_reset=True, has_mic=True, notes=("Tivoo Max 32 variant.",)),
+    "TivoomMax32":    replace(BASELINE, panel_resolution=32, has_fm=True, has_sd=False, has_scoreboard=True, has_orientation=True, has_screen_mirror=True, has_factory_reset=True, has_mic=True, notes=("Tivoo Max 32 variant.",)),
     "TivooLcd":       replace(BASELINE, panel_resolution=128, has_fm=True, has_sd=True, has_scoreboard=True, has_orientation=True, has_screen_mirror=True, has_factory_reset=True, has_mic=True, notes=("Tivoo LCD variant.",)),
-    "Karaoke":        replace(BASELINE, panel_resolution=64, has_fm=True, has_sd=True, has_scoreboard=True, has_orientation=True, has_screen_mirror=True, has_factory_reset=True, has_mic=True, notes=("Divoom Karaoke (64×64).",)),
-    "Lcd5Wifi":       replace(BASELINE, panel_resolution=128, has_fm=True, has_sd=True, has_scoreboard=True, has_orientation=True, has_screen_mirror=True, has_factory_reset=True, has_mic=True, notes=("Divoom 5\" LCD WiFi.",)),
+    "Karaoke":        replace(BASELINE, panel_resolution=64, has_fm=True, has_sd=False, has_scoreboard=True, has_orientation=True, has_screen_mirror=True, has_factory_reset=True, has_mic=True, notes=("Divoom Karaoke (64×64).",)),
+    "Lcd5Wifi":       replace(BASELINE, panel_resolution=128, has_fm=True, has_sd=False, has_scoreboard=True, has_orientation=True, has_screen_mirror=True, has_factory_reset=True, has_mic=True, notes=("Divoom 5\" LCD WiFi.",)),
 
     # large panels
     "Pixoo64Wifi":    replace(BASELINE, panel_resolution=64, has_fm=False, has_sd=False, has_scoreboard=True, has_orientation=True, has_screen_mirror=True, has_factory_reset=True, has_mic=False, notes=("Pixoo 64 WiFi (large panel).",)),
@@ -151,7 +160,7 @@ DEVICE_CAPABILITIES: dict[str, Capabilities] = {
     "PixelBagS":      replace(BASELINE, panel_resolution=16, has_fm=False, has_sd=False, has_scoreboard=False, has_orientation=True, has_screen_mirror=True, has_factory_reset=True, has_mic=False, notes=("Pixel Bag S (16×16).",)),
     "PixelBagNew":    replace(BASELINE, panel_resolution=16, has_fm=False, has_sd=False, has_scoreboard=False, has_orientation=True, has_screen_mirror=True, has_factory_reset=True, has_mic=False, notes=("Pixel Bag New.",)),
     "PixelBagBIPI":   replace(BASELINE, panel_resolution=16, has_fm=False, has_sd=False, has_scoreboard=False, has_orientation=True, has_screen_mirror=True, has_factory_reset=True, has_mic=False, notes=("Pixel Bag BIPI.",)),
-    "Zooe":           replace(BASELINE, panel_resolution=16, has_fm=False, has_sd=False, has_scoreboard=False, has_orientation=True, has_screen_mirror=True, has_factory_reset=True, has_mic=False, notes=("Zooe (battery, no FM/SD).",)),
+    "Zooe":           replace(BASELINE, panel_resolution=16, has_fm=False, has_sd=True, has_scoreboard=False, has_orientation=True, has_screen_mirror=True, has_factory_reset=True, has_mic=False, notes=("Zooe (battery, no FM/SD).",)),
 }
 
 

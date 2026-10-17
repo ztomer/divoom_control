@@ -130,11 +130,7 @@ expires (e2e over the real `divoomd mcp` entry point). **Size:** L.
 **Risk:** P4.6 is a new concurrency primitive on the command queue; it
 inherits the per-device rule below and its stress gate.
 
-#### P4.1 — `get_capabilities` describes the panel
-**Status:** OPEN
-**Why:** it forwards `device_status`, so it returns link state only -- no size,
-model, battery or feature flags (speaker, radio, clock).
-**Done when:** it returns what P3.1 provides plus feature flags from one table.
+Landed (2026-10-17): P4.1, `get_capabilities` describing the named panel with model, size and the vendor app's per-model features (`divoomd/src/panel_features.rs`, derived by `tools/derive_panel_features.py`).
 
 #### P4.2 — `list_screens` derives resolution and live status
 **Status:** OPEN

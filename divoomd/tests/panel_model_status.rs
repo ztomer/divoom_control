@@ -92,3 +92,23 @@ async fn every_listed_panel_carries_its_model_and_resolution() {
     assert_eq!(one["model"], "Pixoo64Wifi", "{one}");
     assert_eq!(one["width"], 64, "{one}");
 }
+
+/// P4.1: each entry also says what the vendor app enables for that model --
+/// and says nothing, rather than a guess, for a panel it cannot name.
+#[tokio::test]
+async fn every_listed_panel_carries_the_features_of_its_model() {
+    let d = Daemon::new();
+    connect(&d, "TM", "Tivoo-Max-light").await;
+    connect(&d, "P64", "Pixoo64-light").await;
+    connect(&d, "PX", "SomethingElse").await;
+    let fleet = d.handle(make_request("device_status", None, None)).await;
+
+    let tm = &entry(&fleet, "TM")["features"];
+    assert_eq!(tm["speaker"], true, "{tm}");
+    assert_eq!(tm["sd_card"], true, "{tm}");
+    assert_eq!(tm["wifi"], false, "{tm}");
+    let p64 = &entry(&fleet, "P64")["features"];
+    assert_eq!(p64["wifi"], true, "{p64}");
+    assert_eq!(p64["speaker"], false, "{p64}");
+    assert_eq!(entry(&fleet, "PX")["features"], Value::Null, "{fleet}");
+}

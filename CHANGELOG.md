@@ -4,6 +4,44 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P4.1 — `get_capabilities` describes the panel (2026-10-17)
+
+`get_capabilities` forwarded `device_status` with NO arguments: the `mac` its
+schema advertised was dropped, so every call described the active panel, and
+the reply held link state only.
+
+- **It asks about the panel named.** The tool passes `mac` through; the reply
+  is the P3.1 entry (model, width/height, `model_source`) plus `features`.
+- **Features from one table, derived, not remembered.**
+  `divoomd/src/panel_features.rs` lists, for all 50 of the vendor app's
+  models, the switches its `setDeviceMode` leaves on. The table is the output
+  of `tools/derive_panel_features.py`, which compiles that method verbatim out
+  of the decompiled `DeviceFunction.java` inside stubs of its surroundings and
+  RUNS it per model under a JDK -- 550 lines of nested branches with local
+  aliases are exactly what a hand transcription gets wrong. The same run
+  re-confirms P3.1's pixel table independently.
+- **Only switches that mean their name.** Each enum's consumers in the app
+  were read first. Kept: `speaker` (MusicEnum: Bluetooth-audio prompt, Voice
+  screen), `sd_card` (SdEnum: SD as a music source, SD firmware update),
+  `temp_sensor`, `wifi`, `clock_style`. Left out, with the reason in the
+  module doc and the tool description: FM (`FmModeEnum` only allows FM as an
+  alarm/sleep sound; the FM screen is not decided per model, so a "radio"
+  flag from it would be wrong for every Ditoo/Tivoo/Timoo), alarm (no
+  consumer), mic (one consumer). An unrecognised model gets `features: null`,
+  never the baseline's guess. Battery is not reported: nothing in the daemon
+  reads it yet.
+- **`divoom_lib` held to it.** `has_sd` is now held to `sd_card` by
+  `tests/test_panel_features_parity.py`; seven rows were wrong (TimeboxEvo --
+  which the app explicitly excludes -- Planet9, PIXOO_MAX, TivoomMax32,
+  Karaoke, Lcd5Wifi; Zooe the other way). `has_fm`/`has_mic`/`has_alarm` are
+  marked as the table's own unsourced assertions.
+- **Watched red first.** `get_capabilities_asks_about_the_named_panel`
+  (FakeDaemon sees `args.mac`) and `panel_model_status.rs`'s features test
+  were red before the wiring; the parity test's re-derivation half went red
+  on a hand edit of one Rust row (TIMOO without its SD card), and its
+  `has_sd` half was red on the seven rows above. Where the decompiled sources
+  or a JDK are absent (CI), the re-derivation half skips and says which.
+
 ## P3.3 — weather is a frame we draw (2026-10-17)
 
 The weather job drove the panel's OWN clock face: a `ClockPacket` with the

@@ -148,7 +148,9 @@ pub fn from_name(name: Option<&str>) -> Panel {
 }
 
 impl Panel {
-    /// The fields every device entry carries.
+    /// The fields every device entry carries: what the panel is, how big,
+    /// how that was decided, and what the vendor app enables for that model
+    /// (`null` when the model is not known -- never the baseline's guess).
     #[must_use]
     pub fn fields(&self) -> serde_json::Value {
         serde_json::json!({
@@ -156,6 +158,7 @@ impl Panel {
             "width": self.pixels,
             "height": self.pixels,
             "model_source": self.source,
+            "features": self.model.and_then(crate::panel_features::of),
         })
     }
 }
