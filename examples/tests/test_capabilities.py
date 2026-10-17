@@ -52,9 +52,14 @@ def test_pixoo_is_most_limited():
 
 
 def test_tivoo_max_has_all_features():
-    """Tivoo Max is a 32×32 retro TV with FM, SD, scoreboard, mic, orientation, mirror."""
+    """Tivoo Max is a 16×16 retro TV with FM, SD, scoreboard, mic, orientation, mirror.
+
+    It was pinned at 32×32 here until 2026-10-17 (P3.1). The vendor app draws
+    it at 16: `setDeviceMode` leaves TivooMax at `DevicePixel16`
+    (references/apk/.../DeviceFunction.java), and `getDeviceDimensions` in the
+    GUI already said 16. A pinned value that is wrong is part of the defect."""
     t = DEVICE_CAPABILITIES["TivooMax"]
-    assert t.panel_resolution == 32
+    assert t.panel_resolution == 16
     assert t.has_fm is True
     assert t.has_sd is True
     assert t.has_scoreboard is True
@@ -72,10 +77,11 @@ def test_ditoo_is_16x16_with_fm_sd_mic():
     assert d.has_mic is True
 
 
-def test_timoo_is_32x32_with_fm_sd_mic():
-    """Timoo is a 32×32 clock with FM, SD, mic."""
+def test_timoo_is_16x16_with_fm_sd_mic():
+    """Timoo is a 16×16 clock with FM, SD, mic (was pinned at 32; the APK's
+    `setDeviceMode` leaves TIMOO at `DevicePixel16` -- see P3.1)."""
     t = DEVICE_CAPABILITIES["TIMOO"]
-    assert t.panel_resolution == 32
+    assert t.panel_resolution == 16
     assert t.has_fm is True
     assert t.has_sd is True
     assert t.has_mic is True
@@ -96,11 +102,11 @@ def test_panel_resolution_is_per_panel_not_wall():
 
     This test guards against the conflation that originally came up in
     R13 §1 design review."""
-    tivoo = DEVICE_CAPABILITIES["TivooMax"]
+    pixoo_max = DEVICE_CAPABILITIES["PIXOO_MAX"]  # a real 32×32 panel
     # Per-panel: 32. NOT the wall canvas (which would be 32*cols).
-    assert tivoo.panel_resolution == 32
-    assert tivoo.panel_resolution * 2 == 64  # 2-col wall
-    assert tivoo.panel_resolution * 4 == 128  # 4-col wall
+    assert pixoo_max.panel_resolution == 32
+    assert pixoo_max.panel_resolution * 2 == 64  # 2-col wall
+    assert pixoo_max.panel_resolution * 4 == 128  # 4-col wall
 
 
 # ── Identifier 1: explicit device_type ──────────────────────────────────
@@ -108,7 +114,7 @@ def test_panel_resolution_is_per_panel_not_wall():
 
 def test_capabilities_for_explicit_type():
     c = capabilities_for("TivooMax")
-    assert c.panel_resolution == 32
+    assert c.panel_resolution == 16  # the APK's size (P3.1), not the old 32
     assert c.has_fm is True
 
 
@@ -137,9 +143,9 @@ def test_device_registry_roundtrip(tmp_path: Path):
     # Fresh registry instance reads the same file.
     reg2 = DeviceRegistry(path=tmp_path / "devices.json")
     assert reg2.lookup("11-75-58-3f-fd-aa").panel_resolution == 16
-    assert reg2.lookup("11-75-58-f8-c3-62").panel_resolution == 32
+    assert reg2.lookup("11-75-58-f8-c3-62").panel_resolution == 16  # TivooMax (P3.1)
     assert reg2.lookup("11-75-58-ee-a1-2d").panel_resolution == 16
-    assert reg2.lookup("11-75-58-54-b9-13").panel_resolution == 32
+    assert reg2.lookup("11-75-58-54-b9-13").panel_resolution == 16  # TIMOO (P3.1)
 
 
 def test_device_registry_case_insensitive_mac(tmp_path: Path):
@@ -234,7 +240,7 @@ def test_divoom_capabilities_uses_explicit_device_type():
     """Explicit device_type kwarg beats everything else."""
     from divoom_legacy import Divoom
     d = Divoom(mac="AA:BB:CC:DD:EE:FF", device_type="TivooMax")
-    assert d.capabilities.panel_resolution == 32
+    assert d.capabilities.panel_resolution == 16  # the APK's size (P3.1)
     assert d.capabilities.has_fm is True
 
 
@@ -261,7 +267,7 @@ def test_divoom_capabilities_uses_manufacturer_data():
     caps_mod.ADVERTISED_FINGERPRINTS[(0x0D00, (0x42,))] = "TivooMax"
     try:
         d = Divoom(mac="AA:BB:CC:DD:EE:FF", advertisement_data={0x0D00: b"\x42\x01\x02"})
-        assert d.capabilities.panel_resolution == 32
+        assert d.capabilities.panel_resolution == 16  # TivooMax (P3.1)
         assert d.capabilities.has_fm is True
     finally:
         del caps_mod.ADVERTISED_FINGERPRINTS[(0x0D00, (0x42,))]
