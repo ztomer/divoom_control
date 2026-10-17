@@ -63,7 +63,7 @@ pub fn catalog() -> Value {
             &json!({"type":"object","properties":{},"additionalProperties":false})),
         tool("get_device_state", "Read the device's current volume, brightness, channel, orientation, mirror.",
             &json!({"type":"object","properties":{},"additionalProperties":false})),
-        tool("list_screens", "List all known and connected display screens, their resolutions, spatial coordinates, rooms, and wall grouping.",
+        tool("list_screens", "List every screen the daemon knows or the saved layout places (`screens`): each with mac, connected (live link), selected, model, width/height (null when never seen), features, and its saved x/y/room; plus wall state and slots.",
             &json!({"type":"object","properties":{},"additionalProperties":false})),
     ])
 }

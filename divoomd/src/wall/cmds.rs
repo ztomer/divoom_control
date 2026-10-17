@@ -55,13 +55,56 @@ pub async fn cmd_get_topology(daemon: &Daemon, _req: &Request) -> Value {
         .await
         .ok()
         .map(|d| d.id.clone());
+    let screens = screens(daemon, &top).await;
     json!({
         "success": true,
         "wall_active": wall_active,
         "slots": slots,
         "current_device": cur_dev,
+        "screens": screens,
         "topology": top
     })
+}
+
+/// Every panel the daemon knows or the saved layout places, one entry each
+/// (P4.2): the device entry `device_status` uses (link state, model, pixels,
+/// features) plus its saved `x`/`y`/`room`. A placed panel the daemon has
+/// never linked is listed too, `connected: false` and its size `null` --
+/// unknown, not assumed 16.
+async fn screens(daemon: &Daemon, top: &Value) -> Vec<Value> {
+    let placed = top.get("devices").and_then(Value::as_object);
+    let place = |entry: &mut Value, id: &str| {
+        let spot = placed.and_then(|m| {
+            m.iter()
+                .find(|(addr, _)| addr.eq_ignore_ascii_case(id))
+                .map(|(_, v)| v)
+        });
+        if let (Some(obj), Some(spot)) = (entry.as_object_mut(), spot) {
+            for k in ["x", "y", "room"] {
+                obj.insert(k.into(), spot.get(k).cloned().unwrap_or(Value::Null));
+            }
+        }
+    };
+    let mut out = Vec::new();
+    for d in daemon.fleet.all().await {
+        let mut e = daemon.device_entry(&d).await;
+        place(&mut e, &d.id);
+        out.push(e);
+    }
+    for addr in placed.into_iter().flat_map(serde_json::Map::keys) {
+        if out.iter().any(|e| {
+            e["mac"]
+                .as_str()
+                .is_some_and(|m| m.eq_ignore_ascii_case(addr))
+        }) {
+            continue;
+        }
+        let mut e = json!({"mac": addr, "connected": false, "selected": false});
+        crate::daemon_status::merge(&mut e, &crate::panel_model::from_name(None).fields());
+        place(&mut e, addr);
+        out.push(e);
+    }
+    out
 }
 
 pub async fn cmd_set_topology(_daemon: &Daemon, req: &Request) -> Value {

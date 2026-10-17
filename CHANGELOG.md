@@ -4,6 +4,27 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P4.2 — `list_screens` says what each screen is and whether it is there (2026-10-17)
+
+`list_screens` forwards `get_topology`, which returned the saved layout
+(`x`/`y`/`room` per address) and one `current_device`: no resolution and no
+per-panel link state, so an agent could not tell a linked 64x64 panel from a
+16x16 one unplugged last week.
+
+- **`screens`.** `get_topology` now also answers `screens`: every panel the
+  daemon knows plus every address the layout places, one entry each, built by
+  the same `Daemon::device_entry` that `device_status` now uses (mac, live
+  `connected`, `selected`, model, width/height, `model_source`, features)
+  with the saved `x`/`y`/`room` merged in. A placed panel the daemon has never
+  linked is listed `connected: false` with its size `null` -- unknown, not
+  assumed 16. Address matching is case-insensitive, as the fleet's is.
+- **One entry builder.** `device_status`'s per-panel entry moved into
+  `Daemon::device_entry`, so the two listings cannot describe a panel
+  differently.
+- **Watched red first.** `divoomd/tests/topology_screens.rs` (its own binary:
+  the layout path is an environment variable) was red with no `screens`, and
+  red again with the placed-only branch disabled.
+
 ## P4.1 — `get_capabilities` describes the panel (2026-10-17)
 
 `get_capabilities` forwarded `device_status` with NO arguments: the `mac` its

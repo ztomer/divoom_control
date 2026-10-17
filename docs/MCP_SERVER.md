@@ -57,7 +57,7 @@ The server exposes 14 tools via `tools/list`:
 | `play_sound` | `{duration_ms: int (100..3000)}` | Trigger hardware buzzer alert tone. Returns `{ok, duration_ms}`. |
 | `get_capabilities` | `{mac?}` | Describe one panel (the named one, else the active one): link state, `model`, `width`/`height` and how they were decided (`model_source`), and `features` -- what the vendor app enables for that model (`speaker`, `sd_card`, `temp_sensor`, `wifi`, `clock_style`), `null` for an unrecognised model. No FM-radio flag: the vendor app does not decide FM per model. |
 | `get_device_state` | `{}` | Read current volume, brightness, active light mode, orientation, and mirror settings. Values are `null` when the daemon cannot be reached, so absent data is never shown as a real reading. |
-| `list_screens` | `{}` | List every known display screen: resolution, spatial coordinates, room, and wall grouping. The one tool the Python server never had. |
+| `list_screens` | `{}` | List every screen the daemon knows or the saved layout places, in `screens`: each with `mac`, `connected` (live link), `selected`, `model`, `width`/`height` (`null` for a placed panel never seen), `features`, and its saved `x`/`y`/`room`; plus wall state and slots. The one tool the Python server never had. |
 
 ### Validation and Error Handling
 - Protocol-level validation errors (missing arguments, invalid JSON) return standard JSON-RPC error codes (`-32602`, `-32700`, etc.).
