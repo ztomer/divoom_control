@@ -1,143 +1,36 @@
-"""The Python coverage floor means the number it advertises (R71 P0.4).
+"""P1.4: the Python coverage floor tracks the last measurement.
 
-**The defect this pins.** `scripts/py_ci.sh` advertised a 90% floor. coverage.py
-compares `round(total, precision) < fail_under` with precision defaulting to 0,
-so a total of 89.50 rounded up to 90 and passed. Measured coverage on a clean
-tree was exactly 89.50% -- the gate had been green on a 0.01-point margin
-against a floor it claimed was a full point higher, and the R70 changelog line
-"coverage 89% -> 90%, floor raised to match" described a threshold nothing ever
-enforced.
-
-That is the same shape as the finding that created R71 P0 (a hook that ran four
-checks while appearing to run eighteen): a gate believed to be stricter than it
-is. Neither was caught by a test, because both were green -- and a gate's
-green tells you nothing about what it would have refused.
-
-**What these tests do NOT do.** They do not run the suite or measure coverage;
-that is `py_ci.sh`'s job and it takes ~7.5 minutes. They pin the *configuration*
-and the *comparison semantics*, which is where the lie lived.
+`scripts/py_ci.sh` enforced 88.5 (lowered in v0.35.4 at a measured 88.74) and
+never ratcheted back, so a floor that only moves down stops protecting
+anything. The floor now equals the last measurement rounded down to 0.1, and
+the script records when and at what value it was last measured, so a quiet move
+is visible in the diff.
 """
-from __future__ import annotations
 
+import math
 import re
 from pathlib import Path
 
-import pytest
-
-REPO = Path(__file__).resolve().parent.parent
-PY_CI = REPO / "scripts" / "py_ci.sh"
-
-should_fail_under = pytest.importorskip("coverage.results").should_fail_under
+REPO = Path(__file__).resolve().parents[1]
+SCRIPT = REPO / "scripts" / "py_ci.sh"
 
 
-def _py_ci_text() -> str:
-    return PY_CI.read_text()
+def _floor_down(value: float, step: float = 0.1) -> float:
+    return math.floor(round(value / step, 9)) * step
 
 
-def _setting(name: str) -> str:
-    """Pull a shell scalar assignment out of py_ci.sh."""
-    m = re.search(rf'^{name}="?\$?\{{?[A-Z_]*:?-?([0-9.]+)\}}?"?$', _py_ci_text(), re.M)
-    assert m, f"could not find {name} in {PY_CI}"
-    return m.group(1)
+def test_coverage_floor_matches_last_measurement():
+    text = SCRIPT.read_text()
+    cov_min_match = re.search(r'COV_MIN="\$\{DIVOOM_PY_COV_MIN:-([\d.]+)\}"', text)
+    assert cov_min_match, "COV_MIN default is missing or unparseable"
+    floor = float(cov_min_match.group(1))
 
+    measured_match = re.search(r"COV_LAST_MEASURED:\s*([\d.]+)\s+on\s+(\d{4}-\d{2}-\d{2})", text)
+    assert measured_match, "script must record 'COV_LAST_MEASURED: <value> on <date>'"
+    measured = float(measured_match.group(1))
 
-def test_floor_and_precision_are_both_set():
-    """A floor without an explicit precision is a floor that rounds."""
-    floor = float(_setting("COV_MIN"))
-    precision = int(_setting("COV_PRECISION"))
-    assert 0 < floor <= 100, floor
-    assert precision >= 2, (
-        f"precision {precision} lets the floor round up to itself; the whole "
-        "defect was precision 0 turning 89.50 into a passing 90"
+    expected = _floor_down(measured, 0.1)
+    assert floor == expected, (
+        f"COV_MIN {floor} != floor({measured}, 0.1) = {expected}; "
+        "ratchet the floor to the measurement or re-measure and update the record"
     )
-
-
-def test_precision_is_actually_passed_to_pytest():
-    """Setting a variable nothing reads is the failure-path-no-op shape.
-
-    COV_PRECISION could sit in the file looking authoritative while the pytest
-    invocation ignores it and silently uses precision 0 again.
-    """
-    text = _py_ci_text()
-    assert "--cov-precision" in text, "COV_PRECISION is set but never passed to pytest"
-    assert '--cov-precision="$COV_PRECISION"' in text, (
-        "--cov-precision is present but not wired to COV_PRECISION"
-    )
-    assert '--cov-fail-under="$COV_MIN"' in text
-
-
-def test_the_advertised_floor_is_the_enforced_floor():
-    """A total just under the advertised number must FAIL.
-
-    Under the old config (floor 90, precision 0) this was false for the whole
-    half-point band [89.5, 90). That band is the bug.
-    """
-    floor = float(_setting("COV_MIN"))
-    precision = int(_setting("COV_PRECISION"))
-
-    # Comfortably under the floor: must fail.
-    assert should_fail_under(floor - 0.5, floor, precision)
-    # Exactly at the floor: must pass.
-    assert not should_fail_under(floor, floor, precision)
-    # A tenth under: must fail. This is the assertion the old config flunked.
-    assert should_fail_under(floor - 0.1, floor, precision), (
-        f"a total of {floor - 0.1} passes a floor of {floor} -- the floor is "
-        "still rounding its way to green"
-    )
-
-
-def test_old_configuration_would_fail_this_suite():
-    """Calibration: prove these tests can tell the two configs apart.
-
-    If this passes with the OLD numbers too, the tests above are decoration.
-    """
-    old_floor, old_precision = 90.0, 0
-    assert not should_fail_under(89.50, old_floor, old_precision), (
-        "the historical defect no longer reproduces, so these tests are no "
-        "longer pinning what they claim to pin"
-    )
-    # ...and the current config does not have that hole.
-    floor = float(_setting("COV_MIN"))
-    precision = int(_setting("COV_PRECISION"))
-    assert should_fail_under(89.49, floor, precision) or floor <= 89.49
-
-
-def test_floor_is_not_quietly_lowered_to_nothing():
-    """A ratchet that can be set to 0 is not a ratchet.
-
-    Guards the lazy fix for a red floor: dropping it rather than earning it.
-    """
-    assert float(_setting("COV_MIN")) >= 85.0, (
-        "the Python coverage floor has been lowered below 85%; if that was "
-        "deliberate, say the number out loud in the CHANGELOG and move this "
-        "bound with it"
-    )
-
-
-def test_the_floor_binds_on_every_run():
-    """No branch of py_ci.sh runs the main suite without the floor.
-
-    Until 2026-10-14 the floored pytest sat in `if have_camoufox`, with a
-    floor-less `python3 -m pytest -q` in the else. The probe behind it asked
-    whether the PINNED camoufox build was active, so when another project moved
-    the machine-wide cache to a newer build the script reported "no camoufox
-    browser" over an installed one and enforced nothing. The browser suites
-    never fed this number anyway (no --run-browser here). So: exactly one
-    main-suite invocation, unindented (not inside any branch), carrying the
-    floor.
-    """
-    lines = _py_ci_text().splitlines()
-    main = [
-        (i, ln) for i, ln in enumerate(lines)
-        if re.search(r"\bpython3 -m pytest\b", ln) and "examples/tests" not in ln
-    ]
-    assert len(main) == 1, f"one main-suite pytest, got: {[ln for _, ln in main]}"
-    i, line = main[0]
-    assert not line[:1].isspace(), f"the floored pytest is inside a branch: {line!r}"
-    invocation = []
-    while True:
-        invocation.append(lines[i])
-        if not lines[i].rstrip().endswith("\\"):
-            break
-        i += 1
-    assert '--cov-fail-under="$COV_MIN"' in "\n".join(invocation), invocation

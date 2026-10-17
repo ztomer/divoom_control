@@ -101,8 +101,9 @@ source "${GOH_DIR:-$HOME/Projects/gates_of_heck}/tui/lib.sh"
 # goes, while the codebase gets better. Read a falling number here as a question
 # v0.35.4: deleted 52 statements of well-covered dead preset methods from
 # PresetsManagerMixin following Virtual Wall Arranger retirement (measured 88.74%).
-# Floor 88.5 so routine work is not blocked by hundredths.
-COV_MIN="${DIVOOM_PY_COV_MIN:-88.5}"
+# Last measured 2026-10-16: 89.01% (COV_LAST_MEASURED: 89.01 on 2026-10-16).
+# Ratchet: floor = measurement rounded down to 0.1.
+COV_MIN="${DIVOOM_PY_COV_MIN:-89.0}"
 COV_PRECISION=2
 
 info "pytest (coverage floor ${COV_MIN}% over divoom_gui + divoom_client;" \

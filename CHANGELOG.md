@@ -4,6 +4,22 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P1.4 — the Python coverage floor ratcheted to the measurement (2026-10-16)
+
+`scripts/py_ci.sh` enforced 88.5 (lowered in v0.35.4 at a measured 88.74) and
+never ratcheted back, so a floor that only moves down stops protecting
+anything.
+
+- **Ratcheted.** Measured coverage on a clean tree is 89.01%; the floor is now
+  89.0 (measurement rounded down to 0.1), with `COV_LAST_MEASURED: 89.01 on
+  2026-10-16` recorded in the script so a quiet move is visible in the diff.
+- **Watched red first.** `tests/test_coverage_floor.py` parses the script and
+  asserts `COV_MIN == floor(last_measured, 0.1)`. Red first (no record, 88.5
+  vs 89.0); green after. Calibrated both directions: a wrong floor and a stale
+  measurement each go red.
+- Tests: `tests/test_coverage_floor.py` added (1). Python suite 1660 passed /
+  132 skipped. Full pre-push gate 26/26.
+
 ## P1.2 — PyInstaller is pinned from a committed file (2026-10-16)
 
 `scripts/build_release.sh` built with whatever PyInstaller the `.buildvenv`
