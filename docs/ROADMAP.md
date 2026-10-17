@@ -23,11 +23,12 @@ marked SHIPPED -- that marker is refused.
 
 Premises were last checked against the code on **2026-10-14** (HEAD `a38e2df`,
 the goh 0.27.0 hook reinstall on top of the 2026-10-12 plan commit `a8a848d`).
-Seven items have landed since (P1.1 `15ff359` on 2026-10-15; P1.6, the
+Eight items have landed since (P1.1 `15ff359` on 2026-10-15; P1.6, the
 build/install platform gate, and P1.7, the RX frame parser's one-byte resync, on
 2026-10-16; P1.12, the framing-vector generator, P1.5, the two-suite
-collection fix, P1.2, the PyInstaller pin from a committed file, and P1.4, the
-coverage floor ratcheted to the measurement, also on 2026-10-16), so the items below have
+collection fix, P1.2, the PyInstaller pin from a committed file, P1.4, the
+coverage floor ratcheted to the measurement, and P1.3, the stale `tao` comments
+in CI, also on 2026-10-16), so the items below have
 NOT been re-derived against a later HEAD -- check an item against the code before
 working it. Phase 0 is new (goh 0.27.0's fallout,
 measured); the old Phase 0 became Phase 1 and every later phase moved up by one
@@ -72,21 +73,11 @@ Two things the phase found that are NOT its items, tracked where they belong:
 
 **Goal:** no known defect or gate hole stays open while feature work starts.
 **Exit:** every P1 item's *Done when* is a test or gate that was watched red
-first. **Size:** M (five items, each S, no hardware needed). Depends on Phase 0
+first. **Size:** M (four items, each S, no hardware needed). Depends on Phase 0
 (nothing pushes until it lands).
 **Risk:** P1.11 is the frame parser the Rust daemon and the Python reference
 share; a fix to one without the other turns the parity gate red for the wrong
 reason, so both move in one commit.
-
-#### P1.3 — CI comments still describe the menubar's `tao` era
-**Status:** OPEN
-**Why:** `.github/workflows/tests.yml` (the `rust-ble` job comments, about lines
-283 and 293 on 2026-10-12) says the menubar (`tao/tray-icon`) needs system
-packages no Linux runner ships; the lock has
-no `tao` since 2026-09-20 and the menubar is on winit plus a target-gated
-`ksni`. A wrong comment next to a CI job decides what the next person skips.
-**Done when:** the comments name the real dependency, and the system-packages
-claim is either proven by a Linux build or deleted.
 
 #### P1.8 — 52 hand-rolled status markers
 **Status:** OPEN

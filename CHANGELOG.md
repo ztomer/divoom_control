@@ -4,6 +4,22 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P1.3 — CI comments no longer describe the menubar's `tao` era (2026-10-16)
+
+The menubar moved off `tao`/`tray-icon` to winit + a target-gated `ksni`
+(2026-09-20), but `.github/workflows/tests.yml` still said it needed
+`tao`/`tray-icon` system packages no Linux runner ships. A wrong comment next
+to a CI job decides what the next person skips.
+
+- **Corrected.** The comments now name the real dependency (winit/ksni) and
+  state the actual reason the menubar is macOS-only (Apple-target code, no
+  Linux build), instead of an unproven system-packages claim.
+- **Watched red first.** `tests/test_ci_comments_no_tao.py` fails if the
+  workflow mentions `tao`. Red first, green after; calibrated by re-introducing
+  `tao` (red again).
+- Tests: `tests/test_ci_comments_no_tao.py` added (1). Python suite 1661 passed
+  / 132 skipped. Full pre-push gate 26/26.
+
 ## P1.4 — the Python coverage floor ratcheted to the measurement (2026-10-16)
 
 `scripts/py_ci.sh` enforced 88.5 (lowered in v0.35.4 at a measured 88.74) and

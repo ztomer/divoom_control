@@ -250,9 +250,8 @@ jobs:
       - name: cargo clippy (divoomd, all targets/features, deny warnings)
         # Scoped to divoomd deliberately: this is the LINUX job, and a
         # workspace-wide clippy pulls in divoom-menubar, which is macOS-only
-        # and never ships on Linux (its winit/tray-icon deps are Apple-target
-        # code; the tao→GTK edge they replaced is gone since 2026-09-20, but
-        # the crate still has no Linux build). The macOS rust-ble job lints
+        # and never ships on Linux (its winit/ksni deps are Apple-target
+        # code; the menubar has no Linux build). The macOS rust-ble job lints
         # the whole workspace instead.
         run: cargo clippy -p divoomd --all-targets --all-features -- -D warnings
       # Clippy reports only on the cfg it COMPILED for and is silent about
@@ -280,8 +279,8 @@ jobs:
   rust-ble:
     # Full native daemon build with the `ble` feature (btleplug against
     # CoreBluetooth). macOS because it is the only platform where the
-    # workspace-wide lint runs: divoom-menubar (tao/tray-icon) needs system
-    # packages no Linux runner image ships.
+    # workspace-wide lint runs: divoom-menubar (winit/ksni) is macOS-only
+    # (Apple-target code, no Linux build).
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
@@ -290,7 +289,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: cargo clippy (whole workspace, all targets/features, deny warnings)
         # macOS owns the workspace-wide lint: it is the only platform where
-        # divoom-menubar (tao/tray-icon) builds without extra system packages.
+        # divoom-menubar (winit/ksni) builds (Apple-target code).
         run: cargo clippy --all-targets --all-features -- -D warnings
       - name: Build + test with BLE (whole workspace)
         # Workspace root: this also builds and runs divoom-menubar's tests,
