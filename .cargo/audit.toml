@@ -6,7 +6,7 @@
 # longer fires should be DELETED, not left to rot -- a stale exemption is a hole
 # held open for the next real finding to fall through.
 #
-# EMPTY since 2026-09-21: the tao -> gtk edge is gone (divoom-menubar runs on
+# EMPTY 2026-09-21..2026-10-17: the tao -> gtk edge is gone (divoom-menubar runs on
 # winit now), so all eleven GTK3-subtree ignores stopped firing and were
 # deleted per the rule above -- verified `cargo audit` green with `ignore = []`.
 # The winit default-features subtree would have added a twelfth
@@ -21,4 +21,13 @@ quiet = false
 deny = ["warnings", "unmaintained", "unsound", "yanked"]
 
 [advisories]
-ignore = []
+# 2026-10-17: RustSec marked zvariant, zvariant_derive and zbus_names unmaintained on 2026-10-16
+# -- merged into zbus 6.0.0 (released the same day). They reach this tree ONLY through
+# divoom-menubar -> tray-icon 0.26.1 -> ksni 0.3.6, and ksni's newest release still requires
+# `zbus ^5`; nothing here names zbus. Not movable from this repo. Each entry goes the moment
+# ksni (or tray-icon) ships on zbus 6 -- goh's audit-ignore check fails a stale entry.
+ignore = [
+    "RUSTSEC-2026-0370", # zvariant unmaintained: only via tray-icon -> ksni 0.3.6 (zbus ^5)
+    "RUSTSEC-2026-0371", # zbus_names unmaintained: only via tray-icon -> ksni 0.3.6 (zbus ^5)
+    "RUSTSEC-2026-0372", # zvariant_derive unmaintained: only via tray-icon -> ksni 0.3.6 (zbus ^5)
+]
