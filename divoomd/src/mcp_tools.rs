@@ -61,7 +61,7 @@ pub fn catalog() -> Value {
             &json!({"type":"object","properties":{"degrees":{"type":"integer","enum":[0,90,180,270]},"mirror":{"type":"boolean"}},"required":["degrees"]})),
         tool("show_image", "Draw a local image file on the panel at the panel's own resolution (from its model; pass size when it has none). resize: fit (whole image, padded black), fill (cover, cropped), exact (stretched), none (must already be the panel's size, else an error). Colours are reduced to the panel's 256-colour palette only when the image has more.",
             &json!({"type":"object","properties":{"file":{"type":"string","description":"Local filesystem path to the image."},"resize":resize,"size":int(8,128)},"required":["file"]})),
-        tool("push_animation", "Push a GIF/animation to the device. Provide 'file' (path) or 'data' (base64). First frame for now, at the panel's resolution under the same resize policy as show_image.",
+        tool("push_animation", "Play a GIF/animation on the panel: every frame, each for its own duration (GIF delays; 50 ms minimum), at the panel's resolution under the same resize policy as show_image. Provide 'file' (path) or 'data' (base64).",
             &json!({"type":"object","properties":{"file":{"type":"string"},"data":{"type":"string"},"resize":resize,"size":int(8,128)},"oneOf":[{"required":["file"]},{"required":["data"]}]})),
         tool("play_sound", "Beep the device (best-effort; some firmware no-ops).",
             &json!({"type":"object","properties":{"duration_ms":int(100,3000)},"required":["duration_ms"]})),
@@ -267,7 +267,9 @@ async fn show_image(a: &Value, target: &DaemonTarget) -> Result<Value, String> {
     let bytes = std::fs::read(file).map_err(|e| format!("cannot read {file}: {e}"))?;
     let size = panel_size(a, target, mac).await?;
     let frames = decode(bytes, size, policy).await?;
-    push_frame(target, &frames[0], mac).await?;
+    // An image tool shows an image: a GIF given here shows its first frame,
+    // and `push_animation` is the tool that plays it.
+    push_frames(target, &frames[..1.min(frames.len())], mac).await?;
     Ok(json!({ "ok": true, "file": file, "size": size, "resize": resize }))
 }
 
@@ -295,11 +297,8 @@ async fn push_animation(a: &Value, target: &DaemonTarget) -> Result<Value, Strin
     let (resize, policy) = resize_policy(a)?;
     let size = panel_size(a, target, mac).await?;
     let frames = decode(bytes, size, policy).await?;
-    push_frame(target, &frames[0], mac).await?;
-    Ok(json!({
-        "ok": true, "size": size, "resize": resize,
-        "note": "pushed first frame (full animation streaming is a follow-up)",
-    }))
+    push_frames(target, &frames, mac).await?;
+    Ok(json!({ "ok": true, "size": size, "resize": resize, "frames": frames.len() }))
 }
 
 async fn get_device_state(a: &Value, target: &DaemonTarget) -> Result<Value, String> {
@@ -385,17 +384,30 @@ async fn decode(
     .map_err(|e| format!("decode task: {e}"))?
 }
 
-/// Push one fitted frame through the daemon's `show_image` (rgb kwargs).
-async fn push_frame(
+/// Push fitted frames through the daemon's `show_image`, all in one call:
+/// the daemon encodes each with its own duration and streams them as one
+/// animation (P4.4). One frame is the same call with a list of one.
+async fn push_frames(
     target: &DaemonTarget,
-    frame: &crate::image_proc::Frame,
+    frames: &[crate::image_proc::Frame],
     mac: Option<&str>,
 ) -> Result<(), String> {
-    let (rgb, w, h, time_ms) = frame;
+    let Some((_, w, h, _)) = frames.first() else {
+        return Err("the image decoded to no frames".into());
+    };
+    let wire: Vec<Value> = frames
+        .iter()
+        .map(|(rgb, _, _, time_ms)| {
+            json!({
+                "rgb_b64": base64::engine::general_purpose::STANDARD.encode(rgb),
+                "time_ms": time_ms,
+            })
+        })
+        .collect();
     crate::mcp_daemon::dc_kw(
         target,
         "show_image",
-        json!({ "w": w, "h": h, "time_ms": time_ms, "rgb": rgb }),
+        json!({ "w": w, "h": h, "frames": wire }),
         mac,
     )
     .await?;

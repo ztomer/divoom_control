@@ -140,6 +140,12 @@ async fn show_clock(ctx: CallCtx<'_>) -> Value {
     }
 }
 
+/// `show_image {w, h, rgb | frames}`: one frame as a byte array (`rgb`), or an
+/// animation as `frames: [{rgb_b64, time_ms}]` (P4.4) -- every frame encoded
+/// with its own duration and streamed as one 0x8B blob, as
+/// `display.show_image` does for a GIF it decodes itself. Base64 per frame
+/// rather than arrays: a 64x64 animation as JSON numbers is four times the
+/// bytes on the wire.
 async fn show_image(ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let kw = ctx.kwargs;
@@ -148,32 +154,73 @@ async fn show_image(ctx: CallCtx<'_>) -> Value {
     // match a real buffer length, and neither can a wrapped huge one.
     let w = i32::try_from(get_kwarg_i64(kw, "w", 16)).unwrap_or(-1);
     let h = i32::try_from(get_kwarg_i64(kw, "h", 16)).unwrap_or(-1);
-    let time_ms = get_kwarg_i64(kw, "time_ms", 100).word();
-    let rgb: Vec<u8> = match kw.and_then(|m| m.get("rgb")).and_then(|v| v.as_array()) {
-        Some(a) => a
-            .iter()
-            .filter_map(|x| x.as_u64().map(crate::wire::WireNarrow::byte))
-            .collect(),
-        None => return err_reply("show_image requires 'rgb' (array of u8)"),
+    let frames = match image_frames(kw) {
+        Ok(f) => f,
+        Err(e) => return err_reply(&e),
     };
     let expected = usize::try_from(w * h * 3).unwrap_or(usize::MAX);
-    if rgb.len() != expected {
-        return err_reply(&format!(
-            "show_image: rgb.len()={} expected w*h*3={expected}",
-            rgb.len()
-        ));
+    let mut blob = Vec::new();
+    for (i, (rgb, time_ms)) in frames.iter().enumerate() {
+        if rgb.len() != expected {
+            return err_reply(&format!(
+                "show_image: frame {i} has {} bytes, expected w*h*3={expected}",
+                rgb.len()
+            ));
+        }
+        // The refusal names itself, so the reply does too: "more than 256
+        // unique colours" is an answer, "encode_animation_frame failed" was not.
+        match crate::image_encode::encode_animation_frame(rgb, w, h, *time_ms) {
+            Ok(b) => blob.extend_from_slice(&b),
+            Err(why) => return err_reply(&format!("encode failed for frame {i} ({w}x{h}): {why}")),
+        }
     }
-    // The refusal now names itself, so the reply does too: "more than 256
-    // unique colours" is an answer, "encode_animation_frame failed" was not.
-    let blob = match crate::image_encode::encode_animation_frame(&rgb, w, h, time_ms) {
-        Ok(b) => b,
-        Err(why) => return err_reply(&format!("encode failed for frame {w}x{h}: {why}")),
-    };
     match dev.stream_animation_8b(&blob).await {
-        Ok(true) => json!({"success": true, "result": true}),
+        Ok(true) => json!({"success": true, "result": true, "frames": frames.len()}),
         Ok(false) => err_reply("stream_animation_8b: empty blob"),
         Err(e) => err_reply(&format!("stream_animation_8b failed: {e}")),
     }
+}
+
+/// The frames a `show_image` call carries, as `(rgb, time_ms)`.
+fn image_frames(
+    kw: Option<&serde_json::Map<String, Value>>,
+) -> Result<Vec<(Vec<u8>, u16)>, String> {
+    use base64::Engine as _;
+    if let Some(frames) = kw.and_then(|m| m.get("frames")).and_then(Value::as_array) {
+        if frames.is_empty() {
+            return Err("show_image: 'frames' is empty".into());
+        }
+        return frames
+            .iter()
+            .enumerate()
+            .map(|(i, f)| {
+                let b64 = f
+                    .get("rgb_b64")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| format!("show_image: frame {i} has no 'rgb_b64'"))?;
+                let rgb = base64::engine::general_purpose::STANDARD
+                    .decode(b64)
+                    .map_err(|e| format!("show_image: frame {i}: bad base64: {e}"))?;
+                let time_ms = f
+                    .get("time_ms")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(100)
+                    .word();
+                Ok((rgb, time_ms))
+            })
+            .collect();
+    }
+    let time_ms = get_kwarg_i64(kw, "time_ms", 100).word();
+    let rgb = kw
+        .and_then(|m| m.get("rgb"))
+        .and_then(Value::as_array)
+        .ok_or("show_image requires 'rgb' (array of u8) or 'frames'")?;
+    Ok(vec![(
+        rgb.iter()
+            .filter_map(|x| x.as_u64().map(crate::wire::WireNarrow::byte))
+            .collect(),
+        time_ms,
+    )])
 }
 
 async fn set_clock_rich(ctx: CallCtx<'_>) -> Value {

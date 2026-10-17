@@ -4,6 +4,33 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P4.4 — `push_animation` streams every frame (2026-10-17)
+
+`push_animation` pushed the first frame and said so ("full animation
+streaming is a follow-up"): the daemon's `show_image` method took exactly one
+`rgb` array.
+
+- **The daemon takes an animation.** `show_image` accepts
+  `frames: [{rgb_b64, time_ms}]` beside the old single `rgb`: each frame is
+  checked against `w*h*3` (a bad one is refused by index), encoded with its
+  own duration, and the frames streamed as one 0x8B blob -- what
+  `display.show_image` already did for a GIF it decoded itself. Base64 per
+  frame, because a 64x64 animation as JSON numbers is four times the bytes.
+  The reply says how many frames went out.
+- **One push path in the MCP server.** `push_frames` sends every fitted frame
+  in one call; `show_image` sends a list of one (a GIF given to the image
+  tool shows its first frame; the animation tool plays it). GIF delays become
+  durations through `image_proc` (50 ms floor), so timing is the file's.
+- **Watched red first.** `divoomd/tests/animation_frames.rs` drives the real
+  dispatcher onto a mock panel and parses the streamed blob back into frame
+  headers: durations `[100, 250, 400]` in, the same out; it and the
+  wrong-length case were red on the single-frame handler. The MCP test plays
+  a real three-frame GIF through the recording fake daemon and was red again
+  with the push cut back to the first frame.
+- **Roadmap repair.** The P4.3 commit deleted P4.3 but left P4.4 and P4.6
+  depending on it, which `tests/test_roadmap_shape.py` flags; the dangling
+  dependencies are gone.
+
 ## P4.3 — `show_image` draws at the panel's size, with a stated policy (2026-10-17)
 
 The MCP `show_image` resized every image to 16x16 ("Device size is 16 for

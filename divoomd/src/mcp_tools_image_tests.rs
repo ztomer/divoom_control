@@ -15,6 +15,13 @@ fn wide_png(tag: &str) -> std::path::PathBuf {
     path
 }
 
+fn decoded_len(frame: &Value) -> usize {
+    base64::engine::general_purpose::STANDARD
+        .decode(frame["rgb_b64"].as_str().expect("rgb_b64"))
+        .expect("base64")
+        .len()
+}
+
 fn shown(daemon: &FakeDaemon) -> Value {
     daemon
         .requests()
@@ -46,7 +53,9 @@ async fn show_image_draws_at_the_panels_size() {
     let kw = &shown(&daemon)["args"]["kwargs"];
     assert_eq!(kw["w"], json!(64));
     assert_eq!(kw["h"], json!(64));
-    assert_eq!(kw["rgb"].as_array().map(Vec::len), Some(64 * 64 * 3));
+    let frames = kw["frames"].as_array().expect("frames");
+    assert_eq!(frames.len(), 1, "an image is one frame");
+    assert_eq!(decoded_len(&frames[0]), 64 * 64 * 3);
     let _ = std::fs::remove_file(png);
 }
 
@@ -113,4 +122,52 @@ async fn an_unknown_resize_policy_is_rejected_by_name() {
     .await
     .expect_err("not a policy");
     assert!(err.contains("resize"), "{err}");
+}
+
+// ── P4.4: every frame of an animation ───────────────────────────────────
+
+/// A 3-frame GIF on disk with the given per-frame delays.
+fn three_frame_gif(tag: &str, delays_ms: [u32; 3]) -> std::path::PathBuf {
+    use image::codecs::gif::GifEncoder;
+    use image::{Delay, Frame, Rgba, RgbaImage};
+    let path = std::env::temp_dir().join(format!("divoom_mcp_{tag}_{}.gif", std::process::id()));
+    let file = std::fs::File::create(&path).expect("create gif");
+    let mut enc = GifEncoder::new(file);
+    for (i, ms) in delays_ms.into_iter().enumerate() {
+        let shade = u8::try_from(i * 100).expect("small");
+        let img = RgbaImage::from_pixel(8, 8, Rgba([shade, 50, 200, 255]));
+        enc.encode_frame(Frame::from_parts(
+            img,
+            0,
+            0,
+            Delay::from_numer_denom_ms(ms, 1),
+        ))
+        .expect("encode frame");
+    }
+    drop(enc);
+    path
+}
+
+#[tokio::test]
+async fn push_animation_sends_every_frame_with_its_delay() {
+    let daemon = FakeDaemon::replying(
+        json!({ "success": true, "width": 16, "height": 16, "result": true }),
+        None,
+    )
+    .await;
+    let gif = three_frame_gif("anim", [100, 250, 400]);
+    let reply = call_tool(
+        "push_animation",
+        &json!({ "file": gif.to_str() }),
+        &daemon.target,
+    )
+    .await
+    .expect("played");
+    assert_eq!(reply["frames"], json!(3), "{reply}");
+    let kw = &shown(&daemon)["args"]["kwargs"];
+    let frames = kw["frames"].as_array().expect("frames");
+    let times: Vec<_> = frames.iter().map(|f| f["time_ms"].clone()).collect();
+    assert_eq!(times, vec![json!(100), json!(250), json!(400)]);
+    assert!(frames.iter().all(|f| decoded_len(f) == 16 * 16 * 3));
+    let _ = std::fs::remove_file(gif);
 }

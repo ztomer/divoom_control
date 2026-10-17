@@ -132,14 +132,8 @@ inherits the per-device rule below and its stress gate.
 
 Landed (2026-10-17): P4.1, `get_capabilities` describing the named panel with model, size and the vendor app's per-model features (`divoomd/src/panel_features.rs`, derived by `tools/derive_panel_features.py`);
 P4.2, `list_screens` listing every known or placed screen with its size, live link and place (`screens` in `get_topology`);
-P4.3, `show_image` drawing at the panel's size under a `resize` policy, every decoded frame held to the 256-colour palette (`divoomd/src/image_fit.rs`).
-
-#### P4.4 — `push_animation` streams every frame
-**Status:** OPEN
-**Why:** it pushes the first frame and says so ("full animation streaming is a
-follow-up").
-**Done when:** multi-frame animations play on the panel, frame timing honoured.
-**Depends on:** P4.3
+P4.3, `show_image` drawing at the panel's size under a `resize` policy, every decoded frame held to the 256-colour palette (`divoomd/src/image_fit.rs`);
+P4.4, `push_animation` playing every frame with its own duration through one multi-frame `show_image` call.
 
 #### P4.5 — Text, live jobs and the built-in tools over MCP
 **Status:** OPEN
@@ -158,7 +152,6 @@ crashed agent leaves a stale frame forever.
 **Done when:** a caller acquires a lease with a mandatory TTL and renewal; on
 expiry the panel returns to what it showed before; continuous pushes for one
 panel are conflated (latest frame wins) on slow links.
-**Depends on:** P4.3
 
 #### P4.7 — Transient notifications as a tool
 **Status:** OPEN
