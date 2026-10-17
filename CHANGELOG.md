@@ -4,6 +4,21 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P1.9 — the release bumps the cask through the tap's own gate (2026-10-17)
+
+`scripts/release.sh` rewrote the cask with `gh api -X PUT`, so the tap's gate
+never ran on the bump. It now delegates to goh's `tap_bump.sh`, which clones
+the tap, moves the version, every url and every sha256, commits, runs the tap's
+`tools/gate.sh --full`, and pushes the commit pinned. A red gate pushes nothing.
+
+- **One call.** The whole cask bump is a single `tap_bump.sh` invocation.
+- **--dry-run.** `scripts/release.sh --dry-run` passes `--dry-run` through, so
+  the tap gate step shows without pushing.
+- **Watched red first.** `tests/test_release_tap_bump.py` (2) asserts the
+  delegation and --dry-run support. Calibrated by reverting release.sh (2 red).
+- Tests: `tests/test_release_tap_bump.py` added (2). Python suite 1666 passed /
+  132 skipped. Full pre-push gate 27/27.
+
 ## P1.10 — CI reads the Python version from one committed source (2026-10-17)
 
 Both CI jobs pinned `python-version: "3.14"` by hand while the house (and the

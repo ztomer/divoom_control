@@ -35,10 +35,12 @@ CASK_PATH="Casks/divoom-control.rb"
 
 SKIP_BUILD=0
 CHECK_CI=1
+DRY_RUN=0
 for arg in "$@"; do
   case "$arg" in
     --skip-build) SKIP_BUILD=1 ;;
     --skip-ci-check) CHECK_CI=0 ;;
+    --dry-run) DRY_RUN=1 ;;
     *) echo "ERROR: unknown option: $arg" >&2; exit 1 ;;
   esac
 done
@@ -186,35 +188,16 @@ else
 fi
 
 # ── 5. bump the Homebrew cask (version + sha256) ────────────────────────────
+# Goes through the tap's OWN gate: tap_bump.sh clones the tap, moves the version,
+# every url and every sha256, commits, runs the tap's tools/gate.sh --full, and
+# pushes the commit pinned. A red gate pushes nothing. --dry-run shows the gate
+# step without pushing.
 echo "→ bumping cask ${TAP}/${CASK_PATH} → ${VERSION}"
-CUR_SHA="$(gh api "repos/${TAP}/contents/${CASK_PATH}" --jq .sha)"
-CUR_CASK="$(gh api "repos/${TAP}/contents/${CASK_PATH}" --jq .content | base64 --decode)"
-NEW_CASK="$(printf '%s' "$CUR_CASK" | VER="$VERSION" SHA="$SHA" python3 -c "
-import os, re, sys
-s = sys.stdin.read()
-s = re.sub(r'version \"[^\"]+\"', 'version \"%s\"' % os.environ['VER'], s, count=1)
-s = re.sub(r'sha256 \"[0-9a-fA-F]+\"', 'sha256 \"%s\"' % os.environ['SHA'], s, count=1)
-# The app is arm64-only since R66 (Apple dropped Intel Macs, so did we). Without
-# an arch constraint Homebrew happily installs the arm64 DMG on an Intel Mac and
-# the user gets a broken app instead of a clean \"unsupported\" message.
-s = s.replace('ztomer/divoom_lib', 'ztomer/divoom_control')  # repo was renamed
-if 'depends_on arch:' not in s:
-    s = re.sub(r'(\n\s*depends_on macos:[^\n]*\n)',
-               r'\\1  depends_on arch: :arm64\n', s, count=1)
-# Command substitution strips trailing newlines; the cask must end with one.
-if not s.endswith('\n'):
-    s += '\n'
-sys.stdout.write(s)
-")"
-if [ "$NEW_CASK" = "$CUR_CASK" ]; then
-  echo "  cask already at ${VERSION} with this sha — no change"
-else
-  gh api -X PUT "repos/${TAP}/contents/${CASK_PATH}" \
-    -f message="divoom-control ${VERSION}" \
-    -f content="$(printf '%s' "$NEW_CASK" | base64 | tr -d '\n')" \
-    -f sha="$CUR_SHA" >/dev/null
-  echo "  cask updated"
+TAP_BUMP_ARGS=(--tap "${TAP}" --cask divoom-control --tag "${TAG}" --artifact "${DMG}")
+if [ "${DRY_RUN}" = "1" ]; then
+  TAP_BUMP_ARGS+=(--dry-run)
 fi
+"${GOH_DIR:-$HOME/Projects/gates_of_heck}/tools/release-kit/tap_bump.sh" "${TAP_BUMP_ARGS[@]}"
 
 echo ""
 echo "✓ released ${TAG}"

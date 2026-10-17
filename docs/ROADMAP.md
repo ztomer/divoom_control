@@ -23,14 +23,15 @@ marked SHIPPED -- that marker is refused.
 
 Premises were last checked against the code on **2026-10-14** (HEAD `a38e2df`,
 the goh 0.27.0 hook reinstall on top of the 2026-10-12 plan commit `a8a848d`).
-Eleven items have landed since (P1.1 `15ff359` on 2026-10-15; P1.6, the
+Twelve items have landed since (P1.1 `15ff359` on 2026-10-15; P1.6, the
 build/install platform gate, and P1.7, the RX frame parser's one-byte resync, on
 2026-10-16; P1.12, the framing-vector generator, P1.5, the two-suite
 collection fix, P1.2, the PyInstaller pin from a committed file, P1.4, the
 coverage floor ratcheted to the measurement, P1.3, the stale `tao` comments
 in CI, P1.8, the 52 hand-rolled status markers, P1.11, the short-frame panic
-fixed on both sides, and P1.10, CI reading Python from `.python-version`, also
-on 2026-10-17), so the items below have
+fixed on both sides, P1.10, CI reading Python from `.python-version`, and
+P1.9, the release bumping the cask through the tap's gate, also on
+2026-10-17), so the items below have
 NOT been re-derived against a later HEAD -- check an item against the code before
 working it. Phase 0 is new (goh 0.27.0's fallout,
 measured); the old Phase 0 became Phase 1 and every later phase moved up by one
@@ -75,18 +76,11 @@ Two things the phase found that are NOT its items, tracked where they belong:
 
 **Goal:** no known defect or gate hole stays open while feature work starts.
 **Exit:** every P1 item's *Done when* is a test or gate that was watched red
-first. **Size:** M (one item, each S, no hardware needed). Depends on Phase 0
+first. **Size:** M (all items landed). Depends on Phase 0
 (nothing pushes until it lands).
-#### P1.9 — The release pushes the tap bump around the tap's gate
-**Status:** OPEN
-**Why:** goh 6.8 (`bfac28b`): `scripts/release.sh` (lines 189-216) rewrites
-the cask through `gh api -X PUT repos/ztomer/homebrew-tap/contents/...`, so
-the tap's own gate never runs on the bump.
-**Done when:** that block is one call to
-`$GOH_DIR/tools/release-kit/tap_bump.sh --tap ztomer/homebrew-tap --cask
-divoom-control --tag vX.Y.Z --artifact <dmg>`, and `--dry-run` of a release
-shows the tap gate step. Size: S.
 
+**Phase 1 complete** (2026-10-17): all eleven P1 items landed (P1.1, P1.2, P1.3,
+P1.4, P1.5, P1.6, P1.7, P1.8, P1.9, P1.10, P1.11).
 ### Phase 2 — daemon liveness and safety
 
 **Goal:** the daemon can say who holds it, never hangs on one peer, and
