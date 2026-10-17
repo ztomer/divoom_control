@@ -105,3 +105,31 @@ def test_the_unix_socket_is_0600_before_it_listens(monkeypatch):
     finally:
         httpd.server_close()
         sock.unlink(missing_ok=True)
+
+
+def test_a_socket_whose_mode_cannot_be_set_is_never_listened_on(monkeypatch):
+    """Fail closed (P2.1): if the chmod fails, the bound socket is closed and
+    the error propagates -- it is never activated at the umask's mode."""
+    activated, closed = [], []
+    monkeypatch.setattr(cs._UnixHTTPServer, "server_activate",
+                        lambda self: activated.append(True))
+    real_close = cs._UnixHTTPServer.server_close
+
+    def spy_close(self):
+        closed.append(True)
+        real_close(self)
+
+    monkeypatch.setattr(cs._UnixHTTPServer, "server_close", spy_close)
+
+    def refuse(path, mode):
+        raise PermissionError("chmod refused")
+
+    monkeypatch.setattr(cs.os, "chmod", refuse)
+    sock = Path(f"/tmp/divoom_ctl_{uuid.uuid4().hex[:8]}.sock")
+    try:
+        with pytest.raises(PermissionError):
+            cs.serve_unix(FakeApi(), str(sock))
+        assert activated == [], "listened on a socket whose mode was never set"
+        assert closed == [True], "the bound socket was leaked, not closed"
+    finally:
+        sock.unlink(missing_ok=True)
