@@ -21,6 +21,7 @@ pub(super) async fn pump_events<S>(
     rx: &mut tokio::sync::broadcast::Receiver<Value>,
     lease: &crate::subscriptions::Lease,
     subscriptions: &Registry,
+    tracked: &crate::connections::Tracked,
     idle_timeout: Duration,
 ) -> std::io::Result<()>
 where
@@ -44,7 +45,10 @@ where
                     // every subscriber's clock together and
                     // separate nobody. The payload is still
                     // ignored; only the fact of it counts.
-                    Ok(_) => subscriptions.touch(lease.id),
+                    Ok(_) => {
+                        subscriptions.touch(lease.id);
+                        tracked.touch();
+                    }
                 }
             }
             msg = rx.recv() => {

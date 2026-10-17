@@ -33,6 +33,7 @@ pub mod command_model;
 pub mod command_names;
 pub mod command_queue;
 pub mod commands;
+pub mod connections;
 pub mod daemon;
 #[cfg(feature = "ble")]
 pub mod daemon_ble;

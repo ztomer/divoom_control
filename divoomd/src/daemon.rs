@@ -70,6 +70,9 @@ pub struct Daemon {
     /// Fired by the `shutdown` command; the main loop awaits this to exit cleanly
     /// (socket unlink) the same way it does for SIGINT/SIGTERM.
     pub shutdown: Arc<tokio::sync::Notify>,
+    /// Every open client connection, across all listeners (P2.2). The
+    /// socket server writes it; `get_status` reads it.
+    pub connections: Arc<crate::connections::Connections>,
 }
 
 impl Default for Daemon {
@@ -105,6 +108,7 @@ impl Daemon {
             wall: Mutex::new(None),
             wall_slots: Mutex::new(serde_json::Map::new()),
             shutdown: Arc::new(tokio::sync::Notify::new()),
+            connections: crate::connections::Connections::new(),
         }
     }
 
@@ -395,6 +399,9 @@ impl Handler for Daemon {
     }
     fn subscribe(&self) -> Option<tokio::sync::broadcast::Receiver<Value>> {
         Some(self.tx.subscribe())
+    }
+    fn connections(&self) -> Option<Arc<crate::connections::Connections>> {
+        Some(self.connections.clone())
     }
     fn initial_status(&self) -> Value {
         // Synchronous by trait contract; the fleet is read with try_lock, so

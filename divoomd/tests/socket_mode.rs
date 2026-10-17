@@ -46,7 +46,11 @@ fn the_socket_is_owner_only_under_a_wide_open_umask() {
         let _wide = Umask::set(0);
         divoomd::socket_bind::acquire(&path).expect("free path must bind")
     };
-    let mode = std::fs::metadata(&path).expect("socket exists").permissions().mode() & 0o777;
+    let mode = std::fs::metadata(&path)
+        .expect("socket exists")
+        .permissions()
+        .mode()
+        & 0o777;
     drop(acquired);
     clean(&path);
 

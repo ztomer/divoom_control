@@ -4,6 +4,28 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P2.2 — `get_status` says who is connected (2026-10-17)
+
+The 2026-09-07 wedge (all 64 permits held) is impossible by construction now,
+but its cause was never found: the only instrument was killing the daemon. The
+semaphore and the subscription registry each knew a count nobody read.
+
+- **One table per daemon.** `divoomd/src/connections.rs` holds every accepted
+  connection for its lifetime (a guard; dropping it is the only way out), shared
+  by the unix and TCP listeners. Each entry carries its kind (request or
+  subscription), transport, the unix peer's pid (`peer_cred`), age, time since
+  the peer last spoke, and the command in flight with how long it has run.
+- **`get_status.connections`** returns `counts` by kind, each listener's
+  `limits`, and the `open` list, so a daemon filling up can be asked who holds
+  it -- by pid -- without being killed.
+- **Watched red first.** `divoomd/tests/connection_census.rs` drives the real
+  accept loop with the real `Daemon`: three idle requests and two subscriptions,
+  read back through `get_status` with ages, pids and the asking connection's
+  own `get_status` named; closing them empties the table. It failed on the
+  missing census before the wiring. Unit tests: `connections_tests.rs` (3).
+- `divoomd/tests/socket_mode.rs` reformatted (`cargo fmt`; P2.1 landed it
+  unformatted -- the commit gate does not run rustfmt, the push gate does).
+
 ## P2.1 — the socket's access rule comes from the daemon, not the umask (2026-10-17)
 
 `/tmp/divoom.sock` has no token check (`require_auth=false`), so its file mode

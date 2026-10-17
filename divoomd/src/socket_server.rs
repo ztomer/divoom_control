@@ -22,6 +22,7 @@ use tokio::sync::Semaphore;
 mod pump;
 use pump::pump_events;
 
+use crate::connections::{Connections, Tracked};
 use crate::subscriptions::{Registry, RENEGOTIATE_AFTER};
 
 use crate::protocol::{encode_message, err_reply, iter_messages, Request, MAX_REPLY_BYTES};
@@ -137,6 +138,12 @@ pub trait Handler: Send + Sync + 'static {
             "counters": {}
         })
     }
+    /// The daemon's connection table, shared by every listener so
+    /// `get_status` can say who holds the daemon. `None` (stub handlers)
+    /// gives each listener a private one.
+    fn connections(&self) -> Option<Arc<Connections>> {
+        None
+    }
 }
 
 /// Serve a single connection: accumulate bytes, split into NDJSON requests,
@@ -193,6 +200,10 @@ where
 /// sends a newline can't grow the buffer past `MAX_REPLY_BYTES` (the connection
 /// is dropped instead).
 ///
+/// `tracked` is this connection's entry in the daemon's table: it is touched
+/// when the peer speaks, names the command in flight, and leaves the table
+/// when this returns.
+///
 /// # Errors
 ///
 /// When the connection cannot be read from or written to. A peer that simply
@@ -204,6 +215,7 @@ pub async fn serve_connection<S, H>(
     token: Option<String>,
     idle_timeout: Duration,
     subscriptions: Arc<Registry>,
+    tracked: Tracked,
 ) -> std::io::Result<()>
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
@@ -218,6 +230,7 @@ where
             Ok(Err(e)) => return Err(e),
             // idle: dead/silent peer, drop
         };
+        tracked.touch();
         buf.extend_from_slice(&tmp[..n]);
         if buf.len() > MAX_REPLY_BYTES {
             return Ok(()); // frame cap: a never-newline-terminated frame, drop it
@@ -263,9 +276,18 @@ where
                         write_line(&mut stream, &reply).await?;
                         continue;
                     };
+                    tracked.mark_subscription();
                     let initial = handler.initial_status();
                     write_line(&mut stream, &initial).await?;
-                    pump_events(&mut stream, &mut rx, &lease, &subscriptions, idle_timeout).await?;
+                    pump_events(
+                        &mut stream,
+                        &mut rx,
+                        &lease,
+                        &subscriptions,
+                        &tracked,
+                        idle_timeout,
+                    )
+                    .await?;
                     return Ok(());
                 }
                 {
@@ -274,7 +296,9 @@ where
                     continue;
                 }
             }
+            tracked.running(Some(&req.command));
             let reply = handler.handle(req).await;
+            tracked.running(None);
             write_line(&mut stream, &reply).await?;
         }
     }
@@ -334,6 +358,22 @@ where
     let _ = stream.shutdown().await;
 }
 
+/// The handler's shared connection table (or a private one), with this
+/// listener's budgets recorded on it.
+fn connection_table<H: Handler>(
+    handler: &H,
+    transport: &'static str,
+    max_connections: usize,
+) -> Arc<Connections> {
+    let table = handler.connections().unwrap_or_default();
+    table.set_limits(
+        transport,
+        max_connections.max(1),
+        subscription_budget(max_connections),
+    );
+    table
+}
+
 /// Accept connections forever on a Unix socket, serving each on its own task.
 /// Runs until the listener errors unrecoverably (callers normally
 /// `tokio::spawn` this).
@@ -359,6 +399,7 @@ pub async fn serve<H: Handler>(
 ) {
     let sem = Arc::new(Semaphore::new(max_connections.max(1)));
     let subs = Registry::new(subscription_budget(max_connections), RENEGOTIATE_AFTER);
+    let table = connection_table(handler.as_ref(), "unix", max_connections);
     loop {
         // ALWAYS accept. Nothing below this line may stop the loop.
         let Ok((stream, _addr)) = listener.accept().await else {
@@ -367,9 +408,13 @@ pub async fn serve<H: Handler>(
         if let Ok(permit) = sem.clone().try_acquire_owned() {
             let h = handler.clone();
             let s = subs.clone();
+            // Who is on the other end: the peer's pid, the one fact that turns
+            // "64 connections are held" into "process N holds them".
+            let pid = stream.peer_cred().ok().and_then(|c| c.pid());
+            let tracked = table.open("unix", pid);
             tokio::spawn(async move {
                 let _permit = permit; // held for the connection's lifetime
-                let _ = serve_connection(stream, h, false, None, idle_timeout, s).await;
+                let _ = serve_connection(stream, h, false, None, idle_timeout, s, tracked).await;
             });
         } else {
             eprintln!(
@@ -392,6 +437,7 @@ pub async fn serve_tcp<H: Handler>(
 ) {
     let sem = Arc::new(Semaphore::new(max_connections.max(1)));
     let subs = Registry::new(subscription_budget(max_connections), RENEGOTIATE_AFTER);
+    let table = connection_table(handler.as_ref(), "tcp", max_connections);
     loop {
         // Accept unconditionally, shed the overflow — see the note in `serve`.
         let Ok((stream, _addr)) = listener.accept().await else {
@@ -402,9 +448,11 @@ pub async fn serve_tcp<H: Handler>(
                 let h = handler.clone();
                 let t = token.clone();
                 let s = subs.clone();
+                let tracked = table.open("tcp", None);
                 tokio::spawn(async move {
                     let _permit = permit;
-                    let _ = serve_connection(stream, h, true, Some(t), idle_timeout, s).await;
+                    let _ =
+                        serve_connection(stream, h, true, Some(t), idle_timeout, s, tracked).await;
                 });
             }
             Err(_) => {

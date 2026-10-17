@@ -132,6 +132,9 @@ async fn get_status(daemon: &Daemon) -> Value {
         "protocol_version": crate::protocol::PROTOCOL_VERSION,
         "daemon_version": env!("CARGO_PKG_VERSION"),
         "capabilities": crate::protocol::protocol_capabilities(),
+        // P2.2: who holds the daemon, by kind, with ages and peer pids --
+        // readable from a daemon that is filling up, without killing it.
+        "connections": daemon.connections.snapshot(),
     });
     if let Some(obj) = res.as_object_mut() {
         if let Some(st_obj) = status.as_object() {

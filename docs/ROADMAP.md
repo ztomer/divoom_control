@@ -91,16 +91,8 @@ cut a legitimately slow `sync_artwork`; per-command budgets, not one global.
 P2.7 needs a panel and the GUI's Bluetooth grant (Hardware reference below).
 
 Landed (2026-10-17): P2.1, the socket made owner-only by the daemon rather
-than the umask.
-
-#### P2.2 — `get_status` cannot say who is connected
-**Status:** OPEN
-**Why:** the 2026-09-07 wedge (64 subscriptions) is now impossible by
-construction, but its CAUSE was never found because killing the daemon
-destroyed the evidence. `get_status` (`divoomd/src/daemon/dispatch.rs`) reports
-no connection counts; the semaphore and the registry's `len()` are never read.
-**Done when:** `get_status` returns connections by kind (request, subscription)
-with ages, and a test opens N of each and reads them back.
+than the umask;
+P2.2, `get_status` reporting every connection by kind with ages, peer pid and in-flight command.
 
 #### P2.3 — A slow command holds its connection with no deadline
 **Status:** OPEN
@@ -110,7 +102,6 @@ invisible. `device_call` bounds itself; cloud calls, `sync_artwork` and
 `render_widget` do not.
 **Done when:** every command runs under a deadline (per-command where needed),
 and a test with a stalled handler sees the connection released.
-**Depends on:** P2.2
 
 #### P2.4 — A reconnecting subscriber cannot replace its own slot
 **Status:** OPEN
@@ -139,7 +130,6 @@ in-process and be pinged from INSIDE the serving loop; a side-channel check is
 exactly the gray-failure blind spot.
 **Done when:** a stalled serving loop is detected and reported (log + exit for
 relaunch) within a stated bound, proven by a test that wedges the loop.
-**Depends on:** P2.2
 
 #### P2.7 — The panel does not always come back after a daemon restart
 **Status:** OPEN
