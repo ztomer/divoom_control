@@ -4,6 +4,33 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P2.4 — a reconnecting subscriber replaces its own slot (2026-10-17)
+
+`divoomd/src/subscriptions.rs` keyed entries by a counter, so a client that
+crashed and reconnected was a stranger to its own slot: with every slot
+active within 600 s it was refused, by its own ghost, until the daemon noticed
+the old connection die.
+
+- **Identity before staleness.** `subscribe` takes an optional `client_id`;
+  `Registry::admit_as` replaces that name's entry at once, before any
+  staleness rule (MQTT 5.0 session takeover, reason 0x8E). The replaced
+  connection is told `{"type":"resubscribe","code":"taken_over"}` and closed;
+  the inactivity eviction now says `code:"inactive"`. An anonymous subscribe
+  behaves as before.
+- **The clients name themselves.** The GUI follower subscribes as
+  `divoom-gui` and the menubar as `divoom-menubar`; both apps are
+  single-instance, so one live process holds each name (two sharing one would
+  displace each other on every reconnect -- documented on
+  `DaemonClient.subscribe`).
+- **Watched red first.** `divoomd/tests/subscription_takeover.rs` fills the
+  real server's budget, then reconnects `divoom-gui` while its old connection
+  is open: refused before, admitted after, with the old connection told
+  `taken_over` and a stranger still refused. Unit:
+  `a_named_reconnect_replaces_its_own_entry_at_once`. Client side:
+  `test_subscribe_names_its_client_when_asked`, the follower test, and the
+  menubar's `the_subscribe_line_names_the_menubar` -- each seen red by
+  reverting only its wiring.
+
 ## P2.3 — every command runs under a deadline (2026-10-17)
 
 `handler.handle(req).await` had no timeout, so a command that never returned

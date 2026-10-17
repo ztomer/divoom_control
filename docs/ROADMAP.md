@@ -93,16 +93,8 @@ P2.7 needs a panel and the GUI's Bluetooth grant (Hardware reference below).
 Landed (2026-10-17): P2.1, the socket made owner-only by the daemon rather
 than the umask;
 P2.2, `get_status` reporting every connection by kind with ages, peer pid and in-flight command;
-P2.3, every command under a per-command deadline (`divoomd/src/deadlines.rs`).
-
-#### P2.4 — A reconnecting subscriber cannot replace its own slot
-**Status:** OPEN
-**Why:** `divoomd/src/subscriptions.rs` keys entries by a counter, not a client
-identity, so a client that crashed and reconnected is a stranger: admitted only
-if the oldest slot has been quiet for 600 s, otherwise refused. Identity-keyed
-takeover should run BEFORE staleness eviction (MQTT 5.0 reason 0x8E).
-**Done when:** a subscribe that names an identity replaces that identity's
-entry immediately, pinned by a test that fills the registry and reconnects.
+P2.3, every command under a per-command deadline (`divoomd/src/deadlines.rs`);
+P2.4, a named subscriber (`client_id`) replacing its own slot before staleness eviction.
 
 #### P2.5 — Status fan-out drops events instead of keeping the latest
 **Status:** OPEN

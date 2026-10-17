@@ -100,13 +100,25 @@ where
             }
             () = tokio::time::sleep_until(deadline) => break, // quiet channel: drop
             () = lease.evict.notified() => {
-                // Our slot was reclaimed for a newcomer because
-                // this client had gone quiet. Say why, so it
-                // reads as a renegotiation and not a fault.
-                let notice = serde_json::json!({
-                    "type": "resubscribe",
-                    "reason": "subscription slot reclaimed after inactivity; reconnect to continue",
-                });
+                // Our slot was reclaimed: by this same client
+                // reconnecting under its name (P2.4), or for a
+                // newcomer because this client had gone quiet.
+                // Say which, so it reads as a renegotiation and
+                // not a fault -- and a `taken_over` client knows
+                // its successor already holds the stream.
+                let notice = if lease.taken_over() {
+                    serde_json::json!({
+                        "type": "resubscribe",
+                        "code": "taken_over",
+                        "reason": "a newer subscription under the same client_id replaced this one",
+                    })
+                } else {
+                    serde_json::json!({
+                        "type": "resubscribe",
+                        "code": "inactive",
+                        "reason": "subscription slot reclaimed after inactivity; reconnect to continue",
+                    })
+                };
                 let _ = write_line(stream, &notice).await;
                 break;
             }

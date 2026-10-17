@@ -274,7 +274,10 @@ where
                     // and scarcer: see MAX_SUBSCRIPTIONS. Refusing here keeps
                     // request capacity available no matter how many subscribers
                     // pile up, and tells the client why instead of hanging.
-                    let Some(lease) = subscriptions.admit() else {
+                    // A client that names itself takes its own old slot
+                    // back (P2.4): a crash-and-reconnect is not a stranger.
+                    let client_id = req.args.get("client_id").and_then(Value::as_str);
+                    let Some(lease) = subscriptions.admit_as(client_id) else {
                         let reply = err_reply(
                             "too many active subscriptions; every slot is held by a \
                              client that is demonstrably still active",

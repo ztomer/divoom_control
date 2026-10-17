@@ -77,6 +77,18 @@ pub fn connection_state() -> Option<String> {
         .map(str::to_string)
 }
 
+/// The menubar's name on the daemon's event stream (P2.4). A subscribe under
+/// a name that already holds a slot replaces it at once, so a menubar that
+/// crashed and relaunched is not refused by its own ghost. The menubar is
+/// single-instance, so one live process holds this name.
+pub const CLIENT_ID: &str = "divoom-menubar";
+
+/// The `subscribe` request line, naming this client.
+#[must_use]
+pub fn subscribe_request() -> Value {
+    json!({ "command": "subscribe", "args": { "client_id": CLIENT_ID } })
+}
+
 /// Open a `subscribe` stream and call `on_event` for each broadcast until the
 /// connection closes or `should_stop()` returns true. Blocking — run on a
 /// dedicated thread. Returns `true` if it connected at all (mirrors the
@@ -97,7 +109,7 @@ pub fn subscribe(mut on_event: impl FnMut(Value), should_stop: impl Fn() -> bool
     {
         return false;
     }
-    let req = match serde_json::to_vec(&json!({ "command": "subscribe" })) {
+    let req = match serde_json::to_vec(&subscribe_request()) {
         Ok(mut v) => {
             v.push(b'\n');
             v

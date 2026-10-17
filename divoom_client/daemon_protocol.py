@@ -462,16 +462,19 @@ class DaemonClient(HostDataMixin, CloudDataMixin):
         on_event: Callable[[dict], None],
         *,
         should_stop: Callable[[], bool] | None = None,
+        client_id: str | None = None,
     ) -> bool:
         """Open a streaming subscription, calling ``on_event(event)`` for each
         event until the connection closes or ``should_stop()`` returns True.
         Returns True if it connected, False if the daemon was unreachable.
-        Blocking — callers run it on their own thread.
+        Blocking — callers run it on their own thread. A ``client_id`` replaces
+        its own earlier slot at once (P2.4); only one live process may use it.
         """
+        args = {"client_id": client_id} if client_id else None
         try:
             with self._connect() as s:
                 s.settimeout(self.timeout)
-                s.sendall(encode_message(make_request(SUBSCRIBE_COMMAND, token=self.token)))
+                s.sendall(encode_message(make_request(SUBSCRIBE_COMMAND, args, token=self.token)))
                 s.settimeout(1.0)  # short read timeout so should_stop() is responsive
                 buf = b""
                 while True:

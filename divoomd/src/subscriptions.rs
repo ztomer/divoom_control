@@ -28,7 +28,18 @@
 //! evidence it is there, so it is the first thing displaced when a slot is
 //! genuinely needed. Any byte a client sends counts, so a client that wants to
 //! defend its slot only has to say something.
+//!
+//! # Identity before staleness (P2.4)
+//!
+//! A client may NAME itself (`client_id`). A named subscribe replaces that
+//! name's existing entry immediately, before any staleness rule is consulted
+//! -- MQTT 5.0's session takeover (reason 0x8E). Without it, a client that
+//! crashed and reconnected was a stranger to its own slot: refused for up to
+//! [`RENEGOTIATE_AFTER`] while the daemon had not yet noticed the old
+//! connection die. The name is the client's claim about itself, which is the
+//! same trust the unix socket's 0600 mode already extends to it.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -42,8 +53,10 @@ pub const RENEGOTIATE_AFTER: Duration = Duration::from_secs(600);
 
 struct Entry {
     id: u64,
+    identity: Option<String>,
     last_active: Instant,
     evict: Arc<Notify>,
+    taken_over: Arc<AtomicBool>,
 }
 
 struct State {
@@ -66,6 +79,17 @@ pub struct Lease {
     /// Notified when this subscription has been chosen for renegotiation. The
     /// serving task should tell the client and close.
     pub evict: Arc<Notify>,
+    taken_over: Arc<AtomicBool>,
+}
+
+impl Lease {
+    /// Whether this slot went to a reconnect under the same name, rather than
+    /// to a newcomer after inactivity. Read after `evict` fires, to tell the
+    /// client which.
+    #[must_use]
+    pub fn taken_over(&self) -> bool {
+        self.taken_over.load(Ordering::Acquire)
+    }
 }
 
 impl Drop for Lease {
@@ -87,16 +111,34 @@ impl Registry {
         })
     }
 
-    /// Take a slot, evicting the least-recently-active entry if that is the only
-    /// way and it has been quiet long enough. `None` means every slot is held by
-    /// a subscription too recently active to disturb.
+    /// Take a slot for an anonymous client; see [`Self::admit_as`].
     pub fn admit(self: &Arc<Self>) -> Option<Lease> {
+        self.admit_as(None)
+    }
+
+    /// Take a slot. A named client first replaces its own entry, if it has
+    /// one; otherwise the least-recently-active entry is evicted if that is the
+    /// only way and it has been quiet long enough. `None` means every slot is
+    /// held by a subscription too recently active to disturb.
+    pub fn admit_as(self: &Arc<Self>, identity: Option<&str>) -> Option<Lease> {
         let now = Instant::now();
         let mut st = self.state.lock().ok()?;
 
+        // Identity before staleness: the same client reconnecting takes its
+        // own slot back, at once, whatever the others are doing.
+        let mine = identity.and_then(|name| {
+            st.entries
+                .iter()
+                .position(|e| e.identity.as_deref() == Some(name))
+        });
+
         // The victim, if one is displaced: computed UNDER the lock, notified
         // AFTER it is released -- see the drop below.
-        let displaced: Option<Arc<Notify>> = if st.entries.len() < self.capacity {
+        let displaced: Option<Arc<Notify>> = if let Some(idx) = mine {
+            let old = st.entries.remove(idx);
+            old.taken_over.store(true, Ordering::Release);
+            Some(old.evict)
+        } else if st.entries.len() < self.capacity {
             None
         } else {
             // Least-recently-active occupant. `min_by_key` returns the FIRST
@@ -119,10 +161,13 @@ impl Registry {
         let id = st.next_id;
         st.next_id += 1;
         let evict = Arc::new(Notify::new());
+        let taken_over = Arc::new(AtomicBool::new(false));
         st.entries.push(Entry {
             id,
+            identity: identity.map(str::to_string),
             last_active: now,
             evict: evict.clone(),
+            taken_over: taken_over.clone(),
         });
 
         // COMPUTE THE VICTIM UNDER THE LOCK, DROP THE LOCK, THEN NOTIFY.
@@ -147,6 +192,7 @@ impl Registry {
             registry: self.clone(),
             id,
             evict,
+            taken_over,
         })
     }
 

@@ -294,3 +294,13 @@ fn the_active_panel_follows_selection_and_owned_devices_broadcasts() {
         "clearing the selection must leave nothing active"
     );
 }
+
+#[test]
+fn the_subscribe_line_names_the_menubar() {
+    // P2.4: a menubar that crashed and relaunched takes its own slot back
+    // instead of being refused by its ghost; that needs its name on the line.
+    assert_eq!(
+        super::subscribe_request(),
+        json!({ "command": "subscribe", "args": { "client_id": "divoom-menubar" } })
+    );
+}

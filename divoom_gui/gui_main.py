@@ -361,6 +361,10 @@ def _make_daemon_event_handler(window):
     return on_event
 
 
+# The GUI's subscriber name on the daemon's event stream (P2.4).
+GUI_CLIENT_ID = "divoom-gui"
+
+
 def _start_shutdown_follower(window) -> None:
     """Subscribe to the daemon's event stream on a daemon thread and forward
     connection status + shutdown to the web UI. Event-driven — no polling. When
@@ -373,8 +377,11 @@ def _start_shutdown_follower(window) -> None:
         from divoom_client.daemon_protocol import DaemonClient, DEFAULT_SOCKET_PATH
         while True:
             try:
+                # Named, so a follower that reconnects after its stream died
+                # takes its own slot back (P2.4). The GUI is single-instance
+                # (single_instance.py), so one live process holds this name.
                 DaemonClient(DEFAULT_SOCKET_PATH, timeout=2.0).subscribe(
-                    _make_daemon_event_handler(window))
+                    _make_daemon_event_handler(window), client_id=GUI_CLIENT_ID)
             except Exception as e:
                 logger.debug(f"daemon event follower stopped: {e}")
             finally:

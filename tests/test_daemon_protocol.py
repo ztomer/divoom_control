@@ -134,3 +134,33 @@ def test_subscribe_streams_events():
 
 def test_subscribe_no_daemon_returns_false():
     assert DaemonClient("/tmp/divoom_absent_xyz.sock").subscribe(lambda e: None) is False
+
+
+def test_subscribe_names_its_client_when_asked():
+    """P2.4: a named subscribe lets a reconnecting client take its own slot
+    back; an unnamed one sends no client_id at all."""
+    import os
+    seen = []
+    for client_id in ("divoom-gui", None):
+        sp = _sock_path()
+        if os.path.exists(sp):
+            os.remove(sp)
+
+        def handler(conn):
+            msgs, _ = iter_messages(conn.recv(4096))
+            seen.append(msgs[0])
+            conn.close()
+
+        ready = threading.Event()
+        t = threading.Thread(target=_serve_one, args=(sp, handler, ready), daemon=True)
+        t.start()
+        ready.wait(2.0)
+        try:
+            DaemonClient(sp).subscribe(lambda e: None, client_id=client_id)
+        finally:
+            t.join(timeout=5.0)
+            if os.path.exists(sp):
+                os.remove(sp)
+    assert seen[0]["command"] == SUBSCRIBE_COMMAND
+    assert seen[0]["args"] == {"client_id": "divoom-gui"}
+    assert "client_id" not in seen[1]["args"]

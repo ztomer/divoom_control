@@ -95,11 +95,14 @@ def test_start_shutdown_follower_notifies_ondaemondown_and_backs_off(monkeypatch
     class _StopLoop(BaseException):
         pass
 
+    subscribed_as = []
+
     class FakeDaemonClient:
         def __init__(self, *a, **kw):
             pass
 
-        def subscribe(self, handler):
+        def subscribe(self, handler, *, client_id=None):
+            subscribed_as.append(client_id)
             raise RuntimeError("daemon socket closed")
 
     sleep_calls = []
@@ -128,6 +131,8 @@ def test_start_shutdown_follower_notifies_ondaemondown_and_backs_off(monkeypatch
 
     assert sleep_calls == [2.0]
     assert any("onDaemonDown" in c for c in w.calls)
+    # P2.4: the follower names itself, so its reconnect takes its own slot back.
+    assert subscribed_as == [gui_main.GUI_CLIENT_ID] == ["divoom-gui"]
 
 
 def test_start_shutdown_follower_swallows_evaluate_js_failure(monkeypatch):

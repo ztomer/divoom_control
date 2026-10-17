@@ -108,3 +108,30 @@ async fn capacity_is_never_zero() {
         "a zero budget would refuse every client"
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_named_reconnect_replaces_its_own_entry_at_once() {
+    // P2.4: a client that crashed and came back is NOT a stranger. With every
+    // slot recently active, an anonymous newcomer is refused; the same client
+    // naming itself takes its old slot back immediately (MQTT 5.0 reason 0x8E),
+    // with no 600 s wait and no other subscriber disturbed.
+    let r = reg(2, 600);
+    let old = r.admit_as(Some("gui")).unwrap();
+    let other = r.admit_as(Some("menubar")).unwrap();
+    assert!(r.admit().is_none(), "full of active subscribers");
+
+    let fresh = r
+        .admit_as(Some("gui"))
+        .expect("a named reconnect takes its slot back");
+    assert_eq!(r.len(), 2, "replaced, not added");
+    assert!(old.taken_over(), "the old entry must learn it was replaced");
+    assert!(!other.taken_over(), "nobody else is disturbed");
+    tokio::time::timeout(Duration::from_millis(1), old.evict.notified())
+        .await
+        .expect("the replaced subscription is told to close");
+
+    drop(old); // its lease drop must not free the NEW entry's slot
+    assert_eq!(r.len(), 2);
+    drop(fresh);
+    assert_eq!(r.len(), 1);
+}
