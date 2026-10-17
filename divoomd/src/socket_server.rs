@@ -138,6 +138,12 @@ pub trait Handler: Send + Sync + 'static {
             "counters": {}
         })
     }
+    /// How long `req` may run before the server answers for it (P2.3).
+    /// The per-command table in [`crate::deadlines`]; a test stub overrides it
+    /// to stall in milliseconds rather than minutes.
+    fn budget(&self, req: &Request) -> Duration {
+        crate::deadlines::budget(&req.command)
+    }
     /// The daemon's connection table, shared by every listener so
     /// `get_status` can say who holds the daemon. `None` (stub handlers)
     /// gives each listener a private one.
@@ -297,7 +303,11 @@ where
                 }
             }
             tracked.running(Some(&req.command));
-            let reply = handler.handle(req).await;
+            let budget = handler.budget(&req);
+            let command = req.command.clone();
+            let reply = tokio::time::timeout(budget, handler.handle(req))
+                .await
+                .unwrap_or_else(|_| crate::deadlines::exceeded(&command, budget));
             tracked.running(None);
             write_line(&mut stream, &reply).await?;
         }

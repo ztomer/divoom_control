@@ -4,6 +4,33 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P2.3 — every command runs under a deadline (2026-10-17)
+
+`handler.handle(req).await` had no timeout, so a command that never returned
+held its connection permit for the life of the daemon, whether or not anyone
+was still waiting. `device_call` bounded itself; cloud calls, `sync_artwork`
+and `render_widget` did not.
+
+- **Per-command budgets, one table.** `divoomd/src/deadlines.rs`: 120 s by
+  default (three times the client's 40 s cloud wait), 240 s for `scan`, 120 s
+  for connect/disconnect/select, 600 s for `sync_artwork`, art pushes,
+  `device_call` and `wall_configure` (five times the client's 120 s). Every
+  budget sits above the Python client's own read timeout, so the client gives
+  up first and the deadline only reclaims a slot nobody waits on -- a slow
+  `sync_artwork` is never cut. A budget keyed by a name the dispatcher does not
+  answer fails `deadlines_tests.rs`, which reads the dispatcher itself.
+- **The answer.** An overrun command is answered `success:false`,
+  `code:"deadline_exceeded"`, `deadline_ms`; the connection stays open. The
+  deadline ends the wait, not queued device work (the per-device rule).
+- **A seam for the test.** `Handler::budget` defaults to the table; a stub
+  overrides it so a stall is milliseconds, not minutes.
+- **Rejected:** cancelling a command when the peer's read side hits EOF. A
+  client that half-closes after sending (`nc -U`, a shell pipe) reads exactly
+  like one that left, and would have had every command cancelled.
+- **Watched red first.** `divoomd/tests/command_deadline.rs` (real `serve`,
+  one-connection cap, a `stall` that never returns): no reply in 3 s, and the
+  next client refused at capacity, before the deadline; both green after.
+
 ## P2.2 — `get_status` says who is connected (2026-10-17)
 
 The 2026-09-07 wedge (all 64 permits held) is impossible by construction now,

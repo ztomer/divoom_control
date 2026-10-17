@@ -41,6 +41,7 @@ pub mod daemon_connect;
 pub mod daemon_mock;
 mod daemon_status;
 pub mod daemon_target;
+pub mod deadlines;
 pub mod device;
 pub mod device_call;
 pub mod framing;

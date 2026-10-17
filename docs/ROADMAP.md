@@ -92,16 +92,8 @@ P2.7 needs a panel and the GUI's Bluetooth grant (Hardware reference below).
 
 Landed (2026-10-17): P2.1, the socket made owner-only by the daemon rather
 than the umask;
-P2.2, `get_status` reporting every connection by kind with ages, peer pid and in-flight command.
-
-#### P2.3 — A slow command holds its connection with no deadline
-**Status:** OPEN
-**Why:** `handler.handle(req).await` in `divoomd/src/socket_server.rs` has no
-timeout and does not read the socket while it runs, so a peer that hangs up is
-invisible. `device_call` bounds itself; cloud calls, `sync_artwork` and
-`render_widget` do not.
-**Done when:** every command runs under a deadline (per-command where needed),
-and a test with a stalled handler sees the connection released.
+P2.2, `get_status` reporting every connection by kind with ages, peer pid and in-flight command;
+P2.3, every command under a per-command deadline (`divoomd/src/deadlines.rs`).
 
 #### P2.4 — A reconnecting subscriber cannot replace its own slot
 **Status:** OPEN
