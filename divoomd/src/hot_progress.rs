@@ -23,7 +23,7 @@ pub struct HotProgress {
     inner: Arc<Mutex<Value>>,
     /// Event sink. `None` only in tests that construct a bare progress cell;
     /// the daemon always wires this to its broadcast channel.
-    tx: Option<tokio::sync::broadcast::Sender<Value>>,
+    tx: Option<Arc<crate::events::Events>>,
 }
 
 impl Default for HotProgress {
@@ -38,7 +38,7 @@ impl Default for HotProgress {
 impl HotProgress {
     /// Build a progress cell wired to the daemon's event bus.
     #[must_use]
-    pub fn with_events(tx: tokio::sync::broadcast::Sender<Value>) -> Self {
+    pub fn with_events(tx: Arc<crate::events::Events>) -> Self {
         Self {
             inner: Arc::new(Mutex::new(json!({"phase": "idle"}))),
             tx: Some(tx),
@@ -133,7 +133,8 @@ mod hot_progress_tests {
     fn set_broadcasts_every_phase() {
         // R67/C6: the whole defect. `set` stored and did not emit, so a UI that
         // had dropped its poll saw nothing at all.
-        let (tx, mut rx) = tokio::sync::broadcast::channel(32);
+        let tx = crate::events::Events::new(32);
+        let mut rx = tx.subscribe();
         let p = HotProgress::with_events(tx);
 
         p.set(&json!({"phase": "fetching_manifest"}));
@@ -157,7 +158,7 @@ mod hot_progress_tests {
     fn broadcast_events_are_tagged_hot_progress() {
         // The GUI forwarder routes purely on `type`; an untagged event is
         // dropped on the floor before it reaches window.Divoom.onHotProgress.
-        let (tx, mut rx) = tokio::sync::broadcast::channel(8);
+        let (tx, mut rx) = crate::events::Events::channel(8);
         let p = HotProgress::with_events(tx);
         p.set(&json!({"phase": "downloading", "current": 1, "total": 2}));
         let events = drain(&mut rx);
@@ -172,7 +173,7 @@ mod hot_progress_tests {
 
     #[test]
     fn try_begin_broadcasts_the_starting_phase() {
-        let (tx, mut rx) = tokio::sync::broadcast::channel(8);
+        let (tx, mut rx) = crate::events::Events::channel(8);
         let p = HotProgress::with_events(tx);
         assert!(p.try_begin());
         let events = drain(&mut rx);
@@ -182,7 +183,7 @@ mod hot_progress_tests {
 
     #[test]
     fn try_begin_refuses_a_second_run_and_stays_silent() {
-        let (tx, mut rx) = tokio::sync::broadcast::channel(8);
+        let (tx, mut rx) = crate::events::Events::channel(8);
         let p = HotProgress::with_events(tx);
         assert!(p.try_begin());
         drain(&mut rx);
@@ -198,7 +199,7 @@ mod hot_progress_tests {
     fn clear_stuck_starting_broadcasts_the_error() {
         // Without this event the UI would sit on "Preparing..." even though the
         // daemon had given up — the exact hang, one layer down.
-        let (tx, mut rx) = tokio::sync::broadcast::channel(8);
+        let (tx, mut rx) = crate::events::Events::channel(8);
         let p = HotProgress::with_events(tx);
         assert!(p.try_begin());
         drain(&mut rx);
@@ -210,7 +211,7 @@ mod hot_progress_tests {
 
     #[test]
     fn clear_stuck_starting_is_a_no_op_when_not_stuck() {
-        let (tx, mut rx) = tokio::sync::broadcast::channel(8);
+        let (tx, mut rx) = crate::events::Events::channel(8);
         let p = HotProgress::with_events(tx);
         p.set(&json!({"phase": "done"}));
         drain(&mut rx);
@@ -229,7 +230,7 @@ mod hot_progress_tests {
     #[test]
     fn stored_state_still_matches_the_last_event() {
         // hot_update_progress (the resync path) must agree with the stream.
-        let (tx, mut rx) = tokio::sync::broadcast::channel(8);
+        let (tx, mut rx) = crate::events::Events::channel(8);
         let p = HotProgress::with_events(tx);
         p.set(&json!({"phase": "uploading", "current": 7, "total": 9}));
         let events = drain(&mut rx);
@@ -240,7 +241,7 @@ mod hot_progress_tests {
     #[test]
     fn a_cell_without_subscribers_does_not_fail() {
         // No UI attached is the normal case, not an error.
-        let (tx, rx) = tokio::sync::broadcast::channel(4);
+        let (tx, rx) = crate::events::Events::channel(4);
         drop(rx);
         let p = HotProgress::with_events(tx);
         p.set(&json!({"phase": "done"}));

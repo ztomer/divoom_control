@@ -23,6 +23,7 @@ pub(super) async fn pump_events<S>(
     subscriptions: &Registry,
     tracked: &crate::connections::Tracked,
     idle_timeout: Duration,
+    conflated: Option<&crate::events::Events>,
 ) -> std::io::Result<()>
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
@@ -74,8 +75,29 @@ where
                         }
                         deadline = tokio::time::Instant::now() + idle_timeout;
                     }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_))
+                        if conflated.is_some() =>
+                    {
+                        // P2.5: a status subscriber wants the CURRENT
+                        // truth. Re-attach at the tail and send the
+                        // latest value of every key, in publish order:
+                        // no hole to report and nothing to drop for.
+                        let latest = conflated.map(|bus| bus.resync(rx)).unwrap_or_default();
+                        for event in &latest {
+                            if write_line(stream, event).await.is_err() {
+                                eprintln!(
+                                    "divoomd: subscriber did not drain its resync \
+                                     within {}s; dropping it",
+                                    WRITE_TIMEOUT.as_secs()
+                                );
+                                return Ok(());
+                            }
+                        }
+                        deadline = tokio::time::Instant::now() + idle_timeout;
+                    }
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                        // Tell the client it has a GAP, so it can
+                        // No conflating bus behind this handler: tell
+                        // the client it has a GAP, so it can
                         // resync instead of trusting stale state,
                         // and drop it once it is hopeless.
                         dropped = dropped.saturating_add(n);

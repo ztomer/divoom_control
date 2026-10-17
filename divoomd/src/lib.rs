@@ -44,6 +44,7 @@ pub mod daemon_target;
 pub mod deadlines;
 pub mod device;
 pub mod device_call;
+pub mod events;
 pub mod framing;
 pub mod hot_progress;
 pub mod hot_state;

@@ -4,6 +4,30 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P2.5 — a slow subscriber gets the latest state, not a hole (2026-10-17)
+
+Subscribers shared a `broadcast::channel(32)`; one that fell behind was sent
+`{"type":"lagged"}` notices and dropped past 64 lost events. No client ever
+read `lagged` (grep finds none in the GUI, the Python client or the menubar),
+so a hole was silently stale state until the next event for that key.
+
+- **Conflation, one funnel.** `divoomd/src/events.rs` (`Events`) wraps the
+  ring and records each key's latest value on every publish, under one lock
+  with the broadcast so recorded and delivered order agree. Keys: per panel
+  (`mac`/`lan_ip`, fleet-wide when none), and per job (`kind`) for
+  `live_job_state`. The daemon's `tx` IS this type, so every publish site --
+  connect, notifications, live jobs, hot progress -- records without being
+  told to; `JobHealth` and `HotProgress` take it too.
+- **Resync, not a gap.** On `Lagged`, the pump re-attaches the receiver at the
+  tail and writes every key's latest value in publish order, and the
+  subscriber stays connected. A handler with no conflating bus (test stubs)
+  keeps the old notice-and-budget behaviour.
+- **Watched red first.** `divoomd/tests/status_conflation.rs` stalls one
+  reader through 400 updates of three keys (padded so the socket fills and the
+  ring laps it), then reads: it saw a `lagged` notice before, and after it ends
+  on the newest value of every key and still receives the next event. Unit:
+  `events_tests.rs` (3) for keying, resync order and tail re-attachment.
+
 ## P2.4 — a reconnecting subscriber replaces its own slot (2026-10-17)
 
 `divoomd/src/subscriptions.rs` keyed entries by a counter, so a client that

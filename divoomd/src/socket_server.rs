@@ -108,6 +108,11 @@ pub const WRITE_TIMEOUT: Duration = Duration::from_secs(10);
 /// decide. Ignoring it is the one policy the field does not have: a subscriber
 /// that cannot tell it has a hole in its state will act on stale truth. So we
 /// count, tell the client so it can resync, and disconnect past this budget.
+///
+/// Only for a handler WITHOUT a conflating bus ([`Handler::events`]). The
+/// daemon has one (P2.5), so its subscribers are caught up to the latest value
+/// of every key instead -- no client ever read the `lagged` notice, so a hole
+/// was silently stale state until then.
 pub const LAG_BUDGET: u64 = 64;
 
 /// Drop a connection that sends nothing for this long (no newline-terminated
@@ -137,6 +142,13 @@ pub trait Handler: Send + Sync + 'static {
             "connected": false,
             "counters": {}
         })
+    }
+    /// The conflating event bus behind [`Self::subscribe`], if there is one
+    /// (P2.5). With it, a subscriber that falls behind the ring is caught up
+    /// to the latest value of every key; without it (stub handlers), it is
+    /// told how many events it lost and dropped past [`LAG_BUDGET`].
+    fn events(&self) -> Option<Arc<crate::events::Events>> {
+        None
     }
     /// How long `req` may run before the server answers for it (P2.3).
     /// The per-command table in [`crate::deadlines`]; a test stub overrides it
@@ -295,6 +307,7 @@ where
                         &subscriptions,
                         &tracked,
                         idle_timeout,
+                        handler.events().as_deref(),
                     )
                     .await?;
                     return Ok(());

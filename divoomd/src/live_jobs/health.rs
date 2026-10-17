@@ -63,13 +63,13 @@ impl JobState {
 pub struct JobHealth {
     kind: String,
     mac: String,
-    tx: tokio::sync::broadcast::Sender<Value>,
+    tx: std::sync::Arc<crate::events::Events>,
     last: Mutex<Option<JobState>>,
 }
 
 impl JobHealth {
     #[must_use]
-    pub fn new(kind: &str, mac: &str, tx: tokio::sync::broadcast::Sender<Value>) -> Self {
+    pub fn new(kind: &str, mac: &str, tx: std::sync::Arc<crate::events::Events>) -> Self {
         Self {
             kind: kind.to_string(),
             mac: mac.to_string(),
@@ -153,10 +153,12 @@ mod tests {
     use super::*;
 
     fn bus() -> (
-        tokio::sync::broadcast::Sender<Value>,
+        std::sync::Arc<crate::events::Events>,
         tokio::sync::broadcast::Receiver<Value>,
     ) {
-        tokio::sync::broadcast::channel(16)
+        let bus = crate::events::Events::new(16);
+        let rx = bus.subscribe();
+        (bus, rx)
     }
 
     fn drain(rx: &mut tokio::sync::broadcast::Receiver<Value>) -> Vec<Value> {
@@ -253,7 +255,7 @@ mod snapshot_tests {
         // R67: events fire only on transitions, so a UI attaching after a job is
         // already running would otherwise see nothing and could not tell
         // "healthy" from "never started". This is the resync half.
-        let (tx, _rx) = tokio::sync::broadcast::channel(8);
+        let (tx, _rx) = crate::events::Events::channel(8);
         let h = JobHealth::new("music", "AA:BB", tx);
         assert!(h.snapshot().is_none(), "nothing reported yet");
 
@@ -266,7 +268,7 @@ mod snapshot_tests {
 
     #[test]
     fn snapshot_carries_the_failure_reason() {
-        let (tx, _rx) = tokio::sync::broadcast::channel(8);
+        let (tx, _rx) = crate::events::Events::channel(8);
         let h = JobHealth::new("weather", "AA:BB", tx);
         h.failed("wttr.in returned 503");
         let snap = h.snapshot().unwrap();
@@ -278,7 +280,7 @@ mod snapshot_tests {
     fn snapshot_and_event_agree() {
         // The two halves must describe the same thing; if they can disagree,
         // a late subscriber gets a different answer than an early one.
-        let (tx, mut rx) = tokio::sync::broadcast::channel(8);
+        let (tx, mut rx) = crate::events::Events::channel(8);
         let h = JobHealth::new("sysmon", "AA:BB", tx);
         h.waiting();
         let event = rx.try_recv().expect("an event");

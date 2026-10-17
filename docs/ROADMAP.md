@@ -94,17 +94,8 @@ Landed (2026-10-17): P2.1, the socket made owner-only by the daemon rather
 than the umask;
 P2.2, `get_status` reporting every connection by kind with ages, peer pid and in-flight command;
 P2.3, every command under a per-command deadline (`divoomd/src/deadlines.rs`);
-P2.4, a named subscriber (`client_id`) replacing its own slot before staleness eviction.
-
-#### P2.5 — Status fan-out drops events instead of keeping the latest
-**Status:** OPEN
-**Why:** subscribers share a `broadcast::channel(32)` (`divoomd/src/daemon.rs`);
-a lagging one is told and dropped past 64 lost events
-(`divoomd/src/socket_server/pump.rs`). A status subscriber wants the CURRENT
-truth, so conflation (latest value per key) is the method of record, not a
-lossy ring.
-**Done when:** a slow subscriber receives the latest state for every key it
-missed rather than a hole or a disconnect, under a test that stalls one reader.
+P2.4, a named subscriber (`client_id`) replacing its own slot before staleness eviction;
+P2.5, a lagging subscriber caught up to the latest value per key (`divoomd/src/events.rs`).
 
 #### P2.6 — Nothing notices the daemon has stopped serving
 **Status:** OPEN
@@ -218,7 +209,7 @@ crashed agent leaves a stale frame forever.
 **Done when:** a caller acquires a lease with a mandatory TTL and renewal; on
 expiry the panel returns to what it showed before; continuous pushes for one
 panel are conflated (latest frame wins) on slow links.
-**Depends on:** P2.5, P4.3
+**Depends on:** P4.3
 
 #### P4.7 — Transient notifications as a tool
 **Status:** OPEN

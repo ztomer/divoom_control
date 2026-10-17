@@ -58,7 +58,9 @@ pub struct Daemon {
     /// silently returns 0 devices until it resets).
     #[cfg(feature = "ble")]
     pub(crate) last_scan: Mutex<Option<(Instant, Vec<Value>)>>,
-    pub(crate) tx: tokio::sync::broadcast::Sender<Value>,
+    /// The event bus. Every publish records its key's latest value, so a
+    /// subscriber that falls behind is caught up rather than dropped (P2.5).
+    pub(crate) tx: Arc<crate::events::Events>,
     pub live_jobs: Arc<crate::live_jobs::LiveJobCoordinator>,
     pub(crate) self_weak: OnceLock<Weak<Self>>,
     /// Shared progress state for the background hot-update task.
@@ -84,7 +86,7 @@ impl Default for Daemon {
 impl Daemon {
     #[must_use]
     pub fn new() -> Self {
-        let (tx, _) = tokio::sync::broadcast::channel(32);
+        let tx = crate::events::Events::new(crate::events::RING);
         let tx_for_hot = tx.clone();
         let fleet = Arc::new(crate::device::Fleet::default());
         Self {
@@ -399,6 +401,9 @@ impl Handler for Daemon {
     }
     fn subscribe(&self) -> Option<tokio::sync::broadcast::Receiver<Value>> {
         Some(self.tx.subscribe())
+    }
+    fn events(&self) -> Option<Arc<crate::events::Events>> {
+        Some(self.tx.clone())
     }
     fn connections(&self) -> Option<Arc<crate::connections::Connections>> {
         Some(self.connections.clone())
