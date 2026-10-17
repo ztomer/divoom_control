@@ -15,28 +15,12 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from tui.lib import info, step, ok, err, warn, hr, section
+
 import time
-
-# ── kare style (TTY-aware) ──────────────────────────────────────────────
-_TTY = sys.stdout.isatty()
-_I_START, _I_OK, _I_ERR, _I_WARN, _I_STEP = ("→", "✓", "✗", "⚠", "·")
-_RESET = "\033[0m" if _TTY else ""
-_DIM = "\033[2m" if _TTY else ""
-_BOLD = "\033[1m" if _TTY else ""
-_GREEN = "\033[0;32m" if _TTY else ""
-_RED = "\033[0;31m" if _TTY else ""
-_YELLOW = "\033[0;33m" if _TTY else ""
-_GRAY = "\033[0;90m" if _TTY else ""
-
-
-def info(m): print(f"{_GRAY}{_I_START}{_RESET} {_DIM}{m}{_RESET}")
-def step(m): print(f"{_GRAY}{_I_STEP}{_RESET} {m}")
-def ok(m): print(f"{_GREEN}{_I_OK}{_RESET} {m}")
-def err(m): print(f"{_RED}{_I_ERR}{_RESET} {m}")
-def warn(m): print(f"{_YELLOW}{_I_WARN}{_RESET} {m}")
-def hr(w=60): print(f"{_GRAY}{'─' * w}{_RESET}")
-def section(t): print(); hr(); print(f"{_BOLD}  {t}{_RESET}"); hr()
-
 
 def _client():
     from divoom_client.daemon_protocol import DaemonClient

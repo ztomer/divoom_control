@@ -79,23 +79,6 @@ first. **Size:** M (four items, each S, no hardware needed). Depends on Phase 0
 share; a fix to one without the other turns the parity gate red for the wrong
 reason, so both move in one commit.
 
-#### P1.8 — 52 hand-rolled status markers
-**Status:** OPEN
-**Why:** goh 4.9 (`51109d6`): `goh.sh status-markers` reads 681 files and
-finds 52 sites in 11 files (2026-10-14): `divoomd/src/monthly_best.rs` 14,
-`scripts/hw_walk_modes.py` 7, `scripts/hw_smoke.py` 7, four each in
-`examples/tests/test_watchface_roundtrip.py`,
-`examples/tests/test_logger_utils.py`,
-`examples/divoom_legacy/utils/logger_utils.py`,
-`examples/divoom_legacy/monthly_best_daemon.py` and
-`divoom_lib/divoom_auth.py`, two in `run_gui.sh`, one each in
-`tests/test_divoom_auth_coverage.py` and `divoomd/src/art.rs`. Not wired, so
-not red.
-**Done when:** the check is a `GOH_CI_STEPS` step; the cheap sites print
-through goh's `tui.lib`, its shell TUI library or goh-tui, the rest are `--seed`ed with
-reasons (the `examples/` oracle is a spec: seed, do not rewrite); a new marker
-in a fixture turns the step red. Size: S.
-
 #### P1.9 — The release pushes the tap bump around the tap's gate
 **Status:** OPEN
 **Why:** goh 6.8 (`bfac28b`): `scripts/release.sh` (lines 189-216) rewrites

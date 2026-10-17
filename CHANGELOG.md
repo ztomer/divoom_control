@@ -8903,3 +8903,10 @@ a Show button + an Enabled checkbox + a Hide button
   - Item timeout: stale expiry, per-submit override, explicit None survival
   - Exception propagation: all built-in exception types
   - Null result: coroutine returning ``None``
+
+## P1.8 — 52 hand-rolled status markers (2026-10-16)
+
+- **Wired.** `goh.sh status-markers` is now a `GOH_CI_STEPS` step (seeded, shrink-only).
+- **Cheap sites routed.** `run_gui.sh`, `scripts/hw_smoke.py`, `scripts/hw_walk_modes.py` now print through goh's tui lib (vendored under `tui/`).
+- **Rest seeded.** `status_marker_seed.json` holds the remaining 46 sites (examples/ oracle untouched).
+- **Red-first.** A new marker in any file turns the step red.

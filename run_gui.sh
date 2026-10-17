@@ -18,6 +18,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${SCRIPT_DIR}"
 
-echo "[ ==> ] Starting Divoom Desktop Control Center..."
+source "$(dirname "$0")/tui/lib.sh"
+info "Starting Divoom Desktop Control Center..."
 python3 divoom_gui/gui_main.py
-echo "[ Ok  ] Divoom Desktop Controller closed."
+ok "Divoom Desktop Controller closed."
