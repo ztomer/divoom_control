@@ -163,6 +163,15 @@ impl Connections {
         json!({ "counts": counts, "limits": limits, "open": open })
     }
 
+    /// [`Self::snapshot`], or `None` if the table is locked right now. For
+    /// the wedge report (P2.6): a dying daemon must not wait on a lock that
+    /// whatever wedged it may be holding.
+    #[must_use]
+    pub fn try_snapshot(&self) -> Option<Value> {
+        drop(self.state.try_lock().ok()?);
+        Some(self.snapshot())
+    }
+
     fn with(&self, id: u64, f: impl FnOnce(&mut Conn)) {
         if let Some(c) = self.lock().open.get_mut(&id) {
             f(c);

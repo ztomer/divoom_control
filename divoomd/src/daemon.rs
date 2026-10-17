@@ -75,6 +75,8 @@ pub struct Daemon {
     /// Every open client connection, across all listeners (P2.2). The
     /// socket server writes it; `get_status` reads it.
     pub connections: Arc<crate::connections::Connections>,
+    /// Beaten by the accept loop; watched by `crate::watchdog` (P2.6).
+    pub heartbeat: Arc<crate::watchdog::Heartbeat>,
 }
 
 impl Default for Daemon {
@@ -111,6 +113,7 @@ impl Daemon {
             wall_slots: Mutex::new(serde_json::Map::new()),
             shutdown: Arc::new(tokio::sync::Notify::new()),
             connections: crate::connections::Connections::new(),
+            heartbeat: crate::watchdog::Heartbeat::new(crate::watchdog::BEAT_EVERY),
         }
     }
 
@@ -407,6 +410,9 @@ impl Handler for Daemon {
     }
     fn connections(&self) -> Option<Arc<crate::connections::Connections>> {
         Some(self.connections.clone())
+    }
+    fn heartbeat(&self) -> Option<Arc<crate::watchdog::Heartbeat>> {
+        Some(self.heartbeat.clone())
     }
     fn initial_status(&self) -> Value {
         // Synchronous by trait contract; the fleet is read with try_lock, so

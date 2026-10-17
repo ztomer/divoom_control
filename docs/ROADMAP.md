@@ -95,16 +95,8 @@ than the umask;
 P2.2, `get_status` reporting every connection by kind with ages, peer pid and in-flight command;
 P2.3, every command under a per-command deadline (`divoomd/src/deadlines.rs`);
 P2.4, a named subscriber (`client_id`) replacing its own slot before staleness eviction;
-P2.5, a lagging subscriber caught up to the latest value per key (`divoomd/src/events.rs`).
-
-#### P2.6 — Nothing notices the daemon has stopped serving
-**Status:** OPEN
-**Why:** launchd has no watchdog (verified as an absence), and the protocol has
-no heartbeat -- only a client-sent `ping`. A wedge detector on macOS has to live
-in-process and be pinged from INSIDE the serving loop; a side-channel check is
-exactly the gray-failure blind spot.
-**Done when:** a stalled serving loop is detected and reported (log + exit for
-relaunch) within a stated bound, proven by a test that wedges the loop.
+P2.5, a lagging subscriber caught up to the latest value per key (`divoomd/src/events.rs`);
+P2.6, an in-process watchdog that exits a wedged daemon within 30 s (`divoomd/src/watchdog.rs`).
 
 #### P2.7 — The panel does not always come back after a daemon restart
 **Status:** OPEN

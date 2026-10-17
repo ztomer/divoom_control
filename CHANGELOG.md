@@ -4,6 +4,41 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P2.6 — the daemon notices its own wedge (2026-10-17)
+
+launchd has no watchdog and the protocol has no heartbeat, so a daemon whose
+serving loop stopped turning was noticed by a person, if at all (2026-09-07:
+five days deaf).
+
+- **Evidence from inside the loop.** `divoomd/src/watchdog.rs`: the unix
+  accept loop beats a `Heartbeat` on every turn and turns at least once a
+  second with no client (a `select!` with a ticker), so silence means the loop
+  stopped, never that nobody called. A plain OS thread -- not a task on the
+  runtime it judges -- checks it.
+- **Stated bound.** `WEDGE_AFTER` = 30 s (`DIVOOMD_WEDGE_SECS`); reported
+  within the bound plus one check (at most 1 s). On a wedge the daemon logs the
+  silence and the connection census from P2.2 (`try_snapshot`, so a dying
+  daemon never waits on a lock) and exits `EX_TEMPFAIL` (75); the next client
+  request respawns it.
+- **Not fooled by suspension.** If the watchdog's own sleep overran by more
+  than half the bound, the whole process was suspended and the loop gets one
+  more check. Calibrated on the real BLE-free binary with a 2 s bound and a
+  4 s SIGSTOP: without the guard it exited `WEDGED` 3/3, with it alive 3/3.
+  (The monotonic clock stops during system sleep, so a closed lid never
+  counted.)
+- **The bounded-writes gate read one file.** Splitting the accept loops into
+  `divoomd/src/socket_server/accept.rs` for the line cap would have moved them
+  out of `tools/check_bounded_writes.py`'s scope, which already missed the
+  subscriber pump beside it. The gate now reads every `socket_server/`
+  submodule, where any `write_all` is a violation; its self-test proves both.
+- **Watched red first.** `divoomd/tests/wedge_watchdog.rs` runs the real
+  `serve` on a current-thread runtime, holds it idle and healthy for three
+  bounds (must NOT fire), then blocks the runtime thread (must fire). Before
+  the loop beat, the healthy idle loop was declared wedged.
+- **Real binary.** `get_status` on the BLE-free daemon returned the census with
+  the asking connection's pid; the socket was `srw-------` (P2.1); idle 5 s
+  under a 2 s bound, it stayed up.
+
 ## P2.5 — a slow subscriber gets the latest state, not a hole (2026-10-17)
 
 Subscribers shared a `broadcast::channel(32)`; one that fell behind was sent

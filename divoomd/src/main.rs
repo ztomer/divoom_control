@@ -33,6 +33,32 @@ fn env_duration(key: &str, default: Duration) -> Duration {
     })
 }
 
+/// The socket limits from the environment, logged, with the wedge watchdog
+/// started on the daemon's heartbeat.
+///
+/// P2.6: the accept loop beats `daemon.heartbeat`; a separate OS thread exits
+/// the daemon once it has been silent past the bound, so the next client
+/// respawns a daemon that serves instead of talking to one that cannot. The
+/// report names who held the connections at the time. The thread runs for the
+/// process's life, so its handle is dropped (detached) here.
+fn serving_limits(daemon: &Daemon) -> (usize, Duration) {
+    let max_connections = env_usize("DIVOOMD_MAX_CONNECTIONS", MAX_CONNECTIONS);
+    let idle_timeout = env_duration("DIVOOMD_IDLE_TIMEOUT_SECS", CONNECTION_IDLE_TIMEOUT);
+    let wedge_after = env_duration("DIVOOMD_WEDGE_SECS", divoomd::watchdog::WEDGE_AFTER);
+    eprintln!(
+        "divoomd: socket limits — max_connections={max_connections}, idle_timeout={}s, \
+         wedge_after={}s",
+        idle_timeout.as_secs(),
+        wedge_after.as_secs()
+    );
+    drop(divoomd::watchdog::exit_when_wedged(
+        daemon.heartbeat.clone(),
+        daemon.connections.clone(),
+        wedge_after,
+    ));
+    (max_connections, idle_timeout)
+}
+
 /// Bind the unix socket, or exit with the reason and the remedy.
 ///
 /// Single-instance guard, stale-socket clearing and blocker diagnosis all
@@ -187,12 +213,7 @@ async fn main() {
         ));
     }
 
-    let max_connections = env_usize("DIVOOMD_MAX_CONNECTIONS", MAX_CONNECTIONS);
-    let idle_timeout = env_duration("DIVOOMD_IDLE_TIMEOUT_SECS", CONNECTION_IDLE_TIMEOUT);
-    eprintln!(
-        "divoomd: socket limits — max_connections={max_connections}, idle_timeout={}s",
-        idle_timeout.as_secs()
-    );
+    let (max_connections, idle_timeout) = serving_limits(&daemon);
 
     // `held` keeps its own reference, so the socket outlives this future no
     // matter how the select below ends.

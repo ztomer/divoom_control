@@ -95,5 +95,6 @@ pub mod sync_artwork;
 pub mod transport;
 pub mod verbs;
 pub mod wall;
+pub mod watchdog;
 pub mod weather;
 pub mod wire;

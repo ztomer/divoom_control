@@ -18,7 +18,11 @@ it there: a counter or a test can only observe the paths that go THROUGH the
 seam, and a new `write_all` added beside it is exactly what neither can see.
 
 SCOPE, stated rather than implied: this gate reads `socket_server.rs`, the
-client transport. It makes no claim about `mcp.rs` (stdio) or `socket_bind.rs`
+client transport, AND every submodule under `socket_server/` (the subscriber
+pump, the accept loops). The seam lives in `socket_server.rs`, so in a
+submodule ANY `write_all` is a violation. Until P2.6 split the accept loops
+out, the gate read the one file and the pump beside it was invisible to it --
+a split for the line cap silently shrank the gate's subject. It makes no claim about `mcp.rs` (stdio) or `socket_bind.rs`
 (a probe with its own timeout) -- different resources, different failure modes.
 Widening it would need a seam in those files first.
 """
@@ -36,6 +40,7 @@ from _tui import err, info, ok  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 TARGET = Path("divoomd/src/socket_server.rs")
+SUBMODULES = Path("divoomd/src/socket_server")
 SEAM = "async fn write_line"
 WRITE = re.compile(r"\.write_all\s*\(")
 
@@ -76,6 +81,16 @@ def audit(text: str) -> tuple[list[int], int]:
     return (bad, total)
 
 
+def audit_submodule(text: str) -> list[int]:
+    """Line numbers of every write_all in a submodule (no seam lives there)."""
+    src = strip_rust_comments(text)
+    return [src.count("\n", 0, m.start()) + 1 for m in WRITE.finditer(src)]
+
+
+def submodules() -> list[Path]:
+    return sorted((REPO / SUBMODULES).glob("*.rs"))
+
+
 def self_test() -> int:
     """Prove the gate can fail, in both directions, before it is believed."""
     clean = (REPO / TARGET).read_text()
@@ -90,6 +105,11 @@ def self_test() -> int:
             "a write_all in a COMMENT passes",
             not audit(clean + "\n// s.write_all(b\"x\");\n")[0],
         ),
+        (
+            "a write_all in a submodule fails",
+            bool(audit_submodule("fn x() { s.write_all(b\"x\"); }\n")),
+        ),
+        ("the submodules are read at all", len(submodules()) >= 2),
         (
             # NOT `write_line_renamed`: that still CONTAINS the seam string, so
             # the first version of this probe changed nothing and reported the
@@ -112,18 +132,24 @@ def main() -> int:
         err(f"[bounded-writes] {TARGET} is gone — fix this gate's scope, do not delete it")
         return 1
     bad_lines, total = audit(path.read_text())
-    if bad_lines:
-        err(f"[bounded-writes] {len(bad_lines)} unbounded write(s) in {TARGET}")
-        for ln in bad_lines:
+    found = [(TARGET, ln) for ln in bad_lines]
+    for sub in submodules():
+        found += [(sub.relative_to(REPO), ln) for ln in audit_submodule(sub.read_text())]
+    if found:
+        err(f"[bounded-writes] {len(found)} unbounded write(s) in the socket server")
+        for where, ln in found:
             info(
-                f"{TARGET}:{ln}: write_all outside `write_line` — a peer that stops "
+                f"{where}:{ln}: write_all outside `write_line` — a peer that stops "
                 f"reading blocks this write forever and pins whatever the task holds. "
                 f"Route it through `write_line`, which applies WRITE_TIMEOUT."
             )
         return 1
     if scope_is_empty("bounded-writes", total, unit="write sites"):
         return 1
-    ok(f"[bounded-writes] OK — {total} write site(s), all inside the WRITE_TIMEOUT seam")
+    ok(
+        f"[bounded-writes] OK — {total} write site(s), all inside the WRITE_TIMEOUT seam; "
+        f"{len(submodules())} submodule(s) hold none"
+    )
     return 0
 
 
