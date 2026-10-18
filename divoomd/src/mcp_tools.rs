@@ -8,6 +8,10 @@
 use base64::Engine;
 use serde_json::{json, Value};
 
+use crate::arg_bounds::{
+    ALARM_INDEX, BRIGHTNESS, DEGREES, HOUR, IMAGE_SIZE, MINUTE, RADIO_FREQ_X10, SOUND_MS,
+    TEMPERATURE_C, VOLUME, WEEKDAY_MASK,
+};
 use crate::daemon_target::DaemonTarget;
 use crate::image_fit::Fit;
 
@@ -36,45 +40,47 @@ const WEATHER_TYPES: [(&str, i64); 6] = [
 /// Python `_SCHEMAS`/`_DESCRIPTIONS`.
 #[must_use]
 pub fn catalog() -> Value {
-    let int = |lo: i64, hi: i64| json!({ "type": "integer", "minimum": lo, "maximum": hi });
     let resize = json!({
         "type": "string",
         "enum": Fit::ALL.iter().map(|(n, _)| *n).collect::<Vec<_>>(),
         "default": "fit",
     });
-    json!([
+    let mut tools = vec![
+
         tool("set_volume", "Set the device's speaker volume (0-15).",
-            &json!({"type":"object","properties":{"level":int(0,15)},"required":["level"]})),
+            &json!({"type":"object","properties":{"level":VOLUME.schema()},"required":["level"]})),
         tool("set_brightness", "Set the device's display brightness (0-100).",
-            &json!({"type":"object","properties":{"level":int(0,100)},"required":["level"]})),
+            &json!({"type":"object","properties":{"level":BRIGHTNESS.schema()},"required":["level"]})),
         tool("set_light_mode", "Switch the active channel (clock, lightning, cloud, vj, visualizer, design, scoreboard, animation).",
             &json!({"type":"object","properties":{"mode":{"type":"string","enum":LIGHT_MODES.iter().map(|(n,_)|*n).collect::<Vec<_>>()}},"required":["mode"]})),
         tool("set_weather", "Push a temperature + weather icon to the device's built-in weather widget.",
-            &json!({"type":"object","properties":{"temperature_c":int(-127,128),"weather":{"type":"string","enum":WEATHER_TYPES.iter().map(|(n,_)|*n).collect::<Vec<_>>()}},"required":["temperature_c","weather"]})),
+            &json!({"type":"object","properties":{"temperature_c":TEMPERATURE_C.schema(),"weather":{"type":"string","enum":WEATHER_TYPES.iter().map(|(n,_)|*n).collect::<Vec<_>>()}},"required":["temperature_c","weather"]})),
         tool("set_alarm", "Set or disable one of the device's 10 alarms.",
-            &json!({"type":"object","properties":{"index":int(0,9),"hour":int(0,23),"minute":int(0,59),"weekday_mask":int(0,127),"enabled":{"type":"boolean"}},"required":["index","hour","minute"]})),
+            &json!({"type":"object","properties":{"index":ALARM_INDEX.schema(),"hour":HOUR.schema(),"minute":MINUTE.schema(),"weekday_mask":WEEKDAY_MASK.schema(),"enabled":{"type":"boolean"}},"required":["index","hour","minute"]})),
         tool("set_radio", "Tune the FM radio (freq_x10 = MHz x 10, e.g. 875 = 87.5).",
-            &json!({"type":"object","properties":{"freq_x10":int(875,1080)},"required":["freq_x10"]})),
+            &json!({"type":"object","properties":{"freq_x10":RADIO_FREQ_X10.schema()},"required":["freq_x10"]})),
         tool("set_low_power", "Enable or disable the device's low-power mode.",
             &json!({"type":"object","properties":{"enabled":{"type":"boolean"}},"required":["enabled"]})),
         tool("set_screen_orientation", "Rotate the device's display 0/90/180/270 degrees; optionally mirror/flip.",
             &json!({"type":"object","properties":{"degrees":{"type":"integer","enum":[0,90,180,270]},"mirror":{"type":"boolean"}},"required":["degrees"]})),
         tool("show_image", "Draw a local image file on the panel at the panel's own resolution (from its model; pass size when it has none). resize: fit (whole image, padded black), fill (cover, cropped), exact (stretched), none (must already be the panel's size, else an error). Colours are reduced to the panel's 256-colour palette only when the image has more.",
-            &json!({"type":"object","properties":{"file":{"type":"string","description":"Local filesystem path to the image."},"resize":resize,"size":int(8,128)},"required":["file"]})),
+            &json!({"type":"object","properties":{"file":{"type":"string","description":"Local filesystem path to the image."},"resize":resize,"size":IMAGE_SIZE.schema()},"required":["file"]})),
         tool("push_animation", "Play a GIF/animation on the panel: every frame, each for its own duration (GIF delays; 50 ms minimum), at the panel's resolution under the same resize policy as show_image. Provide 'file' (path) or 'data' (base64).",
-            &json!({"type":"object","properties":{"file":{"type":"string"},"data":{"type":"string"},"resize":resize,"size":int(8,128)},"oneOf":[{"required":["file"]},{"required":["data"]}]})),
+            &json!({"type":"object","properties":{"file":{"type":"string"},"data":{"type":"string"},"resize":resize,"size":IMAGE_SIZE.schema()},"oneOf":[{"required":["file"]},{"required":["data"]}]})),
         tool("play_sound", "Beep the device (best-effort; some firmware no-ops).",
-            &json!({"type":"object","properties":{"duration_ms":int(100,3000)},"required":["duration_ms"]})),
+            &json!({"type":"object","properties":{"duration_ms":SOUND_MS.schema()},"required":["duration_ms"]})),
         tool("get_capabilities", "Describe a panel: link state, model, width/height in pixels (how it was decided: model_source), and the features the vendor app enables for that model (speaker, sd_card, temp_sensor, wifi, clock_style; null for an unrecognised model). There is no FM-radio flag: the vendor app does not decide FM per model.",
             &json!({"type":"object","properties":{},"additionalProperties":false})),
         tool("get_device_state", "Read the device's current volume, brightness, channel, orientation, mirror.",
             &json!({"type":"object","properties":{},"additionalProperties":false})),
         tool("list_screens", "List every screen the daemon knows or the saved layout places (`screens`): each with mac, connected (live link), selected, model, width/height (null when never seen), features, and its saved x/y/room; plus wall state and slots.",
             &json!({"type":"object","properties":{},"additionalProperties":false})),
-    ])
+    ];
+    tools.extend(crate::mcp_more_tools::catalog());
+    Value::Array(tools)
 }
 
-fn tool(name: &str, desc: &str, schema: &Value) -> Value {
+pub(crate) fn tool(name: &str, desc: &str, schema: &Value) -> Value {
     let mut s = schema.clone();
     if let Some(props) = s.get_mut("properties").and_then(Value::as_object_mut) {
         if name != "list_screens" {
@@ -106,12 +112,12 @@ pub async fn call_tool(name: &str, a: &Value, target: &DaemonTarget) -> Result<V
 
     match name {
         "set_volume" => {
-            let level = need_int(a, "level", 0, 15)?;
+            let level = VOLUME.read(a)?;
             crate::mcp_daemon::dc(target, "music.set_volume", json!([level]), mac).await?;
             Ok(json!({ "ok": true, "level": level }))
         }
         "set_brightness" => {
-            let level = need_int(a, "level", 0, 100)?;
+            let level = BRIGHTNESS.read(a)?;
             crate::mcp_daemon::dc(target, "device.set_brightness", json!([level]), mac).await?;
             Ok(json!({ "ok": true, "level": level }))
         }
@@ -119,7 +125,7 @@ pub async fn call_tool(name: &str, a: &Value, target: &DaemonTarget) -> Result<V
         "set_weather" => set_weather(a, target).await,
         "set_alarm" => set_alarm(a, target).await,
         "set_radio" => {
-            let freq = need_int(a, "freq_x10", 875, 1080)?;
+            let freq = RADIO_FREQ_X10.read(a)?;
             crate::mcp_daemon::dc(target, "radio.set_radio_frequency", json!([freq]), mac).await?;
             Ok(json!({ "ok": true, "freq_x10": freq }))
         }
@@ -128,7 +134,7 @@ pub async fn call_tool(name: &str, a: &Value, target: &DaemonTarget) -> Result<V
         "show_image" => show_image(a, target).await,
         "push_animation" => push_animation(a, target).await,
         "play_sound" => {
-            let dur = need_int(a, "duration_ms", 100, 3000)?;
+            let dur = SOUND_MS.read(a)?;
             crate::mcp_daemon::dc(target, "control.set_hot", json!([1]), mac).await?;
             Ok(json!({ "ok": true, "duration_ms": dur }))
         }
@@ -140,7 +146,9 @@ pub async fn call_tool(name: &str, a: &Value, target: &DaemonTarget) -> Result<V
         }
         "get_device_state" => get_device_state(a, target).await,
         "list_screens" => crate::mcp_daemon::cmd(target, "get_topology", json!({})).await,
-        other => Err(format!("unknown tool: {other}")),
+        other => crate::mcp_more_tools::call(other, a, target)
+            .await
+            .unwrap_or_else(|| Err(format!("unknown tool: {other}"))),
     }
 }
 async fn set_light_mode(a: &Value, target: &DaemonTarget) -> Result<Value, String> {
@@ -184,7 +192,7 @@ pub(crate) fn weather_id(name: &str) -> Result<i64, String> {
 async fn set_weather(a: &Value, target: &DaemonTarget) -> Result<Value, String> {
     let mac = a.get("mac").and_then(Value::as_str);
 
-    let temp = need_int(a, "temperature_c", -127, 128)?;
+    let temp = TEMPERATURE_C.read(a)?;
     let weather = a
         .get("weather")
         .and_then(|v| v.as_str())
@@ -197,10 +205,10 @@ async fn set_weather(a: &Value, target: &DaemonTarget) -> Result<Value, String> 
 async fn set_alarm(a: &Value, target: &DaemonTarget) -> Result<Value, String> {
     let mac = a.get("mac").and_then(Value::as_str);
 
-    let index = need_int(a, "index", 0, 9)?;
-    let hour = need_int(a, "hour", 0, 23)?;
-    let minute = need_int(a, "minute", 0, 59)?;
-    let week = opt_int(a, "weekday_mask", 0, 127, 0)?;
+    let index = ALARM_INDEX.read(a)?;
+    let hour = HOUR.read(a)?;
+    let minute = MINUTE.read(a)?;
+    let week = WEEKDAY_MASK.read_or(a, 0)?;
     let enabled = a
         .get("enabled")
         .and_then(serde_json::Value::as_bool)
@@ -239,7 +247,7 @@ async fn set_low_power(a: &Value, target: &DaemonTarget) -> Result<Value, String
 async fn set_screen_orientation(a: &Value, target: &DaemonTarget) -> Result<Value, String> {
     let mac = a.get("mac").and_then(Value::as_str);
 
-    let degrees = need_int(a, "degrees", 0, 270)?;
+    let degrees = DEGREES.read(a)?;
     let dir = match degrees {
         0 => 0,
         90 => 1,
@@ -321,30 +329,6 @@ async fn get_device_state(a: &Value, target: &DaemonTarget) -> Result<Value, Str
 
 // --- helpers -----------------------------------------------------------------
 
-/// Read a bounded integer out of a tool's arguments.
-///
-/// `pub(crate)` because the CLI verbs share these bounds rather than restating
-/// them: a range that lives in two places is a range that gets changed in one.
-/// The error text is phrased for a tool call, which is also how the CLI reports
-/// it, so the bound reads the same on both surfaces.
-pub(crate) fn need_int(a: &Value, key: &str, lo: i64, hi: i64) -> Result<i64, String> {
-    let v = a
-        .get(key)
-        .and_then(serde_json::Value::as_i64)
-        .ok_or_else(|| format!("{key} must be an integer"))?;
-    if v < lo || v > hi {
-        return Err(format!("{key} must be in [{lo}..{hi}] (got {v})"));
-    }
-    Ok(v)
-}
-
-fn opt_int(a: &Value, key: &str, lo: i64, hi: i64, default: i64) -> Result<i64, String> {
-    match a.get(key) {
-        None | Some(Value::Null) => Ok(default),
-        Some(_) => need_int(a, key, lo, hi),
-    }
-}
-
 /// The `resize` argument: its wire name and policy, `fit` when absent.
 fn resize_policy(a: &Value) -> Result<(&str, Fit), String> {
     let name = a.get("resize").and_then(Value::as_str).unwrap_or("fit");
@@ -355,9 +339,13 @@ fn resize_policy(a: &Value) -> Result<(&str, Fit), String> {
 /// own width from `device_status` (P3.1). A panel with no model to go on (a
 /// LAN panel advertises no name) has no known size, and guessing one is how
 /// a 64x64 panel came to get 16x16 images -- so the caller is asked instead.
-async fn panel_size(a: &Value, target: &DaemonTarget, mac: Option<&str>) -> Result<u32, String> {
+pub(crate) async fn panel_size(
+    a: &Value,
+    target: &DaemonTarget,
+    mac: Option<&str>,
+) -> Result<u32, String> {
     if a.get("size").is_some_and(|v| !v.is_null()) {
-        let edge = need_int(a, "size", 8, 128)?;
+        let edge = IMAGE_SIZE.read(a)?;
         return u32::try_from(edge).map_err(|e| e.to_string());
     }
     let args = mac.map_or_else(|| json!({}), |m| json!({ "mac": m }));
@@ -387,7 +375,7 @@ async fn decode(
 /// Push fitted frames through the daemon's `show_image`, all in one call:
 /// the daemon encodes each with its own duration and streams them as one
 /// animation (P4.4). One frame is the same call with a list of one.
-async fn push_frames(
+pub(crate) async fn push_frames(
     target: &DaemonTarget,
     frames: &[crate::image_proc::Frame],
     mac: Option<&str>,

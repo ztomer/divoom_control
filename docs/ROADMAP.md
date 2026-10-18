@@ -133,16 +133,8 @@ inherits the per-device rule below and its stress gate.
 Landed (2026-10-17): P4.1, `get_capabilities` describing the named panel with model, size and the vendor app's per-model features (`divoomd/src/panel_features.rs`, derived by `tools/derive_panel_features.py`);
 P4.2, `list_screens` listing every known or placed screen with its size, live link and place (`screens` in `get_topology`);
 P4.3, `show_image` drawing at the panel's size under a `resize` policy, every decoded frame held to the 256-colour palette (`divoomd/src/image_fit.rs`);
-P4.4, `push_animation` playing every frame with its own duration through one multi-frame `show_image` call.
-
-#### P4.5 — Text, live jobs and the built-in tools over MCP
-**Status:** OPEN
-**Why:** the daemon already has `render_widget` text, `live_job_start/stop/list`,
-and `scoreboard.set_scoreboard` / `timer.set_timer` /
-`countdown.set_countdown`; none is an MCP tool, so an agent has to speak the raw
-socket for them.
-**Done when:** each is an MCP tool generated from the same registry as the
-others, with the arguments' bounds shared rather than restated.
+P4.4, `push_animation` playing every frame with its own duration through one multi-frame `show_image` call;
+P4.5, text, live jobs, scoreboard, timer and countdown as MCP tools in the one catalog, every integer range stated once (`divoomd/src/arg_bounds.rs`).
 
 #### P4.6 — Screen leases, so agents and background jobs do not collide
 **Status:** OPEN

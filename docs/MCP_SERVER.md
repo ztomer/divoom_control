@@ -40,7 +40,7 @@ Command-line options:
 
 ## Tool Catalog
 
-The server exposes 14 tools via `tools/list`:
+The server exposes 21 tools via `tools/list`. Every integer range below is stated once, in `divoomd/src/arg_bounds.rs`: the schema is generated from it, the tool checks it, and the daemon handler that receives the value refuses outside it.
 
 | Tool | Arguments | Description / Returns |
 |------|-----------|------------------------|
@@ -58,6 +58,13 @@ The server exposes 14 tools via `tools/list`:
 | `get_capabilities` | `{mac?}` | Describe one panel (the named one, else the active one): link state, `model`, `width`/`height` and how they were decided (`model_source`), and `features` -- what the vendor app enables for that model (`speaker`, `sd_card`, `temp_sensor`, `wifi`, `clock_style`), `null` for an unrecognised model. No FM-radio flag: the vendor app does not decide FM per model. |
 | `get_device_state` | `{}` | Read current volume, brightness, active light mode, orientation, and mirror settings. Values are `null` when the daemon cannot be reached, so absent data is never shown as a real reading. |
 | `list_screens` | `{}` | List every screen the daemon knows or the saved layout places, in `screens`: each with `mac`, `connected` (live link), `selected`, `model`, `width`/`height` (`null` for a placed panel never seen), `features`, and its saved `x`/`y`/`room`; plus wall state and slots. The one tool the Python server never had. |
+| `show_text` | `{text: string, color?: "#RRGGBB", size?: 8..128}` | Draw text in the device font at the panel's resolution (the frame `render_widget`'s `text` kind previews; panels over 64 px get it scaled by a whole factor). Returns `{ok, text, size}`. |
+| `live_job_start` | `{kind: "sysmon"\|"stocks"\|"weather"\|"music", params?: object}` | Start a live widget on the named (else the active) panel, replacing the one it runs. `params.size` defaults to the panel's width. `stocks` needs `params.symbol`; `music` needs macOS. Returns `{ok, mac, kind, params}`. |
+| `live_job_stop` | `{kind}` | Stop that panel's live widget of this kind. Returns `{ok, mac, kind, stopped}`. |
+| `live_job_list` | `{mac?}` | The live widgets running, on one panel or all. |
+| `set_scoreboard` | `{red_score: 0..999, blue_score: 0..999, on?: bool}` | Show (or with `on: false` hide) the scoreboard. |
+| `set_timer` | `{action: "start"\|"stop"\|"reset"}` | Control the stopwatch. |
+| `set_countdown` | `{action: "start"\|"stop", minutes?: 0..99, seconds?: 0..59}` | Start a countdown, or stop the running one. |
 
 ### Validation and Error Handling
 - Protocol-level validation errors (missing arguments, invalid JSON) return standard JSON-RPC error codes (`-32602`, `-32700`, etc.).

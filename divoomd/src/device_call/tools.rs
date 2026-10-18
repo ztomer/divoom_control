@@ -1,4 +1,5 @@
 use super::CallCtx;
+use crate::arg_bounds::{BLUE_SCORE, COUNTDOWN_MINUTES, COUNTDOWN_SECONDS, RED_SCORE};
 use crate::protocol::err_reply;
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
@@ -50,9 +51,7 @@ async fn set_scoreboard(ctx: CallCtx<'_>) -> Value {
             kw.and_then(|v| v.get("red_score"))
                 .and_then(serde_json::Value::as_i64)
         })
-        .unwrap_or(0)
-        .clamp(0, 999)
-        .word();
+        .unwrap_or(0);
     let blue_score = args
         .get(2)
         .copied()
@@ -60,9 +59,13 @@ async fn set_scoreboard(ctx: CallCtx<'_>) -> Value {
             kw.and_then(|v| v.get("blue_score"))
                 .and_then(serde_json::Value::as_i64)
         })
-        .unwrap_or(0)
-        .clamp(0, 999)
-        .word();
+        .unwrap_or(0);
+    // The shared bounds (`crate::arg_bounds`), refused rather than clamped:
+    // 1500 used to become 999 without a word.
+    let (red_score, blue_score) = match (RED_SCORE.check(red_score), BLUE_SCORE.check(blue_score)) {
+        (Ok(r), Ok(b)) => (r.word(), b.word()),
+        (Err(e), _) | (_, Err(e)) => return err_reply(&format!("set_scoreboard: {e}")),
+    };
     let mut payload = Vec::with_capacity(6);
     payload.push(1u8); // TOOL_TYPE_SCORE
     payload.push(on_off);
@@ -146,8 +149,7 @@ async fn set_countdown(ctx: CallCtx<'_>) -> Value {
             kw.and_then(|v| v.get("minutes"))
                 .and_then(serde_json::Value::as_i64)
         })
-        .unwrap_or(0)
-        .byte();
+        .unwrap_or(0);
     let seconds = args
         .get(2)
         .copied()
@@ -155,8 +157,15 @@ async fn set_countdown(ctx: CallCtx<'_>) -> Value {
             kw.and_then(|v| v.get("seconds"))
                 .and_then(serde_json::Value::as_i64)
         })
-        .unwrap_or(0)
-        .byte();
+        .unwrap_or(0);
+    // Refused, not narrowed: `.byte()` sent 300 minutes as 44.
+    let (minutes, seconds) = match (
+        COUNTDOWN_MINUTES.check(minutes),
+        COUNTDOWN_SECONDS.check(seconds),
+    ) {
+        (Ok(m), Ok(s)) => (m.byte(), s.byte()),
+        (Err(e), _) | (_, Err(e)) => return err_reply(&format!("set_countdown: {e}")),
+    };
     let payload = [3u8, ctrl_flag, minutes, seconds]; // TOOL_TYPE_COUNTDOWN = 3
     match dev.send_command(0x72, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),

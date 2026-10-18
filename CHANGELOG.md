@@ -4,6 +4,45 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P4.5 — text, live jobs and the built-in tools over MCP (2026-10-17)
+
+The daemon had `render_widget` text, `live_job_start/stop/list`,
+`scoreboard.set_scoreboard`, `timer.set_timer` and `countdown.set_countdown`;
+none was an MCP tool, so an agent had to speak the raw socket for them. And
+the ranges the existing tools did have lived in up to four places each: the
+schema (`int(0, 15)`), the tool's check (`need_int(a, "level", 0, 15)`), the
+CLI verb -- whose comment said "the bounds come from the MCP tool, not from
+here" above a literal restatement -- and the daemon handler, which narrowed
+whatever arrived: `set_countdown` sent 300 minutes as 44, `set_scoreboard`
+clamped 1500 to 999 without a word.
+
+- **One statement per range.** `divoomd/src/arg_bounds.rs`: a `Bound`
+  (key, lo, hi) generates the schema property, does the check, and is what
+  the daemon handler checks. Every integer in the catalog now comes from one;
+  `need_int`/`opt_int` are gone, so a bare literal range has nowhere to go.
+  The CLI verbs (`set-volume`, `set-brightness`, `set-radio`,
+  `set-temperature`, `set-alarm`'s HH:MM) check the same constants.
+- **Seven tools, same registry.** `divoomd/src/mcp_more_tools.rs` (its own
+  file for the line cap; `catalog()` appends it and `call_tool` falls through
+  to it): `show_text` (the `render_widget` text frame at the panel's size,
+  scaled by a whole factor past the renderer's 64 px), `live_job_start` (to
+  the named or active panel, `params.size` defaulting to the panel's width
+  -- every job otherwise draws at 16), `live_job_stop`, `live_job_list`,
+  `set_scoreboard`, `set_timer` (start/stop/reset) and `set_countdown`. Live
+  job kinds are `live_jobs::JOB_KINDS`, held to the coordinator's match arms
+  by a test.
+- **The daemon refuses, names, never narrows.** `scoreboard.set_scoreboard`
+  and `countdown.set_countdown` check `RED_SCORE`/`BLUE_SCORE` (0..999, the
+  GUI's inputs) and `COUNTDOWN_MINUTES`/`SECONDS` (0..99, 0..59).
+- **Watched red first.** `divoomd/tests/tool_bounds.rs` was red on the old
+  handlers (300 minutes accepted). The MCP tests (`mcp_more_tools_tests.rs`:
+  catalog membership, schema == shared bound, refusals before any I/O, the
+  exact args sent, the live job's panel and size, text at 128) were red
+  before the tools existed; the size test went red again with the default
+  removed. The catalog-count pins (`mcp_tools_tests.rs`, `mcp.rs`,
+  `tests/test_mcp_delegation.py` against the real binary) moved 14 -> 21 by
+  name.
+
 ## P4.4 — `push_animation` streams every frame (2026-10-17)
 
 `push_animation` pushed the first frame and said so ("full animation

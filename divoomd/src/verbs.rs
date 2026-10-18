@@ -201,26 +201,29 @@ fn parse_verb(verb: &str, args: &[String]) -> Result<VerbRequest, String> {
     let parsed = match verb {
         "set-volume" => {
             want(1)?;
-            // The bounds come from the MCP tool, not from here: a range that
-            // exists in two places is a range that will be changed in one.
+            // The bounds are `crate::arg_bounds`, the same statements the MCP
+            // schema and the tool's check use: a range that exists in two
+            // places is a range that will be changed in one.
             let raw = number(positional[0], verb)?;
-            let value = crate::mcp_tools::need_int(&json!({ "level": raw }), "level", 0, 15)
+            let value = crate::arg_bounds::VOLUME
+                .check(raw)
                 .map_err(|e| format!("{verb}: {e}"))?;
             Verb::SetVolume { value }
         }
         "set-brightness" => {
             want(1)?;
             let raw = number(positional[0], verb)?;
-            let value = crate::mcp_tools::need_int(&json!({ "level": raw }), "level", 0, 100)
+            let value = crate::arg_bounds::BRIGHTNESS
+                .check(raw)
                 .map_err(|e| format!("{verb}: {e}"))?;
             Verb::SetBrightness { value }
         }
         "set-radio" => {
             want(1)?;
             let raw = number(positional[0], verb)?;
-            let freq_x10 =
-                crate::mcp_tools::need_int(&json!({ "freq_x10": raw }), "freq_x10", 875, 1080)
-                    .map_err(|e| format!("{verb}: {e}"))?;
+            let freq_x10 = crate::arg_bounds::RADIO_FREQ_X10
+                .check(raw)
+                .map_err(|e| format!("{verb}: {e}"))?;
             Verb::SetRadio { freq_x10 }
         }
         "set-alarm" => {
@@ -236,13 +239,9 @@ fn parse_verb(verb: &str, args: &[String]) -> Result<VerbRequest, String> {
             want(2)?;
             let raw = number(positional[0], verb)?;
             // Range and the icon name are the tool's, not this file's.
-            let temperature = crate::mcp_tools::need_int(
-                &json!({ "temperature_c": raw }),
-                "temperature_c",
-                -127,
-                128,
-            )
-            .map_err(|e| format!("{verb}: {e}"))?;
+            let temperature = crate::arg_bounds::TEMPERATURE_C
+                .check(raw)
+                .map_err(|e| format!("{verb}: {e}"))?;
             let weather = positional[1].to_string();
             // Validate the name here so the refusal happens before a panel is
             // resolved, and let the tool map it to the wire value.
@@ -295,12 +294,12 @@ fn parse_hh_mm(raw: &str, verb: &str) -> Result<(i64, i64), String> {
     };
     let hour = parse_part(h, "hour")?;
     let minute = parse_part(m, "minute")?;
-    if !(0..=23).contains(&hour) {
-        return Err(format!("{verb}: hour must be 0..23, got {hour}"));
-    }
-    if !(0..=59).contains(&minute) {
-        return Err(format!("{verb}: minute must be 0..59, got {minute}"));
-    }
+    let hour = crate::arg_bounds::HOUR
+        .check(hour)
+        .map_err(|e| format!("{verb}: {e}"))?;
+    let minute = crate::arg_bounds::MINUTE
+        .check(minute)
+        .map_err(|e| format!("{verb}: {e}"))?;
     Ok((hour, minute))
 }
 

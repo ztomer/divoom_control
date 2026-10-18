@@ -22,6 +22,11 @@ pub mod sysmon;
 pub(crate) mod weather_frame;
 
 pub use coordinator::LiveJobCoordinator;
+
+/// Every live-job kind `LiveJobCoordinator::start` knows (music needs macOS,
+/// and says so elsewhere). The MCP tools enumerate these; the coordinator's
+/// test holds each to a match arm.
+pub const JOB_KINDS: &[&str] = &["sysmon", "stocks", "weather", "music"];
 use frame::{push_live_frame, LiveFrame};
 pub use health::{JobHealth, JobState};
 #[cfg(target_os = "macos")]

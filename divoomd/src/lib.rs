@@ -8,6 +8,7 @@
 //! notify/response correlation, and the command queue — each pinned to the Python
 //! behavior by parity tests.
 
+pub mod arg_bounds;
 pub mod art;
 pub mod art_codec;
 pub mod art_hot;
@@ -58,6 +59,7 @@ pub mod live_jobs;
 pub mod macos_notifications;
 pub mod mcp;
 pub mod mcp_daemon;
+mod mcp_more_tools;
 pub mod mcp_tools;
 pub mod media;
 #[cfg(test)]

@@ -142,3 +142,20 @@ impl LiveJobCoordinator {
         dev.set_activity(&kind, name, preview).await;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    /// Every kind the tools offer has a `start` arm, so an advertised kind
+    /// can never answer "unknown live job kind".
+    #[test]
+    fn every_advertised_kind_is_started_by_name() {
+        let src = include_str!("coordinator.rs");
+        let body = &src[..src.find("#[cfg(test)]\nmod tests").expect("tests marker")];
+        for kind in super::super::JOB_KINDS {
+            assert!(
+                body.contains(&format!("\"{kind}\" =>")),
+                "{kind} is advertised but has no start arm"
+            );
+        }
+    }
+}
