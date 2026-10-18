@@ -159,7 +159,15 @@ P5.1, brightness, volume and panel size read and written per mac through the dae
 **Exit:** P6.1's *Done when*. **Size:** M. Needs two panels for the final
 check.
 
-Landed (2026-10-18): P6.4, every GUI display write -- light, clock, channel,
+Landed (2026-10-18): P6.6, with the wall chosen the deck's brightness and
+volume are the wall's -- one gesture one wall write that reaches every slot,
+the toast naming each slot that did not take it, volume offered only when
+every slot's panel has a speaker by the daemon's word, and a mock panel's
+wire readable over the socket (`mock_sent`) so the test sees the write
+arrive (`039d719`, `092e9b0`; `divoom_gui/web_ui/panel_facts.js`,
+`divoom_gui/web_ui/spatial_stage.js`, `tests/test_e2e_wall_levels.py`,
+`divoomd/src/daemon_mock.rs`);
+P6.4, every GUI display write -- light, clock, channel,
 VJ, visualizer, text, scoreboard, brightness, volume, the ticker and the wall
 image -- answering one outcome through one funnel that keeps the daemon's
 reply, and the page's toast naming each wall panel that did not take it by
@@ -208,18 +216,6 @@ decompile. The refusal is stated (`divoomd/src/wall/refusal.rs`).
 **Done when:** a Wi-Fi image command is taken from a source (a decompile of
 `sendByLocalHttp`, or the public HTTP API's `Draw/SendHttpGif` checked on a
 real LAN panel), the daemon draws a slot over it, and the refusal is deleted.
-
-#### P6.6 — The wall has no brightness or volume control
-**Status:** OPEN
-**Why:** the bridge writes the wall's brightness and volume and, since P6.4,
-names the panel that did not take them, but nothing on the page sends either:
-the deck's sliders are one panel's (`window.PanelLevels` in
-`divoom_gui/web_ui/panel_facts.js` writes only a linked panel, and the wall is
-not one). The capability exists with no control.
-**Done when:** with the wall selected the deck offers its brightness (and
-volume when every slot has a speaker) and a browser test through the real
-daemon sees the write reach every slot, or the bridge's wall levels are
-deleted with the reason.
 
 ### Phase 7 — decisions for the owner
 

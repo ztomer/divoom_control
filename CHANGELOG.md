@@ -4,6 +4,40 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P6.6 — the wall's brightness and volume from the deck (2026-10-18)
+
+The bridge wrote the wall's levels and, since P6.4, answered which panel did
+not take them, but nothing on the page sent either: the deck showed the
+bench's panel whatever display was chosen, and `window.PanelLevels`
+(`divoom_gui/web_ui/panel_facts.js`) wrote only that panel. With the wall
+chosen, a brightness gesture changed one panel of it.
+
+- **The deck follows the display.** `setConnectionState`
+  (`web_ui/connection_events.js`) repaints the deck when the chosen display
+  changes, and `updateInspector` (`web_ui/spatial_stage.js`) shows the wall
+  when it is the one chosen: its name, the slot count -- or how many are
+  linked, in words -- its levels and the power button, no room.
+- **One sender, for the wall too.** `PanelLevels.write` sends one
+  `set_brightness` / `set_volume` naming `MatrixWall`; the daemon sends it to
+  every slot and the toast, through `DisplayWrite.report` with the wall's
+  slots, names each slot that did not take it and why.
+- **Volume only when every slot has a speaker**, by the daemon's word
+  (`features.speaker`, the vendor app's per-model switch); a slot it has not
+  described is not assumed to have one. The wall's shown level is the one
+  every slot last reported or took, else unknown; no read is sent for it.
+- **`mock_sent {mac}`** (`divoomd/src/daemon_mock.rs`): the commands a linked
+  mock panel was asked to send, so a test through the real daemon reads each
+  panel's own wire instead of the daemon's account of it.
+- **Tests, each watched red first.** `tests/test_e2e_wall_levels.py` (real GUI
+  backend, real daemon, two mock panels): one brightness and one volume
+  gesture reach both slots once each (red: only the bench's panel got 0x74),
+  and a wall with a Pixoo in it offers no volume (red: the deck showed the
+  bench panel's speaker); the speaker rule calibrated both ways.
+  `tests/test_e2e_wall_write_names_the_panel.py`: brightness and volume are
+  gestures now, and with Shelf failing each toast names Shelf and not Desk.
+- `python3 -m pytest --run-browser`: 2192 passed, 14 skipped (hardware,
+  cloud, menubar not built, non-darwin paths).
+
 ## P6.4 — every GUI wall write names the panel that failed (2026-10-18)
 
 P6.3 made the daemon name each wall panel whose write failed (`failed`, mac to
