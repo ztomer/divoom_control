@@ -4,6 +4,25 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P2.7 — a respawned daemon gets the GUI's panels back (2026-10-18)
+
+Traced on hardware the same day: each daemon restart with the GUI running
+ended with a new daemon and no panel for 60 s, because nothing asked it to
+link one. `reconnect_daemon` now tells a NEW daemon from the same one by its
+start time (now - `get_status.uptime_s`) -- not by whether the socket answered,
+since `ensure_daemon` also replaces a stale-version daemon and the watchdog
+exits a wedged one -- and relinks every panel this GUI linked that the new
+daemon does not hold, serially, on a background thread
+(`divoom_gui/panel_relink.py`). The connect body moved into
+`ScannerMixin._link`, so a relinked panel is linked exactly as a click links it.
+
+- `tests/test_daemon_respawn_relink.py`: red before the fix (the respawned
+  daemon got no `connect`, BLE and LAN); a live daemon whose link dropped is
+  NOT relinked (watched red with the identity check broken); a panel the new
+  daemon already holds is left alone.
+- Hardware confirmation is open for the next panel session (ROADMAP P2.7).
+- `python3 -m pytest`: 2044 passed, 168 skipped.
+
 ## CI green again, and the local gate runs what CI runs (2026-10-18)
 
 CI had failed on 19 of the last 20 main runs while the 27-step local pre-push

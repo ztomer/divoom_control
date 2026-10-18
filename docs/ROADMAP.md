@@ -107,7 +107,16 @@ P2.5, a lagging subscriber caught up to the latest value per key (`divoomd/src/e
 P2.6, an in-process watchdog that exits a wedged daemon within 30 s (`divoomd/src/watchdog.rs`).
 
 #### P2.7 — The panel does not come back after a daemon restart
-**Status:** OPEN (cause named 2026-10-18)
+**Status:** FIXED in code 2026-10-18, hardware confirmation OPEN. The GUI's
+respawn path owns it (`divoom_gui/panel_relink.py`): `reconnect_daemon`
+compares the daemon's start time (now - `get_status.uptime_s`) with the last
+one it saw; a different instance gets every panel this GUI linked and it does
+not hold, one at a time, off the UI thread. Pinned by
+`tests/test_daemon_respawn_relink.py` (fake daemon at the `ensure_daemon`
+seam; red before the fix). **Next panel session:** with the GUI running,
+SIGTERM the daemon and see `[ble][connect]` and the dot return without a
+click. Not covered: panels linked by the CLI/MCP rather than the GUI, and wall
+slots (a `MatrixWall` connect links nothing itself).
 **Why:** traced on 2026-10-18 (Pixoo-1, installed v0.41.2, `open --env
 DIVOOMD_BLE_DEBUG=1`, log `/tmp/divoom_client.log`). A GUI launch connects
 the saved panel in 4 s. Three `SIGTERM`s of the daemon with the GUI running

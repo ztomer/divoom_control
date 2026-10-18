@@ -155,6 +155,9 @@ class ScannerMixin:
         self._daemon_client = client
         if client is not None:
             logger.info("Daemon reconnected (client re-ensured).")
+            # P2.7: a NEW daemon starts with no panels; ask it for ours back.
+            from divoom_gui import panel_relink
+            panel_relink.after_ensure(self, client)
         return json.dumps({"daemon": client is not None})
 
     def get_scan_settings(self) -> str:
@@ -338,7 +341,20 @@ class ScannerMixin:
             # 2026-09-12: no fleet-wide disconnect here. The daemon keeps one
             # Device per panel; connecting the selected one must not drop
             # the other three the bench is showing.
+            if not self._link(client, address):
+                return False
+            self._persist_last_connected(address)
+            return True
+        except Exception as e:
+            logger.error(f"Single connect failed: {e}")
+            self._last_connect_error = str(e)
+            return False
 
+    def _link(self, client, address: str) -> bool:
+        """Ask ``client``'s daemon to link one panel (BLE mac or ``LAN:ip``)
+        and remember it for a respawn (P2.7). Shared by a connect click and
+        by panel_relink, so a relinked panel is linked the same way."""
+        try:
             if address.startswith("LAN:"):
                 ip = address.split("LAN:")[1]
                 token = self._lan_token_for(ip)
@@ -363,10 +379,11 @@ class ScannerMixin:
                 return False
 
             self._last_connect_error = ""
-            self._persist_last_connected(address)
+            from divoom_gui import panel_relink
+            panel_relink.remember(self, address)
             return True
         except Exception as e:
-            logger.error(f"Single connect failed: {e}")
+            logger.error(f"Link {address} failed: {e}")
             self._last_connect_error = str(e)
             return False
 
