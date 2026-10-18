@@ -81,6 +81,13 @@ first. **Size:** M (all items landed). Depends on Phase 0
 
 **Phase 1 complete** (2026-10-17): all eleven P1 items landed (P1.1, P1.2, P1.3,
 P1.4, P1.5, P1.6, P1.7, P1.8, P1.9, P1.10, P1.11).
+
+Landed after (2026-10-18): a probe crate's cargo build removed with its temp
+dir -- the tray-icon verifier left a build under `~/.cargo/build` per run
+because the house `build-dir` hashes a fresh path every time; every Python
+cargo build spawn in `tools/` and `scripts/` now takes its environment from
+`probe_env`, and a class check fails any that does not (`45cc5e5`;
+`tools/_cargo_env.py`, `tests/test_cargo_probe_env.py`).
 ### Phase 2 — daemon liveness and safety
 
 **Goal:** the daemon can say who holds it, never hangs on one peer, and
