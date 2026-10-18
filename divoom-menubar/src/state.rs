@@ -10,6 +10,8 @@
 //! the tooltip only, so that existing signal isn't silently lost, just
 //! demoted from icon color to a detail string.
 
+use crate::glyph::Look;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum IconState {
     /// The daemon itself is unreachable — nothing else is known.
@@ -26,17 +28,44 @@ pub enum IconState {
 // Kept distinct from tray.rs's icon-drawing code so this module stays pure
 // (no TrayIcon, no socket) and trivially unit-testable.
 pub const GREEN: [u8; 3] = [0x00, 0xcc, 0x66];
-pub const ORANGE: [u8; 3] = [0xff, 0x5a, 0x1f];
-pub const RED: [u8; 3] = [0xff, 0x44, 0x44];
-pub const AMBER: [u8; 3] = [0xff, 0xcc, 0x00];
+// Darker than a pure amber (#FFCC00): a fill must sit a quarter of the grey
+// range away from BOTH menu bars, and #FFCC00's luma (200) was all but the
+// light bar's own (236), so Degraded's fill vanished there in greyscale.
+pub const AMBER: [u8; 3] = [0xe0, 0x9a, 0x00];
 
 impl IconState {
-    pub const fn color(self) -> [u8; 3] {
+    /// Every state, for the gates and the offscreen renderer that must cover
+    /// them all (the tray itself only ever draws the current one).
+    #[cfg(any(test, tray_glyph_probe))]
+    pub const ALL: [Self; 4] = [Self::Offline, Self::Idle, Self::Connected, Self::Degraded];
+
+    /// The glyph this state wears (P7.1, owner ruling D8: Offline HOLLOW,
+    /// Online FILLED, Error BARRED). Shape carries; the fill colour reinforces.
+    ///
+    /// The ruling named three states; the agent has four, so the two shape
+    /// channels compose: FILLED says a device is linked, BARRED says something
+    /// is at fault. Idle (daemon up, no device) is the plain hollow D; a
+    /// Connected device is the filled D; Degraded is a linked device at fault
+    /// (filled + bar); Offline -- the daemon itself unreachable, the fault that
+    /// stops everything -- is hollow + bar. Every pair differs in shape.
+    pub const fn look(self) -> Look {
         match self {
-            Self::Offline => RED,
-            Self::Idle => ORANGE,
-            Self::Connected => GREEN,
-            Self::Degraded => AMBER,
+            Self::Idle => Look {
+                fill: None,
+                barred: false,
+            },
+            Self::Connected => Look {
+                fill: Some(GREEN),
+                barred: false,
+            },
+            Self::Degraded => Look {
+                fill: Some(AMBER),
+                barred: true,
+            },
+            Self::Offline => Look {
+                fill: None,
+                barred: true,
+            },
         }
     }
 }
@@ -104,10 +133,10 @@ mod tests {
     }
 
     #[test]
-    fn connected_is_green_and_says_so() {
+    fn connected_is_filled_green_and_says_so() {
         let (s, t) = resolve_icon_state(true, Some("connected"), false);
         assert_eq!(s, IconState::Connected);
-        assert_eq!(s.color(), GREEN);
+        assert_eq!(s.look().fill, Some(GREEN));
         assert!(t.contains("connected"));
     }
 
@@ -115,9 +144,9 @@ mod tests {
     fn degraded_is_visually_distinct_from_connected_and_idle() {
         let (s, t) = resolve_icon_state(true, Some("degraded"), false);
         assert_eq!(s, IconState::Degraded);
-        assert_ne!(s.color(), IconState::Connected.color());
-        assert_ne!(s.color(), IconState::Idle.color());
-        assert_ne!(s.color(), IconState::Offline.color());
+        assert_ne!(s.look(), IconState::Connected.look());
+        assert_ne!(s.look(), IconState::Idle.look());
+        assert_ne!(s.look(), IconState::Offline.look());
         assert!(t.contains("degraded"));
     }
 
@@ -127,7 +156,7 @@ mod tests {
         let (s2, t2) = resolve_icon_state(true, Some("connected"), true);
         assert_eq!(
             s1, s2,
-            "notification activity must not change the icon state/color"
+            "notification activity must not change the icon state/glyph"
         );
         assert_ne!(t1, t2);
         assert!(t2.contains("notifications"));

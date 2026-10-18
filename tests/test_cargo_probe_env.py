@@ -1,6 +1,6 @@
 """A probe crate's cargo build must stay inside the directory its tool owns.
 
-`tools/render_tray_icon.py --verify-against-rust` compiles a scratch crate in a
+`tools/render_tray_icon.py` compiles a scratch crate in a
 fresh temp dir. The house `~/.cargo/config.toml` sends every build's
 intermediates to `{cargo-cache-home}/build/{workspace-path-hash}`, and a fresh
 temp dir is a fresh hash, so each run left a build dir under `~/.cargo/build`
@@ -78,7 +78,7 @@ def test_the_tray_icon_probe_leaves_no_build_behind(monkeypatch, tmp_path):
 
     monkeypatch.setattr(tempfile, "tempdir", str(parent))
     render = pytest.importorskip("render_tray_icon")
-    assert render.verify_against_rust() == 0, "the probe did not build and match"
+    assert render.rust_glyphs(), "the probe did not build and draw"
 
     leaked = sorted(p.relative_to(leak) for p in leak.glob("**/.fingerprint/probe-*"))
     assert not leaked, f"the probe's build outlived its temp dir: {leaked}"

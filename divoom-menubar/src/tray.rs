@@ -54,7 +54,7 @@ impl Tray {
     pub fn build() -> Option<Self> {
         let icon = TrayIconBuilder::new()
             .with_tooltip("Divoom Control")
-            .with_icon(make_icon(IconState::Offline.color()))
+            .with_icon(make_icon(IconState::Offline))
             .build()
             .ok()?;
         let mut tray = Self {
@@ -277,7 +277,7 @@ impl Tray {
             tooltip.push_str(&active.name);
         }
         if self.last_icon_state != Some(icon_state) {
-            let _ = self.icon.set_icon(Some(make_icon(icon_state.color())));
+            let _ = self.icon.set_icon(Some(make_icon(icon_state)));
             self.last_icon_state = Some(icon_state);
         }
         if tooltip != self.last_tooltip {
@@ -332,125 +332,9 @@ impl Tray {
     }
 }
 
-/// A stylized "D" glyph: a flat left edge (the letter's vertical stroke) plus
-/// a rounded right side (its bowl), outlined in a fixed light border so the
-/// shape reads the same regardless of state, with the STATUS colour filling
-/// the interior. Replaces the earlier bland filled square — user feedback
-/// (2026-07-13) found a plain colored square too unrecognizable to read at a
-/// glance; a named-letter silhouette is legible even before checking color.
-///
-/// Returns raw RGBA plus its dimensions. Split from `make_icon` so the drawing
-/// can be rendered and compared WITHOUT a tray: `tools/render_tray_icon.py`
-/// compiles THIS function to check its offscreen preview is the real glyph,
-/// byte for byte. Wrapping the bytes in a `tray_icon::Icon` is the only
-/// tray-specific part.
-///
-/// SIZE. tray-icon takes the bitmap's pixel height as its height in points,
-/// shrinking anything taller than its 22pt cap to fit (0.26; 0.24 forced every
-/// icon to 18pt instead). A 1x bitmap is therefore resampled on every Retina
-/// display, and the 22 px glyph this used to be grew from 18pt to 22pt when the
-/// cap changed -- larger than any neighbouring item, filling the status item's
-/// whole height (`NSStatusBar.system.thickness` measured 22.0pt, 2026-10-05).
-/// So the canvas is `W` x `H` = 36 x 44 px: the 22pt cap makes that exactly 2x,
-/// crisp on Retina, and the status item keeps the 18pt width and the glyph the
-/// optical size it had through v0.40. The geometry is still
-/// authored in the original 22-unit square and scaled by `W / UNITS`, so the
-/// letterform did not change, only its resolution.
-fn draw_icon(rgb: [u8; 3]) -> (Vec<u8>, u32, u32) {
-    // All pixel arithmetic stays in integers: subsample counts (0..=16) from
-    // the coverage loop all the way to the alpha byte, so the float-to-byte
-    // narrowing never arises. The alpha formula below is exact round-half-up
-    // for every one of the 17 possible counts (checked against the float
-    // version it replaces), and `f32::from` covers the geometry (all values
-    // fit in u8, which converts exactly).
-    const UNITS: f32 = 22.0; // the design square the geometry is authored in
-    const W: u8 = 36; // 18pt at 2x
-    const H: u8 = 44; // 22pt at 2x -- exactly tray-icon's height cap
-    const MARGIN: f32 = 3.0;
-    const STROKE: f32 = 2.2;
-    const BORDER: [u8; 3] = [0xf5, 0xf5, 0xf5];
-    const SUBSAMPLES: u8 = 4; // cheap supersampled AA so the bowl's curve isn't jagged at this size
-
-    let width = usize::from(W);
-    let cells = u16::from(SUBSAMPLES) * u16::from(SUBSAMPLES);
-
-    // Design units to pixels. The glyph fills a W x W square centred in the
-    // taller canvas; the rows above and below it stay transparent.
-    let k = f32::from(W) / UNITS;
-    let stroke = STROKE * k;
-    let left = MARGIN * k;
-    let radius = (UNITS / 2.0 - MARGIN) * k;
-    let mid = left + radius;
-    let cy = f32::from(H) / 2.0;
-    let top = cy - radius;
-    let bottom = cy + radius;
-
-    // The D's silhouette: a rectangle (the spine + body) unioned with a
-    // semicircle (the bowl) sharing the rectangle's right edge as its diameter.
-    let inside_d = |fx: f32, fy: f32| -> bool {
-        let in_rect = fx >= left && fx <= mid && fy >= top && fy <= bottom;
-        let dx = fx - mid;
-        let dy = fy - cy;
-        // Two independent tests ANDed: below the rim (a half-plane) and
-        // inside the circle. The squared distance is bound first so the
-        // shape reads as two facts, not one tangled comparison.
-        let dist2 = dy.mul_add(dy, dx * dx);
-        let in_bowl = fx >= mid && dist2 <= radius * radius;
-        in_rect || in_bowl
-    };
-    // Within STROKE of the silhouette's own boundary (left/top/bottom edges of
-    // the rect, or the bowl's arc) — the fixed-color outline band.
-    let is_border = |fx: f32, fy: f32| -> bool {
-        let dx = fx - mid;
-        let dy = fy - cy;
-        let dist_from_arc = radius - dx.hypot(dy);
-        let near_left =
-            fx <= mid && (fx - left).abs() <= stroke && fy >= top - stroke && fy <= bottom + stroke;
-        let near_top = fx <= mid && (fy - top).abs() <= stroke;
-        let near_bottom = fx <= mid && (fy - bottom).abs() <= stroke;
-        let near_bowl = fx >= mid && dist_from_arc.abs() <= stroke;
-        near_left || near_top || near_bottom || near_bowl
-    };
-
-    let mut rgba = vec![0u8; width * usize::from(H) * 4];
-    for y in 0..H {
-        for x in 0..W {
-            let mut coverage = 0u8;
-            let mut border_weight = 0u8;
-            for sy in 0..SUBSAMPLES {
-                for sx in 0..SUBSAMPLES {
-                    let fx = f32::from(x) + (f32::from(sx) + 0.5) / f32::from(SUBSAMPLES);
-                    let fy = f32::from(y) + (f32::from(sy) + 0.5) / f32::from(SUBSAMPLES);
-                    if inside_d(fx, fy) {
-                        coverage += 1;
-                        if is_border(fx, fy) {
-                            border_weight += 1;
-                        }
-                    }
-                }
-            }
-            if coverage == 0 {
-                continue;
-            }
-            // At least half the covered samples on the outline band.
-            let color = if border_weight * 2 >= coverage {
-                BORDER
-            } else {
-                rgb
-            };
-            let i = (usize::from(y) * width + usize::from(x)) * 4;
-            rgba[i] = color[0];
-            rgba[i + 1] = color[1];
-            rgba[i + 2] = color[2];
-            // coverage <= cells, so this is 0..=255 by construction.
-            rgba[i + 3] = u8::try_from((u16::from(coverage) * 255 + cells / 2) / cells)
-                .expect("subsample coverage scales to one byte");
-        }
-    }
-    (rgba, u32::from(W), u32::from(H))
-}
-
-fn make_icon(rgb: [u8; 3]) -> tray_icon::Icon {
-    let (rgba, w, h) = draw_icon(rgb);
+/// The status item's image for `state`. The pixels come from `glyph::draw`,
+/// which `tools/render_tray_icon.py` also compiles, so its sheets are this glyph.
+fn make_icon(state: IconState) -> tray_icon::Icon {
+    let (rgba, w, h) = crate::glyph::draw(state.look());
     tray_icon::Icon::from_rgba(rgba, w, h).expect("valid tray icon")
 }

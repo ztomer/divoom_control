@@ -23,7 +23,7 @@ marked SHIPPED -- that marker is refused.
 
 Premises were last checked against the code on **2026-10-14** (HEAD `a38e2df`,
 the goh 0.27.0 hook reinstall on top of the 2026-10-12 plan commit `a8a848d`).
-Twelve items have landed since (P1.1 `15ff359` on 2026-10-15; P1.6, the
+Thirteen items have landed since (P1.1 `15ff359` on 2026-10-15; P1.6, the
 build/install platform gate, and P1.7, the RX frame parser's one-byte resync, on
 2026-10-16; P1.12, the framing-vector generator, P1.5, the two-suite
 collection fix, P1.2, the PyInstaller pin from a committed file, P1.4, the
@@ -31,7 +31,7 @@ coverage floor ratcheted to the measurement, P1.3, the stale `tao` comments
 in CI, P1.8, the 52 hand-rolled status markers, P1.11, the short-frame panic
 fixed on both sides, P1.10, CI reading Python from `.python-version`, and
 P1.9, the release bumping the cask through the tap's gate, also on
-2026-10-17), so the items below have
+2026-10-17; P7.1, the tray glyph's shapes, on 2026-10-18), so the items below have
 NOT been re-derived against a later HEAD -- check an item against the code before
 working it. Phase 0 is new (goh 0.27.0's fallout,
 measured); the old Phase 0 became Phase 1 and every later phase moved up by one
@@ -263,14 +263,19 @@ real LAN panel), the daemon draws a slot over it, and the refusal is deleted.
 **Goal:** the owner's calls, each with the evidence needed to make it.
 **Exit:** a recorded ruling per item. **Size:** S once decided.
 
-#### P7.1 — The tray glyph tells states apart by colour alone
+#### P7.2 — The GUI's connection dot tells states apart by colour and motion alone
 **Status:** DECISION (owner)
-**Why:** Offline / Online / Error differ only in fill (grey / green / red); green
-vs red is the pair about 1 in 12 men cannot separate (house rule: colour
-reinforces, shape carries). Also, the `#F5F5F5` border is invisible on a light
-menu bar at every size, so there the glyph is only its fill.
-**Done when:** the owner picks a design (e.g. hollow Offline, barred Error) and
-the states differ in greyscale on `tools/render_tray_icon.py` sheets.
+**Why:** the sibling P7.1 (the tray glyph, landed 2026-10-18) left open. The
+web GUI's `#global-status-dot` (`divoom_gui/web_ui/appbar.css`) is one 8px
+circle: BLE vs LAN vs Wall differ only by hue (blue / green / violet),
+Connecting vs Degraded are the same amber and differ only by pulse speed, and
+Disconnected is the same circle dimmed. Its `title` text names the state, but
+only on hover (ui-house-doctrine rule 9: colour and animation reinforce, shape
+and text carry). It cannot share the tray's renderer (a Rust bitmap), so the
+fix is a shape vocabulary of its own -- or the tray's grammar (hollow = no link,
+filled = linked, bar = fault) redrawn in CSS/SVG.
+**Done when:** the owner picks a design, and a test renders every dot state
+greyscale and static and asserts each pair differs.
 
 ### Phase 9 — parked on something outside this repo
 

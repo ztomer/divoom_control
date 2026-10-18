@@ -4,6 +4,42 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P7.1 — the tray glyph's state is its shape, not its colour (2026-10-18)
+
+Owner ruling D8: Offline HOLLOW, Online FILLED, Error BARRED. The ruling was
+made over `tools/render_tray_icon.py`'s state table -- three states in
+grey/green/red -- which was never the agent's: `IconState` has four (Offline =
+daemon unreachable, Idle = no device, Connected, Degraded) in red / orange /
+green / amber. The Python reproduction was byte-checked against `draw_icon`'s
+pixels and drifted in its table anyway.
+
+- The glyph moved to `divoom-menubar/src/glyph.rs` (pure, std-only) and takes a
+  `Look { fill: Option<rgb>, barred }`; `IconState::look()` maps the four
+  states onto the ruling's two shape channels: Idle = hollow D, Connected =
+  filled D, Degraded = filled + bar, Offline = hollow + bar. FILLED means a
+  device is linked, BARRED means a fault. A hollow look carries no colour, so
+  Idle's orange and Offline's red are gone, and with them the unused
+  `ORANGE`/`RED`.
+- One two-tone outline for every state -- a dark keyline outside, `#F5F5F5`
+  inside -- replaces the `#F5F5F5`-only border, which vanished on a light bar.
+  The bar is the same two tones. Amber darkened `#FFCC00` -> `#E09A00`: its
+  luma (200) sat beside the light bar's (236), so Degraded's fill vanished
+  there in greyscale.
+- `glyph::tests` (class-level, Rust, CI's macOS job): every pair of states
+  differs by >= 5% of the glyph square in greyscale, on a light and a dark bar,
+  at 2x and at 1x, both in the real colours and with ONE colour for every
+  state (shape alone); every state keeps visible ink on both bars; and a
+  calibration test proves the gate fails on identical glyphs. Red on the old
+  drawing (Offline and Idle differed in 0 px; Degraded showed 0 visible px on
+  the light bar), green after.
+- `tools/render_tray_icon.py` no longer reproduces anything: it compiles
+  `glyph.rs` + `state.rs` via `#[path]` into a probe (`--cfg
+  tray_glyph_probe` exposes `IconState::ALL`) and draws what it prints. The
+  sheet is one row per state; columns dark 2x / 1x / greyscale, light 2x / 1x
+  / greyscale. The v0.40/v0.41.0 size columns went with the reproduction.
+- Sibling left open as ROADMAP P7.2: the web GUI's connection dot separates
+  its states by hue and pulse speed alone.
+
 ## P2.7 — a respawned daemon gets the GUI's panels back (2026-10-18)
 
 Traced on hardware the same day: each daemon restart with the GUI running

@@ -9,6 +9,7 @@
 //! the loop proxy.
 
 mod daemon;
+mod glyph;
 mod launch;
 mod menu_model;
 mod resubscribe;

@@ -1,6 +1,6 @@
 """_cargo_env.py — the environment for a cargo build of a throwaway probe crate.
 
-A tool that compiles a scratch crate (`render_tray_icon.py --verify-against-rust`,
+A tool that compiles a scratch crate (`render_tray_icon.py`,
 `mem_gauge_compare.py`) owns a directory and removes it, or reuses it, as its
 own. Cargo does not keep its intermediates there unless told to: the house
 `~/.cargo/config.toml` sets
