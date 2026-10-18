@@ -64,7 +64,7 @@ async fn scrolling_text(ctx: &CallCtx<'_>) -> Value {
         .and_then(|v| v.as_str())
         .filter(|t| !t.trim().is_empty())
     else {
-        return err_reply("show_scrolling_text requires a non-empty `text`");
+        return crate::command_args::missing("show_scrolling_text", "a non-empty 'text'");
     };
 
     // UTF-16LE code units, which is both what the device is sent and what the

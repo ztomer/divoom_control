@@ -22,7 +22,7 @@ use serde_json::{json, Value};
 impl Daemon {
     pub(crate) async fn wall_device_call(&self, req: &Request) -> Value {
         let Some(method) = req.args.get("method").and_then(|v| v.as_str()) else {
-            return err_reply("device_call requires 'method'");
+            return crate::command_args::missing("device_call", "'method'");
         };
         let args = req
             .args
@@ -59,7 +59,7 @@ impl Daemon {
         let ok = match strip(method).as_str() {
             "show_image" | "display_image" => {
                 let Some(path) = text(0, "file_path").or_else(|| text(0, "path")) else {
-                    return err_reply("wall show_image requires a path");
+                    return crate::command_args::missing("device_call wall show_image", "'path'");
                 };
                 let img_data = match std::fs::read(&path) {
                     Ok(d) => d,

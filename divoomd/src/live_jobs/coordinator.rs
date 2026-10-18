@@ -15,12 +15,20 @@ use std::sync::Arc;
 
 pub struct LiveJobCoordinator {
     fleet: Arc<Fleet>,
+    /// Test seam: parks `start` between the panel lookup and the install, so
+    /// a test can run a `disconnect` in exactly that window (P5.9).
+    #[cfg(test)]
+    pub(crate) pause_before_install: crate::test_pause::PausePoint,
 }
 
 impl LiveJobCoordinator {
     #[must_use]
     pub const fn new(fleet: Arc<Fleet>) -> Self {
-        Self { fleet }
+        Self {
+            fleet,
+            #[cfg(test)]
+            pause_before_install: crate::test_pause::PausePoint::new(),
+        }
     }
 
     /// Record a job's latest health, so `list()` can answer a late subscriber.
@@ -37,7 +45,8 @@ impl LiveJobCoordinator {
     ///
     /// # Errors
     ///
-    /// `unknown_device` when no link ever made `mac` a fleet entry (a job
+    /// `unknown_device` when no link ever made `mac` a fleet entry, or when a
+    /// `disconnect` forgot it while this call was starting the job (a job
     /// there would paint nothing and report success -- P5.8; `MatrixWall`
     /// is one such id, since a job runs on one panel's link); `bad_request`
     /// when the kind is unknown; `unsupported` when a job needs a platform
@@ -106,9 +115,18 @@ impl LiveJobCoordinator {
             .get("device_name")
             .and_then(|v| v.as_str())
             .map(str::to_string);
-        dev.install_live_job(&kind, params, alive, handle).await;
+        #[cfg(test)]
+        self.pause_before_install.wait_if_armed().await;
+        // A `disconnect` may have forgotten the panel since the lookup; the
+        // device refuses the job then (and stops it), so nothing runs on a
+        // panel the fleet no longer holds (P5.9).
+        dev.install_live_job(&kind, params, alive, handle)
+            .await
+            .map_err(|_| Fleet::unknown(&mac))?;
         if let Some(n) = dev_name {
-            dev.set_activity(&kind, Some(n), None).await;
+            dev.set_activity(&kind, Some(n), None)
+                .await
+                .map_err(|_| Fleet::unknown(&mac))?;
         }
         Ok(())
     }
@@ -148,7 +166,8 @@ impl LiveJobCoordinator {
     ///
     /// # Errors
     ///
-    /// `unknown_device` when no link ever made `mac` a fleet entry: a record
+    /// `unknown_device` when no link ever made `mac` a fleet entry, or a
+    /// `disconnect` forgot it between the lookup and the record: a record
     /// for it would be a menubar tile for a panel that does not exist.
     pub async fn set_device_activity(
         &self,
@@ -161,10 +180,13 @@ impl LiveJobCoordinator {
             .known(mac)
             .await?
             .set_activity(kind, name, preview)
-            .await;
-        Ok(())
+            .await
+            .map_err(|_| Fleet::unknown(mac))
     }
 }
+
+#[cfg(test)]
+mod race_tests;
 
 #[cfg(test)]
 mod tests {

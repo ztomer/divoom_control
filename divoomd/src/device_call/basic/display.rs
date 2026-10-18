@@ -41,7 +41,7 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 data
             } else {
                 let Some(path) = raw_args.first().and_then(|v| v.as_str()) else {
-                    return err_reply("display.show_image requires a path or blob[0]");
+                    return crate::command_args::missing("display.show_image", "a path or blob[0]");
                 };
                 match std::fs::read(path) {
                     Ok(d) => d,
@@ -156,7 +156,8 @@ async fn show_image(ctx: CallCtx<'_>) -> Value {
     let h = i32::try_from(get_kwarg_i64(kw, "h", 16)).unwrap_or(-1);
     let frames = match image_frames(kw) {
         Ok(f) => f,
-        Err(e) => return err_reply(&e),
+        // A malformed request, not a device failure (P5.9).
+        Err(e) => return crate::protocol::err_code(crate::protocol::ErrorCode::BadRequest, &e),
     };
     let expected = usize::try_from(w * h * 3).unwrap_or(usize::MAX);
     let mut blob = Vec::new();

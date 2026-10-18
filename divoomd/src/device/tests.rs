@@ -132,11 +132,13 @@ async fn a_second_live_job_retires_the_first_and_stop_is_reported() {
     let a1 = Arc::new(AtomicBool::new(true));
     let h1 = tokio::spawn(std::future::pending::<()>());
     d.install_live_job("sysmon", json!({}), a1.clone(), h1)
-        .await;
+        .await
+        .expect("a linked panel takes a job");
     let a2 = Arc::new(AtomicBool::new(true));
     let h2 = tokio::spawn(std::future::pending::<()>());
     d.install_live_job("stocks", json!({}), a2.clone(), h2)
-        .await;
+        .await
+        .expect("a linked panel takes a job");
     assert!(!a1.load(Ordering::SeqCst), "first job's alive flag cleared");
     assert_eq!(d.live_kind().await.as_deref(), Some("stocks"));
     assert!(
@@ -147,4 +149,84 @@ async fn a_second_live_job_retires_the_first_and_stop_is_reported() {
     assert!(!a2.load(Ordering::SeqCst));
     assert!(d.live_kind().await.is_none());
     assert_eq!(d.activity().await.unwrap().kind, "idle");
+}
+
+/// P5.9, a sibling of the job race: `adopt` found (or made) the entry, let
+/// go of the fleet, then attached the link. A `remove` in between took the
+/// entry out first, so the new link landed on a device the fleet no longer
+/// holds: connected, unreachable, never hung up. The remover runs as far
+/// as it can while `adopt` is parked -- all the way, if nothing stops it.
+#[tokio::test]
+async fn a_remove_racing_an_adopt_leaves_no_link_outside_the_fleet() {
+    let f = Arc::new(Fleet::default());
+    f.adopt("A", mock()).await;
+    let (parked, go) = f.pause_before_attach.arm();
+    let adopter = tokio::spawn({
+        let f = f.clone();
+        async move { f.adopt("A", mock()).await }
+    });
+    parked.await.expect("adopt parked before its attach");
+    let remover = tokio::spawn({
+        let f = f.clone();
+        async move { f.remove("A").await }
+    });
+    for _ in 0..8 {
+        tokio::task::yield_now().await;
+    }
+    go.send(()).expect("adopt is still parked");
+    let dev = adopter.await.expect("adopt finished");
+    remover.await.expect("remove finished");
+    let held = f.get("A").await;
+    assert!(
+        !dev.is_connected().await || held.is_some_and(|h| Arc::ptr_eq(&h, &dev)),
+        "a linked device the fleet does not hold"
+    );
+}
+
+/// P5.9: whoever still holds a forgotten panel cannot put a job, an
+/// activity record or a screen lease back on it, and the job it tried to
+/// install is stopped rather than left running.
+#[tokio::test]
+async fn a_forgotten_panel_takes_no_job_activity_or_lease() {
+    let f = Fleet::default();
+    let held = f.adopt("A", mock()).await;
+    let first = Arc::new(AtomicBool::new(true));
+    held.install_live_job(
+        "sysmon",
+        json!({}),
+        first.clone(),
+        tokio::spawn(std::future::pending::<()>()),
+    )
+    .await
+    .expect("a linked panel takes a job");
+    f.remove("A").await;
+    assert!(!first.load(Ordering::SeqCst), "forgetting stops the job");
+    let late = Arc::new(AtomicBool::new(true));
+    let refused = held
+        .install_live_job(
+            "stocks",
+            json!({}),
+            late.clone(),
+            tokio::spawn(std::future::pending::<()>()),
+        )
+        .await;
+    assert_eq!(refused, Err(Forgotten));
+    assert!(
+        !late.load(Ordering::SeqCst),
+        "a refused job is stopped, not left running"
+    );
+    assert_eq!(held.live_kind().await, None);
+    assert_eq!(
+        held.set_activity("clock", Some("Ditoo".into()), None).await,
+        Err(Forgotten)
+    );
+    assert!(held.activity().await.is_none());
+    let lease = crate::device::lease::Lease {
+        token: "t".into(),
+        holder: "agent".into(),
+        expires: std::time::Instant::now() + std::time::Duration::from_secs(60),
+        generation: 1,
+    };
+    assert_eq!(held.set_lease(lease), Err(Forgotten));
+    assert!(held.lease().is_none());
 }

@@ -76,13 +76,19 @@ pub(super) async fn push_live_frame(
         })
         .await
         .unwrap_or(false);
-    if landed {
+    // A record refused means a `disconnect` forgot the panel after the
+    // frame landed: no `activity` event for a panel the fleet let go of.
+    if landed
+        && device
+            .set_activity(kind, None, preview.clone())
+            .await
+            .is_ok()
+    {
         // The panel now shows this frame: say so on the bus, with the
         // pixels, so every preview mirrors the device without polling
         // (2026-09-12: the bench kept the old cover while the device had
         // the new one, because only the Live Widgets tab's poll refreshed
         // it). The activity record keeps it for late subscribers.
-        device.set_activity(kind, None, preview.clone()).await;
         let _ = daemon.tx.send(json!({
             "type": "activity",
             "mac": mac,

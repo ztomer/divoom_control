@@ -28,6 +28,10 @@ pub struct Fleet {
     /// `select_device` (bench click, menubar), by the first link when nothing
     /// is selected, cleared when that device is forgotten.
     selected: std::sync::Mutex<Option<String>>,
+    /// Test seam: parks `adopt` between finding the entry and attaching the
+    /// link, where a racing `remove` used to strand the link (P5.9).
+    #[cfg(test)]
+    pub(crate) pause_before_attach: crate::test_pause::PausePoint,
 }
 
 impl Fleet {
@@ -73,10 +77,8 @@ impl Fleet {
     /// fleet entry exists because a panel linked, never because a client
     /// named a mac (P5.8 -- `get_or_create` was public, and a live job on a
     /// typo made a phantom panel that painted nothing and reported success).
-    async fn entry_for_link(&self, id: &str) -> Arc<Device> {
-        self.devices
-            .lock()
-            .await
+    fn entry_for_link(devices: &mut HashMap<String, Arc<Device>>, id: &str) -> Arc<Device> {
+        devices
             .entry(key(id))
             .or_insert_with(|| Device::new(id))
             .clone()
@@ -91,12 +93,17 @@ impl Fleet {
     /// `unknown_device`, naming the id, when no link has ever made it a fleet
     /// entry (or `disconnect` has forgotten it).
     pub async fn known(&self, id: &str) -> Result<Arc<Device>, CodedError> {
-        self.get(id).await.ok_or_else(|| {
-            CodedError::new(
-                ErrorCode::UnknownDevice,
-                format!("no panel '{id}' has been linked to this daemon; connect it first"),
-            )
-        })
+        self.get(id).await.ok_or_else(|| Self::unknown(id))
+    }
+
+    /// The refusal for a panel the fleet does not hold: never linked, or
+    /// forgotten -- including forgotten after the caller looked it up.
+    #[must_use]
+    pub fn unknown(id: &str) -> CodedError {
+        CodedError::new(
+            ErrorCode::UnknownDevice,
+            format!("no panel '{id}' has been linked to this daemon; connect it first"),
+        )
     }
 
     /// `(connected, id)` without awaiting, for callers that cannot (the
@@ -124,9 +131,18 @@ impl Fleet {
 
     /// Take ownership of a freshly connected transport under `id`: the
     /// device keeps its identity (and live job); the old link is retired.
+    ///
+    /// The entry is found (or made) and the link attached under ONE hold of
+    /// the fleet's lock. They used to be two steps, and a `remove` between
+    /// them took the entry out first: the new link landed on a device the
+    /// fleet no longer held -- connected, unreachable, never hung up (P5.9).
     pub async fn adopt(&self, id: &str, transport: Arc<DeviceTransport>) -> Arc<Device> {
-        let dev = self.entry_for_link(id).await;
+        let mut devices = self.devices.lock().await;
+        let dev = Self::entry_for_link(&mut devices, id);
+        #[cfg(test)]
+        self.pause_before_attach.wait_if_armed().await;
         dev.attach(transport).await;
+        drop(devices);
         // The first panel to link is the active one until the user says
         // otherwise; a later link never steals the selection.
         if self.selected_id().is_none() {
@@ -222,7 +238,9 @@ impl Fleet {
     }
 
     /// Forget one device entirely: its job stopped, its link retired (and
-    /// returned so the caller can hang up), its activity gone.
+    /// returned so the caller can hang up), its activity and lease gone -- and
+    /// those slots closed, so a request still holding the device cannot put
+    /// them back ([`Device::forget`]).
     pub async fn remove(&self, id: &str) -> Option<Arc<Link>> {
         let removed = self.devices.lock().await.remove(&key(id))?;
         if self.is_selected(id) {
@@ -235,8 +253,7 @@ impl Fleet {
                 self.select(&next.id);
             }
         }
-        removed.stop_live_job(None).await;
-        removed.detach().await
+        removed.forget().await
     }
 
     /// Forget every device: jobs stopped, links retired, activity gone.
@@ -248,8 +265,7 @@ impl Fleet {
         let drained: Vec<Arc<Device>> = self.devices.lock().await.drain().map(|(_, d)| d).collect();
         let mut links = Vec::new();
         for d in &drained {
-            d.stop_live_job(None).await;
-            if let Some(l) = d.detach().await {
+            if let Some(l) = d.forget().await {
                 links.push(l);
             }
         }

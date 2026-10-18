@@ -7,7 +7,7 @@
 use std::sync::atomic::Ordering;
 use std::time::Instant;
 
-use super::Device;
+use super::{Device, Forgotten};
 
 /// One holder's claim on a panel's screen.
 #[derive(Clone, Debug)]
@@ -40,23 +40,32 @@ impl Device {
     /// The current lease, if one is held.
     #[must_use]
     pub fn lease(&self) -> Option<Lease> {
-        lock(&self.lease).clone()
+        lock(&self.lease).get().cloned()
     }
 
     /// Whether `token` is this panel's lease.
     #[must_use]
     pub fn leased_to(&self, token: &str) -> bool {
-        lock(&self.lease).as_ref().is_some_and(|l| l.token == token)
+        lock(&self.lease).get().is_some_and(|l| l.token == token)
     }
 
-    pub(crate) fn set_lease(&self, lease: Lease) {
-        *lock(&self.lease) = Some(lease);
+    /// Hand the screen to `lease`.
+    ///
+    /// # Errors
+    ///
+    /// [`Forgotten`] when the fleet let go of this panel since the caller
+    /// looked it up: a lease there would be granted on a panel that is gone.
+    pub(crate) fn set_lease(&self, lease: Lease) -> Result<(), Forgotten> {
+        lock(&self.lease)
+            .replace(lease)
+            .map(drop)
+            .map_err(|_| Forgotten)
     }
 
     /// Move the lease's end, if `token` still holds it.
     pub(crate) fn extend_lease(&self, token: &str, expires: Instant) -> bool {
         let mut g = lock(&self.lease);
-        match g.as_mut() {
+        match g.get_mut() {
             Some(l) if l.token == token => {
                 l.expires = expires;
                 true
@@ -68,7 +77,7 @@ impl Device {
     /// Take the lease if it is still generation `generation`.
     pub(crate) fn take_lease(&self, generation: u64) -> Option<Lease> {
         let mut g = lock(&self.lease);
-        if g.as_ref().is_some_and(|l| l.generation == generation) {
+        if g.get().is_some_and(|l| l.generation == generation) {
             g.take()
         } else {
             None

@@ -408,7 +408,7 @@ async fn stream_animation_8b(ctx: CallCtx<'_>) -> Value {
                 .iter()
                 .filter_map(|x| x.as_u64().map(super::super::wire::WireNarrow::byte))
                 .collect(),
-            None => return err_reply("animation.stream_animation_8b requires 'blob'"),
+            None => return crate::command_args::missing("animation.stream_animation_8b", "'blob'"),
         }
     };
     match dev.stream_animation_8b(&blob).await {

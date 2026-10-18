@@ -81,7 +81,7 @@ pub(crate) async fn owned_devices_payload(daemon: &Daemon) -> Value {
 /// go to it while it is linked. Broadcast so the other clients follow.
 pub(crate) async fn cmd_select_device(daemon: &Daemon, req: &Request) -> Value {
     let Some(mac) = req.args.get("mac").and_then(|v| v.as_str()) else {
-        return err_reply("select_device requires 'mac'");
+        return crate::command_args::missing("select_device", "'mac'");
     };
     if daemon.fleet.select(mac) {
         let _ = daemon.tx.send(json!({ "type": "selection", "mac": mac }));
@@ -317,7 +317,7 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
         .and_then(|v| v.as_str());
     let id = match id {
         Some(i) => i.to_string(),
-        None => return err_reply("connect_device requires 'mac' or 'lan_ip'"),
+        None => return crate::command_args::missing("connect", "'mac', 'id' or 'lan_ip'"),
     };
     let use_ios_le = req
         .args
@@ -344,7 +344,10 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
         }
     }
     #[cfg(not(feature = "ble"))]
-    err_reply("BLE support is disabled, requires 'lan_ip'")
+    crate::protocol::err_code(
+        crate::protocol::ErrorCode::Unsupported,
+        "BLE support is disabled in this build; connect requires 'lan_ip'",
+    )
 }
 
 async fn hang_up(t: &DeviceTransport) {

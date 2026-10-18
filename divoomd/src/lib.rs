@@ -30,6 +30,9 @@ mod cloud_dials;
 mod cloud_photo;
 mod cloud_playlist;
 pub mod cloud_store;
+pub mod command_args;
+#[cfg(test)]
+mod command_args_tests;
 pub mod command_model;
 pub mod command_names;
 pub mod command_queue;
@@ -105,6 +108,8 @@ pub mod spp;
 pub mod spp_bridge_protocol;
 pub mod subscriptions;
 pub mod sync_artwork;
+#[cfg(test)]
+pub(crate) mod test_pause;
 pub mod transport;
 pub mod verbs;
 pub mod wall;

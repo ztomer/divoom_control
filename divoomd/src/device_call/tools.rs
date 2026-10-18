@@ -348,7 +348,7 @@ async fn set_tool_info(ctx: CallCtx<'_>) -> Value {
                 payload.extend_from_slice(&(g("red_score").unwrap_or(0).word()).to_le_bytes());
                 payload.extend_from_slice(&(g("blue_score").unwrap_or(0).word()).to_le_bytes());
             }
-            None => return err_reply("set_tool_info: score needs 'on_off'"),
+            None => return crate::command_args::missing("set_tool_info score", "'on_off'"),
         },
         3 => match (g("ctrl_flag"), g("minutes"), g("seconds")) {
             (Some(c), Some(m), Some(s)) => {

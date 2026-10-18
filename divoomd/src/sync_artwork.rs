@@ -84,7 +84,7 @@ pub fn resolve_preview_data_url(raw: &[u8]) -> Option<String> {
 pub async fn get_animated_preview(args: &Value) -> Value {
     let file_id = match args.get("file_id").and_then(|v| v.as_str()) {
         Some(f) if !f.is_empty() => f.to_string(),
-        _ => return err_reply("get_animated_preview requires 'file_id'"),
+        _ => return crate::command_args::missing("get_animated_preview", "'file_id'"),
     };
     let bytes = match download_cloud_file(&file_id).await {
         Ok(b) => b,
@@ -111,7 +111,7 @@ pub async fn sync_artwork(daemon: &Daemon, args: &Value) -> Value {
             let _ = daemon
                 .tx
                 .send(json!({"type":"hot_progress","progress":100,"phase":"error"}));
-            return err_reply("sync_artwork requires 'file_id'");
+            return crate::command_args::missing("sync_artwork", "'file_id'");
         }
     };
     let size = args

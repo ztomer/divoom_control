@@ -150,7 +150,7 @@ pub async fn handle_device_call(
     timeout: Duration,
 ) -> Value {
     let Some(method) = req.args.get("method").and_then(|v| v.as_str()) else {
-        return crate::protocol::err_reply("device_call requires 'method'");
+        return crate::command_args::missing("device_call", "'method'");
     };
 
     let args: Vec<i64> = req

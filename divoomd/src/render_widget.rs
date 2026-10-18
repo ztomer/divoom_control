@@ -144,7 +144,7 @@ fn frame_reply(kind: &str, size: u32, rgb: &[u8], extra: &Value) -> Value {
 /// `render_widget {kind, size, params}` — the frame the device would be given.
 pub async fn cmd_render_widget(args: &Value) -> Value {
     let Some(kind) = args.get("kind").and_then(|v| v.as_str()) else {
-        return err_reply("render_widget requires 'kind'");
+        return crate::command_args::missing("render_widget", "'kind'");
     };
     let size = clamp_size(
         args.get("size")
@@ -169,7 +169,10 @@ pub async fn cmd_render_widget(args: &Value) -> Value {
 
         "album_art" => {
             let Some(b64) = params.get("image_b64").and_then(|v| v.as_str()) else {
-                return err_reply("album_art requires params.image_b64");
+                return crate::command_args::missing(
+                    "render_widget album_art",
+                    "'params.image_b64'",
+                );
             };
             let raw = match base64::engine::general_purpose::STANDARD.decode(b64) {
                 Ok(r) => r,
@@ -198,7 +201,7 @@ pub async fn cmd_render_widget(args: &Value) -> Value {
         "text" => {
             let text = params.get("text").and_then(|v| v.as_str()).unwrap_or("");
             if text.trim().is_empty() {
-                return err_reply("text requires params.text");
+                return crate::command_args::missing("render_widget text", "'params.text'");
             }
             // `font_size <= 1` selects the half-size glyphs, and so does any
             // 16px matrix — the same rule the GUI applied, kept so the choice

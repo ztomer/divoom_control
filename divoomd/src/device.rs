@@ -22,7 +22,11 @@
 //! * a [`LiveJob`] is the one live widget a screen can show. Its `alive` flag
 //!   is cleared before its task is aborted, and every queued frame checks it;
 //! * the [`Fleet`] is the single owner of "which devices exist" and "which one
-//!   a mac-less request means".
+//!   a mac-less request means";
+//! * a forgotten [`Device`] (`disconnect` removed it) has its job, activity
+//!   and lease slots CLOSED ([`slot::Slot`]): a request that looked the panel up before
+//!   the removal and writes after it is refused with [`Forgotten`], so nothing
+//!   can run on a panel the fleet no longer holds (P5.9).
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -34,6 +38,7 @@ use tokio::task::JoinHandle;
 
 use crate::command_queue::CommandQueue;
 use crate::daemon::{DeviceTransport, EXCLUSIVE_TIMEOUT, ITEM_TIMEOUT};
+use slot::Slot;
 
 /// One connection to a panel: its transport and its one serialization point.
 pub struct Link {
@@ -116,16 +121,21 @@ fn now_secs() -> u64 {
         .as_secs()
 }
 
+/// The panel was forgotten (`disconnect` removed it from the fleet) while
+/// the caller still held it: what it tried to record has nowhere to go.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Forgotten;
+
 pub struct Device {
     /// The id as the client gave it (a `CoreBluetooth` UUID on macOS, a MAC
     /// elsewhere, `LAN:<ip>` for Wi-Fi). Kept verbatim for replies; the fleet
     /// indexes it case-insensitively.
     pub id: String,
     pub(super) link: Mutex<Option<Arc<Link>>>,
-    live: Mutex<Option<LiveJob>>,
-    activity: Mutex<Option<Activity>>,
+    live: Mutex<Slot<LiveJob>>,
+    activity: Mutex<Slot<Activity>>,
     /// Who holds the screen, if anyone (P4.6; `lease.rs`).
-    lease: std::sync::Mutex<Option<lease::Lease>>,
+    lease: std::sync::Mutex<Slot<lease::Lease>>,
     /// The live job's latest frame, landed or held back by a lease: what
     /// the screen goes back to when the lease ends.
     job_frame: std::sync::Mutex<Option<lease::SavedFrame>>,
@@ -139,9 +149,9 @@ impl Device {
         Arc::new(Self {
             id: id.to_string(),
             link: Mutex::new(None),
-            live: Mutex::new(None),
-            activity: Mutex::new(None),
-            lease: std::sync::Mutex::new(None),
+            live: Mutex::new(Slot::empty()),
+            activity: Mutex::new(Slot::empty()),
+            lease: std::sync::Mutex::new(Slot::empty()),
             job_frame: std::sync::Mutex::new(None),
             frame_gen: std::sync::atomic::AtomicU64::new(0),
         })
@@ -184,31 +194,61 @@ impl Device {
         old
     }
 
+    /// The fleet has let go of this panel: its job is stopped and its job,
+    /// activity and lease slots are closed for whoever still holds the `Arc`, then
+    /// its link is retired (and returned so the caller can hang up).
+    pub(super) async fn forget(&self) -> Option<Arc<Link>> {
+        let job = self.live.lock().await.close();
+        if let Some(j) = job {
+            j.stop();
+        }
+        self.clear_job_frame();
+        self.activity.lock().await.close();
+        // The lease goes with the link: its hold was on the queue that
+        // `detach` retires, and its watcher finds nothing left to end.
+        self.lease
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .close();
+        self.detach().await
+    }
+
     // ── live job ──────────────────────────────────────────────────────
 
     /// Install `handle` as this panel's live widget, retiring any other.
     /// One screen shows one thing; two jobs would alternate frames.
+    ///
+    /// # Errors
+    ///
+    /// [`Forgotten`] when the fleet let go of this panel first; the job is
+    /// stopped here, so a refusal leaves nothing running.
     pub(crate) async fn install_live_job(
         &self,
         kind: &str,
         params: Value,
         alive: Arc<AtomicBool>,
         handle: JoinHandle<()>,
-    ) {
-        let old = self.live.lock().await.replace(LiveJob {
+    ) -> Result<(), Forgotten> {
+        let installed = self.live.lock().await.replace(LiveJob {
             kind: kind.to_string(),
             params,
             handle,
             alive,
             health: None,
         });
-        if let Some(o) = old {
-            o.stop();
+        match installed {
+            Ok(Some(old)) => old.stop(),
+            Ok(None) => {}
+            Err(refused) => {
+                refused.stop();
+                return Err(Forgotten);
+            }
         }
         // The saved frame was the old job's: a lease ending now must not
         // repaint a widget that is no longer running.
         self.clear_job_frame();
         self.set_activity_state(kind, "active").await;
+        Ok(())
     }
 
     /// Stop the live job of `kind` (or any job when `kind` is `None`).
@@ -216,7 +256,7 @@ impl Device {
     pub(crate) async fn stop_live_job(&self, kind: Option<&str>) -> bool {
         let mut guard = self.live.lock().await;
         let matches = guard
-            .as_ref()
+            .get()
             .is_some_and(|j| kind.is_none_or(|k| j.kind == k));
         if !matches {
             return false;
@@ -226,7 +266,7 @@ impl Device {
         }
         drop(guard);
         self.clear_job_frame();
-        if let Some(a) = self.activity.lock().await.as_mut() {
+        if let Some(a) = self.activity.lock().await.get_mut() {
             a.kind = "idle".to_string();
             a.at = now_secs();
         }
@@ -234,11 +274,11 @@ impl Device {
     }
 
     pub async fn live_kind(&self) -> Option<String> {
-        self.live.lock().await.as_ref().map(|j| j.kind.clone())
+        self.live.lock().await.get().map(|j| j.kind.clone())
     }
 
     pub(crate) async fn record_health(&self, kind: &str, state: Value) {
-        if let Some(j) = self.live.lock().await.as_mut() {
+        if let Some(j) = self.live.lock().await.get_mut() {
             if j.kind == kind {
                 j.health = Some(state);
             }
@@ -251,7 +291,7 @@ impl Device {
             .live
             .lock()
             .await
-            .as_ref()
+            .get()
             .map(|j| (j.kind.clone(), j.health.clone()))?;
         let mut entry = json!({
             "mac": self.id,
@@ -280,33 +320,43 @@ impl Device {
 
     async fn set_activity_state(&self, kind: &str, state: &str) {
         let mut guard = self.activity.lock().await;
-        let a = guard.get_or_insert_with(|| Activity {
+        let Some(a) = guard.get_or_insert_with(|| Activity {
             name: String::new(), // unknown; consumers substitute their own placeholder
             kind: kind.to_string(),
             preview: None,
             at: now_secs(),
             state: state.to_string(),
-        });
+        }) else {
+            return;
+        };
         a.kind = kind.to_string();
         a.state = state.to_string();
         a.at = now_secs();
         drop(guard);
     }
 
+    /// Record what the panel is showing.
+    ///
+    /// # Errors
+    ///
+    /// [`Forgotten`] when the fleet let go of this panel: the caller must not
+    /// announce a record that went nowhere.
     pub(crate) async fn set_activity(
         &self,
         kind: &str,
         name: Option<String>,
         preview: Option<String>,
-    ) {
+    ) -> Result<(), Forgotten> {
         let mut guard = self.activity.lock().await;
-        let a = guard.get_or_insert_with(|| Activity {
-            name: name.clone().unwrap_or_default(),
-            kind: kind.to_string(),
-            preview: None,
-            at: now_secs(),
-            state: "active".to_string(),
-        });
+        let a = guard
+            .get_or_insert_with(|| Activity {
+                name: name.clone().unwrap_or_default(),
+                kind: kind.to_string(),
+                preview: None,
+                at: now_secs(),
+                state: "active".to_string(),
+            })
+            .ok_or(Forgotten)?;
         a.kind = kind.to_string();
         if let Some(n) = name {
             a.name = n;
@@ -316,10 +366,11 @@ impl Device {
         }
         a.at = now_secs();
         drop(guard);
+        Ok(())
     }
 
     pub async fn activity(&self) -> Option<Activity> {
-        self.activity.lock().await.clone()
+        self.activity.lock().await.get().cloned()
     }
 
     /// The panel's name as best the daemon knows it: what a client told us
@@ -341,6 +392,7 @@ impl Device {
 
 mod fleet;
 pub mod lease;
+mod slot;
 #[cfg(test)]
 mod tests;
 

@@ -204,7 +204,7 @@ pub async fn notification_status() -> Value {
 
 pub async fn set_routing(args: &Value) -> Value {
     let Some(rules_val) = args.get("rules") else {
-        return json!({"success": false, "error": "set_routing requires 'rules'"});
+        return crate::command_args::missing("set_routing", "'rules'");
     };
     let mut new_rules = Vec::new();
     if let Some(arr) = rules_val.as_array() {

@@ -96,12 +96,18 @@ impl Daemon {
         if let Err(e) = link.queue.hold(&token) {
             return err_code(ErrorCode::ScreenLeased, &e.to_string());
         }
-        device.set_lease(Lease {
+        // A `disconnect` may have forgotten the panel since `resolve_target`:
+        // no lease is granted on a panel that is gone (P5.9).
+        let granted = device.set_lease(Lease {
             token: token.clone(),
             holder: holder.clone(),
             expires: Instant::now() + ttl,
             generation,
         });
+        if granted.is_err() {
+            link.queue.release(&token);
+            return crate::device::Fleet::unknown(&device.id).reply();
+        }
         tokio::spawn(watch(device.clone(), self.tx.clone(), generation));
         let _ = self.tx.send(json!({
             "type": "lease", "mac": device.id, "state": "acquired",
@@ -119,7 +125,7 @@ impl Daemon {
             Err(e) => return e,
         };
         let Some(token) = req.args.get("token").and_then(Value::as_str) else {
-            return err_code(ErrorCode::BadRequest, "lease_renew requires 'token'");
+            return crate::command_args::missing("lease_renew", "'token'");
         };
         match leased_device(self, token).await {
             Some(d) if d.extend_lease(token, Instant::now() + ttl) => {
@@ -134,7 +140,7 @@ impl Daemon {
 
     pub(crate) async fn cmd_lease_release(&self, req: &Request) -> Value {
         let Some(token) = req.args.get("token").and_then(Value::as_str) else {
-            return err_code(ErrorCode::BadRequest, "lease_release requires 'token'");
+            return crate::command_args::missing("lease_release", "'token'");
         };
         let Some(device) = leased_device(self, token).await else {
             return err_code(

@@ -161,7 +161,7 @@ impl Daemon {
         // "no device connected" — a diagnosis that sends the caller to look at
         // the wrong thing entirely.
         if req.args.get("method").and_then(|v| v.as_str()).is_none() {
-            return err_reply("device_call requires a 'method' string");
+            return crate::command_args::missing("device_call", "'method' to be a string");
         }
 
         // R67: `target` was NEVER READ. The Python client has always sent

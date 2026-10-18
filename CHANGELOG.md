@@ -4,6 +4,84 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P5.9 — P5.8's three leftovers (2026-10-18)
+
+P5.8 (`0f73dda`) made the daemon refuse a panel action for a panel no link
+ever made a fleet entry. It left three defects.
+
+- **A job could still land on a removed panel.** `LiveJobCoordinator::start`
+  looked the panel up, spawned the job, then installed it, with nothing
+  fencing the gap against `Fleet::remove`. A `disconnect` in that window took
+  the panel out of the fleet, the install then put a running job on the
+  removed `Device`, and the reply said success: a widget nobody could list or
+  stop. The fix is on the device, not the starter. A forgotten device's job
+  and activity slots are CLOSED (`divoomd/src/device/slot.rs`): a closed slot
+  has no room for a value, so `install_live_job` and `set_activity` return
+  `Forgotten` (the refused job is stopped there) and the starter answers
+  `unknown_device`. One lock scope in the starter would have fenced only the
+  starter. Every request that looked a panel up holds an `Arc<Device>`, and
+  the slot fences all of them, whenever they get to it. This mirrors the
+  `Link`'s `retired` flag, which already fences queued frames.
+- **Siblings found and fixed.** (1) `set_device_activity` (and the
+  `switch_channel` record in `Daemon::record_successful_call_activity`)
+  recorded on a device a racing `disconnect` had forgotten, then broadcast an
+  `activity` event for it. The closed slot refuses the record, so nothing is
+  broadcast. (2) The live-frame pusher (`live_jobs/frame.rs`) recorded and
+  broadcast after a frame landed, and now does neither when the record is
+  refused. (3) `Fleet::adopt` found the entry, let go of the fleet lock, then
+  attached the link. A `remove` in between stranded the new link on a device
+  the fleet no longer held: connected, unreachable, never hung up. The entry
+  and the attach now happen under one hold of the fleet's lock. (4)
+  `lease_acquire` resolved the panel and then granted the lease, so a racing
+  `disconnect` left a lease on a forgotten device. The reply said success, and
+  the expiry watcher later announced the end of a lease on a panel that was
+  gone. The lease is a closed slot too: the grant is refused with
+  `unknown_device` and the queue hold it took is released.
+  **Checked and left alone:** `live_job_stop`, `record_health` and
+  `live_jobs_stop_for` act on a stale `Arc` harmlessly (a stop of nothing, a
+  health note nobody reads). Device calls already ride the `Link`, which is
+  retired on removal. `select_device` still accepts a panel that is not linked, by design
+  (P5.8's note): the bench may select an offline panel.
+- **The web UI stopped sending activity the daemon refuses.**
+  `window.setDeviceActivity` forwarded every non-image kind to
+  `set_device_activity`, whatever the mac. That included `MatrixWall`, named
+  by the playlist, photo-album and sleep-aid writers when the wall is the
+  target, and any mac the daemon never reported. It now sends only for a
+  panel the daemon reported (`window.daemonReportedPanel`, the
+  `daemonOwned` flag that `owned_devices` and status events set). The local
+  preview still updates.
+- **Missing-argument replies carry `bad_request`.** 27 sites refused a
+  missing argument in their own words with no `code`. One of them,
+  `custom_art_push`, stopped the panel's live job before it noticed it had
+  nothing to push. `divoomd/src/command_args.rs` now states what every
+  command requires (key, alternatives, JSON type). The dispatcher checks that
+  table before any handler runs, so a malformed request is `bad_request` and
+  has no effect. A handler's own later check (an empty string, the one-of
+  inside `connect`, a `device_call` method's argument) refuses through
+  `command_args::missing`, which carries the same code. A `connect` naming a
+  mac on a BLE-less build is now `unsupported`.
+- **Tests, each watched red.** `live_jobs::coordinator::race_tests` forces the
+  interleaving with a `test_pause::PausePoint` between the lookup and the
+  install (no sleep). On `0f73dda` it found `sysmon` running on the removed
+  panel.
+  `device::tests::a_remove_racing_an_adopt_leaves_no_link_outside_the_fleet`
+  parks `adopt` before its attach and was red on `0f73dda`.
+  `device::tests::a_forgotten_panel_takes_no_job_activity_or_lease` went red,
+  together with the race test, when `Slot::close` was mutated to only empty
+  the slot, and went red at the lease when `forget` left the lease slot open.
+  `command_args_tests` walks the dispatcher's arms against the table both
+  ways, which went red with a row deleted. It drops every requirement in turn
+  and also sends each one with the wrong type, asserting `bad_request` names
+  the command and the key; with the handlers as `0f73dda` left them it was red
+  at the first command, `exclusive_start {}`. It also scans the source for a
+  hand-built missing-argument refusal, which went red with one handler
+  reverted. `tests/test_e2e_activity_only_for_reported_panels.py` saw
+  `['MatrixWall', 'DD:00:00:00:00:09', 'CC:00:00:00:00:03']` sent before the
+  fix and only the reported panel after. That one call is its calibration.
+  Rust 495 passed without BLE (`cargo test -p divoomd --no-default-features`),
+  615 with (`cargo test`); pytest 1897 passed / 164 skipped; with
+  `--run-browser` 2047 passed / 14 skipped.
+
 ## P5.8 — the daemon refuses a panel action for a panel it has never seen (2026-10-18)
 
 `live_job_start` and `set_device_activity` called `fleet.get_or_create(mac)`,

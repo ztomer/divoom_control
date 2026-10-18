@@ -152,8 +152,10 @@ window.setDeviceActivity = function(mac, kind, opts) {
     // menubar can show a per-device tile with the actual face (not a generic
     // glyph). Live-widget image content is skipped here — the daemon sets that
     // kind itself (sysmon/stocks/weather/music) on live_job_start, so we'd only
-    // clobber it with "image".
-    if (kind !== "image" && window.pywebview?.api?.set_device_activity) {
+    // clobber it with "image". Only for a panel the daemon reported (P5.9): it
+    // refuses a record for anything else (P5.8), so MatrixWall, a scan result
+    // or a stale restore would be a round trip to a refusal.
+    if (kind !== "image" && window.daemonReportedPanel(mac) && window.pywebview?.api?.set_device_activity) {
         const dev = (window.DivoomState.discoveredDevices || []).find(d => d.address === mac);
         const name = (dev && dev.name) || (mac === window._activeDeviceMac()
             ? (document.getElementById("banner-device-name")?.textContent || "").trim() : "");
@@ -194,6 +196,15 @@ window.jewelClassFor = function(dev) {
     if (dev.activityState === "degraded") return "amber";
     if (!dev.daemonOwned || dev.activityState === "disconnected") return "standby";
     return "online";
+};
+
+// A panel the daemon reported as its own (an `owned_devices` row or a live
+// status for it): the only ids it keeps per-panel state for. The wall surface
+// (`MatrixWall`) is not one -- the daemon draws it through its slots -- and
+// neither is a scan result it never linked.
+window.daemonReportedPanel = function(mac) {
+    if (!mac) return false;
+    return (window.DivoomState.discoveredDevices || []).some(d => d.address === mac && d.daemonOwned);
 };
 
 // A target the daemon has told us about: a panel it reported, a LAN panel

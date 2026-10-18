@@ -225,7 +225,7 @@ pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
         }
     }
     if slot_map.is_empty() {
-        return json!({"success": false, "error": "custom_art_push requires 'slots' or 'file_ids'"});
+        return crate::command_args::missing("custom_art_push", "'slots' or 'file_ids'");
     }
 
     // Download + encode all files

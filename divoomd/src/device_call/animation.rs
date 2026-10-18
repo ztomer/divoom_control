@@ -170,7 +170,7 @@ async fn set_user_gif(ctx: CallCtx<'_>) -> Value {
             // START_SAVING / TRANSMISSION_END: data[0] selects sub-format.
             let data = kw_bytes(kw, "data");
             if data.is_empty() {
-                return err_reply("set_user_gif: missing 'data'");
+                return crate::command_args::missing("set_user_gif", "'data'");
             }
             p.push(data[0]);
             match data[0] {

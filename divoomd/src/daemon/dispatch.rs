@@ -1,11 +1,17 @@
 //! The daemon's NDJSON command dispatcher. Split from daemon.rs to stay
 //! under the 500-LOC ground rule.
 
+use crate::command_args::missing;
 use crate::daemon::{notifications, Daemon};
 use crate::protocol::{err_code, err_reply, ErrorCode, Request};
 use serde_json::{json, Value};
 
 pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
+    // What the command cannot run without is checked before it runs, so a
+    // request missing it is `bad_request` and has no effect (P5.9).
+    if let Err(refused) = crate::command_args::check(&req.command, &req.args) {
+        return refused;
+    }
     match req.command.as_str() {
         "ping" => json!({"success": true, "pong": true}),
 
@@ -168,7 +174,7 @@ async fn exclusive_start(daemon: &Daemon, req: Request) -> Value {
             },
             Err(e) => e,
         },
-        None => err_reply("exclusive_start requires 'token'"),
+        None => missing("exclusive_start", "'token'"),
     }
 }
 
@@ -180,7 +186,7 @@ async fn exclusive_end(daemon: &Daemon, req: Request) -> Value {
             }
             json!({"success": true})
         }
-        None => err_reply("exclusive_end requires 'token'"),
+        None => missing("exclusive_end", "'token'"),
     }
 }
 
@@ -207,11 +213,11 @@ async fn live_job_start(daemon: &Daemon, req: Request) -> Value {
     };
     let mac = match req.args.get("mac").and_then(|v| v.as_str()) {
         Some(m) => m.to_string(),
-        None => return err_reply("live_job_start requires 'mac'"),
+        None => return missing("live_job_start", "'mac'"),
     };
     let kind = match req.args.get("kind").and_then(|v| v.as_str()) {
         Some(k) => k.to_string(),
-        None => return err_reply("live_job_start requires 'kind'"),
+        None => return missing("live_job_start", "'kind'"),
     };
     let params = req.args.get("params").cloned().unwrap_or_else(|| json!({}));
     match self_weak.upgrade() {
@@ -225,10 +231,10 @@ async fn live_job_start(daemon: &Daemon, req: Request) -> Value {
 
 async fn live_job_stop(daemon: &Daemon, req: Request) -> Value {
     let Some(mac) = req.args.get("mac").and_then(|v| v.as_str()) else {
-        return err_reply("live_job_stop requires 'mac'");
+        return missing("live_job_stop", "'mac'");
     };
     let Some(kind) = req.args.get("kind").and_then(|v| v.as_str()) else {
-        return err_reply("live_job_stop requires 'kind'");
+        return missing("live_job_stop", "'kind'");
     };
     let stopped = daemon.live_jobs.stop(daemon, mac, kind).await;
     json!({"success": true, "stopped": stopped})
@@ -253,11 +259,11 @@ async fn live_jobs_stop_for(daemon: &Daemon, req: Request) -> Value {
 async fn set_device_activity(daemon: &Daemon, req: Request) -> Value {
     let mac = match req.args.get("mac").and_then(|v| v.as_str()) {
         Some(m) => m.to_string(),
-        None => return err_reply("set_device_activity requires 'mac'"),
+        None => return missing("set_device_activity", "'mac'"),
     };
     let kind = match req.args.get("kind").and_then(|v| v.as_str()) {
         Some(k) => k.to_string(),
-        None => return err_reply("set_device_activity requires 'kind'"),
+        None => return missing("set_device_activity", "'kind'"),
     };
     let name = req
         .args

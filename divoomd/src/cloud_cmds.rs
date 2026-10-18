@@ -6,6 +6,7 @@
 
 use serde_json::{json, Value};
 
+use crate::command_args::missing;
 use crate::protocol::{err_reply, Request};
 
 /// Handle a cloud command. The caller routes only the cloud command names here.
@@ -44,7 +45,7 @@ pub async fn handle(command: &str, req: &Request) -> Value {
 }
 async fn fetch_gallery(req: &Request) -> Value {
     let Some(classify) = req.args.get("classify").and_then(serde_json::Value::as_i64) else {
-        return err_reply("fetch_gallery requires 'classify'");
+        return missing("fetch_gallery", "'classify'");
     };
     let limit = req
         .args
@@ -75,7 +76,7 @@ async fn save_credentials(req: &Request) -> Value {
         .and_then(|v| v.as_str())
         .unwrap_or("");
     if email.is_empty() {
-        return err_reply("save_credentials requires 'email'");
+        return missing("save_credentials", "'email'");
     }
     // An empty password means "keep the stored one" (see
     // cloud_store::save_config). Requiring one here made the daemon
@@ -188,7 +189,7 @@ async fn get_dial_types() -> Value {
 async fn get_dial_list(req: &Request) -> Value {
     let dial_type = match req.args.get("dial_type").and_then(|v| v.as_str()) {
         Some(t) => t.to_string(),
-        None => return err_reply("get_dial_list requires 'dial_type'"),
+        None => return missing("get_dial_list", "'dial_type'"),
     };
     let page = req
         .args
@@ -236,7 +237,7 @@ async fn get_aid_sleep_list(command: &str, req: &Request) -> Value {
         .get("sleep_type")
         .and_then(serde_json::Value::as_i64)
     else {
-        return err_reply(&format!("{command} requires 'sleep_type'"));
+        return missing(command, "'sleep_type'");
     };
     let limit = req
         .args
@@ -278,7 +279,7 @@ async fn get_my_playlists(req: &Request) -> Value {
 
 async fn get_playlist_images(req: &Request) -> Value {
     let Some(play_id) = req.args.get("play_id").and_then(serde_json::Value::as_i64) else {
-        return err_reply("get_playlist_images requires 'play_id'");
+        return missing("get_playlist_images", "'play_id'");
     };
     let limit = req
         .args
