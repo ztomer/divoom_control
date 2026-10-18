@@ -142,25 +142,11 @@ P4.7, `notify`: text shown under a screen lease whose TTL is the notification's 
 daemon by mac. **Exit:** browser tests across two panels for P5.1/P5.2; the
 menubar no longer closes on a status change. **Size:** M.
 
-Landed (2026-10-18): P5.2, every channel control writing the selected display's own per-channel settings through one funnel that resolves the display at the gesture via `DisplayPreviewRegistry.getActive()`, the app-wide channel globals deleted (`78608ea`; `divoom_gui/web_ui/channel_settings.js`, `tests/test_e2e_channel_settings_per_panel.py`);
+Landed (2026-10-18): P5.5, with no panel known the bench showing an empty state that says how to add one and the deck "No panel selected" with no levels, the active-panel lookup answering null instead of an invented mac (`f56b550`; `window.isKnownTarget` in `divoom_gui/web_ui/app_globals.js`, `tests/test_e2e_no_invented_fleet.py`);
+P5.2, every channel control writing the selected display's own per-channel settings through one funnel that resolves the display at the gesture via `DisplayPreviewRegistry.getActive()`, the app-wide channel globals deleted (`78608ea`; `divoom_gui/web_ui/channel_settings.js`, `tests/test_e2e_channel_settings_per_panel.py`);
 P5.4, the weather card showing the PNG of `render_widget {kind: "weather"}` with the reading beside it, the SVG renderer and `get_weather` deleted, loading and failure as distinct placeholders that say why (`4ac2bcf`; `divoom_gui/web_ui/widgets_weather.js`, the converse call-site check in `tests/test_widget_drift.py`);
 P5.3, the menubar updating labels, the "Active panel" check and the notification items in place, rebuilding only when the set of rows changes, decided by diffing one `MenuModel` signature (`28f54cd`; `divoom-menubar/src/menu_model.rs`). That meets the exit's menubar half in code; holding the menu open through a fleet change on screen is not yet checked (2026-10-18: the console was locked, so no NSMenu could be held open or captured; a two-mock-panel smoke -- selection A, B, A and a row rename over the socket -- left the menubar running);
 P5.1, brightness, volume and panel size read and written per mac through the daemon, both name-based size guessers deleted, switching panels shows that panel's values (`f1f7b3b`; `divoom_gui/panels.py`, `divoom_gui/web_ui/panel_facts.js`, `tests/test_e2e_panel_levels_per_panel.py`, `divoomd/src/mock_levels_tests.rs`).
-
-#### P5.5 — The bench invents no panels
-**Status:** OPEN
-**Why:** with no panel known, `getDeviceList` (`divoom_gui/web_ui/spatial_stage.js`)
-draws a made-up four-panel fleet (`11:22:33:44:55:01`..`04`, "Ditoo-L",
-"Pixoo-64"), and `window._activeDeviceMac` (`divoom_gui/web_ui/app_globals.js`)
-falls back to `11:22:33:44:55:01` when nothing is selected, so the bench, the
-deck and every caller of the active mac act on a panel that does not exist --
-placeholder data dressed as the user's (the honest-placeholder rule). Found
-during P5.1: the deck now shows `–` for those panels' levels (the daemon has
-never heard of them), which is honest about the levels and not about the panel.
-`_activeDeviceMac` has 28 callers, which is why this is its own item.
-**Done when:** with no panel known the bench shows an empty state that says how
-to add one, the deck says "No panel selected" with no levels, and no bridge
-call carries a mac the daemon never reported (browser test).
 
 ### Phase 6 — the multi-panel wall
 
