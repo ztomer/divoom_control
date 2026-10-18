@@ -4,6 +4,41 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P5.3 — the menubar updates rows in place (2026-10-18)
+
+Any change in the menubar's rows, names, kinds, the active panel or the
+notification monitor rebuilt and reinstalled the root `Menu`
+(`divoom-menubar/src/tray.rs`), which dismisses it if the user has it open --
+so a panel switching widget closed the menu under the pointer. Only the row
+tiles updated in place.
+
+- **One signature, diffed whole** (`divoom-menubar/src/menu_model.rs`):
+  `MenuModel` (the rows' mac, label and active flag, plus whether
+  notifications run) is `PartialEq`, and `change_from` decides between
+  `Unchanged`, `InPlace` and `Rebuild` from it alone -- no per-field flags.
+  `Rebuild` only when the SET of rows differs (a panel appeared or went away,
+  or nothing is installed yet). Order is not structure: the polled fleet is
+  sorted by name and the broadcast one is not, so an order-sensitive key would
+  have closed the menu whenever the two sources alternated.
+- **In place:** labels (`Submenu::set_text`), the "Active panel" check and its
+  enabled state, and Start/Stop Notifications' enabled state are applied to
+  the existing items. The apply path destructures `MenuModel` and `RowModel`
+  with no `..`, so a field added to the model does not compile until it is
+  applied (E0027, watched).
+- **A click no longer forces a rebuild.** muda toggles a check item by itself
+  on click; the tray now puts the checks back to the daemon's last word
+  instead, so the mark moves when a poll reports the new active panel and
+  stays put if the switch failed.
+- **Watched red:** the `menu_model` tests under five sabotages -- the old
+  behaviour (any change rebuilds: five in-place tests red), an
+  order-sensitive key, a row count instead of a row set, no `Unchanged` arm,
+  and a label that ignores the active panel.
+- Not verified on screen: that macOS keeps an OPEN menu open across these
+  updates needs a fleet change while the menu is held open (NSMenuItem title
+  and state changes are live by AppKit's contract; the rebuild was the only
+  thing that dismissed it).
+- Tests: `cargo test -p divoom-menubar` 39 passed; clippy pedantic clean.
+
 ## P5.4 — the weather card shows the frame the panel shows (2026-10-18)
 
 Since P3.3 the panel shows a frame from `render_widget {kind: "weather"}`, but

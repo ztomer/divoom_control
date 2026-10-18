@@ -9,11 +9,24 @@ use tray_icon::menu::{
 };
 use tray_icon::{TrayIcon, TrayIconBuilder};
 
+use crate::menu_model::{MenuChange, MenuModel, RowModel};
 use crate::state::{resolve_icon_state, IconState};
 use crate::{daemon, launch};
 
 pub enum TrayAction {
     Quit,
+}
+
+/// The items of one device row that change without a rebuild.
+struct RowItems {
+    submenu: Submenu,
+    active: CheckMenuItem,
+}
+
+/// The notification items, whose enabled state follows the monitor.
+struct NotifItems {
+    start: MenuItem,
+    stop: MenuItem,
 }
 
 pub struct Tray {
@@ -23,15 +36,18 @@ pub struct Tray {
     notif_start_id: MenuId,
     notif_stop_id: MenuId,
     quit_id: MenuId,
-    last_sig: String,
+    /// What the installed menu shows. A new model is diffed against it whole
+    /// to decide between nothing, an in-place update and a rebuild (P5.3).
+    installed: Option<MenuModel>,
     last_icon_state: Option<IconState>,
     last_tooltip: String,
     /// Frame previews decoded into menu icons, once per frame.
     tiles: std::cell::RefCell<crate::tiles::TileCache>,
-    /// The device rows of the installed menu, by mac, so a new frame updates
-    /// a row's icon IN PLACE instead of rebuilding the menu (which dismisses
-    /// it while the user has it open).
-    rows: std::cell::RefCell<std::collections::HashMap<String, Submenu>>,
+    /// The device rows of the installed menu, by mac, so a new frame, name,
+    /// kind or active panel updates the row IN PLACE instead of rebuilding
+    /// the menu (which dismisses it while the user has it open).
+    rows: std::cell::RefCell<std::collections::HashMap<String, RowItems>>,
+    notif: std::cell::RefCell<Option<NotifItems>>,
 }
 
 impl Tray {
@@ -41,78 +57,79 @@ impl Tray {
             .with_icon(make_icon(IconState::Offline.color()))
             .build()
             .ok()?;
-        let tray = Self {
+        let mut tray = Self {
             icon,
             launch_id: MenuId::new("launch"),
             notif_open_id: MenuId::new("notif_open"),
             notif_start_id: MenuId::new("notif_start"),
             notif_stop_id: MenuId::new("notif_stop"),
             quit_id: MenuId::new("quit"),
-            last_sig: String::new(),
+            installed: None,
             last_icon_state: None, // forces the first poll_daemon() to set icon + tooltip
             last_tooltip: String::new(),
             tiles: std::cell::RefCell::new(crate::tiles::TileCache::default()),
             rows: std::cell::RefCell::new(std::collections::HashMap::new()),
+            notif: std::cell::RefCell::new(None),
         };
-        tray.rebuild(&[], false);
+        let empty = MenuModel::default();
+        tray.rebuild(&[], &empty);
+        tray.installed = Some(empty);
         Some(tray)
     }
 
-    /// Build + install the whole menu: active-device rows (disabled, informational)
-    /// then the fixed actions.
-    /// Build + install the whole menu: active-device submenus with actionable
-    /// channel switching and power controls, plus fixed actions.
-    fn rebuild(&self, devices: &[daemon::DeviceView], notif_running: bool) {
+    /// Build + install the whole menu: one submenu per device (panel switching,
+    /// channels, screen power), then the fixed actions. Only for a change in
+    /// WHICH rows exist (`MenuChange::Rebuild`): installing a new root menu
+    /// dismisses it if it is open.
+    fn rebuild(&self, devices: &[daemon::DeviceView], model: &MenuModel) {
         let menu = Menu::new();
         let mut rows = std::collections::HashMap::new();
-        if devices.is_empty() {
+        if model.rows.is_empty() {
             let _ = menu.append(&MenuItem::new("No active devices", false, None));
         } else {
-            for item in devices {
-                let name = &item.name;
-                let kind = &item.kind;
-                let mut label = if kind.is_empty() || kind == "idle" {
-                    name.clone()
-                } else {
-                    format!("{name} — {kind}")
-                };
-                // The active panel is named in the row itself, not only by
-                // a mark inside its submenu (never one channel).
-                if item.selected {
-                    label.push_str(" (active)");
-                }
-                let dev_submenu = Submenu::new(&label, true);
+            for row in &model.rows {
+                let dev_submenu = Submenu::new(&row.label, true);
                 // The tile: the frame the panel is showing, from the daemon's
                 // broadcast (none when it has not sent one -- text stays honest).
-                dev_submenu.set_icon(self.tiles.borrow_mut().icon_for(item.preview.as_deref()));
+                let preview = devices
+                    .iter()
+                    .find(|d| d.mac == row.mac)
+                    .and_then(|d| d.preview.as_deref());
+                dev_submenu.set_icon(self.tiles.borrow_mut().icon_for(preview));
                 // Switching panels: the check is the state, the click is the
                 // action; the active one is disabled because there is nothing
                 // to do on it.
-                let sel_id = MenuId::new(format!("sel:{}", item.mac));
-                let _ = dev_submenu.append(&CheckMenuItem::with_id(
-                    sel_id,
+                let active = CheckMenuItem::with_id(
+                    MenuId::new(format!("sel:{}", row.mac)),
                     "Active panel",
-                    !item.selected,
-                    item.selected,
+                    !row.selected,
+                    row.selected,
                     None,
-                ));
+                );
+                let _ = dev_submenu.append(&active);
                 let _ = dev_submenu.append(&PredefinedMenuItem::separator());
-                let clk_id = MenuId::new(format!("ch:clock:{}", item.mac));
+                let clk_id = MenuId::new(format!("ch:clock:{}", row.mac));
                 let _ = dev_submenu.append(&MenuItem::with_id(clk_id, "Show Clock", true, None));
-                let eq_id = MenuId::new(format!("ch:visualizer:{}", item.mac));
+                let eq_id = MenuId::new(format!("ch:visualizer:{}", row.mac));
                 let _ =
                     dev_submenu.append(&MenuItem::with_id(eq_id, "Show Visualizer", true, None));
-                let amb_id = MenuId::new(format!("ch:ambient:{}", item.mac));
+                let amb_id = MenuId::new(format!("ch:ambient:{}", row.mac));
                 let _ = dev_submenu.append(&MenuItem::with_id(amb_id, "Show Ambient", true, None));
                 let _ = dev_submenu.append(&PredefinedMenuItem::separator());
-                let off_id = MenuId::new(format!("pwr:off:{}", item.mac));
+                let off_id = MenuId::new(format!("pwr:off:{}", row.mac));
                 let _ =
                     dev_submenu.append(&MenuItem::with_id(off_id, "Turn Off Screen", true, None));
-                let on_id = MenuId::new(format!("pwr:on:{}", item.mac));
+                let on_id = MenuId::new(format!("pwr:on:{}", row.mac));
                 let _ = dev_submenu.append(&MenuItem::with_id(on_id, "Turn On Screen", true, None));
 
                 let _ = menu.append(&dev_submenu);
-                rows.insert(item.mac.clone(), dev_submenu);
+                rows.insert(
+                    row.mac.clone(),
+                    RowItems {
+                        submenu: dev_submenu,
+                        active,
+                    },
+                );
             }
         }
         *self.rows.borrow_mut() = rows;
@@ -132,18 +149,23 @@ impl Tray {
         let _ = menu.append(&PredefinedMenuItem::separator());
         // Start is enabled when stopped; Stop when running (parity with pyobjc,
         // which shows both — we just disable the inapplicable one).
-        let _ = menu.append(&MenuItem::with_id(
-            self.notif_start_id.clone(),
-            "Start Notifications",
-            !notif_running,
-            None,
-        ));
-        let _ = menu.append(&MenuItem::with_id(
-            self.notif_stop_id.clone(),
-            "Stop Notifications",
-            notif_running,
-            None,
-        ));
+        let notif = NotifItems {
+            start: MenuItem::with_id(
+                self.notif_start_id.clone(),
+                "Start Notifications",
+                !model.notif_running,
+                None,
+            ),
+            stop: MenuItem::with_id(
+                self.notif_stop_id.clone(),
+                "Stop Notifications",
+                model.notif_running,
+                None,
+            ),
+        };
+        let _ = menu.append(&notif.start);
+        let _ = menu.append(&notif.stop);
+        *self.notif.borrow_mut() = Some(notif);
         let _ = menu.append(&PredefinedMenuItem::separator());
         let _ = menu.append(&MenuItem::with_id(
             self.quit_id.clone(),
@@ -154,8 +176,48 @@ impl Tray {
         self.icon.set_menu(Some(Box::new(menu)));
     }
 
-    /// Poll the daemon and refresh the glyph colour + menu (only when changed, to
-    /// avoid rebuilding the menu while the user has it open). Ingests cached state
+    /// Apply a model whose rows are the installed ones to the existing items,
+    /// so an open menu stays open. Both patterns name every field with no
+    /// `..`: a field added to the model does not compile until it is named
+    /// here (E0027), and one named but not applied is an unused binding.
+    fn apply_in_place(&self, model: &MenuModel) {
+        let MenuModel {
+            rows: row_models,
+            notif_running,
+        } = model;
+        let rows = self.rows.borrow();
+        for RowModel {
+            mac,
+            label,
+            selected,
+        } in row_models
+        {
+            if let Some(items) = rows.get(mac) {
+                items.submenu.set_text(label);
+                items.active.set_checked(*selected);
+                items.active.set_enabled(!*selected);
+            }
+        }
+        if let Some(notif) = self.notif.borrow().as_ref() {
+            notif.start.set_enabled(!*notif_running);
+            notif.stop.set_enabled(*notif_running);
+        }
+    }
+
+    /// Same rows, maybe new frames: refresh the tiles in place.
+    fn refresh_tiles(&self, devices: &[daemon::DeviceView]) {
+        let rows = self.rows.borrow();
+        for d in devices {
+            if let Some(items) = rows.get(&d.mac) {
+                items
+                    .submenu
+                    .set_icon(self.tiles.borrow_mut().icon_for(d.preview.as_deref()));
+            }
+        }
+    }
+
+    /// Poll the daemon and refresh the glyph colour + menu: in place when the
+    /// same rows exist, rebuilt only when the set of rows changed (P5.3). Ingests cached state
     /// from the subscription stream when fresh to eliminate socket churn.
     pub fn poll_daemon(&mut self) {
         let cached = daemon::get_cached_snapshot();
@@ -223,36 +285,29 @@ impl Tray {
             self.last_tooltip = tooltip;
         }
 
-        let sig = format!(
-            "{}|{}|{}",
-            if offline { "off" } else { "on" },
-            notif_running,
-            devices
-                .iter()
-                .map(|d| format!("{}:{}:{}:{}", d.mac, d.name, d.kind, d.selected))
-                .collect::<Vec<_>>()
-                .join(",")
-        );
-        if sig == self.last_sig {
-            // Same rows, maybe new frames: refresh the tiles in place.
-            let rows = self.rows.borrow();
-            for d in &devices {
-                if let Some(row) = rows.get(&d.mac) {
-                    row.set_icon(self.tiles.borrow_mut().icon_for(d.preview.as_deref()));
-                }
+        let model = MenuModel::from_devices(&devices, notif_running);
+        match model.change_from(self.installed.as_ref()) {
+            MenuChange::Rebuild => self.rebuild(&devices, &model),
+            MenuChange::InPlace => {
+                self.apply_in_place(&model);
+                self.refresh_tiles(&devices);
             }
-        } else {
-            self.rebuild(&devices, notif_running);
-            self.last_sig = sig;
+            MenuChange::Unchanged => self.refresh_tiles(&devices),
         }
+        self.installed = Some(model);
     }
 
     /// Dispatch a menu click. Returns `Some(Quit)` when the app should exit.
-    pub fn on_menu(&mut self, ev: &MenuEvent) -> Option<TrayAction> {
+    pub fn on_menu(&self, ev: &MenuEvent) -> Option<TrayAction> {
         let id_str = ev.id.as_ref();
         if let Some(mac) = id_str.strip_prefix("sel:") {
             daemon::select_device(mac);
-            self.last_sig.clear(); // the mark moves on the next poll
+            // muda toggles a check item on click by itself. Put the checks
+            // back to what the daemon last said: the mark moves when a poll
+            // reports the new active panel, and stays put if the switch failed.
+            if let Some(model) = &self.installed {
+                self.apply_in_place(model);
+            }
         } else if let Some(rest) = id_str.strip_prefix("ch:") {
             if let Some((ch, mac)) = rest.split_once(':') {
                 daemon::switch_channel(mac, ch);
@@ -267,10 +322,8 @@ impl Tray {
             launch::open_notifications();
         } else if ev.id == self.notif_start_id {
             daemon::start_notifications();
-            self.last_sig.clear(); // force a menu refresh on next poll
         } else if ev.id == self.notif_stop_id {
             daemon::stop_notifications();
-            self.last_sig.clear();
         } else if ev.id == self.quit_id {
             launch::quit();
             return Some(TrayAction::Quit);

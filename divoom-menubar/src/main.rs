@@ -10,6 +10,7 @@
 
 mod daemon;
 mod launch;
+mod menu_model;
 mod resubscribe;
 mod state;
 mod tiles;
@@ -233,7 +234,7 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::Menu(ev) => {
                 let quit = self
                     .tray
-                    .as_mut()
+                    .as_ref()
                     .and_then(|t| t.on_menu(&ev))
                     .is_some_and(|a| matches!(a, TrayAction::Quit));
                 if quit {
