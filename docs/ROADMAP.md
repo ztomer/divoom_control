@@ -159,7 +159,14 @@ P5.1, brightness, volume and panel size read and written per mac through the dae
 **Exit:** P6.1's *Done when*. **Size:** M. Needs two panels for the final
 check.
 
-Landed (2026-10-18): P6.1's code, dragged panels snapping flush and lined up
+Landed (2026-10-18): P6.3, a wall reply naming each linked panel whose write
+failed (`failed`, with the reason) apart from each slot with no panel
+(`degraded`), every wall command returning one outcome per slot
+(`WallOutcome`) instead of one `bool`, the wall switching channels from the
+panel's own table, and the wall image push's toast naming the panel by its
+bench name (`066c124`; `divoomd/src/wall/outcome.rs`,
+`divoomd/src/wall_outcome_tests.rs`, `tests/test_e2e_bench_snap.py`);
+P6.1's code, dragged panels snapping flush and lined up
 through one pure function, the saved position the snapped one, and a LAN panel
 refused as a wall slot with its reason by the daemon (`wall_configure`'s
 `refused`, `device_status`'s `wall_refusal`) and in the deck and the wall push
@@ -187,16 +194,30 @@ decompile. The refusal is stated (`divoomd/src/wall/refusal.rs`).
 `sendByLocalHttp`, or the public HTTP API's `Draw/SendHttpGif` checked on a
 real LAN panel), the daemon draws a slot over it, and the refusal is deleted.
 
-#### P6.3 — A wall failure names the panel that failed
+#### P6.4 — Every GUI wall write names the panel that failed
 **Status:** OPEN
-**Why:** P5.10's sweep found that a wall command whose write fails on a
-linked panel answers `device_failed` with `degraded: []`:
-`DivoomWall::degraded_slots` names only slots with no panel, and the wall's
-per-command methods return one `bool` for all slots
-(`divoomd/src/wall/dispatch.rs`, `wall_outcome`). A client cannot tell which
-panel of the wall did not take the command.
-**Done when:** a wall reply names every slot whose write failed, and a test
-with one failing mock panel among two sees exactly that slot named.
+**Why:** P6.3 made the daemon name each wall panel whose write failed
+(`failed`, `degraded`) and the wall image push shows it, but the other wall
+writes from the GUI -- light, clock, channel, VJ, visualizer, text, all
+through `LightingApi._show` in `divoom_gui/api/lighting.py`, and the wall's
+brightness and volume through `_level_write` in `divoom_gui/panels.py` --
+return a bare `bool` to the page. On the wall the toast still says "Failed to
+switch channel" with no panel named; the daemon's reason reaches only the log.
+**Done when:** each of those writes on the wall hands the page the daemon's
+`failed` and `degraded`, its toast names the panel, and a browser test with
+one failing panel sees that panel's name.
+
+#### P6.5 — The wall push shows each panel's preview
+**Status:** OPEN
+**Why:** after a wall image push, `LightingApi.display_wall_image` asks the
+wall for `get_last_previews` to draw each panel's cut on the bench. The Rust
+wall never had it (`divoomd/src/wall/dispatch.rs` refuses it `unsupported`),
+so the call fails, is logged as a warning and the previews are always empty.
+The Python wall had it (`examples/divoom_legacy/wall.py`); the port dropped
+it, and the GUI tests stub the call so they stay green.
+**Done when:** the daemon answers `get_last_previews` for the wall with each
+slot's cut of the last image, and a test through the real daemon sees one
+preview per slot after a push.
 
 ### Phase 7 — decisions for the owner
 
