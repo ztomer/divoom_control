@@ -67,6 +67,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _cargo_env import probe_env  # noqa: E402
 from _tui import err, info, ok, warn  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -175,6 +176,9 @@ def build_probe(version: str) -> Path:
     r = subprocess.run(
         ["cargo", "build", "--release", "--quiet", "--message-format=json"],
         capture_output=True, text=True, cwd=PROBE_DIR, timeout=900, stdin=subprocess.DEVNULL,
+        # Built inside PROBE_DIR, so clearing the temp dir clears the build
+        # too, rather than orphaning it under ~/.cargo/build; see _cargo_env.
+        env=probe_env(PROBE_DIR),
     )
     if r.returncode != 0:
         raise RuntimeError("the sysinfo probe did not build:\n" + r.stderr[-2000:])

@@ -4,6 +4,38 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## Tools — a probe crate's build is removed with its temp dir (2026-10-17)
+
+`tools/render_tray_icon.py --verify-against-rust` compiles a scratch crate
+named `probe` in a fresh temp dir. The house `~/.cargo/config.toml` sets
+`build-dir = "{cargo-cache-home}/build/{workspace-path-hash}"`, and a fresh
+temp dir is a fresh hash, so every run (every pytest run, through
+`tests/test_tray_icon_render.py`) left a build dir under `~/.cargo/build`
+that nothing collected: 112 of them, all fingerprint `probe-b31fe2907f4634b8`.
+Removing the temp dir removed the source, never the build.
+
+- **`tools/_cargo_env.py`**: `probe_env(root)` points `CARGO_BUILD_BUILD_DIR`
+  and `CARGO_TARGET_DIR` inside the directory the tool owns. Environment
+  variables outrank every config file; a caller that set its own (a gate that
+  owns and cleans a build root) is left alone.
+- **Both probe builds use it**: the tray-icon verifier, and
+  `tools/mem_gauge_compare.py`, whose sysinfo probe lives in a fixed
+  `$TMPDIR/divoom-mem-gauge-probe` -- reused rather than leaked per run, but
+  its build sat under `~/.cargo/build` and was orphaned whenever the OS
+  cleared `$TMPDIR`.
+- **`tests/test_cargo_probe_env.py`**, independent of how the machine
+  configures cargo: a `.cargo/config.toml` above the temp dir reproduces the
+  house config's shape (calibrated in the test with `cargo metadata`, so a
+  cargo that stopped honouring it fails rather than passing over nothing),
+  the real verifier runs, and no `probe-*` fingerprint may appear outside its
+  temp dir. Red against the old code. A class check requires every Python
+  `cargo build/run/test/check/clippy` spawn in `tools/` and `scripts/` to go
+  through `probe_env`, red with it removed from `mem_gauge_compare.py`.
+- A full `python3 -m pytest` (1685 passed, 132 skipped) now leaves no
+  `probe-*` build under `~/.cargo/build`; it left two per run before. The
+  five leaked dirs still there (four `probe`, one `mem_gauge_probe`, 36 MB)
+  were deleted.
+
 ## P4.7 — `notify` shows a message, then gives the panel back (2026-10-17)
 
 No MCP tool could put up an alert and hand the panel back afterwards: an

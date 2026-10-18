@@ -50,6 +50,7 @@ import zlib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _cargo_env import probe_env  # noqa: E402
 from _tui import err, ok  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -353,8 +354,10 @@ fn main() {
         (d / "Cargo.toml").write_text(
             '[package]\nname = "probe"\nversion = "0.0.0"\nedition = "2024"\n'
         )
+        # The build stays in `d`, which this `with` removes; see _cargo_env.
         r = subprocess.run(
-            ["cargo", "run", "--quiet"], capture_output=True, text=True, cwd=d, timeout=900, stdin=subprocess.DEVNULL
+            ["cargo", "run", "--quiet"], capture_output=True, text=True, cwd=d, timeout=900,
+            stdin=subprocess.DEVNULL, env=probe_env(d),
         )
         if r.returncode != 0:
             err("the Rust probe did not build:\n" + r.stderr[-2000:])
