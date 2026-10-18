@@ -159,7 +159,15 @@ P5.1, brightness, volume and panel size read and written per mac through the dae
 **Exit:** P6.1's *Done when*. **Size:** M. Needs two panels for the final
 check.
 
-Landed (2026-10-18): P6.3, a wall reply naming each linked panel whose write
+Landed (2026-10-18): P6.5, the wall answering `get_last_previews` with each
+slot's cut as the slicer produced it (kept only for a slot that took the push),
+the wall's methods a declared table held to its arms, and a test holding every
+socket command and `device_call` the GUI or a test fake uses to the daemon's
+tables -- which also found the wall's rich clock, scoreboard and stock ticker
+refused, all three fixed (`3aed256`; `divoomd/src/wall/previews.rs`,
+`divoomd/src/wall_preview_tests.rs`, `tests/test_bridge_commands_exist_in_daemon.py`,
+`tests/test_e2e_wall_previews.py`);
+P6.3, a wall reply naming each linked panel whose write
 failed (`failed`, with the reason) apart from each slot with no panel
 (`degraded`), every wall command returning one outcome per slot
 (`WallOutcome`) instead of one `bool`, the wall switching channels from the
@@ -206,18 +214,6 @@ switch channel" with no panel named; the daemon's reason reaches only the log.
 **Done when:** each of those writes on the wall hands the page the daemon's
 `failed` and `degraded`, its toast names the panel, and a browser test with
 one failing panel sees that panel's name.
-
-#### P6.5 — The wall push shows each panel's preview
-**Status:** OPEN
-**Why:** after a wall image push, `LightingApi.display_wall_image` asks the
-wall for `get_last_previews` to draw each panel's cut on the bench. The Rust
-wall never had it (`divoomd/src/wall/dispatch.rs` refuses it `unsupported`),
-so the call fails, is logged as a warning and the previews are always empty.
-The Python wall had it (`examples/divoom_legacy/wall.py`); the port dropped
-it, and the GUI tests stub the call so they stay green.
-**Done when:** the daemon answers `get_last_previews` for the wall with each
-slot's cut of the last image, and a test through the real daemon sees one
-preview per slot after a push.
 
 ### Phase 7 — decisions for the owner
 
