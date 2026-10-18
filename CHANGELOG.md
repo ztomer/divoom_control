@@ -4,6 +4,52 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P4.6 — screen leases (2026-10-17)
+
+An agent drawing on a panel collided with the panel's live widget both ways:
+its `show_image` went through `preempt_conflicting_live_jobs`, which STOPPED
+the widget for good, and a widget that kept running painted over the agent
+on its next tick. `exclusive_start` was the nearest thing, with no TTL and a
+30 s idle reaper, and nothing gave the screen back. A crashed agent left its
+frame up forever.
+
+- **`lease_acquire` / `lease_renew` / `lease_release`** (daemon commands
+  and MCP tools; `divoomd/src/lease.rs`, state in `device/lease.rs`). The
+  TTL is mandatory and bounded (`arg_bounds::LEASE_TTL_MS`, 1 s..10 min). A
+  lease holds the panel's queue (`CommandQueue::hold`: an owner the idle
+  reaper does not touch, re-held on a reconnect), and every other caller --
+  GUI, `exclusive_start`, a second agent -- is refused with the new code
+  `screen_leased`, the holder's name and the time left. `lease_expired` is
+  the code for a token that is no longer the lease.
+- **The widget pauses, it is not stopped.** The holder's calls skip the
+  preemption; the widget keeps rendering and its frames stop at
+  `push_live_frame`, which keeps the newest (`Device::save_job_frame`). A
+  frame no longer waits out the lease on the queue -- it did with only the
+  queue hold, and landed stale after it.
+- **The screen comes back.** Released, or lapsed with nobody renewing, the
+  widget's newest frame is painted at once (`restored: "job"`), not at the
+  widget's next tick (weather: 15 minutes). A panel with no widget keeps the
+  holder's last frame and the reply says `restored: "none"`; giving back the
+  firmware channel needs a panel to measure, recorded as ROADMAP P9.7.
+- **Frame pushes conflate**, leased or not. Each `show_image` claims a
+  number before it queues; one whose turn comes after a newer claim answers
+  `superseded: true` without drawing.
+- **One seam for the token in MCP.** Every tool that reaches a panel takes
+  `lease` (added to each schema by `mcp_tools::tool`), and every
+  `device_call` the call makes carries it (`mcp_daemon::with_lease`, one
+  payload builder for `dc`/`dc_kw`/`dc_result`), so no tool can be the one
+  that forgot it. The catalog is 24 tools.
+- **Watched red first.** `divoomd/tests/screen_lease.rs` (TTL bounds, the
+  refusal and its holder, the widget paused and repainted with exactly one
+  frame, expiry and renewal, conflation), each assertion red under its own
+  sabotage; `command_queue_behavior::a_leased_hold_is_not_reaped_when_idle`
+  red with the reaper armed for a hold; the MCP unit tests red with the
+  token, the schema seam or the `lease` field removed; and
+  `divoomd/tests/mcp_lease_e2e.rs` -- Phase 4's exit: the real `divoomd mcp`
+  binary leases a mock 64x64 panel running sysmon, plays a two-frame 64 px
+  animation, is refused without the lease, lapses, and the widget comes back
+  -- red with the token dropped and with expiry disabled.
+
 ## P4.5 — text, live jobs and the built-in tools over MCP (2026-10-17)
 
 The daemon had `render_widget` text, `live_job_start/stop/list`,

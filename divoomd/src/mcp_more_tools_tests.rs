@@ -176,3 +176,124 @@ async fn text_is_drawn_at_the_panels_size() {
         .expect("base64");
     assert_eq!(rgb.len(), 128 * 128 * 3);
 }
+
+#[tokio::test]
+async fn a_lease_rides_on_every_device_call_the_tool_makes() {
+    // P4.6: the holder's calls carry its lease; a tool that dropped it would
+    // be refused by its own lease. Positional (scoreboard), keyword (the
+    // frame show_text pushes) and none at all.
+    let frame = base64::engine::general_purpose::STANDARD.encode(vec![0u8; 16 * 16 * 3]);
+    let daemon = FakeDaemon::replying(
+        json!({ "success": true, "width": 16, "frame_rgb_b64": frame, "result": true }),
+        None,
+    )
+    .await;
+    call_tool(
+        "set_scoreboard",
+        &json!({ "red_score": 1, "blue_score": 2, "lease": "L1" }),
+        &daemon.target,
+    )
+    .await
+    .expect("scoreboard");
+    assert_eq!(
+        sent(&daemon, "scoreboard.set_scoreboard")["args"]["token"],
+        json!("L1")
+    );
+    call_tool(
+        "show_text",
+        &json!({ "text": "Hi", "lease": "L1" }),
+        &daemon.target,
+    )
+    .await
+    .expect("text");
+    assert_eq!(sent(&daemon, "show_image")["args"]["token"], json!("L1"));
+
+    let plain = FakeDaemon::start(json!(true), None).await;
+    call_tool("set_timer", &json!({ "action": "start" }), &plain.target)
+        .await
+        .expect("timer");
+    assert_eq!(
+        sent(&plain, "timer.set_timer")["args"].get("token"),
+        None,
+        "no lease, no token"
+    );
+
+    let err = call_tool(
+        "set_timer",
+        &json!({ "action": "start", "lease": 7 }),
+        &unreachable(),
+    )
+    .await
+    .expect_err("a non-string lease");
+    assert!(err.contains("lease"), "{err}");
+}
+
+#[test]
+fn every_tool_that_reaches_a_panel_offers_the_lease() {
+    let all = crate::mcp_tools::catalog();
+    for t in all.as_array().expect("a list") {
+        let name = t["name"].as_str().expect("named");
+        let has = t["inputSchema"]["properties"].get("lease").is_some();
+        // list_screens reads the topology file, not a panel; lease_acquire
+        // is how a lease starts.
+        let exempt = matches!(name, "list_screens" | "lease_acquire");
+        assert_eq!(has, !exempt, "{name}: lease in its schema = {has}");
+    }
+}
+
+#[tokio::test]
+async fn the_lease_tools_speak_the_daemons_lease_commands() {
+    let daemon = FakeDaemon::replying(
+        json!({ "success": true, "token": "T9", "mac": "AA", "ttl_ms": 5000, "restored": "job" }),
+        None,
+    )
+    .await;
+    let got = call_tool(
+        "lease_acquire",
+        &json!({ "ttl_ms": 5000, "mac": "AA" }),
+        &daemon.target,
+    )
+    .await
+    .expect("acquired");
+    assert_eq!(
+        got["lease"],
+        json!("T9"),
+        "the token comes back as `lease`: {got}"
+    );
+    let sent_acquire = sent(&daemon, "lease_acquire");
+    assert_eq!(
+        sent_acquire["args"],
+        json!({ "ttl_ms": 5000, "holder": "MCP agent", "mac": "AA" })
+    );
+
+    call_tool(
+        "lease_renew",
+        &json!({ "lease": "T9", "ttl_ms": 2000 }),
+        &daemon.target,
+    )
+    .await
+    .expect("renewed");
+    assert_eq!(
+        sent(&daemon, "lease_renew")["args"],
+        json!({ "token": "T9", "ttl_ms": 2000 })
+    );
+    let back = call_tool("lease_release", &json!({ "lease": "T9" }), &daemon.target)
+        .await
+        .expect("released");
+    assert_eq!(back["restored"], json!("job"), "{back}");
+
+    for (name, args) in [
+        ("lease_acquire", json!({})),
+        ("lease_acquire", json!({ "ttl_ms": 10 })),
+        ("lease_renew", json!({ "lease": "T9" })),
+        ("lease_release", json!({})),
+    ] {
+        let err = call_tool(name, &args, &unreachable())
+            .await
+            .expect_err("refused");
+        assert!(
+            !err.contains("not reachable"),
+            "{name} reached for the daemon: {err}"
+        );
+    }
+}

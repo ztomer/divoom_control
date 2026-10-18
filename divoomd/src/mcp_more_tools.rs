@@ -13,7 +13,9 @@
 use base64::Engine;
 use serde_json::{json, Value};
 
-use crate::arg_bounds::{BLUE_SCORE, COUNTDOWN_MINUTES, COUNTDOWN_SECONDS, IMAGE_SIZE, RED_SCORE};
+use crate::arg_bounds::{
+    BLUE_SCORE, COUNTDOWN_MINUTES, COUNTDOWN_SECONDS, IMAGE_SIZE, LEASE_TTL_MS, RED_SCORE,
+};
 use crate::daemon_target::DaemonTarget;
 use crate::mcp_daemon::{cmd, dc};
 
@@ -54,6 +56,12 @@ pub fn catalog() -> Vec<Value> {
             &json!({"type":"object","properties":{"action":{"type":"string","enum":names(&TIMER_ACTIONS)}},"required":["action"]})),
         tool("set_countdown", "Start a countdown of minutes:seconds, or stop the running one.",
             &json!({"type":"object","properties":{"action":{"type":"string","enum":names(&COUNTDOWN_ACTIONS)},"minutes":COUNTDOWN_MINUTES.schema(),"seconds":COUNTDOWN_SECONDS.schema()},"required":["action"]})),
+        tool("lease_acquire", "Borrow the panel's screen for ttl_ms (renew before it runs out). Pass the returned lease to every drawing call; anyone else is refused, and the panel's live widget pauses. When the lease ends -- released, or expired because you stopped renewing -- the widget's newest frame comes back at once.",
+            &json!({"type":"object","properties":{"ttl_ms":LEASE_TTL_MS.schema(),"holder":{"type":"string","description":"Who is asking, shown to anyone refused."}},"required":["ttl_ms"]})),
+        tool("lease_renew", "Extend your lease to ttl_ms from now.",
+            &json!({"type":"object","properties":{"lease":{"type":"string"},"ttl_ms":LEASE_TTL_MS.schema()},"required":["lease","ttl_ms"]})),
+        tool("lease_release", "Give the screen back now; says what the panel went back to (job: its live widget, none: nothing to restore).",
+            &json!({"type":"object","properties":{"lease":{"type":"string"}},"required":["lease"]})),
     ]
 }
 
@@ -80,6 +88,7 @@ pub async fn call(name: &str, a: &Value, target: &DaemonTarget) -> Option<Result
             .await
         }
         "set_countdown" => set_countdown(a, target, mac).await,
+        "lease_acquire" | "lease_renew" | "lease_release" => lease(name, a, target, mac).await,
         _ => return None,
     })
 }
@@ -214,6 +223,47 @@ async fn set_scoreboard(
     )
     .await?;
     Ok(json!({ "ok": true, "red_score": red, "blue_score": blue, "on": on }))
+}
+
+/// The three lease tools: the daemon's commands, with `lease` for `token`.
+async fn lease(
+    name: &str,
+    a: &Value,
+    target: &DaemonTarget,
+    mac: Option<&str>,
+) -> Result<Value, String> {
+    let mut args = json!({});
+    if name == "lease_acquire" {
+        args["ttl_ms"] = json!(LEASE_TTL_MS.read(a)?);
+        args["holder"] = json!(a
+            .get("holder")
+            .and_then(Value::as_str)
+            .unwrap_or("MCP agent"));
+        if let Some(m) = mac {
+            args["mac"] = json!(m);
+        }
+    } else {
+        let token = a
+            .get("lease")
+            .and_then(Value::as_str)
+            .ok_or("lease must be the token lease_acquire returned")?;
+        args["token"] = json!(token);
+        if name == "lease_renew" {
+            args["ttl_ms"] = json!(LEASE_TTL_MS.read(a)?);
+        }
+    }
+    let mut reply = cmd(target, name, args)
+        .await
+        .and_then(crate::mcp_daemon::check)?;
+    let obj = reply
+        .as_object_mut()
+        .ok_or("the daemon's reply is not an object")?;
+    obj.remove("success");
+    if let Some(t) = obj.remove("token") {
+        obj.insert("lease".into(), t);
+    }
+    obj.insert("ok".into(), json!(true));
+    Ok(reply)
 }
 
 async fn set_countdown(

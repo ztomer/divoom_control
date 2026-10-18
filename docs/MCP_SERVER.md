@@ -40,7 +40,7 @@ Command-line options:
 
 ## Tool Catalog
 
-The server exposes 21 tools via `tools/list`. Every integer range below is stated once, in `divoomd/src/arg_bounds.rs`: the schema is generated from it, the tool checks it, and the daemon handler that receives the value refuses outside it.
+The server exposes 24 tools via `tools/list`. Every integer range below is stated once, in `divoomd/src/arg_bounds.rs`: the schema is generated from it, the tool checks it, and the daemon handler that receives the value refuses outside it.
 
 | Tool | Arguments | Description / Returns |
 |------|-----------|------------------------|
@@ -65,6 +65,27 @@ The server exposes 21 tools via `tools/list`. Every integer range below is state
 | `set_scoreboard` | `{red_score: 0..999, blue_score: 0..999, on?: bool}` | Show (or with `on: false` hide) the scoreboard. |
 | `set_timer` | `{action: "start"\|"stop"\|"reset"}` | Control the stopwatch. |
 | `set_countdown` | `{action: "start"\|"stop", minutes?: 0..99, seconds?: 0..59}` | Start a countdown, or stop the running one. |
+| `lease_acquire` | `{ttl_ms: 1000..600000, holder?: string, mac?}` | Borrow the panel's screen. Returns `{ok, lease, mac, holder, ttl_ms}`. Pass `lease` to every call while you hold it; anyone else is refused with the holder's name and the time left. The panel's live widget pauses (its frames keep rendering and are held back, the widget is not stopped). |
+| `lease_renew` | `{lease, ttl_ms}` | Move the lease's end to `ttl_ms` from now. A lease that already ended cannot be renewed. |
+| `lease_release` | `{lease}` | Give the screen back. Returns `restored`: `"job"` (the live widget's newest frame is painted at once) or `"none"` (no widget was running; the panel keeps your last frame). |
+
+### Screen leases
+
+An agent that draws on a panel with a live widget running would be painted
+over on the widget's next tick, and an agent that crashes would leave its
+frame up for good. A lease is the borrow with the return built in:
+
+- **The TTL is mandatory** and bounded (1 s to 10 min, `LEASE_TTL_MS` in
+  `arg_bounds.rs`). Renew before it runs out. A lease nobody renews ends by
+  itself, and the panel goes back to its widget as if released.
+- **Every tool that reaches a panel takes `lease`**, the token
+  `lease_acquire` returned, and sends it with each daemon call. Without it,
+  a call to a leased panel is refused.
+- **Frame pushes conflate.** When several `show_image`/`push_animation`/
+  `show_text` calls queue up on a slow link, only the newest is drawn; the
+  others answer `superseded`.
+- Every change is announced on the daemon's event stream as
+  `{"type": "lease", "state": "acquired" | "released" | "expired", ...}`.
 
 ### Validation and Error Handling
 - Protocol-level validation errors (missing arguments, invalid JSON) return standard JSON-RPC error codes (`-32602`, `-32700`, etc.).

@@ -71,12 +71,15 @@ struct Inner {
     owner: Option<String>,
     deadline: Option<Instant>,
     stopped: bool,
+    /// The owner holds by lease (`hold`): no idle auto-release -- the lease's
+    /// own TTL ends it, from outside.
+    held: bool,
 }
 
 impl Inner {
     fn arm_deadline(&mut self, excl: Option<Duration>) {
         self.deadline = match (excl, &self.owner) {
-            (Some(d), Some(_)) => Some(Instant::now() + d),
+            (Some(d), Some(_)) if !self.held => Some(Instant::now() + d),
             _ => None,
         };
     }
@@ -111,6 +114,7 @@ impl CommandQueue {
                 pending: VecDeque::new(),
                 owner: None,
                 deadline: None,
+                held: false,
                 stopped: false,
             })),
             notify: Arc::new(Notify::new()),
@@ -240,6 +244,35 @@ impl CommandQueue {
         Ok(())
     }
 
+    /// Take the exclusive slot for a screen lease (P4.6): like
+    /// [`Self::acquire_now`], but exempt from the idle auto-release -- the
+    /// lease's own TTL ends it, through [`Self::release`]. An agent that
+    /// draws once and then holds the screen for its TTL is the point, not an
+    /// idle session to be reaped after 30 s.
+    ///
+    /// # Errors
+    ///
+    /// When the queue is stopped, or another token owns the slot.
+    ///
+    /// # Panics
+    ///
+    /// If the mutex guarding this value is poisoned.
+    pub fn hold(&self, token: &str) -> Result<(), AcquireError> {
+        let mut g = self.inner.lock().unwrap();
+        if g.stopped {
+            return Err(AcquireError::Stopped);
+        }
+        if g.owner.as_deref().is_some_and(|o| o != token) {
+            return Err(AcquireError::HeldByAnother);
+        }
+        g.owner = Some(token.to_string());
+        g.held = true;
+        g.deadline = None;
+        drop(g);
+        self.notify.notify_one();
+        Ok(())
+    }
+
     /// Release the exclusive slot if `token` owns it.
     ///
     /// # Panics
@@ -251,6 +284,7 @@ impl CommandQueue {
         if g.owner.as_deref() == Some(token) {
             g.owner = None;
             g.deadline = None;
+            g.held = false;
             drop(g);
             self.notify.notify_one();
         }

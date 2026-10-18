@@ -124,6 +124,14 @@ pub struct Device {
     pub(super) link: Mutex<Option<Arc<Link>>>,
     live: Mutex<Option<LiveJob>>,
     activity: Mutex<Option<Activity>>,
+    /// Who holds the screen, if anyone (P4.6; `lease.rs`).
+    lease: std::sync::Mutex<Option<lease::Lease>>,
+    /// The live job's latest frame, landed or held back by a lease: what
+    /// the screen goes back to when the lease ends.
+    job_frame: std::sync::Mutex<Option<lease::SavedFrame>>,
+    /// Bumped by every `show_image` push; a queued push that is no longer
+    /// the newest is skipped (latest frame wins on a slow link).
+    frame_gen: std::sync::atomic::AtomicU64,
 }
 
 impl Device {
@@ -133,6 +141,9 @@ impl Device {
             link: Mutex::new(None),
             live: Mutex::new(None),
             activity: Mutex::new(None),
+            lease: std::sync::Mutex::new(None),
+            job_frame: std::sync::Mutex::new(None),
+            frame_gen: std::sync::atomic::AtomicU64::new(0),
         })
     }
 
@@ -153,6 +164,11 @@ impl Device {
     /// queued on it is dropped rather than delivered to the new one.
     pub(super) async fn attach(&self, transport: Arc<DeviceTransport>) -> Arc<Link> {
         let link = Link::new(transport);
+        // A lease outlives a reconnect: the new queue is held for it too,
+        // or a wall call could reach a leased panel through the new link.
+        if let Some(l) = self.lease() {
+            let _ = link.queue.hold(&l.token);
+        }
         let old = self.link.lock().await.replace(link.clone());
         if let Some(o) = old {
             o.retire();
@@ -189,6 +205,9 @@ impl Device {
         if let Some(o) = old {
             o.stop();
         }
+        // The saved frame was the old job's: a lease ending now must not
+        // repaint a widget that is no longer running.
+        self.clear_job_frame();
         self.set_activity_state(kind, "active").await;
     }
 
@@ -206,6 +225,7 @@ impl Device {
             job.stop();
         }
         drop(guard);
+        self.clear_job_frame();
         if let Some(a) = self.activity.lock().await.as_mut() {
             a.kind = "idle".to_string();
             a.at = now_secs();
@@ -320,6 +340,7 @@ impl Device {
 }
 
 mod fleet;
+pub mod lease;
 #[cfg(test)]
 mod tests;
 

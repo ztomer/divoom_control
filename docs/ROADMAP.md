@@ -122,35 +122,24 @@ P3.3, weather drawn by us as a `render_widget` frame and pushed like every other
 ### Phase 4 — MCP as a display surface
 
 **Goal:** an external agent can discover each panel, draw on it at its real
-resolution, and share it with background jobs without collisions. Today
-`divoomd/src/mcp_tools.rs` has 14 tools.
+resolution, and share it with background jobs without collisions. The
+catalog had 14 tools when this phase opened; it has 24.
 **Exit:** an MCP client draws a full-resolution multi-frame image on a 64x64
 panel while a live job runs, and the panel returns to the job when the lease
 expires (e2e over the real `divoomd mcp` entry point). **Size:** L.
-**Risk:** P4.6 is a new concurrency primitive on the command queue; it
-inherits the per-device rule below and its stress gate.
 
 Landed (2026-10-17): P4.1, `get_capabilities` describing the named panel with model, size and the vendor app's per-model features (`divoomd/src/panel_features.rs`, derived by `tools/derive_panel_features.py`);
 P4.2, `list_screens` listing every known or placed screen with its size, live link and place (`screens` in `get_topology`);
 P4.3, `show_image` drawing at the panel's size under a `resize` policy, every decoded frame held to the 256-colour palette (`divoomd/src/image_fit.rs`);
 P4.4, `push_animation` playing every frame with its own duration through one multi-frame `show_image` call;
-P4.5, text, live jobs, scoreboard, timer and countdown as MCP tools in the one catalog, every integer range stated once (`divoomd/src/arg_bounds.rs`).
-
-#### P4.6 — Screen leases, so agents and background jobs do not collide
-**Status:** OPEN
-**Why:** the nearest thing is `exclusive_start`/`exclusive_end` on the command
-queue. An agent drawing on a panel while sysmon runs gets overwritten, and a
-crashed agent leaves a stale frame forever.
-**Done when:** a caller acquires a lease with a mandatory TTL and renewal; on
-expiry the panel returns to what it showed before; continuous pushes for one
-panel are conflated (latest frame wins) on slow links.
+P4.5, text, live jobs, scoreboard, timer and countdown as MCP tools in the one catalog, every integer range stated once (`divoomd/src/arg_bounds.rs`);
+P4.6, screen leases: `lease_acquire`/`lease_renew`/`lease_release` with a mandatory bounded TTL, the live widget paused under a lease and repainted from its newest frame when the lease ends or lapses, `show_image` pushes conflated latest-wins (`divoomd/src/lease.rs`; the Phase 4 exit is `divoomd/tests/mcp_lease_e2e.rs`).
 
 #### P4.7 — Transient notifications as a tool
 **Status:** OPEN
 **Why:** no MCP tool shows an alert and then gives the panel back.
 **Done when:** a notification tool shows for a bounded time and restores the
-previous content, using the lease from P4.6.
-**Depends on:** P4.6
+previous content, using a screen lease (`lease_acquire`, `divoomd/src/lease.rs`).
 
 ### Phase 5 — the GUI models each panel, not "the" panel
 
@@ -289,6 +278,21 @@ or becomes its own OPEN item with a reproduction.
 **Why:** `multidict` 7 (aiohttp caps <7), `pyee` 14 (playwright caps <14) and
 `playwright` 1.63 (camoufox 0.5.5 caps <1.61) are unreachable, not declined.
 **Done when:** each parent widens its cap and the major moves in its own commit.
+
+#### P9.7 — A lease on a panel with no live widget gives back the firmware channel
+**Status:** BLOCKED (on a panel: what 0x46 reports after a pushed image is unmeasured)
+**Why:** a screen lease (`divoomd/src/lease.rs`) hands a panel back to its
+live widget by repainting the widget's newest frame. A panel with no widget
+is left showing the holder's last frame, and `lease_release` says so
+(`restored: "none"`). Reading the channel with 0x46 at acquire and selecting
+it again at the end is the obvious fix, but nobody has watched what 0x46
+reports after a pushed image, or whether re-selecting that channel shows the
+image again or the channel's own gallery. Restoring a guess would put up a
+screen the user never chose.
+**Done when:** a `DIVOOMD_BLE_DEBUG` trace on a panel shows what 0x46 reads
+after a clock, a channel and a pushed image, and the lease restores each case
+it can restore faithfully, saying `restored: "channel"`, with the rest left
+as `"none"` by measurement rather than assumption.
 
 ---
 

@@ -54,6 +54,7 @@ pub mod image_encode;
 pub mod image_fit;
 pub mod image_proc;
 pub mod lan;
+pub mod lease;
 pub mod live_jobs;
 #[cfg(target_os = "macos")]
 pub mod macos_notifications;

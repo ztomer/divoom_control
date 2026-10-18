@@ -380,12 +380,12 @@ async fn an_unreachable_daemon_yields_nulls_rather_than_a_false_reading() {
 }
 
 #[test]
-fn catalog_has_all_twenty_one_tools() {
+fn catalog_has_all_twenty_four_tools() {
     let c = catalog();
     let arr = c.as_array().expect("catalog is an array");
-    // 14 through P4.4, plus P4.5's seven (show_text, three live-job tools,
-    // scoreboard, timer, countdown).
-    assert_eq!(arr.len(), 21, "21 MCP tools");
+    // 14 through P4.4, P4.5's seven (show_text, three live-job tools,
+    // scoreboard, timer, countdown), and P4.6's three lease tools.
+    assert_eq!(arr.len(), 24, "24 MCP tools");
     for t in arr {
         assert!(t.get("name").and_then(|v| v.as_str()).is_some());
         assert!(t.get("inputSchema").is_some());
@@ -422,9 +422,9 @@ fn the_catalog_is_a_strict_superset_of_the_python_one_it_replaces() {
     for tool in PYTHON_THIRTEEN {
         assert!(names.contains(tool), "the native catalog lost {tool}");
     }
-    // list_screens, then P4.5's seven: each addition is argued for in the
-    // changelog, never an accident of a refactor.
-    assert_eq!(names.len(), 21, "and exactly eight tools beyond them");
+    // list_screens, P4.5's seven, P4.6's three: each addition is argued for
+    // in the changelog, never an accident of a refactor.
+    assert_eq!(names.len(), 24, "and exactly eleven tools beyond them");
 }
 
 #[test]

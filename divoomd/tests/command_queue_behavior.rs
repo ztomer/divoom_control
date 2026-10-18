@@ -112,3 +112,47 @@ async fn item_timeout_rejects_waiting_item() {
         "an item waiting past item_timeout must be rejected"
     );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_leased_hold_is_not_reaped_when_idle() {
+    // P4.6: a screen lease draws once and then holds the screen for its TTL;
+    // the G3 idle auto-release (above) must not end it after 150 ms of quiet,
+    // even with another caller's item waiting -- which is exactly when G3
+    // reaps. Only the lease's own end, `release`, frees it.
+    let q = CommandQueue::new(Some(Duration::from_millis(150)), None);
+    q.hold("L").unwrap();
+    assert!(matches!(q.hold("M"), Err(AcquireError::HeldByAnother)));
+    assert!(matches!(
+        q.acquire_now("M"),
+        Err(AcquireError::HeldByAnother)
+    ));
+    let l = log();
+    let l2 = l.clone();
+    let mut waiting = q.submit(None, async move {
+        l2.lock().unwrap().push("free".into());
+    });
+    // The holder's own exclusive_start on it does not re-arm the reaper.
+    q.acquire_now("L").unwrap();
+    let early = tokio::time::timeout(Duration::from_millis(450), &mut waiting).await;
+    assert!(early.is_err(), "the waiting item ran: the lease was reaped");
+    assert_eq!(
+        q.owner().as_deref(),
+        Some("L"),
+        "a lease outlives the idle timeout"
+    );
+    q.release("L");
+    let ran = tokio::time::timeout(Duration::from_secs(2), waiting).await;
+    assert!(
+        ran.is_ok_and(|r| r.is_ok()),
+        "released, the waiting item runs"
+    );
+    assert_eq!(*l.lock().unwrap(), vec!["free"]);
+    // ...and a plain exclusive owner after it IS reaped again: release
+    // resets the hold.
+    q.acquire_now("A").unwrap();
+    let after = q.submit(None, async {});
+    assert!(tokio::time::timeout(Duration::from_secs(2), after)
+        .await
+        .is_ok());
+    assert_eq!(q.owner(), None, "release resets the hold");
+}

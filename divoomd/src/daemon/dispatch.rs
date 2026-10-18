@@ -20,6 +20,12 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
         "exclusive_start" => exclusive_start(daemon, req).await,
         "exclusive_end" => exclusive_end(daemon, req).await,
 
+        // Screen leases (P4.6): exclusive mode with a mandatory TTL, and the
+        // screen handed back to the live job when it ends.
+        "lease_acquire" => daemon.cmd_lease_acquire(&req).await,
+        "lease_renew" => daemon.cmd_lease_renew(&req).await,
+        "lease_release" => daemon.cmd_lease_release(&req).await,
+
         // Graceful stop (Python-daemon parity): signal the main loop, which
         // unlinks the socket and exits after letting this reply flush.
         "shutdown" => shutdown(daemon),

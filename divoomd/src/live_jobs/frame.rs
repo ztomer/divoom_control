@@ -8,6 +8,7 @@ use serde_json::json;
 
 use super::push_rgb_to_device;
 use crate::daemon::Daemon;
+use crate::device::lease::SavedFrame;
 
 /// Send one live-widget frame to `mac`, or drop it.
 ///
@@ -46,6 +47,21 @@ pub(super) async fn push_live_frame(
     let Some(link) = device.link().await else {
         return false;
     };
+    if !alive.load(Ordering::SeqCst) {
+        return false;
+    }
+    // Kept whether or not it lands: when a screen lease ends, this is what
+    // the panel goes back to (P4.6). While the lease holds, the job keeps
+    // rendering and its frames stop here, so the queue never sees them.
+    device.save_job_frame(SavedFrame {
+        rgb: rgb.clone(),
+        w,
+        h,
+        time_ms,
+    });
+    if device.lease().is_some() {
+        return false;
+    }
     let alive = alive.clone();
     let link_in = link.clone();
     let preview = frame_preview_data_url(&rgb, w, h);

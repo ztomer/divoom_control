@@ -189,12 +189,29 @@ impl Daemon {
             Ok(l) => l,
             Err(e) => return e,
         };
-        self.preempt_conflicting_live_jobs(req, &target_id).await;
+        // A leased screen (P4.6): its holder's calls PAUSE the live job
+        // (its frames are held back, not the job stopped), and everyone
+        // else is told who holds it and for how long.
+        let leased = match device.lease() {
+            Some(l) if token == Some(l.token.as_str()) => true,
+            Some(l) => return crate::lease::refused(&l),
+            None => false,
+        };
+        if !leased {
+            self.preempt_conflicting_live_jobs(req, &target_id).await;
+        }
+        // Frame pushes conflate: each claims a number, and one whose turn
+        // comes after a newer push was claimed is skipped -- on a slow link
+        // the newest frame is drawn, not a backlog of stale ones.
+        let frame = crate::lease::is_frame_push(req).then(|| device.next_frame_gen());
 
         let _permit = match link.queue.acquire(token.map(str::to_string)).await {
             Ok(p) => p,
             Err(e) => return err_reply(&e.to_string()),
         };
+        if frame.is_some_and(|g| !device.is_newest_frame(g)) {
+            return json!({ "success": true, "superseded": true });
+        }
         let dev = link.transport.clone();
 
         // Honor a caller-requested timeout (clamped so a huge value can't wedge the

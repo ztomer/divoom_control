@@ -86,7 +86,7 @@ async fn now_playing_track_async() -> Result<Option<nowplaying::Track>, String> 
 /// No `daemon` parameter any more: it existed only to reach the encoder, and
 /// the encoder is a free function now. A parameter that exists to reach a
 /// singleton is a dependency the caller cannot see.
-pub(super) async fn push_rgb_to_device(
+pub(crate) async fn push_rgb_to_device(
     dev: &DeviceTransport,
     rgb: &[u8],
     w: i32,

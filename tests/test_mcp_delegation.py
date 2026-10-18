@@ -31,9 +31,10 @@ from tests.support.daemon_binary import require_divoomd
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# The 21 tools the native server ships: the 13 the Python catalog shipped,
-# `list_screens`, and P4.5's seven (text, live jobs, the built-in tools).
-# Written out in full rather than counted, because "21" alone would still pass
+# The 24 tools the native server ships: the 13 the Python catalog shipped,
+# `list_screens`, P4.5's seven (text, live jobs, the built-in tools) and
+# P4.6's three screen-lease tools.
+# Written out in full rather than counted, because "24" alone would still pass
 # if one tool were swapped for another; the superset assertion in
 # divoomd/src/mcp_tools.rs checks the same thing from the other side.
 NATIVE_TOOLS = {
@@ -58,6 +59,9 @@ NATIVE_TOOLS = {
     "set_scoreboard",
     "set_timer",
     "set_countdown",
+    "lease_acquire",
+    "lease_renew",
+    "lease_release",
 }
 
 HANDSHAKE = (

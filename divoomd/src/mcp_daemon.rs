@@ -43,6 +43,36 @@ async fn connect(target: &DaemonTarget) -> Result<(DaemonRead, DaemonWrite), Str
     }
 }
 
+tokio::task_local! {
+    /// The screen lease the current tool call carries (P4.6), if any.
+    static LEASE: Option<String>;
+}
+
+/// Run one tool call with `lease` as the token on every `device_call` it
+/// makes. A task-local rather than a parameter threaded through every tool:
+/// the lease is a property of the CALL, and a tool that forgot to thread it
+/// would be refused by its own lease -- the class this rules out.
+pub(crate) async fn with_lease<F: std::future::Future>(lease: Option<String>, f: F) -> F::Output {
+    LEASE.scope(lease, f).await
+}
+
+/// The one `device_call` request every tool sends: method, arguments, the
+/// panel, and the current call's lease token.
+fn device_call(method: &str, args: Value, kwargs: Option<Value>, mac: Option<&str>) -> Value {
+    let mut payload = json!({ "method": method });
+    payload["args"] = args;
+    if let Some(k) = kwargs {
+        payload["kwargs"] = k;
+    }
+    if let Some(m) = mac {
+        payload["mac"] = json!(m);
+    }
+    if let Some(t) = LEASE.try_with(Clone::clone).ok().flatten() {
+        payload["token"] = json!(t);
+    }
+    payload
+}
+
 /// `device_call` with positional args; errors if the daemon reports failure.
 pub(crate) async fn dc(
     target: &DaemonTarget,
@@ -50,26 +80,24 @@ pub(crate) async fn dc(
     args: Value,
     mac: Option<&str>,
 ) -> Result<Value, String> {
-    let mut payload = json!({ "method": method, "args": args });
-    if let Some(m) = mac {
-        payload["mac"] = json!(m);
-    }
-    let reply = crate::mcp_daemon::cmd(target, "device_call", payload).await?;
-    check(reply)
+    check(cmd(target, "device_call", device_call(method, args, None, mac)).await?)
 }
 
+/// `device_call` with keyword args.
 pub(crate) async fn dc_kw(
     target: &DaemonTarget,
     method: &str,
     kwargs: Value,
     mac: Option<&str>,
 ) -> Result<Value, String> {
-    let mut payload = json!({ "method": method, "args": [], "kwargs": kwargs });
-    if let Some(m) = mac {
-        payload["mac"] = json!(m);
-    }
-    let reply = crate::mcp_daemon::cmd(target, "device_call", payload).await?;
-    check(reply)
+    check(
+        cmd(
+            target,
+            "device_call",
+            device_call(method, json!([]), Some(kwargs), mac),
+        )
+        .await?,
+    )
 }
 
 /// `device_call` returning the `result` value (None on failure) — for read tools.
@@ -79,11 +107,7 @@ pub(crate) async fn dc_result(
     args: Value,
     mac: Option<&str>,
 ) -> Value {
-    let mut payload = json!({ "method": method, "args": args });
-    if let Some(m) = mac {
-        payload["mac"] = json!(m);
-    }
-    match crate::mcp_daemon::cmd(target, "device_call", payload).await {
+    match cmd(target, "device_call", device_call(method, args, None, mac)).await {
         Ok(v) if v.get("success").and_then(serde_json::Value::as_bool) == Some(true) => {
             v.get("result").cloned().unwrap_or(Value::Null)
         }

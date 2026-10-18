@@ -92,6 +92,16 @@ pub(crate) fn tool(name: &str, desc: &str, schema: &Value) -> Value {
                 }),
             );
         }
+        // Every tool that can reach a panel takes the caller's lease; one
+        // seam, so no tool can be the one that forgot it.
+        if !matches!(name, "list_screens" | "lease_acquire") {
+            props.entry("lease").or_insert_with(|| {
+                json!({
+                    "type": "string",
+                    "description": "The token from lease_acquire, while you hold the panel's lease."
+                })
+            });
+        }
     }
     json!({ "name": name, "description": desc, "inputSchema": s })
 }
@@ -108,6 +118,15 @@ pub(crate) fn tool(name: &str, desc: &str, schema: &Value) -> Value {
 ///
 /// If a mutex guarding shared tool state is poisoned.
 pub async fn call_tool(name: &str, a: &Value, target: &DaemonTarget) -> Result<Value, String> {
+    let lease = match a.get("lease") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(t)) => Some(t.clone()),
+        Some(_) => return Err("lease must be the token lease_acquire returned".into()),
+    };
+    crate::mcp_daemon::with_lease(lease, dispatch(name, a, target)).await
+}
+
+async fn dispatch(name: &str, a: &Value, target: &DaemonTarget) -> Result<Value, String> {
     let mac = a.get("mac").and_then(Value::as_str);
 
     match name {

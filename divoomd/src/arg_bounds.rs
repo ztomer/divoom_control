@@ -100,3 +100,6 @@ pub const BLUE_SCORE: Bound = Bound::new("blue_score", 0, 999);
 pub const COUNTDOWN_MINUTES: Bound = Bound::new("minutes", 0, 99);
 /// Countdown seconds.
 pub const COUNTDOWN_SECONDS: Bound = Bound::new("seconds", 0, 59);
+/// A screen lease's time to live, ms: mandatory, at least a second, at most
+/// ten minutes -- a crashed holder gives the screen back within that.
+pub const LEASE_TTL_MS: Bound = Bound::new("ttl_ms", 1_000, 600_000);

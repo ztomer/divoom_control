@@ -39,6 +39,11 @@ pub enum ErrorCode {
     NotificationDbUnreadable,
     /// The feature does not exist on this platform.
     Unsupported,
+    /// Another holder leases this panel's screen (P4.6); the reply says who
+    /// and for how long.
+    ScreenLeased,
+    /// The lease token is not (or no longer) the panel's lease.
+    LeaseExpired,
 }
 
 impl ErrorCode {
@@ -54,6 +59,8 @@ impl ErrorCode {
         Self::NotificationDbMissing,
         Self::NotificationDbUnreadable,
         Self::Unsupported,
+        Self::ScreenLeased,
+        Self::LeaseExpired,
     ];
 
     /// The wire name.
@@ -70,6 +77,8 @@ impl ErrorCode {
             Self::NotificationDbMissing => "notification_db_missing",
             Self::NotificationDbUnreadable => "notification_db_unreadable",
             Self::Unsupported => "unsupported",
+            Self::ScreenLeased => "screen_leased",
+            Self::LeaseExpired => "lease_expired",
         }
     }
 }
