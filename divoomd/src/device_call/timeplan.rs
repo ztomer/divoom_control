@@ -1,5 +1,8 @@
 use super::CallCtx;
-use crate::protocol::err_reply;
+use crate::protocol::{
+    err_code,
+    ErrorCode::{DeviceFailed, UnknownCommand},
+};
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
@@ -7,7 +10,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     match method {
         "timeplan.set_time_manage_info" | "set_time_manage_info" => set_time_manage_info(ctx).await,
         "timeplan.set_time_manage_ctrl" | "set_time_manage_ctrl" => set_time_manage_ctrl(ctx).await,
-        _ => err_reply("unimplemented timeplan command"),
+        _ => err_code(UnknownCommand, "unimplemented timeplan command"),
     }
 }
 async fn set_time_manage_info(ctx: CallCtx<'_>) -> Value {
@@ -80,7 +83,7 @@ async fn set_time_manage_info(ctx: CallCtx<'_>) -> Value {
 
     match dev.send_command(0x56, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_time_manage_info failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_time_manage_info failed: {e}")),
     }
 }
 
@@ -109,6 +112,6 @@ async fn set_time_manage_ctrl(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0x57, &[status, index], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_time_manage_ctrl failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_time_manage_ctrl failed: {e}")),
     }
 }

@@ -12,7 +12,10 @@ use serde_json::{json, Map, Value};
 
 use super::CallCtx;
 use crate::daemon::DeviceTransport;
-use crate::protocol::err_reply;
+use crate::protocol::{
+    err_code,
+    ErrorCode::{BadRequest, DeviceFailed, UnknownCommand},
+};
 
 fn kw_i64(kw: Option<&Map<String, Value>>, name: &str) -> Option<i64> {
     kw.and_then(|m| m.get(name))
@@ -34,7 +37,7 @@ fn kw_bytes(kw: Option<&Map<String, Value>>, name: &str) -> Vec<u8> {
 async fn send(dev: &DeviceTransport, cmd: u8, payload: &[u8], label: &str) -> Value {
     match dev.send_command(cmd, payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("{label} failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("{label} failed: {e}")),
     }
 }
 
@@ -89,7 +92,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         "animation.app_get_user_define_info" | "app_get_user_define_info" => {
             app_get_user_define_info(ctx).await
         }
-        _ => err_reply("unimplemented animation command"),
+        _ => err_code(UnknownCommand, "unimplemented animation command"),
     }
 }
 async fn set_gif_speed(ctx: CallCtx<'_>) -> Value {
@@ -147,7 +150,12 @@ async fn app_new_send_gif_cmd(ctx: CallCtx<'_>) -> Value {
             p.extend_from_slice(&file_data());
         }
         2 => {}
-        _ => return err_reply(&format!("app_new_send_gif_cmd: unknown control word {cw}")),
+        _ => {
+            return err_code(
+                BadRequest,
+                &format!("app_new_send_gif_cmd: unknown control word {cw}"),
+            )
+        }
     }
     send(dev, 0x8b, &p, "app_new_send_gif_cmd").await
 }
@@ -178,7 +186,12 @@ async fn set_user_gif(ctx: CallCtx<'_>) -> Value {
                     // LED editor: [type, speed, text_length, *data[3:]]
                     let (speed, tl) = match (kw_i64(kw, "speed"), kw_i64(kw, "text_length")) {
                         (Some(s), Some(t)) if data.len() >= 3 => (s, t),
-                        _ => return err_reply("set_user_gif: LED editor needs speed+text_length"),
+                        _ => {
+                            return err_code(
+                                BadRequest,
+                                "set_user_gif: LED editor needs speed+text_length",
+                            )
+                        }
                     };
                     p.push(speed.byte());
                     p.push(tl.byte());
@@ -191,7 +204,10 @@ async fn set_user_gif(ctx: CallCtx<'_>) -> Value {
                         kw_i64(kw, "speed"),
                         kw_i64(kw, "len_val"),
                     ) else {
-                        return err_reply("set_user_gif: scroll needs mode+speed+len_val");
+                        return err_code(
+                            BadRequest,
+                            "set_user_gif: scroll needs mode+speed+len_val",
+                        );
                     };
                     p.push(mode.byte());
                     p.extend_from_slice(&le16(speed));
@@ -204,12 +220,17 @@ async fn set_user_gif(ctx: CallCtx<'_>) -> Value {
             // TRANSMIT_DATA: [len(data) LE16, *data]
             let data = kw_bytes(kw, "data");
             if data.len() < 2 {
-                return err_reply("set_user_gif: transmit needs >=2 data bytes");
+                return err_code(BadRequest, "set_user_gif: transmit needs >=2 data bytes");
             }
             p.extend_from_slice(&le16(i64::try_from(data.len()).unwrap_or(i64::MAX)));
             p.extend_from_slice(&data);
         }
-        _ => return err_reply(&format!("set_user_gif: unknown control word {cw}")),
+        _ => {
+            return err_code(
+                BadRequest,
+                &format!("set_user_gif: unknown control word {cw}"),
+            )
+        }
     }
     send(dev, 0xb1, &p, "set_user_gif").await
 }
@@ -241,7 +262,12 @@ async fn app_new_user_define(ctx: CallCtx<'_>) -> Value {
             p.extend_from_slice(&file_data());
         }
         2 => {}
-        _ => return err_reply(&format!("app_new_user_define: unknown control word {cw}")),
+        _ => {
+            return err_code(
+                BadRequest,
+                &format!("app_new_user_define: unknown control word {cw}"),
+            )
+        }
     }
     send(dev, 0x8c, &p, "app_new_user_define").await
 }
@@ -280,7 +306,12 @@ async fn app_big64_user_define(ctx: CallCtx<'_>) -> Value {
             p.push(kw_i64(kw, "index").unwrap_or(0).byte());
         }
         5 => p.push(kw_i64(kw, "index").unwrap_or(0).byte()), // DELETE_ALL_BY_INDEX
-        _ => return err_reply(&format!("app_big64_user_define: unknown control word {cw}")),
+        _ => {
+            return err_code(
+                BadRequest,
+                &format!("app_big64_user_define: unknown control word {cw}"),
+            )
+        }
     }
     send(dev, 0x8d, &p, "app_big64_user_define").await
 }

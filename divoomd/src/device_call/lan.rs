@@ -3,6 +3,10 @@
 //! `handle_device_call` when `method.starts_with("lan.")` and the device is
 //! LAN-connected.
 
+use crate::protocol::{
+    err_code,
+    ErrorCode::{DeviceFailed, UnknownCommand},
+};
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
@@ -118,12 +122,12 @@ pub(super) async fn handle_lan_call(
         "lan.send_danmaku_text" => send_danmaku_text(lan, kw).await,
         "lan.danmaku_random_face" => lan.post("Danmaku/RandomFace", None).await,
 
-        _ => return crate::protocol::err_reply(&format!("unknown LAN method: {method}")),
+        _ => return err_code(UnknownCommand, &format!("unknown LAN method: {method}")),
     };
 
     match res {
         Ok(val) => json!({ "success": true, "result": val }),
-        Err(e) => crate::protocol::err_reply(&e.to_string()),
+        Err(e) => err_code(DeviceFailed, &e.to_string()),
     }
 }
 async fn set_channel(

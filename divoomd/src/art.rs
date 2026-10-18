@@ -16,6 +16,7 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 
 use crate::daemon::Daemon;
+use crate::protocol::{err_code, err_with, ok_reply, ErrorCode};
 
 // R67/C6: HotProgress moved to its own module when art.rs crossed the 500-line
 // cap. Re-exported so `crate::art::HotProgress` keeps working for callers.
@@ -182,21 +183,29 @@ pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
     #[cfg(not(feature = "ble"))]
     let _ = page; // no transport in this build; consumed here
 
-    let target_mac = {
-        let explicit = args.get("mac").and_then(|v| v.as_str()).map(String::from);
-        if explicit.is_some() {
-            explicit
-        } else {
-            daemon
-                .fleet
-                .resolve_target(None)
-                .await
-                .ok()
-                .map(|d| d.id.clone())
-        }
+    // The panel must be one that can take a page BEFORE anything is stopped
+    // or downloaded, so a refusal has no effect (P5.10). It used to stop the
+    // panel's live job and fetch every file from the cloud, and only then
+    // notice that a LAN or mock panel cannot take the page.
+    let target = args
+        .get("mac")
+        .and_then(Value::as_str)
+        .or_else(|| args.get("target_mac").and_then(Value::as_str));
+    let device = match daemon.fleet.resolve_target(target).await {
+        Ok(d) => d,
+        Err(e) => return e.reply(),
     };
-    if let Some(ref m) = target_mac {
-        daemon.live_jobs.stop_all_for_device(&daemon, m).await;
+    let Some(link) = device.link().await else {
+        return err_code(
+            ErrorCode::DeviceDisconnected,
+            &format!("device '{}' not connected", device.id),
+        );
+    };
+    if !takes_custom_art(&link.transport) {
+        return err_code(
+            ErrorCode::Unsupported,
+            "custom_art_push requires BLE/SPP transport",
+        );
     }
 
     // Build slot_map: {slot_index -> file_id}
@@ -228,50 +237,72 @@ pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
         return crate::command_args::missing("custom_art_push", "'slots' or 'file_ids'");
     }
 
+    daemon
+        .live_jobs
+        .stop_all_for_device(&daemon, &device.id)
+        .await;
+
     // Download + encode all files
     let mut frames: Vec<Vec<u8>> = vec![Vec::new(); SLOTS_PER_PAGE];
     for (idx, fid) in &slot_map {
-        let encoded = download_and_encode_art(fid.clone()).await;
-        match encoded {
+        match download_and_encode_art(fid.clone()).await {
             Some(e) => frames[*idx] = e,
             None => {
-                return json!({"success": false, "error": format!("could not fetch/decode {fid}")})
+                return err_code(
+                    ErrorCode::UpstreamFailed,
+                    &format!("could not fetch/decode {fid}"),
+                )
             }
         }
     }
 
-    // Push to device over BLE
-    #[cfg(feature = "ble")]
-    {
-        let target_mac = args
-            .get("mac")
-            .and_then(Value::as_str)
-            .or_else(|| args.get("target_mac").and_then(Value::as_str));
-        // The panel's one queue: a multi-packet page transfer must not be
-        // interleaved with a live-widget frame or a GUI device_call, and
-        // holding the permit is what guarantees that (2026-09-12).
-        let link = match daemon.resolve_target_link(target_mac).await {
-            Ok(l) => l,
-            Err(e) => return e,
-        };
-        let _permit = match link.queue.acquire(None).await {
-            Ok(p) => p,
-            Err(e) => return crate::protocol::err_reply(&e.to_string()),
-        };
-        let dev = link.transport.clone();
-        if matches!(
-            &*dev,
-            crate::daemon::DeviceTransport::Ble(_) | crate::daemon::DeviceTransport::Spp(_)
-        ) {
-            let ok = push_custom_art_page(&dev, page, &frames).await;
-            return json!({
-                "success": ok,
-                "files_pushed": slot_map.len(),
-                "device_confirmed": false,  // ACK != device-confirmed (HW-verified)
-            });
-        }
+    // The panel's one queue: a multi-packet page transfer must not be
+    // interleaved with a live-widget frame or a GUI device_call, and
+    // holding the permit is what guarantees that (2026-09-12).
+    let _permit = match link.queue.acquire(None).await {
+        Ok(p) => p,
+        Err(e) => return e.reply(),
+    };
+    let detail = json!({
+        "files_pushed": slot_map.len(),
+        "device_confirmed": false,  // ACK != device-confirmed (HW-verified)
+    });
+    if push_page(&link.transport, page, &frames).await {
+        ok_reply(detail)
+    } else {
+        err_with(
+            ErrorCode::DeviceFailed,
+            "the panel did not take the custom art page",
+            detail,
+        )
     }
-    json!({"success": false, "error": "custom_art_push requires BLE/SPP transport"})
+}
+
+/// Whether `dev` can take a custom-art page: only a Bluetooth link can, and
+/// only in a build with the BLE push path.
+const fn takes_custom_art(dev: &crate::daemon::DeviceTransport) -> bool {
+    match dev {
+        #[cfg(feature = "ble")]
+        crate::daemon::DeviceTransport::Ble(_) => true,
+        crate::daemon::DeviceTransport::Spp(_) => cfg!(feature = "ble"),
+        _ => false,
+    }
+}
+
+#[cfg(feature = "ble")]
+async fn push_page(dev: &crate::daemon::DeviceTransport, page: u8, frames: &[Vec<u8>]) -> bool {
+    push_custom_art_page(dev, page, frames).await
+}
+
+/// Without `ble` no transport passes [`takes_custom_art`]'s check, so this is
+/// never reached; it keeps one body for both builds.
+#[cfg(not(feature = "ble"))]
+fn push_page(
+    _dev: &crate::daemon::DeviceTransport,
+    _page: u8,
+    _frames: &[Vec<u8>],
+) -> impl std::future::Future<Output = bool> + Send {
+    std::future::ready(false)
 }
 
 /// Handle `custom_art_query_page` command.
@@ -292,7 +323,7 @@ pub async fn cmd_custom_art_query_page(daemon: Arc<Daemon>, args: &Value) -> Val
     };
     let _permit = match link.queue.acquire(None).await {
         Ok(p) => p,
-        Err(e) => return crate::protocol::err_reply(&e.to_string()),
+        Err(e) => return e.reply(),
     };
     let dev = link.transport.clone();
     if matches!(
@@ -323,14 +354,24 @@ pub async fn cmd_custom_art_query_page(daemon: Arc<Daemon>, args: &Value) -> Val
                     }
                     return json!({"success": true, "ids": ids});
                 }
-                return json!({"success": false, "error": "unexpected response type"});
+                return err_code(
+                    ErrorCode::DeviceFailed,
+                    &format!("unexpected response type {rtype}"),
+                );
             }
             _ => {
-                return json!({"success": false, "ids": [], "error": "no response (device timed out)"})
+                return err_with(
+                    ErrorCode::DeviceFailed,
+                    "no response (device timed out)",
+                    json!({"ids": []}),
+                )
             }
         }
     }
-    json!({"success": false, "error": "custom_art_query_page requires BLE transport"})
+    err_code(
+        ErrorCode::Unsupported,
+        "custom_art_query_page requires BLE transport",
+    )
 }
 
 /// Without `ble` there is no transport to query: the stub keeps the dispatch
@@ -340,9 +381,10 @@ pub fn cmd_custom_art_query_page(
     _daemon: Arc<Daemon>,
     _args: &Value,
 ) -> impl std::future::Future<Output = Value> + Send {
-    std::future::ready(
-        json!({"success": false, "error": "custom_art_query_page requires BLE transport"}),
-    )
+    std::future::ready(err_code(
+        ErrorCode::Unsupported,
+        "custom_art_query_page requires BLE transport",
+    ))
 }
 
 /// Handle `hot_update` command — starts a background task, returns immediately.
@@ -365,7 +407,7 @@ pub fn cmd_hot_update(daemon: Arc<Daemon>, args: &Value, progress: Arc<HotProgre
         .to_string();
 
     if !progress.try_begin() {
-        return json!({"success": false, "error": "hot update already in progress"});
+        return err_code(ErrorCode::Busy, "hot update already in progress");
     }
 
     let daemon_arc = daemon;
@@ -403,11 +445,7 @@ pub fn cmd_hot_update(daemon: Arc<Daemon>, args: &Value, progress: Arc<HotProgre
 /// offender.
 #[must_use]
 pub fn cmd_hot_update_progress(progress: &HotProgress) -> Value {
-    let mut out = progress.get();
-    if let Some(obj) = out.as_object_mut() {
-        obj.insert("success".to_string(), json!(true));
-    }
-    out
+    ok_reply(progress.get())
 }
 
 // ── hot update session (delegated to art_hot.rs) ─────────────────────────

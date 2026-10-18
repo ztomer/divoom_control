@@ -17,7 +17,7 @@ use crate::ble::{self, BleTransport, Discovered};
 #[cfg(feature = "ble")]
 use crate::ble_fault::{BleError, BleFault};
 use crate::daemon::{Daemon, DeviceTransport};
-use crate::protocol::{err_reply, Request};
+use crate::protocol::{err_code, ErrorCode, Request};
 
 /// Build a full status event so subscribers (the GUI/web UI) can update
 /// connection state directly from the push — `connected`, `mac`/`lan_ip`, and the
@@ -179,7 +179,7 @@ pub(crate) async fn cmd_scan(daemon: &Daemon, req: &Request) -> Value {
         .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
         .is_err()
     {
-        return err_reply("scan already in progress");
+        return err_code(ErrorCode::Busy, "scan already in progress");
     }
     let _guard = ScanGuard(&daemon.scanning);
 
@@ -226,7 +226,7 @@ pub(crate) async fn cmd_scan(daemon: &Daemon, req: &Request) -> Value {
             *daemon.last_scan.lock().await = Some((Instant::now(), devices.clone()));
             json!({"success": true, "devices": devices})
         }
-        Err(e) => err_reply(&format!("scan failed: {e}")),
+        Err(e) => err_code(ErrorCode::DeviceFailed, &format!("scan failed: {e}")),
     }
 }
 
@@ -239,6 +239,28 @@ async fn adopt(daemon: &Daemon, id: &str, id_key: &str, transport: DeviceTranspo
     let _ = daemon.tx.send(status_payload(true, Some(id), None));
     let _ = daemon.tx.send(owned_devices_payload(daemon).await);
     json!({"success":true,"connected":true,"connection_state":"connected", id_key: id})
+}
+
+/// Link a mock panel (no radio): `mac` (default `MOCK_MAC`) and the `name`
+/// it advertises -- what a real panel's BLE name tells the daemon about its
+/// model (P3.1), settable so a test can stand in for each model class.
+async fn connect_mock(daemon: &Daemon, req: &Request) -> Value {
+    let mock_transport = crate::mock_transport::MockTransport::new();
+    if let Some(name) = req.args.get("name").and_then(serde_json::Value::as_str) {
+        mock_transport.set_cached_device_name(name.to_string());
+    }
+    let mock_mac = req
+        .args
+        .get("mac")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("MOCK_MAC");
+    adopt(
+        daemon,
+        mock_mac,
+        "mac",
+        DeviceTransport::Mock(mock_transport),
+    )
+    .await
 }
 
 /// Handle `connect_device` command (BLE or LAN).
@@ -257,7 +279,7 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
             )
             .is_err()
         {
-            return err_reply("connect already in progress");
+            return err_code(ErrorCode::Busy, "connect already in progress");
         }
     }
     #[cfg(feature = "ble")]
@@ -268,25 +290,7 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
         .and_then(serde_json::Value::as_bool)
         .unwrap_or(false);
     if mock {
-        let mock_transport = crate::mock_transport::MockTransport::new();
-        // The name the mock panel advertises: what a real panel's BLE name
-        // tells the daemon about its model (P3.1), settable so a test can
-        // stand in for each model class without the hardware.
-        if let Some(name) = req.args.get("name").and_then(serde_json::Value::as_str) {
-            mock_transport.set_cached_device_name(name.to_string());
-        }
-        let mock_mac = req
-            .args
-            .get("mac")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or("MOCK_MAC");
-        return adopt(
-            daemon,
-            mock_mac,
-            "mac",
-            DeviceTransport::Mock(mock_transport),
-        )
-        .await;
+        return connect_mock(daemon, req).await;
     }
 
     let lan_ip = req.args.get("lan_ip").and_then(|v| v.as_str());
@@ -298,7 +302,10 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
             .unwrap_or(0);
         let lan = crate::lan::LanTransport::new(ip, token);
         if !lan.probe().await {
-            return err_reply(&format!("LAN device at {ip} unreachable"));
+            return err_code(
+                ErrorCode::DeviceFailed,
+                &format!("LAN device at {ip} unreachable"),
+            );
         }
         let mut reply = adopt(
             daemon,
@@ -327,7 +334,9 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
     if !use_ios_le {
         match crate::spp::SppTransport::connect(&id, None, None).await {
             Ok(t) => return adopt(daemon, &id, "mac", DeviceTransport::Spp(t)).await,
-            Err(e) => return err_reply(&format!("connect SPP failed: {e}")),
+            Err(e) => {
+                return err_code(ErrorCode::DeviceFailed, &format!("connect SPP failed: {e}"))
+            }
         }
     }
 
@@ -340,7 +349,7 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
         }
         match result {
             Ok(t) => adopt(daemon, &id, "mac", DeviceTransport::Ble(t)).await,
-            Err(e) => err_reply(&format!("connect failed: {e}")),
+            Err(e) => err_code(ErrorCode::DeviceFailed, &format!("connect failed: {e}")),
         }
     }
     #[cfg(not(feature = "ble"))]

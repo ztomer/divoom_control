@@ -3,7 +3,7 @@
 //! the file-length cap; the arms in `system::handle` name these directly.
 
 use crate::device_call::CallCtx;
-use crate::protocol::err_reply;
+use crate::protocol::{err_code, ErrorCode::DeviceFailed};
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
@@ -114,7 +114,7 @@ pub(super) async fn send_net_temp(ctx: CallCtx<'_>) -> Value {
 
     match dev.send_command(0x5d, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("send_net_temp failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("send_net_temp failed: {e}")),
     }
 }
 
@@ -150,7 +150,7 @@ pub(super) async fn send_net_temp_disp(ctx: CallCtx<'_>) -> Value {
 
     match dev.send_command(0x5e, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("send_net_temp_disp failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("send_net_temp_disp failed: {e}")),
     }
 }
 
@@ -203,7 +203,7 @@ pub(super) async fn send_current_temp(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0x5f, &[temp, weather], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("send_current_temp failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("send_current_temp failed: {e}")),
     }
 }
 
@@ -223,6 +223,6 @@ pub(super) async fn set_temp_type(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0x2b, &[temp_type], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_temp_type failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_temp_type failed: {e}")),
     }
 }

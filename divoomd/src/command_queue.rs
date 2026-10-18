@@ -40,6 +40,24 @@ pub enum AcquireError {
     Stopped,
 }
 
+impl AcquireError {
+    /// The class a client branches on (P5.10): another session holds the
+    /// panel (retry when it lets go), or its link was torn down.
+    #[must_use]
+    pub const fn code(&self) -> crate::protocol::ErrorCode {
+        match self {
+            Self::HeldByAnother => crate::protocol::ErrorCode::Busy,
+            Self::Stopped => crate::protocol::ErrorCode::DeviceDisconnected,
+        }
+    }
+
+    /// The failure reply this refusal becomes.
+    #[must_use]
+    pub fn reply(&self) -> serde_json::Value {
+        crate::protocol::err_code(self.code(), &self.to_string())
+    }
+}
+
 impl std::fmt::Display for AcquireError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

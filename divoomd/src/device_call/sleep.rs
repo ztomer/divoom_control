@@ -1,7 +1,10 @@
 use super::rgb_triple;
 use super::CallCtx;
 use crate::device_call::pos_i64;
-use crate::protocol::err_reply;
+use crate::protocol::{
+    err_code,
+    ErrorCode::{DeviceFailed, UnknownCommand},
+};
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
@@ -18,7 +21,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         }
         "sleep.set_sleep_light" | "set_sleep_light" => set_sleep_light(ctx).await,
         "sleep.set_sleep_scene" | "set_sleep_scene" => set_sleep_scene(ctx).await,
-        _ => err_reply("unimplemented sleep command"),
+        _ => err_code(UnknownCommand, "unimplemented sleep command"),
     }
 }
 async fn show_sleep(ctx: CallCtx<'_>) -> Value {
@@ -58,7 +61,7 @@ async fn show_sleep(ctx: CallCtx<'_>) -> Value {
 
     match dev.send_command(0x40, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("show_sleep failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("show_sleep failed: {e}")),
     }
 }
 
@@ -118,7 +121,7 @@ async fn set_sleep_scene_listen(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0xa3, &[on_off, mode, volume], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_sleep_scene_listen failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_sleep_scene_listen failed: {e}")),
     }
 }
 
@@ -138,7 +141,7 @@ async fn set_scene_volume(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0xa4, &[volume], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_scene_volume failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_scene_volume failed: {e}")),
     }
 }
 
@@ -151,7 +154,7 @@ async fn set_sleep_color(ctx: CallCtx<'_>) -> Value {
     let [r, g, b] = rgb_triple(color_val);
     match dev.send_command(0xad, &[r, g, b], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_sleep_color failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_sleep_color failed: {e}")),
     }
 }
 
@@ -171,7 +174,7 @@ async fn set_sleep_light(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0xae, &[light], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_sleep_light failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_sleep_light failed: {e}")),
     }
 }
 
@@ -220,6 +223,6 @@ async fn set_sleep_scene(ctx: CallCtx<'_>) -> Value {
 
     match dev.send_command(0x41, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_sleep_scene failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_sleep_scene failed: {e}")),
     }
 }

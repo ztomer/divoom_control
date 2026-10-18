@@ -95,6 +95,34 @@ frame up for good. A lease is the borrow with the return built in:
 ### Validation and Error Handling
 - Protocol-level validation errors (missing arguments, invalid JSON) return standard JSON-RPC error codes (`-32602`, `-32700`, etc.).
 - Domain errors (values out of range, unparseable images, device communication timeouts) return a tool result with `isError: true` and an explanatory error message, enabling clients to recover and self-correct.
+- Every daemon failure carries a stable `code` beside the prose: the tool
+  result's JSON is `{"error": "...", "code": "..."}`, and the CLI prints
+  `<message> [<code>]`. Branch on the code, never on the wording; a code's
+  meaning never changes once shipped. The daemon cannot send a failure
+  without one (`divoomd/src/error_code.rs`; ROADMAP P5.10).
+
+<!-- error-codes:start -->
+| Code | Meaning | What a client can do |
+|---|---|---|
+| `bad_request` | The request is malformed: a missing or mistyped argument, a value out of range, an image or file that cannot be read or decoded. | Fix the request; retrying it unchanged will fail again. |
+| `unknown_command` | The daemon does not implement this command or `device_call` method. | Check the daemon's `capabilities` (`get_status`). |
+| `device_disconnected` | The panel named is not connected (or its link was torn down mid-request). | Reconnect it. |
+| `no_device` | No panel is connected at all (for a wall call: no wall is configured). | Connect a panel, or configure the wall. |
+| `unknown_device` | The panel named has never been linked to this daemon, or `disconnect` forgot it. | Link it first. |
+| `ambiguous_target` | Several panels are linked, none is active, and the request named none. | Pass `mac`. |
+| `deadline_exceeded` | The command outran its time budget. | Retry; check the panel's link. |
+| `resource_exhausted` | The daemon is at its connection or subscription cap. | Retry with jitter. |
+| `notification_db_missing` | The macOS Notification Center database was not found. | Nothing to forward from. |
+| `notification_db_unreadable` | The database exists but cannot be read (macOS: no Full Disk Access). | Grant Full Disk Access. |
+| `unsupported` | Not available here: on this platform, in this build, or over this panel's link (a LAN panel has no Bluetooth-only command; the reply's `cause` says which). | Hide the feature for this panel or host. |
+| `screen_leased` | Another holder leases this panel's screen; the reply says who and for how long. | Wait for the lease, or ask its holder. |
+| `lease_expired` | The lease token is not (or no longer) the panel's lease. | Acquire a new lease. |
+| `device_failed` | The panel, or the radio or network path to it, did not do what was asked: a write or transfer failed, a reply never came, a connect or scan failed, a wall panel did not take the command. | Retry, or check the panel. |
+| `busy` | The daemon is already doing this (a scan, a connect, a hot update), or another session holds the panel exclusively. | Retry when it is done. |
+| `unauthorized` | The request's token does not match the daemon's. | Resend with the right token. |
+| `upstream_failed` | A network service the daemon calls for you (the Divoom cloud, a weather or quote provider) failed or refused. | Check the network or the account; the panel is not involved. |
+| `internal` | Something inside the daemon or on its host failed (a file it could not write, a host service that errored, a daemon not fully started). | Report it; not the request's or the panel's fault. |
+<!-- error-codes:end -->
 
 ## Client Configuration
 

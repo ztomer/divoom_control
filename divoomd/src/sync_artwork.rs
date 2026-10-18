@@ -19,7 +19,7 @@ use serde_json::{json, Value};
 
 use crate::daemon::Daemon;
 use crate::media::resolve_to_gif;
-use crate::protocol::{err_reply, Request};
+use crate::protocol::{err_code, ok_reply, ErrorCode, Request};
 
 /// Download a cloud artwork by `file_id` from the Divoom CDN (okhttp UA, 15s
 /// timeout). Shared by `sync_artwork` (push) and `get_animated_preview` (display).
@@ -88,14 +88,22 @@ pub async fn get_animated_preview(args: &Value) -> Value {
     };
     let bytes = match download_cloud_file(&file_id).await {
         Ok(b) => b,
-        Err(e) => return err_reply(&format!("get_animated_preview: {e}")),
+        Err(e) => {
+            return err_code(
+                ErrorCode::UpstreamFailed,
+                &format!("get_animated_preview: {e}"),
+            )
+        }
     };
     resolve_preview_data_url(&bytes).map_or_else(
         || {
-            err_reply(&format!(
-                "get_animated_preview: unrecognized container magic {}",
-                bytes[0]
-            ))
+            err_code(
+                ErrorCode::UpstreamFailed,
+                &format!(
+                    "get_animated_preview: unrecognized container magic {}",
+                    bytes[0]
+                ),
+            )
         },
         |url| json!({"success": true, "file_id": file_id, "preview": url}),
     )
@@ -125,7 +133,7 @@ pub async fn sync_artwork(daemon: &Daemon, args: &Value) -> Value {
             let _ = daemon
                 .tx
                 .send(json!({"type":"hot_progress","progress":100,"phase":"error"}));
-            return err_reply(&format!("sync_artwork: {e}"));
+            return err_code(ErrorCode::UpstreamFailed, &format!("sync_artwork: {e}"));
         }
     };
 
@@ -133,11 +141,14 @@ pub async fn sync_artwork(daemon: &Daemon, args: &Value) -> Value {
         let _ = daemon
             .tx
             .send(json!({"type":"hot_progress","progress":100,"phase":"error"}));
-        return err_reply(&format!(
-            "sync_artwork: unrecognized container magic {} (could not resolve to an image; \
+        return err_code(
+            ErrorCode::UpstreamFailed,
+            &format!(
+                "sync_artwork: unrecognized container magic {} (could not resolve to an image; \
              never raw-streamed to avoid sticking the device).",
-            file_bytes[0]
-        ));
+                file_bytes[0]
+            ),
+        );
     };
 
     // display.show_image resizes (NEAREST) to `size` and 0x8B-streams. Box the
@@ -156,8 +167,13 @@ pub async fn sync_artwork(daemon: &Daemon, args: &Value) -> Value {
         .get("success")
         .and_then(serde_json::Value::as_bool)
         .unwrap_or(false);
-    let _ = daemon.tx.send(json!({"type":"hot_progress","progress":100,"phase":if ok {"done"} else {"error"}, "result":{"success":ok}}));
-    json!({"success": ok})
+    // The push's own reply, so a failure keeps the code it was given (P5.10).
+    let _ = daemon.tx.send(json!({"type":"hot_progress","progress":100,"phase":if ok {"done"} else {"error"}, "result": res}));
+    if ok {
+        ok_reply(json!({}))
+    } else {
+        res
+    }
 }
 
 #[cfg(test)]

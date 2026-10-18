@@ -11,6 +11,13 @@
 //! Wire names are lowercase `snake_case`, matching the two codes that were
 //! already on the wire before this enum (`resource_exhausted`,
 //! `deadline_exceeded`). A wire name, once shipped, never changes meaning.
+//!
+//! This module is also the ONLY place a reply's `success` is written (P5.10):
+//! [`ok_reply`] for a success, [`err_code`] / [`err_with`] for a failure, and
+//! both failure constructors take an [`ErrorCode`]. The old code-less
+//! `protocol::err_reply` is gone, `reply_shape_scan_tests` refuses a
+//! hand-built `"success": false` anywhere else, and [`uncoded_failure`] is
+//! checked on every reply the daemon sends ([`check_on_wire`]).
 
 use serde_json::Value;
 
@@ -19,11 +26,12 @@ use serde_json::Value;
 pub enum ErrorCode {
     /// The line was not JSON, or not an object with a `command` string.
     BadRequest,
-    /// The daemon does not implement this command.
+    /// The daemon does not implement this command, or this `device_call`
+    /// method.
     UnknownCommand,
     /// The panel named in the request is not connected.
     DeviceDisconnected,
-    /// No panel is connected at all.
+    /// No panel is connected at all (for a wall call: no wall is configured).
     NoDevice,
     /// The panel named has never been linked to this daemon (or `disconnect`
     /// forgot it), so there is no link for state about it to wait for (P5.8).
@@ -40,13 +48,37 @@ pub enum ErrorCode {
     /// The database exists but cannot be opened or read -- on macOS, the
     /// daemon lacks Full Disk Access.
     NotificationDbUnreadable,
-    /// The feature does not exist on this platform.
+    /// Not available here: on this platform, in this build, or over this
+    /// panel's link (a LAN panel has no Bluetooth-only command). The
+    /// platform case was the first; the build case was already on the wire
+    /// (`connect` without BLE), and P5.10 named the link case.
     Unsupported,
     /// Another holder leases this panel's screen (P4.6); the reply says who
     /// and for how long.
     ScreenLeased,
     /// The lease token is not (or no longer) the panel's lease.
     LeaseExpired,
+    /// The panel, or the radio or network path to it, did not do what was
+    /// asked: a write or transfer failed, an expected reply never came, a
+    /// connect or scan failed, or a wall panel did not take the command. The
+    /// request itself was well-formed; retrying, or checking the panel, may
+    /// help (P5.10).
+    DeviceFailed,
+    /// The daemon is already doing this -- a scan, a connect, a hot update --
+    /// or another session holds the panel exclusively; retry when it is done
+    /// (P5.10).
+    Busy,
+    /// The request's token does not match the daemon's; resend with the
+    /// right one (P5.10).
+    Unauthorized,
+    /// A network service the daemon calls on the client's behalf -- the
+    /// Divoom cloud, a weather or quote provider -- failed or refused; the
+    /// panel is not involved (P5.10).
+    UpstreamFailed,
+    /// Something inside the daemon or on its host failed: a file it could not
+    /// write, a host service that errored, a daemon not fully started. Not the
+    /// request's fault and not the panel's (P5.10).
+    Internal,
 }
 
 impl ErrorCode {
@@ -65,6 +97,11 @@ impl ErrorCode {
         Self::Unsupported,
         Self::ScreenLeased,
         Self::LeaseExpired,
+        Self::DeviceFailed,
+        Self::Busy,
+        Self::Unauthorized,
+        Self::UpstreamFailed,
+        Self::Internal,
     ];
 
     /// The wire name.
@@ -84,18 +121,81 @@ impl ErrorCode {
             Self::Unsupported => "unsupported",
             Self::ScreenLeased => "screen_leased",
             Self::LeaseExpired => "lease_expired",
+            Self::DeviceFailed => "device_failed",
+            Self::Busy => "busy",
+            Self::Unauthorized => "unauthorized",
+            Self::UpstreamFailed => "upstream_failed",
+            Self::Internal => "internal",
         }
     }
+}
+
+/// A successful reply `{"success": true, ...extra}`.
+#[must_use]
+pub fn ok_reply(extra: Value) -> Value {
+    let mut map = match extra {
+        Value::Object(m) => m,
+        _ => serde_json::Map::new(),
+    };
+    map.insert("success".into(), Value::Bool(true));
+    Value::Object(map)
 }
 
 /// An error reply with its code: `{"success": false, "error": msg, "code": ...}`.
 #[must_use]
 pub fn err_code(code: ErrorCode, msg: &str) -> Value {
-    let mut reply = crate::protocol::err_reply(msg);
-    if let Some(obj) = reply.as_object_mut() {
-        obj.insert("code".into(), Value::String(code.as_str().to_string()));
+    err_with(code, msg, Value::Null)
+}
+
+/// [`err_code`] plus the reply's own detail fields (`degraded`, `cause`,
+/// `state`, ...). `success`, `error` and `code` are written last, so the
+/// detail cannot overwrite them.
+#[must_use]
+pub fn err_with(code: ErrorCode, msg: &str, extra: Value) -> Value {
+    let mut map = match extra {
+        Value::Object(m) => m,
+        _ => serde_json::Map::new(),
+    };
+    map.insert("success".into(), Value::Bool(false));
+    map.insert("error".into(), Value::String(msg.to_string()));
+    map.insert("code".into(), Value::String(code.as_str().to_string()));
+    Value::Object(map)
+}
+
+/// Why `reply` breaks the failure contract, or `None` when it keeps it.
+///
+/// A break is a `success` that is not `true` with no known `code`, or with
+/// no `error` prose. A line with no `success` at all (an event) is not a
+/// reply and is not judged.
+#[must_use]
+pub fn uncoded_failure(reply: &Value) -> Option<&'static str> {
+    let success = reply.get("success")?;
+    if success == &Value::Bool(true) {
+        return None;
     }
-    reply
+    let Some(code) = reply.get("code").and_then(Value::as_str) else {
+        return Some("a failure reply with no code");
+    };
+    if !ErrorCode::ALL.iter().any(|c| c.as_str() == code) {
+        return Some("a failure reply whose code is not an ErrorCode");
+    }
+    if !reply.get("error").is_some_and(Value::is_string) {
+        return Some("a failure reply with no error prose");
+    }
+    None
+}
+
+/// The wire check: every reply the daemon sends passes through here.
+///
+/// A failure without a code is a daemon defect: it fails any debug build (so
+/// every test that provokes it goes red) and is logged in a release one,
+/// where the reply still goes out rather than the request being dropped.
+pub fn check_on_wire(reply: &Value) {
+    let why = uncoded_failure(reply);
+    debug_assert!(why.is_none(), "{why:?} on the wire: {reply}");
+    if let Some(why) = why {
+        eprintln!("[Err] {why} on the wire: {reply}");
+    }
 }
 
 /// A failure with its class, for code that returns errors up a call chain

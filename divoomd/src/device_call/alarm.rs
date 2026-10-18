@@ -1,5 +1,8 @@
 use super::CallCtx;
-use crate::protocol::err_reply;
+use crate::protocol::{
+    err_code,
+    ErrorCode::{DeviceFailed, UnknownCommand},
+};
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
@@ -16,7 +19,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         "alarm.set_alarm_volume_control" | "set_alarm_volume_control" => {
             set_alarm_volume_control(ctx).await
         }
-        _ => err_reply("unimplemented alarm command"),
+        _ => err_code(UnknownCommand, "unimplemented alarm command"),
     }
 }
 async fn get_alarm_time(ctx: CallCtx<'_>) -> Value {
@@ -150,7 +153,7 @@ async fn set_alarm(ctx: CallCtx<'_>) -> Value {
 
     match dev.send_command(0x43, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_alarm failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_alarm failed: {e}")),
     }
 }
 
@@ -206,7 +209,7 @@ async fn set_alarm_gif(ctx: CallCtx<'_>) -> Value {
 
     match dev.send_command(0x51, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_alarm_gif failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_alarm_gif failed: {e}")),
     }
 }
 
@@ -342,7 +345,7 @@ async fn set_memorial_time(ctx: CallCtx<'_>) -> Value {
 
     match dev.send_command(0x54, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_memorial_time failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_memorial_time failed: {e}")),
     }
 }
 
@@ -398,7 +401,7 @@ async fn set_memorial_gif(ctx: CallCtx<'_>) -> Value {
 
     match dev.send_command(0x55, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_memorial_gif failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_memorial_gif failed: {e}")),
     }
 }
 
@@ -436,7 +439,7 @@ async fn set_alarm_listen(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0xa5, &[on_off, mode, volume], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_alarm_listen failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_alarm_listen failed: {e}")),
     }
 }
 
@@ -456,7 +459,7 @@ async fn set_alarm_volume(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0xa6, &[volume], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_alarm_volume failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_alarm_volume failed: {e}")),
     }
 }
 
@@ -485,6 +488,9 @@ async fn set_alarm_volume_control(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0x82, &[control, index], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_alarm_volume_control failed: {e}")),
+        Err(e) => err_code(
+            DeviceFailed,
+            &format!("set_alarm_volume_control failed: {e}"),
+        ),
     }
 }

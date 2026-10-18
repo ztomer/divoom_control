@@ -8,7 +8,10 @@
 //! `cloud_category.rs`) is a separate, already-implemented path.
 
 use super::CallCtx;
-use crate::protocol::err_reply;
+use crate::protocol::{
+    err_code,
+    ErrorCode::{DeviceFailed, Internal, UnknownCommand},
+};
 use serde_json::{json, Value};
 
 const SPP_JSON_COMMAND_ID: u8 = 1;
@@ -22,7 +25,7 @@ async fn send_json_command(
     let body = Value::Object(fields);
     let payload = match serde_json::to_vec(&body) {
         Ok(p) => p,
-        Err(e) => return err_reply(&format!("failed to serialize {command}: {e}")),
+        Err(e) => return err_code(Internal, &format!("failed to serialize {command}: {e}")),
     };
     match ctx
         .dev
@@ -30,7 +33,7 @@ async fn send_json_command(
         .await
     {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("{command} failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("{command} failed: {e}")),
     }
 }
 
@@ -62,6 +65,9 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             fields.insert("Type".to_string(), json!(sleep_type));
             send_json_command(&ctx, "AidSleep/Delete", fields).await
         }
-        _ => err_reply(&format!("unknown aid_sleep method: {method}")),
+        _ => err_code(
+            UnknownCommand,
+            &format!("unknown aid_sleep method: {method}"),
+        ),
     }
 }

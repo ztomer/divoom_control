@@ -3,7 +3,7 @@
 
 use crate::command_args::missing;
 use crate::daemon::{notifications, Daemon};
-use crate::protocol::{err_code, err_reply, ErrorCode, Request};
+use crate::protocol::{err_code, ErrorCode, Request};
 use serde_json::{json, Value};
 
 pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
@@ -170,7 +170,7 @@ async fn exclusive_start(daemon: &Daemon, req: Request) -> Value {
         Some(t) => match daemon.resolve_target_link(None).await {
             Ok(link) => match link.queue.acquire_now(t) {
                 Ok(()) => json!({"success": true, "token": t}),
-                Err(e) => err_reply(&e.to_string()),
+                Err(e) => e.reply(),
             },
             Err(e) => e,
         },
@@ -209,7 +209,7 @@ async fn disconnect(daemon: &Daemon, req: Request) -> Value {
 async fn live_job_start(daemon: &Daemon, req: Request) -> Value {
     let self_weak = match daemon.self_weak.get() {
         Some(w) => w.clone(),
-        None => return err_reply("Daemon self_weak not initialized"),
+        None => return err_code(ErrorCode::Internal, "Daemon self_weak not initialized"),
     };
     let mac = match req.args.get("mac").and_then(|v| v.as_str()) {
         Some(m) => m.to_string(),
@@ -225,7 +225,7 @@ async fn live_job_start(daemon: &Daemon, req: Request) -> Value {
             Ok(()) => json!({"success": true}),
             Err(e) => e.reply(),
         },
-        None => err_reply("Daemon was dropped"),
+        None => err_code(ErrorCode::Internal, "Daemon was dropped"),
     }
 }
 
@@ -308,10 +308,10 @@ async fn owned_devices(daemon: &Daemon) -> Value {
 async fn custom_art_push(daemon: &Daemon, req: Request) -> Value {
     let self_weak = match daemon.self_weak.get() {
         Some(w) => w.clone(),
-        None => return err_reply("Daemon self_weak not initialized"),
+        None => return err_code(ErrorCode::Internal, "Daemon self_weak not initialized"),
     };
     let Some(daemon_arc) = self_weak.upgrade() else {
-        return err_reply("Daemon was dropped");
+        return err_code(ErrorCode::Internal, "Daemon was dropped");
     };
     crate::art::cmd_custom_art_push(daemon_arc, &req.args).await
 }
@@ -319,10 +319,10 @@ async fn custom_art_push(daemon: &Daemon, req: Request) -> Value {
 async fn custom_art_query_page(daemon: &Daemon, req: Request) -> Value {
     let self_weak = match daemon.self_weak.get() {
         Some(w) => w.clone(),
-        None => return err_reply("Daemon self_weak not initialized"),
+        None => return err_code(ErrorCode::Internal, "Daemon self_weak not initialized"),
     };
     let Some(daemon_arc) = self_weak.upgrade() else {
-        return err_reply("Daemon was dropped");
+        return err_code(ErrorCode::Internal, "Daemon was dropped");
     };
     crate::art::cmd_custom_art_query_page(daemon_arc, &req.args).await
 }
@@ -330,10 +330,10 @@ async fn custom_art_query_page(daemon: &Daemon, req: Request) -> Value {
 fn hot_update(daemon: &Daemon, req: &Request) -> Value {
     let self_weak = match daemon.self_weak.get() {
         Some(w) => w.clone(),
-        None => return err_reply("Daemon self_weak not initialized"),
+        None => return err_code(ErrorCode::Internal, "Daemon self_weak not initialized"),
     };
     let Some(daemon_arc) = self_weak.upgrade() else {
-        return err_reply("Daemon was dropped");
+        return err_code(ErrorCode::Internal, "Daemon was dropped");
     };
     let progress = daemon.hot_progress.clone();
     crate::art::cmd_hot_update(daemon_arc, &req.args, progress)

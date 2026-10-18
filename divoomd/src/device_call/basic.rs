@@ -1,5 +1,8 @@
 use super::CallCtx;
-use crate::protocol::err_reply;
+use crate::protocol::{
+    err_code,
+    ErrorCode::{BadRequest, DeviceFailed, UnknownCommand},
+};
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
@@ -88,7 +91,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         | "get_auto_power_off"
         | "sound.get_auto_power_off" => get_auto_power_off(ctx).await,
         "animation.stream_animation_8b" => stream_animation_8b(ctx).await,
-        _ => err_reply("unimplemented basic command"),
+        _ => err_code(UnknownCommand, "unimplemented basic command"),
     }
 }
 async fn get_device_name(ctx: CallCtx<'_>) -> Value {
@@ -144,7 +147,7 @@ async fn set_device_name(ctx: CallCtx<'_>) -> Value {
             }
             json!({"success": true, "result": true})
         }
-        Err(e) => err_reply(&format!("set_device_name failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_device_name failed: {e}")),
     }
 }
 
@@ -199,7 +202,7 @@ async fn set_brightness(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0x74, &[val], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_brightness failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_brightness failed: {e}")),
     }
 }
 
@@ -231,7 +234,7 @@ async fn set_screen_on(ctx: CallCtx<'_>) -> Value {
     };
     match dev.send_command(0x74, &[val], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_screen_on failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_screen_on failed: {e}")),
     }
 }
 
@@ -241,7 +244,7 @@ async fn show_hot_channel(ctx: CallCtx<'_>) -> Value {
     let kw = ctx.kwargs;
 
     if let Err(e) = dev.send_command(0x45, &[0x02], true).await {
-        return err_reply(&format!("show_hot_channel: 0x45 failed: {e}"));
+        return err_code(DeviceFailed, &format!("show_hot_channel: 0x45 failed: {e}"));
     }
     let page = args.first().copied().or_else(|| {
         kw.and_then(|v| v.get("page"))
@@ -250,7 +253,7 @@ async fn show_hot_channel(ctx: CallCtx<'_>) -> Value {
     if let Some(p) = page {
         match dev.send_command(0x85, &[1, p.byte()], true).await {
             Ok(()) => json!({"success": true, "result": true}),
-            Err(e) => err_reply(&format!("show_hot_channel: 0x85 failed: {e}")),
+            Err(e) => err_code(DeviceFailed, &format!("show_hot_channel: 0x85 failed: {e}")),
         }
     } else {
         json!({"success": true, "result": true})
@@ -289,7 +292,7 @@ async fn set_volume(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0x08, &[val], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_volume failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_volume failed: {e}")),
     }
 }
 
@@ -324,7 +327,7 @@ async fn set_radio_frequency(ctx: CallCtx<'_>) -> Value {
     let payload = freq.to_le_bytes();
     match dev.send_command(0x61, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_radio_frequency failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_radio_frequency failed: {e}")),
     }
 }
 
@@ -345,7 +348,7 @@ async fn set_low_power_switch(ctx: CallCtx<'_>) -> Value {
     };
     match dev.send_command(0xb2, &[on_off], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_low_power_switch failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_low_power_switch failed: {e}")),
     }
 }
 
@@ -376,7 +379,7 @@ async fn set_auto_power_off(ctx: CallCtx<'_>) -> Value {
     let payload = minutes.to_le_bytes();
     match dev.send_command(0xab, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_auto_power_off failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_auto_power_off failed: {e}")),
     }
 }
 
@@ -413,7 +416,7 @@ async fn stream_animation_8b(ctx: CallCtx<'_>) -> Value {
     };
     match dev.stream_animation_8b(&blob).await {
         Ok(true) => json!({"success": true, "result": true}),
-        Ok(false) => err_reply("stream_animation_8b: empty blob"),
-        Err(e) => err_reply(&format!("stream_animation_8b failed: {e}")),
+        Ok(false) => err_code(BadRequest, "stream_animation_8b: empty blob"),
+        Err(e) => err_code(DeviceFailed, &format!("stream_animation_8b failed: {e}")),
     }
 }

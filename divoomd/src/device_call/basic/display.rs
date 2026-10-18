@@ -4,7 +4,10 @@
 
 use super::CallCtx;
 use crate::packets::{ClockPacket, LightPacket, LightingType, CMD_SET_LIGHT_MODE};
-use crate::protocol::err_reply;
+use crate::protocol::{
+    err_code,
+    ErrorCode::{BadRequest, DeviceFailed, Internal, UnknownCommand},
+};
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
@@ -45,7 +48,7 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 };
                 match std::fs::read(path) {
                     Ok(d) => d,
-                    Err(e) => return err_reply(&format!("display.show_image: read {path}: {e}")),
+                    Err(e) => return err_code(BadRequest, &format!("read {path}: {e}")),
                 }
             };
 
@@ -57,7 +60,7 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 )
                 .await
             {
-                return err_reply(&format!("show_design failed: {e}"));
+                return err_code(DeviceFailed, &format!("show_design failed: {e}"));
             }
 
             let frames = match tokio::task::spawn_blocking(move || {
@@ -66,8 +69,8 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             .await
             {
                 Ok(Ok(f)) => f,
-                Ok(Err(e)) => return err_reply(&format!("image decode: {e}")),
-                Err(e) => return err_reply(&format!("image decode task: {e}")),
+                Ok(Err(e)) => return err_code(BadRequest, &format!("image decode: {e}")),
+                Err(e) => return err_code(Internal, &format!("image decode task: {e}")),
             };
 
             let mut blob = Vec::new();
@@ -76,16 +79,14 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 // same bytes for a 32x32 panel as the 32x32 entry point did.
                 match crate::image_encode::encode_animation_frame(rgb, *w, *h, *t) {
                     Ok(b) => blob.extend_from_slice(&b),
-                    Err(why) => {
-                        return err_reply(&format!("encode failed for frame {w}x{h}: {why}"))
-                    }
+                    Err(why) => return err_code(BadRequest, &format!("frame {w}x{h}: {why}")),
                 }
             }
 
             match dev.stream_animation_8b(&blob).await {
                 Ok(true) => json!({"success": true, "result": true}),
-                Ok(false) => err_reply("stream_animation_8b: empty blob"),
-                Err(e) => err_reply(&format!("stream_animation_8b failed: {e}")),
+                Ok(false) => err_code(BadRequest, "stream_animation_8b: empty blob"),
+                Err(e) => err_code(DeviceFailed, &format!("stream_animation_8b failed: {e}")),
             }
         }
         // R67/C1: this arm read kwargs named weather/temp/calendar and wrote
@@ -100,7 +101,7 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 .await
             {
                 Ok(()) => json!({"success": true, "result": true}),
-                Err(e) => err_reply(&format!("display.show_clock failed: {e}")),
+                Err(e) => err_code(DeviceFailed, &format!("display.show_clock failed: {e}")),
             }
         }
         "display.set_clock_rich" => set_clock_rich(ctx).await,
@@ -121,7 +122,7 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         "display.show_scoreboard" | "show_scoreboard" => show_scoreboard(ctx).await,
         // Channel switch by name → the matching 0x45 channel payload (Python switch_channel).
         "display.switch_channel" | "switch_channel" => switch_channel(ctx).await,
-        _ => err_reply("unimplemented display command"),
+        _ => err_code(UnknownCommand, "unimplemented display command"),
     }
 }
 async fn show_clock(ctx: CallCtx<'_>) -> Value {
@@ -136,7 +137,7 @@ async fn show_clock(ctx: CallCtx<'_>) -> Value {
         .await
     {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("show_clock failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("show_clock failed: {e}")),
     }
 }
 
@@ -163,22 +164,25 @@ async fn show_image(ctx: CallCtx<'_>) -> Value {
     let mut blob = Vec::new();
     for (i, (rgb, time_ms)) in frames.iter().enumerate() {
         if rgb.len() != expected {
-            return err_reply(&format!(
-                "show_image: frame {i} has {} bytes, expected w*h*3={expected}",
-                rgb.len()
-            ));
+            return err_code(
+                BadRequest,
+                &format!(
+                    "show_image: frame {i} has {} bytes, expected w*h*3={expected}",
+                    rgb.len()
+                ),
+            );
         }
         // The refusal names itself, so the reply does too: "more than 256
         // unique colours" is an answer, "encode_animation_frame failed" was not.
         match crate::image_encode::encode_animation_frame(rgb, w, h, *time_ms) {
             Ok(b) => blob.extend_from_slice(&b),
-            Err(why) => return err_reply(&format!("encode failed for frame {i} ({w}x{h}): {why}")),
+            Err(why) => return err_code(BadRequest, &format!("frame {i} ({w}x{h}): {why}")),
         }
     }
     match dev.stream_animation_8b(&blob).await {
         Ok(true) => json!({"success": true, "result": true, "frames": frames.len()}),
-        Ok(false) => err_reply("stream_animation_8b: empty blob"),
-        Err(e) => err_reply(&format!("stream_animation_8b failed: {e}")),
+        Ok(false) => err_code(BadRequest, "stream_animation_8b: empty blob"),
+        Err(e) => err_code(DeviceFailed, &format!("stream_animation_8b failed: {e}")),
     }
 }
 
@@ -236,7 +240,7 @@ async fn set_clock_rich(ctx: CallCtx<'_>) -> Value {
         .await
     {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("display.set_clock_rich failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("display.set_clock_rich failed: {e}")),
     }
 }
 
@@ -252,7 +256,7 @@ async fn show_design(ctx: CallCtx<'_>) -> Value {
         .await
     {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("display.show_design failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("display.show_design failed: {e}")),
     }
 }
 
@@ -294,7 +298,7 @@ async fn show_light(ctx: CallCtx<'_>) -> Value {
     .to_bytes();
     match dev.send_command(0x45, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("display.show_light failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("display.show_light failed: {e}")),
     }
 }
 
@@ -314,7 +318,7 @@ async fn show_effects(ctx: CallCtx<'_>) -> Value {
     let payload = crate::packets::vj_effect(number.clamp(0, 254).byte());
     match dev.send_command(0x45, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("display.show_effects failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("display.show_effects failed: {e}")),
     }
 }
 
@@ -334,7 +338,7 @@ async fn show_visualization(ctx: CallCtx<'_>) -> Value {
     let payload = crate::packets::visualization(number.clamp(0, 255).byte());
     match dev.send_command(0x45, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("display.show_visualization failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("show_visualization failed: {e}")),
     }
 }
 
@@ -344,7 +348,10 @@ async fn show_scoreboard(ctx: CallCtx<'_>) -> Value {
     let payload = crate::packets::channel_switch(crate::packets::BareChannel::Scoreboard);
     match dev.send_command(0x45, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("display.show_scoreboard failed: {e}")),
+        Err(e) => err_code(
+            DeviceFailed,
+            &format!("display.show_scoreboard failed: {e}"),
+        ),
     }
 }
 
@@ -375,11 +382,16 @@ async fn switch_channel(ctx: CallCtx<'_>) -> Value {
         "ambient" | "lighting" => {
             crate::packets::channel_switch(crate::packets::BareChannel::Lighting)
         }
-        other => return err_reply(&format!("switch_channel: unknown channel '{other}'")),
+        other => {
+            return err_code(
+                BadRequest,
+                &format!("switch_channel: unknown channel '{other}'"),
+            )
+        }
     };
     match dev.send_command(CMD_SET_LIGHT_MODE, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("display.switch_channel failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("display.switch_channel failed: {e}")),
     }
 }
 

@@ -18,7 +18,7 @@
 
 use serde_json::{json, Value};
 
-use crate::protocol::err_reply;
+use crate::protocol::{err_code, err_with, ErrorCode};
 
 /// Handle `weather` — one reading, from the source the device is pushed.
 ///
@@ -46,7 +46,7 @@ pub async fn cmd_weather(args: &Value) -> Value {
         }),
         // Say WHY. A weather card that silently shows nothing is the exact
         // dead-but-green state this round has been about.
-        Err(e) => json!({"success": false, "error": e}),
+        Err(e) => err_code(ErrorCode::UpstreamFailed, &e),
     }
 }
 
@@ -86,7 +86,10 @@ where
         Ok(v) => v,
         // A panic inside the closure is now contained: the task dies, the
         // daemon does not, and the caller is told rather than dropped.
-        Err(e) => err_reply(&format!("now-playing probe failed: {e}")),
+        Err(e) => err_code(
+            ErrorCode::Internal,
+            &format!("now-playing probe failed: {e}"),
+        ),
     }
 }
 
@@ -200,12 +203,11 @@ fn now_playing_blocking(include_artwork: bool) -> Value {
                 out
             }
             Ok(Some(track)) => track_to_json(&track, include_artwork),
-            Err(e) => json!({
-                "success": false,
-                "available": true,
-                "playing": false,
-                "error": e,
-            }),
+            Err(e) => err_with(
+                ErrorCode::Internal,
+                &e,
+                json!({"available": true, "playing": false}),
+            ),
         }
     }
     #[cfg(not(target_os = "macos"))]

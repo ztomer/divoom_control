@@ -6,7 +6,7 @@
 //! dispatcher works with.
 
 use super::CallCtx;
-use crate::protocol::err_reply;
+use crate::protocol::{err_code, ErrorCode::DeviceFailed};
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
@@ -56,7 +56,10 @@ async fn set_song_display_control(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0x83, &[control], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_song_display_control failed: {e}")),
+        Err(e) => err_code(
+            DeviceFailed,
+            &format!("set_song_display_control failed: {e}"),
+        ),
     }
 }
 
@@ -90,7 +93,10 @@ async fn set_power_on_voice_volume(ctx: CallCtx<'_>) -> Value {
     };
     match dev.send_command(0xbb, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_power_on_voice_volume failed: {e}")),
+        Err(e) => err_code(
+            DeviceFailed,
+            &format!("set_power_on_voice_volume failed: {e}"),
+        ),
     }
 }
 
@@ -124,7 +130,7 @@ async fn set_power_on_channel(ctx: CallCtx<'_>) -> Value {
     };
     match dev.send_command(0x8a, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_power_on_channel failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_power_on_channel failed: {e}")),
     }
 }
 
@@ -180,7 +186,7 @@ async fn set_boot_gif(ctx: CallCtx<'_>) -> Value {
 
     match dev.send_command(0x52, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_boot_gif failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_boot_gif failed: {e}")),
     }
 }
 
@@ -200,7 +206,7 @@ async fn set_sound_control(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0xa7, &[enable], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_sound_control failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_sound_control failed: {e}")),
     }
 }
 

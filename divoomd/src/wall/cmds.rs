@@ -3,7 +3,7 @@
 
 use super::{DivoomWall, WallConfig};
 use crate::daemon::{Daemon, DeviceTransport};
-use crate::protocol::{err_reply, Request};
+use crate::protocol::{err_code, err_with, ErrorCode, Request};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -131,12 +131,18 @@ pub async fn cmd_set_topology(_daemon: &Daemon, req: &Request) -> Value {
         }
         match save_topology(&current) {
             Ok(()) => json!({"success": true}),
-            Err(e) => err_reply(&format!("failed to save topology: {e}")),
+            Err(e) => err_code(
+                ErrorCode::Internal,
+                &format!("failed to save topology: {e}"),
+            ),
         }
     } else {
         match save_topology(&top) {
             Ok(()) => json!({"success": true}),
-            Err(e) => err_reply(&format!("failed to save topology: {e}")),
+            Err(e) => err_code(
+                ErrorCode::Internal,
+                &format!("failed to save topology: {e}"),
+            ),
         }
     }
 }
@@ -262,7 +268,7 @@ pub async fn cmd_wall_configure(daemon: &Daemon, req: &Request) -> Value {
         }
         Err(e) => {
             *daemon.wall.lock().await = None;
-            json!({"success": false, "error": e, "wall": false})
+            err_with(ErrorCode::DeviceFailed, &e, json!({"wall": false}))
         }
     }
 }

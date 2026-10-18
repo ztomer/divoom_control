@@ -25,7 +25,9 @@ use pump::pump_events;
 use crate::connections::{Connections, Tracked};
 use crate::subscriptions::Registry;
 
-use crate::protocol::{encode_message, err_reply, iter_messages, Request, MAX_REPLY_BYTES};
+use crate::protocol::{
+    encode_message, err_code, iter_messages, ErrorCode, Request, MAX_REPLY_BYTES,
+};
 
 /// Max concurrent client connections.
 ///
@@ -203,6 +205,9 @@ pub(crate) async fn write_line<S>(stream: &mut S, msg: &Value) -> std::io::Resul
 where
     S: tokio::io::AsyncWrite + Unpin,
 {
+    // The socket's own refusals and a timed-out command's reply never pass
+    // through a handler, so the code contract is checked here too (P5.10).
+    crate::error_code::check_on_wire(msg);
     tokio::time::timeout(WRITE_TIMEOUT, stream.write_all(&encode_message(msg)))
         .await
         .unwrap_or_else(|_| {
@@ -286,7 +291,7 @@ where
                 let supplied = req.token.as_deref().unwrap_or("");
                 let server_token = token.as_deref().unwrap_or("");
                 if server_token.is_empty() || !constant_time_eq(supplied, server_token) {
-                    let reply = err_reply("unauthorized");
+                    let reply = err_code(ErrorCode::Unauthorized, "unauthorized");
                     write_line(&mut stream, &reply).await?;
                     continue;
                 }
@@ -301,7 +306,8 @@ where
                     // back (P2.4): a crash-and-reconnect is not a stranger.
                     let client_id = req.args.get("client_id").and_then(Value::as_str);
                     let Some(lease) = subscriptions.admit_as(client_id) else {
-                        let reply = err_reply(
+                        let reply = err_code(
+                            ErrorCode::ResourceExhausted,
                             "too many active subscriptions; every slot is held by a \
                              client that is demonstrably still active",
                         );
@@ -324,7 +330,7 @@ where
                     return Ok(());
                 }
                 {
-                    let reply = err_reply("subscriptions not supported");
+                    let reply = err_code(ErrorCode::Unsupported, "subscriptions not supported");
                     write_line(&mut stream, &reply).await?;
                     continue;
                 }

@@ -1,6 +1,9 @@
 use super::CallCtx;
 use crate::arg_bounds::{BLUE_SCORE, COUNTDOWN_MINUTES, COUNTDOWN_SECONDS, RED_SCORE};
-use crate::protocol::err_reply;
+use crate::protocol::{
+    err_code,
+    ErrorCode::{BadRequest, DeviceFailed, UnknownCommand},
+};
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
@@ -27,7 +30,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         // *per-type args]. 0=timer[ctrl_flag] 1=score[on_off, red LE16, blue LE16]
         // 2=noise[ctrl_flag] 3=countdown[ctrl_flag, minutes, seconds].
         "tool.set_tool_info" | "set_tool_info" => set_tool_info(ctx).await,
-        _ => err_reply("unimplemented tools command"),
+        _ => err_code(UnknownCommand, "unimplemented tools command"),
     }
 }
 async fn set_scoreboard(ctx: CallCtx<'_>) -> Value {
@@ -64,7 +67,7 @@ async fn set_scoreboard(ctx: CallCtx<'_>) -> Value {
     // 1500 used to become 999 without a word.
     let (red_score, blue_score) = match (RED_SCORE.check(red_score), BLUE_SCORE.check(blue_score)) {
         (Ok(r), Ok(b)) => (r.word(), b.word()),
-        (Err(e), _) | (_, Err(e)) => return err_reply(&format!("set_scoreboard: {e}")),
+        (Err(e), _) | (_, Err(e)) => return err_code(BadRequest, &format!("set_scoreboard: {e}")),
     };
     let mut payload = Vec::with_capacity(6);
     payload.push(1u8); // TOOL_TYPE_SCORE
@@ -73,7 +76,7 @@ async fn set_scoreboard(ctx: CallCtx<'_>) -> Value {
     payload.extend_from_slice(&blue_score.to_le_bytes());
     match dev.send_command(0x72, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_scoreboard failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_scoreboard failed: {e}")),
     }
 }
 
@@ -110,7 +113,7 @@ async fn set_timer(ctx: CallCtx<'_>) -> Value {
     let payload = [0u8, ctrl_flag]; // TOOL_TYPE_TIMER = 0
     match dev.send_command(0x72, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_timer failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_timer failed: {e}")),
     }
 }
 
@@ -164,12 +167,12 @@ async fn set_countdown(ctx: CallCtx<'_>) -> Value {
         COUNTDOWN_SECONDS.check(seconds),
     ) {
         (Ok(m), Ok(s)) => (m.byte(), s.byte()),
-        (Err(e), _) | (_, Err(e)) => return err_reply(&format!("set_countdown: {e}")),
+        (Err(e), _) | (_, Err(e)) => return err_code(BadRequest, &format!("set_countdown: {e}")),
     };
     let payload = [3u8, ctrl_flag, minutes, seconds]; // TOOL_TYPE_COUNTDOWN = 3
     match dev.send_command(0x72, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_countdown failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_countdown failed: {e}")),
     }
 }
 
@@ -206,7 +209,7 @@ async fn set_noise(ctx: CallCtx<'_>) -> Value {
     let payload = [2u8, ctrl_flag]; // TOOL_TYPE_NOISE = 2
     match dev.send_command(0x72, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_noise failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_noise failed: {e}")),
     }
 }
 
@@ -238,14 +241,15 @@ async fn show_notification(ctx: CallCtx<'_>) -> Value {
         })
         .unwrap_or(1)
         .byte();
-    let wire = if app_type >= 8 {
-        app_type + 1
-    } else {
-        app_type
+    let Some(wire) = crate::ancs::bare(app_type) else {
+        return err_code(
+            BadRequest,
+            &format!("show_notification: app_type {app_type} has no wire value"),
+        );
     };
     match dev.send_command(0x50, &[wire], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("show_notification failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("show_notification failed: {e}")),
     }
 }
 
@@ -269,17 +273,10 @@ async fn show_notification_text(ctx: CallCtx<'_>) -> Value {
         .and_then(|v| v.as_str())
         .or_else(|| kw.and_then(|v| v.get("text")).and_then(|v| v.as_str()))
         .unwrap_or("");
-    let mut text_bytes = text.as_bytes().to_vec();
-    if text_bytes.len() > 128 {
-        text_bytes.truncate(128);
-    }
-    let mut payload = Vec::with_capacity(2 + text_bytes.len());
-    payload.push(app_type);
-    payload.push(text_bytes.len().byte());
-    payload.extend_from_slice(&text_bytes);
+    let payload = crate::ancs::with_text(app_type, text);
     match dev.send_command(0x50, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("show_notification_text failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("show_notification_text failed: {e}")),
     }
 }
 
@@ -340,7 +337,7 @@ async fn set_tool_info(ctx: CallCtx<'_>) -> Value {
     match gmi {
         0 | 2 => match g("ctrl_flag") {
             Some(c) => payload.push(c.byte()),
-            None => return err_reply("set_tool_info: timer/noise need 'ctrl_flag'"),
+            None => return err_code(BadRequest, "set_tool_info: timer/noise need 'ctrl_flag'"),
         },
         1 => match g("on_off") {
             Some(on_off) => {
@@ -356,12 +353,22 @@ async fn set_tool_info(ctx: CallCtx<'_>) -> Value {
                 payload.push(m.byte());
                 payload.push(s.byte());
             }
-            _ => return err_reply("set_tool_info: countdown needs ctrl_flag/minutes/seconds"),
+            _ => {
+                return err_code(
+                    BadRequest,
+                    "set_tool_info: countdown needs ctrl_flag/minutes/seconds",
+                )
+            }
         },
-        _ => return err_reply(&format!("set_tool_info: unknown game_mode_index {gmi}")),
+        _ => {
+            return err_code(
+                BadRequest,
+                &format!("set_tool_info: unknown game_mode_index {gmi}"),
+            )
+        }
     }
     match dev.send_command(0x72, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_tool_info failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_tool_info failed: {e}")),
     }
 }

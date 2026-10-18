@@ -8,6 +8,7 @@
 //! notify/response correlation, and the command queue — each pinned to the Python
 //! behavior by parity tests.
 
+pub mod ancs;
 pub mod arg_bounds;
 pub mod art;
 pub mod art_codec;
@@ -99,6 +100,10 @@ pub mod protocol;
 pub mod render_widget;
 #[cfg(test)]
 mod render_widget_tests;
+#[cfg(test)]
+mod reply_code_sweep_tests;
+#[cfg(test)]
+mod reply_shape_scan_tests;
 pub mod response;
 pub mod secret_store;
 pub mod socket_bind;

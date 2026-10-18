@@ -33,7 +33,7 @@ use std::time::Duration;
 
 use crate::live_jobs::render::{render_stock, render_text};
 use crate::live_jobs::sysmon::{clamp_size, sample_once};
-use crate::protocol::err_reply;
+use crate::protocol::{err_code, ErrorCode};
 
 /// Widget kinds this command can render. The GUI enumerates these rather than
 /// hardcoding a list, so a kind added here is covered by the drift test without
@@ -176,7 +176,12 @@ pub async fn cmd_render_widget(args: &Value) -> Value {
             };
             let raw = match base64::engine::general_purpose::STANDARD.decode(b64) {
                 Ok(r) => r,
-                Err(e) => return err_reply(&format!("album_art: bad base64: {e}")),
+                Err(e) => {
+                    return err_code(
+                        ErrorCode::BadRequest,
+                        &format!("album_art: bad base64: {e}"),
+                    )
+                }
             };
             // spawn_blocking: process_image_bytes is CPU-bound and its own
             // docstring asks for it. Decoding a large cover on the reactor
@@ -187,14 +192,17 @@ pub async fn cmd_render_widget(args: &Value) -> Value {
             .await
             {
                 Ok(Ok(f)) => f,
-                Ok(Err(e)) => return err_reply(&format!("album_art: {e}")),
-                Err(e) => return err_reply(&format!("album_art: {e}")),
+                Ok(Err(e)) => return err_code(ErrorCode::BadRequest, &format!("album_art: {e}")),
+                Err(e) => return err_code(ErrorCode::Internal, &format!("album_art: {e}")),
             };
             match frames.first() {
                 Some((rgb, _, _, _)) => {
                     frame_reply(kind, size, rgb, &json!({"frames": frames.len()}))
                 }
-                None => err_reply("album_art: image decoded to no frames"),
+                None => err_code(
+                    ErrorCode::BadRequest,
+                    "album_art: image decoded to no frames",
+                ),
             }
         }
 
@@ -223,10 +231,13 @@ pub async fn cmd_render_widget(args: &Value) -> Value {
 
         "weather" => weather_reply(size, &params).await,
 
-        other => err_reply(&format!(
-            "render_widget: unknown kind '{other}' (known: {})",
-            KINDS.join(", ")
-        )),
+        other => err_code(
+            ErrorCode::BadRequest,
+            &format!(
+                "render_widget: unknown kind '{other}' (known: {})",
+                KINDS.join(", ")
+            ),
+        ),
     }
 }
 
@@ -288,7 +299,7 @@ async fn weather_reading(params: &Value) -> Result<crate::weather::WeatherInfo, 
         .unwrap_or("");
     crate::weather::fetch(&reqwest::Client::new(), location)
         .await
-        .map_err(|e| err_reply(&format!("weather: {e}")))
+        .map_err(|e| err_code(ErrorCode::UpstreamFailed, &format!("weather: {e}")))
 }
 
 /// `render_widget {kind: "stocks"}`: the frame the stocks job pushes.
@@ -303,11 +314,11 @@ async fn stocks_reply(size: u32, params: &Value) -> Value {
         .build()
     {
         Ok(c) => c,
-        Err(e) => return err_reply(&format!("stocks: {e}")),
+        Err(e) => return err_code(ErrorCode::Internal, &format!("stocks: {e}")),
     };
     let quote = match fetch_quote(&client, &symbol).await {
         Ok(q) => q,
-        Err(e) => return err_reply(&e),
+        Err(e) => return err_code(ErrorCode::UpstreamFailed, &e),
     };
     let rgb = render_stock(&symbol, quote.price, quote.change, size);
     frame_reply(

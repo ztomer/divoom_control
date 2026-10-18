@@ -9,7 +9,10 @@ use crate::wire::WireNarrow as _;
 use serde_json::{json, Map, Value};
 
 use super::CallCtx;
-use crate::protocol::err_reply;
+use crate::protocol::{
+    err_code,
+    ErrorCode::{DeviceFailed, UnknownCommand},
+};
 
 fn kw_i64(kw: Option<&Map<String, Value>>, name: &str) -> Option<i64> {
     kw.and_then(|m| m.get(name))
@@ -40,14 +43,14 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         "music.get_sd_music_info" | "get_sd_music_info" => get_sd_music_info(ctx).await,
         "music.get_sd_play_name" | "get_sd_play_name" => get_sd_play_name(ctx).await,
         "music.get_sd_music_list" | "get_sd_music_list" => get_sd_music_list(ctx).await,
-        _ => err_reply("unimplemented music command"),
+        _ => err_code(UnknownCommand, "unimplemented music command"),
     }
 }
 async fn app_need_get_music_list(ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let ok = |r: Result<(), String>, label: &str| match r {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("{label} failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("{label} failed: {e}")),
     };
 
     ok(
@@ -62,7 +65,7 @@ async fn send_sd_list_over(ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let ok = |r: Result<(), String>, label: &str| match r {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("{label} failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("{label} failed: {e}")),
     };
 
     ok(
@@ -80,7 +83,7 @@ async fn set_play_status(ctx: CallCtx<'_>) -> Value {
     let first_arg = |name: &str| args.first().copied().or_else(|| kw_i64(kw, name));
     let ok = |r: Result<(), String>, label: &str| match r {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("{label} failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("{label} failed: {e}")),
     };
 
     let s = first_arg("status").unwrap_or(0).byte();
@@ -99,7 +102,7 @@ async fn set_sd_last_next(ctx: CallCtx<'_>) -> Value {
     let first_arg = |name: &str| args.first().copied().or_else(|| kw_i64(kw, name));
     let ok = |r: Result<(), String>, label: &str| match r {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("{label} failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("{label} failed: {e}")),
     };
 
     let a = first_arg("action").unwrap_or(0).byte();
@@ -118,7 +121,7 @@ async fn set_sd_music_play_mode(ctx: CallCtx<'_>) -> Value {
     let first_arg = |name: &str| args.first().copied().or_else(|| kw_i64(kw, name));
     let ok = |r: Result<(), String>, label: &str| match r {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("{label} failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("{label} failed: {e}")),
     };
 
     let pm = first_arg("play_mode").unwrap_or(0).byte();
@@ -137,7 +140,7 @@ async fn set_sd_music_position(ctx: CallCtx<'_>) -> Value {
     let first_arg = |name: &str| args.first().copied().or_else(|| kw_i64(kw, name));
     let ok = |r: Result<(), String>, label: &str| match r {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("{label} failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("{label} failed: {e}")),
     };
 
     let pos = first_arg("position").unwrap_or(0);
@@ -156,7 +159,7 @@ async fn set_sd_play_music_id(ctx: CallCtx<'_>) -> Value {
     let first_arg = |name: &str| args.first().copied().or_else(|| kw_i64(kw, name));
     let ok = |r: Result<(), String>, label: &str| match r {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("{label} failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("{label} failed: {e}")),
     };
 
     let id = first_arg("music_id").unwrap_or(0);
@@ -174,7 +177,7 @@ async fn set_sd_music_info(ctx: CallCtx<'_>) -> Value {
     let kw = ctx.kwargs;
     let ok = |r: Result<(), String>, label: &str| match r {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("{label} failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("{label} failed: {e}")),
     };
 
     let cur = kw_i64(kw, "current_time")

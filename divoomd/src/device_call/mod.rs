@@ -1,6 +1,10 @@
 mod args;
 use crate::daemon::{Daemon, DeviceTransport};
 use crate::protocol::Request;
+use crate::protocol::{
+    err_code, err_with,
+    ErrorCode::{BadRequest, DeviceFailed, Unsupported},
+};
 use serde_json::Value;
 use std::time::Duration;
 
@@ -73,11 +77,8 @@ fn report_no_lan(dev: &DeviceTransport) -> Value {
             "no LAN address is configured for this device",
         ),
     };
-    let mut reply = crate::protocol::err_reply(why);
-    if let Value::Object(ref mut m) = reply {
-        m.insert("cause".into(), Value::String(cause.into()));
-    }
-    reply
+    // `cause` says which of the two it is; the code says no retry will help.
+    err_with(Unsupported, why, serde_json::json!({ "cause": cause }))
 }
 
 async fn handle_lan_fallback(
@@ -135,11 +136,11 @@ async fn handle_lan_fallback(
             )
             .await
     } else {
-        return crate::protocol::err_reply("method only supported on a BLE/SPP device");
+        return err_code(Unsupported, "method only supported on a BLE/SPP device");
     };
     match res {
         Ok(val) => serde_json::json!({ "success": true, "result": val }),
-        Err(e) => crate::protocol::err_reply(&e.to_string()),
+        Err(e) => err_code(DeviceFailed, &e.to_string()),
     }
 }
 
@@ -169,7 +170,7 @@ pub async fn handle_device_call(
 
     let blob_map_raw = match decode_blob_map(req) {
         Ok(m) => m,
-        Err(e) => return crate::protocol::err_reply(&e),
+        Err(e) => return err_code(BadRequest, &e),
     };
     let blob_map = std::sync::Mutex::new(blob_map_raw);
 

@@ -17,7 +17,7 @@ use serde_json::{json, Value};
 
 use std::sync::{Arc, OnceLock, Weak};
 
-use crate::protocol::{err_reply, Request};
+use crate::protocol::{err_code, ErrorCode, Request};
 use crate::socket_server::Handler;
 
 #[cfg(feature = "ble")]
@@ -207,7 +207,7 @@ impl Daemon {
 
         let _permit = match link.queue.acquire(token.map(str::to_string)).await {
             Ok(p) => p,
-            Err(e) => return err_reply(&e.to_string()),
+            Err(e) => return e.reply(),
         };
         if frame.is_some_and(|g| !device.is_newest_frame(g)) {
             return json!({ "success": true, "superseded": true });
@@ -263,7 +263,7 @@ impl Daemon {
                 id.as_deref(),
                 Some("degraded"),
             ));
-            err_reply(&msg)
+            err_code(ErrorCode::DeadlineExceeded, &msg)
         }
     }
 
@@ -428,7 +428,12 @@ impl Daemon {
 
 impl Handler for Daemon {
     fn handle<'a>(&'a self, req: Request) -> Pin<Box<dyn Future<Output = Value> + Send + 'a>> {
-        Box::pin(async move { self.dispatch(req).await })
+        Box::pin(async move {
+            let reply = self.dispatch(req).await;
+            // Every reply, in-process or socket, meets the code contract (P5.10).
+            crate::error_code::check_on_wire(&reply);
+            reply
+        })
     }
     fn subscribe(&self) -> Option<tokio::sync::broadcast::Receiver<Value>> {
         Some(self.tx.subscribe())

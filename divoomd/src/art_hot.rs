@@ -1,6 +1,7 @@
 //! Hot-channel update session: manifest fetch, file download, BLE streaming.
 //! Split from art.rs to keep both files under the 500-LOC ground rule.
 
+use crate::protocol::{err_code, ErrorCode};
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -131,7 +132,7 @@ pub async fn cmd_hot_manifest(args: &Value) -> Value {
         .build()
     {
         Ok(c) => c,
-        Err(e) => return crate::protocol::err_reply(&format!("hot_manifest: {e}")),
+        Err(e) => return err_code(ErrorCode::Internal, &format!("hot_manifest: {e}")),
     };
     match fetch_hot_manifest(&client, device_type).await {
         Ok(files) => {
@@ -152,7 +153,7 @@ pub async fn cmd_hot_manifest(args: &Value) -> Value {
                 "result": items,
             })
         }
-        Err(e) => crate::protocol::err_reply(&format!("hot_manifest: {e}")),
+        Err(e) => err_code(ErrorCode::UpstreamFailed, &format!("hot_manifest: {e}")),
     }
 }
 

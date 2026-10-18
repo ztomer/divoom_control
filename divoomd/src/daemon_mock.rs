@@ -5,7 +5,7 @@ use serde_json::{json, Value};
 
 use crate::daemon::{Daemon, DeviceTransport};
 use crate::daemon_connect::{owned_devices_payload, status_payload};
-use crate::protocol::{err_reply, Request};
+use crate::protocol::{err_code, ErrorCode, Request};
 
 /// Simulate a mid-session BLE/LAN drop (unexpected — not a clean user
 /// disconnect) on the daemon's mock transport, for hardware-free e2e tests of
@@ -29,7 +29,10 @@ pub(crate) async fn cmd_mock_simulate_drop(daemon: &Daemon, req: &Request) -> Va
     };
     let is_mock = matches!(transport.as_deref(), Some(DeviceTransport::Mock(_)));
     if !is_mock {
-        return err_reply("mock_simulate_drop requires an active mock connection");
+        return err_code(
+            ErrorCode::NoDevice,
+            "mock_simulate_drop requires an active mock connection",
+        );
     }
 
     let reason = req

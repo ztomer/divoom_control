@@ -97,7 +97,7 @@ pub fn protocol_capabilities() -> Vec<&'static str> {
     ]
 }
 
-pub use crate::error_code::{err_code, CodedError, ErrorCode};
+pub use crate::error_code::{err_code, err_with, ok_reply, CodedError, ErrorCode};
 
 /// A client request: `{"command": ..., "args": {...}, "token"?: ...}`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -117,30 +117,4 @@ pub fn make_request(command: &str, args: Option<Value>, token: Option<String>) -
         args: args.unwrap_or_else(|| Value::Object(serde_json::Map::new())),
         token,
     }
-}
-
-/// A successful reply `{"success": true, ...extra}`.
-#[must_use]
-pub fn ok_reply(extra: Value) -> Value {
-    merge_success(true, extra, None)
-}
-
-/// An error reply `{"success": false, "error": msg}`.
-#[must_use]
-pub fn err_reply(msg: &str) -> Value {
-    merge_success(false, Value::Object(serde_json::Map::new()), Some(msg))
-}
-
-fn merge_success(success: bool, extra: Value, error: Option<&str>) -> Value {
-    let mut map = serde_json::Map::new();
-    map.insert("success".into(), Value::Bool(success));
-    if let Some(e) = error {
-        map.insert("error".into(), Value::String(e.to_string()));
-    }
-    if let Value::Object(extra) = extra {
-        for (k, v) in extra {
-            map.insert(k, v);
-        }
-    }
-    Value::Object(map)
 }

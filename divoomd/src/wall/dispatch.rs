@@ -15,7 +15,7 @@
 //! up.
 
 use crate::daemon::Daemon;
-use crate::protocol::{err_reply, Request};
+use crate::protocol::{err_code, err_with, ErrorCode, Request};
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
@@ -35,7 +35,7 @@ impl Daemon {
         let guard = self.wall.lock().await;
         let Some(wall) = guard.as_ref() else {
             drop(guard);
-            return err_reply("no wall configured");
+            return err_code(ErrorCode::NoDevice, "no wall configured");
         };
 
         // Read a positional-or-keyword integer, by TRUE position (R67/C7).
@@ -63,7 +63,12 @@ impl Daemon {
                 };
                 let img_data = match std::fs::read(&path) {
                     Ok(d) => d,
-                    Err(e) => return err_reply(&format!("wall show_image: read {path}: {e}")),
+                    Err(e) => {
+                        return err_code(
+                            ErrorCode::BadRequest,
+                            &format!("wall show_image: read {path}: {e}"),
+                        )
+                    }
                 };
                 let time_ms = num(1, "time", 100).word();
                 wall.show_image(&img_data, time_ms).await
@@ -102,21 +107,31 @@ impl Daemon {
             other => {
                 // Honest refusal. Silently returning success for something the
                 // wall cannot do is exactly the failure this module fixes.
-                return err_reply(&format!(
-                    "'{other}' is not supported on a Virtual Wall (a wall is several \
+                return err_code(
+                    ErrorCode::Unsupported,
+                    &format!(
+                        "'{other}' is not supported on a Virtual Wall (a wall is several \
                      devices; per-device reads and settings have no wall-wide meaning)"
-                ));
+                    ),
+                );
             }
         };
 
-        // `degraded_slots` names the panels that did not take the command, so a
-        // partial success is reported as partial rather than as success.
-        let degraded = wall.degraded_slots();
-        if ok && degraded.is_empty() {
-            json!({"success": true, "result": true})
-        } else {
-            json!({"success": false, "result": false, "degraded": degraded,
-                   "error": "one or more wall panels did not accept the command"})
-        }
+        wall_outcome(ok, &wall.degraded_slots())
+    }
+}
+
+/// The reply to a wall command: a failure when any panel's write failed or
+/// any slot has no panel (`degraded` names those slots -- it does NOT name a
+/// linked panel whose write failed; that shows only as the failure itself).
+fn wall_outcome(ok: bool, degraded: &[String]) -> Value {
+    if ok && degraded.is_empty() {
+        json!({"success": true, "result": true})
+    } else {
+        err_with(
+            ErrorCode::DeviceFailed,
+            "one or more wall panels did not accept the command",
+            json!({"result": false, "degraded": degraded}),
+        )
     }
 }

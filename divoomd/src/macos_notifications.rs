@@ -220,7 +220,10 @@ pub async fn set_routing(args: &Value) -> Value {
     }
 
     if let Err(e) = save_routing_rules(&new_rules) {
-        return json!({"success": false, "error": format!("failed to save routing: {}", e)});
+        return crate::protocol::err_code(
+            crate::protocol::ErrorCode::Internal,
+            &format!("failed to save routing: {e}"),
+        );
     }
 
     let st = state();
@@ -332,35 +335,15 @@ async fn monitor_loop(
 
 // ── forward one notification to the device ────────────────────────────────
 
-/// The 0x50 notification payload: a bare app-type word, or the type, the
-/// text's length and up to 128 bytes of text.
-fn notification_payload(app_type: u8, text: &str) -> Vec<u8> {
-    let mut payload = Vec::new();
-    if text.is_empty() {
-        let wire = if app_type >= 8 {
-            app_type + 1
-        } else {
-            app_type
-        };
-        payload.push(wire);
-    } else {
-        let mut text_bytes = text.as_bytes().to_vec();
-        if text_bytes.len() > 128 {
-            text_bytes.truncate(128);
-        }
-        payload.push(app_type);
-        payload.push(text_bytes.len().byte());
-        payload.extend_from_slice(&text_bytes);
-    }
-    payload
-}
-
 /// A notification goes to EVERY linked panel that can take one. There is no
 /// "current" panel to pick (2026-09-12); a per-panel routing choice belongs
 /// in the routing rules if it is ever wanted. Returns whether any took it.
 #[cfg(feature = "ble")]
 async fn forward_notification(daemon: &Daemon, app_type: u8, text: &str) -> bool {
-    let payload = notification_payload(app_type, text);
+    // A routing rule naming type 255 has no wire value: nothing to send.
+    let Some(payload) = crate::ancs::payload(app_type, text) else {
+        return false;
+    };
     let mut delivered = false;
     for d in daemon.fleet.linked().await {
         let Some(dev) = d.transport().await else {
@@ -392,7 +375,7 @@ fn forward_notification(
     app_type: u8,
     text: &str,
 ) -> impl std::future::Future<Output = bool> + Send {
-    let _ = notification_payload(app_type, text);
+    let _ = crate::ancs::payload(app_type, text);
     std::future::ready(false)
 }
 

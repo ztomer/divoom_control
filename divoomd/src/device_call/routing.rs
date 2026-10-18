@@ -11,6 +11,7 @@ use super::{
     aid_sleep, alarm, animation, basic, design, drawing, game, music, sleep, system, text,
     timeplan, tools, CallCtx, Value,
 };
+use crate::protocol::{err_code, ErrorCode::UnknownCommand};
 
 /// The subsystem module that answers a method.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -442,6 +443,15 @@ pub(super) async fn route(method: &str, ctx: CallCtx<'_>) -> Value {
         Some(Family::Drawing) => drawing::handle(method, ctx).await,
         Some(Family::Music) => music::handle(method, ctx).await,
         Some(Family::Animation) => animation::handle(method, ctx).await,
-        None => crate::protocol::err_reply(&format!("device_call method not ported yet: {method}")),
+        None => err_code(
+            UnknownCommand,
+            &format!("device_call method not ported yet: {method}"),
+        ),
     }
+}
+
+/// Every method name `device_call` routes, for tests that must cover them all.
+#[cfg(test)]
+pub(crate) fn all_methods() -> impl Iterator<Item = &'static str> {
+    ROUTES.iter().flat_map(|(_, names)| names.iter().copied())
 }

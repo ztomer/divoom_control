@@ -1,7 +1,10 @@
 mod temp;
 
 use super::CallCtx;
-use crate::protocol::err_reply;
+use crate::protocol::{
+    err_code,
+    ErrorCode::{BadRequest, DeviceFailed, UnknownCommand},
+};
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
@@ -70,7 +73,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             if let Some(v) = super::system_sound::handle(method, ctx).await {
                 return v;
             }
-            err_reply("unimplemented system command")
+            err_code(UnknownCommand, "unimplemented system command")
         }
     }
 }
@@ -90,7 +93,7 @@ async fn set_hour_type(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0x2c, &[hour_type], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_hour_type failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_hour_type failed: {e}")),
     }
 }
 
@@ -129,7 +132,8 @@ async fn set_date_time(ctx: CallCtx<'_>) -> Value {
                 .any(|k| m.contains_key(*k))
         });
     if !supplied {
-        return err_reply(
+        return err_code(
+            BadRequest,
             "set_date_time needs the time: pass year/month/day/hour/minute/second \
                  (with none supplied this would set the device to 2000-01-01)",
         );
@@ -152,7 +156,7 @@ async fn set_date_time(ctx: CallCtx<'_>) -> Value {
     ];
     match dev.send_command(0x18, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_date_time failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_date_time failed: {e}")),
     }
 }
 
@@ -182,7 +186,7 @@ async fn set_bluetooth_password(ctx: CallCtx<'_>) -> Value {
 
     if control == 1 {
         if password.len() != 4 || !password.chars().all(|c| c.is_ascii_digit()) {
-            return err_reply("Password must be a 4-digit string");
+            return err_code(BadRequest, "Password must be a 4-digit string");
         }
         for c in password.chars() {
             // `to_digit(10)` returns 0..=9 by contract (and the
@@ -193,7 +197,7 @@ async fn set_bluetooth_password(ctx: CallCtx<'_>) -> Value {
 
     match dev.send_command(0x27, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_bluetooth_password failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_bluetooth_password failed: {e}")),
     }
 }
 
@@ -223,7 +227,7 @@ async fn set_work_mode(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0x05, &[mode], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_work_mode failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_work_mode failed: {e}")),
     }
 }
 
@@ -247,7 +251,7 @@ async fn set_channel(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0x45, &[channel_id], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_channel failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_channel failed: {e}")),
     }
 }
 
@@ -262,7 +266,7 @@ async fn set_hot(ctx: CallCtx<'_>) -> Value {
     let enabled = crate::device_call::pos_bool(raw_args, 0, kw, "enabled", false);
     match dev.send_command(0x26, &[u8::from(enabled)], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_hot failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_hot failed: {e}")),
     }
 }
 
@@ -282,7 +286,7 @@ async fn set_keyboard(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0x23, &[key], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("set_keyboard failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("set_keyboard failed: {e}")),
     }
 }
 
@@ -302,6 +306,6 @@ async fn send_sd_status(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0x15, &[status], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("send_sd_status failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("send_sd_status failed: {e}")),
     }
 }

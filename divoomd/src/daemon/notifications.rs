@@ -27,12 +27,11 @@ mod macos {
             status["success"] = json!(true);
             return status;
         }
-        json!({
-            "success": false,
-            "error": "daemon not initialized",
-            "state": "idle",
-            "counters": {"seen": 0, "routed": 0, "dropped": 0},
-        })
+        crate::protocol::err_with(
+            crate::protocol::ErrorCode::Internal,
+            "daemon not initialized",
+            json!({"state": "idle", "counters": {"seen": 0, "routed": 0, "dropped": 0}}),
+        )
     }
 
     pub(in crate::daemon) async fn stop() -> Value {
@@ -65,10 +64,8 @@ mod other {
         })
     }
 
-    fn idle_with(success: bool) -> Value {
-        let mut v = idle();
-        v["success"] = json!(success);
-        v
+    fn idle_ok() -> Value {
+        crate::protocol::ok_reply(idle())
     }
 
     pub(in crate::daemon) fn status_event() -> impl Future<Output = Value> + Send {
@@ -78,22 +75,24 @@ mod other {
     /// Same arguments as the macOS entry point so the dispatch table needs
     /// no `cfg` of its own.
     pub(in crate::daemon) fn start(_daemon: &Daemon) -> impl Future<Output = Value> + Send {
-        let mut v = idle_with(false);
-        v["error"] = json!("notifications not available on this platform");
-        v["unsupported"] = json!(true);
-        v["code"] = json!(crate::protocol::ErrorCode::Unsupported.as_str());
-        ready(v)
+        let mut detail = idle();
+        detail["unsupported"] = json!(true);
+        ready(crate::protocol::err_with(
+            crate::protocol::ErrorCode::Unsupported,
+            "notifications not available on this platform",
+            detail,
+        ))
     }
 
     pub(in crate::daemon) fn stop() -> impl Future<Output = Value> + Send {
-        ready(idle_with(true))
+        ready(idle_ok())
     }
 
     pub(in crate::daemon) fn status() -> impl Future<Output = Value> + Send {
-        ready(idle_with(true))
+        ready(idle_ok())
     }
 
     pub(in crate::daemon) fn set_routing(_req: Request) -> impl Future<Output = Value> + Send {
-        ready(json!({"success": true}))
+        ready(crate::protocol::ok_reply(json!({})))
     }
 }

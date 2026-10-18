@@ -7,7 +7,7 @@
 use serde_json::{json, Value};
 
 use crate::command_args::missing;
-use crate::protocol::{err_reply, Request};
+use crate::protocol::{err_code, ErrorCode, Request};
 
 /// Handle a cloud command. The caller routes only the cloud command names here.
 pub async fn handle(command: &str, req: &Request) -> Value {
@@ -40,7 +40,10 @@ pub async fn handle(command: &str, req: &Request) -> Value {
 
         "get_photo_albums" => get_photo_albums().await,
 
-        other => err_reply(&format!("not a cloud command: {other}")),
+        other => err_code(
+            ErrorCode::UnknownCommand,
+            &format!("not a cloud command: {other}"),
+        ),
     }
 }
 async fn fetch_gallery(req: &Request) -> Value {
@@ -64,7 +67,7 @@ async fn fetch_gallery(req: &Request) -> Value {
         .unwrap_or(127);
     match crate::cloud::fetch_gallery(classify, limit, file_sort, file_size).await {
         Ok(res) => json!({ "success": true, "result": res }),
-        Err(e) => err_reply(&e),
+        Err(e) => err_code(ErrorCode::UpstreamFailed, &e),
     }
 }
 
@@ -104,9 +107,12 @@ async fn save_credentials(req: &Request) -> Value {
                 "utc": creds.utc,
                 "password_store": crate::secret_store::label(),
             }),
-            Err(e) => err_reply(&format!("saved, but login failed: {e}")),
+            Err(e) => err_code(
+                ErrorCode::UpstreamFailed,
+                &format!("saved, but login failed: {e}"),
+            ),
         },
-        Err(e) => err_reply(&e),
+        Err(e) => err_code(ErrorCode::Internal, &e),
     }
 }
 
@@ -125,7 +131,7 @@ async fn get_credentials(req: &Request) -> Value {
             "utc": creds.utc,
             "password_store": crate::secret_store::label(),
         }),
-        Err(e) => err_reply(&e),
+        Err(e) => err_code(ErrorCode::UpstreamFailed, &e),
     }
 }
 
@@ -158,7 +164,7 @@ async fn get_category_file_list(req: &Request) -> Value {
         .unwrap_or(20);
     match crate::cloud::get_category_file_list(classify, limit).await {
         Ok(res) => json!({ "success": true, "result": res }),
-        Err(e) => err_reply(&e),
+        Err(e) => err_code(ErrorCode::UpstreamFailed, &e),
     }
 }
 
@@ -175,14 +181,14 @@ async fn store_clock_faces(req: &Request) -> Value {
         .unwrap_or(1);
     match crate::cloud_dials::store_clock_faces(limit, page).await {
         Ok(res) => json!({ "success": true, "result": res }),
-        Err(e) => err_reply(&e),
+        Err(e) => err_code(ErrorCode::UpstreamFailed, &e),
     }
 }
 
 async fn get_dial_types() -> Value {
     match crate::cloud::get_dial_types().await {
         Ok(res) => json!({ "success": true, "result": res }),
-        Err(e) => err_reply(&e),
+        Err(e) => err_code(ErrorCode::UpstreamFailed, &e),
     }
 }
 
@@ -198,7 +204,7 @@ async fn get_dial_list(req: &Request) -> Value {
         .unwrap_or(1);
     match crate::cloud::get_dial_list(&dial_type, page).await {
         Ok(res) => json!({ "success": true, "result": res }),
-        Err(e) => err_reply(&e),
+        Err(e) => err_code(ErrorCode::UpstreamFailed, &e),
     }
 }
 
@@ -215,7 +221,7 @@ async fn list_clock_faces(req: &Request) -> Value {
         .unwrap_or(1);
     match crate::cloud::list_clock_faces(dial_type, page).await {
         Ok(res) => json!({ "success": true, "result": res }),
-        Err(e) => err_reply(&e),
+        Err(e) => err_code(ErrorCode::UpstreamFailed, &e),
     }
 }
 
@@ -227,7 +233,7 @@ async fn search_weather_city(req: &Request) -> Value {
         .unwrap_or("");
     match crate::cloud::search_weather_city(keyword).await {
         Ok(res) => json!({ "success": true, "result": res }),
-        Err(e) => err_reply(&e),
+        Err(e) => err_code(ErrorCode::UpstreamFailed, &e),
     }
 }
 
@@ -256,7 +262,7 @@ async fn get_aid_sleep_list(command: &str, req: &Request) -> Value {
     };
     match result {
         Ok(res) => json!({ "success": true, "result": res }),
-        Err(e) => err_reply(&e),
+        Err(e) => err_code(ErrorCode::UpstreamFailed, &e),
     }
 }
 
@@ -273,7 +279,7 @@ async fn get_my_playlists(req: &Request) -> Value {
         .unwrap_or(1);
     match crate::cloud::get_my_playlists(limit, page).await {
         Ok(res) => json!({ "success": true, "result": res }),
-        Err(e) => err_reply(&e),
+        Err(e) => err_code(ErrorCode::UpstreamFailed, &e),
     }
 }
 
@@ -293,13 +299,13 @@ async fn get_playlist_images(req: &Request) -> Value {
         .unwrap_or(1);
     match crate::cloud::get_playlist_images(play_id, limit, page).await {
         Ok(res) => json!({ "success": true, "result": res }),
-        Err(e) => err_reply(&e),
+        Err(e) => err_code(ErrorCode::UpstreamFailed, &e),
     }
 }
 
 async fn get_photo_albums() -> Value {
     match crate::cloud::get_photo_albums().await {
         Ok(res) => json!({ "success": true, "result": res }),
-        Err(e) => err_reply(&e),
+        Err(e) => err_code(ErrorCode::UpstreamFailed, &e),
     }
 }

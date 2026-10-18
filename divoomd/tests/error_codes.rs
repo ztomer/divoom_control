@@ -104,3 +104,69 @@ fn every_code_has_a_distinct_snake_case_wire_name() {
         );
     }
 }
+
+/// A device failure reaches an MCP agent and a CLI script as its class, not
+/// only as prose (P5.10): the write fails on a real socket, and the client
+/// half (`ToolError::from_reply`, `cli_line`) carries `device_failed`.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_failed_write_reaches_mcp_and_the_cli_as_device_failed() {
+    use divoomd::daemon::DeviceTransport;
+    use divoomd::daemon_target::DaemonTarget;
+    use divoomd::mcp_tools::call_tool;
+
+    let path = std::env::temp_dir().join(format!("divoomd_p510_{}.sock", std::process::id()));
+    let _ = std::fs::remove_file(&path);
+    let d = Arc::new(Daemon::new());
+    d.initialize_self_weak(Arc::downgrade(&d));
+    let r = ask(&d, "connect", json!({ "mock": true, "mac": "FAILS" })).await;
+    assert_eq!(r["success"], json!(true), "{r}");
+    let t = d.current_transport().await.expect("the mock panel");
+    let DeviceTransport::Mock(m) = &*t else {
+        panic!("expected the mock transport")
+    };
+    m.set_failing(true);
+
+    let listener = Arc::new(UnixListener::bind(&path).expect("bind"));
+    tokio::spawn(serve(listener, d.clone(), 8, Duration::from_secs(60)));
+    let target = DaemonTarget::Unix(path.to_string_lossy().into_owned());
+    let err = call_tool(
+        "set_volume",
+        &json!({ "level": 7, "mac": "FAILS" }),
+        &target,
+    )
+    .await
+    .expect_err("the write fails");
+    assert_eq!(err.code.as_deref(), Some("device_failed"), "{err}");
+    assert!(
+        err.cli_line().ends_with(" [device_failed]"),
+        "{}",
+        err.cli_line()
+    );
+    let _ = std::fs::remove_file(&path);
+}
+
+/// The code table clients read (`docs/MCP_SERVER.md`) lists exactly the
+/// codes the daemon can send, so a new code cannot ship undocumented and a
+/// retired one cannot linger.
+#[test]
+fn the_documented_code_table_is_the_code_set() {
+    let doc = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/MCP_SERVER.md"),
+    )
+    .expect("docs/MCP_SERVER.md");
+    let start = doc
+        .find("<!-- error-codes:start -->")
+        .expect("the table's start marker");
+    let end = doc
+        .find("<!-- error-codes:end -->")
+        .expect("the table's end marker");
+    let mut documented: Vec<&str> = doc[start..end]
+        .lines()
+        .filter_map(|l| l.strip_prefix("| `"))
+        .filter_map(|l| l.split('`').next())
+        .collect();
+    let mut codes: Vec<&str> = ErrorCode::ALL.iter().map(|c| c.as_str()).collect();
+    documented.sort_unstable();
+    codes.sort_unstable();
+    assert_eq!(documented, codes, "docs/MCP_SERVER.md vs ErrorCode::ALL");
+}

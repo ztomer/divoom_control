@@ -19,7 +19,10 @@ use serde_json::{json, Map, Value};
 
 use super::CallCtx;
 use crate::daemon::DeviceTransport;
-use crate::protocol::err_reply;
+use crate::protocol::{
+    err_code,
+    ErrorCode::{BadRequest, DeviceFailed, UnknownCommand},
+};
 
 fn kw_i64(kw: Option<&Map<String, Value>>, name: &str) -> Option<i64> {
     kw.and_then(|m| m.get(name))
@@ -39,7 +42,7 @@ fn kw_bytes(kw: Option<&Map<String, Value>>, name: &str) -> Vec<u8> {
 async fn send(dev: &DeviceTransport, cmd: u8, p: &[u8], label: &str) -> Value {
     match dev.send_command(cmd, p, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_reply(&format!("{label} failed: {e}")),
+        Err(e) => err_code(DeviceFailed, &format!("{label} failed: {e}")),
     }
 }
 
@@ -108,7 +111,7 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         "drawing.set_scroll" | "set_scroll" | "drawing.pic_scan_ctrl" | "pic_scan_ctrl" => {
             set_scroll(ctx).await
         }
-        _ => err_reply("unimplemented drawing command"),
+        _ => err_code(UnknownCommand, "unimplemented drawing command"),
     }
 }
 async fn drawing_ctrl_movie_play(ctx: CallCtx<'_>) -> Value {
@@ -263,7 +266,12 @@ async fn sand_paint_ctrl(ctx: CallCtx<'_>) -> Value {
             p.extend_from_slice(&data("image_data"));
         }
         1 => {}
-        _ => return err_reply(&format!("sand_paint_ctrl: unknown control {control}")),
+        _ => {
+            return err_code(
+                BadRequest,
+                &format!("sand_paint_ctrl: unknown control {control}"),
+            )
+        }
     }
     send(dev, 0x34, &p, "sand_paint_ctrl").await
 }
@@ -278,17 +286,21 @@ async fn set_scroll(ctx: CallCtx<'_>) -> Value {
     // R72 fixed, and it cost two invalid hardware runs this round
     // before anyone noticed the zeros.
     let (Some(mode), Some(speed)) = (kw_i64(kw, "mode"), kw_i64(kw, "speed")) else {
-        return err_reply(
+        return err_code(
+            BadRequest,
             "set_scroll requires both `mode` and `speed`; refusing to \
                      send a zero-speed no-op and report it as success",
         );
     };
     if let Some(c) = kw_i64(kw, "control") {
         if c != 0 {
-            return err_reply(&format!(
-                "set_scroll: control={c} has no counterpart in the APK \
+            return err_code(
+                BadRequest,
+                &format!(
+                    "set_scroll: control={c} has no counterpart in the APK \
                      (CmdManager.b3 is the only SPP_SCROLL builder); only 0 is real"
-            ));
+                ),
+            );
         }
     }
     let mut p = vec![0u8, mode.byte()];

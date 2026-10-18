@@ -4,6 +4,79 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P5.10 — every failure reply carries a `code` (2026-10-18)
+
+P3.2 put a stable `code` on daemon failures so clients branch on a class,
+not on prose (the Settings card; MCP's `ToolError { message, code }` since
+P5.8; the CLI's `<message> [<code>]`). P5.9 closed the missing-argument
+refusals. About 230 other refusals still went out through
+`protocol::err_reply` or a hand-built `{"success": false}` with no `code`.
+
+- **An uncoded failure can no longer be built.** `protocol::err_reply` is
+  deleted. `error_code.rs` is now the only place a reply's `success` is
+  written: `ok_reply`, `err_code(code, msg)` and `err_with(code, msg,
+  detail)`. Both failure constructors take an `ErrorCode`, and `err_with`
+  writes `success`/`error`/`code` last, so a reply's own detail (`degraded`,
+  `cause`, `state`) cannot overwrite them. Every site was converted,
+  including the computed `"success": ok` replies (`custom_art_push`,
+  `sync_artwork`, `send_gamecontrol`, the non-macOS notification stubs).
+- **Five codes added, each a different client action:** `device_failed` (the
+  panel or its link did not do it: retry or check the panel, as opposed to
+  `bad_request`'s fix-the-request), `busy` (a scan, connect or hot update is
+  already running, or another session holds the panel: retry when it is done;
+  `AcquireError::HeldByAnother` maps here and `Stopped` to
+  `device_disconnected`), `unauthorized` (resend with the token),
+  `upstream_failed` (the Divoom cloud, weather or quotes failed: a network or
+  account problem, not the panel) and `internal` (the daemon or its host
+  failed: report it). `unsupported` now also covers a panel whose link
+  cannot do the command (a LAN panel's Bluetooth-only call, with `cause`
+  saying which). `connect` without BLE already used it for the build.
+  `unknown_command` covers an unknown `device_call` method, and `no_device`
+  covers a wall call with no wall.
+- **The wire checks it.** `error_code::check_on_wire` runs on every reply in
+  `Daemon::handle` and in the socket's `write_line`. An uncoded failure fails
+  a debug build, so every test that provokes one goes red. A release build
+  logs it and still sends the reply.
+- **What the sweep found besides missing codes.** `tools.show_notification`
+  computed the ANCS wire type as `app_type + 1` on a `u8`, so an `app_type`
+  of 255 or more (saturated to 255) panicked in a debug build and wrapped to
+  0 in a release one. The macOS notification forwarder had the same mapping
+  copied (a routing rule naming type 255). Both now build the payload in
+  `divoomd/src/ancs.rs`, which refuses the one type with no wire value.
+  `custom_art_push` stopped the panel's live job and downloaded every file
+  from the cloud before noticing that a LAN or mock panel cannot take the
+  page. It now refuses `unsupported` first, with no effect.
+- **Clients.** The GUI reads `error`, `cause` (LAN) and the status
+  `error_code`, and those are unchanged. `hot_progress`'s `result` is now the
+  push's own reply, so its `success` is unchanged and a failure gains its
+  code. MCP and CLI read `code` through `ToolError::from_reply`, which is
+  unchanged. A new socket test drives a failed write through `call_tool` and
+  gets `device_failed` and `... [device_failed]`. `docs/MCP_SERVER.md` holds
+  the code table, and a test holds that table equal to `ErrorCode::ALL`.
+- **Tests, each watched red.** `reply_code_sweep_tests` drives every
+  dispatcher command except the 25 in `NOT_DRIVEN` (radio, cloud, host
+  services, user files, each named with what it would touch). Each runs
+  against a bare daemon, a mock panel and a mock panel whose writes fail
+  (`MockTransport::set_failing`), with five argument shapes. It also drives
+  every `device_call` method under five argument shapes on both panels, and
+  every wall method with and without a wall. On `a2f04fb` the command sweep
+  found 16 uncoded replies of 478 and the wall sweep 34 of 36. The
+  `device_call` sweep stopped at the `show_notification` overflow panic. `reply_shape_scan_tests` scans non-test source for
+  `err_reply` and any `"success"` written as anything but `true`. It found
+  249 sites on `a2f04fb`, and its own self-test went red with the
+  `err_reply` probe disabled. Also watched red: the wire-check
+  `should_panic` (with the assert removed), its shape test (with the prose
+  check removed), the MCP/CLI test (with `set_volume` mapped to another
+  code), the doc-table test (with one row removed), `ancs` (with the
+  overflow restored) and `NOT_DRIVEN`'s staleness check (with a bogus
+  entry). `protocol_behavior.rs` pinned `err_reply("boom")` as
+  `{"success": false, "error": "boom"}`, the wrong shape, and now pins the
+  coded one.
+  Rust: 507 passed without BLE (`cargo test -p divoomd
+  --no-default-features`), 627 with (`cargo test --workspace`). pytest: 1897
+  passed / 164 skipped, and the library suite 1019 / 76. The browser suites
+  (`--run-browser`, the playwright files): 213 passed.
+
 ## P5.9 — P5.8's three leftovers (2026-10-18)
 
 P5.8 (`0f73dda`) made the daemon refuse a panel action for a panel no link

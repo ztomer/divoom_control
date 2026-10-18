@@ -1,5 +1,6 @@
 use crate::transport::BleResult;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -8,6 +9,9 @@ pub struct MockTransport {
     pub device_name: Arc<Mutex<Option<String>>>,
     pub sent_commands: SentCommands,
     pub simulated_responses: Arc<Mutex<HashMap<u8, Vec<u8>>>>,
+    /// While set, every write fails and no response arrives: the panel a
+    /// test needs to drive a handler down its device-failure path (P5.10).
+    pub fail_writes: Arc<AtomicBool>,
 }
 
 /// Shared record of every command byte-pair the mock has been asked to send.
@@ -20,7 +24,17 @@ impl MockTransport {
             device_name: Arc::new(Mutex::new(Some("MockDitoo".to_string()))),
             sent_commands: Arc::new(Mutex::new(Vec::new())),
             simulated_responses: Arc::new(Mutex::new(HashMap::new())),
+            fail_writes: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// Make every later write fail (and no response arrive), or stop doing so.
+    pub fn set_failing(&self, failing: bool) {
+        self.fail_writes.store(failing, Ordering::SeqCst);
+    }
+
+    fn failing(&self) -> bool {
+        self.fail_writes.load(Ordering::SeqCst)
     }
 
     #[must_use]
@@ -47,8 +61,9 @@ impl MockTransport {
     ///
     /// # Errors
     ///
-    /// Never; the signature carries the real transport's error type so the
-    /// two are interchangeable behind `DeviceTransport`.
+    /// Only while [`Self::set_failing`] is on; the signature carries the real
+    /// transport's error type so the two are interchangeable behind
+    /// `DeviceTransport`.
     ///
     /// # Panics
     ///
@@ -60,6 +75,9 @@ impl MockTransport {
         args: &[u8],
         _write_with_response: bool,
     ) -> impl std::future::Future<Output = BleResult<()>> + Send {
+        if self.failing() {
+            return std::future::ready(Err("mock panel: the write failed (injected)".into()));
+        }
         self.sent_commands
             .lock()
             .unwrap()
@@ -79,6 +97,9 @@ impl MockTransport {
         command_id: u8,
         _timeout: Duration,
     ) -> impl std::future::Future<Output = Option<Vec<u8>>> + Send {
+        if self.failing() {
+            return std::future::ready(None);
+        }
         let resp = self
             .simulated_responses
             .lock()
@@ -103,7 +124,8 @@ impl MockTransport {
     ///
     /// # Errors
     ///
-    /// Never; the real transport's error type, for interchangeability.
+    /// Only while [`Self::set_failing`] is on; the real transport's error
+    /// type, for interchangeability.
     ///
     /// # Panics
     ///
@@ -113,6 +135,9 @@ impl MockTransport {
         &self,
         blob: &[u8],
     ) -> impl std::future::Future<Output = BleResult<bool>> + Send {
+        if self.failing() {
+            return std::future::ready(Err("mock panel: the transfer failed (injected)".into()));
+        }
         self.sent_commands
             .lock()
             .unwrap()

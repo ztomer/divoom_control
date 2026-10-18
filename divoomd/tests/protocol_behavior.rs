@@ -4,7 +4,7 @@
 
 use divoomd::commands::{command_id, COMMAND_COUNT};
 use divoomd::protocol::{
-    encode_message, err_reply, iter_messages, make_request, ok_reply, Request,
+    encode_message, err_code, err_with, iter_messages, make_request, ok_reply, ErrorCode, Request,
 };
 use serde_json::{json, Value};
 
@@ -126,9 +126,24 @@ fn replies_have_success_flag() {
         ok_reply(json!({"result": 60})),
         json!({"success": true, "result": 60})
     );
+    // A failure always carries its class (P5.10): there is no code-less
+    // constructor left to build `{"success": false, "error": "boom"}`.
     assert_eq!(
-        err_reply("boom"),
-        json!({"success": false, "error": "boom"})
+        err_code(ErrorCode::DeviceFailed, "boom"),
+        json!({"success": false, "error": "boom", "code": "device_failed"})
+    );
+    // A reply's own detail rides along but cannot overwrite the contract.
+    assert_eq!(
+        err_with(
+            ErrorCode::Busy,
+            "boom",
+            json!({"degraded": ["A"], "success": true, "code": "x"})
+        ),
+        json!({"success": false, "error": "boom", "code": "busy", "degraded": ["A"]})
+    );
+    assert_eq!(
+        ok_reply(json!({"success": false})),
+        json!({"success": true})
     );
 }
 
