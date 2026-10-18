@@ -193,6 +193,23 @@ pub(crate) mod fake {
             Self::replying(json!({ "success": true, "result": result }), token).await
         }
 
+        /// Answer request `i` with `replies[i]`, the last one for the rest:
+        /// a daemon that grants the first steps of a sequence and refuses a
+        /// later one, so the caller's clean-up path can be watched.
+        pub async fn scripted(replies: Vec<Value>) -> Self {
+            Self::serve(
+                Box::new(move |i| {
+                    replies
+                        .get(i)
+                        .or_else(|| replies.last())
+                        .cloned()
+                        .unwrap_or(Value::Null)
+                }),
+                None,
+            )
+            .await
+        }
+
         /// Answer every request with exactly `reply`.
         ///
         /// Needed because a daemon that REFUSES is a different case from an
@@ -202,6 +219,13 @@ pub(crate) mod fake {
         /// client that treats any parseable reply as success would pass every
         /// test written against the success shape.
         pub async fn replying(reply: Value, token: Option<&str>) -> Self {
+            Self::serve(Box::new(move |_| reply.clone()), token).await
+        }
+
+        async fn serve(
+            reply: Box<dyn Fn(usize) -> Value + Send + Sync>,
+            token: Option<&str>,
+        ) -> Self {
             let listener = TcpListener::bind("127.0.0.1:0")
                 .await
                 .expect("bind an ephemeral port");
@@ -216,14 +240,16 @@ pub(crate) mod fake {
                     if reader.read_line(&mut line).await.is_err() {
                         continue;
                     }
+                    let mut index = 0;
                     if let Ok(v) = serde_json::from_str(line.trim()) {
                         // Recorded BEFORE the reply: once a call has returned, its
                         // request is guaranteed to be visible to `requests()`.
                         if let Ok(mut guard) = sink.lock() {
+                            index = guard.len();
                             guard.push(v);
                         }
                     }
-                    let mut bytes = serde_json::to_vec(&reply).unwrap_or_default();
+                    let mut bytes = serde_json::to_vec(&reply(index)).unwrap_or_default();
                     bytes.push(b'\n');
                     // A client that hung up mid-reply ends the connection on
                     // its own; there is nothing to recover and nothing to report.

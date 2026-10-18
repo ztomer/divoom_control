@@ -14,7 +14,8 @@ use base64::Engine;
 use serde_json::{json, Value};
 
 use crate::arg_bounds::{
-    BLUE_SCORE, COUNTDOWN_MINUTES, COUNTDOWN_SECONDS, IMAGE_SIZE, LEASE_TTL_MS, RED_SCORE,
+    BLUE_SCORE, COUNTDOWN_MINUTES, COUNTDOWN_SECONDS, IMAGE_SIZE, LEASE_TTL_MS, NOTIFY_DURATION_MS,
+    RED_SCORE,
 };
 use crate::daemon_target::DaemonTarget;
 use crate::mcp_daemon::{cmd, dc};
@@ -56,6 +57,8 @@ pub fn catalog() -> Vec<Value> {
             &json!({"type":"object","properties":{"action":{"type":"string","enum":names(&TIMER_ACTIONS)}},"required":["action"]})),
         tool("set_countdown", "Start a countdown of minutes:seconds, or stop the running one.",
             &json!({"type":"object","properties":{"action":{"type":"string","enum":names(&COUNTDOWN_ACTIONS)},"minutes":COUNTDOWN_MINUTES.schema(),"seconds":COUNTDOWN_SECONDS.schema()},"required":["action"]})),
+        tool("notify", "Show a short message on the panel for duration_ms, then give the panel back -- its live widget returns by itself; nothing waits. Refused while someone holds the panel's lease. Returns the notification's lease: lease_release dismisses it early.",
+            &json!({"type":"object","properties":{"text":{"type":"string"},"duration_ms":NOTIFY_DURATION_MS.schema(),"color":{"type":"string"},"size":IMAGE_SIZE.schema()},"required":["text","duration_ms"]})),
         tool("lease_acquire", "Borrow the panel's screen for ttl_ms (renew before it runs out). Pass the returned lease to every drawing call; anyone else is refused, and the panel's live widget pauses. When the lease ends -- released, or expired because you stopped renewing -- the widget's newest frame comes back at once.",
             &json!({"type":"object","properties":{"ttl_ms":LEASE_TTL_MS.schema(),"holder":{"type":"string","description":"Who is asking, shown to anyone refused."}},"required":["ttl_ms"]})),
         tool("lease_renew", "Extend your lease to ttl_ms from now.",
@@ -88,18 +91,34 @@ pub async fn call(name: &str, a: &Value, target: &DaemonTarget) -> Option<Result
             .await
         }
         "set_countdown" => set_countdown(a, target, mac).await,
+        "notify" => notify(a, target, mac).await,
         "lease_acquire" | "lease_renew" | "lease_release" => lease(name, a, target, mac).await,
         _ => return None,
     })
 }
 
-async fn show_text(a: &Value, target: &DaemonTarget, mac: Option<&str>) -> Result<Value, String> {
-    let text = a
-        .get("text")
+fn text_arg(a: &Value) -> Result<&str, String> {
+    a.get("text")
         .and_then(Value::as_str)
         .filter(|t| !t.trim().is_empty())
-        .ok_or("text must be a non-empty string")?;
+        .ok_or_else(|| "text must be a non-empty string".into())
+}
+
+async fn show_text(a: &Value, target: &DaemonTarget, mac: Option<&str>) -> Result<Value, String> {
+    let text = text_arg(a)?;
     let size = crate::mcp_tools::panel_size(a, target, mac).await?;
+    draw_text(a, text, size, target, mac).await?;
+    Ok(json!({ "ok": true, "text": text, "size": size }))
+}
+
+/// Render `text` in the device font and push it as one frame at `size`.
+async fn draw_text(
+    a: &Value,
+    text: &str,
+    size: u32,
+    target: &DaemonTarget,
+    mac: Option<&str>,
+) -> Result<(), String> {
     // The text renderer draws up to 64 px; a larger panel gets that frame
     // scaled by a whole factor (128 = 2x), which nearest-neighbour keeps
     // exact, rather than a 64 px frame on a 128 px panel.
@@ -132,8 +151,44 @@ async fn show_text(a: &Value, target: &DaemonTarget, mac: Option<&str>) -> Resul
         crate::image_fit::Fit::Exact,
     )?;
     let edge = i32::try_from(size).map_err(|e| e.to_string())?;
-    crate::mcp_tools::push_frames(target, &[(frame.into_raw(), edge, edge, 100)], mac).await?;
-    Ok(json!({ "ok": true, "text": text, "size": size }))
+    crate::mcp_tools::push_frames(target, &[(frame.into_raw(), edge, edge, 100)], mac).await
+}
+
+/// `notify` (P4.7): a screen lease whose TTL IS the notification's
+/// duration, with the text drawn under it. Nothing waits for the end: the
+/// lease lapses by itself and the daemon hands the panel back (its live
+/// widget's newest frame; see `crate::lease`), so the tool returns at once
+/// and an agent that dies mid-notification cannot leave it up. A failed
+/// draw gives the lease back at once rather than holding a blank borrow.
+async fn notify(a: &Value, target: &DaemonTarget, mac: Option<&str>) -> Result<Value, String> {
+    let text = text_arg(a)?;
+    let duration = NOTIFY_DURATION_MS.read(a)?;
+    let size = crate::mcp_tools::panel_size(a, target, mac).await?;
+    let mut args = json!({ "ttl_ms": duration, "holder": "notification" });
+    if let Some(m) = mac {
+        args["mac"] = json!(m);
+    }
+    let lease = cmd(target, "lease_acquire", args)
+        .await
+        .and_then(crate::mcp_daemon::check)?;
+    let token = lease
+        .get("token")
+        .and_then(Value::as_str)
+        .ok_or("lease_acquire returned no token")?
+        .to_string();
+    // The panel the lease landed on, so the draw cannot go anywhere else.
+    let panel = lease.get("mac").and_then(Value::as_str).or(mac);
+    let drawn =
+        crate::mcp_daemon::with_lease(Some(token.clone()), draw_text(a, text, size, target, panel))
+            .await;
+    if let Err(e) = drawn {
+        let _ = cmd(target, "lease_release", json!({ "token": token })).await;
+        return Err(e);
+    }
+    Ok(json!({
+        "ok": true, "text": text, "size": size, "duration_ms": duration,
+        "mac": panel, "lease": token,
+    }))
 }
 
 /// The panel a live-job call is about: the one named, else the active one.

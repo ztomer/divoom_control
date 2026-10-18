@@ -123,7 +123,7 @@ P3.3, weather drawn by us as a `render_widget` frame and pushed like every other
 
 **Goal:** an external agent can discover each panel, draw on it at its real
 resolution, and share it with background jobs without collisions. The
-catalog had 14 tools when this phase opened; it has 24.
+catalog had 14 tools when this phase opened; it has 25.
 **Exit:** an MCP client draws a full-resolution multi-frame image on a 64x64
 panel while a live job runs, and the panel returns to the job when the lease
 expires (e2e over the real `divoomd mcp` entry point). **Size:** L.
@@ -133,13 +133,8 @@ P4.2, `list_screens` listing every known or placed screen with its size, live li
 P4.3, `show_image` drawing at the panel's size under a `resize` policy, every decoded frame held to the 256-colour palette (`divoomd/src/image_fit.rs`);
 P4.4, `push_animation` playing every frame with its own duration through one multi-frame `show_image` call;
 P4.5, text, live jobs, scoreboard, timer and countdown as MCP tools in the one catalog, every integer range stated once (`divoomd/src/arg_bounds.rs`);
-P4.6, screen leases: `lease_acquire`/`lease_renew`/`lease_release` with a mandatory bounded TTL, the live widget paused under a lease and repainted from its newest frame when the lease ends or lapses, `show_image` pushes conflated latest-wins (`divoomd/src/lease.rs`; the Phase 4 exit is `divoomd/tests/mcp_lease_e2e.rs`).
-
-#### P4.7 — Transient notifications as a tool
-**Status:** OPEN
-**Why:** no MCP tool shows an alert and then gives the panel back.
-**Done when:** a notification tool shows for a bounded time and restores the
-previous content, using a screen lease (`lease_acquire`, `divoomd/src/lease.rs`).
+P4.6, screen leases: `lease_acquire`/`lease_renew`/`lease_release` with a mandatory bounded TTL, the live widget paused under a lease and repainted from its newest frame when the lease ends or lapses, `show_image` pushes conflated latest-wins (`divoomd/src/lease.rs`; the Phase 4 exit is `divoomd/tests/mcp_lease_e2e.rs`);
+P4.7, `notify`: text shown under a screen lease whose TTL is the notification's bounded duration (`arg_bounds::NOTIFY_DURATION_MS`), so the panel comes back when the lease lapses with nothing waiting (`divoomd/tests/notify_tool.rs`).
 
 ### Phase 5 — the GUI models each panel, not "the" panel
 

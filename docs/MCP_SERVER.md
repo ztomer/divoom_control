@@ -40,7 +40,7 @@ Command-line options:
 
 ## Tool Catalog
 
-The server exposes 24 tools via `tools/list`. Every integer range below is stated once, in `divoomd/src/arg_bounds.rs`: the schema is generated from it, the tool checks it, and the daemon handler that receives the value refuses outside it.
+The server exposes 25 tools via `tools/list`. Every integer range below is stated once, in `divoomd/src/arg_bounds.rs`: the schema is generated from it, the tool checks it, and the daemon handler that receives the value refuses outside it.
 
 | Tool | Arguments | Description / Returns |
 |------|-----------|------------------------|
@@ -68,6 +68,7 @@ The server exposes 24 tools via `tools/list`. Every integer range below is state
 | `lease_acquire` | `{ttl_ms: 1000..600000, holder?: string, mac?}` | Borrow the panel's screen. Returns `{ok, lease, mac, holder, ttl_ms}`. Pass `lease` to every call while you hold it; anyone else is refused with the holder's name and the time left. The panel's live widget pauses (its frames keep rendering and are held back, the widget is not stopped). |
 | `lease_renew` | `{lease, ttl_ms}` | Move the lease's end to `ttl_ms` from now. A lease that already ended cannot be renewed. |
 | `lease_release` | `{lease}` | Give the screen back. Returns `restored`: `"job"` (the live widget's newest frame is painted at once) or `"none"` (no widget was running; the panel keeps your last frame). |
+| `notify` | `{text: string, duration_ms: 1000..60000, color?: "#RRGGBB", size?: 8..128, mac?}` | Show a short message for `duration_ms`, then give the panel back. The text is drawn like `show_text`, under a screen lease whose TTL is the duration; the call returns at once and the lease lapses by itself, so a caller that dies cannot leave the message up. Refused (`screen_leased`) while someone else holds the panel. Returns `{ok, text, size, duration_ms, mac, lease}`; `lease_release` with that `lease` dismisses it early. |
 
 ### Screen leases
 
@@ -84,6 +85,10 @@ frame up for good. A lease is the borrow with the return built in:
 - **Frame pushes conflate.** When several `show_image`/`push_animation`/
   `show_text` calls queue up on a slow link, only the newest is drawn; the
   others answer `superseded`.
+- **`notify` is a lease that ends by itself**: its TTL is the notification's
+  duration, so the message comes down when the lease lapses, with the same
+  hand-back as any other lease (the widget's newest frame, or `restored:
+  "none"` on a panel with no widget; ROADMAP P9.7).
 - Every change is announced on the daemon's event stream as
   `{"type": "lease", "state": "acquired" | "released" | "expired", ...}`.
 

@@ -103,3 +103,6 @@ pub const COUNTDOWN_SECONDS: Bound = Bound::new("seconds", 0, 59);
 /// A screen lease's time to live, ms: mandatory, at least a second, at most
 /// ten minutes -- a crashed holder gives the screen back within that.
 pub const LEASE_TTL_MS: Bound = Bound::new("ttl_ms", 1_000, 600_000);
+/// How long a notification stays up, ms (P4.7): long enough to read a line,
+/// short enough that it is a notification and not a takeover.
+pub const NOTIFY_DURATION_MS: Bound = Bound::new("duration_ms", 1_000, 60_000);

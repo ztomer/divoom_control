@@ -305,7 +305,7 @@ mod tests {
             tools.len(),
             crate::mcp_tools::catalog().as_array().map_or(0, Vec::len)
         );
-        assert_eq!(tools.len(), 24);
+        assert_eq!(tools.len(), 25);
         let names: Vec<&str> = tools
             .iter()
             .map(|t| t["name"].as_str().expect("tool name"))

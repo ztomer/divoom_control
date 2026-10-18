@@ -297,3 +297,94 @@ async fn the_lease_tools_speak_the_daemons_lease_commands() {
         );
     }
 }
+
+#[tokio::test]
+async fn a_notification_is_a_lease_that_lapses_by_itself() {
+    // P4.7: lease for exactly the duration, draw under it, return. No
+    // lease_release: the lapse IS the restore, so a dead agent cannot leave
+    // the message up.
+    let frame = base64::engine::general_purpose::STANDARD.encode(vec![0u8; 16 * 16 * 3]);
+    let daemon = FakeDaemon::replying(
+        json!({ "success": true, "width": 16, "token": "N1", "mac": "AA",
+                "frame_rgb_b64": frame, "result": true }),
+        None,
+    )
+    .await;
+    let reply = call_tool(
+        "notify",
+        &json!({ "text": "Build ok", "duration_ms": 4000 }),
+        &daemon.target,
+    )
+    .await
+    .expect("shown");
+    assert_eq!(reply["lease"], json!("N1"), "{reply}");
+    assert_eq!(reply["duration_ms"], json!(4000), "{reply}");
+    let acquire = sent(&daemon, "lease_acquire");
+    assert_eq!(acquire["args"]["ttl_ms"], json!(4000));
+    assert_eq!(acquire["args"]["holder"], json!("notification"));
+    let shown = sent(&daemon, "show_image");
+    assert_eq!(shown["args"]["token"], json!("N1"), "drawn under the lease");
+    assert_eq!(
+        shown["args"]["mac"],
+        json!("AA"),
+        "on the panel the lease landed on"
+    );
+    let commands: Vec<Value> = daemon
+        .requests()
+        .iter()
+        .map(|r| r["command"].clone())
+        .collect();
+    assert!(
+        !commands.contains(&json!("lease_release")),
+        "nothing waits for the end: {commands:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_failed_notification_gives_the_lease_back_at_once() {
+    let daemon = FakeDaemon::scripted(vec![
+        json!({ "success": true, "width": 16 }),
+        json!({ "success": true, "token": "N2", "mac": "AA" }),
+        json!({ "success": false, "error": "renderer down" }),
+        json!({ "success": true, "restored": "job" }),
+    ])
+    .await;
+    let err = call_tool(
+        "notify",
+        &json!({ "text": "Hi", "duration_ms": 30_000 }),
+        &daemon.target,
+    )
+    .await
+    .expect_err("the draw failed");
+    assert!(err.contains("renderer down"), "{err}");
+    let last = daemon.requests().last().cloned().expect("requests");
+    assert_eq!(last["command"], json!("lease_release"), "{last}");
+    assert_eq!(last["args"]["token"], json!("N2"));
+}
+
+#[tokio::test]
+async fn a_notification_is_bounded_before_any_io() {
+    for args in [
+        json!({ "text": "Hi", "duration_ms": 500 }),
+        json!({ "text": "Hi", "duration_ms": 120_000 }),
+        json!({ "text": "Hi" }),
+        json!({ "text": " ", "duration_ms": 2000 }),
+    ] {
+        let err = call_tool("notify", &args, &unreachable())
+            .await
+            .expect_err("refused");
+        assert!(
+            !err.contains("not reachable"),
+            "{args} reached for the daemon: {err}"
+        );
+    }
+    let all = crate::mcp_tools::catalog();
+    let notify = all
+        .as_array()
+        .and_then(|ts| ts.iter().find(|t| t["name"] == json!("notify")))
+        .expect("in the catalog");
+    assert_eq!(
+        notify["inputSchema"]["properties"]["duration_ms"],
+        crate::arg_bounds::NOTIFY_DURATION_MS.schema()
+    );
+}

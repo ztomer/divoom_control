@@ -4,6 +4,44 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P4.7 — `notify` shows a message, then gives the panel back (2026-10-17)
+
+No MCP tool could put up an alert and hand the panel back afterwards: an
+agent had to `lease_acquire`, `show_text` under the token, and remember to
+`lease_release` -- and an agent that died in between left the message up
+until the TTL it happened to choose.
+
+- **`notify`** (`divoomd/src/mcp_more_tools.rs`): `{text, duration_ms,
+  color?, size?}`. It takes a screen lease whose TTL IS the duration
+  (holder `notification`), draws the text under it on the panel the lease
+  landed on (the same renderer as `show_text`, now `draw_text`), and returns
+  at once with the lease token. Nothing waits for the end: the lease lapses
+  by itself and the daemon hands the panel back exactly as for any lease
+  (the live widget's newest frame; `restored: "none"` on a panel with no
+  widget, ROADMAP P9.7). `lease_release` with the returned token dismisses
+  it early. A draw that fails gives the lease back at once rather than
+  holding a blank borrow; a panel someone else holds refuses it with
+  `screen_leased`.
+- **Bounded once**: `arg_bounds::NOTIFY_DURATION_MS`, 1 s..60 s -- long
+  enough to read a line, short enough to be a notification and not a
+  takeover. Checked before any I/O. The catalog is 25 tools.
+- **Fixed on the way in:** the unfinished draft leased for a fixed 10 minutes
+  regardless of `duration_ms`, so the message would have stayed up ten
+  minutes; the lease TTL is now the duration.
+- **Watched red first**, each under its own sabotage: the unit tests
+  (`mcp_more_tools_tests.rs`) red with the TTL fixed at 10 minutes, with no
+  lease token on the draw, with the draw sent to the caller's panel instead
+  of the lease's, with the release on failure removed, and with the bound
+  unchecked; `divoomd/tests/notify_tool.rs` (a real daemon on a unix socket,
+  a mock panel running sysmon: the tool returns before the notification
+  ends, the GUI is refused while it is up, the widget is paused not stopped,
+  and the lease lapses by itself with `restored: "job"`) red with the
+  10-minute TTL and with the token dropped. The scripted `FakeDaemon`
+  (`mcp_daemon::fake::scripted`) answers a sequence, so the failure path
+  can be driven.
+- Tests: `cargo test -p divoomd --no-default-features` 473 passed, 2
+  ignored; `python3 -m pytest` 1680 passed, 132 skipped.
+
 ## P4.6 — screen leases (2026-10-17)
 
 An agent drawing on a panel collided with the panel's live widget both ways:
