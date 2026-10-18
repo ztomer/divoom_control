@@ -4,6 +4,24 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## gui_pov.py runs again (2026-10-18)
+
+`scripts/gui_pov.py` -- the user-POV harness AGENTS.md sends you to -- had died
+on its first line of real work since `6d9cda6` moved the browser opt-in to the
+launch seam: `Skipped: launches a real browser; run with --run-browser`, a pytest
+outcome raised in a plain script. `launch()`/`require_browser()` take a per-call
+`opted_in` (never a write to `RUN_BROWSER`, so a script imported into a test
+session cannot switch browser tests on), and the script passes it.
+`tests/test_gui_pov_launches_a_browser.py` drives `run()` to the launch with the
+stack and browser faked; watched red on the old seam.
+
+Used for the P5.4/P5.3 user-POV check the same day. The console was locked for
+the whole session, so neither the pywebview window nor an open NSMenu could be
+captured (`screencapture` returns black; the computer-use grant was refused);
+the weather card was captured instead through this harness (real web UI, real
+GUI backend, real BLE-free daemon) in both themes, which found the light-theme
+contrast defects below. The menubar got a behavioural smoke only.
+
 ## P5.1 — brightness, volume and size are per panel, from the daemon (2026-10-18)
 
 Brightness and volume were read ONCE at GUI startup with no mac (whichever
@@ -45,6 +63,10 @@ resolution since P3.1.
   speakerless panel, a write that names no panel, the LAN path); the Rust
   tests with the mac routing replaced by `resolve_target(None)` and with the
   panel fields dropped from `device_entry`.
+- Tests: `python3 -m pytest` 1687 passed, 145 skipped; the browser subset
+  (`--run-browser -k "e2e or browser or contrast or fleet or preview or wall or panel"`)
+  277 passed after the two pinned-old-contract tests were updated;
+  `cargo test -p divoomd --no-default-features mock_levels` 3 passed.
 
 ## Light theme: every label and switch reads at 3:1 (2026-10-18)
 
