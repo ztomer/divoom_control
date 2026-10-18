@@ -53,7 +53,8 @@ window.__fleet = {
 const __write = (m) => (...args) => {
   window.__fleet.writes.push({m, args});
   const ms = window.__fleet.delay[m] || 0;
-  return ms ? new Promise(r => setTimeout(() => r(true), ms)) : true;
+  const done = {success: true};   // the display write's outcome (P6.4)
+  return ms ? new Promise(r => setTimeout(() => r(done), ms)) : done;
 };
 window.__api = {
   get_panels: () => JSON.stringify({ok: true, panels: Object.values(window.__fleet.panels)}),

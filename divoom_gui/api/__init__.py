@@ -18,6 +18,35 @@ WALL = "MatrixWall"
 
 
 
+def write_refused(error: str, reply: dict | None = None) -> dict:
+    """A display write that did not happen, in the shape the page reads
+    (`web_ui/display_write.js`): why, and -- when the daemon's reply names
+    them -- each wall panel whose write failed (`failed`, mac to reason) and
+    each slot with no panel (`degraded`)."""
+    reply = reply or {}
+    return {"success": False, "error": error,
+            "failed": reply.get("failed") or {}, "degraded": reply.get("degraded") or []}
+
+
+def write_outcome(what: str, mac, run) -> dict:
+    """Every display write's one reply to the page (P6.4).
+
+    ``run`` performs the write and returns its result. The light, clock,
+    channel, VJ, visualizer, text, scoreboard, brightness and volume writes
+    each returned a bare ``bool``, so on the wall the page said "Failed to
+    switch channel" and the daemon's reply -- naming the panel that did not
+    take it and why (P6.3) -- reached only the log. The failure keeps that
+    reply (`_DeviceCallError.reply`); there is no ``bool`` view of it."""
+    try:
+        ok = run()
+    except Exception as exc:
+        logger.error("%s on %s failed: %s", what, mac, exc)
+        return write_refused(str(exc), getattr(exc, "reply", None))
+    if not ok:
+        return write_refused(f"the display did not take the {what}")
+    return {"success": True}
+
+
 def _lan_error(what: str, reason: str, cause: str) -> dict:
     """One place that phrases a LAN failure (mirrors `_cloud_error`)."""
     logger.error("%s unavailable (%s): %s", what, cause, reason)
@@ -122,6 +151,25 @@ class ApiBase:
             return None
         from divoom_gui.daemon_bridge import DaemonDeviceProxy
         return DaemonDeviceProxy(client, target="device", mac=mac)
+
+    def _unreachable(self, mac) -> str:
+        """Why a write naming ``mac`` resolved to no display."""
+        if not mac:
+            return "No panel selected"
+        if mac == WALL:
+            return "The wall could not be built"
+        return "The background service is not running"
+
+    def _write(self, mac, what: str, build_coro, *, before=None) -> dict:
+        """Resolve the display ``mac`` names and run one write on it: the
+        write's outcome (`write_outcome`), or why there was no display.
+        ``before`` runs once the display is resolved, ahead of the write."""
+        target = self._display(mac)
+        if target is None:
+            return write_refused(self._unreachable(mac))
+        if before is not None:
+            before()
+        return write_outcome(what, mac, lambda: self._run_async(build_coro(target)))
 
     def _lan_action(self, mac, what: str, build_coro) -> dict:
         """Run one LAN command and report WHY it failed, not just that it did.

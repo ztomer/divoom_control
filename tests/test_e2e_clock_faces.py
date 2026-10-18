@@ -103,7 +103,7 @@ async def test_apply_without_a_device_shows_connect_prompt_and_does_not_call_set
         try:
             await eval_js(page, """() => {
                 window.__setClockCalls = [];
-                window.__api.set_clock = (mac, style, color) => { window.__setClockCalls.push([mac, style, color]); return true; };
+                window.__api.set_clock = (mac, style, color) => { window.__setClockCalls.push([mac, style, color]); return {success: true}; };
             }""")
             await wait_js(page, 
                 "() => document.querySelectorAll('#cloud-clock-list .cloud-clock-row').length > 0")
@@ -138,7 +138,7 @@ async def test_apply_with_a_device_calls_set_clock_with_the_real_clock_id():
                 window.DivoomState.discoveredDevices = [{ address: 'E9:DITOO', name: 'Ditoo-light-2' }];
                 window.DivoomState.appConnected = true;
                 window.__setClockCalls = [];
-                window.__api.set_clock = (mac, style, color) => { window.__setClockCalls.push([mac, style, color]); return true; };
+                window.__api.set_clock = (mac, style, color) => { window.__setClockCalls.push([mac, style, color]); return {success: true}; };
             }""")
             await wait_js(page, 
                 "() => document.querySelectorAll('#cloud-clock-list .cloud-clock-row').length > 0")
@@ -256,7 +256,7 @@ async def test_store_faces_show_the_picture_as_drawn_and_at_the_panels_resolutio
                 window.DivoomState.discoveredDevices = [{ address: 'E9:DITOO', name: 'Ditoo-light-2' }];
                 window.DivoomState.appConnected = true;
                 window.__setClockCalls = [];
-                window.__api.set_clock = (mac, style, color) => { window.__setClockCalls.push([mac, style, color]); return true; };
+                window.__api.set_clock = (mac, style, color) => { window.__setClockCalls.push([mac, style, color]); return {success: true}; };
                 window.DivoomState.cloudClockStoreLoaded = false;
                 window.loadCloudClockTypes();
             }""")

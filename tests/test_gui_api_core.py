@@ -80,7 +80,7 @@ class TestGuiApiCoreBasics(GuiApiTestBase):
         dev = MagicMock()
         dev.display.show_image = AsyncMock(return_value=True)
         self.api.lighting._display = lambda mac: dev
-        self.assertFalse(self.api.push_text("AA:00:00:00:00:01", "   "))
+        self.assertFalse(self.api.push_text("AA:00:00:00:00:01", "   ")["success"])
         dev.display.show_image.assert_not_called()
 
     def test_set_alarm(self):

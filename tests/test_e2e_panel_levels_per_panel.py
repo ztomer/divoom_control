@@ -62,9 +62,9 @@ window.__api = {
     return ms ? new Promise(r => setTimeout(() => r(reply), ms)) : reply;
   },
   set_brightness: (mac, v) => { window.__fleet.writes.push({m: 'set_brightness', args: [mac, v]});
-                                if (window.__fleet.levels[mac]) window.__fleet.levels[mac].brightness = v; return true; },
+                                if (window.__fleet.levels[mac]) window.__fleet.levels[mac].brightness = v; return {success: true}; },
   set_volume: (mac, v) => { window.__fleet.writes.push({m: 'set_volume', args: [mac, v]});
-                            if (window.__fleet.levels[mac]) window.__fleet.levels[mac].volume = v; return true; },
+                            if (window.__fleet.levels[mac]) window.__fleet.levels[mac].volume = v; return {success: true}; },
 };
 window.pywebview = { api: new Proxy({}, { get: (_t, name) => (...args) => {
     if (window.__api && typeof window.__api[name] === 'function')

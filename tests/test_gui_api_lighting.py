@@ -55,31 +55,31 @@ class TestLightingApiCoverage(unittest.TestCase):
         dev = MagicMock()
         dev.display.show_light = MagicMock(side_effect=RuntimeError("boom"))
         self._on(dev)
-        self.assertFalse(self.api.lighting.set_solid_light(MAC, "#ff0000", 50))
+        self.assertFalse(self.api.lighting.set_solid_light(MAC, "#ff0000", 50)["success"])
 
     def test_set_clock_exception(self):
         dev = MagicMock()
         dev.display.show_clock = MagicMock(side_effect=RuntimeError("boom"))
         self._on(dev)
-        self.assertFalse(self.api.lighting.set_clock(MAC, 1))
+        self.assertFalse(self.api.lighting.set_clock(MAC, 1)["success"])
 
     def test_switch_channel_exception(self):
         dev = MagicMock()
         dev.display.switch_channel = MagicMock(side_effect=RuntimeError("boom"))
         self._on(dev)
-        self.assertFalse(self.api.lighting.switch_channel(MAC, "clock"))
+        self.assertFalse(self.api.lighting.switch_channel(MAC, "clock")["success"])
 
     def test_set_vj_effect_exception(self):
         dev = MagicMock()
         dev.display.show_effects = MagicMock(side_effect=RuntimeError("boom"))
         self._on(dev)
-        self.assertFalse(self.api.lighting.set_vj_effect(MAC, 1))
+        self.assertFalse(self.api.lighting.set_vj_effect(MAC, 1)["success"])
 
     def test_set_visualization_exception(self):
         dev = MagicMock()
         dev.display.show_visualization = MagicMock(side_effect=RuntimeError("boom"))
         self._on(dev)
-        self.assertFalse(self.api.lighting.set_visualization(MAC, 1))
+        self.assertFalse(self.api.lighting.set_visualization(MAC, 1)["success"])
 
     # ---- push_text: outer exception + inner unlink-OSError swallow -----
 
@@ -87,7 +87,7 @@ class TestLightingApiCoverage(unittest.TestCase):
         dev = MagicMock()
         dev.display.show_image = MagicMock(side_effect=RuntimeError("boom"))
         self._on(dev)
-        self.assertFalse(self.api.lighting.push_text(MAC, "HI"))
+        self.assertFalse(self.api.lighting.push_text(MAC, "HI")["success"])
 
     def test_device_size_falls_back_to_16_on_error(self):
         self.api.__dict__["_size_of"] = MagicMock(side_effect=RuntimeError("boom"))
@@ -194,7 +194,7 @@ class TestLightingApiCoverage(unittest.TestCase):
         dev.display.set_clock_rich = AsyncMock(return_value=True)
         self._on(dev)
         self.assertTrue(self.api.lighting.set_clock_rich(
-            MAC, style=2, twentyfour=False, humidity=True, weather=True, date=True, color="#123456"))
+            MAC, style=2, twentyfour=False, humidity=True, weather=True, date=True, color="#123456")["success"])
         kw = dev.display.set_clock_rich.call_args.kwargs
         self.assertEqual(kw["style"], 2)
         self.assertTrue(kw["humidity"])
@@ -204,11 +204,11 @@ class TestLightingApiCoverage(unittest.TestCase):
         dev = MagicMock()
         dev.display.set_clock_rich = MagicMock(side_effect=RuntimeError("boom"))
         self._on(dev)
-        self.assertFalse(self.api.lighting.set_clock_rich(MAC))
+        self.assertFalse(self.api.lighting.set_clock_rich(MAC)["success"])
 
     def test_set_clock_rich_no_target(self):
         self._on(None)
-        self.assertFalse(self.api.lighting.set_clock_rich(MAC))
+        self.assertFalse(self.api.lighting.set_clock_rich(MAC)["success"])
 
     def test_stop_live_widgets_passes_target_mac(self):
         mock_client = MagicMock()

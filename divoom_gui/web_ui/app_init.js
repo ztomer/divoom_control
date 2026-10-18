@@ -110,19 +110,14 @@ document.addEventListener("DOMContentLoaded", () => {
             if (window.pywebview && window.pywebview.api) {
                 window.pywebview.api.update_wall_slots(JSON.stringify(activeSlots));
                 window.pywebview.api.display_wall_image("MatrixWall", path, 16).then(res => {
-                    const success = typeof res === "object" ? res.success : !!res;
-                    if (success) {
-                        window.showToast("Synchronized display wall", "success", " BLE");
+                    if (window.DisplayWrite.report(res, { done: "Synchronized display wall", what: "the image",
+                                                          failed: "Failed to split and sync wall image", slots: activeSlots })) {
                         const previews = (res && typeof res === "object" && res.previews) || {};
                         Object.keys(previews).forEach(mac => {
                             if (window.setDevicePreview) window.setDevicePreview(mac, previews[mac]);
                             if (window.setDeviceActivity) window.setDeviceActivity(mac, "image", { src: previews[mac] });
                         });
                         if (window.SpatialStage?.refresh) window.SpatialStage.refresh();
-                    } else {
-                        const named = wallFailureText(res, activeSlots);
-                        const errMsg = named || (res && res.error) || "Failed to split and sync wall image";
-                        window.showToast(errMsg, "error");
                     }
                 });
             }
@@ -250,18 +245,3 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 1000);
 });
 
-
-// P6.3: the daemon names each wall panel whose write failed (`failed`, mac ->
-// reason) and each slot with no panel (`degraded`). Say which, by the name the
-// bench shows, or "" when the reply names none.
-function wallFailureText(res, slots) {
-    const named = (mac) => {
-        const key = Object.keys(slots || {}).find(k => k.toLowerCase() === String(mac).toLowerCase());
-        return (key && slots[key].name) || mac;
-    };
-    const failed = (res && typeof res === "object" && res.failed) || {};
-    const unlinked = (res && typeof res === "object" && res.degraded) || [];
-    const parts = Object.keys(failed).map(mac => `${named(mac)} did not take the image (${failed[mac]}).`)
-        .concat(unlinked.map(mac => `${named(mac)} is not connected.`));
-    return parts.join(" ");
-}

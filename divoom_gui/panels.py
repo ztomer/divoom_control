@@ -91,24 +91,13 @@ class PanelsMixin:
             return json.dumps({"ok": False, "mac": mac, "error": str(exc)})
         return json.dumps(out)
 
-    def _level_write(self, mac: str, what: str, wall_call, panel_call) -> bool:
-        if not mac:
-            logger.error("%s refused: no panel named", what)
-            return False
-        try:
-            if mac == WALL:
-                if not self.lighting._rebuild_wall_instance():
-                    return False
-                return bool(self._run_async(wall_call(self.wall_instance)))
-            proxy = self._panel_proxy(mac)
-            if proxy is None:
-                return False
-            return bool(self._run_async(panel_call(proxy)))
-        except Exception as exc:
-            logger.error("%s on %s failed: %s", what, mac, exc)
-            return False
+    def _level_write(self, mac: str, what: str, wall_call, panel_call) -> dict:
+        """One level write on the display ``mac`` names, through the funnel
+        every display write takes (`ApiBase._write`): its outcome, naming the
+        wall panel that did not take it (P6.4)."""
+        return self.lighting._write(mac, what, wall_call if mac == WALL else panel_call)
 
-    def set_brightness(self, mac: str, brightness: int) -> bool:
+    def set_brightness(self, mac: str, brightness: int) -> dict:
         val = max(0, min(100, int(brightness)))
         logger.info("GUI Action: brightness %s on %s", val, mac)
 
@@ -119,10 +108,10 @@ class PanelsMixin:
             # the daemon's `lan.*` calls now (`_LanView`, P5.6).
             return p.lan.set_brightness(val) if p.lan else p.device.set_brightness(val)
 
-        return self._level_write(mac, "set_brightness", lambda w: w.set_brightness(val), on_panel)
+        return self._level_write(mac, "brightness", lambda w: w.set_brightness(val), on_panel)
 
-    def set_volume(self, mac: str, volume: int) -> bool:
+    def set_volume(self, mac: str, volume: int) -> dict:
         val = max(0, min(15, int(volume)))
         logger.info("GUI Action: volume %s on %s", val, mac)
         return self._level_write(
-            mac, "set_volume", lambda w: w.set_volume(val), lambda p: p.music.set_volume(val))
+            mac, "volume", lambda w: w.set_volume(val), lambda p: p.music.set_volume(val))

@@ -244,10 +244,15 @@ async fn adopt(daemon: &Daemon, id: &str, id_key: &str, transport: DeviceTranspo
 /// Link a mock panel (no radio): `mac` (default `MOCK_MAC`) and the `name`
 /// it advertises -- what a real panel's BLE name tells the daemon about its
 /// model (P3.1), settable so a test can stand in for each model class.
+/// `failing: true` links one whose every write fails, so a test through the
+/// socket can drive a write down its device-failure path (P6.4).
 async fn connect_mock(daemon: &Daemon, req: &Request) -> Value {
     let mock_transport = crate::mock_transport::MockTransport::new();
     if let Some(name) = req.args.get("name").and_then(serde_json::Value::as_str) {
         mock_transport.set_cached_device_name(name.to_string());
+    }
+    if req.args.get("failing").and_then(Value::as_bool) == Some(true) {
+        mock_transport.set_failing(true);
     }
     let mock_mac = req
         .args

@@ -131,23 +131,23 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
             logger.debug(f"daemon shutdown on close skipped: {e}")
         self.window_mgr.close_window()
 
-    def set_solid_light(self, mac: str, color: str, brightness: int, mode_type: int = 0) -> bool:
+    def set_solid_light(self, mac: str, color: str, brightness: int, mode_type: int = 0) -> dict:
         return self.lighting.set_solid_light(mac, color, brightness, mode_type)
 
-    def set_clock(self, mac: str, style: int, color: str = None) -> bool:
+    def set_clock(self, mac: str, style: int, color: str = None) -> dict:
         return self.lighting.set_clock(mac, style, color)
 
-    def switch_channel(self, mac: str, channel: str) -> bool:
+    def switch_channel(self, mac: str, channel: str) -> dict:
         return self.lighting.switch_channel(mac, channel)
 
-    def set_vj_effect(self, mac: str, number: int) -> bool:
+    def set_vj_effect(self, mac: str, number: int) -> dict:
         return self.lighting.set_vj_effect(mac, number)
 
-    def set_visualization(self, mac: str, number: int) -> bool:
+    def set_visualization(self, mac: str, number: int) -> dict:
         return self.lighting.set_visualization(mac, number)
 
     def push_text(self, mac: str, text: str, color: str = "#FFFFFF", font_size: int = 1,
-                  speed: int = 50, effect_style: int = 1) -> bool:
+                  speed: int = 50, effect_style: int = 1) -> dict:
         return self.lighting.push_text(mac, text, color, font_size, speed, effect_style)
 
     def send_danmaku_text(self, mac: str, text: str, color: str = "#FFFFFF") -> dict:
@@ -199,7 +199,7 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
 
     def set_clock_rich(self, mac: str, style: int = 0, twentyfour: bool = True,
                        humidity: bool = False, weather: bool = False,
-                       date: bool = False, color: str = "#ffffff") -> bool:
+                       date: bool = False, color: str = "#ffffff") -> dict:
         return self.lighting.set_clock_rich(mac, style, twentyfour, humidity, weather, date, color)
 
     def set_fm_frequency(self, mac: str, freq_x10: int) -> bool:
@@ -434,7 +434,7 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
     def get_work_mode(self, mac: str) -> int | None:
         return self.tools.get_work_mode(mac)
 
-    def set_scoreboard(self, mac: str, on_off: int, red: int = 0, blue: int = 0) -> bool:
+    def set_scoreboard(self, mac: str, on_off: int, red: int = 0, blue: int = 0) -> dict:
         return self.tools.set_scoreboard(mac, on_off, red, blue)
 
     # ── Round 15 §5 (R28: routes through the daemon) ──────────────────

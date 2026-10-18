@@ -56,6 +56,17 @@ class _Api(PanelsMixin, MediaSyncMixin):
     def _run_async(self, coro, *, timeout=120.0):
         return asyncio.run(coro)
 
+    @property
+    def lighting(self):
+        """The one display-write funnel (`ApiBase._write`), as the GUI wires it."""
+        from divoom_gui.api import ApiBase
+
+        class _Lighting(ApiBase):
+            def _run_async(self, coro, *, timeout=120.0):
+                return asyncio.run(coro)
+
+        return _Lighting(None, self._client, lambda: self.__dict__)
+
 
 def test_get_panels_is_the_daemons_description_of_each_panel():
     out = json.loads(_Api(_FakeClient()).get_panels())
@@ -83,8 +94,8 @@ def test_volume_is_not_asked_of_a_panel_without_a_speaker():
 def test_writes_name_their_panel():
     client = _FakeClient()
     api = _Api(client)
-    assert api.set_brightness(B, 55) is True
-    assert api.set_volume(A, 9) is True
+    assert api.set_brightness(B, 55)["success"] is True
+    assert api.set_volume(A, 9)["success"] is True
     assert ("device.set_brightness", B, [55]) in client.calls
     assert ("music.set_volume", A, [9]) in client.calls
 
@@ -92,8 +103,8 @@ def test_writes_name_their_panel():
 def test_a_write_that_names_no_panel_is_refused_not_sent_somewhere():
     client = _FakeClient()
     api = _Api(client)
-    assert api.set_brightness("", 55) is False
-    assert api.set_volume(None, 3) is False
+    assert api.set_brightness("", 55)["success"] is False
+    assert api.set_volume(None, 3)["success"] is False
     assert json.loads(api.get_panel_levels(""))["ok"] is False
     assert client.calls == []
 
@@ -128,7 +139,7 @@ def test_a_lan_panel_takes_brightness_over_lan():
     client = _FakeClient()
     client.status[B]["lan_ip"] = "10.0.0.9"
     api = _Api(client)
-    assert api.set_brightness(B, 40) is True
+    assert api.set_brightness(B, 40)["success"] is True
     assert ("lan.set_brightness", B, [40]) in client.calls
-    assert api.set_brightness(A, 41) is True
+    assert api.set_brightness(A, 41)["success"] is True
     assert ("device.set_brightness", A, [41]) in client.calls

@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 
 from divoom_lib.utils.atomic_io import atomic_write_text
+from divoom_gui.api import write_outcome, write_refused
 from divoom_gui.gallery_sync import GallerySyncMixin
 from divoom_gui.sysmon_widget import SysmonWidgetMixin
 
@@ -124,7 +125,7 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
         except Exception:
             return default
 
-    def _push_frame(self, mac: str, frame_path) -> bool:
+    def _push_frame(self, mac: str, frame_path) -> dict:
         """Push a rendered frame to the display ``mac`` names (P5.7).
 
         It used to push to the wall whenever wall slots existed and otherwise
@@ -149,14 +150,14 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
         """
         target = self.lighting._display(mac)
         if target is None:
-            return False
-        if mac == "MatrixWall":
-            # `_display` has just built the wall (`wall_configure`). This used
-            # to call `target.connect()` first: a method the wall has never
-            # had, refused `unsupported`, so a wall frame push always failed
-            # (P6.5, found by tests/test_bridge_commands_exist_in_daemon.py).
-            return bool(self._run_async(target.show_image(str(frame_path))))
-        return bool(self._run_async(target.display.show_image(str(frame_path))))
+            return write_refused("No panel selected" if not mac else "The display could not be reached")
+        # On the wall, `_display` has just built it (`wall_configure`). This
+        # used to call `target.connect()` first: a method the wall has never
+        # had, refused `unsupported`, so a wall frame push always failed (P6.5,
+        # found by tests/test_bridge_commands_exist_in_daemon.py). The outcome
+        # names the wall panel that did not take the frame (P6.4).
+        show = target.show_image if mac == "MatrixWall" else target.display.show_image
+        return write_outcome("frame", mac, lambda: self._run_async(show(str(frame_path))))
 
     @staticmethod
     def _frame_to_data_url(frame_path) -> str:
@@ -239,9 +240,8 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
         try:
             size = self._size_of(mac)
             extras, frame_path = self._widget_frame("stocks", size, {"symbol": symbol})
-            res = self._push_frame(mac, frame_path)
             return json.dumps({
-                "success": res,
+                **self._push_frame(mac, frame_path),
                 "preview": self._frame_to_data_url(frame_path),
                 "price": extras.get("price", 0.0),
                 "change": extras.get("change", 0.0),

@@ -101,7 +101,7 @@ def test_a_write_reaches_the_panel_it_names_after_the_selection_moved(api, metho
     api.select_device(A)
     api.select_device(B)   # the user moved on before this write ran
     reply = getattr(api, method)(A, *args)
-    assert reply is True or (isinstance(reply, dict) and reply.get("ok")), reply
+    assert reply is True or (isinstance(reply, dict) and (reply.get("success") or reply.get("ok"))), reply
     daemon = api._daemon_client
     sent = [(m, mac) for m, mac in daemon.calls if m == call]
     assert sent == [(call, A)], f"{method} must reach A, the panel it named: {daemon.calls}"
@@ -112,7 +112,8 @@ def test_a_write_reaches_the_panel_it_names_after_the_selection_moved(api, metho
 def test_a_write_naming_no_panel_is_refused(api, method, args, call):
     api.select_device(B)   # the old implicit route, which must not be taken
     reply = getattr(api, method)("", *args)
-    assert reply is False or (isinstance(reply, dict) and reply.get("ok") is False), reply
+    assert reply is False or (isinstance(reply, dict) and not (reply.get("success") or reply.get("ok"))), reply
+    assert reply is False or reply.get("error"), f"{method} refused with no reason: {reply}"
     daemon = api._daemon_client
     assert daemon.calls == [], f"{method} with no panel reached the daemon: {daemon.calls}"
     assert daemon.stops == [], f"{method} with no panel stopped live jobs: {daemon.stops}"

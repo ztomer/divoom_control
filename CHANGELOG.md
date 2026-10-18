@@ -4,6 +4,62 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P6.4 — every GUI wall write names the panel that failed (2026-10-18)
+
+P6.3 made the daemon name each wall panel whose write failed (`failed`, mac to
+reason) apart from each slot with no panel (`degraded`), and the wall image
+push showed it. The other wall writes answered the page a bare `bool`, so on
+the wall the toast said "Failed to switch channel" and the daemon's reason,
+naming the panel, reached only the log.
+
+- **One funnel for every display write.** `write_outcome` and
+  `write_refused` in `divoom_gui/api/__init__.py` make the one reply shape,
+  `{success}` or `{success: false, error, failed, degraded}`, keeping the
+  daemon's whole reply (`_DeviceCallError.reply`) on a failure; there is no
+  `bool` view. `ApiBase._write` resolves the display a write names and runs
+  it through the funnel. Light, clock, rich clock, channel, VJ, visualizer
+  and text (`LightingApi._show`), scoreboard (`ToolsApi.set_scoreboard`),
+  brightness and volume (`PanelsMixin._level_write`, which now resolves the
+  display the same way), the stock ticker's frame push (`_push_frame`) and
+  the wall image push's failures all answer it. A write naming nothing, or a
+  wall that cannot be built, says why.
+- **One place says it.** `web_ui/display_write.js` turns the reply into the
+  toast: success, or the failure message with each panel the reply names, by
+  the name the bench shows, and why ("Failed to switch channel: Shelf did not
+  take it (...)"). Every caller of those writes uses it, and P6.3's
+  `wallFailureText` is folded into it. It escapes the panel names and the
+  reason, which went into the toast as HTML. On the way it fixed five
+  failure toasts that passed " BLE" as the toast KIND, so a failed clock, VJ,
+  EQ, ambient or scoreboard write was not styled as an error.
+- **A failing mock panel over the socket.** `connect`'s mock path takes
+  `failing: true`, a panel whose every write fails, so a test through the
+  real daemon can drive a write down its failure path.
+- **Tests, each watched red on `1cf52e9`.**
+  `tests/test_wall_writes_name_the_panel.py` calls EVERY public bridge method
+  that takes a mac on the wall, against a daemon whose wall names one failing
+  panel, and requires each one that wrote to the wall to hand back that panel
+  and its reason (red: ten answered `False`, and the stock ticker dropped
+  `failed`); the same writes answer the one shape on a panel and say why when
+  they name nothing. `tests/test_e2e_wall_write_names_the_panel.py` drives the
+  real page, the real `DivoomGuiAPI` and a real `divoomd` with Desk and a
+  failing Shelf on a wall, makes each wall write's gesture (channel, VJ, EQ,
+  clock, rich clock, ambient, text, scoreboard, wall image) and requires an
+  error toast naming Shelf, with the reason, and not Desk (red: none of the
+  nine). Its calibration holds its gestures to the bridge-level enumeration,
+  so a new wall write needs a gesture or a stated reason it has none.
+  `a_panel_linked_failing_is_named_by_the_wall` pins the mock seam (red
+  without it). The browser fakes of these writes now answer the outcome the
+  backend sends, not `true`.
+  Rust: 518 passed without BLE, 638 with; clippy `-D warnings` both ways.
+  pytest: 2038 passed / 166 skipped, and the library suite 1019 / 76. The
+  browser suites: 215 of 216 in one 22-minute run; the one failure was
+  `test_e2e_clock_faces.py`, whose fake `set_clock` still answered `true`,
+  fixed to the outcome shape, and that file then passed with the two wall
+  files (12 of 12).
+- **Open:** the deck's brightness and volume sliders are one panel's, so the
+  page has no wall level at all; the bridge writes it and names the panel,
+  but no control sends it.
+
 ## P6.5 — the wall's previews, and every GUI call one the daemon answers (2026-10-18)
 
 After a wall image push the GUI asks the wall for `get_last_previews` to draw

@@ -32,7 +32,7 @@ window.__api = {
         window.__calls.push(["danmaku", mac, text, color]);
         return window.__result;
     },
-    push_text: (...a) => { window.__calls.push(["push_text", ...a]); return true; },
+    push_text: (...a) => { window.__calls.push(["push_text", ...a]); return {success: true}; },
 };
 window.pywebview = { api: new Proxy({}, { get: (_t, name) => (...args) => {
     if (window.__api && typeof window.__api[name] === 'function')

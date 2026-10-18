@@ -144,8 +144,9 @@ document.addEventListener("DOMContentLoaded", () => {
         btn.disabled = true;
         window.pywebview.api.set_clock(w.mac, clockId, w.settings.color).then(res => {
             btn.disabled = false;
-            window.showToast(res ? "Clock face applied" : "Failed to apply clock face", res ? "success" : "error", " BLE");
-            if (res) window.ChannelSettings.commit(w);
+            if (window.DisplayWrite.report(res, { done: "Clock face applied", failed: "Failed to apply clock face" })) {
+                window.ChannelSettings.commit(w);
+            }
         }).catch(() => {
             btn.disabled = false;
             window.showToast("Failed to apply clock face", "error");

@@ -236,15 +236,12 @@ class ToolsApi(ApiBase):
 
     # ── Scoreboard (a channel control, P5.6) ───────────────────────
 
-    def set_scoreboard(self, mac: str, on_off: int, red: int = 0, blue: int = 0) -> bool:
-        """A channel control: it names its panel like the rest (P5.6)."""
+    def set_scoreboard(self, mac: str, on_off: int, red: int = 0, blue: int = 0) -> dict:
+        """A channel control: it names its panel like the rest (P5.6), and
+        answers the write's outcome (P6.4)."""
         logger.info(f"GUI Action: Setting scoreboard on {mac} on_off={on_off} red={red} blue={blue}...")
-        try:
-            return bool(self._dispatch(mac, lambda t: t.scoreboard.set_scoreboard(
-                int(on_off), int(red), int(blue))))
-        except Exception as e:
-            logger.error(f"Scoreboard set failed: {e}")
-            return False
+        return self._write(mac, "scoreboard", lambda t: t.scoreboard.set_scoreboard(
+            int(on_off), int(red), int(blue)))
 
     def get_work_mode(self, mac: str):
         logger.info(f"GUI Action: Getting the work mode of {mac}...")

@@ -44,7 +44,7 @@ def test_push_frame_does_not_read_blocking_attrs():
     o.lighting = _Lighting()
     o._run_async = lambda coro: asyncio.new_event_loop().run_until_complete(coro)
 
-    assert o._push_frame("AA:00:00:00:00:01", "/tmp/frame.png") is True
+    assert o._push_frame("AA:00:00:00:00:01", "/tmp/frame.png") == {"success": True}
     assert pushed["path"] == "/tmp/frame.png"
 
 
@@ -58,4 +58,4 @@ def test_push_frame_returns_false_when_the_named_panel_resolves_to_nothing():
             return None
 
     o.lighting = _Lighting()
-    assert o._push_frame("", "/tmp/frame.png") is False
+    assert o._push_frame("", "/tmp/frame.png")["success"] is False

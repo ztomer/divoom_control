@@ -5,7 +5,7 @@ Extracts the display/lighting command surface.
 from __future__ import annotations
 
 import logging
-from divoom_gui.api import WALL, ApiBase
+from divoom_gui.api import WALL, ApiBase, write_refused
 from divoom_gui.widget_frames import WidgetFrameMixin
 
 logger = logging.getLogger("divoom_gui.api.lighting")
@@ -30,48 +30,43 @@ class LightingApi(ApiBase, WidgetFrameMixin):
             except Exception as e:
                 logger.debug(f"stop live widgets on {target} before switch: {e}")
 
-    def _show(self, mac: str, what: str, on_wall, on_panel) -> bool:
+    def _show(self, mac: str, what: str, on_wall, on_panel) -> dict:
         """Every display takeover's one path (P5.6): the display the click
-        named, its live widgets stopped, then the write. No panel named, no
-        write -- and nothing stopped on a panel nobody chose."""
-        target = self._display(mac)
-        if target is None:
-            return False
-        logger.info(f"GUI Action: {what} on {mac}")
-        self._stop_live_widgets(mac)
-        try:
-            return self._run_async((on_wall if mac == WALL else on_panel)(target))
-        except Exception as e:
-            logger.error(f"{what} on {mac} failed: {e}")
-            return False
+        named, its live widgets stopped, then the write, answered as its
+        outcome (P6.4: on the wall, the panel that did not take it). No panel
+        named, no write -- and nothing stopped on a panel nobody chose."""
+        def takeover():
+            logger.info(f"GUI Action: {what} on {mac}")
+            self._stop_live_widgets(mac)
+        return self._write(mac, what, on_wall if mac == WALL else on_panel, before=takeover)
 
-    def set_solid_light(self, mac: str, color: str, brightness: int, mode_type: int = 0) -> bool:
+    def set_solid_light(self, mac: str, color: str, brightness: int, mode_type: int = 0) -> dict:
         return self._show(mac, f"solid light {color} (brightness={brightness}, mode_type={mode_type})",
                           lambda t: t.set_light(color, brightness),
                           lambda t: t.display.show_light(color, brightness, True, mode_type))
 
-    def set_clock(self, mac: str, style: int, color: str = None) -> bool:
+    def set_clock(self, mac: str, style: int, color: str = None) -> dict:
         return self._show(mac, f"clock style {style} with color {color}",
                           lambda t: t.show_clock(clock=style),
                           lambda t: t.display.show_clock(clock=style, color=color))
 
-    def switch_channel(self, mac: str, channel: str) -> bool:
+    def switch_channel(self, mac: str, channel: str) -> dict:
         return self._show(mac, f"channel {channel}",
                           lambda t: t.switch_channel(channel),
                           lambda t: t.display.switch_channel(channel))
 
-    def set_vj_effect(self, mac: str, number: int) -> bool:
+    def set_vj_effect(self, mac: str, number: int) -> dict:
         return self._show(mac, f"VJ effect {number}",
                           lambda t: t.show_effects(number=int(number)),
                           lambda t: t.display.show_effects(number=int(number)))
 
-    def set_visualization(self, mac: str, number: int) -> bool:
+    def set_visualization(self, mac: str, number: int) -> dict:
         return self._show(mac, f"visualizer {number}",
                           lambda t: t.show_visualization(number=int(number)),
                           lambda t: t.display.show_visualization(number=int(number)))
 
     def push_text(self, mac: str, text: str, color: str = "#FFFFFF", font_size: int = 1,
-                  speed: int = 50, effect_style: int = 1) -> bool:
+                  speed: int = 50, effect_style: int = 1) -> dict:
         """Render the text on the DAEMON and push it as an image.
 
         R32 §D: the 0x87 "set light phone word attr" sequence does NOT render on
@@ -92,7 +87,7 @@ class LightingApi(ApiBase, WidgetFrameMixin):
         strings, and remain a follow-up.
         """
         if not text or not str(text).strip():
-            return False
+            return write_refused("there is no text to push")
         try:
             # Drawn at the NAMED panel's size: the text is for the panel
             # clicked, not whichever one is selected when this runs.
@@ -101,7 +96,7 @@ class LightingApi(ApiBase, WidgetFrameMixin):
                 {"text": str(text), "color": color, "font_size": int(font_size)})
         except Exception as e:
             logger.error(f"push_text failed: {e}")
-            return False
+            return write_refused(f"the text could not be drawn: {e}")
         return self._show(mac, "text", lambda t: t.show_image(str(png_path)),
                           lambda t: t.display.show_image(str(png_path)))
 
@@ -134,10 +129,7 @@ class LightingApi(ApiBase, WidgetFrameMixin):
         try:
             target = self._display(mac, cell_size=cell_size)
             if target is None:
-                why = ("No panel selected" if not mac else
-                       "The wall could not be built" if mac == WALL else
-                       "The background service is not running")
-                return {"success": False, "error": why, "previews": {}}
+                return {**write_refused(self._unreachable(mac)), "previews": {}}
             self._stop_live_widgets(mac)
             if mac == WALL:
                 ok = self._run_async(target.show_image(file_path))
@@ -161,14 +153,11 @@ class LightingApi(ApiBase, WidgetFrameMixin):
             logger.error(f"Wall display failed: {e}")
             # P6.3: which wall panels did not take it, as the daemon named
             # them -- a write that failed apart from a slot with no panel.
-            reply = getattr(e, "reply", None) or {}
-            return {"success": False, "error": str(e), "previews": {},
-                    "failed": reply.get("failed") or {},
-                    "degraded": reply.get("degraded") or []}
+            return {**write_refused(str(e), getattr(e, "reply", None)), "previews": {}}
 
     def set_clock_rich(self, mac: str, style: int = 0, twentyfour: bool = True,
                        humidity: bool = False, weather: bool = False,
-                       date: bool = False, color: str = "#ffffff") -> bool:
+                       date: bool = False, color: str = "#ffffff") -> dict:
         def rich(t):
             return t.display.set_clock_rich(style=style, twentyfour=twentyfour, humidity=humidity,
                                             weather=weather, date=date, color=color)

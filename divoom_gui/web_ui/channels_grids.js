@@ -47,10 +47,9 @@ document.addEventListener("DOMContentLoaded", () => {
             ? api().set_clock_rich(w.mac, x.style, x.twentyfour, x.humidity, x.weather, x.date, x.color)
             : api().set_clock(w.mac, x.style, x.color);
         call.then(res => {
-            const what = rich ? "Clock + extra panels applied" : "Clock style applied";
-            window.showToast(res ? what : "Failed to apply clock", res ? "success" : " BLE");
+            const done = rich ? "Clock + extra panels applied" : "Clock style applied";
             // R50: the SPECIFIC face + color, on the display it was sent to.
-            if (res) CS.commit(w); else CS.revert(w);
+            if (window.DisplayWrite.report(res, { done, failed: "Failed to apply clock" })) CS.commit(w); else CS.revert(w);
         });
     }
 
@@ -141,8 +140,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const w = CS.compose("vj", { vj: v });
         if (!w || !api()?.set_vj_effect) return;
         api().set_vj_effect(w.mac, v).then(res => {
-            window.showToast(res ? "VJ effect applied" : "Failed to apply VJ effect", res ? "success" : " BLE");
-            if (res) CS.commit(w); else CS.revert(w);
+            if (window.DisplayWrite.report(res, { done: "VJ effect applied", failed: "Failed to apply VJ effect" })) CS.commit(w);
+            else CS.revert(w);
         });
     }, -1, VJ_PREVIEWS);
 
@@ -175,8 +174,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const w = CS.compose("visualizer", { eq: v });
         if (!w || !api()?.set_visualization) return;
         api().set_visualization(w.mac, v).then(res => {
-            window.showToast(res ? "EQ pattern applied" : "Failed to apply EQ", res ? "success" : " BLE");
-            if (res) CS.commit(w); else CS.revert(w);
+            if (window.DisplayWrite.report(res, { done: "EQ pattern applied", failed: "Failed to apply EQ" })) CS.commit(w);
+            else CS.revert(w);
         });
     }, -1, EQ_PREVIEWS);
 
@@ -249,8 +248,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const w = CS.compose("ambient", patch);
         if (!w || !api()?.set_solid_light) return;
         const { color, mode } = w.settings;
-        api().set_solid_light(w.mac, color, brightnessOf(w.mac), mode).then(res => {
-            window.showToast(res ? "Ambient mode applied" : "Failed to apply ambient", res ? "success" : " BLE");
+        api().set_solid_light(w.mac, color, brightnessOf(w.mac), mode).then(reply => {
+            const res = window.DisplayWrite.report(reply, { done: "Ambient mode applied", failed: "Failed to apply ambient" });
             // R67: mark what the DEVICE is on, not what was clicked. The
             // apply can fail (LAN cannot express modes 1-4 at all), and a
             // tile that highlights on click regardless would report success

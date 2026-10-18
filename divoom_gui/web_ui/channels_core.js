@@ -46,11 +46,9 @@ document.addEventListener("DOMContentLoaded", () => {
             const w = window.ChannelSettings.compose(ch);
             if (!w || !window.pywebview?.api?.switch_channel) return;
             window.pywebview.api.switch_channel(w.mac, ch).then(res => {
-                if (res) {
-                    window.showToast("Switched channel", "success", " BLE");
+                if (window.DisplayWrite.report(res, { done: "Switched channel", failed: "Failed to switch channel" })) {
                     window.ChannelSettings.commit(w);
                 } else {
-                    window.showToast("Failed to switch channel", "error");
                     window.ChannelSettings.revert(w);
                 }
             });
@@ -77,8 +75,9 @@ document.addEventListener("DOMContentLoaded", () => {
             const effect = parseInt(document.getElementById("text-effect-select")?.value);
             if (window.pywebview?.api?.push_text) {
                 window.pywebview.api.push_text(w.mac, text, color, 1, speed, isNaN(effect) ? 1 : effect).then(res => {
-                    window.showToast(res ? "Text pushed to device" : "Failed to push text", res ? "success" : "error", " BLE");
-                    if (res) window.ChannelSettings.commit(w);
+                    if (window.DisplayWrite.report(res, { done: "Text pushed to device", failed: "Failed to push text" })) {
+                        window.ChannelSettings.commit(w);
+                    }
                 });
             }
         });
@@ -131,8 +130,8 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!w || !window.pywebview?.api?.set_scoreboard) return;
         const { red, blue } = w.settings;
         window.pywebview.api.set_scoreboard(w.mac, 1, red, blue).then(res => {
-            window.showToast(res ? `Score: ${red}–${blue}` : "Failed to set scoreboard", res ? "success" : " BLE");
-            if (res) window.ChannelSettings.commit(w); else window.ChannelSettings.revert(w);
+            const ok = window.DisplayWrite.report(res, { done: `Score: ${red}–${blue}`, failed: "Failed to set scoreboard" });
+            if (ok) window.ChannelSettings.commit(w); else window.ChannelSettings.revert(w);
         });
     }
     const score = (input) => parseInt(input?.value) || 0;

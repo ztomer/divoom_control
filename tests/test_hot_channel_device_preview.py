@@ -20,7 +20,7 @@ window.pywebview = {{
     api: {{
         switch_channel: async (channel) => {{
             window.__calls.push({{ method: "switch_channel", args: [channel] }});
-            return true;
+            return {{ success: true }};
         }},
         hot_update_preview: async () => {{
             window.__calls.push({{ method: "hot_update_preview" }});

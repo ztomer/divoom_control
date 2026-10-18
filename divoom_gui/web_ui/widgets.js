@@ -38,10 +38,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 window.pywebview.api.apply_stock_ticker(mac, symbol).then(resJson => {
                     if (resJson) {
                         const res = JSON.parse(resJson);
-                        if (res.success) {
+                        if (window.DisplayWrite.report(res, { done: `Displaying ${symbol} price frame!`,
+                                                              failed: `Failed to display ${symbol}`, transport: " Ext" })) {
                             const stockCard = document.getElementById("widget-card-stock");
                             if (stockCard) stockCard.classList.add("widget-active");
-                            window.showToast(`Displaying ${symbol} price frame!`, "success", " Ext");
                             const priceMock = document.querySelector(".ticker-price-mock");
                             const arrowMock = document.querySelector(".ticker-arrow-mock");
                             const nameMock = document.querySelector(".ticker-name-mock");
@@ -61,7 +61,6 @@ document.addEventListener("DOMContentLoaded", () => {
                         } else {
                             const stockCard = document.getElementById("widget-card-stock");
                             if (stockCard) stockCard.classList.remove("widget-active");
-                            window.showToast(res.error || `Failed to display ${symbol}`, "error");
                             showTickerDevicePreview(res.preview);
                         }
                     }

@@ -273,3 +273,29 @@ async fn the_wall_sends_a_panels_clock_and_scoreboard_bytes() {
         "a score out of bounds is refused: {reply}"
     );
 }
+
+/// `connect`'s mock `failing` links a panel whose every write fails, so a
+/// test through the socket (`tests/test_e2e_wall_write_names_the_panel.py`)
+/// can see the wall name it (P6.4).
+#[tokio::test]
+async fn a_panel_linked_failing_is_named_by_the_wall() {
+    let d = Daemon::new();
+    for (mac, failing) in [(A, false), (B, true)] {
+        let reply = d
+            .handle(make_request(
+                "connect",
+                Some(json!({"mock": true, "mac": mac, "failing": failing})),
+                None,
+            ))
+            .await;
+        assert_eq!(reply["success"], json!(true), "{reply}");
+    }
+    let slots =
+        json!({"slots": {A: {"x": 0, "y": 0, "size": 16}, B: {"x": 1, "y": 0, "size": 16}}});
+    let reply = d
+        .handle(make_request("wall_configure", Some(slots), None))
+        .await;
+    assert_eq!(reply["success"], json!(true), "{reply}");
+    let reply = wall_call(&d, "show_clock", json!([1])).await;
+    assert_eq!(failed_macs(&reply), vec![B.to_string()], "{reply}");
+}
