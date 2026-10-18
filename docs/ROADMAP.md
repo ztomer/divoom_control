@@ -159,7 +159,14 @@ P5.1, brightness, volume and panel size read and written per mac through the dae
 **Exit:** P6.1's *Done when*. **Size:** M. Needs two panels for the final
 check.
 
-Landed (2026-10-18): P6.5, the wall answering `get_last_previews` with each
+Landed (2026-10-18): P6.4, every GUI display write -- light, clock, channel,
+VJ, visualizer, text, scoreboard, brightness, volume, the ticker and the wall
+image -- answering one outcome through one funnel that keeps the daemon's
+reply, and the page's toast naming each wall panel that did not take it by
+its bench name (`402773c`; `divoom_gui/api/__init__.py`,
+`divoom_gui/web_ui/display_write.js`, `tests/test_wall_writes_name_the_panel.py`,
+`tests/test_e2e_wall_write_names_the_panel.py`);
+P6.5, the wall answering `get_last_previews` with each
 slot's cut as the slicer produced it (kept only for a slot that took the push),
 the wall's methods a declared table held to its arms, and a test holding every
 socket command and `device_call` the GUI or a test fake uses to the daemon's
@@ -202,18 +209,17 @@ decompile. The refusal is stated (`divoomd/src/wall/refusal.rs`).
 `sendByLocalHttp`, or the public HTTP API's `Draw/SendHttpGif` checked on a
 real LAN panel), the daemon draws a slot over it, and the refusal is deleted.
 
-#### P6.4 — Every GUI wall write names the panel that failed
+#### P6.6 — The wall has no brightness or volume control
 **Status:** OPEN
-**Why:** P6.3 made the daemon name each wall panel whose write failed
-(`failed`, `degraded`) and the wall image push shows it, but the other wall
-writes from the GUI -- light, clock, channel, VJ, visualizer, text, all
-through `LightingApi._show` in `divoom_gui/api/lighting.py`, and the wall's
-brightness and volume through `_level_write` in `divoom_gui/panels.py` --
-return a bare `bool` to the page. On the wall the toast still says "Failed to
-switch channel" with no panel named; the daemon's reason reaches only the log.
-**Done when:** each of those writes on the wall hands the page the daemon's
-`failed` and `degraded`, its toast names the panel, and a browser test with
-one failing panel sees that panel's name.
+**Why:** the bridge writes the wall's brightness and volume and, since P6.4,
+names the panel that did not take them, but nothing on the page sends either:
+the deck's sliders are one panel's (`window.PanelLevels` in
+`divoom_gui/web_ui/panel_facts.js` writes only a linked panel, and the wall is
+not one). The capability exists with no control.
+**Done when:** with the wall selected the deck offers its brightness (and
+volume when every slot has a speaker) and a browser test through the real
+daemon sees the write reach every slot, or the bridge's wall levels are
+deleted with the reason.
 
 ### Phase 7 — decisions for the owner
 
