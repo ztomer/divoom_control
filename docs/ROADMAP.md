@@ -142,27 +142,14 @@ P4.7, `notify`: text shown under a screen lease whose TTL is the notification's 
 daemon by mac. **Exit:** browser tests across two panels for P5.1/P5.2; the
 menubar no longer closes on a status change. **Size:** M.
 
-Landed (2026-10-18): P5.7, every other bridge call that acts on a panel -- the Tools tab, the alarms editor, the live widgets, the stock tile, the gallery, hot-channel and custom-art pushes, `device_call` -- naming it first through `ApiBase._display(mac)` (the wall refused for one-panel actions and named, never defaulted, for the rest), `current_divoom` deleted, and one test enumerating every public bridge method so a new one without a mac fails (`691e0b5`; `tests/test_device_actions_name_their_panel.py`, `tests/test_e2e_device_action_reaches_its_panel.py`, `divoomd/src/mock_tools_tests.rs`);
+Landed (2026-10-18): P5.8, a live job or activity record naming a panel no link ever made a fleet entry refused with `unknown_device` naming the mac, the fleet's only constructor private behind `Fleet::adopt` and the client path a `Fleet::known` lookup, a linked-then-dropped panel keeping a new job waiting, `MatrixWall` refused as the wall surface rather than a panel, and MCP/CLI tool errors carrying the daemon's `code` (`0f73dda`; `divoomd/src/device/fleet.rs`, `divoomd/src/error_code.rs`, `divoomd/tests/unknown_panel.rs`);
+P5.7, every other bridge call that acts on a panel -- the Tools tab, the alarms editor, the live widgets, the stock tile, the gallery, hot-channel and custom-art pushes, `device_call` -- naming it first through `ApiBase._display(mac)` (the wall refused for one-panel actions and named, never defaulted, for the rest), `current_divoom` deleted, and one test enumerating every public bridge method so a new one without a mac fails (`691e0b5`; `tests/test_device_actions_name_their_panel.py`, `tests/test_e2e_device_action_reaches_its_panel.py`, `divoomd/src/mock_tools_tests.rs`);
 P5.6, every channel bridge call naming the panel its click resolved, through one `ApiBase._display(mac)` to the daemon, a call naming no panel refused, `_target()` and `current_target_mode` deleted, and `_LanView` forwarding the daemon's `lan.*` calls so albums, playlists and the overlay work through the real proxy (`0a8aa81`; `divoom_gui/api/__init__.py`, `tests/test_e2e_channel_write_reaches_its_panel.py`, `tests/test_channel_writes_name_their_panel.py`, `divoomd/src/mock_channel_tests.rs`);
 P5.5, with no panel known the bench showing an empty state that says how to add one and the deck "No panel selected" with no levels, the active-panel lookup answering null instead of an invented mac (`f56b550`; `window.isKnownTarget` in `divoom_gui/web_ui/app_globals.js`, `tests/test_e2e_no_invented_fleet.py`);
 P5.2, every channel control writing the selected display's own per-channel settings through one funnel that resolves the display at the gesture via `DisplayPreviewRegistry.getActive()`, the app-wide channel globals deleted (`78608ea`; `divoom_gui/web_ui/channel_settings.js`, `tests/test_e2e_channel_settings_per_panel.py`);
 P5.4, the weather card showing the PNG of `render_widget {kind: "weather"}` with the reading beside it, the SVG renderer and `get_weather` deleted, loading and failure as distinct placeholders that say why (`4ac2bcf`; `divoom_gui/web_ui/widgets_weather.js`, the converse call-site check in `tests/test_widget_drift.py`);
 P5.3, the menubar updating labels, the "Active panel" check and the notification items in place, rebuilding only when the set of rows changes, decided by diffing one `MenuModel` signature (`28f54cd`; `divoom-menubar/src/menu_model.rs`). That meets the exit's menubar half in code; holding the menu open through a fleet change on screen is not yet checked (2026-10-18: the console was locked, so no NSMenu could be held open or captured; a two-mock-panel smoke -- selection A, B, A and a row rename over the socket -- left the menubar running);
 P5.1, brightness, volume and panel size read and written per mac through the daemon, both name-based size guessers deleted, switching panels shows that panel's values (`f1f7b3b`; `divoom_gui/panels.py`, `divoom_gui/web_ui/panel_facts.js`, `tests/test_e2e_panel_levels_per_panel.py`, `divoomd/src/mock_levels_tests.rs`).
-
-#### P5.8 — The daemon refuses a panel action for a panel it has never seen
-**Status:** OPEN
-**Why:** `live_job_start` and `set_device_activity` call
-`fleet.get_or_create(mac)` (`divoomd/src/live_jobs/coordinator.rs`), so any
-mac a client names becomes a fleet entry. P5.7 found the GUI starting live
-widgets on `MatrixWall` whenever wall slots existed: the daemon made a
-"panel" with no link and the job painted nothing, reporting success. The GUI
-now refuses a live widget on the wall, but any other client (the CLI, MCP, a
-typo) can still mint a phantom panel this way.
-**Done when:** a live job or an activity record naming a mac the fleet has
-never linked is refused with a coded error that names the mac, a panel that
-was linked and dropped still keeps its job waiting for the link (the
-`mock_simulate_drop` case), and a daemon test pins both.
 
 ### Phase 6 — the multi-panel wall
 
