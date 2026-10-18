@@ -4,6 +4,55 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P5.2 — channel settings are written per display (2026-10-18)
+
+`syncChannelControlsToDisplay` had made the READ side per display, but every
+channel control's WRITE read app-wide state: `DivoomState.selectedClockStyle`,
+a module-level `selectedAmbientMode`, the clock and ambient colour inputs' DOM
+values, and `_activeDeviceMac()` asked again when the panel's reply came back.
+`DisplayPreviewRegistry.getActive()` had no callers. Consequences: a colour
+input kept the previous panel's value when the new panel was on another
+channel, and the next clock write on the new panel sent it; a slow reply was
+recorded on whichever panel was selected by then; VJ and EQ picks were never
+recorded per panel; and `DisplayPreview.setActivity` merged each channel's
+opts into the last one's, so a clock colour (or an image's `src`) rode into
+the next channel.
+
+- **`divoom_gui/web_ui/channel_settings.js`** is the write side's one funnel.
+  `compose(channel, patch)` resolves the selected display at the gesture
+  through `DisplayPreviewRegistry.getActive()` (now its one caller, returning
+  null when no panel is selected) and returns that display's settings for the
+  channel with the patch applied; `commit(w)` records them on THAT display when
+  the panel took them; `revert(w)` repaints the controls from the display when
+  it did not. Settings are kept per display AND per channel (clock style,
+  colour and extra panels; ambient mode and colour; VJ effect; EQ pattern;
+  scoreboard), persisted under `divoom_channel_settings`, and folded in by
+  `DisplayPreview.setActivity`, so a daemon or menubar change lands in the same
+  place as a click.
+- Every channel writer goes through it: the clock faces, colour and extra-panel
+  switches, VJ, EQ, ambient modes/colour/swatches/favourites, scoreboard, the
+  channel cards, text push, and the cloud clock-face Apply. The two
+  `DivoomState` channel globals are deleted. Ambient's brightness is the
+  panel's own level as the daemon read it (P5.1), not the slider's DOM value.
+- Opening the Ambient/Text/Sessions card sends nothing, so it no longer
+  records a channel on the display; the switch_channel cards record theirs
+  when the panel agrees, not before.
+- `syncChannelControlsToDisplay` sets every control from the display's
+  settings whichever channel it is on; `paintChannelControls` is the
+  values-only half a refused write uses, so the tab stays put.
+- **Tests:** `tests/test_e2e_channel_settings_per_panel.py` (two panels on the
+  fake-backend harness). Watched red on the old code: the colour leak, the
+  per-panel VJ/EQ/ambient/scoreboard picks, the late reply landing on the new
+  panel, and the one-resolver check. The literal Done-when (A's clock style
+  leaves B's untouched) passed on the old code for a panel already on Clock;
+  watched red with all displays sharing one settings object, and the late-reply
+  test red with `commit` resolving the panel at reply time. Four tests that
+  pinned the old globals by string were rewritten to the new rule
+  (`test_display_preview_registry`, `test_browser_preview_registry`,
+  `test_ambient_preview_honesty`, `test_round6_layout_and_exposure`).
+  `python3 -m pytest`: 1687 passed, 151 skipped; `--run-browser` over every
+  playwright suite: 199 passed.
+
 ## gui_pov.py runs again (2026-10-18)
 
 `scripts/gui_pov.py` -- the user-POV harness AGENTS.md sends you to -- had died

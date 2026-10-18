@@ -25,7 +25,7 @@ def test_ambient_previews_do_not_fabricate_device_colours():
     """
     js = (WEB_UI / "channels_grids.js").read_text(encoding="utf-8")
 
-    block = js[js.index("const AMBIENT_PREVIEWS"):js.index("let selectedAmbientMode")]
+    block = js[js.index("const AMBIENT_PREVIEWS"):js.index("/// Highlight the mode the device actually accepted")]
 
     # Plain still shows a real colour — it is the one we genuinely know.
     assert "ambient-preview plain" in block
@@ -47,5 +47,12 @@ def test_active_ambient_mode_reflects_the_device_not_the_click():
     """
     js = (WEB_UI / "channels_grids.js").read_text(encoding="utf-8")
 
-    assert "markActiveAmbientMode(res ? modeType : null)" in js, (
+    # P5.2: the apply resolves its panel at the click (ChannelSettings) and
+    # marks a mode only after the panel took it; a refusal repaints the
+    # display's last ACCEPTED mode instead.
+    apply = js[js.index("function applyAmbient("):js.index("function updateAmbientColorVisibility(")]
+    refused = apply.index("if (!res) { CS.revert(w); return; }")
+    assert apply.index("markActiveAmbientMode(mode)") > refused, (
         "the active marker must be driven by the apply RESULT, not the click")
+    grid = js[js.index('buildSelectorGrid("ambient-mode-grid"'):]
+    assert "markActiveAmbientMode" not in grid[:grid.index(";")], "the click itself must not mark a mode"

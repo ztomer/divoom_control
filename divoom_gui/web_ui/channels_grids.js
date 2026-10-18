@@ -27,53 +27,42 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>`
     };
 
+    // Every control below writes the SELECTED display's settings through
+    // ChannelSettings (channel_settings.js): compose at the gesture, commit to
+    // that display when the panel takes it, revert the controls when it does
+    // not. No control reads another control's DOM value or an app-wide global.
+    const CS = window.ChannelSettings;
+    const api = () => window.pywebview && window.pywebview.api;
+
     // R73: the "Extra Panels" checkboxes. Confirmed on hardware -- the device
     // does not overlay these on the clock face, it CYCLES separate weather /
     // date / temperature / clock screens. With none ticked we stay on the
     // plain set_clock() path, so the default behaviour is unchanged.
-    function clockExtras() {
-        return {
-            humidity:   document.getElementById("clock-rich-humidity")?.checked || false,
-            weather:    document.getElementById("clock-rich-weather")?.checked || false,
-            date:       document.getElementById("clock-rich-date")?.checked || false,
-            twentyfour: document.getElementById("clock-rich-24h")?.checked !== false,
-        };
-    }
-
-    function applyClockStyle(style) {
-        if (!window.requireDevice()) return;
-        const color = document.getElementById("clock-color-input")?.value || "#ffffff";
-        if (!(window.pywebview && window.pywebview.api)) return;
-        const x = clockExtras();
+    function applyClock(patch) {
+        const w = CS.compose("clock", patch);
+        if (!w || !api()) return;
+        const x = w.settings;
         const rich = x.humidity || x.weather || x.date;
         const call = rich
-            ? window.pywebview.api.set_clock_rich(style, x.twentyfour, x.humidity, x.weather, x.date, color)
-            : window.pywebview.api.set_clock(style, color);
+            ? api().set_clock_rich(x.style, x.twentyfour, x.humidity, x.weather, x.date, x.color)
+            : api().set_clock(x.style, x.color);
         call.then(res => {
             const what = rich ? "Clock + extra panels applied" : "Clock style applied";
             window.showToast(res ? what : "Failed to apply clock", res ? "success" : " BLE");
-            // R50: reflect the SPECIFIC face + color on the device preview.
-            if (res && window.setDeviceActivity)
-                window.setDeviceActivity(window._activeDeviceMac(), "clock", { style, color });
+            // R50: the SPECIFIC face + color, on the display it was sent to.
+            if (res) CS.commit(w); else CS.revert(w);
         });
     }
 
     // Re-apply when an extra is toggled, so the checkbox is not dead until the
     // user re-picks a face.
-    ["clock-rich-humidity", "clock-rich-weather", "clock-rich-date", "clock-rich-24h"]
-        .forEach(id => document.getElementById(id)?.addEventListener("change", () => {
-            applyClockStyle(window.DivoomState.selectedClockStyle ?? 0);
+    [["clock-rich-humidity", "humidity"], ["clock-rich-weather", "weather"],
+     ["clock-rich-date", "date"], ["clock-rich-24h", "twentyfour"]]
+        .forEach(([id, key]) => document.getElementById(id)?.addEventListener("change", (e) => {
+            applyClock({ [key]: e.target.checked });
         }));
 
-    window.DivoomState.selectedClockStyle = 0;
-    window.buildSelectorGrid("clock-faces-grid", CLOCK_FACES, (v) => {
-        window.DivoomState.selectedClockStyle = v;
-        const color = document.getElementById("clock-color-input")?.value || "#ffffff";
-        if (window.setDeviceActivity) {
-            window.setDeviceActivity(window._activeDeviceMac(), "clock", { style: v, color });
-        }
-        applyClockStyle(v);
-    }, 0, CLOCK_PREVIEWS);
+    window.buildSelectorGrid("clock-faces-grid", CLOCK_FACES, (v) => applyClock({ style: v }), 0, CLOCK_PREVIEWS);
 
     function updateClockPreviewsColor(color) {
         // Style 0 (Full Screen Digital) - update text color and text shadow
@@ -122,13 +111,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const clockColorInput = document.getElementById("clock-color-input");
     if (clockColorInput) {
         clockColorInput.addEventListener("input", (e) => {
-            const color = e.target.value;
-            updateClockPreviewsColor(color);
-            const style = window.DivoomState.selectedClockStyle ?? 0;
-            if (window.setDeviceActivity) {
-                window.setDeviceActivity(window._activeDeviceMac(), "clock", { style, color });
-            }
-            applyClockStyle(style);
+            updateClockPreviewsColor(e.target.value);
+            applyClock({ color: e.target.value });
         });
         
         // Call it initially after a small timeout to let the grid render
@@ -154,12 +138,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     window.buildSelectorGrid("vj-effects-grid", VJ_EFFECTS, (v) => {
-        if (!window.requireDevice()) return;
-        if (window.pywebview && window.pywebview.api && window.pywebview.api.set_vj_effect) {
-            window.pywebview.api.set_vj_effect(v).then(res => {
-                window.showToast(res ? "VJ effect applied" : "Failed to apply VJ effect", res ? "success" : " BLE");
-            });
-        }
+        const w = CS.compose("vj", { vj: v });
+        if (!w || !api()?.set_vj_effect) return;
+        api().set_vj_effect(v).then(res => {
+            window.showToast(res ? "VJ effect applied" : "Failed to apply VJ effect", res ? "success" : " BLE");
+            if (res) CS.commit(w); else CS.revert(w);
+        });
     }, -1, VJ_PREVIEWS);
 
     // ── 5. MUSIC EQ GRID ──
@@ -188,12 +172,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     window.buildSelectorGrid("eq-visualizer-grid", EQ_PATTERNS, (v) => {
-        if (!window.requireDevice()) return;
-        if (window.pywebview && window.pywebview.api && window.pywebview.api.set_visualization) {
-            window.pywebview.api.set_visualization(v).then(res => {
-                window.showToast(res ? "EQ pattern applied" : "Failed to apply EQ", res ? "success" : " BLE");
-            });
-        }
+        const w = CS.compose("visualizer", { eq: v });
+        if (!w || !api()?.set_visualization) return;
+        api().set_visualization(v).then(res => {
+            window.showToast(res ? "EQ pattern applied" : "Failed to apply EQ", res ? "success" : " BLE");
+            if (res) CS.commit(w); else CS.revert(w);
+        });
     }, -1, EQ_PREVIEWS);
 
     // ── 6. AMBIENT COLOR TRIGGERS ──
@@ -235,12 +219,8 @@ document.addEventListener("DOMContentLoaded", () => {
         4: deviceEffectTile("No-Mosquito"),
     };
 
-    let selectedAmbientMode = 0;
-
     /// Highlight the mode the device actually accepted; `null` clears it.
     function markActiveAmbientMode(mode) {
-        selectedAmbientMode = mode ?? 0;
-        window.DivoomState.selectedAmbientMode = selectedAmbientMode;
         document.querySelectorAll("#ambient-mode-grid [data-value]").forEach(el => {
             const isActive = mode !== null && parseInt(el.getAttribute("data-value")) === mode;
             el.classList.toggle("ambient-mode-active", isActive);
@@ -257,29 +237,36 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     window.updateAmbientPreviewsColor = updateAmbientPreviewsColor;
 
-    window.applyAmbientColor = function(color) {
-        if (!window.requireDevice()) return;
-        const brightness = parseInt(document.getElementById("global-brightness-slider")?.value) || 80;
-        const modeType = selectedAmbientMode;
-        if (window.pywebview && window.pywebview.api && window.pywebview.api.set_solid_light) {
-            window.pywebview.api.set_solid_light(color, brightness, modeType).then(res => {
-                window.showToast(res ? "Ambient mode applied" : "Failed to apply ambient", res ? "success" : " BLE");
-                // R67: mark what the DEVICE is on, not what was clicked. The
-                // apply can fail (LAN cannot express modes 1-4 at all), and a
-                // tile that highlights on click regardless would report success
-                // the device never gave.
-                markActiveAmbientMode(res ? modeType : null);
-                if (res && window.setDeviceActivity)
-                    window.setDeviceActivity(window._activeDeviceMac(), "ambient", { color, mode: modeType });
-            });
-        }
+    // The light packet carries a brightness: the panel's own, as the daemon
+    // last read it (P5.1); 80 only when the daemon has not said.
+    function brightnessOf(mac) {
+        const dev = (window.DivoomState.discoveredDevices || []).find(d => d.address === mac);
+        const b = dev && dev.levels ? dev.levels.brightness : null;
+        return typeof b === "number" ? b : 80;
+    }
+
+    function applyAmbient(patch) {
+        const w = CS.compose("ambient", patch);
+        if (!w || !api()?.set_solid_light) return;
+        const { color, mode } = w.settings;
+        api().set_solid_light(color, brightnessOf(w.mac), mode).then(res => {
+            window.showToast(res ? "Ambient mode applied" : "Failed to apply ambient", res ? "success" : " BLE");
+            // R67: mark what the DEVICE is on, not what was clicked. The
+            // apply can fail (LAN cannot express modes 1-4 at all), and a
+            // tile that highlights on click regardless would report success
+            // the device never gave. A failure shows the display's last
+            // accepted mode again.
+            if (!res) { CS.revert(w); return; }
+            CS.commit(w);
+            if (CS.isShown(w)) { markActiveAmbientMode(mode); updateAmbientColorVisibility(mode); }
+        });
     }
 
     // R11 item 3a: the color picker/swatches/favorites only affect "Plain Color"
     // (mode 0); the other ambient effects use fixed palettes, so hide the color
     // controls for them.
-    function updateAmbientColorVisibility() {
-        const show = parseInt(selectedAmbientMode) === 0;
+    function updateAmbientColorVisibility(mode) {
+        const show = parseInt(mode) === 0;
         const controls = document.getElementById("ambient-color-controls");
         const favorites = document.getElementById("ambient-favorites-grid");
         if (controls) controls.style.display = show ? "flex" : "none";
@@ -287,18 +274,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     window.updateAmbientColorVisibility = updateAmbientColorVisibility;
 
-    window.buildSelectorGrid("ambient-mode-grid", AMBIENT_EFFECTS, (v) => {
-        selectedAmbientMode = parseInt(v);
-        const color = ambientColorInput?.value || "#00ffcc";
-        window.applyAmbientColor(color);
-        updateAmbientColorVisibility();
-    }, 0, AMBIENT_PREVIEWS);
+    window.buildSelectorGrid("ambient-mode-grid", AMBIENT_EFFECTS, (v) => applyAmbient({ mode: parseInt(v) }), 0, AMBIENT_PREVIEWS);
 
     // Call it initially after grid builds
     setTimeout(() => {
         const initialColor = ambientColorInput?.value || "#00ffcc";
         updateAmbientPreviewsColor(initialColor);
-        updateAmbientColorVisibility();
+        updateAmbientColorVisibility(0);
     }, 500);
 
     // ── 10-favorites (last-selected colors) — Kare-style bitmap clarity, Rams #10 overridden per user ──
@@ -337,7 +319,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (ambientColorInput) ambientColorInput.value = color;
                 ambientSwatches.forEach(s => s.classList.remove("active"));
                 updateAmbientPreviewsColor(color);
-                window.applyAmbientColor(color);
+                applyAmbient({ color });
             });
             grid.appendChild(btn);
         });
@@ -352,7 +334,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (ambientColorInput) ambientColorInput.value = color;
             updateAmbientPreviewsColor(color);
             pushFavorite(color);
-            window.applyAmbientColor(color);
+            applyAmbient({ color });
         });
     });
 
@@ -370,7 +352,7 @@ document.addEventListener("DOMContentLoaded", () => {
         ambientColorInput.addEventListener("change", (e) => {
             const color = e.target.value;
             pushFavorite(color);
-            window.applyAmbientColor(color);
+            applyAmbient({ color });
         });
     }
 

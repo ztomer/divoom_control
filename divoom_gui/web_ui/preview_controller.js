@@ -37,6 +37,7 @@
             this.mode = "glyph"; // "frame" (raster data-url) | "glyph" (procedural)
             this.frameSrc = null;
             this.opts = { style: 0, color: "#ffffff" };
+            this.settings = window.ChannelSettings.stored(this.mac); // each channel's controls, THIS display (P5.2)
             this.cachedImg = null;
             this.cachedSrc = null;
             this.imgLoaded = false;
@@ -70,8 +71,11 @@
             if (this.activeJob && (ch !== "image" ? this.activeJob.kind !== ch : isArtwork)) {
                 this.unbindJob();
             }
+            // A new channel starts from ITS settings: no clock colour or image src rides into Ambient.
+            const base = ch === this.channel ? this.opts : window.ChannelSettings.of(this, ch);
             this.channel = ch;
-            this.opts = Object.assign({}, this.opts, opts || {});
+            this.opts = Object.assign({}, base, opts || {});
+            window.ChannelSettings.fold(this, ch, opts);
             if (this.opts.src) {
                 this.setFrame(this.opts.src);
             } else {
@@ -425,9 +429,7 @@
         }
     }
 
-    /**
-     * DisplayPreviewRegistry: manages all DisplayPreview instances across N devices.
-     */
+    /** DisplayPreviewRegistry: manages all DisplayPreview instances across N devices. */
     class DisplayPreviewRegistry {
         constructor() {
             this.displays = new Map();
@@ -456,11 +458,10 @@
             return this.getAll().filter(d => d.isBoundTo(k));
         }
 
+        // The selected display (null: none). Channel writes ask "which panel" here only (P5.2).
         getActive() {
-            const mac = (typeof window._activeDeviceMac === "function")
-                ? window._activeDeviceMac()
-                : "default";
-            return this.get(mac);
+            const mac = window._activeDeviceMac();
+            return mac ? this.get(mac) : null;
         }
 
         syncFromFleet(devices) {

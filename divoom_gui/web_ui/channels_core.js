@@ -37,28 +37,23 @@ document.addEventListener("DOMContentLoaded", () => {
             const ch = card.getAttribute("data-channel");
             window.DivoomState.activeChannel = ch;
             showChannelPanel(ch);
-            const chOpts = ch === "clock" ? {
-                style: window.DivoomState.selectedClockStyle ?? 0,
-                color: document.getElementById("clock-color-input")?.value || "#ffffff"
-            } : (ch === "ambient" ? {
-                mode: window.DivoomState.selectedAmbientMode ?? 0,
-                color: document.getElementById("ambient-color-input")?.value || "#00cc66"
-            } : {});
-            const activeMac = (typeof window._activeDeviceMac === "function") ? window._activeDeviceMac() : null;
-            if (window.saveDeviceChannel) window.saveDeviceChannel(activeMac, ch, chOpts);
-            if (window.setDeviceActivity) window.setDeviceActivity(activeMac, ch, chOpts);
             // Ambient and Text are "non-channel" cards (each has its own
-            // Apply/Push button). Every other card — Clock, VJ, EQ, Design,
-            // Scoreboard — fires switch_channel.
+            // Apply/Push button): opening one sends nothing, so it records
+            // nothing on the display either. Every other card — Clock, VJ, EQ,
+            // Design, Scoreboard — fires switch_channel, and the display is on
+            // that channel, with ITS settings for it, once the panel agrees.
             if (["ambient", "text", "sessions"].includes(ch)) return;
-            if (!window.requireDevice()) return;
-            if (window.pywebview && window.pywebview.api && window.pywebview.api.switch_channel) {
-                window.pywebview.api.switch_channel(ch).then(res => {
-                    if (res) {
-                        window.showToast("Switched channel", "success", " BLE");
-                    } else window.showToast("Failed to switch channel", "error");
-                });
-            }
+            const w = window.ChannelSettings.compose(ch);
+            if (!w || !window.pywebview?.api?.switch_channel) return;
+            window.pywebview.api.switch_channel(ch).then(res => {
+                if (res) {
+                    window.showToast("Switched channel", "success", " BLE");
+                    window.ChannelSettings.commit(w);
+                } else {
+                    window.showToast("Failed to switch channel", "error");
+                    window.ChannelSettings.revert(w);
+                }
+            });
         });
     });
 
@@ -73,14 +68,17 @@ document.addEventListener("DOMContentLoaded", () => {
         pushTextBtn.addEventListener("click", () => {
             const text = (document.getElementById("text-content-input")?.value || "").trim();
             if (!text) { window.showToast("Enter some text first", "error"); return; }
-            if (!window.requireDevice()) return;
+            // The text inputs are a composer, not a panel's setting; the push
+            // still names its panel at the click.
+            const w = window.ChannelSettings.compose("text");
+            if (!w) return;
             const color = document.getElementById("text-color-input")?.value || "#00ffcc";
             const speed = parseInt(document.getElementById("text-speed-input")?.value) || 50;
             const effect = parseInt(document.getElementById("text-effect-select")?.value);
             if (window.pywebview?.api?.push_text) {
                 window.pywebview.api.push_text(text, color, 1, speed, isNaN(effect) ? 1 : effect).then(res => {
                     window.showToast(res ? "Text pushed to device" : "Failed to push text", res ? "success" : "error", " BLE");
-                    if (res && window.setDeviceActivity) window.setDeviceActivity(window._activeDeviceMac(), "text");
+                    if (res) window.ChannelSettings.commit(w);
                 });
             }
         });
@@ -126,26 +124,26 @@ document.addEventListener("DOMContentLoaded", () => {
     // matches the other channels' "edit-and-it-applies" pattern.
     const scoreboardRedInput = document.getElementById("scoreboard-red");
     const scoreboardBlueInput = document.getElementById("scoreboard-blue");
-    function pushScoreboard() {
-        if (!window.requireDevice()) return;
-        const red = parseInt(scoreboardRedInput?.value) || 0;
-        const blue = parseInt(scoreboardBlueInput?.value) || 0;
-        if (window.pywebview && window.pywebview.api && window.pywebview.api.set_scoreboard) {
-            window.pywebview.api.set_scoreboard(1, red, blue).then(res => {
-                window.showToast(res ? `Score: ${red}–${blue}` : "Failed to set scoreboard", res ? "success" : " BLE");
-                if (res && window.setDeviceActivity) window.setDeviceActivity(window._activeDeviceMac(), "scoreboard");
-            });
-        }
+    // The score is the selected display's: each input writes its own team.
+    function pushScoreboard(patch) {
+        const w = window.ChannelSettings.compose("scoreboard", patch);
+        if (!w || !window.pywebview?.api?.set_scoreboard) return;
+        const { red, blue } = w.settings;
+        window.pywebview.api.set_scoreboard(1, red, blue).then(res => {
+            window.showToast(res ? `Score: ${red}–${blue}` : "Failed to set scoreboard", res ? "success" : " BLE");
+            if (res) window.ChannelSettings.commit(w); else window.ChannelSettings.revert(w);
+        });
     }
-    if (scoreboardRedInput) scoreboardRedInput.addEventListener("change", pushScoreboard);
-    if (scoreboardBlueInput) scoreboardBlueInput.addEventListener("change", pushScoreboard);
+    const score = (input) => parseInt(input?.value) || 0;
+    if (scoreboardRedInput) scoreboardRedInput.addEventListener("change", () => pushScoreboard({ red: score(scoreboardRedInput) }));
+    if (scoreboardBlueInput) scoreboardBlueInput.addEventListener("change", () => pushScoreboard({ blue: score(scoreboardBlueInput) }));
 
     // R11 item 5a: Reset both scores to 0 and push.
     const scoreboardResetBtn = document.getElementById("scoreboard-reset-btn");
     if (scoreboardResetBtn) scoreboardResetBtn.addEventListener("click", () => {
         if (scoreboardRedInput) scoreboardRedInput.value = 0;
         if (scoreboardBlueInput) scoreboardBlueInput.value = 0;
-        pushScoreboard();
+        pushScoreboard({ red: 0, blue: 0 });
     });
 
     // Selector-grid builder helper

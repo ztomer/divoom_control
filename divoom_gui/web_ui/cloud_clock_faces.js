@@ -38,7 +38,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const storeEl = document.getElementById("cloud-clock-store");
 
     function selectedPanelSize() {
-        const mac = (typeof window._activeDeviceMac === "function") ? window._activeDeviceMac() : null;
+        const mac = window.ChannelSettings.selected()?.mac || null;
         const dev = (window.DivoomState?.discoveredDevices || []).find(d => d.address === mac);
         return { size: window.panelPixels(mac) || window.PANEL_FALLBACK_PIXELS, name: dev?.name || "the panel" };
     }
@@ -135,18 +135,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const onApplyClick = (e) => {
         const btn = e.target.closest(".cloud-clock-apply-btn");
         if (!btn) return;
-        if (!window.requireDevice || !window.requireDevice()) return;
         const row = btn.closest("[data-clock-id]");
         const clockId = parseInt(row?.getAttribute("data-clock-id"));
         if (!clockId || !window.pywebview?.api?.set_clock) return;
-        const color = document.getElementById("clock-color-input")?.value || "#ffffff";
+        // The selected display's clock, with this face, in ITS colour (P5.2).
+        const w = window.ChannelSettings.compose("clock", { style: clockId });
+        if (!w) return;
         btn.disabled = true;
-        window.pywebview.api.set_clock(clockId, color).then(res => {
+        window.pywebview.api.set_clock(clockId, w.settings.color).then(res => {
             btn.disabled = false;
             window.showToast(res ? "Clock face applied" : "Failed to apply clock face", res ? "success" : "error", " BLE");
-            if (res && window.setDeviceActivity) {
-                window.setDeviceActivity(window._activeDeviceMac(), "clock", { style: clockId, color });
-            }
+            if (res) window.ChannelSettings.commit(w);
         }).catch(() => {
             btn.disabled = false;
             window.showToast("Failed to apply clock face", "error");

@@ -79,8 +79,8 @@ def test_channel_controls_sync_structure():
     js_path = Path("divoom_gui/web_ui/channel_preview.js")
     content = js_path.read_text(encoding="utf-8")
     assert "window.syncChannelControlsToDisplay = function" in content
-    assert "selectedClockStyle" in content
-    assert "selectedAmbientMode" in content
+    # The values come from the display's own settings (P5.2), never a global.
+    assert 'window.ChannelSettings.of(disp, channel)' in content
 
 
 def test_spatial_rooms_get_wall_slots_structure():

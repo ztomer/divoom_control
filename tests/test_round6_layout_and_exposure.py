@@ -344,7 +344,7 @@ def test_scoreboard_handler_in_channels_js():
     assert "scoreboard-blue" in src, "channels.js doesn't reference scoreboard-blue"
     # The change handler must exist and call set_scoreboard.
     assert re.search(
-        r"addEventListener\s*\(\s*[\"']change[\"']\s*,\s*pushScoreboard",
+        r"addEventListener\s*\(\s*[\"']change[\"']\s*,\s*\(\)\s*=>\s*pushScoreboard\(",
         src,
     ), "channels.js: scoreboard number inputs must listen to 'change' and call pushScoreboard."
     # Show/Hide handlers must be gone.

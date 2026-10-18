@@ -134,19 +134,19 @@ async def test_browser_channel_controls_two_way_sync():
 
             // Step 1: Sync to d1
             window.syncChannelControlsToDisplay(d1);
-            const d1_style = window.DivoomState.selectedClockStyle;
+            const d1_style = window.ChannelSettings.of(p1, 'clock').style;
             const d1_activeTile = document.querySelector("#clock-faces-grid .selector-cell.active")?.getAttribute("data-value");
             const d1_color = document.getElementById("clock-color-input")?.value;
 
             // Step 2: Sync to d2
             window.syncChannelControlsToDisplay(d2);
-            const d2_style = window.DivoomState.selectedClockStyle;
+            const d2_style = window.ChannelSettings.of(p2, 'clock').style;
             const d2_activeTile = document.querySelector("#clock-faces-grid .selector-cell.active")?.getAttribute("data-value");
             const d2_color = document.getElementById("clock-color-input")?.value;
 
             // Step 3: Switch back to d1
             window.syncChannelControlsToDisplay(d1);
-            const back_d1_style = window.DivoomState.selectedClockStyle;
+            const back_d1_style = window.ChannelSettings.of(p1, 'clock').style;
             const back_d1_activeTile = document.querySelector("#clock-faces-grid .selector-cell.active")?.getAttribute("data-value");
             const back_d1_color = document.getElementById("clock-color-input")?.value;
 

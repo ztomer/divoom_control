@@ -87,13 +87,7 @@ window._channelPreviewSVG = function(kind, opts) {
     const k = (kind || "").toLowerCase();
     let inner;
     if (k === "clock") {
-        // Reflect explicit style + color, falling back to global only when requested
-        const style = (opts.style != null) ? opts.style
-                    : (opts.useGlobalFallback ? (window.DivoomState.selectedClockStyle ?? 0) : (opts.defaultStyle ?? 0));
-        const color = opts.color
-                    || (opts.useGlobalFallback ? document.getElementById("clock-color-input")?.value : null)
-                    || opts.defaultColor || "#ffffff";
-        return window._clockFaceSVG(style, color);
+        return window._clockFaceSVG(opts.style ?? 0, opts.color || "#ffffff");
     } else if (k === "visualizer" || k === "eq") {
         inner = `<rect x="13" y="36" width="8" height="16" fill="${a}"/><rect x="24" y="22" width="8" height="30" fill="${a}"/>`
               + `<rect x="35" y="30" width="8" height="22" fill="${a}"/><rect x="46" y="16" width="8" height="36" fill="${a}"/>`;
@@ -147,79 +141,60 @@ window._renderWallSlotSVG = function(slot, addr) {
     return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
 };
 
-// Two-way synchronization: bind active inspector controls to the selected display's
-// options (DisplayPreview.opts) so switching screens reflects each device's real state.
+// Show the selected display's channel state in the controls: its channel tab
+// and every channel control's value, from ITS settings (channel_settings.js).
+// Every control is set, whichever channel the display is on -- a colour input
+// left alone keeps the previous display's value (P5.2).
 window.syncChannelControlsToDisplay = function(mac) {
-    if (!mac || mac === "-" || mac === "None") return;
+    if (!mac || mac === "-" || mac === "None" || !window.DisplayPreviewRegistry) return;
     const saved = (typeof window.getDeviceChannel === "function") ? window.getDeviceChannel(mac) : null;
-    const disp = window.DisplayPreviewRegistry ? window.DisplayPreviewRegistry.get(mac) : null;
-    const act = window.DivoomState?.deviceActivity?.[mac];
-    const ch = (saved && saved.channel) ? saved.channel : (disp && disp.channel) ? disp.channel : (act && act.kind) ? act.kind : "clock";
-    const opts = (saved && saved.opts) ? saved.opts : (disp && disp.opts) ? disp.opts : (act && act.opts) ? act.opts : {};
-    if (disp && saved?.channel && disp.channel !== saved.channel) {
-        disp.setActivity(saved.channel, saved.opts || {});
-    }
+    const disp = window.DisplayPreviewRegistry.get(mac);
+    if (saved?.channel && disp.channel !== saved.channel) disp.setActivity(saved.channel, saved.opts || {});
+    const ch = disp.channel || "clock";
 
-    // Rehydrate active channel tab & panel to match this display
-    if (ch) {
-        window.DivoomState.activeChannel = ch;
-        const card = document.querySelector(`.tab-btn[data-channel="${ch}"]`);
-        if (card) {
-            document.querySelectorAll(".tab-btn[data-channel]").forEach(c => c.classList.remove("active"));
-            card.classList.add("active");
-        }
-        if (typeof window.showChannelPanel === "function") {
-            window.showChannelPanel(ch);
-        }
+    window.DivoomState.activeChannel = ch;
+    const card = document.querySelector(`.tab-btn[data-channel="${ch}"]`);
+    if (card) {
+        document.querySelectorAll(".tab-btn[data-channel]").forEach(c => c.classList.remove("active"));
+        card.classList.add("active");
     }
+    if (typeof window.showChannelPanel === "function") window.showChannelPanel(ch);
+    window.paintChannelControls(mac);
+};
 
-    // 1. Clock style & color
-    const style = (opts.style != null) ? Number(opts.style) : 0;
-    window.DivoomState.selectedClockStyle = style;
-    document.querySelectorAll("#clock-faces-grid .selector-cell").forEach(el => {
-        const v = Number(el.getAttribute("data-value"));
-        el.classList.toggle("active", v === style);
+// Every channel control's value, from `mac`'s settings -- not the tab: a
+// write the panel refused puts the values back without moving the user off
+// the panel they are looking at.
+window.paintChannelControls = function(mac) {
+    if (!mac || !window.DisplayPreviewRegistry) return;
+    const disp = window.DisplayPreviewRegistry.get(mac);
+    const of = (channel) => window.ChannelSettings.of(disp, channel);
+    const markGrid = (gridId, value) => document.querySelectorAll(`#${gridId} .selector-cell`).forEach(el => {
+        el.classList.toggle("active", value != null && Number(el.getAttribute("data-value")) === Number(value));
     });
-    const clockColor = (ch === "clock" && opts.color) ? opts.color : (document.getElementById("clock-color-input")?.value || "#ffffff");
-    const clockInput = document.getElementById("clock-color-input");
-    if (clockInput && opts.color && ch === "clock") {
-        clockInput.value = clockColor;
-    }
-    if (typeof window.updateClockPreviewsColor === "function") {
-        window.updateClockPreviewsColor(clockColor);
-    }
+    const setValue = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    const setChecked = (id, v) => { const el = document.getElementById(id); if (el) el.checked = !!v; };
 
-    // 2. Ambient mode & color
-    const mode = (opts.mode != null) ? Number(opts.mode) : 0;
-    window.DivoomState.selectedAmbientMode = mode;
-    if (typeof window.markActiveAmbientMode === "function") {
-        window.markActiveAmbientMode(mode);
-    }
-    const ambColor = (ch === "ambient" && opts.color) ? opts.color : (document.getElementById("ambient-color-input")?.value || "#00ffcc");
-    const ambInput = document.getElementById("ambient-color-input");
-    if (ambInput && opts.color && ch === "ambient") {
-        ambInput.value = ambColor;
-    }
-    if (typeof window.updateAmbientPreviewsColor === "function") {
-        window.updateAmbientPreviewsColor(ambColor);
-    }
-    if (typeof window.updateAmbientColorVisibility === "function") {
-        window.updateAmbientColorVisibility();
-    }
+    const clock = of("clock");
+    markGrid("clock-faces-grid", clock.style);
+    setValue("clock-color-input", clock.color);
+    if (typeof window.updateClockPreviewsColor === "function") window.updateClockPreviewsColor(clock.color);
+    setChecked("clock-rich-humidity", clock.humidity);
+    setChecked("clock-rich-weather", clock.weather);
+    setChecked("clock-rich-date", clock.date);
+    setChecked("clock-rich-24h", clock.twentyfour);
 
-    // 3. VJ Effect
-    if (opts.vj != null) {
-        document.querySelectorAll("#vj-effects-grid .selector-cell").forEach(el => {
-            const v = Number(el.getAttribute("data-value"));
-            el.classList.toggle("active", v === Number(opts.vj));
-        });
-    }
+    const ambient = of("ambient");
+    if (typeof window.markActiveAmbientMode === "function") window.markActiveAmbientMode(ambient.mode);
+    setValue("ambient-color-input", ambient.color);
+    document.querySelectorAll(".ambient-swatch").forEach(sw =>
+        sw.classList.toggle("active", (sw.getAttribute("data-color") || "").toLowerCase() === String(ambient.color).toLowerCase()));
+    if (typeof window.updateAmbientPreviewsColor === "function") window.updateAmbientPreviewsColor(ambient.color);
+    if (typeof window.updateAmbientColorVisibility === "function") window.updateAmbientColorVisibility(ambient.mode);
 
-    // 4. EQ Visualizer
-    if (opts.eq != null) {
-        document.querySelectorAll("#eq-visualizer-grid .selector-cell").forEach(el => {
-            const v = Number(el.getAttribute("data-value"));
-            el.classList.toggle("active", v === Number(opts.eq));
-        });
-    }
+    markGrid("vj-effects-grid", of("vj").vj);
+    markGrid("eq-visualizer-grid", of("visualizer").eq);
+    const score = of("scoreboard");
+    setValue("scoreboard-red", score.red);
+    setValue("scoreboard-blue", score.blue);
 };
