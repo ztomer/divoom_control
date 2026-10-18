@@ -132,7 +132,10 @@ async def test_apply_with_a_device_calls_set_clock_with_the_real_clock_id():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
+            # A panel the daemon reported: with none there is nothing to apply
+            # to, and the write path refuses rather than invent one (P5.5).
             await eval_js(page, """() => {
+                window.DivoomState.discoveredDevices = [{ address: 'E9:DITOO', name: 'Ditoo-light-2' }];
                 window.DivoomState.appConnected = true;
                 window.__setClockCalls = [];
                 window.__api.set_clock = (style, color) => { window.__setClockCalls.push([style, color]); return true; };

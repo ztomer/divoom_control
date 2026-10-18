@@ -46,12 +46,13 @@ window.panelIsLinked = function(mac) {
 };
 
 // Gate an action on a panel: the named one, else the selected one.
+window.NO_DEVICE_HINT = "Connect a device first — scan and connect under Settings.";
 window.requireDevice = function(mac) {
     const target = mac || (typeof window._activeDeviceMac === "function" ? window._activeDeviceMac() : null);
     const linked = mac ? window.panelIsLinked(mac)
         : (window.panelIsLinked(target) || !!window.DivoomState.appConnected);
     if (!linked) {
-        window.showToast("Connect a device first — scan and connect under Settings.", "error");
+        window.showToast(window.NO_DEVICE_HINT, "error");
         return false;
     }
     return true;
@@ -195,16 +196,27 @@ window.jewelClassFor = function(dev) {
     return "online";
 };
 
+// A target the daemon has told us about: a panel it reported, a LAN panel
+// registered with it, or the wall when slots are placed.
+window.isKnownTarget = function(mac) {
+    if (!mac) return false;
+    const st = window.DivoomState || {};
+    if (mac === "MatrixWall") return Object.keys(st.assignedSlots || {}).length > 0;
+    if (mac.startsWith("LAN:")) return (st.registeredLanDevices || []).some(d => `LAN:${d.ip}` === mac);
+    return (st.discoveredDevices || []).some(d => d.address === mac);
+};
+
+// The selected panel's mac, or null when there is none (P5.5). It never
+// answers with a mac the daemon did not report: it fell back to an invented
+// 11:22:33:44:55:01, and every caller then acted on a panel that does not
+// exist. Callers handle null as "no panel".
 window._activeDeviceMac = function() {
     const banner = (document.getElementById("banner-device-mac")?.textContent || "").trim();
-    if (banner && banner !== "-" && banner !== "None") return banner;
-    if (window.SpatialStage && typeof window.SpatialStage.getSelectedMac === "function") {
-        const sel = window.SpatialStage.getSelectedMac();
-        if (sel) return sel;
-    }
-    const devList = (window.DivoomState && window.DivoomState.discoveredDevices) || [];
-    if (devList.length > 0 && devList[0].address) return devList[0].address;
-    return "11:22:33:44:55:01";
+    if (window.isKnownTarget(banner)) return banner;
+    const sel = window.SpatialStage?.getSelectedMac?.();
+    if (window.isKnownTarget(sel)) return sel;
+    const first = ((window.DivoomState && window.DivoomState.discoveredDevices) || [])[0];
+    return (first && first.address) || null;
 };
 
 // R46 #2: mirror the active widget's pushed frame to its device's last-active

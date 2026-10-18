@@ -381,14 +381,14 @@ document.addEventListener("DOMContentLoaded", () => {
     // ── 5. TAB-CHANGED AUTOMATIC WIDGET WORKER CONTROL ──
     window.addEventListener("tab-changed", (e) => {
         const tab = e.detail.tab;
-        const mac = (document.getElementById("banner-device-mac")?.textContent || "").trim();
+        const mac = window._activeDeviceMac();
         if (tab === "data-sources") {
             // Auto-refresh all previews on tab open (no device push until card is selected)
             refreshSysmonPreview();
             refreshWeatherPreview();
             const sym = document.getElementById("stock-symbol-input")?.value.trim().toUpperCase();
             if (sym) refreshStockPreview();
-            if (mac && mac !== "None") {
+            if (mac) {
                 window.restoreActiveWidgetForDevice(mac);
             } else {
                 selectWidget(selectedWidget);

@@ -87,7 +87,7 @@
         compose(channel, patch) {
             const display = this.selected();
             if (!display) {
-                window.showToast("No panel selected.", "error");
+                window.showToast(window.NO_DEVICE_HINT, "error");
                 return null;
             }
             if (!window.requireDevice()) {

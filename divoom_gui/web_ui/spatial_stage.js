@@ -142,17 +142,21 @@
         startAnimationLoop();
     }
 
+    // The panels the daemon reported -- and nothing else. With none, the
+    // bench says so (showNoPanels); it drew an invented four-panel fleet (P5.5).
     function getDeviceList() {
-        const list = (window.DivoomState && window.DivoomState.discoveredDevices) || [];
-        if (list.length > 0) return list;
+        return (window.DivoomState && window.DivoomState.discoveredDevices) || [];
+    }
 
-        // Fallback placeholder fleet for UI preview if no devices scanned yet
-        return [
-            { address: '11:22:33:44:55:01', name: 'Ditoo-L', model: 'DITOO', width: 16, room: 'Desk', activityKind: 'clock' },
-            { address: '11:22:33:44:55:02', name: 'Timoo-M', model: 'TIMOO', width: 16, room: 'Desk', activityKind: 'sysmon' },
-            { address: '11:22:33:44:55:03', name: 'Ditoo-R', model: 'DITOO', width: 16, room: 'Desk', activityKind: 'visualizer' },
-            { address: '11:22:33:44:55:04', name: 'Pixoo-64', model: 'Pixoo64Wifi', width: 64, room: 'Wall', activityKind: 'weather' }
-        ];
+    const NO_PANELS = 'No panels yet. Scan for one under Settings → Devices.';
+    function showNoPanels(bench, ribbonChips) {
+        selectedMac = null;
+        bench.innerHTML = `<div id="spatial-bench-empty" class="spatial-bench-empty">
+            <span>${NO_PANELS}</span>
+            <button type="button" class="glow-btn compact" id="spatial-bench-scan">Open Settings</button></div>`;
+        document.getElementById('spatial-bench-scan')?.addEventListener('click', () => document.getElementById('appbar-settings-btn')?.click());
+        if (ribbonChips) ribbonChips.innerHTML = `<span class="spatial-ribbon-empty">${NO_PANELS}</span>`;
+        updateInspector(null);
     }
 
     // What a panel is and how it is drawn: panel_facts.js, from the daemon's
@@ -189,6 +193,7 @@
         const ribbonChips = document.getElementById('spatial-ribbon-chips');
         if (ribbonChips) ribbonChips.innerHTML = '';
         updateRoomFilterTabs();
+        if (devices.length === 0) { showNoPanels(bench, ribbonChips); return; }
 
         let defaultX = 20;
         devices.forEach((dev, idx) => {
@@ -332,9 +337,19 @@
     }
 
     function updateInspector(dev) {
-        const spec = resolveSpec(dev), addr = dev.address || 'dev';
         const nameEl = document.getElementById('deck-device-name'), tagEl = document.getElementById('deck-device-tag');
         const roomSelect = document.getElementById('deck-room-select');
+        const deck = document.getElementById('sidebar-device-deck');
+        // No panel: the deck says so and shows no levels, room or power.
+        deck?.querySelectorAll('.deck-slider-row, .deck-room-row, #deck-device-power').forEach(el => { el.hidden = !dev; });
+        if (!dev) {
+            if (nameEl) nameEl.textContent = 'No panel selected';
+            if (tagEl) tagEl.textContent = '–';
+            const dot = document.getElementById('deck-device-dot'); if (dot) dot.className = 'spatial-jewel standby';
+            if (window.PanelLevels) window.PanelLevels.show(null);
+            return;
+        }
+        const spec = resolveSpec(dev), addr = dev.address || 'dev';
 
         if (nameEl) nameEl.textContent = dev.name || spec.name;
         // The size the daemon resolved; unknown says so rather than guessing.

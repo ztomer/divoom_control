@@ -78,8 +78,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     window.loadGallery = loadGallery;
 
+    // The selected panel, or "" (the backend's "default" style) when there is
+    // none -- never the banner's "-" placeholder as if it were a panel (P5.5).
     function activeDeviceAddr() {
-        return (document.getElementById("banner-device-mac")?.textContent || "").trim();
+        return window._activeDeviceMac() || "";
     }
     window.persistGalleryStyle = function(classify) {
         if (window.pywebview?.api?.set_gallery_style) {

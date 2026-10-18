@@ -4,6 +4,46 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P5.5 — the bench invents no panels (2026-10-18)
+
+With no panel known, `getDeviceList` (`spatial_stage.js`) drew an invented
+four-panel fleet (`11:22:33:44:55:01`..`04`, "Ditoo-L", "Pixoo-64"), and
+`window._activeDeviceMac()` fell back to `11:22:33:44:55:01`. The bench then
+told the backend to select the invented panel (`select_device`), the deck read
+its levels (`get_panel_levels`), and every writer that passes "the selected
+panel" recorded activity for it over the bridge (`set_device_activity`).
+
+- **The lookup answers "none" at the source.** `_activeDeviceMac()` returns
+  the banner's or the bench's selection only when it is a target the daemon
+  reported (`window.isKnownTarget`: a reported panel, a registered LAN panel,
+  or the wall with slots placed), else the first reported panel, else `null`.
+  Its callers already treat a falsy mac as "no panel", so the fix is the
+  lookup, not 28 call sites.
+- **The bench shows an empty state** that says how to add a panel ("Scan for
+  one under Settings -> Devices", with a button that opens Settings), and the
+  ribbon says the same. **The deck says "No panel selected"** with a standby
+  jewel and no brightness, volume, room or power controls.
+- Two sibling resolvers read the banner's text directly and passed its `-`
+  placeholder on as if it were a panel: the gallery's per-panel style
+  (`get_gallery_style("-")` stored a preference under the key `-`) and the
+  Data Sources tab's widget restore. Both use the lookup now; no panel means
+  the backend's `default` style key.
+- **Tests:** `tests/test_e2e_no_invented_fleet.py` -- the empty bench and
+  deck; a walk of every section, channel card and a control on each that
+  asserts no bridge call carries a mac the daemon never reported, nor the
+  banner placeholder; then one reported panel, which is the only one named
+  from then on. Watched red on the old code (the invented nodes;
+  `select_device`/`get_panel_levels` on `11:22:33:44:55:01`), with only the
+  lookup's fake fallback restored (the walk was first blind to that, and gained
+  the `setDeviceActivity(null, ...)` step that the playlist, photo-album and
+  sleep-aid writers take), and with the gallery's banner read restored
+  (`get_gallery_style("-")`). `test_e2e_clock_faces`'s apply-with-a-device
+  test set `appConnected` with no panel at all and leaned on the invented one;
+  it names a reported panel now. With no panel, a channel write says the
+  connect hint (`window.NO_DEVICE_HINT`, shared with `requireDevice`).
+  `python3 -m pytest`: 1687 passed, 153 skipped; `--run-browser` over every
+  playwright suite: 201 passed.
+
 ## P5.2 — channel settings are written per display (2026-10-18)
 
 `syncChannelControlsToDisplay` had made the READ side per display, but every

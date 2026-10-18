@@ -52,6 +52,16 @@ body {
     overflow: hidden;
 }
 
+/* No panel reported (P5.5): the bench says so and how to add one; the deck
+   hides what only a panel has. [hidden] must beat the rows' own display. */
+.spatial-bench-empty {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+    color: var(--text-muted); font-size: 13px; text-align: center; padding: 0 16px;
+}
+.spatial-ribbon-empty { color: var(--text-muted); font-size: 12px; }
+.sidebar-device-deck [hidden] { display: none !important; }
+
 /* Draggable Device Node Chassis */
 .spatial-node {
     position: absolute;
