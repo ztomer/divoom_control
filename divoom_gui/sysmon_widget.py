@@ -79,9 +79,10 @@ class SysmonWidgetMixin(WidgetFrameMixin):
         except Exception:
             return fallback
 
-    def get_system_stats_preview(self, size: int = 0) -> str:
+    def get_system_stats_preview(self, mac: str, size: int = 0) -> str:
+        """The sysmon tile at the size of the panel ``mac`` names (P5.7)."""
         try:
-            sz = int(size) if size and int(size) > 0 else self._active_device_size()
+            sz = int(size) if size and int(size) > 0 else self._size_of(mac or None)
             stats, frame_path = self._sysmon_frame(sz)
             return json.dumps({
                 "ok": True, "size": sz, "stats": stats,

@@ -20,9 +20,12 @@ from tests.support.browser import (
 
 INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.html"
 
+PANEL = "AA:00:00:00:00:01"
+
 _MOCK_API = """
+window.__updates = [];
 window.__api = {
-    hot_channel_update: () => true,
+    hot_channel_update: (...args) => { window.__updates.push(args); return true; },
 };
 window.pywebview = { api: new Proxy({}, { get: (_t, name) => (...args) => {
     if (window.__api && typeof window.__api[name] === 'function')
@@ -38,7 +41,14 @@ async def _open_hot_channel_tab(p):
     await add_init_js(page, _MOCK_API)
     await page.goto(f"file://{INDEX_HTML}")
     await page.wait_for_load_state("domcontentloaded")
-    await wait_js(page, "() => !!window.DivoomState && !!window.Divoom")
+    await wait_js(page, "() => !!window.DivoomState && !!window.Divoom?.onOwnedDevices"
+                        " && !!window.SpatialStage")
+    # The update is for ONE panel, named at the click (P5.7): there has to be
+    # one, selected -- "connected" with no panel names nothing.
+    await eval_js(page, """(m) => window.Divoom.onOwnedDevices({type: 'owned_devices', devices: [
+        {address: m, name: 'Desk', kind: 'clock', state: 'active'}]})""", PANEL)
+    await eval_js(page, "(m) => window.Divoom.onSelection({type: 'selection', mac: m})", PANEL)
+    await wait_js(page, f"() => window.SpatialStage.getSelectedMac() === '{PANEL}'")
     await page.click('.nav-btn[data-tab="pixel-art"]')
     await page.click('[data-pixel-tab="pixel-hot-channel"]')
     await page.wait_for_selector("#pixel-hot-channel.active")
@@ -53,10 +63,10 @@ async def test_hot_channel_button_reenables_after_done_event():
     async with async_playwright() as p:
         browser, page = await _open_hot_channel_tab(p)
         try:
-            await eval_js(page, "() => { window.DivoomState.appConnected = true; }")
             await page.click("#hot-update-btn")
             await wait_js(page, 
                 "() => document.getElementById('hot-update-btn').disabled === true")
+            assert await eval_js(page, "() => window.__updates") == [[PANEL]]
 
             # Simulate the daemon's real completion event.
             await eval_js(page, """() => {
@@ -84,7 +94,6 @@ async def test_hot_channel_button_reenables_after_error_event():
     async with async_playwright() as p:
         browser, page = await _open_hot_channel_tab(p)
         try:
-            await eval_js(page, "() => { window.DivoomState.appConnected = true; }")
             await page.click("#hot-update-btn")
             await wait_js(page, 
                 "() => document.getElementById('hot-update-btn').disabled === true")

@@ -120,34 +120,38 @@ class LightingApi(ApiBase, WidgetFrameMixin):
         except Exception:
             return 16
 
-    def display_wall_image(self, file_path: str, cell_size: int) -> dict:
-        logger.info(f"GUI Action: Push display wall asset {file_path!r} (cell size={cell_size})...")
-        # Also the gallery's single-panel push (`gallery_sync.play_gallery_art`),
-        # which does not name its panel yet: with no wall it goes to
-        # `current_divoom` (ROADMAP P5.7). Its mac is the proxy's `_mac`; the
-        # old `cur.mac` was a proxy PATH, not a string, so the stop's request
-        # failed to serialise and only a TypeError fallback stopped anything.
-        cur = self._current_divoom
-        self._stop_live_widgets(WALL if self._wall_slots else getattr(cur, "_mac", None))
-        try:
-            self._rebuild_wall_instance(cell_size)
-            target = self._wall_instance if self._wall_instance else cur
-            if target is None:
-                raise RuntimeError("No active device or wall configured")
+    def display_wall_image(self, mac: str, file_path: str, cell_size: int | None = None) -> dict:
+        """Show an image on the display ``mac`` names: one panel, or the wall
+        when it says `MatrixWall` (P5.7).
 
-            if target is self._wall_instance:
+        Also the gallery's push (`gallery_sync.play_gallery_art`). It used to
+        go to the wall whenever wall slots existed and otherwise to
+        `current_divoom`, the panel the bench selected last, read when the
+        push RAN: the wall now has to be NAMED, and a call naming nothing is
+        refused like every other display write. ``cell_size`` is the edge of
+        a wall slot that carries no size of its own."""
+        logger.info(f"GUI Action: Push image {file_path!r} to {mac} (cell size={cell_size})...")
+        try:
+            target = self._display(mac, cell_size=cell_size)
+            if target is None:
+                why = ("No panel selected" if not mac else
+                       "The wall could not be built" if mac == WALL else
+                       "The background service is not running")
+                return {"success": False, "error": why, "previews": {}}
+            self._stop_live_widgets(mac)
+            if mac == WALL:
                 ok = self._run_async(target.show_image(file_path))
             else:
                 ok = self._run_async(target.display.show_image(file_path))
 
             previews = {}
-            if ok and self._wall_instance:
+            if ok and mac == WALL:
                 try:
                     # R42 §6: the wall handle is a DaemonDeviceProxy — method
                     # calls return AWAITABLES. The bare call returned an
                     # un-awaited coroutine that poisoned the JSON reply, so the
                     # arranger never received its previews.
-                    previews = self._run_async(self._wall_instance.get_last_previews())
+                    previews = self._run_async(target.get_last_previews())
                     if not isinstance(previews, dict):
                         previews = {}
                 except Exception as ex:

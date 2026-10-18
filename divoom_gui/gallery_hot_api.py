@@ -14,13 +14,18 @@ logger = logging.getLogger("divoom_gui")
 
 
 class GalleryHotApiMixin:
-    def custom_art_push(self, payload_json: str, page: int,
+    def custom_art_push(self, mac: str, payload_json: str, page: int,
                         slot: int | None = None) -> str:
-        """Push cloud files to a custom art page on the device. JSON summary.
+        """Push cloud files to a custom art page on the panel ``mac`` names.
+        JSON summary.
 
         ``payload_json`` is either a {slot: file_id} mapping (preferred — the
-        page is sent once, unmapped slots cleared) or a legacy file-id list."""
-        logger.info(f"GUI Action: Custom art push page={page} slot={slot} payload={payload_json}")
+        page is sent once, unmapped slots cleared) or a legacy file-id list.
+        P5.7: it named no panel, so the daemon pushed the page to whichever one
+        it had selected when the request arrived."""
+        logger.info(f"GUI Action: Custom art push to {mac} page={page} slot={slot} payload={payload_json}")
+        if not mac or mac == "MatrixWall":
+            return json.dumps({"success": False, "error": "custom art is pushed to one panel; name it"})
         client = self._client()
         if client is None:
             return json.dumps({"success": False, "error": "no daemon available"})
@@ -29,20 +34,24 @@ class GalleryHotApiMixin:
         except (TypeError, ValueError):
             return json.dumps({"success": False, "error": "invalid payload"})
         if isinstance(payload, dict):
-            return json.dumps(client.custom_art_push([], int(page), slots=payload))
-        return json.dumps(client.custom_art_push(payload, int(page), slot))
+            return json.dumps(client.custom_art_push([], int(page), slots=payload, mac=mac))
+        return json.dumps(client.custom_art_push(payload, int(page), slot, mac=mac))
 
-    def hot_channel_update(self) -> str:
-        """Start HOT channel update in background on daemon. Returns immediately."""
-        logger.info("GUI Action: Hot channel update (start)...")
+    def hot_channel_update(self, mac: str) -> str:
+        """Start the HOT channel update on the panel ``mac`` names, in the
+        daemon's background. Returns immediately.
+
+        The address is the daemon's TARGET (art_hot.rs) and the key it stamps
+        the last-checked state under (R53, read back by `hot_get_check`). It
+        was the wall whenever wall slots existed, else the panel the bench
+        selected last, read when the call RAN (P5.7)."""
+        logger.info(f"GUI Action: Hot channel update on {mac} (start)...")
+        if not mac or mac == "MatrixWall":
+            return json.dumps({"success": False, "error": "the hot channel updates one panel; name it"})
         client = self._client()
         if client is None:
             return json.dumps({"success": False, "error": "no daemon available"})
-        size = self._active_device_size() if hasattr(self, "_active_device_size") else 16
-        # R53: pass the active device address so the DAEMON stamps the
-        # last-checked state under the same key the GUI reads by (hot_get_check).
-        addr = self._active_device_mac() if hasattr(self, "_active_device_mac") else None
-        r = client.hot_update(device_size=int(size), show=True, address=addr or "")
+        r = client.hot_update(device_size=int(self._size_of(mac)), show=True, address=mac)
         return json.dumps(r)
 
     def sync_now(self) -> str:
@@ -89,7 +98,7 @@ class GalleryHotApiMixin:
                     client = self._client()
                     if client is None:
                         raise RuntimeError("no daemon available")
-                    size = self._active_device_size() if hasattr(self, "_active_device_size") else 16
+                    size = self._size_of(address)
                     start = client.hot_update(device_size=int(size), show=True, address=address)
                     if not start.get("success"):
                         raise RuntimeError(start.get("error") or "could not start hot update")
@@ -124,25 +133,24 @@ class GalleryHotApiMixin:
         threading.Thread(target=worker, name="DivoomSyncNow", daemon=True).start()
         return json.dumps({"success": True})
 
-    def hot_get_check(self, address: str = "") -> str:
-        """R53: the daemon-recorded last hot-channel check for a device (or
-        ``{}``). Reads the shared ``hot_update_state.json`` the daemon writes.
-        With no ``address`` it resolves the active device — the same key
-        ``hot_channel_update`` passes for the write, so read and write always
-        agree."""
+    def hot_get_check(self, address: str) -> str:
+        """R53: the daemon-recorded last hot-channel check for the panel
+        ``address`` names (or ``{}``). Reads the shared ``hot_update_state.json``
+        the daemon writes, under the same key ``hot_channel_update`` passes
+        for the write. It no longer resolves "the active device" when none is
+        named (P5.7): that read the selection when the call RAN."""
         from divoom_lib import hot_update_state
-        addr = address or (self._active_device_mac()
-                           if hasattr(self, "_active_device_mac") else "")
-        return json.dumps(hot_update_state.get_check(addr or ""))
+        return json.dumps(hot_update_state.get_check(address or ""))
 
-    def hot_update_preview(self) -> str:
-        """Fetch the hot channel manifest from Divoom's cloud and cross-reference
-        with the cached gallery to show what would be pushed."""
+    def hot_update_preview(self, mac: str) -> str:
+        """Fetch the hot channel manifest from Divoom's cloud for the panel
+        ``mac`` names (its size picks the manifest) and cross-reference with
+        the cached gallery to show what would be pushed."""
         try:
             client = self._client()
             if client is None:
                 raise RuntimeError("the background service is not running")
-            size = self._active_device_size() if hasattr(self, "_active_device_size") else 16
+            size = self._size_of(mac or None)
             # R70 P2.3: the manifest comes from the daemon, which owns the
             # size -> DeviceType mapping and the manifest cache. The GUI used
             # to hit the same endpoint itself, with a second copy of the

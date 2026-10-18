@@ -48,7 +48,6 @@ class _Api(PanelsMixin, MediaSyncMixin):
     def __init__(self, client):
         self._fake = client
         self.wall_slots = {}
-        self.current_divoom = None
         self.discovered_list = [{"address": A, "name": "Ditoo 64 Desk"}]
 
     def _client(self):
@@ -84,8 +83,8 @@ def test_volume_is_not_asked_of_a_panel_without_a_speaker():
 def test_writes_name_their_panel():
     client = _FakeClient()
     api = _Api(client)
-    assert api.set_brightness(55, B) is True
-    assert api.set_volume(9, A) is True
+    assert api.set_brightness(B, 55) is True
+    assert api.set_volume(A, 9) is True
     assert ("device.set_brightness", B, [55]) in client.calls
     assert ("music.set_volume", A, [9]) in client.calls
 
@@ -93,8 +92,8 @@ def test_writes_name_their_panel():
 def test_a_write_that_names_no_panel_is_refused_not_sent_somewhere():
     client = _FakeClient()
     api = _Api(client)
-    assert api.set_brightness(55, "") is False
-    assert api.set_volume(3, None) is False
+    assert api.set_brightness("", 55) is False
+    assert api.set_volume(None, 3) is False
     assert json.loads(api.get_panel_levels(""))["ok"] is False
     assert client.calls == []
 
@@ -102,30 +101,25 @@ def test_a_write_that_names_no_panel_is_refused_not_sent_somewhere():
 def test_writes_are_clamped_to_the_protocol_range():
     client = _FakeClient()
     api = _Api(client)
-    api.set_brightness(400, A)
-    api.set_volume(-2, A)
+    api.set_brightness(A, 400)
+    api.set_volume(A, -2)
     assert ("device.set_brightness", A, [100]) in client.calls
     assert ("music.set_volume", A, [0]) in client.calls
 
 
-def test_the_active_panel_size_is_the_daemons_not_the_names():
-    """The Ditoo's NAME says 64; the daemon says 16. The old guess said 64."""
-    from divoom_gui.daemon_bridge import DaemonDeviceProxy
-    client = _FakeClient()
-    api = _Api(client)
-    api.current_divoom = DaemonDeviceProxy(client, target="device", mac=A)
-    assert api._active_device_size() == 16
-    api.current_divoom = DaemonDeviceProxy(client, target="device", mac=B)
-    assert api._active_device_size() == 64
+def test_a_panels_size_is_the_daemons_not_the_names():
+    """The Ditoo's NAME says 64; the daemon says 16. The old guess said 64.
+    P5.7: asked of the panel a call NAMES -- there is no "active" one here."""
+    api = _Api(_FakeClient())
+    assert api._size_of(A) == 16
+    assert api._size_of(B) == 64
 
 
 def test_an_unknown_size_falls_back_to_the_default_not_a_guess():
     client = _FakeClient()
     client.status[A]["width"] = None
     api = _Api(client)
-    from divoom_gui.daemon_bridge import DaemonDeviceProxy
-    api.current_divoom = DaemonDeviceProxy(client, target="device", mac=A)
-    assert api._active_device_size() == 16
+    assert api._size_of(A) == 16
     assert api._panel_pixels(A) is None
 
 
@@ -134,7 +128,7 @@ def test_a_lan_panel_takes_brightness_over_lan():
     client = _FakeClient()
     client.status[B]["lan_ip"] = "10.0.0.9"
     api = _Api(client)
-    assert api.set_brightness(40, B) is True
+    assert api.set_brightness(B, 40) is True
     assert ("lan.set_brightness", B, [40]) in client.calls
-    assert api.set_brightness(41, A) is True
+    assert api.set_brightness(A, 41) is True
     assert ("device.set_brightness", A, [41]) in client.calls

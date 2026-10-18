@@ -94,10 +94,11 @@ async def test_one_brightness_gesture_writes_the_device_once():
             )
             # ...and it must carry the value the slider now shows, not a stale
             # one, for the panel it is shown for.
-            assert int(writes[0]["args"][0]) == await eval_js(
+            # (mac, value): every panel action names its panel first (P5.7).
+            assert int(writes[0]["args"][1]) == await eval_js(
                 page, "() => parseInt(document.getElementById('global-brightness-slider').value)"
             )
-            assert writes[0]["args"][1] == PANEL, writes
+            assert writes[0]["args"][0] == PANEL, writes
         finally:
             await browser.close()
 
@@ -140,7 +141,7 @@ async def test_a_dragged_slider_does_not_write_every_intermediate_value():
                 "a drag across five values must not write the device five times "
                 f"(or twice on top of that); got {len(writes)} calls"
             )
-            assert int(writes[0]["args"][0]) == 99, (
+            assert int(writes[0]["args"][1]) == 99, (
                 f"the single write must carry the final value, got {writes[0]['args']}"
             )
         finally:

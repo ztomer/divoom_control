@@ -10,6 +10,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const ALARM_SLOTS = 10;
     const ALARM_WRITE_DEBOUNCE_MS = 500;   // hour-spinner clicks ≠ N BLE writes
     let alarmState = [];                   // local 10-slot model
+    let alarmsMac = null;                  // the panel alarmState is (P5.7)
+    let alarmsTicket = 0;
     const alarmWriteTimers = {};
 
     // Empty = never configured: disabled AND no weekdays. (An enabled alarm
@@ -72,21 +74,42 @@ document.addEventListener("DOMContentLoaded", () => {
         if (addBtn) addBtn.disabled = !alarmState.some(alarmIsEmpty);
     }
 
-    function writeAlarm(i, label) {
+    // P5.7: every write names the panel resolved at the GESTURE. The
+    // debounced write used to send no mac, and the backend wrote to the
+    // panel selected when the timer fired. The table is one panel's alarms
+    // (alarmsMac): an edit made while another panel is selected reloads the
+    // table for that panel instead of writing one panel's alarms to another.
+    function gestureMac() {
+        const mac = window.ChannelSettings.mac(true);
+        if (!mac) return null;
+        if (mac !== alarmsMac) {
+            window.showToast(alarmsMac ? "Those were another panel's alarms; showing this panel's now."
+                                       : "Reading this panel's alarms; make the change once they show.", "error");
+            fetchAlarms();
+            return null;
+        }
+        return mac;
+    }
+    function writeAlarm(mac, i, label) {
         const a = alarmState[i];
-        window.pywebview?.api?.set_alarm?.(i, !!a.status, a.hour, a.minute, a.week).then(res => {
+        window.pywebview?.api?.set_alarm?.(mac, i, !!a.status, a.hour, a.minute, a.week).then(res => {
             if (!res) window.showToast(`Failed to ${label || "update alarm"}`, "error", " BLE");
         });
     }
-    function queueAlarmWrite(i) {
+    function queueAlarmWrite(mac, i) {
         clearTimeout(alarmWriteTimers[i]);
-        alarmWriteTimers[i] = setTimeout(() => writeAlarm(i), ALARM_WRITE_DEBOUNCE_MS);
+        alarmWriteTimers[i] = setTimeout(() => writeAlarm(mac, i), ALARM_WRITE_DEBOUNCE_MS);
     }
 
     function fetchAlarms() {
-        window.pywebview?.api?.get_alarms?.().then(json => {
+        const mac = window.ChannelSettings.selected()?.mac;
+        if (!mac || mac === "MatrixWall") return;
+        const ticket = ++alarmsTicket;
+        window.pywebview?.api?.get_alarms?.(mac).then(json => {
+            if (ticket !== alarmsTicket) return;   // a newer read is for the panel shown
             let parsed = [];
             try { parsed = JSON.parse(json); } catch (e) { /* render empty */ }
+            alarmsMac = mac;
             normalizeAlarms(parsed);
             renderAlarmsTable();
         });
@@ -116,56 +139,61 @@ document.addEventListener("DOMContentLoaded", () => {
     document.addEventListener("click", (e) => {
         const dayCell = e.target.closest("#alarms-list .alarm-day-cell");
         if (dayCell) {
-            if (window.requireDevice && !window.requireDevice()) return;
+            const mac = gestureMac();
+            if (!mac) return;
             const i = parseInt(dayCell.closest(".alarm-row").dataset.index);
             alarmState[i].week ^= (1 << parseInt(dayCell.dataset.bit));
             dayCell.classList.toggle("active");
             dayCell.setAttribute("aria-pressed", dayCell.classList.contains("active") ? "true" : "false");
-            queueAlarmWrite(i);
+            queueAlarmWrite(mac, i);
             return;
         }
         const removeBtn = e.target.closest("#alarms-list .alarm-remove");
         if (removeBtn) {
-            if (window.requireDevice && !window.requireDevice()) return;
+            const mac = gestureMac();
+            if (!mac) return;
             const i = parseInt(removeBtn.closest(".alarm-row").dataset.index);
             clearTimeout(alarmWriteTimers[i]);
             alarmState[i] = { status: 0, hour: 0, minute: 0, week: 0 };
-            writeAlarm(i, "remove alarm");
+            writeAlarm(mac, i, "remove alarm");
             renderAlarmsTable();
         }
     });
     document.addEventListener("change", (e) => {
         const row = e.target.closest("#alarms-list .alarm-row");
         if (!row) return;
-        if (window.requireDevice && !window.requireDevice()) return;
+        const mac = gestureMac();
+        if (!mac) return;
         const i = parseInt(row.dataset.index);
         if (e.target.classList.contains("alarm-enabled")) alarmState[i].status = e.target.checked ? 1 : 0;
         else if (e.target.classList.contains("alarm-hour")) alarmState[i].hour = Math.min(23, Math.max(0, parseInt(e.target.value) || 0));
         else if (e.target.classList.contains("alarm-min")) alarmState[i].minute = Math.min(59, Math.max(0, parseInt(e.target.value) || 0));
         else return;
-        queueAlarmWrite(i);
+        queueAlarmWrite(mac, i);
     });
 
     // + Add alarm: first free slot, sane defaults, written immediately.
     document.addEventListener("click", (e) => {
         if (!e.target.closest("#alarms-add-btn")) return;
-        if (window.requireDevice && !window.requireDevice()) return;
+        const mac = gestureMac();
+        if (!mac) return;
         const i = alarmState.findIndex(alarmIsEmpty);
         if (i === -1) { window.showToast("All 10 alarm slots are in use", "error"); return; }
         alarmState[i] = { status: 1, hour: 7, minute: 0, week: 0 };
-        writeAlarm(i, "add alarm");
+        writeAlarm(mac, i, "add alarm");
         renderAlarmsTable();
     });
 
     // Clear all: zero every slot on the device and empty the table.
     document.addEventListener("click", (e) => {
         if (!e.target.closest("#alarms-clear-btn")) return;
-        if (window.requireDevice && !window.requireDevice()) return;
+        const mac = gestureMac();
+        if (!mac) return;
         for (let i = 0; i < ALARM_SLOTS; i++) {
             clearTimeout(alarmWriteTimers[i]);
             if (alarmIsEmpty(alarmState[i])) continue;
             alarmState[i] = { status: 0, hour: 0, minute: 0, week: 0 };
-            writeAlarm(i, "clear alarm");
+            writeAlarm(mac, i, "clear alarm");
         }
         renderAlarmsTable();
         window.showToast("All alarms cleared", "success", " BLE");

@@ -418,20 +418,18 @@ class DaemonClient(HostDataMixin, CloudDataMixin):
 
     def custom_art_push(self, file_ids: list[str], page: int,
                         slot: int | None = None,
-                        slots: dict | None = None) -> dict:
-        """Push cloud files to a custom art page on the owned device.
-
-        Args:
-            file_ids: list of cloud file IDs (legacy sequential form)
-            page: target page 0-2
-            slot: optional starting slot for the legacy form
-            slots: preferred full-page mapping {slot 0-11: file_id};
-                   unmapped slots are cleared on the device
-        """
+                        slots: dict | None = None,
+                        mac: str | None = None) -> dict:
+        """Push cloud files to custom art ``page`` (0-2) on the panel ``mac``
+        names (without it, the daemon's selected one: `art.rs`). ``slots`` is
+        the full-page {slot 0-11: file_id} mapping (unmapped slots are
+        cleared); ``file_ids`` from ``slot`` on is the legacy form."""
         from divoom_client.daemon_config import load_daemon_config
-        return self.send_command("custom_art_push", {
-            "file_ids": file_ids, "page": page, "slot": slot, "slots": slots,
-        }, read_timeout=load_daemon_config().sync_read_timeout)
+        args = {"file_ids": file_ids, "page": page, "slot": slot, "slots": slots}
+        if mac:
+            args["mac"] = mac
+        return self.send_command("custom_art_push", args,
+                                 read_timeout=load_daemon_config().sync_read_timeout)
 
     def custom_art_query_page(self, page: int = 0) -> dict:
         """Query device for filled slot IDs on a custom art page."""

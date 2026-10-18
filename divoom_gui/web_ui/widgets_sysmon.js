@@ -44,7 +44,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function refreshSysmonPreview() {
         if (!(window.pywebview && window.pywebview.api && window.pywebview.api.get_system_stats_preview)) return;
-        window.pywebview.api.get_system_stats_preview(0).then(json => {
+        window.pywebview.api.get_system_stats_preview(window.ChannelSettings.selected()?.mac || "", 0).then(json => {
             try {
                 const r = JSON.parse(json);
                 if (!r.ok) { showSysmonUnavailable(r.error); return; }

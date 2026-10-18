@@ -55,7 +55,6 @@ class _Host(GallerySyncMixin):
         self.cached_creds = None
         self.device_id = 123
         self.device_pw = 0
-        self.current_divoom = None
         self.wall_slots = {}
         self._daemon_client = None
 

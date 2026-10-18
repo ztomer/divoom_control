@@ -33,11 +33,12 @@ def test_connect_single_device_lan_success(host, monkeypatch, tmp_path):
     assert ok is True
     # 2026-09-12: connecting one panel must not disconnect the fleet.
     client.disconnect_device.assert_not_called()
-    assert host.current_divoom._mac == "LAN:192.168.1.50"
     _, kwargs = client.connect_device.call_args
     assert kwargs["lan_ip"] == "192.168.1.50"
     assert kwargs["lan_token"] == 0
-    assert host.current_divoom is not None
+    # It asked about THAT panel's link, and bound nothing (P5.7).
+    client.device_status.assert_called_with(mac="LAN:192.168.1.50")
+    assert not hasattr(host, "current_divoom")
 
 
 def test_connect_single_device_ble_fail_reply_sets_last_error(host, monkeypatch):
@@ -49,7 +50,7 @@ def test_connect_single_device_ble_fail_reply_sets_last_error(host, monkeypatch)
     ok = host.connect_single_device("AA:BB:CC:DD:EE:FF")
     assert ok is False
     assert host.get_last_connect_error() == "asleep"
-    assert host.current_divoom is None
+    assert not hasattr(host, "current_divoom")
 
 
 def test_connect_single_device_reports_success_but_not_connected(host, monkeypatch):
@@ -61,7 +62,7 @@ def test_connect_single_device_reports_success_but_not_connected(host, monkeypat
     host._daemon_client = client
     ok = host.connect_single_device("AA:BB:CC:DD:EE:FF")
     assert ok is False
-    assert host.current_divoom is None
+    assert not hasattr(host, "current_divoom")
 
 
 def test_connect_single_device_exception_sets_last_error(host, monkeypatch):
@@ -75,7 +76,7 @@ def test_connect_single_device_exception_sets_last_error(host, monkeypatch):
     ok = host.connect_single_device("AA:BB:CC:DD:EE:FF")
     assert ok is False
     assert "wire fell over" in host.get_last_connect_error()
-    assert host.current_divoom is None
+    assert not hasattr(host, "current_divoom")
 
 
 # ── _lan_token_for ──────────────────────────────────────────────────────────
@@ -144,39 +145,25 @@ def test_device_name_for_cache_loop_exhausts_without_match(host, tmp_path):
     assert host._device_name_for("AA:BB") is None
 
 
-def test_select_device_rebinds_the_proxy_without_connecting(host, monkeypatch):
-    """2026-09-12: the bench's selection is the one owner of 'the selected
-    panel'. Selecting must rebind the Python proxy to that mac and must NOT
-    connect or disconnect anything (the daemon keeps the fleet's links)."""
-    from unittest.mock import MagicMock
-    client = MagicMock()
-    host._daemon_client = client
-    assert host.select_device("e9a41e1e-ditoo") is True
-    assert host.current_divoom._mac == "e9a41e1e-ditoo"
-    client.connect_device.assert_not_called()
-    client.disconnect_device.assert_not_called()
-    first = host.current_divoom
-    assert host.select_device("e9a41e1e-ditoo") is True
-    assert host.current_divoom is first, "same panel keeps the same proxy"
-    assert host.select_device("a9fccb71-pixoo") is True
-    assert host.current_divoom._mac == "a9fccb71-pixoo"
-    assert host.select_device("MatrixWall") is True
-    assert host.current_divoom._mac == "a9fccb71-pixoo", (
-        "the wall is no panel; channel writes name it themselves (P5.6)")
-    assert host.select_device("") is False
-
-
-def test_select_device_tells_the_daemon_unless_provisional(host):
+def test_select_device_tells_the_daemon_and_binds_nothing(host):
     """The daemon owns the ACTIVE panel (the menubar switches it too), so a
-    bench click reaches it; the bench's first-render placeholder does not,
-    or it would overwrite a choice made elsewhere on every GUI start."""
+    bench click reaches it -- and nothing in this process follows it (P5.7:
+    `current_divoom` was what the Tools tab, media sync and the gallery push
+    acted on, read when their call RAN). Selecting connects and disconnects
+    nothing; the daemon keeps the fleet's links. The bench's first-render
+    placeholder is not sent, or it would overwrite a choice made elsewhere on
+    every GUI start."""
     from unittest.mock import MagicMock
     client = MagicMock()
     host._daemon_client = client
     assert host.select_device("e9a41e1e-ditoo") is True
     client.select_device.assert_called_once_with("e9a41e1e-ditoo")
+    client.connect_device.assert_not_called()
+    client.disconnect_device.assert_not_called()
     assert host.select_device("a9fccb71-pixoo", provisional=True) is True
+    assert host.select_device("MatrixWall") is True
     client.select_device.assert_called_once()
-    assert host.current_divoom._mac == "a9fccb71-pixoo", "the proxy still follows"
+    assert not hasattr(host, "current_divoom")
     client.select_device.side_effect = RuntimeError("socket gone")
     assert host.select_device("t1-timoo") is True, "a daemon hiccup does not break the click"
+    assert host.select_device("") is False

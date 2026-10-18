@@ -108,7 +108,7 @@ class PanelsMixin:
             logger.error("%s on %s failed: %s", what, mac, exc)
             return False
 
-    def set_brightness(self, brightness: int, mac: str) -> bool:
+    def set_brightness(self, mac: str, brightness: int) -> bool:
         val = max(0, min(100, int(brightness)))
         logger.info("GUI Action: brightness %s on %s", val, mac)
 
@@ -121,7 +121,7 @@ class PanelsMixin:
 
         return self._level_write(mac, "set_brightness", lambda w: w.set_brightness(val), on_panel)
 
-    def set_volume(self, volume: int, mac: str) -> bool:
+    def set_volume(self, mac: str, volume: int) -> bool:
         val = max(0, min(15, int(volume)))
         logger.info("GUI Action: volume %s on %s", val, mac)
         return self._level_write(

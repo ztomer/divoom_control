@@ -75,6 +75,8 @@ mod mock_levels_tests;
 mod mock_scroll_tests;
 #[cfg(test)]
 mod mock_scrolling_text_tests;
+#[cfg(test)]
+mod mock_tools_tests;
 pub mod mock_transport;
 pub mod models;
 pub mod monthly_best;

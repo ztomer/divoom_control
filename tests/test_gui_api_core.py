@@ -9,7 +9,16 @@ from tests.support.gui_api_base import GuiApiTestBase
 from gui_main import DivoomGuiAPI
 
 
+#: The panel every Tools call names (P5.7).
+A = "AA:00:00:00:00:01"
+
+
 class TestGuiApiCoreBasics(GuiApiTestBase):
+    def _on(self, dev):
+        """`dev` answers for panel A only: a Tools call names its panel and
+        `_display` is where it becomes a target (P5.7)."""
+        self.api.tools._display = lambda mac, **_kw: dev if mac == A else None
+
     def test_window_controls(self):
         """Test native window minimize, maximize, and thread-delayed close controls."""
         self.api.minimize_window()
@@ -78,27 +87,27 @@ class TestGuiApiCoreBasics(GuiApiTestBase):
         """R7 Alarms: set_alarm maps enabled→status and weekday mask through."""
         dev = MagicMock()
         dev.alarm.set_alarm = AsyncMock(return_value=True)
-        self.api.current_divoom = dev
-        ok = self.api.set_alarm(2, True, 7, 30, 0b0011111)  # weekdays Mon-Fri
+        self._on(dev)
+        ok = self.api.set_alarm(A, 2, True, 7, 30, 0b0011111)  # weekdays Mon-Fri
         self.assertTrue(ok)
         dev.alarm.set_alarm.assert_called_once_with(2, 1, 7, 30, 31, 0, 0)
 
     def test_set_alarm_no_device(self):
-        self.api.current_divoom = None
-        self.assertFalse(self.api.set_alarm(0, True, 6, 0, 0))
+        self._on(None)
+        self.assertFalse(self.api.set_alarm(A, 0, True, 6, 0, 0))
 
     def test_sleep_start_stop(self):
         """R7 Sleep Aid: start_sleep passes minutes/volume/color; stop sets on=0."""
         dev = MagicMock()
         dev.sleep.show_sleep = AsyncMock(return_value=True)
-        self.api.current_divoom = dev
-        self.assertTrue(self.api.start_sleep(20, "#ff0000", 8))
+        self._on(dev)
+        self.assertTrue(self.api.start_sleep(A, 20, "#ff0000", 8))
         kw = dev.sleep.show_sleep.call_args.kwargs
         self.assertEqual(kw.get("sleeptime"), 20)
         self.assertEqual(kw.get("volume"), 8)
         self.assertEqual(kw.get("on"), 1)
         self.assertEqual(list(kw.get("color")), [255, 0, 0])
-        self.assertTrue(self.api.stop_sleep())
+        self.assertTrue(self.api.stop_sleep(A))
         self.assertEqual(dev.sleep.show_sleep.call_args.kwargs.get("on"), 0)
 
     def test_tools_timer_countdown_noise(self):
@@ -107,13 +116,13 @@ class TestGuiApiCoreBasics(GuiApiTestBase):
         dev.timer.set_timer = AsyncMock(return_value=True)
         dev.countdown.set_countdown = AsyncMock(return_value=True)
         dev.noise.set_noise = AsyncMock(return_value=True)
-        self.api.current_divoom = dev
-        self.api.set_timer("start"); dev.timer.set_timer.assert_called_with(1)
-        self.api.set_timer("reset"); dev.timer.set_timer.assert_called_with(2)
-        self.api.set_countdown("start", 5, 30); dev.countdown.set_countdown.assert_called_with(0, 5, 30)
-        self.api.set_countdown("stop", 5, 30); dev.countdown.set_countdown.assert_called_with(1, 5, 30)
-        self.api.set_noise("start"); dev.noise.set_noise.assert_called_with(1)
-        self.api.set_noise("stop"); dev.noise.set_noise.assert_called_with(2)
+        self._on(dev)
+        self.api.set_timer(A, "start"); dev.timer.set_timer.assert_called_with(1)
+        self.api.set_timer(A, "reset"); dev.timer.set_timer.assert_called_with(2)
+        self.api.set_countdown(A, "start", 5, 30); dev.countdown.set_countdown.assert_called_with(0, 5, 30)
+        self.api.set_countdown(A, "stop", 5, 30); dev.countdown.set_countdown.assert_called_with(1, 5, 30)
+        self.api.set_noise(A, "start"); dev.noise.set_noise.assert_called_with(1)
+        self.api.set_noise(A, "stop"); dev.noise.set_noise.assert_called_with(2)
 
     def test_r8_device_settings(self):
         """R8: hour/temp/name/fm map to the right facade calls + bool coercion."""
@@ -122,19 +131,19 @@ class TestGuiApiCoreBasics(GuiApiTestBase):
         dev.device.set_temp_type = AsyncMock(return_value=True)
         dev.device.set_device_name = AsyncMock(return_value=True)
         dev.radio.set_radio_frequency = AsyncMock(return_value=True)
-        self.api.current_divoom = dev
-        self.api.set_hour_type(True); dev.system.set_hour_type.assert_called_with(1)
-        self.api.set_hour_type("false"); dev.system.set_hour_type.assert_called_with(0)
-        self.api.set_temp_unit(True); dev.device.set_temp_type.assert_called_with(1)
-        self.api.set_device_name("Bedroom"); dev.device.set_device_name.assert_called_with("Bedroom")
-        self.api.set_fm_frequency(1015); dev.radio.set_radio_frequency.assert_called_with(1015)
+        self._on(dev)
+        self.api.set_hour_type(A, True); dev.system.set_hour_type.assert_called_with(1)
+        self.api.set_hour_type(A, "false"); dev.system.set_hour_type.assert_called_with(0)
+        self.api.set_temp_unit(A, True); dev.device.set_temp_type.assert_called_with(1)
+        self.api.set_device_name(A, "Bedroom"); dev.device.set_device_name.assert_called_with("Bedroom")
+        self.api.set_fm_frequency(A, 1015); dev.radio.set_radio_frequency.assert_called_with(1015)
 
     def test_r8_memorial_and_timeplan(self):
         """R8: memorial + timeplan pass through with status/have-flag derivation."""
         dev = MagicMock()
         dev.alarm.set_memorial_time = AsyncMock(return_value=True)
-        self.api.current_divoom = dev
-        self.api.set_memorial(0, True, 12, 25, 9, 0, "Xmas")
+        self._on(dev)
+        self.api.set_memorial(A, 0, True, 12, 25, 9, 0, "Xmas")
         dev.alarm.set_memorial_time.assert_called_with(0, 1, 12, 25, 9, 0, 1, "Xmas")
 
     def test_r72_sync_time_and_auto_off_go_to_the_daemon(self):
@@ -151,74 +160,74 @@ class TestGuiApiCoreBasics(GuiApiTestBase):
         dev = MagicMock()
         dev.system.set_date_time = AsyncMock(return_value=True)
         dev.device.set_auto_power_off = AsyncMock(return_value=True)
-        self.api.current_divoom = dev
+        self._on(dev)
 
-        self.assertTrue(self.api.sync_time())
+        self.assertTrue(self.api.sync_time(A))
         kwargs = dev.system.set_date_time.call_args.kwargs
         assert set(kwargs) == {"year", "month", "day", "hour", "minute", "second"}, kwargs
         # A real clock, not the daemon's 2000-01-01 default.
         assert kwargs["year"] >= 2024, kwargs
 
-        self.assertTrue(self.api.set_auto_power_off(60))
+        self.assertTrue(self.api.set_auto_power_off(A, 60))
         dev.device.set_auto_power_off.assert_called_with(60)
 
     def test_r8_no_device(self):
-        self.api.current_divoom = None
-        self.assertFalse(self.api.set_hour_type(True))
-        self.assertFalse(self.api.set_fm_frequency(900))
+        self._on(None)
+        self.assertFalse(self.api.set_hour_type(A, True))
+        self.assertFalse(self.api.set_fm_frequency(A, 900))
 
     def test_r9_screen_dir_mirror(self):
         """R9: screen dir/mirror reach d.design with bool/int coercion."""
         dev = MagicMock()
         dev.design.set_screen_dir = AsyncMock(return_value=True)
         dev.design.set_screen_mirror = AsyncMock(return_value=True)
-        self.api.current_divoom = dev
-        self.api.set_screen_dir(2); dev.design.set_screen_dir.assert_called_with(2)
-        self.api.set_screen_mirror("on"); dev.design.set_screen_mirror.assert_called_with(True)
-        self.api.set_screen_mirror(0); dev.design.set_screen_mirror.assert_called_with(False)
+        self._on(dev)
+        self.api.set_screen_dir(A, 2); dev.design.set_screen_dir.assert_called_with(2)
+        self.api.set_screen_mirror(A, "on"); dev.design.set_screen_mirror.assert_called_with(True)
+        self.api.set_screen_mirror(A, 0); dev.design.set_screen_mirror.assert_called_with(False)
 
     def test_r9_factory_reset_requires_token(self):
         """R9: factory_reset only fires with the literal 'RESET' token."""
         dev = MagicMock()
         dev.design.factory_reset = AsyncMock(return_value=True)
-        self.api.current_divoom = dev
-        self.assertFalse(self.api.factory_reset())          # no token
-        self.assertFalse(self.api.factory_reset("yes"))     # wrong token
+        self._on(dev)
+        self.assertFalse(self.api.factory_reset(A))          # no token
+        self.assertFalse(self.api.factory_reset(A, "yes"))     # wrong token
         dev.design.factory_reset.assert_not_called()
-        self.assertTrue(self.api.factory_reset("RESET"))    # correct token
+        self.assertTrue(self.api.factory_reset(A, "RESET"))    # correct token
         dev.design.factory_reset.assert_called_once()
 
     def test_r9_no_device(self):
-        self.api.current_divoom = None
-        self.assertFalse(self.api.set_screen_dir(1))
-        self.assertFalse(self.api.set_screen_mirror(True))
-        self.assertFalse(self.api.factory_reset("RESET"))
+        self._on(None)
+        self.assertFalse(self.api.set_screen_dir(A, 1))
+        self.assertFalse(self.api.set_screen_mirror(A, True))
+        self.assertFalse(self.api.factory_reset(A, "RESET"))
 
     def test_r10_send_notification(self):
         """R10: text vs icon-only path + app_type range guard."""
         dev = MagicMock()
         dev.notification.show_notification = AsyncMock(return_value=True)
         dev.notification.show_notification_text = AsyncMock(return_value=True)
-        self.api.current_divoom = dev
+        self._on(dev)
         # icon-only when no text
-        self.api.send_notification(6)
+        self.api.send_notification(A, 6)
         dev.notification.show_notification.assert_called_with(6)
         dev.notification.show_notification_text.assert_not_called()
         # text path when text given
-        self.api.send_notification(7, "Hi")
+        self.api.send_notification(A, 7, "Hi")
         dev.notification.show_notification_text.assert_called_with(7, "Hi")
         # blank/whitespace text falls back to icon-only
-        self.api.send_notification(2, "   ")
+        self.api.send_notification(A, 2, "   ")
         dev.notification.show_notification.assert_called_with(2)
         # out-of-range refused without sending
         dev.notification.show_notification.reset_mock()
-        self.assertFalse(self.api.send_notification(0))
-        self.assertFalse(self.api.send_notification(15))
+        self.assertFalse(self.api.send_notification(A, 0))
+        self.assertFalse(self.api.send_notification(A, 15))
         dev.notification.show_notification.assert_not_called()
 
     def test_r10_no_device(self):
-        self.api.current_divoom = None
-        self.assertFalse(self.api.send_notification(6))
+        self._on(None)
+        self.assertFalse(self.api.send_notification(A, 6))
 
 
     def test_scan_devices(self):
@@ -234,9 +243,9 @@ class TestGuiApiCoreBasics(GuiApiTestBase):
         fake.scan.assert_called_once_with(timeout=2.0, limit=1)
 
     def test_connect_single_device(self):
-        """R17 P5: connect is delegated to the daemon; current_divoom becomes a
-        DaemonDeviceProxy (the daemon owns the real BLE connection)."""
-        from divoom_gui.daemon_bridge import DaemonDeviceProxy
+        """R17 P5: connect is delegated to the daemon (it owns the real BLE
+        connection). P5.7: connecting binds nothing in this process -- every
+        action names its panel."""
         fake = MagicMock()
         fake.disconnect_device.return_value = {"success": True}
         fake.connect_device.return_value = {"success": True, "connected": True}
@@ -248,6 +257,6 @@ class TestGuiApiCoreBasics(GuiApiTestBase):
              patch.object(type(self.api), "_persist_last_connected", return_value=None):
             success = self.api.connect_single_device("00:11:22:33:44:55")
         self.assertTrue(success)
-        self.assertIsInstance(self.api.current_divoom, DaemonDeviceProxy)
+        self.assertFalse(hasattr(self.api, "current_divoom"))
         fake.connect_device.assert_called_once()
         self.assertEqual(fake.connect_device.call_args.kwargs.get("mac"), "00:11:22:33:44:55")

@@ -9,6 +9,11 @@
 document.addEventListener("DOMContentLoaded", () => {
     const btn = document.getElementById("hot-update-btn");
     if (!btn) return;
+    // The panel the hot channel is shown for, and the panel the running
+    // update was CLICKED for (P5.7): its completion lands there, wherever the
+    // selection is by then.
+    const shownMac = () => window.ChannelSettings.selected()?.mac || null;
+    let updateMac = null;
 
     // ── Auto-fetch hot channel manifest on tab activation ──────────────
     window.addEventListener("tab-changed", (e) => {
@@ -27,7 +32,7 @@ document.addEventListener("DOMContentLoaded", () => {
         list.innerHTML = '<div class="hot-preview-empty">Loading hot channel manifest...</div>';
         loadLastChecked();  // R53: show when this device was last checked
 
-        window.pywebview?.api?.hot_update_preview?.().then(json => {
+        window.pywebview?.api?.hot_update_preview?.(shownMac() || "").then(json => {
             let r;
             try { r = JSON.parse(json); } catch { r = {success: false}; }
             if (!r.success) {
@@ -39,9 +44,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // ── R53: per-device "last checked" stamp ──────────────────────────────
-    // The daemon writes the stamp (it owns the update); we only READ it, keyed
-    // by the active device — the backend resolves that key, matching what
-    // hot_channel_update passed for the write.
+    // The daemon writes the stamp (it owns the update) under the panel the
+    // update named; we READ it for the panel shown.
     function formatChecked(seconds) {
         const then = seconds * 1000;
         const diff = Date.now() - then;
@@ -66,10 +70,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function loadLastChecked() {
-        if (!window.pywebview?.api?.hot_get_check) { renderLastChecked(null); return; }
-        // No address arg — the backend resolves the active device (same key the
-        // write used), so read and write can't drift.
-        window.pywebview.api.hot_get_check().then(json => {
+        const mac = shownMac();
+        if (!mac || !window.pywebview?.api?.hot_get_check) { renderLastChecked(null); return; }
+        window.pywebview.api.hot_get_check(mac).then(json => {
+            if (shownMac() !== mac) return;
             let e; try { e = JSON.parse(json); } catch { e = null; }
             renderLastChecked(e);
         });
@@ -110,7 +114,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (gifUrl) {
                         thumb.src = gifUrl;
                         if (i === 0) {
-                            const mac = (typeof window._activeDeviceMac === "function") ? window._activeDeviceMac() : null;
+                            const mac = shownMac();
                             const curAct = window.DivoomState?.deviceActivity?.[mac];
                             if (curAct && (curAct.kind === "cloud" || curAct.kind === "hot") && window.setDeviceActivity) {
                                 window.setDeviceActivity(mac, curAct.kind, { src: gifUrl });
@@ -125,7 +129,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // ── Update button ───────────────────────────────────────────────────
     btn.addEventListener("click", () => {
         if (btn.disabled) return;
-        if (window.requireDevice && !window.requireDevice()) return;
+        const mac = window.ChannelSettings.mac(true);
+        if (!mac) return;
+        updateMac = mac;
 
         const label = document.getElementById("hot-update-label");
         const wrap = document.getElementById("hot-progress-wrap");
@@ -134,7 +140,7 @@ document.addEventListener("DOMContentLoaded", () => {
         btn.disabled = true;
         btn.classList.add("progress-active");
 
-        window.pywebview?.api?.hot_channel_update?.().then(r => {
+        window.pywebview?.api?.hot_channel_update?.(mac).then(r => {
             // R59/event-driven: the daemon broadcasts `hot_progress` (starting/
             // done/error) for every phase, so the 600ms poll is gone — progress
             // is pushed live via window.Divoom.onHotProgress.
@@ -228,7 +234,7 @@ document.addEventListener("DOMContentLoaded", () => {
             // the tiles reflect the set the device was just synced against — the
             // newest file was missing from the preview until this refresh.
             loadHotPreview();
-            const mac = (typeof window._activeDeviceMac === "function") ? window._activeDeviceMac() : null;
+            const mac = updateMac;
             if (mac && window.setDeviceActivity) {
                 const firstThumb = document.querySelector("#hot-preview-list .hot-preview-thumb");
                 const src = (firstThumb && firstThumb.src && !firstThumb.src.includes("pixoo.png")) ? firstThumb.src : null;

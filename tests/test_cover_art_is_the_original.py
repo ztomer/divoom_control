@@ -18,14 +18,13 @@ class _Host(MediaSyncMixin):
     def __init__(self, reply):
         self._reply = reply
         self.wall_slots = {}
-        self.current_divoom = None
 
     def _client(self):
         c = MagicMock()
         c.now_playing.return_value = self._reply
         return c
 
-    def _artwork_preview(self, artwork_b64):  # the device-size frame path
+    def _artwork_preview(self, artwork_b64, size):  # the device-size frame path
         return "data:image/png;base64,FRAME"
 
 
@@ -35,7 +34,7 @@ def test_track_info_carries_original_artwork_and_device_frame_separately():
         "available": True, "playing": True, "title": "T", "artist": "A",
         "artwork_b64": art, "artwork_mime": "image/jpeg",
     })
-    info = json.loads(host.get_current_track_info())
+    info = json.loads(host.get_current_track_info("AA:00:00:00:00:01"))
     assert info["artwork"] == f"data:image/jpeg;base64,{art}", "cover gets the original bytes"
     assert info["preview"] == "data:image/png;base64,FRAME", "device preview stays the frame"
     assert info["artwork"] != info["preview"]
@@ -43,7 +42,7 @@ def test_track_info_carries_original_artwork_and_device_frame_separately():
 
 def test_track_info_without_artwork_has_neither():
     host = _Host({"available": True, "playing": True, "title": "T", "artist": "A"})
-    info = json.loads(host.get_current_track_info())
+    info = json.loads(host.get_current_track_info("AA:00:00:00:00:01"))
     assert info["artwork"] == "" and info["preview"] == ""
 
 

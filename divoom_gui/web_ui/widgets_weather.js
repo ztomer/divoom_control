@@ -59,7 +59,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (wrap && wrap.dataset.state !== "ok") {
             setWeatherCard("loading", "Loading the panel's weather frame…", null, null);
         }
-        Promise.resolve(api.get_weather_preview(0)).then(json => {
+        Promise.resolve(api.get_weather_preview(window.ChannelSettings.selected()?.mac || "", 0)).then(json => {
             if (ticket !== weatherRequest) return;
             let r = json;
             if (typeof json === "string") {

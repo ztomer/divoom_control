@@ -12,26 +12,24 @@ class DummyApi(GallerySyncMixin):
     def __init__(self):
         self._daemon_client = MagicMock()
         self._window = MagicMock()
-        self._active_mac = "11:22:33:44:55:01"
-        self._active_size = 16
 
     def _client(self):
         return self._daemon_client
 
-    def _active_device_mac(self):
-        return self._active_mac
-
-    def _active_device_size(self):
-        return self._active_size
-
-    def display_wall_image(self, path: str, cell_size: int) -> dict:
-        return {"success": True, "path": path, "cell_size": cell_size}
+    def display_wall_image(self, mac: str, path: str, cell_size: int | None = None) -> dict:
+        return {"success": True, "mac": mac, "path": path}
 
 
 def test_play_gallery_art_missing_file_id():
     api = DummyApi()
-    res = api.play_gallery_art("")
+    res = api.play_gallery_art("11:22:33:44:55:01", "")
     assert res == {"success": False, "error": "missing file_id"}
+
+
+def test_play_gallery_art_naming_no_panel_is_refused():
+    """P5.7: it pushed to the panel the bench selected when it RAN."""
+    res = DummyApi().play_gallery_art("", "art123")
+    assert res == {"success": False, "error": "No panel selected"}
 
 
 def test_play_gallery_art_cached_file(tmp_path: Path):
@@ -44,10 +42,10 @@ def test_play_gallery_art_cached_file(tmp_path: Path):
     gif_file.write_bytes(b"GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;")
 
     with patch.object(Path, "home", return_value=tmp_path):
-        res = api.play_gallery_art(file_id)
+        res = api.play_gallery_art("11:22:33:44:55:01", file_id)
         assert res.get("success") is True
         assert res.get("path") == str(gif_file.absolute())
-        assert res.get("cell_size") == 16
+        assert res.get("mac") == "11:22:33:44:55:01"
 
 
 def test_preview_controller_js_syntax_and_structure():

@@ -256,11 +256,12 @@ def test_appbar_volume_handler_in_app_js():
 
 
 def test_gui_api_exposes_set_volume_and_get_panel_levels():
-    """DivoomGuiAPI has set_volume(volume, mac) and get_panel_levels(mac): both
-    name their panel (P5.1, `divoom_gui/panels.py`)."""
+    """DivoomGuiAPI has set_volume(mac, volume) and get_panel_levels(mac): both
+    name their panel, first, like every device action (P5.1, P5.7;
+    `divoom_gui/panels.py`)."""
     src = PANELS_PY.read_text()
-    assert re.search(r"def\s+set_volume\s*\(\s*self\s*,\s*volume:\s*int\s*,\s*mac:\s*str\s*\)", src), (
-        "panels.py has no set_volume(self, volume: int, mac: str).")
+    assert re.search(r"def\s+set_volume\s*\(\s*self\s*,\s*mac:\s*str\s*,\s*volume:\s*int\s*\)", src), (
+        "panels.py has no set_volume(self, mac: str, volume: int).")
     assert re.search(r"def\s+get_panel_levels\s*\(\s*self\s*,\s*mac:\s*str\s*\)", src), (
         "panels.py has no get_panel_levels(self, mac: str).")
 

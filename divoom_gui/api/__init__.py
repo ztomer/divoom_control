@@ -59,15 +59,11 @@ class ApiBase:
     def __init__(self, loop_thread: AsyncLoopThread, daemon_client_getter, state_getter):
         self._loop_thread = loop_thread
         self._daemon_client_getter = daemon_client_getter  # callable returning DaemonClient | None
-        self._state_getter = state_getter  # callable returning dict with current_divoom, wall_instance, wall_slots
+        self._state_getter = state_getter  # callable returning dict with wall_instance, wall_slots
 
     @property
     def _client(self):
         return self._daemon_client_getter()
-
-    @property
-    def _current_divoom(self):
-        return self._state_getter().get("current_divoom")
 
     @property
     def _wall_instance(self):
@@ -77,9 +73,12 @@ class ApiBase:
     def _wall_slots(self):
         return self._state_getter().get("wall_slots", {})
 
-    def _rebuild_wall_instance(self, cell_size: int = 16) -> bool:
+    def _rebuild_wall_instance(self, cell_size: int | None = None) -> bool:
+        """Build the daemon's wall from the slots. ``cell_size`` is only the
+        edge of a slot that carries no ``size`` of its own (`wall/cmds.rs`)."""
         if not self._wall_slots:
             return False
+        cell_size = 16 if cell_size is None else cell_size
         client = self._client
         if client is None:
             logger.error("Wall build failed: no daemon available")
@@ -93,24 +92,31 @@ class ApiBase:
         self._state_getter()["wall_instance"] = DaemonDeviceProxy(client, target="wall")
         return True
 
-    def _display(self, mac):
-        """The display a write's CLICK named, or None (P5.6).
+    def _display(self, mac, *, wall: bool = True, cell_size: int | None = None):
+        """The display a write's CLICK named, or None (P5.6, P5.7).
 
-        The ONE place a display write turns a mac into a target. Every channel
-        call names its panel: the web UI resolves the selected display at the
-        gesture (`web_ui/channel_settings.js`) and passes its mac through. This
-        replaced `_target()`, which asked `current_target_mode` and
-        `current_divoom` -- whichever panel the bench had told the backend to
-        select by the time the call RAN -- so a selection change between a
-        click and its write sent the setting to the other panel. A call that
-        names no panel is refused, as P5.1's level writes are
-        (`divoom_gui/panels.py`); there is no "the" panel to fall back to.
+        The ONE place a device action turns a mac into a target. Every call
+        that acts on a panel names it: the web UI resolves the selected
+        display at the gesture (`web_ui/channel_settings.js`) and passes its
+        mac through. This replaced `_target()` and then `current_divoom` --
+        whichever panel the bench had told the backend to select by the time
+        the call RAN -- so a selection change between a click and its write
+        sent it to the other panel. A call that names no panel is refused, as
+        P5.1's level writes are (`divoom_gui/panels.py`); there is no "the"
+        panel to fall back to.
+
+        ``wall=False`` is for an action that means ONE panel (the Tools tab:
+        an alarm, a timer, a rename): the wall is refused rather than resolved
+        to some panel in it. ``cell_size`` sizes the wall when one is named.
         """
         if not isinstance(mac, str) or not mac:
-            logger.error("display write refused: no panel named (got %r)", mac)
+            logger.error("device action refused: no panel named (got %r)", mac)
             return None
         if mac == WALL:
-            return self._wall_instance if self._rebuild_wall_instance() else None
+            if not wall:
+                logger.error("device action refused: it acts on one panel, not the wall")
+                return None
+            return self._wall_instance if self._rebuild_wall_instance(cell_size) else None
         client = self._client
         if client is None:
             return None

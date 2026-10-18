@@ -157,7 +157,7 @@
             }
             const call = kind === "brightness" ? "set_brightness" : "set_volume";
             if (!a || typeof a[call] !== "function") return;
-            Promise.resolve(a[call](value, mac)).then(ok => {
+            Promise.resolve(a[call](mac, value)).then(ok => {
                 if (!ok) { window.showToast(`The panel did not take the ${kind}.`, "error"); return; }
                 const d = record(mac);
                 if (d) d.levels = Object.assign({}, d.levels, { [kind]: value });

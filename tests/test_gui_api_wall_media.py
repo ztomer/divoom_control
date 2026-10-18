@@ -55,7 +55,6 @@ class TestGuiApiWallMedia(GuiApiTestBase):
 
     def test_vj_visualization_no_target(self):
         """With no connected device and no wall, selectors fail gracefully (no raise)."""
-        self.api.current_divoom = None
         self.api.wall_slots = {}
         self.assertFalse(self.api.set_vj_effect("MatrixWall", 0))
         self.assertFalse(self.api.set_visualization("MatrixWall", 0))
@@ -96,17 +95,17 @@ class TestGuiApiWallMedia(GuiApiTestBase):
             "symbol": "AAPL", "price": 100.0, "change": 1.0, "pct_change": 1.0,
         }
         with patch.object(type(self.api), "_client", lambda self: client):
-            res = json.loads(self.api.get_ticker_preview("AAPL", 32))
+            res = json.loads(self.api.get_ticker_preview("AA:00:00:00:00:01", "AAPL", 32))
         self.assertTrue(res["ok"], res)
         self.assertEqual(res["size"], 32)
         self.assertEqual(res["price"], 100.0)
         self.assertTrue(res["preview"].startswith("data:image/png;base64,"))
 
     def test_apply_stock_ticker_no_target(self):
-        """5.a: clear failure when there is no connected device."""
+        """5.a: clear failure when the call names no panel (P5.7: it used to
+        mean "the panel the bench selected last")."""
         import base64 as _b64
 
-        self.api.current_divoom = None
         self.api.wall_slots = {}
         client = MagicMock()
         client.render_widget.return_value = {
@@ -115,9 +114,10 @@ class TestGuiApiWallMedia(GuiApiTestBase):
             "symbol": "AAPL", "price": 1.0, "change": 0.0, "pct_change": 0.0,
         }
         with patch.object(type(self.api), "_client", lambda self: client):
-            res = json.loads(self.api.apply_stock_ticker("AAPL"))
+            res = json.loads(self.api.apply_stock_ticker("", "AAPL"))
         self.assertFalse(res["success"])
-        self.assertEqual(res["error"], "No device connected")
+        self.assertEqual(res["error"], "No panel selected")
+        client.device_call.assert_not_called()
 
     def test_ticker_persistence(self):
         """5.e: tickers save/load, de-duped and upper-cased."""
@@ -252,17 +252,18 @@ class TestGuiApiWallMedia(GuiApiTestBase):
             "frame_rgb_b64": frame,
             "symbol": "AAPL", "price": 105.5, "change": 1.2, "pct_change": 1.15,
         }
-        with patch.object(type(self.api), "_client", lambda self: client):
-            self.api.current_divoom = MagicMock()
-            self.api.current_divoom.is_connected = True
-            self.api.current_divoom.display.show_image = AsyncMock(return_value=True)
-
-            res_dict = json.loads(self.api.apply_stock_ticker("AAPL"))
+        dev = MagicMock()
+        dev.display.show_image = AsyncMock(return_value=True)
+        self.api.lighting._display = lambda mac, **_kw: dev if mac == "AA:00:00:00:00:01" else None
+        with patch.object(type(self.api), "_client", lambda self: client), \
+             patch.object(self.api, "_size_of", side_effect=lambda mac, default=16: 16):
+            res_dict = json.loads(self.api.apply_stock_ticker("AA:00:00:00:00:01", "AAPL"))
             self.assertTrue(res_dict["success"])
             self.assertEqual(res_dict["price"], 105.5)
             self.assertEqual(res_dict["change"], 1.2)
             client.render_widget.assert_called_once_with(
                 "stocks", size=16, params={"symbol": "AAPL"})
+            dev.display.show_image.assert_awaited_once()
 
     def test_ticker_preview_and_push_come_from_one_call(self):
         """The property P3 exists to restore: the tile and the matrix are the
@@ -277,7 +278,7 @@ class TestGuiApiWallMedia(GuiApiTestBase):
             "symbol": "AAPL", "price": 1.0, "change": 0.0, "pct_change": 0.0,
         }
         with patch.object(type(self.api), "_client", lambda self: client):
-            preview = json.loads(self.api.get_ticker_preview("AAPL", 16))
+            preview = json.loads(self.api.get_ticker_preview("AA:00:00:00:00:01", "AAPL", 16))
         self.assertTrue(preview["ok"], preview)
 
         from PIL import Image

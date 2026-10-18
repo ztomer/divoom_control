@@ -61,9 +61,9 @@ window.__api = {
     const ms = window.__fleet.delay[mac] || 0;
     return ms ? new Promise(r => setTimeout(() => r(reply), ms)) : reply;
   },
-  set_brightness: (v, mac) => { window.__fleet.writes.push({m: 'set_brightness', args: [v, mac]});
+  set_brightness: (mac, v) => { window.__fleet.writes.push({m: 'set_brightness', args: [mac, v]});
                                 if (window.__fleet.levels[mac]) window.__fleet.levels[mac].brightness = v; return true; },
-  set_volume: (v, mac) => { window.__fleet.writes.push({m: 'set_volume', args: [v, mac]});
+  set_volume: (mac, v) => { window.__fleet.writes.push({m: 'set_volume', args: [mac, v]});
                             if (window.__fleet.levels[mac]) window.__fleet.levels[mac].volume = v; return true; },
 };
 window.pywebview = { api: new Proxy({}, { get: (_t, name) => (...args) => {
@@ -157,7 +157,7 @@ async def test_a_write_names_its_panel_and_the_other_panel_keeps_its_value():
             await wait_js(page, "() => window.__fleet.writes.length > 0")
             await eval_js(page, "() => new Promise(r => setTimeout(r, 250))")
             writes = await eval_js(page, "() => window.__fleet.writes")
-            assert writes == [{"m": "set_brightness", "args": [55, B]}], writes
+            assert writes == [{"m": "set_brightness", "args": [B, 55]}], writes
 
             await _select(page, A)
             a = await _deck_shows(page, A, "30%")
@@ -169,7 +169,7 @@ async def test_a_write_names_its_panel_and_the_other_panel_keeps_its_value():
             await wait_js(page, "() => window.__fleet.writes.length > 1")
             await eval_js(page, "() => new Promise(r => setTimeout(r, 250))")
             writes = await eval_js(page, "() => window.__fleet.writes")
-            assert writes[1:] == [{"m": "set_volume", "args": [9, A]}], (
+            assert writes[1:] == [{"m": "set_volume", "args": [A, 9]}], (
                 f"one volume gesture, one write, naming the panel: {writes}")
 
             await _select(page, B)

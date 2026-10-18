@@ -16,8 +16,12 @@ logger = logging.getLogger("divoom_gui")
 
 class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
     """Mixin for macOS active playback tracker, stock tickers, sysmon widget, and frame pushing."""
-    def get_current_track_info(self) -> str:
+    def get_current_track_info(self, mac: str = "") -> str:
         """What is playing — asked of the DAEMON, not discovered here.
+
+        ``mac`` is the panel the card previews for: the device-size frame is
+        drawn at ITS size (P5.7), not the size of whichever panel the bench
+        selected last.
 
         R67/C2: this used to call `media_source.get_current_playing_track()`,
         which ran osascript inside the GUI process against each player in turn
@@ -53,7 +57,7 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
             artwork = ""
             art_b64 = reply.get("artwork_b64")
             if art_b64:
-                preview = self._artwork_preview(art_b64)
+                preview = self._artwork_preview(art_b64, self._size_of(mac or None))
                 # The real album art for the card's cover (a smooth resize of
                 # the original); `preview` is the device-size frame beside it
                 # and is the one that must stay pixelated. Handing the cover
@@ -83,7 +87,7 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
             logger.warning(f"now_playing failed: {e}")
             return json.dumps({})
 
-    def _artwork_preview(self, artwork_b64: str) -> str:
+    def _artwork_preview(self, artwork_b64: str, size: int) -> str:
         """The album-art frame the device is given, as a data URL.
 
         The docstring here used to read: "Uses the same renderer path the device
@@ -102,26 +106,11 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
         """
         try:
             _extras, frame_path = self._widget_frame(
-                "album_art", self._active_device_size(),
-                {"image_b64": artwork_b64})
+                "album_art", size, {"image_b64": artwork_b64})
             return self._frame_to_data_url(frame_path)
         except Exception as e:
             logger.debug(f"artwork preview failed: {e}")
             return ""
-
-    def _active_device_size(self, default: int = 16) -> int:
-        try:
-            if self.wall_slots:
-                sizes = [s.get("size", default) for s in self.wall_slots.values() if isinstance(s, dict)]
-                return min(sizes) if sizes else default
-            # P5.1: the daemon's resolution for the selected panel, never a
-            # guess from its name (PanelsMixin._panel_pixels).
-            px = self._panel_pixels(getattr(self.current_divoom, "_mac", None))
-            if px:
-                return px
-        except Exception:
-            pass
-        return default
 
     def _size_of(self, mac: str | None, default: int = 16) -> int:
         """The named display's edge in pixels (P5.6): the smallest slot for the
@@ -135,44 +124,38 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
         except Exception:
             return default
 
-    def _has_push_target(self) -> bool:
-        dev = self.current_divoom
-        return bool(self.wall_slots) or bool(dev)
+    def _push_frame(self, mac: str, frame_path) -> bool:
+        """Push a rendered frame to the display ``mac`` names (P5.7).
 
-    def _push_frame(self, frame_path, size: int) -> bool:
-        """Push a rendered frame to the wall or the single active (BLE/LAN) device with auto-reconnect support.
+        It used to push to the wall whenever wall slots existed and otherwise
+        to `current_divoom` -- whichever panel the bench selected last, read
+        when the push RAN. The display is now the one the gesture named, and
+        `ApiBase._display` is where it becomes a target; the wall is named as
+        the wall. Live-widget frames do not come through here: the daemon's
+        live jobs push those itself.
 
         Round 4 note: cover-art, sysmon, stock-ticker, and notifications
         all route through `dev.display.show_image` which uses the 0x49
         multi-frame command (NOT 0x44). When reading device ACK logs, a
         response like `01 06 00 04 31 55 50 e0 00 02` is the device
         ACKing our 0x49 push — the `0x31` byte is **0x31 hexadecimal =
-        49 decimal**, which is the same as the `0x49` we sent. This is
-        a common decimal-vs-hex confusion in raw-log parsing. The status
+        49 decimal**, which is the same as the `0x49` we sent. The status
         byte `0x50` is the device's response code (unknown meaning,
-        not a documented error). Cover art and single-frame pushes
-        through this path are confirmed working on Timoo/Pixoo as of
-        2026-06-05.
-        """
-        if self.wall_slots:
-            if self._rebuild_wall_instance(size):
-                async def connect_and_show():
-                    await self.wall_instance.connect()
-                    return await self.wall_instance.show_image(str(frame_path))
-                return bool(self._run_async(connect_and_show()))
-            return False
-            
-        dev = self.current_divoom
-        if not dev:
-            return False
+        not a documented error).
 
-        # Push directly. The daemon's device_call already ensures the device is
-        # connected (_ensure_device_async reconnects an idle/dropped link, honest
-        # is_alive) before the call AND routes to the right transport, so the GUI
-        # must NOT pre-check `dev.is_connected` / `dev.lan` here: each was a BLOCKING
-        # device_status() RPC — `is_connected` ran INSIDE the loop coroutine, stalling
-        # the WHOLE asyncio loop for the round-trip; the reconnect was redundant too.
-        return bool(self._run_async(dev.display.show_image(str(frame_path))))
+        No `is_connected`/`lan` pre-check: each was a BLOCKING device_status()
+        RPC on the loop, and the daemon's device_call reconnects a dropped link
+        before the call regardless.
+        """
+        target = self.lighting._display(mac)
+        if target is None:
+            return False
+        if mac == "MatrixWall":
+            async def connect_and_show():
+                await target.connect()
+                return await target.show_image(str(frame_path))
+            return bool(self._run_async(connect_and_show()))
+        return bool(self._run_async(target.display.show_image(str(frame_path))))
 
     @staticmethod
     def _frame_to_data_url(frame_path) -> str:
@@ -182,7 +165,7 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
         except Exception:
             return ""
 
-    def get_ticker_preview(self, symbol: str, size: int = 0) -> str:
+    def get_ticker_preview(self, mac: str, symbol: str, size: int = 0) -> str:
         """The stock tile, rendered by the daemon.
 
         R70 P3.1. This used to fetch the quote from Yahoo and draw the frame
@@ -193,10 +176,11 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
 
         It still must not touch the CONNECTION: rendering a preview is not
         pushing, and the old `dev.lan`/`dev.is_connected` pre-check fired two
-        blocking RPCs on the pywebview JS thread per render.
+        blocking RPCs on the pywebview JS thread per render. It is drawn at
+        the size of the panel ``mac`` names (P5.7).
         """
         try:
-            sz = int(size) if size and int(size) > 0 else self._active_device_size()
+            sz = int(size) if size and int(size) > 0 else self._size_of(mac or None)
             extras, frame_path = self._widget_frame("stocks", sz, {"symbol": symbol})
             return json.dumps({
                 "ok": True, "size": sz, "symbol": extras.get("symbol", symbol),
@@ -209,7 +193,7 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
             logger.error(f"get_ticker_preview failed: {e}")
             return json.dumps({"ok": False, "error": str(e)})
 
-    def get_weather_preview(self, size: int = 0) -> str:
+    def get_weather_preview(self, mac: str, size: int = 0) -> str:
         """The weather card: the frame the panel shows, and the reading in it.
 
         P5.4. The card used to draw its own SVG icon and temperature from
@@ -220,7 +204,7 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
         the picture, the text beside it and the panel cannot disagree.
         """
         try:
-            sz = int(size) if size and int(size) > 0 else self._active_device_size()
+            sz = int(size) if size and int(size) > 0 else self._size_of(mac or None)
             location = self._weather_location()
             extras, frame_path = self._widget_frame(
                 "weather", sz, {"location": location} if location else {})
@@ -239,21 +223,22 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
             logger.error(f"get_weather_preview failed: {e}")
             return json.dumps({"ok": False, "error": str(e)})
 
-    def apply_stock_ticker(self, symbol: str) -> str:
-        """Push the stock tile — the SAME bytes the preview showed.
+    def apply_stock_ticker(self, mac: str, symbol: str) -> str:
+        """Push the stock tile — the SAME bytes the preview showed — to the
+        panel ``mac`` names, at its size (P5.7).
 
         R70 P3.1: one call produces both, so the tile and the matrix cannot
         disagree. They previously came from two renderers reading one Yahoo
         endpoint, which is the shape that let the album-art preview drift 100%
         of its pixels from the device.
         """
-        logger.info(f"GUI Action: Applying stock ticker for {symbol}...")
+        logger.info(f"GUI Action: Applying stock ticker for {symbol} on {mac}...")
+        if not mac:
+            return json.dumps({"success": False, "error": "No panel selected"})
         try:
-            size = self._active_device_size()
+            size = self._size_of(mac)
             extras, frame_path = self._widget_frame("stocks", size, {"symbol": symbol})
-            if not self._has_push_target():
-                return json.dumps({"success": False, "error": "No device connected"})
-            res = self._push_frame(frame_path, size)
+            res = self._push_frame(mac, frame_path)
             return json.dumps({
                 "success": res,
                 "preview": self._frame_to_data_url(frame_path),
@@ -318,24 +303,13 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
         except Exception:
             return default
 
-    def _active_device_mac(self) -> str | None:
-        if self.wall_slots:
-            return "MatrixWall"
-        dev = self.current_divoom
-        if not dev:
-            return None
-        if dev.lan:
-            return f"LAN:{dev.lan.device_ip}"
-        mac = getattr(getattr(dev, "_conn", None), "mac", None) or getattr(dev, "mac", None)
-        return mac
-
-    def _get_live_params(self) -> dict:
-        params = {"size": self._active_device_size()}
-        if self.wall_slots:
-            params["wall_slots"] = self.wall_slots
-        dev = self.current_divoom
-        if dev and dev.lan:
-            params["lan_token"] = getattr(dev.lan, "local_token", 0)
+    def _get_live_params(self, mac: str) -> dict:
+        """What a live job on ``mac`` is started with: that panel's size and
+        the weather location. (`wall_slots` and `lan_token` went: the daemon
+        reads neither, and `lan_token` had become a proxy PATH rather than a
+        number since `_LanView` forwards attributes, so the request failed to
+        serialise and every live widget on a LAN panel was refused.)"""
+        params = {"size": self._size_of(mac)}
         location = self._weather_location()
         if location:
             params["location"] = location
@@ -371,17 +345,28 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
             return bool(reply.get("success", False))
         return bool(reply)
 
-    def _toggle_live_job(self, enable: bool, kind: str, params: dict | None = None) -> bool:
-        """Start or stop one live job and report what the daemon actually said."""
+    def _toggle_live_job(self, mac: str, enable: bool, kind: str,
+                         params: dict | None = None) -> bool:
+        """Start or stop one live job on the panel ``mac`` names, and report
+        what the daemon actually said.
+
+        P5.7: the panel used to be `_active_device_mac()` -- the wall whenever
+        wall slots existed, else the panel the bench selected last, read when
+        the toggle RAN. The wall is refused, and says why: the daemon's live
+        jobs push to one panel's link, and a job named `MatrixWall` made a
+        phantom fleet entry with no link and painted nothing."""
+        if not mac:
+            logger.error("live job %s refused: no panel named", kind)
+            return False
+        if mac == "MatrixWall":
+            logger.error("live job %s refused: live widgets play on one panel, not the wall", kind)
+            return False
         client = self._client()
         if client is None:
             return False
-        mac = self._active_device_mac()
-        if not mac:
-            return False
         try:
             if enable:
-                reply = client.live_job_start(mac, kind, params or self._get_live_params())
+                reply = client.live_job_start(mac, kind, params or self._get_live_params(mac))
             else:
                 reply = client.live_job_stop(mac, kind)
         except Exception as e:
@@ -392,25 +377,25 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
             logger.warning(f"daemon refused live job {kind}: {reply}")
         return ok
 
-    def toggle_sysmon_sync(self, enable: bool) -> bool:
-        logger.info(f"GUI Action: Toggle sysmon sync to {enable}")
+    def toggle_sysmon_sync(self, mac: str, enable: bool) -> bool:
+        logger.info(f"GUI Action: Toggle sysmon sync to {enable} on {mac}")
         self.sysmon_sync_active = enable
-        return self._toggle_live_job(enable, "sysmon")
+        return self._toggle_live_job(mac, enable, "sysmon")
 
-    def toggle_stocks_sync(self, enable: bool, symbol: str = "") -> bool:
-        logger.info(f"GUI Action: Toggle stocks sync to {enable} for symbol {symbol}")
+    def toggle_stocks_sync(self, mac: str, enable: bool, symbol: str = "") -> bool:
+        logger.info(f"GUI Action: Toggle stocks sync to {enable} for symbol {symbol} on {mac}")
         self.stocks_sync_active = enable
         if symbol:
             self.stocks_symbol = symbol
-        params = self._get_live_params()
+        params = self._get_live_params(mac)
         params["symbol"] = symbol or getattr(self, "stocks_symbol", "")
-        return self._toggle_live_job(enable, "stocks", params)
+        return self._toggle_live_job(mac, enable, "stocks", params)
 
-    def toggle_music_sync(self, enable: bool) -> bool:
-        logger.info(f"GUI Action: Toggle music sync to {enable}")
+    def toggle_music_sync(self, mac: str, enable: bool) -> bool:
+        logger.info(f"GUI Action: Toggle music sync to {enable} on {mac}")
         self.music_sync_active = enable
-        return self._toggle_live_job(enable, "music")
+        return self._toggle_live_job(mac, enable, "music")
 
-    def toggle_weather_sync(self, enable: bool) -> bool:
-        logger.info(f"GUI Action: Toggle weather sync to {enable}")
-        return self._toggle_live_job(enable, "weather")
+    def toggle_weather_sync(self, mac: str, enable: bool) -> bool:
+        logger.info(f"GUI Action: Toggle weather sync to {enable} on {mac}")
+        return self._toggle_live_job(mac, enable, "weather")

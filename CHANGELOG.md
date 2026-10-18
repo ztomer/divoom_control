@@ -4,6 +4,59 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P5.7 — every device action names its panel (2026-10-18)
+
+P5.6 made the channel writes name their panel. Everything else that acts on a
+panel -- the Tools tab, the alarms editor, the live widgets, the stock tile,
+the gallery, hot-channel and custom-art pushes, and the generic `device_call`
+-- still sent no mac: the backend acted on `current_divoom`, the panel the
+bench had selected by the time the call RAN, so a click followed by a click on
+another panel acted on the second one.
+
+- **One path for every panel action.** Each bridge method that acts on a panel
+  takes the mac first (the Tools tab's 18 writes, `set_brightness`/`set_volume`
+  reordered to match, the four live-widget toggles, `apply_stock_ticker`,
+  `play_gallery_art`, `display_wall_image`, `custom_art_push`,
+  `hot_channel_update`, `device_call`, and the reads `get_alarms`,
+  `get_device_name`, `get_work_mode`). `ApiBase._display(mac)` is where every
+  one becomes a target; `_display(mac, wall=False)` refuses the wall for an
+  action that means one panel. A call naming no panel is refused. The web UI
+  resolves the mac at the gesture through `ChannelSettings.mac()` (built on
+  P5.6's `target()`); the replies that used to land on "the selected panel"
+  (a rename, the hot channel's completion, the work-mode read) land on the
+  panel asked about. `current_divoom` is deleted, and `select_device` binds
+  nothing in this process: it only tells the daemon.
+- **The wall is named, never defaulted.** The gallery push and the stock tile
+  went to the wall whenever wall slots existed, whatever was selected; they go
+  to the display named, and the wall only when `MatrixWall` is named.
+- **Bugs found on the way.** A live widget named `MatrixWall` made the daemon
+  invent a fleet entry with no link that painted nothing (`fleet.get_or_create`
+  in `live_jobs/coordinator.rs`): the GUI now refuses a live widget on the
+  wall and says why. Every live widget on a LAN panel was refused: its params
+  carried `lan_token` read through `_LanView`, which since P5.6 forwards
+  attributes, so it was a proxy PATH and the request failed to serialise (the
+  daemon never read `lan_token` or `wall_slots` from live-job params; both
+  went). The alarm cache was ONE list for whichever panel was selected when it
+  was written, shown for every panel: it is keyed by panel now, and an old
+  list is read as no panel's. The debounced alarm write read the panel when
+  its timer fired; an edit while another panel is selected reloads that
+  panel's alarms instead of writing one panel's table to another.
+- **Tests.** `tests/test_device_actions_name_their_panel.py` calls EVERY public
+  bridge method against a recording daemon after the selection moved, and
+  fails any method that acts on a panel without naming it first -- a new one
+  fails the day it is added, with no table to forget (36 red on `54d63bf`;
+  the no-panel half red under a fallback mutation).
+  `tests/test_e2e_device_actions_per_panel.py` makes each gesture in the real
+  web UI and moves the selection at once (red on `54d63bf`).
+  `tests/test_e2e_device_action_reaches_its_panel.py` drives the real UI,
+  bridge and daemon with two mock panels: a held rename and a held live widget
+  land on the panel clicked (red on `54d63bf`). `divoomd/src/mock_tools_tests.rs`
+  pins the daemon's half for every Tools call -- red with its mac routing
+  replaced by its selection.
+  The level and hot-channel browser tests follow the new argument order and
+  name a panel to update. pytest 1897 passed / 163 skipped; browser suites
+  212 passed.
+
 ## P6.1 — panels snap into one surface; a panel on Wi-Fi says why it is not a slot (2026-10-18)
 
 A wall slices one image by each slot's place on the bench (`divoomd/src/wall.rs`

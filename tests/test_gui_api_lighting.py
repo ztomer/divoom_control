@@ -47,7 +47,7 @@ class TestLightingApiCoverage(unittest.TestCase):
 
     def _on(self, dev):
         """P5.6: the display a write names resolves to `dev` (and no mac to nothing)."""
-        self.api.lighting._display = lambda mac: dev if mac else None
+        self.api.lighting._display = lambda mac, **_kw: dev if mac else None
 
     # ---- exception handlers for the single-device static-takeover ops ---
 
@@ -113,9 +113,9 @@ class TestLightingApiCoverage(unittest.TestCase):
         return fake
 
     def test_display_wall_image_no_target_is_handled_error(self):
-        self.api.current_divoom = None
+        self._on(None)
         self.api.wall_slots = {}
-        result = self.api.lighting.display_wall_image("/tmp/x.png", 16)
+        result = self.api.lighting.display_wall_image(MAC, "/tmp/x.png", 16)
         self.assertFalse(result["success"])
         self.assertIn("error", result)
         self.assertEqual(result["previews"], {})
@@ -124,9 +124,11 @@ class TestLightingApiCoverage(unittest.TestCase):
         dev = MagicMock()
         dev._mac = MAC
         dev.display.show_image = AsyncMock(return_value=True)
-        self.api.current_divoom = dev
-        self.api.wall_slots = {}
-        result = self.api.lighting.display_wall_image("/tmp/x.png", 16)
+        self._on(dev)
+        # Wall slots exist, and a panel is named: the panel gets it (P5.7; it
+        # went to the wall whenever slots existed).
+        self.api.wall_slots = {"AA:BB:CC:DD:EE:FF": {"x": 0, "y": 0, "size": 16}}
+        result = self.api.lighting.display_wall_image(MAC, "/tmp/x.png", 16)
         self.assertTrue(result["success"])
         self.assertEqual(result["previews"], {})
         dev.display.show_image.assert_awaited_once_with("/tmp/x.png")
@@ -135,7 +137,7 @@ class TestLightingApiCoverage(unittest.TestCase):
         fake = self._wall_fake_client(previews_result={"AA:BB": "data:image/png;base64,xx"})
         self.api._daemon_client = fake
         self.api.wall_slots = {"AA:BB:CC:DD:EE:FF": {"x": 0, "y": 0, "size": 16}}
-        result = self.api.lighting.display_wall_image("/tmp/x.png", 16)
+        result = self.api.lighting.display_wall_image("MatrixWall", "/tmp/x.png", 16)
         self.assertTrue(result["success"])
         self.assertEqual(result["previews"], {"AA:BB": "data:image/png;base64,xx"})
 
@@ -143,7 +145,7 @@ class TestLightingApiCoverage(unittest.TestCase):
         fake = self._wall_fake_client(previews_result="not-a-dict")
         self.api._daemon_client = fake
         self.api.wall_slots = {"AA:BB:CC:DD:EE:FF": {"x": 0, "y": 0, "size": 16}}
-        result = self.api.lighting.display_wall_image("/tmp/x.png", 16)
+        result = self.api.lighting.display_wall_image("MatrixWall", "/tmp/x.png", 16)
         self.assertTrue(result["success"])
         self.assertEqual(result["previews"], {})
 
@@ -151,17 +153,16 @@ class TestLightingApiCoverage(unittest.TestCase):
         fake = self._wall_fake_client(previews_result=RuntimeError("preview fetch boom"))
         self.api._daemon_client = fake
         self.api.wall_slots = {"AA:BB:CC:DD:EE:FF": {"x": 0, "y": 0, "size": 16}}
-        result = self.api.lighting.display_wall_image("/tmp/x.png", 16)
+        result = self.api.lighting.display_wall_image("MatrixWall", "/tmp/x.png", 16)
         self.assertTrue(result["success"])
         self.assertEqual(result["previews"], {})
 
     def test_display_wall_image_outer_exception_returns_error_dict(self):
-        self.api.current_divoom = None
         self.api.wall_slots = {"AA:BB:CC:DD:EE:FF": {"x": 0, "y": 0, "size": 16}}
         fake = MagicMock()
         fake.wall_configure.side_effect = RuntimeError("daemon exploded")
         self.api._daemon_client = fake
-        result = self.api.lighting.display_wall_image("/tmp/x.png", 16)
+        result = self.api.lighting.display_wall_image("MatrixWall", "/tmp/x.png", 16)
         self.assertFalse(result["success"])
         self.assertIn("error", result)
         self.assertEqual(result["previews"], {})
@@ -214,26 +215,24 @@ class TestLightingApiCoverage(unittest.TestCase):
         dev = MagicMock()
         dev._mac = "11:22:33:44:55:66"
         dev.display.show_image = AsyncMock(return_value=True)
-        self.api.current_divoom = dev
         mock_client = MagicMock()
         self.api._daemon_client = mock_client
-        result = self.api.lighting.display_wall_image("/tmp/fake.png", 16)
+        self.api.lighting._display = lambda mac, **_kw: dev if mac == "11:22:33:44:55:66" else None
+        result = self.api.lighting.display_wall_image("11:22:33:44:55:66", "/tmp/fake.png", 16)
         self.assertTrue(result["success"])
         mock_client.live_jobs_stop_for.assert_called_with("11:22:33:44:55:66")
 
-    def test_play_gallery_art_stops_live_widgets(self):
-        dev = MagicMock()
-        dev._mac = "11:22:33:44:55:66"
-        self.api.current_divoom = dev
+    def test_play_gallery_art_pushes_to_the_display_it_names(self):
+        """The push -- and its live-widget stop, which `display_wall_image`
+        does -- goes to the display the click named (P5.7)."""
         mock_client = MagicMock()
         self.api._daemon_client = mock_client
         with patch.object(Path, "exists", return_value=True), \
              patch.object(Path, "stat") as mock_stat, \
              patch.object(self.api, "display_wall_image", return_value={"success": True}) as mock_wall_img:
             mock_stat.return_value.st_size = 100
-            res = self.api.play_gallery_art("art_123")
+            res = self.api.play_gallery_art("11:22:33:44:55:66", "art_123")
             self.assertTrue(res["success"])
-            mock_client.live_jobs_stop_for.assert_called_with("11:22:33:44:55:66")
-            mock_wall_img.assert_called_once()
+            self.assertEqual(mock_wall_img.call_args.args[0], "11:22:33:44:55:66")
 
 

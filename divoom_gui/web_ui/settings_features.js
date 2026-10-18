@@ -1,4 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
+    // Every Tools action names ONE panel, resolved at the gesture (P5.7).
+    const panel = () => window.ChannelSettings.mac(true);
+
     // ── 4. ROUTINES ──
     function saveSchedule() {
         const enabled = document.getElementById("routines-auto-sync-enabled")?.checked || false;
@@ -49,14 +52,17 @@ document.addEventListener("DOMContentLoaded", () => {
     if (sleepVol && sleepVolVal) sleepVol.addEventListener("input", () => { sleepVolVal.textContent = sleepVol.value; });
     document.addEventListener("click", (e) => {
         if (e.target.closest("#sleep-start-btn")) {
-            if (window.requireDevice && !window.requireDevice()) return;
+            const mac = panel();
+            if (!mac) return;
             const m = parseInt(document.getElementById("sleep-minutes")?.value) || 30;
             const c = document.getElementById("sleep-color")?.value || "#2040ff";
             const v = parseInt(document.getElementById("sleep-volume")?.value) || 10;
-            window.pywebview?.api?.start_sleep?.(m, c, v).then(r =>
+            window.pywebview?.api?.start_sleep?.(mac, m, c, v).then(r =>
                 window.showToast(r ? "Sleep started" : "Failed to start sleep", r ? "success" : "error", " BLE"));
         } else if (e.target.closest("#sleep-stop-btn")) {
-            window.pywebview?.api?.stop_sleep?.().then(r =>
+            const mac = panel();
+            if (!mac) return;
+            window.pywebview?.api?.stop_sleep?.(mac).then(r =>
                 window.showToast(r ? "Sleep stopped" : "Failed", r ? "success" : "error", " BLE"));
         }
     });
@@ -65,24 +71,27 @@ document.addEventListener("DOMContentLoaded", () => {
     document.addEventListener("click", (e) => {
         const timerBtn = e.target.closest(".tool-timer-btn");
         if (timerBtn) {
-            if (window.requireDevice && !window.requireDevice()) return;
-            window.pywebview?.api?.set_timer?.(timerBtn.dataset.action).then(r =>
+            const mac = panel();
+            if (!mac) return;
+            window.pywebview?.api?.set_timer?.(mac, timerBtn.dataset.action).then(r =>
                 window.showToast(r ? `Stopwatch ${timerBtn.dataset.action}` : "Failed", r ? "success" : "error", " BLE"));
             return;
         }
         if (e.target.closest("#countdown-start-btn") || e.target.closest("#countdown-stop-btn")) {
-            if (window.requireDevice && !window.requireDevice()) return;
+            const mac = panel();
+            if (!mac) return;
             const action = e.target.closest("#countdown-stop-btn") ? "stop" : "start";
             const mm = parseInt(document.getElementById("countdown-min")?.value) || 0;
             const ss = parseInt(document.getElementById("countdown-sec")?.value) || 0;
-            window.pywebview?.api?.set_countdown?.(action, mm, ss).then(r =>
+            window.pywebview?.api?.set_countdown?.(mac, action, mm, ss).then(r =>
                 window.showToast(r ? `Countdown ${action}` : "Failed", r ? "success" : "error", " BLE"));
             return;
         }
         if (e.target.closest("#noise-start-btn") || e.target.closest("#noise-stop-btn")) {
-            if (window.requireDevice && !window.requireDevice()) return;
+            const mac = panel();
+            if (!mac) return;
             const action = e.target.closest("#noise-stop-btn") ? "stop" : "start";
-            window.pywebview?.api?.set_noise?.(action).then(r =>
+            window.pywebview?.api?.set_noise?.(mac, action).then(r =>
                 window.showToast(r ? `Noise meter ${action}` : "Failed", r ? "success" : "error", " BLE"));
         }
     });
@@ -144,12 +153,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // ── Round 8: Device settings / weather / memorial / FM ─────────────
     function api() { return window.pywebview && window.pywebview.api; }
-    function dev() { return !window.requireDevice || window.requireDevice(); }
     function toast(r, ok, fail) { window.showToast(r ? ok : (fail || "Failed"), r ? "success" : "error", " BLE"); }
 
     const wireToggle = (id, fn) => {
         const el = document.getElementById(id);
-        if (el) el.addEventListener("change", () => { if (dev()) api()?.[fn]?.(el.checked).then(r => toast(r, "Saved")); });
+        if (el) el.addEventListener("change", () => {
+            const mac = panel();
+            if (mac) api()?.[fn]?.(mac, el.checked).then(r => toast(r, "Saved"));
+        });
     };
     wireToggle("screen-mirror-toggle", "set_screen_mirror");
 
@@ -164,7 +175,8 @@ document.addEventListener("DOMContentLoaded", () => {
         btn.classList.add("active");
         const fn = seg.getAttribute("data-api");
         const on = btn.getAttribute("data-val") === "1";
-        if (fn && dev()) api()?.[fn]?.(on).then(r => toast(r, "Saved"));
+        const mac = fn ? panel() : null;
+        if (mac) api()?.[fn]?.(mac, on).then(r => toast(r, "Saved"));
     });
 
     // Display orientation (0-3 = 0/90/180/270°) via tab selector.
@@ -173,65 +185,64 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!dirBtn) return;
         document.querySelectorAll("#screen-dir-tabs .tab-btn").forEach(b => b.classList.remove("active"));
         dirBtn.classList.add("active");
-        if (dev()) api()?.set_screen_dir?.(parseInt(dirBtn.getAttribute("data-dir")) || 0)
+        const mac = panel();
+        if (mac) api()?.set_screen_dir?.(mac, parseInt(dirBtn.getAttribute("data-dir")) || 0)
             .then(r => toast(r, "Orientation set"));
     });
 
     document.addEventListener("click", (e) => {
         if (e.target.closest("#sync-time-btn")) {
-            if (dev()) api()?.sync_time?.().then(r => toast(r, "Time synced"));
+            const mac = panel();
+            if (mac) api()?.sync_time?.(mac).then(r => toast(r, "Time synced"));
         } else if (e.target.closest("#device-name-save")) {
             const name = document.getElementById("device-name-input")?.value.trim();
             if (!name) { window.showToast("Enter a name", "error"); return; }
-            if (dev()) {
-                api()?.set_device_name?.(name).then(r => {
+            const mac = panel();
+            if (mac) {
+                // The reply renames the panel the click named, wherever the
+                // selection is by then (it renamed the one shown THEN).
+                api()?.set_device_name?.(mac, name).then(r => {
                     toast(r, "Name saved");
-                    if (r) {
-                        const activeMac = (document.getElementById("banner-device-mac")?.textContent || "").trim();
-                        if (activeMac && activeMac !== "None") {
-                            (window.DivoomState.discoveredDevices || []).forEach(d => {
-                                if (d.address === activeMac) d.name = name;
-                            });
-                            const bannerName = document.getElementById("banner-device-name");
-                            if (bannerName) bannerName.textContent = name;
-                            if (window.updateDeviceSelectorDropdown) window.updateDeviceSelectorDropdown();
-                            if (window.populateDeviceSelectors) window.populateDeviceSelectors(window.DivoomState.discoveredDevices);
-                        }
-                    }
+                    if (r) renamed(mac, name);
                 });
             }
         } else if (e.target.closest("#auto-off-save")) {
             const m = parseInt(document.getElementById("auto-off-min")?.value) || 0;
-            if (dev()) api()?.set_auto_power_off?.(m).then(r => toast(r, m ? `Auto-off ${m}min` : "Auto-off disabled"));
+            const mac = panel();
+            if (mac) api()?.set_auto_power_off?.(mac, m).then(r => toast(r, m ? `Auto-off ${m}min` : "Auto-off disabled"));
         } else if (e.target.closest("#memorial-save")) {
-            if (!dev()) return;
+            const mac = panel();
+            if (!mac) return;
             const enabled = document.getElementById("memorial-enabled")?.checked;
             const title = document.getElementById("memorial-title")?.value.trim() || "";
             const mo = parseInt(document.getElementById("memorial-month")?.value) || 1;
             const da = parseInt(document.getElementById("memorial-day")?.value) || 1;
             const hh = parseInt(document.getElementById("memorial-hour")?.value) || 0;
             const mi = parseInt(document.getElementById("memorial-min")?.value) || 0;
-            api()?.set_memorial?.(0, enabled, mo, da, hh, mi, title).then(r => toast(r, "Anniversary saved"));
+            api()?.set_memorial?.(mac, 0, enabled, mo, da, hh, mi, title).then(r => toast(r, "Anniversary saved"));
         } else if (e.target.closest("#factory-reset-btn")) {
-            if (!dev()) return;
+            const mac = panel();
+            if (!mac) return;
             // Double-confirm: a dialog, then a typed token, then the bridge also
             // requires the literal "RESET" string before it sends anything.
             if (!window.confirm("Factory-reset this device? This wipes its stored config and cannot be undone.")) return;
             const token = window.prompt('This is irreversible. Type RESET (all caps) to confirm:');
             if (token !== "RESET") { window.showToast("Factory reset cancelled", "error"); return; }
-            api()?.factory_reset?.("RESET").then(r => toast(r, "Device factory-reset"));
+            api()?.factory_reset?.(mac, "RESET").then(r => toast(r, "Device factory-reset"));
         } else if (e.target.closest("#notif-send")) {
-            if (!dev()) return;
+            const mac = panel();
+            if (!mac) return;
             const t = parseInt(document.getElementById("notif-app-select")?.value) || 7;
             const txt = document.getElementById("notif-text")?.value.trim() || "";
-            api()?.send_notification?.(t, txt).then(r => toast(r, "Notification sent"));
+            api()?.send_notification?.(mac, t, txt).then(r => toast(r, "Notification sent"));
         }
     });
 
     // FM radio — frequency (MHz → MHz×10) + presets.
     function tuneFM(mhz) {
         const x10 = Math.round(parseFloat(mhz) * 10);
-        if (dev()) api()?.set_fm_frequency?.(x10).then(r => toast(r, `Tuned ${mhz} MHz`));
+        const mac = panel();
+        if (mac) api()?.set_fm_frequency?.(mac, x10).then(r => toast(r, `Tuned ${mhz} MHz`));
     }
     document.addEventListener("click", (e) => {
         if (e.target.closest("#fm-tune-btn")) {
@@ -247,33 +258,32 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // ── Device Name Auto-load ──
+    // The panel's name as IT reports it, for the panel the read was asked
+    // about (P5.7): the reply used to land on whichever panel the banner
+    // showed when it came back.
+    function renamed(mac, name) {
+        let changed = false;
+        (window.DivoomState.discoveredDevices || []).forEach(d => {
+            if (d.address === mac && d.name !== name) { d.name = name; changed = true; }
+        });
+        if (!changed) return;
+        if (window._activeDeviceMac() === mac) {
+            const bannerName = document.getElementById("banner-device-name");
+            if (bannerName) bannerName.textContent = name;
+            if (window._updateDeviceLabel) window._updateDeviceLabel(name);
+        }
+        if (window.updateDeviceSelectorDropdown) window.updateDeviceSelectorDropdown();
+        if (window.populateDeviceSelectors) window.populateDeviceSelectors(window.DivoomState.discoveredDevices);
+    }
     window.loadDeviceName = function() {
         const inp = document.getElementById("device-name-input");
-        if (!inp) return;
-        if (window.pywebview && window.pywebview.api && window.pywebview.api.get_device_name) {
-            window.pywebview.api.get_device_name().then(name => {
-                if (name !== null && name !== undefined) {
-                    inp.value = name;
-                    const activeMac = (document.getElementById("banner-device-mac")?.textContent || "").trim();
-                    if (activeMac && activeMac !== "None") {
-                        let changed = false;
-                        (window.DivoomState.discoveredDevices || []).forEach(d => {
-                            if (d.address === activeMac && d.name !== name) {
-                                d.name = name;
-                                changed = true;
-                            }
-                        });
-                        if (changed) {
-                            const bannerName = document.getElementById("banner-device-name");
-                            if (bannerName) bannerName.textContent = name;
-                            if (window._updateDeviceLabel) window._updateDeviceLabel(name);
-                            if (window.updateDeviceSelectorDropdown) window.updateDeviceSelectorDropdown();
-                            if (window.populateDeviceSelectors) window.populateDeviceSelectors(window.DivoomState.discoveredDevices);
-                        }
-                    }
-                }
-            }).catch(() => {});
-        }
+        const mac = window.ChannelSettings.selected()?.mac;
+        if (!inp || !mac || mac === "MatrixWall") return;
+        Promise.resolve(window.pywebview?.api?.get_device_name?.(mac)).then(name => {
+            if (name === null || name === undefined) return;
+            if (window.ChannelSettings.selected()?.mac === mac) inp.value = name;
+            renamed(mac, name);
+        }).catch(() => {});
     };
 
     window.addEventListener("tab-changed", (e) => {

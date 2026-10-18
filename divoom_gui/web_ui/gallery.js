@@ -193,7 +193,9 @@ document.addEventListener("DOMContentLoaded", () => {
             item.classList.add("selected", "active");
             window.DivoomState.selectedArtworkIndex = idx;
 
-            const mac = (typeof window._activeDeviceMac === "function") ? window._activeDeviceMac() : null;
+            // The display this click names -- a panel or the wall -- and the
+            // push goes THERE, wherever the selection is when it lands (P5.7).
+            const mac = window.ChannelSettings.mac();
             if (mac && window.DisplayPreviewRegistry) {
                 window.DisplayPreviewRegistry.get(mac)?.unbindJob();
             }
@@ -203,8 +205,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 window.setDeviceActivity(mac, "image", { src: src, fileId: art.file_id, name: art.name });
             }
 
-            if (art.file_id && window.pywebview?.api?.play_gallery_art) {
-                window.pywebview.api.play_gallery_art(art.file_id).then(res => {
+            if (mac && art.file_id && window.pywebview?.api?.play_gallery_art) {
+                window.pywebview.api.play_gallery_art(mac, art.file_id).then(res => {
                     const r = (typeof res === "string") ? JSON.parse(res) : res;
                     if (r && r.success) {
                         window.showToast(`Pushed "${art.name}" to screen`, "success", " BLE");

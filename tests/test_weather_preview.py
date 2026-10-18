@@ -40,16 +40,23 @@ class _Daemon:
         return self.reply
 
 
+#: The panel the card previews for (P5.7: the call names it).
+PANEL = "AA:00:00:00:00:01"
+
+
 class _Host(MediaSyncMixin):
     """The mixin with only the state it reads: no device, no wall."""
 
     def __init__(self, daemon):
         self._daemon = daemon
         self.wall_slots = {}
-        self.current_divoom = None
+        self.pixels = {}
 
     def _client(self):
         return self._daemon
+
+    def _panel_pixels(self, mac):
+        return self.pixels.get(mac)
 
 
 def _ok_reply(size=16, **extras):
@@ -70,7 +77,7 @@ def test_the_card_gets_the_daemons_weather_frame_byte_for_byte(location):
     from PIL import Image
 
     daemon = _Daemon(_ok_reply(temperature_c=-3, weather=8, location="Oslo"))
-    r = json.loads(_Host(daemon).get_weather_preview(16))
+    r = json.loads(_Host(daemon).get_weather_preview(PANEL, 16))
 
     assert r["ok"] is True, r
     assert daemon.calls and daemon.calls[0][0] == "weather"
@@ -83,7 +90,7 @@ def test_the_card_gets_the_daemons_weather_frame_byte_for_byte(location):
 
 def test_the_reading_beside_the_frame_is_the_reading_in_it(location):
     daemon = _Daemon(_ok_reply(temperature_c=-3, weather=8, location="Oslo"))
-    r = json.loads(_Host(daemon).get_weather_preview(16))
+    r = json.loads(_Host(daemon).get_weather_preview(PANEL, 16))
 
     assert (r["temperature_c"], r["weather"], r["location"]) == (-3, 8, "Oslo")
     assert len(daemon.calls) == 1, "one reply carries both the frame and the reading"
@@ -92,28 +99,29 @@ def test_the_reading_beside_the_frame_is_the_reading_in_it(location):
 def test_the_card_previews_the_city_the_live_job_is_started_with(location):
     daemon = _Daemon(_ok_reply(temperature_c=1, weather=1, location="Oslo"))
     host = _Host(daemon)
-    host.get_weather_preview(16)
+    host.get_weather_preview(PANEL, 16)
 
     assert daemon.calls[0][2].get("location") == location
-    assert host._get_live_params().get("location") == location
+    assert host._get_live_params(PANEL).get("location") == location
 
 
 def test_size_defaults_to_the_live_jobs_size(location):
     """32, not the 16 every default in the chain falls back to, so a preview
-    that ignored the panel's size could not pass by agreeing with a default."""
+    that ignored the panel's size could not pass by agreeing with a default.
+    Both are the size of the panel the call NAMES (P5.7)."""
     daemon = _Daemon(_ok_reply(size=32, temperature_c=1, weather=1, location="Oslo"))
     host = _Host(daemon)
-    host.wall_slots = {"aa": {"size": 32}}
-    r = json.loads(host.get_weather_preview(0))
+    host.pixels = {PANEL: 32}
+    r = json.loads(host.get_weather_preview(PANEL, 0))
 
-    assert host._get_live_params()["size"] == 32
+    assert host._get_live_params(PANEL)["size"] == 32
     assert daemon.calls[0][1] == 32
     assert r["size"] == 32
 
 
 def test_a_daemon_failure_is_a_reason_not_a_reading(location):
     r = json.loads(_Host(_Daemon(
-        {"success": False, "error": "weather: wttr.in returned 503"})).get_weather_preview(16))
+        {"success": False, "error": "weather: wttr.in returned 503"})).get_weather_preview(PANEL, 16))
 
     assert r["ok"] is False
     assert "503" in r["error"]
@@ -121,7 +129,7 @@ def test_a_daemon_failure_is_a_reason_not_a_reading(location):
 
 
 def test_no_daemon_says_why(location):
-    r = json.loads(_Host(None).get_weather_preview(16))
+    r = json.loads(_Host(None).get_weather_preview(PANEL, 16))
 
     assert r["ok"] is False
     assert r["error"], "an unreachable daemon must still give the card a reason"
@@ -132,6 +140,6 @@ def test_no_city_from_anyone_says_unknown(monkeypatch):
     rather than a stand-in that would read as the user's location."""
     import divoom_lib.weather_provider as wp
     monkeypatch.setattr(wp, "resolve_location", lambda _explicit: "")
-    r = json.loads(_Host(_Daemon(_ok_reply(temperature_c=4, weather=1))).get_weather_preview(16))
+    r = json.loads(_Host(_Daemon(_ok_reply(temperature_c=4, weather=1))).get_weather_preview(PANEL, 16))
 
     assert r["ok"] is True and r["location"] == "unknown"

@@ -36,7 +36,6 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
         self.loop_thread.start()
         self.loop_thread.ready.wait()
 
-        self.current_divoom = None
         self.discovered_list = []
         self.wall_slots = {}
         self.wall_instance = None
@@ -82,13 +81,8 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
 
     def _wire_collaborators(self):
         _state = lambda: self.__dict__
-        # Expose the active-device-size resolver to collaborators through the shared
-        # state dict. It's a METHOD (on MediaSyncMixin), so it isn't in __dict__ by
-        # default → LightingApi._device_size's `_state.get("_active_device_size")`
-        # always missed and push_text rendered text at the 16px fallback on every
-        # non-16px device. Storing the bound method here makes the lookup resolve.
-        self.__dict__["_active_device_size"] = self._active_device_size
-        # P5.6: a write that names its panel is drawn at THAT panel's size.
+        # P5.6: a write that names its panel is drawn at THAT panel's size;
+        # LightingApi reads the resolver through the shared state dict.
         self.__dict__["_size_of"] = self._size_of
         _dc = lambda: self._daemon_client
         self.connection = ConnectionApi(self.loop_thread, _dc, _state)
@@ -159,45 +153,48 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
     def send_danmaku_text(self, mac: str, text: str, color: str = "#FFFFFF") -> dict:
         return self.lighting.send_danmaku_text(mac, text, color)
 
-    def get_alarms(self) -> str:
-        return self.tools.get_alarms()
+    # The Tools tab (P5.7): each names the ONE panel its gesture resolved.
+    def get_alarms(self, mac: str) -> str:
+        return self.tools.get_alarms(mac)
 
-    def set_alarm(self, index: int, enabled, hour: int, minute: int,
+    def set_alarm(self, mac: str, index: int, enabled, hour: int, minute: int,
                   week: int = 0, mode: int = 0, trigger_mode: int = 0) -> bool:
-        return self.tools.set_alarm(index, enabled, hour, minute, week, mode, trigger_mode)
+        return self.tools.set_alarm(mac, index, enabled, hour, minute, week, mode, trigger_mode)
 
-    def start_sleep(self, minutes: int = 30, color: str = "#2040ff", volume: int = 10) -> bool:
-        return self.tools.start_sleep(minutes, color, volume)
+    def start_sleep(self, mac: str, minutes: int = 30, color: str = "#2040ff",
+                    volume: int = 10) -> bool:
+        return self.tools.start_sleep(mac, minutes, color, volume)
 
-    def stop_sleep(self) -> bool:
-        return self.tools.stop_sleep()
+    def stop_sleep(self, mac: str) -> bool:
+        return self.tools.stop_sleep(mac)
 
-    def set_timer(self, action: str = "start") -> bool:
-        return self.tools.set_timer(action)
+    def set_timer(self, mac: str, action: str = "start") -> bool:
+        return self.tools.set_timer(mac, action)
 
-    def set_countdown(self, action: str = "start", minutes: int = 5, seconds: int = 0) -> bool:
-        return self.tools.set_countdown(action, minutes, seconds)
+    def set_countdown(self, mac: str, action: str = "start", minutes: int = 5,
+                      seconds: int = 0) -> bool:
+        return self.tools.set_countdown(mac, action, minutes, seconds)
 
-    def set_noise(self, action: str = "start") -> bool:
-        return self.tools.set_noise(action)
+    def set_noise(self, mac: str, action: str = "start") -> bool:
+        return self.tools.set_noise(mac, action)
 
-    def set_hour_type(self, is_24h) -> bool:
-        return self.tools.set_hour_type(is_24h)
+    def set_hour_type(self, mac: str, is_24h) -> bool:
+        return self.tools.set_hour_type(mac, is_24h)
 
-    def set_temp_unit(self, fahrenheit) -> bool:
-        return self.tools.set_temp_unit(fahrenheit)
+    def set_temp_unit(self, mac: str, fahrenheit) -> bool:
+        return self.tools.set_temp_unit(mac, fahrenheit)
 
-    def sync_time(self) -> bool:
-        return self.tools.sync_time()
+    def sync_time(self, mac: str) -> bool:
+        return self.tools.sync_time(mac)
 
-    def set_device_name(self, name: str) -> bool:
-        return self.tools.set_device_name(name)
+    def set_device_name(self, mac: str, name: str) -> bool:
+        return self.tools.set_device_name(mac, name)
 
-    def set_auto_power_off(self, minutes: int) -> bool:
-        return self.tools.set_auto_power_off(minutes)
+    def set_auto_power_off(self, mac: str, minutes: int) -> bool:
+        return self.tools.set_auto_power_off(mac, minutes)
 
-    def set_low_power(self, on) -> bool:
-        return self.tools.set_low_power(on)
+    def set_low_power(self, mac: str, on) -> bool:
+        return self.tools.set_low_power(mac, on)
 
 
     def set_clock_rich(self, mac: str, style: int = 0, twentyfour: bool = True,
@@ -205,23 +202,23 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
                        date: bool = False, color: str = "#ffffff") -> bool:
         return self.lighting.set_clock_rich(mac, style, twentyfour, humidity, weather, date, color)
 
-    def set_fm_frequency(self, freq_x10: int) -> bool:
-        return self.tools.set_fm_frequency(freq_x10)
+    def set_fm_frequency(self, mac: str, freq_x10: int) -> bool:
+        return self.tools.set_fm_frequency(mac, freq_x10)
 
-    def set_memorial(self, index, enabled, month, day, hour, minute, title="") -> bool:
-        return self.tools.set_memorial(index, enabled, month, day, hour, minute, title)
+    def set_memorial(self, mac: str, index, enabled, month, day, hour, minute, title="") -> bool:
+        return self.tools.set_memorial(mac, index, enabled, month, day, hour, minute, title)
 
-    def set_screen_dir(self, direction) -> bool:
-        return self.tools.set_screen_dir(direction)
+    def set_screen_dir(self, mac: str, direction) -> bool:
+        return self.tools.set_screen_dir(mac, direction)
 
-    def set_screen_mirror(self, on) -> bool:
-        return self.tools.set_screen_mirror(on)
+    def set_screen_mirror(self, mac: str, on) -> bool:
+        return self.tools.set_screen_mirror(mac, on)
 
-    def factory_reset(self, confirm="") -> bool:
+    def factory_reset(self, mac: str, confirm="") -> bool:
         if str(confirm) != "RESET":
             logger.warning("factory_reset refused: missing/invalid confirm token")
             return False
-        return self.tools.factory_reset(confirm)
+        return self.tools.factory_reset(mac, confirm)
 
     # Lifecycle-settings methods (keep_daemon_alive / quit_menubar_on_exit) live
     # on LifecycleSettingsMixin so pywebview still exposes them as api.get_*().
@@ -232,12 +229,8 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
             return {"success": False, "error": "daemon unavailable"}
         return client.live_job_list(mac)
 
-    def send_notification(self, app_type, text="") -> bool:
-        t = int(app_type)
-        if not (1 <= t <= 14):
-            logger.warning(f"send_notification: app_type {t} out of range 1-14")
-            return False
-        return self.tools.send_notification(t, text)
+    def send_notification(self, mac: str, app_type, text="") -> bool:
+        return self.tools.send_notification(mac, app_type, text)
 
     # ── macOS notification mirroring (daemon-owned) ───────────────────────
     # The daemon is the SINGLE owner of the macOS Notification Center monitor
@@ -392,15 +385,25 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
         top = topology_data.get("topology", topology_data) if isinstance(topology_data, dict) else {}
         return client.set_topology(top)
 
-    def device_call(self, method: str, args: list = None, kwargs: dict = None,
-                     target: str = "device", blobs: dict = None,
-                     token: str = None) -> str:
-        """Generic device method proxy (exposed to JS). Routes through daemon."""
+    def device_call(self, mac: str, method: str, args: list = None, kwargs: dict = None,
+                    blobs: dict = None, token: str = None) -> str:
+        """Generic device method proxy (exposed to JS), on the panel it NAMES.
+
+        P5.7: it used to send no mac, so the daemon ran it on its selected
+        panel -- the custom-art page switch went wherever the bench pointed
+        when the call arrived. The wall is named as `MatrixWall`, like every
+        other call; a call naming nothing is refused."""
+        if not mac:
+            return json.dumps({"success": False, "error": "name the panel this call is for"})
         client = self._client()
         if client is None:
             return json.dumps({"success": False, "error": "daemon unavailable"})
-        reply = client.device_call(method, args, kwargs, target=target,
-                                   blobs=blobs, token=token)
+        if mac == "MatrixWall":
+            reply = client.device_call(method, args, kwargs, target="wall",
+                                       blobs=blobs, token=token)
+        else:
+            reply = client.device_call(method, args, kwargs, target="device",
+                                       blobs=blobs, token=token, mac=mac)
         return json.dumps(reply)
 
     def open_file_dialog(self) -> str | None:
@@ -425,11 +428,11 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
             logger.error(f"Error opening file dialog: {e}")
             return None
 
-    def get_device_name(self) -> str | None:
-        return self.tools.get_device_name()
+    def get_device_name(self, mac: str) -> str | None:
+        return self.tools.get_device_name(mac)
 
-    def get_work_mode(self) -> int | None:
-        return self.tools.get_work_mode()
+    def get_work_mode(self, mac: str) -> int | None:
+        return self.tools.get_work_mode(mac)
 
     def set_scoreboard(self, mac: str, on_off: int, red: int = 0, blue: int = 0) -> bool:
         return self.tools.set_scoreboard(mac, on_off, red, blue)

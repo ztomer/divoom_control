@@ -28,10 +28,14 @@ document.addEventListener("DOMContentLoaded", () => {
     window.displayTicker = function(symbol) {
         symbol = (symbol || "").trim().toUpperCase();
         if (!symbol) return;
+        // The panel this gesture names; the tile and the job it starts go
+        // THERE, wherever the selection is when they land (P5.7).
+        const mac = window.ChannelSettings.mac(true);
+        if (!mac) return;
         {
             window.showToast(`Fetching Yahoo price data for ${symbol}...`, "success");
             if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.apply_stock_ticker(symbol).then(resJson => {
+                window.pywebview.api.apply_stock_ticker(mac, symbol).then(resJson => {
                     if (resJson) {
                         const res = JSON.parse(resJson);
                         if (res.success) {
@@ -52,7 +56,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             
                             // Re-trigger/update active stocks background sync
                             if (window.pywebview.api.toggle_stocks_sync) {
-                                window.pywebview.api.toggle_stocks_sync(true, symbol);
+                                window.pywebview.api.toggle_stocks_sync(mac, true, symbol);
                             }
                         } else {
                             const stockCard = document.getElementById("widget-card-stock");
@@ -78,7 +82,7 @@ document.addEventListener("DOMContentLoaded", () => {
     function refreshStockPreview() {
         const symbol = document.getElementById("stock-symbol-input")?.value.trim().toUpperCase();
         if (!symbol || !(window.pywebview && window.pywebview.api && window.pywebview.api.get_ticker_preview)) return;
-        window.pywebview.api.get_ticker_preview(symbol).then(resJson => {
+        window.pywebview.api.get_ticker_preview(window.ChannelSettings.selected()?.mac || "", symbol).then(resJson => {
             try {
                 if (!resJson) return;
                 const res = JSON.parse(resJson);
@@ -185,7 +189,9 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     };
 
-    function selectWidget(widgetId) {
+    // `quiet`: not a gesture (a tab opening with no panel), so no panel is
+    // asked for and nothing is said.
+    function selectWidget(widgetId, quiet) {
         selectedWidget = widgetId;
 
         // Update visual card states
@@ -198,7 +204,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         // Trigger background sync toggles
-        syncActiveWidget();
+        syncActiveWidget(quiet);
         if (widgetId === "sysmon" && window.refreshSysmonPreview) {
             window.refreshSysmonPreview();
         }
@@ -255,13 +261,22 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    function syncActiveWidget() {
+    // The live jobs start and stop on the panel resolved HERE, once, at the
+    // gesture (P5.7): they used to name none, and the backend chose the wall
+    // whenever slots existed, else the panel selected when the call RAN. A
+    // live widget plays on one panel; with none (or the wall) the cards and
+    // previews still follow the choice and no job is touched.
+    function syncActiveWidget(quiet) {
         if (!window.pywebview || !window.pywebview.api) return;
         const isTabActive = document.getElementById("data-sources")?.classList.contains("active");
+        const shown = window.ChannelSettings.selected()?.mac;
+        const mac = quiet ? (shown && shown !== "MatrixWall" ? shown : null)
+                          : window.ChannelSettings.mac(true);
+        const toggle = (fn, ...args) => { if (mac) window.pywebview.api[fn]?.(mac, ...args); };
 
         // 1. Music (Cover Art)
         const startMusic = isTabActive && (selectedWidget === "music");
-        window.pywebview.api.toggle_music_sync(startMusic);
+        toggle("toggle_music_sync", startMusic);
         if (startMusic) {
             startTrackPolling();
         } else {
@@ -271,9 +286,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // 2. Stocks
         const symbol = document.getElementById("stock-symbol-input")?.value.trim().toUpperCase();
         const startStocks = isTabActive && (selectedWidget === "stock") && !!symbol;
-        if (window.pywebview.api.toggle_stocks_sync) {
-            window.pywebview.api.toggle_stocks_sync(startStocks, symbol || "");
-        }
+        toggle("toggle_stocks_sync", startStocks, symbol || "");
         if (startStocks) {
             refreshStockPreview();
             if (!stockTimer) {
@@ -289,9 +302,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // 3. System Monitor
         const sysmonLiveChecked = sysmonLive ? sysmonLive.checked : true;
         const startSysmon = isTabActive && (selectedWidget === "sysmon") && sysmonLiveChecked;
-        if (window.pywebview.api.toggle_sysmon_sync) {
-            window.pywebview.api.toggle_sysmon_sync(startSysmon);
-        }
+        toggle("toggle_sysmon_sync", startSysmon);
         if (startSysmon) {
             refreshSysmonPreview();
             if (!sysmonTimer) {
@@ -307,18 +318,15 @@ document.addEventListener("DOMContentLoaded", () => {
         // 4. Weather
         const weatherLiveChecked = weatherLive ? weatherLive.checked : true;
         const startWeather = isTabActive && (selectedWidget === "weather") && weatherLiveChecked;
-        if (window.pywebview.api.toggle_weather_sync) {
-            window.pywebview.api.toggle_weather_sync(startWeather);
-        }
+        toggle("toggle_weather_sync", startWeather);
         if (startWeather) {
             startWeatherPolling();
         } else {
             stopWeatherPolling();
         }
 
-        const activeMac = window._activeDeviceMac();
-        if (window.DisplayPreviewRegistry && activeMac) {
-            const disp = window.DisplayPreviewRegistry.get(activeMac);
+        if (window.DisplayPreviewRegistry && mac) {
+            const disp = window.DisplayPreviewRegistry.get(mac);
             if (startMusic) disp.bindJob("music");
             else if (startStocks) disp.bindJob("stock", { symbol });
             else if (startSysmon) disp.bindJob("sysmon");
@@ -391,7 +399,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (mac) {
                 window.restoreActiveWidgetForDevice(mac);
             } else {
-                selectWidget(selectedWidget);
+                selectWidget(selectedWidget, true);
             }
         } else {
             // Stop local preview pollers (but let the daemon background tasks keep running)

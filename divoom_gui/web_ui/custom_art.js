@@ -59,8 +59,12 @@
         selectedSlot = null;
         renderSlots();
         updatePushLabel();
-        // Switch device display to this page
-        window.pywebview?.api?.device_call?.("design.use_user_define_index", [page])
+        // Switch the panel shown to this page -- THAT panel, named at the
+        // click (P5.7; the call named none and the daemon chose). Quietly
+        // nothing when no single panel is shown: the tab is also the editor's.
+        const mac = window.ChannelSettings.selected()?.mac;
+        if (!mac || mac === "MatrixWall") return;
+        window.pywebview?.api?.device_call?.(mac, "design.use_user_define_index", [page])
           .then((raw) => {
             let r;
             try { r = typeof raw === "string" ? JSON.parse(raw) : raw; } catch { r = {}; }
@@ -248,7 +252,8 @@
     if (!btn) return;
 
     btn.addEventListener("click", () => {
-      if (!window.requireDevice()) return;
+      const mac = window.ChannelSettings.mac(true);
+      if (!mac) return;
 
       const slots = {};
       assignments[currentPage].forEach((a, i) => {
@@ -262,7 +267,7 @@
       btn.disabled = true;
       btn.textContent = "Pushing…";
 
-      window.pywebview?.api?.custom_art_push?.(JSON.stringify(slots), currentPage)
+      window.pywebview?.api?.custom_art_push?.(mac, JSON.stringify(slots), currentPage)
         .then((raw) => {
           let result;
           try {

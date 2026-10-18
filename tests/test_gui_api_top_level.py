@@ -100,14 +100,15 @@ class TestGuiApiTopLevelCoverage(unittest.TestCase):
     def test_tools_wrappers_forward_to_collaborator(self):
         self.api.tools = MagicMock()
         self.api.tools.get_alarms.return_value = "ALARMS"
-        self.assertEqual(self.api.get_alarms(), "ALARMS")
+        self.assertEqual(self.api.get_alarms("AA:00:00:00:00:01"), "ALARMS")
+        self.api.tools.get_alarms.assert_called_with("AA:00:00:00:00:01")
 
         self.api.tools.set_low_power.return_value = True
-        self.assertTrue(self.api.set_low_power(True))
-        self.api.tools.set_low_power.assert_called_with(True)
+        self.assertTrue(self.api.set_low_power("AA:00:00:00:00:01", True))
+        self.api.tools.set_low_power.assert_called_with("AA:00:00:00:00:01", True)
 
         self.api.tools.get_device_name.return_value = "Bedroom Pixoo"
-        self.assertEqual(self.api.get_device_name(), "Bedroom Pixoo")
+        self.assertEqual(self.api.get_device_name("AA:00:00:00:00:01"), "Bedroom Pixoo")
 
         # push_weather was deleted in R70 P5.3 and get_weather (with the whole
         # WidgetsApi it was the last method of) in P5.4: the weather card reads
@@ -180,18 +181,35 @@ class TestGuiApiTopLevelCoverage(unittest.TestCase):
 
     def test_device_call_no_daemon(self):
         with patch.object(self.api, "_client", return_value=None):
-            result = json.loads(self.api.device_call("get_capabilities"))
+            result = json.loads(self.api.device_call("AA:00:00:00:00:01", "get_capabilities"))
         self.assertEqual(result, {"success": False, "error": "daemon unavailable"})
 
-    def test_device_call_delegates_to_daemon(self):
+    def test_device_call_delegates_to_the_panel_it_names(self):
+        """P5.7: it named no panel, so the daemon ran it on its selected one."""
         fake = MagicMock()
         fake.device_call.return_value = {"success": True, "result": 42}
         with patch.object(self.api, "_client", return_value=fake):
             result = json.loads(self.api.device_call(
-                "get_brightness", [1], {"a": 2}, target="wall", blobs={"b": "x"}, token="tok"))
+                "AA:00:00:00:00:01", "get_brightness", [1], {"a": 2}, blobs={"b": "x"}, token="tok"))
         self.assertEqual(result, {"success": True, "result": 42})
         fake.device_call.assert_called_with(
-            "get_brightness", [1], {"a": 2}, target="wall", blobs={"b": "x"}, token="tok")
+            "get_brightness", [1], {"a": 2}, target="device", blobs={"b": "x"}, token="tok",
+            mac="AA:00:00:00:00:01")
+
+    def test_device_call_names_the_wall_as_the_wall(self):
+        fake = MagicMock()
+        fake.device_call.return_value = {"success": True}
+        with patch.object(self.api, "_client", return_value=fake):
+            self.api.device_call("MatrixWall", "get_last_previews")
+        fake.device_call.assert_called_with(
+            "get_last_previews", None, None, target="wall", blobs=None, token=None)
+
+    def test_device_call_naming_no_panel_is_refused(self):
+        fake = MagicMock()
+        with patch.object(self.api, "_client", return_value=fake):
+            result = json.loads(self.api.device_call("", "get_brightness"))
+        self.assertFalse(result["success"])
+        fake.device_call.assert_not_called()
 
     # ---- open_file_dialog: no window / picked / cancelled / exception -----
 

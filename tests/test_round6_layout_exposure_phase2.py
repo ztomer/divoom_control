@@ -49,7 +49,7 @@ def test_r9_settings_js_wires_display_and_guards_reset():
     assert "set_screen_mirror" in src, "settings.js does not call set_screen_mirror."
     # Factory reset must be confirmed (dialog + typed RESET token) before calling.
     assert "factory_reset" in src, "settings.js does not call factory_reset."
-    assert 'factory_reset?.("RESET")' in src, (
+    assert 'factory_reset?.(mac, "RESET")' in src, (
         "factory_reset must be called with the literal 'RESET' token."
     )
     assert "window.prompt" in src and "RESET" in src, (
@@ -90,8 +90,9 @@ def test_r10_settings_js_wires_notification():
 def test_r10_gui_api_and_lib_expose_notification():
     api = GUI_API_PY.read_text()
     assert re.search(r"def\s+send_notification\s*\(", api), "missing send_notification bridge."
-    # range guard present
-    assert "1 <= t <= 14" in api, "send_notification must guard app_type 1-14."
+    # range guard present, once, where the call is made (`api/tools.py`)
+    tools = (GUI_API_PY.parent / "api" / "tools.py").read_text()
+    assert "1 <= t <= 14" in tools, "send_notification must guard app_type 1-14."
     # command id registered
     from pathlib import Path as _P
     cmds = (REPO_ROOT / "divoom_lib" / "models" / "commands.py").read_text()

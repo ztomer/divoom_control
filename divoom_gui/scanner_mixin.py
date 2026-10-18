@@ -3,7 +3,8 @@
 # R17 P5 full cutover: the GUI no longer touches the BLE radio. Scanning,
 # connecting (BLE + LAN), and the multi-device wall are all owned by the
 # daemon; this mixin is a thin client that issues daemon RPCs and stores
-# `current_divoom`/`wall_instance` as DaemonDeviceProxy handles.
+# `wall_instance` as a DaemonDeviceProxy handle. It holds no "current" panel
+# (P5.7): every action names the panel its gesture resolved.
 
 import os
 import json
@@ -281,40 +282,38 @@ class ScannerMixin:
             logger.warning(f"Failed to cache discovered devices/count: {ce}")
 
     def select_device(self, address: str, provisional: bool = False) -> bool:
-        """The bench selected a panel: bind the actions that do not name a
-        panel yet (the Tools tab, media sync) to IT, and tell the daemon,
-        which owns the ACTIVE panel for every client (the menubar can switch
-        it too, and the bench follows). Channel writes do not read this
-        binding: each names the panel its click resolved (P5.6), because a
-        binding read when the write runs is the selection of THAT moment.
+        """The bench selected a panel: tell the daemon, which owns the ACTIVE
+        panel for every client (the menubar can switch it too, and the bench
+        follows).
+
+        Nothing in this process follows the selection any more (P5.7). It
+        used to bind `current_divoom`, which the Tools tab, media sync and the
+        gallery push then acted on -- read when THEIR call ran, so a click
+        followed by a selection change acted on the second panel. Every
+        action names the panel its gesture resolved instead, as channel
+        writes have since P5.6.
 
         ``provisional`` is the bench's own placeholder before the daemon has
-        spoken (first render picks the first panel); it binds the proxy but
-        does not push a selection the daemon may already have made elsewhere.
+        spoken (first render picks the first panel): it does not push a
+        selection the daemon may already have made elsewhere.
 
         2026-09-12: the bench restores its selection from local storage, and
-        the startup auto-reconnect binds ``current_divoom`` to the LAST
-        CONNECTED panel. Those are two owners of "the selected device", and
-        they disagreed: the preview showed the Ditoo while the gallery push
-        went to the Pixoo. Selection is now one funnel -- the bench calls
-        this on every highlight, and the Python proxy follows. No connect
-        happens here; the daemon keeps the panel's link regardless.
+        the startup auto-reconnect used to bind the LAST CONNECTED panel --
+        two owners of "the selected device" that disagreed (the preview showed
+        the Ditoo while the gallery push went to the Pixoo). The daemon is now
+        the one owner; no connect happens here.
         """
         if not address:
             return False
-        if address == "MatrixWall":
+        if address == "MatrixWall" or provisional:
             return True
         client = self._client()
         if client is None:
             return False
-        cur = getattr(self, "current_divoom", None)
-        if cur is None or getattr(cur, "_mac", None) != address:
-            self.current_divoom = DaemonDeviceProxy(client, target="device", mac=address)
-        if not provisional:
-            try:
-                client.select_device(address)
-            except Exception as exc:
-                logger.debug("select_device not accepted by the daemon: %s", exc)
+        try:
+            client.select_device(address)
+        except Exception as exc:
+            logger.debug("select_device not accepted by the daemon: %s", exc)
         return True
 
     def connect_single_device(self, address: str) -> bool:
@@ -357,13 +356,10 @@ class ScannerMixin:
                     reply.get("message") or reply.get("error") or "Could not connect")
                 logger.error(f"Daemon connect failed: {reply.get('reason', '')} "
                              f"{reply.get('error', reply)}")
-                self.current_divoom = None
                 return False
 
-            self.current_divoom = DaemonDeviceProxy(client, target="device", mac=address)
-            if not self.current_divoom.is_connected:
+            if not DaemonDeviceProxy(client, target="device", mac=address).is_connected:
                 logger.error("Daemon reported success but device is NOT connected.")
-                self.current_divoom = None
                 return False
 
             self._last_connect_error = ""
@@ -372,7 +368,6 @@ class ScannerMixin:
         except Exception as e:
             logger.error(f"Single connect failed: {e}")
             self._last_connect_error = str(e)
-            self.current_divoom = None
             return False
 
     def _lan_token_for(self, ip: str) -> int:

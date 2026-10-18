@@ -17,7 +17,7 @@ document.addEventListener("DOMContentLoaded", () => {
     function pollTrackInfo() {
         const api = window.pywebview && window.pywebview.api;
         if (!api || !api.get_current_track_info) return;
-        api.get_current_track_info().then(infoJson => {
+        api.get_current_track_info(window.ChannelSettings.selected()?.mac || "").then(infoJson => {
             if (!infoJson) return;
             let info;
             try { info = JSON.parse(infoJson); } catch { return; }

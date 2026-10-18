@@ -46,15 +46,19 @@ class _FakeClient:
         return self.items
 
 
+#: The panel the preview is asked for (P5.7: the call names it).
+PANEL = "AA:00:00:00:00:01"
+
+
 class _Api(GalleryHotApiMixin):
-    """Minimal host for the mixin with a controllable active device size."""
+    """Minimal host for the mixin whose one panel, PANEL, has a set size."""
 
     def __init__(self, size, client=None):
         self._size = size
         self._fake = client if client is not None else _FakeClient()
 
-    def _active_device_size(self, default: int = 16) -> int:
-        return self._size
+    def _size_of(self, mac, default: int = 16) -> int:
+        return self._size if mac == PANEL else default
 
     def _client(self):
         return self._fake
@@ -66,10 +70,10 @@ def _patch_manifest(monkeypatch, tmp_path):
     return {}
 
 
-def test_preview_asks_at_the_active_device_size(monkeypatch, tmp_path):
+def test_preview_asks_at_the_named_panels_size(monkeypatch, tmp_path):
     _patch_manifest(monkeypatch, tmp_path)
     api = _Api(64)
-    out = json.loads(api.hot_update_preview())
+    out = json.loads(api.hot_update_preview(PANEL))
     assert out["success"] is True
     # A 64px Pixoo must not silently get the 16px manifest.
     assert api._fake.sizes == [64]
@@ -80,7 +84,7 @@ def test_preview_size_tracks_the_device_at_every_size(monkeypatch, tmp_path):
     _patch_manifest(monkeypatch, tmp_path)
     for size in (16, 32, 64, 128, 256):
         api = _Api(size)
-        api.hot_update_preview()
+        api.hot_update_preview(PANEL)
         assert api._fake.sizes == [size], (
             f"preview at size {size} asked for the wrong manifest")
 
@@ -129,7 +133,7 @@ def test_preview_uses_gallery_cache_names_and_marks_has_cache(monkeypatch, tmp_p
         {"file_id": "g/abc", "name": "Cool Art", "likes": 42, "preview_url": "http://x/y.gif"},
     ]), encoding="utf-8")
 
-    out = json.loads(_Api(16).hot_update_preview())
+    out = json.loads(_Api(16).hot_update_preview(PANEL))
     assert out["success"] is True
     item = out["items"][0]
     assert item["name"] == "Cool Art"
@@ -142,7 +146,7 @@ def test_preview_falls_back_to_file_id_tail_when_uncached(monkeypatch, tmp_path)
     """No gallery cache on disk → name falls back to the file_id tail and
     has_cache is False."""
     _patch_manifest(monkeypatch, tmp_path)
-    out = json.loads(_Api(16).hot_update_preview())
+    out = json.loads(_Api(16).hot_update_preview(PANEL))
     item = out["items"][0]
     assert item["name"] == "abc"  # "g/abc".rsplit("/", 1)[-1]
     assert item["has_cache"] is False
@@ -156,7 +160,7 @@ def test_preview_survives_corrupt_gallery_cache(monkeypatch, tmp_path):
     cache_dir.mkdir(parents=True)
     (cache_dir / "gallery_cache.json").write_text("{not valid json", encoding="utf-8")
 
-    out = json.loads(_Api(16).hot_update_preview())
+    out = json.loads(_Api(16).hot_update_preview(PANEL))
     assert out["success"] is True
     assert out["items"][0]["name"] == "abc"
     assert out["items"][0]["has_cache"] is False
@@ -169,7 +173,7 @@ def test_preview_reports_manifest_fetch_failure(monkeypatch, tmp_path):
 
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
     api = _Api(16, _FakeClient(error=CloudUnavailable("hot_manifest: timed out", "cloud")))
-    out = json.loads(api.hot_update_preview())
+    out = json.loads(api.hot_update_preview(PANEL))
     assert out["success"] is False
     assert "timed out" in out["error"]
 
@@ -181,7 +185,7 @@ def test_preview_without_a_daemon_says_so(monkeypatch, tmp_path):
         def _client(self):
             return None
 
-    out = json.loads(_NoDaemon(16).hot_update_preview())
+    out = json.loads(_NoDaemon(16).hot_update_preview(PANEL))
     assert out["success"] is False
     assert "background service" in out["error"]
 

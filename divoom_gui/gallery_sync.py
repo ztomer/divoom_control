@@ -96,21 +96,20 @@ class GallerySyncMixin(GalleryHotApiMixin):
             })
         return json.dumps(final_list)
 
-    def play_gallery_art(self, file_id: str) -> dict:
-        """Push a cached or downloaded gallery artwork to the active display."""
-        logger.info(f"GUI Action: Play gallery artwork file_id={file_id!r}")
+    def play_gallery_art(self, mac: str, file_id: str) -> dict:
+        """Push a cached or downloaded gallery artwork to the display ``mac``
+        names -- one panel, or the wall as `MatrixWall` (P5.7).
+
+        It used to stop live widgets on `current_divoom` and then push through
+        `display_wall_image`, which chose the wall whenever slots existed and
+        otherwise the panel the bench selected last -- read when the push
+        RAN. `display_wall_image` now stops and pushes on the named display."""
+        logger.info(f"GUI Action: Play gallery artwork file_id={file_id!r} on {mac}")
+        if not mac:
+            return {"success": False, "error": "No panel selected"}
         if not file_id:
             return {"success": False, "error": "missing file_id"}
-        client = self._client() if callable(getattr(self, "_client", None)) else getattr(self, "_client", None)
-        if client:
-            try:
-                cur = getattr(self, "current_divoom", None) or getattr(self, "_current_divoom", None)
-                # The proxy's `_mac`: `cur.mac` is a proxy PATH, not a string,
-                # so the request failed to serialise (a TypeError) and the
-                # mac-less retry stopped the daemon's active panel instead.
-                client.live_jobs_stop_for(getattr(cur, "_mac", None))
-            except Exception as e:
-                logger.debug(f"stop live widgets before gallery play: {e}")
+        client = self._client()
         cache_dir = Path.home() / ".config" / "divoom-control" / "cache_gallery"
         target_path = None
         safe_name = file_id.replace("/", "_")
@@ -129,10 +128,7 @@ class GallerySyncMixin(GalleryHotApiMixin):
                 except Exception as e:
                     logger.warning(f"Failed to fetch gallery preview for {file_id}: {e}")
         if target_path and target_path.exists():
-            cell_size = self._active_device_size() if hasattr(self, "_active_device_size") else 16
-            if hasattr(self, "display_wall_image"):
-                return self.display_wall_image(str(target_path.absolute()), cell_size)
-            return {"success": True, "path": str(target_path)}
+            return self.display_wall_image(mac, str(target_path.absolute()))
         return {"success": False, "error": "file not found in cache"}
 
     FILE_SIZE_BITMASK: dict[int, int] = {16: 1, 32: 2, 64: 4, 128: 16, 256: 32}

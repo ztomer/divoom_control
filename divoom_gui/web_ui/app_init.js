@@ -109,7 +109,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                      : "Splitting image and syncing wall...", "success");
             if (window.pywebview && window.pywebview.api) {
                 window.pywebview.api.update_wall_slots(JSON.stringify(activeSlots));
-                window.pywebview.api.display_wall_image(path, 16).then(res => {
+                window.pywebview.api.display_wall_image("MatrixWall", path, 16).then(res => {
                     const success = typeof res === "object" ? res.success : !!res;
                     if (success) {
                         window.showToast("Synchronized display wall", "success", " BLE");
@@ -135,9 +135,13 @@ document.addEventListener("DOMContentLoaded", () => {
     // channel card in the Control Panel (Round 7).
     // 0=clock, 1=lightning, 2=cloud, 3=vj, 4=visualizer, 5=design,
     // 6=scoreboard. Ambient has no mode int (it's a tool, not a channel).
-    if (window.pywebview && window.pywebview.api && window.pywebview.api.get_work_mode) {
-        window.pywebview.api.get_work_mode().then(mode => {
+    // The panel asked is the one shown at startup, and the cards follow its
+    // answer only while it is still the one shown (P5.7).
+    const modeMac = window.ChannelSettings?.selected()?.mac;
+    if (modeMac && modeMac !== "MatrixWall" && window.pywebview?.api?.get_work_mode) {
+        window.pywebview.api.get_work_mode(modeMac).then(mode => {
             if (mode === null || mode === undefined) return;
+            if (window.ChannelSettings.selected()?.mac !== modeMac) return;
             const modeToChannel = {0: "clock", 3: "vj", 4: "visualizer", 5: "design", 6: "scoreboard"};
             const channel = modeToChannel[mode];
             if (!channel) return;

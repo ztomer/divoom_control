@@ -16,7 +16,6 @@ class _Host(ScannerMixin):
     daemon spawn, credential load) just to exercise this mixin."""
 
     def __init__(self, presets_file: Path):
-        self.current_divoom = None
         self.discovered_list = []
         self.wall_slots = {}
         self.wall_instance = None

@@ -101,6 +101,22 @@
             return { display, mac: display.mac };
         },
 
+        // The mac every OTHER device action names (P5.7): the Tools tab,
+        // the live widgets, the gallery and custom-art pushes, resolved at
+        // the gesture through target(). They sent no mac and the backend
+        // acted on the panel the bench selected when the call RAN. `one`
+        // is for an action that means a single panel (an alarm, a timer, a
+        // rename, a live widget): the wall is refused here, with why.
+        mac(one) {
+            const t = this.target();
+            if (!t) return null;
+            if (one && t.mac === "MatrixWall") {
+                window.showToast("That acts on one panel. Select a panel, not the wall.", "error");
+                return null;
+            }
+            return t.mac;
+        },
+
         // A channel write for the selected display: target() plus that
         // display's settings for the channel with the patch applied.
         compose(channel, patch) {
