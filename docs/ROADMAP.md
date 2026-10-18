@@ -142,7 +142,8 @@ P4.7, `notify`: text shown under a screen lease whose TTL is the notification's 
 daemon by mac. **Exit:** browser tests across two panels for P5.1/P5.2; the
 menubar no longer closes on a status change. **Size:** M.
 
-Landed (2026-10-18): P5.4, the weather card showing the PNG of `render_widget {kind: "weather"}` with the reading beside it, the SVG renderer and `get_weather` deleted, loading and failure as distinct placeholders that say why (`4ac2bcf`; `divoom_gui/web_ui/widgets_weather.js`, the converse call-site check in `tests/test_widget_drift.py`).
+Landed (2026-10-18): P5.4, the weather card showing the PNG of `render_widget {kind: "weather"}` with the reading beside it, the SVG renderer and `get_weather` deleted, loading and failure as distinct placeholders that say why (`4ac2bcf`; `divoom_gui/web_ui/widgets_weather.js`, the converse call-site check in `tests/test_widget_drift.py`);
+P5.3, the menubar updating labels, the "Active panel" check and the notification items in place, rebuilding only when the set of rows changes, decided by diffing one `MenuModel` signature (`28f54cd`; `divoom-menubar/src/menu_model.rs`). That meets the exit's menubar half in code; holding the menu open through a fleet change on screen is not yet checked.
 
 #### P5.1 — Connection, brightness and volume are per panel
 **Status:** OPEN
@@ -168,14 +169,6 @@ fixed the READ side, but the write path still uses globals
 the previous display's value when the new one is on another channel.
 **Done when:** every channel control writes to the selected display's state,
 and changing display A's clock style leaves B's untouched (browser test).
-
-#### P5.3 — The menubar updates rows in place
-**Status:** OPEN
-**Why:** any change of rows, names, kinds or the active panel rebuilds the root
-`Menu` (`divoom-menubar/src/tray.rs`), which dismisses it if it is open; only
-row icons update in place.
-**Done when:** labels and the "Active panel" check update in place; a rebuild
-happens only when the set of rows changes.
 
 ### Phase 6 — the multi-panel wall
 
