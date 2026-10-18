@@ -48,6 +48,7 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
         "select_device" => crate::daemon_connect::cmd_select_device(daemon, &req).await,
         "disconnect" => disconnect(daemon, req).await,
         "mock_simulate_drop" => crate::daemon_mock::cmd_mock_simulate_drop(daemon, &req).await,
+        "mock_sent" => crate::daemon_mock::cmd_mock_sent(daemon, &req).await,
         "device_call" => daemon.cmd_device_call(&req).await,
 
         "live_job_start" => live_job_start(daemon, req).await,

@@ -69,6 +69,33 @@ pub(crate) async fn cmd_mock_simulate_drop(daemon: &Daemon, req: &Request) -> Va
     json!({"success": true, "connection_state": "disconnected", "reason": reason})
 }
 
+/// Every command a linked mock panel was asked to send, oldest first, as
+/// `[[command id, [arg bytes]], ...]` (P6.6).
+///
+/// The wire of a panel with no radio. A wall write's reply is the daemon's
+/// own account of what each slot did; an end-to-end test that must see a
+/// write ARRIVE at each panel reads it here instead. Only a mock answers --
+/// a real panel's wire is `DIVOOMD_BLE_DEBUG`'s.
+pub(crate) async fn cmd_mock_sent(daemon: &Daemon, req: &Request) -> Value {
+    let mac = req.args.get("mac").and_then(Value::as_str).unwrap_or("");
+    let transport = match daemon.fleet.get(mac).await {
+        Some(dev) => dev.transport().await,
+        None => None,
+    };
+    let Some(DeviceTransport::Mock(mock)) = transport.as_deref() else {
+        return err_code(
+            ErrorCode::NoDevice,
+            &format!("mock_sent: {mac} is not a linked mock panel"),
+        );
+    };
+    let sent: Vec<Value> = mock
+        .sent_commands
+        .lock()
+        .map(|c| c.iter().map(|(id, args)| json!([id, args])).collect())
+        .unwrap_or_default();
+    json!({"success": true, "sent": sent})
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -185,5 +212,51 @@ mod tests {
                 .is_connected()
                 .await
         );
+    }
+
+    // The mock's wire, by mac: what THAT panel was asked to send and nothing
+    // another panel was (P6.6).
+    #[tokio::test]
+    async fn mock_sent_answers_each_mock_panels_own_commands() {
+        let daemon = Daemon::new();
+        for mac in ["AA:00:00:00:00:01", "BB:00:00:00:00:02"] {
+            let c = cmd_connect(
+                &daemon,
+                &make_request("connect", Some(json!({"mock": true, "mac": mac})), None),
+            )
+            .await;
+            assert_eq!(c["success"], json!(true), "{c}");
+        }
+        let set = make_request(
+            "device_call",
+            Some(json!({"method": "set_brightness", "args": [40], "mac": "AA:00:00:00:00:01"})),
+            None,
+        );
+        assert_eq!(daemon.cmd_device_call(&set).await["success"], json!(true));
+        let ask = |mac: &str| make_request("mock_sent", Some(json!({"mac": mac})), None);
+        let a = cmd_mock_sent(&daemon, &ask("AA:00:00:00:00:01")).await;
+        assert!(
+            a["sent"].as_array().unwrap().contains(&json!([0x74, [40]])),
+            "{a}"
+        );
+        let b = cmd_mock_sent(&daemon, &ask("BB:00:00:00:00:02")).await;
+        assert!(
+            !b["sent"].as_array().unwrap().contains(&json!([0x74, [40]])),
+            "{b}"
+        );
+    }
+
+    // A mac with no mock panel behind it is refused with a code, never an
+    // empty list that reads as "nothing was sent".
+    #[tokio::test]
+    async fn mock_sent_refuses_a_mac_with_no_mock_panel() {
+        let daemon = Daemon::new();
+        let res = cmd_mock_sent(
+            &daemon,
+            &make_request("mock_sent", Some(json!({"mac": "CC:00:00:00:00:03"})), None),
+        )
+        .await;
+        assert_eq!(res["success"], json!(false));
+        assert_eq!(res["code"], json!("no_device"));
     }
 }

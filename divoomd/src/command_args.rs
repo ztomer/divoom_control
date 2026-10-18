@@ -81,6 +81,7 @@ pub const COMMAND_ARGS: &[(&str, &[Required])] = &[
     ("select_device", &[&[("mac", Str)]]),
     ("disconnect", &[]),
     ("mock_simulate_drop", &[]),
+    ("mock_sent", &[&[("mac", Str)]]),
     ("device_call", &[&[("method", Str)]]),
     ("live_job_start", &[&[("mac", Str)], &[("kind", Str)]]),
     ("live_job_stop", &[&[("mac", Str)], &[("kind", Str)]]),
