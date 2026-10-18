@@ -142,7 +142,8 @@ P4.7, `notify`: text shown under a screen lease whose TTL is the notification's 
 daemon by mac. **Exit:** browser tests across two panels for P5.1/P5.2; the
 menubar no longer closes on a status change. **Size:** M.
 
-Landed (2026-10-18): P5.9, a job, activity record or screen lease refused on a panel a racing `disconnect` forgot (its slots closed for whoever still holds it, pinned by a forced interleaving) and `Fleet::adopt` attaching under one lock hold, the web UI sending `set_device_activity` only for a panel the daemon reported, and every missing required argument refused `bad_request` from one command table the dispatcher checks first (`58898ed`; `divoomd/src/device/slot.rs`, `divoomd/src/command_args.rs`, `tests/test_e2e_activity_only_for_reported_panels.py`);
+Landed (2026-10-18): P5.10, every failure reply carrying an `ErrorCode` -- the code-less `err_reply` deleted, `error_code.rs` the only place a reply's `success` is written, the wire checking every reply, five codes added (`device_failed`, `busy`, `unauthorized`, `upstream_failed`, `internal`) and the code table in `docs/MCP_SERVER.md` held to the enum (`3459280`; `divoomd/src/reply_code_sweep_tests.rs`, `divoomd/src/reply_shape_scan_tests.rs`, `divoomd/src/ancs.rs`);
+P5.9, a job, activity record or screen lease refused on a panel a racing `disconnect` forgot (its slots closed for whoever still holds it, pinned by a forced interleaving) and `Fleet::adopt` attaching under one lock hold, the web UI sending `set_device_activity` only for a panel the daemon reported, and every missing required argument refused `bad_request` from one command table the dispatcher checks first (`58898ed`; `divoomd/src/device/slot.rs`, `divoomd/src/command_args.rs`, `tests/test_e2e_activity_only_for_reported_panels.py`);
 P5.8, a live job or activity record naming a panel no link ever made a fleet entry refused with `unknown_device` naming the mac, the fleet's only constructor private behind `Fleet::adopt` and the client path a `Fleet::known` lookup, a linked-then-dropped panel keeping a new job waiting, `MatrixWall` refused as the wall surface rather than a panel, and MCP/CLI tool errors carrying the daemon's `code` (`0f73dda`; `divoomd/src/device/fleet.rs`, `divoomd/src/error_code.rs`, `divoomd/tests/unknown_panel.rs`);
 P5.7, every other bridge call that acts on a panel -- the Tools tab, the alarms editor, the live widgets, the stock tile, the gallery, hot-channel and custom-art pushes, `device_call` -- naming it first through `ApiBase._display(mac)` (the wall refused for one-panel actions and named, never defaulted, for the rest), `current_divoom` deleted, and one test enumerating every public bridge method so a new one without a mac fails (`691e0b5`; `tests/test_device_actions_name_their_panel.py`, `tests/test_e2e_device_action_reaches_its_panel.py`, `divoomd/src/mock_tools_tests.rs`);
 P5.6, every channel bridge call naming the panel its click resolved, through one `ApiBase._display(mac)` to the daemon, a call naming no panel refused, `_target()` and `current_target_mode` deleted, and `_LanView` forwarding the daemon's `lan.*` calls so albums, playlists and the overlay work through the real proxy (`0a8aa81`; `divoom_gui/api/__init__.py`, `tests/test_e2e_channel_write_reaches_its_panel.py`, `tests/test_channel_writes_name_their_panel.py`, `divoomd/src/mock_channel_tests.rs`);
@@ -151,25 +152,6 @@ P5.2, every channel control writing the selected display's own per-channel setti
 P5.4, the weather card showing the PNG of `render_widget {kind: "weather"}` with the reading beside it, the SVG renderer and `get_weather` deleted, loading and failure as distinct placeholders that say why (`4ac2bcf`; `divoom_gui/web_ui/widgets_weather.js`, the converse call-site check in `tests/test_widget_drift.py`);
 P5.3, the menubar updating labels, the "Active panel" check and the notification items in place, rebuilding only when the set of rows changes, decided by diffing one `MenuModel` signature (`28f54cd`; `divoom-menubar/src/menu_model.rs`). That meets the exit's menubar half in code; holding the menu open through a fleet change on screen is not yet checked (2026-10-18: the console was locked, so no NSMenu could be held open or captured; a two-mock-panel smoke -- selection A, B, A and a row rename over the socket -- left the menubar running);
 P5.1, brightness, volume and panel size read and written per mac through the daemon, both name-based size guessers deleted, switching panels shows that panel's values (`f1f7b3b`; `divoom_gui/panels.py`, `divoom_gui/web_ui/panel_facts.js`, `tests/test_e2e_panel_levels_per_panel.py`, `divoomd/src/mock_levels_tests.rs`).
-
-#### P5.10 — Every failure reply carries a `code`
-**Status:** OPEN
-**Why:** P3.2 promised a stable `code` on every daemon failure
-(`divoomd/src/error_code.rs`) and clients branch on it -- the Settings card,
-MCP `ToolError { message, code }` since P5.8, the CLI's `<message> [<code>]`.
-P5.9 closed the missing-argument refusals (`divoomd/src/command_args.rs`), but
-about 230 other refusals -- device write failures, a scan or connect already
-running, a cloud call that failed, a wall panel that did not take a command --
-still go out through `protocol::err_reply` or a hand-built
-`{"success": false}` with no `code`, so a client can tell them apart only by
-matching prose. Converting the 230 sites one by one would leave the old
-constructor for the next handler to reach for.
-**Done when:** no handler can build a failure reply without an `ErrorCode`
-(the code-less constructor is gone and a source scan refuses a hand-built
-`"success": false`); a test drives every command and every `device_call`
-method through its failure paths and finds no reply without a code, both
-watched red on the tree before the change; the GUI, MCP and CLI read the
-codes; the code table in `docs/` lists every code.
 
 ### Phase 6 — the multi-panel wall
 
@@ -204,6 +186,17 @@ decompile. The refusal is stated (`divoomd/src/wall/refusal.rs`).
 **Done when:** a Wi-Fi image command is taken from a source (a decompile of
 `sendByLocalHttp`, or the public HTTP API's `Draw/SendHttpGif` checked on a
 real LAN panel), the daemon draws a slot over it, and the refusal is deleted.
+
+#### P6.3 — A wall failure names the panel that failed
+**Status:** OPEN
+**Why:** P5.10's sweep found that a wall command whose write fails on a
+linked panel answers `device_failed` with `degraded: []`:
+`DivoomWall::degraded_slots` names only slots with no panel, and the wall's
+per-command methods return one `bool` for all slots
+(`divoomd/src/wall/dispatch.rs`, `wall_outcome`). A client cannot tell which
+panel of the wall did not take the command.
+**Done when:** a wall reply names every slot whose write failed, and a test
+with one failing mock panel among two sees exactly that slot named.
 
 ### Phase 7 — decisions for the owner
 
