@@ -92,7 +92,8 @@ cargo build spawn in `tools/` and `scripts/` now takes its environment from
 
 **Goal:** the daemon can say who holds it, never hangs on one peer, and
 notices its own wedge. **Exit:** P2.1-P2.6 each pinned by a test that stalls,
-floods or wedges the real socket server; P2.7 has a trace or is gone.
+floods or wedges the real socket server; P2.7 has a trace or is gone (the
+trace was taken 2026-10-18; P2.7 and P2.8 are now fixes with named causes).
 **Size:** L (P2.5 and P2.6 are each M). **Risk:** P2.3's deadlines must not
 cut a legitimately slow `sync_artwork`; per-command budgets, not one global.
 P2.7 needs a panel and the GUI's Bluetooth grant (Hardware reference below).
@@ -105,14 +106,38 @@ P2.4, a named subscriber (`client_id`) replacing its own slot before staleness e
 P2.5, a lagging subscriber caught up to the latest value per key (`divoomd/src/events.rs`);
 P2.6, an in-process watchdog that exits a wedged daemon within 30 s (`divoomd/src/watchdog.rs`).
 
-#### P2.7 — The panel does not always come back after a daemon restart
+#### P2.7 — The panel does not come back after a daemon restart
+**Status:** OPEN (cause named 2026-10-18)
+**Why:** traced on 2026-10-18 (Pixoo-1, installed v0.41.2, `open --env
+DIVOOMD_BLE_DEBUG=1`, log `/tmp/divoom_client.log`). A GUI launch connects
+the saved panel in 4 s. Three `SIGTERM`s of the daemon with the GUI running
+each had the GUI respawn a daemon (`==== daemon spawn from pid 6675 ====`)
+and nothing else: no `[ble][connect]` line in 60 s, `device_status`
+`devices: []` every time. `scan` on that daemon answered in 8 s with all four
+bench panels, and `connect {mac}` linked in 1.3 s -- the 2026-09-07 "scan
+times out" did not recur. The cause is that nobody asks: the GUI's
+`reconnect_daemon` (`divoom_gui/scanner_mixin.py`) re-ensures a daemon and
+never re-issues `connect` for the panels the old one held, and the daemon
+does not link its saved panels itself.
+**Done when:** after a daemon restart the panels linked before it come back
+without a user action (one owner decides who: the daemon from its saved
+topology, or the GUI's respawn path), pinned by a test that kills the daemon
+under a mock panel and sees the link return.
+
+#### P2.8 — A dropped BLE link reads as connected, and a timed-out read as success
 **Status:** OPEN
-**Why:** seen repeatedly on 2026-09-07: `scan` times out while `connect` with
-the saved identifier succeeds at once. Unexplained; it costs every hardware
-round time, and nobody knows whether normal use (no restarts) is affected.
-**Done when:** a BLE trace (`DIVOOMD_BLE_DEBUG`) of one failing restart is
-captured and the cause named, or the reconnect path uses the saved identifier
-first and the symptom is gone.
+**Why:** on 2026-10-18, after a `0x74` (brightness) write the Pixoo-1 stopped
+answering: every later call failed `Peripheral no longer available`, yet
+`device_status` kept saying `connected: true`, and `light.get_light_mode`
+answered `{"success": true, "result": null}` -- a failed read dressed as a
+success (`get_light_mode` in `divoomd/src/device_call/basic.rs` maps a
+timeout to `success: true`, as do `get_device_name`, `get_brightness` and
+`get_volume` beside it). No
+disconnect line was logged. `disconnect` then `connect {mac}` recovered it.
+**Done when:** a lost peripheral flips the panel's `connected` and is
+reported (event + `device_status`), and every read that gets no answer
+fails with an `ErrorCode` instead of `success: true, result: null`, each
+pinned by a mock-panel test that drops the link mid-call.
 
 ### Phase 3 — the daemon knows what each panel is
 
@@ -157,7 +182,7 @@ P5.6, every channel bridge call naming the panel its click resolved, through one
 P5.5, with no panel known the bench showing an empty state that says how to add one and the deck "No panel selected" with no levels, the active-panel lookup answering null instead of an invented mac (`f56b550`; `window.isKnownTarget` in `divoom_gui/web_ui/app_globals.js`, `tests/test_e2e_no_invented_fleet.py`);
 P5.2, every channel control writing the selected display's own per-channel settings through one funnel that resolves the display at the gesture via `DisplayPreviewRegistry.getActive()`, the app-wide channel globals deleted (`78608ea`; `divoom_gui/web_ui/channel_settings.js`, `tests/test_e2e_channel_settings_per_panel.py`);
 P5.4, the weather card showing the PNG of `render_widget {kind: "weather"}` with the reading beside it, the SVG renderer and `get_weather` deleted, loading and failure as distinct placeholders that say why (`4ac2bcf`; `divoom_gui/web_ui/widgets_weather.js`, the converse call-site check in `tests/test_widget_drift.py`);
-P5.3, the menubar updating labels, the "Active panel" check and the notification items in place, rebuilding only when the set of rows changes, decided by diffing one `MenuModel` signature (`28f54cd`; `divoom-menubar/src/menu_model.rs`). That meets the exit's menubar half in code; holding the menu open through a fleet change on screen is not yet checked (2026-10-18: the console was locked, so no NSMenu could be held open or captured; a two-mock-panel smoke -- selection A, B, A and a row rename over the socket -- left the menubar running);
+P5.3, the menubar updating labels, the "Active panel" check and the notification items in place, rebuilding only when the set of rows changes, decided by diffing one `MenuModel` signature (`28f54cd`; `divoom-menubar/src/menu_model.rs`). That meets the exit's menubar half in code; holding the menu open through a fleet change on screen is not yet checked (2026-10-18: the console was locked, so no NSMenu could be held open or captured; 2026-10-18 unlocked, full-screen control for clicking the status item was declined, so it is still unchecked; a two-mock-panel smoke -- selection A, B, A and a row rename over the socket -- left the menubar running);
 P5.1, brightness, volume and panel size read and written per mac through the daemon, both name-based size guessers deleted, switching panels shows that panel's values (`f1f7b3b`; `divoom_gui/panels.py`, `divoom_gui/web_ui/panel_facts.js`, `tests/test_e2e_panel_levels_per_panel.py`, `divoomd/src/mock_levels_tests.rs`).
 
 ### Phase 6 — the multi-panel wall
@@ -261,6 +286,9 @@ arguments (`divoom_gui/api/lighting.py`).
 
 #### P9.3 — Light/dark backdrop check of the four widgets on a real panel
 **Status:** BLOCKED (on a hardware session with a camera)
+(2026-10-18: the four bench panels were all in scan range and the packet's
+four widget pushes were sent OK by `scripts/hw_verify.py`, each UNKNOWN for
+want of anyone looking; panels are not the blocker, eyes are.)
 **Why:** the R12 visual pass verified the widgets on the panel but never judged
 them against a light AND a dark surrounding. It is a photograph, not code.
 **Done when:** photos against both backdrops are judged and filed with the
@@ -297,7 +325,15 @@ or becomes its own OPEN item with a reproduction.
 **Done when:** each parent widens its cap and the major moves in its own commit.
 
 #### P9.7 — A lease on a panel with no live widget gives back the firmware channel
-**Status:** BLOCKED (on a panel: what 0x46 reports after a pushed image is unmeasured)
+**Status:** BLOCKED (on eyes on the panel: what re-selecting channel 5 shows)
+**Measured 2026-10-18** (Pixoo-1, `DIVOOMD_BLE_DEBUG` trace, 0x46 byte 0 =
+`current_light_effect_mode`): after `show_clock` 0; after `set_channel 1`
+(light) 1, with brightness and on/off reading 0; after a pushed image
+(`display.show_image`, `0x45 05..` then 0x8B) 5; `set_channel 3` (VJ, a
+one-byte `0x45 03`) drew no echo while `0x45 01` echoed in the same window,
+and 0x46 stayed 0 -- this panel does not take that form. So the channel is
+readable at acquire; what is still unwatched is whether `0x45 05` shows the
+pushed image again or the custom gallery.
 **Why:** a screen lease (`divoomd/src/lease.rs`) hands a panel back to its
 live widget by repainting the widget's newest frame. A panel with no widget
 is left showing the holder's last frame, and `lease_release` says so
