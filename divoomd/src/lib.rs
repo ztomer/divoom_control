@@ -120,6 +120,8 @@ pub mod verbs;
 pub mod wall;
 #[cfg(test)]
 mod wall_lan_tests;
+#[cfg(test)]
+mod wall_outcome_tests;
 pub mod watchdog;
 pub mod weather;
 pub mod wire;

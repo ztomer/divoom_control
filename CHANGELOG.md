@@ -4,6 +4,63 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P6.3 — a wall failure names the panel that failed (2026-10-18)
+
+P5.10's sweep found that a wall command whose write failed on a linked panel
+answered `device_failed` with `degraded: []`. `DivoomWall::degraded_slots`
+named only slots with no panel, and every wall command method returned one
+`bool` for all its slots, so no client could tell which panel of the wall had
+not taken the command.
+
+- **The per-slot outcome is the type.** Every wall command (`show_image`,
+  `set_light`, `show_clock`, `show_effects`, `show_visualization`,
+  `set_brightness`, `set_volume`, `switch_channel`) returns a `WallOutcome`:
+  one `(slot, Accepted | Unlinked | Failed(reason))` per slot, in wall order
+  (`divoomd/src/wall/outcome.rs`). One helper, `DivoomWall::each_slot`, runs
+  the write on every linked slot and records what each did, so the image push
+  and the broadcast commands can no longer fold the answer into one `bool`.
+  The type has no `bool` view. Its one exit is `WallOutcome::reply`, which
+  `wall_outcome` returns.
+- **The reply names the slot.** A failure is still `device_failed`. `failed`
+  maps each linked slot whose write failed to its reason, `degraded` still
+  lists each slot with no panel, and the message names both (`wall: BB:..
+  did not take it (...); CC:.. has no panel linked`). `docs/MCP_SERVER.md`'s
+  code table says so.
+- **The wall switched channels from its own table.** The wall's
+  `switch_channel` had a private name table that lacked `visualizer` and
+  `ambient`, the names the GUI's channel tabs send, so switching the wall to
+  either failed. It sent Clock as ten zero bytes, the blank clock face that
+  `BareChannel` exists to prevent, and VJ as effect 0 where one panel sends
+  the 1-indexed effect 1. Both now build the packet with
+  `packets::channel_payload`. An unknown channel on the wall is `bad_request`
+  rather than `device_failed`.
+- **The GUI names the panel.** `_DeviceCallError` keeps the daemon's whole
+  reply. `display_wall_image` hands its `failed` and `degraded` to the page,
+  and the wall push toast names each panel by its bench name ("Shelf did not
+  take the image (...)"). The other GUI wall writes still return a bare
+  `bool` (ROADMAP P6.4).
+- **Found on the way:** after a wall push the GUI asks the wall for
+  `get_last_previews`, which the Rust wall never had, so the bench's
+  per-panel previews have always been empty since the port (ROADMAP P6.5).
+- **Tests, each watched red on `7388771`.** `wall_outcome_tests` drives every
+  wall command with one failing mock panel among two and finds exactly that
+  slot in `failed` and in the message, and `degraded` empty (red: `failed`
+  absent). It builds a wall with a healthy slot, a failing one and one with
+  no panel, and finds the last two told apart (red: `failed` absent). It
+  switches the wall to every channel name one panel takes and finds the same
+  bytes on both slots (red: `clock` sent ten zero bytes). A calibration test,
+  green before and after, shows a healthy wall succeeds on every command. In
+  Python, `test_display_wall_image_failure_names_the_panels_that_failed` was
+  red with `KeyError: 'failed'`. In the browser,
+  `test_a_wall_image_that_one_panel_did_not_take_names_that_panel` timed out
+  waiting for a toast naming "Shelf".
+  Rust: 511 passed without BLE (`cargo test -p divoomd
+  --no-default-features`), 631 with (`cargo test --workspace`). pytest: 1898
+  passed / 165 skipped, and the library suite 1019 / 76. The browser suites:
+  212 of 214 passed in one 22-minute run at load average 12 to 17. The two
+  failures were `test_e2e_danmaku.py` timeouts that moved to a different test
+  on each rerun, and the file then passed 8 of 8.
+
 ## P5.10 — every failure reply carries a `code` (2026-10-18)
 
 P3.2 put a stable `code` on daemon failures so clients branch on a class,

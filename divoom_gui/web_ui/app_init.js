@@ -120,7 +120,8 @@ document.addEventListener("DOMContentLoaded", () => {
                         });
                         if (window.SpatialStage?.refresh) window.SpatialStage.refresh();
                     } else {
-                        const errMsg = (res && res.error) || "Failed to split and sync wall image";
+                        const named = wallFailureText(res, activeSlots);
+                        const errMsg = named || (res && res.error) || "Failed to split and sync wall image";
                         window.showToast(errMsg, "error");
                     }
                 });
@@ -249,3 +250,18 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 1000);
 });
 
+
+// P6.3: the daemon names each wall panel whose write failed (`failed`, mac ->
+// reason) and each slot with no panel (`degraded`). Say which, by the name the
+// bench shows, or "" when the reply names none.
+function wallFailureText(res, slots) {
+    const named = (mac) => {
+        const key = Object.keys(slots || {}).find(k => k.toLowerCase() === String(mac).toLowerCase());
+        return (key && slots[key].name) || mac;
+    };
+    const failed = (res && typeof res === "object" && res.failed) || {};
+    const unlinked = (res && typeof res === "object" && res.degraded) || [];
+    const parts = Object.keys(failed).map(mac => `${named(mac)} did not take the image (${failed[mac]}).`)
+        .concat(unlinked.map(mac => `${named(mac)} is not connected.`));
+    return parts.join(" ");
+}

@@ -159,3 +159,28 @@ async def test_a_panel_on_wifi_says_why_it_is_not_a_wall_slot_and_is_left_out():
             assert any(c["m"] == "display_wall_image" for c in calls), "the rest of the wall still gets the image"
         finally:
             await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_a_wall_image_that_one_panel_did_not_take_names_that_panel():
+    """P6.3: the daemon names each wall panel whose write failed; the toast
+    says which panel, by the name the bench shows, and why -- not "the wall
+    failed"."""
+    require_browser()
+    from playwright.async_api import async_playwright
+
+    async with async_playwright() as p:
+        browser, page = await _open(p, [_panel(A), _panel(B)], _owned(A, B))
+        try:
+            await eval_js(page, """(b) => { window.__api.display_wall_image = () => ({
+                success: false, previews: {},
+                error: `wall: ${b} did not take it (the transfer failed)`,
+                failed: {[b]: 'the transfer failed'}, degraded: []}); }""", B)
+            await eval_js(page, """() => { document.getElementById('file-path-input').value = '/tmp/art.png';
+                document.getElementById('apply-wall-art').click(); }""")
+            toast = await wait_toast(page, "Shelf", kind="error")
+            text = toast["rendered"]["text"]
+            assert "the transfer failed" in text, f"the reason is kept: {text!r}"
+            assert "Desk" not in text, f"Desk took the image: {text!r}"
+        finally:
+            await browser.close()

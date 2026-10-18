@@ -167,6 +167,26 @@ class TestLightingApiCoverage(unittest.TestCase):
         self.assertIn("error", result)
         self.assertEqual(result["previews"], {})
 
+    def test_display_wall_image_failure_names_the_panels_that_failed(self):
+        """P6.3: the daemon's wall reply names each panel whose write failed
+        (`failed`, with the reason) apart from each slot with no panel
+        (`degraded`); the bridge hands both to the page instead of keeping
+        only the message."""
+        a, b, c = "AA:00:00:00:00:01", "BB:00:00:00:00:02", "CC:00:00:00:00:03"
+        fake = MagicMock()
+        fake.wall_configure.return_value = {"success": True, "wall": True}
+        fake.device_call.return_value = {
+            "success": False, "code": "device_failed", "result": False,
+            "error": f"wall: {b} did not take it (the write failed); {c} has no panel linked",
+            "failed": {b: "the write failed"}, "degraded": [c]}
+        self.api._daemon_client = fake
+        self.api.wall_slots = {m: {"x": i, "y": 0, "size": 16} for i, m in enumerate((a, b, c))}
+        result = self.api.lighting.display_wall_image("MatrixWall", "/tmp/x.png", 16)
+        self.assertFalse(result["success"])
+        self.assertEqual(result["failed"], {b: "the write failed"})
+        self.assertEqual(result["degraded"], [c])
+        self.assertIn(b, result["error"])
+
     # ---- set_clock_rich: success, exception, no-target ------------------
 
     def test_set_clock_rich_success(self):

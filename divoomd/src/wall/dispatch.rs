@@ -15,9 +15,9 @@
 //! up.
 
 use crate::daemon::Daemon;
-use crate::protocol::{err_code, err_with, ErrorCode, Request};
+use crate::protocol::{err_code, ErrorCode, Request};
 use crate::wire::WireNarrow as _;
-use serde_json::{json, Value};
+use serde_json::Value;
 
 impl Daemon {
     pub(crate) async fn wall_device_call(&self, req: &Request) -> Value {
@@ -56,7 +56,7 @@ impl Daemon {
         };
 
         let strip = |m: &str| m.rsplit('.').next().unwrap_or(m).to_string();
-        let ok = match strip(method).as_str() {
+        let outcome = match strip(method).as_str() {
             "show_image" | "display_image" => {
                 let Some(path) = text(0, "file_path").or_else(|| text(0, "path")) else {
                     return crate::command_args::missing("device_call wall show_image", "'path'");
@@ -101,8 +101,14 @@ impl Daemon {
                     .await
             }
             "switch_channel" => {
-                let ch = text(0, "channel").unwrap_or_default().to_lowercase();
-                wall.switch_channel(&ch).await
+                let ch = text(0, "channel").unwrap_or_default();
+                let Some(packet) = crate::packets::channel_payload(&ch) else {
+                    return err_code(
+                        ErrorCode::BadRequest,
+                        &format!("wall switch_channel: unknown channel '{ch}'"),
+                    );
+                };
+                wall.switch_channel(&packet).await
             }
             other => {
                 // Honest refusal. Silently returning success for something the
@@ -117,21 +123,14 @@ impl Daemon {
             }
         };
 
-        wall_outcome(ok, &wall.degraded_slots())
+        wall_outcome(&outcome)
     }
 }
 
-/// The reply to a wall command: a failure when any panel's write failed or
-/// any slot has no panel (`degraded` names those slots -- it does NOT name a
-/// linked panel whose write failed; that shows only as the failure itself).
-fn wall_outcome(ok: bool, degraded: &[String]) -> Value {
-    if ok && degraded.is_empty() {
-        json!({"success": true, "result": true})
-    } else {
-        err_with(
-            ErrorCode::DeviceFailed,
-            "one or more wall panels did not accept the command",
-            json!({"result": false, "degraded": degraded}),
-        )
-    }
+/// The reply to a wall command, built from what each slot did (P6.3): it
+/// names each linked panel whose write failed (`failed`, with the reason)
+/// apart from each slot with no panel (`degraded`). It used to take one
+/// `bool` for the whole wall, so a failed write named no panel at all.
+fn wall_outcome(outcome: &super::WallOutcome) -> Value {
+    outcome.reply()
 }

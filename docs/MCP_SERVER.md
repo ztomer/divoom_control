@@ -117,7 +117,7 @@ frame up for good. A lease is the borrow with the return built in:
 | `unsupported` | Not available here: on this platform, in this build, or over this panel's link (a LAN panel has no Bluetooth-only command; the reply's `cause` says which). | Hide the feature for this panel or host. |
 | `screen_leased` | Another holder leases this panel's screen; the reply says who and for how long. | Wait for the lease, or ask its holder. |
 | `lease_expired` | The lease token is not (or no longer) the panel's lease. | Acquire a new lease. |
-| `device_failed` | The panel, or the radio or network path to it, did not do what was asked: a write or transfer failed, a reply never came, a connect or scan failed, a wall panel did not take the command. | Retry, or check the panel. |
+| `device_failed` | The panel, or the radio or network path to it, did not do what was asked: a write or transfer failed, a reply never came, a connect or scan failed, a wall panel did not take the command (the reply's `failed` maps each such slot to its reason, and `degraded` lists each slot with no panel). | Retry, or check the panel. |
 | `busy` | The daemon is already doing this (a scan, a connect, a hot update), or another session holds the panel exclusively. | Retry when it is done. |
 | `unauthorized` | The request's token does not match the daemon's. | Resend with the right token. |
 | `upstream_failed` | A network service the daemon calls for you (the Divoom cloud, a weather or quote provider) failed or refused. | Check the network or the account; the panel is not involved. |

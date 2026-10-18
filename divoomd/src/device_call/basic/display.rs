@@ -367,27 +367,13 @@ async fn switch_channel(ctx: CallCtx<'_>) -> Value {
         .unwrap_or("")
         .to_lowercase();
     // R67/C1 sibling: these were five hand-written byte arrays, and the
-    // "clock" one was a full ClockPacket spelled out by hand — the exact
-    // shape that let the overlay fields drift in the first place. They
-    // now come from the same builders as every other 0x45 packet.
-    let payload: [u8; 10] = match channel.as_str() {
-        "clock" => ClockPacket::default().to_bytes(),
-        "visualizer" | "eq" => crate::packets::visualization(0),
-        // VJ effects are 1-indexed on the wire; vj_effect(0) sends 1,
-        // which is what the hand-rolled array did.
-        "vj" => crate::packets::vj_effect(0),
-        "design" | "custom" => crate::packets::channel_switch(crate::packets::BareChannel::Design),
-        "scoreboard" => crate::packets::channel_switch(crate::packets::BareChannel::Scoreboard),
-        "cloud" | "hot" => crate::packets::channel_switch(crate::packets::BareChannel::Cloud),
-        "ambient" | "lighting" => {
-            crate::packets::channel_switch(crate::packets::BareChannel::Lighting)
-        }
-        other => {
-            return err_code(
-                BadRequest,
-                &format!("switch_channel: unknown channel '{other}'"),
-            )
-        }
+    // "clock" one was a full ClockPacket spelled out by hand. They come from
+    // the one channel table, which the wall uses too (P6.3).
+    let Some(payload) = crate::packets::channel_payload(&channel) else {
+        return err_code(
+            BadRequest,
+            &format!("switch_channel: unknown channel '{channel}'"),
+        );
     };
     match dev.send_command(CMD_SET_LIGHT_MODE, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),

@@ -159,7 +159,12 @@ class LightingApi(ApiBase, WidgetFrameMixin):
             return {"success": bool(ok), "previews": previews}
         except Exception as e:
             logger.error(f"Wall display failed: {e}")
-            return {"success": False, "error": str(e), "previews": {}}
+            # P6.3: which wall panels did not take it, as the daemon named
+            # them -- a write that failed apart from a slot with no panel.
+            reply = getattr(e, "reply", None) or {}
+            return {"success": False, "error": str(e), "previews": {},
+                    "failed": reply.get("failed") or {},
+                    "degraded": reply.get("degraded") or []}
 
     def set_clock_rich(self, mac: str, style: int = 0, twentyfour: bool = True,
                        humidity: bool = False, weather: bool = False,

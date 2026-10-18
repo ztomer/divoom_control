@@ -25,11 +25,16 @@ class _DeviceCallError(RuntimeError):
     so a GUI panel could only ever say "it failed" -- which is how a BLE-only
     user clicking Send Overlay got "Failed to send overlay" instead of "this
     device has no LAN API". The reason existed daemon-side and died here.
+
+    ``reply`` is the daemon's whole failure reply, so a detail it carries
+    reaches the caller too: a wall command's ``failed`` and ``degraded`` name
+    the panels that did not take it (P6.3).
     """
 
-    def __init__(self, message: str, cause: str = ""):
+    def __init__(self, message: str, cause: str = "", reply: dict | None = None):
         super().__init__(message)
         self.cause = cause
+        self.reply = reply or {}
 
 
 class _LanView:
@@ -250,7 +255,7 @@ class DaemonDeviceProxy:
             if not reply.get("success", False):
                 raise _DeviceCallError(
                     reply.get("error", f"device_call {method} failed"),
-                    str(reply.get("cause") or ""))
+                    str(reply.get("cause") or ""), reply)
             return reply.get("result")
 
         return _invoke()

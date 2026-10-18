@@ -11,10 +11,12 @@ use crate::image_encode;
 mod bounds;
 mod cmds;
 mod dispatch;
+mod outcome;
 mod refusal;
 
 use bounds::WallBounds;
 pub(crate) use cmds::{cmd_get_topology, cmd_set_topology, cmd_wall_configure};
+pub use outcome::{SlotOutcome, WallOutcome};
 use refusal::is_lan_id;
 pub use refusal::LAN_SLOT_REFUSAL;
 
@@ -214,44 +216,16 @@ impl DivoomWall {
             .collect()
     }
 
-    /// Show an image on every panel in this wall.
+    /// Show an image on every panel in this wall, each its own cut of it.
     ///
     /// The `daemon` parameter is gone: it existed to reach the C encoder
     /// through `Daemon::encoder()`, and `image_encode` is a free function now.
-    pub async fn show_image(&self, img_data: &[u8], default_time_ms: u16) -> bool {
+    pub async fn show_image(&self, img_data: &[u8], default_time_ms: u16) -> WallOutcome {
         let is_gif = img_data.len() >= 3 && &img_data[0..3] == b"GIF";
-
-        let mut tasks = Vec::new();
-        for slot in &self.devices {
-            let dev = match slot.device {
-                Some(ref d) => d.clone(),
-                None => continue,
-            };
-
-            let left = if self.is_free_form {
-                slot.x - self.min_x
-            } else {
-                slot.x * slot.size
-            };
-            let upper = if self.is_free_form {
-                slot.y - self.min_y
-            } else {
-                slot.y * slot.size
-            };
-            let cut = SlotCut {
-                width: slot.width.unwrap_or(slot.size),
-                height: slot.height.unwrap_or(slot.size),
-                left,
-                upper,
-                size: slot.size,
-                total_width: self.total_width,
-                total_height: self.total_height,
-                is_free_form: self.is_free_form,
-            };
-
+        self.each_slot(|slot, dev| {
+            let cut = self.cut_for(slot);
             let data_vec = img_data.to_vec();
-
-            tasks.push(tokio::spawn(async move {
+            async move {
                 let frames = tokio::task::spawn_blocking(move || {
                     process_wall_image(&data_vec, is_gif, &cut, default_time_ms)
                 })
@@ -271,28 +245,38 @@ impl DivoomWall {
                 }
 
                 if let DeviceTransport::Lan(_) = &*dev {
-                    Err(LAN_SLOT_REFUSAL.to_string())
-                } else {
-                    let _ = dev
-                        .send_command(0x45, &[0x05, 0, 0, 0, 0, 0, 0, 0, 0, 0], false)
-                        .await;
-                    dev.stream_animation_8b(&blob)
-                        .await
-                        .map_err(|e| e.to_string())
+                    return Err(LAN_SLOT_REFUSAL.to_string());
                 }
-            }));
-        }
-
-        let mut ok = true;
-        for task in tasks {
-            match task.await {
-                Ok(Ok(true)) => {}
-                _ => {
-                    ok = false;
+                let _ = dev
+                    .send_command(0x45, &[0x05, 0, 0, 0, 0, 0, 0, 0, 0, 0], false)
+                    .await;
+                match dev.stream_animation_8b(&blob).await {
+                    Ok(true) => Ok(()),
+                    Ok(false) => Err("the image encoded to nothing to send".to_string()),
+                    Err(e) => Err(e.to_string()),
                 }
             }
+        })
+        .await
+    }
+
+    /// The rectangle of the wall image `slot` shows.
+    fn cut_for(&self, slot: &DeviceSlot) -> SlotCut {
+        let (left, upper) = if self.is_free_form {
+            (slot.x - self.min_x, slot.y - self.min_y)
+        } else {
+            (slot.x * slot.size, slot.y * slot.size)
+        };
+        SlotCut {
+            width: slot.width.unwrap_or(slot.size),
+            height: slot.height.unwrap_or(slot.size),
+            left,
+            upper,
+            size: slot.size,
+            total_width: self.total_width,
+            total_height: self.total_height,
+            is_free_form: self.is_free_form,
         }
-        ok && self.degraded_slots().is_empty()
     }
 
     /// R67: this hand-built `[0x01, brightness, R, G, B, 0x01]` — with
@@ -308,7 +292,7 @@ impl DivoomWall {
         color: [u8; 3],
         brightness: u8,
         kind: crate::packets::LightingType,
-    ) -> bool {
+    ) -> WallOutcome {
         let packet = crate::packets::LightPacket {
             rgb: color,
             brightness,
@@ -319,7 +303,7 @@ impl DivoomWall {
             .await
     }
 
-    pub async fn show_clock(&self, clock: u8) -> bool {
+    pub async fn show_clock(&self, clock: u8) -> WallOutcome {
         let packet = crate::packets::ClockPacket {
             style: clock,
             ..Default::default()
@@ -332,7 +316,7 @@ impl DivoomWall {
     /// needs the full ten (see the padding notes in
     /// `divoom_lib/display/__init__.py`) and VJ effects are 1-indexed on BLE,
     /// so this sent the wrong effect in a packet the device may ignore outright.
-    pub async fn show_effects(&self, number: u8) -> bool {
+    pub async fn show_effects(&self, number: u8) -> WallOutcome {
         self.broadcast_command(
             crate::packets::CMD_SET_LIGHT_MODE,
             &crate::packets::vj_effect(number),
@@ -341,7 +325,7 @@ impl DivoomWall {
     }
 
     /// R67: was `[0x04, number]` — two bytes where the device needs ten.
-    pub async fn show_visualization(&self, number: u8) -> bool {
+    pub async fn show_visualization(&self, number: u8) -> WallOutcome {
         self.broadcast_command(
             crate::packets::CMD_SET_LIGHT_MODE,
             &crate::packets::visualization(number),
@@ -349,57 +333,34 @@ impl DivoomWall {
         .await
     }
 
-    pub async fn set_brightness(&self, brightness: u8) -> bool {
+    pub async fn set_brightness(&self, brightness: u8) -> WallOutcome {
         self.broadcast_command(0x74, &[brightness]).await
     }
 
-    pub async fn set_volume(&self, volume: u8) -> bool {
+    pub async fn set_volume(&self, volume: u8) -> WallOutcome {
         self.broadcast_command(0x08, &[volume]).await
     }
 
-    pub async fn switch_channel(&self, channel: &str) -> bool {
-        let val = match channel {
-            "clock" => 0x00,
-            "light" => 0x01,
-            "cloud" => 0x02,
-            "vj" => 0x03,
-            "eq" => 0x04,
-            "image" => 0x05,
-            "scoreboard" => 0x06,
-            _ => return false,
-        };
-        self.broadcast_command(0x45, &[val, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+    /// Switch every panel to a channel, `packet` from
+    /// [`crate::packets::channel_payload`] -- the table one panel uses (P6.3).
+    pub async fn switch_channel(&self, packet: &[u8; 10]) -> WallOutcome {
+        self.broadcast_command(crate::packets::CMD_SET_LIGHT_MODE, packet)
             .await
     }
 
-    async fn broadcast_command(&self, command_id: u8, args: &[u8]) -> bool {
-        let mut tasks = Vec::new();
-        for slot in &self.devices {
-            if let Some(ref dev) = slot.device {
-                let dev_clone = dev.clone();
-                let args_vec = args.to_vec();
-                tasks.push(tokio::spawn(async move {
-                    match &*dev_clone {
-                        DeviceTransport::Lan(_) => false,
-                        _ => dev_clone
-                            .send_command(command_id, &args_vec, true)
-                            .await
-                            .is_ok(),
-                    }
-                }));
-            }
-        }
-        let mut ok = true;
-        for task in tasks {
-            if let Ok(res) = task.await {
-                if !res {
-                    ok = false;
+    async fn broadcast_command(&self, command_id: u8, args: &[u8]) -> WallOutcome {
+        self.each_slot(|_, dev| {
+            let args_vec = args.to_vec();
+            async move {
+                if let DeviceTransport::Lan(_) = &*dev {
+                    return Err(LAN_SLOT_REFUSAL.to_string());
                 }
-            } else {
-                ok = false;
+                dev.send_command(command_id, &args_vec, true)
+                    .await
+                    .map_err(|e| e.to_string())
             }
-        }
-        ok && self.degraded_slots().is_empty()
+        })
+        .await
     }
 }
 

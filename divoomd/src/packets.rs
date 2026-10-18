@@ -340,3 +340,24 @@ pub const fn vj_effect(number: u8) -> [u8; 10] {
 pub const fn visualization(number: u8) -> [u8; 10] {
     [Channel::Visualization as u8, number, 0, 0, 0, 0, 0, 0, 0, 0]
 }
+
+/// The 0x45 packet that switches to the channel `name` calls it.
+///
+/// `None` for a name no channel has. One table for one panel and the wall
+/// (P6.3): the wall kept its own, which lacked `visualizer` and `ambient`
+/// (the names the GUI sends) and switched to Clock and VJ with zero-filled
+/// packets -- the blank clock face [`BareChannel`] exists to prevent.
+#[must_use]
+pub fn channel_payload(name: &str) -> Option<[u8; 10]> {
+    Some(match name.to_ascii_lowercase().as_str() {
+        "clock" => ClockPacket::default().to_bytes(),
+        "visualizer" | "eq" => visualization(0),
+        // VJ effects are 1-indexed on the wire; vj_effect(0) sends 1.
+        "vj" => vj_effect(0),
+        "design" | "custom" | "image" => channel_switch(BareChannel::Design),
+        "scoreboard" => channel_switch(BareChannel::Scoreboard),
+        "cloud" | "hot" => channel_switch(BareChannel::Cloud),
+        "ambient" | "lighting" | "light" => channel_switch(BareChannel::Lighting),
+        _ => return None,
+    })
+}
