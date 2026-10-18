@@ -13,7 +13,7 @@
 .custom-art-tabs .page-tab { flex: 1; }
 .page-tab.active {
     background: var(--accent) !important;
-    color: #fff !important;
+    color: #06140c !important;
 }
 
 /* Slot grid and library share the same tile size so slots read as
@@ -39,15 +39,15 @@
 }
 .custom-art-slot {
     aspect-ratio: 1;
-    background: rgba(0, 0, 0, 0.3);
-    border: 2px dashed rgba(255, 255, 255, 0.12);
+    background: var(--surface-sunken);
+    border: 2px dashed var(--border-color);
     border-radius: 6px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 11px;
-    color: rgba(255, 255, 255, 0.35);
+    color: var(--text-muted);
     transition: border-color 0.15s, background 0.15s;
     position: relative;
     overflow: hidden;

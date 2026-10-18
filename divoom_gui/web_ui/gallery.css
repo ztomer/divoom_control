@@ -300,7 +300,7 @@
 .sync-target-list {
     font-size: 12px;
     font-weight: 600;
-    color: var(--primary);
+    color: var(--primary-text);
     display: flex;
     align-items: center;
     gap: 6px;

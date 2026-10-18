@@ -79,7 +79,9 @@ def test_tabs_css_defines_active_state() -> None:
     )
     assert m, "tabs.css is missing .tabs-row .tab-btn.active"
     body = m.group(1)
-    assert "var(--primary)" in body, "active text must use --primary"
+    # The accent AS TEXT is --primary-text: --primary itself on the light
+    # theme's tint read 2.5:1 (tests/test_e2e_theme_contrast.py, 2026-10-18).
+    assert "var(--primary-text)" in body, "active text must use --primary-text"
     assert "rgba(255, 90, 31" in body, "active bg/border must be a translucent --primary tint"
 
 

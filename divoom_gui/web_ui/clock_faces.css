@@ -53,5 +53,5 @@
     cursor: pointer;
     transition: background 0.15s ease, border-color 0.15s ease;
 }
-.cloud-clock-apply-btn:hover { border-color: var(--primary); color: var(--primary); }
+.cloud-clock-apply-btn:hover { border-color: var(--primary); color: var(--primary-text); }
 .cloud-clock-apply-btn:disabled { opacity: 0.5; cursor: default; }

@@ -438,7 +438,7 @@ body.theme-light #widget-device-select {
 }
 .status-pill[data-state="unsupported"] {
   border-color: rgba(255, 200, 100, 0.55);
-  color: #ffc864;
+  color: var(--warn-text);
   background: rgba(255, 200, 100, 0.08);
 }
 #macnotif-detail {
@@ -451,7 +451,7 @@ body.theme-light #widget-device-select {
   overflow-x: auto;
 }
 #macnotif-rules-msg[data-state="ok"]    { color: #5ede91; }
-#macnotif-rules-msg[data-state="warn"]  { color: #ffc864; }
+#macnotif-rules-msg[data-state="warn"]  { color: var(--warn-text); }
 #macnotif-rules-msg[data-state="error"] { color: #e85c5c; }
 details > summary { list-style: none; }
 details > summary::-webkit-details-marker { display: none; }

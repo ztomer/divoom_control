@@ -54,6 +54,14 @@
 
     --text-main: #e8e9eb;
     --text-muted: #82838a;
+    /* Accent colours used AS TEXT, and the two surfaces the bench and deck
+       are built from: per theme, because a colour tuned for one background
+       is unreadable on the other (tests/test_e2e_theme_contrast.py). */
+    --primary-text: #ff5a1f;
+    --warn-text: #ffcc00;
+    --info-text: #5aaaff;
+    --surface-raised: #22242b;
+    --surface-sunken: #181920;
     --sidebar-width: 168px;
     --header-height: 80px;
 
@@ -97,6 +105,11 @@ body.theme-light {
     
     --text-main: #1c1d21;
     --text-muted: #62636a;
+    --primary-text: #c2410c;
+    --warn-text: #8a6100;
+    --info-text: #1d63c4;
+    --surface-raised: #ffffff;
+    --surface-sunken: #e8e9eb;
 }
 
 /* ── System Auto Mode Mapping ── */
@@ -121,6 +134,11 @@ body.theme-light {
         
         --text-main: #1c1d21;
         --text-muted: #62636a;
+        --primary-text: #c2410c;
+        --warn-text: #8a6100;
+        --info-text: #1d63c4;
+        --surface-raised: #ffffff;
+        --surface-sunken: #e8e9eb;
     }
 }
 

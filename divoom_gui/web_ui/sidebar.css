@@ -92,7 +92,7 @@
 }
 
 .nav-btn.active {
-    color: var(--primary);
+    color: var(--primary-text);
     background: rgba(255, 90, 31, 0.08);
     border-color: rgba(255, 90, 31, 0.3);
     box-shadow: none;

@@ -94,11 +94,11 @@ window.DivoomTemplates.widgets = `                <div class="grid-layout three-
                                     <b class="sysmon-bar-value text-warn" id="sysmon-cpu">–</b>
                                 </div>
                                 <div class="sysmon-bar-row" data-stat="mem">
-                                    <span class="sysmon-bar-label" style="color:#5aaaff;">MEM</span>
+                                    <span class="sysmon-bar-label text-info">MEM</span>
                                     <div class="sysmon-bar-track">
                                         <div class="sysmon-bar-fill" data-fill-color="#5aaaff" style="width:0%; background:#5aaaff;"></div>
                                     </div>
-                                    <b class="sysmon-bar-value" id="sysmon-mem" style="color:#5aaaff;">–</b>
+                                    <b class="sysmon-bar-value text-info" id="sysmon-mem">–</b>
                                 </div>
                                 <div class="sysmon-bar-row" data-stat="bat">
                                     <span class="sysmon-bar-label text-error">BAT</span>

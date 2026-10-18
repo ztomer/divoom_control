@@ -4,6 +4,32 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## Light theme: every label and switch reads at 3:1 (2026-10-18)
+
+Found looking at the P5.4 weather card in the light theme for the user-POV
+check: its "Live" switch was a white oval with no knob. `.slider-round:before`
+was `white` in every theme, over a track that is white in the light one. A
+probe of the whole page in both themes found 60 more, all one class -- a
+colour chosen for ONE theme: the bench header and the panel deck painted
+hardcoded dark surfaces (`#181920`, `#22242b`) behind theme-coloured text (the
+deck's panel name at 1.04:1, "Center"/"Align"/"Ribbon" at 1.09:1), and accent
+colours tuned for a dark background were used as TEXT on a light one (the
+active nav item at 2.36:1, the CPU label at 1.51:1).
+
+- **Tokens, per theme** (`divoom_gui/web_ui/style.css`): `--primary-text`,
+  `--warn-text`, `--info-text`, `--surface-raised`, `--surface-sunken`. Every
+  `color: var(--primary)` became `var(--primary-text)`; the bench and deck
+  surfaces, the custom-art slots and the switch track use the surface tokens.
+  Dark is unchanged apart from the off-state switch knob, which is now grey
+  (white means on).
+- **The gate is the class, not the list:** `tests/test_e2e_theme_contrast.py`
+  walks every tab in both themes and requires every element with its own
+  visible text, and every switch knob against its track, to reach 3:1 (WCAG
+  1.4.11). Text over a gradient or image backdrop is not measurable from
+  computed style and is skipped. One dark-theme failure too: the active
+  custom-art page tab (white on the green accent, 2.14:1).
+- **Watched red:** 60 failures light, 1 dark, before the change.
+
 ## P5.3 — the menubar updates rows in place (2026-10-18)
 
 Any change in the menubar's rows, names, kinds, the active panel or the

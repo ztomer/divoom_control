@@ -106,7 +106,7 @@
    the rest of the app uses for the same state. */
 .tabs-row .tab-btn.active {
   background: rgba(255, 90, 31, 0.12);
-  color: var(--primary);
+  color: var(--primary-text);
   border-color: rgba(255, 90, 31, 0.3);
 }
 

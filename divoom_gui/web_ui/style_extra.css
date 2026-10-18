@@ -128,14 +128,15 @@
    translucent-white caption above a braun-table (batch 5, templates_settings.js). */
 .label-caption {
     font-size: 11px;
-    color: rgba(255, 255, 255, 0.45);
+    color: var(--text-muted);
     margin-bottom: 8px;
     display: block;
 }
 .text-12      { font-size: 12px; }
 
 /* Semantic status colours (tokens defined in style.css :root). */
-.text-warn  { color: var(--warn); }
+.text-warn  { color: var(--warn-text); }
+.text-info  { color: var(--info-text); }
 .text-error { color: var(--error); }
 
 .file-uploader {

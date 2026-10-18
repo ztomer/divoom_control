@@ -193,7 +193,7 @@
 .selector-cell.active {
     border-color: var(--primary);
     background: rgba(0, 255, 204, 0.12);
-    color: var(--primary);
+    color: var(--primary-text);
 }
 
 .ambient-controls {
@@ -282,7 +282,7 @@
 }
 
 .selector-cell.active .cell-label {
-    color: var(--primary);
+    color: var(--primary-text);
 }
 
 /* APK EQ and VJ icons styling — R45 #4: sized to match the clock-face preview
