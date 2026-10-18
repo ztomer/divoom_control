@@ -167,14 +167,33 @@ test that switches panels before the write lands sees it reach the first.
 **Exit:** P6.1's *Done when*. **Size:** M. Needs two panels for the final
 check.
 
-#### P6.1 — Snap adjacent panels into one surface
-**Status:** OPEN
-**Why:** slicing an image across a wall already works (`divoomd/src/wall.rs`
-cuts per slot by x/y), but placing panels is free-form: dragging only clamps to
-the bench, and "Align" lays everything in one row. LAN panels are refused for
-wall images.
-**Done when:** dragged panels snap edge-to-edge into a contiguous group, and a
-LAN panel can be a wall slot (or the refusal is shown in the UI with its reason).
+Landed (2026-10-18): P6.1's code, dragged panels snapping flush and lined up
+through one pure function, the saved position the snapped one, and a LAN panel
+refused as a wall slot with its reason by the daemon (`wall_configure`'s
+`refused`, `device_status`'s `wall_refusal`) and in the deck and the wall push
+(`eaf199b`; `divoom_gui/web_ui/spatial_snap.js`, `tests/test_spatial_snap.py`,
+`tests/test_e2e_bench_snap.py`, `divoomd/src/wall_lan_tests.rs`).
+
+#### P6.1 — Snap adjacent panels into one surface: the hardware check
+**Status:** BLOCKED (on two real panels at the bench)
+**Why:** the snapping and the refusal are tested in the browser and the daemon,
+but nothing has shown one image across two real panels placed by snapping:
+the slots are the bench's chassis drawings, so a bezel or a size the drawing
+gets wrong would show as a gap or a step at the seam that no test can see.
+**Done when:** two real panels dragged edge to edge on the bench show one
+image across the seam with no gap, overlap or step (photographed), or the
+error is measured and the slot geometry corrected.
+
+#### P6.2 — A panel on Wi-Fi as a wall slot
+**Status:** BLOCKED (on a source for the Wi-Fi image upload and a LAN panel)
+**Why:** P6.1 found the limit is not the wall: the daemon cannot draw an image
+on a LAN panel at all (a LAN transport has no `send_command` or
+`stream_animation_8b`; `divoomd/src/device_call/lan.rs` has no image command),
+and the vendor app's Wi-Fi upload (`DesignSendModel.sendByLocalHttp`) did not
+decompile. The refusal is stated (`divoomd/src/wall/refusal.rs`).
+**Done when:** a Wi-Fi image command is taken from a source (a decompile of
+`sendByLocalHttp`, or the public HTTP API's `Draw/SendHttpGif` checked on a
+real LAN panel), the daemon draws a slot over it, and the refusal is deleted.
 
 ### Phase 7 — decisions for the owner
 
