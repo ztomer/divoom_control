@@ -152,6 +152,25 @@ P5.4, the weather card showing the PNG of `render_widget {kind: "weather"}` with
 P5.3, the menubar updating labels, the "Active panel" check and the notification items in place, rebuilding only when the set of rows changes, decided by diffing one `MenuModel` signature (`28f54cd`; `divoom-menubar/src/menu_model.rs`). That meets the exit's menubar half in code; holding the menu open through a fleet change on screen is not yet checked (2026-10-18: the console was locked, so no NSMenu could be held open or captured; a two-mock-panel smoke -- selection A, B, A and a row rename over the socket -- left the menubar running);
 P5.1, brightness, volume and panel size read and written per mac through the daemon, both name-based size guessers deleted, switching panels shows that panel's values (`f1f7b3b`; `divoom_gui/panels.py`, `divoom_gui/web_ui/panel_facts.js`, `tests/test_e2e_panel_levels_per_panel.py`, `divoomd/src/mock_levels_tests.rs`).
 
+#### P5.10 — Every failure reply carries a `code`
+**Status:** OPEN
+**Why:** P3.2 promised a stable `code` on every daemon failure
+(`divoomd/src/error_code.rs`) and clients branch on it -- the Settings card,
+MCP `ToolError { message, code }` since P5.8, the CLI's `<message> [<code>]`.
+P5.9 closed the missing-argument refusals (`divoomd/src/command_args.rs`), but
+about 230 other refusals -- device write failures, a scan or connect already
+running, a cloud call that failed, a wall panel that did not take a command --
+still go out through `protocol::err_reply` or a hand-built
+`{"success": false}` with no `code`, so a client can tell them apart only by
+matching prose. Converting the 230 sites one by one would leave the old
+constructor for the next handler to reach for.
+**Done when:** no handler can build a failure reply without an `ErrorCode`
+(the code-less constructor is gone and a source scan refuses a hand-built
+`"success": false`); a test drives every command and every `device_call`
+method through its failure paths and finds no reply without a code, both
+watched red on the tree before the change; the GUI, MCP and CLI read the
+codes; the code table in `docs/` lists every code.
+
 ### Phase 6 — the multi-panel wall
 
 **Goal:** a wall is placed by snapping, and LAN panels can join it.
