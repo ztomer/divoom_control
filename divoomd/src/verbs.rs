@@ -340,7 +340,9 @@ pub async fn run(request: &VerbRequest, target: &DaemonTarget) -> Result<VerbOut
         Verb::SetVolume { value } => {
             let mut tool_args = json!({ "level": value });
             put_mac(&mut tool_args, mac);
-            let value_out = crate::mcp_tools::call_tool("set_volume", &tool_args, target).await?;
+            let value_out = crate::mcp_tools::call_tool("set_volume", &tool_args, target)
+                .await
+                .map_err(|e| e.cli_line())?;
             Ok(VerbOutcome {
                 human: format!("set volume to {value}/15"),
                 value: value_out,
@@ -349,8 +351,9 @@ pub async fn run(request: &VerbRequest, target: &DaemonTarget) -> Result<VerbOut
         Verb::SetBrightness { value } => {
             let mut tool_args = json!({ "level": value });
             put_mac(&mut tool_args, mac);
-            let value_out =
-                crate::mcp_tools::call_tool("set_brightness", &tool_args, target).await?;
+            let value_out = crate::mcp_tools::call_tool("set_brightness", &tool_args, target)
+                .await
+                .map_err(|e| e.cli_line())?;
             Ok(VerbOutcome {
                 human: format!("set brightness to {value}%"),
                 value: value_out,
@@ -360,7 +363,9 @@ pub async fn run(request: &VerbRequest, target: &DaemonTarget) -> Result<VerbOut
             let freq_x10 = *freq_x10;
             let mut tool_args = json!({ "freq_x10": freq_x10 });
             put_mac(&mut tool_args, mac);
-            let out = crate::mcp_tools::call_tool("set_radio", &tool_args, target).await?;
+            let out = crate::mcp_tools::call_tool("set_radio", &tool_args, target)
+                .await
+                .map_err(|e| e.cli_line())?;
             Ok(VerbOutcome {
                 // Integer math rather than `freq_x10 as f64 / 10.0`: the cast
                 // can lose precision, and `87.5` is exactly "87.5" this way.
@@ -387,7 +392,9 @@ pub async fn run(request: &VerbRequest, target: &DaemonTarget) -> Result<VerbOut
                 "weekday_mask": 127,
             });
             put_mac(&mut tool_args, mac);
-            let out = crate::mcp_tools::call_tool("set_alarm", &tool_args, target).await?;
+            let out = crate::mcp_tools::call_tool("set_alarm", &tool_args, target)
+                .await
+                .map_err(|e| e.cli_line())?;
             Ok(VerbOutcome {
                 human: format!("set alarm 0 to {hour:02}:{minute:02} every day ({time})"),
                 value: out,
@@ -399,7 +406,9 @@ pub async fn run(request: &VerbRequest, target: &DaemonTarget) -> Result<VerbOut
         } => {
             let mut tool_args = json!({ "temperature_c": temperature, "weather": weather });
             put_mac(&mut tool_args, mac);
-            let out = crate::mcp_tools::call_tool("set_weather", &tool_args, target).await?;
+            let out = crate::mcp_tools::call_tool("set_weather", &tool_args, target)
+                .await
+                .map_err(|e| e.cli_line())?;
             Ok(VerbOutcome {
                 human: format!("set weather: {temperature}°C, {weather}"),
                 value: out,
@@ -418,7 +427,9 @@ pub async fn run(request: &VerbRequest, target: &DaemonTarget) -> Result<VerbOut
             let name = std::path::Path::new(path)
                 .file_name()
                 .map_or_else(|| path.clone(), |n| n.to_string_lossy().into_owned());
-            let reply = mcp_daemon::dc(target, "display.show_image", json!([path]), mac).await?;
+            let reply = mcp_daemon::dc(target, "display.show_image", json!([path]), mac)
+                .await
+                .map_err(|e| e.cli_line())?;
             let ok = reply
                 .get("success")
                 .and_then(Value::as_bool)

@@ -408,8 +408,9 @@ async fn owned_devices_never_invents_a_name() {
     let d = daemon_with_mock("DEV_A").await;
     let mut rx = d.subscribe().expect("daemon broadcasts");
     d.live_jobs
-        .set_device_activity("DEV_A".into(), "clock".into(), None, None)
-        .await;
+        .set_device_activity("DEV_A", "clock", None, None)
+        .await
+        .expect("DEV_A is linked");
     daemon_with_mock_on(&d, "DEV_B").await;
     let mut owned = None;
     while let Ok(ev) = rx.try_recv() {

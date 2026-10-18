@@ -374,6 +374,9 @@ async fn test_device_call_set_screen_on_and_standby_preemption() {
 #[tokio::test]
 async fn test_set_device_activity_broadcasts_event() {
     let d = Daemon::new();
+    // A record is for a panel the fleet has linked (P5.8); the subscription
+    // starts after the link so the first event is the activity.
+    connect_mock(&d, "AA:BB:CC:DD:EE:FF").await;
     let mut rx = d.subscribe().expect("broadcast subscriber available");
 
     let res = d

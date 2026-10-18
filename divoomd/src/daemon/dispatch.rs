@@ -217,7 +217,7 @@ async fn live_job_start(daemon: &Daemon, req: Request) -> Value {
     match self_weak.upgrade() {
         Some(d) => match daemon.live_jobs.start(d, mac, kind, params).await {
             Ok(()) => json!({"success": true}),
-            Err(e) => err_reply(&e),
+            Err(e) => e.reply(),
         },
         None => err_reply("Daemon was dropped"),
     }
@@ -269,10 +269,15 @@ async fn set_device_activity(daemon: &Daemon, req: Request) -> Value {
         .get("preview")
         .and_then(|v| v.as_str())
         .map(std::string::ToString::to_string);
-    daemon
+    // A refused record is not broadcast: the menubar would grow a tile for
+    // a panel that does not exist (P5.8).
+    if let Err(e) = daemon
         .live_jobs
-        .set_device_activity(mac.clone(), kind.clone(), name.clone(), preview.clone())
-        .await;
+        .set_device_activity(&mac, &kind, name.clone(), preview.clone())
+        .await
+    {
+        return e.reply();
+    }
     let mut ev = json!({
         "type": "activity",
         "mac": mac,

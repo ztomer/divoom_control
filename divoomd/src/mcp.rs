@@ -167,7 +167,9 @@ async fn handle_line(line: &str, target: &DaemonTarget) -> Option<Value> {
             match crate::mcp_tools::call_tool(name, &args, target).await {
                 Ok(value) => Ok(tool_content(&value, false)),
                 // Tool-level errors are returned as a result with isError, per MCP.
-                Err(e) => Ok(tool_content(&json!({ "error": e }), true)),
+                // The daemon's `code` rides beside the prose (P5.8), so an
+                // agent can branch on the class instead of the wording.
+                Err(e) => Ok(tool_content(&e.to_json(), true)),
             }
         }
         other => Err((-32601, format!("method not found: {other}"))),
@@ -355,6 +357,33 @@ mod tests {
         assert!(
             text.contains("level"),
             "the message must name the argument: {text}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_daemon_refusal_carries_its_code_to_the_agent() {
+        // P5.8: `check` read the reply's prose and dropped its `code`, so an
+        // agent could only tell refusals apart by their wording -- every
+        // daemon code, not just `unknown_device`, died one hop from the
+        // socket. Every device-call tool goes through `check`; one pins all.
+        let daemon = FakeDaemon::replying(
+            json!({ "success": false, "error": "no panel 'X'", "code": "unknown_device" }),
+            None,
+        )
+        .await;
+        let line = req(
+            "tools/call",
+            &json!({ "name": "set_volume", "arguments": { "level": 7, "mac": "X" } }),
+        );
+        let reply = handle_line(&line, &daemon.target).await.expect("reply");
+        assert_eq!(reply["result"]["isError"], json!(true), "{reply}");
+        let text = reply["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap_or_default();
+        let body: Value = serde_json::from_str(text).expect("the content is JSON");
+        assert_eq!(
+            body,
+            json!({ "error": "no panel 'X'", "code": "unknown_device" })
         );
     }
 

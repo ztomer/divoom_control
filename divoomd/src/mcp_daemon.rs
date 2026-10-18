@@ -16,6 +16,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpStream, UnixStream};
 
 use crate::daemon_target::DaemonTarget;
+use crate::error_code::ToolError;
 
 /// The two halves of a connection, boxed so a unix socket and a TCP socket
 /// share one signature. Boxed rather than an enum of half-pairs because
@@ -79,7 +80,7 @@ pub(crate) async fn dc(
     method: &str,
     args: Value,
     mac: Option<&str>,
-) -> Result<Value, String> {
+) -> Result<Value, ToolError> {
     check(cmd(target, "device_call", device_call(method, args, None, mac)).await?)
 }
 
@@ -89,7 +90,7 @@ pub(crate) async fn dc_kw(
     method: &str,
     kwargs: Value,
     mac: Option<&str>,
-) -> Result<Value, String> {
+) -> Result<Value, ToolError> {
     check(
         cmd(
             target,
@@ -115,16 +116,21 @@ pub(crate) async fn dc_result(
     }
 }
 
-pub(crate) fn check(reply: Value) -> Result<Value, String> {
+pub(crate) fn check(reply: Value) -> Result<Value, ToolError> {
     if reply.get("success").and_then(serde_json::Value::as_bool) == Some(true) {
         Ok(reply)
     } else {
-        Err(reply
-            .get("error")
-            .and_then(|e| e.as_str())
-            .unwrap_or("device call failed")
-            .to_string())
+        Err(ToolError::from_reply(&reply, "device call failed"))
     }
+}
+
+/// [`cmd`], refused unless the daemon said `success` -- its `code` kept.
+pub(crate) async fn cmd_ok(
+    target: &DaemonTarget,
+    command: &str,
+    args: Value,
+) -> Result<Value, ToolError> {
+    check(cmd(target, command, args).await?)
 }
 
 /// One NDJSON request/reply against the daemon, local socket or remote TCP.

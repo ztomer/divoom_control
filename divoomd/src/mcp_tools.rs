@@ -13,6 +13,7 @@ use crate::arg_bounds::{
     TEMPERATURE_C, VOLUME, WEEKDAY_MASK,
 };
 use crate::daemon_target::DaemonTarget;
+use crate::error_code::ToolError;
 use crate::image_fit::Fit;
 
 // name -> channel int (LIGHT_MODE_NAMES in mcp_tools.py).
@@ -117,7 +118,7 @@ pub(crate) fn tool(name: &str, desc: &str, schema: &Value) -> Value {
 /// # Panics
 ///
 /// If a mutex guarding shared tool state is poisoned.
-pub async fn call_tool(name: &str, a: &Value, target: &DaemonTarget) -> Result<Value, String> {
+pub async fn call_tool(name: &str, a: &Value, target: &DaemonTarget) -> Result<Value, ToolError> {
     let lease = match a.get("lease") {
         None | Some(Value::Null) => None,
         Some(Value::String(t)) => Some(t.clone()),
@@ -126,7 +127,7 @@ pub async fn call_tool(name: &str, a: &Value, target: &DaemonTarget) -> Result<V
     crate::mcp_daemon::with_lease(lease, dispatch(name, a, target)).await
 }
 
-async fn dispatch(name: &str, a: &Value, target: &DaemonTarget) -> Result<Value, String> {
+async fn dispatch(name: &str, a: &Value, target: &DaemonTarget) -> Result<Value, ToolError> {
     let mac = a.get("mac").and_then(Value::as_str);
 
     match name {
@@ -161,16 +162,16 @@ async fn dispatch(name: &str, a: &Value, target: &DaemonTarget) -> Result<Value,
             let args = a
                 .get("mac")
                 .map_or_else(|| json!({}), |m| json!({ "mac": m }));
-            crate::mcp_daemon::cmd(target, "device_status", args).await
+            crate::mcp_daemon::cmd_ok(target, "device_status", args).await
         }
         "get_device_state" => get_device_state(a, target).await,
-        "list_screens" => crate::mcp_daemon::cmd(target, "get_topology", json!({})).await,
+        "list_screens" => crate::mcp_daemon::cmd_ok(target, "get_topology", json!({})).await,
         other => crate::mcp_more_tools::call(other, a, target)
             .await
-            .unwrap_or_else(|| Err(format!("unknown tool: {other}"))),
+            .unwrap_or_else(|| Err(format!("unknown tool: {other}").into())),
     }
 }
-async fn set_light_mode(a: &Value, target: &DaemonTarget) -> Result<Value, String> {
+async fn set_light_mode(a: &Value, target: &DaemonTarget) -> Result<Value, ToolError> {
     let mac = a.get("mac").and_then(Value::as_str);
 
     let mode = a
@@ -208,7 +209,7 @@ pub(crate) fn weather_id(name: &str) -> Result<i64, String> {
         })
 }
 
-async fn set_weather(a: &Value, target: &DaemonTarget) -> Result<Value, String> {
+async fn set_weather(a: &Value, target: &DaemonTarget) -> Result<Value, ToolError> {
     let mac = a.get("mac").and_then(Value::as_str);
 
     let temp = TEMPERATURE_C.read(a)?;
@@ -221,7 +222,7 @@ async fn set_weather(a: &Value, target: &DaemonTarget) -> Result<Value, String> 
     Ok(json!({ "ok": true, "temperature_c": temp, "weather": weather }))
 }
 
-async fn set_alarm(a: &Value, target: &DaemonTarget) -> Result<Value, String> {
+async fn set_alarm(a: &Value, target: &DaemonTarget) -> Result<Value, ToolError> {
     let mac = a.get("mac").and_then(Value::as_str);
 
     let index = ALARM_INDEX.read(a)?;
@@ -246,7 +247,7 @@ async fn set_alarm(a: &Value, target: &DaemonTarget) -> Result<Value, String> {
     )
 }
 
-async fn set_low_power(a: &Value, target: &DaemonTarget) -> Result<Value, String> {
+async fn set_low_power(a: &Value, target: &DaemonTarget) -> Result<Value, ToolError> {
     let mac = a.get("mac").and_then(Value::as_str);
 
     let enabled = a
@@ -263,7 +264,7 @@ async fn set_low_power(a: &Value, target: &DaemonTarget) -> Result<Value, String
     Ok(json!({ "ok": true, "enabled": enabled }))
 }
 
-async fn set_screen_orientation(a: &Value, target: &DaemonTarget) -> Result<Value, String> {
+async fn set_screen_orientation(a: &Value, target: &DaemonTarget) -> Result<Value, ToolError> {
     let mac = a.get("mac").and_then(Value::as_str);
 
     let degrees = DEGREES.read(a)?;
@@ -283,7 +284,7 @@ async fn set_screen_orientation(a: &Value, target: &DaemonTarget) -> Result<Valu
     Ok(json!({ "ok": true, "degrees": degrees, "mirror": mirror }))
 }
 
-async fn show_image(a: &Value, target: &DaemonTarget) -> Result<Value, String> {
+async fn show_image(a: &Value, target: &DaemonTarget) -> Result<Value, ToolError> {
     let mac = a.get("mac").and_then(Value::as_str);
     let (resize, policy) = resize_policy(a)?;
     let file = a
@@ -300,7 +301,7 @@ async fn show_image(a: &Value, target: &DaemonTarget) -> Result<Value, String> {
     Ok(json!({ "ok": true, "file": file, "size": size, "resize": resize }))
 }
 
-async fn push_animation(a: &Value, target: &DaemonTarget) -> Result<Value, String> {
+async fn push_animation(a: &Value, target: &DaemonTarget) -> Result<Value, ToolError> {
     let mac = a.get("mac").and_then(Value::as_str);
 
     let file = a
@@ -328,7 +329,7 @@ async fn push_animation(a: &Value, target: &DaemonTarget) -> Result<Value, Strin
     Ok(json!({ "ok": true, "size": size, "resize": resize, "frames": frames.len() }))
 }
 
-async fn get_device_state(a: &Value, target: &DaemonTarget) -> Result<Value, String> {
+async fn get_device_state(a: &Value, target: &DaemonTarget) -> Result<Value, ToolError> {
     let mac = a.get("mac").and_then(Value::as_str);
 
     let volume = crate::mcp_daemon::dc_result(target, "music.get_volume", json!([]), mac).await;
@@ -398,7 +399,7 @@ pub(crate) async fn push_frames(
     target: &DaemonTarget,
     frames: &[crate::image_proc::Frame],
     mac: Option<&str>,
-) -> Result<(), String> {
+) -> Result<(), ToolError> {
     let Some((_, w, h, _)) = frames.first() else {
         return Err("the image decoded to no frames".into());
     };

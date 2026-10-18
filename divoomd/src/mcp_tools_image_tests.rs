@@ -74,7 +74,10 @@ async fn resize_none_with_the_wrong_size_is_refused_before_anything_is_sent() {
     )
     .await
     .expect_err("16x8 is not 64x64");
-    assert!(err.contains("64x64") && err.contains("16x8"), "{err}");
+    assert!(
+        err.message.contains("64x64") && err.message.contains("16x8"),
+        "{err}"
+    );
     assert!(
         daemon
             .requests()
@@ -100,7 +103,7 @@ async fn an_unknown_panel_size_must_be_given_not_guessed() {
     )
     .await
     .expect_err("no size to draw at");
-    assert!(err.contains("size"), "{err}");
+    assert!(err.message.contains("size"), "{err}");
     call_tool(
         "show_image",
         &json!({ "file": png.to_str(), "size": 32 }),
@@ -121,7 +124,7 @@ async fn an_unknown_resize_policy_is_rejected_by_name() {
     )
     .await
     .expect_err("not a policy");
-    assert!(err.contains("resize"), "{err}");
+    assert!(err.message.contains("resize"), "{err}");
 }
 
 // ── P4.4: every frame of an animation ───────────────────────────────────

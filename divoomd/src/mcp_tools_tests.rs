@@ -127,7 +127,7 @@ async fn bounded_arguments_are_checked_at_both_ends() {
             .await
             .expect_err(&format!("{tool} {args} must be rejected"));
         assert!(
-            err.contains(expected),
+            err.message.contains(expected),
             "{tool} {args}: expected {expected:?} in {err:?}"
         );
     }
@@ -162,7 +162,11 @@ async fn a_non_numeric_or_missing_argument_is_rejected_by_name() {
         let err = call_tool(tool, &args, &unreachable())
             .await
             .expect_err(&format!("{tool} {args} must be rejected"));
-        assert_ne!(err.len(), 0, "{tool} {args}: an empty error helps nobody");
+        assert_ne!(
+            err.message.len(),
+            0,
+            "{tool} {args}: an empty error helps nobody"
+        );
     }
 }
 
@@ -176,7 +180,7 @@ async fn the_enum_arguments_reject_names_that_are_not_in_the_table() {
     )
     .await
     .expect_err("an unknown mode must be rejected");
-    assert!(err.contains("mode must be one of"), "{err}");
+    assert!(err.message.contains("mode must be one of"), "{err}");
 
     let err = call_tool(
         "set_weather",
@@ -185,7 +189,7 @@ async fn the_enum_arguments_reject_names_that_are_not_in_the_table() {
     )
     .await
     .expect_err("an unknown weather icon must be rejected");
-    assert!(err.contains("weather must be one of"), "{err}");
+    assert!(err.message.contains("weather must be one of"), "{err}");
 
     // And the documented names are the accepted ones.
     let daemon = FakeDaemon::start(json!({}), None).await;
@@ -224,7 +228,7 @@ async fn push_animation_needs_exactly_one_of_file_or_data() {
         let err = call_tool("push_animation", &args, &unreachable())
             .await
             .expect_err("one of file/data, exactly");
-        assert!(err.contains("exactly one"), "{err}");
+        assert!(err.message.contains("exactly one"), "{err}");
     }
     let err = call_tool(
         "push_animation",
@@ -233,7 +237,7 @@ async fn push_animation_needs_exactly_one_of_file_or_data() {
     )
     .await
     .expect_err("invalid base64 must be rejected");
-    assert!(err.contains("base64"), "{err}");
+    assert!(err.message.contains("base64"), "{err}");
 }
 
 #[tokio::test]
@@ -241,7 +245,7 @@ async fn show_image_rejects_an_empty_or_unreadable_path() {
     let err = call_tool("show_image", &json!({ "file": "" }), &unreachable())
         .await
         .expect_err("an empty path is not a path");
-    assert!(err.contains("non-empty"), "{err}");
+    assert!(err.message.contains("non-empty"), "{err}");
 
     let err = call_tool(
         "show_image",
@@ -250,7 +254,7 @@ async fn show_image_rejects_an_empty_or_unreadable_path() {
     )
     .await
     .expect_err("a missing file must be reported, not sent");
-    assert!(err.contains("cannot read"), "{err}");
+    assert!(err.message.contains("cannot read"), "{err}");
 }
 
 #[tokio::test]
@@ -264,7 +268,7 @@ async fn screen_orientation_accepts_only_the_four_right_angles() {
     )
     .await
     .expect_err("45 degrees is not a rotation this device has");
-    assert!(err.contains("0, 90, 180"), "{err}");
+    assert!(err.message.contains("0, 90, 180"), "{err}");
 
     let daemon = FakeDaemon::start(json!({}), None).await;
     for degrees in [0, 90, 180, 270] {

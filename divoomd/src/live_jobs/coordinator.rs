@@ -8,6 +8,7 @@
 
 use crate::daemon::Daemon;
 use crate::device::Fleet;
+use crate::protocol::{CodedError, ErrorCode};
 use serde_json::{json, Value};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -30,12 +31,16 @@ impl LiveJobCoordinator {
     }
 
     /// Start `kind` on `mac`, retiring whatever live job the panel had. A
-    /// job may be started for a panel that is not linked right now; it
-    /// reports `waiting_for_device` until the link comes back.
+    /// job may be started for a panel that is not linked right now -- one
+    /// that linked and dropped; it reports `waiting_for_device` until the
+    /// link comes back.
     ///
     /// # Errors
     ///
-    /// When the live-job kind is unknown, and when a job needs a platform
+    /// `unknown_device` when no link ever made `mac` a fleet entry (a job
+    /// there would paint nothing and report success -- P5.8; `MatrixWall`
+    /// is one such id, since a job runs on one panel's link); `bad_request`
+    /// when the kind is unknown; `unsupported` when a job needs a platform
     /// facility that is absent -- the music job needs macOS `MediaRemote` and
     /// says so rather than starting and rendering nothing.
     pub async fn start(
@@ -44,7 +49,9 @@ impl LiveJobCoordinator {
         mac: String,
         kind: String,
         params: Value,
-    ) -> Result<(), String> {
+    ) -> Result<(), CodedError> {
+        // Looked up before anything is spawned: a refusal leaves no task.
+        let dev = self.fleet.known(&mac).await?;
         let alive = Arc::new(AtomicBool::new(true));
         let daemon_weak = Arc::downgrade(&daemon);
         let mac_clone = mac.clone();
@@ -81,14 +88,20 @@ impl LiveJobCoordinator {
             // and the caller could not tell a typo from a platform limit.
             #[cfg(not(target_os = "macos"))]
             "music" => {
-                return Err("the music live job needs macOS MediaRemote for \
-                            now-playing and album art"
-                    .to_string())
+                return Err(CodedError::new(
+                    ErrorCode::Unsupported,
+                    "the music live job needs macOS MediaRemote for \
+                     now-playing and album art",
+                ))
             }
-            _ => return Err(format!("unknown live job kind: {kind}")),
+            _ => {
+                return Err(CodedError::new(
+                    ErrorCode::BadRequest,
+                    format!("unknown live job kind: {kind}"),
+                ))
+            }
         };
 
-        let dev = self.fleet.get_or_create(&mac).await;
         let dev_name = params
             .get("device_name")
             .and_then(|v| v.as_str())
@@ -131,15 +144,25 @@ impl LiveJobCoordinator {
         })
     }
 
+    /// Record what `mac` is showing, for the menubar's tile.
+    ///
+    /// # Errors
+    ///
+    /// `unknown_device` when no link ever made `mac` a fleet entry: a record
+    /// for it would be a menubar tile for a panel that does not exist.
     pub async fn set_device_activity(
         &self,
-        mac: String,
-        kind: String,
+        mac: &str,
+        kind: &str,
         name: Option<String>,
         preview: Option<String>,
-    ) {
-        let dev = self.fleet.get_or_create(&mac).await;
-        dev.set_activity(&kind, name, preview).await;
+    ) -> Result<(), CodedError> {
+        self.fleet
+            .known(mac)
+            .await?
+            .set_activity(kind, name, preview)
+            .await;
+        Ok(())
     }
 }
 

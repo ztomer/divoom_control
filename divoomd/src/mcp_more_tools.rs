@@ -18,7 +18,8 @@ use crate::arg_bounds::{
     RED_SCORE,
 };
 use crate::daemon_target::DaemonTarget;
-use crate::mcp_daemon::{cmd, dc};
+use crate::error_code::ToolError;
+use crate::mcp_daemon::{cmd, cmd_ok, dc};
 
 /// `set_timer` actions and the 0x72 control flag each sends.
 pub const TIMER_ACTIONS: [(&str, i64); 3] = [("stop", 0), ("start", 1), ("reset", 2)];
@@ -69,7 +70,11 @@ pub fn catalog() -> Vec<Value> {
 }
 
 /// Dispatch one of this file's tools; `None` for a name it does not own.
-pub async fn call(name: &str, a: &Value, target: &DaemonTarget) -> Option<Result<Value, String>> {
+pub async fn call(
+    name: &str,
+    a: &Value,
+    target: &DaemonTarget,
+) -> Option<Result<Value, ToolError>> {
     let mac = a.get("mac").and_then(Value::as_str);
     Some(match name {
         "show_text" => show_text(a, target, mac).await,
@@ -77,9 +82,7 @@ pub async fn call(name: &str, a: &Value, target: &DaemonTarget) -> Option<Result
         "live_job_stop" => live_job_stop(a, target, mac).await,
         "live_job_list" => {
             let args = mac.map_or_else(|| json!({}), |m| json!({ "mac": m }));
-            cmd(target, "live_job_list", args)
-                .await
-                .and_then(crate::mcp_daemon::check)
+            cmd_ok(target, "live_job_list", args).await
         }
         "set_scoreboard" => set_scoreboard(a, target, mac).await,
         "set_timer" => {
@@ -104,7 +107,11 @@ fn text_arg(a: &Value) -> Result<&str, String> {
         .ok_or_else(|| "text must be a non-empty string".into())
 }
 
-async fn show_text(a: &Value, target: &DaemonTarget, mac: Option<&str>) -> Result<Value, String> {
+async fn show_text(
+    a: &Value,
+    target: &DaemonTarget,
+    mac: Option<&str>,
+) -> Result<Value, ToolError> {
     let text = text_arg(a)?;
     let size = crate::mcp_tools::panel_size(a, target, mac).await?;
     draw_text(a, text, size, target, mac).await?;
@@ -118,7 +125,7 @@ async fn draw_text(
     size: u32,
     target: &DaemonTarget,
     mac: Option<&str>,
-) -> Result<(), String> {
+) -> Result<(), ToolError> {
     // The text renderer draws up to 64 px; a larger panel gets that frame
     // scaled by a whole factor (128 = 2x), which nearest-neighbour keeps
     // exact, rather than a 64 px frame on a 128 px panel.
@@ -127,13 +134,12 @@ async fn draw_text(
     if let Some(c) = a.get("color").and_then(Value::as_str) {
         params["color"] = json!(c);
     }
-    let reply = cmd(
+    let reply = cmd_ok(
         target,
         "render_widget",
         json!({ "kind": "text", "size": drawn, "params": params }),
     )
-    .await
-    .and_then(crate::mcp_daemon::check)?;
+    .await?;
     let rgb = reply
         .get("frame_rgb_b64")
         .and_then(Value::as_str)
@@ -160,7 +166,7 @@ async fn draw_text(
 /// widget's newest frame; see `crate::lease`), so the tool returns at once
 /// and an agent that dies mid-notification cannot leave it up. A failed
 /// draw gives the lease back at once rather than holding a blank borrow.
-async fn notify(a: &Value, target: &DaemonTarget, mac: Option<&str>) -> Result<Value, String> {
+async fn notify(a: &Value, target: &DaemonTarget, mac: Option<&str>) -> Result<Value, ToolError> {
     let text = text_arg(a)?;
     let duration = NOTIFY_DURATION_MS.read(a)?;
     let size = crate::mcp_tools::panel_size(a, target, mac).await?;
@@ -168,9 +174,7 @@ async fn notify(a: &Value, target: &DaemonTarget, mac: Option<&str>) -> Result<V
     if let Some(m) = mac {
         args["mac"] = json!(m);
     }
-    let lease = cmd(target, "lease_acquire", args)
-        .await
-        .and_then(crate::mcp_daemon::check)?;
+    let lease = cmd_ok(target, "lease_acquire", args).await?;
     let token = lease
         .get("token")
         .and_then(Value::as_str)
@@ -192,7 +196,7 @@ async fn notify(a: &Value, target: &DaemonTarget, mac: Option<&str>) -> Result<V
 }
 
 /// The panel a live-job call is about: the one named, else the active one.
-async fn job_panel(target: &DaemonTarget, mac: Option<&str>) -> Result<(String, Value), String> {
+async fn job_panel(target: &DaemonTarget, mac: Option<&str>) -> Result<(String, Value), ToolError> {
     let args = mac.map_or_else(|| json!({}), |m| json!({ "mac": m }));
     let status = cmd(target, "device_status", args).await?;
     let id = mac
@@ -211,7 +215,7 @@ async fn live_job_start(
     a: &Value,
     target: &DaemonTarget,
     mac: Option<&str>,
-) -> Result<Value, String> {
+) -> Result<Value, ToolError> {
     let kind = a
         .get("kind")
         .and_then(Value::as_str)
@@ -220,7 +224,8 @@ async fn live_job_start(
         return Err(format!(
             "kind must be one of {:?} (got {kind:?})",
             crate::live_jobs::JOB_KINDS
-        ));
+        )
+        .into());
     }
     let (id, status) = job_panel(target, mac).await?;
     let mut params = a.get("params").cloned().unwrap_or_else(|| json!({}));
@@ -234,13 +239,12 @@ async fn live_job_start(
             params["size"] = json!(w);
         }
     }
-    cmd(
+    cmd_ok(
         target,
         "live_job_start",
         json!({ "mac": id, "kind": kind, "params": params }),
     )
-    .await
-    .and_then(crate::mcp_daemon::check)?;
+    .await?;
     Ok(json!({ "ok": true, "mac": id, "kind": kind, "params": params }))
 }
 
@@ -248,15 +252,13 @@ async fn live_job_stop(
     a: &Value,
     target: &DaemonTarget,
     mac: Option<&str>,
-) -> Result<Value, String> {
+) -> Result<Value, ToolError> {
     let kind = a
         .get("kind")
         .and_then(Value::as_str)
         .ok_or("kind must be a string")?;
     let (id, _) = job_panel(target, mac).await?;
-    let reply = cmd(target, "live_job_stop", json!({ "mac": id, "kind": kind }))
-        .await
-        .and_then(crate::mcp_daemon::check)?;
+    let reply = cmd_ok(target, "live_job_stop", json!({ "mac": id, "kind": kind })).await?;
     Ok(
         json!({ "ok": true, "mac": id, "kind": kind, "stopped": reply.get("stopped").cloned().unwrap_or(Value::Null) }),
     )
@@ -266,7 +268,7 @@ async fn set_scoreboard(
     a: &Value,
     target: &DaemonTarget,
     mac: Option<&str>,
-) -> Result<Value, String> {
+) -> Result<Value, ToolError> {
     let red = RED_SCORE.read(a)?;
     let blue = BLUE_SCORE.read(a)?;
     let on = a.get("on").and_then(Value::as_bool).unwrap_or(true);
@@ -286,7 +288,7 @@ async fn lease(
     a: &Value,
     target: &DaemonTarget,
     mac: Option<&str>,
-) -> Result<Value, String> {
+) -> Result<Value, ToolError> {
     let mut args = json!({});
     if name == "lease_acquire" {
         args["ttl_ms"] = json!(LEASE_TTL_MS.read(a)?);
@@ -307,9 +309,7 @@ async fn lease(
             args["ttl_ms"] = json!(LEASE_TTL_MS.read(a)?);
         }
     }
-    let mut reply = cmd(target, name, args)
-        .await
-        .and_then(crate::mcp_daemon::check)?;
+    let mut reply = cmd_ok(target, name, args).await?;
     let obj = reply
         .as_object_mut()
         .ok_or("the daemon's reply is not an object")?;
@@ -325,7 +325,7 @@ async fn set_countdown(
     a: &Value,
     target: &DaemonTarget,
     mac: Option<&str>,
-) -> Result<Value, String> {
+) -> Result<Value, ToolError> {
     let flag = action(a, &COUNTDOWN_ACTIONS, "start")?;
     let minutes = COUNTDOWN_MINUTES.read_or(a, 0)?;
     let seconds = COUNTDOWN_SECONDS.read_or(a, 0)?;

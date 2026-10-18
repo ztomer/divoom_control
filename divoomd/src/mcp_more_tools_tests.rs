@@ -78,7 +78,7 @@ async fn out_of_range_is_refused_before_any_io() {
             .await
             .expect_err("refused");
         assert!(
-            !err.contains("not reachable"),
+            !err.message.contains("not reachable"),
             "{name} reached for the daemon: {err}"
         );
     }
@@ -225,7 +225,7 @@ async fn a_lease_rides_on_every_device_call_the_tool_makes() {
     )
     .await
     .expect_err("a non-string lease");
-    assert!(err.contains("lease"), "{err}");
+    assert!(err.message.contains("lease"), "{err}");
 }
 
 #[test]
@@ -292,7 +292,7 @@ async fn the_lease_tools_speak_the_daemons_lease_commands() {
             .await
             .expect_err("refused");
         assert!(
-            !err.contains("not reachable"),
+            !err.message.contains("not reachable"),
             "{name} reached for the daemon: {err}"
         );
     }
@@ -356,7 +356,7 @@ async fn a_failed_notification_gives_the_lease_back_at_once() {
     )
     .await
     .expect_err("the draw failed");
-    assert!(err.contains("renderer down"), "{err}");
+    assert!(err.message.contains("renderer down"), "{err}");
     let last = daemon.requests().last().cloned().expect("requests");
     assert_eq!(last["command"], json!("lease_release"), "{last}");
     assert_eq!(last["args"]["token"], json!("N2"));
@@ -374,7 +374,7 @@ async fn a_notification_is_bounded_before_any_io() {
             .await
             .expect_err("refused");
         assert!(
-            !err.contains("not reachable"),
+            !err.message.contains("not reachable"),
             "{args} reached for the daemon: {err}"
         );
     }

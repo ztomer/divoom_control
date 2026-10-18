@@ -68,16 +68,35 @@ impl Fleet {
         }
     }
 
-    /// The device for `id`, created (unconnected) if the fleet has never
-    /// heard of it. Activity and live jobs can exist for a panel the daemon
-    /// is not currently linked to.
-    pub async fn get_or_create(&self, id: &str) -> Arc<Device> {
+    /// The device for `id`, made the first time a link names it. Private,
+    /// and reached only from [`Self::adopt`], which holds a transport: a
+    /// fleet entry exists because a panel linked, never because a client
+    /// named a mac (P5.8 -- `get_or_create` was public, and a live job on a
+    /// typo made a phantom panel that painted nothing and reported success).
+    async fn entry_for_link(&self, id: &str) -> Arc<Device> {
         self.devices
             .lock()
             .await
             .entry(key(id))
             .or_insert_with(|| Device::new(id))
             .clone()
+    }
+
+    /// The panel `id` names, linked now or linked once and dropped -- the
+    /// lookup every client-facing path uses for state that may outlive a
+    /// link (a live job, an activity record).
+    ///
+    /// # Errors
+    ///
+    /// `unknown_device`, naming the id, when no link has ever made it a fleet
+    /// entry (or `disconnect` has forgotten it).
+    pub async fn known(&self, id: &str) -> Result<Arc<Device>, CodedError> {
+        self.get(id).await.ok_or_else(|| {
+            CodedError::new(
+                ErrorCode::UnknownDevice,
+                format!("no panel '{id}' has been linked to this daemon; connect it first"),
+            )
+        })
     }
 
     /// `(connected, id)` without awaiting, for callers that cannot (the
@@ -106,7 +125,7 @@ impl Fleet {
     /// Take ownership of a freshly connected transport under `id`: the
     /// device keeps its identity (and live job); the old link is retired.
     pub async fn adopt(&self, id: &str, transport: Arc<DeviceTransport>) -> Arc<Device> {
-        let dev = self.get_or_create(id).await;
+        let dev = self.entry_for_link(id).await;
         dev.attach(transport).await;
         // The first panel to link is the active one until the user says
         // otherwise; a later link never steals the selection.

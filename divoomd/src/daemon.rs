@@ -307,9 +307,17 @@ impl Daemon {
                         .and_then(|v| v.as_str())
                 })
                 .unwrap_or("clock");
-            self.live_jobs
-                .set_device_activity(target.to_string(), ch.to_string(), None, None)
-                .await;
+            // `target` answered the call, so it is linked -- unless a
+            // `disconnect` forgot it in between, and then there is no panel
+            // to record anything for.
+            if self
+                .live_jobs
+                .set_device_activity(target, ch, None, None)
+                .await
+                .is_err()
+            {
+                return;
+            }
             let _ = self.tx.send(json!({
                 "type": "activity",
                 "mac": target,

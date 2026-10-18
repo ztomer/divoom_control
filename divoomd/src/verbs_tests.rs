@@ -262,15 +262,19 @@ async fn a_daemon_that_refuses_is_an_error_not_a_success_message() {
     // Err, so the exit code carries the failure. What can be wrong on the wire
     // is that the reply says success:false, and this pins that we read it.
     let daemon = FakeDaemon::replying(
-        json!({ "success": false, "error": "no device connected" }),
+        json!({ "success": false, "error": "no device connected", "code": "no_device" }),
         None,
     )
     .await;
-    let request = verb(&["push-image", "/etc/hosts"]).expect("hosts exists");
-    let err = run(&request, &daemon.target)
-        .await
-        .expect_err("the daemon refused");
-    assert!(err.contains("no device connected"), "{err}");
+    // Both routes a verb takes: straight to `device_call`, and through a tool.
+    for argv in [&["push-image", "/etc/hosts"][..], &["set-volume", "5"]] {
+        let request = verb(argv).expect("parses");
+        let err = run(&request, &daemon.target)
+            .await
+            .expect_err("the daemon refused");
+        // The class rides after the prose, so a script can match it (P5.8).
+        assert_eq!(err, "no device connected [no_device]", "{argv:?}");
+    }
 }
 
 #[tokio::test]

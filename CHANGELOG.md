@@ -4,6 +4,60 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P5.8 — the daemon refuses a panel action for a panel it has never seen (2026-10-18)
+
+`live_job_start` and `set_device_activity` called `fleet.get_or_create(mac)`,
+so any mac a client named became a fleet entry: a job on a typo, or on the
+GUI's `MatrixWall`, painted nothing and replied success, and an activity
+record put a tile for a panel that does not exist in the menubar and in
+`owned_devices`.
+
+- **A fleet entry is made only by a link.** `get_or_create` is gone. The one
+  constructor, `Fleet::entry_for_link`, is private and reached only from
+  `Fleet::adopt`, which holds a transport, so no request handler can create a
+  panel. The client-facing path is `Fleet::known(mac)`, a lookup that fails
+  with the new code `unknown_device` and names the mac. A panel that linked
+  and dropped is still known, so a job started on it waits for the link
+  (`waiting_for_device`). A panel `disconnect` forgot is unknown again: there
+  is no link left to wait for.
+- **What `MatrixWall` means here.** It is the GUI's name for the wall
+  surface, not a panel. The daemon draws the wall through `wall_configure`'s
+  slots, and a live job runs on one panel's link, so a job or activity record
+  naming `MatrixWall` is refused like any other unknown id, even with a wall
+  configured over linked panels.
+- **Every refusal the job starter makes has a code.** An unknown kind is `bad_request`, a
+  music job off macOS is `unsupported`, a phantom panel is `unknown_device`.
+  The job is looked up before anything is spawned, so a refusal leaves no
+  task behind. A refused activity record is not broadcast.
+- **MCP and CLI clients get the code.** `mcp_daemon::check` read a reply's
+  prose and dropped its `code`, so every daemon code died one hop from the
+  socket. Tool errors are now `ToolError { message, code }`: an MCP
+  `tools/call` refusal's content is `{"error": ..., "code": ...}`, and a CLI
+  verb prints `<prose> [<code>]`. There is no `From<ToolError> for String`, so
+  `?` cannot flatten the code away anywhere in the tool chain. `get_capabilities`
+  and `list_screens` now report a daemon refusal as a tool error instead of
+  passing it back as a result.
+- **Siblings checked.** Every other mac a client names is a lookup:
+  `live_job_stop`/`list`, `record_health`, `device_status` and the lease
+  commands use `get`/`resolve_target` and create nothing. `select_device`
+  still accepts a panel that is not linked: it is a UI pointer the bench
+  restores before the auto-reconnect links, it creates no fleet entry, and
+  routing ignores a selection that is not linked. `wall_configure` makes its
+  own slot links outside the fleet, which is where a link is actually made.
+- **Tests.** `divoomd/tests/unknown_panel.rs`: a job or activity on a
+  never-linked panel is refused by code and leaves no trace (no fleet entry,
+  job, activity, `owned_devices` row or broadcast); `MatrixWall` is refused
+  with a wall configured; a forgotten panel is unknown again; a dropped panel
+  keeps a new job waiting; an MCP client gets the code. Four went red with
+  `known` creating the entry again, the drop test went red with `known`
+  requiring a live link, and the MCP test went red with `check` dropping the
+  code. `mcp::tests::a_daemon_refusal_carries_its_code_to_the_agent` pins the
+  `tools/call` content (red with the code dropped);
+  `verbs::tests::a_daemon_that_refuses_is_an_error_not_a_success_message`
+  pins the CLI line on both verb routes (red with the code left off).
+  Rust 582 passed without BLE, 609 with; pytest 1897 passed / 163 skipped;
+  browser suites 212 passed.
+
 ## P5.7 — every device action names its panel (2026-10-18)
 
 P5.6 made the channel writes name their panel. Everything else that acts on a
