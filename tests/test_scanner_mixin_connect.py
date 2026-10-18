@@ -11,7 +11,6 @@ from tests.support.scanner_support import CACHE_REL, CONFIG_REL, host  # noqa: F
 
 def test_connect_single_device_matrix_wall(host, tmp_path):
     assert host.connect_single_device("MatrixWall") is True
-    assert host.current_target_mode == "wall"
     cfg = configparser.ConfigParser()
     cfg.read(tmp_path / CONFIG_REL)
     assert cfg["gui"]["last_connected_device"] == "MatrixWall"
@@ -154,7 +153,6 @@ def test_select_device_rebinds_the_proxy_without_connecting(host, monkeypatch):
     host._daemon_client = client
     assert host.select_device("e9a41e1e-ditoo") is True
     assert host.current_divoom._mac == "e9a41e1e-ditoo"
-    assert host.current_target_mode == "single"
     client.connect_device.assert_not_called()
     client.disconnect_device.assert_not_called()
     first = host.current_divoom
@@ -163,7 +161,8 @@ def test_select_device_rebinds_the_proxy_without_connecting(host, monkeypatch):
     assert host.select_device("a9fccb71-pixoo") is True
     assert host.current_divoom._mac == "a9fccb71-pixoo"
     assert host.select_device("MatrixWall") is True
-    assert host.current_target_mode == "wall"
+    assert host.current_divoom._mac == "a9fccb71-pixoo", (
+        "the wall is no panel; channel writes name it themselves (P5.6)")
     assert host.select_device("") is False
 
 

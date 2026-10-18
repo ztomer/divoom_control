@@ -86,11 +86,11 @@ class TestGuiApiTopLevelCoverage(unittest.TestCase):
     def test_lighting_wrappers_forward_to_collaborator(self):
         self.api.lighting = MagicMock()
         self.api.lighting.switch_channel.return_value = True
-        self.assertTrue(self.api.switch_channel("clock"))
-        self.api.lighting.switch_channel.assert_called_with("clock")
+        self.assertTrue(self.api.switch_channel("AA:00:00:00:00:01", "clock"))
+        self.api.lighting.switch_channel.assert_called_with("AA:00:00:00:00:01", "clock")
 
         self.api.lighting.set_clock_rich.return_value = True
-        self.assertTrue(self.api.set_clock_rich(style=1))
+        self.assertTrue(self.api.set_clock_rich("AA:00:00:00:00:01", style=1))
 
         self.api.lighting.display_wall_image.return_value = True
         self.assertTrue(self.api.display_wall_image("/tmp/a.png", 16))

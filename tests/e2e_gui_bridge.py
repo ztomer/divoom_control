@@ -47,6 +47,18 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 
+#: Bridge calls that reach the Bluetooth radio, answered here and never
+#: forwarded. The page runs a startup BLE scan (`window.runBleScan`), the daemon
+#: under test is a terminal-launched process with no Bluetooth grant, and the
+#: first scan gets it killed by TCC with SIGABRT and no message (AGENTS.md
+#: "Hardware"), so any test that lived past that scan died at a random step
+#: (seen 2026-10-18: `divoomd exited (-6)` mid-test, the crash report's TCC
+#: payload naming NSBluetoothAlwaysUsageDescription). These tests drive mock
+#: panels; nothing here may touch a radio. The answer is the call's "found
+#: nothing" reply.
+RADIO_CALLS = {"scan_devices": "[]"}
+
+
 def _make_handler(api, isolated_socket_path: str):
     from divoom_gui.daemon_bridge import DaemonClient
 
@@ -86,6 +98,9 @@ def _make_handler(api, isolated_socket_path: str):
                 if self.path == "/call":
                     body = self._read_json() or {}
                     method_name, args = body["method"], body.get("args", [])
+                    if method_name in RADIO_CALLS:
+                        self._send_json(200, {"result": RADIO_CALLS[method_name]})
+                        return
                     method = getattr(api, method_name)
                     self._send_json(200, {"result": method(*args)})
                 elif self.path == "/daemon_send_command":

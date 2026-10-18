@@ -26,14 +26,14 @@ class TestGuiApiWallMedia(GuiApiTestBase):
         slots = {"AA:BB:CC:DD:EE:FF": {"x": 0, "y": 0, "size": 16, "width": 120, "height": 120}}
         self.api.update_wall_slots(json.dumps(slots))
         self.assertEqual(self.api.wall_slots, slots)
-        self.api.current_target_mode = "wall"
 
-        self.assertTrue(self.api.set_solid_light("00FFCC", 100))
+        # The bench's wall selector is the mac a wall write names (P5.6).
+        self.assertTrue(self.api.set_solid_light("MatrixWall", "00FFCC", 100))
         fake.device_call.assert_called_with("set_light", ["00FFCC", 100], {},
                                             target="wall", blobs=None, token=None,
                                             mac=None)
 
-        self.assertTrue(self.api.set_clock(3))
+        self.assertTrue(self.api.set_clock("MatrixWall", 3))
         # show_clock is called with clock=3 (kwargs)
         last = fake.device_call.call_args
         self.assertEqual(last.args[0], "show_clock")
@@ -46,20 +46,20 @@ class TestGuiApiWallMedia(GuiApiTestBase):
         self.api.update_wall_slots(json.dumps(
             {"AA:BB:CC:DD:EE:FF": {"x": 0, "y": 0, "size": 16, "width": 120, "height": 120}}
         ))
-        self.api.current_target_mode = "wall"
 
-        self.assertTrue(self.api.set_vj_effect(5))
+        self.assertTrue(self.api.set_vj_effect("MatrixWall", 5))
         self.assertEqual(fake.device_call.call_args.args[0], "show_effects")
 
-        self.assertTrue(self.api.set_visualization(3))
+        self.assertTrue(self.api.set_visualization("MatrixWall", 3))
         self.assertEqual(fake.device_call.call_args.args[0], "show_visualization")
 
     def test_vj_visualization_no_target(self):
         """With no connected device and no wall, selectors fail gracefully (no raise)."""
         self.api.current_divoom = None
         self.api.wall_slots = {}
-        self.assertFalse(self.api.set_vj_effect(0))
-        self.assertFalse(self.api.set_visualization(0))
+        self.assertFalse(self.api.set_vj_effect("MatrixWall", 0))
+        self.assertFalse(self.api.set_visualization("MatrixWall", 0))
+        self.assertFalse(self.api.set_vj_effect(None, 0))
 
     def test_hot_channel_bridges_delegate(self):
         """4.c/4.d: target + schedule bridges delegate to hotchannel_config."""

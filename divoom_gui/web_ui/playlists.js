@@ -40,12 +40,14 @@ document.addEventListener("DOMContentLoaded", () => {
     listEl.addEventListener("click", (e) => {
         const btn = e.target.closest(".cloud-clock-apply-btn");
         if (!btn) return;
-        if (!window.requireDevice || !window.requireDevice()) return;
+        // The panel this click is for, resolved now (P5.6).
+        const t = window.ChannelSettings.target();
+        if (!t) return;
         const row = btn.closest(".cloud-clock-row");
         const playId = parseInt(row?.getAttribute("data-play-id"));
         if (!playId || !window.pywebview?.api?.push_playlist) return;
         btn.disabled = true;
-        window.pywebview.api.push_playlist(playId).then(res => {
+        window.pywebview.api.push_playlist(t.mac, playId).then(res => {
             btn.disabled = false;
             /* R71 P3.4: {ok, error, cause}, not a bool — see photo_albums.js. */
             const ok = res && res.ok;
@@ -54,7 +56,7 @@ document.addEventListener("DOMContentLoaded", () => {
                    : window.DivoomCloud.problemText(res, "Failed to push playlist"),
                 ok ? "success" : "error", " LAN");
             if (ok && window.setDeviceActivity) {
-                window.setDeviceActivity(window._activeDeviceMac(), "playlist", { playId });
+                window.setDeviceActivity(t.mac, "playlist", { playId });
             }
         }).catch(() => {
             btn.disabled = false;

@@ -48,16 +48,18 @@ document.addEventListener("DOMContentLoaded", () => {
     listEl.addEventListener("click", (e) => {
         const btn = e.target.closest(".cloud-clock-apply-btn");
         if (!btn) return;
-        if (!window.requireDevice || !window.requireDevice()) return;
+        // The panel this click is for, resolved now (P5.6).
+        const t = window.ChannelSettings.target();
+        if (!t) return;
         const row = btn.closest(".cloud-clock-row");
         const sleepId = parseInt(row?.getAttribute("data-sleep-id"));
         if (!sleepId || !window.pywebview?.api?.play_aid_sleep) return;
         btn.disabled = true;
-        window.pywebview.api.play_aid_sleep(sleepId, currentType).then(res => {
+        window.pywebview.api.play_aid_sleep(t.mac, sleepId, currentType).then(res => {
             btn.disabled = false;
             window.showToast(res ? "Playing on device" : "Failed to play sound", res ? "success" : "error", " BLE");
             if (res && window.setDeviceActivity) {
-                window.setDeviceActivity(window._activeDeviceMac(), "aid_sleep", { sleepId, sleepType: currentType });
+                window.setDeviceActivity(t.mac, "aid_sleep", { sleepId, sleepType: currentType });
             }
         }).catch(() => {
             btn.disabled = false;

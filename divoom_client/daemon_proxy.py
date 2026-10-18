@@ -33,12 +33,27 @@ class _DeviceCallError(RuntimeError):
 
 
 class _LanView:
-    """Minimal stand-in for ``divoom.lan`` so introspection reads still work."""
-    def __init__(self, device_ip: str | None):
+    """``divoom.lan``: truthy when the panel has a LAN address, and its methods
+    are the daemon's ``lan.*`` calls.
+
+    It used to be a status view with NO methods, so every ``t.lan.<call>(...)``
+    raised AttributeError on a real proxy: LAN brightness (found in P5.1 and
+    worked around in `divoom_gui/panels.py`), then photo albums, playlists and
+    the Danmaku overlay (P5.6) -- all three dead through the real proxy and
+    green in tests that faked ``t.lan``. Forwarding here closes the class: the
+    attribute that answers "has a LAN?" is also the one that makes the call.
+    """
+    def __init__(self, device_ip: str | None, calls: "DaemonDeviceProxy | None" = None):
         self.device_ip = device_ip
+        self._calls = calls
 
     def __bool__(self):
         return bool(self.device_ip)
+
+    def __getattr__(self, name: str) -> Any:
+        if name.startswith("_") or self._calls is None:
+            raise AttributeError(name)
+        return getattr(self._calls, name)
 
 
 class _ConnView:
@@ -196,7 +211,8 @@ class DaemonDeviceProxy:
                 key = "wall" if self._target == "wall" else "connected"
                 return bool(st.get(key, False))
             if name == "lan":
-                return _LanView(st.get("lan_ip"))
+                return _LanView(st.get("lan_ip"), DaemonDeviceProxy(
+                    self._client, "lan", target=self._target, _token=self._token, mac=self._mac))
             if name == "_conn":
                 return _ConnView(st.get("mac"))
         if name.startswith("_"):

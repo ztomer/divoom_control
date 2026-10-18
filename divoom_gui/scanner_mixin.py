@@ -281,9 +281,12 @@ class ScannerMixin:
             logger.warning(f"Failed to cache discovered devices/count: {ce}")
 
     def select_device(self, address: str, provisional: bool = False) -> bool:
-        """The bench selected a panel: bind every device action to IT, and
-        tell the daemon, which owns the ACTIVE panel for every client (the
-        menubar can switch it too, and the bench follows).
+        """The bench selected a panel: bind the actions that do not name a
+        panel yet (the Tools tab, media sync) to IT, and tell the daemon,
+        which owns the ACTIVE panel for every client (the menubar can switch
+        it too, and the bench follows). Channel writes do not read this
+        binding: each names the panel its click resolved (P5.6), because a
+        binding read when the write runs is the selection of THAT moment.
 
         ``provisional`` is the bench's own placeholder before the daemon has
         spoken (first render picks the first panel); it binds the proxy but
@@ -300,9 +303,7 @@ class ScannerMixin:
         if not address:
             return False
         if address == "MatrixWall":
-            self.current_target_mode = "wall"
             return True
-        self.current_target_mode = "single"
         client = self._client()
         if client is None:
             return False
@@ -320,12 +321,9 @@ class ScannerMixin:
         logger.info(f"GUI Action: Connecting to {address} (daemon-owned)...")
         try:
             if address == "MatrixWall":
-                self.current_target_mode = "wall"
                 logger.info("Switched to multi-screen display wall mode.")
                 self._persist_last_connected(address)
                 return True
-
-            self.current_target_mode = "single"
 
             # R57: a connect click must never target a stale/dead daemon socket.
             # reconnect_daemon() is a cheap no-op when a daemon is already live

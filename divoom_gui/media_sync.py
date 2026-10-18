@@ -123,6 +123,18 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
             pass
         return default
 
+    def _size_of(self, mac: str | None, default: int = 16) -> int:
+        """The named display's edge in pixels (P5.6): the smallest slot for the
+        wall, else the daemon's resolution for that panel, else ``default``."""
+        try:
+            if mac == "MatrixWall":
+                sizes = [s.get("size", default) for s in (self.wall_slots or {}).values()
+                         if isinstance(s, dict)]
+                return min(sizes) if sizes else default
+            return self._panel_pixels(mac) or default
+        except Exception:
+            return default
+
     def _has_push_target(self) -> bool:
         dev = self.current_divoom
         return bool(self.wall_slots) or bool(dev)

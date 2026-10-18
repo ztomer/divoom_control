@@ -44,8 +44,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const x = w.settings;
         const rich = x.humidity || x.weather || x.date;
         const call = rich
-            ? api().set_clock_rich(x.style, x.twentyfour, x.humidity, x.weather, x.date, x.color)
-            : api().set_clock(x.style, x.color);
+            ? api().set_clock_rich(w.mac, x.style, x.twentyfour, x.humidity, x.weather, x.date, x.color)
+            : api().set_clock(w.mac, x.style, x.color);
         call.then(res => {
             const what = rich ? "Clock + extra panels applied" : "Clock style applied";
             window.showToast(res ? what : "Failed to apply clock", res ? "success" : " BLE");
@@ -140,7 +140,7 @@ document.addEventListener("DOMContentLoaded", () => {
     window.buildSelectorGrid("vj-effects-grid", VJ_EFFECTS, (v) => {
         const w = CS.compose("vj", { vj: v });
         if (!w || !api()?.set_vj_effect) return;
-        api().set_vj_effect(v).then(res => {
+        api().set_vj_effect(w.mac, v).then(res => {
             window.showToast(res ? "VJ effect applied" : "Failed to apply VJ effect", res ? "success" : " BLE");
             if (res) CS.commit(w); else CS.revert(w);
         });
@@ -174,7 +174,7 @@ document.addEventListener("DOMContentLoaded", () => {
     window.buildSelectorGrid("eq-visualizer-grid", EQ_PATTERNS, (v) => {
         const w = CS.compose("visualizer", { eq: v });
         if (!w || !api()?.set_visualization) return;
-        api().set_visualization(v).then(res => {
+        api().set_visualization(w.mac, v).then(res => {
             window.showToast(res ? "EQ pattern applied" : "Failed to apply EQ", res ? "success" : " BLE");
             if (res) CS.commit(w); else CS.revert(w);
         });
@@ -249,7 +249,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const w = CS.compose("ambient", patch);
         if (!w || !api()?.set_solid_light) return;
         const { color, mode } = w.settings;
-        api().set_solid_light(color, brightnessOf(w.mac), mode).then(res => {
+        api().set_solid_light(w.mac, color, brightnessOf(w.mac), mode).then(res => {
             window.showToast(res ? "Ambient mode applied" : "Failed to apply ambient", res ? "success" : " BLE");
             // R67: mark what the DEVICE is on, not what was clicked. The
             // apply can fail (LAN cannot express modes 1-4 at all), and a

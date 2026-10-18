@@ -12,6 +12,8 @@ sys.path.append(str(Path(__file__).parent.parent / "divoom_gui"))
 
 from gui_main import DivoomGuiAPI
 
+MAC = "AA:00:00:00:00:01"
+
 class TestLightingApiCoverage(unittest.TestCase):
     """R61 planning item 1 coverage push: LightingApi
     (divoom_gui/api/lighting.py) exception handlers, the text-render
@@ -38,54 +40,58 @@ class TestLightingApiCoverage(unittest.TestCase):
 
     def test_stop_live_widgets_swallows_client_error(self):
         class _BadClient:
-            def live_jobs_stop_for(self):
+            def live_jobs_stop_for(self, mac):
                 raise RuntimeError("boom")
         self.api._daemon_client = _BadClient()
-        self.api.lighting._stop_live_widgets()  # must not raise
+        self.api.lighting._stop_live_widgets(MAC)  # must not raise
+
+    def _on(self, dev):
+        """P5.6: the display a write names resolves to `dev` (and no mac to nothing)."""
+        self.api.lighting._display = lambda mac: dev if mac else None
 
     # ---- exception handlers for the single-device static-takeover ops ---
 
     def test_set_solid_light_exception(self):
         dev = MagicMock()
         dev.display.show_light = MagicMock(side_effect=RuntimeError("boom"))
-        self.api.current_divoom = dev
-        self.assertFalse(self.api.lighting.set_solid_light("#ff0000", 50))
+        self._on(dev)
+        self.assertFalse(self.api.lighting.set_solid_light(MAC, "#ff0000", 50))
 
     def test_set_clock_exception(self):
         dev = MagicMock()
         dev.display.show_clock = MagicMock(side_effect=RuntimeError("boom"))
-        self.api.current_divoom = dev
-        self.assertFalse(self.api.lighting.set_clock(1))
+        self._on(dev)
+        self.assertFalse(self.api.lighting.set_clock(MAC, 1))
 
     def test_switch_channel_exception(self):
         dev = MagicMock()
         dev.display.switch_channel = MagicMock(side_effect=RuntimeError("boom"))
-        self.api.current_divoom = dev
-        self.assertFalse(self.api.lighting.switch_channel("clock"))
+        self._on(dev)
+        self.assertFalse(self.api.lighting.switch_channel(MAC, "clock"))
 
     def test_set_vj_effect_exception(self):
         dev = MagicMock()
         dev.display.show_effects = MagicMock(side_effect=RuntimeError("boom"))
-        self.api.current_divoom = dev
-        self.assertFalse(self.api.lighting.set_vj_effect(1))
+        self._on(dev)
+        self.assertFalse(self.api.lighting.set_vj_effect(MAC, 1))
 
     def test_set_visualization_exception(self):
         dev = MagicMock()
         dev.display.show_visualization = MagicMock(side_effect=RuntimeError("boom"))
-        self.api.current_divoom = dev
-        self.assertFalse(self.api.lighting.set_visualization(1))
+        self._on(dev)
+        self.assertFalse(self.api.lighting.set_visualization(MAC, 1))
 
     # ---- push_text: outer exception + inner unlink-OSError swallow -----
 
     def test_push_text_dispatch_exception_returns_false(self):
         dev = MagicMock()
         dev.display.show_image = MagicMock(side_effect=RuntimeError("boom"))
-        self.api.current_divoom = dev
-        self.assertFalse(self.api.lighting.push_text("HI"))
+        self._on(dev)
+        self.assertFalse(self.api.lighting.push_text(MAC, "HI"))
 
     def test_device_size_falls_back_to_16_on_error(self):
-        self.api.__dict__["_active_device_size"] = MagicMock(side_effect=RuntimeError("boom"))
-        self.assertEqual(self.api.lighting._device_size(), 16)
+        self.api.__dict__["_size_of"] = MagicMock(side_effect=RuntimeError("boom"))
+        self.assertEqual(self.api.lighting._device_size(MAC), 16)
 
     # ---- _render_text_png scaling branches -------------------------------
 
@@ -116,6 +122,7 @@ class TestLightingApiCoverage(unittest.TestCase):
 
     def test_display_wall_image_single_device_path(self):
         dev = MagicMock()
+        dev._mac = MAC
         dev.display.show_image = AsyncMock(return_value=True)
         self.api.current_divoom = dev
         self.api.wall_slots = {}
@@ -164,9 +171,9 @@ class TestLightingApiCoverage(unittest.TestCase):
     def test_set_clock_rich_success(self):
         dev = MagicMock()
         dev.display.set_clock_rich = AsyncMock(return_value=True)
-        self.api.current_divoom = dev
+        self._on(dev)
         self.assertTrue(self.api.lighting.set_clock_rich(
-            style=2, twentyfour=False, humidity=True, weather=True, date=True, color="#123456"))
+            MAC, style=2, twentyfour=False, humidity=True, weather=True, date=True, color="#123456"))
         kw = dev.display.set_clock_rich.call_args.kwargs
         self.assertEqual(kw["style"], 2)
         self.assertTrue(kw["humidity"])
@@ -175,25 +182,37 @@ class TestLightingApiCoverage(unittest.TestCase):
     def test_set_clock_rich_exception(self):
         dev = MagicMock()
         dev.display.set_clock_rich = MagicMock(side_effect=RuntimeError("boom"))
-        self.api.current_divoom = dev
-        self.assertFalse(self.api.lighting.set_clock_rich())
+        self._on(dev)
+        self.assertFalse(self.api.lighting.set_clock_rich(MAC))
 
     def test_set_clock_rich_no_target(self):
-        self.api.current_divoom = None
-        self.assertFalse(self.api.lighting.set_clock_rich())
+        self._on(None)
+        self.assertFalse(self.api.lighting.set_clock_rich(MAC))
 
     def test_stop_live_widgets_passes_target_mac(self):
-        dev = MagicMock()
-        dev.mac = "11:22:33:44:55:66"
-        self.api.current_divoom = dev
         mock_client = MagicMock()
         self.api._daemon_client = mock_client
-        self.api.lighting._stop_live_widgets()
-        mock_client.live_jobs_stop_for.assert_called_with("11:22:33:44:55:66")
+        self.api.lighting._stop_live_widgets("11:22:33:44:55:66")
+        mock_client.live_jobs_stop_for.assert_called_once_with("11:22:33:44:55:66")
+
+    def test_stop_live_widgets_on_the_wall_stops_every_slot(self):
+        mock_client = MagicMock()
+        self.api._daemon_client = mock_client
+        self.api.wall_slots = {"AA:00:00:00:00:01": {}, "BB:00:00:00:00:02": {}}
+        self.api.lighting._stop_live_widgets("MatrixWall")
+        self.assertEqual([c.args for c in mock_client.live_jobs_stop_for.call_args_list],
+                         [("AA:00:00:00:00:01",), ("BB:00:00:00:00:02",)])
+
+    def test_stop_live_widgets_naming_no_panel_stops_nothing(self):
+        """A mac-less stop is the daemon's ACTIVE panel: never what a write meant."""
+        mock_client = MagicMock()
+        self.api._daemon_client = mock_client
+        self.api.lighting._stop_live_widgets(None)
+        mock_client.live_jobs_stop_for.assert_not_called()
 
     def test_display_wall_image_stops_live_widgets(self):
         dev = MagicMock()
-        dev.mac = "11:22:33:44:55:66"
+        dev._mac = "11:22:33:44:55:66"
         dev.display.show_image = AsyncMock(return_value=True)
         self.api.current_divoom = dev
         mock_client = MagicMock()
@@ -204,7 +223,7 @@ class TestLightingApiCoverage(unittest.TestCase):
 
     def test_play_gallery_art_stops_live_widgets(self):
         dev = MagicMock()
-        dev.mac = "11:22:33:44:55:66"
+        dev._mac = "11:22:33:44:55:66"
         self.api.current_divoom = dev
         mock_client = MagicMock()
         self.api._daemon_client = mock_client

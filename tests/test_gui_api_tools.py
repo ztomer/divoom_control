@@ -203,19 +203,27 @@ class TestToolsApiCoverage(unittest.TestCase):
     def test_set_scoreboard_success(self):
         dev = MagicMock()
         dev.scoreboard.set_scoreboard = AsyncMock(return_value=True)
-        self.api.current_divoom = dev
-        self.assertTrue(self.api.set_scoreboard(1, 10, 20))
+        # P5.6: a channel control names its panel; `_display` resolves it.
+        self.api.tools._display = lambda mac: dev if mac == "AA:00:00:00:00:01" else None
+        self.assertTrue(self.api.set_scoreboard("AA:00:00:00:00:01", 1, 10, 20))
         dev.scoreboard.set_scoreboard.assert_called_with(1, 10, 20)
 
     def test_set_scoreboard_no_device(self):
-        self.api.current_divoom = None
-        self.assertFalse(self.api.set_scoreboard(1))
+        self.api.tools._display = lambda mac: None
+        self.assertFalse(self.api.set_scoreboard("AA:00:00:00:00:01", 1))
+
+    def test_set_scoreboard_naming_no_panel_is_refused(self):
+        dev = MagicMock()
+        dev.scoreboard.set_scoreboard = AsyncMock(return_value=True)
+        self.api.current_divoom = dev   # the old implicit route, which must not be taken
+        self.assertFalse(self.api.set_scoreboard("", 1, 10, 20))
+        dev.scoreboard.set_scoreboard.assert_not_called()
 
     def test_set_scoreboard_exception(self):
         dev = MagicMock()
         dev.scoreboard.set_scoreboard = AsyncMock(side_effect=RuntimeError("boom"))
-        self.api.current_divoom = dev
-        self.assertFalse(self.api.set_scoreboard(1))
+        self.api.tools._display = lambda mac: dev
+        self.assertFalse(self.api.set_scoreboard("AA:00:00:00:00:01", 1))
 
     def test_get_work_mode_success(self):
         dev = MagicMock()

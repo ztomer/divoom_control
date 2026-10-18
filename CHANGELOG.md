@@ -4,6 +4,57 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P5.6 — channel writes name their panel (2026-10-18)
+
+P5.2 resolved the selected display at the click, but the bridge call it then
+made carried no mac: `ApiBase._target()` sent it to `current_divoom`, which the
+bench rebinds on every highlight (`select_device`). A selection change between
+a click and the backend's write sent the setting to the other panel -- intent
+read when the write RAN, not at the gesture.
+
+- **One resolution, at the click, through to the daemon.** Every channel bridge
+  call takes the mac first -- `set_clock`, `set_clock_rich`, `switch_channel`,
+  `set_vj_effect`, `set_visualization`, `set_solid_light`, `push_text`,
+  `set_scoreboard`, and the panel plays `play_album`, `push_playlist`,
+  `send_danmaku_text`, `play_aid_sleep`. The web UI passes the mac
+  `ChannelSettings.target()` resolved at the gesture (`compose()` is built on
+  it). `ApiBase._display(mac)` is the one place a mac becomes a target (the wall
+  for `MatrixWall`, else a `DaemonDeviceProxy` naming the panel); a call naming
+  no panel is refused, as P5.1's level writes are.
+- **The implicit route is deleted:** `_target()`, `current_target_mode` and its
+  readers. Live widgets are stopped on the named panel (every slot's, for the
+  wall), never on "the" panel; a mac-less stop stops nothing. Text is drawn at
+  the named panel's size (`_size_of(mac)`), not the selected one's. The album,
+  playlist and sleep-sound pushes record their activity on the panel clicked,
+  not on whichever is selected when the reply lands.
+- **Three LAN features were dead through the real proxy.** `t.lan` on a
+  `DaemonDeviceProxy` was a status view with no methods, so `play_album`,
+  `push_playlist` and `send_danmaku_text` raised AttributeError on every call
+  while the fake-target tests passed (P5.1 had found the same for LAN
+  brightness and worked around it at the call site). `_LanView` now forwards
+  to the daemon's `lan.*` calls, and the workaround in `panels.py` is gone.
+- **The live-widget stop sent a proxy path as the mac.** `cur.mac` on a proxy
+  is a call path, not a string; the request failed to serialise and a
+  TypeError fallback stopped the daemon's ACTIVE panel instead. The gallery
+  push had the same read; both use the proxy's `_mac`.
+- **The real-daemon e2e bridge answers `scan_devices` itself.** The page's
+  startup BLE scan reached a terminal-launched `divoomd` with no Bluetooth
+  grant, and TCC killed it (SIGABRT, crash report naming
+  NSBluetoothAlwaysUsageDescription) at a random step of any test that lived
+  long enough.
+- **Tests:** `tests/test_e2e_channel_write_reaches_its_panel.py` (real web UI,
+  real `DivoomGuiAPI`, real `divoomd` with two mock panels: click VJ on A, the
+  write held while the selection moves to B, and the daemon records the switch
+  on A) -- watched red on the old code, where B got it;
+  `tests/test_channel_writes_name_their_panel.py` (every bridge write reaches
+  the mac it names after `select_device` moved on, and one naming no panel
+  reaches nothing) -- red on the old code, and red on the three LAN rows before
+  the `_LanView` fix; `test_every_channel_write_names_the_panel_clicked` in
+  `tests/test_e2e_channel_settings_per_panel.py` -- red on the old JS;
+  `divoomd/src/mock_channel_tests.rs` (channel writes land on the named panel
+  with the other selected) -- red with the daemon's mac routing replaced by its
+  selection. pytest 1717 passed / 155 skipped; browser suites 203 passed.
+
 ## P5.5 — the bench invents no panels (2026-10-18)
 
 With no panel known, `getDeviceList` (`spatial_stage.js`) drew an invented

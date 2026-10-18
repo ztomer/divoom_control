@@ -36,23 +36,23 @@ class _FakeTarget:
         self.lan = _FakeLan(recorder)
 
 
+MAC = "AA:00:00:00:00:01"
+
+
 @pytest.fixture
 def api(monkeypatch):
-    """A LightingApi whose dispatch runs the lambda against a fake device.
+    """A LightingApi whose display resolution answers a fake device.
 
-    `_current_target_mode` is a read-only property over `_state_getter()`, so
-    the mode is set through that dict rather than assigned — the non-wall value
-    is "single".
+    P5.6: every write names its panel, and `_display(mac)` is the one place a
+    mac becomes a target -- so that, and `_run_async`, are the seams to fake.
+    No mac, no target, exactly as the real `_display` refuses one.
     """
     calls: list = []
-    state = {"current_target_mode": "single"}
+    state: dict = {}
     obj = LightingApi.__new__(LightingApi)
     obj._state_getter = lambda: state
-
-    # R71 P3.1: send_danmaku_text goes through `_lan_action` now, which
-    # resolves `_target()` and awaits via `_run_async` — so those are the two
-    # seams to fake, not `_dispatch`.
-    monkeypatch.setattr(obj, "_target", lambda: _FakeTarget(calls), raising=False)
+    monkeypatch.setattr(obj, "_display", lambda mac: _FakeTarget(calls) if mac else None,
+                        raising=False)
     monkeypatch.setattr(obj, "_run_async", lambda coro, **kw: coro, raising=False)
     obj._calls = calls
     obj._state = state
@@ -66,7 +66,7 @@ def test_the_daemon_is_called_with_keyword_arguments(api):
     having pushed an empty string — a success signal for a no-op, which is the
     exact failure mode this feature is already suspected of on hardware.
     """
-    assert api.send_danmaku_text("hello", "#00ffcc")["ok"] is True
+    assert api.send_danmaku_text(MAC, "hello", "#00ffcc")["ok"] is True
 
     name, args, kwargs = api._calls[0]
     assert name == "send_danmaku_text"
@@ -75,17 +75,17 @@ def test_the_daemon_is_called_with_keyword_arguments(api):
 
 
 def test_the_default_colour_is_white(api):
-    api.send_danmaku_text("hi")
+    api.send_danmaku_text(MAC, "hi")
     assert api._calls[0][2]["TextColor"] == "#FFFFFF"
 
 
 def test_text_is_trimmed(api):
-    api.send_danmaku_text("  spaced  ")
+    api.send_danmaku_text(MAC, "  spaced  ")
     assert api._calls[0][2]["Text"] == "spaced"
 
 
 def test_empty_text_never_reaches_the_device(api):
-    reply = api.send_danmaku_text("   ")
+    reply = api.send_danmaku_text(MAC, "   ")
     assert reply["ok"] is False and reply["cause"] == "input"
     assert api._calls == []
 
@@ -93,8 +93,7 @@ def test_empty_text_never_reaches_the_device(api):
 def test_wall_mode_is_refused(api):
     """An overlay targets one device's own display, not a composite across
     several — the same reason album and playlist playback reject wall mode."""
-    api._state["current_target_mode"] = "wall"
-    reply = api.send_danmaku_text("hello")
+    reply = api.send_danmaku_text("MatrixWall", "hello")
     assert reply["ok"] is False and reply["cause"] == "wall"
     assert "Virtual Wall" in reply["error"]
     assert api._calls == []
@@ -107,7 +106,7 @@ def test_a_device_error_is_reported_not_raised(api, monkeypatch):
         raise RuntimeError("LAN unreachable")
 
     monkeypatch.setattr(api, "_run_async", boom, raising=False)
-    reply = api.send_danmaku_text("hello")
+    reply = api.send_danmaku_text(MAC, "hello")
     assert reply["ok"] is False
     assert "LAN unreachable" in reply["error"]
 
@@ -152,7 +151,7 @@ def test_no_lan_capability_is_distinguishable_from_a_plain_failure(api, monkeypa
             "no_lan_capability")
 
     monkeypatch.setattr(api, "_run_async", refuse, raising=False)
-    reply = api.send_danmaku_text("hello")
+    reply = api.send_danmaku_text(MAC, "hello")
 
     assert reply["ok"] is False
     assert reply["cause"] == "no_lan_capability"
@@ -170,15 +169,22 @@ def test_a_generic_lan_failure_keeps_its_own_cause(api, monkeypatch):
         raise _DeviceCallError("Danmaku/SendText failed (RC=1)", "")
 
     monkeypatch.setattr(api, "_run_async", refuse, raising=False)
-    reply = api.send_danmaku_text("hello")
+    reply = api.send_danmaku_text(MAC, "hello")
     assert reply["ok"] is False
     assert reply["cause"] == "lan", reply
 
 
 def test_no_device_connected_is_its_own_cause(api, monkeypatch):
-    monkeypatch.setattr(api, "_target", lambda: None, raising=False)
-    reply = api.send_danmaku_text("hello")
+    monkeypatch.setattr(api, "_display", lambda mac: None, raising=False)
+    reply = api.send_danmaku_text(MAC, "hello")
     assert reply["ok"] is False and reply["cause"] == "unreachable"
+
+
+def test_an_overlay_naming_no_panel_never_reaches_a_device(api):
+    """P5.6: there is no "the" panel to fall back to."""
+    reply = api.send_danmaku_text("", "hello")
+    assert reply["ok"] is False and reply["cause"] == "unreachable"
+    assert api._calls == []
 
 
 def test_the_proxy_preserves_the_daemons_cause():

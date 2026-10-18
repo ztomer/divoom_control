@@ -75,7 +75,7 @@ async def test_push_without_a_device_shows_connect_prompt_and_does_not_call_push
         try:
             await eval_js(page, """() => {
                 window.__pushPlaylistCalls = [];
-                window.__api.push_playlist = (playId) => { window.__pushPlaylistCalls.push(playId); return { ok: true, error: '', cause: '' }; };
+                window.__api.push_playlist = (mac, playId) => { window.__pushPlaylistCalls.push([mac, playId]); return { ok: true, error: '', cause: '' }; };
             }""")
             await wait_js(page, 
                 "() => document.querySelectorAll('#cloud-playlist-list .cloud-clock-row').length > 0")
@@ -105,16 +105,17 @@ async def test_push_with_a_device_calls_push_playlist_with_the_real_play_id():
         browser, page = await _open_playlists_tab(p)
         try:
             await eval_js(page, """() => {
+                window.DivoomState.discoveredDevices = [{ address: 'E9:DITOO', name: 'Ditoo-light-2' }];
                 window.DivoomState.appConnected = true;
                 window.__pushPlaylistCalls = [];
-                window.__api.push_playlist = (playId) => { window.__pushPlaylistCalls.push(playId); return { ok: true, error: '', cause: '' }; };
+                window.__api.push_playlist = (mac, playId) => { window.__pushPlaylistCalls.push([mac, playId]); return { ok: true, error: '', cause: '' }; };
             }""")
             await wait_js(page, 
                 "() => document.querySelectorAll('#cloud-playlist-list .cloud-clock-row').length > 0")
             await page.click("#cloud-playlist-list .cloud-clock-apply-btn")
             await wait_js(page, "() => (window.__pushPlaylistCalls || []).length > 0")
             calls = await eval_js(page, "() => window.__pushPlaylistCalls")
-            assert calls == [42]  # first row: Chill, PlayId 42
+            assert calls == [["E9:DITOO", 42]]  # first row: Chill, PlayId 42
             # `wait_toast`, not a poll of the live `#toast` element: this element
             # is reused, so a toast the app raises on its own can overwrite the
             # one under test between polls and the wait then never fires. That

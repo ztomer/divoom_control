@@ -28,8 +28,8 @@ _MOCK_API = """
 window.__calls = [];
 window.__result = { ok: true, error: '', cause: '' };
 window.__api = {
-    send_danmaku_text: (text, color) => {
-        window.__calls.push(["danmaku", text, color]);
+    send_danmaku_text: (mac, text, color) => {
+        window.__calls.push(["danmaku", mac, text, color]);
         return window.__result;
     },
     push_text: (...a) => { window.__calls.push(["push_text", ...a]); return true; },
@@ -55,7 +55,10 @@ async def _open(p, *, with_device=True):
     if with_device:
         # requireDevice() gates every device action; stub it rather than
         # simulating a full connect, which is another suite's subject.
-        await eval_js(page, "() => { window.requireDevice = () => true; }")
+        # A panel the daemon reported and the bench shows: the overlay names
+        # the panel selected at the click (P5.6).
+        await eval_js(page, "() => { window.requireDevice = () => true; window.DivoomState"
+                            ".discoveredDevices = [{ address: 'E9:DITOO', name: 'Ditoo-light-2' }]; }")
     else:
         await eval_js(page, "() => { window.requireDevice = () => false; }")
     # The Text panel is not the default (Clock is). The channel tabs are
@@ -84,7 +87,7 @@ async def test_the_overlay_button_reuses_the_panels_text_and_colour():
             await wait_js(page, "() => window.__calls.length > 0")
 
             call = await eval_js(page, "() => window.__calls[0]")
-            assert call == ["danmaku", "hello wall", "#ff0000"], call
+            assert call == ["danmaku", "E9:DITOO", "hello wall", "#ff0000"], call
         finally:
             await browser.close()
 
@@ -288,7 +291,7 @@ async def test_a_toast_this_test_did_not_create_cannot_satisfy_its_wait():
                                 "connected over Bluetooth, which has no LAN API', "
                                 "cause: 'no_lan_capability' }; }")
             await eval_js(page, _SPY_TWO_ARGS)
-            await eval_js(page, "() => { window.__api.send_danmaku_text = (text, color) =>"
+            await eval_js(page, "() => { window.__api.send_danmaku_text = (mac, text, color) =>"
                                 " new Promise(r => setTimeout("
                                 " () => r(window.__result), 3000)); }")
             await page.fill("#text-content-input", "hello")

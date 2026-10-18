@@ -48,7 +48,6 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
         self.music_sync_active = False
         self.music_thread = None
         self.current_track_cache = None
-        self.current_target_mode = "single"
 
         self._daemon_client = None
 
@@ -89,6 +88,8 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
         # always missed and push_text rendered text at the 16px fallback on every
         # non-16px device. Storing the bound method here makes the lookup resolve.
         self.__dict__["_active_device_size"] = self._active_device_size
+        # P5.6: a write that names its panel is drawn at THAT panel's size.
+        self.__dict__["_size_of"] = self._size_of
         _dc = lambda: self._daemon_client
         self.connection = ConnectionApi(self.loop_thread, _dc, _state)
         self.lighting = LightingApi(self.loop_thread, _dc, _state)
@@ -136,27 +137,27 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
             logger.debug(f"daemon shutdown on close skipped: {e}")
         self.window_mgr.close_window()
 
-    def set_solid_light(self, color: str, brightness: int, mode_type: int = 0) -> bool:
-        return self.lighting.set_solid_light(color, brightness, mode_type)
+    def set_solid_light(self, mac: str, color: str, brightness: int, mode_type: int = 0) -> bool:
+        return self.lighting.set_solid_light(mac, color, brightness, mode_type)
 
-    def set_clock(self, style: int, color: str = None) -> bool:
-        return self.lighting.set_clock(style, color)
+    def set_clock(self, mac: str, style: int, color: str = None) -> bool:
+        return self.lighting.set_clock(mac, style, color)
 
-    def switch_channel(self, channel: str) -> bool:
-        return self.lighting.switch_channel(channel)
+    def switch_channel(self, mac: str, channel: str) -> bool:
+        return self.lighting.switch_channel(mac, channel)
 
-    def set_vj_effect(self, number: int) -> bool:
-        return self.lighting.set_vj_effect(number)
+    def set_vj_effect(self, mac: str, number: int) -> bool:
+        return self.lighting.set_vj_effect(mac, number)
 
-    def set_visualization(self, number: int) -> bool:
-        return self.lighting.set_visualization(number)
+    def set_visualization(self, mac: str, number: int) -> bool:
+        return self.lighting.set_visualization(mac, number)
 
-    def push_text(self, text: str, color: str = "#FFFFFF", font_size: int = 1,
+    def push_text(self, mac: str, text: str, color: str = "#FFFFFF", font_size: int = 1,
                   speed: int = 50, effect_style: int = 1) -> bool:
-        return self.lighting.push_text(text, color, font_size, speed, effect_style)
+        return self.lighting.push_text(mac, text, color, font_size, speed, effect_style)
 
-    def send_danmaku_text(self, text: str, color: str = "#FFFFFF") -> bool:
-        return self.lighting.send_danmaku_text(text, color)
+    def send_danmaku_text(self, mac: str, text: str, color: str = "#FFFFFF") -> dict:
+        return self.lighting.send_danmaku_text(mac, text, color)
 
     def get_alarms(self) -> str:
         return self.tools.get_alarms()
@@ -199,10 +200,10 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
         return self.tools.set_low_power(on)
 
 
-    def set_clock_rich(self, style: int = 0, twentyfour: bool = True,
+    def set_clock_rich(self, mac: str, style: int = 0, twentyfour: bool = True,
                        humidity: bool = False, weather: bool = False,
                        date: bool = False, color: str = "#ffffff") -> bool:
-        return self.lighting.set_clock_rich(style, twentyfour, humidity, weather, date, color)
+        return self.lighting.set_clock_rich(mac, style, twentyfour, humidity, weather, date, color)
 
     def set_fm_frequency(self, freq_x10: int) -> bool:
         return self.tools.set_fm_frequency(freq_x10)
@@ -430,8 +431,8 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
     def get_work_mode(self) -> int | None:
         return self.tools.get_work_mode()
 
-    def set_scoreboard(self, on_off: int, red: int = 0, blue: int = 0) -> bool:
-        return self.tools.set_scoreboard(on_off, red, blue)
+    def set_scoreboard(self, mac: str, on_off: int, red: int = 0, blue: int = 0) -> bool:
+        return self.tools.set_scoreboard(mac, on_off, red, blue)
 
     # ── Round 15 §5 (R28: routes through the daemon) ──────────────────
     #

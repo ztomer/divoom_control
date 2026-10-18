@@ -20,7 +20,6 @@ class _Host(ScannerMixin):
         self.discovered_list = []
         self.wall_slots = {}
         self.wall_instance = None
-        self.current_target_mode = "single"
         self._daemon_client = None
         self._presets_file = presets_file
 

@@ -5,7 +5,7 @@ Extracts the display/lighting command surface.
 from __future__ import annotations
 
 import logging
-from divoom_gui.api import ApiBase
+from divoom_gui.api import WALL, ApiBase
 from divoom_gui.widget_frames import WidgetFrameMixin
 
 logger = logging.getLogger("divoom_gui.api.lighting")
@@ -15,77 +15,62 @@ class LightingApi(ApiBase, WidgetFrameMixin):
     def __init__(self, loop_thread, daemon_client_getter, state_getter):
         super().__init__(loop_thread, daemon_client_getter, state_getter)
 
-    def _stop_live_widgets(self, mac: str | None = None) -> None:
+    def _stop_live_widgets(self, mac: str) -> None:
         """A static-display takeover (channel / clock / VJ / visualizer / solid
         light / image) is mutually exclusive with a streaming live widget. Stop
-        the active device's live jobs first, or the widget's next tick re-pushes
-        its frame and clobbers the switch (HW-confirmed). Best-effort."""
-        try:
-            client = self._client
-            if client is not None:
-                target_mac = mac
-                if not target_mac:
-                    cur = self._current_divoom
-                    if cur is not None and hasattr(cur, "mac"):
-                        target_mac = cur.mac
-                try:
-                    client.live_jobs_stop_for(target_mac)
-                except TypeError:
-                    client.live_jobs_stop_for()
-        except Exception as e:
-            logger.debug(f"stop live widgets before switch: {e}")
+        the named display's live jobs first -- every slot's, for the wall -- or
+        the widget's next tick re-pushes its frame and clobbers the switch
+        (HW-confirmed). Best-effort."""
+        client = self._client
+        if client is None or not isinstance(mac, str) or not mac:
+            return  # no panel named: stop nothing, least of all the daemon's default
+        for target in (list(self._wall_slots) if mac == WALL else [mac]):
+            try:
+                client.live_jobs_stop_for(target)
+            except Exception as e:
+                logger.debug(f"stop live widgets on {target} before switch: {e}")
 
-    def set_solid_light(self, color: str, brightness: int, mode_type: int = 0) -> bool:
-        logger.info(f"GUI Action: Applying solid light {color} (brightness={brightness}, mode_type={mode_type})...")
-        self._stop_live_widgets()
+    def _show(self, mac: str, what: str, on_wall, on_panel) -> bool:
+        """Every display takeover's one path (P5.6): the display the click
+        named, its live widgets stopped, then the write. No panel named, no
+        write -- and nothing stopped on a panel nobody chose."""
+        target = self._display(mac)
+        if target is None:
+            return False
+        logger.info(f"GUI Action: {what} on {mac}")
+        self._stop_live_widgets(mac)
         try:
-            return self._dispatch(lambda t: t.set_light(color, brightness)
-                                if t is self._wall_instance else t.display.show_light(color, brightness, True, mode_type))
+            return self._run_async((on_wall if mac == WALL else on_panel)(target))
         except Exception as e:
-            logger.error(f"Light setting failed: {e}")
+            logger.error(f"{what} on {mac} failed: {e}")
             return False
 
-    def set_clock(self, style: int, color: str = None) -> bool:
-        logger.info(f"GUI Action: Applying clock style {style} with color {color}...")
-        self._stop_live_widgets()
-        try:
-            return self._dispatch(lambda t: t.show_clock(clock=style)
-                                if t is self._wall_instance else t.display.show_clock(clock=style, color=color))
-        except Exception as e:
-            logger.error(f"Clock setting failed: {e}")
-            return False
+    def set_solid_light(self, mac: str, color: str, brightness: int, mode_type: int = 0) -> bool:
+        return self._show(mac, f"solid light {color} (brightness={brightness}, mode_type={mode_type})",
+                          lambda t: t.set_light(color, brightness),
+                          lambda t: t.display.show_light(color, brightness, True, mode_type))
 
-    def switch_channel(self, channel: str) -> bool:
-        logger.info(f"GUI Action: Switching channel to {channel}...")
-        self._stop_live_widgets()
-        try:
-            return self._dispatch(lambda t: t.switch_channel(channel)
-                                if t is self._wall_instance else t.display.switch_channel(channel))
-        except Exception as e:
-            logger.error(f"Channel switch failed: {e}")
-            return False
+    def set_clock(self, mac: str, style: int, color: str = None) -> bool:
+        return self._show(mac, f"clock style {style} with color {color}",
+                          lambda t: t.show_clock(clock=style),
+                          lambda t: t.display.show_clock(clock=style, color=color))
 
-    def set_vj_effect(self, number: int) -> bool:
-        logger.info(f"GUI Action: Applying VJ effect {number}...")
-        self._stop_live_widgets()
-        try:
-            return self._dispatch(lambda t: t.show_effects(number=int(number))
-                                if t is self._wall_instance else t.display.show_effects(number=int(number)))
-        except Exception as e:
-            logger.error(f"VJ effect failed: {e}")
-            return False
+    def switch_channel(self, mac: str, channel: str) -> bool:
+        return self._show(mac, f"channel {channel}",
+                          lambda t: t.switch_channel(channel),
+                          lambda t: t.display.switch_channel(channel))
 
-    def set_visualization(self, number: int) -> bool:
-        logger.info(f"GUI Action: Applying visualizer {number}...")
-        self._stop_live_widgets()
-        try:
-            return self._dispatch(lambda t: t.show_visualization(number=int(number))
-                                if t is self._wall_instance else t.display.show_visualization(number=int(number)))
-        except Exception as e:
-            logger.error(f"Visualizer failed: {e}")
-            return False
+    def set_vj_effect(self, mac: str, number: int) -> bool:
+        return self._show(mac, f"VJ effect {number}",
+                          lambda t: t.show_effects(number=int(number)),
+                          lambda t: t.display.show_effects(number=int(number)))
 
-    def push_text(self, text: str, color: str = "#FFFFFF", font_size: int = 1,
+    def set_visualization(self, mac: str, number: int) -> bool:
+        return self._show(mac, f"visualizer {number}",
+                          lambda t: t.show_visualization(number=int(number)),
+                          lambda t: t.display.show_visualization(number=int(number)))
+
+    def push_text(self, mac: str, text: str, color: str = "#FFFFFF", font_size: int = 1,
                   speed: int = 50, effect_style: int = 1) -> bool:
         """Render the text on the DAEMON and push it as an image.
 
@@ -106,22 +91,22 @@ class LightingApi(ApiBase, WidgetFrameMixin):
         unused (static image); scrolling frames remain the real answer for long
         strings, and remain a follow-up.
         """
+        if not text or not str(text).strip():
+            return False
         try:
-            if not text or not str(text).strip():
-                return False
-            self._stop_live_widgets()
-            size = self._device_size()
+            # Drawn at the NAMED panel's size: the text is for the panel
+            # clicked, not whichever one is selected when this runs.
             _extras, png_path = self._widget_frame(
-                "text", size,
+                "text", self._device_size(mac),
                 {"text": str(text), "color": color, "font_size": int(font_size)})
-            return self._dispatch(lambda t: t.show_image(str(png_path))
-                                if t is self._wall_instance else t.display.show_image(str(png_path)))
         except Exception as e:
             logger.error(f"push_text failed: {e}")
             return False
+        return self._show(mac, "text", lambda t: t.show_image(str(png_path)),
+                          lambda t: t.display.show_image(str(png_path)))
 
-    def _device_size(self) -> int:
-        """The active device's pixel size, or 16.
+    def _device_size(self, mac: str) -> int:
+        """The named display's pixel size as the daemon resolved it, or 16.
 
         R70 P3.3 note: this was deleted by accident along with
         `_render_text_png` — the two sat adjacent, and the cut took both. The
@@ -129,18 +114,24 @@ class LightingApi(ApiBase, WidgetFrameMixin):
         attribute '_device_size'`); the targeted runs did not, because none of
         them exercised push_text end to end.
         """
-        getter = self._state_getter().get("_active_device_size")
+        getter = self._state_getter().get("_size_of")
         try:
-            return int(getter() if callable(getter) else (getter or 16))
+            return int(getter(mac)) if callable(getter) else 16
         except Exception:
             return 16
 
     def display_wall_image(self, file_path: str, cell_size: int) -> dict:
         logger.info(f"GUI Action: Push display wall asset {file_path!r} (cell size={cell_size})...")
-        self._stop_live_widgets()
+        # Also the gallery's single-panel push (`gallery_sync.play_gallery_art`),
+        # which does not name its panel yet: with no wall it goes to
+        # `current_divoom` (ROADMAP P5.7). Its mac is the proxy's `_mac`; the
+        # old `cur.mac` was a proxy PATH, not a string, so the stop's request
+        # failed to serialise and only a TypeError fallback stopped anything.
+        cur = self._current_divoom
+        self._stop_live_widgets(WALL if self._wall_slots else getattr(cur, "_mac", None))
         try:
             self._rebuild_wall_instance(cell_size)
-            target = self._wall_instance if self._wall_instance else self._current_divoom
+            target = self._wall_instance if self._wall_instance else cur
             if target is None:
                 raise RuntimeError("No active device or wall configured")
 
@@ -166,62 +157,54 @@ class LightingApi(ApiBase, WidgetFrameMixin):
             logger.error(f"Wall display failed: {e}")
             return {"success": False, "error": str(e), "previews": {}}
 
-    def set_clock_rich(self, style: int = 0, twentyfour: bool = True,
+    def set_clock_rich(self, mac: str, style: int = 0, twentyfour: bool = True,
                        humidity: bool = False, weather: bool = False,
                        date: bool = False, color: str = "#ffffff") -> bool:
-        logger.info(f"GUI Action: Setting rich clock (style={style}, twentyfour={twentyfour}, ...)")
-        self._stop_live_widgets()
-        try:
-            return self._dispatch(lambda t: t.display.set_clock_rich(style=style, twentyfour=twentyfour,
-                                                                     humidity=humidity, weather=weather,
-                                                                     date=date, color=color)
-                                if t is self._wall_instance else t.display.set_clock_rich(style=style, twentyfour=twentyfour,
-                                                                                          humidity=humidity, weather=weather,
-                                                                                          date=date, color=color))
-        except Exception as e:
-            logger.error(f"Rich clock failed: {e}")
-            return False
+        def rich(t):
+            return t.display.set_clock_rich(style=style, twentyfour=twentyfour, humidity=humidity,
+                                            weather=weather, date=date, color=color)
+        return self._show(mac, f"rich clock (style={style}, twentyfour={twentyfour})", rich, rich)
 
-    def play_album(self, album_id: int) -> dict:
+    def play_album(self, mac: str, album_id: int) -> dict:
         """Play a cloud-browsed photo album on the device (Photo/PlayAlbum,
         LAN-only — see divoom_lib/lan_transport.py). Not meaningful on a
         Virtual Wall (the album targets one device's own local slideshow,
         not a composite image), so that target mode is rejected up front."""
         logger.info(f"GUI Action: Playing album {album_id} on device...")
         from divoom_gui.api import _lan_error
-        if self._current_target_mode == "wall":
+        if mac == WALL:
             return _lan_error("play the album",
                               "a Virtual Wall has no single device to play it on",
                               "wall")
-        self._stop_live_widgets()
+        self._stop_live_widgets(mac)
         try:
             val = int(album_id)
         except (TypeError, ValueError):
             return _lan_error("play the album", f"{album_id!r} is not an album id",
                               "input")
-        return self._lan_action("play the album", lambda t: t.lan.play_album(val))
+        return self._lan_action(mac, "play the album", lambda t: t.lan.play_album(val))
 
-    def push_playlist(self, play_id: int) -> dict:
+    def push_playlist(self, mac: str, play_id: int) -> dict:
         """Push a cloud playlist to the device (Playlist/SendDevice, LAN-only —
         see divoom_lib/lan_transport.py). Not meaningful on a Virtual Wall
         (the playlist targets one device's own local slideshow, not a
         composite image), so that target mode is rejected up front."""
         logger.info(f"GUI Action: Pushing playlist {play_id} to device...")
         from divoom_gui.api import _lan_error
-        if self._current_target_mode == "wall":
+        if mac == WALL:
             return _lan_error("push the playlist",
                               "a Virtual Wall has no single device to play it on",
                               "wall")
-        self._stop_live_widgets()
+        self._stop_live_widgets(mac)
         try:
             val = int(play_id)
         except (TypeError, ValueError):
             return _lan_error("push the playlist", f"{play_id!r} is not a playlist id",
                               "input")
-        return self._lan_action("push the playlist",
+        return self._lan_action(mac, "push the playlist",
                                 lambda t: t.lan.send_playlist(val))
 
-    def send_danmaku_text(self, text: str, color: str = "#FFFFFF") -> dict:
+    def send_danmaku_text(self, mac: str, text: str, color: str = "#FFFFFF") -> dict:
         """Send a Danmaku scrolling bullet-chat overlay (Danmaku/SendText,
         LAN-only — see divoomd/src/device_call/lan.rs).
 
@@ -242,7 +225,7 @@ class LightingApi(ApiBase, WidgetFrameMixin):
         """
         logger.info("GUI Action: Sending Danmaku overlay text...")
         from divoom_gui.api import _lan_error
-        if self._current_target_mode == "wall":
+        if mac == WALL:
             return _lan_error("send the overlay",
                               "a Virtual Wall has no single device to draw it on",
                               "wall")
@@ -253,21 +236,21 @@ class LightingApi(ApiBase, WidgetFrameMixin):
         # (get_arg_str(kw, ...)), and positional args would silently land as
         # neither — the command would ACK having sent an empty string.
         return self._lan_action(
-            "send the overlay",
+            mac, "send the overlay",
             lambda t: t.lan.send_danmaku_text(Text=text, TextColor=color))
 
-    def play_aid_sleep(self, sleep_id: int, sleep_type: int = 0) -> bool:
+    def play_aid_sleep(self, mac: str, sleep_id: int, sleep_type: int = 0) -> bool:
         """Play a browsed AidSleep cloud sound on the device (AidSleep/Play —
         BLE/SPP JSON, no cloud round-trip; see divoom_lib/tools/aid_sleep.py
         and divoomd/src/device_call/aid_sleep.rs). Not meaningful on a
         Virtual Wall (audio is per-device, not composite)."""
         logger.info(f"GUI Action: Playing AidSleep sound {sleep_id} (type={sleep_type})...")
-        if self._current_target_mode == "wall":
+        if mac == WALL:
             logger.warning("AidSleep playback is not supported on a Virtual Wall target")
             return False
-        self._stop_live_widgets()
+        self._stop_live_widgets(mac)
         try:
-            return self._dispatch(lambda t: t.aid_sleep.play(int(sleep_id), int(sleep_type)))
+            return self._dispatch(mac, lambda t: t.aid_sleep.play(int(sleep_id), int(sleep_type)))
         except Exception as e:
             logger.error(f"AidSleep play failed: {e}")
             return False

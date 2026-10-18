@@ -64,6 +64,8 @@ mod mcp_more_tools;
 pub mod mcp_tools;
 pub mod media;
 #[cfg(test)]
+mod mock_channel_tests;
+#[cfg(test)]
 mod mock_device_tests;
 #[cfg(test)]
 mod mock_device_tests2;

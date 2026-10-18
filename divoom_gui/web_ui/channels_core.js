@@ -45,7 +45,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (["ambient", "text", "sessions"].includes(ch)) return;
             const w = window.ChannelSettings.compose(ch);
             if (!w || !window.pywebview?.api?.switch_channel) return;
-            window.pywebview.api.switch_channel(ch).then(res => {
+            window.pywebview.api.switch_channel(w.mac, ch).then(res => {
                 if (res) {
                     window.showToast("Switched channel", "success", " BLE");
                     window.ChannelSettings.commit(w);
@@ -76,7 +76,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const speed = parseInt(document.getElementById("text-speed-input")?.value) || 50;
             const effect = parseInt(document.getElementById("text-effect-select")?.value);
             if (window.pywebview?.api?.push_text) {
-                window.pywebview.api.push_text(text, color, 1, speed, isNaN(effect) ? 1 : effect).then(res => {
+                window.pywebview.api.push_text(w.mac, text, color, 1, speed, isNaN(effect) ? 1 : effect).then(res => {
                     window.showToast(res ? "Text pushed to device" : "Failed to push text", res ? "success" : "error", " BLE");
                     if (res) window.ChannelSettings.commit(w);
                 });
@@ -98,10 +98,11 @@ document.addEventListener("DOMContentLoaded", () => {
         danmakuBtn.addEventListener("click", () => {
             const text = (document.getElementById("text-content-input")?.value || "").trim();
             if (!text) { window.showToast("Enter some text first", "error"); return; }
-            if (!window.requireDevice()) return;
+            const t = window.ChannelSettings.target();
+            if (!t) return;
             const color = document.getElementById("text-color-input")?.value || "#00ffcc";
             if (window.pywebview?.api?.send_danmaku_text) {
-                window.pywebview.api.send_danmaku_text(text, color).then(res => {
+                window.pywebview.api.send_danmaku_text(t.mac, text, color).then(res => {
                     /* R71 P3.1: res is {ok, error, cause}, not a bool. A
                        Bluetooth-only device now says so instead of reporting a
                        generic failure the user cannot act on. */
@@ -129,7 +130,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const w = window.ChannelSettings.compose("scoreboard", patch);
         if (!w || !window.pywebview?.api?.set_scoreboard) return;
         const { red, blue } = w.settings;
-        window.pywebview.api.set_scoreboard(1, red, blue).then(res => {
+        window.pywebview.api.set_scoreboard(w.mac, 1, red, blue).then(res => {
             window.showToast(res ? `Score: ${red}–${blue}` : "Failed to set scoreboard", res ? "success" : " BLE");
             if (res) window.ChannelSettings.commit(w); else window.ChannelSettings.revert(w);
         });

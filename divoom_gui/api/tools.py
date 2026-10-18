@@ -236,13 +236,12 @@ class ToolsApi(ApiBase):
 
     # ── Scoreboard (uses _tool_call pattern) ────────────────────────
 
-    def set_scoreboard(self, on_off: int, red: int = 0, blue: int = 0) -> bool:
-        logger.info(f"GUI Action: Setting scoreboard on_off={on_off} red={red} blue={blue}...")
+    def set_scoreboard(self, mac: str, on_off: int, red: int = 0, blue: int = 0) -> bool:
+        """A channel control: it names its panel like the rest (P5.6)."""
+        logger.info(f"GUI Action: Setting scoreboard on {mac} on_off={on_off} red={red} blue={blue}...")
         try:
-            target = self._current_divoom
-            if not target:
-                return False
-            return self._run_async(target.scoreboard.set_scoreboard(int(on_off), int(red), int(blue)))
+            return bool(self._dispatch(mac, lambda t: t.scoreboard.set_scoreboard(
+                int(on_off), int(red), int(blue))))
         except Exception as e:
             logger.error(f"Scoreboard set failed: {e}")
             return False

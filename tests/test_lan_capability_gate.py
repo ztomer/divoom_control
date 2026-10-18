@@ -102,8 +102,8 @@ def test_a_bypassing_method_would_be_caught():
     """Prove the detector bites, without waiting for someone to write one."""
     bad = ast.parse(
         "class A:\n"
-        "    def push_thing(self, v):\n"
-        "        return self._dispatch(lambda t: t.lan.send_thing(v))\n"
+        "    def push_thing(self, mac, v):\n"
+        "        return self._dispatch(mac, lambda t: t.lan.send_thing(v))\n"
     )
     offenders = [n for n, fn in _lan_methods(bad).items()
                  if not _uses_funnel(fn) and not _branches_on_lan(fn)]
@@ -132,15 +132,20 @@ class _FakeTarget:
         self.lan = _FakeLan(rec)
 
 
+MAC = "AA:00:00:00:00:01"
+
+
 @pytest.fixture
 def api(monkeypatch):
     calls: list = []
-    state = {"current_target_mode": "single"}
+    state: dict = {}
     obj = LightingApi.__new__(LightingApi)
     obj._state_getter = lambda: state
-    monkeypatch.setattr(obj, "_target", lambda: _FakeTarget(calls), raising=False)
+    # P5.6: `_display(mac)` is the one place a named panel becomes a target.
+    monkeypatch.setattr(obj, "_display", lambda mac: _FakeTarget(calls) if mac else None,
+                        raising=False)
     monkeypatch.setattr(obj, "_run_async", lambda coro, **kw: coro, raising=False)
-    monkeypatch.setattr(obj, "_stop_live_widgets", lambda: None, raising=False)
+    monkeypatch.setattr(obj, "_stop_live_widgets", lambda mac: None, raising=False)
     obj._calls = calls
     obj._state = state
     return obj
@@ -151,7 +156,7 @@ def api(monkeypatch):
     ("push_playlist", 3, "push the playlist"),
 ])
 def test_success_reports_ok(api, method, arg, verb):
-    reply = getattr(api, method)(arg)
+    reply = getattr(api, method)(MAC, arg)
     assert reply["ok"] is True, reply
     assert api._calls, "the device was never called"
 
@@ -167,7 +172,7 @@ def test_no_lan_capability_reaches_the_caller(api, monkeypatch, method, arg):
             "no_lan_capability")
 
     monkeypatch.setattr(api, "_run_async", refuse, raising=False)
-    reply = getattr(api, method)(arg)
+    reply = getattr(api, method)(MAC, arg)
     assert reply["ok"] is False
     assert reply["cause"] == "no_lan_capability", reply
     assert "Bluetooth" in reply["error"]
@@ -175,8 +180,7 @@ def test_no_lan_capability_reaches_the_caller(api, monkeypatch, method, arg):
 
 @pytest.mark.parametrize("method,arg", [("play_album", 7), ("push_playlist", 3)])
 def test_wall_mode_is_refused_with_its_own_cause(api, method, arg):
-    api._state["current_target_mode"] = "wall"
-    reply = getattr(api, method)(arg)
+    reply = getattr(api, method)("MatrixWall", arg)
     assert reply["ok"] is False and reply["cause"] == "wall"
     assert api._calls == []
 
@@ -184,6 +188,6 @@ def test_wall_mode_is_refused_with_its_own_cause(api, method, arg):
 @pytest.mark.parametrize("method", ["play_album", "push_playlist"])
 def test_a_non_numeric_id_is_input_not_a_device_failure(api, method):
     """Bad input must not masquerade as the device refusing."""
-    reply = getattr(api, method)("not-a-number")
+    reply = getattr(api, method)(MAC, "not-a-number")
     assert reply["ok"] is False and reply["cause"] == "input"
     assert api._calls == []

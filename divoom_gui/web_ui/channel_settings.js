@@ -10,8 +10,9 @@
  *
  * This module is the write side's one funnel:
  *   compose(channel, patch) resolves the selected display NOW, at the gesture,
- *     through DisplayPreviewRegistry.getActive(), and returns that display's
- *     settings for the channel with the patch applied;
+ *     through DisplayPreviewRegistry.getActive(), and returns its mac and that
+ *     display's settings for the channel with the patch applied -- the mac is
+ *     the first argument of every bridge write (P5.6);
  *   commit(w) records them as THAT display's state once the panel took them;
  *   revert(w) puts the controls back to the display's state when it did not.
  *
@@ -81,10 +82,13 @@
             return window.DisplayPreviewRegistry ? window.DisplayPreviewRegistry.getActive() : null;
         },
 
-        // A write for the selected display, resolved at the gesture. null when
-        // there is no panel to write to (said once, here), and the controls
-        // go back to what the display has.
-        compose(channel, patch) {
+        // The selected display and its mac, resolved NOW, at the gesture. Every
+        // write passes this mac to the bridge (P5.6): the backend used to send
+        // a mac-less call to whichever panel was selected when the call RAN,
+        // so a selection change between the click and the write sent it to
+        // the other panel. null when there is no panel to write to (said once,
+        // here), and the controls go back to what the display has.
+        target() {
             const display = this.selected();
             if (!display) {
                 window.showToast(window.NO_DEVICE_HINT, "error");
@@ -94,7 +98,15 @@
                 this.revert({ display, mac: display.mac });
                 return null;
             }
-            return { display, mac: display.mac, channel, settings: Object.assign(this.of(display, channel), patch || {}) };
+            return { display, mac: display.mac };
+        },
+
+        // A channel write for the selected display: target() plus that
+        // display's settings for the channel with the patch applied.
+        compose(channel, patch) {
+            const t = this.target();
+            if (!t) return null;
+            return { display: t.display, mac: t.mac, channel, settings: Object.assign(this.of(t.display, channel), patch || {}) };
         },
 
         // The panel took it: it is that display's state now, wherever the

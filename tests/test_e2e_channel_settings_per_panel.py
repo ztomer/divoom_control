@@ -65,6 +65,9 @@ window.__api = {
   set_visualization: __write('set_visualization'),
   switch_channel: __write('switch_channel'),
   set_scoreboard: __write('set_scoreboard'),
+  push_text: __write('push_text'),
+  send_danmaku_text: (...args) => { window.__fleet.writes.push({m: 'send_danmaku_text', args});
+                                    return {ok: true, error: '', cause: ''}; },
 };
 window.pywebview = { api: new Proxy({}, { get: (_t, name) => (...args) => {
     if (window.__api && typeof window.__api[name] === 'function')
@@ -147,7 +150,7 @@ async def test_changing_a_clock_style_on_one_panel_leaves_the_other_untouched():
 
             await _click(page, '#clock-faces-grid .selector-cell[data-value="3"]')
             await _colour(page, "clock-color-input", "#ff0000", "input")
-            assert await _writes(page, "set_clock") == [[3, "#ffffff"], [3, "#ff0000"]]
+            assert await _writes(page, "set_clock") == [[A, 3, "#ffffff"], [A, 3, "#ff0000"]]
 
             await _select(page, B)
             b = await eval_js(page, _CONTROLS)
@@ -190,7 +193,7 @@ async def test_a_colour_follows_its_panel_onto_another_channel():
             await _clear_writes(page)
             await _click(page, '.tab-btn[data-channel="clock"]')
             await _click(page, '#clock-faces-grid .selector-cell[data-value="1"]')
-            assert await _writes(page, "set_clock") == [[1, "#ffffff"]]
+            assert await _writes(page, "set_clock") == [[B, 1, "#ffffff"]]
             saved = await eval_js(page, "(b) => window.getDeviceChannel(b)", B)
             assert saved["channel"] == "clock" and saved["opts"]["color"] == "#ffffff", saved
 
@@ -259,11 +262,52 @@ async def test_a_write_lands_on_the_panel_it_was_made_for():
             await browser.close()
 
 
+# Every channel control, and what it sends (P5.6). Each write must name, as
+# its first argument, the panel selected at the CLICK.
+_EVERY_WRITE = [
+    ("set_clock", "() => document.querySelector('#clock-faces-grid .selector-cell[data-value=\"2\"]').click()"),
+    ("set_clock_rich", """() => { const c = document.getElementById('clock-rich-weather');
+        c.checked = !c.checked; c.dispatchEvent(new Event('change', {bubbles: true})); }"""),
+    ("switch_channel", "() => document.querySelector('.tab-btn[data-channel=\"vj\"]').click()"),
+    ("set_vj_effect", "() => document.querySelector('#vj-effects-grid .selector-cell[data-value=\"3\"]').click()"),
+    ("set_visualization", "() => document.querySelector('#eq-visualizer-grid .selector-cell[data-value=\"1\"]').click()"),
+    ("set_solid_light", "() => document.querySelector('#ambient-mode-grid .selector-cell[data-value=\"0\"]').click()"),
+    ("set_scoreboard", """() => { const i = document.getElementById('scoreboard-red');
+        i.value = 4; i.dispatchEvent(new Event('change', {bubbles: true})); }"""),
+    ("push_text", """() => { document.getElementById('text-content-input').value = 'HI';
+        document.getElementById('push-text-btn').click(); }"""),
+    ("send_danmaku_text", """() => { document.getElementById('text-content-input').value = 'HI';
+        document.getElementById('send-danmaku-btn').click(); }"""),
+]
+
+
+@pytest.mark.asyncio
+async def test_every_channel_write_names_the_panel_clicked():
+    require_browser()
+    from playwright.async_api import async_playwright
+
+    async with async_playwright() as p:
+        browser, page = await _open(p)
+        try:
+            for method, gesture in _EVERY_WRITE:
+                await _select(page, A)
+                await _clear_writes(page)
+                await eval_js(page, gesture)
+                await _select(page, B)   # the user moves on at once
+                await _settle(page)
+                sent = await _writes(page, method)
+                assert sent and all(args[0] == A for args in sent), (
+                    f"{method} must name A, the panel clicked: {sent}")
+        finally:
+            await browser.close()
+
+
 def test_the_write_path_resolves_the_panel_in_one_place():
     """No channel writer asks "which panel" itself: the selected display comes
     from ``DisplayPreviewRegistry.getActive()`` via ``ChannelSettings``, and the
     app-wide channel globals are gone."""
-    writers = ("channels_grids.js", "channels_core.js", "cloud_clock_faces.js")
+    writers = ("channels_grids.js", "channels_core.js", "cloud_clock_faces.js",
+               "playlists.js", "photo_albums.js", "aid_sleep.js")
     for name in writers:
         js = (WEB_UI / name).read_text(encoding="utf-8")
         assert "_activeDeviceMac" not in js, f"{name} resolves the panel itself"

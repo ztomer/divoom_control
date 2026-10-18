@@ -112,14 +112,10 @@ class PanelsMixin:
 
         def on_panel(p):
             # A LAN panel takes brightness over its HTTP API (`lan.set_brightness`
-            # in divoomd/src/device_call/lan.rs), not the BLE opcode. `p.lan` is
-            # only a status VIEW (`_LanView`, no methods): the old
-            # `t.lan.set_brightness(...)` raised on every LAN panel and the
-            # MagicMock tests never noticed.
-            if p.lan:
-                from divoom_gui.daemon_bridge import DaemonDeviceProxy
-                return DaemonDeviceProxy(p._client, "lan", target="device", mac=mac).set_brightness(val)
-            return p.device.set_brightness(val)
+            # in divoomd/src/device_call/lan.rs), not the BLE opcode. `p.lan`
+            # once had no methods and this raised on every LAN panel; it makes
+            # the daemon's `lan.*` calls now (`_LanView`, P5.6).
+            return p.lan.set_brightness(val) if p.lan else p.device.set_brightness(val)
 
         return self._level_write(mac, "set_brightness", lambda w: w.set_brightness(val), on_panel)
 

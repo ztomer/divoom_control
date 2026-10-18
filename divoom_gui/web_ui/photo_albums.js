@@ -36,12 +36,14 @@ document.addEventListener("DOMContentLoaded", () => {
     listEl.addEventListener("click", (e) => {
         const btn = e.target.closest(".cloud-clock-apply-btn");
         if (!btn) return;
-        if (!window.requireDevice || !window.requireDevice()) return;
+        // The panel this click is for, resolved now (P5.6).
+        const t = window.ChannelSettings.target();
+        if (!t) return;
         const row = btn.closest(".cloud-clock-row");
         const albumId = parseInt(row?.getAttribute("data-album-id"));
         if (!albumId || !window.pywebview?.api?.play_album) return;
         btn.disabled = true;
-        window.pywebview.api.play_album(albumId).then(res => {
+        window.pywebview.api.play_album(t.mac, albumId).then(res => {
             btn.disabled = false;
             /* R71 P3.4: {ok, error, cause}, not a bool — a Bluetooth-only
                device now says so instead of "Failed to play album". */
@@ -51,7 +53,7 @@ document.addEventListener("DOMContentLoaded", () => {
                    : window.DivoomCloud.problemText(res, "Failed to play album"),
                 ok ? "success" : "error", " LAN");
             if (ok && window.setDeviceActivity) {
-                window.setDeviceActivity(window._activeDeviceMac(), "photo_album", { albumId });
+                window.setDeviceActivity(t.mac, "photo_album", { albumId });
             }
         }).catch(() => {
             btn.disabled = false;

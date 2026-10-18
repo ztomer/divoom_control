@@ -9,11 +9,11 @@ class LightingForwardMixin:
     def display_wall_image(self, file_path: str, cell_size: int) -> bool:
         return self.lighting.display_wall_image(file_path, cell_size)
 
-    def push_playlist(self, play_id: int) -> bool:
-        return self.lighting.push_playlist(play_id)
+    def push_playlist(self, mac: str, play_id: int) -> dict:
+        return self.lighting.push_playlist(mac, play_id)
 
-    def play_aid_sleep(self, sleep_id: int, sleep_type: int = 0) -> bool:
-        return self.lighting.play_aid_sleep(sleep_id, sleep_type)
+    def play_aid_sleep(self, mac: str, sleep_id: int, sleep_type: int = 0) -> bool:
+        return self.lighting.play_aid_sleep(mac, sleep_id, sleep_type)
 
-    def play_album(self, album_id: int) -> bool:
-        return self.lighting.play_album(album_id)
+    def play_album(self, mac: str, album_id: int) -> dict:
+        return self.lighting.play_album(mac, album_id)

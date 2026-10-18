@@ -105,11 +105,10 @@ class GallerySyncMixin(GalleryHotApiMixin):
         if client:
             try:
                 cur = getattr(self, "current_divoom", None) or getattr(self, "_current_divoom", None)
-                mac = getattr(cur, "mac", None)
-                try:
-                    client.live_jobs_stop_for(mac)
-                except TypeError:
-                    client.live_jobs_stop_for()
+                # The proxy's `_mac`: `cur.mac` is a proxy PATH, not a string,
+                # so the request failed to serialise (a TypeError) and the
+                # mac-less retry stopped the daemon's active panel instead.
+                client.live_jobs_stop_for(getattr(cur, "_mac", None))
             except Exception as e:
                 logger.debug(f"stop live widgets before gallery play: {e}")
         cache_dir = Path.home() / ".config" / "divoom-control" / "cache_gallery"

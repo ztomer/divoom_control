@@ -46,8 +46,8 @@ class TestGuiApiCoreBasics(GuiApiTestBase):
             return True
 
         dev.display.show_image = AsyncMock(side_effect=_show_image)
-        self.api.current_divoom = dev
-        self.api.current_target_mode = "single"
+        # P5.6: the write names its panel; `_display` is where it resolves.
+        self.api.lighting._display = lambda mac: dev if mac == "AA:00:00:00:00:01" else None
 
         client = MagicMock()
         client.render_widget.return_value = {
@@ -57,7 +57,7 @@ class TestGuiApiCoreBasics(GuiApiTestBase):
         }
         with patch.object(type(self.api.lighting), "_client",
                           property(lambda self: client)):
-            ok = self.api.push_text("HI", color="#FF0000", speed=40, effect_style=1)
+            ok = self.api.push_text("AA:00:00:00:00:01", "HI", color="#FF0000", speed=40, effect_style=1)
 
         self.assertTrue(ok)
         dev.display.show_image.assert_awaited_once()
@@ -70,9 +70,8 @@ class TestGuiApiCoreBasics(GuiApiTestBase):
         """Empty text is a no-op (returns False, pushes nothing)."""
         dev = MagicMock()
         dev.display.show_image = AsyncMock(return_value=True)
-        self.api.current_divoom = dev
-        self.api.current_target_mode = "single"
-        self.assertFalse(self.api.push_text("   "))
+        self.api.lighting._display = lambda mac: dev
+        self.assertFalse(self.api.push_text("AA:00:00:00:00:01", "   "))
         dev.display.show_image.assert_not_called()
 
     def test_set_alarm(self):

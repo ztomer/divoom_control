@@ -103,7 +103,7 @@ async def test_apply_without_a_device_shows_connect_prompt_and_does_not_call_set
         try:
             await eval_js(page, """() => {
                 window.__setClockCalls = [];
-                window.__api.set_clock = (style, color) => { window.__setClockCalls.push([style, color]); return true; };
+                window.__api.set_clock = (mac, style, color) => { window.__setClockCalls.push([mac, style, color]); return true; };
             }""")
             await wait_js(page, 
                 "() => document.querySelectorAll('#cloud-clock-list .cloud-clock-row').length > 0")
@@ -138,14 +138,14 @@ async def test_apply_with_a_device_calls_set_clock_with_the_real_clock_id():
                 window.DivoomState.discoveredDevices = [{ address: 'E9:DITOO', name: 'Ditoo-light-2' }];
                 window.DivoomState.appConnected = true;
                 window.__setClockCalls = [];
-                window.__api.set_clock = (style, color) => { window.__setClockCalls.push([style, color]); return true; };
+                window.__api.set_clock = (mac, style, color) => { window.__setClockCalls.push([mac, style, color]); return true; };
             }""")
             await wait_js(page, 
                 "() => document.querySelectorAll('#cloud-clock-list .cloud-clock-row').length > 0")
             await page.click("#cloud-clock-list .cloud-clock-apply-btn")
             await wait_js(page, "() => (window.__setClockCalls || []).length > 0")
             calls = await eval_js(page, "() => window.__setClockCalls")
-            assert calls == [[26, "#ffffff"]]  # first row: Facebook Video, ClockId 26
+            assert calls == [["E9:DITOO", 26, "#ffffff"]]  # the panel shown; first row: Facebook Video, ClockId 26
             # `wait_toast`, not a poll of the live `#toast` element: this element
             # is reused, so a toast the app raises on its own can overwrite the
             # one under test between polls and the wait then never fires. That
@@ -256,7 +256,7 @@ async def test_store_faces_show_the_picture_as_drawn_and_at_the_panels_resolutio
                 window.DivoomState.discoveredDevices = [{ address: 'E9:DITOO', name: 'Ditoo-light-2' }];
                 window.DivoomState.appConnected = true;
                 window.__setClockCalls = [];
-                window.__api.set_clock = (style, color) => { window.__setClockCalls.push([style, color]); return true; };
+                window.__api.set_clock = (mac, style, color) => { window.__setClockCalls.push([mac, style, color]); return true; };
                 window.DivoomState.cloudClockStoreLoaded = false;
                 window.loadCloudClockTypes();
             }""")
@@ -283,6 +283,6 @@ async def test_store_faces_show_the_picture_as_drawn_and_at_the_panels_resolutio
             assert not no_pic
             await page.click('#cloud-clock-store .clock-face-card[data-clock-id="998"] .cloud-clock-apply-btn')
             await wait_js(page, "() => (window.__setClockCalls || []).length > 0")
-            assert await eval_js(page, "() => window.__setClockCalls") == [[998, "#ffffff"]]
+            assert await eval_js(page, "() => window.__setClockCalls") == [["E9:DITOO", 998, "#ffffff"]]
         finally:
             await browser.close()

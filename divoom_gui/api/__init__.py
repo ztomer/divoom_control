@@ -12,6 +12,10 @@ import logging
 
 logger = logging.getLogger("divoom_gui.api")
 
+#: The bench's selector for the virtual wall: a write naming it goes to the
+#: daemon-owned wall, not to a panel.
+WALL = "MatrixWall"
+
 
 
 def _lan_error(what: str, reason: str, cause: str) -> dict:
@@ -48,14 +52,14 @@ class ApiBase:
     Provides:
     - shared reference to the async loop thread
     - shared reference to the daemon client (lazy, cached)
-    - shared wall/single target resolution + dispatch
+    - one resolution of the display a write names (`_display`) + dispatch
     - `_run_async` / `_schedule_async` helpers
     """
 
     def __init__(self, loop_thread: AsyncLoopThread, daemon_client_getter, state_getter):
         self._loop_thread = loop_thread
         self._daemon_client_getter = daemon_client_getter  # callable returning DaemonClient | None
-        self._state_getter = state_getter  # callable returning dict with current_divoom, wall_instance, current_target_mode, wall_slots
+        self._state_getter = state_getter  # callable returning dict with current_divoom, wall_instance, wall_slots
 
     @property
     def _client(self):
@@ -73,10 +77,6 @@ class ApiBase:
     def _wall_slots(self):
         return self._state_getter().get("wall_slots", {})
 
-    @property
-    def _current_target_mode(self):
-        return self._state_getter().get("current_target_mode", "single")
-
     def _rebuild_wall_instance(self, cell_size: int = 16) -> bool:
         if not self._wall_slots:
             return False
@@ -93,14 +93,31 @@ class ApiBase:
         self._state_getter()["wall_instance"] = DaemonDeviceProxy(client, target="wall")
         return True
 
-    def _target(self):
-        if self._current_target_mode == "wall":
-            if not self._rebuild_wall_instance():
-                return None
-            return self._wall_instance
-        return self._current_divoom
+    def _display(self, mac):
+        """The display a write's CLICK named, or None (P5.6).
 
-    def _lan_action(self, what: str, build_coro) -> dict:
+        The ONE place a display write turns a mac into a target. Every channel
+        call names its panel: the web UI resolves the selected display at the
+        gesture (`web_ui/channel_settings.js`) and passes its mac through. This
+        replaced `_target()`, which asked `current_target_mode` and
+        `current_divoom` -- whichever panel the bench had told the backend to
+        select by the time the call RAN -- so a selection change between a
+        click and its write sent the setting to the other panel. A call that
+        names no panel is refused, as P5.1's level writes are
+        (`divoom_gui/panels.py`); there is no "the" panel to fall back to.
+        """
+        if not isinstance(mac, str) or not mac:
+            logger.error("display write refused: no panel named (got %r)", mac)
+            return None
+        if mac == WALL:
+            return self._wall_instance if self._rebuild_wall_instance() else None
+        client = self._client
+        if client is None:
+            return None
+        from divoom_gui.daemon_bridge import DaemonDeviceProxy
+        return DaemonDeviceProxy(client, target="device", mac=mac)
+
+    def _lan_action(self, mac, what: str, build_coro) -> dict:
         """Run one LAN command and report WHY it failed, not just that it did.
 
         R71 P3.1, and the same defect R70 fixed for cloud browse. Every
@@ -120,7 +137,7 @@ class ApiBase:
         """
         from divoom_client.daemon_proxy import _DeviceCallError
 
-        target = self._target()
+        target = self._display(mac)
         if target is None:
             return _lan_error(what, "no device is connected", "unreachable")
         try:
@@ -132,8 +149,8 @@ class ApiBase:
             return _lan_error(what, str(exc), "lan")
         return {"ok": True, "error": "", "cause": ""}
 
-    def _dispatch(self, build_coro):
-        target = self._target()
+    def _dispatch(self, mac, build_coro):
+        target = self._display(mac)
         if target is None:
             return False
         return self._run_async(build_coro(target))

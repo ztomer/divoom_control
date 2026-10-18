@@ -97,7 +97,7 @@ async def test_play_without_a_device_shows_connect_prompt_and_does_not_call_play
         try:
             await eval_js(page, """() => {
                 window.__playAidSleepCalls = [];
-                window.__api.play_aid_sleep = (sleepId, type) => { window.__playAidSleepCalls.push([sleepId, type]); return true; };
+                window.__api.play_aid_sleep = (mac, sleepId, type) => { window.__playAidSleepCalls.push([mac, sleepId, type]); return true; };
             }""")
             await wait_js(page, 
                 "() => document.querySelectorAll('#aid-sleep-list .cloud-clock-row').length > 0")
@@ -127,16 +127,17 @@ async def test_play_with_a_device_calls_play_aid_sleep_with_the_real_sleep_id():
         browser, page = await _open_sleep_sounds_tab(p)
         try:
             await eval_js(page, """() => {
+                window.DivoomState.discoveredDevices = [{ address: 'E9:DITOO', name: 'Ditoo-light-2' }];
                 window.DivoomState.appConnected = true;
                 window.__playAidSleepCalls = [];
-                window.__api.play_aid_sleep = (sleepId, type) => { window.__playAidSleepCalls.push([sleepId, type]); return true; };
+                window.__api.play_aid_sleep = (mac, sleepId, type) => { window.__playAidSleepCalls.push([mac, sleepId, type]); return true; };
             }""")
             await wait_js(page, 
                 "() => document.querySelectorAll('#aid-sleep-list .cloud-clock-row').length > 0")
             await page.click("#aid-sleep-list .cloud-clock-apply-btn")
             await wait_js(page, "() => (window.__playAidSleepCalls || []).length > 0")
             calls = await eval_js(page, "() => window.__playAidSleepCalls")
-            assert calls == [[256, 0]]  # first row: Gentle Rain, SleepId 256, type 0
+            assert calls == [["E9:DITOO", 256, 0]]  # first row: Gentle Rain, SleepId 256, type 0
             # `wait_toast`, not a poll of the live `#toast` element: this element
             # is reused, so a toast the app raises on its own can overwrite the
             # one under test between polls and the wait then never fires. That

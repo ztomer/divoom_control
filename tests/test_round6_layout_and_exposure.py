@@ -362,12 +362,13 @@ def test_scoreboard_handler_in_channels_js():
 
 
 def test_gui_api_exposes_set_scoreboard():
-    """gui_api.py must have set_scoreboard(on_off, red=0, blue=0) -> bool."""
+    """gui_api.py must have set_scoreboard(mac, on_off, red=0, blue=0) -> bool
+    (the mac names the panel, P5.6)."""
     src = GUI_API_PY.read_text()
     assert re.search(
-        r"def\s+set_scoreboard\s*\(\s*self\s*,\s*on_off:\s*int\s*,\s*red:\s*int\s*=\s*0\s*,\s*blue:\s*int\s*=\s*0\s*\)",
+        r"def\s+set_scoreboard\s*\(\s*self\s*,\s*mac:\s*str\s*,\s*on_off:\s*int\s*,\s*red:\s*int\s*=\s*0\s*,\s*blue:\s*int\s*=\s*0\s*\)",
         src,
-    ), "gui_api.py is missing set_scoreboard(self, on_off: int, red: int = 0, blue: int = 0) method."
+    ), "gui_api.py is missing set_scoreboard(self, mac: str, on_off: int, red: int = 0, blue: int = 0)."
 
 
 # ──────────────────────────────────────────────────────────────────
