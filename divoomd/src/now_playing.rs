@@ -18,7 +18,7 @@
 
 use serde_json::{json, Value};
 
-use crate::protocol::{err_code, err_with, ErrorCode};
+use crate::protocol::{err_code, ErrorCode};
 
 /// Handle `weather` — one reading, from the source the device is pushed.
 ///
@@ -203,7 +203,7 @@ fn now_playing_blocking(include_artwork: bool) -> Value {
                 out
             }
             Ok(Some(track)) => track_to_json(&track, include_artwork),
-            Err(e) => err_with(
+            Err(e) => crate::protocol::err_with(
                 ErrorCode::Internal,
                 &e,
                 json!({"available": true, "playing": false}),

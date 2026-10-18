@@ -30,23 +30,38 @@ type info >/dev/null 2>&1 || { info() { echo "→ $*"; }; ok() { echo "✓ $*"; 
 
 TARGET="${LINUX_TARGET:-x86_64-unknown-linux-gnu}"
 
-# Skip rather than fail when the cross toolchain is absent: CI is authoritative
-# for Linux, and a machine without zig must still be able to commit.
-if ! command -v cargo-zigbuild >/dev/null 2>&1 || ! command -v zig >/dev/null 2>&1; then
-    warn "[linux] skipped — cargo-zigbuild + zig not installed (CI still covers Linux)"
+# FAIL, never skip, when the cross toolchain is absent (2026-10-18). This used
+# to warn and exit 0 -- and the x86_64-unknown-linux-gnu target was in fact not
+# installed, so every pre-push "passed" it while CI's Linux lint went red on 19
+# of 20 main runs (`unused import: err_with`, used only under cfg(macos)). A
+# step that skips itself green is not a gate. A machine that genuinely cannot
+# cross-check opts out by typing DIVOOM_SKIP_LINUX_CHECK=1, which is loud.
+if [ "${DIVOOM_SKIP_LINUX_CHECK:-}" = "1" ]; then
+    warn "[linux] SKIPPED by DIVOOM_SKIP_LINUX_CHECK=1 — CI's Linux lint is unchecked here"
     exit 0
 fi
-if ! grep -qx "$TARGET" <<<"$(rustup target list --installed 2>/dev/null)"; then
-    warn "[linux] skipped — rust target $TARGET not installed (rustup target add $TARGET)"
-    exit 0
+missing=""
+command -v cargo-zigbuild >/dev/null 2>&1 || missing+=" cargo-zigbuild"
+command -v zig >/dev/null 2>&1 || missing+=" zig"
+grep -qx "$TARGET" <<<"$(rustup target list --installed 2>/dev/null)" \
+    || missing+=" rust-target:$TARGET (rustup target add $TARGET)"
+if [ -n "$missing" ]; then
+    printf '✗ [linux] cannot cross-check, missing:%s\n' "$missing" >&2
+    exit 1
 fi
 
 info "[linux] checking divoomd for $TARGET"
-if cargo-zigbuild clippy -p divoomd --no-default-features \
-        --target "$TARGET" >/tmp/divoom_linux_check.log 2>&1; then
-    ok "[linux] OK — divoomd compiles for $TARGET"
+# CI_LINT_ARGS is CI's "Lint core without BLE" step, flag for flag
+# (.github/workflows/tests.yml, rust-core job); tests/test_linux_lint_parity.py
+# holds the two together. It was `clippy --no-default-features` alone: no
+# --all-targets, no -D warnings, so a Linux-only WARNING -- the exact class CI
+# denies -- passed here as long as it compiled.
+CI_LINT_ARGS=(-p divoomd --no-default-features --all-targets --locked -- -D warnings)
+LOG="${TMPDIR:-/tmp}/divoom_linux_check.log"
+if cargo-zigbuild clippy --target "$TARGET" "${CI_LINT_ARGS[@]}" >"$LOG" 2>&1; then
+    ok "[linux] OK — divoomd lints clean for $TARGET (CI flags)"
 else
-    grep -E "^error" /tmp/divoom_linux_check.log | head -20 || true
-    echo "  full log: /tmp/divoom_linux_check.log"
+    grep -E "^error" "$LOG" | head -20 || true
+    echo "  full log: $LOG"
     exit 1
 fi

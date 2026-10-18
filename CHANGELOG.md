@@ -4,6 +4,38 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## CI green again, and the local gate runs what CI runs (2026-10-18)
+
+CI had failed on 19 of the last 20 main runs while the 27-step local pre-push
+gate passed every one. Two causes, and one class behind both.
+
+- **`unused import: err_with`** (`divoomd/src/now_playing.rs`): used only
+  under `cfg(target_os = "macos")`, so CI's Linux clippy (`-D warnings`)
+  denied it and no macOS lint could see it. The call site now names
+  `crate::protocol::err_with` inside the macOS block.
+- **camoufox could not import on Python 3.15**: it needs PyYAML's C loader
+  (`from yaml import CLoader`, still so in camoufox 0.5.8), PyYAML 6.0.3 has
+  no 3.15 wheel, and its sdist built WITHOUT libyaml as pure Python. The test
+  job now installs libyaml, puts it on the build's include path, and sets
+  `PYYAML_FORCE_LIBYAML=1` so a build that cannot find it fails at install
+  (calibrated both ways locally); then checks `yaml.__with_libyaml__`.
+- **The class: the local gate was weaker than CI.**
+  `scripts/check_linux_build.sh` -- the one local instrument for Linux --
+  SKIPPED green when `x86_64-unknown-linux-gnu` was not installed (it was
+  not), and even when it ran it linted without `--all-targets` or
+  `-D warnings`. It now fails closed when the cross toolchain is missing
+  (`DIVOOM_SKIP_LINUX_CHECK=1` opts out, loudly) and runs CI's "Lint core
+  without BLE" flags exactly; `tests/test_linux_lint_parity.py` pins the two
+  together (watched red with the old flags). On the old tree it reproduced
+  CI's exact error locally.
+- **gates_of_heck `check_ci_local_parity.py` adopted** as the first
+  `GOH_CI_STEPS` step and as a CI step beside the structural gate: every repo
+  script CI runs must be run locally or exempted with a reason. Red on the old
+  tree (`scripts/py_ci.sh`, `tools/camoufox_installed.py` unnamed), green with
+  both exempted with their reasons; floor 12 of the 14 it reads.
+- Still open: the local gate runs no `--run-browser` suites, and CI's
+  `--all-features` Linux lint (BlueZ/D-Bus headers) has no local equivalent.
+
 ## P6.6 — the wall's brightness and volume from the deck (2026-10-18)
 
 The bridge wrote the wall's levels and, since P6.4, answered which panel did

@@ -68,6 +68,11 @@ jobs:
         # (GOH_NO_NATIVE is retired and ignored); structural.sh builds it from
         # the checkout with cargo, which the manifest step above guarantees.
         run: GOH_DIR="$GITHUB_WORKSPACE/goh" bash goh/gates/structural.sh --full
+      - name: Every script CI runs, the local gate runs too (ci_local_parity)
+        # The same command GOH_CI_STEPS runs first in .gatesrc. Here it guards
+        # the other direction of the same edit: a script added to THIS file
+        # without a local step goes red in CI too, not only on the next push.
+        run: GOH_DIR="$GITHUB_WORKSPACE/goh" python3 goh/checks/check_ci_local_parity.py
       # R67: these ran ONLY in the local gate list, so local and CI disagreed
       # about what "green" means — the same divergence the house rules name,
       # pointing the other way. They resolve the TUI via tools/_tui.py, which
@@ -116,7 +121,23 @@ jobs:
       # worker that no JS could start, and that was never in requirements.txt
       # at all.
       - name: Install dependencies
+        # camoufox imports PyYAML's C loader unconditionally
+        # (`from yaml import CLoader` in camoufox/pkgman.py and geolocation.py,
+        # still so in 0.5.8). PyYAML ships no wheel for a new CPython (none for
+        # 3.15 as of 6.0.3), so pip builds the sdist, and without libyaml
+        # headers on the include path that build SUCCEEDS as pure Python --
+        # then every `python -m camoufox` dies with `cannot import name
+        # 'CLoader'`. That was 19 of 20 red main runs in 2026-10. The fix is
+        # the dependency, not the interpreter: give the build libyaml, and set
+        # PYYAML_FORCE_LIBYAML=1 so a build that cannot find it FAILS here
+        # instead of installing a module that fails three steps later.
+        env:
+          PYYAML_FORCE_LIBYAML: "1"
         run: |
+          brew install libyaml
+          BREW_PREFIX="$(brew --prefix)"
+          export CFLAGS="-I${BREW_PREFIX}/include ${CFLAGS:-}"
+          export LDFLAGS="-L${BREW_PREFIX}/lib ${LDFLAGS:-}"
           python -m pip install --upgrade pip
           pip install -r requirements.txt || true
           # pytest + pillow are also in requirements.txt (which is installed
@@ -132,6 +153,8 @@ jobs:
           # camoufox accepts any build in [alpha.1, 1), so pinning the package
           # alone still lets `fetch` take the newest.
           pip install pytest pillow -e '.[e2e]'
+          # The artifact, not the exit code: the C loader camoufox needs is there.
+          python -c 'import yaml, camoufox.pkgman; assert yaml.__with_libyaml__, "PyYAML built without libyaml"'
 
       - name: Install the camoufox browser
         # The GUI e2e suites (15 modules) drive headless camoufox via
