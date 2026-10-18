@@ -142,19 +142,10 @@ P4.7, `notify`: text shown under a screen lease whose TTL is the notification's 
 daemon by mac. **Exit:** browser tests across two panels for P5.1/P5.2; the
 menubar no longer closes on a status change. **Size:** M.
 
-Landed (2026-10-18): P5.4, the weather card showing the PNG of `render_widget {kind: "weather"}` with the reading beside it, the SVG renderer and `get_weather` deleted, loading and failure as distinct placeholders that say why (`4ac2bcf`; `divoom_gui/web_ui/widgets_weather.js`, the converse call-site check in `tests/test_widget_drift.py`);
+Landed (2026-10-18): P5.2, every channel control writing the selected display's own per-channel settings through one funnel that resolves the display at the gesture via `DisplayPreviewRegistry.getActive()`, the app-wide channel globals deleted (`78608ea`; `divoom_gui/web_ui/channel_settings.js`, `tests/test_e2e_channel_settings_per_panel.py`);
+P5.4, the weather card showing the PNG of `render_widget {kind: "weather"}` with the reading beside it, the SVG renderer and `get_weather` deleted, loading and failure as distinct placeholders that say why (`4ac2bcf`; `divoom_gui/web_ui/widgets_weather.js`, the converse call-site check in `tests/test_widget_drift.py`);
 P5.3, the menubar updating labels, the "Active panel" check and the notification items in place, rebuilding only when the set of rows changes, decided by diffing one `MenuModel` signature (`28f54cd`; `divoom-menubar/src/menu_model.rs`). That meets the exit's menubar half in code; holding the menu open through a fleet change on screen is not yet checked (2026-10-18: the console was locked, so no NSMenu could be held open or captured; a two-mock-panel smoke -- selection A, B, A and a row rename over the socket -- left the menubar running);
 P5.1, brightness, volume and panel size read and written per mac through the daemon, both name-based size guessers deleted, switching panels shows that panel's values (`f1f7b3b`; `divoom_gui/panels.py`, `divoom_gui/web_ui/panel_facts.js`, `tests/test_e2e_panel_levels_per_panel.py`, `divoomd/src/mock_levels_tests.rs`).
-
-#### P5.2 — Channel settings are written per display
-**Status:** OPEN
-**Why:** `syncChannelControlsToDisplay` (`divoom_gui/web_ui/channel_preview.js`)
-fixed the READ side, but the write path still uses globals
-(`divoom_gui/web_ui/channels_grids.js`, `divoom_gui/web_ui/channels_core.js`),
-`DisplayPreviewRegistry.getActive()` has no callers, and a colour input keeps
-the previous display's value when the new one is on another channel.
-**Done when:** every channel control writes to the selected display's state,
-and changing display A's clock style leaves B's untouched (browser test).
 
 #### P5.5 — The bench invents no panels
 **Status:** OPEN
