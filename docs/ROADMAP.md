@@ -142,26 +142,24 @@ P4.7, `notify`: text shown under a screen lease whose TTL is the notification's 
 daemon by mac. **Exit:** browser tests across two panels for P5.1/P5.2; the
 menubar no longer closes on a status change. **Size:** M.
 
-Landed (2026-10-18): P5.5, with no panel known the bench showing an empty state that says how to add one and the deck "No panel selected" with no levels, the active-panel lookup answering null instead of an invented mac (`f56b550`; `window.isKnownTarget` in `divoom_gui/web_ui/app_globals.js`, `tests/test_e2e_no_invented_fleet.py`);
+Landed (2026-10-18): P5.6, every channel bridge call naming the panel its click resolved, through one `ApiBase._display(mac)` to the daemon, a call naming no panel refused, `_target()` and `current_target_mode` deleted, and `_LanView` forwarding the daemon's `lan.*` calls so albums, playlists and the overlay work through the real proxy (`0a8aa81`; `divoom_gui/api/__init__.py`, `tests/test_e2e_channel_write_reaches_its_panel.py`, `tests/test_channel_writes_name_their_panel.py`, `divoomd/src/mock_channel_tests.rs`);
+P5.5, with no panel known the bench showing an empty state that says how to add one and the deck "No panel selected" with no levels, the active-panel lookup answering null instead of an invented mac (`f56b550`; `window.isKnownTarget` in `divoom_gui/web_ui/app_globals.js`, `tests/test_e2e_no_invented_fleet.py`);
 P5.2, every channel control writing the selected display's own per-channel settings through one funnel that resolves the display at the gesture via `DisplayPreviewRegistry.getActive()`, the app-wide channel globals deleted (`78608ea`; `divoom_gui/web_ui/channel_settings.js`, `tests/test_e2e_channel_settings_per_panel.py`);
 P5.4, the weather card showing the PNG of `render_widget {kind: "weather"}` with the reading beside it, the SVG renderer and `get_weather` deleted, loading and failure as distinct placeholders that say why (`4ac2bcf`; `divoom_gui/web_ui/widgets_weather.js`, the converse call-site check in `tests/test_widget_drift.py`);
 P5.3, the menubar updating labels, the "Active panel" check and the notification items in place, rebuilding only when the set of rows changes, decided by diffing one `MenuModel` signature (`28f54cd`; `divoom-menubar/src/menu_model.rs`). That meets the exit's menubar half in code; holding the menu open through a fleet change on screen is not yet checked (2026-10-18: the console was locked, so no NSMenu could be held open or captured; a two-mock-panel smoke -- selection A, B, A and a row rename over the socket -- left the menubar running);
 P5.1, brightness, volume and panel size read and written per mac through the daemon, both name-based size guessers deleted, switching panels shows that panel's values (`f1f7b3b`; `divoom_gui/panels.py`, `divoom_gui/web_ui/panel_facts.js`, `tests/test_e2e_panel_levels_per_panel.py`, `divoomd/src/mock_levels_tests.rs`).
 
-#### P5.6 — Channel writes name their panel
+#### P5.7 — The rest of the GUI's device actions name their panel
 **Status:** OPEN
-**Why:** P5.2 resolves the selected display at the click in
-`divoom_gui/web_ui/channel_settings.js`, but the bridge calls it then makes
-(`set_clock`, `switch_channel` and the rest, `divoom_gui/api/lighting.py`)
-carry no mac: they reach whichever panel the bench last told the backend to
-select (`current_divoom`, via `ApiBase._target`). That is intent read when the
-write lands, not at the click: a selection change in between sends the setting
-to the wrong panel. P5.1 did this right for brightness and volume
-(`divoom_gui/panels.py` refuses a call that names no panel).
-**Done when:** every channel bridge call carries the mac resolved at the click
-through one dispatcher to the daemon, a call naming no panel is refused, the
-implicit route is deleted, and a two-panel test that switches to B before the
-write lands sees the write reach A (watched red on the old code).
+**Why:** P5.6 made every channel write name its panel, but the Tools tab
+(alarms, sleep, timer, countdown, noise, name, power, orientation, factory
+reset: `divoom_gui/api/tools.py`), media sync (`divoom_gui/media_sync.py`) and
+the gallery push (`divoom_gui/gallery_sync.py` through `display_wall_image`)
+still act on `current_divoom`, the panel the bench last selected, read when
+the call runs -- the same race P5.6 closed for channels.
+**Done when:** each of those calls carries the mac its gesture resolved, a
+call naming no panel is refused, `current_divoom` is deleted, and a two-panel
+test that switches panels before the write lands sees it reach the first.
 
 ### Phase 6 — the multi-panel wall
 
