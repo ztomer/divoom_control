@@ -150,3 +150,33 @@ def test_the_widget_kinds_the_gui_asks_for_all_exist_in_the_daemon():
             asked.add(m.group(1))
     assert asked, "no _widget_frame call sites found — has the funnel moved?"
     assert asked <= kinds, f"the GUI asks for kinds the daemon lacks: {asked - kinds}"
+
+
+# Kinds the daemon renders that the GUI deliberately shows no preview of, each
+# with the reason it may stand. Empty: every kind the panel can show has a GUI
+# surface, and that surface must be fed by the funnel.
+NOT_PREVIEWED: dict[str, str] = {}
+
+
+def test_every_kind_the_daemon_renders_is_previewed_through_the_funnel():
+    """The converse of the check above, and the one P5.4 was missing.
+
+    A kind with no `_widget_frame` caller is a kind whose GUI surface, if it
+    has one, is drawn some other way. That is how the weather card kept its own
+    SVG icon and text for a whole phase after the panel started showing a
+    `render_widget {kind: "weather"}` frame: the check above only proved the GUI
+    asked for nothing unknown, never that it asked for everything it shows.
+    A kind that genuinely has no GUI surface goes in NOT_PREVIEWED with its
+    reason, so the omission is a decision on the page rather than a gap.
+    """
+    kinds = set(daemon_kinds())
+    asked: set[str] = set()
+    for path in (REPO / "divoom_gui").rglob("*.py"):
+        for m in re.finditer(r'_widget_frame\(\s*"([a-z_]+)"', path.read_text()):
+            asked.add(m.group(1))
+    missing = kinds - asked - set(NOT_PREVIEWED)
+    assert not missing, (
+        f"the daemon renders {sorted(missing)} but no GUI surface asks for it "
+        "through _widget_frame -- a GUI preview of it would be a second renderer")
+    stale = set(NOT_PREVIEWED) & asked
+    assert not stale, f"NOT_PREVIEWED lists kinds the GUI now previews: {sorted(stale)}"

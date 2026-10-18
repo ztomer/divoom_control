@@ -22,7 +22,6 @@ from divoom_gui.api import AsyncLoopThread
 from divoom_gui.api.connection import ConnectionApi
 from divoom_gui.api.lighting import LightingApi
 from divoom_gui.api.tools import ToolsApi
-from divoom_gui.api.widgets import WidgetsApi
 from divoom_gui.api.window import WindowApi
 
 logger = logging.getLogger("divoom_gui")
@@ -93,7 +92,6 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
         self.connection = ConnectionApi(self.loop_thread, _dc, _state)
         self.lighting = LightingApi(self.loop_thread, _dc, _state)
         self.tools = ToolsApi(self.loop_thread, _dc, _state)
-        self.widgets = WidgetsApi(self.loop_thread, _dc, _state)
         self.window_mgr = WindowApi(self.loop_thread, _dc, _state)
 
     def _client(self):
@@ -204,9 +202,6 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
                        humidity: bool = False, weather: bool = False,
                        date: bool = False, color: str = "#ffffff") -> bool:
         return self.lighting.set_clock_rich(style, twentyfour, humidity, weather, date, color)
-
-    def get_weather(self) -> dict:
-        return self.widgets.get_weather()
 
     def set_fm_frequency(self, freq_x10: int) -> bool:
         return self.tools.set_fm_frequency(freq_x10)

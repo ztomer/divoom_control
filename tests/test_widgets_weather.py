@@ -9,7 +9,7 @@ Three contract tests:
    Live Widgets (R15 §3 move) and the matching cards are gone from
    Settings → Devices.
 3. The widgets.js auto-fetch + auto-push on selection flow is wired
-   (mock get_weather + push_weather are called once on selection).
+   (the card reads get_weather_preview; the panel is a daemon live job).
 """
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
 WIDGETS_JS = REPO_ROOT / "divoom_gui" / "web_ui" / "widgets.js"
+WEATHER_JS = REPO_ROOT / "divoom_gui" / "web_ui" / "widgets_weather.js"
 
 def _cat(paths: list[Path]) -> str:
     parts = []
@@ -111,12 +112,18 @@ def test_weather_card_has_no_panel_hint() -> None:
     )
 
 
-def test_weather_preview_has_128px_box_and_temp_and_icon() -> None:
-    """The 128x128 preview box contains the temp + icon spans."""
+def test_weather_preview_box_holds_the_panels_frame_not_a_drawing() -> None:
+    """P5.4: the 128x128 box holds an <img> for the daemon's frame and a note
+    for the placeholder states; the reading is text BESIDE it. No <svg>: the
+    card drew its own icon until P5.4, a second renderer for the widget."""
     lw = _live_widgets_block()
-    assert 'id="weather-device-preview"' in lw, "weather-device-preview box missing"
-    assert 'id="weather-preview-temp"' in lw, "weather-preview-temp span missing"
-    assert 'id="weather-preview-icon"' in lw, "weather-preview-icon SVG missing"
+    m = re.search(r'<div id="weather-device-preview"[^>]*>(.*?)</div>', lw, re.S)
+    assert m, "weather-device-preview box missing"
+    box = m.group(1)
+    assert 'id="weather-frame"' in box and "<img" in box, "the frame <img> is missing"
+    assert 'id="weather-frame-note"' in box, "the placeholder note is missing"
+    assert "<svg" not in box, "the card draws a weather picture of its own again"
+    assert 'id="weather-reading-temp"' in lw, "the reading beside the frame is missing"
     assert 'id="weather-preview-location"' in lw, "weather-preview-location span missing"
 
 
@@ -168,11 +175,13 @@ def test_settings_devices_block_no_longer_has_notif_cards() -> None:
 # ── 3. widgets.js wires auto-fetch + auto-push ────────────────────────
 
 
-def test_widgets_js_calls_get_weather_on_select() -> None:
+def test_widgets_js_refreshes_the_weather_frame_on_select() -> None:
     src = WIDGETS_JS.read_text()
-    # selectWidget("weather") path calls api.get_weather() (via
-    # refreshWeatherPreview).
-    assert "get_weather" in src, "widgets.js does not call get_weather."
+    # selectWidget("weather") refreshes the card through refreshWeatherPreview,
+    # which lives in widgets_weather.js and reads get_weather_preview (P5.4).
+    assert "refreshWeatherPreview" in src, "widgets.js never refreshes the weather card."
+    assert "get_weather_preview" in WEATHER_JS.read_text(), (
+        "widgets_weather.js does not read get_weather_preview.")
     # R40 §4: the Weather Live toggle polls every 15 minutes.
     assert re.search(
         r"15\s*\*\s*60\s*\*\s*1000",

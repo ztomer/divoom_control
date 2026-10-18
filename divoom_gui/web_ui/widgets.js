@@ -129,48 +129,9 @@ document.addEventListener("DOMContentLoaded", () => {
     window.selectedWidgetIs = (id) => selectedWidget === id;
     let weatherTimer = null;  // R15 §3: 10-minute poll for the weather card
 
-    // R15 §3: weather card icon SVGs (one per WeatherType). Inline so the
-    // preview doesn't depend on an external sprite.
-    const WEATHER_ICON_SVG = {
-        1: '<circle cx="8" cy="8" r="3" fill="currentColor"/><g stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><line x1="8" y1="1" x2="8" y2="3"/><line x1="8" y1="13" x2="8" y2="15"/><line x1="1" y1="8" x2="3" y2="8"/><line x1="13" y1="8" x2="15" y2="8"/><line x1="3" y1="3" x2="4.5" y2="4.5"/><line x1="11.5" y1="11.5" x2="13" y2="13"/><line x1="3" y1="13" x2="4.5" y2="11.5"/><line x1="11.5" y1="4.5" x2="13" y2="3"/></g>', // Clear (sun)
-        3: '<path d="M3,12 C1.5,12 0.5,10.5 0.5,9 C0.5,7.5 1.5,6 3,6 C3.5,4 5.5,3 8,3 C11,3 13.5,5.5 13.5,8.5 C13.5,10.5 12,12 10,12 Z" fill="none" stroke="currentColor" stroke-width="1.5"/>', // CloudySky
-        5: '<path d="M3,11 C1.5,11 0.5,9.5 0.5,8 C0.5,6.5 1.5,5 3,5 C3.5,3 5.5,2 8,2 C11,2 13.5,4.5 13.5,7.5 C13.5,9.5 12,11 10,11 Z" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="4" y1="13" x2="6" y2="15" stroke="currentColor" stroke-width="1.2"/><line x1="12" y1="13" x2="10" y2="15" stroke="currentColor" stroke-width="1.2"/>', // Thunderstorm
-        6: '<path d="M3,9 C1.5,9 0.5,7.5 0.5,6 C0.5,4.5 1.5,3 3,3 C3.5,1 5.5,0 8,0 C11,0 13.5,2.5 13.5,5.5 C13.5,7.5 12,9 10,9 Z" fill="none" stroke="currentColor" stroke-width="1.2"/><g stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><line x1="4" y1="11" x2="3" y2="13"/><line x1="8" y1="11" x2="7" y2="13"/><line x1="12" y1="11" x2="11" y2="13"/></g>', // Rain (drops)
-        8: '<g fill="currentColor"><circle cx="5" cy="3" r="0.8"/><circle cx="9" cy="3" r="0.8"/><circle cx="13" cy="3" r="0.8"/><circle cx="3" cy="6" r="0.8"/><circle cx="7" cy="6" r="0.8"/><circle cx="11" cy="6" r="0.8"/><circle cx="15" cy="6" r="0.8"/><circle cx="5" cy="9" r="0.8"/><circle cx="9" cy="9" r="0.8"/><circle cx="13" cy="9" r="0.8"/></g>', // Snow (dots)
-        9: '<g fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><line x1="2" y1="6" x2="14" y2="6"/><line x1="2" y1="9" x2="14" y2="9"/><line x1="2" y1="12" x2="14" y2="12"/></g>', // Fog (lines)
-    };
-
-    function renderWeatherPreview(info) {
-        const tempEl = document.getElementById("weather-preview-temp");
-        const iconEl = document.getElementById("weather-preview-icon");
-        const locEl = document.getElementById("weather-preview-location");
-        if (tempEl) tempEl.textContent = `${info.temperature_c}°`;
-        if (iconEl) {
-            const svg = WEATHER_ICON_SVG[info.weather_type] || WEATHER_ICON_SVG[1];
-            iconEl.innerHTML = svg;
-        }
-        if (locEl) {
-            // Truncate long location strings to keep the card tidy.
-            const loc = info.location || "--";
-            const short = loc.length > 28 ? `${loc.slice(0, 25)}…` : loc;
-            locEl.textContent = short;
-        }
-    }
-
-    function refreshWeatherPreview() {
-        if (!window.pywebview || !window.pywebview.api) return;
-        const api = window.pywebview.api;
-        if (typeof api.get_weather !== "function") return;
-        Promise.resolve(api.get_weather()).then(info => {
-            if (info && typeof info === "object") renderWeatherPreview(info);
-        });
-    }
-
-    // Exposed for weather_city.js: after the city changes, the card must be
-    // re-read through this same path rather than patched locally, so what it
-    // shows is what the BACKEND resolved. A save that silently failed should
-    // leave the old city on screen, not an optimistic one.
-    window.refreshWeatherPreview = refreshWeatherPreview;
+    // Rendering lives in widgets_weather.js (the panel's own frame, P5.4);
+    // this file owns selection + the Live (15m) poll, like sysmon above.
+    const refreshWeatherPreview = (...a) => window.refreshWeatherPreview?.(...a);
 
     function startWeatherPolling() {
         if (weatherTimer) return;
@@ -389,11 +350,6 @@ document.addEventListener("DOMContentLoaded", () => {
     bindCardSelection("widget-card-weather", "weather");
     bindCardSelection("widget-card-notif-manual", "notif-manual");
     bindCardSelection("widget-card-notif-mirror", "notif-mirror");
-
-    // R18 item 1: populate the weather card on load — no click required.
-    // (Preview only; pushing to the device still happens when weather is the
-    // selected widget, per the one-active-widget model.)
-    refreshWeatherPreview();
 
     const sysmonLive = document.getElementById("sysmon-live");
     if (sysmonLive) {

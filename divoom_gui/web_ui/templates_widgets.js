@@ -117,11 +117,12 @@ window.DivoomTemplates.widgets = `                <div class="grid-layout three-
                         </div>
                     </div>
 
-                    <!-- R15 §3: Weather is its own card now (was nested
-                         inside the sysmon card). The body is JUST the
-                         128x128 preview — no text, no button (Kare: the
-                         preview is the only thing the user needs to see;
-                         auto-push fires on card selection). -->
+                    <!-- R15 §3: Weather is its own card (was nested inside
+                         the sysmon card). P5.4: the box shows the frame the
+                         panel shows (render_widget "weather", via
+                         get_weather_preview), never a drawing of our own; the
+                         reading sits beside it as text. Until a frame arrives,
+                         or when it cannot, the box says why instead. -->
                     <div class="card glass-card clip-shrink" id="widget-card-weather">
                         <div class="card-header flex-header">
                             <h3>Weather</h3>
@@ -129,11 +130,12 @@ window.DivoomTemplates.widgets = `                <div class="grid-layout three-
                             <label class="switch" title="Live updates every 15 min"><input type="checkbox" id="weather-live"><span class="slider-round"></span></label>
                         </div>
                         <div class="card-body col gap-10" style="align-items:center;">
-                            <div id="weather-device-preview" class="device-preview-wrap large">
-                                <span id="weather-preview-temp" class="weather-preview-temp">--</span>
-                                <svg id="weather-preview-icon" class="weather-preview-icon" viewBox="0 0 16 16" aria-hidden="true">
-                                    <circle cx="8" cy="8" r="3" fill="currentColor"/>
-                                </svg>
+                            <div class="row gap-12" style="align-items:center;">
+                                <div id="weather-device-preview" class="device-preview-wrap large" data-state="loading">
+                                    <img id="weather-frame" class="device-preview-img" alt="The weather frame the panel shows" style="display:none;">
+                                    <span id="weather-frame-note" class="weather-frame-note">Loading the panel's weather frame…</span>
+                                </div>
+                                <span id="weather-reading-temp" class="weather-reading-temp">–</span>
                             </div>
                             <!-- P3.1b: the location line doubles as the way to
                                  change it. Weather geolocates by IP, which is

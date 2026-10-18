@@ -141,7 +141,7 @@ class ApiBase:
     def _run_async(self, coro, *, timeout: float = 120.0):
         # A3 (completion): bound the wait. The A3 hardening added this guard to
         # GuiApi._run_async, but EVERY actual device command goes through a
-        # collaborator (LightingApi/ToolsApi/WidgetsApi/ConnectionApi) which inherits
+        # collaborator (LightingApi/ToolsApi/ConnectionApi) which inherits
         # THIS base method — so without the bound here a wedged async chain (daemon
         # stopped answering, hung device op) froze the pywebview JS-API thread forever
         # (a dead button, no error). On expiry cancel + raise so the GUI surfaces it.

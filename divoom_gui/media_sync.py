@@ -205,6 +205,36 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
             logger.error(f"get_ticker_preview failed: {e}")
             return json.dumps({"ok": False, "error": str(e)})
 
+    def get_weather_preview(self, size: int = 0) -> str:
+        """The weather card: the frame the panel shows, and the reading in it.
+
+        P5.4. The card used to draw its own SVG icon and temperature from
+        `get_weather` while the panel showed `render_widget {kind: "weather"}`
+        (P3.3) -- a second renderer for one widget, the class R70 removed for
+        sysmon, stocks and album art. Now one reply carries both the frame and
+        the reading it was drawn from, at the live job's size and location, so
+        the picture, the text beside it and the panel cannot disagree.
+        """
+        try:
+            sz = int(size) if size and int(size) > 0 else self._active_device_size()
+            location = self._weather_location()
+            extras, frame_path = self._widget_frame(
+                "weather", sz, {"location": location} if location else {})
+            preview = self._frame_to_data_url(frame_path)
+            if not preview:
+                raise RuntimeError(f"the weather frame at {frame_path} could not be read")
+            return json.dumps({
+                "ok": True, "size": sz, "preview": preview,
+                "temperature_c": extras.get("temperature_c"),
+                "weather": extras.get("weather"),
+                # The daemon names the city it resolved; with neither it nor an
+                # override the honest answer is "unknown", never a stand-in.
+                "location": extras.get("location") or location or "unknown",
+            })
+        except Exception as e:
+            logger.error(f"get_weather_preview failed: {e}")
+            return json.dumps({"ok": False, "error": str(e)})
+
     def apply_stock_ticker(self, symbol: str) -> str:
         """Push the stock tile — the SAME bytes the preview showed.
 
@@ -302,20 +332,28 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
         dev = self.current_divoom
         if dev and dev.lan:
             params["lan_token"] = getattr(dev.lan, "local_token", 0)
-        # R67/C2: the weather job reads params["location"] and this never sent
-        # it, so the daemon fell back to IP geolocation while the GUI preview
-        # resolved the location its own way. Same machine usually agrees — but
-        # not when the daemon was started separately (the dev bundle, launchd)
-        # and so did not inherit the GUI's DIVOOM_CONTROL_WEATHER_* env. Send
-        # the resolved value rather than letting two resolvers guess apart.
+        location = self._weather_location()
+        if location:
+            params["location"] = location
+        return params
+
+    @staticmethod
+    def _weather_location() -> str:
+        """The location weather is fetched for: the live job's AND the card's.
+
+        R67/C2: the weather job reads params["location"] and the GUI never sent
+        it, so the daemon fell back to IP geolocation while the GUI preview
+        resolved the location its own way. Same machine usually agrees — but
+        not when the daemon was started separately (the dev bundle, launchd)
+        and so did not inherit the GUI's DIVOOM_CONTROL_WEATHER_* env. One
+        resolver, read by both, so the card cannot preview another city.
+        """
         try:
             from divoom_lib.weather_provider import resolve_location
-            location = resolve_location(None)
-            if location:
-                params["location"] = location
+            return resolve_location(None) or ""
         except Exception as e:
-            logger.debug(f"could not resolve weather location for live params: {e}")
-        return params
+            logger.debug(f"could not resolve the weather location: {e}")
+            return ""
 
     @staticmethod
     def _job_reply_ok(reply) -> bool:

@@ -102,7 +102,7 @@ class TestGuiApiTopLevelCoverage(unittest.TestCase):
         self.api.lighting.set_volume.return_value = True
         self.assertTrue(self.api.set_volume(5))
 
-    def test_tools_and_widgets_wrappers_forward_to_collaborator(self):
+    def test_tools_wrappers_forward_to_collaborator(self):
         self.api.tools = MagicMock()
         self.api.tools.get_alarms.return_value = "ALARMS"
         self.assertEqual(self.api.get_alarms(), "ALARMS")
@@ -114,11 +114,9 @@ class TestGuiApiTopLevelCoverage(unittest.TestCase):
         self.api.tools.get_device_name.return_value = "Bedroom Pixoo"
         self.assertEqual(self.api.get_device_name(), "Bedroom Pixoo")
 
-        self.api.widgets = MagicMock()
-        # push_weather was deleted in R70 P5.3: no JS caller, and it fetched
-        # weather and switched channels in the GUI process — the pre-R67 path.
-        self.api.widgets.get_weather.return_value = {"temp": 70}
-        self.assertEqual(self.api.get_weather(), {"temp": 70})
+        # push_weather was deleted in R70 P5.3 and get_weather (with the whole
+        # WidgetsApi it was the last method of) in P5.4: the weather card reads
+        # get_weather_preview, the frame the panel shows.
 
     # ---- close_window: daemon-shutdown branch + swallowed lifecycle error -
 

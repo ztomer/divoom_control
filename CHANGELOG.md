@@ -4,6 +4,48 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P5.4 — the weather card shows the frame the panel shows (2026-10-18)
+
+Since P3.3 the panel shows a frame from `render_widget {kind: "weather"}`, but
+the GUI's weather card drew its own SVG icon (one per condition) and a
+temperature from `get_weather` -- a second renderer for one widget, the class
+R70 removed for sysmon, stocks and album art. The card never matched the
+firmware's face either; now there was a frame to mirror and it did not.
+
+- **`get_weather_preview(size)`** (`divoom_gui/media_sync.py`): one
+  `_widget_frame("weather", ...)` call at the live job's size and location,
+  returning the PNG and the reading that frame was drawn from in ONE reply, so
+  the picture, the text beside it and the panel cannot come from two fetches
+  that disagree. The location comes from `_weather_location()`, now the one
+  resolver both the live job's params and the card read.
+- **The card** (`divoom_gui/web_ui/widgets_weather.js`, split from
+  `widgets.js` for the 500-line rule): an `<img>` of that PNG with the
+  temperature as text beside it. The SVG icon table and the drawing code are
+  deleted, not kept as a fallback. Until a frame arrives the box says
+  "Loading the panel's weather frame…" (dashed border); when it cannot, it
+  says "⚠ Weather unavailable — <the daemon's reason>" (solid border) and
+  takes down any frame and number it showed before, so a stale picture never
+  passes for the panel's current one. The two states differ in text and
+  border shape, not only colour. Replies are last-wins. While weather is the
+  selected widget the frame is mirrored onto the displays bound to the weather
+  job, as sysmon and stocks already were.
+- **Deleted:** `get_weather` and `WidgetsApi` (`divoom_gui/api/widgets.py`),
+  whose only method it was; the capability census entry for its
+  `resolve_location` call went with it.
+- **Class-level gate:** `tests/test_widget_drift.py` now also checks the
+  converse -- every kind the daemon renders has a `_widget_frame` caller, with
+  an explicit (empty) `NOT_PREVIEWED` ratchet for a kind that genuinely has no
+  GUI surface. It was red on `weather` before this change.
+- **Watched red:** the drift converse (on `weather`); `tests/test_weather_preview.py`
+  under five separate sabotages (location not sent, size hardcoded to 16, a
+  fabricated reading on failure, the wrong kind asked for, the reading not
+  taken from the reply); `tests/test_e2e_weather_card.py` (real web UI, mock
+  bridge) red before the change and under five more (stale frame kept on
+  failure, the loading border equal to the failed one, a number kept on
+  failure, the reason dropped, an `<svg>` back in the box).
+- Tests: `python3 -m pytest` 1686 passed, 139 skipped; with `--run-browser`,
+  `tests/test_e2e_weather_card.py` + `tests/test_e2e_weather_city.py` 11 passed.
+
 ## Tools — a probe crate's build is removed with its temp dir (2026-10-17)
 
 `tools/render_tray_icon.py --verify-against-rust` compiles a scratch crate

@@ -247,29 +247,29 @@
     border-radius: 6px;
 }
 
-/* ── R15 §3: Weather preview (icon + temperature) ──
+/* ── P5.4: Weather card — the panel's frame, and the reading beside it ──
  *
- * The .device-preview-wrap is the 128×128 dark box. We layer:
- *   - the SVG icon (32×32, centered) for the weather type
- *   - the temperature (pixel-art 7-segment style, top-right corner)
- * Both are absolutely positioned inside the box; the box itself is
- * flex-centered so the icon stays put if the temperature is long.
+ * The 128x128 box holds the PNG the daemon rendered (the same frame the
+ * panel shows) or, until one arrives or when it cannot, a note saying why.
+ * The two placeholder states differ in TEXT and in the box's border shape
+ * (dashed while loading, solid when failed), so neither rides on colour.
  */
-.weather-preview-icon {
-    width: 64px;
-    height: 64px;
-    color: var(--text-main);
-    flex-shrink: 0;
+.weather-frame-note {
+    padding: 0 10px;
+    font-size: 11px;
+    line-height: 1.4;
+    text-align: center;
+    color: var(--text-muted);
 }
-.weather-preview-temp {
-    position: absolute;
-    top: 8px;
-    right: 10px;
+#weather-device-preview[data-state="ok"] .weather-frame-note { display: none; }
+#weather-device-preview[data-state="loading"] { border-style: dashed; }
+#weather-device-preview[data-state="failed"] .weather-frame-note { color: var(--text-main); }
+.weather-reading-temp {
     font-family: var(--font-mono);
-    font-size: 18px;
+    font-size: 22px;
     font-weight: 700;
     color: var(--text-main);
     letter-spacing: -0.02em;
-    pointer-events: none;
+    min-width: 4ch;
 }
 

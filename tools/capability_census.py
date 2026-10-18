@@ -88,10 +88,8 @@ OWNED_LIB = (
 # omit and the one that matters.
 REACHES_ALLOWLIST: dict[str, str] = {
     # client-local: pure preference resolution, env vars and a saved city.
-    "divoom_gui/api/widgets.py::resolve_location":
-        "client-local — pure, no network; the daemon fetches the weather",
     "divoom_gui/media_sync.py::resolve_location":
-        "client-local — same resolver, same reason",
+        "client-local — pure, no network; the daemon fetches the weather",
     "divoom_gui/weather_city.py::saved_location":
         "client-local — which city the user picked is the client's own state",
     # shared-state: one file, two parsers, held in step by

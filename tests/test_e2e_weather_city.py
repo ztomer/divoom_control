@@ -8,7 +8,7 @@ test_e2e_clock_faces.py. What these pin, beyond "the button works":
   never heard of a Divoom CityId;
 * clearing the override is reachable from the UI, because getting back to IP
   geolocation must not require editing config.ini;
-* the card re-reads through get_weather after a save rather than patching the
+* the card re-reads through get_weather_preview after a save rather than patching the
   label locally, so a save that failed leaves the OLD city on screen;
 * a slow search cannot overwrite the results for newer text in the box.
 
@@ -46,10 +46,11 @@ window.__api = {
             : {location: "", name: ""};
         return true;
     },
-    get_weather: () => {
-        window.__calls.push(["get_weather"]);
-        return {temperature_c: 11, weather_type: 1,
-                location: window.__saved.name || "IP geolocation"};
+    get_weather_preview: () => {
+        window.__calls.push(["get_weather_preview"]);
+        return JSON.stringify({ok: true, size: 16, temperature_c: 11, weather: 1,
+                preview: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC",
+                location: window.__saved.name || "IP geolocation"});
     },
 };
 window.pywebview = { api: new Proxy({}, { get: (_t, name) => (...args) => {
@@ -164,7 +165,7 @@ async def test_picking_a_city_saves_coordinates_not_the_name():
 
 @pytest.mark.asyncio
 async def test_saving_closes_the_panel_and_re_reads_the_card():
-    """The label must come from get_weather, not be patched locally: a save that
+    """The label must come from get_weather_preview, not be patched locally: a save that
     silently failed has to leave the OLD city on screen, not an optimistic one."""
     require_browser()
     from playwright.async_api import async_playwright
@@ -184,7 +185,7 @@ async def test_saving_closes_the_panel_and_re_reads_the_card():
 
             await page.wait_for_selector("#weather-city-input", state="hidden")
             await wait_js(
-                page, "() => window.__calls.some(c => c[0] === 'get_weather')")
+                page, "() => window.__calls.some(c => c[0] === 'get_weather_preview')")
             await wait_js(
                 page,
                 "() => document.getElementById('weather-preview-location')"

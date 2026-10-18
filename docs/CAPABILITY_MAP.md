@@ -101,7 +101,7 @@ invariant is about the WORK.
 |---|---|---|---|
 | ~~`DateTimeCommand(...)`~~ | `api/tools.py:158` | **CLOSED** with P1.2 | P1.2 |
 | ~~`DeviceSettings(...)`~~ | `api/tools.py:176`, `:180` | **CLOSED** with P1.3 | P1.3 |
-| `resolve_location(...)` | `api/widgets.py:42`, `media_sync.py:299` | **`client-local`** (verdict CORRECTED) | P2.1 |
+| `resolve_location(...)` | `media_sync.py::_weather_location` (one site since P5.4; `api/widgets.py` was deleted) | **`client-local`** (verdict CORRECTED) | P2.1 |
 | `saved_location()` | `weather_city.py:82` | `client-local` | — |
 | `hotchannel_config.*` | `gallery_hot_api.py:74`, `gallery_sync.py` ×7 | `shared-state` | P2.4 |
 | ~~`media_decoder.*`~~ | `scripts/verify_gallery_render.py` ×4 | **CLOSED** with P3.1 | P3.1 |
