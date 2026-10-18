@@ -142,6 +142,8 @@ P4.7, `notify`: text shown under a screen lease whose TTL is the notification's 
 daemon by mac. **Exit:** browser tests across two panels for P5.1/P5.2; the
 menubar no longer closes on a status change. **Size:** M.
 
+Landed (2026-10-18): P5.4, the weather card showing the PNG of `render_widget {kind: "weather"}` with the reading beside it, the SVG renderer and `get_weather` deleted, loading and failure as distinct placeholders that say why (`4ac2bcf`; `divoom_gui/web_ui/widgets_weather.js`, the converse call-site check in `tests/test_widget_drift.py`).
+
 #### P5.1 — Connection, brightness and volume are per panel
 **Status:** OPEN
 **Why:** `window.DivoomState.appConnected` (`divoom_gui/web_ui/app_globals.js`)
@@ -174,18 +176,6 @@ and changing display A's clock style leaves B's untouched (browser test).
 row icons update in place.
 **Done when:** labels and the "Active panel" check update in place; a rebuild
 happens only when the set of rows changes.
-
-#### P5.4 — The weather card shows the frame the panel shows
-**Status:** OPEN
-**Why:** since P3.3 the panel shows a frame from `render_widget {kind:
-"weather"}`, but the GUI's weather card (`renderWeatherPreview` in
-`divoom_gui/web_ui/widgets.js`) still draws its own SVG icon and text from
-`get_weather` -- a second renderer for one widget, the class R70 removed for
-sysmon, stocks and album art. It predates P3.3 (the card never matched the
-firmware's face either), but now there is a frame to mirror.
-**Done when:** the card displays the PNG from `_widget_frame("weather", ...)`
-(with the reading as text beside it), and `tests/test_widget_drift.py`'s
-call-site check sees a `"weather"` caller.
 
 ### Phase 6 — the multi-panel wall
 
