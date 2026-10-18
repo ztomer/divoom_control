@@ -13,7 +13,14 @@
    per-panel record (the per-device rule) -- from get_panels, and the levels
    are read with get_panel_levels(mac) every time a panel is shown. The two
    sliders have ONE sender each, here, and it names the panel and refuses a
-   panel that is not linked. */
+   panel that is not linked.
+
+   With the wall chosen as the display the sliders are the WALL's (P6.6): one
+   gesture is one `set_brightness` / `set_volume` naming `MatrixWall`, which
+   the daemon sends to every slot, and the toast names each slot that did not
+   take it (`web_ui/display_write.js`). The deck showed the bench's panel
+   instead, so a wall gesture changed one panel of it. Volume is offered only
+   when every slot's panel has a speaker, as the daemon reports it. */
 (function () {
     "use strict";
 
@@ -67,6 +74,29 @@
         const dev = record(mac);
         return dev && dev.features && typeof dev.features.speaker === "boolean" ? dev.features.speaker : null;
     };
+
+    // ── The wall ─────────────────────────────────────────────────────────
+    const WALL = "MatrixWall";
+    const wallSlots = () => (window.DivoomState && window.DivoomState.assignedSlots) || {};
+
+    // true only when every slot's panel has a speaker by the daemon's word
+    // (`features.speaker`); a slot it has not described is not assumed to.
+    window.wallHasSpeaker = function () {
+        const macs = Object.keys(wallSlots());
+        return macs.length > 0 && macs.every(m => window.panelHasSpeaker(m) === true);
+    };
+
+    // The wall's level of `kind`: the value every slot last reported or took,
+    // when they all agree; null (shown as unknown) when they do not or one
+    // has never said. No read is sent: the wall has no level of its own.
+    function wallLevel(kind) {
+        const vals = Object.keys(wallSlots()).map(m => {
+            const d = record(m);
+            return d && d.levels ? d.levels[kind] : null;
+        });
+        return vals.length > 0 && vals.every(v => Number.isInteger(v) && v === vals[0]) ? vals[0] : null;
+    }
+    const wallLevels = () => ({ brightness: wallLevel("brightness"), volume: wallLevel("volume") });
 
     // The bench's drawing of the panel's chassis, keyed by the daemon's MODEL
     // (the vendor app's DeviceTypeEnum), never by the name. Millimetres are
@@ -132,6 +162,11 @@
             const changed = (mac || null) !== shownMac;
             shownMac = mac || null;
             const e = els();
+            if (mac === WALL) {
+                if (e.vRow) e.vRow.style.display = window.wallHasSpeaker() ? "block" : "none";
+                paint(wallLevels());
+                return;
+            }
             if (e.vRow) e.vRow.style.display = window.panelHasSpeaker(mac) === false ? "none" : "block";
             const dev = record(mac);
             paint(dev ? dev.levels : null);
@@ -150,6 +185,7 @@
         // while THAT panel is linked.
         write(kind, value) {
             const mac = selected();
+            if (mac === WALL) { writeWall(kind, value); return; }
             const a = api();
             if (!mac || !window.panelIsLinked(mac)) {
                 window.showToast("That panel is not connected — connect it under Device Settings.", "error");
@@ -165,6 +201,39 @@
             });
         },
     };
+
+    // One wall level write: every slot through the daemon's wall, the toast
+    // naming each slot that did not take it. A slot that took it now has
+    // that level; the deck then shows the wall's, unknown if they disagree.
+    function writeWall(kind, value) {
+        const slots = wallSlots();
+        if (!window.isKnownTarget(WALL)) {
+            window.showToast("No wall is placed — put panels on the wall first.", "error");
+            return;
+        }
+        if (kind === "volume" && !window.wallHasSpeaker()) {
+            window.showToast("Not every panel on the wall has a speaker.", "error");
+            return;
+        }
+        const a = api();
+        const call = kind === "brightness" ? "set_brightness" : "set_volume";
+        if (!a || typeof a[call] !== "function") return;
+        Promise.resolve(a[call](WALL, value)).then(res => {
+            const done = kind === "brightness" ? `Wall brightness set to ${value}%` : `Wall volume set to ${value}/15`;
+            const ok = window.DisplayWrite.report(res, {
+                done, failed: `The wall did not take the ${kind}`, what: `the ${kind}`, slots, transport: " Wall" });
+            const r = (res && typeof res === "object") ? res : {};
+            const missed = Object.keys(r.failed || {}).concat(r.degraded || []).map(m => String(m).toLowerCase());
+            // A failure that names no slot (no wall, no daemon) reached none.
+            const took = ok || missed.length > 0
+                ? Object.keys(slots).filter(m => !missed.includes(m.toLowerCase())) : [];
+            took.forEach(m => {
+                const d = record(m);
+                if (d) d.levels = Object.assign({}, d.levels, { [kind]: value });
+            });
+            if (shownMac === WALL) paint(wallLevels());
+        });
+    }
 
     document.addEventListener("DOMContentLoaded", () => {
         const e = els();

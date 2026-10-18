@@ -59,6 +59,13 @@ GESTURES = {
                   document.getElementById('push-text-btn').click(); })()"""),
     "set_scoreboard": ("Failed to set scoreboard", """(() => { const r = document.getElementById('scoreboard-red');
                        r.value = 3; r.dispatchEvent(new Event('change')); })()"""),
+    # The deck's levels are the wall's while it is the display (P6.6).
+    "set_brightness": ("The wall did not take the brightness", """(() => {
+                       const s = document.getElementById('global-brightness-slider');
+                       s.value = 40; s.dispatchEvent(new Event('change')); })()"""),
+    "set_volume": ("The wall did not take the volume", """(() => {
+                   const s = document.getElementById('appbar-volume-slider');
+                   s.value = 7; s.dispatchEvent(new Event('change')); })()"""),
     "display_wall_image": ("Failed to split and sync wall image", """(() => {
                            document.getElementById('file-path-input').value = window.__IMAGE__;
                            document.getElementById('apply-wall-art').click(); })()"""),
@@ -67,8 +74,6 @@ GESTURES = {
 #: Wall writes with no gesture here, and why. Each is held to the same reply
 #: by the bridge-level enumeration.
 NOT_FROM_THE_PAGE = {
-    "set_brightness": "the deck's level sliders are one panel's; the page has no wall level",
-    "set_volume": "the deck's level sliders are one panel's; the page has no wall level",
     "apply_stock_ticker": "renders a live Yahoo quote first; the network is not part of this test",
     "play_gallery_art": "the gallery push is display_wall_image's, from a cached download",
 }

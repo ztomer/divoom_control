@@ -55,6 +55,7 @@ window.setConnectionState = function(s) {
         list.forEach(d => { d.daemonOwned = false; d.activityState = "disconnected"; });
     }
     window.DivoomState.appConnected = (mode === "active" || mode === "degraded");
+    const shown = (document.getElementById("banner-device-mac")?.textContent || "").trim();
     if ((mode === "active" || mode === "degraded") && s.mac) {
         let name = s.name || s.mac;
         const found = (window.DivoomState.discoveredDevices || [])
@@ -70,6 +71,10 @@ window.setConnectionState = function(s) {
         if (bannerName) bannerName.textContent = "None";
         if (bannerMac) bannerMac.textContent = "None";
     }
+    // The deck follows the display: choosing the wall (or leaving it) changes
+    // what its levels write to (P6.6).
+    const now = (document.getElementById("banner-device-mac")?.textContent || "").trim();
+    if (now !== shown && window.SpatialStage?.showDeck) window.SpatialStage.showDeck();
 };
 
 // ── 3. CONNECTION ACTIONS ──

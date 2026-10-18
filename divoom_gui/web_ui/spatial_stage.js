@@ -336,10 +336,32 @@
         }
     }
 
+    // The deck shows the display the rest of the page writes to: the wall
+    // when it is chosen (P6.6), else the bench's panel. It showed the bench's
+    // panel with the wall chosen, so its levels changed one panel of the wall.
+    function showDeck() {
+        updateInspector(getDeviceList().length ? getSelectedDevice() : null);
+    }
+
+    function updateWallInspector(deck, nameEl, tagEl) {
+        const slots = Object.keys(window.DivoomState?.assignedSlots || {});
+        const linked = slots.filter(m => window.panelIsLinked(m)).length;
+        deck?.querySelectorAll('.deck-slider-row, #deck-device-power').forEach(el => { el.hidden = false; });
+        deck?.querySelectorAll('.deck-room-row').forEach(el => { el.hidden = true; });
+        const n = document.getElementById('deck-wall-note'); if (n) n.hidden = true;
+        if (nameEl) nameEl.textContent = 'Virtual Wall';
+        // The text carries the state; the jewel only reinforces it.
+        if (tagEl) tagEl.textContent = linked === slots.length ? `${slots.length} panels` : `${linked} of ${slots.length} panels linked`;
+        const dot = document.getElementById('deck-device-dot');
+        if (dot) dot.className = `spatial-jewel ${linked === slots.length ? 'online' : 'amber'}`;
+        if (window.PanelLevels) window.PanelLevels.show('MatrixWall');
+    }
+
     function updateInspector(dev) {
         const nameEl = document.getElementById('deck-device-name'), tagEl = document.getElementById('deck-device-tag');
         const roomSelect = document.getElementById('deck-room-select');
         const deck = document.getElementById('sidebar-device-deck');
+        if (window._activeDeviceMac?.() === 'MatrixWall') { updateWallInspector(deck, nameEl, tagEl); return; }
         // No panel: the deck says so and shows no levels, room or power.
         deck?.querySelectorAll('.deck-slider-row, .deck-room-row, #deck-device-power').forEach(el => { el.hidden = !dev; });
         if (!dev) { const n = document.getElementById('deck-wall-note'); if (n) n.hidden = true; }
@@ -429,7 +451,7 @@
         renderLoop();
     }
 
-    window.SpatialStage = { init: initSpatialStage, refresh: refreshBenchNodes, snap: snapToDesk, center: centerDevices, getSelectedMac: () => selectedMac, followSelection: followSelection };
+    window.SpatialStage = { init: initSpatialStage, refresh: refreshBenchNodes, snap: snapToDesk, center: centerDevices, getSelectedMac: () => selectedMac, followSelection: followSelection, showDeck: showDeck };
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initSpatialStage);
