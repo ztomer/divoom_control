@@ -107,7 +107,7 @@ P2.5, a lagging subscriber caught up to the latest value per key (`divoomd/src/e
 P2.6, an in-process watchdog that exits a wedged daemon within 30 s (`divoomd/src/watchdog.rs`).
 
 #### P2.7 — The panel does not come back after a daemon restart
-**Status:** FIXED in code 2026-10-18, hardware confirmation OPEN. The GUI's
+**Status:** WATCH (fixed in code 2026-10-18; hardware confirmation open). The GUI's
 respawn path owns it (`divoom_gui/panel_relink.py`): `reconnect_daemon`
 compares the daemon's start time (now - `get_status.uptime_s`) with the last
 one it saw; a different instance gets every panel this GUI linked and it does
