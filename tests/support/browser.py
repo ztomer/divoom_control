@@ -128,14 +128,17 @@ UI_TIMEOUT_MS = int(os.environ.get("DIVOOM_E2E_TIMEOUT_MS", "60000"))
 RUN_BROWSER = False
 
 
-def require_browser() -> None:
+def require_browser(*, opted_in: bool = False) -> None:
     """Skip the test unless browser tests are opted in AND a launchable
     browser is actually present.
 
     Checks the binary, not just the import — that distinction is the whole
     point of this helper.
+
+    ``opted_in``: a caller that is not a test (``scripts/gui_pov.py``) is
+    opted in by being run. Per call, never a write to :data:`RUN_BROWSER`.
     """
-    if not RUN_BROWSER:
+    if not (RUN_BROWSER or opted_in):
         pytest.skip("launches a real browser; run with --run-browser")
     pytest.importorskip("playwright.async_api")
     pytest.importorskip("camoufox.utils")
@@ -149,14 +152,14 @@ def require_browser() -> None:
         pytest.skip("camoufox browser not downloaded — run: python3 -m camoufox fetch")
 
 
-async def launch(p):
+async def launch(p, *, opted_in: bool = False):
     """Launch the e2e browser from an ``async_playwright()`` instance.
 
     Drop-in for the old ``p.chromium.launch(headless=True)``.
 
     Calls :func:`require_browser` itself -- see the note on :func:`launch_sync`.
     """
-    require_browser()
+    require_browser(opted_in=opted_in)
     from camoufox.utils import launch_options
 
     return await p.firefox.launch(**launch_options(headless=True, main_world_eval=True))
