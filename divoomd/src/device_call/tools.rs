@@ -34,50 +34,48 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     }
 }
 async fn set_scoreboard(ctx: CallCtx<'_>) -> Value {
-    let dev = ctx.dev;
-    let args = ctx.args;
-    let kw = ctx.kwargs;
+    let payload = match scoreboard_payload(ctx.args, ctx.kwargs) {
+        Ok(p) => p,
+        Err(e) => return err_code(BadRequest, &e),
+    };
+    match ctx.dev.send_command(0x72, &payload, true).await {
+        Ok(()) => json!({"success": true, "result": true}),
+        Err(e) => err_code(DeviceFailed, &format!("set_scoreboard failed: {e}")),
+    }
+}
 
-    let on_off = args
-        .first()
-        .copied()
-        .or_else(|| {
-            kw.and_then(|v| v.get("on_off"))
-                .and_then(serde_json::Value::as_i64)
-        })
-        .unwrap_or(0)
-        .byte();
-    let red_score = args
-        .get(1)
-        .copied()
-        .or_else(|| {
-            kw.and_then(|v| v.get("red_score"))
-                .and_then(serde_json::Value::as_i64)
-        })
-        .unwrap_or(0);
-    let blue_score = args
-        .get(2)
-        .copied()
-        .or_else(|| {
-            kw.and_then(|v| v.get("blue_score"))
-                .and_then(serde_json::Value::as_i64)
-        })
-        .unwrap_or(0);
-    // The shared bounds (`crate::arg_bounds`), refused rather than clamped:
-    // 1500 used to become 999 without a word.
-    let (red_score, blue_score) = match (RED_SCORE.check(red_score), BLUE_SCORE.check(blue_score)) {
+/// The 0x72 scoreboard payload for `set_scoreboard(on_off, red_score,
+/// blue_score)`, positional or by keyword -- one panel's and the wall's
+/// (P6.5), so the two cannot disagree on the layout.
+///
+/// # Errors
+///
+/// A score outside the shared bounds (`crate::arg_bounds`), refused rather
+/// than clamped: 1500 used to become 999 without a word.
+pub(crate) fn scoreboard_payload(
+    args: &[i64],
+    kw: Option<&serde_json::Map<String, Value>>,
+) -> Result<Vec<u8>, String> {
+    let pick = |idx: usize, name: &str| {
+        args.get(idx)
+            .copied()
+            .or_else(|| kw.and_then(|v| v.get(name)).and_then(Value::as_i64))
+            .unwrap_or(0)
+    };
+    let on_off = pick(0, "on_off").byte();
+    let (red_score, blue_score) = match (
+        RED_SCORE.check(pick(1, "red_score")),
+        BLUE_SCORE.check(pick(2, "blue_score")),
+    ) {
         (Ok(r), Ok(b)) => (r.word(), b.word()),
-        (Err(e), _) | (_, Err(e)) => return err_code(BadRequest, &format!("set_scoreboard: {e}")),
+        (Err(e), _) | (_, Err(e)) => return Err(format!("set_scoreboard: {e}")),
     };
     let mut payload = Vec::with_capacity(6);
     payload.push(1u8); // TOOL_TYPE_SCORE
     payload.push(on_off);
     payload.extend_from_slice(&red_score.to_le_bytes());
     payload.extend_from_slice(&blue_score.to_le_bytes());
-    match dev.send_command(0x72, &payload, true).await {
-        Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_scoreboard failed: {e}")),
-    }
+    Ok(payload)
 }
 
 async fn get_scoreboard(ctx: CallCtx<'_>) -> Value {

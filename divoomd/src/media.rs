@@ -20,7 +20,7 @@ use crate::art_codec::{
 
 /// Encode RGB frames (`(rgb, duration_ms)`, each `w*h*3` bytes) into an animated
 /// GIF that loops forever.
-fn encode_frames_to_gif(frames: &[(Vec<u8>, u32)], w: u32, h: u32) -> Option<Vec<u8>> {
+pub(crate) fn encode_frames_to_gif(frames: &[(Vec<u8>, u32)], w: u32, h: u32) -> Option<Vec<u8>> {
     if frames.is_empty() || w == 0 || h == 0 {
         return None;
     }

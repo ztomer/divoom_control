@@ -12,11 +12,13 @@ mod bounds;
 mod cmds;
 mod dispatch;
 mod outcome;
+mod previews;
 mod refusal;
 
 use bounds::WallBounds;
 pub(crate) use cmds::{cmd_get_topology, cmd_set_topology, cmd_wall_configure};
 pub use outcome::{SlotOutcome, WallOutcome};
+pub use previews::Previews;
 use refusal::is_lan_id;
 pub use refusal::LAN_SLOT_REFUSAL;
 
@@ -50,6 +52,8 @@ pub struct DivoomWall {
     pub min_y: i32,
     pub grid_unit_size: i32,
     pub is_free_form: bool,
+    /// What each slot took of the last image push (`get_last_previews`).
+    pub previews: Arc<Previews>,
 }
 
 impl DivoomWall {
@@ -169,6 +173,7 @@ impl DivoomWall {
             min_y,
             grid_unit_size,
             is_free_form,
+            previews: Arc::default(),
         })
     }
 
@@ -216,18 +221,25 @@ impl DivoomWall {
             .collect()
     }
 
-    /// Show an image on every panel in this wall, each its own cut of it.
+    /// Show an image on every panel in this wall, each its own cut of it,
+    /// and keep each cut a panel took as its preview.
     ///
     /// The `daemon` parameter is gone: it existed to reach the C encoder
     /// through `Daemon::encoder()`, and `image_encode` is a free function now.
     pub async fn show_image(&self, img_data: &[u8], default_time_ms: u16) -> WallOutcome {
         let is_gif = img_data.len() >= 3 && &img_data[0..3] == b"GIF";
+        self.previews.clear();
         self.each_slot(|slot, dev| {
             let cut = self.cut_for(slot);
             let data_vec = img_data.to_vec();
+            let previews = self.previews.clone();
+            let mac = slot.mac.clone();
             async move {
-                let frames = tokio::task::spawn_blocking(move || {
-                    process_wall_image(&data_vec, is_gif, &cut, default_time_ms)
+                let (frames, preview) = tokio::task::spawn_blocking(move || {
+                    process_wall_image(&data_vec, is_gif, &cut, default_time_ms).map(|frames| {
+                        let preview = crate::preview_url::data_url(&frames);
+                        (frames, preview)
+                    })
                 })
                 .await
                 .map_err(|e| e.to_string())??;
@@ -251,7 +263,12 @@ impl DivoomWall {
                     .send_command(0x45, &[0x05, 0, 0, 0, 0, 0, 0, 0, 0, 0], false)
                     .await;
                 match dev.stream_animation_8b(&blob).await {
-                    Ok(true) => Ok(()),
+                    Ok(true) => {
+                        if let Some(url) = preview {
+                            previews.record(&mac, url);
+                        }
+                        Ok(())
+                    }
                     Ok(false) => Err("the image encoded to nothing to send".to_string()),
                     Err(e) => Err(e.to_string()),
                 }
@@ -303,13 +320,17 @@ impl DivoomWall {
             .await
     }
 
-    pub async fn show_clock(&self, clock: u8) -> WallOutcome {
-        let packet = crate::packets::ClockPacket {
-            style: clock,
-            ..Default::default()
-        };
+    /// The clock on every panel, `packet` built by the parser one panel's
+    /// `show_clock` and `set_clock_rich` use, so the wall's clock is a panel's.
+    pub async fn show_clock(&self, packet: &crate::packets::ClockPacket) -> WallOutcome {
         self.broadcast_command(crate::packets::CMD_SET_LIGHT_MODE, &packet.to_bytes())
             .await
+    }
+
+    /// The scoreboard on every panel, `payload` from
+    /// [`crate::device_call::tools::scoreboard_payload`] -- one panel's layout.
+    pub async fn set_scoreboard(&self, payload: &[u8]) -> WallOutcome {
+        self.broadcast_command(0x72, payload).await
     }
 
     /// R67: was `[0x03, number]` — two bytes, and NOT 1-indexed. The device

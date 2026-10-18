@@ -96,6 +96,7 @@ pub mod palette_table;
 pub mod panel_features;
 pub mod panel_model;
 pub mod paths;
+pub mod preview_url;
 pub mod protocol;
 pub mod render_widget;
 #[cfg(test)]
@@ -122,6 +123,8 @@ pub mod wall;
 mod wall_lan_tests;
 #[cfg(test)]
 mod wall_outcome_tests;
+#[cfg(test)]
+mod wall_preview_tests;
 pub mod watchdog;
 pub mod weather;
 pub mod wire;

@@ -4,6 +4,66 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P6.5 — the wall's previews, and every GUI call one the daemon answers (2026-10-18)
+
+After a wall image push the GUI asks the wall for `get_last_previews` to draw
+each panel's cut on the bench. The Rust wall never had it: the port from the
+Python wall dropped it, the daemon refused it `unsupported`, the GUI logged a
+warning, and every wall push came back with `previews: {}`. The GUI tests
+answered the call in their own fake daemon, which is why they stayed green.
+
+- **The wall keeps what each slot took** (`divoomd/src/wall/previews.rs`).
+  `DivoomWall::show_image` clears the previews, and each slot's task encodes
+  the frames the slicer produced for it as a `data:` URL once the panel has
+  taken them: one frame as a PNG, an animation as a looping GIF with its
+  delays. A slot whose write failed has no preview rather than one of an
+  image it is not showing. `get_last_previews` answers `{mac: url}`. The
+  encoder is one function, `divoomd/src/preview_url.rs`, which the live
+  jobs' frame preview now uses too (it had its own PNG encoder).
+- **The class: a fake that answers a command the daemon lacks.** The wall's
+  methods are a declared table, `WALL_METHODS` in
+  `divoomd/src/wall/dispatch.rs`, held to its `match` arms both ways by a
+  test in that file. `tests/test_bridge_commands_exist_in_daemon.py` holds
+  the GUI to the daemon's tables: every literal socket command the client
+  and GUI send (`send_command`/`cloud_call`/`make_request`) to
+  `COMMAND_ARGS`; every `device_call` that EVERY public bridge method makes,
+  called on a panel and on the wall, to `ROUTES` and the `lan.*` arms or to
+  `WALL_METHODS`; and every method or command a test fake is keyed on
+  (`method == "..."`, `cmd == "..."`) to the same tables. The recording
+  daemon client it shares with P5.7's test (now `tests/support/bridge_calls.py`)
+  answers only names the real `DaemonClient` has.
+- **What else it found, all fixed.** The wall's rich clock
+  (`set_clock_rich`) and scoreboard (`set_scoreboard`) were refused
+  `unsupported`: both are wall arms now, built by the parsers one panel uses
+  (`clock_packet_from_call`, and `scoreboard_payload` split out of the
+  panel's handler), so the wall sends a panel's bytes. The stock ticker on
+  the wall called `connect()` on it first, a method the wall never had, so
+  every wall ticker push failed; the call is gone (`_display` has just built
+  the wall). The generic `device_call` bridge method forwards its caller's
+  method and is checked on a panel only; its one caller, the custom-art page
+  switch, never names the wall.
+- **Tests, each watched red.** On `7418201`, the existence test failed 7:
+  the wall's `get_last_previews` (from `display_wall_image` and
+  `play_gallery_art`), `display.set_clock_rich`, `scoreboard.set_scoreboard`
+  and `connect`, and the fake in `tests/test_gui_api_lighting.py` answering
+  `get_last_previews`; removing `get_status` from `COMMAND_ARGS` turned both
+  socket-command checks red. `wall_preview_tests` (each panel previews its
+  own half of a red/blue image, an animation previews as a GIF, a panel that
+  did not take a push has no preview, an unpushed wall has none) failed 4 of
+  4 with `unsupported`. `the_wall_sends_a_panels_clock_and_scoreboard_bytes`
+  went red with the two arms removed. `tests/test_e2e_wall_previews.py`
+  drives the real `DivoomGuiAPI` against a real `divoomd` with two mock
+  panels and got `previews: {}` before the fix; after it, each panel's
+  preview is its own half of the image.
+  Rust: 394 lib tests plus the integration suites green without BLE (`cargo
+  test -p divoomd --no-default-features --locked`) and with (`cargo test
+  --locked`); clippy `-D warnings` (pedantic) with no features and with all.
+  pytest: 2015 passed / 165 skipped, and the library suite 1019 / 76. The
+  browser suites: 212 of 214 in one 26-minute run at load average 10 to 19;
+  the two failures were `test_e2e_danmaku.py` timeouts (`Page.click`,
+  `Page.fill`), a different test than P6.3's run hit, and the file then passed
+  8 of 8.
+
 ## P6.3 — a wall failure names the panel that failed (2026-10-18)
 
 P5.10's sweep found that a wall command whose write failed on a linked panel

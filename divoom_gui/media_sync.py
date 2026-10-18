@@ -151,10 +151,11 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
         if target is None:
             return False
         if mac == "MatrixWall":
-            async def connect_and_show():
-                await target.connect()
-                return await target.show_image(str(frame_path))
-            return bool(self._run_async(connect_and_show()))
+            # `_display` has just built the wall (`wall_configure`). This used
+            # to call `target.connect()` first: a method the wall has never
+            # had, refused `unsupported`, so a wall frame push always failed
+            # (P6.5, found by tests/test_bridge_commands_exist_in_daemon.py).
+            return bool(self._run_async(target.show_image(str(frame_path))))
         return bool(self._run_async(target.display.show_image(str(frame_path))))
 
     @staticmethod

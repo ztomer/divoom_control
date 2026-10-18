@@ -7,6 +7,7 @@ use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
 mod display;
+pub(crate) use display::clock_packet_from_call;
 
 /// # Panics
 ///

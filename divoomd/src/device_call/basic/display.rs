@@ -390,7 +390,7 @@ async fn switch_channel(ctx: CallCtx<'_>) -> Value {
 ///
 /// `clock` and `style` are accepted as aliases for the face index: Python has
 /// `show_clock(clock=...)` and `set_clock_rich(style=...)` for the same field.
-fn clock_packet_from_call(
+pub fn clock_packet_from_call(
     args: &[i64],
     raw_args: &[Value],
     kw: Option<&serde_json::Map<String, Value>>,

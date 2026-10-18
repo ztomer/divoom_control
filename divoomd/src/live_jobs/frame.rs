@@ -64,7 +64,7 @@ pub(super) async fn push_live_frame(
     }
     let alive = alive.clone();
     let link_in = link.clone();
-    let preview = frame_preview_data_url(&rgb, w, h);
+    let preview = crate::preview_url::data_url(&[(rgb.clone(), w, h, 0)]);
     let landed = link
         .run(None, async move {
             if !alive.load(Ordering::SeqCst) || link_in.is_retired() {
@@ -97,18 +97,4 @@ pub(super) async fn push_live_frame(
         }));
     }
     landed
-}
-
-/// The frame as a `data:image/png;base64,...` URL, or `None` if the
-/// buffer is not `w * h * 3` bytes.
-fn frame_preview_data_url(rgb: &[u8], w: i32, h: i32) -> Option<String> {
-    use base64::Engine as _;
-    let (wu, hu) = (u32::try_from(w).ok()?, u32::try_from(h).ok()?);
-    let img = image::RgbImage::from_raw(wu, hu, rgb.to_vec())?;
-    let mut png = std::io::Cursor::new(Vec::new());
-    img.write_to(&mut png, image::ImageFormat::Png).ok()?;
-    Some(format!(
-        "data:image/png;base64,{}",
-        base64::engine::general_purpose::STANDARD.encode(png.into_inner())
-    ))
 }

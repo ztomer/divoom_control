@@ -16,11 +16,11 @@ use crate::wall::{DeviceSlot, DivoomWall};
 use serde_json::{json, Value};
 use std::sync::Arc;
 
-const A: &str = "AA:00:00:00:00:01";
-const B: &str = "BB:00:00:00:00:02";
+pub const A: &str = "AA:00:00:00:00:01";
+pub const B: &str = "BB:00:00:00:00:02";
 const C: &str = "CC:00:00:00:00:03";
 
-async fn two_panel_wall() -> Daemon {
+pub async fn two_panel_wall() -> Daemon {
     let d = Daemon::new();
     for mac in [A, B] {
         let reply = d
@@ -43,7 +43,7 @@ async fn two_panel_wall() -> Daemon {
     d
 }
 
-async fn mock_of(d: &Daemon, mac: &str) -> MockTransport {
+pub async fn mock_of(d: &Daemon, mac: &str) -> MockTransport {
     let dev = d.fleet.get(mac).await.expect("the panel is in the fleet");
     let transport = dev.transport().await.expect("the panel is linked");
     match &*transport {
@@ -52,7 +52,7 @@ async fn mock_of(d: &Daemon, mac: &str) -> MockTransport {
     }
 }
 
-async fn wall_call(d: &Daemon, method: &str, args: Value) -> Value {
+pub async fn wall_call(d: &Daemon, method: &str, args: Value) -> Value {
     d.handle(make_request(
         "device_call",
         Some(json!({"method": method, "target": "wall", "args": args})),
@@ -80,6 +80,8 @@ fn every_wall_call() -> Vec<(&'static str, Value)> {
         ("show_image", json!([a_png()])),
         ("show_light", json!(["#FF0000", 50])),
         ("show_clock", json!([1])),
+        ("set_clock_rich", json!([2])),
+        ("set_scoreboard", json!([1, 3, 4])),
         ("show_effects", json!([2])),
         ("show_visualization", json!([3])),
         ("set_brightness", json!([40])),
@@ -170,6 +172,7 @@ async fn a_slot_with_no_panel_and_a_failed_write_are_told_apart() {
         min_y: 0,
         grid_unit_size: 16,
         is_free_form: false,
+        previews: Arc::default(),
     });
     let reply = wall_call(&d, "set_brightness", json!([40])).await;
     assert_eq!(reply["success"], json!(false), "{reply}");
@@ -218,4 +221,55 @@ async fn the_wall_switches_to_every_channel_one_panel_does() {
     }
     let reply = wall_call(&d, "switch_channel", json!(["zz"])).await;
     assert_eq!(reply["code"], json!("bad_request"), "{reply}");
+}
+
+/// The wall's rich clock and scoreboard are a panel's (P6.5): the GUI sent
+/// both to the wall, which refused them `unsupported` until they were routed
+/// through the parsers one panel uses.
+#[tokio::test]
+async fn the_wall_sends_a_panels_clock_and_scoreboard_bytes() {
+    let d = two_panel_wall().await;
+    let last_sent = |m: &MockTransport| m.sent_commands.lock().ok().and_then(|c| c.last().cloned());
+    let (a, b) = (mock_of(&d, A).await, mock_of(&d, B).await);
+    let calls = [
+        (
+            "display.set_clock_rich",
+            json!({"style": 3, "date": true, "color": "#00FF00"}),
+        ),
+        (
+            "scoreboard.set_scoreboard",
+            json!({"on_off": 1, "red_score": 7, "blue_score": 9}),
+        ),
+    ];
+    for (method, kwargs) in calls {
+        let one = d
+            .handle(make_request(
+                "device_call",
+                Some(json!({"method": method, "kwargs": kwargs, "mac": A})),
+                None,
+            ))
+            .await;
+        assert_eq!(one["success"], json!(true), "{method}: {one}");
+        let panel_bytes = last_sent(&a);
+        let reply = d
+            .handle(make_request(
+                "device_call",
+                Some(json!({"method": method, "target": "wall", "kwargs": kwargs})),
+                None,
+            ))
+            .await;
+        assert_eq!(reply["success"], json!(true), "{method}: {reply}");
+        assert_eq!(
+            last_sent(&a),
+            panel_bytes,
+            "{method}: the wall sends what one panel does"
+        );
+        assert_eq!(last_sent(&b), panel_bytes, "{method}: to every slot");
+    }
+    let reply = wall_call(&d, "set_scoreboard", json!([1, 5000, 0])).await;
+    assert_eq!(
+        reply["code"],
+        json!("bad_request"),
+        "a score out of bounds is refused: {reply}"
+    );
 }
