@@ -148,6 +148,21 @@ P5.4, the weather card showing the PNG of `render_widget {kind: "weather"}` with
 P5.3, the menubar updating labels, the "Active panel" check and the notification items in place, rebuilding only when the set of rows changes, decided by diffing one `MenuModel` signature (`28f54cd`; `divoom-menubar/src/menu_model.rs`). That meets the exit's menubar half in code; holding the menu open through a fleet change on screen is not yet checked (2026-10-18: the console was locked, so no NSMenu could be held open or captured; a two-mock-panel smoke -- selection A, B, A and a row rename over the socket -- left the menubar running);
 P5.1, brightness, volume and panel size read and written per mac through the daemon, both name-based size guessers deleted, switching panels shows that panel's values (`f1f7b3b`; `divoom_gui/panels.py`, `divoom_gui/web_ui/panel_facts.js`, `tests/test_e2e_panel_levels_per_panel.py`, `divoomd/src/mock_levels_tests.rs`).
 
+#### P5.6 — Channel writes name their panel
+**Status:** OPEN
+**Why:** P5.2 resolves the selected display at the click in
+`divoom_gui/web_ui/channel_settings.js`, but the bridge calls it then makes
+(`set_clock`, `switch_channel` and the rest, `divoom_gui/api/lighting.py`)
+carry no mac: they reach whichever panel the bench last told the backend to
+select (`current_divoom`, via `ApiBase._target`). That is intent read when the
+write lands, not at the click: a selection change in between sends the setting
+to the wrong panel. P5.1 did this right for brightness and volume
+(`divoom_gui/panels.py` refuses a call that names no panel).
+**Done when:** every channel bridge call carries the mac resolved at the click
+through one dispatcher to the daemon, a call naming no panel is refused, the
+implicit route is deleted, and a two-panel test that switches to B before the
+write lands sees the write reach A (watched red on the old code).
+
 ### Phase 6 — the multi-panel wall
 
 **Goal:** a wall is placed by snapping, and LAN panels can join it.
