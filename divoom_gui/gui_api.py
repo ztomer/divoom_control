@@ -17,6 +17,7 @@ from divoom_gui.aid_sleep import AidSleepMixin
 from divoom_gui.photo_albums import PhotoAlbumsMixin
 from divoom_gui.weather_city import WeatherCityMixin
 from divoom_gui.lighting_forward import LightingForwardMixin
+from divoom_gui.panels import PanelsMixin
 
 from divoom_gui.api import AsyncLoopThread
 from divoom_gui.api.connection import ConnectionApi
@@ -28,7 +29,7 @@ logger = logging.getLogger("divoom_gui")
 
 class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin,
                    LifecycleSettingsMixin, ClockFacesMixin, PlaylistsMixin, AidSleepMixin,
-                   PhotoAlbumsMixin, WeatherCityMixin, LightingForwardMixin):
+                   PhotoAlbumsMixin, WeatherCityMixin, LightingForwardMixin, PanelsMixin):
     """The PyWebView JS api bridge orchestrator."""
     def __init__(self) -> None:
         self.loop_thread = AsyncLoopThread()
@@ -423,17 +424,11 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
             logger.error(f"Error opening file dialog: {e}")
             return None
 
-    def get_brightness(self) -> int | None:
-        return self.tools.get_brightness()
-
     def get_device_name(self) -> str | None:
         return self.tools.get_device_name()
 
     def get_work_mode(self) -> int | None:
         return self.tools.get_work_mode()
-
-    def get_volume(self) -> int | None:
-        return self.tools.get_volume()
 
     def set_scoreboard(self, on_off: int, red: int = 0, blue: int = 0) -> bool:
         return self.tools.set_scoreboard(on_off, red, blue)

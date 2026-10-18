@@ -121,77 +121,8 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // ── 7. BRIGHTNESS SLIDERS AND TARGET CHANGE HANDLERS ──
-    const globalBrightnessSlider = document.getElementById("global-brightness-slider");
-    const globalBrightnessValue = document.getElementById("global-brightness-value");
-    
-    // R11 4e: thumb tracks brightness — white at 100%, darkening toward black.
-    function updateBrightnessThumb(v) {
-        const g = Math.round(255 * (parseInt(v) || 0) / 100);
-        globalBrightnessSlider.style.setProperty("--thumb-color", `rgb(${g},${g},${g})`);
-    }
-    if (globalBrightnessSlider) {
-        updateBrightnessThumb(globalBrightnessSlider.value);
-        globalBrightnessSlider.addEventListener("input", (e) => {
-            const val = e.target.value;
-            if (globalBrightnessValue) globalBrightnessValue.textContent = val + "%";
-            updateBrightnessThumb(val);
-        });
-        globalBrightnessSlider.addEventListener("change", (e) => {
-            const val = parseInt(e.target.value);
-            if (!window.DivoomState.appConnected) return;
-            if (window.pywebview && window.pywebview.api && window.pywebview.api.set_brightness) {
-                window.pywebview.api.set_brightness(val).then(res => {
-                    if (res) window.showToast(`Brightness set to ${val}%`, "success", " BLE");
-                });
-            }
-        });
-    }
-
-    // Volume slider (Round 6 — new functionality exposure).
-    // Protocol range is 0-15 (divoom.music.set_volume). Kare: show the
-    // raw value as "N/15" so the user knows the device's actual range.
-    // Send on `change` (not `input`) to avoid spamming 0x08 writes.
-    const appbarVolumeSlider = document.getElementById("appbar-volume-slider");
-    const appbarVolumeValue = document.getElementById("appbar-volume-value");
-    if (appbarVolumeSlider) {
-        appbarVolumeSlider.addEventListener("input", (e) => {
-            const val = e.target.value;
-            if (appbarVolumeValue) appbarVolumeValue.textContent = `${val}/15`;
-        });
-        appbarVolumeSlider.addEventListener("change", (e) => {
-            const val = parseInt(e.target.value);
-            if (!window.DivoomState.appConnected) return;
-            if (window.pywebview && window.pywebview.api && window.pywebview.api.set_volume) {
-                window.pywebview.api.set_volume(val).then(res => {
-                    if (res) window.showToast(`Volume set to ${val}/15`, "success", " BLE");
-                });
-            }
-        });
-    }
-
-    // On startup, read the current volume and update the slider to match.
-    // This gives the user a "what's my device doing right now" glance.
-    if (window.pywebview && window.pywebview.api && window.pywebview.api.get_volume) {
-        window.pywebview.api.get_volume().then(val => {
-            if (val !== null && val !== undefined && appbarVolumeSlider) {
-                appbarVolumeSlider.value = val;
-                if (appbarVolumeValue) appbarVolumeValue.textContent = `${val}/15`;
-            }
-        });
-    }
-
-    // On startup, read the current brightness and update the slider to
-    // match (Round 7 — matches the volume slider pattern from Round 6).
-    // Kare: pixel-perfect parity between GUI and device state.
-    if (window.pywebview && window.pywebview.api && window.pywebview.api.get_brightness) {
-        window.pywebview.api.get_brightness().then(val => {
-            if (val !== null && val !== undefined && globalBrightnessSlider) {
-                globalBrightnessSlider.value = val;
-                if (globalBrightnessValue) globalBrightnessValue.textContent = val + "%";
-            }
-        });
-    }
+    // ── 7. Brightness and volume are per panel: panel_facts.js reads them from
+    // the daemon for the panel shown and is their one sender (P5.1). ──
 
     // On startup, read the current work mode and highlight the active
     // channel card in the Control Panel (Round 7).

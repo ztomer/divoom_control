@@ -217,38 +217,6 @@ class TestToolsApiCoverage(unittest.TestCase):
         self.api.current_divoom = dev
         self.assertFalse(self.api.set_scoreboard(1))
 
-    def test_get_volume_success(self):
-        dev = MagicMock()
-        dev.music.get_volume = AsyncMock(return_value=8)
-        self.api.current_divoom = dev
-        self.assertEqual(self.api.get_volume(), 8)
-
-    def test_get_volume_no_device(self):
-        self.api.current_divoom = None
-        self.assertIsNone(self.api.get_volume())
-
-    def test_get_volume_exception(self):
-        dev = MagicMock()
-        dev.music.get_volume = AsyncMock(side_effect=RuntimeError("boom"))
-        self.api.current_divoom = dev
-        self.assertIsNone(self.api.get_volume())
-
-    def test_get_brightness_success(self):
-        dev = MagicMock()
-        dev.device.get_brightness = AsyncMock(return_value=75)
-        self.api.current_divoom = dev
-        self.assertEqual(self.api.get_brightness(), 75)
-
-    def test_get_brightness_no_device(self):
-        self.api.current_divoom = None
-        self.assertIsNone(self.api.get_brightness())
-
-    def test_get_brightness_exception(self):
-        dev = MagicMock()
-        dev.device.get_brightness = AsyncMock(side_effect=RuntimeError("boom"))
-        self.api.current_divoom = dev
-        self.assertIsNone(self.api.get_brightness())
-
     def test_get_work_mode_success(self):
         dev = MagicMock()
         dev.device.get_work_mode = AsyncMock(return_value=2)

@@ -280,15 +280,21 @@ async def test_gallery_requests_the_active_device_resolution():
         browser, page = await _open(p)
         try:
             await wait_js(page, "() => typeof window.readGalleryTargetSize === 'function'")
+            # P5.1: the size is the daemon's (`device_status` width, applied by
+            # panel_facts.js), read for the SELECTED panel -- not the name.
             sizes = await eval_js(page, """() => {
-                const banner = document.getElementById('banner-device-name');
+                const bm = document.getElementById('banner-device-mac');
+                window.DivoomState.discoveredDevices = [
+                    {address: 'P:64', name: 'Kitchen'}, {address: 'D:16', name: 'Ditoo 64'}];
+                window.applyPanelFacts([{mac: 'P:64', width: 64, height: 64, model: 'Pixoo64Wifi'},
+                                        {mac: 'D:16', width: 16, height: 16, model: 'DitooPlus'}]);
                 const out = {};
-                banner.textContent = 'Pixoo64'; out.pixoo64 = window.readGalleryTargetSize();
-                banner.textContent = 'Ditoo';   out.ditoo   = window.readGalleryTargetSize();
+                bm.textContent = 'P:64'; out.pixoo64 = window.readGalleryTargetSize();
+                bm.textContent = 'D:16'; out.ditoo   = window.readGalleryTargetSize();
                 return out;
             }""")
             assert sizes["pixoo64"] == 64    # was always 16 before the fix
-            assert sizes["ditoo"] == 16
+            assert sizes["ditoo"] == 16      # its name says 64; the daemon says 16
         finally:
             await browser.close()
 

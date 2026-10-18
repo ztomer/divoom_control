@@ -467,9 +467,8 @@
             if (!Array.isArray(devices)) return;
             devices.forEach(dev => {
                 if (!dev || !dev.address) return;
-                const spec = (typeof window.getDeviceDimensions === "function")
-                    ? window.getDeviceDimensions(dev.name)
-                    : { width: 16, height: 16, size: 16, name: dev.name };
+                const px = window.panelPixels(dev.address) || window.PANEL_FALLBACK_PIXELS;
+                const spec = { width: px, height: px, size: px, name: dev.name };
                 this.get(dev.address, spec);
             });
         }

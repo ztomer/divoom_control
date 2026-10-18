@@ -17,9 +17,3 @@ class LightingForwardMixin:
 
     def play_album(self, album_id: int) -> bool:
         return self.lighting.play_album(album_id)
-
-    def set_brightness(self, brightness: int) -> bool:
-        return self.lighting.set_brightness(brightness)
-
-    def set_volume(self, volume: int) -> bool:
-        return self.lighting.set_volume(volume)

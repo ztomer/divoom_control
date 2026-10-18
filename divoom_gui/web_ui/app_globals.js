@@ -252,15 +252,8 @@ window.getFleetStatus = function() {
 // renderDeviceDots, setScanning) lives in device_selector.js to keep this file
 // under the 500-LOC cap.
 
-window.getDeviceDimensions = function(name) {
-    const n = (name || "").toLowerCase();
-    if (n.includes("tivoo-max") || n.includes("tivoo max")) return { width: 160, height: 140, size: 16, image: "assets/tivoo_max.png" };
-    if (n.includes("timoo")) return { width: 80, height: 80, size: 16, image: "assets/timoo.png" };
-    if (n.includes("ditoo")) return { width: 90, height: 90, size: 16, image: "assets/ditoo.png" };
-    if (n.includes("timebox") || n.includes("evo")) return { width: 100, height: 100, size: 16, image: "assets/timebox.png" };
-    if (n.includes("pixoo") && n.includes("64")) return { width: 260, height: 260, size: 64, image: "assets/pixoo.png" };
-    return { width: 200, height: 200, size: 16, image: "assets/pixoo.png" };
-};
+// Panel size is the daemon's, per mac: window.panelPixels / panelEnclosure in
+// panel_facts.js (P5.1). The name-based guesser that lived here is gone.
 
 // ── 3. CONNECTION ACTIONS ──
 // Moved to connection_events.js (loaded after this file): connectDevice,

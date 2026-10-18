@@ -263,8 +263,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     const tr = document.createElement("tr");
                     tr.style.cursor = "pointer";
                     const color = window.deviceColor(d.address);
-                    const dims = window.getDeviceDimensions ? window.getDeviceDimensions(d.name) : { size: 16 };
-                    const isSpk = /timoo|ditoo|tivoo/i.test(d.name || "");
+                    // Size and speaker as the daemon reports them (P5.1); a
+                    // panel it has not described yet reads as unknown.
+                    const px = window.panelPixels(d.address);
+                    const spk = window.panelHasSpeaker(d.address);
                     tr.innerHTML = `
                         <td>
                             <div style="display:flex; align-items:center; gap:8px;">
@@ -273,8 +275,8 @@ document.addEventListener("DOMContentLoaded", () => {
                             </div>
                         </td>
                         <td><span class="device-mac">${d.address}</span></td>
-                        <td>${dims.size}x${dims.size}</td>
-                        <td>${isSpk ? "Yes" : "No"}</td>
+                        <td>${px ? `${px}x${px}` : "–"}</td>
+                        <td>${spk === null ? "–" : (spk ? "Yes" : "No")}</td>
                     `;
                     tr.addEventListener("click", () => {
                         window.connectDevice(d.name, d.address);
@@ -313,11 +315,11 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         window.DivoomState.registeredLanDevices.forEach(d => {
             const tr = document.createElement("tr");
-            const dims = window.getDeviceDimensions ? window.getDeviceDimensions(`Wi-Fi Screen: ${d.ip}`) : { size: 16 };
+            const px = window.panelPixels(`LAN:${d.ip}`);
             tr.innerHTML = `
                 <td style="font-weight:600; cursor:pointer;" class="lan-connect-cell"> ${d.ip}</td>
                 <td>${d.token || 0}</td>
-                <td>${dims.size}x${dims.size}</td>
+                <td>${px ? `${px}x${px}` : "–"}</td>
                 <td>—</td>
                 <td>
                     <button class="glow-btn compact delete-lan-btn" style="margin:0; background:rgba(255, 68, 68, 0.15); border-color:#ef4444; color:#ef4444; padding: 4px 8px; font-size: 11px;" data-ip="${d.ip}">Delete</button>

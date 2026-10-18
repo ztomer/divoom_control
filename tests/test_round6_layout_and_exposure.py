@@ -38,7 +38,7 @@ from tests.support.round6_webui import (
     GALLERY_JS,
     GUI_API_PY,
     INDEX_HTML,
-    LIGHTING_FORWARD_PY,
+    PANELS_PY,
     REPO_ROOT,
     ROUTINES_JS,
     SETTINGS_JS,
@@ -241,35 +241,28 @@ def test_appbar_volume_slider_exists():
 
 
 def test_appbar_volume_handler_in_app_js():
-    """app.js must handle the volume slider's change event and call
-    set_volume / get_volume on the API."""
+    """The volume slider's change handler pushes the value to the panel it is
+    for, and the slider shows that panel's volume as the daemon reads it
+    (P5.1: `get_panel_levels(mac)` replaced the mac-less `get_volume` read
+    once at startup)."""
     src = APP_JS
-    assert "appbar-volume-slider" in src, (
-        "app.js doesn't reference the volume slider id."
-    )
+    assert "appbar-volume-slider" in src, "the web UI doesn't reference the volume slider id."
     assert "set_volume" in src, (
-        "app.js doesn't call window.pywebview.api.set_volume — the "
-        "slider's change handler must push the value to the device."
-    )
-    assert "get_volume" in src, (
-        "app.js doesn't call window.pywebview.api.get_volume — the "
-        "slider should initialize to the device's current volume."
-    )
+        "nothing calls window.pywebview.api.set_volume — the slider's change "
+        "handler must push the value to the device.")
+    assert "get_panel_levels" in src, (
+        "nothing calls get_panel_levels — the slider must show the shown "
+        "panel's current volume.")
 
 
-def test_gui_api_exposes_set_volume_and_get_volume():
-    """DivoomGuiAPI must have set_volume(volume: int) -> bool and
-    get_volume() -> int | None methods. set_volume is a one-line forward to
-    LightingApi, defined in the LightingForwardMixin (divoom_gui/
-    lighting_forward.py) that DivoomGuiAPI inherits — gui_api.py itself was
-    split to stay under the 500-line house limit, so check both files."""
-    src = GUI_API_PY.read_text() + LIGHTING_FORWARD_PY.read_text()
-    assert re.search(r"def\s+set_volume\s*\(\s*self\s*,\s*volume:\s*int\s*\)", src), (
-        "Neither gui_api.py nor lighting_forward.py has set_volume(self, volume: int)."
-    )
-    assert re.search(r"def\s+get_volume\s*\(\s*self\s*\)", src), (
-        "gui_api.py is missing get_volume(self) method."
-    )
+def test_gui_api_exposes_set_volume_and_get_panel_levels():
+    """DivoomGuiAPI has set_volume(volume, mac) and get_panel_levels(mac): both
+    name their panel (P5.1, `divoom_gui/panels.py`)."""
+    src = PANELS_PY.read_text()
+    assert re.search(r"def\s+set_volume\s*\(\s*self\s*,\s*volume:\s*int\s*,\s*mac:\s*str\s*\)", src), (
+        "panels.py has no set_volume(self, volume: int, mac: str).")
+    assert re.search(r"def\s+get_panel_levels\s*\(\s*self\s*,\s*mac:\s*str\s*\)", src), (
+        "panels.py has no get_panel_levels(self, mac: str).")
 
 
 # ──────────────────────────────────────────────────────────────────

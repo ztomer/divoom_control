@@ -446,9 +446,10 @@
             const addr = dev.address;
             if (!addr) return;
             const p = findPosition(posMap, addr) || { x: 0, y: 0 };
-            const dims = (typeof window.getDeviceDimensions === 'function')
-                ? window.getDeviceDimensions(dev.name)
-                : { width: 80, height: 80, size: 16 };
+            // The bench footprint the user placed (the chassis drawing) and the
+            // daemon's diode count (P5.1), from one source with the bench.
+            const enc = window.panelEnclosure(dev);
+            const dims = { width: Math.round(enc.w_mm * 0.65), height: Math.round(enc.h_mm * 0.65), size: enc.pw };
             slots[addr] = {
                 x: p.x,
                 y: p.y,

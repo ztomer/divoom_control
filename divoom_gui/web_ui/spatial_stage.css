@@ -417,3 +417,9 @@ body {
 .deck-slider::-webkit-slider-thumb:hover {
     background: var(--primary);
 }
+
+/* P5.1: a level the daemon has not read is not a value. The thumb is a ghost
+   (and the caption says "–") until the panel reports one -- a thumb resting
+   at 0 would otherwise read as "off". */
+.deck-slider[data-state="unknown"]::-webkit-slider-thumb { opacity: 0.3; }
+.deck-slider[data-state="unknown"]::-moz-range-thumb { opacity: 0.3; }

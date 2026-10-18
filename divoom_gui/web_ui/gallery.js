@@ -41,13 +41,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // ── 1. CLOUD GALLERY FETCH ──
     function readTargetSize() {
-        // `banner-device-res` was moved to Settings → Devices, so reading it here
-        // ALWAYS hit the "16x16" fallback — the gallery fetched 16px art for every
-        // device, even a 64px Pixoo. Derive the panel size from the active device
-        // name instead (the same heuristic connectDevice uses for the preview).
-        const name = (document.getElementById("banner-device-name")?.textContent || "").trim();
-        const size = (window.getDeviceDimensions && name && name !== "None")
-            ? (window.getDeviceDimensions(name).size || 16) : 16;
+        // The selected panel's resolution as the daemon resolved it (P5.1; it
+        // was guessed from the name). The cloud serves 16, 32 and 64.
+        const size = window.panelPixels(window._activeDeviceMac()) || window.PANEL_FALLBACK_PIXELS;
         return size === 64 ? 64 : (size === 32 ? 32 : 16);
     }
     window.readGalleryTargetSize = readTargetSize;   // exposed for the e2e test

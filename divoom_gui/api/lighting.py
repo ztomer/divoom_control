@@ -135,27 +135,6 @@ class LightingApi(ApiBase, WidgetFrameMixin):
         except Exception:
             return 16
 
-    def set_brightness(self, brightness: int) -> bool:
-        logger.info(f"GUI Action: Setting brightness to {brightness}...")
-        try:
-            val = int(brightness)
-            return self._dispatch(lambda t: t.set_brightness(val)
-                                if t is self._wall_instance else
-                                (t.lan.set_brightness(val) if t.lan else t.device.set_brightness(val)))
-        except Exception as e:
-            logger.error(f"Brightness setting failed: {e}")
-            return False
-
-    def set_volume(self, volume: int) -> bool:
-        logger.info(f"GUI Action: Setting volume to {volume}...")
-        try:
-            val = max(0, min(15, int(volume)))
-            return self._dispatch(lambda t: t.set_volume(val)
-                                if t is self._wall_instance else t.music.set_volume(val))
-        except Exception as e:
-            logger.error(f"Volume setting failed: {e}")
-            return False
-
     def display_wall_image(self, file_path: str, cell_size: int) -> dict:
         logger.info(f"GUI Action: Push display wall asset {file_path!r} (cell size={cell_size})...")
         self._stop_live_widgets()

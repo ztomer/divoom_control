@@ -89,54 +89,6 @@ class TestLightingApiCoverage(unittest.TestCase):
 
     # ---- _render_text_png scaling branches -------------------------------
 
-    def test_set_brightness_uses_lan_when_present(self):
-        dev = MagicMock()
-        dev.lan = MagicMock()
-        dev.lan.set_brightness = AsyncMock(return_value=True)
-        self.api.current_divoom = dev
-        self.assertTrue(self.api.lighting.set_brightness(80))
-        dev.lan.set_brightness.assert_called_with(80)
-
-    def test_set_brightness_uses_ble_when_no_lan(self):
-        dev = MagicMock()
-        dev.lan = None
-        dev.device.set_brightness = AsyncMock(return_value=True)
-        self.api.current_divoom = dev
-        self.assertTrue(self.api.lighting.set_brightness(50))
-        dev.device.set_brightness.assert_called_with(50)
-
-    def test_set_brightness_exception(self):
-        dev = MagicMock()
-        dev.lan = None
-        dev.device.set_brightness = MagicMock(side_effect=RuntimeError("boom"))
-        self.api.current_divoom = dev
-        self.assertFalse(self.api.lighting.set_brightness(50))
-
-    def test_set_brightness_no_target(self):
-        self.api.current_divoom = None
-        self.assertFalse(self.api.lighting.set_brightness(50))
-
-    # ---- set_volume: clamping + exception + no-target -------------------
-
-    def test_set_volume_clamps_high_and_low(self):
-        dev = MagicMock()
-        dev.music.set_volume = AsyncMock(return_value=True)
-        self.api.current_divoom = dev
-        self.assertTrue(self.api.lighting.set_volume(999))
-        dev.music.set_volume.assert_called_with(15)
-        self.assertTrue(self.api.lighting.set_volume(-5))
-        dev.music.set_volume.assert_called_with(0)
-
-    def test_set_volume_exception(self):
-        dev = MagicMock()
-        dev.music.set_volume = MagicMock(side_effect=RuntimeError("boom"))
-        self.api.current_divoom = dev
-        self.assertFalse(self.api.lighting.set_volume(5))
-
-    def test_set_volume_no_target(self):
-        self.api.current_divoom = None
-        self.assertFalse(self.api.lighting.set_volume(5))
-
     # ---- display_wall_image: single-device path, wall path + previews,
     # non-dict previews reset, previews exception, outer exception --------
 

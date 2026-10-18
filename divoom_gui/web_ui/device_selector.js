@@ -41,6 +41,8 @@ window.mergeDiscoveredDevices = function(fresh) {
         });
     });
     window.DivoomState.discoveredDevices = Object.values(byAddr);
+    // A record that is new to the list learns what its panel is (P5.1).
+    if (window.refreshPanelFacts) window.refreshPanelFacts();
     return window.DivoomState.discoveredDevices;
 };
 
@@ -91,6 +93,7 @@ window.refreshOwnedDevices = function() {
             }
         });
         if (changed && window.renderDeviceDots) window.renderDeviceDots();
+        if (changed && window.refreshPanelFacts) window.refreshPanelFacts();
     }).catch(() => {});
 };
 

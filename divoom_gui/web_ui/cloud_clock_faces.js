@@ -40,8 +40,7 @@ document.addEventListener("DOMContentLoaded", () => {
     function selectedPanelSize() {
         const mac = (typeof window._activeDeviceMac === "function") ? window._activeDeviceMac() : null;
         const dev = (window.DivoomState?.discoveredDevices || []).find(d => d.address === mac);
-        const dims = window.getDeviceDimensions ? window.getDeviceDimensions(dev?.name || "") : { size: 16 };
-        return { size: dims.size || 16, name: dev?.name || "the panel" };
+        return { size: window.panelPixels(mac) || window.PANEL_FALLBACK_PIXELS, name: dev?.name || "the panel" };
     }
 
     // One card: the face as drawn, and as the selected panel would show it.

@@ -26,6 +26,7 @@ from tests.support.browser import (
 )
 
 INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.html"
+PANEL = "AA:00:00:00:00:01"
 
 # A permissive mock daemon API that RECORDS every device call, so a test can
 # count them. `get_*` calls return "{}" (valid JSON the app parses).
@@ -48,8 +49,13 @@ async def _open(p):
     await page.goto(f"file://{INDEX_HTML}")
     await page.wait_for_load_state("domcontentloaded")
     await wait_js(page, "() => !!window.DivoomState && !!document.getElementById('global-brightness-slider')")
-    # A linked panel: the surviving sender is allowed to write.
-    await eval_js(page, "() => { window.DivoomState.appConnected = true; }")
+    # A linked, selected panel: the one sender is allowed to write to IT (P5.1:
+    # the gate is that panel's link, not the app-wide appConnected flag).
+    await eval_js(page, """(mac) => {
+        window.Divoom.onOwnedDevices({type: 'owned_devices', devices: [
+            {address: mac, name: 'Ditoo', kind: 'clock', state: 'active'}]});
+        window.Divoom.onSelection({type: 'selection', mac: mac});
+    }""", PANEL)
     return browser, page
 
 
@@ -86,10 +92,12 @@ async def test_one_brightness_gesture_writes_the_device_once():
                 "one slider gesture must write the device once; got "
                 f"{len(writes)} calls (a duplicate sender is listening again)"
             )
-            # ...and it must carry the value the slider now shows, not a stale one.
+            # ...and it must carry the value the slider now shows, not a stale
+            # one, for the panel it is shown for.
             assert int(writes[0]["args"][0]) == await eval_js(
                 page, "() => parseInt(document.getElementById('global-brightness-slider').value)"
             )
+            assert writes[0]["args"][1] == PANEL, writes
         finally:
             await browser.close()
 
@@ -145,7 +153,8 @@ async def test_no_brightness_write_without_a_linked_panel():
 
     `spatial_stage.js`'s sender had no connectivity check — it fired whether or
     not a panel was linked, so a drag over a disconnected deck still hit the
-    bridge. Whichever sender survives keeps the `appConnected` guard.
+    bridge. The one sender refuses a panel that is not linked (P5.1: that
+    panel's link, not the app-wide `appConnected`).
     """
     require_browser()
     from playwright.async_api import async_playwright
@@ -159,6 +168,8 @@ async def test_no_brightness_write_without_a_linked_panel():
         await wait_js(page, "() => !!window.DivoomState && !!document.getElementById('global-brightness-slider')")
         try:
             assert await eval_js(page, "() => window.DivoomState.appConnected") is False
+            # The bench's placeholder fleet selects a panel nobody linked.
+            assert not await eval_js(page, "() => window.panelIsLinked(window.SpatialStage.getSelectedMac())")
             await page.focus("#global-brightness-slider")
             await page.keyboard.press("ArrowRight")
             # Give a stray sender every chance to fire before asserting absence.

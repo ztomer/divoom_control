@@ -28,6 +28,15 @@ from divoom_gui.api.lighting import LightingApi
 
 REPO = Path(__file__).resolve().parent.parent
 LIGHTING = REPO / "divoom_gui" / "api" / "lighting.py"
+# P5.1 moved set_brightness/set_volume to the per-panel mixin; every GUI file
+# that drives a panel is in scope, not only the one the test was written for.
+PANELS = REPO / "divoom_gui" / "panels.py"
+SCOPE = (LIGHTING, PANELS)
+
+
+def _scope_tree() -> ast.Module:
+    return ast.Module(body=[n for f in SCOPE for n in ast.parse(f.read_text(encoding="utf-8")).body],
+                      type_ignores=[])
 
 
 def _lan_methods(tree: ast.AST) -> dict[str, ast.FunctionDef]:
@@ -60,7 +69,7 @@ def _branches_on_lan(fn: ast.AST) -> bool:
 
 
 def test_every_lan_surface_goes_through_the_funnel():
-    tree = ast.parse(LIGHTING.read_text(encoding="utf-8"))
+    tree = _scope_tree()
     offenders = [
         name for name, fn in _lan_methods(tree).items()
         if not _uses_funnel(fn) and not _branches_on_lan(fn)
@@ -74,15 +83,14 @@ def test_every_lan_surface_goes_through_the_funnel():
 
 def test_the_scan_actually_finds_the_lan_surfaces():
     """Calibration: an empty scan would make the test above pass vacuously."""
-    found = set(_lan_methods(ast.parse(LIGHTING.read_text(encoding="utf-8"))))
+    found = set(_lan_methods(_scope_tree()))
     for expected in ("send_danmaku_text", "play_album", "push_playlist"):
         assert expected in found, f"{expected} not seen by the scan: {sorted(found)}"
 
 
 def test_the_brightness_fallback_is_recognised_not_excused():
     """The exception must be earned by branching, not by being on a list."""
-    tree = ast.parse(LIGHTING.read_text(encoding="utf-8"))
-    fn = _lan_methods(tree).get("set_brightness")
+    fn = _lan_methods(_scope_tree()).get("set_brightness")
     assert fn is not None
     assert _branches_on_lan(fn), (
         "set_brightness is exempt only because it branches on `t.lan` and falls "

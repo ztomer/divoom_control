@@ -114,15 +114,15 @@ window.connectDevice = function(name, address) {
                 window._updateDeviceLabel(name);
                 // R32 §C2: prefer the last-pushed preview; fall back to the
                 // product icon when this device hasn't been pushed to yet.
-                const dims = window.getDeviceDimensions(name);
-                window.restoreDevicePreview(address, dims.image);
+                window.restoreDevicePreview(address);
                 if (window.renderDeviceDots) window.renderDeviceDots();
                 if (window.loadDeviceName) window.loadDeviceName();
                 if (window.restoreActiveWidgetForDevice) window.restoreActiveWidgetForDevice(address);
                 // banner-device-res and banner-device-speaker moved to Settings → Devices.
                 // Their textContent assignments are intentionally skipped here.
-                const isSpk = name.toLowerCase().includes("timoo") || name.toLowerCase().includes("ditoo") || name.toLowerCase().includes("tivoo");
-                window.updateSidebarSpeakerIcon(isSpk);
+                // Whether it has a speaker is the vendor app's per-model switch,
+                // as the daemon reports it (P5.1) -- not a guess from the name.
+                window.updateSidebarSpeakerIcon(window.panelHasSpeaker(address) !== false);
                 const sidebarSelect = document.getElementById("sidebar-device-select");
                 if (sidebarSelect) sidebarSelect.value = address;
                 if (window.updateSyncTargetList) window.updateSyncTargetList();
@@ -275,6 +275,8 @@ window.Divoom.onOwnedDevices = function(ev) {
     if (window.renderDeviceDots) window.renderDeviceDots();
     // The bench and deck jewels read daemonOwned too (2026-09-12).
     if (window.SpatialStage?.refresh) window.SpatialStage.refresh();
+    // What each owned panel IS (model, size, speaker): the daemon's word, by mac (P5.1).
+    if (window.refreshPanelFacts) window.refreshPanelFacts();
     // The daemon owns the ACTIVE panel; the bench follows its word.
     const active = ev.devices.find(dev => dev.selected === true);
     if (active && active.address && window.SpatialStage?.followSelection) window.SpatialStage.followSelection(active.address);

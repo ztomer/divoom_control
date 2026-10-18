@@ -94,13 +94,8 @@ class TestGuiApiTopLevelCoverage(unittest.TestCase):
 
         self.api.lighting.display_wall_image.return_value = True
         self.assertTrue(self.api.display_wall_image("/tmp/a.png", 16))
-
-
-        self.api.lighting.set_brightness.return_value = True
-        self.assertTrue(self.api.set_brightness(80))
-
-        self.api.lighting.set_volume.return_value = True
-        self.assertTrue(self.api.set_volume(5))
+        # set_brightness / set_volume name their panel now: divoom_gui/panels.py,
+        # tests/test_gui_panels.py (P5.1).
 
     def test_tools_wrappers_forward_to_collaborator(self):
         self.api.tools = MagicMock()

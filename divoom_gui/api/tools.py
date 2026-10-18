@@ -247,30 +247,6 @@ class ToolsApi(ApiBase):
             logger.error(f"Scoreboard set failed: {e}")
             return False
 
-    # ── Volume / brightness getters (read-only, single device) ──────
-
-    def get_volume(self):
-        logger.info("GUI Action: Getting current volume...")
-        try:
-            target = self._current_divoom
-            if not target:
-                return None
-            return self._run_async(target.music.get_volume())
-        except Exception as e:
-            logger.error(f"Volume get failed: {e}")
-            return None
-
-    def get_brightness(self):
-        logger.info("GUI Action: Getting current brightness...")
-        try:
-            target = self._current_divoom
-            if not target:
-                return None
-            return self._run_async(target.device.get_brightness())
-        except Exception as e:
-            logger.error(f"Brightness get failed: {e}")
-            return None
-
     def get_work_mode(self):
         logger.info("GUI Action: Getting current work mode...")
         try:

@@ -16,15 +16,6 @@ logger = logging.getLogger("divoom_gui")
 
 class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
     """Mixin for macOS active playback tracker, stock tickers, sysmon widget, and frame pushing."""
-    def _get_device_size(self, address: str) -> int:
-        for d in self.discovered_list:
-            if d.get("address") == address:
-                name = d.get("name", "").lower()
-                if "64" in name:
-                    return 64
-                return 16
-        return 16
-
     def get_current_track_info(self) -> str:
         """What is playing — asked of the DAEMON, not discovered here.
 
@@ -123,10 +114,11 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
             if self.wall_slots:
                 sizes = [s.get("size", default) for s in self.wall_slots.values() if isinstance(s, dict)]
                 return min(sizes) if sizes else default
-            dev = self.current_divoom
-            mac = getattr(getattr(dev, "_conn", None), "mac", None) or getattr(dev, "mac", None)
-            if mac:
-                return self._get_device_size(mac)
+            # P5.1: the daemon's resolution for the selected panel, never a
+            # guess from its name (PanelsMixin._panel_pixels).
+            px = self._panel_pixels(getattr(self.current_divoom, "_mac", None))
+            if px:
+                return px
         except Exception:
             pass
         return default

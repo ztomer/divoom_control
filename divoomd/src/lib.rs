@@ -68,6 +68,8 @@ mod mock_device_tests;
 #[cfg(test)]
 mod mock_device_tests2;
 #[cfg(test)]
+mod mock_levels_tests;
+#[cfg(test)]
 mod mock_scroll_tests;
 #[cfg(test)]
 mod mock_scrolling_text_tests;

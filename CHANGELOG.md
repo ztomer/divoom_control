@@ -4,6 +4,48 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P5.1 — brightness, volume and size are per panel, from the daemon (2026-10-18)
+
+Brightness and volume were read ONCE at GUI startup with no mac (whichever
+panel `current_divoom` happened to be), written with no mac, and gated on the
+one app-wide `appConnected` flag. The deck's per-panel brightness was a
+localStorage memory of what the slider last sent -- 85 for a panel it had
+never touched -- and the volume slider had two senders, one with no link
+check. Panel SIZE was guessed from the device NAME in three places that
+disagreed: `getDeviceDimensions` (app_globals.js), `resolveDeviceSpec`
+(spatial_stage.js) and `MediaSyncMixin._get_device_size` ("64" in the name
+meant 64), although `device_status` has carried each panel's model and
+resolution since P3.1.
+
+- **Backend** (`divoom_gui/panels.py`): `get_panels()` is `device_status`'s
+  description of every linked panel; `get_panel_levels(mac)` reads that
+  panel's brightness and (when the vendor app says it has a speaker) volume;
+  `set_brightness(v, mac)` / `set_volume(v, mac)` write to the panel named and
+  refuse a call that names none. The mac-less `get_brightness`/`get_volume`
+  and the LightingApi writers are deleted. The active-panel size the widget
+  renderers use is the daemon's width (`_panel_pixels`), not the name.
+- **A LAN panel's brightness never worked from the GUI.** The old writer did
+  `t.lan.set_brightness(v)`, but on the daemon proxy `t.lan` is a status view
+  with no methods, so it raised on every LAN panel; its tests used MagicMock
+  and could not see it. It now calls the daemon's `lan.set_brightness`.
+- **Web UI** (`divoom_gui/web_ui/panel_facts.js`): the facts are written onto
+  `discoveredDevices[i]` (the GUI's one per-panel record) on every
+  `owned_devices` broadcast; the deck reads the shown panel's levels each time
+  the panel CHANGES (a repaint is not a radio read), last-wins, and shows `–`
+  for a value the daemon did not give. One sender per slider, naming the
+  panel, refusing one that is not linked. Size and the speaker row come from
+  the daemon's model, never the name; both name guessers are deleted, and the
+  bench draws each chassis from the model.
+- **Daemon:** no change needed -- `device_call` already routes by `mac`.
+  `divoomd/src/mock_levels_tests.rs` pins it with two mock panels (a write
+  lands on the panel named and no other; a read answers from the panel named).
+- **Watched red:** all six `tests/test_e2e_panel_levels_per_panel.py` tests on
+  the old code, and the last-wins one again with the ticket check removed;
+  `tests/test_gui_panels.py` (size from the name, a volume read on a
+  speakerless panel, a write that names no panel, the LAN path); the Rust
+  tests with the mac routing replaced by `resolve_target(None)` and with the
+  panel fields dropped from `device_entry`.
+
 ## Light theme: every label and switch reads at 3:1 (2026-10-18)
 
 Found looking at the P5.4 weather card in the light theme for the user-POV

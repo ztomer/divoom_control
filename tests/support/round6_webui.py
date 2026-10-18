@@ -10,6 +10,7 @@ GALLERY_CSS = REPO_ROOT / "divoom_gui" / "web_ui" / "gallery.css"
 GALLERY_JS = REPO_ROOT / "divoom_gui" / "web_ui" / "gallery.js"
 GUI_API_PY = REPO_ROOT / "divoom_gui" / "gui_api.py"
 LIGHTING_FORWARD_PY = REPO_ROOT / "divoom_gui" / "lighting_forward.py"
+PANELS_PY = REPO_ROOT / "divoom_gui" / "panels.py"
 
 def _cat(paths: list[Path]) -> str:
     """Read and concatenate multiple source files."""
@@ -39,6 +40,8 @@ SETTINGS_JS = _cat([
 APP_JS = _cat([
     REPO_ROOT / "divoom_gui" / "web_ui" / "app_globals.js",
     REPO_ROOT / "divoom_gui" / "web_ui" / "app_init.js",
+    # P5.1: the deck's brightness/volume senders and per-panel reads.
+    REPO_ROOT / "divoom_gui" / "web_ui" / "panel_facts.js",
 ])
 
 CHANNELS_JS = _cat([

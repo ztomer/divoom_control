@@ -11,7 +11,6 @@
     let tick = 0;
     const devicePositions = {};
     const deviceRooms = {};
-    const deviceBrightness = {};
     let activeRoomFilter = 'all';
 
     function initSpatialStage() {
@@ -110,38 +109,10 @@
             refreshBenchNodes();
         });
 
-        // Sidebar deck controls (brightness, volume, power)
-        const bSlider = document.getElementById('global-brightness-slider'), bVal = document.getElementById('global-brightness-value');
-        if (bSlider) {
-            bSlider.addEventListener('input', (e) => {
-                const val = parseInt(e.target.value);
-                if (bVal) bVal.textContent = val + '%';
-                if (selectedMac) { deviceBrightness[selectedMac] = val; try { localStorage.setItem('divoom_stage_brightness', JSON.stringify(deviceBrightness)); } catch (_) {} }
-                // P1.1: NO device write here. `input` fires per value, so sending here wrote the
-                // device on every intermediate step of a drag -- and `app_init.js`'s `change`
-                // handler then wrote the settled value as well, so every gesture ended in a
-                // duplicate. That handler is the one sender (it is also the one that refuses to
-                // write when no panel is linked); caption and cached brightness stay here.
-            });
-        }
-        const vSlider = document.getElementById('appbar-volume-slider'), vVal = document.getElementById('appbar-volume-value');
-        if (vSlider) {
-            vSlider.addEventListener('input', (e) => { if (vVal) vVal.textContent = e.target.value + '/15'; });
-            vSlider.addEventListener('change', (e) => { if (window.pywebview?.api?.set_volume) window.pywebview.api.set_volume(parseInt(e.target.value)); });
-        }
-        const powerBtn = document.getElementById('deck-device-power');
-        if (powerBtn) {
-            powerBtn.addEventListener('click', () => {
-                if (!bSlider) return;
-                const next = parseInt(bSlider.value) > 0 ? 0 : 85;
-                bSlider.value = next;
-                if (bVal) bVal.textContent = next + '%';
-                if (selectedMac) { deviceBrightness[selectedMac] = next; try { localStorage.setItem('divoom_stage_brightness', JSON.stringify(deviceBrightness)); } catch (_) {} }
-                if (window.pywebview?.api?.set_brightness) window.pywebview.api.set_brightness(next);
-            });
-        }
+        // The deck's brightness, volume and power controls are panel_facts.js's
+        // (P5.1): one sender each, naming the panel, read from the daemon.
 
-        // Load topology, rooms, and brightness from cache & daemon
+        // Load topology and rooms from cache & daemon
         if (window.SpatialRooms) {
             Object.assign(devicePositions, window.SpatialRooms.getSavedPositions());
             Object.assign(deviceRooms, window.SpatialRooms.getDeviceRooms());
@@ -153,7 +124,6 @@
                 if (r) Object.assign(deviceRooms, JSON.parse(r));
             } catch (_) {}
         }
-        try { const b = localStorage.getItem('divoom_stage_brightness'); if (b) Object.assign(deviceBrightness, JSON.parse(b)); } catch (_) {}
 
         window.addEventListener('divoom:topology-loaded', (e) => {
             const top = e.detail || {};
@@ -178,31 +148,17 @@
 
         // Fallback placeholder fleet for UI preview if no devices scanned yet
         return [
-            { address: '11:22:33:44:55:01', name: 'Ditoo-L', model: 'Ditoo', size: 16, room: 'Desk', activityKind: 'clock' },
-            { address: '11:22:33:44:55:02', name: 'Timoo-M', model: 'Timoo', size: 16, room: 'Desk', activityKind: 'sysmon' },
-            { address: '11:22:33:44:55:03', name: 'Ditoo-R', model: 'Ditoo', size: 16, room: 'Desk', activityKind: 'visualizer' },
-            { address: '11:22:33:44:55:04', name: 'Pixoo-64', model: 'Pixoo-64', size: 64, room: 'Wall', activityKind: 'weather' }
+            { address: '11:22:33:44:55:01', name: 'Ditoo-L', model: 'DITOO', width: 16, room: 'Desk', activityKind: 'clock' },
+            { address: '11:22:33:44:55:02', name: 'Timoo-M', model: 'TIMOO', width: 16, room: 'Desk', activityKind: 'sysmon' },
+            { address: '11:22:33:44:55:03', name: 'Ditoo-R', model: 'DITOO', width: 16, room: 'Desk', activityKind: 'visualizer' },
+            { address: '11:22:33:44:55:04', name: 'Pixoo-64', model: 'Pixoo64Wifi', width: 64, room: 'Wall', activityKind: 'weather' }
         ];
     }
 
-    // Accurate physical dimensions database (mm) & pixel resolution
+    // What a panel is and how it is drawn: panel_facts.js, from the daemon's
+    // model and resolution (P5.1) -- never from the name.
     const SCALE = 0.65;
-    const DIVOOM_SPECS = {
-        timoo:     { name: 'Timoo',     w_mm: 82.5, h_mm: 90,  screen_mm: 60,  pw: 16, ph: 16, form: 'timoo' },
-        ditoo:     { name: 'Ditoo',     w_mm: 90,   h_mm: 114, screen_mm: 64,  pw: 16, ph: 16, form: 'ditoo' },
-        tivoo_max: { name: 'Tivoo-Max', w_mm: 184,  h_mm: 163, screen_mm: 110, pw: 16, ph: 16, form: 'tivoo_max' },
-        pixoo:     { name: 'Pixoo',     w_mm: 200,  h_mm: 200, screen_mm: 158, pw: 16, ph: 16, form: 'pixoo' },
-        pixoo64:   { name: 'Pixoo-64',  w_mm: 261,  h_mm: 261, screen_mm: 210, pw: 64, ph: 64, form: 'pixoo' }
-    };
-
-    function resolveDeviceSpec(dev) {
-        const name = (dev.name || '').toLowerCase();
-        if (name.includes('64') || dev.size === 64) return DIVOOM_SPECS.pixoo64;
-        if (name.includes('max') || name.includes('tivoo-max')) return DIVOOM_SPECS.tivoo_max;
-        if (name.includes('timoo')) return DIVOOM_SPECS.timoo;
-        if (name.includes('pixoo')) return DIVOOM_SPECS.pixoo;
-        return DIVOOM_SPECS.ditoo;
-    }
+    const resolveSpec = (dev) => window.panelEnclosure(dev);
 
     function getSelectedDevice() {
         const list = getDeviceList();
@@ -236,7 +192,7 @@
 
         let defaultX = 20;
         devices.forEach((dev, idx) => {
-            const addr = dev.address || ('dev-' + idx), spec = resolveDeviceSpec(dev);
+            const addr = dev.address || ('dev-' + idx), spec = resolveSpec(dev);
             const w = Math.round(spec.w_mm * SCALE), h = Math.round(spec.h_mm * SCALE);
             const sw = Math.round(spec.screen_mm * SCALE), pw = spec.pw, ph = spec.ph;
 
@@ -280,7 +236,7 @@
             // Node Click Selection & Drag
             node.addEventListener('mousedown', (e) => {
                 highlightNode(addr, dev);
-                window.SpatialDrag.start(e, { addr, node, dev, positions: devicePositions, rooms: deviceRooms, nameOf: (d) => d.name || resolveDeviceSpec(d).name });
+                window.SpatialDrag.start(e, { addr, node, dev, positions: devicePositions, rooms: deviceRooms, nameOf: (d) => d.name || resolveSpec(d).name });
             });
 
             bench.appendChild(node);
@@ -348,7 +304,7 @@
         if (activeNode) { activeNode.classList.add('selected'); activeNode.style.zIndex = '25'; }
         const bm = document.getElementById('banner-device-mac'), bn = document.getElementById('banner-device-name');
         if (bm) bm.textContent = addr;
-        if (bn) { const s = resolveDeviceSpec(dev); bn.textContent = dev.name || s.name; }
+        if (bn) { const s = resolveSpec(dev); bn.textContent = dev.name || s.name; }
         updateInspector(dev);
         updateRibbonSelection();
         if (typeof window.restoreDevicePreview === 'function') window.restoreDevicePreview(addr);
@@ -371,29 +327,26 @@
     function selectDevice(addr, dev) {
         highlightNode(addr, dev);
         if (typeof window.connectDevice === 'function') {
-            window.connectDevice(dev.name || resolveDeviceSpec(dev).name, addr);
+            window.connectDevice(dev.name || resolveSpec(dev).name, addr);
         }
     }
 
     function updateInspector(dev) {
-        const spec = resolveDeviceSpec(dev), addr = dev.address || 'dev';
+        const spec = resolveSpec(dev), addr = dev.address || 'dev';
         const nameEl = document.getElementById('deck-device-name'), tagEl = document.getElementById('deck-device-tag');
-        const roomSelect = document.getElementById('deck-room-select'), volContainer = document.getElementById('deck-volume-container');
-        const bSlider = document.getElementById('global-brightness-slider'), bVal = document.getElementById('global-brightness-value');
+        const roomSelect = document.getElementById('deck-room-select');
 
         if (nameEl) nameEl.textContent = dev.name || spec.name;
-        if (tagEl) tagEl.textContent = `${spec.pw}×${spec.ph}`;
+        // The size the daemon resolved; unknown says so rather than guessing.
+        if (tagEl) tagEl.textContent = spec.pixels ? `${spec.pixels}×${spec.pixels}` : '–';
         const deckDot = document.getElementById('deck-device-dot'); if (deckDot) deckDot.className = `spatial-jewel ${jewelClass(dev)}`;
         if (roomSelect) {
             const rm = deviceRooms[addr] !== undefined ? deviceRooms[addr] : (dev.room || '');
             if (window.SpatialRooms) window.SpatialRooms.populateSelect(roomSelect, rm);
             else roomSelect.value = rm;
         }
-        if (volContainer) volContainer.style.display = (spec.form !== 'pixoo') ? 'block' : 'none';
-
-        const curB = (deviceBrightness[addr] !== undefined) ? deviceBrightness[addr] : 85;
-        if (bSlider) bSlider.value = curB;
-        if (bVal) bVal.textContent = curB + '%';
+        // Its own brightness and volume, read from the daemon (P5.1).
+        if (window.PanelLevels) window.PanelLevels.show(addr);
     }
 
     function updateRibbonSelection() {
@@ -411,7 +364,7 @@
         let minX = Infinity, maxX = -Infinity;
         devs.forEach(d => {
             const a = d.address || 'dev', p = devicePositions[a] || { x: 20, y: 50 };
-            const w = Math.round(resolveDeviceSpec(d).w_mm * SCALE);
+            const w = Math.round(resolveSpec(d).w_mm * SCALE);
             if (p.x < minX) minX = p.x;
             if (p.x + w > maxX) maxX = p.x + w;
         });
@@ -426,7 +379,7 @@
     function snapToDesk() {
         let curX = 20;
         getDeviceList().forEach((dev) => {
-            const addr = dev.address || 'dev', spec = resolveDeviceSpec(dev);
+            const addr = dev.address || 'dev', spec = resolveSpec(dev);
             devicePositions[addr] = { x: curX, y: Math.max(10, 165 - Math.round(spec.h_mm * SCALE)) };
             curX += Math.round(spec.w_mm * SCALE) + 12;
         });
