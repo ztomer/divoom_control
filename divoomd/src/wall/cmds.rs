@@ -244,13 +244,21 @@ pub async fn cmd_wall_configure(daemon: &Daemon, req: &Request) -> Value {
     match DivoomWall::connect(daemon, &configs, &existing_by_mac).await {
         Ok(new_wall) => {
             let degraded = new_wall.degraded_slots();
+            let refused: serde_json::Map<String, Value> = new_wall
+                .refused
+                .iter()
+                .map(|mac| (mac.clone(), json!(super::LAN_SLOT_REFUSAL)))
+                .collect();
             *daemon.wall.lock().await = Some(new_wall);
             *daemon.wall_slots.lock().await = slots;
-            if degraded.is_empty() {
-                json!({"success": true, "wall": true})
-            } else {
-                json!({"success": true, "wall": true, "degraded": degraded})
+            let mut reply = json!({"success": true, "wall": true});
+            if !degraded.is_empty() {
+                reply["degraded"] = json!(degraded);
             }
+            if !refused.is_empty() {
+                reply["refused"] = Value::Object(refused);
+            }
+            reply
         }
         Err(e) => {
             *daemon.wall.lock().await = None;

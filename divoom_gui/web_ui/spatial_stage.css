@@ -368,6 +368,14 @@ body {
 
 .deck-select:focus { border-color: var(--primary); }
 
+/* A status, not an alarm (P6.1): why this panel cannot be a wall slot. */
+.deck-note {
+    margin: 2px 0 0;
+    font-size: 11px;
+    line-height: 1.35;
+    color: var(--text-muted);
+}
+
 .deck-slider-row {
     display: flex;
     flex-direction: column;

@@ -38,6 +38,8 @@
             dev.width = Number.isInteger(p.width) ? p.width : null;
             dev.height = Number.isInteger(p.height) ? p.height : null;
             dev.features = p.features || null;
+            // Why the daemon will not make it a wall slot, or null (P6.1).
+            dev.wallRefusal = typeof p.wall_refusal === "string" ? p.wall_refusal : null;
         });
     };
 

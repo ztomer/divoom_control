@@ -106,6 +106,8 @@ pub mod sync_artwork;
 pub mod transport;
 pub mod verbs;
 pub mod wall;
+#[cfg(test)]
+mod wall_lan_tests;
 pub mod watchdog;
 pub mod weather;
 pub mod wire;

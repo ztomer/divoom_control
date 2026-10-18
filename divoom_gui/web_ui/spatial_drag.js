@@ -1,6 +1,8 @@
 // spatial_drag.js — dragging a panel node on the Spatial Bench.
 // Split from spatial_stage.js (500-line cap). A drag that never moved is a
-// click: it connects the panel. One that moved saves the new position.
+// click: it connects the panel. One that moved saves the new position, which
+// SpatialSnap (spatial_snap.js) has put flush against a panel it was dropped
+// near or on (P6.1): a wall cuts its image by these positions.
 (function() {
     'use strict';
 
@@ -16,7 +18,10 @@
             initialX: positions[addr] ? positions[addr].x : 0,
             initialY: positions[addr] ? positions[addr].y : 0,
             benchWidth: bench.clientWidth, benchHeight: bench.clientHeight,
-            nodeWidth: node.offsetWidth, nodeHeight: node.offsetHeight, hasMoved: false
+            nodeWidth: node.offsetWidth, nodeHeight: node.offsetHeight, hasMoved: false,
+            // Every other panel's footprint, read once: they do not move while this one does.
+            others: [...bench.querySelectorAll('.spatial-node')].filter(n => n !== node).map(n => ({
+                x: n.offsetLeft, y: n.offsetTop, w: n.offsetWidth, h: n.offsetHeight }))
         };
         window.addEventListener('mousemove', onMove);
         window.addEventListener('mouseup', end);
@@ -27,8 +32,12 @@
         if (!activeDrag) return;
         const dx = e.clientX - activeDrag.startX, dy = e.clientY - activeDrag.startY;
         if (Math.abs(dx) > 3 || Math.abs(dy) > 3) activeDrag.hasMoved = true;
-        const nx = Math.max(0, Math.min(activeDrag.benchWidth - activeDrag.nodeWidth, activeDrag.initialX + dx));
-        const ny = Math.max(0, Math.min(activeDrag.benchHeight - activeDrag.nodeHeight, activeDrag.initialY + dy));
+        const d = activeDrag;
+        const cx = Math.max(0, Math.min(d.benchWidth - d.nodeWidth, d.initialX + dx));
+        const cy = Math.max(0, Math.min(d.benchHeight - d.nodeHeight, d.initialY + dy));
+        const { x: nx, y: ny } = window.SpatialSnap.snap(
+            { x: cx, y: cy, w: d.nodeWidth, h: d.nodeHeight }, d.others,
+            { bounds: { w: d.benchWidth, h: d.benchHeight } });
         const positions = activeDrag.positions;
         if (!positions[activeDrag.addr]) positions[activeDrag.addr] = {};
         positions[activeDrag.addr].x = nx;

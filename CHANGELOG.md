@@ -4,6 +4,47 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## P6.1 — panels snap into one surface; a panel on Wi-Fi says why it is not a slot (2026-10-18)
+
+A wall slices one image by each slot's place on the bench (`divoomd/src/wall.rs`
+cuts per slot by x/y), but dragging a panel only clamped it to the bench, so a
+wall's panels sat with gaps and overlaps the image was cut across. LAN panels
+were refused for wall images with the reason thrown away: the slot's piece was
+cut, failed to send, and the whole wall reported failure.
+
+- **Snapping is one pure function**, `SpatialSnap.snap`
+  (`divoom_gui/web_ui/spatial_snap.js`): a panel dropped within 12 px of
+  another's edge lands flush against it and, when also within reach of its
+  top/bottom (or left/right) edge, lines up with it; contact is a shared edge,
+  never a corner; a drop ON a panel is pushed to the nearest flush spot; a drop
+  near nothing stays put; nothing lands off the bench. The drag
+  (`spatial_drag.js`) asks it on every move, so the position saved -- the one
+  the wall cuts by -- is the snapped one.
+- **Why a LAN panel cannot be a slot, investigated:** the daemon draws images
+  only through the Bluetooth 0x8B stream -- a LAN transport has no
+  `send_command` and no `stream_animation_8b` (`transport.rs`), and
+  `device_call/lan.rs` speaks no image command, so not even a single LAN panel
+  can be sent an image. The vendor app's Wi-Fi image upload is
+  `DesignSendModel.sendByLocalHttp`, which did not decompile ("Method dump
+  skipped"); the protocol is not in the references and is not invented here.
+  That is a real limit, so the refusal is stated: `divoomd` leaves a LAN slot
+  out before measuring the wall, `wall_configure` names it under `refused`
+  with the reason (a wall of only LAN panels fails with it), and
+  `device_status` carries `wall_refusal` per panel. The GUI reads it with the
+  panel's other facts (`get_panels`), leaves the panel out of the wall's slots
+  at their one producer (`SpatialRooms.getWallSlots`), shows the reason in the
+  deck when that panel is selected, and names it in the wall push's toast.
+- **Tests:** `tests/test_spatial_snap.py` (node; near-miss in reach, one px
+  past it, a drop on a panel, different sizes, a chain of three, a corner, the
+  bench's bounds) -- each case watched red under a mutation of the function;
+  `tests/test_e2e_bench_snap.py` (a real mouse drag lands flush and is saved
+  snapped -- red with the snap call removed -- a drag clear of the others stays
+  put; a LAN panel's deck note and its absence from the wall's slots -- red
+  with each removed); `divoomd/src/wall_lan_tests.rs` -- red with the LAN check
+  and the `wall_refusal` field disabled. Two real panels showing one image
+  across the seam is not checked: it needs the hardware (ROADMAP P6.1).
+  pytest 1725 passed / 158 skipped; browser suites 206 passed.
+
 ## P5.6 — channel writes name their panel (2026-10-18)
 
 P5.2 resolved the selected display at the click, but the bridge call it then

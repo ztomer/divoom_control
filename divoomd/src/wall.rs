@@ -11,9 +11,12 @@ use crate::image_encode;
 mod bounds;
 mod cmds;
 mod dispatch;
+mod refusal;
 
 use bounds::WallBounds;
 pub(crate) use cmds::{cmd_get_topology, cmd_set_topology, cmd_wall_configure};
+use refusal::is_lan_id;
+pub use refusal::LAN_SLOT_REFUSAL;
 
 #[derive(Clone, Debug)]
 pub struct WallConfig {
@@ -37,6 +40,8 @@ pub struct DeviceSlot {
 
 pub struct DivoomWall {
     pub devices: Vec<DeviceSlot>,
+    /// Slots left out of the wall, each for `LAN_SLOT_REFUSAL`.
+    pub refused: Vec<String>,
     pub total_width: i32,
     pub total_height: i32,
     pub min_x: i32,
@@ -59,6 +64,25 @@ impl DivoomWall {
         // lays out its grid and reports that it cannot reach any panel.
         #[cfg(not(feature = "ble"))]
         let _ = daemon;
+        // A panel on Wi-Fi cannot be drawn on (`LAN_SLOT_REFUSAL`): it is left
+        // out before the layout is measured, so the image spans the slots
+        // that show it.
+        let is_lan = |c: &WallConfig| {
+            is_lan_id(&c.mac)
+                || existing
+                    .get(&c.mac)
+                    .is_some_and(|t| matches!(**t, DeviceTransport::Lan(_)))
+        };
+        let refused: Vec<String> = configs
+            .iter()
+            .filter(|c| is_lan(c))
+            .map(|c| c.mac.clone())
+            .collect();
+        let eligible: Vec<WallConfig> = configs.iter().filter(|c| !is_lan(c)).cloned().collect();
+        if eligible.is_empty() && !refused.is_empty() {
+            return Err(LAN_SLOT_REFUSAL.to_string());
+        }
+        let configs = eligible.as_slice();
         let is_free_form = configs.iter().any(|c| c.width.is_some());
         let WallBounds {
             min_x,
@@ -136,6 +160,7 @@ impl DivoomWall {
 
         Ok(Self {
             devices,
+            refused,
             total_width,
             total_height,
             min_x,
@@ -246,7 +271,7 @@ impl DivoomWall {
                 }
 
                 if let DeviceTransport::Lan(_) = &*dev {
-                    Err("LAN not supported for wall show_image".to_string())
+                    Err(LAN_SLOT_REFUSAL.to_string())
                 } else {
                     let _ = dev
                         .send_command(0x45, &[0x05, 0, 0, 0, 0, 0, 0, 0, 0, 0], false)

@@ -94,12 +94,19 @@ document.addEventListener("DOMContentLoaded", () => {
                 ? Object.fromEntries(wallMacs.map(mac => [mac, allSlots[mac]]))
                 : allSlots;
             const slotCount = Object.keys(activeSlots).length;
+            // Panels the daemon will not make slots (P6.1), in the same scope
+            // as the wall: its room when one is named, else every panel. Said
+            // in the one toast this click raises, so the next cannot hide it.
+            const refused = (window.SpatialRooms ? window.SpatialRooms.getWallRefusals() : [])
+                .filter(r => wallMacs.length === 0 || r.room.toLowerCase() === 'wall');
+            const leftOut = refused.map(r => `${r.name} is left out. ${r.reason}`).join(' ');
             if (slotCount === 0) {
-                window.showToast("No screens configured on the Spatial Bench!", "error");
+                window.showToast(leftOut || "No screens configured on the Spatial Bench!", "error");
                 return;
             }
             window.DivoomState.assignedSlots = activeSlots;
-            window.showToast("Splitting image and syncing wall...", "success");
+            window.showToast(leftOut ? `Splitting image and syncing wall. ${leftOut}`
+                                     : "Splitting image and syncing wall...", "success");
             if (window.pywebview && window.pywebview.api) {
                 window.pywebview.api.update_wall_slots(JSON.stringify(activeSlots));
                 window.pywebview.api.display_wall_image(path, 16).then(res => {

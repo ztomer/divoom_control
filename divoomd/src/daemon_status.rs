@@ -77,7 +77,15 @@ impl Daemon {
             "connected": d.is_connected().await,
             "selected": self.fleet.is_selected(&d.id),
         });
-        merge(&mut e, &panel_of(d.transport().await.as_deref()).fields());
+        let transport = d.transport().await;
+        merge(&mut e, &panel_of(transport.as_deref()).fields());
+        // Whether it can be a wall slot, and why not (P6.1).
+        let lan = matches!(transport.as_deref(), Some(DeviceTransport::Lan(_)));
+        e["wall_refusal"] = if lan {
+            json!(crate::wall::LAN_SLOT_REFUSAL)
+        } else {
+            Value::Null
+        };
         e
     }
 }

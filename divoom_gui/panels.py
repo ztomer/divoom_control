@@ -24,8 +24,10 @@ logger = logging.getLogger("divoom_gui")
 #: daemon-owned wall, not to a panel.
 WALL = "MatrixWall"
 
-#: `device_status` fields that say what a panel is (`divoomd/src/panel_model.rs`).
-PANEL_FIELDS = ("mac", "connected", "selected", "model", "width", "height", "model_source", "features")
+#: `device_status` fields that say what a panel is (`divoomd/src/panel_model.rs`),
+#: and why it cannot be a wall slot when it cannot (`wall_refusal`, P6.1).
+PANEL_FIELDS = ("mac", "connected", "selected", "model", "width", "height", "model_source", "features",
+                "wall_refusal")
 
 
 class PanelsMixin:

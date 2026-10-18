@@ -342,6 +342,7 @@
         const deck = document.getElementById('sidebar-device-deck');
         // No panel: the deck says so and shows no levels, room or power.
         deck?.querySelectorAll('.deck-slider-row, .deck-room-row, #deck-device-power').forEach(el => { el.hidden = !dev; });
+        if (!dev) { const n = document.getElementById('deck-wall-note'); if (n) n.hidden = true; }
         if (!dev) {
             if (nameEl) nameEl.textContent = 'No panel selected';
             if (tagEl) tagEl.textContent = '–';
@@ -360,6 +361,9 @@
             if (window.SpatialRooms) window.SpatialRooms.populateSelect(roomSelect, rm);
             else roomSelect.value = rm;
         }
+        // Why it is not a wall slot, when the daemon says it cannot be (P6.1).
+        const wallNote = document.getElementById('deck-wall-note');
+        if (wallNote) { wallNote.hidden = !dev.wallRefusal; wallNote.textContent = dev.wallRefusal || ''; }
         // Its own brightness and volume, read from the daemon (P5.1).
         if (window.PanelLevels) window.PanelLevels.show(addr);
     }

@@ -444,7 +444,9 @@
         const slots = {};
         devList.forEach(dev => {
             const addr = dev.address;
-            if (!addr) return;
+            // A panel the daemon refuses as a slot (P6.1) is no slot here
+            // either; getWallRefusals says which and why.
+            if (!addr || dev.wallRefusal) return;
             const p = findPosition(posMap, addr) || { x: 0, y: 0 };
             // The bench footprint the user placed (the chassis drawing) and the
             // daemon's diode count (P5.1), from one source with the bench.
@@ -463,6 +465,14 @@
         return slots;
     }
 
+    // The panels left out of the wall, with the daemon's reason and their room.
+    function getWallRefusals(devices) {
+        const devList = devices || (window.DivoomState && window.DivoomState.discoveredDevices) || [];
+        const roomMap = getDeviceRooms();
+        return devList.filter(d => d.address && d.wallRefusal).map(d => ({
+            mac: d.address, name: d.name || d.address, reason: d.wallRefusal, room: roomMap[d.address] || 'Desk' }));
+    }
+
     window.SpatialRooms = {
         getRooms,
         addRoom,
@@ -473,6 +483,7 @@
         savePositions,
         findPosition,
         getWallSlots,
+        getWallRefusals,
         syncTopology,
         loadTopology,
         populateSelect,
