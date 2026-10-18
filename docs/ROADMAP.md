@@ -151,6 +151,26 @@ P5.4, the weather card showing the PNG of `render_widget {kind: "weather"}` with
 P5.3, the menubar updating labels, the "Active panel" check and the notification items in place, rebuilding only when the set of rows changes, decided by diffing one `MenuModel` signature (`28f54cd`; `divoom-menubar/src/menu_model.rs`). That meets the exit's menubar half in code; holding the menu open through a fleet change on screen is not yet checked (2026-10-18: the console was locked, so no NSMenu could be held open or captured; a two-mock-panel smoke -- selection A, B, A and a row rename over the socket -- left the menubar running);
 P5.1, brightness, volume and panel size read and written per mac through the daemon, both name-based size guessers deleted, switching panels shows that panel's values (`f1f7b3b`; `divoom_gui/panels.py`, `divoom_gui/web_ui/panel_facts.js`, `tests/test_e2e_panel_levels_per_panel.py`, `divoomd/src/mock_levels_tests.rs`).
 
+#### P5.9 — P5.8's three leftovers: a job on a removed panel, wasted activity calls, uncoded missing-argument replies
+**Status:** OPEN
+**Why:** P5.8 (`0f73dda`) left three defects. (1) `LiveJobCoordinator::start`
+(`divoomd/src/live_jobs/coordinator.rs`) looks the panel up with
+`Fleet::known` and installs the job later, outside any lock: a `disconnect`
+that removes the panel in between leaves a running job on a panel no longer
+in the fleet, and the reply says success. (2) The web UI
+(`divoom_gui/web_ui/app_globals.js`, `window.setDeviceActivity`) still sends
+`set_device_activity` for `MatrixWall` and for panels the daemon never
+reported; the daemon refuses every one, so each call is wasted. (3) A missing
+required argument is answered with prose and no `code` (`live_job_start
+requires 'mac'`, 27 sites across the handlers), so a program cannot tell a
+malformed request from any other failure.
+**Done when:** lookup-and-install cannot interleave with removal, pinned by a
+deterministic interleaving test (a hook between lookup and install, not a
+sleep) watched red on `0f73dda`; a browser test sees no `set_device_activity`
+naming `MatrixWall` or an unreported mac, watched red; and one test walks the
+daemon's command table and asserts a missing required argument yields a
+`bad_request` reply for every command, watched red.
+
 ### Phase 6 — the multi-panel wall
 
 **Goal:** a wall is placed by snapping, and LAN panels can join it.
