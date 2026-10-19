@@ -540,11 +540,11 @@ is judged against; when one moves, change it here in the same commit.
 | Measure | Value | Where it is enforced |
 |---|---|---|
 | Local gate | 29 `GOH_CI_STEPS` (incl. the browser suites, 2026-10-19) + `scripts/py_ci.sh` = 30 steps, run by `pre-push` on the pushed commit in a clean worktree | `.gatesrc`, `tools/gate.sh`, `scripts/ci_local.sh` |
-| Python tests (default) | 1640, 129 skipped | `pytest.ini` (`testpaths = tests`) |
-| `examples/tests` | 1095 (2026-10-04) | `scripts/py_ci.sh` |
-| Browser subset | 223: 213 passed, 10 skipped (2026-10-18, beta.39, `-n 8`; opt-in `--run-browser`, own CI step) | `.github/workflows/tests.yml` |
-| Rust tests | 486 (2026-10-04) | `cargo test --locked` |
-| Python coverage floor | 88.5 (see P1.4) | `scripts/py_ci.sh` |
+| Python tests (default) | 2053, 176 skipped (2026-10-19) | `pytest.ini` (`testpaths = tests`) |
+| `examples/tests` | 1022 passed, 73 skipped (2026-10-19) | `scripts/py_ci.sh` |
+| Browser subset | 230 passed (2026-10-19, beta.39, `-n 8`; in the local gate and CI, through `scripts/browser_e2e.sh`) | `scripts/browser_e2e.sh` |
+| Rust tests | 644 (2026-10-19) | `cargo test --locked` |
+| Python coverage floor | 89.0 (see P1.4) | `scripts/py_ci.sh` |
 | Rust coverage floor | 42 | `scripts/rust_coverage.sh` |
 | File length | 500 lines, allowlist empty | gates_of_heck structural layer |
 | Daemon/client duplication | 0 DIRECT, 0 WRAPPED | `tools/capability_census.py` |
@@ -590,7 +590,9 @@ HTTP, and Classic SPP through the co-process above.
 `HttpCommand.java` implemented; the backend-only ones are the gated
 capabilities above.
 
-**Shipped, by release:** `CHANGELOG.md`; the release table this file carried
+**Shipped, by release:** `CHANGELOG.md` -- the newest stanza is `v0.41.3`
+(2026-10-19: the browser e2e suites run in the local gate, and the app's own
+startup no longer overwrites live state); the release table this file carried
 until 2026-10-14 is `git show a8a848d:docs/ROADMAP.md`.
 
 ---
