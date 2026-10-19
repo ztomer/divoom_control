@@ -28,6 +28,75 @@ workflow, shell script, `.gatesrc` or the code of `tools/`, `scripts/` and
 default build); and a mismatched active build. Three of them went red with the
 old `fetch` literal restored and the build check disabled.
 
+Wiring the suites into pre-push exposed one more defect, in the suites: they
+were not hermetic. `index.html` links Google Fonts and `page.goto` waits for
+that stylesheet, so every goto spent 2.7-6.0 s on the internet (0.12-0.73 s
+without it), and at load 100-160 the fetch crossed goto's 30 s cap -- 8 and 17
+`Page.goto` timeouts on two eight-wide runs, different tests each time. The one
+launch seam (`tests/support/browser.py` -> `browser_options.py`) now routes the
+test browser's off-machine traffic to a closed local port; `scripts/gui_pov.py`
+asks for the network so its screenshots keep the real fonts.
+`tests/test_e2e_offline_browser.py` is red with the proxy removed (the font
+stylesheet loads) and green with it.
+
+P1.13 is landed: the browser suites run in the local gate (`414ab5e`, `0627eb5`
+and the two commits before them, `1760a79` and `7080f72`). At the tree those
+four commits make, the suites are green eight-wide (`230 passed`), the rest of
+the Python suite is green (`2050 passed, 179 skipped`), and the full local gate
+(`bash tools/gate.sh --full`) passes all 30 steps.
+
+## A pending connect is not a lost link (2026-10-19)
+
+The browser suites, running eight-wide in the local gate, went red on
+`test_e2e_wall_write_names_the_panel.py`: a wall write was refused with
+"Connect a device first" instead of naming the panel that did not take it. It
+was not a flake and not the test's timing -- one app defect.
+
+**The class:** `setConnectionState` writes TWO views of one fact -- the panel's
+own flags (`daemonOwned`, which `panelIsLinked` and `requireDevice` read) and
+the app-wide `appConnected`. The banner had always followed the rule "a pending
+click must not erase the last known device before its outcome is known" --
+`connecting` never wipes it. The link flag did not: `connecting` cleared
+`appConnected`, so the two views of the same fact disagreed.
+
+It cost the app a real write. `requireDevice()` gates every channel write, and
+for the Virtual Wall -- a composite of panels, with no `discoveredDevices`
+record of its own -- it falls back to that app-wide flag. So while ANY connect
+was in flight, every wall write was refused with "Connect a device first" and
+DROPPED, never reaching the daemon. The window is ordinary rather than exotic:
+the app's own startup restore reconnects the last device a second after load
+(`app_init.js`), so the writes that land in that second are lost.
+
+`connecting` no longer clears the link flag; only the daemon saying so
+(`inactive`) does (`divoom_gui/web_ui/connection_events.js`).
+`tests/test_e2e_write_during_pending_connect.py` pins both directions of the
+gate -- the wall, whose link the app-wide flag carries, and a panel, whose link
+its own record carries -- with the connect HELD in flight, so the assertion
+cannot be won by luck. It is red on the old code ("a pending connect is not a
+lost link: it must not clear the app-wide link flag the wall's writes are gated
+on") and green after.
+
+The same run found a second instance of the same class, in the app's own
+startup. The app restores persisted state a second after mount -- a snapshot of
+a PREVIOUS session -- and installed that snapshot over whatever the app had
+established by then. `{}` (nothing persisted) is truthy in JavaScript, so an
+EMPTY snapshot erased a live wall too. The wall then stopped being a known
+target: it vanished from the device selector, and every write aimed at it went
+to a single panel instead of the wall -- the same "Connect a device first"
+refusal, from the other end. The same overwrite dropped the daemon's own live
+devices from `discoveredDevices`, so `panelIsLinked` said "not linked" for a
+panel the daemon WAS linking. The restore now FILLS A GAP and never overwrites
+live state: the persisted wall is restored only when there is no live wall, and
+the persisted devices are MERGED IN (still tagged "not in range", the R61
+treatment) rather than installed over the daemon's own list
+(`divoom_gui/web_ui/app_init.js`);
+`tests/test_e2e_startup_restore_keeps_live_state.py` holds the restore's
+config read so "the restore landed" is a state the test owns, and is red on the
+old code ("the startup restore erased the live wall: it installed the persisted
+snapshot over it"; "the startup restore dropped the daemon's live device").
+
+Shipped in `0627eb5` (the hermetic browser seam, `414ab5e`, shipped with it).
+
 ## A bench re-render is not a selection (2026-10-18)
 
 Main CI's browser step went red on run 39171574815 twice, on two different

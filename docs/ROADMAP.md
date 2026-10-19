@@ -23,7 +23,7 @@ marked SHIPPED -- that marker is refused.
 
 Premises were last checked against the code on **2026-10-14** (HEAD `a38e2df`,
 the goh 0.27.0 hook reinstall on top of the 2026-10-12 plan commit `a8a848d`).
-Thirteen items have landed since (P1.1 `15ff359` on 2026-10-15; P1.6, the
+Fourteen items have landed since (P1.1 `15ff359` on 2026-10-15; P1.6, the
 build/install platform gate, and P1.7, the RX frame parser's one-byte resync, on
 2026-10-16; P1.12, the framing-vector generator, P1.5, the two-suite
 collection fix, P1.2, the PyInstaller pin from a committed file, P1.4, the
@@ -31,7 +31,9 @@ coverage floor ratcheted to the measurement, P1.3, the stale `tao` comments
 in CI, P1.8, the 52 hand-rolled status markers, P1.11, the short-frame panic
 fixed on both sides, P1.10, CI reading Python from `.python-version`, and
 P1.9, the release bumping the cask through the tap's gate, also on
-2026-10-17; P7.1, the tray glyph's shapes, on 2026-10-18), so the items below have
+2026-10-17; P7.1, the tray glyph's shapes, on 2026-10-18; P1.13, the browser
+suites run in the local gate, on 2026-10-19, in `1760a79`, `7080f72`, `414ab5e`
+and `0627eb5`), so the items below have
 NOT been re-derived against a later HEAD -- check an item against the code before
 working it. Phase 0 is new (goh 0.27.0's fallout,
 measured); the old Phase 0 became Phase 1 and every later phase moved up by one
@@ -111,7 +113,27 @@ machine's build; owner ruling: CI uses the local machine's version). CI fetches
 that spec, and CI and `GOH_CI_STEPS` both run `scripts/browser_e2e.sh`, which
 refuses any other active build with the install command; the parity exemption
 is gone (`tests/test_camoufox_install_check.py` fails a build literal outside
-the pin).
+the pin). The suites are hermetic too: the test browser's
+off-machine traffic goes to a closed port, because waiting on Google Fonts made
+`Page.goto` time out under load (`tests/support/browser_options.py`, `414ab5e`).
+Landed after (2026-10-19): the browser suites running eight-wide in the local
+gate found two app defects, both the same class -- the app's own startup
+overwrote state it already had. `setConnectionState` wrote two views of one
+fact (the panel's own link flags and the app-wide `appConnected`) and
+disagreed on what a PENDING connect means: the banner keeps the last known
+device until the connect resolves, the link flag did not, and for the Virtual
+Wall -- which has no `discoveredDevices` record of its own -- that flag is what
+`requireDevice()` gates every wall write on, so those writes were refused with
+"Connect a device first" and dropped. Separately, the app's startup restore
+installed the PERSISTED snapshot over the live state (an empty snapshot
+erasing it too, since `{}` is truthy in JavaScript): the wall stopped being a
+known target and writes aimed at it went to a single panel instead, and the
+daemon's own live devices were dropped from `discoveredDevices`, so
+`panelIsLinked` said "not linked" for a panel that was linked
+(`divoom_gui/web_ui/connection_events.js`, `divoom_gui/web_ui/app_init.js`;
+`tests/test_e2e_write_during_pending_connect.py`,
+`tests/test_e2e_startup_restore_keeps_live_state.py`, both red before;
+`0627eb5`).
 
 ### Phase 2 — daemon liveness and safety
 
