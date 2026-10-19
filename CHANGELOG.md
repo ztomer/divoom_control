@@ -52,6 +52,13 @@ click it (a probe saw the removal in 12 of 12 runs). The fixture now serves a
 real 1x1 GIF, and the test pauses 400ms before the click, so a fixture tile the
 app judges broken is red every time instead of sometimes.
 
+The fix's own second CI run (39184355370 attempt 2) found the last instance of
+that shape: `test_bench_preview_advances_gif_frames` sampled a 400ms GIF loop
+through a real 260ms `setTimeout`, a 55-minute loaded runner fired it past
+400ms, and the loop had wrapped back to red. The probe now pins the player's
+clock per sample (50ms and 300ms into the loop); the old probe with a 450ms
+overshoot is red, the new one green.
+
 ## P7.1 — the tray glyph's state is its shape, not its colour (2026-10-18)
 
 Owner ruling D8: Offline HOLLOW, Online FILLED, Error BARRED. The ruling was

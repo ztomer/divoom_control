@@ -101,7 +101,9 @@ which fires the refresh inside each gesture, 4 red before). Running the suites
 eight-wide to reproduce CI's contention found two test-side instances of the
 same "the page moved on while the test looked" shape, both fixed: a gallery
 fixture tile the app drops as broken (180 ms fade) and three backend mocks
-that released on a 120-3000 ms timer instead of when the test said so.
+that released on a 120-3000 ms timer instead of when the test said so, and
+a GIF-frame probe that read a 400 ms loop through a real 260 ms timer (now a
+pinned clock, `tests/test_preview_gif_animation.py`).
 
 #### P1.13 — The browser suites run in the local gate
 **Status:** BLOCKED (on a per-project camoufox build). The local gate runs no

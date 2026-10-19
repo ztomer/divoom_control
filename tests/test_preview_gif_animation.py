@@ -47,12 +47,18 @@ PROBE_JS = """([src, disablePlayer]) => {
     return new Promise(resolve => {
         // Let the static <img> path load too, so the calibration branch
         // really is "drawImage of a loaded GIF", not "nothing loaded yet".
+        //
+        // The player's clock is PINNED per sample: "50ms into the loop" and
+        // "300ms into it" (frame 1 spans 0-200ms, frame 2 200-400ms). It used
+        // to be a real 260ms setTimeout, and a loaded CI runner fired it past
+        // 400ms -- the loop had wrapped to frame 1 and the test read red twice
+        // (main run 39184355370 attempt 2). The real wait below is only for the
+        // <img> to load, which no clock reading depends on.
+        const at = (ms) => { if (disp.gif) disp.gif.startedAt = performance.now() - ms; return px(); };
         setTimeout(() => {
-            const start = performance.now();
-            if (disp.gif) disp.gif.startedAt = start;
-            const first = px();
+            const first = at(50);
             setTimeout(() => {
-                const second = px();
+                const second = at(300);
                 resolve({ first, second, decoded: !!(disp.gif && disp.gif.active),
                           frames: disp.gif && disp.gif.anim ? disp.gif.anim.frames.length : 0,
                           total: disp.gif && disp.gif.anim ? disp.gif.anim.total : 0 });
