@@ -264,7 +264,7 @@ async def run(args) -> int:
         async with async_playwright() as p:
             # Running this script IS the browser opt-in; it has no
             # --run-browser to pass (tests/test_gui_pov_launches_a_browser.py).
-            browser = await launch(p, opted_in=True)
+            browser = await launch(p, opted_in=True, network=True)
             page = await browser.new_page(viewport={"width": 1440, "height": 960})
             errors: list[str] = []
             page.on("pageerror", lambda e: errors.append(str(e)))

@@ -30,8 +30,7 @@ no longer even installed on the machine running the suite, so the pin had stoppe
 describing reality. Verified on 156.0.1-beta.34: 165 passed / 1 failed across the browser
 suites and 14/14 in ``test_main_world_bridge.py``, which is this module's own
 claim working -- "when the browser next moves the goalposts, it is one function
-again". Moved to 156.0.1-beta.39 on 2026-10-19 (P1.13). Move it forward in its
-own commit when the channel moves, with the suites run against the candidate.
+again". Move it forward in its own commit (P1.13), suites run on the candidate.
 
 **The isolated world.** From build 152.0.4-beta.29 (2026-08-20) page scripting
 runs in an ISOLATED WORLD, so main-world globals the app defines --
@@ -93,6 +92,8 @@ import time
 
 import pytest
 
+from tests.support.browser_options import launch_options_for
+
 # How long a UI wait may take before a test gives up.
 #
 # This is a BUDGET, not an assertion. No e2e test here measures how FAST the UI
@@ -153,17 +154,17 @@ def require_browser(*, opted_in: bool = False) -> None:
         pytest.skip("camoufox browser not downloaded — run: python3 -m camoufox fetch")
 
 
-async def launch(p, *, opted_in: bool = False):
+async def launch(p, *, opted_in: bool = False, network: bool = False):
     """Launch the e2e browser from an ``async_playwright()`` instance.
 
-    Drop-in for the old ``p.chromium.launch(headless=True)``.
+    Drop-in for the old ``p.chromium.launch(headless=True)``. Hermetic unless
+    ``network`` (see ``tests/support/browser_options.py``); ``scripts/gui_pov.py`` asks for
+    the network so its screenshots carry the app's real web fonts.
 
     Calls :func:`require_browser` itself -- see the note on :func:`launch_sync`.
     """
     require_browser(opted_in=opted_in)
-    from camoufox.utils import launch_options
-
-    return await p.firefox.launch(**launch_options(headless=True, main_world_eval=True))
+    return await p.firefox.launch(**launch_options_for(network=network))
 
 
 def launch_sync(p):
@@ -180,9 +181,7 @@ def launch_sync(p):
     guard, so getting a browser now requires passing it by construction.
     """
     require_browser()
-    from camoufox.utils import launch_options
-
-    return p.firefox.launch(**launch_options(headless=True, main_world_eval=True))
+    return p.firefox.launch(**launch_options_for(network=False))
 
 
 # ── Reaching the page's main world ────────────────────────────────────────────
