@@ -18,6 +18,8 @@ your own probe proves your branch works without proving reality reaches it.
 
 from __future__ import annotations
 
+import ast
+import re
 import subprocess
 import sys
 import textwrap
@@ -96,13 +98,17 @@ pkgman.installed_verstr = lambda: {build!r}
 """
 
 
-def _pinned_build() -> str:
+def _checker():
     import importlib.util
 
     spec = importlib.util.spec_from_file_location("_camoufox_check", CHECKER)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)  # loaded by path: tools/ is not a package
-    return module.EXPECTED_BUILD
+    return module
+
+
+def _pinned_build() -> str:
+    return _checker().pinned_build()
 
 
 def test_passes_when_the_pinned_build_is_active() -> None:
@@ -130,4 +136,85 @@ def test_fails_when_another_build_is_active_and_names_the_shared_cache() -> None
     assert result.returncode != 0, "a build other than the pin must fail the check"
     assert f"camoufox browser is 0.0.0-beta.0, expected {_pinned_build()}" in result.stderr
     assert "machine-wide" in result.stderr
-    assert f"camoufox set official/stable/{_pinned_build()}" in result.stderr
+    assert f"camoufox set {_checker().pinned_spec()}" in result.stderr
+
+
+# ── One declared build (P1.13, 2026-10-19) ─────────────────────────────────
+# CI pinned beta.34 while the dev machine ran beta.39, because the build was a
+# literal in three places and the machine cache was an undeclared fourth. The
+# pin now lives in `.camoufox-build` only; these tests hold that shape.
+
+BUILD_LITERAL = re.compile(r"\b\d+\.\d+(?:\.\d+)?-(?:alpha|beta)\.\d+\b")
+
+
+def test_the_pin_file_is_the_expected_build_and_the_spec_ci_installs() -> None:
+    """`--spec` prints the pin verbatim: what CI fetches is what the gate requires."""
+    pin = (REPO_ROOT / ".camoufox-build").read_text().strip()
+    result = subprocess.run(
+        [sys.executable, str(CHECKER), "--spec"],
+        capture_output=True, text=True, cwd=REPO_ROOT, timeout=60, stdin=subprocess.DEVNULL, check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == pin
+    assert pin.endswith("/" + _pinned_build())
+
+
+@pytest.mark.parametrize(
+    "content",
+    ["", "156.0.1-beta.39\n", "official/nightly/156.0.1-beta.39\n", "official/stable/1.0-beta.1\nofficial/stable/1.0-beta.2\n"],
+)
+def test_a_malformed_pin_is_refused_not_defaulted(tmp_path: Path, content: str) -> None:
+    """No fallback build: a default here would be a second copy of the pin."""
+    pin = tmp_path / ".camoufox-build"
+    pin.write_text(content)
+    checker = _checker()
+    with pytest.raises(checker.PinError):
+        checker.pinned_spec(pin)
+
+
+def test_the_workflow_installs_the_pin_and_runs_the_gates_script() -> None:
+    """CI reads the pin through the checker and runs the same script as the local gate."""
+    workflow = (REPO_ROOT / ".github" / "workflows" / "tests.yml").read_text()
+    assert 'SPEC="$(python3 tools/camoufox_installed.py --spec)"' in workflow
+    assert 'camoufox fetch "$SPEC"' in workflow and 'camoufox set "$SPEC"' in workflow
+    assert "./scripts/browser_e2e.sh" in workflow
+    gatesrc = (REPO_ROOT / ".gatesrc").read_text()
+    steps = re.search(r"^GOH_CI_STEPS='([^']*)'", gatesrc, re.MULTILINE)
+    assert steps is not None
+    assert "./scripts/browser_e2e.sh" in steps.group(1).split(":")
+
+
+def _code_string_literals(path: Path) -> list[str]:
+    """String constants in a Python file's CODE, docstrings excluded (they carry history)."""
+    tree = ast.parse(path.read_text())
+    docstrings = {
+        id(node.body[0].value)
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+        and node.body and isinstance(node.body[0], ast.Expr) and isinstance(node.body[0].value, ast.Constant)
+    }
+    return [
+        n.value for n in ast.walk(tree)
+        if isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) not in docstrings
+    ]
+
+
+def test_no_camoufox_build_literal_outside_the_pin() -> None:
+    """The CLASS gate: a build named anywhere operative is a second pin that can drift.
+
+    Covers every file that installs, selects or checks a build -- workflows,
+    shell scripts, the gate config, and the code (not docstrings) of tools/,
+    scripts/ and tests/support/. Comments may record history; code may not pin.
+    """
+    offenders: list[str] = []
+    shell_like = [*(REPO_ROOT / ".github" / "workflows").glob("*.yml"), *(REPO_ROOT / "scripts").glob("*.sh"),
+                  *(REPO_ROOT / "tools").glob("*.sh"), REPO_ROOT / ".gatesrc"]
+    for path in shell_like:
+        for n, line in enumerate(path.read_text().splitlines(), 1):
+            code = line.split("#", 1)[0] if not line.lstrip().startswith("#") else ""
+            if BUILD_LITERAL.search(code):
+                offenders.append(f"{path.relative_to(REPO_ROOT)}:{n}: {line.strip()}")
+    for path in [*(REPO_ROOT / "tools").glob("*.py"), *(REPO_ROOT / "scripts").glob("*.py"),
+                 *(REPO_ROOT / "tests" / "support").glob("*.py")]:
+        offenders += [f"{path.relative_to(REPO_ROOT)}: {s!r}" for s in _code_string_literals(path) if BUILD_LITERAL.search(s)]
+    assert not offenders, "camoufox build named outside .camoufox-build:\n" + "\n".join(offenders)

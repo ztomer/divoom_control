@@ -78,8 +78,13 @@ GOH_TAG_VERSION_SOURCES='pyproject:pyproject.toml cargo:divoomd/Cargo.toml cargo
 # before anything leaves the machine instead of when somebody remembers.
 # Carried as an "open question" for two rounds; closed here so it stops being
 # re-litigated.
+# The browser e2e suites run here too (P1.13, 2026-10-19), through the same
+# scripts/browser_e2e.sh CI runs, eight-wide (10-11 min measured). The build is
+# the one `.camoufox-build` declares, the same file CI installs from; the
+# machine-wide camoufox cache must hold it, and tools/camoufox_installed.py
+# fails the gate with the install command when it does not.
 export GOH_DIR="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
-GOH_CI_STEPS='"$GOH_DIR/gates/structural.sh" --full:python3 "$GOH_DIR/checks/check_ci_local_parity.py":python3 tools/check_scripts.py:python3 tools/check_test_placement.py:python3 tools/check_examples.py:python3 tools/check_version_consistency.py:python3 tools/check_positional_args.py:python3 tools/check_bounded_writes.py:python3 tools/check_weather_parity.py:python3 tools/check_hotchannel_parity.py:python3 tools/capability_census.py:python3 tools/check_gui_is_a_client.py:python3 tools/check_gui_api_reachable.py:python3 tools/check_hw_verify_methods.py:python3 tools/check_applescript_launch.py:python3 tools/check_cargo_features.py:"$GOH_DIR/gates/rust_gate.sh":python3 "$GOH_DIR/lib/advisory_db.py" run --fetch -- cargo audit:cargo clippy -p divoomd --no-default-features --all-targets --locked -- -D warnings:cargo build -p divoomd --no-default-features --locked:cargo test -p divoomd --no-default-features --locked:./scripts/check_linux_build.sh:cargo test --locked:python3 tools/check_built_binaries.py:"$GOH_DIR/gates/goh.sh" status-markers:./scripts/rust_coverage.sh:cargo build -p divoomd --locked'
+GOH_CI_STEPS='"$GOH_DIR/gates/structural.sh" --full:python3 "$GOH_DIR/checks/check_ci_local_parity.py":python3 tools/check_scripts.py:python3 tools/check_test_placement.py:python3 tools/check_examples.py:python3 tools/check_version_consistency.py:python3 tools/check_positional_args.py:python3 tools/check_bounded_writes.py:python3 tools/check_weather_parity.py:python3 tools/check_hotchannel_parity.py:python3 tools/capability_census.py:python3 tools/check_gui_is_a_client.py:python3 tools/check_gui_api_reachable.py:python3 tools/check_hw_verify_methods.py:python3 tools/check_applescript_launch.py:python3 tools/check_cargo_features.py:"$GOH_DIR/gates/rust_gate.sh":python3 "$GOH_DIR/lib/advisory_db.py" run --fetch -- cargo audit:cargo clippy -p divoomd --no-default-features --all-targets --locked -- -D warnings:cargo build -p divoomd --no-default-features --locked:cargo test -p divoomd --no-default-features --locked:./scripts/check_linux_build.sh:cargo test --locked:python3 tools/check_built_binaries.py:"$GOH_DIR/gates/goh.sh" status-markers:./scripts/rust_coverage.sh:cargo build -p divoomd --locked:python3 tools/camoufox_installed.py:./scripts/browser_e2e.sh'
 
 # No process kill by name (gates_of_heck check_no_kill_by_name.py, 2026-09-23).
 # A name matches processes this repo does not own. Today's survivors are in
@@ -113,6 +118,5 @@ GOH_SUBPROCESS_STDIN_MIN_CALLS=54     # read 60, every one declared
 # structural gate. Adopted 2026-10-18 after 19 of 20 red main runs that the
 # 27-step local gate passed. A ratchet both ways: an entry CI stops running, or
 # that GOH_CI_STEPS starts naming, is stale and red.
-GOH_CI_PARITY_EXEMPT='scripts/py_ci.sh: runs locally, through scripts/ci_local.sh --step (repo_gates.sh at pre-push), which the name match cannot see; only DIVOOM_GATE_FAST skips it, and it says so
-tools/camoufox_installed.py: verifies the browser build CI fetches for its --run-browser step; the local gate runs no browser suites (P1.13 in docs/ROADMAP.md) and the active build is machine-wide, set by other projects'
+GOH_CI_PARITY_EXEMPT='scripts/py_ci.sh: runs locally, through scripts/ci_local.sh --step (repo_gates.sh at pre-push), which the name match cannot see; only DIVOOM_GATE_FAST skips it, and it says so'
 GOH_CI_PARITY_MIN_SCRIPTS=12          # read 14

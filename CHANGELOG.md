@@ -4,6 +4,30 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## One camoufox build, in CI and on the dev machine (2026-10-19)
+
+P1.13. The browser e2e suites ran only in CI, on build 156.0.1-beta.34, while
+the dev machine's shared camoufox cache held 156.0.1-beta.39, so the local gate
+could not run them without gating on a browser CI did not use. Owner ruling:
+CI uses the machine's build.
+
+**The class:** a pin written in several places, plus an undeclared copy (the
+machine cache), drifts. The build was a literal in `tools/camoufox_installed.py`
+and on the workflow's `fetch` and `set` lines. It now lives only in
+`.camoufox-build` (`official/prerelease/156.0.1-beta.39`, the newest release;
+the newest *stable* is beta.36). CI fetches what `tools/camoufox_installed.py
+--spec` prints, and the suites run through one script, `scripts/browser_e2e.sh`,
+in CI (serial) and in `GOH_CI_STEPS` (`-n 8`). The script refuses any other
+active build, printing the install command, rather than running on it or
+skipping. The `GOH_CI_PARITY_EXEMPT` entry for the checker is gone, and
+`pytest-xdist` is declared in the `e2e` extra.
+
+`tests/test_camoufox_install_check.py` now fails a build literal in any
+workflow, shell script, `.gatesrc` or the code of `tools/`, `scripts/` and
+`tests/support/`; a workflow that stops reading the pin; a malformed pin (no
+default build); and a mismatched active build. Three of them went red with the
+old `fetch` literal restored and the build check disabled.
+
 ## A bench re-render is not a selection (2026-10-18)
 
 Main CI's browser step went red on run 39171574815 twice, on two different

@@ -176,17 +176,18 @@ jobs:
         #
         # The BROWSER BUILD is pinned, and pinning the pip package is NOT
         # enough: camoufox accepts any build in [alpha.1, 1), so a bare `fetch`
-        # takes the newest. The pin is now beta.29 — the current latest on the
-        # official/stable channel — and the suite reaches the page's main world
-        # explicitly through tests/support/browser.py rather than relying on a
-        # build where the two worlds happened to be the same one. The pin stays
-        # because "latest" is still a moving target: it is what makes a red run
-        # mean a code change, and it is verified below rather than assumed.
-        # tests/support/browser.py documents what reaching the main world takes.
+        # takes the newest. The pin is `.camoufox-build` -- the ONE declaration,
+        # read through tools/camoufox_installed.py --spec here and by the local
+        # gate's scripts/browser_e2e.sh, so CI and the dev machine run the same
+        # build (owner ruling 2026-10-19; P1.13). Never write a build literal in
+        # this file: tests/test_camoufox_install_check.py fails one.
+        # `fetch` asks before installing a prerelease and aborts on a closed
+        # stdin, hence the `printf 'y\n'`.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -uo pipefail
+          SPEC="$(python3 tools/camoufox_installed.py --spec)" || exit 1
           # The retry LOOPS ON THE VERIFICATION, not on the exit code. Looping on
           # the exit code would never retry the failure we actually saw, because
           # that failure exits 0 -- the loop would break on attempt 1 every time.
@@ -196,8 +197,8 @@ jobs:
             # first." -- and there is no `sync` subcommand, so that advice is
             # unfollowable. Fetching only the pinned build makes it the active
             # one; `set` afterwards is belt-and-braces if anything else exists.
-            python -m camoufox fetch official/156.0.1-beta.34 || true
-            python -m camoufox set official/stable/156.0.1-beta.34 || true
+            printf 'y\n' | python -m camoufox fetch "$SPEC" || true
+            python -m camoufox set "$SPEC" || true
             if python3 tools/camoufox_installed.py; then
               exit 0
             fi
@@ -231,8 +232,21 @@ jobs:
       # measured a 5x swing in one readiness wait under load), and until
       # 2026-09-12 CI installed camoufox and then never ran them at all --
       # the default pytest run skips them without --run-browser.
+      # scripts/browser_e2e.sh is the same command the local gate runs
+      # (.gatesrc GOH_CI_STEPS); CI only narrows it to serial for its 3-core
+      # runner.
+      # The script speaks through the house TUI library (gates_of_heck tui/lib.sh).
+      - name: Check out gates_of_heck
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          repository: ztomer/gates_of_heck
+          path: goh
+          token: ${{ secrets.GOH_TOKEN || github.token }}
       - name: Run the browser e2e suites (--run-browser, serialized)
-        run: python3 -m pytest -q --run-browser $(grep -l playwright tests/test_*.py)
+        env:
+          DIVOOM_BROWSER_WORKERS: "0"
+        run: GOH_DIR="$GITHUB_WORKSPACE/goh" ./scripts/browser_e2e.sh
 
   rust-core:
     # The hardware-/platform-free gate for the native daemon. Builds + tests the

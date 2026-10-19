@@ -82,11 +82,13 @@ test = [
 # literal in .github/workflows/tests.yml, which is why scripts/py_ci.sh could
 # only WARN when the browser was missing: nothing declared them, so nothing
 # could hold them. camoufox is pinned to the version CI installs; note the pin
-# is not what makes the suite pass -- the BROWSER BUILD is (see the `camoufox
-# fetch` step, pinned to official/152.0.4-beta.29).
+# is not what makes the suite pass -- the BROWSER BUILD is, and it is pinned in
+# `.camoufox-build` (the one declaration CI and the local gate both read).
+# pytest-xdist: scripts/browser_e2e.sh runs the suites eight-wide locally.
 e2e = [
     "playwright",
     "camoufox==0.5.5",
+    "pytest-xdist",
 ]
 dev = [
     "divoom-control[gui,test]",

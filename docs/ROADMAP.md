@@ -106,21 +106,15 @@ a GIF-frame probe that read a 400 ms loop through a real 260 ms timer (now a
 pinned clock, `tests/test_preview_gif_animation.py`).
 
 #### P1.13 — The browser suites run in the local gate
-**Status:** BLOCKED (on a per-project camoufox build). The local gate runs no
-browser suite, so the one step that went red on main is the one step pre-push
-cannot see (`.gatesrc` `GOH_CI_PARITY_EXEMPT`, `tools/camoufox_installed.py`).
-Measured 2026-10-18 on the 16-core dev machine: serial 29 min 22 s
-(211 passed); `-n 8` (pytest-xdist) 10 min 10 s - 10 min 50 s at load 40-130,
-213 passed. Ten minutes is affordable; the blocker is the build: the active
-camoufox build is machine-wide (`~/Library/Caches/camoufox`), other projects
-moved it to 156.0.1-beta.39 while CI pins beta.34, so a local run would gate on
-a browser CI does not use, and pinning it locally would move every other
-project's browser.
-**Done when:** the suites run in `GOH_CI_STEPS` against the pinned build from a
-cache only this repo uses (or the pin moves to the build the machine has, in
-its own commit, per the pin rule below), `-n 8`, and the
-`tools/camoufox_installed.py` exemption is deleted.
-**Why:** run 39171574815 went red in this step only after the push; no local gate could have shown it.
+**Status:** DONE (2026-10-19). The camoufox browser build is declared once, in
+`.camoufox-build` (`official/prerelease/156.0.1-beta.39`, the newest release and
+the build the dev machine ran; owner ruling: CI uses the local machine's
+version). CI installs exactly that spec (`tools/camoufox_installed.py --spec`),
+and both CI and `GOH_CI_STEPS` run the suites through `scripts/browser_e2e.sh`,
+which refuses any other active build with the install command (CI serial, local
+`-n 8`). The parity exemption is gone. `tests/test_camoufox_install_check.py`
+fails a build literal anywhere operative outside the pin, a workflow that does
+not read it, and a mismatched active build.
 
 ### Phase 2 — daemon liveness and safety
 
@@ -470,7 +464,8 @@ still owns the device.
 - **Pins move with their channel.** The camoufox pin went stale twice because a
   pin looks like discipline and staleness looks identical. Move it in its own
   commit when the channel moves, after running the browser suites against the
-  candidate (`tools/camoufox_installed.py`, `tests/support/browser.py`).
+  candidate: edit `.camoufox-build` (the only copy) and run the install command
+  `tools/camoufox_installed.py` prints.
 - **A dependency bump can change what a number MEANS.** sysinfo 0.30 -> 0.39
   changed `used_memory()`'s formula under the same signature; v0.41.0 then
   misread its own measurement. Re-derive with `tools/mem_gauge_compare.py`
@@ -525,7 +520,7 @@ is judged against; when one moves, change it here in the same commit.
 
 | Measure | Value | Where it is enforced |
 |---|---|---|
-| Local gate | 24 `GOH_CI_STEPS` + `scripts/py_ci.sh` = 25 steps, run by `pre-push` on the pushed commit in a clean worktree | `.gatesrc`, `tools/gate.sh`, `scripts/ci_local.sh` |
+| Local gate | 29 `GOH_CI_STEPS` (incl. the browser suites, 2026-10-19) + `scripts/py_ci.sh` = 30 steps, run by `pre-push` on the pushed commit in a clean worktree | `.gatesrc`, `tools/gate.sh`, `scripts/ci_local.sh` |
 | Python tests (default) | 1640, 129 skipped | `pytest.ini` (`testpaths = tests`) |
 | `examples/tests` | 1095 (2026-10-04) | `scripts/py_ci.sh` |
 | Browser subset | 223: 213 passed, 10 skipped (2026-10-18, beta.39, `-n 8`; opt-in `--run-browser`, own CI step) | `.github/workflows/tests.yml` |

@@ -43,8 +43,8 @@ ACTUAL_PY="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.versi
 # feed this number. They do not: this pytest never passes --run-browser, so
 # tests/support/browser.py:require_browser skips every browser test here
 # whether or not a browser exists, and the number is the same either way. The
-# browser suites run in CI's own step (.github/workflows/tests.yml, "Run the
-# browser e2e suites"). Meanwhile the probe answered "is the PINNED build the
+# browser suites run in their own step (scripts/browser_e2e.sh, in CI and in
+# GOH_CI_STEPS). Meanwhile the probe answered "is the PINNED build the
 # active one", so when another project moved the machine-wide camoufox cache
 # to 156.0.1-beta.36 this script printed "no camoufox browser" over an
 # installed browser and enforced no floor at all -- a gate that could not fail.
@@ -117,7 +117,7 @@ COV_MIN="${DIVOOM_PY_COV_MIN:-89.0}"
 COV_PRECISION=2
 
 info "pytest (coverage floor ${COV_MIN}% over divoom_gui + divoom_client;" \
-    "browser suites run in CI's --run-browser step)"
+    "browser suites run in scripts/browser_e2e.sh, a GOH_CI_STEPS step)"
 python3 -m pytest -q \
     --cov=divoom_gui --cov=divoom_client \
     --cov-report=term-missing:skip-covered \

@@ -15,9 +15,10 @@ Before R66 each of the 15 e2e modules called
 2. **The engine was copy-pasted 17 times.** Swapping it meant touching every
    file, which is why it never happened. It is now one function.
 
-Version: CI pins the **browser build** to ``official/stable/156.0.1-beta.34``
-(the current latest on that channel) via ``camoufox set``, with the pip package
-at 0.5.5. Pinning the package is NOT sufficient on its own -- camoufox accepts
+Version: the **browser build** is pinned in ``.camoufox-build`` at the repo
+root -- the one declaration CI installs from (``camoufox fetch``/``set``) and
+the local gate verifies (``scripts/browser_e2e.sh``), so both run one build --
+with the pip package at 0.5.5. Pinning the package is NOT sufficient on its own -- camoufox accepts
 any build in ``[alpha.1, 1)``, so a bare ``camoufox fetch`` takes the newest one
 regardless, and the build is the half that decides whether the suite passes.
 
@@ -29,8 +30,8 @@ no longer even installed on the machine running the suite, so the pin had stoppe
 describing reality. Verified on 156.0.1-beta.34: 165 passed / 1 failed across the browser
 suites and 14/14 in ``test_main_world_bridge.py``, which is this module's own
 claim working -- "when the browser next moves the goalposts, it is one function
-again". Move it forward in its own commit when the channel moves, with the
-suites run against the candidate first.
+again". Moved to 156.0.1-beta.39 on 2026-10-19 (P1.13). Move it forward in its
+own commit when the channel moves, with the suites run against the candidate.
 
 **The isolated world.** From build 152.0.4-beta.29 (2026-08-20) page scripting
 runs in an ISOLATED WORLD, so main-world globals the app defines --

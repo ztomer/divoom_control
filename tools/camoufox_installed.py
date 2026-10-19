@@ -19,14 +19,18 @@ camoufox accepts any build in [alpha.1, 1), so a bare `fetch` takes the newest.
 Checking only that *a* browser exists would let the next such change drift in
 silently, which is the same failure this file was written for one level down.
 
-Override with CAMOUFOX_EXPECTED_BUILD when deliberately testing another build;
-set it empty to skip the build check and only require presence.
+The expected build is the pin in `.camoufox-build`, the ONE declaration CI and
+the local gate both read. Override with CAMOUFOX_EXPECTED_BUILD when
+deliberately testing another build; set it empty to skip the build check and
+only require presence.
 
-Exit 0 when the expected browser is active (prints the version), non-zero
-otherwise.
+Exit 0 when the expected browser is active (prints the version), 1 when it is
+absent or another build, 2 when the pin itself is unreadable. `--spec` prints
+the pinned spec (repo/channel/version-build) for an installer to consume.
 
-Used by .github/workflows/tests.yml (as the retry's loop condition, so a
-transient rate limit retries instead of poisoning the run). scripts/py_ci.sh
+Used by .github/workflows/tests.yml (`--spec` for what to fetch, then as the
+retry's loop condition, so a transient rate limit retries instead of poisoning
+the run) and by scripts/browser_e2e.sh, which the local gate runs. scripts/py_ci.sh
 consulted it until 2026-10-14 to decide whether to enforce the coverage floor;
 the browser suites never fed that number, and a wrong build read as "no
 browser" and switched the floor off, so it no longer does.
@@ -41,27 +45,61 @@ repo broke something.
 from __future__ import annotations
 
 import os
+import re
 import sys
+from pathlib import Path
 
-# Keep in step with `camoufox set` in .github/workflows/tests.yml and the
-# rationale in tests/support/browser.py.
-# KEEP THIS CURRENT. The pin exists for DETERMINISM -- a specific build, so a
-# red run means a code change and not "the browser moved under you" -- NOT to
-# hold the browser back. It was last moved off 152.0.4-beta.29 on 2026-10-04,
-# two releases late: beta.29 was superseded by 152.0.4-beta.31 (2026-09-24) and
-# then by this one (2026-10-03), and by then the pin named a build that was no
-# longer installed on the machine running the suite.
+# THE PIN LIVES IN ONE FILE: `.camoufox-build` at the repo root, read here and
+# nowhere else (P1.13, 2026-10-19). CI installs exactly that spec through
+# `python3 tools/camoufox_installed.py --spec`, and the local gate
+# (scripts/browser_e2e.sh) refuses to run the suites on any other build. Before
+# it, the build was a literal in three places -- this file, the workflow's
+# fetch AND set lines -- and the machine-wide cache was a fourth copy nobody
+# declared, which is how CI sat on beta.34 while every local run had beta.39.
+# tests/test_camoufox_install_check.py fails any build literal outside the pin.
 #
-# The move was verified, not assumed: on 156.0.1-beta.34 the browser suites run
-# 165 passed / 1 failed and tests/test_main_world_bridge.py is 14/14, so the
-# `mw:` bridge absorbs the world split exactly as tests/support/browser.py
-# claims it would ("when the browser next moves the goalposts, it is one
-# function again"). The one failure is unrelated stale test drift.
-#
-# So the claim that a newer build "fails ~60 tests" is HISTORICAL: it was true
-# of beta.29, which is the build that INTRODUCED the isolated world, before the
-# three holes below were closed. Do not use it to justify staying behind again.
-EXPECTED_BUILD = os.environ.get("CAMOUFOX_EXPECTED_BUILD", "156.0.1-beta.34")
+# KEEP IT CURRENT. The pin exists for DETERMINISM -- a specific build, so a red
+# run means a code change and not "the browser moved under you" -- NOT to hold
+# the browser back. Move it in its own commit, after the browser suites pass on
+# the candidate. The claim that a newer build "fails ~60 tests" is HISTORICAL:
+# it was true of 152.0.4-beta.29, the build that INTRODUCED the isolated world,
+# before tests/support/browser.py's main-world bridges existed.
+PIN_FILE = Path(__file__).resolve().parent.parent / ".camoufox-build"
+
+# repo/channel/version-build, the 3-part form `camoufox set` accepts.
+_SPEC = re.compile(r"^(?P<repo>[a-z0-9_-]+)/(?P<channel>stable|prerelease)/(?P<build>\d+(?:\.\d+)*-(?:alpha|beta)\.\d+)$")
+
+
+class PinError(ValueError):
+    """The pin file is missing or does not hold one well-formed spec."""
+
+
+def pinned_spec(path: Path = PIN_FILE) -> str:
+    """The declared browser spec, e.g. ``official/prerelease/156.0.1-beta.39``.
+
+    Raises :class:`PinError` rather than returning a default: a fallback build
+    here would be a second copy of the pin, which is the defect this replaces.
+    """
+    try:
+        lines = [ln.strip() for ln in path.read_text().splitlines() if ln.strip() and not ln.lstrip().startswith("#")]
+    except OSError as exc:
+        raise PinError(f"cannot read the camoufox pin {path}: {exc}") from exc
+    if len(lines) != 1 or not _SPEC.match(lines[0]):
+        raise PinError(f"{path} must hold exactly one repo/channel/version-build spec, got {lines!r}")
+    return lines[0]
+
+
+def pinned_build(path: Path = PIN_FILE) -> str:
+    """The version-build part of the pin, the string camoufox reports as active."""
+    match = _SPEC.match(pinned_spec(path))
+    assert match is not None  # pinned_spec validated it
+    return match["build"]
+
+
+def expected_build() -> str:
+    """The build to require: CAMOUFOX_EXPECTED_BUILD if set (empty = presence only), else the pin."""
+    override = os.environ.get("CAMOUFOX_EXPECTED_BUILD")
+    return override if override is not None else pinned_build()
 
 
 def installed_version() -> str | None:
@@ -90,28 +128,48 @@ def cache_dir() -> str:
     return str(INSTALL_DIR)
 
 
-def main() -> int:
+def install_command(spec: str) -> str:
+    """The commands that make ``spec`` the active build on this machine.
+
+    ``fetch`` asks before installing a prerelease (``click.confirm``) and dies
+    with "Aborted!" on a closed stdin, so the answer is supplied.
+    """
+    return f"printf 'y\\n' | python3 -m camoufox fetch {spec} && python3 -m camoufox set {spec}"
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = sys.argv[1:] if argv is None else argv
+    try:
+        spec = pinned_spec()
+        expected = expected_build()
+    except PinError as exc:
+        print(f"camoufox pin unreadable: {exc}", file=sys.stderr)
+        return 2
+    if args == ["--spec"]:
+        print(spec)
+        return 0
+    if args:
+        print("usage: camoufox_installed.py [--spec]", file=sys.stderr)
+        return 2
     version = installed_version()
     if version is None:
         print(
             "camoufox browser NOT installed — `camoufox fetch` may have exited 0 "
             "without installing anything (check for GitHub API 403 rate limits "
-            "above). The 15 GUI e2e suites cannot run.",
+            f"above). The browser suites cannot run. Install the pinned build: "
+            f"{install_command(spec)}",
             file=sys.stderr,
         )
         return 1
-    if EXPECTED_BUILD and version != EXPECTED_BUILD:
+    if expected and version != expected:
         print(
-            f"camoufox browser is {version}, expected {EXPECTED_BUILD}. The active "
-            f"build is machine-wide ({cache_dir()}): any project using camoufox can "
-            f"switch it, and the browser suites are pinned to one build so a red run "
-            f"means a code change. Either run them on {version} "
-            f"(pytest --run-browser) and move the pin in its own commit "
-            f"(tools/camoufox_installed.py, .github/workflows/tests.yml, "
-            f"tests/support/browser.py), or restore the pinned build -- for every "
-            f"project on this machine: python3 -m camoufox fetch "
-            f"official/stable/{EXPECTED_BUILD} && python3 -m camoufox set "
-            f"official/stable/{EXPECTED_BUILD}",
+            f"camoufox browser is {version}, expected {expected} (pinned in "
+            f"{PIN_FILE.name}, the one source CI installs from). The active build is "
+            f"machine-wide ({cache_dir()}): any project using camoufox can switch it. "
+            f"Either restore the pinned build -- for every project on this machine: "
+            f"{install_command(spec)} -- or run the browser suites on {version} "
+            f"(scripts/browser_e2e.sh with CAMOUFOX_EXPECTED_BUILD={version}) and "
+            f"move the pin in {PIN_FILE.name}, in its own commit.",
             file=sys.stderr,
         )
         return 1
