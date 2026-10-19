@@ -4,6 +4,67 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## v0.41.3 — the browser suites run in the local gate, and the app stops overwriting its own state (2026-10-19)
+
+Patch release, and a catch-up one: it carries every round since v0.41.2 — the
+P1 gate and build fixes, P2's daemon liveness work, P3's panel facts, P4's MCP
+display surface, P5's per-panel GUI, P6's wall work and P7.1's tray glyph —
+each written up in the sections below, in the order it landed. The one that
+mattered most was invisible: the app's own startup overwrote the state it
+already had, so a write in the first second after launch was refused, or aimed
+at the wrong panel.
+
+- **The browser e2e suites now run in the local gate.** One camoufox build is
+  declared once, in `.camoufox-build` (`official/prerelease/156.0.1-beta.39`),
+  and CI fetches what `tools/camoufox_installed.py --spec` prints. CI and the
+  pre-push gate both run `scripts/browser_e2e.sh`, which refuses any other
+  active build instead of running on it or skipping, and `pytest-xdist` is in
+  the `test` extra so the suites run eight-wide (`1760a79`, `7080f72`).
+
+- **The suites are hermetic.** `index.html` links Google Fonts and `page.goto`
+  waits for that stylesheet, so every goto spent 2.7-6.0 s on the internet and,
+  under load, the fetch crossed goto's 30 s cap — 8 and 17 `Page.goto` timeouts
+  on two eight-wide runs, a different test each time. The one launch seam
+  (`tests/support/browser.py` -> `browser_options.py`) now routes the test
+  browser's off-machine traffic to a closed local port; `scripts/gui_pov.py`
+  asks for the network so its screenshots keep the real fonts (`414ab5e`).
+
+- **A pending connect is not a lost link.** `setConnectionState` wrote two
+  views of one fact — the panel's own flags (`daemonOwned`, which
+  `panelIsLinked` and `requireDevice` read) and the app-wide `appConnected` —
+  and the two views disagreed about what a PENDING connect means: the banner
+  keeps the last known device until the connect resolves, the link flag did
+  not. For the Virtual Wall, which has no `discoveredDevices` record of its own,
+  that flag is what `requireDevice()` gates every wall write on, so those writes
+  were refused with "Connect a device first" and dropped. `connecting` no
+  longer clears the link flag; only the daemon saying so (`inactive`) does.
+
+- **The startup restore fills a gap instead of overwriting live state.** The
+  app restores a snapshot of a PREVIOUS session a second after mount, and
+  installed it over whatever the app had established by then — and `{}` is
+  truthy in JavaScript, so an EMPTY snapshot erased it too. The wall stopped
+  being a known target and writes aimed at it went to a single panel instead,
+  and the daemon's own live devices were dropped from `discoveredDevices`, so
+  `panelIsLinked` said "not linked" for a panel the daemon WAS linking. The
+  persisted wall is now restored only when there is no live wall, and the
+  persisted devices are merged in rather than installed over the daemon's own
+  list (`0627eb5`; both fixes were found by the suites running eight-wide).
+
+  Also: the plan's rounds since v0.41.2 ship with it — P1's gate and build
+  fixes, P2's daemon liveness and safety work, P3's panel facts, P4's MCP
+  display surface (the catalog grew from 14 tools to 25), P5's per-panel GUI,
+  P6's wall work and P7.1's tray glyph — each written up in the sections
+  below. The patch number is the version, not a claim that nothing changed:
+  the daemon's socket access rule is now the daemon's own (P2.1), and the local
+  gate runs the browser suites, so a push here is slower and says so.
+
+  Re-check on the next panel session: P3.3's R12-style visual pass on the
+  weather widget (it changed what that widget looks like on every panel, and
+  the phase's release check asks for a real panel), P2.7's relink after a daemon
+  restart, P2.8's dropped link read as connected, and P6.1's two-panel snap —
+  all still open on hardware. P7.2 still wants the owner's ruling on the
+  connection dot's shapes.
+
 ## One camoufox build, in CI and on the dev machine (2026-10-19)
 
 P1.13. The browser e2e suites ran only in CI, on build 156.0.1-beta.34, while
@@ -20,7 +81,9 @@ the newest *stable* is beta.36). CI fetches what `tools/camoufox_installed.py
 in CI (serial) and in `GOH_CI_STEPS` (`-n 8`). The script refuses any other
 active build, printing the install command, rather than running on it or
 skipping. The `GOH_CI_PARITY_EXEMPT` entry for the checker is gone, and
-`pytest-xdist` is declared in the `e2e` extra.
+`pytest-xdist` is declared in the `test` extra (it moved there in `7080f72`:
+the e2e extra's exact set is a gate of its own, and `scripts/browser_e2e.sh`
+needs xdist wherever the suites are collected from).
 
 `tests/test_camoufox_install_check.py` now fails a build literal in any
 workflow, shell script, `.gatesrc` or the code of `tools/`, `scripts/` and
