@@ -78,6 +78,10 @@ GOH_TAG_VERSION_SOURCES='pyproject:pyproject.toml cargo:divoomd/Cargo.toml cargo
 # before anything leaves the machine instead of when somebody remembers.
 # Carried as an "open question" for two rounds; closed here so it stops being
 # re-litigated.
+# Per-step ceiling (goh local_ci.sh, default 900 s). The browser step needs
+# longer and says so: -n 8 measured 9 min 46 s at load ~7 and 15 min 51 s at
+# load 100-140 (2026-10-19); serial 29 min 22 s. 2400 s is 1.5x the loaded run.
+export GOH_LCI_TIMEOUT=2400
 # The browser e2e suites run here too (P1.13, 2026-10-19), through the same
 # scripts/browser_e2e.sh CI runs, eight-wide (10-11 min measured). The build is
 # the one `.camoufox-build` declares, the same file CI installs from; the

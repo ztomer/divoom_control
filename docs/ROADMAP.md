@@ -104,17 +104,14 @@ fixture tile the app drops as broken (180 ms fade) and three backend mocks
 that released on a 120-3000 ms timer instead of when the test said so, and
 a GIF-frame probe that read a 400 ms loop through a real 260 ms timer (now a
 pinned clock, `tests/test_preview_gif_animation.py`).
-
-#### P1.13 — The browser suites run in the local gate
-**Status:** DONE (2026-10-19). The camoufox browser build is declared once, in
-`.camoufox-build` (`official/prerelease/156.0.1-beta.39`, the newest release and
-the build the dev machine ran; owner ruling: CI uses the local machine's
-version). CI installs exactly that spec (`tools/camoufox_installed.py --spec`),
-and both CI and `GOH_CI_STEPS` run the suites through `scripts/browser_e2e.sh`,
-which refuses any other active build with the install command (CI serial, local
-`-n 8`). The parity exemption is gone. `tests/test_camoufox_install_check.py`
-fails a build literal anywhere operative outside the pin, a workflow that does
-not read it, and a mismatched active build.
+Landed after (2026-10-19): P1.13, the browser suites run in the local gate.
+The camoufox build is declared once, in `.camoufox-build`
+(`official/prerelease/156.0.1-beta.39`, the newest release and the dev
+machine's build; owner ruling: CI uses the local machine's version). CI fetches
+that spec, and CI and `GOH_CI_STEPS` both run `scripts/browser_e2e.sh`, which
+refuses any other active build with the install command; the parity exemption
+is gone (`tests/test_camoufox_install_check.py` fails a build literal outside
+the pin).
 
 ### Phase 2 — daemon liveness and safety
 

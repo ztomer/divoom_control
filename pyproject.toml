@@ -75,6 +75,8 @@ gui = [
 test = [
     "pytest",
     "pytest-asyncio",
+    # scripts/browser_e2e.sh passes -n (eight-wide locally, -n 0 in CI).
+    "pytest-xdist",
 ]
 # Browser-driven suites: the 15 GUI e2e modules (tests/test_*.py with a
 # playwright import) and scripts/gui_pov.py, the harness AGENTS.md calls "does
@@ -84,11 +86,9 @@ test = [
 # could hold them. camoufox is pinned to the version CI installs; note the pin
 # is not what makes the suite pass -- the BROWSER BUILD is, and it is pinned in
 # `.camoufox-build` (the one declaration CI and the local gate both read).
-# pytest-xdist: scripts/browser_e2e.sh runs the suites eight-wide locally.
 e2e = [
     "playwright",
     "camoufox==0.5.5",
-    "pytest-xdist",
 ]
 dev = [
     "divoom-control[gui,test]",

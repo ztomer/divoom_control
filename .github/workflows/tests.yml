@@ -152,7 +152,7 @@ jobs:
           # passes -- the BROWSER BUILD is (see the fetch step below).
           # camoufox accepts any build in [alpha.1, 1), so pinning the package
           # alone still lets `fetch` take the newest.
-          pip install pytest pillow -e '.[e2e]'
+          pip install pytest pytest-xdist pillow -e '.[e2e]'
           # The artifact, not the exit code: the C loader camoufox needs is there.
           python -c 'import yaml, camoufox.pkgman; assert yaml.__with_libyaml__, "PyYAML built without libyaml"'
 

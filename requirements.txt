@@ -9,3 +9,4 @@ tomli-w
 # test deps
 pytest
 pytest-asyncio
+pytest-xdist
