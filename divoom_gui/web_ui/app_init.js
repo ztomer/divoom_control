@@ -183,7 +183,22 @@ document.addEventListener("DOMContentLoaded", () => {
                     }
                     if (conf.limit != null && getEl("scan-limit")) getEl("scan-limit").value = conf.limit;
                     
-                    if (conf.slots) { window.DivoomState.assignedSlots = conf.slots; window.renderArrangerCanvas(); }
+                    // The persisted wall is a snapshot of a PREVIOUS session, read
+                    // a second after mount -- by which time the app may already
+                    // have a wall of its own (the user arranged one, or the
+                    // daemon's topology supplied one). Installing the snapshot
+                    // then ERASED that wall, and `{}` (nothing persisted) is
+                    // truthy in JavaScript, so an EMPTY snapshot erased it too.
+                    // The wall stopped being a known target: it vanished from
+                    // the selector, and every write aimed at it went to a
+                    // single panel instead of the wall.
+                    // The restore FILLS A GAP; it never overwrites live state.
+                    const liveSlots = window.DivoomState.assignedSlots || {};
+                    const persisted = (conf.slots && typeof conf.slots === "object") ? conf.slots : null;
+                    if (persisted && Object.keys(persisted).length && !Object.keys(liveSlots).length) {
+                        window.DivoomState.assignedSlots = persisted;
+                        window.renderArrangerCanvas();
+                    }
                     if (conf.devices && conf.devices.length > 0) {
                         // R61 follow-up (user-reported): these are PERSISTED devices
                         // from a prior session, not devices confirmed present right
@@ -194,9 +209,24 @@ document.addEventListener("DOMContentLoaded", () => {
                         // can add/update but never downgrade an address, so every
                         // device ever seen looked permanently in-range after every
                         // restart, even when genuinely unreachable.
-                        window.DivoomState.discoveredDevices =
-                            conf.devices.map(d => Object.assign({}, d, { unconfirmed: true }));
-                        if (window.populateDeviceSelectors) window.populateDeviceSelectors(conf.devices);
+                        //
+                        // They are MERGED IN, not installed over the live list: the
+                        // daemon's own report (onOwnedDevices) has already arrived by
+                        // now, and replacing the list with the persisted one dropped
+                        // every device the daemon actually owns -- so `panelIsLinked`
+                        // said "not linked" for a panel that WAS linked, and a write
+                        // to it was refused with "Connect a device first". Same class
+                        // as the wall above: the restore overwrote live state instead
+                        // of filling a gap.
+                        const liveDevices = window.DivoomState.discoveredDevices || [];
+                        const liveAddrs = new Set(liveDevices.map(d => d.address));
+                        const restored = conf.devices
+                            .filter(d => d && d.address && !liveAddrs.has(d.address))
+                            .map(d => Object.assign({}, d, { unconfirmed: true }));
+                        window.DivoomState.discoveredDevices = liveDevices.concat(restored);
+                        if (window.populateDeviceSelectors) {
+                            window.populateDeviceSelectors(window.DivoomState.discoveredDevices);
+                        }
                         window.renderArrangerCanvas();
                     }
                     

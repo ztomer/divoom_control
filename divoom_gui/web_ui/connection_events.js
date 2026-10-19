@@ -38,9 +38,16 @@ window.setConnectionState = function(s) {
             : mode === "connecting" ? "Connecting..." : "Disconnected";
         dot.removeAttribute("style");
     }
-    // The funnel writes BOTH views of the same fact: the panel's own flags
+    // The funnel writes BOTH views of one fact -- the panel's own flags
     // (what jewels, requireDevice and getFleetStatus read) and appConnected,
-    // which is the selected panel's link and nothing more.
+    // which is the selected target's link and nothing more. They must agree,
+    // and "connecting" is the case that made them disagree: it says a connect
+    // is IN FLIGHT, which is not a statement about the link. Only a settled
+    // answer moves the link.
+    //
+    // The banner has always followed that rule -- "connecting" never wipes it,
+    // because a pending click must not erase the last known device before its
+    // outcome is known -- and the link flags did not.
     const list = window.DivoomState.discoveredDevices || [];
     if (s.mac) {
         const known = list.find(d => d.address === s.mac);
@@ -54,7 +61,25 @@ window.setConnectionState = function(s) {
         // Nobody named: the daemon (or the bridge) is gone for every panel.
         list.forEach(d => { d.daemonOwned = false; d.activityState = "disconnected"; });
     }
-    window.DivoomState.appConnected = (mode === "active" || mode === "degraded");
+    // appConnected is the SELECTED target's link (app_globals.js), and a
+    // pending connect is NOT a lost link: "connecting" says a connect is in
+    // flight, and only the daemon saying so ("inactive") means the link is
+    // down.
+    //
+    // It cost the app a real write: `requireDevice()` gates every channel
+    // write, and for the Virtual Wall (a composite of panels, with no
+    // discoveredDevices record of its own) it falls back to that app-wide
+    // flag. So every wall write in the window of a pending connect was
+    // refused with "Connect a device first" and DROPPED, never reaching the
+    // daemon. The window is ordinary rather than exotic: the app's own
+    // startup restore (app_init.js) reconnects the last device a second after
+    // load, so the writes that land in that second are lost.
+    //
+    // The panel's own flags above are already right: a pending connect names
+    // no mac, so it never touched them. This line was the one view of the
+    // fact that a pending connect could move.
+    window.DivoomState.appConnected = (mode === "active" || mode === "degraded")
+        || (mode === "connecting" && window.DivoomState.appConnected);
     const shown = (document.getElementById("banner-device-mac")?.textContent || "").trim();
     if ((mode === "active" || mode === "degraded") && s.mac) {
         let name = s.name || s.mac;
