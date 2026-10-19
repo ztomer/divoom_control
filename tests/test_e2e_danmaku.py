@@ -291,9 +291,11 @@ async def test_a_toast_this_test_did_not_create_cannot_satisfy_its_wait():
                                 "connected over Bluetooth, which has no LAN API', "
                                 "cause: 'no_lan_capability' }; }")
             await eval_js(page, _SPY_TWO_ARGS)
+            # HELD until the test releases it, not a 3s timer: the race is
+            # forced by the test's own order, so a loaded machine cannot let
+            # this click's toast land first and turn the check vacuous.
             await eval_js(page, "() => { window.__api.send_danmaku_text = (mac, text, color) =>"
-                                " new Promise(r => setTimeout("
-                                " () => r(window.__result), 3000)); }")
+                                " new Promise(r => { window.__release = () => r(window.__result); }); }")
             await page.fill("#text-content-input", "hello")
             await page.click("#send-danmaku-btn")
             # The app's own toast, raised while this click's toast is still in
@@ -307,6 +309,8 @@ async def test_a_toast_this_test_did_not_create_cannot_satisfy_its_wait():
             assert not any("Bluetooth" in m for m in recorded), recorded
             # The condition this file now waits on, at that same moment: false.
             assert await eval_js(page, toast_condition("Bluetooth", kind="error")) is None
+            await wait_js(page, "() => typeof window.__release === 'function'")
+            await eval_js(page, "() => window.__release()")
 
             # The new wait: still patient, and it lands on the right toast.
             toast = await wait_toast(page, "Bluetooth", kind="error")

@@ -4,6 +4,54 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## A bench re-render is not a selection (2026-10-18)
+
+Main CI's browser step went red on run 39171574815 twice, on two different
+tests: `test_e2e_bench_snap.py` (attempt 1, B dropped flush against A came back
+at its starting x, 110 instead of 79) and `test_e2e_danmaku.py` (attempt 2, the
+click on `#send-danmaku-btn` timed out on "element is not visible"). Locally the
+same family surfaced as `test_a_toast_this_test_did_not_create_cannot_satisfy_its_wait`
+("element is not visible" on `#text-content-input`). Not flakes, and not test
+timing: one app defect.
+
+**The class:** `SpatialStage.refresh` (`refreshBenchNodes`) runs on every
+device-list update -- each scan result, activity event and owned-device
+broadcast, including the startup auto-scan `app_init.js` fires a second after
+load -- and it re-applied SELECTION side effects on every run, clobbering
+whatever the user was doing at that moment. A probe that logged every
+`showChannelPanel` caller caught it: `refreshBenchNodes -> restoreDevicePreview
+-> syncChannelControlsToDisplay -> showChannelPanel('clock')`. Three instances:
+
+- **The channel tab.** The "rehydrate on initial bench load" block ran on every
+  refresh, so a scan landing after the user opened Text put them back on
+  Clock. It now runs only when the selected panel changes (`syncedMac`), and
+  even then a refresh paints the controls without moving a tab the user has
+  opened (`DivoomState.channelChosen`, `syncChannelControlsToDisplay(mac,
+  {keepTab})`): the first panel arriving from the startup scan, after the user
+  clicked Text, is the Danmaku failure exactly. A selection the user makes
+  still moves the tab.
+- **A drag in flight.** `bench.innerHTML = ''` detached the node under the
+  mouse and re-seeded positions from storage; the drop moved a node nobody
+  could see. A refresh asked for mid-drag now waits for the drop
+  (`SpatialDrag.deferWhileDragging`), after the position is saved.
+- **A level slider being held.** Every refresh repaints the selected panel's
+  last-read brightness/volume, snapping the thumb back under the pointer.
+  `PanelLevels` paint now leaves a slider matching `:active` alone.
+
+`tests/test_e2e_rerender_keeps_user_state.py` fires the refresh INSIDE each
+gesture, so the race is a certainty rather than a timer's luck: 4 red before
+the fix (tab moved to Clock, twice; B at (97,85) not (79,82); slider 96 -> 50),
+green after, plus a calibration test that a real selection still syncs the tab.
+
+Running the browser suites eight-wide (`-n 8`) to reproduce CI's contention
+surfaced one more, in the fixture rather than the app:
+`test_a_rename_ticker_and_gallery_push_name_the_panel_clicked` handed the
+gallery a tile with an empty `preview_url`, which `gallery.js` correctly drops
+as a broken asset 180ms after drawing it (R64), and the test raced the fade to
+click it (a probe saw the removal in 12 of 12 runs). The fixture now serves a
+real 1x1 GIF, and the test pauses 400ms before the click, so a fixture tile the
+app judges broken is red every time instead of sometimes.
+
 ## P7.1 — the tray glyph's state is its shape, not its colour (2026-10-18)
 
 Owner ruling D8: Offline HOLLOW, Online FILLED, Error BARRED. The ruling was

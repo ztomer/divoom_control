@@ -88,6 +88,38 @@ because the house `build-dir` hashes a fresh path every time; every Python
 cargo build spawn in `tools/` and `scripts/` now takes its environment from
 `probe_env`, and a class check fails any that does not (`45cc5e5`;
 `tools/_cargo_env.py`, `tests/test_cargo_probe_env.py`).
+Landed after (2026-10-18): main CI's browser step, red on run 39171574815 on two
+different tests, was one app defect -- a Spatial Bench re-render (every scan
+result, activity event and owned-device broadcast, including the startup scan a
+second after load) re-applied selection side effects: it moved the channel tab
+the user had opened, rebuilt the node under an open drag, and repainted a level
+slider under the pointer. A refresh now syncs only on a change of panel, never
+moves a tab the user opened, waits for a drop, and leaves a held slider alone
+(`divoom_gui/web_ui/spatial_stage.js`, `divoom_gui/web_ui/spatial_drag.js`,
+`divoom_gui/web_ui/panel_facts.js`; `tests/test_e2e_rerender_keeps_user_state.py`,
+which fires the refresh inside each gesture, 4 red before). Running the suites
+eight-wide to reproduce CI's contention found two test-side instances of the
+same "the page moved on while the test looked" shape, both fixed: a gallery
+fixture tile the app drops as broken (180 ms fade) and three backend mocks
+that released on a 120-3000 ms timer instead of when the test said so.
+
+#### P1.13 — The browser suites run in the local gate
+**Status:** BLOCKED (on a per-project camoufox build). The local gate runs no
+browser suite, so the one step that went red on main is the one step pre-push
+cannot see (`.gatesrc` `GOH_CI_PARITY_EXEMPT`, `tools/camoufox_installed.py`).
+Measured 2026-10-18 on the 16-core dev machine: serial 29 min 22 s
+(211 passed); `-n 8` (pytest-xdist) 10 min 10 s - 10 min 50 s at load 40-130,
+213 passed. Ten minutes is affordable; the blocker is the build: the active
+camoufox build is machine-wide (`~/Library/Caches/camoufox`), other projects
+moved it to 156.0.1-beta.39 while CI pins beta.34, so a local run would gate on
+a browser CI does not use, and pinning it locally would move every other
+project's browser.
+**Done when:** the suites run in `GOH_CI_STEPS` against the pinned build from a
+cache only this repo uses (or the pin moves to the build the machine has, in
+its own commit, per the pin rule below), `-n 8`, and the
+`tools/camoufox_installed.py` exemption is deleted.
+**Why:** run 39171574815 went red in this step only after the push; no local gate could have shown it.
+
 ### Phase 2 — daemon liveness and safety
 
 **Goal:** the daemon can say who holds it, never hangs on one peer, and
@@ -416,6 +448,15 @@ still owns the device.
 
 ### Rules that came from shipped bugs
 
+- **A re-render is not a selection.** Anything that runs on every status or scan
+  event (`SpatialStage.refresh`, `PanelLevels.show`) repaints; it never moves
+  the user's tab, rebuilds the node under a drag, or sets a control the pointer
+  holds. Selection side effects belong to the gesture that selects
+  (`tests/test_e2e_rerender_keeps_user_state.py` fires the refresh mid-gesture).
+- **A test owns the in-flight state it asserts on.** A mock that answers on a
+  timer makes "during the call" a window a loaded runner overshoots; hold the
+  promise and release it from the test (`tests/test_e2e_ux_feedback.py`).
+
 - **A deletion is only as safe as its consumer list**, and the list is never
   the one you remember: v0.40.0 missed the archived `examples/tests/` suite and
   the callers that EXECUTE things (CI workflows, the Linux host, `build.sh`).
@@ -485,7 +526,7 @@ is judged against; when one moves, change it here in the same commit.
 | Local gate | 24 `GOH_CI_STEPS` + `scripts/py_ci.sh` = 25 steps, run by `pre-push` on the pushed commit in a clean worktree | `.gatesrc`, `tools/gate.sh`, `scripts/ci_local.sh` |
 | Python tests (default) | 1640, 129 skipped | `pytest.ini` (`testpaths = tests`) |
 | `examples/tests` | 1095 (2026-10-04) | `scripts/py_ci.sh` |
-| Browser subset | 177, all passing (opt-in `--run-browser`, own CI step) | `.github/workflows/tests.yml` |
+| Browser subset | 223: 213 passed, 10 skipped (2026-10-18, beta.39, `-n 8`; opt-in `--run-browser`, own CI step) | `.github/workflows/tests.yml` |
 | Rust tests | 486 (2026-10-04) | `cargo test --locked` |
 | Python coverage floor | 88.5 (see P1.4) | `scripts/py_ci.sh` |
 | Rust coverage floor | 42 | `scripts/rust_coverage.sh` |

@@ -59,14 +59,17 @@ async def test_scan_shows_progress_then_result():
         browser, page = await _open(p)
         try:
             await eval_js(page, """() => {
-                window.__api.scan_devices = () => new Promise(r => setTimeout(
-                    () => r(JSON.stringify([{address:'AA',name:'Ditoo'},
-                                            {address:'BB',name:'Pixoo'}])), 150));
+                // HELD until the test releases it: "during the scan" is a state
+                // the test owns, not a 150ms window a loaded machine overshoots.
+                window.__api.scan_devices = () => new Promise(r => { window.__release = () =>
+                    r(JSON.stringify([{address:'AA',name:'Ditoo'}, {address:'BB',name:'Pixoo'}])); });
                 window.runBleScan();
             }""")
             # During the scan the indicator must be visible.
+            await wait_js(page, "() => typeof window.__release === 'function'")
             assert await eval_js(page, 
                 "() => document.getElementById('scan-indicator').hidden") is False
+            await eval_js(page, "() => window.__release()")
             # Afterwards: hidden again + a 'Discovered 2' toast that's actually shown.
             await wait_js(page, 
                 "() => document.getElementById('scan-indicator').hidden === true",
@@ -91,8 +94,9 @@ async def test_connect_shows_connecting_then_connected():
         browser, page = await _open(p)
         try:
             await eval_js(page, """() => {
+                // HELD until released (see the scan test above).
                 window.__api.connect_single_device = () =>
-                    new Promise(r => setTimeout(() => r(true), 120));
+                    new Promise(r => { window.__release = () => r(true); });
                 window.__api.get_device_name = () => 'Ditoo';   // realistic readback
                 window.DivoomState.discoveredDevices = [{address:'AA', name:'Ditoo'}];
                 window.renderDeviceDots();
@@ -107,6 +111,8 @@ async def test_connect_shows_connecting_then_connected():
             })""")
             assert "Connecting to Ditoo" in mid["toast"]
             assert mid["connecting"]
+            await wait_js(page, "() => typeof window.__release === 'function'")
+            await eval_js(page, "() => window.__release()")
             # After success: connected toast + active state + banner names the device.
             await wait_js(page, 
                 "() => window.DivoomState.appConnected === true", timeout=4000)

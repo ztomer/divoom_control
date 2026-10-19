@@ -7,6 +7,9 @@
 
     let stageMounted = false;
     let selectedMac = null;
+    // The panel whose channel the controls were last synced to by a refresh.
+    // A refresh re-renders; only a CHANGE of panel moves the user's tab.
+    let syncedMac = null;
     let isWallMode = false;
     let tick = 0;
     const devicePositions = {};
@@ -151,6 +154,7 @@
     const NO_PANELS = 'No panels yet. Scan for one under Settings → Devices.';
     function showNoPanels(bench, ribbonChips) {
         selectedMac = null;
+        syncedMac = null;
         bench.innerHTML = `<div id="spatial-bench-empty" class="spatial-bench-empty">
             <span>${NO_PANELS}</span>
             <button type="button" class="glow-btn compact" id="spatial-bench-scan">Open Settings</button></div>`;
@@ -182,6 +186,7 @@
     function refreshBenchNodes() {
         const bench = document.getElementById('spatial-bench');
         if (!bench) return;
+        if (window.SpatialDrag?.deferWhileDragging(refreshBenchNodes)) return;
         bench.innerHTML = '';
 
         if (window.SpatialRooms) {
@@ -259,27 +264,22 @@
             if (isSelected) updateInspector(dev);
         });
 
-        // Rehydrate active channel and preview for primary device on initial bench load
-        if (devices.length > 0 && selectedMac) {
+        // Show the selected panel's preview and channel controls the first time
+        // the bench shows it -- not on every refresh: a scan result re-renders
+        // the bench. And a refresh never moves the channel tab once the user
+        // has opened one: the startup scan lands a second after load, and
+        // moving the user off the tab they opened is not a re-render's call.
+        // A selection the USER makes (highlightNode) still moves it.
+        if (devices.length > 0 && selectedMac && selectedMac !== syncedMac) {
+            syncedMac = selectedMac;
             const activeDev = devices.find(d => (d.address || 'dev-0') === selectedMac) || devices[0];
             const activeAddr = activeDev.address || selectedMac;
             const savedCh = (typeof window.getDeviceChannel === 'function') ? window.getDeviceChannel(activeAddr) : null;
             if (savedCh && window.DisplayPreviewRegistry) {
                 window.DisplayPreviewRegistry.get(activeAddr).setActivity(savedCh.channel, savedCh.opts || {});
             }
-            if (typeof window.restoreDevicePreview === 'function') window.restoreDevicePreview(activeAddr);
-            const act = savedCh ? { kind: savedCh.channel, opts: savedCh.opts } : window.DivoomState?.deviceActivity?.[activeAddr];
-            if (act?.kind) {
-                const card = document.querySelector(`.tab-btn[data-channel="${act.kind}"]`);
-                if (card) {
-                    document.querySelectorAll('.tab-btn[data-channel]').forEach(c => c.classList.remove('active'));
-                    card.classList.add('active');
-                    window.DivoomState.activeChannel = act.kind;
-                    if (window.showChannelPanel) window.showChannelPanel(act.kind);
-                }
-            }
-            if (typeof window.syncChannelControlsToDisplay === 'function') {
-                window.syncChannelControlsToDisplay(activeAddr);
+            if (typeof window.restoreDevicePreview === 'function') {
+                window.restoreDevicePreview(activeAddr, null, { keepTab: !!window.DivoomState?.channelChosen });
             }
         }
     }
@@ -304,6 +304,7 @@
 
     function highlightNode(addr, dev) {
         setSelected(addr);
+        syncedMac = addr;
         document.querySelectorAll('.spatial-node').forEach(n => { n.classList.remove('selected'); n.style.zIndex = '10'; });
         const activeNode = document.getElementById(`spatial-node-${addr}`);
         if (activeNode) { activeNode.classList.add('selected'); activeNode.style.zIndex = '25'; }

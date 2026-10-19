@@ -7,6 +7,9 @@
     'use strict';
 
     let activeDrag = null;
+    // A bench re-render asked for while a drag is open waits for the drop:
+    // rebuilding the nodes would detach the one under the mouse.
+    let afterDrop = null;
 
     function start(e, ctx) {
         if (e.button !== 0) return;
@@ -65,7 +68,17 @@
         activeDrag = null;
         window.removeEventListener('mousemove', onMove);
         window.removeEventListener('mouseup', end);
+        const pending = afterDrop;
+        afterDrop = null;
+        if (pending) pending();
     }
 
-    window.SpatialDrag = { start };
+    // True while a drag is open; `fn` then runs once, after the drop has saved.
+    function deferWhileDragging(fn) {
+        if (!activeDrag) return false;
+        afterDrop = fn;
+        return true;
+    }
+
+    window.SpatialDrag = { start, deferWhileDragging };
 })();

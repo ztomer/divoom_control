@@ -36,6 +36,8 @@ document.addEventListener("DOMContentLoaded", () => {
             card.classList.add("active");
             const ch = card.getAttribute("data-channel");
             window.DivoomState.activeChannel = ch;
+            // The user opened this tab: a bench re-render may not move it.
+            window.DivoomState.channelChosen = true;
             showChannelPanel(ch);
             // Ambient and Text are "non-channel" cards (each has its own
             // Apply/Push button): opening one sends nothing, so it records

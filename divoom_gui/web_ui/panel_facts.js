@@ -139,12 +139,18 @@
         const g = Math.round(255 * (parseInt(v) || 0) / 100);
         slider.style.setProperty("--thumb-color", `rgb(${g},${g},${g})`);
     }
+    // A slider the pointer is holding is the user's: a repaint (the bench
+    // refreshes on every scan result) must not move it under their finger.
+    const held = (el) => { try { return el.matches(":active"); } catch (_) { return false; } };
     function paint(levels) {
         const e = els();
         const b = levels && Number.isInteger(levels.brightness) ? levels.brightness : null;
         const v = levels && Number.isInteger(levels.volume) ? levels.volume : null;
-        if (e.b) { e.b.dataset.state = b === null ? "unknown" : "known"; if (b !== null) { e.b.value = b; updateBrightnessThumb(e.b, b); } }
-        if (e.bVal) e.bVal.textContent = b === null ? UNKNOWN : `${b}%`;
+        if (!(e.b && held(e.b))) {
+            if (e.b) { e.b.dataset.state = b === null ? "unknown" : "known"; if (b !== null) { e.b.value = b; updateBrightnessThumb(e.b, b); } }
+            if (e.bVal) e.bVal.textContent = b === null ? UNKNOWN : `${b}%`;
+        }
+        if (e.v && held(e.v)) return;
         if (e.v) { e.v.dataset.state = v === null ? "unknown" : "known"; if (v !== null) e.v.value = v; }
         if (e.vVal) e.vVal.textContent = v === null ? UNKNOWN : `${v}/15`;
     }

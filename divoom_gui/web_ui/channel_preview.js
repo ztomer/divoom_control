@@ -144,13 +144,15 @@ window._renderWallSlotSVG = function(slot, addr) {
 // Show the selected display's channel state in the controls: its channel tab
 // and every channel control's value, from ITS settings (channel_settings.js).
 // Every control is set, whichever channel the display is on -- a colour input
-// left alone keeps the previous display's value (P5.2).
-window.syncChannelControlsToDisplay = function(mac) {
+// left alone keeps the previous display's value (P5.2). `keepTab`: paint the
+// controls but leave the tab the user opened (a re-render, not a selection).
+window.syncChannelControlsToDisplay = function(mac, opts) {
     if (!mac || mac === "-" || mac === "None" || !window.DisplayPreviewRegistry) return;
     const saved = (typeof window.getDeviceChannel === "function") ? window.getDeviceChannel(mac) : null;
     const disp = window.DisplayPreviewRegistry.get(mac);
     if (saved?.channel && disp.channel !== saved.channel) disp.setActivity(saved.channel, saved.opts || {});
     const ch = disp.channel || "clock";
+    if (opts?.keepTab) { window.paintChannelControls(mac); return; }
 
     window.DivoomState.activeChannel = ch;
     const card = document.querySelector(`.tab-btn[data-channel="${ch}"]`);

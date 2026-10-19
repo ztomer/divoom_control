@@ -114,5 +114,5 @@ GOH_SUBPROCESS_STDIN_MIN_CALLS=54     # read 60, every one declared
 # 27-step local gate passed. A ratchet both ways: an entry CI stops running, or
 # that GOH_CI_STEPS starts naming, is stale and red.
 GOH_CI_PARITY_EXEMPT='scripts/py_ci.sh: runs locally, through scripts/ci_local.sh --step (repo_gates.sh at pre-push), which the name match cannot see; only DIVOOM_GATE_FAST skips it, and it says so
-tools/camoufox_installed.py: verifies the browser build CI fetches for its --run-browser step; the local gate runs no browser suites (open: docs/ROADMAP.md) and the active build is machine-wide, set by other projects'
+tools/camoufox_installed.py: verifies the browser build CI fetches for its --run-browser step; the local gate runs no browser suites (P1.13 in docs/ROADMAP.md) and the active build is machine-wide, set by other projects'
 GOH_CI_PARITY_MIN_SCRIPTS=12          # read 14

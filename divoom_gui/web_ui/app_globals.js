@@ -113,13 +113,13 @@ window.setDevicePreview = function(address, src) {
     }
 };
 
-window.restoreDevicePreview = function(address, _fallbackSrc) {
+window.restoreDevicePreview = function(address, _fallbackSrc, opts) {
     // R49: no product photo anymore — just show this device's last frame in the
     // flat screen (or the empty state when nothing has been pushed yet).
     const regFrame = window.DisplayPreviewRegistry ? window.DisplayPreviewRegistry.get(address)?.frameSrc : null;
     window._setScreenOverlayFrame(regFrame || window.DivoomState.devicePreviews[address] || null);
     if (typeof window.syncChannelControlsToDisplay === "function") {
-        window.syncChannelControlsToDisplay(address);
+        window.syncChannelControlsToDisplay(address, opts);
     }
 };
 

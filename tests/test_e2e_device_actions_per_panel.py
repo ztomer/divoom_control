@@ -39,6 +39,7 @@ ACTIONS = (
 )
 
 _MOCK_API = """
+const __GIF = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 window.__fleet = {
   panels: {
     '%A%': {mac: '%A%', connected: true, selected: false, model: 'DitooPlus', width: 16, height: 16,
@@ -53,7 +54,11 @@ window.__api = {
   get_panels: () => JSON.stringify({ok: true, panels: Object.values(window.__fleet.panels)}),
   get_panel_levels: (mac) => JSON.stringify({ok: true, mac, brightness: 50, volume: null}),
   get_alarms: (mac) => { window.__fleet.calls.push({m: 'get_alarms', args: [mac]}); return '[]'; },
-  fetch_gallery: () => JSON.stringify([{file_id: 'f1', name: 'Art', likes: 1, preview_url: ''}]),
+  // A tile with a real preview: gallery.js drops a tile whose preview is
+  // missing or will not decode (R64), 180ms after drawing it, so an empty
+  // preview_url here was a broken asset the test raced to click.
+  fetch_gallery: () => JSON.stringify([{file_id: 'f1', name: 'Art', likes: 1, preview_url: __GIF}]),
+  get_animated_preview: () => __GIF,
   apply_stock_ticker: (...args) => { window.__fleet.calls.push({m: 'apply_stock_ticker', args});
       return JSON.stringify({success: true, price: 1, change: 0, preview: ''}); },
   custom_art_push: (...args) => { window.__fleet.calls.push({m: 'custom_art_push', args});
@@ -176,6 +181,10 @@ async def test_a_rename_ticker_and_gallery_push_name_the_panel_clicked():
             await _select(page, A)
             await eval_js(page, "() => window.loadGallery()")
             await wait_js(page, "() => !!document.querySelector('.gallery-item')")
+            # A user looks at a tile before clicking it. The pause is longer
+            # than gallery.js's broken-tile removal (180ms fade), so a fixture
+            # tile the app judges broken goes red here instead of racing it.
+            await _settle(page, 400)
             await eval_js(page, _CLICK, ".gallery-item")
             await _select(page, B)
             await _settle(page)
