@@ -155,7 +155,11 @@ def run_steps(d: Daemon, steps: list[dict], dwell: float) -> list[dict]:
     for s in steps:
         if s["group"] != group:
             group = s["group"]
-            print(f"\n  {_BOLD}[{group}]{_RESET}")
+            # The house PUBLIC helpers, not the TUI's module-private colour
+            # names: `_BOLD`/`_RESET` live inside `tui/lib.py` and do not
+            # exist here, so this line raised NameError on the first group
+            # header — after the test had already started driving the device.
+            section(f"[{group}]")
         # send
         if s["kind"] == "dc":
             r = d.dc(s["method"], s.get("args"))

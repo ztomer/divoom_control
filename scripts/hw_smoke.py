@@ -38,7 +38,7 @@ def discover(c, scan_timeout: float) -> list:
             for d in devs:
                 name = d.get("name") if isinstance(d, dict) else d
                 addr = d.get("address") if isinstance(d, dict) else ""
-                step(f"{name}  {_GRAY}{addr}{_RESET}")
+                step(f"{name}  {addr}")
         else:
             warn(f"no devices advertising. raw={json.dumps(r)[:200]}")
         return devs
@@ -63,7 +63,7 @@ def _connect(c, mac: str, name: str) -> tuple[bool, float]:
         dt = time.monotonic() - t0
         good = bool(r.get("success") and r.get("connected"))
         if good:
-            ok(f"connected {name} in {dt:.1f}s  {_GRAY}{json.dumps(_conn_state(c))[:90]}{_RESET}")
+            ok(f"connected {name} in {dt:.1f}s  {json.dumps(_conn_state(c))[:90]}")
         else:
             warn(f"{name} not connected in {dt:.1f}s — reason={r.get('reason') or r.get('error')}")
         return good, dt
@@ -208,12 +208,12 @@ def stress(c, devs: list, iterations: int, scan_every: int, fleet: int,
             continue
         avg = sm / a if a else 0
         line = f"{nm:<20} {o}/{a} ok"
-        line += f"  {_GRAY}{lo:.1f}/{avg:.1f}/{hi:.1f}s (min/avg/max){_RESET}"
+        line += f"  {lo:.1f}/{avg:.1f}/{hi:.1f}s (min/avg/max)"
         (ok if f == 0 else warn)(line)
     if anomalies:
         err(f"{len(anomalies)} anomaly(ies):")
         for m in anomalies:
-            step(f"{_RED}{m}{_RESET}")
+            step(m)
     else:
         ok("no anomalies — clean stress run")
     return len(anomalies)
@@ -241,7 +241,7 @@ def main() -> int:
         try:
             fn = getattr(c, call, None)
             if fn:
-                step(f"{name}: {_DIM}{json.dumps(fn())[:200]}{_RESET}")
+                step(f"{name}: {json.dumps(fn())[:200]}")
         except Exception as e:
             warn(f"{name} unavailable: {e}")
 
