@@ -325,10 +325,9 @@ impl BleTransport {
         if let Err(e) = self.send_command(command_id, args, true).await {
             return Read::LinkFailed(e.to_string());
         }
-        match self.wait_for_response(command_id, timeout).await {
-            Some(p) => Read::Answered(p),
-            None => Read::Silent,
-        }
+        self.wait_for_response(command_id, timeout)
+            .await
+            .map_or(Read::Silent, Read::Answered)
     }
 
     /// Stream a pre-encoded animation blob via the 0x8B 3-phase protocol.

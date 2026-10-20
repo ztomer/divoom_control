@@ -259,7 +259,7 @@ pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
     // The panel's one queue: a multi-packet page transfer must not be
     // interleaved with a live-widget frame or a GUI device_call, and
     // holding the permit is what guarantees that (2026-09-12).
-    let _permit = match link.queue.acquire(None).await {
+    let permit = match link.queue.acquire(None).await {
         Ok(p) => p,
         Err(e) => return e.reply(),
     };
@@ -270,8 +270,15 @@ pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
     if push_page(&link.transport, page, &frames).await {
         ok_reply(detail)
     } else {
+        // Every failure on this path is a write that could not be sent, so
+        // the link is gone: the panel must stop reading as connected, and
+        // the drop must be reported (P2.8).
+        drop(permit);
+        daemon
+            .link_failed(&device.id, Some("the panel did not take the custom art page"))
+            .await;
         err_with(
-            ErrorCode::DeviceFailed,
+            ErrorCode::DeviceDisconnected,
             "the panel did not take the custom art page",
             detail,
         )

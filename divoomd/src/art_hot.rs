@@ -351,7 +351,7 @@ pub(crate) async fn run_hot_update(
             .live_jobs
             .stop_all_for_device(&daemon, &target.id)
             .await;
-        let _permit = link
+        let permit = link
             .queue
             .acquire(None)
             .await
@@ -361,14 +361,27 @@ pub(crate) async fn run_hot_update(
             &*dev,
             crate::daemon::DeviceTransport::Ble(_) | crate::daemon::DeviceTransport::Spp(_)
         ) {
-            let result = session::run_hot_session(&dev, &files, ok_dl, progress).await?;
+            let result = match session::run_hot_session(&dev, &files, ok_dl, progress).await {
+                Ok(r) => r,
+                Err(why) => {
+                    // Every failure in the session is a write that could not
+                    // be sent, so the link is gone: the panel must stop
+                    // reading as connected (P2.8).
+                    drop(permit);
+                    daemon.link_failed(&target.id, Some(&why)).await;
+                    return Err(why);
+                }
+            };
             // Parity with the Python daemon (owner_art.show_hot_channel): after a
             // successful push, switch the device to the HOT/cloud channel so it
             // actually shows what we just uploaded. Without this the files land in
             // the rotation but the screen stays on whatever channel it was on.
             if show_after {
                 if let Err(e) = dev.send_command(0x45, &[0x02], true).await {
-                    return Err(format!("hot channel switch (0x45 [0x02]) failed: {e}"));
+                    let why = format!("hot channel switch (0x45 [0x02]) failed: {e}");
+                    drop(permit);
+                    daemon.link_failed(&target.id, Some(&why)).await;
+                    return Err(why);
                 }
             }
             return Ok(result);
