@@ -13,6 +13,9 @@ This closes that hole with the cheapest checks that can run without hardware:
   1. every shell script parses (`bash -n`) and passes shellcheck when available
   2. every Python script parses
   3. no script runs `python -m <repo.module>` for a repo module that is gone
+  4. no script drives a GUI API method that no longer exists
+  5. no script references a repo script that no longer exists
+  6. no Python file in the tooling USES a name it never DEFINES
 
 HONEST SCOPE: check 3 would NOT have caught the R67 bug. `divoom_lib.cli` still
 exists — it was the `daemon` SUBCOMMAND that was archived, and no static check
@@ -24,6 +27,16 @@ catches dead-on-arrival tooling. Neither substitutes for the other.
 Check 3 is deliberately scoped to REPO modules (top-level component matches a
 package in the tree). External tools — PyInstaller, camoufox, pip — are not this
 repo's to guarantee, and flagging them would make the gate cry wolf.
+
+Check 6 exists because checks 1–5 all read the file's SHAPE, and a file can
+have the perfect shape and still raise NameError the moment it prints a
+result: `scripts/hw_smoke.py` and `scripts/hw_walk_modes.py` printed with the
+house TUI's module-private colour names (`_GRAY`, `_DIM`, `_BOLD`, `_RED`,
+`_RESET`), which live inside `tui/lib.py` and exist nowhere else. The scan
+found four panels and then the REPORTING raised — and the raise was caught and
+reported as a warning, so the script exited 0. A gate that only checks that
+code parses is blind to the one class of bug that a script hits the first time
+somebody actually runs it.
 """
 from __future__ import annotations
 
@@ -38,9 +51,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _tui import err, info, ok  # noqa: E402
 from _empty_scope import scope_is_empty  # noqa: E402
+from _undefined_names import undefined_names_in_file  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 SCRIPTS = REPO / "scripts"
+TOOLS = REPO / "tools"
 
 
 def tracked_scripts() -> list[Path]:
@@ -222,6 +237,59 @@ def check_script_path_refs(failures: list[str]) -> None:
                         f"not exist in this repo")
 
 
+def tooling_python_files() -> list[Path]:
+    """Every Python file the repo's TOOLING is made of.
+
+    `scripts/` is what the operator runs; `tools/` is what verifies it. A
+    NameError in either is the same defect: the code parses, and the first
+    time it reaches the line that matters it raises. `tools/capability_census.py`
+    called `err()` without importing it, so the branch that reports a
+    capability violation would have crashed instead of reporting it.
+    """
+    found: list[Path] = []
+    for directory in (SCRIPTS, TOOLS):
+        if not directory.is_dir():
+            continue
+        found += [p for p in directory.rglob("*.py") if p.is_file()]
+    return sorted(set(found))
+
+
+def _display_path(path: Path) -> str:
+    """The path as the reader knows it: repo-relative when it is in the repo."""
+    try:
+        return str(path.relative_to(REPO))
+    except ValueError:
+        return str(path)
+
+
+def check_undefined_names(failures: list[str]) -> None:
+    """No Python file in the tooling may USE a name it never DEFINES.
+
+    A script that parses can still raise NameError on the first line that
+    prints a result, and a raise that is caught and reported as a warning
+    leaves the exit code at 0 — which is how `scripts/hw_smoke.py` announced a
+    clean run in which the reporting of four found panels had failed.
+
+    HONEST SCOPE: this reads the module's own bindings; it does not import
+    it, so a name that arrives through `from x import *` cannot be seen (no
+    script in this repo star-imports) and a name that arrives at runtime
+    through `globals()` or `exec` cannot be seen at all. It is a static pass
+    over the standard library's `ast`, not a linter: no new dependency, so it
+    runs wherever the repo's other gates run.
+    """
+    for path in tooling_python_files():
+        rel = _display_path(path)
+        try:
+            problems = undefined_names_in_file(path)
+        except SyntaxError:
+            continue  # check_python owns the syntax error, and reports it
+        for name, lineno in problems:
+            failures.append(
+                f"{rel}:{lineno}: uses `{name}`, which this file never "
+                f"defines — a NameError waiting for the first run"
+            )
+
+
 def main() -> int:
     failures: list[str] = []
     check_shell(failures)
@@ -229,6 +297,7 @@ def main() -> int:
     check_module_refs(failures)
     check_api_method_refs(failures)
     check_script_path_refs(failures)
+    check_undefined_names(failures)
 
     n = len(tracked_scripts())
     if scope_is_empty("scripts", n, unit="scripts"):

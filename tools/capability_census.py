@@ -49,7 +49,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from _tui import hr, info, ok, section, warn  # noqa: E402
+from _tui import err, hr, info, ok, section, warn  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 RUST = REPO / "divoomd" / "src"
