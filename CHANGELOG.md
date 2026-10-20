@@ -6,6 +6,91 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **P7.2 -- the connection dot's design, priced for the owner.** No UI changed;
+  the plan of record now carries the options, the measurements behind them and
+  a recommendation, and the owner rules.
+
+  **What the dot actually renders.** `#global-status-dot`
+  (`divoom_gui/web_ui/index.html:590`) is one 10px circle
+  (`divoom_gui/web_ui/appbar.css:65`), written by ONE funnel,
+  `window.setConnectionState` (`divoom_gui/web_ui/connection_events.js:25`).
+  Six live states: `inactive`, `connecting`, `active ble`, `active lan`,
+  `active wall`, `active degraded`. BLE / LAN / Wall differ only by hue;
+  Connecting and Degraded are the same amber and differ only by pulse PERIOD
+  (1s vs 2s); Disconnected is the same circle dimmed.
+
+  **Two claims in the old entry were wrong.** The dot is 10px, not 8px. And
+  its `title` is not a hover readout: the dot is `pointer-events: none`
+  (`divoom_gui/web_ui/appbar.css:73`), so the pointer never reaches it --
+  `document.elementFromPoint` at the dot's centre returns the page -- and the
+  browser never shows the title the funnel writes. The title never named the
+  transport either ("Connected" for BLE, LAN and Wall alike), and the
+  element's `aria-label` is the static "Connection status" in every state.
+  The entry also described a title the user has never been able to see.
+
+  **The measurement.** Driving the real page in the house browser and
+  rendering the real states greyscale and static, judged with the TRAY's own
+  metric (a luma step of 64 over 5% of the mark's square,
+  `divoom-menubar/src/glyph.rs:210`): every pair of LIVE states differs by
+  0 px. Connecting vs Degraded: 0 px (max luma delta 9.3). BLE vs Wall: 0 px
+  (10.2). Only Disconnected separates, by being dimmer. So the dot is one
+  channel doing all the work -- the exact defect ui-house-doctrine rule 9
+  names -- and it fails the repo's own P7.1 gate applied to the web surface.
+
+  **What the panel found.** The house's ux-expert-panel roster ran over the
+  real dot. Rams: the transport axis has no other carrier anywhere in the app
+  (the banner's spans and the per-device chips are hidden, and the
+  `.transport-badge` / `.transport-status-panel` styles render nothing -- that
+  panel was removed in R32), so it cannot simply be deleted from the dot.
+  Kare: the shape budget is NOT the excuse -- measured at today's 10px, a
+  circle / square / 2x2-grid trio differs by 88-177 px in greyscale and a
+  filled / hollow / barred trio by 63-208 px, so a two-axis vocabulary fits
+  where the dot already is; but a shape vocabulary needs a KEY, because three
+  silhouettes do not self-evidently mean BLE/LAN/Wall. Blow: the dot's real
+  question is "is the panel I am driving linked?", and the transport is a
+  property of a panel -- but with no other carrier for it, moving the
+  transport out of the corner is a cost, not a free deletion. Carmack: the
+  old Done when could not have worked as written -- a pulsing dot is not
+  reproducible (two screenshots 180 ms apart differ in 400 of 400 px), so any
+  proof must disable the animation. Hashimoto: the title and the aria-label
+  are lies, and the transport is derived TWICE -- the heartbeat says "wall"
+  for the wall, the event path says "ble" for any non-LAN mac, so the wall can
+  be painted the BLE hue.
+
+  **The options now on the table**, each priced in `docs/ROADMAP.md` (P7.2)
+  with what it looks like, what it costs, how it is proved and what it
+  breaks: A, colour + pulse only (the ruling as it stands -- measured 0 px,
+  and WCAG 1.4.1 fails for the transport and for Connecting vs Degraded); B,
+  shape per transport with the fill pattern carrying the link state, colour
+  reinforcing and pulse reinforcing pending (satisfies the house rule BY
+  MEASUREMENT, contradicts the letter of D15, and fits at 10px with no size
+  or layout change); C, a word beside the dot (the doctrine's other carrier,
+  at the cost of the corner's quiet); D, the panel's own -- the dot is the
+  LINK only, on the tray's own grammar, and the transport moves to the panel's
+  card in the bench.
+
+  **The recommendation is B**, with the key, and with the two defects (the
+  unreachable title and the static aria-label; the two disagreeing transport
+  derivations) fixed whichever design is ruled. It contradicts the letter of
+  the owner's constraint; the panel does not get to make that call.
+
+  **The second round of the panel, on the recommendation itself**, changed
+  three things in the row: the greyscale floor is now stated in the DOT's own
+  units (5% of the mark's square at 2x -- 5 device px at today's 10px) rather
+  than the tray's, because a floor measured on a 36x44 glyph does not transfer
+  to a 10px mark; the Done when now also requires the INK rule (a dimmed
+  Disconnected must differ from a full-strength hollow in ink, not only in
+  ratio -- measured 108 px differing, 50 ink against 136) and requires the KEY
+  to be on screen if the shape carries the transport; and the dead
+  `.transport-badge` / `.transport-status-panel` styles were named as a
+  deletion that goes with every ruling. On the revised row every persona
+  returned NO FURTHER COMMENTS.
+
+  - `docs/ROADMAP.md`: P7.2 rewritten -- the corrected Why, the measured
+    tension, four priced options, the recommendation, and a Done when that can
+    actually be run (the animation disabled, the tray's floor, a calibration
+    test, and the owner's eye on the app's own window -- no panel needed).
+
 - **The daily job that pointed at a file deleted 36 days ago is gone, and the
   class of failure it belonged to is now a finding instead of a log line.**
 
