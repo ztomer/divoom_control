@@ -6,6 +6,20 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **Two Rust advisories closed, and the gate's audit is green again.** The
+  gate's `cargo audit` step went red on 2026-10-20 on two advisories that
+  arrived through the TLS stack, and nothing in this repo could push until
+  they were closed: RUSTSEC-2026-0382 (`rustls-webpki` 0.103.15 -- certificate
+  verification may accept distrusted intermediates) and RUSTSEC-2026-0383
+  (`webpki-root-certs` 1.0.9 -- the bundled root certificates trust distrusted
+  emSign intermediates). Both come in through `rustls-platform-verifier` 0.7.1
+  -> `reqwest` 0.13.5 -> `divoomd`, and both had a patch fix INSIDE the
+  locked range, so the lock moved and nothing else did:
+  `rustls-webpki` 0.103.15 -> 0.103.16 and `webpki-root-certs` 1.0.9 ->
+  1.0.10 -- four lines of `Cargo.lock`, no manifest touched. `cargo audit
+  --deny warnings --deny unmaintained --deny unsound --deny yanked` is green
+  again, and the pins moved in a commit of their own, as the house rule says.
+
 - **P7.2 -- the connection dot's design, priced for the owner.** No UI changed;
   the plan of record now carries the options, the measurements behind them and
   a recommendation, and the owner rules.
