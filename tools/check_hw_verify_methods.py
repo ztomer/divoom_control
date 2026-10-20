@@ -71,7 +71,8 @@ def main() -> int:
         info("  still hold their match arms in the expected shape.")
         return 1
 
-    from scripts.hw_verify import CallCheck, CommandCheck, LiveJobCheck, build_checks
+    from scripts.hw_verify import (CallCheck, CommandCheck, ImageCheck,
+                                   LiveJobCheck, PANEL_LOOK, build_checks)
 
     bad: list[str] = []
     for c in build_checks():
@@ -81,7 +82,7 @@ def main() -> int:
             if c.kind not in kinds:
                 bad.append(f"{c.id}: live-job kind {c.kind!r} is not one of "
                            f"{sorted(kinds)}")
-        elif isinstance(c, CallCheck):
+        elif isinstance(c, (CallCheck, ImageCheck)):
             if c.method not in caps:
                 bad.append(f"{c.id}: device_call method {c.method!r} is not a "
                            f"daemon capability")
@@ -92,6 +93,18 @@ def main() -> int:
         else:
             bad.append(f"{c.id}: unknown check type {type(c).__name__} — this "
                        f"gate cannot vouch for it")
+
+        # THE SECOND HALF OF THIS GATE: a panel check must show the frame the
+        # DAEMON painted, not a sentence this repo wrote about what the panel
+        # shows. That sentence is how the `weather` check graded a WORKING
+        # widget FAIL (it still said the device "cycles" after the daemon
+        # started drawing one combined frame) — and no name check could ever
+        # have caught it, because the sentence names nothing the daemon can
+        # answer. Only a socket-level check (no picture exists) may answer in
+        # words.
+        if not isinstance(c, CommandCheck) and c.look != PANEL_LOOK:
+            bad.append(f"{c.id}: a panel check carries a hand-written LOOK — "
+                       f"it must show the daemon's own frame instead")
 
     if bad:
         one = len(bad) == 1

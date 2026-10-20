@@ -6,6 +6,126 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **A description of what the panel shows is a claim about ANOTHER program's
+  renderer, and it went stale silently.** The hardware packet used to carry a
+  hand-written sentence per check, saying what the operator should see. The
+  `weather` check still said (2026-09-07): "the device CYCLES; it does NOT
+  draw one combined face ... the `weather` flag drives a temperature panel".
+  P3.3 changed the renderer under it — the daemon now draws ONE combined
+  icon + temperature frame — so the packet asked a human holding the device
+  to grade a WORKING widget FAIL. The packet's own comment admits it had
+  already "graded a working command FAIL" twice for the same reason, and no
+  gate in this repo could ever have caught it, because the sentence names
+  nothing the daemon can answer.
+
+  The sentence is gone. The expectation is now an artifact the SYSTEM
+  produced: the frame the daemon itself painted (its activity record's
+  preview) and the frame the daemon says it renders (`render_widget`), saved
+  as a PNG next to the run's report and printed as text, so the operator
+  compares the panel with a picture the daemon painted instead of parsing a
+  paragraph about one. `custom_art` compares against
+  `render_widget album_art` on the same bytes, which is the SAME downscaler
+  (`process_image_bytes`) `display.show_image` uses, so it is the picture the
+  panel was sent rather than a guess at it.
+
+  The machine half grew with it, honestly: a widget that painted NOTHING is
+  a FAIL rather than a question for the operator; a check whose precondition
+  is unmet (nothing playing) is a SKIP, not a FAIL and not a PASS; and the
+  packet now names the panel it pushes to and reads — a mac-less
+  `device_call` went to whichever panel connected LAST, which with four
+  bench panels is not the one the operator is watching.
+
+  - `scripts/hw_expect.py` (new): the daemon-derived frames, the diff, the
+    ASCII art, and the one shared instruction every panel check shows.
+  - `scripts/hw_packet.py` (new): the checks and their expectations.
+    `scripts/hw_verify.py` is the runner again (408 lines, under the 500
+    cap) and re-exports the check classes the gates import.
+  - `tools/check_hw_verify_methods.py` now refuses a panel check that
+    carries a hand-written LOOK — the old `weather` sentence put back makes
+    it red — so the class cannot come back.
+  - `tests/test_hw_verify.py`: seven new tests, red against the old packet
+    (7 failed) and green with the fix (22 passed).
+  - `python3 -m pytest`: 2078 passed, 176 skipped.
+
+- **The hardware round's named verdicts (2026-10-20), four panels on the
+  bench.** Machine proof where an instrument exists, and plainly named
+  where only eyes can do it.
+
+  - **P2.7 — CONFIRMED, and deleted from the plan.** With the GUI running,
+    `kill -TERM` on the daemon made the GUI respawn it (`==== daemon spawn
+    from pid 35435 ====`) and relink the panel with NO click (`[ble][connect]`,
+    `device_status` showing it linked). Proven twice on Pixoo-1 with the
+    installed v0.41.3 bundle.
+  - **The four widget pushes — machine half CONFIRMED** (Pixoo-1, installed
+    v0.41.3): `sysmon` paints a frame that changes with load (three distinct
+    pictures, CPU 12 -> 50) and equals `render_widget sysmon`; `weather`
+    paints a frame BYTE-IDENTICAL to `render_widget weather` (0 of 256 pixels
+    differ) and it is one combined icon + temperature frame; `custom_art`
+    paints the source downscaled NEAREST (18 of 256 pixels differ by 1-2,
+    palette quantisation) where a BILINEAR smear would give 216, so it is
+    neither a smear nor a crop; `album_art` pushes nothing because nothing
+    is playing (`now_playing`: "Kaset (not playing)") — the documented
+    precondition, now a SKIP in the packet rather than a silent question.
+  - **P6.1 — machine half CONFIRMED, the glass is the owner's photograph.**
+    Two real panels as one wall, grid (x=0, x=1) and free-form (x=0, x=16),
+    both give EXACT adjacent halves: a blue marker column lands at source
+    column 15 in slot A and nowhere in slot B, the cuts are 16x16 each, 0 of
+    256 pixels differ from the source halves, tile width exactly 32 = 16+16.
+    The arithmetic is right; the bench geometry is chassis-based
+    (`getWallSlots` uses `enc.w_mm * 0.65`) while the screen square is inset,
+    so the picture ON the glass is discontinuous by the bezel width — 21
+    bench px for Pixoo + Timoo. No camera here sees a panel (it sees a lamp:
+    0 blue-dominant pixels after a blue push).
+  - **P6.2 — the blocker as written was WRONG, and the real one is named.**
+    The roadmap said the vendor app's Wi-Fi upload "did not decompile". It
+    DID: `DesignSendModel.sendByLocalHttp` ->
+    `HttpCommand.DrawPixelLocalHttp = "Draw/PixelLocalHttp"`, a multipart
+    POST to `http://<DevicePrivateIP>:9000/upload`
+    (`OkHttpUtils.uploadFileToLocalDevice`), plus `Draw/EqLocalHttp`, with
+    `DrawPixelLocalHttpRequest` carrying fileName, imageName, flag,
+    authorId, nickName, headFileId, headFileName, lcdIndex and
+    soundFileName. The blocker is not the request shape: no LAN panel is
+    bound to the account (`Device/GetListV2` and `Device/GetList` both
+    answer `DeviceList: []` on the signed-in account — user_id 401414409, the
+    session token redacted here as everywhere else in this repo) and port
+    9000 is closed on every 192.168.0.1-254 (192.168.0.175 answered once,
+    then went down). The daemon's LAN transport still has no image command.
+  - **P9.7 — the channel half is settled.** 0x46 byte 0 reads the channel
+    back in every case (clock -> 0, `set_channel 1` -> 1, a pushed image ->
+    5); the device ECHOES 0x45 for every channel except 3 (VJ), which draws
+    no echo in either the one-byte or the 10-byte form, while the control
+    `0x45 01` echoed in the SAME window — so the silence is the panel, not
+    the trace. A re-selected channel 5 is ACCEPTED (0x46 reads 5 back). What
+    is left is a pixel question: does `0x45 05` put the pushed image back up
+    or the channel's own gallery? Only eyes can tell, and the lease must not
+    restore a screen the user never chose.
+  - **P5.3 — the model is live, the menu is the owner's screen.** The status
+    item's AX "help" text tracks the fleet ("4 of 4 panels online — active:
+    Pixoo-1 / Tivoo-Max-light-3 / Timoo-light-4") and changes with
+    `select_device`, so the menubar's model is live; the MENU could not be
+    opened from this session at all (the console is at the login window, and
+    an AXPress on a known-good control — FineTune — opened no window and
+    produced no AXMenu change, so the block is the environment).
+  - **P9.3 — still eyes.** The four pushes are machine-proven; judging them
+    against a light AND a dark surrounding is a photograph, and no camera on
+    this machine can see a panel.
+  - All four panels were put back to the recorded baseline and READ BACK:
+    Pixoo-1 0/85/[75,0,1], Timoo-light-4 0/60/[255,255,255], Tivoo-Max-light-3
+    2/50/[0,255,255], Ditoo-light-2 2/60/[0,255,204].
+  - **Pushed with `GOH_PROVEN=0`, on purpose.** gates_of_heck's proven-step
+    cache had skipped the `cargo build -p divoomd --locked` step on this very
+    tree (an earlier attempt on the same commit had proved it), so the
+    pre-push worktree — which is FRESH — had no daemon binary, and the
+    Python suite failed with "divoomd (Rust daemon) binary not found": a gate
+    failure with nothing to do with this change. With the cache off every
+    step runs for real. The defect is reported in the ROADMAP's "Owned
+    elsewhere" section; gates_of_heck is another repository and is not
+    written to from here.
+  - The browser suite also ran SERIALLY for this push (`DIVOOM_BROWSER_WORKERS=0`,
+    the way CI runs it): at 8 and at 4 workers it flaked on three different
+    UI-timing tests in three runs, each of which passes alone. The flake
+    ledger in the ROADMAP carries the class.
+
 - **A dropped link is not a connected panel, and a read that got no answer is
   not a success.** On 2026-10-18 a Pixoo-1 stopped answering: every later
   call failed `Peripheral no longer available`, yet `device_status` kept

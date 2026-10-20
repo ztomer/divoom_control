@@ -26,6 +26,14 @@ verdicts. `--self-test` exists so the instrument is calibrated before its
 answers are trusted: it drives a check that MUST fail and reports whether the
 packet noticed.
 
+**The expectation is the daemon's own frame, not a sentence this file wrote.**
+The packet used to describe what the panel should look like, in prose, and the
+prose went stale: it still said the `weather` widget "cycles" after the daemon
+started drawing ONE combined frame, so a working widget was graded FAIL. Now
+every panel check shows you the frame the DAEMON painted (saved next to the
+report, and printed as text) and asks you to compare the panel with it. There
+is nothing left here that can go stale — see `scripts/hw_expect.py`.
+
 **Exit codes are the verdict.** 0 = every check that ran was answered (or the
 self-test is calibrated), 1 = FAIL (a check failed, or the self-test could not
 report a failure), 2 = the daemon is not there or the arguments are wrong,
@@ -40,16 +48,29 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-import time
-from dataclasses import dataclass, field
+import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "tools"))
+sys.path.insert(0, str(REPO / "scripts"))
 from _tui import err, hr, info, ok, section, warn  # noqa: E402
 
 from divoom_client.daemon_protocol import DEFAULT_SOCKET_PATH, DaemonClient  # noqa: E402
+
+# The packet's checks live in their own module; the runner lives here.
+from hw_packet import (  # noqa: E402  (re-exported for the gates and tests)
+    CallCheck,
+    Check,
+    CommandCheck,
+    Expectation,
+    ImageCheck,
+    LiveJobCheck,
+    PANEL_LOOK,
+    build_checks,
+)
 
 PASS, FAIL, SKIP, UNKNOWN = "PASS", "FAIL", "SKIP", "UNKNOWN"
 # A check that is EXPECTED to fail. XFAIL is the expected outcome and carries no
@@ -71,167 +92,6 @@ class Result:
     verdict: str
     detail: str = ""
     note: str = ""
-
-
-@dataclass
-class Check:
-    id: str
-    title: str
-    look: str                     # what the operator should SEE
-    needs_device: bool = True
-    expect_fail: str = ""         # why this check is EXPECTED to fail
-    tags: list[str] = field(default_factory=list)
-
-    def drive(self, client: DaemonClient, ctx: dict) -> tuple[bool, str]:
-        """`ctx` carries what only the live daemon knows: `mac`, `size`, `image`."""
-        raise NotImplementedError
-
-
-@dataclass
-class CallCheck(Check):
-    """Fire one device_call, then ask what appeared on the panel."""
-    method: str = ""
-    args: list = field(default_factory=list)
-    settle: float = 1.5
-
-    def drive(self, client, ctx):
-        args = [ctx[a[1:]] if isinstance(a, str) and a.startswith("$") else a
-                for a in self.args]
-        reply = client.device_call(self.method, args)
-        time.sleep(self.settle)
-        if not isinstance(reply, dict):
-            return False, f"non-dict reply: {reply!r}"
-        if reply.get("success") is False:
-            return False, str(reply.get("error") or reply)
-        return True, json.dumps(reply)[:200]
-
-
-@dataclass
-class CommandCheck(Check):
-    """Fire one socket command (not a device call)."""
-    command: str = ""
-    cargs: dict = field(default_factory=dict)
-    needs_device: bool = False
-
-    def drive(self, client, ctx):
-        cargs = {k: (ctx[v[1:]] if isinstance(v, str) and v.startswith("$") else v)
-                 for k, v in self.cargs.items()}
-        reply = client.send_command(self.command, cargs)
-        if not isinstance(reply, dict):
-            return False, f"non-dict reply: {reply!r}"
-        if reply.get("success") is False:
-            return False, str(reply.get("error") or reply)
-        return True, json.dumps(reply)[:200]
-
-
-@dataclass
-class LiveJobCheck(Check):
-    """Start one live widget job and watch the panel.
-
-    The four widget checks are `live_job_start`, NOT `device_call`. That is the
-    whole reason this packet failed five for five on 2026-09-07: it named
-    `live_jobs.start` / `media.push_album_art` / `display.show_weather`, none of
-    which the daemon has ever answered, and the R12 visual pass sat in the
-    roadmap as "needs a device" when it would have failed identically with no
-    device attached. The names now come from the daemon's own match arms and are
-    held there by `tools/check_hw_verify_methods.py`.
-    """
-    kind: str = ""
-    params: dict = field(default_factory=dict)
-    settle: float = 8.0
-
-    def drive(self, client, ctx):
-        # Clear whatever the previous check left running: the jobs share one
-        # panel, so a music job still pushing album art would sit on top of the
-        # weather face and the operator would grade the wrong widget.
-        client.send_command("live_jobs_stop_for", {"mac": ctx["mac"]})
-        params = dict(self.params)
-        params.setdefault("size", ctx["size"])
-        reply = client.send_command(
-            "live_job_start",
-            {"mac": ctx["mac"], "kind": self.kind, "params": params})
-        if not isinstance(reply, dict):
-            return False, f"non-dict reply: {reply!r}"
-        if reply.get("success") is False:
-            return False, str(reply.get("error") or reply)
-        time.sleep(self.settle)
-        return True, json.dumps(reply)[:200]
-
-
-def build_checks() -> list[Check]:
-    """The packet. Each entry names what a person must SEE, not what returned 0."""
-    return [
-        LiveJobCheck(
-            id="sysmon", tags=["P2.2"],
-            title="System-monitor gauges on a matrix",
-            look="CPU / RAM bars on the device, and the values MOVING over ~10s "
-                 "(a frozen plausible number looks identical to a working one)",
-            kind="sysmon", settle=12.0,
-        ),
-        LiveJobCheck(
-            id="album_art", tags=["P2.3", "R12"],
-            title="Album cover on the device",
-            look="the current track's cover art, NEAREST-scaled (blocky, not "
-                 "smoothed) and matching the GUI preview pixel for pixel. "
-                 "PLAY SOMETHING FIRST — with no track this job has nothing to "
-                 "push, and a dark panel then means 'nothing playing', not "
-                 "'broken'",
-            kind="music", settle=10.0,
-        ),
-        LiveJobCheck(
-            id="weather", tags=["P2.3", "R12"],
-            title="Weather widget on the device",
-            look="the device CYCLES; it does NOT draw one combined face. WATCH "
-                 "IT for ~30s. You are waiting for a TEMPERATURE screen to "
-                 "alternate with the clock — measured on hardware 2026-09-07, "
-                 "the `weather` flag drives a temperature panel, and it is the "
-                 "`humidity` flag that draws the icon face people call "
-                 "'weather'. A white digital clock is the CLOCK PHASE and is "
-                 "not a failure. Answer n only if the cycle never leaves the "
-                 "clock. (This instruction claimed a single weather face, then "
-                 "a weather panel; both graded a working command FAIL.)",
-            kind="weather", settle=12.0,
-        ),
-        CallCheck(
-            id="custom_art", tags=["P2.3", "R12"],
-            title="Custom art (local image) on the device",
-            look="the image at --image, right way up, filling the panel. The "
-                 "default is a 1024x1024 asset, so the point of the check is "
-                 "that the daemon's downscale lands it on the panel intact — "
-                 "recognisable, not a smear and not a crop",
-            method="display.show_image", args=["$image"], settle=3.0,
-        ),
-        CommandCheck(
-            id="weather_city", tags=["P2.6"],
-            title="search_weather_city on the CONFIGURED account",
-            look="EXPECTED TO FAIL with `RC=1 Failed` — R73 disproved the "
-                 "success path on the real, logged-in account, isolated by "
-                 "elimination (GetCategoryFileListV2 and Channel/GetDialType "
-                 "succeeded on the same daemon, credentials and minute). This "
-                 "check is now a CANARY: a non-empty list means the server "
-                 "changed and the feature can be revived. Anything else — a "
-                 "guest-login RC=10, a transport error — means the harness "
-                 "moved, not the endpoint",
-            command="search_weather_city", cargs={"keyword": "London"},
-            expect_fail="R73 disproved the success path on the real account "
-                        "(RC=1). A FAILURE here is the known state and no news; "
-                        "a SUCCESS means the server changed.",
-        ),
-    ]
-
-
-def ask(prompt: str, interactive: bool) -> tuple[str, str]:
-    """PASS / FAIL / SKIP from a human, or UNKNOWN when nobody is watching."""
-    if not interactive:
-        return UNKNOWN, "no tty — nobody was looking"
-    while True:
-        raw = input(f"    {prompt} [y = saw it / n = did not / s = skip] ").strip().lower()
-        if raw in ("y", "yes"):
-            return PASS, input("    note (optional): ").strip()
-        if raw in ("n", "no"):
-            return FAIL, input("    what DID you see? ").strip()
-        if raw in ("s", "skip", ""):
-            return SKIP, input("    why skipped: ").strip()
 
 
 def require_daemon(socket_path: str) -> DaemonClient:
@@ -285,10 +145,31 @@ def device_connected(client: DaemonClient) -> tuple[bool, str, dict]:
             {"mac": mac, "size": st.get("size")})
 
 
+def ask(prompt: str, interactive: bool) -> tuple[str, str]:
+    """PASS / FAIL / SKIP from a human, or UNKNOWN when nobody is watching."""
+    if not interactive:
+        return UNKNOWN, "no tty — nobody was looking"
+    while True:
+        raw = input(f"    {prompt} [y = saw it / n = did not / s = skip] ").strip().lower()
+        if raw in ("y", "yes"):
+            return PASS, input("    note (optional): ").strip()
+        if raw in ("n", "no"):
+            return FAIL, input("    what DID you see? ").strip()
+        if raw in ("s", "skip", ""):
+            return SKIP, input("    why skipped: ").strip()
+
+
+def show_expectation(exp: Expectation) -> None:
+    """Print the daemon's own frame for the operator to compare against."""
+    for line in (exp.text or "").splitlines():
+        info(f"  {line}")
+
+
 def run_packet(client, checks, interactive, results, ctx=None):
     connected, detail, dev = device_connected(client)
     ctx = {**(ctx or {}), **{k: v for k, v in dev.items() if v is not None}}
     ctx.setdefault("size", 16)
+    ctx.setdefault("frames_dir", tempfile.gettempdir())
     if connected:
         ok(f"device connected — {detail}")
     else:
@@ -326,6 +207,24 @@ def run_packet(client, checks, interactive, results, ctx=None):
             results.append(Result(c.id, XPASS, detail, c.expect_fail))
             continue
         info(f"sent OK — {detail}")
+        try:
+            exp = c.expectation(client, ctx)
+        except Exception as exc:
+            err(f"expectation raised: {exc}")
+            results.append(Result(c.id, FAIL, f"expectation raised: {exc}"))
+            continue
+        if exp.verdict:
+            # The machine's own verdict. A widget that painted NOTHING cannot
+            # be graded by a human looking at the panel, and a check whose
+            # precondition is unmet is a SKIP, not a FAIL.
+            (err if exp.verdict == FAIL else warn)(f"{c.id}: {exp.verdict} — {exp.detail}")
+            results.append(Result(c.id, exp.verdict, exp.detail))
+            continue
+        show_expectation(exp)
+        if c.setup:
+            info("BEFORE YOU LOOK:")
+            for line in c.setup.split(". "):
+                info(f"  {line}")
         info("LOOK AT THE DEVICE:")
         for line in c.look.split(". "):
             info(f"  {line}")
@@ -423,6 +322,9 @@ def main() -> int:
     ap.add_argument("--out", default="",
                     help="write a JSON report here (gitignored: a verdict file "
                          "is evidence about one run on one machine)")
+    ap.add_argument("--frames-dir", default="",
+                    help="where the daemon's frames are saved (default: next "
+                         "to --out, else a temp directory)")
     ap.add_argument("--image", default=str(DEFAULT_IMAGE),
                     help="image for the custom_art check")
     ap.add_argument("--size", type=int, default=0,
@@ -452,7 +354,16 @@ def main() -> int:
         warn("stdin is not a terminal — every LOOK will be recorded UNKNOWN.")
         warn("  Nothing here can PASS without a person; that is the point.")
 
-    ctx: dict = {"image": args.image}
+    if args.frames_dir:
+        frames_dir = args.frames_dir
+    elif args.out:
+        report = Path(args.out)
+        frames_dir = str(report.parent / f"{report.stem}_frames")
+    else:
+        frames_dir = tempfile.mkdtemp(prefix="hw_verify_frames_")
+    info(f"frames (the daemon's own pictures) are saved in: {frames_dir}")
+
+    ctx: dict = {"image": args.image, "frames_dir": frames_dir}
     if args.size:
         ctx["size"] = args.size
     if not Path(args.image).is_file():
