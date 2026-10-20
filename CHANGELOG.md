@@ -42,6 +42,62 @@ shipped milestone (per the project planning docs).
   (`divoomd/src/reply_shape_scan_tests.rs`), so the next read cannot launder
   a failure the same way.
 
+- **A script that PARSES is not a script that RUNS, and an instrument that
+  cannot say NO is a form.** `scripts/hw_smoke.py` and
+  `scripts/hw_walk_modes.py` printed their results with `_GRAY`, `_DIM`,
+  `_BOLD`, `_RED` and `_RESET` — the house TUI's module-private colour
+  constants, which live inside `tui/lib.py` and exist nowhere else. Every code
+  path that PRINTED a result raised NameError. On the wire it looked like
+  this:
+
+      ✓ 4 device(s):
+      ✗ scan failed: NameError: name '_GRAY' is not defined
+
+  The scan had worked — four panels had answered — and the REPORTING of that
+  fact died. Worse, the raise was caught and reported as `⚠`, so the run
+  exited 0: a run that had just found four panels was announced as a clean
+  run whose reporting had failed. `tools/check_scripts.py`, the gate that
+  exists so `scripts/` is not unverified tooling, was green throughout,
+  because it only checked that scripts PARSE — and a file with a NameError in
+  it parses perfectly.
+
+  Three things changed. The scripts print through the house PUBLIC helpers
+  (`info`, `step`, `ok`, `err`, `warn`, `hr`, `section`), never raw colour
+  names. The exit code is now the verdict: `scripts/hw_verify.py` exits 0
+  when every check that ran was answered, 1 when a check FAILED — including a
+  branch that RAISED, which is never a warning — 2 when the daemon is not
+  there, and 3 when nothing was proven (a verdict was UNKNOWN or SKIP, or the
+  self-test has one branch proven and one still owed). That is the contract
+  the roadmap has always documented for `--self-test`: 3 = PARTIAL until a
+  device is connected, 0 = calibrated. The self-test now also drives its
+  bogus call through the packet's OWN result machinery, so it proves the
+  packet records a FAIL — not merely that the daemon refused.
+
+  And the class is closed by a GATE, not by a fix. `tools/check_scripts.py`
+  now runs a scope-aware, AST-only pass over `scripts/` and `tools/` for
+  names that are USED and never DEFINED (`tools/_undefined_names.py`; no new
+  dependency, because a linter that is not already a dependency is not a
+  gate). It was red on the pre-fix file with all twelve names and green
+  after, and it is calibrated by a second, different planted name. The
+  repository's own code came back with three more instances of the class:
+  `tools/capability_census.py` called `err()` without importing it, so the
+  branch that reports a capability violation would have CRASHED instead of
+  reporting it, and `examples/tests/test_light_functions.py` used
+  `constants.LPWA_CONTROL_COLOR` seven times with no import anywhere.
+
+  Evidence: `tests/test_undefined_names_gate.py` (the pass, the gate, the
+  calibration, and the two scripts' house rule),
+  `tests/test_hw_smoke_failure.py` (a raising branch is a FAIL with a
+  non-zero exit; a clean run still exits 0), and `tests/test_hw_verify.py`
+  (the exit-code contract). Live, against the four panels on the desk,
+  `scripts/hw_smoke.py --phase discover` now names Ditoo-light-2, Pixoo-1,
+  Timoo-light-4 and Tivoo-Max-light-3 and exits 0, and
+  `scripts/hw_verify.py --self-test` exits 0 with a device connected and 3
+  against a daemon with no device (the documented PARTIAL case).
+
+  Tests: 2071 passed, 176 skipped (`pytest tests`); 1022 passed, 73 skipped
+  (`pytest examples/tests`).
+
 ## v0.41.3 — the browser suites run in the local gate, and the app stops overwriting its own state (2026-10-19)
 
 Patch release, and a catch-up one: it carries every round since v0.41.2 — the

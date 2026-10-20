@@ -7,6 +7,9 @@ import sys
 
 from divoom_legacy import Divoom
 from divoom_legacy.utils.discovery import discover_device
+# `constants.LPWA_CONTROL_COLOR` was used seven times below with no import
+# anywhere: a NameError waiting for the first run with a device attached.
+from divoom_lib.models import constants
 
 # --- Configuration ---
 DEVICE_NAME_SUBSTRING = "Timoo"

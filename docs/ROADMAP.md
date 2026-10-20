@@ -505,6 +505,20 @@ against the daemon's match arms. `album_art` needs something PLAYING — with no
 track the music job has nothing to push, and a dark panel then means "nothing
 playing", not "broken". `search_weather_city` is the XFAIL canary (see above).
 
+**The exit code is the verdict.** `scripts/hw_verify.py` exits 0 when every
+check that ran was answered, **1** when a check FAILED — including a branch
+that RAISED, which is never a warning — **2** when the daemon is not there or
+the arguments are wrong, and **3** when nothing was proven: a verdict was
+UNKNOWN or SKIP, or the self-test has one branch proven and one still owed.
+`scripts/hw_smoke.py` exits 0 clean, 1 when any branch failed, 2 when the
+daemon is not there.
+
+**A script prints through the house PUBLIC helpers** — `info`, `step`, `ok`,
+`err`, `warn`, `hr`, `section` from `tui/lib.py` (or `tools/_tui.py`, which
+resolves the same helpers in CI). The TUI's colour constants are
+module-private (`_C_GRAY`, `_C_RESET`, ...); naming one from a script is a
+NameError, and `tools/check_scripts.py` now fails the push for it.
+
 **A locally built daemon on hardware.** Let the app be the responsible process:
 `scripts/build_release.sh` then `scripts/install_local.sh`, which quits the app,
 refuses to install over a running bundle, `open`s it, and proves the running
@@ -532,7 +546,7 @@ is judged against; when one moves, change it here in the same commit.
 | Measure | Value | Where it is enforced |
 |---|---|---|
 | Local gate | 29 `GOH_CI_STEPS` (incl. the browser suites, 2026-10-19) + `scripts/py_ci.sh` = 30 steps, run by `pre-push` on the pushed commit in a clean worktree | `.gatesrc`, `tools/gate.sh`, `scripts/ci_local.sh` |
-| Python tests (default) | 2053, 176 skipped (2026-10-19) | `pytest.ini` (`testpaths = tests`) |
+| Python tests (default) | 2071, 176 skipped (2026-10-19) | `pytest.ini` (`testpaths = tests`) |
 | `examples/tests` | 1022 passed, 73 skipped (2026-10-19) | `scripts/py_ci.sh` |
 | Browser subset | 230 passed (2026-10-19, beta.39, `-n 8`; in the local gate and CI, through `scripts/browser_e2e.sh`) | `scripts/browser_e2e.sh` |
 | Rust tests | 644 (2026-10-19) | `cargo test --locked` |
