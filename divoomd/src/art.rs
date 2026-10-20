@@ -275,7 +275,10 @@ pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
         // the drop must be reported (P2.8).
         drop(permit);
         daemon
-            .link_failed(&device.id, Some("the panel did not take the custom art page"))
+            .link_failed(
+                &device.id,
+                Some("the panel did not take the custom art page"),
+            )
             .await;
         err_with(
             ErrorCode::DeviceDisconnected,
