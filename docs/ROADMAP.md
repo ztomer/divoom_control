@@ -171,6 +171,17 @@ CONFIRMED on hardware (the GUI respawns the daemon and the panel re-links with
 no click; two SIGTERMs, `==== daemon spawn from pid 35435 ====` then
 `[ble][connect]` and `device_status` showing the panel linked).
 
+Landed (2026-10-20): P2.7's REMAINDER — the panels a CLI or an MCP client
+linked, and the wall's slots, which the GUI's relink never covered. The
+daemon now writes down what it holds (`~/.config/divoom-control/links.json`:
+the id and the connect request that made each link, and the wall's slots) and
+replays it on startup, one panel at a time. The GUI's own relink stays — it
+is the client's path, and the two agree because the daemon skips a panel it
+already holds. The restore reaches for the radio, so it is the spawn that
+carries the Bluetooth grant (the app's client) that asks for it
+(`divoomd/src/links.rs`, `divoomd/tests/link_restore.rs`,
+`tests/test_daemon_link_restore_e2e.py`).
+
 ### Phase 3 — the daemon knows what each panel is
 
 **Goal:** one owner (the daemon) for each panel's model, size and failure
@@ -593,11 +604,11 @@ is judged against; when one moves, change it here in the same commit.
 
 | Measure | Value | Where it is enforced |
 |---|---|---|
-| Local gate | 29 `GOH_CI_STEPS` (incl. the browser suites, 2026-10-19) + `scripts/py_ci.sh` = 30 steps, run by `pre-push` on the pushed commit in a clean worktree | `.gatesrc`, `tools/gate.sh`, `scripts/ci_local.sh` |
-| Python tests (default) | 2078, 176 skipped (2026-10-20) | `pytest.ini` (`testpaths = tests`) |
+| Local gate | 30 `GOH_CI_STEPS` (incl. the browser suites and CI's Linux `--all-features` lint, 2026-10-20) + `scripts/py_ci.sh` = 31 steps, run by `pre-push` on the pushed commit in a clean worktree | `.gatesrc`, `tools/gate.sh`, `scripts/ci_local.sh` |
+| Python tests (default) | 2095, 176 skipped (2026-10-20) | `pytest.ini` (`testpaths = tests`) |
 | `examples/tests` | 1022 passed, 73 skipped (2026-10-19) | `scripts/py_ci.sh` |
 | Browser subset | 230 passed (2026-10-19, beta.39, `-n 8`; in the local gate and CI, through `scripts/browser_e2e.sh`) | `scripts/browser_e2e.sh` |
-| Rust tests | 644 (2026-10-19) | `cargo test --locked` |
+| Rust tests | 659 (2026-10-20) | `cargo test --locked` |
 | Python coverage floor | 89.0 (see P1.4) | `scripts/py_ci.sh` |
 | Rust coverage floor | 42 | `scripts/rust_coverage.sh` |
 | File length | 500 lines, allowlist empty | gates_of_heck structural layer |
@@ -627,6 +638,15 @@ monitor and app_updates; each belongs to the repo named.
 
 - **Restriction lints** (`unwrap_used`, `expect_used`, `panic`) are adopted
   nowhere. A correctness campaign with its own review, not a switch to flip.
+- **homebrew-tap's T2.3 (the cask's `pkill`) is UNBLOCKED as of 2026-10-20.**
+  The tap's cask stopped the app's helpers with a NAME PATTERN, because they
+  had no stable identity. They have one now: the app writes an identity file
+  per helper it spawns (`~/.config/divoom-control/run/divoomd.pid`,
+  `.../divoom-menubar.pid`), naming the process by pid AND by the moment it
+  started, so a stale identity from a crashed run names nothing and the
+  reader leaves an innocent process alone. The cask's change is the TAP's to
+  make; this repo's half (the identity, the quit path that clears it, and the
+  `pkill` this repo used for the same job) is done.
 - **PATH decides which build of a tool runs, and installers do not check.**
   `app_updates` shows the fix: after copying, ask the binary its identity and
   confirm `command -v` resolves to the copy just written. The user's `.zshrc`

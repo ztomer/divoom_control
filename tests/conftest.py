@@ -13,6 +13,7 @@ hardware tests are skipped by default. Run them against a real device with::
     pytest --run-hardware
 """
 
+import os
 import sys
 import threading
 import pathlib
@@ -141,6 +142,26 @@ def pytest_collection_modifyitems(config, items):
 # leaving it to surface as an unrelated mock/decode failure hundreds of tests
 # later. Scoped to this one thread name (unique to OwnerLoopMixin) so it can't
 # false-positive on unrelated threads (notification monitor, socket server...).
+@pytest.fixture(autouse=True)
+def _identities_stay_out_of_the_users_home(tmp_path_factory):
+    """The helpers' identity files go to a directory of this session's own.
+
+    The app records an identity for every helper it spawns, so a test that
+    spawns a daemon would otherwise write into the USER's
+    `~/.config/divoom-control/run/` -- and a test that kills it would leave a
+    stale identity there, pointing at a pid the OS may reuse. The identity
+    directory is overridable (DIVOOM_IDENTITY_DIR) for exactly this.
+    """
+    run_dir = tmp_path_factory.mktemp("helper-identities")
+    previous = os.environ.get("DIVOOM_IDENTITY_DIR")
+    os.environ["DIVOOM_IDENTITY_DIR"] = str(run_dir)
+    yield run_dir
+    if previous is None:
+        os.environ.pop("DIVOOM_IDENTITY_DIR", None)
+    else:
+        os.environ["DIVOOM_IDENTITY_DIR"] = previous
+
+
 @pytest.fixture(autouse=True)
 def _no_leaked_device_loop_threads():
     yield

@@ -98,7 +98,7 @@ def _patch_main_common(monkeypatch, tmp_path, *, fire_closing=True):
     # process-global pywebview class) — that decision itself is covered by the
     # dedicated _pywebview_1820_bug_present tests above.
     monkeypatch.setattr(gui_main, "_pywebview_1820_bug_present", lambda: False)
-    monkeypatch.setattr(gui_main, "_spawn_menubar_agent", lambda: None)
+    monkeypatch.setattr(gui_main, "_spawn_menubar_agent", lambda resolve: None)
     monkeypatch.setattr(gui_main, "_start_shutdown_follower", lambda w: None)
 
     import divoom_gui.daemon_bridge as daemon_bridge

@@ -6,6 +6,99 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **The helpers have a stable identity, and the daemon brings its panels back
+  after a restart.** Two facts that lived in a client's memory, or in a
+  process's NAME, and were lost the moment they were needed.
+
+  **The identity.** `divoomd` and `divoom-menubar` are bare binaries in their
+  own sessions: a `quit:` by bundle id cannot reach either of them (the
+  daemon's embedded `__TEXT,__info_plist` exists for the Bluetooth grant, not
+  for LaunchServices; the menubar has no plist at all), and the only way to
+  stop them was a NAME PATTERN — this repo's own
+  `pkill -f divoom-menubar`, and the homebrew cask's
+  `pkill -f Divoom.app/Contents/Frameworks/bin/divoom`. A pattern is not an
+  address: it reaches every process whose command line looks like the
+  helper's, including ones this app does not own.
+
+  The app now records an identity for every helper it spawns:
+
+      ~/.config/divoom-control/run/divoomd.pid
+      ~/.config/divoom-control/run/divoom-menubar.pid
+
+  each naming ONE process — its pid AND the moment it started. The start time
+  is what makes a stale identity safe: the OS reuses pids, so an identity left
+  behind by a crashed run would otherwise point at whatever process took that
+  pid next. With it, a stale identity resolves to NOTHING and the reader
+  leaves the innocent process alone. The app's quit path clears the identity
+  when it stops the helper, so nothing is left claiming a pid.
+
+  **This is user-visible:** the helpers are now findable and killable by name
+  (their identity files), which is exactly what the homebrew cask needs — the
+  tap's `pkill` and its `kill_by_name_allow.json` entry can go, and the
+  change it should make is in the hand-off below. It is also visible inside
+  this repo: `kill_by_name_allow.json` loses three entries (the app's own
+  `pkill` and the two that tested it), because a fixed kill takes its entry
+  with it.
+
+  - `divoom_client/helper_identity.py` (new): write, read, resolve, forget,
+    stop. The resolver is the whole point — it answers "is this pid still
+    that process?", not "is this pid alive?".
+  - `scripts/stop_helpers.sh` (new): the shell half, for the callers that
+    cannot run Python (an uninstall script, an installer).
+  - `divoom_client/daemon_client.py`: the daemon's identity is written where
+    it is spawned; `divoom_gui/gui_main.py`: the menu-bar agent's identity is
+    written where it is spawned, and the quit path stops it BY ITS IDENTITY
+    and clears the daemon's identity.
+  - `tests/test_helper_identity.py`, `tests/test_stop_helpers_script.py`:
+    the three properties — the identity REACHES the helper, it is CLEARED on
+    the quit path, and a STALE identity names nothing.
+
+  **The panels come back.** P2.7's remainder: the GUI's relink brings back
+  the panels the GUI itself linked, and nothing else. A panel a CLI or an MCP
+  client linked had no client left holding the memory, and a wall's slots
+  were never a link at all — so both stayed dark after a daemon restart until
+  a human clicked.
+
+  The daemon now writes down what it holds (`~/.config/divoom-control/links.json`:
+  the id and the connect request that made each link, plus the wall's slots)
+  and replays it on startup, the panels first and the wall last. The GUI's
+  own relink stays — it is the client's path, it works when the file is lost,
+  and the two agree because the daemon skips a panel it already holds.
+
+  Three things it is careful about: the list is written by the PROCESS, not
+  by every daemon value, so no test can write the user's list (or erase it);
+  a MOCK panel is written down only into a NAMED list, because a test double
+  must never end up in the user's list where every later start would go
+  looking for a device called `MOCK_MAC` on the radio; and the restore
+  reaches for the radio, which kills a daemon without the Bluetooth grant
+  (SIGABRT, no message) — so the spawn that carries the grant asks for the
+  restore, and a daemon started by hand from a shell does not reach for the
+  radio on its own.
+
+  - `divoomd/src/links.rs` (new), `divoomd/tests/link_restore.rs` (new),
+    `tests/test_daemon_link_restore_e2e.py` (new, over a real socket and a
+    real daemon process). Red with the restore switched off (2 of 4 and 1 of
+    2), green with it on.
+
+- **CI's Linux `--all-features` lint ran in CI and NOWHERE ELSE.** The Linux
+  half of the daemon — `ble` → btleplug → bluer → dbus → libdbus-sys — is only
+  ever compiled on Linux, and CI's `rust-core` job was the only thing that
+  compiled it with the feature ON. The local gate cross-built the NO-BLE half
+  (zig cannot supply the `dbus-1.pc` the `ble` feature needs), so a
+  Linux-only clippy finding was invisible until a push went red on the runner:
+  CI's Linux lint was red on 19 of 20 main runs.
+
+  `scripts/check_linux_all_features.sh` runs CI's exact clippy line —
+  `cargo clippy -p divoomd --all-targets --all-features -- -D warnings` —
+  inside a Linux container with the same `libdbus-1-dev` + `pkg-config` CI
+  installs, and `tests/test_linux_all_features_parity.py` pins the two
+  together (the flags, and the step's presence in `GOH_CI_STEPS`). It FAILS
+  rather than skipping when Docker is absent; `DIVOOM_SKIP_LINUX_ALL_FEATURES=1`
+  is the loud opt-out.
+
+  Proven: a Linux-only unused import is GREEN under the macOS clippy and RED
+  under this gate.
+
 - **A description of what the panel shows is a claim about ANOTHER program's
   renderer, and it went stale silently.** The hardware packet used to carry a
   hand-written sentence per check, saying what the operator should see. The

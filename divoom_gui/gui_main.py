@@ -120,12 +120,23 @@ def _resolve_bundled_binary(name: str) -> "str | None":
 
 
 # The lock + "focus the incumbent" pair lives in divoom_gui.single_instance;
-# re-exported under the historical private names so this module's callers (and
-# the monkeypatching in tests/test_gui_main_main.py) keep addressing gui_main.
+# re-exported under the historical private names so this module's callers
+# (and the monkeypatching in tests/test_gui_main_main.py) keep addressing
+# gui_main.
 from divoom_gui.single_instance import (  # noqa: E402
     ensure_single_instance as _ensure_single_instance,
     focus_running_gui as _focus_running_gui,
     running_gui_pid as _running_gui_pid,
+)
+
+# The menu-bar agent's lifecycle (find it, launch it, stop it) lives in
+# divoom_gui.menubar_agent — it is a bare binary in its own session with an
+# identity of its own, and none of that is the dashboard's business. The
+# spawn takes this module's binary resolver and its own path, so the agent
+# module does not have to know how the app is packaged.
+from divoom_gui.menubar_agent import (  # noqa: E402
+    _spawn_menubar_agent,
+    _terminate_menubar_agent,
 )
 
 
@@ -249,7 +260,7 @@ def main():
                                "UI will auto-reconnect / offer a Reconnect banner.")
         except Exception as e:
             logger.warning(f"eager daemon spawn failed: {e}")
-    _spawn_menubar_agent()
+    _spawn_menubar_agent(_resolve_bundled_binary)
     # Prime TCC prompts up front from the foreground app — esp. Automation
     # (AppleScript control of Music/Spotify) for the cover-art widget, whose
     # prompt was otherwise raised invisibly by the headless daemon.
@@ -281,6 +292,9 @@ def main():
                 from divoom_client.daemon_protocol import DaemonClient, DEFAULT_SOCKET_PATH
                 logger.info(f"{reason}; stopping daemon (shared lifecycle).")
                 DaemonClient(DEFAULT_SOCKET_PATH, timeout=1.0).shutdown()
+                # The daemon is on its way out: its identity goes with it, so
+                # nothing is left pointing at a pid the OS may reuse.
+                _forget_daemon_identity()
             # The native menu bar doesn't follow the daemon's shutdown broadcast,
             # so terminate it explicitly (unless the user opted to keep the tray).
             if should_quit_menubar_on_exit(keep_alive, get_quit_menubar_on_exit()):
@@ -398,95 +412,18 @@ def _start_shutdown_follower(window) -> None:
     threading.Thread(target=_run, daemon=True, name="daemon-event-follower").start()
 
 
-def _resolve_menubar_binary() -> "str | None":
-    """Locate the native Rust menubar binary (divoom-menubar).
+def _forget_daemon_identity() -> None:
+    """Drop the daemon's identity: it is stopping.
 
-    Bundle and env override first (`_resolve_bundled_binary` knows this app's
-    packaging layouts and the `DIVOOM_MENUBAR_BINARY` name); the dev tree is
-    resolved BY VERSION through the shared resolver.
-
-    That last part is not cosmetic. This function used to walk
-    `("release", "debug")` and take the first that existed — the same
-    stale-`target/release` trap fixed for `divoomd` in v0.28.3, still live here
-    because that fix was applied per-instance instead of swept for siblings.
-    Nothing in this repo rebuilds `target/release`, so a developer running the
-    GUI from source got whatever menubar was last shipped, indefinitely.
+    The identity is a claim that "this pid is our daemon". Once the daemon is
+    on its way out the claim is stale, and a stale claim is worse than none:
+    the next reader would have to check it to discover it says nothing.
     """
-    bundled = _resolve_bundled_binary("divoom-menubar")
-    if bundled:
-        return bundled
-    from divoom_client import binary_resolver
-
-    found = binary_resolver.resolve("divoom-menubar")
-    return str(found) if found else None
-
-
-def _spawn_menubar_agent() -> None:
-    """Best-effort: launch the native Rust menu-bar agent (divoom-menubar)
-    alongside the GUI so its status item appears on launch. The agent talks to the
-    daemon over the socket and relaunches THIS GUI on demand, so we hand it our
-    launch command via env (DIVOOM_GUI_PYTHON/SCRIPT). Detached + dupe-guarded;
-    never blocks or fails the GUI if it can't start. macOS only."""
-    if sys.platform != "darwin":
-        return
     try:
-        import subprocess
-        # Don't spawn a second status item if one is already running. Match the
-        # EXACT process name (-x), not a loose command-line substring (-f): under
-        # LaunchServices (`open` / Finder / Dock) some coalition process
-        # transiently carries "divoom-menubar" in its args, so `-f` false-matched
-        # and the agent never launched (no tray icon on a normal launch). `-x`
-        # matches only a real `divoom-menubar` process, path-independent.
-        existing = subprocess.run(
-            ["pgrep", "-x", "divoom-menubar"],
-            capture_output=True, text=True, stdin=subprocess.DEVNULL,
-        )
-        if existing.returncode == 0 and existing.stdout.strip():
-            logger.info("Menu-bar agent already running; not spawning another.")
-            return
-        binary = _resolve_menubar_binary()
-        if not binary:
-            logger.warning("Native menu-bar binary (divoom-menubar) not found; "
-                           "build it with ./build.sh. No menu-bar this session.")
-            return
-        # Tell the agent how to relaunch this GUI from "Launch Dashboard".
-        env = dict(os.environ)
-        if getattr(sys, "frozen", False):
-            # PyInstaller .app: sys.executable IS the GUI launcher — run it alone
-            # (no script; the agent runs DIVOOM_GUI_PYTHON with no args).
-            env["DIVOOM_GUI_PYTHON"] = sys.executable
-            env["DIVOOM_GUI_SCRIPT"] = ""
-        else:
-            from divoom_client.daemon_client import bundle_python
-            env["DIVOOM_GUI_PYTHON"] = bundle_python() or sys.executable
-            env["DIVOOM_GUI_SCRIPT"] = str(Path(__file__).resolve())
-        subprocess.Popen(
-            [binary],
-            env=env,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-        logger.info("Launched native Rust menu-bar agent (divoom-menubar).")
+        from divoom_client import helper_identity
+        helper_identity.forget(helper_identity.DAEMON)
     except Exception as e:
-        logger.warning(f"Could not launch menu-bar agent: {e}")
-
-
-def _terminate_menubar_agent() -> None:
-    """Terminate the native menu-bar agent (divoom-menubar) on a shared-lifecycle
-    quit. It's spawned detached and does NOT self-terminate on the daemon's
-    shutdown broadcast, so without this it orphans to launchd — a stale tray icon
-    that also survives a `brew upgrade`. Best-effort; macOS only; never raises.
-    Gated by :func:`lifecycle_config.should_quit_menubar_on_exit`."""
-    if sys.platform != "darwin":
-        return
-    try:
-        import subprocess
-        subprocess.run(["pkill", "-f", "divoom-menubar"],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                       check=False, timeout=3, stdin=subprocess.DEVNULL)
-        logger.info("Terminated menu-bar agent (shared-lifecycle quit).")
-    except Exception as e:
-        logger.debug(f"menu-bar terminate skipped: {e}")
+        logger.debug(f"daemon identity not cleared: {e}")
 
 
 if __name__ == "__main__":

@@ -37,6 +37,7 @@ from divoom_client.daemon_protocol import (
 )
 
 from divoom_client import binary_resolver
+from divoom_client import helper_identity
 from divoom_client.socket_failure import explain_daemon_failure
 from divoom_client.daemon_version import (  # noqa: F401  (re-exported)
     _stop_stale_daemon,
@@ -231,12 +232,15 @@ def spawn_daemon(
     # __TEXT,__info_plist).
     if sys.platform == "darwin":
         try:
-            disclaim_env = dict(spawn_env)
-            pid = _spawn_disclaimed_macos(cmd, log_path, env=disclaim_env)
+            pid = _spawn_disclaimed_macos(cmd, log_path, env=dict(spawn_env))
             logger.info("Spawned daemon (TCC-disclaimed) pid=%s", pid)
-            return pid
         except Exception as e:
             logger.warning("Disclaimed spawn failed (%s); falling back to Popen.", e)
+        else:
+            # Recording the identity is bookkeeping: it must never change how
+            # the daemon was spawned, so it is outside the spawn's own try.
+            _record_identity(pid, rust_bin)
+            return pid
 
     try:
         log_fh = open(log_path, "a", buffering=1)
@@ -244,10 +248,27 @@ def spawn_daemon(
     except OSError:
         _out = _err = subprocess.DEVNULL
     logger.info("Spawning daemon (Popen, detach=%s): %s", detach, " ".join(cmd))
-    return subprocess.Popen(
+    proc = subprocess.Popen(
         cmd, stdout=_out, stderr=_err, stdin=subprocess.DEVNULL,
         start_new_session=detach, env=spawn_env,
     )
+    pid = getattr(proc, "pid", None)
+    if isinstance(pid, int):
+        _record_identity(pid, rust_bin)
+    return proc
+
+
+def _record_identity(pid: int, command: str) -> None:
+    """Write the daemon's identity, so it can be addressed by it.
+
+    The daemon is a bare binary: `quit:` cannot reach it and no name pattern
+    should have to. The identity file names the process exactly (pid + start
+    time), and the app's quit path removes it.
+    """
+    try:
+        helper_identity.write(helper_identity.DAEMON, pid, command)
+    except Exception as e:
+        logger.warning("Could not record the daemon's identity: %s", e)
 
 
 def ensure_daemon(

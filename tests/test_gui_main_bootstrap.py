@@ -32,6 +32,7 @@ if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
 from divoom_gui import gui_main  # noqa: E402
+from divoom_gui import menubar_agent  # noqa: E402  (the agent's own lifecycle)
 from divoom_gui import single_instance  # noqa: E402  (gui_main re-exports these)
 
 
@@ -248,8 +249,8 @@ def test_ensure_single_instance_false_when_locked(tmp_path, monkeypatch):
 # ─────────────────────────────── _resolve_menubar_binary ─────────────────────
 
 def test_resolve_menubar_binary_uses_bundled(monkeypatch):
-    monkeypatch.setattr(gui_main, "_resolve_bundled_binary", lambda name: "/bundled/divoom-menubar")
-    assert gui_main._resolve_menubar_binary() == "/bundled/divoom-menubar"
+    resolve = lambda name: "/bundled/divoom-menubar"  # noqa: E731
+    assert menubar_agent._resolve_menubar_binary(resolve) == "/bundled/divoom-menubar"
 
 
 def _menubar_stub(path, version: str | None):
@@ -275,12 +276,11 @@ def test_resolve_menubar_binary_dev_tree(monkeypatch, tmp_path):
     """
     from divoom_client import binary_resolver
 
-    monkeypatch.setattr(gui_main, "_resolve_bundled_binary", lambda name: None)
     monkeypatch.setattr(binary_resolver, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(binary_resolver, "_expected_version", lambda: "9.9.9")
     good = _menubar_stub(tmp_path / "target" / "release" / "divoom-menubar", "9.9.9")
 
-    assert gui_main._resolve_menubar_binary() == str(good)
+    assert menubar_agent._resolve_menubar_binary(lambda name: None) == str(good)
 
 
 def test_resolve_menubar_binary_ignores_a_stale_dev_tree_build(monkeypatch, tmp_path):
@@ -293,33 +293,31 @@ def test_resolve_menubar_binary_ignores_a_stale_dev_tree_build(monkeypatch, tmp_
     """
     from divoom_client import binary_resolver
 
-    monkeypatch.setattr(gui_main, "_resolve_bundled_binary", lambda name: None)
     monkeypatch.setattr(binary_resolver, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(binary_resolver, "_expected_version", lambda: "9.9.9")
     _menubar_stub(tmp_path / "target" / "release" / "divoom-menubar", "0.27.0")
 
-    assert gui_main._resolve_menubar_binary() is None
+    assert menubar_agent._resolve_menubar_binary(lambda name: None) is None
 
 
 def test_resolve_menubar_binary_not_found(monkeypatch, tmp_path):
     from divoom_client import binary_resolver
 
-    monkeypatch.setattr(gui_main, "_resolve_bundled_binary", lambda name: None)
     monkeypatch.setattr(binary_resolver, "REPO_ROOT", tmp_path)
 
-    assert gui_main._resolve_menubar_binary() is None
+    assert menubar_agent._resolve_menubar_binary(lambda name: None) is None
 
 
 # ─────────────────────────────── _spawn_menubar_agent ────────────────────────
 
 def test_spawn_menubar_agent_noop_on_non_darwin(monkeypatch):
-    monkeypatch.setattr(gui_main.sys, "platform", "linux")
+    monkeypatch.setattr(menubar_agent.sys, "platform", "linux")
     monkeypatch.setattr(subprocess, "run", lambda *a, **kw: (_ for _ in ()).throw(AssertionError("must not run")))
-    gui_main._spawn_menubar_agent()  # must return immediately, no assertion raised
+    menubar_agent._spawn_menubar_agent(gui_main._resolve_bundled_binary)
 
 
 def test_spawn_menubar_agent_already_running_skips_spawn(monkeypatch):
-    monkeypatch.setattr(gui_main.sys, "platform", "darwin")
+    monkeypatch.setattr(menubar_agent.sys, "platform", "darwin")
 
     class _Match:
         returncode = 0
@@ -327,82 +325,93 @@ def test_spawn_menubar_agent_already_running_skips_spawn(monkeypatch):
 
     monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _Match())
     monkeypatch.setattr(subprocess, "Popen", lambda *a, **kw: (_ for _ in ()).throw(AssertionError("must not spawn")))
-    gui_main._spawn_menubar_agent()  # no assertion raised => Popen never called
+    menubar_agent._spawn_menubar_agent(gui_main._resolve_bundled_binary)
 
 
 def test_spawn_menubar_agent_binary_not_found_warns(monkeypatch):
-    monkeypatch.setattr(gui_main.sys, "platform", "darwin")
+    monkeypatch.setattr(menubar_agent.sys, "platform", "darwin")
 
     class _NoMatch:
         returncode = 1
         stdout = ""
 
     monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _NoMatch())
-    monkeypatch.setattr(gui_main, "_resolve_menubar_binary", lambda: None)
+    monkeypatch.setattr(menubar_agent, "_resolve_menubar_binary", lambda resolve: None)
     monkeypatch.setattr(subprocess, "Popen", lambda *a, **kw: (_ for _ in ()).throw(AssertionError("must not spawn")))
-    gui_main._spawn_menubar_agent()  # no assertion raised => Popen never called
+    menubar_agent._spawn_menubar_agent(gui_main._resolve_bundled_binary)
 
 
 def test_spawn_menubar_agent_frozen_uses_executable(monkeypatch):
-    monkeypatch.setattr(gui_main.sys, "platform", "darwin")
-    monkeypatch.setattr(gui_main.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(menubar_agent.sys, "platform", "darwin")
+    monkeypatch.setattr(menubar_agent.sys, "frozen", True, raising=False)
 
     class _NoMatch:
         returncode = 1
         stdout = ""
 
     monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _NoMatch())
-    monkeypatch.setattr(gui_main, "_resolve_menubar_binary", lambda: "/bin/divoom-menubar")
+    monkeypatch.setattr(menubar_agent, "_resolve_menubar_binary", lambda resolve: "/bin/divoom-menubar")
     seen = {}
 
     def fake_popen(args, env=None, **kw):
         seen["args"] = args
         seen["env"] = env
-        return object()
+        return types.SimpleNamespace(pid=4321)
 
     monkeypatch.setattr(subprocess, "Popen", fake_popen)
-    gui_main._spawn_menubar_agent()
+    menubar_agent._spawn_menubar_agent(gui_main._resolve_bundled_binary)
 
     assert seen["env"]["DIVOOM_GUI_PYTHON"] == sys.executable
     assert seen["env"]["DIVOOM_GUI_SCRIPT"] == ""
 
 
 def test_spawn_menubar_agent_swallows_exceptions(monkeypatch):
-    monkeypatch.setattr(gui_main.sys, "platform", "darwin")
+    monkeypatch.setattr(menubar_agent.sys, "platform", "darwin")
 
     def raiser(*a, **kw):
         raise OSError("pgrep missing")
 
     monkeypatch.setattr(subprocess, "run", raiser)
-    gui_main._spawn_menubar_agent()  # must not raise
+    menubar_agent._spawn_menubar_agent(gui_main._resolve_bundled_binary)
 
 
 # ────────────────────────────── _terminate_menubar_agent ─────────────────────
 
 def test_terminate_menubar_agent_noop_on_non_darwin(monkeypatch):
-    monkeypatch.setattr(gui_main.sys, "platform", "linux")
+    monkeypatch.setattr(menubar_agent.sys, "platform", "linux")
     monkeypatch.setattr(subprocess, "run", lambda *a, **kw: (_ for _ in ()).throw(AssertionError("must not run")))
-    gui_main._terminate_menubar_agent()
+    menubar_agent._terminate_menubar_agent()
 
 
-def test_terminate_menubar_agent_calls_pkill(monkeypatch):
-    monkeypatch.setattr(gui_main.sys, "platform", "darwin")
+def test_terminate_menubar_agent_stops_the_agent_by_its_identity(monkeypatch,
+                                                                    tmp_path):
+    """The agent is stopped by its identity, not by a name pattern.
+
+    `pkill -f divoom-menubar` reached every process whose COMMAND LINE looked
+    like the agent's -- including ones this app does not own. The identity
+    names one process: the pid the app recorded, checked against the process's
+    start time.
+    """
+    monkeypatch.setenv("DIVOOM_IDENTITY_DIR", str(tmp_path))
+    monkeypatch.setattr(menubar_agent.sys, "platform", "darwin")
+    from divoom_client import helper_identity
     seen = {}
 
-    def fake_run(args, **kw):
-        seen["args"] = args
-        return types.SimpleNamespace(returncode=0)
+    def fake_stop(name):
+        seen["name"] = name
+        return True
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
-    gui_main._terminate_menubar_agent()
-    assert seen["args"] == ["pkill", "-f", "divoom-menubar"]
+    monkeypatch.setattr(helper_identity, "stop", fake_stop)
+    menubar_agent._terminate_menubar_agent()
+    assert seen["name"] == helper_identity.MENUBAR
 
 
 def test_terminate_menubar_agent_swallows_exceptions(monkeypatch):
-    monkeypatch.setattr(gui_main.sys, "platform", "darwin")
+    monkeypatch.setattr(menubar_agent.sys, "platform", "darwin")
 
     def raiser(*a, **kw):
-        raise subprocess.TimeoutExpired(cmd="pkill", timeout=3)
+        raise OSError("identity unreadable")
 
-    monkeypatch.setattr(subprocess, "run", raiser)
-    gui_main._terminate_menubar_agent()  # must not raise
+    from divoom_client import helper_identity
+    monkeypatch.setattr(helper_identity, "stop", raiser)
+    menubar_agent._terminate_menubar_agent()  # must not raise
