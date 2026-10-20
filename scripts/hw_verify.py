@@ -25,6 +25,15 @@ UNKNOWN, never PASS — if stdin is not a terminal the packet refuses to invent
 verdicts. `--self-test` exists so the instrument is calibrated before its
 answers are trusted: it drives a check that MUST fail and reports whether the
 packet noticed.
+
+**Exit codes are the verdict.** 0 = every check that ran was answered (or the
+self-test is calibrated), 1 = FAIL (a check failed, or the self-test could not
+report a failure), 2 = the daemon is not there or the arguments are wrong,
+3 = PARTIAL (a verdict was UNKNOWN or SKIP, or the self-test has one branch
+proven and one still owed). A branch that RAISES is a FAIL with a non-zero
+exit, never a warning: the neighbours of this file reported a NameError as
+`⚠` and exited 0, so a run that had found four panels was announced as a
+clean run whose reporting had failed.
 """
 from __future__ import annotations
 
@@ -327,11 +336,31 @@ def run_packet(client, checks, interactive, results, ctx=None):
 
 
 def self_test(client) -> int:
-    """P2.1 — prove the packet can say NO before trusting it when it says yes."""
+    """P2.1 — prove the packet can say NO before trusting it when it says yes.
+
+    The exit code IS the verdict: 0 = CALIBRATED (the packet rejects a bogus
+    call AND records it as FAIL, so it would exit non-zero because of it),
+    1 = FAIL (it cannot report a failure: a bogus call came back successful,
+    a branch raised, or the failure was not recorded — nothing it says can be
+    trusted), 3 = PARTIAL (one branch proven, one still owed: with no device
+    the daemon refuses at the no-device precondition, so "the packet rejects
+    an invalid method" is still untested). 3 is what the roadmap documents:
+    PARTIAL until a device is connected, 0 once it is.
+    """
     section("self-test: can this packet report FAILURE?")
     probe = CallCheck(id="_probe", title="deliberately invalid device call",
-                      look="n/a", method="definitely.not.a.real.method", args=[])
-    fired, detail = probe.drive(client, {})
+                      look="n/a", method="definitely.not.a.real.method", args=[],
+                      needs_device=False)
+    try:
+        fired, detail = probe.drive(client, {})
+    except Exception as exc:
+        # A branch that RAISES is a FAILURE, never a warning and never an
+        # unhandled crash: the packet cannot report a failure it did not
+        # survive.
+        err(f"the probe itself raised: {type(exc).__name__}: {exc}")
+        info("  A branch that raises is a FAIL. The packet is not calibrated,")
+        info("  and nothing it reports can be trusted until this is fixed.")
+        return 1
     if fired:
         err("an invalid device_call was reported as SUCCESS")
         info(f"  reply: {detail}")
@@ -339,6 +368,23 @@ def self_test(client) -> int:
         info("  one, so none of its PASS verdicts mean anything. Fix this")
         info("  before trusting a single result.")
         return 1
+
+    # The daemon's refusal is not the whole property. The property is that
+    # the PACKET records the refusal as a FAIL and would exit non-zero
+    # because of it — so drive the probe through the packet's own machinery
+    # and read the verdict it produces, not the daemon's answer.
+    results: list[Result] = []
+    run_packet(client, [probe], False, results)
+    recorded = [r for r in results if r.verdict == FAIL]
+    if not recorded:
+        err("the packet did not record the bogus call as a FAIL")
+        info(f"  verdicts: {[r.verdict for r in results]}")
+        info("  A packet that swallows a failure reports success it never")
+        info("  earned. Fix that before trusting a single result.")
+        return 1
+    ok("the packet records a failed call as FAIL, and its exit code is non-zero")
+    info(f"  recorded: {recorded[0].check} → {recorded[0].verdict}")
+
     connected, cdetail, _dev = device_connected(client)
     # WHY it failed matters as much as THAT it failed. With no device attached
     # the daemon refuses at the precondition before it ever looks at the method
@@ -360,7 +406,7 @@ def self_test(client) -> int:
     else:
         ok(f"no device connected ({cdetail}) — device checks would record FAIL")
 
-    if precondition_refusal and not connected:
+    if precondition_refusal:
         warn("PARTIAL calibration: one branch proven, one still owed.")
         return 3
     return 0
@@ -433,7 +479,17 @@ def main() -> int:
             [r.__dict__ for r in results], indent=2), encoding="utf-8")
         ok(f"report written to {args.out}")
 
-    return 1 if tally.get(FAIL) else 0
+    # The exit code IS the verdict, and it follows the same contract as
+    # --self-test: 1 = FAIL, 3 = PARTIAL (nothing was proven), 0 = every check
+    # that ran was answered. A run with nobody watching records every verdict
+    # UNKNOWN, and exiting 0 there would be exactly the silent pass this
+    # packet exists to refuse.
+    if tally.get(FAIL):
+        return 1
+    if tally.get(UNKNOWN) or tally.get(SKIP):
+        warn("PARTIAL — at least one check was not answered; nothing was proven")
+        return 3
+    return 0
 
 
 if __name__ == "__main__":

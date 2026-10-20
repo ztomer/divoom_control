@@ -31,6 +31,12 @@ sys.path.insert(0, str(REPO / "scripts"))
 hw = pytest.importorskip("hw_verify")
 
 
+@pytest.fixture(autouse=True)
+def _no_settle_sleep(monkeypatch):
+    """The packet's settle times are for a real panel, not for a fake client."""
+    monkeypatch.setattr(hw.time, "sleep", lambda seconds: None)
+
+
 class FakeClient:
     """Enough DaemonClient for the packet, with scriptable replies."""
 
@@ -137,6 +143,63 @@ def test_self_test_fails_loudly_if_a_bogus_call_reports_success():
     client = FakeClient(status={"connected": True, "mac": "AA:BB"},
                         call_reply={"success": True})
     assert hw.self_test(client) == 1
+
+
+def test_self_test_fails_loudly_when_the_probe_ITSELF_raises():
+    """A branch that RAISES is a FAIL — never a warning, never a crash.
+
+    This is the shape of the defect that started all of it: the smoke script
+    caught the NameError raised while printing a device, reported it as a
+    warning, and exited 0. A self-test that crashes is better than one that
+    lies, but a self-test that reports FAIL with a non-zero exit is what the
+    contract says: 1 = the instrument is broken.
+    """
+    class Boom(FakeClient):
+        def device_call(self, method, args=None):
+            raise RuntimeError("socket closed")
+
+    client = Boom(status={"connected": True, "mac": "AA:BB"})
+    assert hw.self_test(client) == 1
+
+
+def test_the_self_test_proves_the_PACKET_records_the_failure():
+    """Not only that the daemon refused — that the packet wrote down a FAIL.
+
+    The daemon's answer is the daemon's business. The property the packet
+    claims is 'I can report a failure', and that is only true if the verdict
+    lands in the results and the exit code follows it.
+    """
+    client = FakeClient(status={"connected": True, "mac": "AA:BB"},
+                        call_reply={"success": False, "error": "unknown method 'x'"})
+    assert hw.self_test(client) == 0
+
+    results = []
+    probe = hw.CallCheck(id="_probe", title="t", look="l",
+                         method="definitely.not.a.real.method", args=[],
+                         needs_device=False)
+    hw.run_packet(client, [probe], interactive=False, results=results)
+    assert [r.verdict for r in results] == [hw.FAIL], results
+
+
+def test_the_run_exits_nonzero_when_a_check_fails(monkeypatch):
+    """A FAIL in the results must be a non-zero exit, not a red line."""
+    client = FakeClient(status={"connected": True, "mac": "AA:BB"},
+                        call_reply={"success": False, "error": "unknown method"})
+    monkeypatch.setattr(hw, "require_daemon", lambda path: client)
+    monkeypatch.setattr(hw.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(sys, "argv", ["hw_verify.py"])
+    assert hw.main() == 1
+
+
+def test_the_run_is_PARTIAL_when_nobody_was_watching(monkeypatch):
+    """No tty means every LOOK is UNKNOWN — and a run that proved nothing
+    must not exit 0. The silent pass is the thing this packet refuses."""
+    client = FakeClient(status={"connected": True, "mac": "AA:BB"},
+                        call_reply={"success": True})
+    monkeypatch.setattr(hw, "require_daemon", lambda path: client)
+    monkeypatch.setattr(hw.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(sys, "argv", ["hw_verify.py"])
+    assert hw.main() == 3
 
 
 def test_every_check_states_what_to_look_at():
