@@ -96,6 +96,12 @@ jobs:
         run: python3 tools/check_weather_parity.py
       - name: hotchannel.json's two parsers agree (R72)
         run: python3 tools/check_hotchannel_parity.py
+      # The launchd gate's LIVE half needs a macOS LaunchAgents dir, so this
+      # step runs the half that runs everywhere: the tool's own self-test,
+      # which fails unless the checker can see a dead job. The live check runs
+      # in the local pre-push gate (and on this repo's own machine).
+      - name: A launchd job that points at a deleted file is a finding
+        run: python3 tools/check_launchd_jobs.py
       - name: Everything the daemon owns lives in the daemon (R72)
         run: python3 tools/capability_census.py
       - name: The GUI is a client, not a second implementation (R70)

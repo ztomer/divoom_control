@@ -6,6 +6,75 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **The daily job that pointed at a file deleted 36 days ago is gone, and the
+  class of failure it belonged to is now a finding instead of a log line.**
+
+  **What happened.** `com.divoom.monthlybest` ran
+  `divoom_lib/monthly_best_daemon.py` every 86400 s. Commit `6a4f91a`
+  (2026-09-14, v0.38.0) moved that file to
+  `examples/divoom_legacy/monthly_best_daemon.py`, and the job kept running
+  against the empty path: exit status 2, 29 × "can't open file ... [Errno 2]
+  No such file or directory", last written 2026-10-19 20:50, into a log under
+  `test_reports/` that nobody read. The estate-wide survey found it on
+  2026-10-20 (the servers ROADMAP's E44).
+
+  **Why no gate in this repo could have seen it.** The job's definition lived
+  in `~/Library/LaunchAgents/` — outside the checkout — installed by
+  `scripts/install_daemon.sh`, which `34045c0` (2026-08-30) deleted from this
+  repo as superseded, with the reasoning written down at the time: "divoomd
+  owns monthly-best now (DIVOOMD_MONTHLY_BEST=1) ... a future user following
+  the script would have run reference-only code as a background service". The
+  Mac kept the installed copy; the repo forgot the job. A file the repo does
+  not hold is a file no gate in the repo can fail over.
+
+  **The job was deleted, not repointed.** The script it ran is reference-only
+  now (v0.38.0 retired the direct-to-device library), and its last execution
+  failed anyway — "BLE Communication error for None: No Divoom device found
+  with name substring 'Timoo'". The Rust implementation of the same work,
+  `divoomd/src/monthly_best.rs`, is not a program a plist can point at: it is
+  a TASK inside the daemon, opt-in through the daemon's environment, and
+  driven by the targets in `divoom_lib/hotchannel_config.py`'s file. A plist
+  that started a second daemon would fight the installed app's own daemon for
+  the Bluetooth radio, and with an empty `targets` list it would push nothing.
+  So the job was unloaded and its plist removed, with the original kept beside
+  it as `com.divoom.monthlybest.plist.bak.2026-10-20`.
+
+  **What is not lost.** The panel the job pushed to — Timoo-light-4
+  (`f90d2cc9-420e-65f9-9e06-f9554470fced`) — is present, and was on the bench
+  on 2026-10-19/20. The capability itself belongs to the app (Settings →
+  Routines → Auto-Sync), not to a launchd job. Whether the estate still wants
+  a scheduled gallery push is the owner's call, and it is now a question with
+  the evidence attached (`docs/ROADMAP.md` P7.3) rather than a job that fails
+  into the void.
+
+  **The gate, and the declaration that goes with it.** `docs/launchd_jobs.json`
+  (new) is this repo's declaration of the launchd jobs it installs, with
+  repo-relative paths, and it is EMPTY — truthfully: this repo installs no
+  launchd job. The point of declaring them here is that a job whose definition
+  lived outside the repo is a job no gate in CI can fail over, which is
+  exactly what happened. `tools/check_launchd_jobs.py` (new) holds three
+  things together: the declaration is REAL (every path a declared job names
+  exists in the checkout — the check that would have turned `6a4f91a` red),
+  the declaration is TRUE (an installed agent of this repo's that nobody
+  declared is a finding — the 2026-09-14 shape), and the job is ALIVE (a
+  declared or installed job of this repo's must not be dead, and must not name
+  a file that is gone). It is calibrated before it is trusted: it runs ITSELF
+  over fixtures — a healthy job, a job naming a deleted file, a job whose last
+  run failed, and an undeclared job — and fails unless it flags exactly the
+  three bad ones. The live half reads one machine's LaunchAgents, so the
+  self-test is what runs in CI — a step that cannot fail is not a gate. Fed
+  the actual 36-day job from its backup, it reports all three findings.
+
+  - `docs/launchd_jobs.json` (new): this repo's declaration of its launchd
+    jobs — the thing that was missing.
+  - `tools/check_launchd_jobs.py` (new): the checker, its scope, and its
+    self-test.
+  - `tests/test_check_launchd_jobs.py` (new): the both-directions proof — the
+    broken job is a finding, the healthy job is not, another repo's dead job
+    is a warning rather than a failure, and the self-test can itself fail.
+  - `.gatesrc`, `.github/workflows/tests.yml`: the gate is a step of the local
+    pre-push gate and of CI.
+
 - **The helpers have a stable identity, and the daemon brings its panels back
   after a restart.** Two facts that lived in a client's memory, or in a
   process's NAME, and were lost the moment they were needed.
