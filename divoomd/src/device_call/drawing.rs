@@ -17,11 +17,12 @@ use crate::wire::le16;
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Map, Value};
 
+use super::link_gone;
 use super::CallCtx;
 use crate::daemon::DeviceTransport;
 use crate::protocol::{
     err_code,
-    ErrorCode::{BadRequest, DeviceFailed, UnknownCommand},
+    ErrorCode::{BadRequest, UnknownCommand},
 };
 
 fn kw_i64(kw: Option<&Map<String, Value>>, name: &str) -> Option<i64> {
@@ -42,7 +43,7 @@ fn kw_bytes(kw: Option<&Map<String, Value>>, name: &str) -> Vec<u8> {
 async fn send(dev: &DeviceTransport, cmd: u8, p: &[u8], label: &str) -> Value {
     match dev.send_command(cmd, p, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("{label} failed: {e}")),
+        Err(e) => link_gone(label, &e),
     }
 }
 

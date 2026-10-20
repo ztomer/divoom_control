@@ -340,49 +340,6 @@ async fn optional_integers_default_when_absent() {
     );
 }
 
-#[tokio::test]
-async fn the_read_tools_map_daemon_results_into_their_own_shape() {
-    // get_device_state makes five calls; a read tool that silently returns
-    // nulls is how a client shows a device as blank when it is merely
-    // unreachable.
-    let daemon = FakeDaemon::start(json!({ "value": 42 }), None).await;
-    let state = call_tool("get_device_state", &json!({}), &daemon.target)
-        .await
-        .expect("state");
-    for key in [
-        "volume",
-        "brightness",
-        "light_mode",
-        "screen_orientation",
-        "mirror",
-    ] {
-        assert_eq!(
-            state[key],
-            json!({ "value": 42 }),
-            "{key} lost its result: {state}"
-        );
-    }
-    assert_eq!(daemon.requests().len(), 5);
-}
-
-#[tokio::test]
-async fn an_unreachable_daemon_yields_nulls_rather_than_a_false_reading() {
-    // The distinction that matters: absent data must be visibly absent, not
-    // zero. Zero is a real volume.
-    let state = call_tool("get_device_state", &json!({}), &unreachable())
-        .await
-        .expect("a read against no daemon still returns its shape");
-    for key in [
-        "volume",
-        "brightness",
-        "light_mode",
-        "screen_orientation",
-        "mirror",
-    ] {
-        assert_eq!(state[key], json!(null), "{key} must be null, not a default");
-    }
-}
-
 #[test]
 fn catalog_has_all_twenty_five_tools() {
     let c = catalog();

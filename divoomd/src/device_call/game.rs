@@ -1,8 +1,6 @@
+use super::link_gone;
 use super::CallCtx;
-use crate::protocol::{
-    err_code,
-    ErrorCode::{DeviceFailed, UnknownCommand},
-};
+use crate::protocol::{err_code, ErrorCode::UnknownCommand};
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 use std::time::Duration;
@@ -39,7 +37,7 @@ async fn show_game(ctx: CallCtx<'_>) -> Value {
     };
     match dev.send_command(0xa0, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("show_game failed: {e}")),
+        Err(e) => link_gone("show_game", &e),
     }
 }
 
@@ -48,7 +46,7 @@ async fn hide_game(ctx: CallCtx<'_>) -> Value {
 
     match dev.send_command(0xa0, &[0x00, 0x00], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("hide_game/exit_game failed: {e}")),
+        Err(e) => link_gone("hide_game/exit_game", &e),
     }
 }
 
@@ -68,7 +66,7 @@ async fn set_key_down(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0x17, &[key], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_key_down failed: {e}")),
+        Err(e) => link_gone("set_key_down", &e),
     }
 }
 
@@ -88,7 +86,7 @@ async fn set_key_up(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0x21, &[key], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_key_up failed: {e}")),
+        Err(e) => link_gone("set_key_up", &e),
     }
 }
 
@@ -108,7 +106,7 @@ async fn set_magic_ball_answer(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0x88, &[answer], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_magic_ball_answer failed: {e}")),
+        Err(e) => link_gone("set_magic_ball_answer", &e),
     }
 }
 
@@ -135,7 +133,7 @@ async fn send_gamecontrol(ctx: CallCtx<'_>) -> Value {
     if control_value == 0 {
         match dev.send_command(0x88, &[], true).await {
             Ok(()) => json!({"success": true, "result": true}),
-            Err(e) => err_code(DeviceFailed, &format!("send_gamecontrol (go) failed: {e}")),
+            Err(e) => link_gone("send_gamecontrol (go)", &e),
         }
     } else {
         let down = dev.send_command(0x17, &[control_value], true).await;
@@ -143,7 +141,7 @@ async fn send_gamecontrol(ctx: CallCtx<'_>) -> Value {
         let up = dev.send_command(0x21, &[control_value], true).await;
         match down.and(up) {
             Ok(()) => json!({"success": true, "result": true}),
-            Err(e) => err_code(DeviceFailed, &format!("send_gamecontrol failed: {e}")),
+            Err(e) => link_gone("send_gamecontrol", &e),
         }
     }
 }

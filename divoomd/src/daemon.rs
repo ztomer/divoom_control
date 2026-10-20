@@ -25,6 +25,7 @@ use crate::central::BleCentral;
 use tokio::sync::Mutex;
 
 mod dispatch;
+mod link;
 mod notifications;
 
 pub(crate) const EXCLUSIVE_TIMEOUT: Duration = Duration::from_secs(30);
@@ -205,7 +206,7 @@ impl Daemon {
         // the newest frame is drawn, not a backlog of stale ones.
         let frame = crate::lease::is_frame_push(req).then(|| device.next_frame_gen());
 
-        let _permit = match link.queue.acquire(token.map(str::to_string)).await {
+        let permit = match link.queue.acquire(token.map(str::to_string)).await {
             Ok(p) => p,
             Err(e) => return e.reply(),
         };
@@ -242,14 +243,29 @@ impl Daemon {
             // so the UI flips the dot amber immediately instead of waiting for
             // a poll. A successful op recovers it to `active`.
             let id = Some(target_id.clone());
-            let degraded = reply.get("success").and_then(serde_json::Value::as_bool) != Some(true);
-            let st = if degraded { "degraded" } else { "active" };
-            let _ = self.tx.send(crate::daemon_connect::status_payload(
-                true,
-                id.as_deref(),
-                Some(st),
-            ));
-            if !degraded {
+            let failed = reply.get("success").and_then(serde_json::Value::as_bool) != Some(true);
+            if failed && link::link_is_gone(&reply) {
+                // The LINK is gone -- the command could not even be sent
+                // (`device_disconnected`; see `device_call::link_gone`). That is
+                // not a degraded panel, it is a dropped one: the link is
+                // retired so the panel stops reading as connected, and the
+                // drop is reported the way `mock_simulate_drop` reports a
+                // simulated one (P2.8).
+                drop(permit);
+                let reason = reply
+                    .get("error")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_string);
+                self.link_failed(&target_id, reason.as_deref()).await;
+            } else {
+                let st = if failed { "degraded" } else { "active" };
+                let _ = self.tx.send(crate::daemon_connect::status_payload(
+                    true,
+                    id.as_deref(),
+                    Some(st),
+                ));
+            }
+            if !failed {
                 if let Some(target) = id.as_deref() {
                     self.record_successful_call_activity(req, target).await;
                 }

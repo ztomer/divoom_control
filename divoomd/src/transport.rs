@@ -6,6 +6,43 @@ use crate::ble::BleTransport;
 /// `crate::ble` re-exports it for back-compat.
 pub type BleResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
+/// What one read on a panel gave back.
+///
+/// The three answers are kept apart because they mean three different things
+/// to a client, and one of them is not a failure at all:
+///
+/// * the panel ANSWERED -- here are its bytes;
+/// * the panel is SILENT -- the command went out and nothing came back
+///   before the deadline (a slow or busy panel);
+/// * the LINK FAILED -- the command could not even be sent, so the panel is
+///   not there any more.
+///
+/// The read used to answer `Option<Vec<u8>>`, which could not say the third
+/// thing: a write that failed was swallowed into "no bytes", and "no bytes"
+/// became `{"success": true, "result": null}` (P2.8). A dropped link and a
+/// quiet panel then wore the same face, and the caller could not tell a
+/// failure from a value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Read {
+    /// The panel answered with these bytes.
+    Answered(Vec<u8>),
+    /// The command went out; no answer came back before the deadline.
+    Silent,
+    /// The command could not be sent: the link is not usable.
+    LinkFailed(String),
+}
+
+impl Read {
+    /// The bytes, when the panel answered.
+    #[must_use]
+    pub fn answered(&self) -> Option<&[u8]> {
+        match self {
+            Self::Answered(p) => Some(p),
+            Self::Silent | Self::LinkFailed(_) => None,
+        }
+    }
+}
+
 pub enum DeviceTransport {
     #[cfg(feature = "ble")]
     Ble(BleTransport),
@@ -73,17 +110,26 @@ impl DeviceTransport {
         }
     }
 
+    /// Read one value from the panel: the bytes it answered with, or why
+    /// there are none.
+    ///
+    /// The write and the wait are ONE outcome here, not two: a write that
+    /// failed is a link that is gone, and it must not come back as "no
+    /// bytes" (P2.8).
     pub async fn send_command_and_wait(
         &self,
         command_id: u8,
         args: &[u8],
         timeout: std::time::Duration,
-    ) -> Option<Vec<u8>> {
+    ) -> Read {
         match self {
             #[cfg(feature = "ble")]
             Self::Ble(b) => b.send_command_and_wait(command_id, args, timeout).await,
             Self::Spp(s) => s.send_command_and_wait(command_id, args, timeout).await,
-            Self::Lan(_) => None,
+            // A LAN panel has no read protocol on this path: its values come
+            // from its HTTP API (`device_call::lan`), so a read here is a
+            // panel that did not answer.
+            Self::Lan(_) => Read::Silent,
             Self::Mock(m) => m.send_command_and_wait(command_id, args, timeout).await,
         }
     }

@@ -3,7 +3,7 @@ use crate::daemon::{Daemon, DeviceTransport};
 use crate::protocol::Request;
 use crate::protocol::{
     err_code, err_with,
-    ErrorCode::{BadRequest, DeviceFailed, Unsupported},
+    ErrorCode::{BadRequest, DeviceDisconnected, DeviceFailed, Unsupported},
 };
 use serde_json::Value;
 use std::time::Duration;
@@ -27,6 +27,7 @@ pub mod drawing;
 pub mod game;
 mod lan;
 pub mod music;
+pub(crate) mod read;
 pub mod routing;
 pub mod sleep;
 pub mod system;
@@ -79,6 +80,20 @@ fn report_no_lan(dev: &DeviceTransport) -> Value {
     };
     // `cause` says which of the two it is; the code says no retry will help.
     err_with(Unsupported, why, serde_json::json!({ "cause": cause }))
+}
+
+/// The reply for a command that could not be sent: the link is gone.
+///
+/// A write that fails IS the link failing -- the command never left the
+/// machine -- so the panel is not connected, and the code says so (P2.8).
+/// `device_failed` is for the other thing: a panel that IS there and did not
+/// do what was asked (it did not answer, or it answered with something the
+/// daemon could not read).
+///
+/// The daemon acts on the code: a `device_disconnected` reply retires the
+/// link and reports the drop, so the panel stops reading as connected.
+pub(crate) fn link_gone(what: &str, e: &impl std::fmt::Display) -> Value {
+    err_code(DeviceDisconnected, &format!("{what} failed: {e}"))
 }
 
 async fn handle_lan_fallback(

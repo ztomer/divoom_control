@@ -131,6 +131,23 @@ async fn connect_disconnect_reconnect_loop_stays_responsive() {
     }
 }
 
+/// Stage a brightness reply on the linked mock, so a read ANSWERS.
+///
+/// The timeout tests below are about a normal op completing inside its
+/// budget. A mock that answers nothing is not a normal op any more: a read
+/// that gets no answer fails (P2.8), which would make these tests assert
+/// about the failure instead of about the timeout.
+async fn stage_brightness(daemon: &Daemon) {
+    let transport = daemon.current_transport().await.expect("the mock panel");
+    let crate::daemon::DeviceTransport::Mock(m) = &*transport else {
+        panic!("expected the mock transport")
+    };
+    m.simulated_responses
+        .lock()
+        .expect("the mock's replies")
+        .insert(0x46, vec![0, 0, 0, 0, 0, 0, 42, 0]);
+}
+
 // R58: device_call is now bounded by an overall timeout (default 30s) enforced
 // at the top level so a hung op can't hold the device lock forever. A normal
 // mock op must complete well within that and leave the lock free for the next
@@ -145,6 +162,7 @@ async fn device_call_timeout_enforced_but_not_false_firing() {
     )
     .await;
     assert_eq!(c["success"], json!(true));
+    stage_brightness(&daemon).await;
 
     let first = make_request(
         "device_call",
@@ -179,6 +197,7 @@ async fn device_call_short_requested_timeout_still_succeeds() {
         &make_request("connect", Some(json!({"mock": true})), None),
     )
     .await;
+    stage_brightness(&daemon).await;
     let req = make_request(
         "device_call",
         Some(json!({ "method": "display.get_brightness", "timeout": 1 })),

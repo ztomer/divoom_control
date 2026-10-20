@@ -55,6 +55,7 @@ const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 
 pub use crate::transport::BleResult;
+pub use crate::transport::Read;
 
 /// A device discovered during a scan.
 #[derive(Debug, Clone)]
@@ -208,7 +209,12 @@ impl BleTransport {
     async fn autoprobe(&mut self) {
         let probe = Duration::from_millis(1500);
         self.protocol = Protocol::IosLe;
-        if self.send_command_and_wait(0x46, &[], probe).await.is_some() {
+        if self
+            .send_command_and_wait(0x46, &[], probe)
+            .await
+            .answered()
+            .is_some()
+        {
             return; // iOS-LE answered
         }
         self.protocol = Protocol::Basic;
@@ -302,18 +308,27 @@ impl BleTransport {
     /// device emits UNSOLICITED frames (e.g. a proactive 0x46 on a brightness
     /// change), so stale frames are dropped before the query to avoid reading a
     /// value one step behind (HW-confirmed in the Python impl).
+    ///
+    /// The write and the wait are ONE outcome (P2.8): a write that failed
+    /// means the peripheral is gone, and it must not come back as "no
+    /// answer" — that is what let a dropped link read as a successful null.
     pub async fn send_command_and_wait(
         &self,
         command_id: u8,
         args: &[u8],
         timeout: Duration,
-    ) -> Option<Vec<u8>> {
+    ) -> Read {
         {
             let mut rx = self.rx.lock().await;
             while rx.try_recv().is_ok() {}
         }
-        self.send_command(command_id, args, true).await.ok()?;
-        self.wait_for_response(command_id, timeout).await
+        if let Err(e) = self.send_command(command_id, args, true).await {
+            return Read::LinkFailed(e.to_string());
+        }
+        match self.wait_for_response(command_id, timeout).await {
+            Some(p) => Read::Answered(p),
+            None => Read::Silent,
+        }
     }
 
     /// Stream a pre-encoded animation blob via the 0x8B 3-phase protocol.

@@ -7,10 +7,11 @@
 //! catalog (AidSleep/GetAllList — cloud, RC=3 fix documented in
 //! `cloud_category.rs`) is a separate, already-implemented path.
 
+use super::link_gone;
 use super::CallCtx;
 use crate::protocol::{
     err_code,
-    ErrorCode::{DeviceFailed, Internal, UnknownCommand},
+    ErrorCode::{Internal, UnknownCommand},
 };
 use serde_json::{json, Value};
 
@@ -33,7 +34,7 @@ async fn send_json_command(
         .await
     {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("{command} failed: {e}")),
+        Err(e) => link_gone(command, &e),
     }
 }
 

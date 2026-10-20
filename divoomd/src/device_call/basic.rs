@@ -1,3 +1,4 @@
+use super::link_gone;
 use super::CallCtx;
 use crate::protocol::{
     err_code,
@@ -5,6 +6,8 @@ use crate::protocol::{
 };
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
+
+use super::read::read_reply;
 
 mod display;
 pub(crate) use display::clock_packet_from_call;
@@ -104,24 +107,28 @@ async fn get_device_name(ctx: CallCtx<'_>) -> Value {
             return json!({"success": true, "result": name});
         }
     }
-    dev.send_command_and_wait(0x76, &[], timeout)
-        .await
-        .filter(|p| !p.is_empty())
-        .map_or_else(
-            || json!({"success": true, "result": Value::Null}),
-            |p| {
-                let name_len = p[0] as usize;
-                if p.len() <= name_len {
-                    return json!({"success": true, "result": Value::Null});
-                }
-                let name_bytes = &p[1..=name_len];
-                let Ok(name) = std::str::from_utf8(name_bytes) else {
-                    return json!({"success": true, "result": Value::Null});
-                };
-                dev.set_cached_device_name(name.to_string());
-                json!({"success": true, "result": name})
-            },
-        )
+    read_reply(dev, "get_device_name", 0x76, &[], timeout, 1, |p| {
+        let name_len = p[0] as usize;
+        if p.len() <= name_len {
+            return err_code(
+                DeviceFailed,
+                &format!(
+                    "get_device_name: the panel's name is {name_len} bytes but its answer carries {}",
+                    p.len()
+                ),
+            );
+        }
+        let name_bytes = &p[1..=name_len];
+        let Ok(name) = std::str::from_utf8(name_bytes) else {
+            return err_code(
+                DeviceFailed,
+                "get_device_name: the panel's name is not valid UTF-8",
+            );
+        };
+        dev.set_cached_device_name(name.to_string());
+        json!({"success": true, "result": name})
+    })
+    .await
 }
 
 async fn set_device_name(ctx: CallCtx<'_>) -> Value {
@@ -148,7 +155,7 @@ async fn set_device_name(ctx: CallCtx<'_>) -> Value {
             }
             json!({"success": true, "result": true})
         }
-        Err(e) => err_code(DeviceFailed, &format!("set_device_name failed: {e}")),
+        Err(e) => link_gone("set_device_name", &e),
     }
 }
 
@@ -156,18 +163,24 @@ async fn get_brightness(ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let timeout = ctx.timeout;
 
-    match dev.send_command_and_wait(0x46, &[], timeout).await {
-        Some(p) if p.len() >= 7 => json!({"success": true, "result": i64::from(p[6])}),
-        _ => json!({"success": true, "result": Value::Null}),
-    }
+    read_reply(
+        dev,
+        "get_brightness",
+        0x46,
+        &[],
+        timeout,
+        7,
+        |p| json!({"success": true, "result": i64::from(p[6])}),
+    )
+    .await
 }
 
 async fn get_light_mode(ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let timeout = ctx.timeout;
 
-    match dev.send_command_and_wait(0x46, &[], timeout).await {
-        Some(r) if r.len() >= 20 => json!({"success": true, "result": {
+    read_reply(dev, "get_light_mode", 0x46, &[], timeout, 20, |r| {
+        json!({"success": true, "result": {
             "current_light_effect_mode": r[0],
             "temperature_display_mode": r[1],
             "vj_selection_option": r[2],
@@ -181,9 +194,9 @@ async fn get_light_mode(ctx: CallCtx<'_>) -> Value {
             "time_display_rgb_color_values": [r[12], r[13], r[14]],
             "time_display_mode": r[15],
             "time_checkbox_modes": [r[16], r[17], r[18], r[19]],
-        }}),
-        _ => json!({"success": true, "result": Value::Null}),
-    }
+        }})
+    })
+    .await
 }
 
 async fn set_brightness(ctx: CallCtx<'_>) -> Value {
@@ -203,7 +216,7 @@ async fn set_brightness(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0x74, &[val], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_brightness failed: {e}")),
+        Err(e) => link_gone("set_brightness", &e),
     }
 }
 
@@ -235,7 +248,7 @@ async fn set_screen_on(ctx: CallCtx<'_>) -> Value {
     };
     match dev.send_command(0x74, &[val], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_screen_on failed: {e}")),
+        Err(e) => link_gone("set_screen_on", &e),
     }
 }
 
@@ -245,7 +258,7 @@ async fn show_hot_channel(ctx: CallCtx<'_>) -> Value {
     let kw = ctx.kwargs;
 
     if let Err(e) = dev.send_command(0x45, &[0x02], true).await {
-        return err_code(DeviceFailed, &format!("show_hot_channel: 0x45 failed: {e}"));
+        return link_gone("show_hot_channel: 0x45", &e);
     }
     let page = args.first().copied().or_else(|| {
         kw.and_then(|v| v.get("page"))
@@ -254,7 +267,7 @@ async fn show_hot_channel(ctx: CallCtx<'_>) -> Value {
     if let Some(p) = page {
         match dev.send_command(0x85, &[1, p.byte()], true).await {
             Ok(()) => json!({"success": true, "result": true}),
-            Err(e) => err_code(DeviceFailed, &format!("show_hot_channel: 0x85 failed: {e}")),
+            Err(e) => link_gone("show_hot_channel: 0x85", &e),
         }
     } else {
         json!({"success": true, "result": true})
@@ -293,7 +306,7 @@ async fn set_volume(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0x08, &[val], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_volume failed: {e}")),
+        Err(e) => link_gone("set_volume", &e),
     }
 }
 
@@ -301,10 +314,16 @@ async fn get_volume(ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let timeout = ctx.timeout;
 
-    match dev.send_command_and_wait(0x09, &[], timeout).await {
-        Some(p) if !p.is_empty() => json!({"success": true, "result": i64::from(p[0])}),
-        _ => json!({"success": true, "result": Value::Null}),
-    }
+    read_reply(
+        dev,
+        "get_volume",
+        0x09,
+        &[],
+        timeout,
+        1,
+        |p| json!({"success": true, "result": i64::from(p[0])}),
+    )
+    .await
 }
 
 async fn set_radio_frequency(ctx: CallCtx<'_>) -> Value {
@@ -328,7 +347,7 @@ async fn set_radio_frequency(ctx: CallCtx<'_>) -> Value {
     let payload = freq.to_le_bytes();
     match dev.send_command(0x61, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_radio_frequency failed: {e}")),
+        Err(e) => link_gone("set_radio_frequency", &e),
     }
 }
 
@@ -349,7 +368,7 @@ async fn set_low_power_switch(ctx: CallCtx<'_>) -> Value {
     };
     match dev.send_command(0xb2, &[on_off], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_low_power_switch failed: {e}")),
+        Err(e) => link_gone("set_low_power_switch", &e),
     }
 }
 
@@ -357,10 +376,16 @@ async fn get_low_power_switch(ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let timeout = ctx.timeout;
 
-    match dev.send_command_and_wait(0xb3, &[], timeout).await {
-        Some(p) if !p.is_empty() => json!({"success": true, "result": i64::from(p[0])}),
-        _ => json!({"success": true, "result": Value::Null}),
-    }
+    read_reply(
+        dev,
+        "get_low_power_switch",
+        0xb3,
+        &[],
+        timeout,
+        1,
+        |p| json!({"success": true, "result": i64::from(p[0])}),
+    )
+    .await
 }
 
 async fn set_auto_power_off(ctx: CallCtx<'_>) -> Value {
@@ -380,7 +405,7 @@ async fn set_auto_power_off(ctx: CallCtx<'_>) -> Value {
     let payload = minutes.to_le_bytes();
     match dev.send_command(0xab, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_auto_power_off failed: {e}")),
+        Err(e) => link_gone("set_auto_power_off", &e),
     }
 }
 
@@ -388,13 +413,11 @@ async fn get_auto_power_off(ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let timeout = ctx.timeout;
 
-    match dev.send_command_and_wait(0xac, &[], timeout).await {
-        Some(p) if p.len() >= 2 => {
-            let minutes = i64::from(u16::from_le_bytes([p[0], p[1]]));
-            json!({"success": true, "result": minutes})
-        }
-        _ => json!({"success": true, "result": Value::Null}),
-    }
+    read_reply(dev, "get_auto_power_off", 0xac, &[], timeout, 2, |p| {
+        let minutes = i64::from(u16::from_le_bytes([p[0], p[1]]));
+        json!({"success": true, "result": minutes})
+    })
+    .await
 }
 
 async fn stream_animation_8b(ctx: CallCtx<'_>) -> Value {
@@ -418,6 +441,6 @@ async fn stream_animation_8b(ctx: CallCtx<'_>) -> Value {
     match dev.stream_animation_8b(&blob).await {
         Ok(true) => json!({"success": true, "result": true}),
         Ok(false) => err_code(BadRequest, "stream_animation_8b: empty blob"),
-        Err(e) => err_code(DeviceFailed, &format!("stream_animation_8b failed: {e}")),
+        Err(e) => link_gone("stream_animation_8b", &e),
     }
 }

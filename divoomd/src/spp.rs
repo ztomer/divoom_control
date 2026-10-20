@@ -227,19 +227,24 @@ impl SppTransport {
         }
     }
 
+    /// The write and the wait are ONE outcome (P2.8): a write that failed
+    /// means the port is gone, and it must not come back as "no answer".
     pub async fn send_command_and_wait(
         &self,
         command_id: u8,
         args: &[u8],
         timeout: Duration,
-    ) -> Option<Vec<u8>> {
+    ) -> crate::transport::Read {
         let _ = self
             .wait_for_response(command_id, Duration::from_millis(1))
             .await; // drain
-        if self.send_command(command_id, args, true).await.is_err() {
-            return None;
+        if let Err(e) = self.send_command(command_id, args, true).await {
+            return crate::transport::Read::LinkFailed(e.to_string());
         }
-        self.wait_for_response(command_id, timeout).await
+        self.wait_for_response(command_id, timeout).await.map_or(
+            crate::transport::Read::Silent,
+            crate::transport::Read::Answered,
+        )
     }
 
     /// # Errors

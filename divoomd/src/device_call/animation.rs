@@ -10,12 +10,15 @@ use crate::wire::WireNarrow as _;
 use crate::wire::{be32, le16, le32};
 use serde_json::{json, Map, Value};
 
+use super::link_gone;
 use super::CallCtx;
 use crate::daemon::DeviceTransport;
 use crate::protocol::{
     err_code,
-    ErrorCode::{BadRequest, DeviceFailed, UnknownCommand},
+    ErrorCode::{BadRequest, UnknownCommand},
 };
+
+use super::read::read_reply;
 
 fn kw_i64(kw: Option<&Map<String, Value>>, name: &str) -> Option<i64> {
     kw.and_then(|m| m.get(name))
@@ -37,7 +40,7 @@ fn kw_bytes(kw: Option<&Map<String, Value>>, name: &str) -> Vec<u8> {
 async fn send(dev: &DeviceTransport, cmd: u8, payload: &[u8], label: &str) -> Value {
     match dev.send_command(cmd, payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("{label} failed: {e}")),
+        Err(e) => link_gone(label, &e),
     }
 }
 
@@ -326,13 +329,16 @@ async fn modify_user_gif_items(ctx: CallCtx<'_>) -> Value {
         .copied()
         .or_else(|| kw_i64(kw, "data"))
         .unwrap_or(0);
-    match dev
-        .send_command_and_wait(0xb6, &[data.byte()], ctx.timeout)
-        .await
-    {
-        Some(r) if !r.is_empty() => json!({"success": true, "result": i64::from(r[0])}),
-        _ => json!({"success": true, "result": Value::Null}),
-    }
+    read_reply(
+        dev,
+        "modify_user_gif_items",
+        0xb6,
+        &[data.byte()],
+        ctx.timeout,
+        1,
+        |r| json!({"success": true, "result": i64::from(r[0])}),
+    )
+    .await
 }
 
 async fn app_get_user_define_info(ctx: CallCtx<'_>) -> Value {
@@ -345,15 +351,16 @@ async fn app_get_user_define_info(ctx: CallCtx<'_>) -> Value {
         .copied()
         .or_else(|| kw_i64(kw, "user_index"))
         .unwrap_or(0);
-    match dev
-        .send_command_and_wait(0x8e, &[idx.byte()], ctx.timeout)
-        .await
-    {
-        Some(r) if !r.is_empty() => {
-            json!({"success": true, "result": parse_user_define_info(&r)})
-        }
-        _ => json!({"success": true, "result": Value::Null}),
-    }
+    read_reply(
+        dev,
+        "app_get_user_define_info",
+        0x8e,
+        &[idx.byte()],
+        ctx.timeout,
+        1,
+        |r| json!({"success": true, "result": parse_user_define_info(r)}),
+    )
+    .await
 }
 
 /// pos(1 BE) + `total_length(2` LE) + `gif_id(1` BE) + *data — shared by `set_rhythm_gif`

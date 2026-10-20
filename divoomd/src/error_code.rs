@@ -29,7 +29,10 @@ pub enum ErrorCode {
     /// The daemon does not implement this command, or this `device_call`
     /// method.
     UnknownCommand,
-    /// The panel named in the request is not connected.
+    /// The panel named in the request is not connected -- or its link failed
+    /// while the request ran: the command could not be sent, so the panel is
+    /// not there any more (P2.8). The daemon acts on this code: the link is
+    /// retired and the drop is reported.
     DeviceDisconnected,
     /// No panel is connected at all (for a wall call: no wall is configured).
     NoDevice,
@@ -58,11 +61,13 @@ pub enum ErrorCode {
     ScreenLeased,
     /// The lease token is not (or no longer) the panel's lease.
     LeaseExpired,
-    /// The panel, or the radio or network path to it, did not do what was
-    /// asked: a write or transfer failed, an expected reply never came, a
-    /// connect or scan failed, or a wall panel did not take the command. The
-    /// request itself was well-formed; retrying, or checking the panel, may
-    /// help (P5.10).
+    /// The panel is there, and it did not do what was asked: it did not
+    /// answer, or it answered with something the daemon could not read, or a
+    /// wall panel did not take the command. The request itself was
+    /// well-formed; retrying, or checking the panel, may help (P5.10).
+    ///
+    /// A command that could not be SENT is not this: that is
+    /// [`Self::DeviceDisconnected`] (P2.8).
     DeviceFailed,
     /// The daemon is already doing this -- a scan, a connect, a hot update --
     /// or another session holds the panel exclusively; retry when it is done

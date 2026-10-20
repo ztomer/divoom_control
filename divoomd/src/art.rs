@@ -334,7 +334,7 @@ pub async fn cmd_custom_art_query_page(daemon: Arc<Daemon>, args: &Value) -> Val
             .send_command_and_wait(CMD_QUERY, &[page], std::time::Duration::from_secs(4))
             .await;
         match resp {
-            Some(data) if data.len() >= 8 => {
+            crate::transport::Read::Answered(data) if data.len() >= 8 => {
                 let rtype = data[0];
                 if rtype == 2 {
                     return json!({"success": true, "ids": []});
@@ -359,10 +359,24 @@ pub async fn cmd_custom_art_query_page(daemon: Arc<Daemon>, args: &Value) -> Val
                     &format!("unexpected response type {rtype}"),
                 );
             }
-            _ => {
+            crate::transport::Read::Silent => {
                 return err_with(
                     ErrorCode::DeviceFailed,
                     "no response (device timed out)",
+                    json!({"ids": []}),
+                )
+            }
+            crate::transport::Read::LinkFailed(why) => {
+                return err_with(
+                    ErrorCode::DeviceDisconnected,
+                    &format!("the panel's link failed: {why}"),
+                    json!({"ids": []}),
+                )
+            }
+            crate::transport::Read::Answered(_) => {
+                return err_with(
+                    ErrorCode::DeviceFailed,
+                    "the panel's answer was too short to read",
                     json!({"ids": []}),
                 )
             }

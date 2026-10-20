@@ -186,6 +186,27 @@ mod tests {
         m.set_failing(failing);
     }
 
+    /// Link the mock panel again, failing or not.
+    ///
+    /// A panel whose every write fails LOSES ITS LINK the first time a
+    /// command cannot be sent (P2.8: the link is retired and the drop is
+    /// reported). A sweep that kept the broken link would go on asking a
+    /// panel that is no longer there, and every method after the first would
+    /// be answered "not connected" -- the failure paths this sweep exists to
+    /// drive would go untested. So the panel is re-linked before each
+    /// method, and the sweep still meets every method on a failing device.
+    async fn relink(d: &Daemon, failing: bool) {
+        let r = d
+            .handle(make_request(
+                "connect",
+                Some(json!({ "mock": true, "mac": PANEL })),
+                None,
+            ))
+            .await;
+        assert_eq!(r["success"], json!(true), "{r}");
+        set_failing(d, failing).await;
+    }
+
     #[test]
     fn not_driven_names_only_real_commands() {
         let known: Vec<&str> = COMMAND_ARGS.iter().map(|(c, _)| *c).collect();
@@ -236,6 +257,11 @@ mod tests {
             for method in crate::device_call::routing::all_methods()
                 .chain(["no.such_method", "lan.set_brightness"])
             {
+                // A failing panel loses its link on the first failed command
+                // (P2.8), so it is linked again before each method: every
+                // method still meets a device that fails, not a link that is
+                // already gone.
+                relink(&d, failing).await;
                 for args in call_variants(method) {
                     f.ask(&d, "device_call", args).await;
                 }

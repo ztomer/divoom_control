@@ -72,7 +72,7 @@ pub fn catalog() -> Value {
             &json!({"type":"object","properties":{"duration_ms":SOUND_MS.schema()},"required":["duration_ms"]})),
         tool("get_capabilities", "Describe a panel: link state, model, width/height in pixels (how it was decided: model_source), and the features the vendor app enables for that model (speaker, sd_card, temp_sensor, wifi, clock_style; null for an unrecognised model). There is no FM-radio flag: the vendor app does not decide FM per model.",
             &json!({"type":"object","properties":{},"additionalProperties":false})),
-        tool("get_device_state", "Read the device's current volume, brightness, channel, orientation, mirror.",
+        tool("get_device_state", "Read the device's current volume, brightness, channel, orientation, mirror. A field the daemon could not read is null, and `errors` names it with the daemon's reason and code -- a null is never the only thing you know.",
             &json!({"type":"object","properties":{},"additionalProperties":false})),
         tool("list_screens", "List every screen the daemon knows or the saved layout places (`screens`): each with mac, connected (live link), selected, model, width/height (null when never seen), features, and its saved x/y/room; plus wall state and slots.",
             &json!({"type":"object","properties":{},"additionalProperties":false})),
@@ -329,22 +329,80 @@ async fn push_animation(a: &Value, target: &DaemonTarget) -> Result<Value, ToolE
     Ok(json!({ "ok": true, "size": size, "resize": resize, "frames": frames.len() }))
 }
 
+/// One field of the device state: the value the panel gave, or nothing.
+struct StateField {
+    value: Value,
+    /// Why there is no value, when the daemon refused the read. The field
+    /// stays null (absent data is visibly absent) and the reason is named
+    /// beside it, so a null is never the only thing a client knows (P2.8).
+    refused: Option<ToolError>,
+}
+
+/// Read one field of the device state.
+async fn state_field(target: &DaemonTarget, method: &str, mac: Option<&str>) -> StateField {
+    match crate::mcp_daemon::dc_result(target, method, json!([]), mac).await {
+        Ok(Some(value)) => StateField {
+            value,
+            refused: None,
+        },
+        // No daemon: no data at all. The shape the tool has always had.
+        Ok(None) => StateField {
+            value: Value::Null,
+            refused: None,
+        },
+        Err(e) => StateField {
+            value: Value::Null,
+            refused: Some(e),
+        },
+    }
+}
+
+/// A field the daemon has no read for: the value is absent, and the reason
+/// is that, not a panel that did not answer.
+fn unreadable_field(what: &str) -> StateField {
+    StateField {
+        value: Value::Null,
+        refused: Some(ToolError {
+            message: format!("this daemon cannot read the {what}"),
+            code: Some("unsupported".to_string()),
+        }),
+    }
+}
+
 async fn get_device_state(a: &Value, target: &DaemonTarget) -> Result<Value, ToolError> {
     let mac = a.get("mac").and_then(Value::as_str);
 
-    let volume = crate::mcp_daemon::dc_result(target, "music.get_volume", json!([]), mac).await;
-    let brightness =
-        crate::mcp_daemon::dc_result(target, "device.get_brightness", json!([]), mac).await;
-    let light_mode =
-        crate::mcp_daemon::dc_result(target, "control.get_light_mode", json!([]), mac).await;
-    let screen_dir =
-        crate::mcp_daemon::dc_result(target, "design.get_screen_dir", json!([]), mac).await;
-    let mirror =
-        crate::mcp_daemon::dc_result(target, "design.get_screen_mirror", json!([]), mac).await;
-    Ok(json!({
-        "volume": volume, "brightness": brightness, "light_mode": light_mode,
-        "screen_orientation": screen_dir, "mirror": mirror,
-    }))
+    // The routed name is `light.get_light_mode`; `control.get_light_mode`
+    // was never a method, so that field has been reporting "no value" for a
+    // read that never ran (P2.8). The orientation and the mirror are SET
+    // by the daemon and never read back -- the protocol has no read for
+    // them -- so they are reported as what they are instead of as a panel
+    // that did not answer.
+    let fields: [(&str, Option<&str>); 5] = [
+        ("volume", Some("music.get_volume")),
+        ("brightness", Some("device.get_brightness")),
+        ("light_mode", Some("light.get_light_mode")),
+        ("screen_orientation", None),
+        ("mirror", None),
+    ];
+
+    let mut out = serde_json::Map::new();
+    let mut errors = serde_json::Map::new();
+    for (name, method) in fields {
+        let field = match method {
+            Some(m) => state_field(target, m, mac).await,
+            None => unreadable_field(name),
+        };
+        if let Some(e) = field.refused {
+            errors.insert(name.to_string(), e.to_json());
+        }
+        out.insert(name.to_string(), field.value);
+    }
+    let mut state = Value::Object(out);
+    if !errors.is_empty() {
+        state["errors"] = Value::Object(errors);
+    }
+    Ok(state)
 }
 
 // --- helpers -----------------------------------------------------------------
@@ -425,6 +483,10 @@ pub(crate) async fn push_frames(
 #[cfg(test)]
 #[path = "mcp_tools_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "mcp_tools_read_tests.rs"]
+mod read_tests;
 
 #[cfg(test)]
 #[path = "mcp_tools_image_tests.rs"]

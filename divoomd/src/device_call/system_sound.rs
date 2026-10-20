@@ -5,10 +5,12 @@
 //! them touches the time, temperature or channel state the rest of that
 //! dispatcher works with.
 
+use super::link_gone;
 use super::CallCtx;
-use crate::protocol::{err_code, ErrorCode::DeviceFailed};
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
+
+use super::read::read_reply;
 
 /// Handle one `sound.*` method, or `None` when it is not one of ours.
 ///
@@ -56,10 +58,7 @@ async fn set_song_display_control(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0x83, &[control], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(
-            DeviceFailed,
-            &format!("set_song_display_control failed: {e}"),
-        ),
+        Err(e) => link_gone("set_song_display_control", &e),
     }
 }
 
@@ -93,10 +92,7 @@ async fn set_power_on_voice_volume(ctx: CallCtx<'_>) -> Value {
     };
     match dev.send_command(0xbb, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(
-            DeviceFailed,
-            &format!("set_power_on_voice_volume failed: {e}"),
-        ),
+        Err(e) => link_gone("set_power_on_voice_volume", &e),
     }
 }
 
@@ -130,7 +126,7 @@ async fn set_power_on_channel(ctx: CallCtx<'_>) -> Value {
     };
     match dev.send_command(0x8a, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_power_on_channel failed: {e}")),
+        Err(e) => link_gone("set_power_on_channel", &e),
     }
 }
 
@@ -186,7 +182,7 @@ async fn set_boot_gif(ctx: CallCtx<'_>) -> Value {
 
     match dev.send_command(0x52, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_boot_gif failed: {e}")),
+        Err(e) => link_gone("set_boot_gif", &e),
     }
 }
 
@@ -206,7 +202,7 @@ async fn set_sound_control(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0xa7, &[enable], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_sound_control failed: {e}")),
+        Err(e) => link_gone("set_sound_control", &e),
     }
 }
 
@@ -214,8 +210,14 @@ async fn get_sound_control(ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let timeout = ctx.timeout;
 
-    match dev.send_command_and_wait(0xa8, &[], timeout).await {
-        Some(p) if !p.is_empty() => json!({"success": true, "result": i64::from(p[0])}),
-        _ => json!({"success": true, "result": Value::Null}),
-    }
+    read_reply(
+        dev,
+        "get_sound_control",
+        0xa8,
+        &[],
+        timeout,
+        1,
+        |p| json!({"success": true, "result": i64::from(p[0])}),
+    )
+    .await
 }

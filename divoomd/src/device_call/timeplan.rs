@@ -1,8 +1,6 @@
+use super::link_gone;
 use super::CallCtx;
-use crate::protocol::{
-    err_code,
-    ErrorCode::{DeviceFailed, UnknownCommand},
-};
+use crate::protocol::{err_code, ErrorCode::UnknownCommand};
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
 
@@ -83,7 +81,7 @@ async fn set_time_manage_info(ctx: CallCtx<'_>) -> Value {
 
     match dev.send_command(0x56, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_time_manage_info failed: {e}")),
+        Err(e) => link_gone("set_time_manage_info", &e),
     }
 }
 
@@ -112,6 +110,6 @@ async fn set_time_manage_ctrl(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0x57, &[status, index], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_time_manage_ctrl failed: {e}")),
+        Err(e) => link_gone("set_time_manage_ctrl", &e),
     }
 }

@@ -101,19 +101,34 @@ pub(crate) async fn dc_kw(
     )
 }
 
-/// `device_call` returning the `result` value (None on failure) — for read tools.
+/// `device_call` returning the `result` value -- or the failure, never a
+/// null value in its place (P2.8).
+///
+/// Three answers, kept apart because they mean three different things:
+///
+/// * `Ok(Some(v))` -- the panel answered, and this is its value;
+/// * `Ok(None)` -- the daemon is not reachable at all: the client has no
+///   data, and a read tool answers nulls for that (the shape the tool has
+///   always had, and the reason a null is not a reading);
+/// * `Err(e)` -- the daemon answered and REFUSED: the panel is there and did
+///   not do what was asked. That used to come back as a null too, which made
+///   a dropped panel and a panel with no value look the same.
 pub(crate) async fn dc_result(
     target: &DaemonTarget,
     method: &str,
     args: Value,
     mac: Option<&str>,
-) -> Value {
-    match cmd(target, "device_call", device_call(method, args, None, mac)).await {
-        Ok(v) if v.get("success").and_then(serde_json::Value::as_bool) == Some(true) => {
-            v.get("result").cloned().unwrap_or(Value::Null)
-        }
-        _ => Value::Null,
-    }
+) -> Result<Option<Value>, ToolError> {
+    // The daemon is not reachable: no data, which is not a failure of
+    // this read and is answered as such by the caller.
+    let Ok(reply) = cmd(target, "device_call", device_call(method, args, None, mac)).await else {
+        return Ok(None);
+    };
+    check(reply).and_then(|v| {
+        v.get("result").cloned().map(Some).ok_or_else(|| {
+            ToolError::from(format!("{method}: the daemon's reply carried no result"))
+        })
+    })
 }
 
 pub(crate) fn check(reply: Value) -> Result<Value, ToolError> {

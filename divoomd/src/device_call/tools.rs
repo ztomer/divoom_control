@@ -1,11 +1,14 @@
+use super::link_gone;
 use super::CallCtx;
 use crate::arg_bounds::{BLUE_SCORE, COUNTDOWN_MINUTES, COUNTDOWN_SECONDS, RED_SCORE};
 use crate::protocol::{
     err_code,
-    ErrorCode::{BadRequest, DeviceFailed, UnknownCommand},
+    ErrorCode::{BadRequest, UnknownCommand, Unsupported},
 };
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
+
+use super::read::read_reply;
 
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     match method {
@@ -40,7 +43,7 @@ async fn set_scoreboard(ctx: CallCtx<'_>) -> Value {
     };
     match ctx.dev.send_command(0x72, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_scoreboard failed: {e}")),
+        Err(e) => link_gone("set_scoreboard", &e),
     }
 }
 
@@ -81,17 +84,17 @@ pub(crate) fn scoreboard_payload(
 async fn get_scoreboard(ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
 
-    match dev.send_command_and_wait(0x71, &[1], ctx.timeout).await {
-        Some(p) if p.len() >= 5 => json!({
+    read_reply(dev, "get_scoreboard", 0x71, &[1], ctx.timeout, 5, |p| {
+        json!({
             "success": true,
             "result": {
                 "on_off": i64::from(p[0]),
                 "red_score": i64::from(u16::from_le_bytes([p[1], p[2]])),
                 "blue_score": i64::from(u16::from_le_bytes([p[3], p[4]])),
             }
-        }),
-        _ => json!({"success": true, "result": Value::Null}),
-    }
+        })
+    })
+    .await
 }
 
 async fn set_timer(ctx: CallCtx<'_>) -> Value {
@@ -111,22 +114,22 @@ async fn set_timer(ctx: CallCtx<'_>) -> Value {
     let payload = [0u8, ctrl_flag]; // TOOL_TYPE_TIMER = 0
     match dev.send_command(0x72, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_timer failed: {e}")),
+        Err(e) => link_gone("set_timer", &e),
     }
 }
 
 async fn get_timer(ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
 
-    match dev.send_command_and_wait(0x71, &[0], ctx.timeout).await {
-        Some(p) if !p.is_empty() => json!({
+    read_reply(dev, "get_timer", 0x71, &[0], ctx.timeout, 1, |p| {
+        json!({
             "success": true,
             "result": {
                 "status": i64::from(p[0]),
             }
-        }),
-        _ => json!({"success": true, "result": Value::Null}),
-    }
+        })
+    })
+    .await
 }
 
 async fn set_countdown(ctx: CallCtx<'_>) -> Value {
@@ -170,24 +173,24 @@ async fn set_countdown(ctx: CallCtx<'_>) -> Value {
     let payload = [3u8, ctrl_flag, minutes, seconds]; // TOOL_TYPE_COUNTDOWN = 3
     match dev.send_command(0x72, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_countdown failed: {e}")),
+        Err(e) => link_gone("set_countdown", &e),
     }
 }
 
 async fn get_countdown(ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
 
-    match dev.send_command_and_wait(0x71, &[3], ctx.timeout).await {
-        Some(p) if p.len() >= 3 => json!({
+    read_reply(dev, "get_countdown", 0x71, &[3], ctx.timeout, 3, |p| {
+        json!({
             "success": true,
             "result": {
                 "status": i64::from(p[0]),
                 "minutes": i64::from(p[1]),
                 "seconds": i64::from(p[2]),
             }
-        }),
-        _ => json!({"success": true, "result": Value::Null}),
-    }
+        })
+    })
+    .await
 }
 
 async fn set_noise(ctx: CallCtx<'_>) -> Value {
@@ -207,22 +210,22 @@ async fn set_noise(ctx: CallCtx<'_>) -> Value {
     let payload = [2u8, ctrl_flag]; // TOOL_TYPE_NOISE = 2
     match dev.send_command(0x72, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_noise failed: {e}")),
+        Err(e) => link_gone("set_noise", &e),
     }
 }
 
 async fn get_noise(ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
 
-    match dev.send_command_and_wait(0x71, &[2], ctx.timeout).await {
-        Some(p) if !p.is_empty() => json!({
+    read_reply(dev, "get_noise", 0x71, &[2], ctx.timeout, 1, |p| {
+        json!({
             "success": true,
             "result": {
                 "status": i64::from(p[0]),
             }
-        }),
-        _ => json!({"success": true, "result": Value::Null}),
-    }
+        })
+    })
+    .await
 }
 
 async fn show_notification(ctx: CallCtx<'_>) -> Value {
@@ -247,7 +250,7 @@ async fn show_notification(ctx: CallCtx<'_>) -> Value {
     };
     match dev.send_command(0x50, &[wire], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("show_notification failed: {e}")),
+        Err(e) => link_gone("show_notification", &e),
     }
 }
 
@@ -274,7 +277,7 @@ async fn show_notification_text(ctx: CallCtx<'_>) -> Value {
     let payload = crate::ancs::with_text(app_type, text);
     match dev.send_command(0x50, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("show_notification_text failed: {e}")),
+        Err(e) => link_gone("show_notification_text", &e),
     }
 }
 
@@ -291,27 +294,46 @@ async fn get_tool_info(ctx: CallCtx<'_>) -> Value {
                 .and_then(serde_json::Value::as_i64)
         })
         .unwrap_or(0);
-    dev.send_command_and_wait(0x71, &[tool_type.byte()], ctx.timeout)
-            .await
-            .map_or_else(
-                || json!({"success": true, "result": Value::Null}),
-                |r| {
-                let result = match tool_type {
-                    1 if r.len() >= 5 => json!({
-                        "on_off": i64::from(r[0]),
-                        "red_score": i64::from(u16::from_le_bytes([r[1], r[2]])),
-                        "blue_score": i64::from(u16::from_le_bytes([r[3], r[4]])),
-                    }),
-                    0 | 2 if !r.is_empty() => json!({"status": i64::from(r[0])}),
-                    3 if r.len() >= 3 => json!({
-                        "status": i64::from(r[0]), "minutes": i64::from(r[1]), "seconds": i64::from(r[2]),
-                    }),
-                    255 => json!({"status": "not in game mode"}),
-                    _ => Value::Null,
-                };
-                json!({"success": true, "result": result})
-                },
+    // The answer's shape depends on the tool: the scoreboard carries two
+    // scores, the timer and the noise one byte, the countdown three, and
+    // 255 ("not in game mode") carries nothing to read. A tool type this
+    // daemon cannot decode is refused, not answered with a null (P2.8).
+    let min_len = match tool_type {
+        1 => 5,
+        0 | 2 => 1,
+        3 => 3,
+        255 => 0,
+        other => {
+            return err_code(
+                Unsupported,
+                &format!("get_tool_info: this daemon cannot read tool type {other}"),
             )
+        }
+    };
+    read_reply(
+        dev,
+        "get_tool_info",
+        0x71,
+        &[tool_type.byte()],
+        ctx.timeout,
+        min_len,
+        |r| {
+            let result = match tool_type {
+                1 => json!({
+                    "on_off": i64::from(r[0]),
+                    "red_score": i64::from(u16::from_le_bytes([r[1], r[2]])),
+                    "blue_score": i64::from(u16::from_le_bytes([r[3], r[4]])),
+                }),
+                0 | 2 => json!({"status": i64::from(r[0])}),
+                3 => json!({
+                    "status": i64::from(r[0]), "minutes": i64::from(r[1]), "seconds": i64::from(r[2]),
+                }),
+                _ => json!({"status": "not in game mode"}),
+            };
+            json!({"success": true, "result": result})
+        },
+    )
+    .await
 }
 
 async fn set_tool_info(ctx: CallCtx<'_>) -> Value {
@@ -367,6 +389,6 @@ async fn set_tool_info(ctx: CallCtx<'_>) -> Value {
     }
     match dev.send_command(0x72, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_tool_info failed: {e}")),
+        Err(e) => link_gone("set_tool_info", &e),
     }
 }

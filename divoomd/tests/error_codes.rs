@@ -107,9 +107,14 @@ fn every_code_has_a_distinct_snake_case_wire_name() {
 
 /// A device failure reaches an MCP agent and a CLI script as its class, not
 /// only as prose (P5.10): the write fails on a real socket, and the client
-/// half (`ToolError::from_reply`, `cli_line`) carries `device_failed`.
+/// half (`ToolError::from_reply`, `cli_line`) carries the class.
+///
+/// The class of a write that could not be sent is `device_disconnected`:
+/// the command never left, so the panel is not there any more (P2.8). The
+/// receipt this test exists for is that the class REACHES the client -- not
+/// which class it is.
 #[tokio::test(flavor = "multi_thread")]
-async fn a_failed_write_reaches_mcp_and_the_cli_as_device_failed() {
+async fn a_failed_write_reaches_mcp_and_the_cli_as_its_class() {
     use divoomd::daemon::DeviceTransport;
     use divoomd::daemon_target::DaemonTarget;
     use divoomd::mcp_tools::call_tool;
@@ -136,9 +141,9 @@ async fn a_failed_write_reaches_mcp_and_the_cli_as_device_failed() {
     )
     .await
     .expect_err("the write fails");
-    assert_eq!(err.code.as_deref(), Some("device_failed"), "{err}");
+    assert_eq!(err.code.as_deref(), Some("device_disconnected"), "{err}");
     assert!(
-        err.cli_line().ends_with(" [device_failed]"),
+        err.cli_line().ends_with(" [device_disconnected]"),
         "{}",
         err.cli_line()
     );

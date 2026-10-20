@@ -8,11 +8,14 @@ use crate::wire::le16;
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Map, Value};
 
+use super::link_gone;
 use super::CallCtx;
 use crate::protocol::{
     err_code,
     ErrorCode::{DeviceFailed, UnknownCommand},
 };
+
+use super::read::read_reply;
 
 fn kw_i64(kw: Option<&Map<String, Value>>, name: &str) -> Option<i64> {
     kw.and_then(|m| m.get(name))
@@ -50,7 +53,7 @@ async fn app_need_get_music_list(ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let ok = |r: Result<(), String>, label: &str| match r {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("{label} failed: {e}")),
+        Err(e) => link_gone(label, &e),
     };
 
     ok(
@@ -65,7 +68,7 @@ async fn send_sd_list_over(ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let ok = |r: Result<(), String>, label: &str| match r {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("{label} failed: {e}")),
+        Err(e) => link_gone(label, &e),
     };
 
     ok(
@@ -83,7 +86,7 @@ async fn set_play_status(ctx: CallCtx<'_>) -> Value {
     let first_arg = |name: &str| args.first().copied().or_else(|| kw_i64(kw, name));
     let ok = |r: Result<(), String>, label: &str| match r {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("{label} failed: {e}")),
+        Err(e) => link_gone(label, &e),
     };
 
     let s = first_arg("status").unwrap_or(0).byte();
@@ -102,7 +105,7 @@ async fn set_sd_last_next(ctx: CallCtx<'_>) -> Value {
     let first_arg = |name: &str| args.first().copied().or_else(|| kw_i64(kw, name));
     let ok = |r: Result<(), String>, label: &str| match r {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("{label} failed: {e}")),
+        Err(e) => link_gone(label, &e),
     };
 
     let a = first_arg("action").unwrap_or(0).byte();
@@ -121,7 +124,7 @@ async fn set_sd_music_play_mode(ctx: CallCtx<'_>) -> Value {
     let first_arg = |name: &str| args.first().copied().or_else(|| kw_i64(kw, name));
     let ok = |r: Result<(), String>, label: &str| match r {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("{label} failed: {e}")),
+        Err(e) => link_gone(label, &e),
     };
 
     let pm = first_arg("play_mode").unwrap_or(0).byte();
@@ -140,7 +143,7 @@ async fn set_sd_music_position(ctx: CallCtx<'_>) -> Value {
     let first_arg = |name: &str| args.first().copied().or_else(|| kw_i64(kw, name));
     let ok = |r: Result<(), String>, label: &str| match r {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("{label} failed: {e}")),
+        Err(e) => link_gone(label, &e),
     };
 
     let pos = first_arg("position").unwrap_or(0);
@@ -159,7 +162,7 @@ async fn set_sd_play_music_id(ctx: CallCtx<'_>) -> Value {
     let first_arg = |name: &str| args.first().copied().or_else(|| kw_i64(kw, name));
     let ok = |r: Result<(), String>, label: &str| match r {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("{label} failed: {e}")),
+        Err(e) => link_gone(label, &e),
     };
 
     let id = first_arg("music_id").unwrap_or(0);
@@ -177,7 +180,7 @@ async fn set_sd_music_info(ctx: CallCtx<'_>) -> Value {
     let kw = ctx.kwargs;
     let ok = |r: Result<(), String>, label: &str| match r {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("{label} failed: {e}")),
+        Err(e) => link_gone(label, &e),
     };
 
     let cur = kw_i64(kw, "current_time")
@@ -216,54 +219,67 @@ async fn get_play_status(ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let to = ctx.timeout;
 
-    match dev.send_command_and_wait(0x0b, &[], to).await {
-        Some(r) if !r.is_empty() => json!({"success": true, "result": i64::from(r[0])}),
-        _ => json!({"success": true, "result": Value::Null}),
-    }
+    read_reply(
+        dev,
+        "get_play_status",
+        0x0b,
+        &[],
+        to,
+        1,
+        |r| json!({"success": true, "result": i64::from(r[0])}),
+    )
+    .await
 }
 
 async fn get_sd_music_list_total_num(ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let to = ctx.timeout;
 
-    match dev.send_command_and_wait(0x7d, &[], to).await {
-        Some(r) if r.len() >= 2 => {
-            json!({"success": true, "result": i64::from(u16::from_le_bytes([r[0], r[1]]))})
-        }
-        _ => json!({"success": true, "result": Value::Null}),
-    }
+    read_reply(
+        dev,
+        "get_sd_music_list_total_num",
+        0x7d,
+        &[],
+        to,
+        2,
+        |r| json!({"success": true, "result": i64::from(u16::from_le_bytes([r[0], r[1]]))}),
+    )
+    .await
 }
 
 async fn get_sd_music_info(ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let to = ctx.timeout;
 
-    match dev.send_command_and_wait(0xb4, &[], to).await {
-        Some(r) if r.len() >= 9 => json!({"success": true, "result": {
+    read_reply(dev, "get_sd_music_info", 0xb4, &[], to, 9, |r| {
+        json!({"success": true, "result": {
             "current_time": u16::from_le_bytes([r[0], r[1]]),
             "total_time": u16::from_le_bytes([r[2], r[3]]),
             "music_id": u16::from_le_bytes([r[4], r[5]]),
             "status": r[6], "volume": r[7], "play_mode": r[8],
-        }}),
-        _ => json!({"success": true, "result": Value::Null}),
-    }
+        }})
+    })
+    .await
 }
 
 async fn get_sd_play_name(ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let to = ctx.timeout;
 
-    match dev.send_command_and_wait(0x06, &[], to).await {
-        Some(r) if r.len() >= 2 => {
-            let n = u16::from_le_bytes([r[0], r[1]]) as usize;
-            if r.len() >= 2 + n {
-                json!({"success": true, "result": String::from_utf8_lossy(&r[2..2 + n])})
-            } else {
-                json!({"success": true, "result": Value::Null})
-            }
+    read_reply(dev, "get_sd_play_name", 0x06, &[], to, 2, |r| {
+        let n = u16::from_le_bytes([r[0], r[1]]) as usize;
+        if r.len() < 2 + n {
+            return err_code(
+                DeviceFailed,
+                &format!(
+                    "get_sd_play_name: the panel's name is {n} bytes but its answer carries {}",
+                    r.len()
+                ),
+            );
         }
-        _ => json!({"success": true, "result": Value::Null}),
-    }
+        json!({"success": true, "result": String::from_utf8_lossy(&r[2..2 + n])})
+    })
+    .await
 }
 
 async fn get_sd_music_list(ctx: CallCtx<'_>) -> Value {
@@ -281,25 +297,23 @@ async fn get_sd_music_list(ctx: CallCtx<'_>) -> Value {
     let mut req = Vec::new();
     req.extend_from_slice(&le16(start));
     req.extend_from_slice(&le16(end));
-    dev.send_command_and_wait(0x07, &req, to).await.map_or_else(
-        || json!({"success": true, "result": []}),
-        |r| {
-            let mut list = Vec::new();
-            let mut off = 0usize;
-            while off + 4 <= r.len() {
-                let id = u16::from_le_bytes([r[off], r[off + 1]]);
-                off += 2;
-                let name_len = u16::from_le_bytes([r[off], r[off + 1]]) as usize;
-                off += 2;
-                if off + name_len <= r.len() {
-                    let name = String::from_utf8_lossy(&r[off..off + name_len]).to_string();
-                    list.push(json!({"id": id, "name": name}));
-                    off += name_len;
-                } else {
-                    break;
-                }
+    read_reply(dev, "get_sd_music_list", 0x07, &req, to, 0, |r| {
+        let mut list = Vec::new();
+        let mut off = 0usize;
+        while off + 4 <= r.len() {
+            let id = u16::from_le_bytes([r[off], r[off + 1]]);
+            off += 2;
+            let name_len = u16::from_le_bytes([r[off], r[off + 1]]) as usize;
+            off += 2;
+            if off + name_len <= r.len() {
+                let name = String::from_utf8_lossy(&r[off..off + name_len]).to_string();
+                list.push(json!({"id": id, "name": name}));
+                off += name_len;
+            } else {
+                break;
             }
-            json!({"success": true, "result": list})
-        },
-    )
+        }
+        json!({"success": true, "result": list})
+    })
+    .await
 }

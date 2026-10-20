@@ -9,6 +9,8 @@ use crate::daemon::{Daemon, DeviceTransport};
 mod coordinator;
 pub mod font;
 mod frame;
+#[cfg(test)]
+mod frame_link_tests;
 mod health;
 /// macOS-only: it reads now-playing through the `nowplaying` crate, which is
 /// itself a macOS-only dependency of this crate (MediaRemote does not exist
@@ -81,6 +83,24 @@ async fn now_playing_track_async() -> Result<Option<nowplaying::Track>, String> 
 
 // --- Device Helpers ---
 
+/// Why a live frame did not land.
+///
+/// The two are different facts: a frame the daemon could not BUILD is the
+/// daemon's problem, and a frame whose COMMAND could not be sent means the
+/// panel's link is gone (P2.8) -- which the caller has to act on, because a
+/// panel that is gone must stop reading as connected.
+#[derive(Debug)]
+pub(crate) enum PushFailure {
+    /// The command could not be sent: the link is gone.
+    Link(String),
+    /// The frame could not be built, or this panel cannot take one (a LAN
+    /// panel has no frame protocol). The job keeps running and keeps saying
+    /// so; the reason is not carried, because nothing reads it and a live
+    /// widget that cannot be pushed is the job's own business, not a link
+    /// event.
+    Other,
+}
+
 /// Push one already-decoded RGB frame to a device.
 ///
 /// No `daemon` parameter any more: it existed only to reach the encoder, and
@@ -92,22 +112,22 @@ pub(crate) async fn push_rgb_to_device(
     w: i32,
     h: i32,
     time_ms: u16,
-) -> Result<(), String> {
+) -> Result<(), PushFailure> {
     if let DeviceTransport::Lan(_) = dev {
-        return Err("LAN image push not supported".into());
+        return Err(PushFailure::Other);
     }
 
     let blob = crate::image_encode::encode_animation_frame(rgb, w, h, time_ms)
-        .map_err(|why| format!("encode {w}x{h} failed: {why}"))?;
+        .map_err(|_why| PushFailure::Other)?;
 
     dev.send_command(0x45, &[0x05, 0, 0, 0, 0, 0, 0, 0, 0, 0], false)
         .await
-        .map_err(|e| format!("show_design failed: {e}"))?;
+        .map_err(|e| PushFailure::Link(format!("show_design failed: {e}")))?;
 
     dev.stream_animation_8b(&blob)
         .await
         .map(|_| ())
-        .map_err(|e| format!("stream_8b failed: {e}"))
+        .map_err(|e| PushFailure::Link(format!("stream_8b failed: {e}")))
 }
 
 async fn get_device_transport(daemon: &Daemon, mac: &str) -> Option<Arc<DeviceTransport>> {

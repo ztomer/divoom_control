@@ -1,8 +1,9 @@
+use super::link_gone;
 use super::rgb_triple;
 use super::CallCtx;
 use crate::protocol::{
     err_code,
-    ErrorCode::{BadRequest, DeviceFailed, Internal},
+    ErrorCode::{BadRequest, Internal},
 };
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
@@ -103,10 +104,7 @@ async fn scrolling_text(ctx: &CallCtx<'_>) -> Value {
     //    with; on a real Tivoo-Max it rendered nothing, because the device
     //    enters marquee mode after the content it was given is already gone.
     if let Err(e) = dev.send_command(0x6E, &[1u8], true).await {
-        return err_code(
-            DeviceFailed,
-            &format!("show_scrolling_text: starting playback failed: {e}"),
-        );
+        return link_gone("show_scrolling_text: starting playback", &e);
     }
 
     // 1. glyph upload, 5 characters per packet
@@ -130,10 +128,7 @@ async fn scrolling_text(ctx: &CallCtx<'_>) -> Value {
             }
         }
         if let Err(e) = dev.send_command(0x7C, &p, true).await {
-            return err_code(
-                DeviceFailed,
-                &format!("show_scrolling_text: glyph upload failed: {e}"),
-            );
+            return link_gone("show_scrolling_text: glyph upload", &e);
         }
     }
 
@@ -146,18 +141,12 @@ async fn scrolling_text(ctx: &CallCtx<'_>) -> Value {
         p.push((u >> 8) as u8);
     }
     if let Err(e) = dev.send_command(0x86, &p, true).await {
-        return err_code(
-            DeviceFailed,
-            &format!("show_scrolling_text: sending the text failed: {e}"),
-        );
+        return link_gone("show_scrolling_text: sending the text", &e);
     }
 
     // 3. rate LAST, matching B1(rate) at the end of CmdManager.G().
     if let Err(e) = dev.send_command(0x86, &[0u8, rate], true).await {
-        return err_code(
-            DeviceFailed,
-            &format!("show_scrolling_text: setting the rate failed: {e}"),
-        );
+        return link_gone("show_scrolling_text: setting the rate", &e);
     }
     json!({"success": true, "result": true, "characters": units.len(), "rate": rate})
 }
@@ -268,9 +257,6 @@ pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
 
     match dev.send_command(0x87, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(
-            DeviceFailed,
-            &format!("set_light_phone_word_attr failed: {e}"),
-        ),
+        Err(e) => link_gone("set_light_phone_word_attr", &e),
     }
 }

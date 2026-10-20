@@ -1,10 +1,10 @@
+use super::link_gone;
 use super::CallCtx;
-use crate::protocol::{
-    err_code,
-    ErrorCode::{DeviceFailed, UnknownCommand},
-};
+use crate::protocol::{err_code, ErrorCode::UnknownCommand};
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
+
+use super::read::read_reply;
 
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     match method {
@@ -26,31 +26,27 @@ async fn get_alarm_time(ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let timeout = ctx.timeout;
 
-    dev.send_command_and_wait(0x42, &[], timeout)
-        .await
-        .map_or_else(
-            || json!({"success": true, "result": Value::Null}),
-            |p| {
-                let record_len = 10;
-                let count = std::cmp::min(10, p.len() / record_len);
-                let mut alarms = Vec::with_capacity(count);
-                for i in 0..count {
-                    let start = i * record_len;
-                    let block = &p[start..start + record_len];
-                    alarms.push(json!({
-                        "status": i64::from(block[1]),
-                        "hour": i64::from(block[2]),
-                        "minute": i64::from(block[3]),
-                        "week": i64::from(block[4]),
-                        "mode": i64::from(block[5]),
-                        "trigger_mode": i64::from(block[6]),
-                        "fm_freq": i64::from(u16::from_le_bytes([block[7], block[8]])),
-                        "volume": i64::from(block[9]),
-                    }));
-                }
-                json!({"success": true, "result": alarms})
-            },
-        )
+    read_reply(dev, "get_alarm_time", 0x42, &[], timeout, 0, |p| {
+        let record_len = 10;
+        let count = std::cmp::min(10, p.len() / record_len);
+        let mut alarms = Vec::with_capacity(count);
+        for i in 0..count {
+            let start = i * record_len;
+            let block = &p[start..start + record_len];
+            alarms.push(json!({
+                "status": i64::from(block[1]),
+                "hour": i64::from(block[2]),
+                "minute": i64::from(block[3]),
+                "week": i64::from(block[4]),
+                "mode": i64::from(block[5]),
+                "trigger_mode": i64::from(block[6]),
+                "fm_freq": i64::from(u16::from_le_bytes([block[7], block[8]])),
+                "volume": i64::from(block[9]),
+            }));
+        }
+        json!({"success": true, "result": alarms})
+    })
+    .await
 }
 
 async fn set_alarm(ctx: CallCtx<'_>) -> Value {
@@ -153,7 +149,7 @@ async fn set_alarm(ctx: CallCtx<'_>) -> Value {
 
     match dev.send_command(0x43, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_alarm failed: {e}")),
+        Err(e) => link_gone("set_alarm", &e),
     }
 }
 
@@ -209,7 +205,7 @@ async fn set_alarm_gif(ctx: CallCtx<'_>) -> Value {
 
     match dev.send_command(0x51, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_alarm_gif failed: {e}")),
+        Err(e) => link_gone("set_alarm_gif", &e),
     }
 }
 
@@ -217,34 +213,30 @@ async fn get_memorial_time(ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let timeout = ctx.timeout;
 
-    dev.send_command_and_wait(0x53, &[], timeout)
-        .await
-        .map_or_else(
-            || json!({"success": true, "result": Value::Null}),
-            |p| {
-                let record_len = 39;
-                let count = std::cmp::min(10, p.len() / record_len);
-                let mut memorials = Vec::with_capacity(count);
-                for i in 0..count {
-                    let start = i * record_len;
-                    let block = &p[start..start + record_len];
-                    let title = String::from_utf8_lossy(&block[7..39])
-                        .trim_end_matches('\0')
-                        .to_string();
-                    memorials.push(json!({
-                        "dialy_id": i64::from(block[0]),
-                        "on_off": i64::from(block[1]),
-                        "month": i64::from(block[2]),
-                        "day": i64::from(block[3]),
-                        "hour": i64::from(block[4]),
-                        "minute": i64::from(block[5]),
-                        "have_flag": i64::from(block[6]),
-                        "title_name": title,
-                    }));
-                }
-                json!({"success": true, "result": memorials})
-            },
-        )
+    read_reply(dev, "get_memorial_time", 0x53, &[], timeout, 0, |p| {
+        let record_len = 39;
+        let count = std::cmp::min(10, p.len() / record_len);
+        let mut memorials = Vec::with_capacity(count);
+        for i in 0..count {
+            let start = i * record_len;
+            let block = &p[start..start + record_len];
+            let title = String::from_utf8_lossy(&block[7..39])
+                .trim_end_matches('\0')
+                .to_string();
+            memorials.push(json!({
+                "dialy_id": i64::from(block[0]),
+                "on_off": i64::from(block[1]),
+                "month": i64::from(block[2]),
+                "day": i64::from(block[3]),
+                "hour": i64::from(block[4]),
+                "minute": i64::from(block[5]),
+                "have_flag": i64::from(block[6]),
+                "title_name": title,
+            }));
+        }
+        json!({"success": true, "result": memorials})
+    })
+    .await
 }
 
 async fn set_memorial_time(ctx: CallCtx<'_>) -> Value {
@@ -345,7 +337,7 @@ async fn set_memorial_time(ctx: CallCtx<'_>) -> Value {
 
     match dev.send_command(0x54, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_memorial_time failed: {e}")),
+        Err(e) => link_gone("set_memorial_time", &e),
     }
 }
 
@@ -401,7 +393,7 @@ async fn set_memorial_gif(ctx: CallCtx<'_>) -> Value {
 
     match dev.send_command(0x55, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_memorial_gif failed: {e}")),
+        Err(e) => link_gone("set_memorial_gif", &e),
     }
 }
 
@@ -439,7 +431,7 @@ async fn set_alarm_listen(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0xa5, &[on_off, mode, volume], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_alarm_listen failed: {e}")),
+        Err(e) => link_gone("set_alarm_listen", &e),
     }
 }
 
@@ -459,7 +451,7 @@ async fn set_alarm_volume(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0xa6, &[volume], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_alarm_volume failed: {e}")),
+        Err(e) => link_gone("set_alarm_volume", &e),
     }
 }
 
@@ -488,9 +480,6 @@ async fn set_alarm_volume_control(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0x82, &[control, index], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(
-            DeviceFailed,
-            &format!("set_alarm_volume_control failed: {e}"),
-        ),
+        Err(e) => link_gone("set_alarm_volume_control", &e),
     }
 }

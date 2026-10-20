@@ -109,14 +109,23 @@ impl MockTransport {
         std::future::ready(resp)
     }
 
+    /// The mock's read, in the same three shapes as a real transport's
+    /// (P2.8): the panel answered, the panel said nothing, or the LINK is
+    /// gone (the mock's `fail_writes`, which is what a dropped link looks
+    /// like to a caller).
     pub async fn send_command_and_wait(
         &self,
         command_id: u8,
         args: &[u8],
         timeout: Duration,
-    ) -> Option<Vec<u8>> {
-        let _ = self.send_command(command_id, args, true).await;
-        self.wait_for_response(command_id, timeout).await
+    ) -> crate::transport::Read {
+        if let Err(e) = self.send_command(command_id, args, true).await {
+            return crate::transport::Read::LinkFailed(e.to_string());
+        }
+        self.wait_for_response(command_id, timeout).await.map_or(
+            crate::transport::Read::Silent,
+            crate::transport::Read::Answered,
+        )
     }
 
     /// Records the blob as one `0x8b` command; complete immediately, like

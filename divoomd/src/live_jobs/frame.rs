@@ -65,17 +65,23 @@ pub(super) async fn push_live_frame(
     let alive = alive.clone();
     let link_in = link.clone();
     let preview = crate::preview_url::data_url(&[(rgb.clone(), w, h, 0)]);
-    let landed = link
+    let outcome = link
         .run(None, async move {
             if !alive.load(Ordering::SeqCst) || link_in.is_retired() {
-                return false;
+                return Ok(());
             }
-            push_rgb_to_device(&link_in.transport, &rgb, w, h, time_ms)
-                .await
-                .is_ok()
+            push_rgb_to_device(&link_in.transport, &rgb, w, h, time_ms).await
         })
-        .await
-        .unwrap_or(false);
+        .await;
+    let landed = matches!(outcome, Some(Ok(())));
+    // A frame whose command could not be sent means the panel's LINK is
+    // gone: the panel must stop reading as connected, and the drop must be
+    // reported -- the same two broadcasts a user-initiated call produces
+    // (P2.8). A live widget is the most common writer to a panel, so this
+    // is usually how a drop is noticed at all.
+    if let Some(Err(super::PushFailure::Link(why))) = &outcome {
+        daemon.link_failed(mac, Some(why)).await;
+    }
     // A record refused means a `disconnect` forgot the panel after the
     // frame landed: no `activity` event for a panel the fleet let go of.
     if landed

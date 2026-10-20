@@ -2,25 +2,27 @@
 //! network temperature it displays, and the unit. Split from `system.rs` at
 //! the file-length cap; the arms in `system::handle` name these directly.
 
+use crate::device_call::link_gone;
 use crate::device_call::CallCtx;
-use crate::protocol::{err_code, ErrorCode::DeviceFailed};
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
+
+use crate::device_call::read::read_reply;
 
 pub(super) async fn get_device_temp(ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let timeout = ctx.timeout;
 
-    match dev.send_command_and_wait(0x59, &[], timeout).await {
-        Some(p) if p.len() >= 2 => json!({
+    read_reply(dev, "get_device_temp", 0x59, &[], timeout, 2, |p| {
+        json!({
             "success": true,
             "result": {
                 "format": i64::from(p[0]),
                 "value": i64::from(i8::from_ne_bytes([p[1]])),
             }
-        }),
-        _ => json!({"success": true, "result": Value::Null}),
-    }
+        })
+    })
+    .await
 }
 
 pub(super) async fn send_net_temp(ctx: CallCtx<'_>) -> Value {
@@ -114,7 +116,7 @@ pub(super) async fn send_net_temp(ctx: CallCtx<'_>) -> Value {
 
     match dev.send_command(0x5d, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("send_net_temp failed: {e}")),
+        Err(e) => link_gone("send_net_temp", &e),
     }
 }
 
@@ -150,7 +152,7 @@ pub(super) async fn send_net_temp_disp(ctx: CallCtx<'_>) -> Value {
 
     match dev.send_command(0x5e, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("send_net_temp_disp failed: {e}")),
+        Err(e) => link_gone("send_net_temp_disp", &e),
     }
 }
 
@@ -158,16 +160,16 @@ pub(super) async fn get_net_temp_disp(ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let timeout = ctx.timeout;
 
-    match dev.send_command_and_wait(0x73, &[], timeout).await {
-        Some(p) if p.len() >= 7 => json!({
+    read_reply(dev, "get_net_temp_disp", 0x73, &[], timeout, 7, |p| {
+        json!({
             "success": true,
             "result": {
                 "display_modes": [i64::from(p[0]), i64::from(p[1]), i64::from(p[2]), i64::from(p[3]), i64::from(p[4])],
                 "time_minutes": i64::from(u16::from_le_bytes([p[5], p[6]])),
             }
-        }),
-        _ => json!({"success": true, "result": Value::Null}),
-    }
+        })
+    })
+    .await
 }
 
 pub(super) async fn send_current_temp(ctx: CallCtx<'_>) -> Value {
@@ -203,7 +205,7 @@ pub(super) async fn send_current_temp(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0x5f, &[temp, weather], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("send_current_temp failed: {e}")),
+        Err(e) => link_gone("send_current_temp", &e),
     }
 }
 
@@ -223,6 +225,6 @@ pub(super) async fn set_temp_type(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0x2b, &[temp_type], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_temp_type failed: {e}")),
+        Err(e) => link_gone("set_temp_type", &e),
     }
 }

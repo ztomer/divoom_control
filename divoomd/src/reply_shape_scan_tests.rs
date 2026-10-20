@@ -11,6 +11,12 @@
 //!
 //! So a failure reply can only come from `err_code`/`err_with`, which take
 //! an `ErrorCode`, and a new handler cannot regress the class by habit.
+//!
+//! The second scan is P2.8's class: a failure laundered into a success
+//! shape. A reply's `result` may not be a null -- neither written as one
+//! nor read as one when the key is missing. That shape is how a dropped
+//! link and a timed-out read came to look like a panel with no value, and
+//! twenty-eight reads in the daemon answered it.
 
 #[cfg(test)]
 mod tests {
@@ -109,6 +115,75 @@ mod tests {
         let src = "fn a() {}\n#[cfg(test)]\nmod tests {\n    json!({\"success\": false});\n}\nfn b() {}\n";
         let kept: Vec<usize> = production_lines(src).iter().map(|(n, _)| *n).collect();
         assert_eq!(kept, vec![1, 6], "test items are skipped, the rest kept");
+    }
+
+    /// Why `line` launders a failure into a null result, if it does.
+    fn laundered(line: &str) -> Option<&'static str> {
+        let code = line.split("//").next().unwrap_or("");
+        let mut rest = code;
+        while let Some(i) = rest.find("\"result\"") {
+            let after = rest[i + "\"result\"".len()..].trim_start();
+            let value = after
+                .strip_prefix(':')
+                .or_else(|| after.strip_prefix("] ="))
+                .map(str::trim_start);
+            if let Some(v) = value {
+                if v.starts_with("Value::Null") || v.starts_with("null") {
+                    return Some("a null written into a reply's result");
+                }
+            }
+            rest = &rest[i + 1..];
+        }
+        // A reply with no `result` key, read as a null: the same shape, one
+        // step further from the reader.
+        if code.contains("get(\"result\")") && code.contains("unwrap_or(Value::Null)") {
+            return Some("a missing result read as a null");
+        }
+        None
+    }
+
+    #[test]
+    fn the_scanner_sees_each_laundering_shape() {
+        for bad in [
+            "json!({\"success\": true, \"result\": Value::Null})",
+            "json!({\"success\": true, \"result\": null})",
+            "reply[\"result\"] = Value::Null;",
+            "v.get(\"result\").cloned().unwrap_or(Value::Null)",
+        ] {
+            assert!(laundered(bad).is_some(), "missed: {bad}");
+        }
+        for fine in [
+            "json!({\"success\": true, \"result\": v})",
+            "json!({\"success\": true, \"result\": []})",
+            "err_with(ErrorCode::DeviceFailed, \"x\", json!({\"result\": false}))",
+            "let v = reply.get(\"result\").cloned();",
+            "// json!({\"success\": true, \"result\": Value::Null}) is what a read must not do",
+        ] {
+            assert!(laundered(fine).is_none(), "false alarm: {fine}");
+        }
+    }
+
+    #[test]
+    fn no_reply_puts_a_null_where_a_value_goes() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut files = Vec::new();
+        walk(&root, &mut files);
+        let mut found = Vec::new();
+        for f in files.iter().filter(|f| !is_test_file(f)) {
+            let src = std::fs::read_to_string(f).expect("utf-8 source");
+            for (n, line) in production_lines(&src) {
+                if let Some(why) = laundered(line) {
+                    let rel = f.strip_prefix(&root).unwrap_or(f);
+                    found.push(format!("{}:{n}: {why}: {}", rel.display(), line.trim()));
+                }
+            }
+        }
+        assert!(
+            found.is_empty(),
+            "{} replies launder a failure into a null result:\n{}",
+            found.len(),
+            found.join("\n")
+        );
     }
 
     #[test]

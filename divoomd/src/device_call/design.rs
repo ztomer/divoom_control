@@ -1,10 +1,10 @@
+use super::link_gone;
 use super::CallCtx;
-use crate::protocol::{
-    err_code,
-    ErrorCode::{DeviceFailed, UnknownCommand},
-};
+use crate::protocol::{err_code, ErrorCode::UnknownCommand};
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
+
+use super::read::read_reply;
 
 pub async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
     match method {
@@ -45,7 +45,7 @@ async fn set_eq(ctx: CallCtx<'_>) -> Value {
     let payload = [0x1eu8, u8::from(dynamic), mode, u8::from(stream)];
     match dev.send_command(0xbd, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_eq failed: {e}")),
+        Err(e) => link_gone("set_eq", &e),
     }
 }
 
@@ -65,7 +65,7 @@ async fn set_language(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0xbd, &[0x26, lang], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_language failed: {e}")),
+        Err(e) => link_gone("set_language", &e),
     }
 }
 
@@ -106,7 +106,7 @@ async fn set_user_define_time(ctx: CallCtx<'_>) -> Value {
         .await
     {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_user_define_time failed: {e}")),
+        Err(e) => link_gone("set_user_define_time", &e),
     }
 }
 
@@ -114,25 +114,35 @@ async fn get_user_define_time(ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let timeout = ctx.timeout;
 
-    match dev.send_command_and_wait(0xbd, &[0x15], timeout).await {
-        Some(p) if p.len() >= 3 => json!({
-            "success": true,
-            "result": {
-                "hour": i64::from(p[0]),
-                "minute": i64::from(p[1]),
-                "second": i64::from(p[2]),
+    read_reply(
+        dev,
+        "get_user_define_time",
+        0xbd,
+        &[0x15],
+        timeout,
+        2,
+        |p| {
+            if p.len() >= 3 {
+                return json!({
+                    "success": true,
+                    "result": {
+                        "hour": i64::from(p[0]),
+                        "minute": i64::from(p[1]),
+                        "second": i64::from(p[2]),
+                    }
+                });
             }
-        }),
-        Some(p) if p.len() == 2 => json!({
-            "success": true,
-            "result": {
-                "hour": i64::from(p[0]),
-                "minute": i64::from(p[1]),
-                "second": 0,
-            }
-        }),
-        _ => json!({"success": true, "result": Value::Null}),
-    }
+            json!({
+                "success": true,
+                "result": {
+                    "hour": i64::from(p[0]),
+                    "minute": i64::from(p[1]),
+                    "second": 0,
+                }
+            })
+        },
+    )
+    .await
 }
 
 async fn set_screen_dir(ctx: CallCtx<'_>) -> Value {
@@ -151,7 +161,7 @@ async fn set_screen_dir(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0xbd, &[0x23, direction], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_screen_dir failed: {e}")),
+        Err(e) => link_gone("set_screen_dir", &e),
     }
 }
 
@@ -171,7 +181,7 @@ async fn set_screen_mirror(ctx: CallCtx<'_>) -> Value {
         .unwrap_or(false);
     match dev.send_command(0xbd, &[0x24, u8::from(on)], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_screen_mirror failed: {e}")),
+        Err(e) => link_gone("set_screen_mirror", &e),
     }
 }
 
@@ -180,7 +190,7 @@ async fn factory_reset(ctx: CallCtx<'_>) -> Value {
 
     match dev.send_command(0xbd, &[0x25, 0x01], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("factory_reset failed: {e}")),
+        Err(e) => link_gone("factory_reset", &e),
     }
 }
 
@@ -200,7 +210,7 @@ async fn use_user_define_index(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0xbd, &[0x17, page], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("use_user_define_index failed: {e}")),
+        Err(e) => link_gone("use_user_define_index", &e),
     }
 }
 
@@ -220,9 +230,6 @@ async fn clear_user_define_index(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0xbd, &[0x16, page], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(
-            DeviceFailed,
-            &format!("clear_user_define_index failed: {e}"),
-        ),
+        Err(e) => link_gone("clear_user_define_index", &e),
     }
 }

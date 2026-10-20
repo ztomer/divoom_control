@@ -1,12 +1,15 @@
 mod temp;
 
+use super::link_gone;
 use super::CallCtx;
 use crate::protocol::{
     err_code,
-    ErrorCode::{BadRequest, DeviceFailed, UnknownCommand},
+    ErrorCode::{BadRequest, UnknownCommand},
 };
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
+
+use super::read::read_reply;
 
 /// # Panics
 ///
@@ -93,7 +96,7 @@ async fn set_hour_type(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0x2c, &[hour_type], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_hour_type failed: {e}")),
+        Err(e) => link_gone("set_hour_type", &e),
     }
 }
 
@@ -156,7 +159,7 @@ async fn set_date_time(ctx: CallCtx<'_>) -> Value {
     ];
     match dev.send_command(0x18, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_date_time failed: {e}")),
+        Err(e) => link_gone("set_date_time", &e),
     }
 }
 
@@ -197,7 +200,7 @@ async fn set_bluetooth_password(ctx: CallCtx<'_>) -> Value {
 
     match dev.send_command(0x27, &payload, true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_bluetooth_password failed: {e}")),
+        Err(e) => link_gone("set_bluetooth_password", &e),
     }
 }
 
@@ -205,10 +208,16 @@ async fn get_work_mode(ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let timeout = ctx.timeout;
 
-    match dev.send_command_and_wait(0x13, &[], timeout).await {
-        Some(p) if !p.is_empty() => json!({"success": true, "result": i64::from(p[0])}),
-        _ => json!({"success": true, "result": Value::Null}),
-    }
+    read_reply(
+        dev,
+        "get_work_mode",
+        0x13,
+        &[],
+        timeout,
+        1,
+        |p| json!({"success": true, "result": i64::from(p[0])}),
+    )
+    .await
 }
 
 async fn set_work_mode(ctx: CallCtx<'_>) -> Value {
@@ -227,7 +236,7 @@ async fn set_work_mode(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0x05, &[mode], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_work_mode failed: {e}")),
+        Err(e) => link_gone("set_work_mode", &e),
     }
 }
 
@@ -251,7 +260,7 @@ async fn set_channel(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0x45, &[channel_id], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_channel failed: {e}")),
+        Err(e) => link_gone("set_channel", &e),
     }
 }
 
@@ -266,7 +275,7 @@ async fn set_hot(ctx: CallCtx<'_>) -> Value {
     let enabled = crate::device_call::pos_bool(raw_args, 0, kw, "enabled", false);
     match dev.send_command(0x26, &[u8::from(enabled)], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_hot failed: {e}")),
+        Err(e) => link_gone("set_hot", &e),
     }
 }
 
@@ -286,7 +295,7 @@ async fn set_keyboard(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0x23, &[key], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("set_keyboard failed: {e}")),
+        Err(e) => link_gone("set_keyboard", &e),
     }
 }
 
@@ -306,6 +315,6 @@ async fn send_sd_status(ctx: CallCtx<'_>) -> Value {
         .byte();
     match dev.send_command(0x15, &[status], true).await {
         Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => err_code(DeviceFailed, &format!("send_sd_status failed: {e}")),
+        Err(e) => link_gone("send_sd_status", &e),
     }
 }
