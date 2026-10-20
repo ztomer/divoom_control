@@ -78,6 +78,8 @@ pub struct Daemon {
     pub connections: Arc<crate::connections::Connections>,
     /// Beaten by the accept loop; watched by `crate::watchdog` (P2.6).
     pub heartbeat: Arc<crate::watchdog::Heartbeat>,
+    /// The panels this daemon holds, remembered across a restart (P2.7).
+    pub links: crate::links::Wanted,
 }
 
 impl Default for Daemon {
@@ -115,6 +117,7 @@ impl Daemon {
             shutdown: Arc::new(tokio::sync::Notify::new()),
             connections: crate::connections::Connections::new(),
             heartbeat: crate::watchdog::Heartbeat::new(crate::watchdog::BEAT_EVERY),
+            links: crate::links::Wanted::none(),
         }
     }
 

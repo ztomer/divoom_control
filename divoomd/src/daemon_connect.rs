@@ -231,11 +231,24 @@ pub(crate) async fn cmd_scan(daemon: &Daemon, req: &Request) -> Value {
 }
 
 /// Adopt a connected transport into the fleet under `id`, announce it on the
-/// bus (status, then the owned-device list), and build the success reply;
-/// `id_key` names the reply field that carries `id` (`mac`, or `lan_ip` for
-/// a LAN device, whose caller then overwrites it with the bare address).
-async fn adopt(daemon: &Daemon, id: &str, id_key: &str, transport: DeviceTransport) -> Value {
+/// bus (status, then the owned-device list), REMEMBER it (so the link comes
+/// back if this daemon restarts -- P2.7's remainder), and build the success
+/// reply; `id_key` names the reply field that carries `id` (`mac`, or
+/// `lan_ip` for a LAN device, whose caller then overwrites it with the bare
+/// address).
+///
+/// `args` is the connect request that produced this link, kept verbatim: the
+/// restore replays it, so a LAN link comes back as a LAN link and a mock
+/// link comes back as a mock.
+async fn adopt(
+    daemon: &Daemon,
+    id: &str,
+    id_key: &str,
+    transport: DeviceTransport,
+    args: &Value,
+) -> Value {
     daemon.fleet.adopt(id, Arc::new(transport)).await;
+    daemon.links.remember_link(id, args.clone()).await;
     let _ = daemon.tx.send(status_payload(true, Some(id), None));
     let _ = daemon.tx.send(owned_devices_payload(daemon).await);
     json!({"success":true,"connected":true,"connection_state":"connected", id_key: id})
@@ -264,6 +277,7 @@ async fn connect_mock(daemon: &Daemon, req: &Request) -> Value {
         mock_mac,
         "mac",
         DeviceTransport::Mock(mock_transport),
+        &req.args,
     )
     .await
 }
@@ -317,6 +331,7 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
             &format!("LAN:{ip}"),
             "lan_ip",
             DeviceTransport::Lan(lan),
+            &req.args,
         )
         .await;
         reply["lan_ip"] = json!(ip);
@@ -338,7 +353,7 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
         .unwrap_or(true);
     if !use_ios_le {
         match crate::spp::SppTransport::connect(&id, None, None).await {
-            Ok(t) => return adopt(daemon, &id, "mac", DeviceTransport::Spp(t)).await,
+            Ok(t) => return adopt(daemon, &id, "mac", DeviceTransport::Spp(t), &req.args).await,
             Err(e) => {
                 return err_code(ErrorCode::DeviceFailed, &format!("connect SPP failed: {e}"))
             }
@@ -353,7 +368,7 @@ pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
             result = run_connect(daemon, &id).await;
         }
         match result {
-            Ok(t) => adopt(daemon, &id, "mac", DeviceTransport::Ble(t)).await,
+            Ok(t) => adopt(daemon, &id, "mac", DeviceTransport::Ble(t), &req.args).await,
             Err(e) => err_code(ErrorCode::DeviceFailed, &format!("connect failed: {e}")),
         }
     }
@@ -392,6 +407,8 @@ pub(crate) async fn cmd_disconnect_one(daemon: &Daemon, mac: &str) -> Value {
     if let Some(l) = link {
         hang_up(&l.transport).await;
     }
+    // The user dropped this panel: it must not come back on the next start.
+    daemon.links.forget_link(&dev.id).await;
     let _ = daemon
         .tx
         .send(status_payload(false, Some(&dev.id), Some("disconnected")));
@@ -408,6 +425,8 @@ pub(crate) async fn cmd_disconnect(daemon: &Daemon) -> Value {
     for l in links {
         hang_up(&l.transport).await;
     }
+    // Every panel was dropped: none of them comes back on the next start.
+    daemon.links.forget_all_links().await;
     let _ = daemon.tx.send(status_payload(false, None, None));
     let _ = daemon.tx.send(owned_devices_payload(daemon).await);
     json!({"success": true})

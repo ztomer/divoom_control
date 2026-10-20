@@ -61,6 +61,7 @@ pub mod lan;
 pub mod lease;
 #[cfg(test)]
 mod link_loss_tests;
+pub mod links;
 pub mod live_jobs;
 #[cfg(target_os = "macos")]
 pub mod macos_notifications;

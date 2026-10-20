@@ -155,6 +155,8 @@ async fn teardown_wall(daemon: &Daemon) -> Value {
     }
     drop(wall_guard);
     *daemon.wall_slots.lock().await = serde_json::Map::new();
+    // The wall is gone: it must not come back on the next start.
+    daemon.links.forget_wall().await;
     json!({"success": true, "wall": false})
 }
 
@@ -256,7 +258,13 @@ pub async fn cmd_wall_configure(daemon: &Daemon, req: &Request) -> Value {
                 .map(|mac| (mac.clone(), json!(super::LAN_SLOT_REFUSAL)))
                 .collect();
             *daemon.wall.lock().await = Some(new_wall);
-            *daemon.wall_slots.lock().await = slots;
+            *daemon.wall_slots.lock().await = slots.clone();
+            // Remember the slots: a wall is not a link, so nothing else would
+            // bring it back after the daemon restarts (P2.7's remainder).
+            daemon
+                .links
+                .remember_wall(slots, i64::from(cell_size))
+                .await;
             let mut reply = json!({"success": true, "wall": true});
             if !degraded.is_empty() {
                 reply["degraded"] = json!(degraded);

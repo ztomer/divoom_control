@@ -209,6 +209,20 @@ def spawn_daemon(
     except OSError:
         pass
 
+    # The daemon brings the panels it held before it last stopped back when
+    # it starts (P2.7's remainder): a panel a CLI or an MCP client linked has
+    # no client left holding the memory, and a wall's slots were never a
+    # link at all.
+    #
+    # The restore reaches for the radio, so it is asked for HERE and not in
+    # the daemon: this is the spawn that carries the Bluetooth grant (the
+    # daemon is its own responsible process, see the TCC note below), and a
+    # daemon started by hand from a shell has no grant -- the radio kills
+    # such a process on the first scan, so the restore must not be what
+    # reaches for it first.
+    spawn_env = os.environ.copy()
+    spawn_env["DIVOOM_LINKS_RESTORE"] = "1"
+
     # macOS TCC: an undisclaimed child inherits its launcher's responsible
     # process; if that launcher lacks a Bluetooth usage description (e.g. the .app
     # was started under Terminal / Claude Desktop), CoreBluetooth SIGABRTs the
@@ -217,7 +231,7 @@ def spawn_daemon(
     # __TEXT,__info_plist).
     if sys.platform == "darwin":
         try:
-            disclaim_env = dict(os.environ)
+            disclaim_env = dict(spawn_env)
             pid = _spawn_disclaimed_macos(cmd, log_path, env=disclaim_env)
             logger.info("Spawned daemon (TCC-disclaimed) pid=%s", pid)
             return pid
@@ -230,7 +244,6 @@ def spawn_daemon(
     except OSError:
         _out = _err = subprocess.DEVNULL
     logger.info("Spawning daemon (Popen, detach=%s): %s", detach, " ".join(cmd))
-    spawn_env = os.environ.copy()
     return subprocess.Popen(
         cmd, stdout=_out, stderr=_err, stdin=subprocess.DEVNULL,
         start_new_session=detach, env=spawn_env,

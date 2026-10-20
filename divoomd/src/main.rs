@@ -196,8 +196,7 @@ async fn main() {
 
     let tcp = bind_tcp(args.host, args.port, args.token).await;
 
-    let daemon = Arc::new(Daemon::new());
-    daemon.initialize_self_weak(Arc::downgrade(&daemon));
+    let daemon = start_daemon();
 
     // Monthly-best background sync is OPT-IN (parity: in Python it is a SEPARATE
     // daemon, not the main one). Without this gate the main daemon would push
@@ -265,6 +264,53 @@ async fn main() {
     // it here: `release` already PRINTS when it was not, which is the visible
     // symptom of a duplicate instance and the whole reason it is not silent.
     let _was_ours = held.release();
+}
+
+/// The daemon as the PROCESS runs it.
+///
+/// Two things are true of a daemon that runs and not of a `Daemon` value a
+/// test builds:
+///
+///   * the panels it holds are written down, so they come back after a
+///     restart (P2.7's remainder). Only the process asks for this: a test's
+///     daemon keeps no list, so no test can write the user's — or erase it.
+///   * the panels it held before it restarted are brought back. The GUI's own
+///     relink covers the GUI's panels; this covers the ones a CLI or an MCP
+///     client linked, and the wall's slots, which no client held in memory.
+///     It runs on its own task, after a short delay, so the client that
+///     started the daemon gets the radio first.
+fn start_daemon() -> Arc<Daemon> {
+    let mut daemon = Daemon::new();
+    if let Some(location) = divoomd::links::resolve_location() {
+        daemon.persist_links(location);
+    }
+    let daemon = Arc::new(daemon);
+    daemon.initialize_self_weak(Arc::downgrade(&daemon));
+    // The restore reaches for the radio, and the radio is what a daemon
+    // WITHOUT the Bluetooth grant dies on (SIGABRT, no message). A daemon
+    // started from a shell has no grant -- the grant belongs to the bundle
+    // the app installed -- so the restore is opt-in: whoever spawns the
+    // daemon with the grant (the app's client) asks for it.
+    if restore_is_enabled() {
+        let restore_daemon = daemon.clone();
+        tokio::spawn(async move {
+            divoomd::links::restore(&restore_daemon).await;
+        });
+    }
+    daemon
+}
+
+/// Whether this daemon should bring its panels back at startup.
+///
+/// `DIVOOM_LINKS_RESTORE=1` asks for it. The app's client sets it, because
+/// that is the spawn that carries the Bluetooth grant; a daemon started by
+/// hand from a shell does not have the grant, and reaching for the radio
+/// without it kills the process on the spot.
+fn restore_is_enabled() -> bool {
+    matches!(
+        std::env::var("DIVOOM_LINKS_RESTORE").as_deref(),
+        Ok("1" | "true" | "yes")
+    )
 }
 
 /// Resolve when SIGINT or SIGTERM arrives, so the socket is unlinked on a clean
