@@ -4,6 +4,43 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## Unreleased
+
+- **A dropped link is not a connected panel, and a read that got no answer is
+  not a success.** On 2026-10-18 a Pixoo-1 stopped answering: every later
+  call failed `Peripheral no longer available`, yet `device_status` kept
+  saying `connected: true`, and `light.get_light_mode` answered
+  `{"success": true, "result": null}` -- a failed read dressed as a success.
+  Two failures, one class: a failure laundered into a success shape.
+
+  The read path could not even say what had happened. `send_command_and_wait`
+  answered `Option<Vec<u8>>`, so a write that failed (the peripheral is gone)
+  and a panel that simply did not answer came back as the same "no bytes" --
+  and "no bytes" became `success: true, result: null` in 28 places across the
+  daemon's `device_call` layer, the read the report named being one of them.
+  The transport now answers with three outcomes -- `Answered`, `Silent`,
+  `LinkFailed` (`divoomd/src/transport.rs`) -- and every read has ONE exit
+  (`divoomd/src/device_call/read.rs`): the value, or a failure with a code. A
+  read that got no answer is `device_failed` (the panel is there and did not
+  answer); a command that could not be SENT is `device_disconnected` (the
+  panel is not there any more). That second code is also the one the daemon
+  acts on: the link is retired, so the panel stops reading as connected, and
+  the drop is reported -- the same two broadcasts `mock_simulate_drop` walks
+  for a simulated one (`divoomd/src/daemon/link.rs`). A failed write used to
+  be `device_failed`; it is `device_disconnected` now, because the command
+  never left the machine.
+
+  The class, not the instance. The same fix carries the live widget's push
+  (the most common writer to a panel, and usually how a drop is noticed at
+  all), and the MCP `get_device_state` tool, whose `light_mode` field read
+  `control.get_light_mode` -- a method the daemon never routed, so the field
+  reported "no value" for a read that never ran -- and whose orientation and
+  mirror fields asked for reads that do not exist. A field the daemon could
+  not read is now `null` AND named in `errors` with the reason and the code.
+  A structural gate refuses a reply that puts a null where a value goes
+  (`divoomd/src/reply_shape_scan_tests.rs`), so the next read cannot launder
+  a failure the same way.
+
 ## v0.41.3 — the browser suites run in the local gate, and the app stops overwriting its own state (2026-10-19)
 
 Patch release, and a catch-up one: it carries every round since v0.41.2 — the

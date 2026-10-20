@@ -153,6 +153,13 @@ P2.4, a named subscriber (`client_id`) replacing its own slot before staleness e
 P2.5, a lagging subscriber caught up to the latest value per key (`divoomd/src/events.rs`);
 P2.6, an in-process watchdog that exits a wedged daemon within 30 s (`divoomd/src/watchdog.rs`).
 
+Landed (2026-10-19): P2.8, a lost link retires itself and is reported (event +
+`device_status`), and every read that gets no answer fails with a code instead
+of `success: true, result: null` -- the class, not the one read the report
+named: 28 reads across the daemon's `device_call` layer, the MCP read tool,
+and the live widget's push (`divoomd/src/device_call/read.rs`,
+`divoomd/src/daemon/link.rs`, `divoomd/src/transport.rs`).
+
 #### P2.7 — The panel does not come back after a daemon restart
 **Status:** WATCH (fixed in code 2026-10-18; hardware confirmation open). The GUI's
 respawn path owns it (`divoom_gui/panel_relink.py`): `reconnect_daemon`
@@ -179,21 +186,6 @@ does not link its saved panels itself.
 without a user action (one owner decides who: the daemon from its saved
 topology, or the GUI's respawn path), pinned by a test that kills the daemon
 under a mock panel and sees the link return.
-
-#### P2.8 — A dropped BLE link reads as connected, and a timed-out read as success
-**Status:** OPEN
-**Why:** on 2026-10-18, after a `0x74` (brightness) write the Pixoo-1 stopped
-answering: every later call failed `Peripheral no longer available`, yet
-`device_status` kept saying `connected: true`, and `light.get_light_mode`
-answered `{"success": true, "result": null}` -- a failed read dressed as a
-success (`get_light_mode` in `divoomd/src/device_call/basic.rs` maps a
-timeout to `success: true`, as do `get_device_name`, `get_brightness` and
-`get_volume` beside it). No
-disconnect line was logged. `disconnect` then `connect {mac}` recovered it.
-**Done when:** a lost peripheral flips the panel's `connected` and is
-reported (event + `device_status`), and every read that gets no answer
-fails with an `ErrorCode` instead of `success: true, result: null`, each
-pinned by a mock-panel test that drops the link mid-call.
 
 ### Phase 3 — the daemon knows what each panel is
 
