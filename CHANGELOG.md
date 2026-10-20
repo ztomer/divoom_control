@@ -32,12 +32,13 @@ shipped milestone (per the project planning docs).
 
   The class, not the instance. The same fix carries the live widget's push
   (the most common writer to a panel, and usually how a drop is noticed at
-  all), and the MCP `get_device_state` tool, whose `light_mode` field read
-  `control.get_light_mode` -- a method the daemon never routed, so the field
-  reported "no value" for a read that never ran -- and whose orientation and
-  mirror fields asked for reads that do not exist. A field the daemon could
-  not read is now `null` AND named in `errors` with the reason and the code.
-  A structural gate refuses a reply that puts a null where a value goes
+  all), the custom-art page push and the hot-channel update, and the MCP
+  `get_device_state` tool, whose `light_mode` field read `control.get_light_mode`
+  -- a method the daemon never routed, so the field reported "no value" for a
+  read that never ran -- and whose orientation and mirror fields asked for
+  reads that do not exist. A field the daemon could not read is now `null` AND
+  named in `errors` with the reason and the code. A structural gate refuses a
+  reply that puts a null where a value goes
   (`divoomd/src/reply_shape_scan_tests.rs`), so the next read cannot launder
   a failure the same way.
 
