@@ -97,6 +97,16 @@ was SHOWN apart from what was STORED, and says which in the run's own state.
   page]`), so the art on the screen is the art in the device's own gallery;
   **the owner's eyes are the last proof on this hardware.**
 
+- **Tests.** Rust: **450** unit tests + the integration suites (**577** in the
+  no-BLE run, **701** in the whole run), all green. Python: **2134** passed /
+  180 skipped in `tests/`. The new rules were pinned RED FIRST — the stored
+  axis of the verdict ("a device that was reached and stored nothing is a
+  FAILED RUN"), the state that says what was SHOWN and what was STORED, the
+  app's own wire form for the save, and the frames the store keeps — each
+  one was seen RED with its own message before the rule went back, and the
+  panic the live run found was seen RED with the panic's own message
+  ("range start index 12 out of range for slice of length 9").
+
 ## v0.41.5 — the gallery's magic-26 files decode, and the run names the ones it cannot show (2026-10-21)
 
 The hot channel's last observed run pushed **34 of 40 files** to the owner's
