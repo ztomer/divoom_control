@@ -23,7 +23,7 @@ refresh is fired INSIDE the gesture on purpose, so the race is a certainty.
 import pytest
 
 from tests.support.browser import eval_js, require_browser, wait_js
-from tests.test_e2e_bench_snap import A, B, _box, _open, _owned, _panel
+from tests.test_e2e_bench_snap import A, B, _box, _node_box, _open, _owned, _panel
 
 _REFRESH = "() => window.SpatialStage.refresh()"
 
@@ -109,7 +109,7 @@ async def test_a_bench_refresh_during_a_drag_keeps_the_drag():
             b = await _box(page, B)
             gap = b["x"] - (a["x"] + a["w"])
             dx, dy = -(gap - 5), 6
-            box = await page.locator(f"[id='spatial-node-{B}']").bounding_box()
+            box = await _node_box(page, B)
             sx, sy = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
             await page.mouse.move(sx, sy)
             await page.mouse.down()
