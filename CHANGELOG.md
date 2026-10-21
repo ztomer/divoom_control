@@ -184,13 +184,15 @@ a log nobody read.
   the rest of the crate already uses), and the status-marker seed's entry for
   `monthly_best.rs` is gone: the debt may only fall.
 
-- **Tests.** Rust: 428 unit tests + the integration suites, all green
-  (`cargo test -p divoomd --no-default-features`, and with BLE). Python:
-  2122 passed, 180 skipped (the browser and hardware suites are opt-in).
-  The new rules were pinned RED FIRST — the loop's target resolution, the
-  stale file's report, the daily cadence and the settings' own address rule
-  each fail against the old behaviour with the message quoted in the round's
-  notes.
+- **Tests.** Rust: 432 unit tests + the integration suites (559 in the
+  whole run), all green (`cargo test -p divoomd --no-default-features`, and
+  with BLE). Python: 2128 passed / 180 skipped in `tests/`, 1022 passed /
+  73 skipped in `examples/tests` (the browser and hardware suites are
+  opt-in). The new rules were pinned RED FIRST — the loop's target
+  resolution, the stale file's report, the daily cadence, the settings' own
+  address rule, the write that must not unregister what it did not see, and
+  "a run that missed a device is not ok" each fail against the old behaviour
+  with the message quoted in the round's notes.
 
 Carried from the Unreleased section — the gallery round's work, released with
 this one:
