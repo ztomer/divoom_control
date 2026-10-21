@@ -1,36 +1,58 @@
 """Shared persistence for the Monthly Best "hot channel" feature.
 
 Both the desktop GUI and the headless daemon read/write this single config so
-that the user's selected target devices and schedule survive across sessions and
-drive automatic, headless syncs (request items 4.c / 4.d).
+that the user's schedule survives across sessions and drives automatic,
+headless syncs.
 
 Stored at ``~/.config/divoom-control/hotchannel.json``:
 
     {
-      "enabled": false,        # whether the scheduled daemon should run
-      "interval": 3600,        # seconds between automatic sync cycles
-      "classify": 18,          # Divoom gallery classification id (18 = Recommend)
-      "targets": ["AA:BB:CC:DD:EE:FF", "LAN:192.168.1.50"],  # device addresses
-      "device_galleries": {"AA:BB:CC:DD:EE:FF": 9, "LAN:192.168.1.50": 18}  # per-device gallery style
+      "enabled": false,   # whether the scheduled daemon should run
+      "interval": 86400   # seconds between automatic sync cycles
     }
-"""
 
+WHAT IS NOT HERE ANY MORE: the devices the loop pushes to. They used to be
+here (``targets`` and ``device_galleries``), in a list nobody filled — so the
+loop was enabled, scheduled, and pushing nothing at all. The devices are the
+app's settings now (``config.ini``'s ``[gallery]`` table); see
+``divoom_lib/settings_devices.py`` and the daemon's
+``divoomd/src/settings_devices.rs``. One home for the fact, so there is no
+second list to fill and no second list to drift.
+
+A file written by an older build still carries the old keys. They are
+REPORTED (a warning, so the owner learns the file is stale) and IGNORED, and
+the next save drops them — the migration is the save, not a silent rewrite.
+"""
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path
+
+logger = logging.getLogger("divoom_gui")
 
 CONFIG_DIR = Path.home() / ".config" / "divoom-control"
 CONFIG_PATH = CONFIG_DIR / "hotchannel.json"
 
+# The default cadence: a DAY.
+#
+# WHY: the "monthly best" content is refreshed almost daily — the owner says
+# so, and the dates on the files themselves bear it out. The CATEGORY is
+# called "monthly best" because that is the CLOUD's name for it, not because
+# the content turns over monthly. A weekly push leaves the device up to a
+# week behind, so the default is 86400 seconds. The owner can still choose
+# another interval in the Routines card.
+DEFAULT_INTERVAL = 86400
+
 DEFAULTS = {
     "enabled": False,
-    "interval": 3600,
-    "classify": 18,
-    "targets": [],
-    "device_galleries": {},
+    "interval": DEFAULT_INTERVAL,
 }
+
+# The keys an older build wrote here that no longer mean anything. They are
+# read (an old file must not break anything), reported, and ignored.
+LEGACY_KEYS = ("targets", "device_galleries", "classify")
 
 # Guardrails.
 MIN_INTERVAL = 60  # never hammer the cloud/device faster than once a minute
@@ -57,13 +79,27 @@ def load_config() -> dict:
             data = json.loads(path.read_text(encoding="utf-8"))
             if isinstance(data, dict):
                 cfg.update({k: data[k] for k in DEFAULTS if k in data})
+                stale = [k for k in LEGACY_KEYS if k in data]
+                if stale:
+                    logger.warning(
+                        "%s still carries %s — ignored. The hot channel's devices "
+                        "are the app's settings (config.ini [gallery]); a stale list "
+                        "must not override them. Saving the schedule drops them.",
+                        path,
+                        ", ".join(stale),
+                    )
         except (OSError, ValueError):
             pass
     return _normalize(cfg)
 
 
 def save_config(cfg: dict) -> bool:
-    """Persist a (partial) config, merged over the current stored values."""
+    """Persist a (partial) config, merged over the current stored values.
+
+    Only the loop's own keys are written, so saving MIGRATES a file that
+    still carries the old device list: the stale keys go away because the
+    file is rewritten, not because they were read.
+    """
     merged = load_config()
     for k in DEFAULTS:
         if k in cfg:
@@ -77,70 +113,18 @@ def save_config(cfg: dict) -> bool:
         return False
 
 
-def set_targets(targets: list[str]) -> bool:
-    return save_config({"targets": targets})
-
-
-def get_targets() -> list[str]:
-    return load_config()["targets"]
-
-
-def get_device_classify(cfg: dict, address: str) -> int:
-    """Return the per-device gallery style, falling back to global classify."""
-    per_device = cfg.get("device_galleries") or {}
-    if address in per_device:
-        try:
-            return int(per_device[address])
-        except (TypeError, ValueError):
-            pass
-    return cfg.get("classify", DEFAULTS["classify"])
-
-
-def set_device_galleries(galleries: dict) -> bool:
-    """Persist per-device gallery style overrides."""
-    return save_config({"device_galleries": galleries})
-
-
 def _normalize(cfg: dict) -> dict:
-    """Coerce/validate fields so callers and the daemon get safe values."""
-    out = dict(DEFAULTS)
-    out.update(cfg)
-    out["enabled"] = bool(out.get("enabled", False))
+    """Coerce/validate fields so callers and the daemon get safe values.
+
+    Only the loop's own keys survive: a key this build does not know is
+    dropped rather than written back, which is what migrates a stale file.
+    """
+    out = {
+        "enabled": bool(cfg.get("enabled", DEFAULTS["enabled"])),
+        "interval": DEFAULTS["interval"],
+    }
     try:
-        out["interval"] = max(MIN_INTERVAL, min(MAX_INTERVAL, int(out.get("interval", 3600))))
+        out["interval"] = max(MIN_INTERVAL, min(MAX_INTERVAL, int(cfg.get("interval", DEFAULT_INTERVAL))))
     except (TypeError, ValueError):
         out["interval"] = DEFAULTS["interval"]
-    try:
-        out["classify"] = int(out.get("classify", 18))
-    except (TypeError, ValueError):
-        out["classify"] = DEFAULTS["classify"]
-    targets = out.get("targets") or []
-    if not isinstance(targets, list):
-        targets = []
-    # De-dupe, drop blanks, preserve order.
-    seen, clean = set(), []
-    for t in targets:
-        t = str(t).strip()
-        if t and t not in seen:
-            seen.add(t)
-            clean.append(t)
-    out["targets"] = clean
-    # Per-device gallery styles. Coerce defensively and DROP bad entries: a
-    # non-numeric value (hand-edited JSON, or a blank style from the GUI) must
-    # not raise here — load_config() calls _normalize() outside its try/except
-    # and promises "never raises", and monthly_best_daemon.main() calls
-    # load_config() unguarded at startup, so a bare int(v) would crash the
-    # headless daemon. Mirrors get_device_classify()'s tolerant coercion.
-    dg = out.get("device_galleries") or {}
-    if not isinstance(dg, dict):
-        dg = {}
-    clean_dg: dict = {}
-    for k, v in dg.items():
-        if not (isinstance(k, str) and k.strip()):
-            continue
-        try:
-            clean_dg[k] = int(v)
-        except (TypeError, ValueError):
-            continue
-    out["device_galleries"] = clean_dg
     return out

@@ -56,9 +56,10 @@ class GalleryHotApiMixin:
 
     def sync_now(self) -> str:
         """Manually run Auto-Sync immediately, instead of waiting for the
-        scheduled interval. Pushes hot-channel content to every toggled sync
-        target (`hotchannel_config.get_targets()` — the same list the
-        Routines > Auto-Sync device toggles edit) one at a time — the daemon
+        scheduled interval. Pushes hot-channel content to every device the
+        app's settings register (`settings_devices.registered_devices()` —
+        the same table the Routines > Auto-Sync device toggles edit and the
+        daemon's scheduled loop reads) one at a time — the daemon
         owns a single active device, so this connects, runs the same
         `hot_update` the "Update Hot Channel" button uses, waits for it to
         finish, disconnects (implicitly, on the next `connect_single_device`),
@@ -67,7 +68,7 @@ class GalleryHotApiMixin:
         `monthly_best_daemon.py::_push_items_to_target`'s per-address
         try/except). Runs in a background thread; returns immediately."""
         logger.info("GUI Action: Sync Now (start)...")
-        from divoom_lib import hotchannel_config
+        from divoom_lib import settings_devices
 
         def notify(address, phase, **extra):
             if not self.window:
@@ -80,7 +81,7 @@ class GalleryHotApiMixin:
                 logger.warning(f"Failed to send sync-now progress: {e}")
 
         def worker():
-            targets = hotchannel_config.get_targets()
+            targets = [addr for addr, _ in settings_devices.registered_devices()]
             summary = {"total": len(targets), "ok": 0, "failed": 0}
             for address in targets:
                 notify(address, "connecting")

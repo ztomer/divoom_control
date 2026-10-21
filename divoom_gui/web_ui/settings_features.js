@@ -5,7 +5,10 @@ document.addEventListener("DOMContentLoaded", () => {
     // ── 4. ROUTINES ──
     function saveSchedule() {
         const enabled = document.getElementById("routines-auto-sync-enabled")?.checked || false;
-        const interval = parseInt(document.querySelector("#routines-interval-tabs .tab-btn.active")?.getAttribute("data-interval")) || 3600;
+        // 86400 = a day. The "monthly best" content is refreshed almost daily
+        // (the CATEGORY is the cloud's name for it, not a monthly cadence), so
+        // a weekly push leaves the device up to a week behind.
+        const interval = parseInt(document.querySelector("#routines-interval-tabs .tab-btn.active")?.getAttribute("data-interval")) || 86400;
         if (window.pywebview?.api?.save_hot_channel_config) {
             window.pywebview.api.save_hot_channel_config(JSON.stringify({ enabled, interval })).then(ok => {
                 const st = document.getElementById("routines-auto-sync-status");
@@ -21,7 +24,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     const cfg = JSON.parse(json);
                     const en = document.getElementById("routines-auto-sync-enabled");
                     if (en) en.checked = !!cfg.enabled;
-                    const iv = String(cfg.interval || 3600);
+                    const iv = String(cfg.interval || 86400);
                     document.querySelectorAll("#routines-interval-tabs .tab-btn").forEach(b => {
                         b.classList.toggle("active", b.getAttribute("data-interval") === iv);
                     });

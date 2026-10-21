@@ -237,9 +237,14 @@ class GallerySyncMixin(GalleryHotApiMixin):
         return cached_data
 
     def get_sync_candidates(self) -> str:
-        from divoom_lib import hotchannel_config
-        selected = set(hotchannel_config.get_targets())
-        cfg = hotchannel_config.load_config()
+        """The devices the hot channel can reach, and whether each is on.
+
+        The answer comes from the app's OWN settings (`config.ini`'s
+        `[gallery]` table) — the same table the daemon reads — so the toggle
+        says what the daemon will actually do.
+        """
+        from divoom_lib import settings_devices
+        selected = {addr for addr, _ in settings_devices.registered_devices()}
         seen, candidates = set(), []
 
         def add(address, name):
@@ -250,7 +255,7 @@ class GallerySyncMixin(GalleryHotApiMixin):
                 "address": address,
                 "name": name or "Divoom Screen",
                 "selected": address in selected,
-                "gallery_style": hotchannel_config.get_device_classify(cfg, address),
+                "gallery_style": settings_devices.device_classify(address),
                 "device_name": name or "Divoom Screen",
             })
 
@@ -268,20 +273,24 @@ class GallerySyncMixin(GalleryHotApiMixin):
         return json.dumps(candidates)
 
     def set_sync_targets(self, targets_json=None, galleries_json=None) -> bool:
-        """Accept JSON-string targets list and optional JSON-string galleries dict."""
-        from divoom_lib import hotchannel_config
+        """Register the given devices — in the app's settings, not in a second list.
+
+        The Routines card's toggles and the daemon's push read the same
+        table, so what the owner ticks here is what the daemon pushes to.
+        """
+        from divoom_lib import settings_devices
         try:
             addrs = []
             if targets_json and isinstance(targets_json, str):
                 parsed = json.loads(targets_json)
                 if isinstance(parsed, list):
                     addrs = [str(a) for a in parsed]
-            ok = hotchannel_config.set_targets(addrs)
+            galleries = {}
             if galleries_json and isinstance(galleries_json, str):
                 parsed = json.loads(galleries_json)
                 if isinstance(parsed, dict):
-                    hotchannel_config.set_device_galleries(parsed)
-            return ok
+                    galleries = parsed
+            return settings_devices.set_registered(addrs, galleries)
         except Exception as e:
             logger.error(f"set_sync_targets failed: {e}")
             return False

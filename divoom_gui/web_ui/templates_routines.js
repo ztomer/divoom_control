@@ -32,10 +32,11 @@ window.DivoomTemplates.routines = `
                     <div class="mb-18">
                         <label class="form-label label-sm">Sync every</label>
                         <div class="tabs-row" role="tablist" id="routines-interval-tabs">
-                            <button class="tab-btn active" data-interval="3600">1h</button>
+                            <button class="tab-btn" data-interval="3600">1h</button>
                             <button class="tab-btn" data-interval="21600">6h</button>
                             <button class="tab-btn" data-interval="43200">12h</button>
-                            <button class="tab-btn" data-interval="86400">24h</button>
+                            <!-- 24h is the default: the content is refreshed almost daily. -->
+                            <button class="tab-btn active" data-interval="86400">24h</button>
                             <button class="tab-btn" data-interval="604800">7d</button>
                             <button class="tab-btn" data-interval="2592000">30d</button>
                         </div>
