@@ -4,6 +4,99 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## v0.41.6 — the gallery push STORES the art, and says so (2026-10-21)
+
+The owner's ruling (2026-10-21): *"art should be stored"*, and *"decoder
+should be fixed, if possible"* (the decoder half shipped as v0.41.5). The
+push **showed** the art — it streamed a `0x8B` animation to the panel — and
+never left it there. This release leaves the art on the device, counts what
+was SHOWN apart from what was STORED, and says which in the run's own state.
+
+- **What "stored" CAN mean on this protocol, and the code that shows it.**
+  The panel has a persistent gallery of its own — the app's "custom art"
+  page — and the repo's own comparison of the app's two channels says so in
+  a table (`docs/CUSTOM_CHANNEL_VS_APK.md`): the `0x8B` path the push used is
+  "**Transient display, one-shot**", while the custom-art path is
+  "**Persistent storage, 3×12 slots**". That path is four commands:
+  - **SAVE** a page — `0xB1` "Set user gif": header `[0x00,0x00,page]`,
+    packets `[0x01][len:2 LE][data]`, end `[0x02]`. This is the app's own
+    page writer (`CmdManager.N2`), and it is the form the app uses on the
+    panels in this house: the app sends the NEW form (`0x8C`) only for the
+    models whose `DeviceFunction.NewAniSendMode2020` is set (DigitalBadge,
+    CyberBag2, Dipow*…), and Pixoo/Ditoo/Tivoo/Timoo are not among them.
+  - **PLAY** a stored page — `0xBD [0x17,page]` ("use user define index").
+  - **FORGET** a page — `0xBD [0x16,page]`.
+  - **ASK** what is stored — `0x8E` "App get user define info" (the file ids
+    a page holds).
+  `divoomd/src/gallery_store.rs` (new) is the store: it encodes the art in
+  the device's own frame form (`image_encode`, the same encoder the show path
+  uses, so **the art that is stored is the art that was shown**), writes the
+  page in the app's own wire form, and tells the panel to play it.
+
+- **What "stored" CANNOT mean here, and why.** Not the cloud's album route:
+  `Photo/*` is the app's photo-FRAME feature, the album lives in the cloud,
+  and the command that writes a device's own photo store
+  (`Photo/LocalAddToAlbum`) uploads a phone picture over the device's LOCAL
+  HTTP server — while the daemon's own "what does it hold" query
+  (`Photo/GetPhotoList`) TIMES OUT on these panels. Not the `0x8B` stream:
+  streaming is showing.
+
+- **SHOWN and STORED are two numbers now.** The run counts the files the
+  device showed and the files it stored, and the state file
+  (`~/.config/divoom-control/hotchannel_state.json`) carries both, per
+  device, with what the device said it holds. The old state said only
+  "ok"/"failed", which could not answer the owner's question — did the art
+  land?
+
+- **The failure granularity moved to the thing the push is FOR.** A device
+  that could not be reached, or was reached and stored NOTHING, fails the run
+  and rings the phone; a file that could not be shown is a warning, and a
+  device that stored three of five files has stored something and says so.
+  (Before this, the axis was "showed nothing" — a run that showed the art
+  and kept none of it was a pass.)
+
+- **The live run found a PANIC, and it is fixed.** The first run that reached
+  a real panel with the store in it offered NINE items (one file's container
+  was a magic-42 the decoder does not read) and the store panicked on
+  `items[12..]` — a slice past the end, in the push path, on a page that
+  holds twelve. `split_for_page` is the fix, and
+  `fewer_items_than_a_page_are_split_without_panicking` is the test that
+  was seen RED with the panic's own message ("range start index 12 out of
+  range for slice of length 9") before the fix went back. **A test suite
+  that cannot see a panic in the push path is a suite that is not looking.**
+
+- **THE OBSERVED RUN (2026-10-21, the shipped daemon, the owner's four
+  panels).** The cycle finished **"37 of 40 file(s) shown and 37 stored in 4
+  device(s)' own gallery"** — the art is on the devices, and the state file
+  says so per device:
+
+  | device | offered | shown | stored | the read-back |
+  |---|---|---|---|---|
+  | Timoo-light-4 | 10 | 9 | **9** | no answer |
+  | Ditoo-light-2 | 10 | 9 | **9** | no answer |
+  | Tivoo-Max-light-3 | 10 | 9 | **9** | no answer |
+  | Pixoo-1 | 10 | 10 | **10** | no answer |
+
+  The three files that did not make it are named, one per device, with the
+  reason ("Burger on pink" (the cloud's name carries a burger emoji):
+  "a magic-42 container this decoder does not read") — they are a WARNING, not a failed run, and the run says so.
+
+- **What CANNOT be verified from this side, said plainly.** The read-back
+  (`0x8E`) does not answer on this hardware: measured 2026-10-21 on all
+  four of the owner's panels (Pixoo-1, Ditoo-light-2, Tivoo-Max-light-3,
+  Timoo-light-4) every `0x8E` timed out, while `0xB6` ("how many
+  user-defined items") answers on three of them and `0xBD [0x15]` ("get user
+  define time") answers on all four — so the panels are alive and the store
+  is not what is missing. The protocol has no screen readback either. So
+  the run reports the store as the device's ACKNOWLEDGEMENT of the save
+  command, asks the device afterwards what it holds, and prints the answer
+  it got — including "the device did not answer the read-back query, so the
+  store cannot be confirmed from this side". A run that claims a
+  confirmation it does not have is the thing this release exists to stop.
+  The push also tells the panel to PLAY the stored page (`0xBD [0x17,
+  page]`), so the art on the screen is the art in the device's own gallery;
+  **the owner's eyes are the last proof on this hardware.**
+
 ## v0.41.5 — the gallery's magic-26 files decode, and the run names the ones it cannot show (2026-10-21)
 
 The hot channel's last observed run pushed **34 of 40 files** to the owner's

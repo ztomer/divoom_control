@@ -538,6 +538,29 @@ animation plays as its first 12 seconds.)
 refusal is lifted by reading that flag out of the native library the same way
 `0x0C` was — or the flags are shown never to appear and this item is deleted.
 
+#### P9.10 — The stored gallery cannot be READ BACK on this hardware
+**Status:** WATCH (the trigger is named: a panel that answers `0x8E`)
+**Why:** the push now STORES the art in the device's own gallery — the
+custom-art page, `divoomd/src/gallery_store.rs`, the only persistent art
+store this protocol has for a 16×16 panel — instead of only streaming it
+past. The WRITE is the device's own acknowledgement of the save command
+(`0xB1`, the app's own page writer), and the panel is then told to PLAY the
+stored page (`0xBD [0x17, page]`). What is MISSING is the READ-back: `0x8E`
+("App get user define info" — the file ids a page holds) does not answer.
+Measured 2026-10-21 on all four of the owner's panels (Pixoo-1,
+Ditoo-light-2, Tivoo-Max-light-3, Timoo-light-4): every `0x8E` timed out,
+while `0xB6` ("how many user-defined items") answers on three of them and
+`0xBD [0x15]` ("get user define time") answers on all four — so the panels
+are alive and the store is not the missing thing. The protocol has no screen
+readback either, so what is ON the panel cannot be read from this side.
+**The trigger is named:** the run asks the device after every store and
+prints its answer, so the first `0x8E` that answers is visible in the
+daemon's log.
+**Done when:** a panel answers `0x8E` with the ids of what the push stored —
+then the run can report the store as CONFIRMED instead of "the device
+accepted the save" — or the owner says the art is on the panel and this item
+is deleted.
+
 ---
 
 ## Standing rules
