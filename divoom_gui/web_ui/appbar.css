@@ -56,50 +56,35 @@
 
 /* Active device selector moved to sidebar (see sidebar.css .sidebar-device-select) */
 
-/* R52: moved out of the appbar to an unobtrusive lower-right corner dot. */
+/* R52: moved out of the appbar to an unobtrusive lower-right corner dot.
+ *
+ * P7.2: the dot is now a `transport-mark` — its SHAPE says which transport
+ * is being driven and its FILL says what the link is doing, and the colour
+ * only reinforces. The vocabulary lives in transport_mark.css, shared with
+ * the KEY in Settings -> Devices; this rule owns only the dot's PLACE (and
+ * the glow that says "the link is up", which the KEY does not need).
+ *
+ * The old rules drew the dot by hand: one circle whose only carrier was
+ * colour (`active.ble` / `active.lan` / `active.wall` differ by hue alone)
+ * and whose "connecting" and "degraded" states differed by pulse PERIOD
+ * alone (1s vs 2s) — invisible in a still frame, in greyscale, and to a
+ * reader who cannot separate the hues. The greyscale gate
+ * (tests/test_e2e_transport_mark_greyscale.py) is what that cost.
+ */
 #global-status-dot {
     position: fixed;
     bottom: 12px;
     right: 14px;
     z-index: 200;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    transition: background 0.3s, box-shadow 0.3s;
-    background-color: #6b7280;
-    box-shadow: none;
-    flex-shrink: 0;
+    transition: box-shadow 0.3s;
     -webkit-app-region: no-drag;
     pointer-events: none;
 }
-/* These ID+class selectors (specificity 1,1,0 / 1,2,0) already out-rank the
-   base `#global-status-dot` rule and the `.transport-dot.*` rules in
-   settings.css (0,2,0, which don't set colour anyway). The JS also clears any
-   inline style (`removeAttribute("style")`), so no `!important` is needed to
-   win the cascade — see REVIEW_2026-06 §2.3. */
-#global-status-dot.active.ble { background-color: var(--transport-ble, #3b82f6); color: var(--transport-ble, #3b82f6); box-shadow: 0 0 8px var(--transport-ble, #3b82f6); opacity: 1; }
-#global-status-dot.active.lan { background-color: var(--transport-lan, #22c55e); color: var(--transport-lan, #22c55e); box-shadow: 0 0 8px var(--transport-lan, #22c55e); opacity: 1; }
-#global-status-dot.active.wall { background-color: #8b5cf6; color: #8b5cf6; box-shadow: 0 0 8px #8b5cf6; opacity: 1; }
-#global-status-dot.connecting { background-color: #f59e0b; color: #f59e0b; box-shadow: 0 0 8px #f59e0b; opacity: 1; animation: dot-pulse 1s ease-in-out infinite; }
-#global-status-dot.inactive { background-color: #6b7280; color: #6b7280; opacity: 0.3; box-shadow: none; }
-/* BLE Hardening P6: DEGRADED — connected per the OS but a write/drop just
-   failed. Amber with a SLOW pulse, distinct from the faster "connecting" pulse.
-   No transport sub-class is set in this state, so this (1,1,0) rule wins. */
-#global-status-dot.degraded { background-color: #f59e0b; color: #f59e0b; box-shadow: 0 0 8px #f59e0b; opacity: 1; animation: dot-pulse 2s ease-in-out infinite; }
-
-/* "Connecting" state — pulses in the device's own accent color.
-   JS sets --dot-pulse-color inline so each device dot pulses in its
-   assigned hue; the global appbar dot defaults to amber fallback. */
-.transport-dot.connecting {
-    background: var(--dot-pulse-color, #f59e0b) !important;
-    color: var(--dot-pulse-color, #f59e0b) !important;
-    opacity: 1;
-    animation: dot-pulse 1s ease-in-out infinite;
-}
-
-@keyframes dot-pulse {
-    0%, 100% { box-shadow: 0 0 2px currentColor; opacity: 0.6; }
-    50% { box-shadow: 0 0 8px currentColor; opacity: 1; }
+/* The glow is decoration on top of the fill, and only the live dot gets it:
+   it says "this link is up" at a glance without carrying anything the shape
+   does not already say. */
+#global-status-dot.mark-linked {
+    box-shadow: 0 0 8px currentColor;
 }
 
 .appbar-logo {

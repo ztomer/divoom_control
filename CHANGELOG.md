@@ -71,9 +71,9 @@ shipped milestone (per the project planning docs).
   for the wall, the event path says "ble" for any non-LAN mac, so the wall can
   be painted the BLE hue.
 
-  **The options now on the table**, each priced in `docs/ROADMAP.md` (P7.2)
-  with what it looks like, what it costs, how it is proved and what it
-  breaks: A, colour + pulse only (the ruling as it stands -- measured 0 px,
+  **The options now on the table**, each priced with what it looks like, what
+  it costs, how it is proved and what it breaks (the full pricing is in the
+  entry below, where it lives now that the item has left the plan): A, colour + pulse only (the ruling as it stands -- measured 0 px,
   and WCAG 1.4.1 fails for the transport and for Connecting vs Degraded); B,
   shape per transport with the fill pattern carrying the link state, colour
   reinforcing and pulse reinforcing pending (satisfies the house rule BY
@@ -104,6 +104,124 @@ shipped milestone (per the project planning docs).
     tension, four priced options, the recommendation, and a Done when that can
     actually be run (the animation disabled, the tray's floor, a calibration
     test, and the owner's eye on the app's own window -- no panel needed).
+
+- **P7.2 -- the owner ruled B, and the connection dot now carries its own
+  state.** The ruling is the owner's, made on 2026-10-20: **option B** -- the
+  dot's SHAPE says which transport is being driven and its FILL says what the
+  link is doing, with colour reinforcing. It contradicts the letter of the
+  estate's D15 ("colour and pulse only"), and the owner is the one who may
+  contradict it; the panel priced the options so that the call could be made
+  on evidence rather than on taste. The dot in the app's lower-right corner is
+  no longer one circle whose only carrier was colour.
+
+  **The options, and what each one cost.** (The item left the plan when it
+  shipped, so the pricing lives here now -- it is the record of why B beat A.)
+
+  - **A -- colour + pulse only (the ruling as it stood).** One circle, six
+    colours, two pulse periods. Costs: colour is the sole carrier of the
+    transport (measured 0 px in greyscale), and a pulse PERIOD is the sole
+    difference between Connecting and Degraded -- invisible in a still frame,
+    in greyscale, and to a reader who cannot separate the hues. WCAG 1.4.1
+    fails for the transport and for the Connecting/Degraded pair.
+  - **B -- shape per transport, fill pattern per state (RULED).** A circle for
+    a Bluetooth panel, a square for a Wi-Fi panel, a 2x2 grid for the Virtual
+    Wall; solid = linked, solid with a diagonal bar = degraded, hollow = not
+    linked, hollow and pulsing = a connect in flight. Costs: the vocabulary
+    needs a KEY, and the dot's class vocabulary changes. Needs NO size change
+    (measured at today's 10px, the three silhouettes differ by 88-177 px in
+    greyscale and the three patterns by 63-208 px). Breaks: the letter of
+    D15; it serves its intent (the states must be tellable apart).
+  - **C -- a word beside the dot.** The corner stops being a dot and becomes a
+    pill at 60-90px of corner width, the word is always visible (it cannot
+    live behind the pointer), and a visible word in the corner is the layout
+    the app already decided against. Breaks: the ruling in letter even harder.
+  - **D -- the panel's own: the dot is the LINK only, the transport moves to
+    the panel's card.** The corner loses the transport, the web dot still
+    cannot share the Rust renderer, so the two surfaces need a parity test or
+    the app keeps two marks that look alike and are not identical. Breaks:
+    the ruling outright -- the dot would no longer tell BLE, LAN and Wall
+    apart at all.
+
+  **What the dot is now.** One vocabulary, in one file
+  (`divoom_gui/web_ui/transport_mark.css`), shared by three users: the dot
+  itself, the KEY in Settings -> Devices, and the offscreen sheet. The mark
+  is a `transport-mark` plus ONE shape class and ONE fill class, so the class
+  string carries both axes:
+
+  | state | class | what it says |
+  |---|---|---|
+  | disconnected | `transport-mark mark-ble mark-open` | hollow, dimmed -- no link |
+  | connecting | `transport-mark mark-ble mark-pending` | hollow, pulsing -- a connect in flight |
+  | linked, Bluetooth | `transport-mark mark-ble mark-linked` | a solid circle |
+  | linked, Wi-Fi | `transport-mark mark-lan mark-linked` | a solid square |
+  | linked, Virtual Wall | `transport-mark mark-wall mark-linked` | a solid 2x2 grid |
+  | degraded | `transport-mark mark-ble mark-fault` | solid, with the tray's diagonal bar |
+
+  The fill grammar is the TRAY's own (hollow = no link, filled = linked, bar =
+  fault), so the app has ONE state vocabulary rather than two. The bar is the
+  tray's bar too: a light core between dark keylines, so it reads over any
+  fill and over any backdrop -- a bar drawn in the fill's own hue would vanish
+  in greyscale, which is the whole point of the gate below. The dot keeps its
+  10px size, its place in the corner, and its glow on a linked link.
+
+  **The KEY is on screen.** Three silhouettes do not teach themselves, so
+  Settings -> Devices now carries the key: the same three marks, in the same
+  classes the dot uses, beside the names they mean (Bluetooth screen, Wi-Fi
+  screen, Virtual Wall). It is not a legend of its own -- it borrows the dot's
+  classes, so it cannot drift from it.
+
+  **The three defects are fixed, not deferred.**
+  (1) The `title` is DELETED rather than made reachable: the dot is
+  `pointer-events: none`, so the pointer never reached it and the browser
+  never showed the title the funnel wrote -- a name no user had ever been
+  able to see, and a hit-testable 10px corner dot would swallow the clicks it
+  covers. The state is carried by the aria-label the funnel writes, which now
+  names BOTH axes ("Connection status: link degraded, reconnecting --
+  Bluetooth screen"), and by the KEY's visible words.
+  (2) The transport is derived ONCE, in the funnel. It used to be derived
+  twice -- the heartbeat read the banner's mac, the event path read the
+  event's mac -- and the two disagreed about the wall, which could be painted
+  the Bluetooth hue; under a shape vocabulary a wrong derivation paints the
+  wrong SHAPE, which is worse than a wrong colour. `window._transportOfMac`
+  is now the only derivation, and the funnel is its only caller.
+  (3) The dead CSS is gone: `.transport-badge`, `.transport-status-panel`,
+  `.transport-row*` and the removed panel's `.transport-dot` rules were
+  rendered by nothing (that panel was removed in R32) and only their styles
+  stayed -- a style that renders nothing is the quiet variant of a control
+  that does nothing.
+
+  **The gate, and what it measured.** `tests/test_e2e_transport_mark_greyscale.py`
+  renders the six states in the REAL page, through the REAL funnel, with the
+  motion DISABLED (a pulsing dot is not reproducible: two screenshots 180 ms
+  apart differ in 400 of 400 px), reads the pixels back out of the browser and
+  converts them to greyscale. The metric is the tray's own
+  (`divoom-menubar/src/glyph.rs:210`): a luma step of 64, and a floor of 5%
+  of the MARK'S OWN square -- 400 device px at 2x for a 10 CSS px dot, so 20
+  device px. Every pair passes, the tightest by 3.5x (Bluetooth vs degraded,
+  69 px; Bluetooth vs Wi-Fi 82; Bluetooth vs Wall 104; disconnected vs
+  connecting 101; the widest, disconnected vs Wi-Fi, 388). The INK rule holds
+  too: the dimmed Disconnected mark and the full-strength hollow of a connect
+  in flight differ by 112 px of ink (0 against 112), so they differ in the
+  AMOUNT of ink and not merely in the ratio of one tone to another. A
+  CALIBRATION test proves the gate bites: two different states are forced to
+  carry one mark on the real page, and the gate goes red.
+
+  **The sheet for the owner's eye.** `docs/connection-dot-states.png` is the
+  six states side by side, in colour and in greyscale, and it is a TOOL's
+  output rather than a screenshot somebody took once:
+
+      python3 tools/render_connection_dot_sheet.py --out docs/connection-dot-states.png
+
+  The sheet drives the real funnel, reads back the class string the funnel
+  wrote, and renders marks with that exact class string in the real page --
+  the product's own cascade, not a canvas reimplementation (the lesson
+  `tools/render_tray_icon.py` was rewritten for).
+
+  **Not done, on purpose.** The estate umbrella's D15 row (the owner's
+  "colour and pulse only" constraint) is the coordinator's to note, not this
+  repo's to edit. The dot's colour still carries the transport's hue, so a
+  reader who cannot separate the hues is no worse off than before -- and now
+  has the shape as well.
 
 - **The daily job that pointed at a file deleted 36 days ago is gone, and the
   class of failure it belonged to is now a finding instead of a log line.**

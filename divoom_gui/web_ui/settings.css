@@ -1,85 +1,12 @@
 /* settings.css — Settings sub-tabs, Braun borderless tables, connectivity legends */
 
-/* ── Transport Layer Badges ─────────────────────────────────────────── */
-.transport-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  padding: 2px 7px;
-  border-radius: 20px;
-  opacity: 0.9;
-  white-space: nowrap;
-  user-select: none;
-}
-
-.transport-badge.ble   { background: rgba(59,130,246,0.15); color: var(--transport-ble);   border: 1px solid rgba(59,130,246,0.3); }
-.transport-badge.lan   { background: rgba(34,197,94,0.15);  color: var(--transport-lan);   border: 1px solid rgba(34,197,94,0.3); }
-.transport-badge.cloud { background: rgba(245,158,11,0.15); color: var(--transport-cloud); border: 1px solid rgba(245,158,11,0.3); }
-.transport-badge.ext   { background: rgba(239,68,68,0.15);  color: var(--transport-ext);   border: 1px solid rgba(239,68,68,0.3); }
-
-/* ── Transport Status Panel (replaces single dot) ───────────────────── */
-.transport-status-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 12px;
-  background: rgba(255,255,255,0.03);
-  border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.06);
-  margin-top: 8px;
-}
-
-.transport-status-panel .panel-title {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: rgba(255,255,255,0.35);
-  margin-bottom: 2px;
-}
-
-.transport-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  cursor: default;
-}
-
-.transport-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  transition: box-shadow 0.3s;
-}
-
-.transport-dot.active {
-  box-shadow: 0 0 6px currentColor;
-}
-
-.transport-dot.inactive {
-  opacity: 0.25;
-}
-
-.transport-row-label {
-  color: rgba(255,255,255,0.7);
-  font-weight: 500;
-  flex: 1;
-}
-
-.transport-row-detail {
-  font-size: 9px;
-  color: rgba(255,255,255,0.35);
-  text-align: right;
-  max-width: 90px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+/* P7.2: the `.transport-badge` and `.transport-status-panel` styles that used
+   to live here are GONE. They were rendered by nothing — that panel was
+   removed in R32 (`settings_hardware.js:379`) and only its styles stayed, and
+   a style that renders nothing is the quiet variant of a control that does
+   nothing. The mark vocabulary that replaced them (the dot's shape + fill,
+   and the KEY in Settings -> Devices) lives in transport_mark.css, which the
+   dot and the key SHARE. */
 
 /* ── Card transport badge ── */
 .card-transport-badge {
@@ -361,22 +288,6 @@ body.theme-light .theme-mode-btn.active {
 }
 
 /* ── Light Mode Status Panel Text Overrides ──────────────── */
-body.theme-light .transport-status-panel {
-  background: rgba(0, 0, 0, 0.04) !important;
-  border: 1px solid rgba(0, 0, 0, 0.08) !important;
-}
-
-body.theme-light .transport-status-panel .panel-title {
-  color: rgba(0, 0, 0, 0.45) !important;
-}
-
-body.theme-light .transport-row-label {
-  color: rgba(0, 0, 0, 0.8) !important;
-}
-
-body.theme-light .transport-row-detail {
-  color: rgba(0, 0, 0, 0.5) !important;
-}
 
 body.theme-light #gallery-device-select,
 body.theme-light #widget-device-select {
@@ -386,19 +297,6 @@ body.theme-light #widget-device-select {
 }
 
 @media (prefers-color-scheme: light) {
-    body.theme-system .transport-status-panel {
-      background: rgba(0, 0, 0, 0.04) !important;
-      border: 1px solid rgba(0, 0, 0, 0.08) !important;
-    }
-    body.theme-system .transport-status-panel .panel-title {
-      color: rgba(0, 0, 0, 0.45) !important;
-    }
-    body.theme-system .transport-row-label {
-      color: rgba(0, 0, 0, 0.8) !important;
-    }
-    body.theme-system .transport-row-detail {
-      color: rgba(0, 0, 0, 0.5) !important;
-    }
     body.theme-system #gallery-device-select,
     body.theme-system #widget-device-select {
       background: rgba(0, 0, 0, 0.05) !important;

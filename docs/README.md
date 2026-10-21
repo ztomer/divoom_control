@@ -29,6 +29,11 @@
 - **`scripts/ci_local.sh`** — the full CI-equivalent gate; run before pushing.
 - **`scripts/gui_pov.py`** — drive the real GUI against a real daemon and report
   what a user would see. Use before calling anything user-facing "done".
+- **[connection-dot-states.png](connection-dot-states.png)** — the connection
+  dot's six states (disconnected, connecting, linked per transport, degraded),
+  in colour and in greyscale. It is a tool's output, not a screenshot:
+  `python3 tools/render_connection_dot_sheet.py --out docs/connection-dot-states.png`
+  renders it from the app's own CSS and its own funnel.
 
 ## Historical
 `docs/archive/` is gone entirely (2026-08-30) — round plans, superseded

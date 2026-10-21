@@ -194,8 +194,9 @@ async def test_real_connect_then_refresh_shows_active_dot(gui_daemon_stack):
             await eval_js(page, "() => window.refreshConnectionState()")
             await wait_js(page, 
                 "() => document.getElementById('global-status-dot')"
-                ".className === 'transport-dot active ble'", timeout=4000)
-            assert (await _dot_class(page)).split() == ["transport-dot", "active", "ble"]
+                ".className === 'transport-mark mark-ble mark-linked'", timeout=4000)
+            assert (await _dot_class(page)).split() == [
+                "transport-mark", "mark-ble", "mark-linked"]
 
             state = await eval_js(page, 
                 "() => window.pywebview.api.get_connection_state()"
@@ -272,9 +273,10 @@ async def test_real_drop_then_refresh_shows_inactive_dot(gui_daemon_stack):
                 "() => window.DivoomState.appConnected === false", timeout=4000)
             await wait_js(page, 
                 "() => document.getElementById('global-status-dot')"
-                ".className === 'transport-dot inactive'", timeout=4000)
-            assert await eval_js(page, 
-                "() => document.getElementById('global-status-dot').title") == "Disconnected"
+                ".className === 'transport-mark mark-ble mark-open'", timeout=4000)
+            assert await eval_js(page,
+                "() => document.getElementById('global-status-dot')"
+                ".getAttribute('aria-label')") == "Connection status: disconnected"
             assert await eval_js(page, 
                 "() => window.DivoomState.appConnected") is False
         finally:
@@ -305,7 +307,7 @@ async def test_real_event_relay_degraded_then_disconnected(gui_daemon_stack):
 
             await wait_js(page, 
                 "() => document.getElementById('global-status-dot')"
-                ".className === 'transport-dot inactive'", timeout=4000)
+                ".className === 'transport-mark mark-ble mark-open'", timeout=4000)
 
             # Wait on the channel this test actually asserts about.
             #
@@ -361,10 +363,13 @@ async def test_real_connect_single_device_failure_unreachable_lan(gui_daemon_sta
             toast = await wait_toast(page, "Unreachable", kind="error", timeout=8000)
             assert "error" in toast["rendered"]["className"].split(), toast
             assert "Unreachable" in toast["rendered"]["text"]
-            # The dot must still settle inactive — kept as a separate assertion
-            # rather than as the (mis-used) synchronisation signal.
-            await wait_js(page, 
+            # The dot must still settle with no link — kept as a separate
+            # assertion rather than as the (mis-used) synchronisation signal.
+            # P7.2: the SHAPE is the transport, and the target that failed to
+            # connect is a Wi-Fi screen, so the mark is the square -- hollow,
+            # because there is no link.
+            await wait_js(page,
                 "() => document.getElementById('global-status-dot')"
-                ".className === 'transport-dot inactive'", timeout=4000)
+                ".className === 'transport-mark mark-lan mark-open'", timeout=4000)
         finally:
             await browser.close()

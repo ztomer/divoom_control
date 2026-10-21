@@ -22,20 +22,61 @@
 // A degraded link stays "connected" (the daemon self-heals); "connecting"
 // never wipes the banner (a pending click must not erase the last known
 // device before its outcome is known).
+//
+// P7.2: the dot is a `transport-mark` now. Its SHAPE says which transport is
+// being driven (circle = Bluetooth, square = Wi-Fi, 2x2 grid = the Virtual
+// Wall) and its FILL says what the link is doing (solid = linked, solid with
+// a bar = degraded, hollow = not linked, hollow and pulsing = a connect in
+// flight). Colour reinforces. One funnel call writes the class, the
+// aria-label and nothing else -- the `title` is DELETED, not made reachable:
+// the dot is pointer-events:none, so a title could never be seen, and a
+// hit-testable 10px corner dot would swallow the clicks it covers.
+window._transportOfMac = function(mac) {
+    const m = (mac || "").trim();
+    if (!m) return null;
+    if (m === "MatrixWall") return "wall";
+    if (m.startsWith("LAN:")) return "lan";
+    return "ble";
+};
+
+// The dot's one spoken name: it names BOTH axes, because the shape names
+// them visually and the label is what a screen reader hears. `transport` is
+// null when no target is known -- then the label says the state alone.
+window._connectionStatusLabel = function(mode, transport) {
+    const what = transport === "wall" ? "Virtual Wall"
+        : transport === "lan" ? "Wi-Fi screen"
+        : transport === "ble" ? "Bluetooth screen" : null;
+    const state = mode === "active" ? "connected"
+        : mode === "degraded" ? "link degraded, reconnecting"
+        : mode === "connecting" ? "connecting" : "disconnected";
+    return what ? `Connection status: ${state} — ${what}`
+                 : `Connection status: ${state}`;
+};
+
 window.setConnectionState = function(s) {
     s = s || {};
     const mode = s.mode || "inactive";
     const dot = document.getElementById("global-status-dot");
     if (dot) {
-        let cls = "transport-dot ";
-        if (mode === "connecting") cls += "connecting";
-        else if (mode === "degraded") cls += "active degraded";
-        else if (mode === "active") cls += "active " + (s.transport || "ble");
-        else cls += "inactive";
-        dot.className = cls;
-        dot.title = mode === "active" ? "Connected"
-            : mode === "degraded" ? "Link degraded — reconnecting"
-            : mode === "connecting" ? "Connecting..." : "Disconnected";
+        // ONE transport derivation, in the one writer (P7.2's second
+        // defect). The transport used to be derived TWICE -- the heartbeat
+        // read the banner's mac, the event path read the event's mac -- and
+        // the two disagreed about the wall, which could be painted the BLE
+        // hue. Under the shape vocabulary a wrong derivation paints the
+        // wrong SHAPE, which is worse than a wrong colour, so this is the
+        // only place the transport is decided: the mac this call is about,
+        // else the SELECTED target (the dot speaks for the selected target
+        // only), else Bluetooth as the default shape.
+        const selectedMac = (typeof window._activeDeviceMac === "function")
+            ? window._activeDeviceMac() : null;
+        const knownTransport = window._transportOfMac(s.mac)
+            || window._transportOfMac(selectedMac);
+        const transport = knownTransport || "ble";
+        const fill = mode === "active" ? "linked"
+            : mode === "degraded" ? "fault"
+            : mode === "connecting" ? "pending" : "open";
+        dot.className = "transport-mark mark-" + transport + " mark-" + fill;
+        dot.setAttribute("aria-label", window._connectionStatusLabel(mode, knownTransport));
         dot.removeAttribute("style");
     }
     // The funnel writes BOTH views of one fact -- the panel's own flags
@@ -51,7 +92,10 @@ window.setConnectionState = function(s) {
     const list = window.DivoomState.discoveredDevices || [];
     if (s.mac) {
         const known = list.find(d => d.address === s.mac);
-        if (known) {
+        // A pending connect names a mac (the dot's shape needs it) but must
+        // not move the panel's flags: the old code got that by passing no mac
+        // at all, so it says so here instead.
+        if (known && mode !== "connecting") {
             known.daemonOwned = (mode === "active" || mode === "degraded");
             known.activityState = mode === "degraded" ? "degraded"
                 : mode === "active" ? "active"
@@ -111,16 +155,16 @@ window.updateSidebarSpeakerIcon = function(_hasSpeaker) {
 
 window.connectDevice = function(name, address) {
     window.showToast(`Connecting to ${name}...`, "success");
-    window.setConnectionState({ mode: "connecting" });
-    // R35 §2: pulse the sidebar device dot being connected, in the device's
-    // own accent color (CSS var --dot-pulse-color, amber fallback for the
-    // global dot). Cleared by re-render on success or explicitly on failure.
+    // The mac goes with the state: the dot's SHAPE is the transport of the
+    // target being connected, so a connect to a Wi-Fi panel shows the square
+    // and not the Bluetooth circle it fell back to before.
+    window.setConnectionState({ mode: "connecting", mac: address });
+    // R35 §2: pulse the sidebar chip being connected. Cleared by re-render on
+    // success or explicitly on failure.
     const deviceDot = document.querySelector(
         `#device-dots [data-value="${(window.CSS && CSS.escape) ? CSS.escape(address) : address}"]`);
     if (deviceDot) {
         deviceDot.classList.add("connecting");
-        // Pulse in the device's accent color (CSS var, fallback amber).
-        deviceDot.style.setProperty("--dot-pulse-color", window.deviceColor(address));
     }
 
     if (window.pywebview && window.pywebview.api) {
@@ -137,10 +181,10 @@ window.connectDevice = function(name, address) {
         window.pywebview.api.connect_single_device(address).then(res => {
             clearTimeout(connectWatchdog);
             if (res) {
-                const type = address === "MatrixWall" ? "wall" : (address.startsWith("LAN:") ? "lan" : "ble");
+                const type = window._transportOfMac(address);
                 const label = type === "wall" ? " Wall" : (type === "lan" ? " LAN" : " BLE");
                 window.showToast(`Connected to ${name}!`, "success", label);
-                window.setConnectionState({ mode: "active", transport: type, mac: address, name: name });
+                window.setConnectionState({ mode: "active", mac: address, name: name });
                 window._updateDeviceLabel(name);
                 // R32 §C2: prefer the last-pushed preview; fall back to the
                 // product icon when this device hasn't been pushed to yet.
@@ -191,13 +235,11 @@ window.connectDevice = function(name, address) {
 // connection_state so the dot reflects DEGRADED (amber) and a genuine drop,
 // not a stale solid "connected". (The fast path is the event-driven
 // window.Divoom.onDaemonEvent below; this heartbeat is the safety net.)
-window._activeTransportType = function() {
-    const mac = (document.getElementById("banner-device-mac")?.textContent || "").trim();
-    if (mac === "MatrixWall") return "wall";
-    if (mac.startsWith("LAN:")) return "lan";
-    return "ble";
-};
-
+//
+// P7.2: the heartbeat no longer derives the transport. It used to read the
+// banner's mac here and the event's mac in the event path, and the two
+// disagreed about the wall — which could be painted the Bluetooth hue. The
+// funnel derives it once, from the mac this call is about.
 window.refreshConnectionState = function() {
     // No latch: an authoritative answer heals in BOTH directions. The old
     // early-return unless appConnected meant a false flag could never become
@@ -209,10 +251,12 @@ window.refreshConnectionState = function() {
         try { s = JSON.parse(raw); } catch (e) { return; }
         if (s && s.selected && window.SpatialStage?.followSelection) window.SpatialStage.followSelection(s.selected);
         const state = s && s.state;
+        // The daemon's ACTIVE panel — the target the answer is about.
+        const selected = (s && s.selected) || null;
         if (state === "degraded") {
             // Reports connected but a write/drop just failed — show amber, keep
             // appConnected (the daemon's live-job self-heal may revive it).
-            window.setConnectionState({ mode: "degraded" });
+            window.setConnectionState({ mode: "degraded", mac: selected });
         } else if (state === "disconnected" || !s || !s.connected) {
             // Genuinely dropped — or the daemon explicitly reports disconnected
             // while a stale connected:true lingered. Flip the dot + the global
@@ -223,8 +267,9 @@ window.refreshConnectionState = function() {
             const sel = (typeof window._activeDeviceMac === "function") ? window._activeDeviceMac() : null;
             window.setConnectionState({ mode: "inactive", mac: s ? sel : null });
         } else {
-            // Honest connected (ble/lan/wall) — colour the dot by transport type.
-            window.setConnectionState({ mode: "active", transport: window._activeTransportType() });
+            // Honest connected (ble/lan/wall) — the funnel gives the dot the
+            // SHAPE of the transport and the FILL of the link.
+            window.setConnectionState({ mode: "active", mac: selected });
         }
     }).catch(() => {});
 };
@@ -272,7 +317,12 @@ window.Divoom.onDaemonEvent = function(ev) {
         } else if (degraded) {
             window.setConnectionState({ mode: "degraded", mac: mac });
         } else {
-            window.setConnectionState({ mode: "active", transport: mac && mac.startsWith("LAN:") ? "lan" : "ble", mac: mac });
+            // P7.2: no transport here. The event's mac went in and the funnel
+            // derives the shape from it — the old ternary here said "ble" for
+            // anything that was not a LAN mac, so the wall could be painted
+            // the Bluetooth hue (and, under the shape vocabulary, the wrong
+            // SHAPE).
+            window.setConnectionState({ mode: "active", mac: mac });
         }
     }
     if (window.renderDeviceDots) window.renderDeviceDots();

@@ -586,9 +586,21 @@
          dropped) as an unobtrusive dot in the lower-right corner. The
          connection_state heartbeat reports the ACTIVE link's honest state here,
          so a mid-session drop or DEGRADED link is always visible without
-         crowding the appbar. Updated by connectDevice + refreshConnectionState. -->
-    <span id="global-status-dot" class="transport-dot inactive"
-          title="Disconnected" role="img" aria-label="Connection status"></span>
+         crowding the appbar. Updated by connectDevice + refreshConnectionState.
+
+         P7.2: the dot is a `transport-mark` now — its SHAPE says which
+         transport is being driven (circle = Bluetooth, square = Wi-Fi, 2x2 grid
+         = the Virtual Wall) and its FILL says what the link is doing (solid =
+         linked, solid + bar = degraded, hollow = not linked, hollow + pulse =
+         connecting). Colour reinforces; it never carries alone. The vocabulary
+         is transport_mark.css, shared with the KEY in Settings -> Devices.
+
+         It has no `title`: the dot is pointer-events:none, so the pointer
+         never reaches it and the browser never showed the title the funnel
+         wrote (P7.2's first defect). The state is carried by the aria-label
+         the funnel writes, and by the visible words in the KEY. -->
+    <span id="global-status-dot" class="transport-mark mark-ble mark-open"
+          role="img" aria-label="Connection status: disconnected"></span>
 
     <!-- R53: daemon-down banner. The background service owns the device over the
          socket and is killed on quit (keep-alive off), so it must respawn on the

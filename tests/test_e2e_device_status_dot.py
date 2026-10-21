@@ -60,9 +60,15 @@ def _dot_cls(page):
 
 
 def _dot_info(page):
+    # P7.2: the dot carries its state in the aria-label the funnel writes.
+    # It has no `title`: the dot is pointer-events:none, so the pointer never
+    # reached it and the browser never showed the title the funnel used to
+    # write — a name no user had ever been able to see.
     return eval_js(page, """() => ({
         cls: document.getElementById('global-status-dot').className,
-        title: document.getElementById('global-status-dot').title,
+        label: document.getElementById('global-status-dot')
+            .getAttribute('aria-label'),
+        title: document.getElementById('global-status-dot').getAttribute('title'),
         connected: window.DivoomState.appConnected })""")
 
 
@@ -79,9 +85,10 @@ async def test_status_dot_connected_ble():
                     state:'connected', mac:'AA:BB:CC'}});
             }}""")
             info = await _dot_info(page)
-            assert "transport-dot" in info["cls"]
-            assert "active" in info["cls"] and "ble" in info["cls"]
-            assert info["title"] == "Connected"
+            assert "transport-mark" in info["cls"]
+            assert "mark-linked" in info["cls"] and "mark-ble" in info["cls"]
+            assert info["label"] == "Connection status: connected — Bluetooth screen"
+            assert info["title"] is None
         finally:
             await browser.close()
 
@@ -98,7 +105,7 @@ async def test_status_dot_connected_lan():
                     state:'connected', lan_ip:'10.0.0.5'}});
             }}""")
             cls = await _dot_cls(page)
-            assert "active" in cls and "lan" in cls
+            assert "mark-linked" in cls and "mark-lan" in cls
         finally:
             await browser.close()
 
@@ -117,7 +124,7 @@ async def test_status_dot_connected_wall():
                 "() => document.getElementById('global-status-dot')"
                 ".className.includes('wall')", timeout=4000)
             cls = await _dot_cls(page)
-            assert "active" in cls and "wall" in cls
+            assert "mark-linked" in cls and "mark-wall" in cls
         finally:
             await browser.close()
 
@@ -135,9 +142,9 @@ async def test_status_dot_degraded_keeps_appconnected():
                     state:'degraded', mac:'AA'}});
             }}""")
             info = await _dot_info(page)
-            assert "degraded" in info["cls"]
+            assert "mark-fault" in info["cls"]
             assert info["connected"] is True           # self-heal may revive it
-            assert "reconnect" in info["title"].lower()
+            assert "reconnect" in info["label"].lower()
         finally:
             await browser.close()
 
@@ -154,9 +161,9 @@ async def test_status_dot_disconnected_flips_appconnected():
                 {_STATUS_EVENT}({{type:'status', connected:false}});
             }}""")
             info = await _dot_info(page)
-            assert "inactive" in info["cls"]
+            assert "mark-open" in info["cls"]
             assert info["connected"] is False          # UI stops claiming a link
-            assert info["title"] == "Disconnected"
+            assert info["label"] == "Connection status: disconnected"
         finally:
             await browser.close()
 
@@ -177,7 +184,7 @@ async def test_status_dot_state_disconnected_overrides_stale_connected():
             }}""")
             connected = await eval_js(page, "() => window.DivoomState.appConnected")
             cls = await _dot_cls(page)
-            assert "inactive" in cls
+            assert "mark-open" in cls
             assert connected is False
         finally:
             await browser.close()
@@ -195,14 +202,14 @@ async def test_status_dot_malformed_event_leaves_dot_untouched():
             await eval_js(page, f"""() => {{
                 window.DivoomState.appConnected = true;
                 const d = document.getElementById('global-status-dot');
-                d.className = 'transport-dot active ble';
-                d.title = 'pinned';
+                d.className = 'transport-mark mark-ble mark-linked';
+                d.setAttribute('aria-label', 'pinned');
                 {_STATUS_EVENT}(null);
                 {_STATUS_EVENT}({{}});
             }}""")
             info = await _dot_info(page)
-            assert info["cls"] == "transport-dot active ble"   # unchanged
-            assert info["title"] == "pinned"
+            assert info["cls"] == "transport-mark mark-ble mark-linked"   # unchanged
+            assert info["label"] == "pinned"
             assert info["connected"] is True
         finally:
             await browser.close()
@@ -222,11 +229,11 @@ async def test_status_dot_event_is_authoritative():
                 window.DivoomState.appConnected = true;
                 {_STATUS_EVENT}({{type:'status', connected:false}});
             }}""")
-            res = await eval_js(page, 
+            res = await eval_js(page,
                 "() => { const d=document.getElementById('global-status-dot');"
-                " return {cls:d.className, hasActive:d.classList.contains('active'),"
-                " hasInactive:d.classList.contains('inactive')}; }")
-            assert res["hasInactive"] is True and res["hasActive"] is False
+                " return {cls:d.className, hasOpen:d.classList.contains('mark-open'),"
+                " hasLinked:d.classList.contains('mark-linked')}; }")
+            assert res["hasOpen"] is True and res["hasLinked"] is False
         finally:
             await browser.close()
 
@@ -248,11 +255,11 @@ async def test_status_dot_safety_net_refresh_connection_state():
                     JSON.stringify({connected:false, state:'disconnected'});
                 return window.refreshConnectionState();
             }""")
-            await wait_js(page, 
+            await wait_js(page,
                 "() => document.getElementById('global-status-dot')"
-                ".className.includes('inactive')", timeout=4000)
+                ".className.includes('mark-open')", timeout=4000)
             info = await _dot_info(page)
-            assert "inactive" in info["cls"]
+            assert "mark-open" in info["cls"]
             assert info["connected"] is False
         finally:
             await browser.close()

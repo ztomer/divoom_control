@@ -17,6 +17,9 @@ _CONNECTION_JS = (REPO / "divoom_gui" / "web_ui" / "connection_events.js").read_
 APP_GLOBALS = (REPO / "divoom_gui" / "web_ui" / "app_globals.js").read_text() + "\n" + _CONNECTION_JS
 APP_INIT = (REPO / "divoom_gui" / "web_ui" / "app_init.js").read_text()
 APPBAR_CSS = (REPO / "divoom_gui" / "web_ui" / "appbar.css").read_text()
+# P7.2: the dot's vocabulary moved into its own file, shared by the dot, the
+# KEY in Settings -> Devices and the offscreen sheet.
+TRANSPORT_MARK_CSS = (REPO / "divoom_gui" / "web_ui" / "transport_mark.css").read_text()
 
 
 # ── Python API: get_connection_state ───────────────────────────────────────
@@ -74,8 +77,11 @@ def test_js_connection_state_is_event_driven():
 
 
 def test_js_degraded_sets_amber_dot_class():
-    # The funnel builds the class from the mode: degraded = active + degraded.
-    assert 'cls += "active degraded"' in APP_GLOBALS
+    # The funnel builds the class from the mode: degraded is the FAULT fill —
+    # solid with the tray's bar across it — and amber, which the shape
+    # vocabulary draws in transport_mark.css.
+    assert ': mode === "degraded" ? "fault"' in APP_GLOBALS
+    assert 'dot.className = "transport-mark mark-" + transport + " mark-" + fill' in APP_GLOBALS
 
 
 def test_js_disconnect_clears_appConnected():
@@ -93,4 +99,11 @@ def test_heartbeat_started_on_init():
 
 
 def test_css_has_degraded_rule():
-    assert "#global-status-dot.degraded" in APPBAR_CSS
+    # P7.2: the degraded mark is the FAULT fill — a solid mark with the
+    # tray's diagonal bar — and it lives in the shared vocabulary file.
+    assert ".transport-mark.mark-fault" in TRANSPORT_MARK_CSS
+    assert ".transport-mark.mark-fault::before" in TRANSPORT_MARK_CSS
+    # The old per-state colour rules on the dot's id are gone: the shape
+    # vocabulary draws the dot and the colour only reinforces it.
+    assert "#global-status-dot.degraded" not in APPBAR_CSS
+    assert "#global-status-dot.active" not in APPBAR_CSS

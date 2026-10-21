@@ -21,6 +21,19 @@ window.DivoomTemplates.settings = `                <!-- R15 §1+§7: tab chrome 
 
                 <!-- 1. DEVICES TAB -->
                 <div class="settings-tab-content active" id="settings-devices">
+                    <!-- P7.2: the KEY. The connection dot's SHAPE says which
+                         transport is being driven — a circle for a Bluetooth
+                         screen, a square for a Wi-Fi screen, a 2x2 grid for the
+                         Virtual Wall — and three silhouettes do not teach
+                         themselves. These are the SAME marks the dot uses (the
+                         same transport-mark classes, so there is one vocabulary
+                         and not a legend of its own), beside the names they
+                         mean. -->
+                    <div class="transport-key">
+                        <span class="transport-key-item"><span class="transport-mark mark-ble mark-linked" aria-hidden="true"></span> Bluetooth screen</span>
+                        <span class="transport-key-item"><span class="transport-mark mark-lan mark-linked" aria-hidden="true"></span> Wi-Fi screen</span>
+                        <span class="transport-key-item"><span class="transport-mark mark-wall mark-linked" aria-hidden="true"></span> Virtual Wall</span>
+                    </div>
                     <div class="grid-layout">
                         <!-- BLE Scanner -->
                         <div class="card glass-card">

@@ -1,0 +1,188 @@
+/* transport_mark.css — the transport mark vocabulary (P7.2).
+ *
+ * ONE vocabulary, three users: the appbar's connection dot
+ * (`#global-status-dot`), the KEY in Settings -> Devices, and the offscreen
+ * sheet `tools/render_connection_dot_sheet.py` draws. A mark is a
+ * `transport-mark` plus ONE shape class and ONE fill class, so the same
+ * markup means the same thing everywhere.
+ *
+ * THE SHAPE says which transport is being driven:
+ *   mark-ble   a circle          — one Bluetooth panel
+ *   mark-lan   a square          — one Wi-Fi panel
+ *   mark-wall  a 2x2 grid        — the Virtual Wall, which IS several panels
+ * THE FILL says what the link is doing:
+ *   mark-linked   solid           — the link is up
+ *   mark-fault    solid + a bar   — linked, but a write/drop just failed
+ *   mark-open     hollow, dimmed  — no link
+ *   mark-pending  hollow, pulsing — a connect is in flight
+ *
+ * COLOUR REINFORCES and never carries alone: the transport's hue (blue /
+ * green / violet), amber when the link is degraded or a connect is in flight,
+ * grey when there is no link. The doctrine's own figure — render it
+ * greyscale, in one size, static: can you still tell the options apart? — is
+ * the gate (tests/test_e2e_transport_mark_greyscale.py), and the fill
+ * grammar is the tray's own (hollow = no link, filled = linked, bar = fault),
+ * so the app has ONE state vocabulary rather than two.
+ *
+ * The bar is the tray's bar: a light core between dark keylines, so it reads
+ * over any fill and over any backdrop. Without the two tones a bar drawn in
+ * the fill's own hue would vanish in greyscale — which is the whole point of
+ * the gate.
+ */
+
+.transport-mark {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    box-sizing: border-box;
+    flex-shrink: 0;
+    position: relative;
+    vertical-align: middle;
+}
+
+/* ── the SHAPE axis ───────────────────────────────────────────────────── */
+
+.transport-mark.mark-ble {
+    border-radius: 50%;
+}
+
+.transport-mark.mark-lan {
+    border-radius: 2px;
+}
+
+/* The Virtual Wall is a composite of panels, so its mark is a 2x2 grid of
+   four squares: a 10px box, a 0.5px margin, a 1px gap, four 4px tiles.
+   The gap is what separates it from the LAN square at a glance — and it is
+   TRANSPARENT, so the tiles can be filled without the gap filling too. */
+.transport-mark.mark-wall {
+    border-radius: 1px;
+    background-color: transparent;
+    background-image:
+        linear-gradient(currentColor, currentColor),
+        linear-gradient(currentColor, currentColor),
+        linear-gradient(currentColor, currentColor),
+        linear-gradient(currentColor, currentColor);
+    background-size: 4px 4px;
+    background-position: 0.5px 0.5px, 5.5px 0.5px, 0.5px 5.5px, 5.5px 5.5px;
+    background-repeat: no-repeat;
+}
+
+/* ── the FILL axis ───────────────────────────────────────────────────── */
+
+/* Solid: the link is up. The wall's tiles are painted by its own gradients,
+   so only the circle and the square take a background here. */
+.transport-mark.mark-ble.mark-linked,
+.transport-mark.mark-lan.mark-linked,
+.transport-mark.mark-ble.mark-fault,
+.transport-mark.mark-lan.mark-fault {
+    background-color: currentColor;
+}
+
+/* Hollow: no link, or a connect in flight. An outline, not a fill. */
+.transport-mark.mark-ble.mark-open,
+.transport-mark.mark-ble.mark-pending,
+.transport-mark.mark-lan.mark-open,
+.transport-mark.mark-lan.mark-pending {
+    background-color: transparent;
+    border: 1.5px solid currentColor;
+}
+
+/* The wall's hollow form: the same 2x2 grid, divided rather than filled —
+   four panes with the cross between them. */
+.transport-mark.mark-wall.mark-open,
+.transport-mark.mark-wall.mark-pending {
+    background-color: transparent;
+    border: 1.5px solid currentColor;
+    background-image:
+        linear-gradient(currentColor, currentColor),
+        linear-gradient(currentColor, currentColor);
+    background-size: 1px 100%, 100% 1px;
+    background-position: 50% 0, 0 50%;
+    background-repeat: no-repeat;
+}
+
+/* ── the FAULT bar: a light core between dark keylines ───────────────── */
+
+.transport-mark.mark-fault::before,
+.transport-mark.mark-fault::after {
+    content: "";
+    position: absolute;
+    left: -12%;
+    width: 124%;
+    transform: rotate(-45deg);
+    transform-origin: 50% 50%;
+}
+
+.transport-mark.mark-fault::before {
+    top: calc(50% - 1.2px);
+    height: 2.4px;
+    background: #1c1c1e;
+}
+
+.transport-mark.mark-fault::after {
+    top: calc(50% - 0.55px);
+    height: 1.1px;
+    background: #f5f5f5;
+}
+
+/* ── the COLOUR axis: it reinforces, it never carries alone ──────────── */
+
+.transport-mark.mark-ble {
+    color: var(--transport-ble, #3b82f6);
+}
+
+.transport-mark.mark-lan {
+    color: var(--transport-lan, #22c55e);
+}
+
+.transport-mark.mark-wall {
+    color: #8b5cf6;
+}
+
+/* These come last on purpose: they share the shape rules' specificity, and
+   the state is the thing that owns the hue when the link is not up. */
+.transport-mark.mark-open {
+    color: #6b7280;
+    opacity: 0.35;
+}
+
+.transport-mark.mark-pending {
+    color: #f59e0b;
+    opacity: 1;
+    animation: dot-pulse 1s ease-in-out infinite;
+}
+
+.transport-mark.mark-fault {
+    color: #f59e0b;
+    opacity: 1;
+}
+
+/* The pulse: a connect in flight. It REINFORCES the hollow fill — the fill
+   already says "not linked yet" — so the mark is still legible in a still
+   frame, and the fill is what the greyscale gate measures. */
+@keyframes dot-pulse {
+    0%, 100% { box-shadow: 0 0 2px currentColor; opacity: 0.6; }
+    50% { box-shadow: 0 0 8px currentColor; opacity: 1; }
+}
+
+/* ── the KEY: the same three marks, beside the names they mean ───────── */
+/* A vocabulary nobody is taught is a guess (P7.2). The key lives in Settings
+   -> Devices and uses the mark classes above, so it cannot drift from the
+   dot: there is one vocabulary, not a legend of its own. */
+
+.transport-key {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 12px;
+    font-size: 10.5px;
+    color: var(--text-muted);
+}
+
+.transport-key-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+}
+

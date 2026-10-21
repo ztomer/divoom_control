@@ -33,7 +33,8 @@ fixed on both sides, P1.10, CI reading Python from `.python-version`, and
 P1.9, the release bumping the cask through the tap's gate, also on
 2026-10-17; P7.1, the tray glyph's shapes, on 2026-10-18; P1.13, the browser
 suites run in the local gate, on 2026-10-19, in `1760a79`, `7080f72`, `414ab5e`
-and `0627eb5`), so the items below have
+and `0627eb5`; P7.2, the connection dot's shape-and-fill vocabulary, on
+2026-10-20, ruled by the owner and landed), so the items below have
 NOT been re-derived against a later HEAD -- check an item against the code before
 working it. Phase 0 is new (goh 0.27.0's fallout,
 measured); the old Phase 0 became Phase 1 and every later phase moved up by one
@@ -140,6 +141,24 @@ daemon's own live devices were dropped from `discoveredDevices`, so
 `tests/test_e2e_write_during_pending_connect.py`,
 `tests/test_e2e_startup_restore_keeps_live_state.py`, both red before;
 `0627eb5`).
+
+#### P1.14 — The web UI's JavaScript has no syntax gate
+**Status:** OPEN
+**Why:** found on 2026-10-20 while landing P7.2. A stray backtick inside a
+template literal in `divoom_gui/web_ui/templates_settings.js` was a syntax
+error that broke the whole Settings tab -- `window.DivoomTemplates` never
+existed, so the tab rendered empty -- and NOTHING in this repo's gates
+noticed: the browser suites load the page, but a file the page loads and
+nothing calls is not exercised by any of them. The house gate parses the
+shell scripts (`bash -n`) and the Python, and has no parser for the ~40
+JavaScript files the app is made of, so a whole-file syntax error in the
+web UI is invisible until a person opens the app.
+**Done when:** a gate fails on a JavaScript syntax error in
+`divoom_gui/web_ui/` -- `node --check` where node exists, and a browser-free
+fallback that does not depend on node -- and it is watched RED on a file with
+a deliberate syntax error before it is trusted. It must cover the template
+literals: the failure mode that was actually hit is a stray backtick inside
+one, which a parser that only reads whole files may not catch.
 
 ### Phase 2 — daemon liveness and safety
 
@@ -353,166 +372,6 @@ scheduler cannot report its own death, so something outside it has to look.
 Either way `tools/check_launchd_jobs.py` keeps the "installed but dead" shape
 a finding, and `docs/launchd_jobs.json` keeps this repo's declaration of its
 launchd jobs in the repo, where CI can see it.
-
-#### P7.2 — The GUI's connection dot tells states apart by colour and motion alone
-**Status:** DECISION (owner)
-**Why:** the sibling P7.1 (the tray glyph, landed 2026-10-18) left open. The
-web GUI's `#global-status-dot` (`divoom_gui/web_ui/index.html:590`, drawn by
-`divoom_gui/web_ui/appbar.css:60`) is one 10px circle: BLE vs LAN vs Wall
-differ only by hue (blue / green / violet), Connecting vs Degraded are the same
-amber and differ only by pulse PERIOD (1s vs 2s), and Disconnected is the same
-circle dimmed. It cannot share the tray's renderer (a Rust bitmap), so the fix
-is a shape vocabulary of its own -- or the tray's grammar (hollow = no link,
-filled = linked, bar = fault) redrawn in CSS/SVG. Both of those are priced
-below (B and D). **Two of this entry's old claims were wrong and are corrected
-here:** the dot is 10px, not 8px
-(`divoom_gui/web_ui/appbar.css:65`), and its `title` is NOT a hover readout --
-the dot is `pointer-events: none` (`divoom_gui/web_ui/appbar.css:73`), the
-pointer never reaches it (`document.elementFromPoint` at the dot's centre
-returns the page, not the dot), so the browser never shows the title the
-funnel writes (`divoom_gui/web_ui/connection_events.js:36`); that name never
-carries the transport either ("Connected" for BLE, LAN and Wall alike), and the
-element's `aria-label` is the static "Connection status" in every state
-(`divoom_gui/web_ui/index.html:591`).
-
-**The tension, named rather than smoothed.** This entry was re-derived against
-the code on 2026-10-20 (HEAD `ac065b7`), by driving the real page in the
-house browser -- the numbers below are measured, not read. The owner's
-constraint (D15 in the estate umbrella: colour and pulse only) and the house's
-own rule
-(ui-house-doctrine rule 9 -- "render it greyscale, in one size, static: can
-you still tell the options apart?") cannot both be honoured by one channel.
-**Measured 2026-10-20 with the TRAY's own metric** (a luma step of 64 over
-5% of the mark's square, `divoom-menubar/src/glyph.rs:210`), driving the real
-page in the house browser and rendering the real states greyscale and static:
-every pair of LIVE states differs by 0 px. Connecting vs Degraded: 0 px (max
-luma delta 9.3). BLE vs Wall: 0 px (10.2). Only Disconnected separates, by
-being dimmer. The dot today is one channel doing all the work, and it fails
-the repo's own P7.1 gate applied to the web surface.
-
-**The panel's priced options (2026-10-20).** The house's ux-expert-panel
-roster ran over the real dot -- Rams (what is superfluous), Kare (legibility
-and the shape family; final say on the UI half by the house's tiebreak), Blow
-(what the dot is FOR), Carmack (cost, build order, and whether the proof
-works), Hashimoto (what the UI lies about). The accessibility half is not a
-taste question and was not laundered into the tiebreak: it stays with the
-owner.
-
-- **A -- colour + pulse only (the ruling as it stands).** Looks like exactly
-  what renders today: one circle, six colours, two pulse periods. Costs:
-  colour is the sole carrier of the transport (0 px in greyscale, measured),
-  and a pulse PERIOD is the sole difference between Connecting and Degraded --
-  a period is invisible in a still frame, in greyscale, and to a reader who
-  cannot separate the hues (the doctrine's own figure: about 1 in 12 men).
-  The transport has no other carrier in the app: the banner's name and mac
-  spans are hidden (`divoom_gui/web_ui/index.html:216`), the per-device chips
-  are hidden (`divoom_gui/web_ui/spatial_stage.css:95`), and the
-  `.transport-badge` and `.transport-status-panel` styles in
-  `divoom_gui/web_ui/settings.css` are rendered by nothing -- that panel was
-  removed in R32 (`divoom_gui/web_ui/settings_hardware.js:379`) -- leaving
-  3-second toasts as the only words that name a transport. WCAG 1.4.1 (use of
-  colour) fails for the transport and for the Connecting/Degraded pair. Proof:
-  the greyscale gate this entry's Done when asks for, which exists and is RED
-  today. Breaks: nothing technical; it keeps the defect, and it is the only
-  option under which the transport is stated by hue alone.
-- **B -- shape per transport, fill pattern per state: colour reinforces, pulse
-  reinforces pending.** Looks like: the SILHOUETTE says what is being driven
-  -- a circle for a BLE panel, a square for a LAN panel, a 2x2 grid of four
-  squares for the Virtual Wall (which IS several panels); the FILL says the
-  link -- solid = linked, solid with a diagonal bar = linked but degraded (the
-  tray's own "bar = fault"), hollow = not linked, hollow and pulsing = a
-  connect in flight. Colour reinforces (the transport hue; amber when degraded
-  or connecting). Costs: the shape vocabulary needs a KEY -- three silhouettes
-  do not self-evidently mean BLE/LAN/Wall, so the app must teach the mapping
-  once (the Settings -> Devices list is the place; the connect toast already
-  names it); the funnel must write the shape and the pattern, and the CSS must
-  draw three silhouettes and one bar; the dot's class vocabulary changes, so
-  the assertions that pin its className change in the same commit
-  (`tests/test_e2e_gui_daemon_connect_disconnect.py` pins the exact string in
-  four places, `tests/test_e2e_device_status_dot.py` in one). It needs NO size
-  change: measured at today's 10px, the three silhouettes differ by 88-177 px
-  in greyscale and the three patterns by 63-208 px (floor 5), so the whole
-  two-axis vocabulary fits where the dot already is. Proof: the browser e2e
-  suite -- the only place the real cascade exists -- renders each state with
-  the animation DISABLED, converts to greyscale, and asserts every pair
-  differs by at least 5% of the mark's own square at 2x, with a calibration
-  test that the gate goes red when two states share a look; a CSS-text
-  assertion cannot see a shape, and a canvas reimplementation would be a
-  parallel renderer (the lesson `tools/render_tray_icon.py` was rewritten
-  for). Breaks: the ruling as
-  literally written -- it serves the ruling's intent (the states must be
-  tellable apart) and not its letter. Satisfies the house rule: YES, measured.
-- **C -- a word beside the dot.** Looks like: the dot plus "BLE" / "LAN" /
-  "Wall" / "Connecting..." / "Degraded" / "Disconnected" in the corner.
-  Costs: the corner stops being a dot and becomes a pill, at roughly 60-90px
-  of corner width; the word cannot live behind the pointer (ui-house-doctrine
-  rule 8), so it is always visible, and a visible word in the corner is the
-  layout the app already decided against when it moved the dot out of the
-  appbar. Proof: a text assertion plus a layout check that the word does not
-  reflow or overflow; the greyscale question disappears for the transport,
-  because a word survives greyscale. Breaks: the ruling in letter even
-  harder; the app's quiet-corner decision.
-- **D -- the panel's own: the dot is the LINK only, and the transport moves to
-  the panel.** Looks like: the web dot adopts the tray's grammar outright --
-  hollow = no link, filled = linked, barred = fault, pulse = a connect in
-  flight (`divoom-menubar/src/state.rs:51`) -- and the transport stops being
-  the dot's business: it is written as a word on the panel's card in the
-  bench, where a panel is chosen. Costs: the corner loses the transport, so
-  the bench card must gain it (a template edit and a place where it is always
-  visible); the web dot still cannot share the Rust renderer, so the two
-  surfaces need a parity test or the app keeps two marks that look alike and
-  are not identical -- which the doctrine forbids (a new mark for an existing
-  concept is a parallel renderer). Proof: the same greyscale gate, plus a
-  cross-surface parity test, plus the owner's eye. Breaks: the ruling
-  outright -- the dot would no longer tell BLE, LAN and Wall apart at all.
-
-**Recommendation: B**, with the key, and with the three defects below fixed
-whatever is ruled -- because it is the only option that satisfies the house
-rule BY MEASUREMENT and still keeps the transport in the dot where the owner
-wants it, at no size and no layout cost, and because it reuses the tray's own
-fill grammar, so the app has ONE state vocabulary instead of two. It does
-contradict the letter of D15, and the panel does not get to make that call:
-the owner rules. If the owner's constraint is the letter -- colour and pulse
-only, no shape -- then A stands, and its price is named and measured above,
-not asserted.
-
-**Three defects that go with whichever design is ruled** (they are defects, not
-preferences, and they live in the dot's channel design, so they belong to this
-item rather than to a new one): (1) the `title` the funnel writes can never be
-seen and the `aria-label` is the static "Connection status" -- one funnel call
-must write class, title and aria-label together, and the title must be
-DELETED rather than made reachable (a hit-testable 10px corner dot would
-swallow the clicks it covers); the state is carried by the aria-label the
-funnel writes, and by a visible word where one exists; (2) the transport is
-derived TWICE and the two derivations disagree for the wall -- the heartbeat
-says "wall" (`divoom_gui/web_ui/connection_events.js:194`), the event path
-says "ble" for any non-LAN mac (`divoom_gui/web_ui/connection_events.js:275`),
-so the wall can be painted the BLE hue. Under B a wrong derivation would
-paint the wrong SHAPE, which is worse than a wrong colour, so ONE derivation,
-in the funnel, must be the only one; (3) under every option the dead CSS goes:
-`.transport-badge` and `.transport-status-panel`
-(`divoom_gui/web_ui/settings.css`) are rendered by nothing -- that panel was
-removed in R32 (`divoom_gui/web_ui/settings_hardware.js:379`) and only its
-styles stayed -- and a style that renders nothing is the quiet variant of a
-control that does nothing.
-
-**Done when:** the owner rules and the ruling is recorded here; then the
-browser e2e suite renders every dot state with the animation DISABLED (a
-pulsing dot is not reproducible: two screenshots of the same pulsing dot
-180 ms apart differ in 400 of 400 px), converts them to greyscale, and asserts
-every pair differs by at least 5% of the MARK'S OWN square at 2x (5 device px
-at today's 10px -- the tray's floor, in the dot's units, not the tray's), and
-that the dimmed Disconnected mark differs from a full-strength hollow in INK
-and not only in ratio (measured: 108 px differing, 50 ink against 136); with a
-calibration test proving the gate goes red when two states share a look; and,
-if the shape carries the transport, the KEY is on screen (the same three marks
-beside the panels they name, in the Settings -> Devices list), because a
-vocabulary nobody is taught is a guess. Then an offscreen sheet of the six
-states is on the owner's screen for the last judgement. Nothing here needs a
-panel: the dot is a mark in the app's own window, so the owner's eye is on the
-app, not on the bench. The dot speaks for the SELECTED target only (the
-standing per-device rule), so every claim above is about the active panel, not
-about the fleet.
 
 ### Phase 9 — parked on something outside this repo
 

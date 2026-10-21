@@ -107,7 +107,7 @@ async def test_connect_shows_connecting_then_connected():
                 toast: document.getElementById('toast').textContent,
                 connecting: !!document.querySelector('#device-dots .device-chip.connecting')
                           || (document.getElementById('global-status-dot')||{}).className
-                             ?.includes('connecting')
+                             ?.includes('mark-pending')
             })""")
             assert "Connecting to Ditoo" in mid["toast"]
             assert mid["connecting"]
@@ -264,12 +264,15 @@ async def test_degraded_link_shows_distinct_state():
                     JSON.stringify({connected:true, state:'degraded'});
                 return window.refreshConnectionState();
             }""")
-            await wait_js(page, 
+            await wait_js(page,
                 "() => (document.getElementById('global-status-dot')||{}).className"
-                "        ?.includes('degraded')", timeout=4000)
-            title = await eval_js(page, 
-                "() => document.getElementById('global-status-dot').title")
-            assert "degraded" in title.lower() or "reconnect" in title.lower()
+                "        ?.includes('mark-fault')", timeout=4000)
+            # P7.2: the dot has no title (it is pointer-events:none, so a title
+            # could never be seen); the state is in the aria-label.
+            label = await eval_js(page,
+                "() => document.getElementById('global-status-dot')"
+                ".getAttribute('aria-label')")
+            assert "degraded" in label.lower() or "reconnect" in label.lower()
         finally:
             await browser.close()
 
