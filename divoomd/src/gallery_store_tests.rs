@@ -13,8 +13,8 @@
 //!   reader does not know is NAMED rather than guessed at.
 
 use crate::gallery_store::{
-    frames_for, page_body, page_end, page_header, page_packets, parse_what_it_holds, ArtItem,
-    WhatItHolds,
+    frames_for, page_body, page_end, page_header, page_packets, parse_what_it_holds,
+    split_for_page, ArtItem, WhatItHolds,
 };
 use std::path::PathBuf;
 
@@ -114,6 +114,33 @@ fn the_page_is_sent_in_the_apps_packets() {
     );
     assert_eq!(packets[0].len(), 3 + 256);
     assert_eq!(packets[1].len(), 3 + 44, "the last packet carries the rest");
+}
+
+/// A run that offers FEWER items than a page must not fall off the end.
+///
+/// This is a REGRESSION test for a panic in the push path, found by the live
+/// run of 2026-10-21: nine items reached the store and `items[12..]` panicked
+/// — the run died on the first real device with fewer items than a page.
+#[test]
+fn fewer_items_than_a_page_are_split_without_panicking() {
+    let items: Vec<ArtItem> = (0..9)
+        .map(|i| item(&format!("file {i}"), vec![vec![i as u8]]))
+        .collect();
+    let (fitting, overflow) = split_for_page(&items);
+    assert_eq!(fitting.len(), 9, "every item fits a page of twelve");
+    assert_eq!(overflow.len(), 0, "and none is left over");
+}
+
+/// More items than a page: the ones that do not fit are named, not dropped.
+#[test]
+fn the_items_that_do_not_fit_a_page_are_the_ones_left_over() {
+    let items: Vec<ArtItem> = (0..15)
+        .map(|i| item(&format!("file {i}"), vec![vec![i as u8]]))
+        .collect();
+    let (fitting, overflow) = split_for_page(&items);
+    assert_eq!(fitting.len(), 12, "a page holds twelve items");
+    assert_eq!(overflow.len(), 3, "the rest are named by the store");
+    assert_eq!(overflow[0].name, "file 12", "and they are the last ones");
 }
 
 /// The device's answer is read as the app reads it.

@@ -273,6 +273,22 @@ pub async fn store(
     Ok(outcome)
 }
 
+/// The items that fit the device's page, and the ones that do not.
+///
+/// A page holds [`ITEMS_PER_PAGE`] items. A run that offers FEWER must not
+/// fall off the end of the slice: the live run of 2026-10-21 offered nine
+/// (one file's container was not readable) and the store panicked on
+/// `items[12..]` — a panic in the push path, on the first run that reached
+/// the device with fewer items than a page.
+#[must_use]
+pub fn split_for_page(items: &[ArtItem]) -> (&[ArtItem], &[ArtItem]) {
+    let fitting = items.len().min(ITEMS_PER_PAGE);
+    (
+        &items[..fitting],
+        items.get(ITEMS_PER_PAGE..).unwrap_or(&[]),
+    )
+}
+
 /// Save the items into the device's page, and say what did not fit.
 async fn store_items(
     dev: &crate::daemon::DeviceTransport,
@@ -280,8 +296,8 @@ async fn store_items(
     outcome: &mut StoreOutcome,
 ) -> (usize, Vec<FileFailure>) {
     let mut failures = Vec::new();
-    let fitting = &items[..items.len().min(ITEMS_PER_PAGE)];
-    for item in &items[ITEMS_PER_PAGE..] {
+    let (fitting, overflow) = split_for_page(items);
+    for item in overflow {
         failures.push(FileFailure {
             name: item.name.clone(),
             reason: format!(
