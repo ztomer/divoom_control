@@ -363,40 +363,6 @@ even with a panel the draw is code to write.
 checked on a real LAN panel), the daemon draws a slot over it, and the
 refusal is deleted — which needs a Wi-Fi panel bound to the account first.
 
-### Phase 7 — decisions for the owner
-
-**Goal:** the owner's calls, each with the evidence needed to make it.
-**Exit:** a recorded ruling per item. **Size:** S once decided.
-
-#### P7.3 — A scheduled monthly gallery push: the job is gone; does the feature come back?
-**Status:** DECISION (owner)
-**Why:** the job that did it — `com.divoom.monthlybest` — ran a Python script
-this repo retired on 2026-09-14, and failed every day for 36 days before the
-estate-wide survey found it (the servers ROADMAP's E44). It was removed on
-2026-10-20; nothing replaced it. The evidence, all measured: the Rust
-implementation of the same work, `divoomd/src/monthly_best.rs`, is a TASK
-inside the daemon and not a program — it runs only when the daemon's
-environment says `DIVOOMD_MONTHLY_BEST=1`, and nothing in this repo sets
-that, so it has never run in production; and it syncs to the targets in
-`divoom_lib/hotchannel_config.py`'s file, whose `targets` list is EMPTY on
-this machine, so even enabled it would push nothing. The panel the old job
-pushed to (Timoo-light-4) is present and was used on the bench on
-2026-10-19/20 — nothing about the HARDWARE is gone. What is missing is the
-SCHEDULE.
-**Done when:** the owner rules, and the ruling is recorded in the CHANGELOG:
-either the app's own Auto-Sync takes the job (the daemon runs monthly-best
-with a named target, and the daemon is spawned with the environment that
-enables it — a change in this repo, not a launchd job), or the estate does
-not want a scheduled gallery push and the feature stays off. If the owner
-wants it back as UNATTENDED scheduled work, the house's shape for that is a
-routines task (the `[[tasks]]` table in the routines config), not a launchd
-job: the routines scheduler runs it and `com.ztomer.routines.watch` looks
-from OUTSIDE and pushes its failure to the phone — the doctrine that a dead
-scheduler cannot report its own death, so something outside it has to look.
-Either way `tools/check_launchd_jobs.py` keeps the "installed but dead" shape
-a finding, and `docs/launchd_jobs.json` keeps this repo's declaration of its
-launchd jobs in the repo, where CI can see it.
-
 ### Phase 9 — parked on something outside this repo
 
 **Goal:** none until the named trigger fires; each item says what unparks it.
@@ -504,6 +470,21 @@ after a clock, a channel and a pushed image (done, 2026-10-20), AND a
 photograph says what re-selecting channel 5 shows, and the lease then
 restores each case it can restore faithfully, saying `restored: "channel"`,
 with the rest left as `"none"` by measurement rather than assumption.
+
+#### P9.8 — Is the "monthly best" category a sliding window?
+**Status:** WATCH
+**Why:** the owner asked on 2026-10-21 whether the category slides and said
+they were not sure. The name says "monthly", the content is refreshed almost
+daily, and the files it returns carry dates from 2020 to 2026 — so neither the
+name nor a single snapshot can answer it. It is a MEASUREMENT, and the
+measurement is now being taken: every scheduled push writes down what the
+category returned — the file names, the dates they carry and their ids — into
+the daemon's log and into
+`~/.config/divoom-control/hotchannel_fetches.json` (the last 14 runs).
+**What is left:** two dated snapshots a day apart, and the diff between them.
+**Done when:** two runs' snapshots exist on different days, and the diff says
+which files came and which went — then the answer (window or not, and of what
+width) is written down in `CHANGELOG.md` and this item is deleted.
 
 ---
 

@@ -4,7 +4,116 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
-## Unreleased
+## v0.41.4 — the hot channel reaches the devices the app's settings name (2026-10-21)
+
+The owner's ruling of 2026-10-21: there is no Python job (the dead launchd
+job `com.divoom.monthlybest` stays dead — it was removed on 2026-10-20 and
+nothing resurrects it), the hot channel's updates go to the devices the
+app's settings register, over Bluetooth, and the content is refreshed almost
+daily, so the push is DAILY. The sliding-window question is to be MEASURED,
+not assumed.
+
+The finding underneath all of it: the fact was stored TWICE, and the second
+copy was empty. The hot-channel loop kept its own list of devices
+(`hotchannel.json` → `targets`) and its own per-device gallery
+(`device_galleries`); the app's settings already knew the same devices in
+`config.ini`'s `[gallery]` table. The list nobody filled won, so the push was
+enabled, scheduled, and reached nobody — and the only evidence was a line on
+a log nobody read.
+
+- **One home for the fact: the app's own settings.** The loop resolves its
+  devices, and each device's gallery, from `config.ini`'s `[gallery]` table —
+  the table the GUI writes when the owner browses the gallery with a device,
+  and the table the Routines card's device toggles now write. The second list
+  is gone from `hotchannel.json`, which keeps only what is genuinely the
+  LOOP's own: whether it runs, and how often.
+  - `divoomd/src/settings_devices.rs` (new) — the daemon's reader: a device
+    address is a key, a classify is its value, and `default` /
+    `gallery_sort` / `gallery_file_size` are the table's own settings, not
+    devices. A key that is NEITHER a device NOR a known setting is a FINDING
+    and fails the run — a device whose name is wrong must be a failure, not
+    a no-op.
+  - `divoom_lib/settings_devices.py` (new) — the GUI's writer, the same
+    table, the same rules, the same reserved keys.
+  - `tools/check_hotchannel_parity.py` — the gate that holds the two readers
+    together, now also comparing the reserved keys and the fallback classify.
+    It also had a hole: its default-literal pattern was `(-?\d+)`, which
+    stopped MATCHING the moment the interval default became five digits
+    (`86_400`), so the default it exists to pin was silently unpinned. The
+    pattern now accepts the `_` separators `clippy::unreadable_literal`
+    insists on — the same repair the clamp pattern in that file already had.
+
+- **The migration, and what a stale file may not do.** A `hotchannel.json`
+  written by an older build still carries `targets` / `device_galleries` /
+  `classify`. Those keys are READ (an old file must not break the daemon),
+  REPORTED (the daemon prints which ones it found and ignored) and IGNORED:
+  a stale list must never override the settings. The next save of the
+  schedule rewrites the file with the loop's own keys only, which is the
+  migration — deliberate, visible, and not a silent rewrite of the owner's
+  file behind their back. `divoom_lib/hotchannel_config.py` warns when it
+  reads a stale file, so the GUI says so too.
+
+- **Daily, because the content is.** The interval is 86400 seconds. The
+  CATEGORY is called "monthly best" because that is the CLOUD's name for it;
+  the content behind it is refreshed almost daily, so a weekly push left the
+  device up to a week behind. The default is a day in the daemon
+  (`monthly_best.rs`), in the GUI's config (`hotchannel_config.py`) and in
+  the Routines card (24h is the tab that starts selected), and the operator
+  can still choose another interval.
+
+- **The loop had never run, because of a second switch.** The task was
+  spawned only when the daemon's environment said `DIVOOMD_MONTHLY_BEST=1`,
+  and nothing in this repo ever set it — so "the push is enabled" was true
+  on paper and false in fact, for the same reason the empty list was: a
+  second copy of a fact the app already had. The switch is now the app's own
+  Auto-Sync (`hotchannel.json`'s `enabled`), the same flag the Routines card
+  shows and writes. A daemon restart does not push: the loop waits out the
+  remainder of the interval (`monthly_best::should_run_now`), because the
+  cadence is the point and the GUI restarts the daemon often.
+
+- **A failure is loud, on the estate's own channel.** A failed cycle is not a
+  line on the daemon's stdout: it POSTs to the estate's push endpoint — the
+  same `ROUTINES_PUSH_URL` the rest of the estate alarms use, read from the
+  same `~/.routines/env`, so the failure reaches the owner's phone the way
+  the estate's other failures do. A cycle that succeeds after a failed one
+  posts a quiet recovery; a good run is not a buzz. A broken channel is
+  itself reported loudly, because the next thing the owner needs to know is
+  that the phone was not rung.
+  - `divoomd/src/owner_alert.rs` (new) — the endpoint, the post, and the
+    last run's outcome (`hotchannel_state.json`).
+
+- **The sliding window: measured, not assumed.** Every push writes down what
+  the category returned — the file names, the dates they carry, the ids — into
+  the daemon's log and into `~/.config/divoom-control/hotchannel_fetches.json`
+  (the last 14 runs, newest first). Two dated snapshots a day apart answer
+  the question either way; a snapshot that only ever holds one list answers
+  it never. `docs/ROADMAP.md` P9.8 carries the item until the diff exists.
+  **The answer is not in yet** — the measurement needs a day — and this
+  release says so rather than claiming a window it has not seen.
+
+- **One run, observed.** The loop's log lines, the file count and the
+  outcome, from the daemon this release installed. What the devices hold is
+  in the round's notes.
+
+- **A pre-existing red, repaired on the way.** The browser suites' navigation
+  budget was split into its own module (`tests/support/navigation_budget.py`)
+  while its gate still read the old names out of `tests/support/browser.py` —
+  so three tests in `tests/test_browser_navigation_budget.py` failed on a
+  CLEAN HEAD (measured in a worktree at `43a79fa`, before this round's tree
+  existed) and the gate could not go green. The gate now reads the module
+  that holds the implementation. It is not this round's defect; it was this
+  round's blocker.
+
+- **Tests.** Rust: 428 unit tests + the integration suites, all green
+  (`cargo test -p divoomd --no-default-features`, and with BLE). Python:
+  2122 passed, 180 skipped (the browser and hardware suites are opt-in).
+  The new rules were pinned RED FIRST — the loop's target resolution, the
+  stale file's report, the daily cadence and the settings' own address rule
+  each fail against the old behaviour with the message quoted in the round's
+  notes.
+
+Carried from the Unreleased section — the gallery round's work, released with
+this one:
 
 - **Two browser-suite flakes that were refusing the push, and the reason each
   one was not the change's fault.** The pre-push gate's browser step went red
