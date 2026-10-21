@@ -15,6 +15,20 @@ export GOH_EXCLUDE='docs/divoom_docs/'   # captured Divoom API responses + sampl
 # GOH_SWIFT_COV_MIN=95
 # GOH_MAX_SCRATCH_GB=25           # disk-hygiene ceiling (full runs only)
 
+# The pre-push export carries the built Rust daemon, because 11 tests in
+# scripts/py_ci.sh SPAWN it (tests/test_daemon_connect_edge_e2e.py,
+# tests/test_daemon_link_restore_e2e.py,
+# tests/test_daemon_client_coverage.py::test_spawn_daemon_rust_binary_env_invalid_path_falls_through).
+# Measured 2026-10-20: the export worktree has no target/ at all, so
+# divoom_client/binary_resolver.py resolves nothing and those tests fail with
+# "divoomd (Rust daemon) binary not found" -- a fact about the EXPORT, not about
+# the tree. In the checkout the same step is green (2113 passed, 176 skipped).
+# This is the house's own lever for exactly this (gates_of_heck carries its
+# bin/goh the same way, koffee_big its jniLibs), and it keeps the tests strict:
+# a stale binary is refused by the version guard in binary_resolver.py, so the
+# gate is red for a real reason rather than quietly skipping its subject.
+GOH_EXPORT_KEEP='target/debug/divoomd'
+
 # Length-only exemption: captured third-party API data (not hand-written code).
 # It stays emoji- and secret-scanned, which is why it is LINE_EXCLUDE and not
 # GOH_EXCLUDE.
