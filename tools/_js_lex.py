@@ -110,11 +110,7 @@ def scan(source: str) -> list[Problem]:
         prev = frame.prev
         if prev == "":
             return True
-        if prev in _VALUE_ENDERS:
-            return False
-        if prev == "value":
-            return False
-        return True
+        return prev not in _VALUE_ENDERS and prev != "value"
 
     while i < n:
         frame = frames[-1]
