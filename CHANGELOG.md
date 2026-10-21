@@ -106,17 +106,25 @@ underneath it.
   measured a container the app was about to empty.
 
   Reproduced here on the CI runner's own viewport (the container is 316px
-  tall in both) by loading the machine: the app's write has to land between
-  the injection and the first poll, and that window is one browser round
-  trip. The test now watches the container with a MutationObserver and waits
-  for the app to go QUIET -- measured from the app's LAST write and not from
-  the click, so the wait does not depend on how long the app defers its
-  load, and any write inside the window resets the clock. It then asserts
-  that the tiles SURVIVED the measurement (a late write now fails loudly
-  instead of quietly measuring an empty container), that the grid overflows,
-  and that neither the card nor the page scrolls -- the two halves of what
-  the test's name claims, the second of which it had never checked at all:
-  the old test computed `gallery_scroll` and asserted nothing about it.
+  tall in both): the app's write has to land between the injection and the
+  first poll, and that window is one browser round trip. The test now
+  watches the container with a MutationObserver and waits for TWO things: the
+  app's OWN write (the one that says "this container is mine now"), and
+  then stillness. **Stillness alone is not enough, and the first CI run of
+  this fix proved it:** the gallery's load is scheduled with
+  `setTimeout(window.loadGallery, 50)`, and a timer fires when the MAIN
+  THREAD is free -- 450ms later on a loaded runner. The container had
+  therefore never been written, so it read as quiet, the test injected, and
+  the app's load landed 20ms later and emptied the container underneath it.
+  So the wait is for the app's write and only then for quiet, and the
+  writes are COUNTED rather than guessed at.
+
+  The test then asserts that the tiles SURVIVED the measurement (a late
+  write now fails loudly instead of quietly measuring an empty container),
+  that the grid overflows, and that neither the card nor the page scrolls
+  -- the two halves of what the test's name claims, the second of which it
+  had never checked at all: the old test computed `gallery_scroll` and
+  asserted nothing about it.
 
   Tests: **2134** passed, **180** skipped (`python3 -m pytest`, `tests/`; the
   browser and hardware suites are opt-in). The new gate's own test

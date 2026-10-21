@@ -65,7 +65,23 @@ async def _watch_gallery(page) -> None:
 
 
 async def _wait_for_gallery_quiet(page, *, quiet_ms: int = GALLERY_QUIET_MS) -> dict:
-    """Wait until the app has stopped rewriting the gallery container."""
+    """Wait until the app has taken the gallery container over and stopped.
+
+    TWO conditions, and the first one is the one that matters: the app must
+    have WRITTEN at least once since the watch went up, and the container must
+    then have been still for `quiet_ms`.
+
+    "Still for a while" alone is not enough, and the CI run proved it: the
+    gallery's own load is scheduled with `setTimeout(window.loadGallery, 50)`,
+    and a timer fires when the MAIN THREAD is free -- which on a loaded runner
+    was 450ms later. The container had therefore been quiet for the whole of
+    that time (it had never been written), the test read "quiet", injected, and
+    the app's load landed 20ms later and emptied the container underneath it.
+
+    So the wait is for the app's OWN write -- the one that says "this
+    container is mine now" -- and only then for stillness. The write is
+    watched, not guessed at: the observer counts them.
+    """
     deadline = time.monotonic() + UI_TIMEOUT_MS / 1000
     state = None
     while True:
@@ -76,13 +92,14 @@ async def _wait_for_gallery_quiet(page, *, quiet_ms: int = GALLERY_QUIET_MS) -> 
                 return { idleMs: Date.now() - w.last, writes: w.writes };
             }
         """)
-        if state and state["idleMs"] >= quiet_ms:
+        if state and state["writes"] >= 1 and state["idleMs"] >= quiet_ms:
             return state
         if time.monotonic() >= deadline:
             raise AssertionError(
-                f"the gallery never went quiet: {state} — the app is still "
-                f"rewriting #gallery-container, and a test that injects into "
-                f"it measures a container the app is about to empty"
+                f"the gallery never settled: {state} — the app's gallery load "
+                f"must write the container once and then stop; a test that "
+                f"measures before that measures a container the app is about "
+                f"to replace"
             )
         await asyncio.sleep(POLL_INTERVAL_MS / 1000)
 

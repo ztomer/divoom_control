@@ -183,12 +183,16 @@ and not the cause. Reproduced here on the CI runner's own viewport (the
 container is 316px tall in both) by loading the machine: the app's write has
 to land between the injection and the first poll, and that window is one
 browser round trip. The test now watches the container with a
-MutationObserver and waits for the app to go QUIET -- measured from the app's
-last write, not from the click, so the wait does not depend on how long the
-app defers -- and it asserts that the tiles SURVIVED the measurement, that
-the grid overflows, and that neither the card nor the page scrolls (the two
-halves of what the test's name claims, and the second of which it had never
-checked).
+MutationObserver and waits for TWO things: the app's OWN write (the one
+that says "this container is mine now") and then stillness. Stillness alone is
+not enough, and the first CI run of that fix proved it -- the gallery's load
+is scheduled with `setTimeout(window.loadGallery, 50)`, and a timer fires
+when the MAIN THREAD is free, which on a loaded runner was 450ms later: the
+container had never been written, it read as quiet, the test injected, and
+the app's load landed 20ms later and emptied the container underneath it. The
+test also asserts that the tiles SURVIVED the measurement, that the grid
+overflows, and that neither the card nor the page scrolls (the two halves of
+what the test's name claims, and the second of which it had never checked).
 
 Landed after (2026-10-21): P1.15, the daemon's startup lock is released
 EXPLICITLY, and the reason it outlived the process is named. A `flock` belongs
