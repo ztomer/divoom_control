@@ -92,6 +92,13 @@ Native output: DECODED 2026-09-13 (Ghidra on `libtimebox.so`): the 0x1A
   (26) container's frames are `u32 BE len` + a 0xAA record with flag 0x15,
   a quadtree over 8x8 tiles with per-node sub-palettes. The reader is
   `divoomd/src/art_codec/fix.rs` (the store's clock-face pictures).
+  DECODED AGAIN 2026-10-21 (llvm-objdump on the same library): the 0x1A
+  container's frames are `u32 BE len` + a 0xAA record whose FLAG says how the
+  pixels are coded — 0x0C is a palette (`ncol`, a u16 LE at offset 6) with
+  LSB-first indices at `bits(ncol)` bits each, 0x0B and 0x11 are raw RGB,
+  0x12 is the palette form at 128x128, 0x14 is the palette form in the app's
+  "net" colour order, and 0x15 is the quadtree above. The gallery's files are
+  the 0x0C form; the reader is `divoomd/src/art_codec/iframe.rs`.
 ```
 
 **Verdict:** Our RR=0x03 and 2-byte NN come from **hass-divoom**, not the APK.

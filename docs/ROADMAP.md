@@ -517,6 +517,27 @@ the daemon's log and into
 which files came and which went — then the answer (window or not, and of what
 width) is written down in `CHANGELOG.md` and this item is deleted.
 
+#### P9.9 — The magic-26 family's other frame flags are not read
+**Status:** WATCH
+**Why:** the gallery's magic-26 containers are the flag-`0x0C` form (a
+palette and LSB-first indices in a 4x4 grid of 16x16 tiles), and
+`divoomd/src/art_codec/iframe.rs` reads that, the raw forms (`0x0B`, `0x11`),
+the 128x128 palette form (`0x12`) and the quadtree (`0x15`). Two more flags
+exist in the app's own dispatcher and are NOT read here: `0x00`, the
+standard 7-byte `AA` form the daemon itself encodes (the app picks its size
+from the picture, not from the container's grid), and `0x14`, the palette
+form in the "net" colour order, which the app converts with
+`convert_rgb_local_to_net_128` before it shows it. Both are REFUSED rather
+than guessed at, and no gallery file has carried either.
+**The trigger is named:** the run now prints the frame flag of every file it
+could not show, so the first `0x00` or `0x14` in a gallery run is visible in
+the daemon's log. (A magic-26 animation is also decoded to its first 24
+frames — the same bound the magic-9 and magic-18 decoders carry — so a long
+animation plays as its first 12 seconds.)
+**Done when:** a gallery file carries a flag this decoder refuses, and the
+refusal is lifted by reading that flag out of the native library the same way
+`0x0C` was — or the flags are shown never to appear and this item is deleted.
+
 ---
 
 ## Standing rules

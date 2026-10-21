@@ -4,6 +4,97 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## v0.41.5 — the gallery's magic-26 files decode, and the run names the ones it cannot show (2026-10-21)
+
+The hot channel's last observed run pushed **34 of 40 files** to the owner's
+four panels and said nothing about the other six beyond a count. The six were
+**magic-26 (`0x1A`) containers** — the newest art in the gallery — and the
+native decoder could not read them. This release reads them, and it makes the
+run name any file it still cannot show.
+
+- **The decoder gap is CLOSED, for the shape the gallery serves.** A magic-26
+  container is `[26][frames][speed:u16 BE][rows][cols]` and then, per frame,
+  `[len:u32 BE][record]`; the record's own flag says how its pixels are coded.
+  The gallery's files are the **flag `0x0C`** form: a palette of `ncol`
+  colours and the picture's indices, `bits(ncol)` bits each, LSB-first, in a
+  4x4 grid of 16x16 tiles (64x64).
+  - `divoomd/src/art_codec/iframe.rs` (new) — the port. It was read out of
+    the app's own native library (`libtimebox.so`,
+    `divoom_image_decode_Iframe` → `divoom_image_decode_Iframe_in`, with
+    `llvm-objdump` on the arm64-v8a build), because the app is what renders
+    these files and its format is the ground truth. The flag dispatch, the
+    palette's bit width, the LSB-first packing and the TILE layout are all
+    the native code's, not a guess.
+  - `divoomd/src/art_codec/fix.rs` — the container reader now walks ANY
+    `rows` x `cols` grid instead of only the 8x8 (128x128) one, and hands
+    each record to the format its flag names. The quadtree (`0x15`) is read
+    as before and its pinned SHA-1 is unchanged.
+  - **The proof is the ART.** The gallery's own file ("Jack Skellington",
+    fetched 2026-10-21) decodes to a picture whose SHA-1 is pinned
+    (`0f732027b40f68e505e8441fd8fa3b56ff6b1244`), and the frames consume
+    EXACTLY the file — the container's own frame lengths add up to its last
+    byte, which is the structural proof that the frames were read where the
+    file says they are. Decoded and looked at, it is a ghost.
+  - The flag `0x14` — the same palette form in the app's "net" colour order,
+    which the app converts with `convert_rgb_local_to_net_128` — is REFUSED
+    rather than shown in the wrong colours, and the file is named.
+
+- **The run names the files it could not show, and why.** A warning that says
+  "1 of 10 file(s) could not be shown" says less than the run that names the
+  file and the reason, and a run that quietly drops files says less than it
+  does. Every failure now carries its reason — the container it was, the
+  frame flag, a download that failed, a device that would not take the image
+  — and the warning line names the file.
+  - `divoomd/src/media.rs` — `why_not_resolvable`: the magic byte says which
+    container, and for the magic-26 family the first frame's own flag says
+    which shape of it.
+  - The GUI's own paths (`sync_artwork`, `get_animated_preview`) say the same
+    thing instead of "unrecognized container magic 26".
+
+- **The granularity is unchanged, and now it is PINNED as a rule about the
+  FILES.** A device that could not be **reached** fails the run and rings the
+  phone. A device that was reached and showed **nothing** also fails the run.
+  A file that could not be **shown** while the device showed the others is a
+  WARNING — a daily alert for a decoder gap would train the owner to ignore
+  the channel. The rule is one function now
+  (`monthly_best_push::device_verdict`), and the test was seen RED with its
+  own message ("a device that was reached and showed nothing is a FAILED
+  RUN") before the rule was put back.
+
+- **What the gap cost, measured from the daemon's own log (the cycle of
+  2026-10-21 05:47 UTC).** The run offered **40 files** across the owner's
+  four panels (10 each); **6 file-attempts** could not be shown — one per
+  classify-18 panel (all of them the same file) and three on the classify-17
+  panel — and they are **4 distinct files**: `Old animation` (63,978 B),
+  `Jack Skellington` (9,260 B), `Haunted2026 Ghostly Cutie` (303,881 B) and
+  `Haunted2026 + Zashiki-warashi` (347,227 B). In bytes: **852,302 B of the
+  run's 3,308,028 B (25.8%)** was downloaded and never reached a panel, and
+  **177 frames** of animation never arrived.
+
+- **What the device holds after such a run, measured live.** The push SHOWS
+  the art — it streams a 0x8B animation to the panel — rather than adding it
+  to a stored gallery. Reading the panels back after the run (0x46,
+  `current_light_effect_mode`): **three of the four still read 5**, the
+  pushed-image channel, and the fourth reads 0 (the clock). What is ON the
+  screen cannot be read back from this side: the protocol has no screen
+  readback, and the daemon's own "what does it hold" query times out on the
+  Pixoo (the panel does not answer that form — P9.7 records it). What the
+  daemon pushed is known exactly: the log names every file, and the run now
+  names the ones it could not show.
+
+- **A limit worth stating.** A magic-26 animation is decoded to its first
+  **24 frames** — the same bound the cloud's magic-9 and magic-18 decoders
+  carry, so a 83-frame gallery animation plays as its first 12 seconds rather
+  than as a 300 KB GIF over the radio.
+
+- **Tests.** Rust: **439** unit tests + the integration suites (**566** in the
+  no-BLE run, **690** in the whole run), all green. Python: **2128** passed /
+  180 skipped in `tests/`, **1022** passed / 73 skipped in `examples/tests`,
+  and **238** browser tests. The two new rules were pinned RED FIRST — the
+  gallery's magic-26 file ("the gallery's magic-26 file decodes") and the
+  granularity ("a device that was reached and showed nothing is a FAILED
+  RUN") each fail with their own message against the old behaviour.
+
 ## v0.41.4 — the hot channel reaches the devices the app's settings name (2026-10-21)
 
 The owner's ruling of 2026-10-21: there is no Python job (the dead launchd
