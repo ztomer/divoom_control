@@ -5,6 +5,7 @@
 //! error the user cannot act on is the defect being fixed, not a detail.
 
 use super::*;
+use std::os::unix::process::CommandExt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -281,6 +282,105 @@ fn releasing_the_lock_lets_the_next_daemon_start() {
     let second = acquire(&p).expect("a released lock must be re-acquirable");
     drop(second);
     cleanup(&p);
+}
+
+/// The lock is released EXPLICITLY, not by the last `close()`.
+///
+/// P1.15. A `flock` is held by the OPEN FILE DESCRIPTION, not by the
+/// descriptor: a descriptor is a reference to a description, and the lock
+/// lives until the LAST reference goes away. A child process that inherits the
+/// descriptor holds another reference to the SAME description, so the parent's
+/// `close()` does not release the lock -- the lock survives the parent, and
+/// the next daemon is told "another divoomd is starting up" by a daemon that
+/// is not running at all.
+///
+/// That is not a test-only shape: the daemon spawns children (`spp.rs` starts a
+/// Python helper), and a child that outlives the daemon keeps the lock held
+/// after the daemon is gone -- which is exactly the failure the lock exists to
+/// prevent, one daemon later.
+///
+/// The window in the wild is the fork-to-exec gap, which is short but is not
+/// zero, and it is longer on a loaded machine. The CI failure was that: the
+/// second `flock` came back EWOULDBLOCK after the first was dropped, with no
+/// descriptor of this process left pointing at the lock file.
+#[test]
+fn a_released_lock_is_released_even_when_a_child_inherited_the_descriptor() {
+    let p = tmp_path("lockinherited");
+    cleanup(&p);
+    let first = acquire(&p).expect("first");
+
+    // The descriptor the lock lives on, found in THIS process, so the child
+    // can be given a copy of it.
+    let lock_path = lock_path(&p);
+    let fd = fd_pointing_at(&lock_path).expect("the lock's own descriptor");
+
+    // The child keeps the descriptor OPEN past `exec`: `pre_exec` clears
+    // FD_CLOEXEC on it, so the copy survives into the new program. That is
+    // the whole mechanism, made deliberate.
+    let mut command = std::process::Command::new("/bin/sleep");
+    command.arg("30");
+    // SAFETY: the closure only calls `fcntl` on a descriptor this process
+    // owns, in the child between fork and exec. `fcntl` is async-signal-safe,
+    // and the closure allocates nothing.
+    unsafe {
+        command.pre_exec(move || {
+            // `fcntl` on a descriptor this process owns; it is
+            // async-signal-safe and the closure allocates nothing.
+            let flags = libc::fcntl(fd, libc::F_GETFD);
+            if flags < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            // Clearing FD_CLOEXEC on our own descriptor, so the copy survives
+            // the exec into the child.
+            if libc::fcntl(fd, libc::F_SETFD, flags & !libc::FD_CLOEXEC) < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    let mut child = command
+        .spawn()
+        .expect("spawn the child that inherits the descriptor");
+
+    // Let the child reach its `exec` with the descriptor still open.
+    std::thread::sleep(std::time::Duration::from_millis(200));
+
+    drop(first); // the daemon exits: its own reference is gone
+
+    let second = acquire(&p).expect(
+        "a released lock must be released even when a child still holds a \
+         copy of the descriptor",
+    );
+    drop(second);
+
+    let _ = child.kill();
+    let _ = child.wait();
+    cleanup(&p);
+}
+
+/// The descriptor of THIS process that points at `path`, if there is one.
+///
+/// The INODE is the identity, not the device: `/dev/fd/N` on macOS reports the
+/// fdesc device with the file's own inode, so comparing both would never
+/// match.
+fn fd_pointing_at(path: &str) -> Option<i32> {
+    use std::os::unix::fs::MetadataExt;
+    let target = std::fs::metadata(path).ok()?;
+    let ino = target.ino();
+    for entry in std::fs::read_dir("/dev/fd").ok()? {
+        let entry = entry.ok()?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let Ok(fd) = name.trim_start_matches("fd").parse::<i32>() else {
+            continue;
+        };
+        let Ok(md) = std::fs::metadata(entry.path()) else {
+            continue;
+        };
+        if md.ino() == ino {
+            return Some(fd);
+        }
+    }
+    None
 }
 
 #[test]

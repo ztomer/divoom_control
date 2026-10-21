@@ -190,29 +190,29 @@ the grid overflows, and that neither the card nor the page scrolls (the two
 halves of what the test's name claims, and the second of which it had never
 checked).
 
-#### P1.15 — The daemon's socket-lock test flakes on CI, and the reason is not known
-**Status:** OPEN
-**Why:** CI run 39523759110 (2026-10-21, the `b84565a` push) went red in the
-`rust-ble` job on one test:
-`socket_bind::tests::releasing_the_lock_lets_the_next_daemon_start` --
-"a released lock must be re-acquirable: StartupInProgress"
-(`divoomd/src/socket_bind_tests.rs:281`). The test takes the startup lock
-(`flock` on `<socket>.lock`), drops it, removes the socket file, and expects
-the next `acquire` to succeed; on CI the second `flock` came back
-EWOULDBLOCK, which is the only path to that error. Every other job in that
-run was green, and the previous run (39438403478) was green too. It did NOT
-reproduce locally: 12 isolated runs of that one test and 6 full runs of the
-435-test lib binary (the same features) were all green on 2026-10-20. So the
-cause is not the tree's -- and it is not known, which is the point of the
-item: a lock that is not re-acquirable after it was dropped is exactly the
-shape of "a second daemon cannot start", which is the defect the lock exists
-to prevent, and it must be NAMED rather than re-run until it is green.
-**Done when:** the failure is reproduced (a loop of the CI job's own command,
-`cargo test --locked`, on a macOS runner) or the mechanism is found by
-reading it out of the code -- and then either the test or the lock is fixed,
-and the fix is watched red first. A retry loop is NOT the answer: the lock is
-what makes two daemons safe, and a test that retries a lock it cannot get
-teaches nobody whether the lock works.
+Landed after (2026-10-21): P1.15, the daemon's startup lock is released
+EXPLICITLY, and the reason it outlived the process is named. A `flock` belongs
+to the OPEN FILE DESCRIPTION, not to the descriptor: a descriptor is one
+reference to a description, and the lock lives until the LAST reference goes
+away. A child process that inherits the descriptor holds another reference to
+the SAME description, so the parent's `close()` does not release the lock --
+the lock outlives the process that took it, and the next daemon is told
+"another divoomd is starting up" by a daemon that is not running. The daemon
+starts children (`spp.rs` starts a Python helper), the window is the
+fork-to-exec gap -- short, not zero, and longer on a loaded machine -- and
+that is CI run 39523759110. Reproduced 4 times in 320 runs of the 435-test
+lib binary (twice as `StartupInProgress` on the lock, twice as
+`UnresponsiveListener` on the socket), and then DETERMINISTICALLY:
+`a_released_lock_is_released_even_when_a_child_inherited_the_descriptor` gives
+a child a copy of the lock's descriptor and watches the second `acquire` fail
+with CI's own message. `StartupLock` now unlocks (`flock(LOCK_UN)`) when it is
+dropped, so the release means "I am giving the lock up" and not "the last
+descriptor is gone"; the same test is that fix's green. The same window seen
+through the SOCKET rather than the lock is the `clears_a_stale_socket` variant
+(`UnresponsiveListener`: a child that inherited the listener's descriptor keeps
+the socket listening, and the probe finds a listener that never answers). Its
+production exposure is bounded -- the daemon unlinks the socket path before it
+exits, so the path is gone -- and it is left as a named variant, not as a fix.
 
 ### Phase 2 — daemon liveness and safety
 

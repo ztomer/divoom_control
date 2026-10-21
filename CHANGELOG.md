@@ -4,6 +4,39 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## The daemon's startup lock is released EXPLICITLY, and the reason it outlived the process is named (2026-10-21)
+
+- **P1.15 -- the lock the daemon takes now means "I am giving it up", not
+  "the last descriptor is gone".** A `flock` belongs to the OPEN FILE
+  DESCRIPTION, not to the descriptor: a descriptor is one reference to a
+  description, and the lock lives until the LAST reference goes away. A child
+  process that inherits the descriptor holds another reference to the SAME
+  description, so the parent's `close()` does not release the lock -- the lock
+  outlives the process that took it, and the next daemon is told "another
+  divoomd is starting up" by a daemon that is not running.
+
+  The daemon starts children (`spp.rs` starts a Python helper), and the
+  window is the fork-to-exec gap: short, not zero, and longer on a loaded
+  machine. That is CI run 39523759110, where the second `flock` came back
+  EWOULDBLOCK after the first was dropped. The same window, seen through the
+  SOCKET rather than the lock, is the `clears_a_stale_socket` variant
+  (`UnresponsiveListener`): a child that inherited the listener's descriptor
+  keeps the socket listening, and the prober then finds a listener that never
+  answers. Its production exposure is bounded -- the daemon unlinks the socket
+  path before it exits, so the path is gone -- and it is left as a named
+  variant, not as a fix.
+
+  `StartupLock` now unlocks (`flock(LOCK_UN)`) when it is dropped.
+
+  **The failure was reproduced four times in 320 runs of the 435-test lib
+  binary, and then DETERMINISTICALLY.**
+  `a_released_lock_is_released_even_when_a_child_inherited_the_descriptor`
+  gives a child a copy of the lock's descriptor -- `pre_exec` clears
+  FD_CLOEXEC on it, so the copy survives the exec -- and watches the second
+  `acquire` fail with CI's own message, "a released lock must be released
+  even when a child still holds a copy of the descriptor: StartupInProgress".
+  That test was watched RED before the fix and is GREEN after it.
+
 ## The web UI's JavaScript has a syntax gate, and the gallery test stops racing the app (2026-10-21)
 
 Two gates this repo did not have, and one test that measured a page moving

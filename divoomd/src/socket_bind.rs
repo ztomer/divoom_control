@@ -97,15 +97,35 @@ pub struct Acquired {
 
 /// The held startup lock.
 ///
-/// Its only job is to stay alive: dropping it releases the advisory lock and
-/// lets a second daemon race us. It is a distinct type so that `let _ = ...`
-/// (which would drop it immediately) reads as obviously wrong at the call site.
-/// The field is named `_file` rather than carrying an `#[allow(dead_code)]`:
-/// nothing reads it, and that is the point, so the underscore states the intent
-/// where a lint suppression would only have hidden the question.
+/// Its job is to hold the advisory lock and to give it up on the way out. It is
+/// a distinct type so that `let _ = ...` (which would drop it immediately)
+/// reads as obviously wrong at the call site. The field was named `_file`
+/// while nothing read it; the release below reads it, so it is named `file`.
+///
+/// # Why the release is EXPLICIT
+///
+/// A `flock` belongs to the OPEN FILE DESCRIPTION, not to the descriptor: a
+/// descriptor is one reference to a description, and the lock lives until the
+/// LAST reference goes away. A child process that inherits the descriptor
+/// holds another reference to the SAME description, so closing ours does not
+/// release the lock -- the lock outlives the process that took it, and the
+/// next daemon is told "another divoomd is starting up" by a daemon that is
+/// not running.
+///
+/// That is not a test-only shape. The daemon starts children (`spp.rs` starts
+/// a Python helper), and a child that outlives the daemon keeps the lock
+/// held after the daemon is gone -- which is the failure the lock exists to
+/// prevent, one daemon later. The window is the fork-to-exec gap, which is
+/// short and is not zero, and it is longer on a loaded machine: that is what
+/// CI run 39523759110 hit, and the second `flock` came back EWOULDBLOCK with
+/// no descriptor of this process left pointing at the lock file.
+///
+/// Unlocking explicitly releases the lock for every holder of the description,
+/// which is what "I am giving the lock up" has to mean. The descriptor is
+/// still closed afterwards; it simply no longer decides WHEN the lock goes.
 #[derive(Debug)]
 pub struct StartupLock {
-    _file: std::fs::File,
+    file: std::fs::File,
 }
 
 impl StartupLock {
@@ -115,7 +135,18 @@ impl StartupLock {
     /// build a `HeldSocket` without going through a real `acquire`; taking the
     /// lock is `acquire`'s job and stays here.
     pub(crate) const fn hold(file: std::fs::File) -> Self {
-        Self { _file: file }
+        Self { file }
+    }
+}
+
+impl Drop for StartupLock {
+    fn drop(&mut self) {
+        // SAFETY: the descriptor is ours, it is open, and `flock` with
+        // LOCK_UN only ever removes a lock. A failure here leaves the lock to
+        // be released by the close below, which is the old behaviour.
+        unsafe {
+            libc::flock(self.file.as_raw_fd(), libc::LOCK_UN);
+        }
     }
 }
 
