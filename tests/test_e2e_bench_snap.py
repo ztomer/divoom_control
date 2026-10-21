@@ -15,6 +15,9 @@ Skipped if a browser isn't installed (runs with --run-browser).
 """
 from pathlib import Path
 
+import asyncio
+import time
+
 import pytest
 
 from tests.support.browser import (
@@ -71,9 +74,39 @@ async def _box(page, mac):
         return {x: n.offsetLeft, y: n.offsetTop, w: n.offsetWidth, h: n.offsetHeight}; }""", mac)
 
 
-async def _drag(page, mac, dx, dy):
+async def _node_box(page, mac, timeout: float = 10.0):
+    """The node's box, re-measured if the app re-rendered the bench under us.
+
+    The app REBUILDS the bench's nodes on every refresh -- `refreshBenchNodes`
+    clears the bench and re-creates them -- and it defers that while a drag is
+    in progress (`SpatialDrag.deferWhileDragging`), but the moment BEFORE a
+    drag is not protected, and the startup refresh lands about a second after
+    load, which is inside this test's window. A locator that resolves the node
+    a moment before the replacement then measures a DETACHED element, and
+    Playwright answers None for that -- which is how this file failed with a
+    TypeError instead of an assertion.
+
+    Measured 2026-10-20: 2 of 6 parallel runs of this file failed that way on
+    CLEAN HEAD (`b84565a`) and the same on the P7.2 tree, so the race is not
+    that change's doing: it is the app's rebuild landing between the
+    measurement and the mousedown, and the test reading a box that was never
+    there. Re-measuring waits for the node the app has NOW, which is what the
+    drag needs -- a node that is attached when the button goes down.
+    """
     node = page.locator(f"[id='spatial-node-{mac}']")
-    box = await node.bounding_box()
+    deadline = time.monotonic() + timeout
+    while True:
+        box = await node.bounding_box()
+        if box is not None:
+            return box
+        if time.monotonic() >= deadline:
+            raise AssertionError(
+                f"the bench node {mac} never had a box in {timeout}s")
+        await asyncio.sleep(0.05)
+
+
+async def _drag(page, mac, dx, dy):
+    box = await _node_box(page, mac)
     sx, sy = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
     await page.mouse.move(sx, sy)
     await page.mouse.down()
