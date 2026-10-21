@@ -142,6 +142,30 @@ daemon's own live devices were dropped from `discoveredDevices`, so
 `tests/test_e2e_startup_restore_keeps_live_state.py`, both red before;
 `0627eb5`).
 
+#### P1.15 — The daemon's socket-lock test flakes on CI, and the reason is not known
+**Status:** OPEN
+**Why:** CI run 39523759110 (2026-10-21, the `b84565a` push) went red in the
+`rust-ble` job on one test:
+`socket_bind::tests::releasing_the_lock_lets_the_next_daemon_start` --
+"a released lock must be re-acquirable: StartupInProgress"
+(`divoomd/src/socket_bind_tests.rs:281`). The test takes the startup lock
+(`flock` on `<socket>.lock`), drops it, removes the socket file, and expects
+the next `acquire` to succeed; on CI the second `flock` came back
+EWOULDBLOCK, which is the only path to that error. Every other job in that
+run was green, and the previous run (39438403478) was green too. It did NOT
+reproduce locally: 12 isolated runs of that one test and 6 full runs of the
+435-test lib binary (the same features) were all green on 2026-10-20. So the
+cause is not the tree's -- and it is not known, which is the point of the
+item: a lock that is not re-acquirable after it was dropped is exactly the
+shape of "a second daemon cannot start", which is the defect the lock exists
+to prevent, and it must be NAMED rather than re-run until it is green.
+**Done when:** the failure is reproduced (a loop of the CI job's own command,
+`cargo test --locked`, on a macOS runner) or the mechanism is found by
+reading it out of the code -- and then either the test or the lock is fixed,
+and the fix is watched red first. A retry loop is NOT the answer: the lock is
+what makes two daemons safe, and a test that retries a lock it cannot get
+teaches nobody whether the lock works.
+
 #### P1.14 — The web UI's JavaScript has no syntax gate
 **Status:** OPEN
 **Why:** found on 2026-10-20 while landing P7.2. A stray backtick inside a

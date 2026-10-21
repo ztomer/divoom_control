@@ -6,6 +6,43 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **Two browser-suite flakes that were refusing the push, and the reason each
+  one was not the change's fault.** The pre-push gate's browser step went red
+  twice on 2026-10-20 while P7.2 was waiting to land, on two different
+  suites, and both were the machine rather than the tree.
+
+  **The Spatial Bench test measured a node the app had just replaced.** The
+  app REBUILDS the bench's nodes on every refresh (`refreshBenchNodes` clears
+  the bench and re-creates them) and defers that while a drag is in progress
+  (`SpatialDrag.deferWhileDragging`) -- but the moment BEFORE a drag is not
+  protected, and the startup refresh lands about a second after load, inside
+  that test's window. A locator that resolved the node a moment before the
+  replacement then measured a DETACHED element, and Playwright answers None
+  for that: the suite died with `TypeError: 'NoneType' object is not
+  subscriptable` instead of an assertion about snapping. Measured the way the
+  house asks -- the same file, run the same way, against CLEAN HEAD: 2 of 6
+  parallel runs failed on `b84565a` (before the P7.2 tree existed) and 1 of 6
+  on the P7.2 tree. So the race was the test's own. It now re-measures until
+  it has a box, which is what the drag needs -- a node that is attached when
+  the button goes down -- and a node that never gets a box still fails, with
+  a message naming the node and the wait. 8 of 8 parallel runs green after.
+
+  **The navigation cap was the library's, not the house's.** Every wait in
+  these suites is sized from a measurement (`UI_TIMEOUT_MS`, 60s, because a
+  readiness wait that takes 3s unloaded takes 16s under load) -- except the
+  navigation, which was Playwright's own 30s default, the one budget nobody
+  had measured. On a loaded machine it is too tight: the suites open eight
+  browsers at once, and at load 90+ (another repo's Rust build) two pre-push
+  runs were refused by `Page.goto: Timeout 30000ms exceeded` on unrelated
+  suites, while the same suites were green locally at load 25. Every page and
+  context the suites open now gets the house's budget, applied at the one
+  seam (`Browser.new_page` / `Browser.new_context`), so no suite has to
+  remember it -- 47 files would otherwise each have to, and 46 of them would
+  have remembered it wrong. A longer cap costs nothing on a green run and
+  only lengthens a red one, which is the same trade the UI wait already
+  makes (`tests/support/browser.py`,
+  `tests/test_browser_navigation_budget.py`).
+
 - **Two Rust advisories closed, and the gate's audit is green again.** The
   gate's `cargo audit` step went red on 2026-10-20 on two advisories that
   arrived through the TLS stack, and nothing in this repo could push until

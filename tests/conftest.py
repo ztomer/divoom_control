@@ -117,6 +117,14 @@ def pytest_configure(config):
 
     browser_support.RUN_BROWSER = bool(config.getoption("--run-browser"))
 
+    # Every page and context the suites open gets the house's navigation
+    # budget (60s, like every other wait) instead of Playwright's own 30s,
+    # which a loaded machine crosses: at load 90+ two pre-push runs of this
+    # repo were refused by `Page.goto: Timeout 30000ms exceeded` on unrelated
+    # suites. The patch lives in its own module because the harness file is
+    # already at the 500-line cap.
+    from tests.support import navigation_budget  # noqa: F401  (the import IS the patch)
+
 
 def pytest_collection_modifyitems(config, items):
     run_hw = config.getoption("--run-hardware")
