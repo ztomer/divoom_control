@@ -43,7 +43,7 @@ pub async fn push_to_device(daemon: &Daemon, device: &RegisteredDevice) -> Devic
     };
 
     println!(
-        "[ ==> ] Fetching gallery for {} (classify={})...",
+        "divoomd: fetching gallery for {} (classify={})...",
         device.address, device.classify
     );
     let response = match crate::cloud::fetch_gallery(device.classify, LIMIT, SORT, FILE_SIZE).await
@@ -70,14 +70,14 @@ pub async fn push_to_device(daemon: &Daemon, device: &RegisteredDevice) -> Devic
     // lines a day apart, not by a belief.
     for (index, file) in files.iter().enumerate() {
         println!(
-            "[ ==> ] gallery[{index}] {} — date={} by={} id={}",
+            "divoomd: gallery[{index}] {} — date={} by={} id={}",
             file.name, file.date, file.user, file.id
         );
     }
     if let Err(e) =
         crate::hotchannel_fetches::record_fetch(device.classify, &device.address, &files)
     {
-        println!("[ Wrn ] could not record the fetch snapshot: {e}");
+        eprintln!("divoomd: could not record the fetch snapshot: {e}");
     }
 
     match sync_files_to_device(daemon, &device.address, &files).await {
@@ -104,13 +104,13 @@ async fn download(client: &reqwest::Client, file_id: &str, file_name: &str) -> O
     let resp = match client.get(&dl_url).send().await {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("[ Wrn ] Failed to download {file_name}: {e}");
+            eprintln!("divoomd: failed to download {file_name}: {e}");
             return None;
         }
     };
     if resp.status() != 200 {
         eprintln!(
-            "[ Wrn ] Download of {} failed with status {}",
+            "divoomd: download of {} failed with status {}",
             file_name,
             resp.status()
         );
@@ -119,7 +119,7 @@ async fn download(client: &reqwest::Client, file_id: &str, file_name: &str) -> O
     match resp.bytes().await {
         Ok(b) => Some(b.to_vec()),
         Err(e) => {
-            eprintln!("[ Wrn ] Failed to read bytes for {file_name}: {e}");
+            eprintln!("divoomd: failed to read bytes for {file_name}: {e}");
             None
         }
     }
@@ -135,7 +135,7 @@ async fn download(client: &reqwest::Client, file_id: &str, file_name: &str) -> O
 async fn show(daemon: &Daemon, file_bytes: &[u8], file_name: &str) -> bool {
     let Some(img) = crate::media::resolve_to_gif(file_bytes) else {
         eprintln!(
-            "[ Wrn ] {} (magic {}) not decodable in native daemon; skipping (no raw-stream)",
+            "divoomd: {} (magic {}) not decodable in native daemon; skipping (no raw-stream)",
             file_name, file_bytes[0]
         );
         return false;
@@ -214,7 +214,7 @@ async fn sync_files_to_device(
         let file_name = file.name.as_str();
 
         println!(
-            "[ ==> ] Downloading item [{}/{}]: {} ({})...",
+            "divoomd: downloading item [{}/{}]: {} ({})...",
             idx + 1,
             files.len(),
             file_name,
@@ -232,10 +232,10 @@ async fn sync_files_to_device(
 
         if show(daemon, &file_bytes, file_name).await {
             counts.pushed += 1;
-            println!("[ Ok  ] Successfully pushed {file_name}");
+            println!("divoomd: pushed {file_name}");
         } else {
             counts.failed += 1;
-            eprintln!("[ Err ] Failed to push {file_name}");
+            eprintln!("divoomd: failed to push {file_name}");
         }
 
         if idx < files.len() - 1 {
@@ -250,7 +250,7 @@ async fn sync_files_to_device(
         token: None,
     };
     daemon.dispatch(req_disconnect).await;
-    println!("[ ==> ] Sync completed for target {target}");
+    println!("divoomd: sync completed for target {target}");
 
     Ok(counts)
 }

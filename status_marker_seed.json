@@ -3,7 +3,6 @@
   "files": {
     "divoom_lib/divoom_auth.py": 4,
     "divoomd/src/art.rs": 1,
-    "divoomd/src/monthly_best.rs": 14,
     "examples/divoom_legacy/monthly_best_daemon.py": 4,
     "examples/divoom_legacy/utils/logger_utils.py": 4,
     "examples/tests/test_logger_utils.py": 4,

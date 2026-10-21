@@ -172,10 +172,7 @@ impl CycleOutcome {
 /// the remainder instead of pushing again.
 #[must_use]
 pub fn should_run_now(last_run_at: Option<u64>, now: u64, interval: u64) -> bool {
-    match last_run_at {
-        None => true,
-        Some(last) => now.saturating_sub(last) >= interval,
-    }
+    last_run_at.is_none_or(|last| now.saturating_sub(last) >= interval)
 }
 
 /// The scheduled loop: wake up, push to every device the settings register,
@@ -193,7 +190,7 @@ pub async fn monthly_best_loop_task(daemon: Arc<Daemon>) {
 
         for key in &loaded.legacy_keys {
             println!(
-                "[ Err ] hotchannel.json still carries '{key}' — IGNORED. The hot \
+                "divoomd: hotchannel.json still carries '{key}' — IGNORED. The hot \
                  channel's devices are the app's settings (config.ini [gallery]); \
                  a stale list must not override them."
             );
@@ -206,18 +203,18 @@ pub async fn monthly_best_loop_task(daemon: Arc<Daemon>) {
             let since = now.saturating_sub(last);
             let wait = interval_secs.saturating_sub(since);
             println!(
-                "[ ==> ] The last monthly best push was {since}s ago; the next one is in {wait}s."
+                "divoomd: the last monthly best push was {since}s ago; the next one is in {wait}s."
             );
             sleep(Duration::from_secs(wait)).await;
             continue;
         }
 
-        println!("[ ==> ] Native Monthly Best Sync loop cycle started.");
+        println!("divoomd: monthly best cycle started.");
 
         let outcome = run_cycle(&daemon).await;
         report_cycle(&outcome).await;
 
-        println!("[ ==> ] Sleeping for {interval_secs} seconds until next monthly best cycle...");
+        println!("divoomd: sleeping for {interval_secs}s until the next monthly best cycle");
         sleep(Duration::from_secs(interval_secs)).await;
     }
 }
@@ -259,7 +256,7 @@ pub async fn run_cycle(daemon: &Daemon) -> CycleOutcome {
     }
 
     println!(
-        "[ ==> ] {} device(s) from the app's settings: {}",
+        "divoomd: {} device(s) from the app's settings: {}",
         devices.len(),
         devices
             .iter()
@@ -271,14 +268,14 @@ pub async fn run_cycle(daemon: &Daemon) -> CycleOutcome {
     for device in &devices {
         let device_outcome = crate::monthly_best_push::push_to_device(daemon, device).await;
         if let Some(error) = &device_outcome.error {
-            println!("[ Err ] {}: {error}", device.address);
+            eprintln!("divoomd: {}: {error}", device.address);
         }
         outcome.devices.push(device_outcome);
     }
 
     outcome.failures = failures;
     for failure in &outcome.failures {
-        println!("[ Err ] {failure}");
+        eprintln!("divoomd: {failure}");
     }
     outcome
 }
@@ -303,7 +300,7 @@ pub async fn report_cycle(outcome: &CycleOutcome) {
     if outcome.ok() {
         let pushed: usize = outcome.devices.iter().map(|d| d.pushed).sum();
         let files: usize = outcome.devices.iter().map(|d| d.files).sum();
-        println!("[ Ok  ] Monthly Best cycle finished: {pushed} file(s) pushed to {} device(s) ({files} fetched).", outcome.devices.len());
+        println!("divoomd: monthly best cycle finished: {pushed} file(s) pushed to {} device(s) ({files} fetched).", outcome.devices.len());
         if previous.as_deref() == Some("failed") {
             let body = format!(
                 "The monthly best push works again: {} device(s), {pushed} file(s) pushed.",
@@ -324,7 +321,7 @@ pub async fn report_cycle(outcome: &CycleOutcome) {
         outcome.failures.join("\n")
     );
     println!(
-        "[ Err ] Monthly Best cycle FAILED: {}",
+        "divoomd: monthly best cycle FAILED: {}",
         outcome.failures.join("; ")
     );
     notify(
@@ -342,7 +339,7 @@ pub async fn report_cycle(outcome: &CycleOutcome) {
 /// not being rung.
 async fn notify(title: &str, body: &str, priority: &str) {
     match crate::owner_alert::notify_owner(title, body, priority).await {
-        Ok(()) => println!("[ Ok  ] Alert delivered: {title}"),
-        Err(e) => println!("[ Err ] THE ALERT ITSELF FAILED: {e}"),
+        Ok(()) => println!("divoomd: alert delivered: {title}"),
+        Err(e) => eprintln!("divoomd: THE ALERT ITSELF FAILED: {e}"),
     }
 }
