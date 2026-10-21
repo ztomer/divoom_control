@@ -186,6 +186,8 @@ fn device(address: &str, pushed: usize, error: Option<&str>) -> DeviceOutcome {
         classify: 18,
         files: 10,
         pushed,
+        stored: pushed,
+        readback: None,
         error: error.map(str::to_string),
         warnings: Vec::new(),
     }
@@ -257,10 +259,10 @@ fn the_warning_names_the_file_and_the_failure_names_them_all() {
         },
     ];
 
-    let (error, warnings) = device_verdict(0, &failures);
+    let (error, warnings) = device_verdict(0, 2, &failures);
     assert!(
         error.is_some(),
-        "a device that was reached and showed nothing is a FAILED RUN"
+        "a device that was reached and stored nothing is a FAILED RUN"
     );
     assert!(
         warnings.is_empty(),
@@ -272,10 +274,10 @@ fn the_warning_names_the_file_and_the_failure_names_them_all() {
         "the failure names the files it could not show: {error}"
     );
 
-    let (error, warnings) = device_verdict(8, &failures);
+    let (error, warnings) = device_verdict(8, 10, &failures);
     assert!(
         error.is_none(),
-        "a device that showed the art is not a failed run: {error:?}"
+        "a device that stored the art is not a failed run: {error:?}"
     );
     assert_eq!(
         warnings.len(),
@@ -289,5 +291,99 @@ fn the_warning_names_the_file_and_the_failure_names_them_all() {
     assert!(
         warnings[0].contains("flag 0x2a"),
         "and says why: {warnings:?}"
+    );
+}
+
+/// E63: the owner's ruling — *"art should be stored"*.
+///
+/// The push's job is to LEAVE the art on the device, not to flash it past.
+/// So the failure turns on what the device STORED: a device that was reached
+/// and stored nothing is a failed run, and a device that stored some of it
+/// has stored something and said so.
+#[test]
+fn a_device_that_stored_nothing_is_a_failed_run() {
+    use crate::monthly_best_push::{device_verdict, FileFailure};
+
+    let failures = vec![FileFailure {
+        name: "Haunted2026 Ghostly Cutie".to_string(),
+        reason: "the device did not take the gallery page".to_string(),
+    }];
+
+    // The device SHOWED the art and kept nothing: the push did not do its
+    // job, so the run fails and the owner's phone rings.
+    let (error, warnings) = device_verdict(0, 5, &failures);
+    assert!(
+        error.is_some(),
+        "a device that was reached and stored nothing is a FAILED RUN"
+    );
+    let error = error.unwrap_or_default();
+    assert!(
+        error.contains("stored"),
+        "and the failure says what did not happen: {error}"
+    );
+    assert_eq!(
+        warnings.len(),
+        0,
+        "it is a failure, not a warning: {warnings:?}"
+    );
+}
+
+/// E63: three of five stored is three of five stored — the run says so.
+#[test]
+fn a_device_that_stored_some_of_the_art_is_not_a_failed_run() {
+    use crate::monthly_best_push::{device_verdict, FileFailure};
+
+    let failures = vec![FileFailure {
+        name: "Jack Skellington".to_string(),
+        reason: "the download failed".to_string(),
+    }];
+
+    let (error, warnings) = device_verdict(3, 5, &failures);
+    assert!(
+        error.is_none(),
+        "a device that stored 3 of 5 file(s) has stored something: {error:?}"
+    );
+    assert_eq!(warnings.len(), 1, "the file that did not make it is named");
+    assert!(
+        warnings[0].contains("Jack Skellington"),
+        "the warning names the file: {warnings:?}"
+    );
+}
+
+/// E63: the state after a run says WHICH happened.
+///
+/// "ok" cannot answer the owner's question — did the art land on the device?
+/// The state carries the files each device was SHOWN and the files it
+/// STORED, and what the device said it holds.
+#[test]
+fn the_state_says_what_was_shown_and_what_was_stored() {
+    use crate::monthly_best::{device_states, CycleOutcome, DeviceOutcome};
+
+    let mut stored_device = DeviceOutcome {
+        address: "A".to_string(),
+        classify: 18,
+        files: 5,
+        pushed: 5,
+        stored: 3,
+        readback: Some("the device says it holds 3 item(s) on the page".to_string()),
+        error: None,
+        warnings: vec!["Jack Skellington: the download failed".to_string()],
+    };
+    stored_device.warnings.clear();
+
+    let states = device_states(&CycleOutcome {
+        devices: vec![stored_device],
+        failures: Vec::new(),
+    });
+
+    let device = &states[0];
+    assert_eq!(device["shown"], serde_json::json!(5), "the shown count");
+    assert_eq!(device["stored"], serde_json::json!(3), "the stored count");
+    assert!(
+        device["readback"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("3 item(s)"),
+        "and what the device said it holds: {states}"
     );
 }

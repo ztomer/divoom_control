@@ -167,6 +167,20 @@ pub fn last_run_at() -> Option<u64> {
 ///
 /// When the state file cannot be written.
 pub fn record_outcome(outcome: &str, detail: &str) -> Result<(), String> {
+    record_outcome_with(outcome, detail, &Value::Null)
+}
+
+/// Remember the last run's outcome AND what each device holds.
+///
+/// The state has to say WHICH happened, not only that the run was "ok": the
+/// owner's question about a push is whether the art landed on the device, and
+/// that is the difference between the files a device was SHOWN and the files
+/// it STORED.
+///
+/// # Errors
+///
+/// When the state file cannot be written.
+pub fn record_outcome_with(outcome: &str, detail: &str, devices: &Value) -> Result<(), String> {
     let Some(path) = state_path() else {
         return Err("no config directory to record the run's outcome in".to_string());
     };
@@ -177,6 +191,7 @@ pub fn record_outcome(outcome: &str, detail: &str) -> Result<(), String> {
         "last_outcome": outcome,
         "last_detail": detail,
         "last_run_utc": crate::civil_time::unix_seconds(),
+        "devices": devices,
     });
     let text = serde_json::to_string_pretty(&state).map_err(|e| e.to_string())?;
     std::fs::write(&path, text + "\n").map_err(|e| e.to_string())

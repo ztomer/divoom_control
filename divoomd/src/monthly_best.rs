@@ -36,7 +36,7 @@
 //! never a quiet skip.
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -133,10 +133,18 @@ pub struct DeviceOutcome {
     pub classify: i64,
     /// How many files the category offered.
     pub files: usize,
-    /// How many of them reached the device.
+    /// How many of them the device SHOWED.
     pub pushed: usize,
+    /// How many of them the device STORED — the art is in its own gallery.
+    ///
+    /// This is the number the run's failure turns on: the push's job is to
+    /// leave the art on the device, so a device that stored NOTHING is a
+    /// failed run even when it showed everything.
+    pub stored: usize,
+    /// What the device said it holds, when it answers the read-back.
+    pub readback: Option<String>,
     /// Why the DEVICE failed: it could not be reached, or nothing could be
-    /// shown on it. A device that failed is a failed run.
+    /// stored on it. A device that failed is a failed run.
     pub error: Option<String>,
     /// The files that did not make it, when the device itself was reached.
     ///
@@ -274,6 +282,33 @@ pub fn fold_devices(devices: Vec<DeviceOutcome>, mut failures: Vec<String>) -> C
     CycleOutcome { devices, failures }
 }
 
+/// What each device holds, for the state file.
+///
+/// The state after a run must say WHICH happened: the files a device was
+/// SHOWN, the files it STORED, and what the device said it holds. A state
+/// that says only "ok" cannot answer the owner's question — did the art land?
+#[must_use]
+pub fn device_states(outcome: &CycleOutcome) -> Value {
+    Value::Array(
+        outcome
+            .devices
+            .iter()
+            .map(|d| {
+                json!({
+                    "address": d.address,
+                    "classify": d.classify,
+                    "files": d.files,
+                    "shown": d.pushed,
+                    "stored": d.stored,
+                    "readback": d.readback,
+                    "error": d.error,
+                    "warnings": d.warnings,
+                })
+            })
+            .collect(),
+    )
+}
+
 /// Run one cycle: every device the settings register, in order.
 pub async fn run_cycle(daemon: &Daemon) -> CycleOutcome {
     let (devices, mut failures) = resolve_targets();
@@ -333,13 +368,32 @@ pub async fn report_cycle(outcome: &CycleOutcome) {
         .map(String::as_str)
         .collect::<Vec<_>>()
         .join("; ");
-    let _ = crate::owner_alert::record_outcome(if outcome.ok() { "ok" } else { "failed" }, &detail);
+    let _ = crate::owner_alert::record_outcome_with(
+        if outcome.ok() { "ok" } else { "failed" },
+        &detail,
+        &device_states(outcome),
+    );
 
     if outcome.ok() {
         let pushed: usize = outcome.devices.iter().map(|d| d.pushed).sum();
+        let stored: usize = outcome.devices.iter().map(|d| d.stored).sum();
         let files: usize = outcome.devices.iter().map(|d| d.files).sum();
         let warned: usize = outcome.devices.iter().map(|d| d.warnings.len()).sum();
-        println!("divoomd: monthly best cycle finished: {pushed} of {files} file(s) pushed to {} device(s).", outcome.devices.len());
+        println!(
+            "divoomd: monthly best cycle finished: {pushed} of {files} file(s) shown and \
+             {stored} stored in {} device(s)' own gallery.",
+            outcome.devices.len()
+        );
+        for device in &outcome.devices {
+            match &device.readback {
+                Some(what) => println!("divoomd: {} holds {what}", device.address),
+                None => println!(
+                    "divoomd: {}: the device did not answer the read-back query, so what it \
+                     holds cannot be confirmed from this side",
+                    device.address
+                ),
+            }
+        }
         if warned > 0 {
             println!(
                 "divoomd: {warned} file(s) could not be shown (the device was reached): \
@@ -348,7 +402,8 @@ pub async fn report_cycle(outcome: &CycleOutcome) {
         }
         if previous.as_deref() == Some("failed") {
             let body = format!(
-                "The monthly best push works again: {} device(s), {pushed} file(s) pushed.",
+                "The monthly best push works again: {} device(s), {pushed} file(s) shown, \
+                 {stored} stored.",
                 outcome.devices.len()
             );
             notify(

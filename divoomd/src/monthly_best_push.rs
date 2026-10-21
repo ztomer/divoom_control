@@ -1,8 +1,21 @@
 //! Pushing one device's monthly-best art to that device, over BLE.
 //!
 //! Split out of `monthly_best.rs` to keep both files under the 500-line house
-//! limit: this file is the WIRE (fetch, download, show), the other is the
-//! DECISION (which devices, how often, and what a failure means).
+//! limit: this file is the WIRE (fetch, download, show, store), the other is
+//! the DECISION (which devices, how often, and what a failure means).
+//!
+//! # Two things happen to every file, and they are not the same thing
+//!
+//! * **SHOWN** — the art is streamed to the panel (`0x8B`). That is a
+//!   transient display: the panel shows it and the push moves on.
+//! * **STORED** — the art is written into the device's OWN gallery (the
+//!   custom-art page; see [`crate::gallery_store`]), so the panel KEEPS it.
+//!
+//! The owner's ruling (2026-10-21): *"art should be stored"*. The push's job
+//! is to leave the art on the device, not to flash it past — so a run that
+//! only shows the art has not done its job, and a run that claims to have
+//! stored what it did not is a lie. The two are counted apart, and the device
+//! that stored NOTHING is a failed run.
 
 use base64::Engine;
 use serde_json::json;
@@ -10,6 +23,7 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 use crate::daemon::Daemon;
+use crate::gallery_store::{self, ArtItem};
 use crate::monthly_best::DeviceOutcome;
 use crate::protocol::Request;
 use crate::settings_devices::RegisteredDevice;
@@ -23,13 +37,17 @@ const FILE_SIZE: i64 = 127;
 /// Seconds to wait between two pushes to the same device.
 const PUSH_GAP_SECS: u64 = 15;
 
-/// How many files reached the device, and which ones did not.
+/// What reached the device, and what it kept.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PushCounts {
-    /// Files the device showed.
+    /// Files the device SHOWED.
     pub pushed: usize,
+    /// Files the device STORED — the art is in its own gallery.
+    pub stored: usize,
     /// The files that did not make it, and why each one did not.
     pub failures: Vec<FileFailure>,
+    /// What the device said it holds, when it answers the read-back.
+    pub readback: Option<String>,
 }
 
 /// One file that did not make it to the device, and why.
@@ -37,25 +55,30 @@ pub struct PushCounts {
 pub struct FileFailure {
     /// The gallery file's name, as the cloud calls it.
     pub name: String,
-    /// Why it could not be shown.
+    /// Why it could not be shown or stored.
     pub reason: String,
 }
 
-/// The rule the box records, as a rule about the FILES.
+/// The rule the box records, as a rule about the DEVICE.
 ///
-/// A device that was REACHED and showed NOTHING is a FAILURE of the run: it
-/// rings the owner's phone. A device that showed the art and could not show
-/// one file only WARNS — and the warning NAMES the file and says WHY,
-/// because a run that says "3 of 10 file(s) could not be shown" says less
-/// than the run that names them, and a run that quietly drops files is a run
-/// that says less than it does.
+/// A device that was REACHED and STORED NOTHING is a FAILURE of the run: it
+/// rings the owner's phone, because the push's job is to leave the art on the
+/// device. A device that stored the art and could not show one file only
+/// WARNS — and the warning NAMES the file and says WHY, because a run that
+/// says "3 of 10 file(s) could not be shown" says less than the run that
+/// names them, and a run that quietly drops files is a run that says less
+/// than it does.
 #[must_use]
-pub fn device_verdict(pushed: usize, failures: &[FileFailure]) -> (Option<String>, Vec<String>) {
+pub fn device_verdict(
+    stored: usize,
+    offered: usize,
+    failures: &[FileFailure],
+) -> (Option<String>, Vec<String>) {
     if failures.is_empty() {
         return (None, Vec::new());
     }
-    if pushed == 0 {
-        let total = pushed + failures.len();
+    if stored == 0 {
+        let total = offered.max(stored + failures.len());
         let named = failures
             .iter()
             .map(|f| format!("{} ({})", f.name, f.reason))
@@ -63,7 +86,7 @@ pub fn device_verdict(pushed: usize, failures: &[FileFailure]) -> (Option<String
             .join("; ");
         return (
             Some(format!(
-                "the device was reached but none of its {total} file(s) could be shown: {named}"
+                "the device was reached but none of its {total} file(s) could be stored: {named}"
             )),
             Vec::new(),
         );
@@ -84,6 +107,8 @@ pub async fn push_to_device(daemon: &Daemon, device: &RegisteredDevice) -> Devic
         classify: device.classify,
         files: 0,
         pushed: 0,
+        stored: 0,
+        readback: None,
         error: None,
         warnings: Vec::new(),
     };
@@ -129,10 +154,12 @@ pub async fn push_to_device(daemon: &Daemon, device: &RegisteredDevice) -> Devic
     match sync_files_to_device(daemon, &device.address, &files).await {
         Ok(counts) => {
             outcome.pushed = counts.pushed;
-            // The rule, in one place: a device that was reached and showed
-            // NOTHING failed; a device that showed the art and could not show
+            outcome.stored = counts.stored;
+            outcome.readback.clone_from(&counts.readback);
+            // The rule, in one place: a device that was reached and stored
+            // NOTHING failed; a device that stored the art and could not show
             // one file only warns — and the warning names the file.
-            let (error, warnings) = device_verdict(counts.pushed, &counts.failures);
+            let (error, warnings) = device_verdict(counts.stored, outcome.files, &counts.failures);
             outcome.error = error;
             outcome.warnings = warnings;
         }
@@ -176,7 +203,7 @@ async fn download(
     }
 }
 
-/// Resolve a gallery file to a displayable image and show it.
+/// Resolve a gallery file to a displayable image.
 ///
 /// `media::resolve_to_gif` handles GIF/PNG/JPG, magic-43, and the cloud/hot
 /// containers (magic 9/18/26 AES+LZO, 0xAA) by re-encoding them to an
@@ -184,19 +211,28 @@ async fn download(
 /// unrecognized container, which would otherwise stick the device in its
 /// loading animation — and that error says WHICH container it was, so the
 /// run can name the file rather than count it.
-async fn show(daemon: &Daemon, file_bytes: &[u8], file_name: &str) -> Result<(), String> {
+///
+/// The SAME GIF is what the panel is shown and what the device is given to
+/// keep: resolving once is what makes "the art that was stored is the art
+/// that was shown" true rather than likely.
+fn resolve(file_bytes: &[u8], file_name: &str) -> Result<Vec<u8>, String> {
     let Some(img) = crate::media::resolve_to_gif(file_bytes) else {
         let reason = crate::media::why_not_resolvable(file_bytes);
         eprintln!("divoomd: {file_name}: {reason}; skipping (no raw-stream)");
         return Err(reason);
     };
+    Ok(img)
+}
+
+/// Show a resolved image on the device.
+async fn show(daemon: &Daemon, img: &[u8], file_name: &str) -> Result<(), String> {
     let req_show = Request {
         command: "device_call".to_string(),
         args: json!({
             "method": "display.show_image",
             "kwargs": {"size": 16},
             "blobs": {
-                "0": base64::engine::general_purpose::STANDARD.encode(&img)
+                "0": base64::engine::general_purpose::STANDARD.encode(img)
             }
         }),
         token: None,
@@ -210,14 +246,17 @@ async fn show(daemon: &Daemon, file_bytes: &[u8], file_name: &str) -> Result<(),
     if shown {
         Ok(())
     } else {
-        Err("the device did not take the image".to_string())
+        Err(format!("the device did not take {file_name}"))
     }
 }
 
 /// Connect, push every file, disconnect — and count what actually landed.
 ///
-/// A file that could not be downloaded or shown is a FAILED file, not a
-/// skipped one: the caller turns a non-zero failure count into a failed run.
+/// Two things are counted, because they are two things: the files the device
+/// SHOWED (the `0x8B` stream) and the files it STORED (the art written into
+/// its own gallery). A file that could not be downloaded, shown or stored is a
+/// FAILED file, not a skipped one: the caller turns "the device stored
+/// nothing" into a failed run.
 async fn sync_files_to_device(
     daemon: &Daemon,
     target: &str,
@@ -261,56 +300,30 @@ async fn sync_files_to_device(
         .map_err(|e| e.to_string())?;
 
     let mut counts = PushCounts::default();
+    let mut items: Vec<ArtItem> = Vec::new();
     for (idx, file) in files.iter().enumerate() {
-        let file_id = file.id.as_str();
-        let file_name = file.name.as_str();
-
         println!(
             "divoomd: downloading item [{}/{}]: {} ({})...",
             idx + 1,
             files.len(),
-            file_name,
-            file_id
+            file.name,
+            file.id
         );
-        let file_bytes = match download(&client, file_id, file_name).await {
-            Ok(bytes) => bytes,
-            Err(reason) => {
-                counts.failures.push(FileFailure {
-                    name: file_name.to_string(),
-                    reason,
-                });
-                continue;
-            }
-        };
-
-        if file_bytes.len() < 4 {
-            counts.failures.push(FileFailure {
-                name: file_name.to_string(),
-                reason: "the file was too short to be a container".to_string(),
-            });
-            continue;
-        }
-
-        match show(daemon, &file_bytes, file_name).await {
-            Ok(()) => {
-                counts.pushed += 1;
-                println!("divoomd: pushed {file_name}");
-            }
-            Err(reason) => {
-                eprintln!("divoomd: failed to push {file_name}: {reason}");
-                counts.failures.push(FileFailure {
-                    name: file_name.to_string(),
-                    reason,
-                });
-            }
-        }
+        push_one_file(daemon, &client, file, &mut counts, &mut items).await;
 
         if idx < files.len() - 1 {
             sleep(Duration::from_secs(PUSH_GAP_SECS)).await;
         }
     }
 
-    // 3. Disconnect
+    // 3. STORE: leave the art on the device.
+    //
+    // Showing is not keeping. The art goes into the device's own gallery (the
+    // custom-art page — see `gallery_store`), and the run counts what the
+    // device took and what it says it holds.
+    store_page(daemon, target, &items, &mut counts).await;
+
+    // 4. Disconnect
     let req_disconnect = Request {
         command: "disconnect".to_string(),
         args: json!({}),
@@ -320,6 +333,108 @@ async fn sync_files_to_device(
     println!("divoomd: sync completed for target {target}");
 
     Ok(counts)
+}
+
+/// Download one file, SHOW it, and keep the frames the device will hold.
+async fn push_one_file(
+    daemon: &Daemon,
+    client: &reqwest::Client,
+    file: &crate::hotchannel_fetches::FetchedFile,
+    counts: &mut PushCounts,
+    items: &mut Vec<ArtItem>,
+) {
+    let file_name = file.name.as_str();
+    let file_bytes = match download(client, file.id.as_str(), file_name).await {
+        Ok(bytes) => bytes,
+        Err(reason) => {
+            counts.failures.push(FileFailure {
+                name: file_name.to_string(),
+                reason,
+            });
+            return;
+        }
+    };
+
+    if file_bytes.len() < 4 {
+        counts.failures.push(FileFailure {
+            name: file_name.to_string(),
+            reason: "the file was too short to be a container".to_string(),
+        });
+        return;
+    }
+
+    let img = match resolve(&file_bytes, file_name) {
+        Ok(img) => img,
+        Err(reason) => {
+            counts.failures.push(FileFailure {
+                name: file_name.to_string(),
+                reason,
+            });
+            return;
+        }
+    };
+
+    match show(daemon, &img, file_name).await {
+        Ok(()) => {
+            counts.pushed += 1;
+            println!("divoomd: pushed {file_name}");
+        }
+        Err(reason) => {
+            eprintln!("divoomd: failed to push {file_name}: {reason}");
+            counts.failures.push(FileFailure {
+                name: file_name.to_string(),
+                reason,
+            });
+        }
+    }
+
+    // The frames the device will KEEP: the same art, in the device's own
+    // encoding. A file whose frames cannot be made is a file the device
+    // cannot hold, and the run says so.
+    match gallery_store::frames_for(&img) {
+        Ok(frames) => items.push(ArtItem {
+            name: file_name.to_string(),
+            frames,
+        }),
+        Err(reason) => {
+            eprintln!("divoomd: failed to store {file_name}: {reason}");
+            counts.failures.push(FileFailure {
+                name: file_name.to_string(),
+                reason,
+            });
+        }
+    }
+}
+
+/// Leave the art on the device: the gallery page, and what it says it holds.
+async fn store_page(daemon: &Daemon, target: &str, items: &[ArtItem], counts: &mut PushCounts) {
+    match gallery_store::store(daemon, target, items).await {
+        Ok(store) => {
+            counts.stored = store.stored;
+            counts.readback.clone_from(&store.readback);
+            counts.failures.extend(store.failures);
+            if store.stored > 0 {
+                println!(
+                    "divoomd: stored {} of {} file(s) in the device's own gallery",
+                    store.stored,
+                    items.len()
+                );
+            }
+            match &store.readback {
+                Some(what) => println!("divoomd: the device's own answer — {what}"),
+                None => println!(
+                    "divoomd: the device did not answer the read-back query, so the store \
+                     cannot be confirmed from this side"
+                ),
+            }
+        }
+        Err(e) => {
+            counts.failures.push(FileFailure {
+                name: "the gallery page".to_string(),
+                reason: e,
+            });
+        }
+    }
 }
 
 /// Pull a GIF out of a magic-43 container.

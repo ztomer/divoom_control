@@ -53,6 +53,9 @@ pub mod device_call;
 pub mod error_code;
 pub mod events;
 pub mod framing;
+pub mod gallery_store;
+#[cfg(test)]
+mod gallery_store_tests;
 pub mod hot_progress;
 pub mod hot_state;
 pub mod hotchannel_fetches;
