@@ -29,18 +29,25 @@ def test_get_sync_candidates_merges_and_dedupes_sources(tmp_path, monkeypatch):
     ]))
     m.wall_slots = {"AA:BB": {"name": "WallDup"}, "CC:DD": {"name": "WallOnly"}}
 
-    from divoom_lib import hotchannel_config
-    hotchannel_config.set_targets(["CC:DD", "EE:FF"])  # EE:FF only via "selected"
+    # The devices are the app's SETTINGS now — the `[gallery]` table in
+    # config.ini, which is where the daemon reads them from too. The table is
+    # an INI file, so a key cannot contain ':' (configparser's delimiter):
+    # the addresses that live there are the UUID-shaped ones.
+    from divoom_lib import settings_devices
+    settings_devices.set_registered([
+        "2b471aee-a9bd-24ab-7d5f-4afd88c16eeb",
+        "e9a41e1e-9a96-974f-ce44-54f16d616f28",
+    ])
 
     out = json.loads(m.get_sync_candidates())
     addrs = [c["address"] for c in out]
     assert addrs.count("AA:BB") == 1  # deduped across discovered+wall
-    assert "CC:DD" in addrs
-    assert "EE:FF" in addrs
+    assert "2b471aee-a9bd-24ab-7d5f-4afd88c16eeb" in addrs
+    assert "e9a41e1e-9a96-974f-ce44-54f16d616f28" in addrs
     by_addr = {c["address"]: c for c in out}
     assert by_addr["AA:BB"]["name"] == "Discovered1"  # first-seen (discovered) wins
-    assert by_addr["CC:DD"]["selected"] is True
-    assert by_addr["EE:FF"]["name"] == "Divoom Screen"  # no name -> default
+    assert by_addr["2b471aee-a9bd-24ab-7d5f-4afd88c16eeb"]["selected"] is True
+    assert by_addr["e9a41e1e-9a96-974f-ce44-54f16d616f28"]["name"] == "Divoom Screen"  # no name
 
 
 def test_get_sync_candidates_handles_malformed_discovered_file(tmp_path, monkeypatch):
@@ -59,32 +66,39 @@ def test_get_sync_candidates_handles_malformed_discovered_file(tmp_path, monkeyp
 # ─────────────────────────── set_sync_targets ───────────────────────────
 
 def test_set_sync_targets_valid_list_and_galleries(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("DIVOOM_HOTCHANNEL_CONFIG", str(tmp_path / "hotchannel.json"))
     m = _Host()
-    from divoom_lib import hotchannel_config
+    from divoom_lib import settings_devices
 
     ok = m.set_sync_targets(
-        targets_json=json.dumps(["AA:BB", "CC:DD"]),
-        galleries_json=json.dumps({"AA:BB": 9}),
+        targets_json=json.dumps([
+            "a9fccb71-3d3d-4de3-c381-0de382cdc4aa",
+            "f90d2cc9-420e-65f9-9e06-f9554470fced",
+        ]),
+        galleries_json=json.dumps({"a9fccb71-3d3d-4de3-c381-0de382cdc4aa": 9}),
     )
     assert ok is True
-    assert hotchannel_config.get_targets() == ["AA:BB", "CC:DD"]
-    assert hotchannel_config.load_config()["device_galleries"] == {"AA:BB": 9}
+    assert settings_devices.registered_devices() == [
+        ("a9fccb71-3d3d-4de3-c381-0de382cdc4aa", 9),
+        ("f90d2cc9-420e-65f9-9e06-f9554470fced", 18),
+    ]
 
 
 def test_set_sync_targets_non_list_and_non_dict_payloads_are_ignored(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("DIVOOM_HOTCHANNEL_CONFIG", str(tmp_path / "hotchannel.json"))
     m = _Host()
-    from divoom_lib import hotchannel_config
+    from divoom_lib import settings_devices
 
     ok = m.set_sync_targets(targets_json=json.dumps({"not": "a list"}),
                              galleries_json=json.dumps([1, 2, 3]))
-    assert ok is True  # set_targets([]) still succeeds
-    assert hotchannel_config.get_targets() == []
-    assert hotchannel_config.load_config()["device_galleries"] == {}
+    assert ok is True  # registering nothing still succeeds
+    assert settings_devices.registered_devices() == []
 
 
 def test_set_sync_targets_none_payloads(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("DIVOOM_HOTCHANNEL_CONFIG", str(tmp_path / "hotchannel.json"))
     m = _Host()
     ok = m.set_sync_targets(targets_json=None, galleries_json=None)
@@ -92,6 +106,7 @@ def test_set_sync_targets_none_payloads(tmp_path, monkeypatch):
 
 
 def test_set_sync_targets_malformed_json_returns_false(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("DIVOOM_HOTCHANNEL_CONFIG", str(tmp_path / "hotchannel.json"))
     m = _Host()
     ok = m.set_sync_targets(targets_json="{not valid json[")
@@ -104,8 +119,7 @@ def test_get_hot_channel_config_returns_defaults(tmp_path, monkeypatch):
     monkeypatch.setenv("DIVOOM_HOTCHANNEL_CONFIG", str(tmp_path / "hotchannel.json"))
     m = _Host()
     cfg = json.loads(m.get_hot_channel_config())
-    assert cfg["classify"] == 18
-    assert cfg["targets"] == []
+    assert cfg == {"enabled": False, "interval": 86400}
 
 
 def test_save_hot_channel_config_positional_json_string(tmp_path, monkeypatch):
@@ -121,10 +135,10 @@ def test_save_hot_channel_config_positional_json_string(tmp_path, monkeypatch):
 def test_save_hot_channel_config_kwargs_style(tmp_path, monkeypatch):
     monkeypatch.setenv("DIVOOM_HOTCHANNEL_CONFIG", str(tmp_path / "hotchannel.json"))
     m = _Host()
-    ok = m.save_hot_channel_config(enabled=True, classify=9)
+    ok = m.save_hot_channel_config(enabled=True, interval=900)
     assert ok is True
     cfg = json.loads(m.get_hot_channel_config())
-    assert cfg["classify"] == 9
+    assert cfg["interval"] == 900
 
 
 def test_save_hot_channel_config_swallows_exception(tmp_path, monkeypatch):

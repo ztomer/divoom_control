@@ -21,6 +21,7 @@ come back as an intermittent pre-push refusal nobody could point at.
 from __future__ import annotations
 
 from tests.support import browser as B
+from tests.support import navigation_budget as N
 
 
 def _seams():
@@ -50,8 +51,12 @@ def test_every_seam_gets_the_navigation_budget():
 
 def test_the_budget_is_the_house_ui_budget():
     """One number, one argument: a loaded machine stretches a wait, and a
-    longer cap costs nothing on a green run."""
-    assert B.NAVIGATION_TIMEOUT_MS == B.UI_TIMEOUT_MS
+    longer cap costs nothing on a green run.
+
+    The budget lives in `tests/support/navigation_budget.py` — the patch has to
+    be importable without playwright's API — and the readiness cap in
+    `tests/support/browser.py`. They are the SAME number on purpose."""
+    assert N.NAVIGATION_TIMEOUT_MS == B.UI_TIMEOUT_MS
 
 
 def test_the_budget_is_applied_to_a_page():
@@ -63,12 +68,12 @@ def test_the_budget_is_applied_to_a_page():
             self.ms = ms
 
     fake = Fake()
-    B._give_navigation_budget(fake)
-    assert fake.ms == B.NAVIGATION_TIMEOUT_MS
+    N.give_navigation_budget(fake)
+    assert fake.ms == N.NAVIGATION_TIMEOUT_MS
 
 
 def test_an_object_that_is_neither_a_page_nor_a_context_is_left_alone():
     class NotAPage:
         pass
 
-    B._give_navigation_budget(NotAPage())  # must not raise
+    N.give_navigation_budget(NotAPage())  # must not raise

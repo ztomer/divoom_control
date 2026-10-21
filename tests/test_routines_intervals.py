@@ -141,14 +141,12 @@ def test_long_interval_round_trips(tmp_path: Path, monkeypatch) -> None:
         cfg = dict(DEFAULTS)
         cfg["enabled"] = True
         cfg["interval"] = value
-        cfg["targets"] = ["11-75-58-3f-fd-aa"]
         save_config(cfg)
         loaded = load_config()
         assert loaded["interval"] == value, (
             f"Interval {value}s did not round-trip; got {loaded['interval']}."
         )
         assert loaded["enabled"] is True
-        assert loaded["targets"] == ["11-75-58-3f-fd-aa"]
 
 
 def test_max_interval_clamps_typos(tmp_path: Path, monkeypatch) -> None:

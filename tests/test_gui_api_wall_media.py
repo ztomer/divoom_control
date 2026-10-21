@@ -61,24 +61,26 @@ class TestGuiApiWallMedia(GuiApiTestBase):
         self.assertFalse(self.api.set_vj_effect(None, 0)["success"])
 
     def test_hot_channel_bridges_delegate(self):
-        """4.c/4.d: target + schedule bridges delegate to hotchannel_config."""
-        cfg = {"enabled": False, "interval": 3600, "classify": 18, "targets": ["AA"]}
-        with patch("divoom_lib.hotchannel_config.set_targets", return_value=True) as mset, \
+        """4.c/4.d: the target bridge writes the app's SETTINGS (the one home
+        for the device list) and the schedule bridge writes hotchannel.json."""
+        cfg = {"enabled": False, "interval": 3600}
+        with patch("divoom_lib.settings_devices.set_registered", return_value=True) as mset, \
+             patch("divoom_lib.settings_devices.registered_devices",
+                   return_value=[("a9fccb71-3d3d-4de3-c381-0de382cdc4aa", 18)]), \
              patch("divoom_lib.hotchannel_config.load_config", return_value=cfg), \
-             patch("divoom_lib.hotchannel_config.get_targets", return_value=["AA"]), \
              patch("divoom_lib.hotchannel_config.save_config", return_value=True) as msave:
 
             self.assertTrue(self.api.set_sync_targets(json.dumps(["AA", "BB"])))
-            mset.assert_called_once_with(["AA", "BB"])
+            mset.assert_called_once_with(["AA", "BB"], {})
 
-            self.assertEqual(json.loads(self.api.get_hot_channel_config())["targets"], ["AA"])
+            self.assertEqual(json.loads(self.api.get_hot_channel_config())["interval"], 3600)
 
             self.assertTrue(self.api.save_hot_channel_config(json.dumps({"enabled": True})))
             msave.assert_called_once()
 
             cands = json.loads(self.api.get_sync_candidates())
             sel = {c["address"]: c["selected"] for c in cands}
-            self.assertTrue(sel.get("AA"))  # persisted target shows as selected
+            self.assertTrue(sel.get("a9fccb71-3d3d-4de3-c381-0de382cdc4aa"))
 
     def test_ticker_preview_returns_data_url(self):
         """5.d: get_ticker_preview returns the daemon's frame as a PNG data URL.
