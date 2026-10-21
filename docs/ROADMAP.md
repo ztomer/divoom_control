@@ -142,6 +142,26 @@ daemon's own live devices were dropped from `discoveredDevices`, so
 `tests/test_e2e_startup_restore_keeps_live_state.py`, both red before;
 `0627eb5`).
 
+#### P1.16 — The gallery's internal-scroll test races the gallery's own render
+**Status:** OPEN
+**Why:** CI run 39542787961 (2026-10-21) went red on
+`tests/test_monthly_best_button_visible.py::test_gallery_scrolls_internally_not_whole_card`
+-- "gallery never overflowed: scrollHeight 316, clientHeight 316" -- while the
+same suite is green on the dev machine. Measured 2026-10-21 in the real page:
+the test injects 100 tiles into `#gallery-container` and then waits for the
+container to overflow, and the app's own gallery render
+(`loadGallery` -> `renderGallery`, which replaces the container's contents
+wholesale) lands AFTER the injection -- measured: the container's children go
+100 -> 0 within half a second, and its text goes back to the "Fetching public
+community gallery..." placeholder, so the tiles are gone before the test
+measures them. The gallery's fetch never settles under the suite's mock
+(`fetch_gallery` answers `true`, and `JSON.parse(true)` throws), so the
+container's text cannot be used to tell "the first load" from "a later one".
+**Done when:** the injection lands on a container the app is not about to
+replace -- either the gallery stops re-rendering a container a test is
+measuring, or the test waits for the gallery to be quiet -- and the test is
+watched red first on the CI runner's own viewport.
+
 #### P1.15 — The daemon's socket-lock test flakes on CI, and the reason is not known
 **Status:** OPEN
 **Why:** CI run 39523759110 (2026-10-21, the `b84565a` push) went red in the
