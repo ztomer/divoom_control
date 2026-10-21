@@ -104,6 +104,23 @@ a log nobody read.
   that holds the implementation. It is not this round's defect; it was this
   round's blocker.
 
+- **The retired daemon reads the retired config with its own reader.** The
+  Python monthly-best daemon (retired 2026-09-14, now
+  `examples/divoom_legacy/monthly_best_daemon.py`) reads the OLD shape —
+  `targets`, `device_galleries` — and it broke the moment the live module's
+  shape changed. A frozen artifact that depends on a module that has moved on
+  is a broken artifact, so the retired reader moved with it
+  (`examples/divoom_legacy/hotchannel_config.py`). The live module carries
+  exactly one shape now: the one the GUI writes and the daemon reads.
+
+- **The loop's log lines speak in the daemon's own voice.** The house prints
+  status through `tui/lib.sh`, or the goh-tui crate for Rust — which lives in
+  another checkout and is not a dependency of this crate — so a hand-rolled
+  marker (`[ Ok  ]`, `[ Err ]`) is a finding, and a NEW file gets no
+  allowance. The loop's lines carry the daemon's own prefix now (the shape
+  the rest of the crate already uses), and the status-marker seed's entry for
+  `monthly_best.rs` is gone: the debt may only fall.
+
 - **Tests.** Rust: 428 unit tests + the integration suites, all green
   (`cargo test -p divoomd --no-default-features`, and with BLE). Python:
   2122 passed, 180 skipped (the browser and hardware suites are opt-in).
