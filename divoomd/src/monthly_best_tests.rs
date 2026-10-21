@@ -9,7 +9,9 @@
 //! * the cadence is a day, because the content is;
 //! * an empty settings table is a failure, not a quiet no-op.
 
-use crate::monthly_best::{load_hotchannel_config, resolve_targets, should_run_now};
+use crate::monthly_best::{
+    load_hotchannel_config, resolve_targets, should_run_now, DeviceOutcome,
+};
 use std::fs;
 use tempfile::TempDir;
 
@@ -178,4 +180,57 @@ fn a_restart_does_not_push_before_the_cadence_is_due() {
         !should_run_now(Some(1_000), 1_000 + 10, 86_400),
         "a restart ten seconds after the last push must not push again"
     );
+}
+
+fn device(address: &str, pushed: usize, error: Option<&str>) -> DeviceOutcome {
+    DeviceOutcome {
+        address: address.to_string(),
+        classify: 18,
+        files: 10,
+        pushed,
+        error: error.map(str::to_string),
+        warnings: Vec::new(),
+    }
+}
+
+#[test]
+fn a_device_that_failed_is_a_failed_run() {
+    // Found by this round's own observed run: the device's failure was
+    // printed, and the run's outcome said "ok". The quiet skip this whole
+    // round exists to end, in the code that was written to end it.
+    let devices = vec![
+        device("A", 10, None),
+        device(
+            "B",
+            0,
+            Some("the device was reached but none of its 10 file(s) could be shown"),
+        ),
+    ];
+    let failures = crate::monthly_best::device_failures(&devices);
+    assert_eq!(failures.len(), 1, "the failed device is the run's failure");
+    assert!(failures[0].contains('B'), "the failure names the device");
+    let outcome = crate::monthly_best::fold_devices(devices, Vec::new());
+    assert!(
+        outcome.failures.len() == 1,
+        "the run's outcome carries the device's failure: {:?}",
+        outcome.failures
+    );
+    assert!(!outcome.ok(), "a run that missed a device is not ok");
+}
+
+#[test]
+fn a_file_that_could_not_be_shown_is_a_warning_not_a_failed_run() {
+    // The device was reached and the art IS on it. A container format the
+    // decoder does not handle is a defect in the decoder; a run that rings
+    // the owner's phone every day for it teaches them to ignore the channel.
+    let mut warned = device("A", 9, None);
+    warned.warnings.push("1 of 10 file(s) could not be shown".to_string());
+    let devices = vec![warned];
+    let outcome = crate::monthly_best::fold_devices(devices, Vec::new());
+    assert!(
+        outcome.failures.is_empty(),
+        "a warning is not a failure: {:?}",
+        outcome.failures
+    );
+    assert!(outcome.ok());
 }

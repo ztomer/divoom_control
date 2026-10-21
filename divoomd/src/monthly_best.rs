@@ -135,8 +135,16 @@ pub struct DeviceOutcome {
     pub files: usize,
     /// How many of them reached the device.
     pub pushed: usize,
-    /// Why it failed, if it did.
+    /// Why the DEVICE failed: it could not be reached, or nothing could be
+    /// shown on it. A device that failed is a failed run.
     pub error: Option<String>,
+    /// The files that did not make it, when the device itself was reached.
+    ///
+    /// These are WARNINGS, not a failed run: a container format the decoder
+    /// does not handle is a defect in the decoder, and a run that rings the
+    /// owner's phone every day for it teaches them to ignore the channel. The
+    /// line is still printed, and the count is in the run's summary.
+    pub warnings: Vec<String>,
 }
 
 impl DeviceOutcome {
@@ -240,6 +248,31 @@ pub fn resolve_targets() -> (Vec<crate::settings_devices::RegisteredDevice>, Vec
     (settings.devices, failures)
 }
 
+/// The run's failures, one line per device that failed.
+///
+/// A device that failed is a FAILED RUN. It used to be printed and nothing
+/// else: the line was in the log and the run's outcome said "ok" — the quiet
+/// skip this whole round exists to end, found by the round's own observed run
+/// (2026-10-21: "a9fccb71…: 3 of 10 file(s) did not reach the device" in the
+/// log, and `last_outcome: ok` in the state file).
+#[must_use]
+pub fn device_failures(devices: &[DeviceOutcome]) -> Vec<String> {
+    devices
+        .iter()
+        .filter_map(|d| d.error.as_ref().map(|e| format!("{}: {e}", d.address)))
+        .collect()
+}
+
+/// Fold what happened to each device into the run's outcome.
+///
+/// The devices' failures BECOME the run's failures here, and nowhere else —
+/// which is the whole point, and the thing the observed run found missing.
+#[must_use]
+pub fn fold_devices(devices: Vec<DeviceOutcome>, mut failures: Vec<String>) -> CycleOutcome {
+    failures.extend(device_failures(&devices));
+    CycleOutcome { devices, failures }
+}
+
 /// Run one cycle: every device the settings register, in order.
 pub async fn run_cycle(daemon: &Daemon) -> CycleOutcome {
     let (devices, mut failures) = resolve_targets();
@@ -265,15 +298,19 @@ pub async fn run_cycle(daemon: &Daemon) -> CycleOutcome {
             .join(", ")
     );
 
+    let mut outcomes = Vec::new();
     for device in &devices {
         let device_outcome = crate::monthly_best_push::push_to_device(daemon, device).await;
         if let Some(error) = &device_outcome.error {
             eprintln!("divoomd: {}: {error}", device.address);
         }
-        outcome.devices.push(device_outcome);
+        for warning in &device_outcome.warnings {
+            eprintln!("divoomd: {}: {warning}", device.address);
+        }
+        outcomes.push(device_outcome);
     }
 
-    outcome.failures = failures;
+    outcome = fold_devices(outcomes, failures);
     for failure in &outcome.failures {
         eprintln!("divoomd: {failure}");
     }
@@ -300,7 +337,14 @@ pub async fn report_cycle(outcome: &CycleOutcome) {
     if outcome.ok() {
         let pushed: usize = outcome.devices.iter().map(|d| d.pushed).sum();
         let files: usize = outcome.devices.iter().map(|d| d.files).sum();
-        println!("divoomd: monthly best cycle finished: {pushed} file(s) pushed to {} device(s) ({files} fetched).", outcome.devices.len());
+        let warned: usize = outcome.devices.iter().map(|d| d.warnings.len()).sum();
+        println!("divoomd: monthly best cycle finished: {pushed} of {files} file(s) pushed to {} device(s).", outcome.devices.len());
+        if warned > 0 {
+            println!(
+                "divoomd: {warned} file(s) could not be shown (the device was reached): \
+                 see the lines above."
+            );
+        }
         if previous.as_deref() == Some("failed") {
             let body = format!(
                 "The monthly best push works again: {} device(s), {pushed} file(s) pushed.",

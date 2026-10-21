@@ -40,6 +40,7 @@ pub async fn push_to_device(daemon: &Daemon, device: &RegisteredDevice) -> Devic
         files: 0,
         pushed: 0,
         error: None,
+        warnings: Vec::new(),
     };
 
     println!(
@@ -84,11 +85,26 @@ pub async fn push_to_device(daemon: &Daemon, device: &RegisteredDevice) -> Devic
         Ok(counts) => {
             outcome.pushed = counts.pushed;
             if counts.failed > 0 {
-                outcome.error = Some(format!(
-                    "{} of {} file(s) did not reach the device",
-                    counts.failed,
-                    counts.pushed + counts.failed
-                ));
+                if counts.pushed == 0 {
+                    // The device was reached and NOTHING could be shown on
+                    // it: the push to this device failed.
+                    outcome.error = Some(format!(
+                        "the device was reached but none of its {} file(s) could be shown",
+                        counts.failed
+                    ));
+                } else {
+                    // Some got through: the device was reached and the art
+                    // IS on it. The files that did not make it are a
+                    // WARNING — a container format the decoder does not
+                    // handle is a defect in the decoder, and a run that
+                    // rings the owner's phone every day for it teaches them
+                    // to ignore the channel.
+                    outcome.warnings.push(format!(
+                        "{} of {} file(s) could not be shown",
+                        counts.failed,
+                        counts.pushed + counts.failed
+                    ));
+                }
             }
         }
         Err(e) => {

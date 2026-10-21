@@ -91,9 +91,37 @@ a log nobody read.
   **The answer is not in yet** — the measurement needs a day — and this
   release says so rather than claiming a window it has not seen.
 
-- **One run, observed.** The loop's log lines, the file count and the
-  outcome, from the daemon this release installed. What the devices hold is
-  in the round's notes.
+- **One run, observed — and it found a bug in the code that wrote it.** The
+  installed daemon ran the cycle against the owner's four devices: it named
+  them from the settings, fetched each device's gallery (classify 18 for
+  three of them, classify 17 for the fourth — the per-device gallery the
+  settings carry), and pushed **34 of 40 files** to the panels, one every 15
+  seconds. The log is in the round's notes.
+
+  **The bug it found:** the run's own summary said "monthly best cycle
+  finished" and the state file said `last_outcome: ok` — while the log said
+  "a9fccb71…: 3 of 10 file(s) did not reach the device". A device's failure
+  was PRINTED and never became the run's failure: the quiet skip this whole
+  round exists to end, in the code written to end it. The devices' failures
+  are folded into the run's outcome now (`monthly_best::fold_devices`), and
+  the rule is pinned: "a run that missed a device is not ok".
+
+  **The granularity, and why:** a device that could not be REACHED, or that
+  was reached and showed nothing, is a failed run and rings the owner's
+  phone. A file that could not be shown while the device showed the others
+  is a WARNING — 6 of the 40 files were magic-26 containers the native
+  decoder does not handle, which is a defect in the decoder, and a run that
+  rings the phone every day for it teaches the owner to ignore the channel.
+  The lines are still printed, and the count is in the run's summary.
+
+- **What the content looks like, measured.** The classify-18 gallery offered
+  ten files dated 2021-11-03 … 2026-08-19; the classify-17 gallery offered
+  ten files dated up to **2026-10-20 — yesterday**. So the content is fresh
+  (which is why the cadence is a day), and the category is a curated list
+  spanning years rather than a window over file dates. Whether the SET
+  slides is still the open question, and it is now measurable: every run's
+  file list is in the log and in `hotchannel_fetches.json`, so two runs a
+  day apart settle it (`docs/ROADMAP.md` P9.8).
 
 - **A pre-existing red, repaired on the way.** The browser suites' navigation
   budget was split into its own module (`tests/support/navigation_budget.py`)
