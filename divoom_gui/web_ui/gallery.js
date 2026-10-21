@@ -240,14 +240,25 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // ── 2. ROUTINE SYNC TARGETS (Routines → Schedule device list) ──
+    //
+    // The card's state lives HERE, not in the DOM: a write that reads the
+    // live checkboxes can see an empty list while the card is re-rendering,
+    // and a write that says "these ARE the devices" would then empty the
+    // settings -- four registered devices gone in one write, silently. The
+    // card keeps what it was shown (`known`) and what is on (`checked`), and
+    // the settings are told about both.
+    let syncTargetState = new Map();
+
     window.renderSyncTargets = function(candidates) {
         const el = document.getElementById("sync-targets-list");
         if (!el) return;
         if (!Array.isArray(candidates) || candidates.length === 0) {
             el.innerHTML = `<span class="empty-list">No devices — scan under Settings, or add a Wi-Fi screen.</span>`;
+            syncTargetState = new Map();
             return;
         }
         el.innerHTML = "";
+        syncTargetState = new Map();
         candidates.forEach(c => {
             const row = document.createElement("div");
             row.className = "sync-device-row";
@@ -281,7 +292,11 @@ document.addEventListener("DOMContentLoaded", () => {
             cb.type = "checkbox";
             cb.value = c.address;
             cb.checked = !!c.selected;
-            cb.addEventListener("change", persistSyncTargets);
+            syncTargetState.set(c.address, !!c.selected);
+            cb.addEventListener("change", () => {
+                syncTargetState.set(c.address, cb.checked);
+                persistSyncTargets();
+            });
             const slider = document.createElement("span");
             slider.className = "slider-round";
             toggle.append(cb, slider);
@@ -292,9 +307,14 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function persistSyncTargets() {
-        const checked = Array.from(document.querySelectorAll("#sync-targets-list input:checked")).map(i => i.value);
+        const checked = [];
+        const known = [];
+        syncTargetState.forEach((on, address) => {
+            known.push(address);
+            if (on) checked.push(address);
+        });
         if (window.pywebview && window.pywebview.api && window.pywebview.api.set_sync_targets) {
-            window.pywebview.api.set_sync_targets(JSON.stringify(checked));
+            window.pywebview.api.set_sync_targets(JSON.stringify({ checked, known }));
         }
     }
 

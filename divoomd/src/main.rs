@@ -198,23 +198,35 @@ async fn main() {
 
     let daemon = start_daemon();
 
-    // Monthly-best background sync. Its switch is the app's own Auto-Sync
-    // (`hotchannel.json`'s `enabled`), the same flag the Routines card shows
-    // and writes — ONE switch for one fact.
+    // Monthly-best background sync.
     //
-    // It used to be an ENVIRONMENT variable (`DIVOOMD_MONTHLY_BEST=1`) that
-    // nothing in this repo ever set, so the loop had never run in
-    // production: a second switch for a fact the app already had, and the
-    // reason the push was "enabled" on paper and dead in fact. The devices
-    // are the app's settings now (`config.ini`'s `[gallery]` table) and the
-    // cadence is the interval in the same file, so the file decides both
-    // whether to run and where to run.
+    // TWO switches, TWO owners, and they answer different questions:
+    //
+    // * `DIVOOM_MONTHLY_BEST=1` says "this process MAY run the scheduled
+    //   push". The app sets it (divoom_gui/gui_main.py) because the app owns
+    //   the schedule; a daemon spawned by a TEST, or by hand, does not get
+    //   it — and that matters: the loop reaches the owner's panels, so a
+    //   test daemon must never push to them or write their state.
+    // * `hotchannel.json`'s `enabled` says "the push is ON, and every
+    //   `interval` seconds" — the app's own Auto-Sync card, the same flag
+    //   the Routines card shows and writes. The devices are the app's
+    //   settings (`config.ini`'s `[gallery]` table).
+    //
+    // The environment used to be the ONLY switch, and nothing in this repo
+    // ever set it, so the loop had never run in production: "enabled" was
+    // true on paper and dead in fact.
     //
     // A daemon restart does not push: the loop waits out the remainder of
     // the interval (`monthly_best::should_run_now`).
-    tokio::spawn(divoomd::monthly_best::monthly_best_loop_task(
-        daemon.clone(),
-    ));
+    if matches!(
+        std::env::var("DIVOOM_MONTHLY_BEST").as_deref(),
+        Ok("1" | "true" | "yes")
+    ) {
+        eprintln!("divoomd: monthly-best background sync enabled");
+        tokio::spawn(divoomd::monthly_best::monthly_best_loop_task(
+            daemon.clone(),
+        ));
+    }
 
     let (max_connections, idle_timeout) = serving_limits(&daemon);
 

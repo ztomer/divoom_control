@@ -277,20 +277,29 @@ class GallerySyncMixin(GalleryHotApiMixin):
 
         The Routines card's toggles and the daemon's push read the same
         table, so what the owner ticks here is what the daemon pushes to.
+
+        The payload carries BOTH the checked devices and the devices the card
+        had in front of it (``known``): a device is unregistered only if the
+        card SAW it and no longer wants it. A write whose list was empty
+        because the card had not rendered yet must not empty the settings —
+        that is how four registered devices disappeared in one write.
         """
         from divoom_lib import settings_devices
         try:
-            addrs = []
+            checked, known = [], []
             if targets_json and isinstance(targets_json, str):
                 parsed = json.loads(targets_json)
-                if isinstance(parsed, list):
-                    addrs = [str(a) for a in parsed]
+                if isinstance(parsed, dict):
+                    checked = [str(a) for a in parsed.get("checked", [])]
+                    known = [str(a) for a in parsed.get("known", [])]
+                elif isinstance(parsed, list):
+                    checked = [str(a) for a in parsed]
             galleries = {}
             if galleries_json and isinstance(galleries_json, str):
                 parsed = json.loads(galleries_json)
                 if isinstance(parsed, dict):
                     galleries = parsed
-            return settings_devices.set_registered(addrs, galleries)
+            return settings_devices.set_registered(checked, galleries, known)
         except Exception as e:
             logger.error(f"set_sync_targets failed: {e}")
             return False

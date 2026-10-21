@@ -65,11 +65,11 @@ a log nobody read.
   spawned only when the daemon's environment said `DIVOOMD_MONTHLY_BEST=1`,
   and nothing in this repo ever set it — so "the push is enabled" was true
   on paper and false in fact, for the same reason the empty list was: a
-  second copy of a fact the app already had. The switch is now the app's own
-  Auto-Sync (`hotchannel.json`'s `enabled`), the same flag the Routines card
-  shows and writes. A daemon restart does not push: the loop waits out the
-  remainder of the interval (`monthly_best::should_run_now`), because the
-  cadence is the point and the GUI restarts the daemon often.
+  second copy of a fact the app already had. The app sets it now (the app
+  owns the schedule) and the Auto-Sync flag says whether the push is ON. A
+  daemon restart does not push: the loop waits out the remainder of the
+  interval (`monthly_best::should_run_now`), because the cadence is the
+  point and the GUI restarts the daemon often.
 
 - **A failure is loud, on the estate's own channel.** A failed cycle is not a
   line on the daemon's stdout: it POSTs to the estate's push endpoint — the
@@ -103,6 +103,41 @@ a log nobody read.
   existed) and the gate could not go green. The gate now reads the module
   that holds the implementation. It is not this round's defect; it was this
   round's blocker.
+
+- **The write that emptied the settings, and the rule that stops it.** The
+  Routines card's device toggles write the hot channel's device list, and
+  they wrote it as a REPLACE: the table's device entries became exactly the
+  list the card sent. A send whose list was empty — the card had not
+  rendered yet, or was mid-rebuild — therefore replaced the table with
+  nothing. **Measured on this machine, on this round's own build: the owner's
+  four registered devices were gone from `config.ini` in one write**, and the
+  daemon's own state file said so a minute later ("the app's settings
+  register no devices"). The devices were restored from what the file had
+  held at the start of the round.
+
+  The write is a DIFF now, and the rule is the house's: **a caller may only
+  unregister what it was SHOWN.** The card sends the devices it had in front
+  of it (`known`) as well as the ones that are on (`checked`); a device
+  outside that set stays. The card keeps its state in JS rather than
+  reading the live checkboxes, because a re-render can empty the DOM it
+  would read. Pinned red first: "a write that did not see a device must not
+  unregister it — assert [] == [('a9fccb71-…', 17)]".
+
+- **Two switches, two owners — and the second one is the app's.** The
+  daemon's scheduled push is now gated by `DIVOOM_MONTHLY_BEST=1` AGAIN, and
+  the app sets it (`divoom_gui/gui_main.py`). That is not the second switch
+  the earlier draft had: the environment answers "may THIS process run the
+  scheduled push", and the config answers "is the push ON, and how often".
+  The first is a deployment fact — the app owns the schedule — and the second
+  is the owner's Auto-Sync, the flag the Routines card shows and writes.
+
+  The environment is what keeps a TEST daemon from pushing to the owner's
+  panels: the e2e suites spawn real daemons, and with the loop ungated a
+  test daemon would have fetched the gallery and pushed to the owner's
+  frames. It did exactly that once during this round — a spawned daemon
+  wrote the owner's `hotchannel_state.json` at 23:16, with a run that failed
+  because the settings table had already been emptied. The loop is
+  environment-gated again, the app sets it, and a test daemon does not.
 
 - **The retired daemon reads the retired config with its own reader.** The
   Python monthly-best daemon (retired 2026-09-14, now

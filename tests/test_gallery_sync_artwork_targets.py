@@ -72,10 +72,16 @@ def test_set_sync_targets_valid_list_and_galleries(tmp_path, monkeypatch):
     from divoom_lib import settings_devices
 
     ok = m.set_sync_targets(
-        targets_json=json.dumps([
-            "a9fccb71-3d3d-4de3-c381-0de382cdc4aa",
-            "f90d2cc9-420e-65f9-9e06-f9554470fced",
-        ]),
+        targets_json=json.dumps({
+            "checked": [
+                "a9fccb71-3d3d-4de3-c381-0de382cdc4aa",
+                "f90d2cc9-420e-65f9-9e06-f9554470fced",
+            ],
+            "known": [
+                "a9fccb71-3d3d-4de3-c381-0de382cdc4aa",
+                "f90d2cc9-420e-65f9-9e06-f9554470fced",
+            ],
+        }),
         galleries_json=json.dumps({"a9fccb71-3d3d-4de3-c381-0de382cdc4aa": 9}),
     )
     assert ok is True
@@ -83,6 +89,26 @@ def test_set_sync_targets_valid_list_and_galleries(tmp_path, monkeypatch):
         ("a9fccb71-3d3d-4de3-c381-0de382cdc4aa", 9),
         ("f90d2cc9-420e-65f9-9e06-f9554470fced", 18),
     ]
+
+
+def test_set_sync_targets_never_unregisters_what_it_did_not_see(tmp_path, monkeypatch):
+    """The Routines card's write carries the devices it was SHOWN. A write
+    whose list was empty (the card had not rendered yet) must not empty the
+    settings — that is how four registered devices disappeared in one write."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("DIVOOM_HOTCHANNEL_CONFIG", str(tmp_path / "hotchannel.json"))
+    m = _Host()
+    from divoom_lib import settings_devices
+
+    cfg_dir = tmp_path / ".config" / "divoom-control"
+    cfg_dir.mkdir(parents=True)
+    (cfg_dir / "config.ini").write_text(
+        "[gallery]\na9fccb71-3d3d-4de3-c381-0de382cdc4aa = 17\n", encoding="utf-8"
+    )
+    before = settings_devices.registered_devices()
+
+    assert m.set_sync_targets(targets_json=json.dumps({"checked": [], "known": []})) is True
+    assert settings_devices.registered_devices() == before
 
 
 def test_set_sync_targets_non_list_and_non_dict_payloads_are_ignored(tmp_path, monkeypatch):
@@ -111,6 +137,26 @@ def test_set_sync_targets_malformed_json_returns_false(tmp_path, monkeypatch):
     m = _Host()
     ok = m.set_sync_targets(targets_json="{not valid json[")
     assert ok is False
+
+
+def test_the_sync_target_write_says_what_it_saw():
+    """The card's write carries the devices it was SHOWN, not only the checked
+    ones.
+
+    A write that reads the live checkboxes can see an empty list while the
+    card is re-rendering — and a write that said "these ARE the devices"
+    would then empty the settings, which is how four registered devices
+    disappeared from them in one write (measured 2026-10-21)."""
+    src = (
+        Path(__file__).resolve().parent.parent
+        / "divoom_gui" / "web_ui" / "gallery.js"
+    ).read_text(encoding="utf-8")
+    assert "set_sync_targets(JSON.stringify({ checked, known }))" in src, (
+        "the write must carry both the checked devices and the ones it saw"
+    )
+    assert 'querySelectorAll("#sync-targets-list input:checked")' not in src, (
+        "the write must not read the live DOM: a re-render can empty it"
+    )
 
 
 # ───────────────────── hot channel config get/save ─────────────────────

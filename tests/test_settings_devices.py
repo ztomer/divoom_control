@@ -78,28 +78,70 @@ def test_an_unusable_gallery_value_falls_back(settings_file):
 
 def test_registering_writes_the_table_and_keeps_the_rest(settings_file):
     settings_file.write_text(SETTINGS, encoding="utf-8")
-    assert sd.set_registered(["f90d2cc9-420e-65f9-9e06-f9554470fced"]) is True
+    assert sd.set_registered(
+        ["f90d2cc9-420e-65f9-9e06-f9554470fced"],
+        known=[
+            "f90d2cc9-420e-65f9-9e06-f9554470fced",
+            "a9fccb71-3d3d-4de3-c381-0de382cdc4aa",
+        ],
+    ) is True
     text = settings_file.read_text(encoding="utf-8")
     assert "a9fccb71-3d3d-4de3-c381-0de382cdc4aa" not in text, (
-        "a device that was turned off must leave the table"
+        "a device the caller SAW and no longer wants must leave the table"
     )
     assert "gallery_sort = 1" in text, "the table's own settings must survive"
     assert "timeout = 120" in text, "the rest of the settings file must survive"
-    assert sd.registered_devices() == [("f90d2cc9-420e-65f9-9e06-f9554470fced", 18)]
+    assert sd.registered_devices() == [
+        ("f90d2cc9-420e-65f9-9e06-f9554470fced", 18),
+        # The two the caller did NOT see stay: a write may only unregister
+        # what it was shown.
+        ("e9a41e1e-9a96-974f-ce44-54f16d616f28", 18),
+        ("2b471aee-a9bd-24ab-7d5f-4afd88c16eeb", 18),
+    ]
+
+
+def test_a_write_that_saw_nothing_unregisters_nothing(settings_file):
+    """The rule that keeps the settings from emptying themselves.
+
+    Measured 2026-10-21: the Routines card's toggles wrote the whole device
+    list, and a write whose list happened to be empty (the card had not
+    rendered yet) REPLACED the table with nothing — four registered devices
+    gone from the settings in one write, silently. A caller that saw nothing
+    may only ADD."""
+    settings_file.write_text(SETTINGS, encoding="utf-8")
+    before = sd.registered_devices()
+
+    assert sd.set_registered([], known=[]) is True
+
+    assert sd.registered_devices() == before, (
+        "a write that did not see a device must not unregister it"
+    )
+
+
+def test_a_device_the_caller_did_not_see_stays_registered(settings_file):
+    settings_file.write_text(SETTINGS, encoding="utf-8")
+    assert sd.set_registered(
+        ["f90d2cc9-420e-65f9-9e06-f9554470fced"],
+        known=["f90d2cc9-420e-65f9-9e06-f9554470fced"],
+    ) is True
+    assert ("a9fccb71-3d3d-4de3-c381-0de382cdc4aa", 17) in sd.registered_devices(), (
+        "a device the caller did not see must stay registered"
+    )
 
 
 def test_registering_keeps_the_gallery_a_device_already_had(settings_file):
     settings_file.write_text(SETTINGS, encoding="utf-8")
     sd.set_registered(["a9fccb71-3d3d-4de3-c381-0de382cdc4aa"])
-    assert sd.registered_devices() == [("a9fccb71-3d3d-4de3-c381-0de382cdc4aa", 17)]
+    assert ("a9fccb71-3d3d-4de3-c381-0de382cdc4aa", 17) in sd.registered_devices()
 
 
 def test_registering_can_set_the_gallery(settings_file):
     settings_file.write_text(SETTINGS, encoding="utf-8")
     sd.set_registered(
-        ["a9fccb71-3d3d-4de3-c381-0de382cdc4aa"], {"a9fccb71-3d3d-4de3-c381-0de382cdc4aa": 9}
+        ["a9fccb71-3d3d-4de3-c381-0de382cdc4aa"],
+        {"a9fccb71-3d3d-4de3-c381-0de382cdc4aa": 9},
     )
-    assert sd.registered_devices() == [("a9fccb71-3d3d-4de3-c381-0de382cdc4aa", 9)]
+    assert ("a9fccb71-3d3d-4de3-c381-0de382cdc4aa", 9) in sd.registered_devices()
 
 
 def test_a_name_that_is_not_an_address_is_not_a_device():

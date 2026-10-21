@@ -71,7 +71,7 @@ class TestGuiApiWallMedia(GuiApiTestBase):
              patch("divoom_lib.hotchannel_config.save_config", return_value=True) as msave:
 
             self.assertTrue(self.api.set_sync_targets(json.dumps(["AA", "BB"])))
-            mset.assert_called_once_with(["AA", "BB"], {})
+            mset.assert_called_once_with(["AA", "BB"], {}, [])
 
             self.assertEqual(json.loads(self.api.get_hot_channel_config())["interval"], 3600)
 

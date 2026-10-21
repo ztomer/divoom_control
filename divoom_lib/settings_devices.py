@@ -138,8 +138,20 @@ def _as_classify(value) -> int | None:
     return classify if classify > 0 else None
 
 
-def set_registered(addresses, galleries=None) -> bool:
-    """Register exactly ``addresses`` as the devices the hot channel reaches.
+def set_registered(addresses, galleries=None, known=None) -> bool:
+    """Register ``addresses``; unregister only the devices the caller SAW.
+
+    ``known`` is the set of devices the caller had in front of it. A device
+    is unregistered only if it was in ``known`` and is not in ``addresses``.
+    A caller that saw NOTHING unregisters nothing.
+
+    That rule exists because the alternative was measured: the Routines card's
+    toggles wrote the whole device list, and a write whose list happened to be
+    empty (the card had not rendered yet, or was mid-rebuild) REPLACED the
+    table with nothing -- four registered devices gone from the settings in
+    one write, silently. A write that could wipe a fact because the caller's
+    list was incomplete is the same defect as the empty list that started
+    this: the fact was in two places and only one of them was ever filled in.
 
     ``galleries`` optionally carries a per-device gallery (address → id); an
     address that already had one keeps it. The table's own settings
@@ -156,19 +168,26 @@ def set_registered(addresses, galleries=None) -> bool:
     existing = {addr: classify for addr, classify in registered_devices()}
     wanted = [str(a).strip() for a in (addresses or []) if str(a).strip()]
     wanted_galleries = galleries if isinstance(galleries, dict) else {}
+    seen = [str(a).strip() for a in (known or []) if str(a).strip()]
 
+    # The table's own settings survive; the device entries are rebuilt from
+    # what the caller said, and what it did NOT see stays.
     kept = {
         key: value
         for key, value in parser.items("gallery")
         if key.lower() in RESERVED_KEYS
     }
-    parser["gallery"] = kept
+    for addr, classify in existing.items():
+        if addr not in seen or addr in wanted:
+            kept[addr] = str(classify)
 
     for address in wanted:
         classify = _as_classify(wanted_galleries.get(address))
         if classify is None:
             classify = existing.get(address) or DEFAULT_CLASSIFY
-        parser["gallery"][address] = str(classify)
+        kept[address] = str(classify)
+
+    parser["gallery"] = kept
 
     try:
         path.parent.mkdir(parents=True, exist_ok=True)

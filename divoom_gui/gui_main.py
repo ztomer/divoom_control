@@ -245,6 +245,13 @@ def main():
     if sys.platform == "darwin":
         try:
             from divoom_gui.daemon_bridge import ensure_daemon
+            # The daemon runs the scheduled monthly-best push only when the
+            # process that owns the schedule says it may. The app owns it (the
+            # Routines card's Auto-Sync), so the app says so; a daemon spawned
+            # by a TEST, or by hand, does not get this -- and that matters,
+            # because the loop reaches the owner's panels: a test daemon must
+            # never push to them.
+            os.environ["DIVOOM_MONTHLY_BEST"] = "1"
             # R53: assign the client. Previously the return value was discarded,
             # so api._daemon_client stayed None until the first user action
             # lazily re-ran ensure_daemon — and a failed/slow spawn surfaced
