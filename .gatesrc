@@ -123,6 +123,20 @@ GOH_CI_STEPS='"$GOH_DIR/gates/structural.sh" --full:python3 "$GOH_DIR/checks/che
 # name fails, and a fixed one must take its entry with it.
 GOH_NO_KILL_BY_NAME=1
 
+# Every child process names its stdin (`goh subprocess-stdin`, the house stdin
+# gate). The step has been ON by default since goh 0.27.0 flipped it, and this
+# file named nothing: a gate a repo inherits from a default is a gate nobody
+# turned on, and the only way to turn one off is to write `off` here. So it is
+# named here instead -- what runs is a decision this file makes.
+#
+# The 52 calls that inherited their caller's stdin were declared on 2026-10-14
+# (`56a6a2b`), DECLARED and not seeded: this repo carries no
+# `subprocess_stdin_allow.json`, so nothing is exempt and no entry is
+# 'unreviewed' debt. Re-measured 2026-10-21 with the house's own tool: 73
+# process calls across 53 files, every one of them declaring its stdin, and
+# the floor below moved with the tree.
+GOH_SUBPROCESS_STDIN=on
+
 # Every scanner's floor (goh v0.27.0, docs/config.md): a full-scope scan that
 # reads less than this has lost its subject and is red, not clean. Nine tenths
 # of what each read on 2026-10-14 (the house rule); lower one with the tree in
@@ -140,7 +154,7 @@ GOH_CHECKOUT_CREDENTIALS_MIN_FILES=1  # read 1
 GOH_MD_LINKS_MIN_LINKS=35             # read 39
 GOH_UNREAPED_SPAWN_MIN_FILES=321      # read 357
 GOH_STATUS_MARKERS_MIN_FILES=624   # read 693
-GOH_SUBPROCESS_STDIN_MIN_CALLS=54     # read 60, every one declared
+GOH_SUBPROCESS_STDIN_MIN_CALLS=65     # read 73, every one declared (2026-10-21)
 
 # CI <-> local parity (gates_of_heck check_ci_local_parity.py, v0.33.0;
 # docs/config.md). Every repo script CI's workflow runs must be named by a

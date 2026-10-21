@@ -825,6 +825,40 @@ this one:
   Tests: 2071 passed, 176 skipped (`pytest tests`); 1022 passed, 73 skipped
   (`pytest examples/tests`).
 
+## Every child process names its stdin, and the floor names the count (2026-10-21)
+
+The house sweep's row for this repo was closed on 2026-10-14 (`56a6a2b`): 52
+process calls inherited their caller's stdin without saying so, and every one
+of them declares it now. The tree has moved since — the Python surface grew
+from 60 calls to 73 — and the floor that was set with the tree had stayed at
+54, low enough that a scan which stopped seeing calls would still read clean.
+This round re-measured the subject, set the floor with it, and NAMED the step
+in the repo's own file.
+
+- **The floor moved with the tree.** `GOH_SUBPROCESS_STDIN_MIN_CALLS` is 65:
+  nine tenths of the 73 the scan reads, the rule every other floor in this
+  file follows. A floor is what catches the fourth vacuous pass — a scanner
+  whose own selection broke reads less than the repo holds, and a scan of
+  nothing finds nothing, so it reads as clean.
+- **The step is NAMED.** `GOH_SUBPROCESS_STDIN=on` is in `.gatesrc`. The gate
+  has run by default since goh 0.27.0 flipped it, and only a written `off`
+  turns it off — but a gate a repo inherits from a default is a gate nobody
+  turned on, and this file said nothing about it. It runs in the local
+  pre-push gate and in CI's structural job, which reads this same file.
+- **Nothing is seeded.** There is no `subprocess_stdin_allow.json` in this
+  repo: no call is exempt, no entry is 'unreviewed' debt, and the 73 calls
+  are the whole subject.
+- **Both directions watched RED first.** With every `stdin=`/`input=`
+  declaration stripped from the tree and `ruff format` run over it, the check
+  exits 1 and names all 73 calls with their file, line and text. With the
+  floor raised above what the scan reads, it exits 1 and names
+  `GOH_SUBPROCESS_STDIN_MIN_CALLS`. As committed, it exits 0: `528 tracked
+  Python file(s), every one of 73 process call(s) declares its stdin`.
+
+  Tests: 2128 passed, 180 skipped (`python3 -m pytest`, `tests/`; the browser
+  and hardware suites are opt-in). Nothing in the Python changed — this round
+  moved a gate's floor and named a step.
+
 ## v0.41.3 — the browser suites run in the local gate, and the app stops overwriting its own state (2026-10-19)
 
 Patch release, and a catch-up one: it carries every round since v0.41.2 — the

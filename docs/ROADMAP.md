@@ -81,6 +81,17 @@ Two things the phase found that are NOT its items, tracked where they belong:
 - The py_ci coverage floor now binds on every run (`23b512f`) — it was
   reporting "NOT enforced" because the two camoufox probes disagreed.
 
+Landed after (2026-10-21): the stdin sweep's row for this repo was closed on
+2026-10-14 (`56a6a2b`, P0.1), and the tree has moved since, so the floor was
+re-measured with the house's own tool and set WITH the tree: 73 process calls
+across 53 files, every one of them declaring its stdin, and no allowlist file
+at all — nothing is seeded, so there is no 'unreviewed' debt to work off. The
+step is NAMED in `.gatesrc` now (`GOH_SUBPROCESS_STDIN=on`): it has run by
+default since goh 0.27.0, and a gate a repo inherits from a default is a gate
+nobody turned on. Both directions were watched red first — with every
+declaration stripped the check names all 73 calls, and with the floor raised
+above what the scan reads it names the floor key.
+
 ### Phase 1 — correctness defects and drift (small, independent)
 
 **Goal:** no known defect or gate hole stays open while feature work starts.
@@ -671,6 +682,7 @@ is judged against; when one moves, change it here in the same commit.
 | Python coverage floor | 89.0 (see P1.4) | `scripts/py_ci.sh` |
 | Rust coverage floor | 42 | `scripts/rust_coverage.sh` |
 | File length | 500 lines, allowlist empty | gates_of_heck structural layer |
+| Process calls | 73 in 53 files, every one declaring its stdin (2026-10-21) | gates_of_heck structural layer (`goh subprocess-stdin`) |
 | Daemon/client duplication | 0 DIRECT, 0 WRAPPED | `tools/capability_census.py` |
 
 **Flake ledger** (one line each; a repeat earns an investigation):
