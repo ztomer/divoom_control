@@ -119,7 +119,10 @@ async def main_async():
 
     # Resolve run parameters. With --use-config, the GUI-selected targets and
     # schedule drive the daemon so automatic syncs run headless (request 4.d).
-    from divoom_lib import hotchannel_config
+    # The RETIRED daemon reads the retired config shape with its own reader
+    # (examples/divoom_legacy/hotchannel_config.py): the live module moved on,
+    # and a frozen artifact must not depend on a module that has.
+    from divoom_legacy import hotchannel_config
     hc_cfg = hotchannel_config.load_config()
     if args.use_config:
         classify = hc_cfg["classify"]

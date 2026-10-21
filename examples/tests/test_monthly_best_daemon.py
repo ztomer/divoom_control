@@ -344,7 +344,7 @@ class TestMainAsync(unittest.IsolatedAsyncioTestCase):
         push_mock = AsyncMock()
         with patch.object(sys, "argv", ["monthly_best_daemon.py", "--dry-run"]), \
              patch("divoom_lib.divoom_auth.get_credentials", return_value=self.creds), \
-             patch("divoom_lib.hotchannel_config.load_config", return_value=self._hc()), \
+             patch("divoom_legacy.hotchannel_config.load_config", return_value=self._hc()), \
              patch.object(monthly_best_daemon, "_fetch_and_download", fetch_mock), \
              patch.object(monthly_best_daemon, "_push_items_to_target", push_mock):
             await monthly_best_daemon.main_async()
@@ -357,7 +357,7 @@ class TestMainAsync(unittest.IsolatedAsyncioTestCase):
         push_mock = AsyncMock()
         with patch.object(sys, "argv", ["monthly_best_daemon.py"]), \
              patch("divoom_lib.divoom_auth.get_credentials", return_value=self.creds), \
-             patch("divoom_lib.hotchannel_config.load_config", return_value=self._hc()), \
+             patch("divoom_legacy.hotchannel_config.load_config", return_value=self._hc()), \
              patch.object(monthly_best_daemon, "_fetch_and_download", fetch_mock), \
              patch.object(monthly_best_daemon, "_push_items_to_target", push_mock):
             await monthly_best_daemon.main_async()
@@ -370,7 +370,7 @@ class TestMainAsync(unittest.IsolatedAsyncioTestCase):
     async def test_credentials_failure_exits(self):
         with patch.object(sys, "argv", ["monthly_best_daemon.py"]), \
              patch("divoom_lib.divoom_auth.get_credentials", side_effect=RuntimeError("no login")), \
-             patch("divoom_lib.hotchannel_config.load_config", return_value=self._hc()), \
+             patch("divoom_legacy.hotchannel_config.load_config", return_value=self._hc()), \
              patch.object(monthly_best_daemon, "_fetch_and_download", AsyncMock()), \
              patch.object(monthly_best_daemon, "_push_items_to_target", AsyncMock()):
             with self.assertRaises(SystemExit):
@@ -384,7 +384,7 @@ class TestMainAsync(unittest.IsolatedAsyncioTestCase):
         fetch_mock = AsyncMock(return_value=[])
         with patch.object(sys, "argv", ["monthly_best_daemon.py", "--dry-run"]), \
              patch("divoom_lib.divoom_auth.get_credentials", return_value=self.creds), \
-             patch("divoom_lib.hotchannel_config.load_config", return_value=self._hc()), \
+             patch("divoom_legacy.hotchannel_config.load_config", return_value=self._hc()), \
              patch.object(monthly_best_daemon, "_fetch_and_download", fetch_mock), \
              patch.object(monthly_best_daemon, "_push_items_to_target", AsyncMock()):
             await monthly_best_daemon.main_async()
@@ -401,7 +401,7 @@ class TestMainAsync(unittest.IsolatedAsyncioTestCase):
         fetch_mock = AsyncMock(return_value=[])
         with patch.object(sys, "argv", ["monthly_best_daemon.py", "--dry-run"]), \
              patch("divoom_lib.divoom_auth.get_credentials", return_value=self.creds), \
-             patch("divoom_lib.hotchannel_config.load_config", return_value=self._hc()), \
+             patch("divoom_legacy.hotchannel_config.load_config", return_value=self._hc()), \
              patch.object(monthly_best_daemon, "_fetch_and_download", fetch_mock), \
              patch.object(monthly_best_daemon, "_push_items_to_target", AsyncMock()):
             await monthly_best_daemon.main_async()
@@ -423,7 +423,7 @@ class TestMainAsync(unittest.IsolatedAsyncioTestCase):
 
         with patch.object(sys, "argv", ["monthly_best_daemon.py", "--use-config"]), \
              patch("divoom_lib.divoom_auth.get_credentials", return_value=self.creds), \
-             patch("divoom_lib.hotchannel_config.load_config", return_value=hc_cfg), \
+             patch("divoom_legacy.hotchannel_config.load_config", return_value=hc_cfg), \
              patch.object(monthly_best_daemon, "_fetch_and_download", fetch_mock), \
              patch.object(monthly_best_daemon, "_push_items_to_target", push_mock), \
              patch("divoom_legacy.monthly_best_daemon.asyncio.sleep", sleep_mock):
@@ -447,7 +447,7 @@ class TestMainAsync(unittest.IsolatedAsyncioTestCase):
 
         with patch.object(sys, "argv", ["monthly_best_daemon.py", "--use-config"]), \
              patch("divoom_lib.divoom_auth.get_credentials", return_value=self.creds), \
-             patch("divoom_lib.hotchannel_config.load_config",
+             patch("divoom_legacy.hotchannel_config.load_config",
                    side_effect=[hc_cfg_initial, RuntimeError("disk fail")]), \
              patch.object(monthly_best_daemon, "_fetch_and_download", fetch_mock), \
              patch.object(monthly_best_daemon, "_push_items_to_target", push_mock):
@@ -466,7 +466,7 @@ class TestMainAsync(unittest.IsolatedAsyncioTestCase):
 
         with patch.object(sys, "argv", ["monthly_best_daemon.py", "--use-config", "--loop"]), \
              patch("divoom_lib.divoom_auth.get_credentials", return_value=self.creds), \
-             patch("divoom_lib.hotchannel_config.load_config", return_value=hc_cfg), \
+             patch("divoom_legacy.hotchannel_config.load_config", return_value=hc_cfg), \
              patch.object(monthly_best_daemon, "_fetch_and_download", fetch_mock), \
              patch.object(monthly_best_daemon, "_push_items_to_target", push_mock):
             await monthly_best_daemon.main_async()
@@ -484,7 +484,7 @@ class TestMainAsync(unittest.IsolatedAsyncioTestCase):
 
         with patch.object(sys, "argv", ["monthly_best_daemon.py", "--use-config"]), \
              patch("divoom_lib.divoom_auth.get_credentials", return_value=self.creds), \
-             patch("divoom_lib.hotchannel_config.load_config", return_value=hc_cfg), \
+             patch("divoom_legacy.hotchannel_config.load_config", return_value=hc_cfg), \
              patch.object(monthly_best_daemon, "_fetch_and_download", fetch_mock), \
              patch.object(monthly_best_daemon, "_push_items_to_target", push_mock), \
              patch("builtins.print") as mock_print:
