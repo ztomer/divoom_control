@@ -36,6 +36,12 @@ from _tui import err, info, ok  # noqa: E402
 REPO = Path(__file__).resolve().parent.parent
 PY = REPO / "divoom_lib" / "hotchannel_config.py"
 RS = REPO / "divoomd" / "src" / "monthly_best.rs"
+# The settings' `[gallery]` table -- the ONE home for the device list. Both
+# sides read it, so both sides' idea of "which keys are settings, not
+# devices" has to be the same list.
+SETTINGS_PY = REPO / "divoom_lib" / "settings_devices.py"
+SETTINGS_RS = REPO / "divoomd" / "src" / "settings_devices.rs"
+CLOUD_CATEGORY_RS = REPO / "divoomd" / "src" / "cloud_category.rs"
 
 
 def python_side() -> tuple[set[str], dict, tuple[int, int]]:
@@ -43,6 +49,20 @@ def python_side() -> tuple[set[str], dict, tuple[int, int]]:
     tree = ast.parse(PY.read_text(encoding="utf-8"))
     defaults: dict = {}
     consts: dict = {}
+    # Module-level constants first: a DEFAULTS value may be a NAME
+    # (`"interval": DEFAULT_INTERVAL`), and a gate that cannot resolve a name
+    # reports "no default" instead of the default -- which reads as "nothing
+    # to compare" and quietly stops pinning the very number it exists to pin.
+    for node in tree.body:
+        if not isinstance(node, ast.Assign) or not node.targets:
+            continue
+        name = getattr(node.targets[0], "id", "")
+        if name in ("DEFAULTS",):
+            continue
+        try:
+            consts[name] = ast.literal_eval(node.value)
+        except (ValueError, TypeError):
+            continue
     for node in tree.body:
         if not isinstance(node, ast.Assign) or not node.targets:
             continue
@@ -50,9 +70,16 @@ def python_side() -> tuple[set[str], dict, tuple[int, int]]:
         if name == "DEFAULTS" and isinstance(node.value, ast.Dict):
             for k, v in zip(node.value.keys, node.value.values):
                 try:
-                    defaults[ast.literal_eval(k)] = ast.literal_eval(v)
+                    key = ast.literal_eval(k)
                 except ValueError:
-                    defaults[ast.literal_eval(k)] = None
+                    continue
+                if isinstance(v, ast.Name):
+                    defaults[key] = consts.get(v.id)
+                else:
+                    try:
+                        defaults[key] = ast.literal_eval(v)
+                    except ValueError:
+                        defaults[key] = None
         elif name in ("MIN_INTERVAL", "MAX_INTERVAL"):
             try:
                 consts[name] = ast.literal_eval(node.value)
@@ -70,8 +97,15 @@ def rust_side() -> tuple[set[str], dict, tuple[int, int]]:
     fields = set(re.findall(r"pub (\w+):", m.group(1)))
 
     defaults: dict = {}
-    for fn, val in re.findall(r"fn (default_\w+)\(\) -> \w+ \{\s*(-?\d+)\s*\}", src):
-        defaults[fn.removeprefix("default_")] = int(val)
+    # The literal may carry `_` separators: `clippy::unreadable_literal` ADDS
+    # them, so `86400` is written `86_400` in a pedantic crate. The old
+    # pattern here was `(-?\d+)`, which stopped MATCHING the moment the
+    # default became five digits -- and a pattern that matches nothing
+    # reports no divergence, which is the worst way for a gate to fail: the
+    # interval default was silently unpinned. Same reasoning as the clamp
+    # below.
+    for fn, val in re.findall(r"fn (default_\w+)\(\) -> \w+ \{\s*(-?[\d_]+)\s*\}", src):
+        defaults[fn.removeprefix("default_")] = int(val.replace("_", ""))
     # `#[serde(default)]` with no function means the type's zero value.
     for field in fields:
         defaults.setdefault(field, None)
@@ -88,6 +122,48 @@ def rust_side() -> tuple[set[str], dict, tuple[int, int]]:
         else (None, None)
     )
     return fields, defaults, bounds
+
+
+def settings_side() -> tuple[set[str], int | None]:
+    """The `[gallery]` table's reserved keys and default classify, Python side."""
+    tree = ast.parse(SETTINGS_PY.read_text(encoding="utf-8"))
+    reserved: set[str] = set()
+    classify: int | None = None
+    for node in tree.body:
+        if not isinstance(node, ast.Assign) or not node.targets:
+            continue
+        name = getattr(node.targets[0], "id", "")
+        if name == "RESERVED_KEYS":
+            try:
+                reserved = set(ast.literal_eval(node.value))
+            except ValueError:
+                reserved = set()
+        elif name == "DEFAULT_CLASSIFY":
+            try:
+                classify = ast.literal_eval(node.value)
+            except ValueError:
+                classify = None
+    return reserved, classify
+
+
+def settings_rust_side() -> tuple[set[str], int | None]:
+    """The same two things, read from the Rust side."""
+    src = SETTINGS_RS.read_text(encoding="utf-8")
+    reserved: set[str] = set()
+    m = re.search(r"pub const RESERVED_KEYS: &\[&str\] = &\[(.*?)\];", src, re.S)
+    if m:
+        reserved = set(re.findall(r'"([^"]+)"', m.group(1)))
+    # The daemon's fallback classify is the cloud's own default, which lives
+    # in cloud_category.rs -- that is where the number is, so that is where it
+    # is read.
+    classify = None
+    cm = re.search(
+        r"pub const DEFAULT_GALLERY_CLASSIFY: i64 = (\d+);",
+        CLOUD_CATEGORY_RS.read_text(encoding="utf-8"),
+    )
+    if cm:
+        classify = int(cm.group(1))
+    return reserved, classify
 
 
 def main() -> int:
@@ -122,6 +198,21 @@ def main() -> int:
             f"interval clamp differs: python={py_bounds} rust={rs_bounds} — the GUI "
             f"would display a clamped value the daemon does not honour")
 
+    # The settings' `[gallery]` table is the OTHER half of the same fact: the
+    # GUI writes it, the daemon reads it, and the keys that are settings
+    # rather than devices must be the same list on both sides — otherwise the
+    # daemon connects to "gallery_sort".
+    py_reserved, py_classify = settings_side()
+    rs_reserved, rs_classify = settings_rust_side()
+    if py_reserved != rs_reserved:
+        problems.append(
+            f"the [gallery] table's reserved keys differ: python={sorted(py_reserved)} "
+            f"rust={sorted(rs_reserved)} — one side would treat the other's "
+            f"settings as devices")
+    if py_classify != rs_classify:
+        problems.append(
+            f"the fallback gallery differs: python={py_classify!r} rust={rs_classify!r}")
+
     if problems:
         err(f"[hotchannel-parity] {len(problems)} divergence(s) in hotchannel.json")
         for p in problems:
@@ -130,7 +221,8 @@ def main() -> int:
         return 1
 
     ok(f"[hotchannel-parity] OK — {len(py_fields)} fields, defaults and "
-       f"clamp {py_bounds[0]}..{py_bounds[1]}s agree")
+       f"clamp {py_bounds[0]}..{py_bounds[1]}s agree; "
+       f"{len(py_reserved)} reserved gallery keys agree")
     return 0
 
 

@@ -67,6 +67,10 @@ _ARM_AFTER = re.compile(r'\|\s*"([a-z_][a-z_0-9.]*)"')
 OWNED_LIB = (
     "cloud", "divoom_auth", "weather_provider", "media_decoder",
     "system", "display", "tools", "lan_transport", "wall", "hotchannel_config",
+    # The settings' `[gallery]` table — the ONE home for the hot channel's
+    # device list. The GUI writes it; the daemon reads it. Shared state, the
+    # same shape hotchannel_config was, so it is gated the same way.
+    "settings_devices",
 )
 
 
@@ -94,20 +98,20 @@ REACHES_ALLOWLIST: dict[str, str] = {
         "client-local — which city the user picked is the client's own state",
     # shared-state: one file, two parsers, held in step by
     # tools/check_hotchannel_parity.py rather than by deleting either reader.
-    "divoom_gui/gallery_hot_api.py::hotchannel_config.get_targets":
-        "shared-state — gated by check_hotchannel_parity.py",
-    "divoom_gui/gallery_sync.py::hotchannel_config.get_targets":
-        "shared-state — gated by check_hotchannel_parity.py",
-    "divoom_gui/gallery_sync.py::hotchannel_config.get_device_classify":
-        "shared-state — gated by check_hotchannel_parity.py",
     "divoom_gui/gallery_sync.py::hotchannel_config.load_config":
         "shared-state — gated by check_hotchannel_parity.py",
     "divoom_gui/gallery_sync.py::hotchannel_config.save_config":
         "shared-state — gated by check_hotchannel_parity.py",
-    "divoom_gui/gallery_sync.py::hotchannel_config.set_targets":
-        "shared-state — gated by check_hotchannel_parity.py",
-    "divoom_gui/gallery_sync.py::hotchannel_config.set_device_galleries":
-        "shared-state — gated by check_hotchannel_parity.py",
+    # The settings' `[gallery]` table: the GUI writes it, the daemon reads it.
+    # ONE home for the device list — the same table, not a second copy.
+    "divoom_gui/gallery_hot_api.py::settings_devices.registered_devices":
+        "shared-state — one home for the fact; gated by check_hotchannel_parity.py",
+    "divoom_gui/gallery_sync.py::settings_devices.device_classify":
+        "shared-state — one home for the fact; gated by check_hotchannel_parity.py",
+    "divoom_gui/gallery_sync.py::settings_devices.registered_devices":
+        "shared-state — one home for the fact; gated by check_hotchannel_parity.py",
+    "divoom_gui/gallery_sync.py::settings_devices.set_registered":
+        "shared-state — one home for the fact; gated by check_hotchannel_parity.py",
 }
 
 def row(text: str) -> None:
