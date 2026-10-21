@@ -85,6 +85,12 @@ underneath it.
   the test's name claims, the second of which it had never checked at all:
   the old test computed `gallery_scroll` and asserted nothing about it.
 
+  Tests: **2134** passed, **180** skipped (`python3 -m pytest`, `tests/`; the
+  browser and hardware suites are opt-in). The new gate's own test
+  (`tests/test_js_syntax_gate.py`) is green, and the gallery test was watched
+  RED before the fix -- with CI's own message -- and green after it, under
+  the same load.
+
 ## v0.41.6 — the gallery push STORES the art, and says so (2026-10-21)
 
 The owner's ruling (2026-10-21): *"art should be stored"*, and *"decoder
