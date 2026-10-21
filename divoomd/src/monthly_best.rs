@@ -142,8 +142,9 @@ pub struct DeviceOutcome {
     ///
     /// These are WARNINGS, not a failed run: a container format the decoder
     /// does not handle is a defect in the decoder, and a run that rings the
-    /// owner's phone every day for it teaches them to ignore the channel. The
-    /// line is still printed, and the count is in the run's summary.
+    /// owner's phone every day for it teaches them to ignore the channel.
+    /// Each warning NAMES the file and says why it could not be shown — a
+    /// run that quietly drops files says less than it does.
     pub warnings: Vec<String>,
 }
 
@@ -342,7 +343,7 @@ pub async fn report_cycle(outcome: &CycleOutcome) {
         if warned > 0 {
             println!(
                 "divoomd: {warned} file(s) could not be shown (the device was reached): \
-                 see the lines above."
+                 the lines above name each file and the reason."
             );
         }
         if previous.as_deref() == Some("failed") {

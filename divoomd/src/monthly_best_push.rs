@@ -23,13 +23,58 @@ const FILE_SIZE: i64 = 127;
 /// Seconds to wait between two pushes to the same device.
 const PUSH_GAP_SECS: u64 = 15;
 
-/// How many files reached the device, and how many did not.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// How many files reached the device, and which ones did not.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PushCounts {
     /// Files the device showed.
     pub pushed: usize,
-    /// Files that did not make it.
-    pub failed: usize,
+    /// The files that did not make it, and why each one did not.
+    pub failures: Vec<FileFailure>,
+}
+
+/// One file that did not make it to the device, and why.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileFailure {
+    /// The gallery file's name, as the cloud calls it.
+    pub name: String,
+    /// Why it could not be shown.
+    pub reason: String,
+}
+
+/// The rule the box records, as a rule about the FILES.
+///
+/// A device that was REACHED and showed NOTHING is a FAILURE of the run: it
+/// rings the owner's phone. A device that showed the art and could not show
+/// one file only WARNS — and the warning NAMES the file and says WHY,
+/// because a run that says "3 of 10 file(s) could not be shown" says less
+/// than the run that names them, and a run that quietly drops files is a run
+/// that says less than it does.
+#[must_use]
+pub fn device_verdict(pushed: usize, failures: &[FileFailure]) -> (Option<String>, Vec<String>) {
+    if failures.is_empty() {
+        return (None, Vec::new());
+    }
+    if pushed == 0 {
+        let total = pushed + failures.len();
+        let named = failures
+            .iter()
+            .map(|f| format!("{} ({})", f.name, f.reason))
+            .collect::<Vec<_>>()
+            .join("; ");
+        return (
+            Some(format!(
+                "the device was reached but none of its {total} file(s) could be shown: {named}"
+            )),
+            Vec::new(),
+        );
+    }
+    (
+        None,
+        failures
+            .iter()
+            .map(|f| format!("{}: {}", f.name, f.reason))
+            .collect(),
+    )
 }
 
 /// Fetch the category for one device, write down what came back, and push it.
@@ -84,28 +129,12 @@ pub async fn push_to_device(daemon: &Daemon, device: &RegisteredDevice) -> Devic
     match sync_files_to_device(daemon, &device.address, &files).await {
         Ok(counts) => {
             outcome.pushed = counts.pushed;
-            if counts.failed > 0 {
-                if counts.pushed == 0 {
-                    // The device was reached and NOTHING could be shown on
-                    // it: the push to this device failed.
-                    outcome.error = Some(format!(
-                        "the device was reached but none of its {} file(s) could be shown",
-                        counts.failed
-                    ));
-                } else {
-                    // Some got through: the device was reached and the art
-                    // IS on it. The files that did not make it are a
-                    // WARNING — a container format the decoder does not
-                    // handle is a defect in the decoder, and a run that
-                    // rings the owner's phone every day for it teaches them
-                    // to ignore the channel.
-                    outcome.warnings.push(format!(
-                        "{} of {} file(s) could not be shown",
-                        counts.failed,
-                        counts.pushed + counts.failed
-                    ));
-                }
-            }
+            // The rule, in one place: a device that was reached and showed
+            // NOTHING failed; a device that showed the art and could not show
+            // one file only warns — and the warning names the file.
+            let (error, warnings) = device_verdict(counts.pushed, &counts.failures);
+            outcome.error = error;
+            outcome.warnings = warnings;
         }
         Err(e) => {
             outcome.error = Some(e);
@@ -114,29 +143,35 @@ pub async fn push_to_device(daemon: &Daemon, device: &RegisteredDevice) -> Devic
     outcome
 }
 
-/// Pull a gallery file's bytes, or say why not and answer `None`.
-async fn download(client: &reqwest::Client, file_id: &str, file_name: &str) -> Option<Vec<u8>> {
+/// Pull a gallery file's bytes, or say why not.
+async fn download(
+    client: &reqwest::Client,
+    file_id: &str,
+    file_name: &str,
+) -> Result<Vec<u8>, String> {
     let dl_url = format!("https://fin.divoom-gz.com/{file_id}");
     let resp = match client.get(&dl_url).send().await {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("divoomd: failed to download {file_name}: {e}");
-            return None;
+            let reason = format!("the download failed: {e}");
+            eprintln!("divoomd: failed to download {file_name}: {reason}");
+            return Err(reason);
         }
     };
     if resp.status() != 200 {
+        let reason = format!("the download failed with status {}", resp.status());
         eprintln!(
-            "divoomd: download of {} failed with status {}",
-            file_name,
+            "divoomd: download of {file_name} failed with status {}",
             resp.status()
         );
-        return None;
+        return Err(reason);
     }
     match resp.bytes().await {
-        Ok(b) => Some(b.to_vec()),
+        Ok(b) => Ok(b.to_vec()),
         Err(e) => {
-            eprintln!("divoomd: failed to read bytes for {file_name}: {e}");
-            None
+            let reason = format!("the download's bytes could not be read: {e}");
+            eprintln!("divoomd: failed to read bytes for {file_name}: {reason}");
+            Err(reason)
         }
     }
 }
@@ -147,14 +182,13 @@ async fn download(client: &reqwest::Client, file_id: &str, file_name: &str) -> O
 /// containers (magic 9/18/26 AES+LZO, 0xAA) by re-encoding them to an
 /// animated GIF the device can render. The only honest-error path is a truly
 /// unrecognized container, which would otherwise stick the device in its
-/// loading animation.
-async fn show(daemon: &Daemon, file_bytes: &[u8], file_name: &str) -> bool {
+/// loading animation — and that error says WHICH container it was, so the
+/// run can name the file rather than count it.
+async fn show(daemon: &Daemon, file_bytes: &[u8], file_name: &str) -> Result<(), String> {
     let Some(img) = crate::media::resolve_to_gif(file_bytes) else {
-        eprintln!(
-            "divoomd: {} (magic {}) not decodable in native daemon; skipping (no raw-stream)",
-            file_name, file_bytes[0]
-        );
-        return false;
+        let reason = crate::media::why_not_resolvable(file_bytes);
+        eprintln!("divoomd: {file_name}: {reason}; skipping (no raw-stream)");
+        return Err(reason);
     };
     let req_show = Request {
         command: "device_call".to_string(),
@@ -167,12 +201,17 @@ async fn show(daemon: &Daemon, file_bytes: &[u8], file_name: &str) -> bool {
         }),
         token: None,
     };
-    daemon
+    let shown = daemon
         .dispatch(req_show)
         .await
         .get("success")
         .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false)
+        .unwrap_or(false);
+    if shown {
+        Ok(())
+    } else {
+        Err("the device did not take the image".to_string())
+    }
 }
 
 /// Connect, push every file, disconnect — and count what actually landed.
@@ -221,10 +260,7 @@ async fn sync_files_to_device(
         .build()
         .map_err(|e| e.to_string())?;
 
-    let mut counts = PushCounts {
-        pushed: 0,
-        failed: 0,
-    };
+    let mut counts = PushCounts::default();
     for (idx, file) in files.iter().enumerate() {
         let file_id = file.id.as_str();
         let file_name = file.name.as_str();
@@ -236,22 +272,37 @@ async fn sync_files_to_device(
             file_name,
             file_id
         );
-        let Some(file_bytes) = download(&client, file_id, file_name).await else {
-            counts.failed += 1;
-            continue;
+        let file_bytes = match download(&client, file_id, file_name).await {
+            Ok(bytes) => bytes,
+            Err(reason) => {
+                counts.failures.push(FileFailure {
+                    name: file_name.to_string(),
+                    reason,
+                });
+                continue;
+            }
         };
 
         if file_bytes.len() < 4 {
-            counts.failed += 1;
+            counts.failures.push(FileFailure {
+                name: file_name.to_string(),
+                reason: "the file was too short to be a container".to_string(),
+            });
             continue;
         }
 
-        if show(daemon, &file_bytes, file_name).await {
-            counts.pushed += 1;
-            println!("divoomd: pushed {file_name}");
-        } else {
-            counts.failed += 1;
-            eprintln!("divoomd: failed to push {file_name}");
+        match show(daemon, &file_bytes, file_name).await {
+            Ok(()) => {
+                counts.pushed += 1;
+                println!("divoomd: pushed {file_name}");
+            }
+            Err(reason) => {
+                eprintln!("divoomd: failed to push {file_name}: {reason}");
+                counts.failures.push(FileFailure {
+                    name: file_name.to_string(),
+                    reason,
+                });
+            }
         }
 
         if idx < files.len() - 1 {

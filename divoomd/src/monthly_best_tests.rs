@@ -234,3 +234,60 @@ fn a_file_that_could_not_be_shown_is_a_warning_not_a_failed_run() {
     );
     assert!(outcome.ok());
 }
+
+/// E56: the rule the box records, as a rule about the FILES.
+///
+/// A device that was REACHED and showed NOTHING fails the run and rings the
+/// phone. A device that showed the art and could not show one file only
+/// WARNS — and the warning NAMES the file and says WHY, because a run that
+/// says "3 of 10 file(s) could not be shown" says less than the run that
+/// names them.
+#[test]
+fn the_warning_names_the_file_and_the_failure_names_them_all() {
+    use crate::monthly_best_push::{device_verdict, FileFailure};
+
+    let failures = vec![
+        FileFailure {
+            name: "Old animation".to_string(),
+            reason: "a magic-26 (0x1A) container with frame flag 0x2a".to_string(),
+        },
+        FileFailure {
+            name: "Jack Skellington".to_string(),
+            reason: "a magic-26 (0x1A) container with frame flag 0x2a".to_string(),
+        },
+    ];
+
+    let (error, warnings) = device_verdict(0, &failures);
+    assert!(
+        error.is_some(),
+        "a device that was reached and showed nothing is a FAILED RUN"
+    );
+    assert!(
+        warnings.is_empty(),
+        "and it is a failure, not a warning: {warnings:?}"
+    );
+    let error = error.unwrap_or_default();
+    assert!(
+        error.contains("Old animation") && error.contains("Jack Skellington"),
+        "the failure names the files it could not show: {error}"
+    );
+
+    let (error, warnings) = device_verdict(8, &failures);
+    assert!(
+        error.is_none(),
+        "a device that showed the art is not a failed run: {error:?}"
+    );
+    assert_eq!(
+        warnings.len(),
+        2,
+        "one warning per file that did not make it"
+    );
+    assert!(
+        warnings[0].contains("Old animation"),
+        "the warning names the file: {warnings:?}"
+    );
+    assert!(
+        warnings[0].contains("flag 0x2a"),
+        "and says why: {warnings:?}"
+    );
+}

@@ -85,6 +85,35 @@ pub fn resolve_to_gif(raw: &[u8]) -> Option<Vec<u8>> {
     }
 }
 
+/// Why a payload could not be resolved to an image — the reason a run names.
+///
+/// The magic byte says WHICH container it is, and for the magic-26 family
+/// the first frame's own flag says which shape of it, so the next person
+/// knows where to look instead of counting a file that did not arrive.
+#[must_use]
+pub fn why_not_resolvable(raw: &[u8]) -> String {
+    match raw.first().copied() {
+        None => "the file was empty".to_string(),
+        Some(26) => {
+            // The first frame's record starts at byte 10 — a 6-byte container
+            // header and the frame's u32 length — and the flag is the
+            // record's sixth byte.
+            let record = raw.get(10..16).filter(|r| r.first() == Some(&0xAA));
+            record.map_or_else(
+                || "a magic-26 (0x1A) container this decoder does not read".to_string(),
+                |r| {
+                    format!(
+                        "a magic-26 (0x1A) container with frame flag 0x{:02x} — a frame \
+                         shape this decoder does not read",
+                        r[5]
+                    )
+                },
+            )
+        }
+        Some(magic) => format!("a magic-{magic} container this decoder does not read"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     //! Verify the full resolve→GIF pipeline offline: decoded cloud frames encode to

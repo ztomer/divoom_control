@@ -100,8 +100,8 @@ pub async fn get_animated_preview(args: &Value) -> Value {
             err_code(
                 ErrorCode::UpstreamFailed,
                 &format!(
-                    "get_animated_preview: unrecognized container magic {}",
-                    bytes[0]
+                    "get_animated_preview: {}",
+                    crate::media::why_not_resolvable(&bytes)
                 ),
             )
         },
@@ -144,9 +144,9 @@ pub async fn sync_artwork(daemon: &Daemon, args: &Value) -> Value {
         return err_code(
             ErrorCode::UpstreamFailed,
             &format!(
-                "sync_artwork: unrecognized container magic {} (could not resolve to an image; \
+                "sync_artwork: {} (could not resolve to an image; \
              never raw-streamed to avoid sticking the device).",
-                file_bytes[0]
+                crate::media::why_not_resolvable(&file_bytes)
             ),
         );
     };
