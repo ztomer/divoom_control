@@ -9,9 +9,7 @@
 //! * the cadence is a day, because the content is;
 //! * an empty settings table is a failure, not a quiet no-op.
 
-use crate::monthly_best::{
-    load_hotchannel_config, resolve_targets, should_run_now, DeviceOutcome,
-};
+use crate::monthly_best::{load_hotchannel_config, resolve_targets, should_run_now, DeviceOutcome};
 use std::fs;
 use tempfile::TempDir;
 
@@ -224,7 +222,9 @@ fn a_file_that_could_not_be_shown_is_a_warning_not_a_failed_run() {
     // decoder does not handle is a defect in the decoder; a run that rings
     // the owner's phone every day for it teaches them to ignore the channel.
     let mut warned = device("A", 9, None);
-    warned.warnings.push("1 of 10 file(s) could not be shown".to_string());
+    warned
+        .warnings
+        .push("1 of 10 file(s) could not be shown".to_string());
     let devices = vec![warned];
     let outcome = crate::monthly_best::fold_devices(devices, Vec::new());
     assert!(
