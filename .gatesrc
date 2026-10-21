@@ -154,7 +154,7 @@ GOH_CHECKOUT_CREDENTIALS_MIN_FILES=1  # read 1
 GOH_MD_LINKS_MIN_LINKS=35             # read 39
 GOH_UNREAPED_SPAWN_MIN_FILES=321      # read 357
 GOH_STATUS_MARKERS_MIN_FILES=624   # read 693
-GOH_SUBPROCESS_STDIN_MIN_CALLS=65     # read 73, every one declared (2026-10-21)
+GOH_SUBPROCESS_STDIN_MIN_CALLS=67     # read 75, every one declared (2026-10-21)
 
 # CI <-> local parity (gates_of_heck check_ci_local_parity.py, v0.33.0;
 # docs/config.md). Every repo script CI's workflow runs must be named by a
