@@ -4,6 +4,87 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## The web UI's JavaScript has a syntax gate, and the gallery test stops racing the app (2026-10-21)
+
+Two gates this repo did not have, and one test that measured a page moving
+underneath it.
+
+- **P1.14 -- the web UI's JavaScript parses, or the gate says why.**
+  On 2026-10-20 a stray backtick inside a template literal in
+  `divoom_gui/web_ui/templates_settings.js` broke the whole Settings tab:
+  `window.DivoomTemplates` never existed, so the tab rendered empty. Nothing
+  noticed. The browser suites load the page, but a file the page loads and
+  nothing calls is not exercised by any of them, and the house gate parses
+  the shell scripts and the Python and had no parser for the ~40 JavaScript
+  files the app is made of.
+
+  **The rule is the browser's, and it is not `node --check`.** The unit is
+  the FILE, parsed as one classic script, independently of every other file
+  (the browser makes one Script Record per `<script src>`; concatenating
+  would hide an error in one file behind another and invent errors in two
+  files that are each fine). The payload of a template literal is NOT code:
+  the browser parses the `${...}` holes and leaves the HTML alone -- which
+  is exactly the shape of the failure, a stray backtick ending the literal
+  early and the HTML after it being read as JavaScript.
+
+  The node reader uses `vm.Script`, which IS the Script goal a `<script src>`
+  uses. `node --check` runs as well, but its goal is not that one: it parses
+  a `.js` file with the CommonJS goal, or -- on node 22 and later -- with
+  the MODULE goal when the file has ESM syntax, so it ACCEPTS a file with a
+  top-level `return`, or an `import`, or a top-level `await`. A browser
+  refuses all three for a classic script, and a file it refuses never loads:
+  the app would lose a whole tab without a word. That difference is the
+  reason the gate names the goal instead of the tool.
+
+  The pure-Python reader (`tools/_js_lex.py`) is the fallback for a machine
+  with no node, and it runs on EVERY run -- never only when node is missing,
+  because a fallback that is dormant until the day it is needed is a fallback
+  nobody has ever seen work. Its scope is stated rather than implied: it is
+  a LEXER, so it fails on an unterminated string, template literal, comment
+  or regex, on a bracket that is never closed, is closed twice or is closed
+  by the wrong kind, and on a `${}` hole that is never closed -- the class
+  that broke the Settings tab -- and it does NOT fail on a grammar error
+  such as `const x = ;`. A green run on a machine without node is a LEXICAL
+  green and is printed as one.
+
+  The gate is `tools/check_js_syntax.py`; it is named in `.gatesrc` and runs
+  in CI's checks job. It covers every `.js` file under
+  `divoom_gui/web_ui/`, not only the ones `index.html` names -- two of them
+  (`templates_gallery.js`, `templates_hot_channel.js`) are loaded by the test
+  suite rather than by the page, and a file no page loads today may be
+  loaded tomorrow.
+
+  **Both directions watched RED first** (`tests/test_js_syntax_gate.py`):
+  with the historical defect planted on a copy of the real tree -- a stray
+  backtick inside a template literal in `templates_settings.js` -- the node
+  reader and the lexical reader both name it and the gate exits 1; a plain
+  grammar error fails the node reader; the real tree is green; and an EMPTY
+  scope is red, so a renamed directory cannot make the gate pass over zero
+  files.
+
+- **P1.16 -- the gallery's scroll test stopped racing the gallery's own
+  render.** CI run 39542787961 went red on
+  `test_gallery_scrolls_internally_not_whole_card` with "gallery never
+  overflowed: scrollHeight 316, clientHeight 316" -- the numbers of an EMPTY
+  container, which name the symptom and not the cause. The app schedules its
+  gallery load 50ms after the Gallery sub-tab is clicked
+  (`settings_features.js`), and that load replaces the container's contents
+  wholesale; the test injected its tiles straight after the click, so it
+  measured a container the app was about to empty.
+
+  Reproduced here on the CI runner's own viewport (the container is 316px
+  tall in both) by loading the machine: the app's write has to land between
+  the injection and the first poll, and that window is one browser round
+  trip. The test now watches the container with a MutationObserver and waits
+  for the app to go QUIET -- measured from the app's LAST write and not from
+  the click, so the wait does not depend on how long the app defers its
+  load, and any write inside the window resets the clock. It then asserts
+  that the tiles SURVIVED the measurement (a late write now fails loudly
+  instead of quietly measuring an empty container), that the grid overflows,
+  and that neither the card nor the page scrolls -- the two halves of what
+  the test's name claims, the second of which it had never checked at all:
+  the old test computed `gallery_scroll` and asserted nothing about it.
+
 ## v0.41.6 — the gallery push STORES the art, and says so (2026-10-21)
 
 The owner's ruling (2026-10-21): *"art should be stored"*, and *"decoder

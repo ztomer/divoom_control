@@ -153,25 +153,42 @@ daemon's own live devices were dropped from `discoveredDevices`, so
 `tests/test_e2e_startup_restore_keeps_live_state.py`, both red before;
 `0627eb5`).
 
-#### P1.16 — The gallery's internal-scroll test races the gallery's own render
-**Status:** OPEN
-**Why:** CI run 39542787961 (2026-10-21) went red on
-`tests/test_monthly_best_button_visible.py::test_gallery_scrolls_internally_not_whole_card`
--- "gallery never overflowed: scrollHeight 316, clientHeight 316" -- while the
-same suite is green on the dev machine. Measured 2026-10-21 in the real page:
-the test injects 100 tiles into `#gallery-container` and then waits for the
-container to overflow, and the app's own gallery render
-(`loadGallery` -> `renderGallery`, which replaces the container's contents
-wholesale) lands AFTER the injection -- measured: the container's children go
-100 -> 0 within half a second, and its text goes back to the "Fetching public
-community gallery..." placeholder, so the tiles are gone before the test
-measures them. The gallery's fetch never settles under the suite's mock
-(`fetch_gallery` answers `true`, and `JSON.parse(true)` throws), so the
-container's text cannot be used to tell "the first load" from "a later one".
-**Done when:** the injection lands on a container the app is not about to
-replace -- either the gallery stops re-rendering a container a test is
-measuring, or the test waits for the gallery to be quiet -- and the test is
-watched red first on the CI runner's own viewport.
+Landed after (2026-10-21): P1.14, the web UI's JavaScript has a syntax gate.
+The rule is the browser's: one classic script per file, parsed independently
+(the browser makes one Script Record per `<script src>`), and the payload of a
+template literal is NOT code -- the browser parses only the `${...}` holes.
+The node reader uses `vm.Script`, which IS the Script goal a `<script src>`
+uses; `node --check` runs too, but its goal flips to CommonJS (or, on node
+22+, to module), so it ACCEPTS a file the browser refuses (a top-level
+`return`, an `import`, a top-level `await`) -- a difference that is not
+academic, because such a file never loads and the app loses a whole tab
+without a word. The pure-Python reader (`tools/_js_lex.py`) is the fallback
+where node is absent, it runs on EVERY run so it is never dormant, and its
+scope is stated: it is a LEXER (unterminated literals, unbalanced brackets,
+unclosed `${}` holes) and it cannot see `const x = ;`. The gate is
+`tools/check_js_syntax.py`, named in `.gatesrc` and in CI's checks job; it
+covers every `.js` file under `divoom_gui/web_ui/`, not only the ones
+`index.html` names (two of them are loaded by the test suite instead). Both
+directions watched RED first, on a copy of the real tree with the historical
+defect planted: a stray backtick inside a template literal in
+`templates_settings.js` (`tests/test_js_syntax_gate.py`).
+Landed after (2026-10-21): P1.16, the gallery's internal-scroll test stopped
+racing the gallery's own render. The app schedules its gallery load 50ms
+after the Gallery sub-tab is clicked (`settings_features.js`), and that load
+replaces the container's contents wholesale; the test injected its tiles
+straight after the click, so it measured a container the app was about to
+empty, and CI run 39542787961 read "gallery never overflowed: scrollHeight
+316, clientHeight 316" -- an EMPTY container's numbers, which name the symptom
+and not the cause. Reproduced here on the CI runner's own viewport (the
+container is 316px tall in both) by loading the machine: the app's write has
+to land between the injection and the first poll, and that window is one
+browser round trip. The test now watches the container with a
+MutationObserver and waits for the app to go QUIET -- measured from the app's
+last write, not from the click, so the wait does not depend on how long the
+app defers -- and it asserts that the tiles SURVIVED the measurement, that
+the grid overflows, and that neither the card nor the page scrolls (the two
+halves of what the test's name claims, and the second of which it had never
+checked).
 
 #### P1.15 — The daemon's socket-lock test flakes on CI, and the reason is not known
 **Status:** OPEN
@@ -196,24 +213,6 @@ reading it out of the code -- and then either the test or the lock is fixed,
 and the fix is watched red first. A retry loop is NOT the answer: the lock is
 what makes two daemons safe, and a test that retries a lock it cannot get
 teaches nobody whether the lock works.
-
-#### P1.14 — The web UI's JavaScript has no syntax gate
-**Status:** OPEN
-**Why:** found on 2026-10-20 while landing P7.2. A stray backtick inside a
-template literal in `divoom_gui/web_ui/templates_settings.js` was a syntax
-error that broke the whole Settings tab -- `window.DivoomTemplates` never
-existed, so the tab rendered empty -- and NOTHING in this repo's gates
-noticed: the browser suites load the page, but a file the page loads and
-nothing calls is not exercised by any of them. The house gate parses the
-shell scripts (`bash -n`) and the Python, and has no parser for the ~40
-JavaScript files the app is made of, so a whole-file syntax error in the
-web UI is invisible until a person opens the app.
-**Done when:** a gate fails on a JavaScript syntax error in
-`divoom_gui/web_ui/` -- `node --check` where node exists, and a browser-free
-fallback that does not depend on node -- and it is watched RED on a file with
-a deliberate syntax error before it is trusted. It must cover the template
-literals: the failure mode that was actually hit is a stray backtick inside
-one, which a parser that only reads whole files may not catch.
 
 ### Phase 2 — daemon liveness and safety
 
