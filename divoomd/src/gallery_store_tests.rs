@@ -123,8 +123,8 @@ fn the_page_is_sent_in_the_apps_packets() {
 /// — the run died on the first real device with fewer items than a page.
 #[test]
 fn fewer_items_than_a_page_are_split_without_panicking() {
-    let items: Vec<ArtItem> = (0..9)
-        .map(|i| item(&format!("file {i}"), vec![vec![i as u8]]))
+    let items: Vec<ArtItem> = (0..9u8)
+        .map(|i| item(&format!("file {i}"), vec![vec![i]]))
         .collect();
     let (fitting, overflow) = split_for_page(&items);
     assert_eq!(fitting.len(), 9, "every item fits a page of twelve");
@@ -134,8 +134,8 @@ fn fewer_items_than_a_page_are_split_without_panicking() {
 /// More items than a page: the ones that do not fit are named, not dropped.
 #[test]
 fn the_items_that_do_not_fit_a_page_are_the_ones_left_over() {
-    let items: Vec<ArtItem> = (0..15)
-        .map(|i| item(&format!("file {i}"), vec![vec![i as u8]]))
+    let items: Vec<ArtItem> = (0..15u8)
+        .map(|i| item(&format!("file {i}"), vec![vec![i]]))
         .collect();
     let (fitting, overflow) = split_for_page(&items);
     assert_eq!(fitting.len(), 12, "a page holds twelve items");
