@@ -124,4 +124,17 @@ mod tests {
             "resized to device size"
         );
     }
+
+    /// E56: the gallery's magic-26 files are the ones the run used to count
+    /// as warnings. They must reach the device as a real animation.
+    #[test]
+    fn a_gallery_magic26_resolves_to_decodable_gif() {
+        let gif = resolve_to_gif(&raw("gallery_magic26_jack_skellington.bin"))
+            .expect("resolve the gallery's magic-26");
+        assert!(gif.starts_with(b"GIF"), "resolved output must be a GIF");
+        let frames = crate::image_proc::process_image_bytes(gif, 16, 100).expect("re-decode");
+        assert_eq!(frames.len(), 2, "both frames survive the GIF round-trip");
+        assert_eq!((frames[0].1, frames[0].2), (16, 16), "resized to the panel");
+        assert_eq!(frames[0].3, 500, "the frame's own display time survives");
+    }
 }

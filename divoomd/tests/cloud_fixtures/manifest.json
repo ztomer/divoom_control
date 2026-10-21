@@ -18,5 +18,17 @@
       32
     ],
     "dur": 100
+  },
+  "26": {
+    "file": "group1/M00/15/61/Ci0s8WrWj8SEVHM0AAAAAIvYTis8894568",
+    "bytes": 9260,
+    "n_frames": 2,
+    "size": [
+      64,
+      64
+    ],
+    "dur": 500,
+    "name": "Jack Skellington",
+    "note": "the monthly-best gallery's magic-26 container (classify 18, fetched 2026-10-21): a 4x4 grid of 16x16 tiles, the flag-0x0c palette form"
   }
 }

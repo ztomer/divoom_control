@@ -22,7 +22,7 @@
 //! `bits(n)` is `ceil(log2 n)` (0 for n <= 1): `gdivoom_image_bits_table`.
 
 /// `gdivoom_image_bits_table`: bits per index for a palette of `n`.
-const fn bits_for(n: usize) -> u32 {
+pub(super) const fn bits_for(n: usize) -> u32 {
     if n <= 1 {
         0
     } else {
@@ -192,14 +192,27 @@ pub fn decode_fix_128(rec: &[u8]) -> Option<(Vec<u8>, u32)> {
 }
 
 /// A magic-`26` container: `{26, frames, speed:u16 BE, rows, cols}` then
-/// per frame `len:u32 BE` + one record. Only the 128x128 (8x8 tile) shape
-/// is decoded here; the record's own time wins over the header's when set.
+/// per frame `len:u32 BE` + one record. The picture is a grid of 16x16
+/// tiles — `cols` across, `rows` down — so the container's own shape says
+/// how big the picture is. The record's own time wins over the header's
+/// when set.
+///
+/// The frames' FORMAT is the record's flag, and the app's own dispatcher
+/// routes them: the quadtree (`0x15`) is read here, the palette and raw
+/// forms by [`super::iframe::decode_iframe_record`]. A flag neither of them
+/// reads is a REFUSAL — the run then names the file rather than showing the
+/// wrong colours.
 pub fn decode_cloud_magic26(data: &[u8]) -> Option<(Vec<Vec<u8>>, u32, u32, u32)> {
-    if data.len() < 10 || data[0] != 26 || data[4] != 8 || data[5] != 8 {
+    if data.len() < 10 || data[0] != 26 {
         return None;
     }
     let total = usize::from(data[1]);
     let speed = u32::from(u16::from_be_bytes([data[2], data[3]]));
+    let rows = usize::from(data[4]);
+    let cols = usize::from(data[5]);
+    if rows == 0 || cols == 0 {
+        return None;
+    }
     let mut frames = Vec::new();
     let mut pos = 6;
     let mut dur = if speed >= 10 { speed } else { 100 };
@@ -211,7 +224,7 @@ pub fn decode_cloud_magic26(data: &[u8]) -> Option<(Vec<Vec<u8>>, u32, u32, u32)
             *data.get(pos + 3)?,
         ]) as usize;
         let rec = data.get(pos + 4..pos + 4 + len)?;
-        let (rgb, t) = decode_fix_128(rec)?;
+        let (rgb, t) = decode_magic26_record(rec, rows, cols)?;
         if t >= 10 {
             dur = t;
         }
@@ -221,7 +234,17 @@ pub fn decode_cloud_magic26(data: &[u8]) -> Option<(Vec<Vec<u8>>, u32, u32, u32)
     if frames.is_empty() {
         return None;
     }
-    Some((frames, 128, 128, dur))
+    let width = u32::try_from(cols.saturating_mul(16)).unwrap_or(u32::MAX);
+    let height = u32::try_from(rows.saturating_mul(16)).unwrap_or(u32::MAX);
+    Some((frames, width, height, dur))
+}
+
+/// Decode one magic-26 record, by the flag it carries.
+fn decode_magic26_record(rec: &[u8], rows: usize, cols: usize) -> Option<(Vec<u8>, u32)> {
+    match rec.get(5).copied()? & 0x7f {
+        0x15 => decode_fix_128(rec),
+        _ => super::iframe::decode_iframe_record(rec, rows, cols),
+    }
 }
 
 #[cfg(test)]

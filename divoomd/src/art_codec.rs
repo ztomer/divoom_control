@@ -6,6 +6,7 @@ use minilzo_rs::LZO;
 
 mod aes;
 mod fix;
+mod iframe;
 pub(crate) use aes::aes_cbc_decrypt;
 pub(crate) use fix::decode_cloud_magic26;
 // ── payload decoders (ported from divoom_lib/media_decoder.py) ────────────
