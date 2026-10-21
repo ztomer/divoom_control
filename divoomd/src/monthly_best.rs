@@ -1,339 +1,348 @@
-//! Monthly Best sync background service.
-//! Ports `divoom_lib/monthly_best_daemon.py`.
+//! The scheduled Monthly Best push.
+//!
+//! WHAT IT PUSHES: the cloud's "Recommend" gallery (classify 18) — what the
+//! owner calls "monthly best" — to the devices the APP'S SETTINGS register,
+//! over BLE.
+//!
+//! # The devices come from the settings, not from a second list
+//!
+//! The loop used to keep its own list (`hotchannel.json` → `targets`) and its
+//! own per-device gallery (`device_galleries`). That list was EMPTY: the loop
+//! was enabled, it was scheduled, and it fetched nothing and pushed nothing
+//! — for 36 days, with nothing anywhere saying so. Meanwhile the app's
+//! settings already knew the devices: `config.ini`'s `[gallery]` table is
+//! keyed by device address and holds the gallery that device wants.
+//!
+//! So the fact lives in ONE place. The loop reads the settings (see
+//! [`crate::settings_devices`]); `hotchannel.json` keeps only what is
+//! genuinely the LOOP's own — whether it runs and how often. A stale
+//! `hotchannel.json` that still carries the old keys is REPORTED and
+//! IGNORED: it must never override the settings.
+//!
+//! # The cadence is a day, because the content is
+//!
+//! The source content is refreshed almost daily — the owner says so, and the
+//! dates on the files themselves bear it out. The CATEGORY is called "monthly
+//! best" because that is the CLOUD's name for it, not because the content
+//! turns over monthly. A weekly push therefore leaves a device up to a week
+//! behind, so the interval is 86400 seconds.
+//!
+//! # A failure is loud
+//!
+//! A failed run is not a line on the daemon's stdout: it POSTs to the estate's
+//! own push endpoint, so it reaches the owner's phone (see
+//! [`crate::owner_alert`]). A device that cannot be resolved, a category that
+//! comes back empty, a connection that fails — each is a FAILURE of the run,
+//! never a quiet skip.
 
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-use std::collections::HashMap;
+use serde_json::Value;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
 
 use crate::daemon::Daemon;
-use crate::protocol::Request;
-use base64::Engine;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+/// The loop's own settings: whether it runs, and how often.
+///
+/// The devices it pushes to are NOT here — they are the app's settings
+/// (see [`crate::settings_devices`]). One home for the fact.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct HotchannelConfig {
+    /// Whether the scheduled loop runs at all.
     #[serde(default)]
     pub enabled: bool,
+    /// Seconds between runs.
     #[serde(default = "default_interval")]
     pub interval: u64,
-    #[serde(default = "default_classify")]
-    pub classify: i64,
-    #[serde(default)]
-    pub targets: Vec<String>,
-    #[serde(default)]
-    pub device_galleries: HashMap<String, Value>,
 }
 
+/// The default seconds between runs: a day.
+///
+/// WHY DAILY: the "monthly best" content is refreshed almost daily, so a
+/// weekly push leaves the device up to a week behind. The CATEGORY is called
+/// "monthly best" because that is the cloud's name for it, not because the
+/// content turns over monthly.
 const fn default_interval() -> u64 {
-    3600
-}
-const fn default_classify() -> i64 {
-    18
+    86_400
 }
 
+/// The keys `hotchannel.json` used to carry that no longer mean anything.
+///
+/// The devices used to be listed there, in a list nobody filled. The keys are
+/// still READ (a file written by an older build must not break the daemon),
+/// but they are IGNORED and REPORTED: a stale list must never override the
+/// app's settings.
+pub const LEGACY_KEYS: &[&str] = &["targets", "device_galleries", "classify"];
+
+/// What the loader found in `hotchannel.json`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LoadedHotchannel {
+    /// The loop's own settings.
+    pub config: HotchannelConfig,
+    /// The legacy keys the file still carries — reported, never used.
+    pub legacy_keys: Vec<String>,
+}
+
+/// Read the loop's own settings, and report the file's stale keys.
+///
+/// A missing or unreadable file is "the loop is off" — the same answer the
+/// default config gives — never a panic and never a silent "on".
 #[must_use]
-pub fn load_hotchannel_config() -> HotchannelConfig {
+pub fn load_hotchannel_config() -> LoadedHotchannel {
     let Some(mut path) = crate::cloud::config_dir() else {
-        return default_config();
+        return LoadedHotchannel::default();
     };
     path.push("hotchannel.json");
-    if !path.exists() {
-        return default_config();
-    }
     let Ok(content) = std::fs::read_to_string(&path) else {
-        return default_config();
+        return LoadedHotchannel::default();
     };
-    let mut cfg: HotchannelConfig = match serde_json::from_str(&content) {
-        Ok(c) => c,
-        Err(_) => return default_config(),
+    let Ok(raw) = serde_json::from_str::<Value>(&content) else {
+        return LoadedHotchannel::default();
     };
 
-    // Normalize values
-    cfg.interval = cfg.interval.clamp(60, 2_592_000); // 60s to 30 days
-    if cfg.classify <= 0 {
-        cfg.classify = 18;
+    let legacy_keys = raw
+        .as_object()
+        .map(|object| {
+            LEGACY_KEYS
+                .iter()
+                .filter(|key| object.contains_key(**key))
+                .map(|key| (*key).to_string())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let mut config: HotchannelConfig = serde_json::from_value(raw).unwrap_or_default();
+    if config.interval == 0 {
+        config.interval = default_interval();
     }
-    cfg
+    config.interval = config.interval.clamp(60, 2_592_000); // 60s to 30 days
+
+    LoadedHotchannel {
+        config,
+        legacy_keys,
+    }
 }
 
-fn default_config() -> HotchannelConfig {
-    HotchannelConfig {
-        enabled: false,
-        interval: 3600,
-        classify: 18,
-        targets: Vec::new(),
-        device_galleries: HashMap::new(),
+/// One device's outcome.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeviceOutcome {
+    /// The device address the push went to.
+    pub address: String,
+    /// The gallery classify that was fetched for it.
+    pub classify: i64,
+    /// How many files the category offered.
+    pub files: usize,
+    /// How many of them reached the device.
+    pub pushed: usize,
+    /// Why it failed, if it did.
+    pub error: Option<String>,
+}
+
+impl DeviceOutcome {
+    /// Whether the push to this device succeeded.
+    #[must_use]
+    pub const fn ok(&self) -> bool {
+        self.error.is_none()
     }
 }
 
+/// One cycle's outcome.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CycleOutcome {
+    /// What happened to each device.
+    pub devices: Vec<DeviceOutcome>,
+    /// Why the cycle failed, one line per reason. Empty means it worked.
+    pub failures: Vec<String>,
+}
+
+impl CycleOutcome {
+    /// Whether the cycle had no failures at all.
+    #[must_use]
+    pub const fn ok(&self) -> bool {
+        self.failures.is_empty()
+    }
+}
+
+/// Whether a cycle is due.
+///
+/// The daemon restarts often — the GUI owns it — and a restart must not
+/// push: the CADENCE is the point. So a run that happened less than one
+/// interval ago means the next one is not due yet, and the loop waits out
+/// the remainder instead of pushing again.
 #[must_use]
-pub fn extract_gif_from_magic_43(data: &[u8]) -> Option<Vec<u8>> {
-    if data.len() < 10 || data[0] != 43 {
-        return None;
+pub fn should_run_now(last_run_at: Option<u64>, now: u64, interval: u64) -> bool {
+    match last_run_at {
+        None => true,
+        Some(last) => now.saturating_sub(last) >= interval,
     }
-    let text_len = u32::from_le_bytes(data[6..10].try_into().ok()?) as usize;
-    let text_end = 10 + text_len;
-    if data.len() < text_end + 4 {
-        return None;
-    }
-    let gif_len = u32::from_le_bytes(data[text_end..text_end + 4].try_into().ok()?) as usize;
-    let gif_start = text_end + 4;
-    let gif_end = gif_start + gif_len;
-    if gif_end > data.len() {
-        return None;
-    }
-    let gif_data = &data[gif_start..gif_end];
-    if gif_data.starts_with(b"GIF89a") || gif_data.starts_with(b"GIF87a") {
-        return Some(gif_data.to_vec());
-    }
-    None
 }
 
+/// The scheduled loop: wake up, push to every device the settings register,
+/// report, sleep until the next run.
 pub async fn monthly_best_loop_task(daemon: Arc<Daemon>) {
     // Wait a brief moment after startup before starting
     sleep(Duration::from_secs(5)).await;
 
     loop {
-        let config = load_hotchannel_config();
-        if !config.enabled {
+        let loaded = load_hotchannel_config();
+        if !loaded.config.enabled {
             sleep(Duration::from_secs(30)).await;
             continue;
         }
 
-        let interval_secs = config.interval;
+        for key in &loaded.legacy_keys {
+            println!(
+                "[ Err ] hotchannel.json still carries '{key}' — IGNORED. The hot \
+                 channel's devices are the app's settings (config.ini [gallery]); \
+                 a stale list must not override them."
+            );
+        }
+
+        let interval_secs = loaded.config.interval;
+        let now = crate::civil_time::unix_seconds();
+        if !should_run_now(crate::owner_alert::last_run_at(), now, interval_secs) {
+            let last = crate::owner_alert::last_run_at().unwrap_or(now);
+            let since = now.saturating_sub(last);
+            let wait = interval_secs.saturating_sub(since);
+            println!(
+                "[ ==> ] The last monthly best push was {since}s ago; the next one is in {wait}s."
+            );
+            sleep(Duration::from_secs(wait)).await;
+            continue;
+        }
+
         println!("[ ==> ] Native Monthly Best Sync loop cycle started.");
 
-        for target in &config.targets {
-            let mut classify = config.classify;
-            if let Some(c_val) = config.device_galleries.get(target) {
-                if let Some(c) = c_val.as_i64() {
-                    classify = c;
-                }
-            }
-
-            println!("[ ==> ] Fetching gallery for target {target} (classify={classify})...");
-            // Limit to 5 items to match python daemon default limit
-            match crate::cloud::fetch_gallery(classify, 5, 1, 127).await {
-                Ok(resp_val) => {
-                    let file_list = resp_val.get("FileList").and_then(|v| v.as_array());
-                    if let Some(files) = file_list {
-                        if !files.is_empty() {
-                            println!(
-                                "[ Ok  ] Found {} files. Syncing to {}...",
-                                files.len(),
-                                target
-                            );
-                            if let Err(e) = sync_files_to_device(&daemon, target, files).await {
-                                eprintln!("[ Err ] Failed to sync to {target}: {e}");
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    eprintln!("[ Err ] Failed to fetch gallery for {target}: {e}");
-                }
-            }
-        }
+        let outcome = run_cycle(&daemon).await;
+        report_cycle(&outcome).await;
 
         println!("[ ==> ] Sleeping for {interval_secs} seconds until next monthly best cycle...");
         sleep(Duration::from_secs(interval_secs)).await;
     }
 }
 
-/// Fetch one gallery file's bytes, or say why not and answer `None`.
-async fn download(client: &reqwest::Client, file_id: &str, file_name: &str) -> Option<Vec<u8>> {
-    let dl_url = format!("https://fin.divoom-gz.com/{file_id}");
-    let resp = match client.get(&dl_url).send().await {
-        Ok(r) => r,
-        Err(e) => {
-            eprintln!("[ Wrn ] Failed to download {file_name}: {e}");
-            return None;
-        }
-    };
-    if resp.status() != 200 {
-        eprintln!(
-            "[ Wrn ] Download of {} failed with status {}",
-            file_name,
-            resp.status()
-        );
-        return None;
-    }
-    match resp.bytes().await {
-        Ok(b) => Some(b.to_vec()),
-        Err(e) => {
-            eprintln!("[ Wrn ] Failed to read bytes for {file_name}: {e}");
-            None
-        }
-    }
-}
-
-/// Resolve a gallery file to a displayable image and show it.
+/// The devices the loop pushes to, read from the app's settings, and the
+/// failures the settings themselves carry.
 ///
-/// `media::resolve_to_gif` handles GIF/PNG/JPG, magic-43, and the cloud/hot
-/// containers (magic 9/18/26 AES+LZO, 0xAA) by re-encoding them to an
-/// animated GIF the device can render. The only honest-error path is a truly
-/// unrecognized container, which would otherwise stick the device in its
-/// loading animation.
-async fn show(daemon: &Daemon, file_bytes: &[u8], file_name: &str) -> bool {
-    let Some(img) = crate::media::resolve_to_gif(file_bytes) else {
-        eprintln!(
-            "[ Wrn ] {} (magic {}) not decodable in native daemon; skipping (no raw-stream)",
-            file_name, file_bytes[0]
-        );
-        return false;
-    };
-    let req_show = Request {
-        command: "device_call".to_string(),
-        args: json!({
-            "method": "display.show_image",
-            "kwargs": {"size": 16},
-            "blobs": {
-                "0": base64::engine::general_purpose::STANDARD.encode(&img)
-            }
-        }),
-        token: None,
-    };
-    daemon
-        .dispatch(req_show)
-        .await
-        .get("success")
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false)
+/// Split out of [`run_cycle`] so the RESOLUTION — which devices, and what to
+/// say about a settings entry the loop cannot read — can be pinned by a test
+/// without a daemon, a radio or the cloud.
+#[must_use]
+pub fn resolve_targets() -> (Vec<crate::settings_devices::RegisteredDevice>, Vec<String>) {
+    let settings = crate::settings_devices::registered_devices();
+    let failures = settings
+        .broken
+        .iter()
+        .map(|(key, value)| {
+            format!(
+                "the app's settings carry a gallery entry the loop cannot resolve: {key} = {value}"
+            )
+        })
+        .collect();
+    (settings.devices, failures)
 }
 
-async fn sync_files_to_device(
-    daemon: &Daemon,
-    target: &str,
-    files: &[Value],
-) -> Result<(), String> {
-    // 1. Connect
-    let connect_args = target.strip_prefix("LAN:").map_or_else(
-        || {
-            json!({
-                "mac": target,
-                "use_ios_le_protocol": true
-            })
-        },
-        |ip| json!({ "lan_ip": ip }),
+/// Run one cycle: every device the settings register, in order.
+pub async fn run_cycle(daemon: &Daemon) -> CycleOutcome {
+    let (devices, mut failures) = resolve_targets();
+    let mut outcome = CycleOutcome::default();
+
+    if devices.is_empty() {
+        failures.push(
+            "the app's settings register no devices (config.ini's [gallery] table is empty) — \
+             the hot channel has nowhere to go"
+                .to_string(),
+        );
+        outcome.failures = failures;
+        return outcome;
+    }
+
+    println!(
+        "[ ==> ] {} device(s) from the app's settings: {}",
+        devices.len(),
+        devices
+            .iter()
+            .map(|d| d.address.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
     );
 
-    let req_connect = Request {
-        command: "connect".to_string(),
-        args: connect_args,
-        token: None,
-    };
-
-    let res = daemon.dispatch(req_connect).await;
-    if !res
-        .get("success")
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false)
-    {
-        let err = res
-            .get("error")
-            .and_then(|v| v.as_str())
-            .unwrap_or("unknown connection error");
-        return Err(format!("Connection to {target} failed: {err}"));
+    for device in &devices {
+        let device_outcome = crate::monthly_best_push::push_to_device(daemon, device).await;
+        if let Some(error) = &device_outcome.error {
+            println!("[ Err ] {}: {error}", device.address);
+        }
+        outcome.devices.push(device_outcome);
     }
 
-    // 2. Download and stream each file
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(15))
-        .user_agent("okhttp/4.12.0")
-        .build()
-        .map_err(|e| e.to_string())?;
-
-    for (idx, item) in files.iter().enumerate() {
-        let Some(file_id) = item.get("FileId").and_then(|v| v.as_str()) else {
-            continue;
-        };
-        let file_name = item
-            .get("FileName")
-            .and_then(|v| v.as_str())
-            .unwrap_or("unnamed");
-
-        println!(
-            "[ ==> ] Downloading item [{}/{}]: {} ({})...",
-            idx + 1,
-            files.len(),
-            file_name,
-            file_id
-        );
-        let Some(file_bytes) = download(&client, file_id, file_name).await else {
-            continue;
-        };
-
-        if file_bytes.len() < 4 {
-            continue;
-        }
-
-        let success = show(daemon, &file_bytes, file_name).await;
-
-        if success {
-            println!("[ Ok  ] Successfully pushed {file_name}");
-        } else {
-            eprintln!("[ Err ] Failed to push {file_name}");
-        }
-
-        if idx < files.len() - 1 {
-            sleep(Duration::from_secs(15)).await;
-        }
+    outcome.failures = failures;
+    for failure in &outcome.failures {
+        println!("[ Err ] {failure}");
     }
-
-    // 3. Disconnect
-    let req_disconnect = Request {
-        command: "disconnect".to_string(),
-        args: json!({}),
-        token: None,
-    };
-    daemon.dispatch(req_disconnect).await;
-    println!("[ ==> ] Sync completed for target {target}");
-
-    Ok(())
+    outcome
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::wire::WireNarrow as _;
-    use std::fs;
-    use tempfile::TempDir;
+/// Say what the cycle did, and — when it failed — get the failure to the
+/// owner's phone.
+///
+/// A failure that only exists in a log is a failure nobody hears, so a failed
+/// cycle POSTs to the estate's push endpoint. A cycle that succeeds after a
+/// failed one posts a quiet recovery: the estate's own pattern, so the owner
+/// learns the channel works again without a daily buzz.
+pub async fn report_cycle(outcome: &CycleOutcome) {
+    let previous = crate::owner_alert::last_outcome();
+    let detail = outcome
+        .failures
+        .iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .join("; ");
+    let _ = crate::owner_alert::record_outcome(if outcome.ok() { "ok" } else { "failed" }, &detail);
 
-    #[test]
-    fn test_extract_gif_from_magic_43() {
-        // magic byte 43 (0x2b) + text_len (4 bytes LE) + text content + gif_len (4 bytes LE) + GIF89a
-        let text_content = b"my metadata text content";
-        let gif_content = b"GIF89a_my_awesome_gif_data_here";
-        let mut data = vec![43u8, 0, 0, 0, 0, 0];
-        data.extend_from_slice(&(text_content.len().dword()).to_le_bytes());
-        data.extend_from_slice(text_content);
-        data.extend_from_slice(&(gif_content.len().dword()).to_le_bytes());
-        data.extend_from_slice(gif_content);
-
-        let extracted = extract_gif_from_magic_43(&data).unwrap();
-        assert_eq!(extracted, gif_content);
+    if outcome.ok() {
+        let pushed: usize = outcome.devices.iter().map(|d| d.pushed).sum();
+        let files: usize = outcome.devices.iter().map(|d| d.files).sum();
+        println!("[ Ok  ] Monthly Best cycle finished: {pushed} file(s) pushed to {} device(s) ({files} fetched).", outcome.devices.len());
+        if previous.as_deref() == Some("failed") {
+            let body = format!(
+                "The monthly best push works again: {} device(s), {pushed} file(s) pushed.",
+                outcome.devices.len()
+            );
+            notify(
+                "divoom: monthly best RECOVERED",
+                &body,
+                crate::owner_alert::PRIORITY_RECOVERY,
+            )
+            .await;
+        }
+        return;
     }
 
-    #[test]
-    fn test_load_hotchannel_config() {
-        let _lock = crate::cloud::TEST_MUTEX
-            .get_or_init(|| tokio::sync::Mutex::new(()))
-            .blocking_lock();
-        let temp = TempDir::new().unwrap();
-        std::env::set_var("HOME", temp.path());
+    let body = format!(
+        "The monthly best push FAILED.\n{}",
+        outcome.failures.join("\n")
+    );
+    println!(
+        "[ Err ] Monthly Best cycle FAILED: {}",
+        outcome.failures.join("; ")
+    );
+    notify(
+        "divoom: monthly best FAILED",
+        &body,
+        crate::owner_alert::PRIORITY_FAILURE,
+    )
+    .await;
+}
 
-        let conf_dir = temp.path().join(".config").join("divoom-control");
-        fs::create_dir_all(&conf_dir).unwrap();
-
-        let hc_json = r#"{"enabled": true, "interval": 120, "classify": 9, "targets": ["AA:BB:CC:DD:EE:FF"]}"#;
-        fs::write(conf_dir.join("hotchannel.json"), hc_json).unwrap();
-
-        let cfg = load_hotchannel_config();
-        assert!(cfg.enabled);
-        assert_eq!(cfg.interval, 120);
-        assert_eq!(cfg.classify, 9);
-        assert_eq!(cfg.targets, vec!["AA:BB:CC:DD:EE:FF"]);
+/// Send one alert, and say so when the channel itself is broken.
+///
+/// A broken channel is a failure of the alarm, not of the art: it is printed
+/// loudly, because the next thing the owner needs to know is that the phone is
+/// not being rung.
+async fn notify(title: &str, body: &str, priority: &str) {
+    match crate::owner_alert::notify_owner(title, body, priority).await {
+        Ok(()) => println!("[ Ok  ] Alert delivered: {title}"),
+        Err(e) => println!("[ Err ] THE ALERT ITSELF FAILED: {e}"),
     }
 }

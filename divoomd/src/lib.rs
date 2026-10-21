@@ -23,6 +23,7 @@ pub mod ble_fault;
 mod c7_positional_tests;
 #[cfg(feature = "ble")]
 pub mod central;
+pub mod civil_time;
 pub mod cli_args;
 pub mod cloud;
 mod cloud_category;
@@ -54,6 +55,7 @@ pub mod events;
 pub mod framing;
 pub mod hot_progress;
 pub mod hot_state;
+pub mod hotchannel_fetches;
 pub mod image_encode;
 pub mod image_fit;
 pub mod image_proc;
@@ -87,11 +89,15 @@ mod mock_tools_tests;
 pub mod mock_transport;
 pub mod models;
 pub mod monthly_best;
+pub mod monthly_best_push;
+#[cfg(test)]
+mod monthly_best_tests;
 #[cfg(target_os = "macos")]
 pub mod notification_db;
 #[cfg(target_os = "macos")]
 pub mod notification_routing;
 pub mod now_playing;
+pub mod owner_alert;
 pub mod packets;
 #[cfg(test)]
 mod packets_tests;
@@ -110,6 +116,7 @@ mod reply_code_sweep_tests;
 mod reply_shape_scan_tests;
 pub mod response;
 pub mod secret_store;
+pub mod settings_devices;
 pub mod socket_bind;
 pub mod socket_owner;
 pub mod socket_server;

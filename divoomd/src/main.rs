@@ -198,19 +198,23 @@ async fn main() {
 
     let daemon = start_daemon();
 
-    // Monthly-best background sync is OPT-IN (parity: in Python it is a SEPARATE
-    // daemon, not the main one). Without this gate the main daemon would push
-    // gallery animations to every configured device on each startup. Enable with
-    // DIVOOMD_MONTHLY_BEST=1.
-    if matches!(
-        std::env::var("DIVOOMD_MONTHLY_BEST").as_deref(),
-        Ok("1" | "true" | "yes")
-    ) {
-        eprintln!("divoomd: monthly-best background sync enabled");
-        tokio::spawn(divoomd::monthly_best::monthly_best_loop_task(
-            daemon.clone(),
-        ));
-    }
+    // Monthly-best background sync. Its switch is the app's own Auto-Sync
+    // (`hotchannel.json`'s `enabled`), the same flag the Routines card shows
+    // and writes — ONE switch for one fact.
+    //
+    // It used to be an ENVIRONMENT variable (`DIVOOMD_MONTHLY_BEST=1`) that
+    // nothing in this repo ever set, so the loop had never run in
+    // production: a second switch for a fact the app already had, and the
+    // reason the push was "enabled" on paper and dead in fact. The devices
+    // are the app's settings now (`config.ini`'s `[gallery]` table) and the
+    // cadence is the interval in the same file, so the file decides both
+    // whether to run and where to run.
+    //
+    // A daemon restart does not push: the loop waits out the remainder of
+    // the interval (`monthly_best::should_run_now`).
+    tokio::spawn(divoomd::monthly_best::monthly_best_loop_task(
+        daemon.clone(),
+    ));
 
     let (max_connections, idle_timeout) = serving_limits(&daemon);
 
