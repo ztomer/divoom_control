@@ -200,7 +200,10 @@ window.connectDevice = function(name, address) {
                 const sidebarSelect = document.getElementById("sidebar-device-select");
                 if (sidebarSelect) sidebarSelect.value = address;
                 if (window.updateSyncTargetList) window.updateSyncTargetList();
-                if (window.updateChannelButtonsVisibility) window.updateChannelButtonsVisibility(name);
+                // The channel cards follow the PANEL the daemon has described (P3.4),
+                // not the name: the daemon says whether this panel has a radio
+                // and whether it has the VJ channel.
+                if (window.updateChannelButtonsVisibility) window.updateChannelButtonsVisibility(address);
             } else {
                 window.setConnectionState({ mode: "inactive", mac: address });
                 // BLE Hardening P1: show the daemon's actionable reason (asleep /
@@ -218,7 +221,7 @@ window.connectDevice = function(name, address) {
                 window._updateDeviceLabel(null);
                 window.updateSidebarSpeakerIcon(false);
                 if (window.updateSyncTargetList) window.updateSyncTargetList();
-                if (window.updateChannelButtonsVisibility) window.updateChannelButtonsVisibility("None");
+                if (window.updateChannelButtonsVisibility) window.updateChannelButtonsVisibility(null);
             }
         });
     } else {

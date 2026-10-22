@@ -356,18 +356,23 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // ── 7. DYNAMIC VJ EFFECTS TOGGLE & GALLERY CACHE SELECTOR (R15 §1+§7: `.channel-card` → `.tab-btn`) ──
-    window.updateChannelButtonsVisibility = function(name) {
-        const n = (name || "").toLowerCase();
+    // The panel's abilities are the daemon's (P3.4), not a guess from the
+    // device's name: the vendor app offers the FM screen to the Timebox and
+    // the Tiivoo 2, and the VJ channel to the panels that get its common
+    // light screen. This used to read the NAME and match "tivoo"/"ditoo" for
+    // FM and "timebox"/"evo" for VJ -- offering a radio to panels that have
+    // none, and hiding the VJ channel from the Ditoo that has it.
+    window.updateChannelButtonsVisibility = function(mac) {
+        const feature = (key) => (typeof window.panelHasFeature === "function")
+            ? window.panelHasFeature(mac, key) : null;
 
-        // R24 #5: FM Radio card — only FM-capable models (Tivoo / Ditoo).
         const fmCard = document.getElementById("fm-radio-card");
-        if (fmCard) fmCard.style.display = (n.includes("tivoo") || n.includes("ditoo")) ? "" : "none";
+        if (fmCard) fmCard.style.display = feature("radio") === true ? "" : "none";
 
         const vjCard = document.querySelector('.tab-btn[data-channel="vj"]');
         if (!vjCard) return;
 
-        // Timebox Evo supports VJ effects
-        const supportsVJ = n.includes("timebox") || n.includes("evo");
+        const supportsVJ = feature("vj") === true;
         if (supportsVJ) {
             vjCard.style.display = "";
         } else {

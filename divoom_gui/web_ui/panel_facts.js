@@ -45,6 +45,10 @@
             dev.width = Number.isInteger(p.width) ? p.width : null;
             dev.height = Number.isInteger(p.height) ? p.height : null;
             dev.features = p.features || null;
+            // Which product it is and how big (P3.4): the daemon's table, not
+            // a second one here.
+            dev.chassis = p.chassis || null;
+            dev.screens = Array.isArray(p.screens) ? p.screens : null;
             // Why the daemon will not make it a wall slot, or null (P6.1).
             dev.wallRefusal = typeof p.wall_refusal === "string" ? p.wall_refusal : null;
         });
@@ -59,6 +63,13 @@
             const r = parse(raw);
             if (ticket !== factsRequest || !r || !r.ok) return;
             window.applyPanelFacts(r.panels);
+            // The channel cards follow the panel's abilities (P3.4), and the
+            // abilities arrive with the facts -- so the cards are told again
+            // when they do, not only when a panel connects.
+            if (window.updateChannelButtonsVisibility) {
+                const mac = (typeof window._activeDeviceMac === "function") ? window._activeDeviceMac() : null;
+                window.updateChannelButtonsVisibility(mac);
+            }
             if (window.SpatialStage && window.SpatialStage.refresh) window.SpatialStage.refresh();
         }, () => {});
     };
@@ -71,8 +82,21 @@
 
     // true / false from the vendor app's per-model switch; null when unknown.
     window.panelHasSpeaker = function (mac) {
+        return window.panelHasFeature(mac, "speaker");
+    };
+
+    // The same, for any feature the daemon reports: the vendor app's own
+    // per-model switch. null means the daemon has not described the panel.
+    window.panelHasFeature = function (mac, key) {
         const dev = record(mac);
-        return dev && dev.features && typeof dev.features.speaker === "boolean" ? dev.features.speaker : null;
+        return dev && dev.features && typeof dev.features[key] === "boolean" ? dev.features[key] : null;
+    };
+
+    // The screens the app offers this panel (P3.4): the vendor app's own home
+    // list for its model. null when the daemon has not described the panel.
+    window.panelHasScreen = function (mac, screen) {
+        const dev = record(mac);
+        return dev && Array.isArray(dev.screens) ? dev.screens.includes(screen) : null;
     };
 
     // ── The wall ─────────────────────────────────────────────────────────
@@ -98,34 +122,24 @@
     }
     const wallLevels = () => ({ brightness: wallLevel("brightness"), volume: wallLevel("volume") });
 
-    // The bench's drawing of the panel's chassis, keyed by the daemon's MODEL
-    // (the vendor app's DeviceTypeEnum), never by the name. Millimetres are
-    // presentation only; the diode count is the daemon's.
-    const CHASSIS = {
-        ditoo:     { w_mm: 90,  h_mm: 114, screen_mm: 64 },
-        timoo:     { w_mm: 82.5, h_mm: 90, screen_mm: 60 },
-        tivoo_max: { w_mm: 184, h_mm: 163, screen_mm: 110 },
-        pixoo:     { w_mm: 200, h_mm: 200, screen_mm: 158 },
-        pixoo64:   { w_mm: 261, h_mm: 261, screen_mm: 210 },
-        panel:     { w_mm: 120, h_mm: 120, screen_mm: 100 },
-    };
-    function chassisOf(model) {
-        const m = String(model || "");
-        if (/^(DITOO|Ditoo)/.test(m)) return "ditoo";
-        if (m === "TIMOO") return "timoo";
-        if (m === "TivooMax" || m === "TivoomMax32") return "tivoo_max";
-        if (/^Pixoo64/.test(m)) return "pixoo64";
-        if (m === "Pixoo" || m === "PIXOO_MAX") return "pixoo";
-        return "panel";
-    }
+    // The bench's drawing of the panel's chassis: the daemon's table (P3.4),
+    // which says which product the panel is and how big it is. This file used
+    // to keep its own table and decide the family from the model with its own
+    // regexes, so the bench drew the GUI's idea of a panel while the daemon
+    // said something else about the same panel.
+    //
+    // The generic chassis is the fallback for a panel the daemon has not
+    // described -- the same row the daemon's table starts with
+    // (divoomd/src/panel_model.rs, FAMILIES). It is the only number kept
+    // here, and `tests/test_panel_model_parity.py` holds it to the daemon's.
+    const GENERIC_CHASSIS = { w_mm: 120, h_mm: 120, screen_mm: 100 };
     window.panelEnclosure = function (dev) {
-        const form = chassisOf(dev && dev.model);
+        const c = (dev && dev.chassis) || null;
         const px = (dev && Number.isInteger(dev.width) && dev.width > 0) ? dev.width : null;
-        return Object.assign({ form, name: (dev && dev.model) || "Panel", pixels: px,
+        return Object.assign({ form: (c && c.family) || "panel", name: (dev && dev.model) || "Panel", pixels: px,
                                pw: px || window.PANEL_FALLBACK_PIXELS, ph: px || window.PANEL_FALLBACK_PIXELS },
-                             CHASSIS[form]);
+                              c ? { w_mm: c.w_mm, h_mm: c.h_mm, screen_mm: c.screen_mm } : GENERIC_CHASSIS);
     };
-
     // ── How bright and loud it is ────────────────────────────────────────
     const UNKNOWN = "–";
     const els = () => ({

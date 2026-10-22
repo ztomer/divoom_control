@@ -26,8 +26,13 @@ WALL = "MatrixWall"
 
 #: `device_status` fields that say what a panel is (`divoomd/src/panel_model.rs`),
 #: and why it cannot be a wall slot when it cannot (`wall_refusal`, P6.1).
-PANEL_FIELDS = ("mac", "connected", "selected", "model", "width", "height", "model_source", "features",
-                "wall_refusal")
+#:
+#: `chassis` (which product it is and how big), `features` (the vendor app's
+#: per-model switches) and `screens` (what the app offers that model) are the
+#: panel's description: the GUI reads them and derives nothing of its own
+#: (P3.4).
+PANEL_FIELDS = ("mac", "connected", "selected", "model", "width", "height", "model_source",
+                "chassis", "features", "screens", "wall_refusal")
 
 
 class PanelsMixin:
