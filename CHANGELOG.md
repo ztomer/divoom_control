@@ -4,6 +4,40 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## The channel cards follow the panel IN HAND (2026-10-22)
+
+- **P3.6 -- the bar describes the panel it writes to.** The daemon knows
+  what each panel IS (P3.4), and the web UI reads that description -- but it
+  read it for the panel that had just CONNECTED, and never for the panel the
+  user then SELECTED. So selecting a second panel left the FIRST panel's
+  abilities on screen: the FM radio card stayed offered to a panel with no
+  radio, and the VJ channel to a panel that has none. The panels differ, and
+  the bar has to follow the one in hand.
+
+  The SELECTION decides the cards now
+  (`divoom_gui/web_ui/spatial_stage.js`): it is the one thing that says which
+  panel the channel bar writes to. A CONNECT REPLY is not a selection -- a
+  late reply for a panel the user has moved on from used to put that panel's
+  abilities back on screen (`divoom_gui/web_ui/connection_events.js`).
+
+  **Unknown is not "has it".** A panel the daemon has not described is
+  offered neither card, and the daemon's description arriving brings them
+  back (`divoom_gui/web_ui/panel_facts.js`). And the auto-switch off the VJ
+  channel happens only when the daemon SAYS the panel has no VJ channel:
+  moving the user off a channel is a WRITE to the panel, and a panel the
+  daemon cannot name is not a panel without VJ
+  (`divoom_gui/web_ui/channels_grids.js`).
+
+  **Watched red first.** `tests/test_panel_description_one_place.py` is red
+  with the connect-time rule put back, and
+  `tests/test_e2e_channel_cards_follow_the_panel.py` drives the REAL web UI
+  with a two-panel fleet: the radio card and the VJ channel are offered to
+  the panel that has them, taken away from the panel that has neither, and
+  they come back when the user selects the first panel again.
+
+  Tests: **2139** passed, **182** skipped (`python3 -m pytest`, `tests/`),
+  and the new browser test is green under `--run-browser` (2 passed).
+
 ## The daemon knows what each panel IS, and the clients read that (2026-10-22)
 
 - **P3.4 -- one description of a panel, and one place that keeps it.**

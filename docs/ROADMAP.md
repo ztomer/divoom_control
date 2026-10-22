@@ -287,6 +287,13 @@ P3.5, the daemon REFUSES to tune a panel it knows has no radio, with the
 `unsupported` code, and `get_capabilities` carries the whole description
 (`divoomd/src/device_call/basic.rs`, `divoomd/src/mcp_tools.rs`).
 
+Landed (2026-10-22): P3.6, the channel cards follow the panel IN HAND -- the
+selection decides them, and a connect reply does not
+(`divoom_gui/web_ui/spatial_stage.js`,
+`divoom_gui/web_ui/connection_events.js`,
+`divoom_gui/web_ui/channels_grids.js`,
+`tests/test_e2e_channel_cards_follow_the_panel.py`).
+
 **The radio was the wrong fact, and it reached the screen.** The table said
 the app decides no FM per model -- "FmModeEnum only allows FM as an alarm
 sound" -- and that belief had the web UI offering the FM card to every panel

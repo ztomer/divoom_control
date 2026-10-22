@@ -200,10 +200,17 @@ window.connectDevice = function(name, address) {
                 const sidebarSelect = document.getElementById("sidebar-device-select");
                 if (sidebarSelect) sidebarSelect.value = address;
                 if (window.updateSyncTargetList) window.updateSyncTargetList();
-                // The channel cards follow the PANEL the daemon has described (P3.4),
-                // not the name: the daemon says whether this panel has a radio
-                // and whether it has the VJ channel.
-                if (window.updateChannelButtonsVisibility) window.updateChannelButtonsVisibility(address);
+                // The channel cards follow the PANEL IN HAND (P3.6), and the
+                // panel in hand is the one the channel bar writes to -- not
+                // the panel that happened to answer this connect. A late
+                // reply for a panel the user has moved on from used to put
+                // that panel's abilities back on screen: a radio offered to a
+                // panel with no radio. The daemon says whether the panel in
+                // hand has a radio and whether it has the VJ channel.
+                if (window.updateChannelButtonsVisibility) {
+                    window.updateChannelButtonsVisibility(
+                        (typeof window._activeDeviceMac === "function") ? window._activeDeviceMac() : null);
+                }
             } else {
                 window.setConnectionState({ mode: "inactive", mac: address });
                 // BLE Hardening P1: show the daemon's actionable reason (asleep /
@@ -221,7 +228,14 @@ window.connectDevice = function(name, address) {
                 window._updateDeviceLabel(null);
                 window.updateSidebarSpeakerIcon(false);
                 if (window.updateSyncTargetList) window.updateSyncTargetList();
-                if (window.updateChannelButtonsVisibility) window.updateChannelButtonsVisibility(null);
+                // A connect that failed says nothing about what the panel IS:
+                // the bar describes the panel in hand (its abilities), and the
+                // connection dot is where the link is shown (P7.2). So the
+                // cards are recomputed for the panel in hand, not taken away.
+                if (window.updateChannelButtonsVisibility) {
+                    window.updateChannelButtonsVisibility(
+                        (typeof window._activeDeviceMac === "function") ? window._activeDeviceMac() : null);
+                }
             }
         });
     } else {

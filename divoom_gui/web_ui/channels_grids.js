@@ -362,6 +362,12 @@ document.addEventListener("DOMContentLoaded", () => {
     // light screen. This used to read the NAME and match "tivoo"/"ditoo" for
     // FM and "timebox"/"evo" for VJ -- offering a radio to panels that have
     // none, and hiding the VJ channel from the Ditoo that has it.
+    //
+    // `mac` is the panel IN HAND -- the one the channel bar writes to. Every
+    // caller passes that panel (P3.6): the selection, the daemon's
+    // description of it. A connect reply is NOT a selection, so it does not
+    // decide this: a late reply for a panel the user has moved on from used
+    // to put that panel's abilities back on screen.
     window.updateChannelButtonsVisibility = function(mac) {
         const feature = (key) => (typeof window.panelHasFeature === "function")
             ? window.panelHasFeature(mac, key) : null;
@@ -377,8 +383,14 @@ document.addEventListener("DOMContentLoaded", () => {
             vjCard.style.display = "";
         } else {
             vjCard.style.display = "none";
-            // Auto-switch to clock mode if active channel was VJ
-            if (window.DivoomState.activeChannel === "vj") {
+            // Auto-switch to clock mode if active channel was VJ -- but only
+            // when the daemon SAYS the panel has no VJ channel. A panel the
+            // daemon has not described is not a panel without VJ (the daemon
+            // claims nothing about a panel it cannot name), and moving the
+            // user off a channel on a guess is a write to the panel: the
+            // clock card's click sends `switch_channel`. Unknown is not "no",
+            // here as everywhere else.
+            if (feature("vj") === false && window.DivoomState.activeChannel === "vj") {
                 const clockCard = document.querySelector('.tab-btn[data-channel="clock"]');
                 if (clockCard) clockCard.click();
             }

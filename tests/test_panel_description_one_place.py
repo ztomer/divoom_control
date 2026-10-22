@@ -57,15 +57,45 @@ def test_the_web_ui_does_not_decide_a_panel_ability_from_its_name():
     assert 'feature("vj")' in src, "the VJ card does not read the daemon's vj"
 
 
-def test_the_channel_cards_follow_the_panel_not_the_name():
-    """The caller hands over the PANEL, so the cards can read its facts."""
-    src = _read(CONNECTION)
-    assert "updateChannelButtonsVisibility(name)" not in src, (
+def test_the_channel_cards_follow_the_panel_in_hand():
+    """The bar describes the panel IN HAND -- the one it writes to.
+
+    The cards used to be decided at CONNECT time, so the panel the user
+    selected later kept the PREVIOUS panel's abilities: the radio card stayed
+    offered to a panel with no radio, and the VJ channel to a panel that has
+    none. The selection is the one thing that decides them, and a connect
+    reply is not a selection -- a late reply for a panel the user has moved
+    on from used to put that panel's abilities back on screen.
+    """
+    stage = _read(WEB / "spatial_stage.js")
+    assert "updateChannelButtonsVisibility(addr)" in stage, (
+        "the selection does not tell the channel cards which panel they are about"
+    )
+    conn = _read(CONNECTION)
+    assert "updateChannelButtonsVisibility(address)" not in conn, (
+        "a connect reply still decides the channel cards for the panel that answered"
+    )
+    assert "updateChannelButtonsVisibility(name)" not in conn, (
         "the channel cards are still told a device NAME"
     )
-    assert "updateChannelButtonsVisibility(address)" in src, (
-        "the channel cards are not told which panel they are about"
+    facts = _read(PANEL_FACTS)
+    assert "updateChannelButtonsVisibility(mac)" in facts, (
+        "the daemon's description does not reach the channel cards"
     )
+
+
+def test_no_call_site_decides_the_channel_cards_for_a_name():
+    """The cards are read from the daemon's description of a panel, so no call
+    site may hand them a device NAME to decide from."""
+    import re
+
+    for path in sorted(WEB.glob("*.js")):
+        src = path.read_text(encoding="utf-8")
+        for m in re.finditer(r"updateChannelButtonsVisibility\(\s*([A-Za-z_][\w.]*)\s*\)", src):
+            arg = m.group(1)
+            assert arg not in ("name", "dev.name"), (
+                f"{path.name} decides the channel cards from {arg!r}"
+            )
 
 
 def test_the_bridge_carries_the_whole_description():

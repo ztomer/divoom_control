@@ -328,6 +328,19 @@
         if (typeof window.syncChannelControlsToDisplay === "function") {
             window.syncChannelControlsToDisplay(addr);
         }
+        // The channel cards follow the PANEL IN HAND (P3.6). The daemon
+        // describes each panel -- the vendor app's own per-model switches --
+        // so the radio card and the VJ channel belong to the panel that has
+        // them. They used to be decided when a panel CONNECTED, so selecting
+        // a second panel left the FIRST panel's abilities on screen: a radio
+        // offered to a panel with no radio, and the VJ channel offered to a
+        // panel that has none. The panels differ, and the bar has to follow
+        // the one in hand. Last, so a panel that cannot show the channel it
+        // was on is moved off it rather than left showing a channel it does
+        // not have.
+        if (typeof window.updateChannelButtonsVisibility === "function") {
+            window.updateChannelButtonsVisibility(addr);
+        }
     }
 
     function selectDevice(addr, dev) {
