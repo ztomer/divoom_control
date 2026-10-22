@@ -162,16 +162,16 @@ uses; `node --check` runs too, but its goal flips to CommonJS (or, on node
 22+, to module), so it ACCEPTS a file the browser refuses (a top-level
 `return`, an `import`, a top-level `await`) -- a difference that is not
 academic, because such a file never loads and the app loses a whole tab
-without a word. The pure-Python reader (`tools/_js_lex.py`) is the fallback
+without a word. The pure-Python reader is the fallback
 where node is absent, it runs on EVERY run so it is never dormant, and its
 scope is stated: it is a LEXER (unterminated literals, unbalanced brackets,
-unclosed `${}` holes) and it cannot see `const x = ;`. The gate is
-`tools/check_js_syntax.py`, named in `.gatesrc` and in CI's checks job; it
+unclosed `${}` holes) and it cannot see `const x = ;`. The gate was adopted
+into gates_of_heck (`GOH_JS_SYNTAX=on` in `.gatesrc`) and CI's checks job; it
 covers every `.js` file under `divoom_gui/web_ui/`, not only the ones
 `index.html` names (two of them are loaded by the test suite instead). Both
 directions watched RED first, on a copy of the real tree with the historical
 defect planted: a stray backtick inside a template literal in
-`templates_settings.js` (`tests/test_js_syntax_gate.py`).
+`templates_settings.js`.
 Landed after (2026-10-21): P1.16, the gallery's internal-scroll test stopped
 racing the gallery's own render. The app schedules its gallery load 50ms
 after the Gallery sub-tab is clicked (`settings_features.js`), and that load

@@ -79,26 +79,14 @@ jobs:
       # finds the goh checkout above and degrades to plain text if absent.
       - name: Scripts parse, lint, and reference live modules
         run: python3 tools/check_scripts.py
-      # P1.14: the web UI's ~43 JavaScript files had no syntax gate at all. A
-      # stray backtick inside a template literal in templates_settings.js
-      # broke the whole Settings tab and NOTHING noticed: the browser suites
-      # load the page, but a file the page loads and nothing calls is not
-      # exercised by any of them.
-      #
-      # The rule is the browser's: one classic script per file, parsed
-      # independently (the browser makes one Script Record per <script src>),
-      # and the payload of a template literal is NOT code -- the browser
-      # parses only the ${...} holes. The node reader uses vm.Script, which
-      # is the Script goal a <script src> uses; node --check runs too, but
-      # its goal flips to CommonJS (or, on node 22+, to module), so it
-      # ACCEPTS a file the browser refuses. The pure-Python reader in
-      # tools/_js_lex.py is the fallback where node is absent, and it runs on
-      # every run so it is never dormant.
-      #
-      # node is present on the GitHub runners; the fallback is what makes
-      # this step mean something on a machine without it.
-      - name: The web UI's JavaScript parses (P1.14)
-        run: python3 tools/check_js_syntax.py
+      # P1.14's parse gate moved INTO the shared gate (2026-10-22): the
+      # structural step above carries goh's `js-syntax` for this repo, opted
+      # in and floored by this repo's own `.gatesrc` (GOH_JS_SYNTAX /
+      # GOH_JS_SYNTAX_MIN_FILES), judged by the browser's goal per file
+      # (.js classic script, .mjs module, .cjs CommonJS) with templates
+      # substituted first, node the engine on the runners and here. It runs
+      # through the SAME command, config and goh checkout locally and in CI,
+      # so neither half can drift.
       - name: Tests live in tests/, Rust test modules are cfg-gated (Phase 1)
         run: python3 tools/check_test_placement.py
       # check_examples resolves the facade's REAL classes (`has_member` on

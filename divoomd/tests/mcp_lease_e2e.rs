@@ -83,6 +83,37 @@ async fn sent(d: &Daemon) -> usize {
     }
 }
 
+async fn assert_mcp_discovery(mcp: &mut Mcp) {
+    let (bad, cap) = mcp.call("get_capabilities", json!({ "mac": MAC })).await;
+    assert!(!bad, "get_capabilities answers: {cap}");
+    assert_eq!(cap["model"], json!("Pixoo64Wifi"), "{cap}");
+    assert_eq!(cap["width"], json!(64), "{cap}");
+    assert_eq!(cap["height"], json!(64), "{cap}");
+    assert_eq!(cap["model_source"], json!("name"), "{cap}");
+    assert_eq!(cap["chassis"]["family"], json!("pixoo64"), "{cap}");
+    assert_eq!(cap["features"]["wifi"], json!(true), "{cap}");
+    assert_eq!(cap["features"]["speaker"], json!(false), "{cap}");
+    assert_eq!(cap["features"]["radio"], json!(false), "{cap}");
+    let screens = cap["screens"].as_array().expect("the app's home list");
+    assert!(!screens.iter().any(|s| s == "fm_radio"), "{screens:?}");
+    let (bad, listed) = mcp.call("list_screens", json!({})).await;
+    assert!(!bad, "list_screens answers: {listed}");
+    let listed = listed["screens"]
+        .as_array()
+        .and_then(|s| {
+            s.iter()
+                .find(|e| e["mac"].as_str().is_some_and(|m| m == MAC))
+        })
+        .expect("the mock panel is listed");
+    assert_eq!(listed["connected"], json!(true), "{listed}");
+    assert_eq!(listed["width"], json!(64), "{listed}");
+    assert_eq!(
+        listed["chassis"]["family"],
+        json!("pixoo64"),
+        "each screen carries its kind too: {listed}"
+    );
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn an_agent_leases_draws_and_a_lapsed_lease_hands_the_panel_back() {
     let path = std::env::temp_dir().join(format!("divoomd_mcp_lease_{}.sock", std::process::id()));
@@ -122,6 +153,8 @@ async fn an_agent_leases_draws_and_a_lapsed_lease_hands_the_panel_back() {
         stdout: BufReader::new(child.stdout.take().expect("stdout")).lines(),
         id: 0,
     };
+
+    assert_mcp_discovery(&mut mcp).await;
 
     let (bad, lease) = mcp
         .call(

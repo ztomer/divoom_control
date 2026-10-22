@@ -299,6 +299,49 @@ underneath it.
   RED before the fix -- with CI's own message -- and green after it, under
   the same load.
 
+## The MCP surface proves it describes what the daemon knows (2026-10-22)
+
+- **P4 at the surface.** The daemon describes each panel (P3.4), and the MCP
+  forwards the description (P4.1) -- but the only test pinning
+  `get_capabilities` pinned the REQUEST it sends, not the ANSWER the agent
+  reads, so a dispatch that dropped the fields would have stayed green: the
+  daemon knowing and the surface showing nothing. The lease e2e's agent now
+  asks FIRST, before it leases anything: `get_capabilities` and
+  `list_screens` through the real `divoomd mcp` entry point, and the answer
+  must carry the description the daemon owns -- model, width/height and how
+  they were decided (`model_source`), the chassis, the features the vendor
+  app enables for the model (the Pixoo 64: wifi and radio absent, no
+  speaker), and the screens the app offers it -- and every `list_screens`
+  row its link state, size and kind (`divoomd/tests/mcp_lease_e2e.rs`).
+
+  **Watched red first:** with the tool's dispatch answering `ok` and nothing
+  else, the e2e goes red at the model assertion naming what it lost; green
+  restored, the lease-lapse exit still green end to end.
+
+## The web UI's JavaScript parse gate moves into the shared gate (2026-10-22)
+
+- **One fact in one place.** The parse gate P1.14 landed here on 2026-10-21
+  as a checker of this repo's own; the house gate now carries the same rule,
+  and this repo opts in and calibrates its own floor (`.gatesrc`:
+  `GOH_JS_SYNTAX=on`, `GOH_JS_SYNTAX_MIN_FILES=38` against a read of 43 --
+  every `.js` file under `divoom_gui/web_ui/`, 8 of them templates judged by
+  their substituted form, nine tenths the house rule). The engine is goh's --
+  node the primary, JavaScriptCore the fallback on a machine without it --
+  and the goal is decided by the file's own name: `.js` a classic script,
+  `.mjs` a module, `.cjs` CommonJS, the browser's decision for a `<script
+  src>`. The repo's checker, its lexical fallback and its test are deleted
+  rather than kept as a second copy of the same fact, and so are their steps:
+  the parse gate is one line in CI's workflow and out of `.gatesrc`'s step
+  list, so it runs through the ONE structural command locally and in CI's
+  no-emoji job.
+
+  **Both directions re-proved RED on the shared gate:** a top-level
+  `return;` appended to a tracked `.js` file is refused naming the file at
+  its line (exit 1); with the floor raised to 44 the subject step refuses
+  the scan naming the key, the declared floor and the 43 files read. The
+  real tree is green, and `check_ci_local_parity` stays green with the step
+  removed.
+
 ## v0.41.6 — the gallery push STORES the art, and says so (2026-10-21)
 
 The owner's ruling (2026-10-21): *"art should be stored"*, and *"decoder
