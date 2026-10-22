@@ -4,6 +4,67 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## v0.41.7 — the daemon knows what each panel IS, and the clients read that (2026-10-22)
+
+The release where the PANEL is described in one place -- by the daemon -- and
+every client reads that description instead of keeping its own answer. The
+web UI, the CLI and the MCP each used to decide for themselves what kind of
+panel a device was, and one of those answers was wrong in a way that reached
+the screen: the radio card was offered to every panel whose NAME contained
+"tivoo" or "ditoo", which is fifteen rows of the app's own per-model table
+the wrong way round.
+
+- **The daemon describes the panel, and refuses what it knows is absent.**
+  The chassis (which product it is and how big), the vendor app's own
+  per-model switch for the radio, and the app's own home list for the model
+  -- what the panel CAN SHOW. The derivation RUNS the app's `setDeviceMode`
+  and PARSES the app's `DiscoverModel.s()`, so it is the app's statement and
+  not a transcription. A panel the daemon knows has no radio is refused with
+  the `unsupported` code; a panel it cannot NAME is not refused, because
+  unknown is not "no radio". Full account: "The daemon knows what each panel
+  IS, and the clients read that" below.
+
+- **The channel cards follow the panel IN HAND.** The cards were decided at
+  CONNECT time, so selecting a second panel left the FIRST panel's abilities
+  on screen. The selection decides them now, a connect reply does not, and a
+  panel the daemon has not described is offered neither card -- the cards
+  come back when its description arrives.
+
+- **The daemon's startup lock is released EXPLICITLY.** A `flock` belongs to
+  the open file description, so a child that inherited the descriptor held
+  the lock past the parent's `close()`, and the next daemon was told
+  "another divoomd is starting up" by a daemon that was not running. The
+  failure was reproduced four times in 320 runs and then made DETERMINISTIC.
+
+- **The web UI's JavaScript parses, or the gate says why.** ~40 `.js` files
+  the app is made of had no parser: a stray backtick inside a template
+  literal broke the whole Settings tab, and nothing noticed. The rule is the
+  browser's -- the FILE, parsed as one classic script -- and the pure-Python
+  fallback runs on EVERY run, because a fallback that is dormant until the
+  day it is needed is a fallback nobody has ever seen work.
+
+- **The gallery's scroll test stopped racing the gallery's own render.**
+  The test waited for the container to be STILL, and stillness is satisfied
+  by "the app has not written YET": the app schedules its gallery load 50ms
+  after the click, a timer fires when the MAIN THREAD is free -- 450ms later
+  on a loaded runner -- so the container had never been written, the test
+  read it as quiet, injected, and the app's load landed underneath the
+  measurement. The wait is now for TWO things: the app's OWN write, and only
+  then for quiet. **This fix was in no tag until this one**: it sat on
+  `main` and shipped to nobody, which is what the estate's E75 item was
+  about. It is in this release.
+
+**What could not be verified from this side.** The panel's own read-back
+query does not answer on this hardware (every one timed out, while other
+queries on the same panels do answer), and there is no screen readback -- so
+the gallery's store is reported as the device's acknowledgement of the save,
+not as a confirmation. The radio and the VJ channel are read from the app's
+own per-model switches, which is the app's statement and not the panel's
+answer.
+
+Tests: **2139** passed, **182** skipped (`python3 -m pytest`, `tests/`), and
+the browser suites are green under `--run-browser`.
+
 ## The channel cards follow the panel IN HAND (2026-10-22)
 
 - **P3.6 -- the bar describes the panel it writes to.** The daemon knows
