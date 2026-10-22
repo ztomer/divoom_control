@@ -21,17 +21,18 @@
 //!   the alarm and sleep sound lists only for them. Two independent per-model
 //!   statements agree, so this is the vendor's statement about the radio --
 //!   NOT a guess from the sound list, which is what the table used to say.
-//! `MicEnum` is NOT one of them: it reads like "the panel has a microphone"
-//! and it is not -- the switch is on for the plain Pixoo, a picture frame
-//! with no microphone, and off for the PixelBag -- and its only consumer is
-//! gated on the TiVi UI architecture as well. A switch whose consumers do
-//! not say what the key claims is not a fact about the panel.
 //! * `vj` -- the panel gets the app's COMMON light screen
 //!   (`LightCommonMainFragment`), whose config list offers the VJ channel
 //!   (`LightConfigFragment`). The mini Timebox and the 64x64 picture frame
 //!   get other screens and no VJ.
 //! * `clock_style` -- `ClockModeEnum`: which family of clock faces the app
 //!   offers.
+//!
+//! `MicEnum` is NOT one of them: it reads like "the panel has a microphone"
+//! and it is not -- the switch is on for the plain `Pixoo`, a picture frame
+//! with no microphone, and off for the `PixelBag` -- and its only consumer is
+//! gated on the `TiVi` UI architecture as well. A switch whose consumers do
+//! not say what the key claims is not a fact about the panel.
 //!
 //! `SCREENS` is the app's own home list per `DiscoverFunEnum`: the surfaces
 //! it offers for a model ("what it can show"). It is parsed out of
