@@ -43,10 +43,11 @@ pub const SCREENS: &[(&str, &str)] = &[
     ("DivoomFlowToo", "aid_sleep design ai alarm tomato stopwatch countdown scoreboard voice power_on_off noise fill_game mixer music weather"),
 ];
 
-/// The screens the app offers for an APK model name, or `None` for a name the
-/// app does not have. The list is the app's, so a model with no home list of
-/// its own (the app has no branch for `ESportDiscover`) gets an empty one
-/// rather than a guess.
+/// The screens the app offers for an APK model name.
+///
+/// `None` for a name the app does not have. The list is the app's, so a model
+/// with no home list of its own (the app has no branch for `ESportDiscover`)
+/// gets an empty one rather than a guess.
 #[must_use]
 pub fn screens_of(model: &str) -> Option<&'static str> {
     let (_, _, _, discover, _) = FEATURES.iter().find(|(m, ..)| *m == model)?;
