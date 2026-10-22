@@ -271,30 +271,40 @@ Landed (2026-10-17): P3.1, `device_status` carrying each panel's model and resol
 P3.2, a stable `code` on every device failure, branched on by the Settings card (`divoomd/src/error_code.rs`);
 P3.3, weather drawn by us as a `render_widget` frame and pushed like every other widget, the firmware's clock face no longer selected (`divoomd/src/live_jobs/weather_frame.rs`).
 
-#### P3.4 — the panel's description is the daemon's, and the clients read it
-**Status:** OPEN
-**Why:** the daemon knew each panel's model and size, and three clients kept
-their OWN answers to "what kind of panel is this": the web UI decided the
-chassis family from the model with its own regexes and a table of its own, the
-web UI decided the FM-radio and VJ abilities from the DEVICE NAME, and the CLI
-kept a per-model capability table whose FM rows were wrong for fifteen models.
-The name-based one reached the screen: the FM card was offered to every panel
-whose name contained "tivoo" or "ditoo", and the vendor app offers the radio to
-the Timebox and the Tiivoo 2 and to no other panel -- the opposite.
-**Done when:** the daemon's `device_status` carries the chassis, the app's
-per-model switches (including the radio and the microphone) and the app's home
-list for the model; the web UI carries no per-model derivation of its own; the
-CLI has no capability table, and the daemon refuses to tune a panel it knows
-has no radio.
+Landed (2026-10-22): P3.4, the panel's DESCRIPTION is the daemon's and the
+clients read it -- the chassis (which product it is and how big), the vendor
+app's per-model switches for the radio and the microphone, and the app's own
+home list for the model, which is what the panel CAN SHOW
+(`divoomd/src/panel_features.rs`, `divoomd/src/panel_screens.rs`,
+`divoomd/src/panel_model.rs`, derived by `tools/derive_panel_features.py`,
+which now parses the app's `DiscoverModel.s()` home list as well as running
+its `setDeviceMode`); the web UI's chassis table and its name-based FM and VJ
+rules are gone (`divoom_gui/web_ui/panel_facts.js`,
+`divoom_gui/web_ui/channels_grids.js`); the CLI's per-model capability table
+is the retired library's copy again, held to the daemon's by the parity test,
+and the CLI's verbs read the daemon (`divoom_lib/cli_device_verbs.py`);
+P3.5, the daemon REFUSES to tune a panel it knows has no radio, with the
+`unsupported` code, and `get_capabilities` carries the whole description
+(`divoomd/src/device_call/basic.rs`, `divoomd/src/mcp_tools.rs`).
 
-#### P3.5 — the MCP says what the daemon says
-**Status:** OPEN
-**Why:** `get_capabilities` returned the daemon's description, but its own
-description of the description was wrong ("There is no FM-radio flag: the
-vendor app does not decide FM per model"), and it did not carry the chassis
-or the screens.
-**Done when:** the tool's text matches the daemon's table, and the whole
-description is what it returns.
+**The radio was the wrong fact, and it reached the screen.** The table said
+the app decides no FM per model -- "FmModeEnum only allows FM as an alarm
+sound" -- and that belief had the web UI offering the FM card to every panel
+whose NAME contained "tivoo" or "ditoo". The app decides it twice over: it
+offers the FM home screen to exactly the models whose `FmModeEnum` is
+`SupportFm` (the Timebox and the Tiivoo 2), and it keeps the FM entry in the
+alarm and sleep sound lists for exactly those two. Fifteen rows of the
+retired table were the wrong way round, and the CLI's radio gate let the
+tuning through.
+
+**What is NOT claimed.** The app's home list is the app's UI, not the
+protocol: a model the app has no branch for (the Divoom D-base) gets an
+EMPTY list, which is not the same as a model that can show nothing, so the
+daemon refuses a panel on a definite statement (a switch) and never on an
+absent screen. The daemon's chassis table is the products' published sizes,
+which no switch in the app states; the millimetres are a fact about the
+product, and the web UI keeps only the generic row for a panel the daemon has
+not described.
 
 ### Phase 4 — MCP as a display surface
 
@@ -312,6 +322,17 @@ P4.4, `push_animation` playing every frame with its own duration through one mul
 P4.5, text, live jobs, scoreboard, timer and countdown as MCP tools in the one catalog, every integer range stated once (`divoomd/src/arg_bounds.rs`);
 P4.6, screen leases: `lease_acquire`/`lease_renew`/`lease_release` with a mandatory bounded TTL, the live widget paused under a lease and repainted from its newest frame when the lease ends or lapses, `show_image` pushes conflated latest-wins (`divoomd/src/lease.rs`; the Phase 4 exit is `divoomd/tests/mcp_lease_e2e.rs`);
 P4.7, `notify`: text shown under a screen lease whose TTL is the notification's bounded duration (`arg_bounds::NOTIFY_DURATION_MS`), so the panel comes back when the lease lapses with nothing waiting (`divoomd/tests/notify_tool.rs`).
+
+**The exit, re-checked (2026-10-22):** green against the real entry point --
+`divoomd/tests/mcp_lease_e2e.rs` launches the real `divoomd mcp` binary as an
+MCP client's config does, against a real daemon on a unix socket with a mock
+64x64 panel running a live widget: the agent leases the screen, plays a
+full-resolution two-frame image on it, a second caller is refused, and the
+agent stops renewing -- as a crashed agent would -- and the panel goes back to
+its widget. **The hardware half is still owed:** the four panels on the bench
+are all 16x16, so a REAL 64x64 panel has never drawn a full-resolution
+multi-frame image through this path. The mock is a 64x64 panel in every way
+the daemon can see; the glass is the owner's eyes.
 
 ### Phase 5 — the GUI models each panel, not "the" panel
 

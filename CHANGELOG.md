@@ -4,6 +4,74 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## The daemon knows what each panel IS, and the clients read that (2026-10-22)
+
+- **P3.4 -- one description of a panel, and one place that keeps it.**
+  The daemon knew each panel's model and its resolution. Three clients kept
+  their OWN answers to "what kind of panel is this", and one of them was
+  wrong in a way that reached the screen.
+
+  The web UI decided the chassis family from the model with its own regexes
+  and a table of its own (`panel_facts.js`), so the bench drew the GUI's idea
+  of a panel while the daemon said something else about the same panel. The
+  web UI decided the FM-radio and VJ abilities from the DEVICE NAME
+  (`channels_grids.js`: `name.includes("tivoo") || name.includes("ditoo")` for
+  the radio, `"timebox" || "evo"` for VJ). The CLI kept a per-model capability
+  table of its own (`divoom_lib/models/capabilities.py`) and three verbs read
+  it.
+
+  **The radio was the wrong fact.** The table said the app decides no FM per
+  model -- "its `FmModeEnum` only allows FM as an alarm sound" -- and that
+  belief had the FM card offered to every panel whose name contained "tivoo"
+  or "ditoo". The app decides it TWICE over: it offers the FM home screen
+  (`HomeFmRadio`, `DiscoverModel.s()`) to exactly the models whose
+  `FmModeEnum` is `SupportFm` -- `TimeBoxDiscover` (the Timebox) and
+  `TivooLcdDiscover` (the Tiivoo 2) -- and to no other; and it keeps the FM
+  entry in the alarm and sleep sound lists (`AlarmAddFragment:95`,
+  `SleepMainFragment:108`, `WifiAlarmEditFragment:235`) for exactly those two.
+  Fifteen rows of the retired table were the wrong way round.
+
+  The daemon's description now carries the rest of what a panel is:
+  the chassis (which product it is and how big it is), the app's per-model
+  switches for the radio and the microphone, and the app's own home list for
+  the model -- what the panel CAN SHOW. The derivation RUNS the app's
+  `setDeviceMode` for the radio and the microphone and PARSES the app's
+  `DiscoverModel.s()` home list (`tools/derive_panel_features.py`), so it is
+  the app's statement and not a transcription.
+
+  **The daemon refuses to tune a panel it knows has no radio**, with the
+  `unsupported` code (`divoomd/src/device_call/basic.rs`). A panel the daemon
+  cannot NAME is not refused: unknown is not "no radio".
+
+- **The clients read it.** The web UI's chassis table and its name-based FM
+  and VJ rules are gone (`panel_facts.js`, `channels_grids.js`,
+  `connection_events.js`): the channel cards are told which PANEL they are
+  about, and the abilities come from the daemon's description. The one number
+  the web UI keeps is the generic chassis, for a panel the daemon has not
+  described, and `tests/test_panel_model_parity.py` holds it to the daemon's
+  generic row.
+
+  The CLI has no capability table any more: `divoom-control capabilities`
+  prints the daemon's description of the panel, and the two gates the table
+  fed could not fire (`has_alarm` and `has_weather` were true of every row)
+  are gone rather than moved -- a gate that cannot fail is not a gate. The
+  retired table stays, held to the daemon's row by row by the parity test,
+  because the archived `examples/` suite is its oracle.
+
+- **The MCP says what the daemon says.** `get_capabilities` carries the
+  whole description -- model, size, chassis, features, screens -- and its own
+  description of it no longer claims the app decides no FM per model
+  (`divoomd/src/mcp_tools.rs`, `docs/MCP_SERVER.md`).
+
+- **Watched red first.** `tests/test_panel_description_one_place.py` was red
+  with the old name-based rule put back (the FM card matching "tivoo" again);
+  `divoomd/tests/panel_model_status.rs` refuses a Ditoo and tunes a Tiivoo 2;
+  `tests/test_cli_device_verbs.py` shows the real CLI handing the radio over
+  and the daemon refusing it with `unsupported`; the parity test's
+  re-derivation half went red on a hand edit of one Rust row, and the
+  retired table's radio, microphone and alarm columns went red on the fifteen
+  wrong rows.
+
 ## The daemon's startup lock is released EXPLICITLY, and the reason it outlived the process is named (2026-10-21)
 
 - **P1.15 -- the lock the daemon takes now means "I am giving it up", not
