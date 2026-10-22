@@ -34,7 +34,7 @@ RUST = REPO / "divoomd" / "src" / "panel_features.rs"
 SCREENS_RUST = REPO / "divoomd" / "src" / "panel_screens.rs"
 PIXELS = REPO / "divoomd" / "src" / "panel_model.rs"
 GUI = REPO / "divoom_gui" / "web_ui" / "panel_facts.js"
-FLAG_KEYS = ("speaker", "sd_card", "temp_sensor", "wifi", "radio", "mic", "vj")
+FLAG_KEYS = ("speaker", "sd_card", "temp_sensor", "wifi", "radio", "vj")
 
 # The rows are matched with the whitespace normalised out: `cargo fmt` wraps
 # the long ones across lines, and a gate that cried wolf over formatting
@@ -110,10 +110,12 @@ def test_the_rust_table_was_read():
 def test_divoom_lib_is_the_daemons_table():
     """The retired library's copy of the per-model facts, held to the daemon's.
 
-    Four of them now: the SD card, the radio, the microphone and the alarm.
-    The last three were wrong here before 2026-10-22, and the radio was the
-    one that reached the screen -- the web UI showed the FM card to every
-    panel whose NAME contained "tivoo" or "ditoo".
+    Three of them now: the SD card, the radio and the alarm. The last two
+    were wrong here before 2026-10-22, and the radio was the one that reached
+    the screen -- the web UI showed the FM card to every panel whose NAME
+    contained "tivoo" or "ditoo". The microphone is NOT among them: the
+    app's `MicEnum` is on for the plain Pixoo, a picture frame with no
+    microphone, so the daemon does not claim a microphone either.
     """
     rows = _rust_features()
     wrong = {
@@ -126,12 +128,6 @@ def test_divoom_lib_is_the_daemons_table():
         m: (c.has_fm, rows[m]["radio"])
         for m, c in DEVICE_CAPABILITIES.items()
         if m in rows and c.has_fm != rows[m]["radio"]
-    }
-    assert not wrong, f"model: (divoom_lib, daemon/APK) -> {wrong}"
-    wrong = {
-        m: (c.has_mic, rows[m]["mic"])
-        for m, c in DEVICE_CAPABILITIES.items()
-        if m in rows and c.has_mic != rows[m]["mic"]
     }
     assert not wrong, f"model: (divoom_lib, daemon/APK) -> {wrong}"
     # The alarm is not a switch in the daemon's table but a screen in the

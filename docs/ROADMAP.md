@@ -273,7 +273,7 @@ P3.3, weather drawn by us as a `render_widget` frame and pushed like every other
 
 Landed (2026-10-22): P3.4, the panel's DESCRIPTION is the daemon's and the
 clients read it -- the chassis (which product it is and how big), the vendor
-app's per-model switches for the radio and the microphone, and the app's own
+app's per-model switch for the radio, and the app's own
 home list for the model, which is what the panel CAN SHOW
 (`divoomd/src/panel_features.rs`, `divoomd/src/panel_screens.rs`,
 `divoomd/src/panel_model.rs`, derived by `tools/derive_panel_features.py`,
@@ -301,7 +301,10 @@ tuning through.
 protocol: a model the app has no branch for (the Divoom D-base) gets an
 EMPTY list, which is not the same as a model that can show nothing, so the
 daemon refuses a panel on a definite statement (a switch) and never on an
-absent screen. The daemon's chassis table is the products' published sizes,
+absent screen. The app's `MicEnum` is not claimed either: it is ON for the
+plain Pixoo, a picture frame with no microphone, so a switch whose consumers
+do not say what the key claims is not a fact about the panel. The daemon's
+chassis table is the products' published sizes,
 which no switch in the app states; the millimetres are a fact about the
 product, and the web UI keeps only the generic row for a panel the daemon has
 not described.

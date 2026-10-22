@@ -70,7 +70,7 @@ pub fn catalog() -> Value {
             &json!({"type":"object","properties":{"file":{"type":"string"},"data":{"type":"string"},"resize":resize,"size":IMAGE_SIZE.schema()},"oneOf":[{"required":["file"]},{"required":["data"]}]})),
         tool("play_sound", "Beep the device (best-effort; some firmware no-ops).",
             &json!({"type":"object","properties":{"duration_ms":SOUND_MS.schema()},"required":["duration_ms"]})),
-        tool("get_capabilities", "Describe a panel: link state, model, width/height in pixels (how it was decided: model_source), the chassis (which product it is and how big it is), the features the vendor app enables for that model (speaker, sd_card, temp_sensor, wifi, radio, mic, vj, clock_style), and the screens the app offers that model (null for an unrecognised model).",
+        tool("get_capabilities", "Describe a panel: link state, model, width/height in pixels (how it was decided: model_source), the chassis (which product it is and how big it is), the features the vendor app enables for that model (speaker, sd_card, temp_sensor, wifi, radio, vj, clock_style), and the screens the app offers that model (null for an unrecognised model).",
             &json!({"type":"object","properties":{},"additionalProperties":false})),
         tool("get_device_state", "Read the device's current volume, brightness, channel, orientation, mirror. A field the daemon could not read is null, and `errors` names it with the daemon's reason and code -- a null is never the only thing you know.",
             &json!({"type":"object","properties":{},"additionalProperties":false})),

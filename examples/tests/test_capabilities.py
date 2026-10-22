@@ -52,15 +52,21 @@ def test_pixoo_is_most_limited():
 
 
 def test_tivoo_max_has_all_features():
-    """Tivoo Max is a 16×16 retro TV with FM, SD, scoreboard, mic, orientation, mirror.
+    """Tivoo Max is a 16×16 retro TV with SD, scoreboard, mic, orientation, mirror.
 
     It was pinned at 32×32 here until 2026-10-17 (P3.1). The vendor app draws
     it at 16: `setDeviceMode` leaves TivooMax at `DevicePixel16`
     (references/apk/.../DeviceFunction.java), and `getDeviceDimensions` in the
-    GUI already said 16. A pinned value that is wrong is part of the defect."""
+    GUI already said 16. A pinned value that is wrong is part of the defect.
+
+    It had FM here too, until 2026-10-22 (P3.4), and that was the same kind of
+    wrong: the app offers the FM home screen to EXACTLY the models whose
+    `FmModeEnum` is `SupportFm` -- the Timebox and the Tiivoo 2 -- and the
+    Tivoo Max is neither. The claim reached the screen: the web UI offered the
+    radio card to every panel whose name contained "tivoo"."""
     t = DEVICE_CAPABILITIES["TivooMax"]
     assert t.panel_resolution == 16
-    assert t.has_fm is True
+    assert t.has_fm is False
     assert t.has_sd is True
     assert t.has_scoreboard is True
     assert t.has_mic is True
@@ -69,20 +75,28 @@ def test_tivoo_max_has_all_features():
 
 
 def test_ditoo_is_16x16_with_fm_sd_mic():
-    """Ditoo is a 16×16 cube with FM, SD, mic."""
+    """Ditoo is a 16×16 cube with SD and a mic.
+
+    It had FM here too, until 2026-10-22 (P3.4): the app offers the FM home
+    screen to the Timebox and the Tiivoo 2 and to no other panel, and the
+    Ditoo is neither. The web UI was the worse half of that -- it offered the
+    radio card to every Ditoo, by NAME."""
     d = DEVICE_CAPABILITIES["DITOO"]
     assert d.panel_resolution == 16
-    assert d.has_fm is True
+    assert d.has_fm is False
     assert d.has_sd is True
     assert d.has_mic is True
 
 
 def test_timoo_is_16x16_with_fm_sd_mic():
-    """Timoo is a 16×16 clock with FM, SD, mic (was pinned at 32; the APK's
-    `setDeviceMode` leaves TIMOO at `DevicePixel16` -- see P3.1)."""
+    """Timoo is a 16×16 clock with SD and a mic (was pinned at 32; the APK's
+    `setDeviceMode` leaves TIMOO at `DevicePixel16` -- see P3.1).
+
+    No FM, since 2026-10-22 (P3.4): the app offers the FM home screen to the
+    Timebox and the Tiivoo 2 and to no other panel."""
     t = DEVICE_CAPABILITIES["TIMOO"]
     assert t.panel_resolution == 16
-    assert t.has_fm is True
+    assert t.has_fm is False
     assert t.has_sd is True
     assert t.has_mic is True
 
@@ -115,7 +129,7 @@ def test_panel_resolution_is_per_panel_not_wall():
 def test_capabilities_for_explicit_type():
     c = capabilities_for("TivooMax")
     assert c.panel_resolution == 16  # the APK's size (P3.1), not the old 32
-    assert c.has_fm is True
+    assert c.has_fm is False  # the app offers the radio to two models (P3.4)
 
 
 def test_capabilities_for_unknown_type_returns_baseline():
@@ -241,7 +255,7 @@ def test_divoom_capabilities_uses_explicit_device_type():
     from divoom_legacy import Divoom
     d = Divoom(mac="AA:BB:CC:DD:EE:FF", device_type="TivooMax")
     assert d.capabilities.panel_resolution == 16  # the APK's size (P3.1)
-    assert d.capabilities.has_fm is True
+    assert d.capabilities.has_fm is False  # the app's own radio rows (P3.4)
 
 
 def test_divoom_capabilities_uses_registry(monkeypatch, tmp_path: Path):
@@ -255,7 +269,7 @@ def test_divoom_capabilities_uses_registry(monkeypatch, tmp_path: Path):
     monkeypatch.setattr("divoom_lib.models.capabilities.REGISTRY_PATH", reg_path)
     d = Divoom(mac="11-75-58-3f-fd-aa")  # user's Ditoo
     assert d.capabilities.panel_resolution == 16
-    assert d.capabilities.has_fm is True
+    assert d.capabilities.has_fm is False  # the app's own radio rows (P3.4)
 
 
 def test_divoom_capabilities_uses_manufacturer_data():
@@ -268,7 +282,7 @@ def test_divoom_capabilities_uses_manufacturer_data():
     try:
         d = Divoom(mac="AA:BB:CC:DD:EE:FF", advertisement_data={0x0D00: b"\x42\x01\x02"})
         assert d.capabilities.panel_resolution == 16  # TivooMax (P3.1)
-        assert d.capabilities.has_fm is True
+        assert d.capabilities.has_fm is False  # the app's own radio rows (P3.4)
     finally:
         del caps_mod.ADVERTISED_FINGERPRINTS[(0x0D00, (0x42,))]
 

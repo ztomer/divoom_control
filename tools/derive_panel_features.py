@@ -75,22 +75,22 @@ DISCOVER_SOURCE = (REPO / "references" / "apk" / "decompiled_src" / "sources" / 
 #                which substitutes another sound when it is off. Two
 #                independent per-model statements agree, so this is the
 #                vendor's statement about the radio, not about a sound list.
-#   mic          MicEnum.SupportMic: the app offers the microphone with the
-#                panel. Its consumer is the TiVi light settings
-#                (LightSettingsFragment:522), and the app pairs it with the
-#                `...MicDiscover` home variants (`PixooAlarmMicDiscover`
-#                against `PixooAlarmNoMicDiscover`), so the switch says the
-#                panel has the microphone and not merely that a screen exists.
-#
-# Deliberately NOT reported: AlarmEnum has no consumer of its own -- the
-# alarm screen is decided by the home list, which the SCREENS table carries.
+
+# Deliberately NOT reported: `MicEnum.SupportMic`. It reads like "the panel
+# has a microphone" and it is not: the switch is ON for the plain Pixoo -- a
+# picture frame with no microphone -- and OFF for the PixelBag, and its only
+# consumer (the TiVi light settings, LightSettingsFragment:522) is
+# additionally gated on the TiVi UI architecture. A switch whose consumers do
+# not say what the key claims is not a fact about the panel, and this table's
+# rule is that only those are reported. `AlarmEnum` is not reported either:
+# the alarm SCREEN is decided by the home list, and the home list is the
+# SCREENS table.
 FLAGS = (
     ("speaker", "MusicEnum", "SupportMusic"),
     ("sd_card", "SdEnum", "SupportSd"),
     ("temp_sensor", "TempSensorEnum", "TempSensor"),
     ("wifi", "WifiBlueArchEnum", "WifiArchMode"),
     ("radio", "FmModeEnum", "SupportFm"),
-    ("mic", "MicEnum", "SupportMic"),
 )
 PIXELS = {"DevicePixel16": 16, "DevicePixel32": 32, "DevicePixel64": 64,
           "DevicePixel128": 128, "DevicePixel256": 256}

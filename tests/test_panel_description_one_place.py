@@ -88,11 +88,12 @@ def test_the_python_table_is_the_daemons_and_not_a_second_answer():
     """The retired library's table is held to the daemon's, row by row.
 
     `tests/test_panel_features_parity.py` does the comparison; this is the
-    floor: the columns that were wrong (the radio, the microphone, the alarm)
-    must still be there to be compared.
+    floor: the columns that were wrong (the radio, the alarm) must still be
+    there to be compared. The microphone is NOT among them -- the app decides
+    no such thing, so the daemon claims none either.
     """
     from divoom_lib.models.capabilities import DEVICE_CAPABILITIES
 
     assert DEVICE_CAPABILITIES, "the retired table is empty"
-    for field in ("has_fm", "has_mic", "has_alarm", "has_sd"):
+    for field in ("has_fm", "has_alarm", "has_sd"):
         assert hasattr(DEVICE_CAPABILITIES["DITOO"], field), field

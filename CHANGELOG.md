@@ -33,11 +33,13 @@ shipped milestone (per the project planning docs).
 
   The daemon's description now carries the rest of what a panel is:
   the chassis (which product it is and how big it is), the app's per-model
-  switches for the radio and the microphone, and the app's own home list for
-  the model -- what the panel CAN SHOW. The derivation RUNS the app's
-  `setDeviceMode` for the radio and the microphone and PARSES the app's
-  `DiscoverModel.s()` home list (`tools/derive_panel_features.py`), so it is
-  the app's statement and not a transcription.
+  switches for the radio, and the app's own home list for the model -- what
+  the panel CAN SHOW. The derivation RUNS the app's `setDeviceMode` for the
+  radio and PARSES the app's `DiscoverModel.s()` home list
+  (`tools/derive_panel_features.py`), so it is the app's statement and not a
+  transcription. The app's `MicEnum` is NOT one of the switches: it is on for
+  the plain Pixoo, a picture frame with no microphone, so the daemon claims no
+  microphone either.
 
   **The daemon refuses to tune a panel it knows has no radio**, with the
   `unsupported` code (`divoomd/src/device_call/basic.rs`). A panel the daemon
@@ -69,8 +71,10 @@ shipped milestone (per the project planning docs).
   `tests/test_cli_device_verbs.py` shows the real CLI handing the radio over
   and the daemon refusing it with `unsupported`; the parity test's
   re-derivation half went red on a hand edit of one Rust row, and the
-  retired table's radio, microphone and alarm columns went red on the fifteen
-  wrong rows.
+  retired table's radio and alarm columns went red on the wrong rows, and the
+  archived `examples/` suite -- the retired library's oracle -- said the same
+  about the Tivoo Max, the Ditoo and the Timoo, so its spec was corrected
+  with the evidence.
 
 ## The daemon's startup lock is released EXPLICITLY, and the reason it outlived the process is named (2026-10-21)
 

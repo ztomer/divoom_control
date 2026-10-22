@@ -2,9 +2,10 @@
 """
 Tune the device's FM radio to a specific frequency.
 
-Only devices with FM hardware (Tivoo / Tivoo Max / Timoo / Ditoo) work.
-Pixoo returns an error because it has no FM tuner. The capabilities
-table flags this; we check it before issuing the command.
+Only the panels the vendor app gives a radio work: the Timebox and the
+Tiivoo 2 (P3.4 -- the app's `FmModeEnum` is on for exactly those two, and it
+offers them the FM home screen). Every other panel has no tuner, and the
+capabilities table says so; we check it before issuing the command.
 
 Usage:
     python -m examples.set_radio 87.5

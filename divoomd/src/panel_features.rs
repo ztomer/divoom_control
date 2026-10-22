@@ -21,8 +21,11 @@
 //!   the alarm and sleep sound lists only for them. Two independent per-model
 //!   statements agree, so this is the vendor's statement about the radio --
 //!   NOT a guess from the sound list, which is what the table used to say.
-//! * `mic` -- `MicEnum::SupportMic`: the panel has the microphone; the app
-//!   pairs the switch with its `...MicDiscover` home variants.
+//! `MicEnum` is NOT one of them: it reads like "the panel has a microphone"
+//! and it is not -- the switch is on for the plain Pixoo, a picture frame
+//! with no microphone, and off for the PixelBag -- and its only consumer is
+//! gated on the TiVi UI architecture as well. A switch whose consumers do
+//! not say what the key claims is not a fact about the panel.
 //! * `vj` -- the panel gets the app's COMMON light screen
 //!   (`LightCommonMainFragment`), whose config list offers the VJ channel
 //!   (`LightConfigFragment`). The mini Timebox and the 64x64 picture frame
@@ -49,73 +52,71 @@ pub const TEMP_SENSOR: u32 = 1 << 2;
 pub const WIFI: u32 = 1 << 3;
 /// `FmModeEnum::SupportFm`.
 pub const RADIO: u32 = 1 << 4;
-/// `MicEnum::SupportMic`.
-pub const MIC: u32 = 1 << 5;
 /// The app's common light screen, and with it the VJ channel.
-pub const VJ: u32 = 1 << 6;
+pub const VJ: u32 = 1 << 5;
 
 /// Every `DeviceTypeEnum` model, in the app's order: (model, switches,
 /// `ClockModeEnum`, `DiscoverFunEnum`, `UiArchEnum`).
 pub const FEATURES: &[(&str, u32, &str, &str, &str)] = &[
     (
         "TIMEBOX_NORMAL",
-        SPEAKER | RADIO | MIC,
+        SPEAKER | RADIO,
         "ClockNormal16",
         "TimeBoxDiscover",
         "MiniUiArch",
     ),
     (
         "TIMEBOX_MIN",
-        SPEAKER | MIC,
+        SPEAKER,
         "ClockNormal16",
         "MiniDiscover",
         "MiniUiArch",
     ),
     (
         "Tivoo",
-        SPEAKER | SD_CARD | MIC | VJ,
+        SPEAKER | SD_CARD | VJ,
         "ClockNormal16",
         "TivooDiscover",
         "TiViUiArch",
     ),
     (
         "TimeboxEvo",
-        SPEAKER | MIC | VJ,
+        SPEAKER | VJ,
         "ClockNormal16",
         "TivooDiscover",
         "TiViUiArch",
     ),
     (
         "Pixoo",
-        MIC | VJ,
+        VJ,
         "ClockNormal16",
         "PixooAlarmMicDiscover",
         "PixooArch",
     ),
     (
         "TivooMax",
-        SPEAKER | SD_CARD | MIC | VJ,
+        SPEAKER | SD_CARD | VJ,
         "ClockNormal16",
         "TivooDiscover",
         "TiViUiArch",
     ),
     (
         "Pixoo64Wifi",
-        WIFI | MIC,
+        WIFI,
         "ClockNormal16",
         "PixooWifiDiscover",
         "Pixoo64Arch",
     ),
     (
         "TIMOO",
-        SPEAKER | SD_CARD | MIC | VJ,
+        SPEAKER | SD_CARD | VJ,
         "ClockNormal16",
         "TivooDiscover",
         "TiViUiArch",
     ),
     (
         "DITOO",
-        SPEAKER | SD_CARD | MIC | VJ,
+        SPEAKER | SD_CARD | VJ,
         "ClockNormal16",
         "TivooDiscover",
         "TiViUiArch",
@@ -129,7 +130,7 @@ pub const FEATURES: &[(&str, u32, &str, &str, &str)] = &[
     ),
     (
         "Planet9",
-        MIC,
+        NONE,
         "ClockNormal16",
         "PlanetDiscover",
         "PlanetArch",
@@ -143,14 +144,14 @@ pub const FEATURES: &[(&str, u32, &str, &str, &str)] = &[
     ),
     (
         "PIXOO_MAX",
-        MIC | VJ,
+        VJ,
         "ClockNormal32",
         "PixooAlarmMicDiscover",
         "PixooArch",
     ),
     (
         "PIXOO_VJ",
-        MIC | VJ,
+        VJ,
         "ClockNormal16",
         "PixooAlarmMicDiscover",
         "PixooArch",
@@ -164,14 +165,14 @@ pub const FEATURES: &[(&str, u32, &str, &str, &str)] = &[
     ),
     (
         "DitooPlus",
-        SPEAKER | SD_CARD | MIC | VJ,
+        SPEAKER | SD_CARD | VJ,
         "ClockNormal16",
         "TivooDiscover",
         "TiViUiArch",
     ),
     (
         "TivooLit",
-        SPEAKER | SD_CARD | MIC | VJ,
+        SPEAKER | SD_CARD | VJ,
         "ClockNormal16",
         "TivooDiscover",
         "TiViUiArch",
@@ -192,7 +193,7 @@ pub const FEATURES: &[(&str, u32, &str, &str, &str)] = &[
     ),
     (
         "PixoolNull",
-        TEMP_SENSOR | MIC,
+        TEMP_SENSOR,
         "ClockNormal16",
         "TivooDiscover",
         "MiniUiArch",
@@ -206,21 +207,21 @@ pub const FEATURES: &[(&str, u32, &str, &str, &str)] = &[
     ),
     (
         "Zooe",
-        SPEAKER | SD_CARD | MIC | VJ,
+        SPEAKER | SD_CARD | VJ,
         "ClockNormal16",
         "TivooDiscover",
         "TiViUiArch",
     ),
     (
         "TivoomMax32",
-        SPEAKER | MIC | VJ,
+        SPEAKER | VJ,
         "ClockNormal32",
         "TivooDiscover",
         "TiViUiArch",
     ),
     (
         "DitooMic",
-        SPEAKER | SD_CARD | MIC | VJ,
+        SPEAKER | SD_CARD | VJ,
         "ClockDitooMic",
         "DitooSoundConsole",
         "TiViUiArch",
@@ -234,42 +235,42 @@ pub const FEATURES: &[(&str, u32, &str, &str, &str)] = &[
     ),
     (
         "Pixoo16Wifi",
-        WIFI | MIC,
+        WIFI,
         "ClockNormal16",
         "PixooWifiDiscover",
         "Pixoo64Arch",
     ),
     (
         "DitooPro",
-        SPEAKER | SD_CARD | MIC | VJ,
+        SPEAKER | SD_CARD | VJ,
         "ClockDitooMic",
         "DitooProConsole",
         "TiViUiArch",
     ),
     (
         "Lcd5Wifi",
-        WIFI | MIC,
+        WIFI,
         "ClockNormal16",
         "Lcd5WifiDiscover",
         "Lcd5WifiArch",
     ),
     (
         "PixelBagBIPI",
-        TEMP_SENSOR | MIC,
+        TEMP_SENSOR,
         "ClockNormal16",
         "TivooDiscover",
         "MiniUiArch",
     ),
     (
         "Pixoo64Wifi_2",
-        WIFI | MIC,
+        WIFI,
         "ClockNormal16",
         "PixooWifiDiscover",
         "Pixoo64Arch",
     ),
     (
         "TivooLcd",
-        SPEAKER | SD_CARD | RADIO | MIC,
+        SPEAKER | SD_CARD | RADIO,
         "ClockNormal16",
         "TivooLcdDiscover",
         "BlueHighPixelArch",
@@ -297,21 +298,21 @@ pub const FEATURES: &[(&str, u32, &str, &str, &str)] = &[
     ),
     (
         "DitooPro5",
-        SPEAKER | SD_CARD | MIC | VJ,
+        SPEAKER | SD_CARD | VJ,
         "ClockDitooMic",
         "DitooProConsole",
         "TiViUiArch",
     ),
     (
         "DitooMic5",
-        SPEAKER | SD_CARD | MIC | VJ,
+        SPEAKER | SD_CARD | VJ,
         "ClockDitooMic",
         "DitooSoundConsole",
         "TiViUiArch",
     ),
     (
         "PhotoFrameWifi",
-        SPEAKER | WIFI | MIC,
+        SPEAKER | WIFI,
         "ClockNormal16",
         "PhotoFrameDiscover",
         "Pixoo64Arch",
@@ -339,56 +340,56 @@ pub const FEATURES: &[(&str, u32, &str, &str, &str)] = &[
     ),
     (
         "TimeBoxEvoPro",
-        SPEAKER | MIC | VJ,
+        SPEAKER | VJ,
         "ClockDitooMic",
         "TimeBoxEvoDiscover",
         "TiViUiArch",
     ),
     (
         "MiniToo",
-        SPEAKER | SD_CARD | MIC,
+        SPEAKER | SD_CARD,
         "ClockNormal16",
         "MiniTooDiscover",
         "BlueHighPixelArch",
     ),
     (
         "PhotoSpeakerWifi",
-        SPEAKER | WIFI | MIC,
+        SPEAKER | WIFI,
         "ClockNormal16",
         "PhotoFrameDiscover",
         "Pixoo64Arch",
     ),
     (
         "DigitalBadge",
-        MIC,
+        NONE,
         "ClockNormal16",
         "DigitalBadgeDiscover",
         "BlueHighPixelArch",
     ),
     (
         "PhotoFrameWifiPure",
-        SPEAKER | WIFI | MIC,
+        SPEAKER | WIFI,
         "ClockNormal16",
         "PhotoFrameDiscover",
         "Pixoo64Arch",
     ),
     (
         "Pixoo64Wifi_5G",
-        WIFI | MIC,
+        WIFI,
         "ClockNormal16",
         "PixooWifiDiscover",
         "Pixoo64Arch",
     ),
     (
         "Lcd5Wifi_5G",
-        WIFI | MIC,
+        WIFI,
         "ClockNormal16",
         "Lcd5WifiDiscover",
         "Lcd5WifiArch",
     ),
     (
         "DivoomFlowToo",
-        SPEAKER | SD_CARD | MIC,
+        SPEAKER | SD_CARD,
         "ClockNormal16",
         "DivoomFlowToo",
         "BlueHighPixelArch",
@@ -408,7 +409,6 @@ pub const FEATURES: &[(&str, u32, &str, &str, &str)] = &[
         "ChargerPixelArch",
     ),
 ];
-
 /// The feature switches for an APK model name, or `None` for a name the app
 /// does not have.
 #[must_use]
@@ -423,7 +423,6 @@ pub fn of(model: &str) -> Option<Value> {
                 "temp_sensor": on & TEMP_SENSOR != 0,
                 "wifi": on & WIFI != 0,
                 "radio": on & RADIO != 0,
-                "mic": on & MIC != 0,
                 "vj": on & VJ != 0,
                 "clock_style": clock,
                 "ui": arch,

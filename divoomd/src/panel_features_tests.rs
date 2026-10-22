@@ -64,14 +64,6 @@ fn the_radio_is_the_timebox_and_the_tiivoo_two() {
     }
 }
 
-/// The microphone is the app's per-model statement too, and the app pairs it
-/// with its `...MicDiscover` home variants.
-#[test]
-fn the_microphone_is_the_models_the_app_says_have_one() {
-    assert_eq!(of("DitooMic").expect("row")["mic"], true);
-    assert_eq!(of("PixelBag").expect("row")["mic"], false);
-}
-
 /// The VJ channel belongs to the app's common light screen, which the mini
 /// Timebox and the 64x64 picture frame do not get.
 #[test]
