@@ -5,7 +5,9 @@ The daemon's per-model feature table (`divoomd/src/panel_features.rs`) is a
 PORT, and a port is only as good as its provenance. This is the provenance: it
 RUNS the decompiled vendor app's own `DeviceTypeEnum.setDeviceMode` for every
 model and reads back the switches it leaves set -- speaker, SD card,
-temperature sensor, Wi-Fi architecture, clock style and pixel class.
+temperature sensor, Wi-Fi architecture, clock style and pixel class -- plus the
+two per-model enums that say what KIND of panel it is: the app's home list
+(`DiscoverFunEnum`) and its UI architecture (`UiArchEnum`).
 
 Executing the method rather than reading it is the point. `setDeviceMode` is
 550 lines of nested if/else with local aliases (`fmModeEnum = SupportFm` set in
@@ -19,6 +21,10 @@ compiled inside a stub of its surroundings -- each `...Enum` class becomes a
 real Java enum (constants read from the same file) with a recorded mode, and
 `DeviceFunction.j()` returns an object with the same public fields. Nothing of
 the vendor app runs except that one method.
+
+The app's home list is read the same way: `DiscoverModel.s()` is one `if
+(mode == DiscoverFunEnum.X)` chain whose branches add `HomeBeanType` screens,
+so the screens a model is offered are parsed out of it rather than transcribed.
 
 The decompiled sources are local-only (`references/` is never published), so
 this runs on a machine that has them:
@@ -42,6 +48,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 SOURCE = (REPO / "references" / "apk" / "decompiled_src" / "sources" / "com" / "divoom"
           / "Divoom" / "utils" / "DeviceFunction" / "DeviceFunction.java")
+DISCOVER_SOURCE = (REPO / "references" / "apk" / "decompiled_src" / "sources" / "com"
+                   / "divoom" / "Divoom" / "view" / "fragment" / "discover" / "model"
+                   / "DiscoverModel.java")
 
 # The switches reported, each as (output key, enum class, the constant that
 # means "on"). Only switches whose CONSUMERS in the vendor app were read and
@@ -56,20 +65,42 @@ SOURCE = (REPO / "references" / "apk" / "decompiled_src" / "sources" / "com" / "
 #                weather screens.
 #   wifi         WifiBlueArchEnum.WifiArchMode: the panel is driven over Wi-Fi
 #                (MQTT) rather than Bluetooth.
+#   radio        FmModeEnum.SupportFm: the panel has an FM radio. The app
+#                offers the FM home screen (`HomeFmRadio`, DiscoverModel.s())
+#                to EXACTLY the models whose `FmModeEnum` is SupportFm --
+#                `TimeBoxDiscover` (TIMEBOX_NORMAL) and `TivooLcdDiscover`
+#                (TivooLcd) -- and to no other. The switch also keeps the FM
+#                entry in the alarm and sleep sound lists (AlarmAddFragment:95,
+#                SleepMainFragment:108, WifiAlarmEditFragment:235), each of
+#                which substitutes another sound when it is off. Two
+#                independent per-model statements agree, so this is the
+#                vendor's statement about the radio, not about a sound list.
+#   mic          MicEnum.SupportMic: the app offers the microphone with the
+#                panel. Its consumer is the TiVi light settings
+#                (LightSettingsFragment:522), and the app pairs it with the
+#                `...MicDiscover` home variants (`PixooAlarmMicDiscover`
+#                against `PixooAlarmNoMicDiscover`), so the switch says the
+#                panel has the microphone and not merely that a screen exists.
 #
-# Deliberately NOT reported, because the switch does not mean its name:
-# FmModeEnum gates only "FM as the alarm / sleep sound" (AlarmAddFragment,
-# SleepMainFragment) -- the FM screen itself is not decided per model -- so it
-# is no "has a radio" flag; AlarmEnum has no consumer at all; MicEnum has one,
-# inside the TiVi light settings.
+# Deliberately NOT reported: AlarmEnum has no consumer of its own -- the
+# alarm screen is decided by the home list, which the SCREENS table carries.
 FLAGS = (
     ("speaker", "MusicEnum", "SupportMusic"),
     ("sd_card", "SdEnum", "SupportSd"),
     ("temp_sensor", "TempSensorEnum", "TempSensor"),
     ("wifi", "WifiBlueArchEnum", "WifiArchMode"),
+    ("radio", "FmModeEnum", "SupportFm"),
+    ("mic", "MicEnum", "SupportMic"),
 )
 PIXELS = {"DevicePixel16": 16, "DevicePixel32": 32, "DevicePixel64": 64,
           "DevicePixel128": 128, "DevicePixel256": 256}
+
+# The app's UI architectures that get the COMMON light screen
+# (`LightCommonMainFragment`, JumpControl.java:196). Its config list
+# (`LightConfigFragment`) offers the VJ channel unconditionally, so these
+# models have VJ effects and the others do not -- the mini Timebox does not,
+# and neither does a 64x64 picture frame.
+COMMON_LIGHT_ARCHS = ("TiViUiArch", "PixooArch")
 
 
 def available() -> str | None:
@@ -107,6 +138,53 @@ def _fields(src: str) -> list[str]:
     head = src[: src.index("public static final class")]
     decls = re.findall(r"^\s+(?:public|private) (boolean|int|String) (f\d+\w*)(?: = [^;]+)?;", head, re.M)
     return [f"public {t} {n};" for t, n in decls]
+
+
+# The app's abbreviations, spelled out: a screen id is read by people (the
+# GUI's tabs, an agent's tool output), so `HomeAni` is `animation` and not
+# `ani`.
+SCREEN_IDS = {
+    "HomeAI": "ai",
+    "HomeAni": "animation",
+    "HomeLed": "light",
+    "HomeStopWatch": "stopwatch",
+    "HomeScoreBoard": "scoreboard",
+    "HomeCountDown": "countdown",
+    "HomeWhiteNoise": "white_noise",
+}
+
+
+def _screen_id(name: str) -> str:
+    """`HomeFmRadio` -> `fm_radio`: the app's screen name as an id."""
+    if name in SCREEN_IDS:
+        return SCREEN_IDS[name]
+    if name.startswith("Home"):
+        name = name[4:]
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+
+
+def discover_screens(src: str) -> dict[str, list[str]]:
+    """`DiscoverFunEnum` -> the home screens the app offers for it.
+
+    `DiscoverModel.s()` is one `if (mode == DiscoverFunEnum.X)` chain whose
+    branches add `HomeBeanType` screens; the branch bodies are matched by
+    their braces so a nested `if` cannot end one early. A variant with no
+    branch (the app has none for `ESportDiscover`) offers nothing.
+    """
+    out: dict[str, list[str]] = {}
+    for m in re.finditer(r"if \(mode == DeviceFunction\.DiscoverFunEnum\.(\w+)\) \{", src):
+        name = m.group(1)
+        depth = 1
+        i = m.end()
+        while depth:
+            c = src[i]
+            depth += c == "{"
+            depth -= c == "}"
+            i += 1
+        body = src[m.end(): i - 1]
+        screens = re.findall(r"HomeBeanType\.(\w+)", body)
+        out[name] = [_screen_id(s) for s in screens]
+    return out
 
 
 def _java(src: str) -> str:
@@ -164,7 +242,8 @@ public static void main(String[] a) {{
   for (DeviceTypeEnum t : DeviceTypeEnum.values()) {{
     DeviceTypeEnum.setDeviceMode(t);
     rows.add(row("model", t.name(), {flags},
-                 "clock", ClockModeEnum.mode.name(), "pixels", DevicePixelModelEnum.mode.name()));
+                 "clock", ClockModeEnum.mode.name(), "pixels", DevicePixelModelEnum.mode.name(),
+                 "discover", DiscoverFunEnum.mode.name(), "arch", UiArchEnum.mode.name()));
   }}
   System.out.println("[" + String.join(",", rows) + "]");
 }}
@@ -187,8 +266,12 @@ def derive() -> list[dict]:
             if out.returncode:
                 raise SystemExit(f"{argv[0]} failed:\n{out.stderr[-4000:]}")
     rows = json.loads(out.stdout)
+    screens = discover_screens(DISCOVER_SOURCE.read_text(encoding="utf-8")) \
+        if DISCOVER_SOURCE.is_file() else {}
     for r in rows:
         r["pixels"] = PIXELS[r["pixels"]]
+        r["screens"] = screens.get(r["discover"], [])
+        r["vj"] = r["arch"] in COMMON_LIGHT_ARCHS and "light" in r["screens"]
     return rows
 
 
@@ -197,13 +280,37 @@ def rust_rows(rows: list[dict]) -> str:
     lines = []
     for r in rows:
         on = " | ".join(k.upper() for k, _, _ in FLAGS if r[k]) or "NONE"
-        lines.append(f'    ("{r["model"]}", {on}, "{r["clock"]}"),')
+        if r["vj"]:
+            on = "VJ" if on == "NONE" else on + " | VJ"
+        lines.append(
+            f'    ("{r["model"]}", {on}, "{r["clock"]}", "{r["discover"]}", "{r["arch"]}"),')
+    return "\n".join(lines)
+
+
+def rust_screens(rows: list[dict]) -> str:
+    """The rows of `panel_features::SCREENS`: the home list per variant.
+
+    The screens are one space-separated string per variant, not an array: the
+    array form is a dozen lines per variant once `cargo fmt` has wrapped it,
+    and the table is data, not code.
+    """
+    seen: dict[str, list[str]] = {}
+    for r in rows:
+        seen.setdefault(r["discover"], r["screens"])
+    lines = []
+    for name, screens in seen.items():
+        lines.append(f'    ("{name}", "{" ".join(screens)}"),')
     return "\n".join(lines)
 
 
 def main() -> int:
     rows = derive()
-    print(rust_rows(rows) if "--rust" in sys.argv[1:] else json.dumps(rows, indent=1))
+    if "--rust" in sys.argv[1:]:
+        print(rust_rows(rows))
+        print()
+        print(rust_screens(rows))
+    else:
+        print(json.dumps(rows, indent=1))
     return 0
 
 

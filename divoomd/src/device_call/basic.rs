@@ -2,7 +2,7 @@ use super::link_gone;
 use super::CallCtx;
 use crate::protocol::{
     err_code,
-    ErrorCode::{BadRequest, DeviceFailed, UnknownCommand},
+    ErrorCode::{BadRequest, DeviceFailed, UnknownCommand, Unsupported},
 };
 use crate::wire::WireNarrow as _;
 use serde_json::{json, Value};
@@ -330,6 +330,21 @@ async fn set_radio_frequency(ctx: CallCtx<'_>) -> Value {
     let dev = ctx.dev;
     let args = ctx.args;
     let kw = ctx.kwargs;
+
+    // The panel's own description says whether it has a radio (P3.4), and the
+    // daemon is the one place that answer is kept -- so the daemon is the one
+    // place that refuses. A panel the daemon cannot NAME is not refused:
+    // unknown is not "no radio".
+    let model = crate::panel_model::from_name(dev.device_name().as_deref()).model;
+    if let Some(model) = model {
+        let features = crate::panel_features::of(model).unwrap_or(Value::Null);
+        if features.get("radio") == Some(&Value::Bool(false)) {
+            return err_code(
+                Unsupported,
+                &format!("this panel ({model}) has no FM radio"),
+            );
+        }
+    }
 
     let freq = args
         .first()
