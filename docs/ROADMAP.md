@@ -271,6 +271,31 @@ Landed (2026-10-17): P3.1, `device_status` carrying each panel's model and resol
 P3.2, a stable `code` on every device failure, branched on by the Settings card (`divoomd/src/error_code.rs`);
 P3.3, weather drawn by us as a `render_widget` frame and pushed like every other widget, the firmware's clock face no longer selected (`divoomd/src/live_jobs/weather_frame.rs`).
 
+#### P3.4 — the panel's description is the daemon's, and the clients read it
+**Status:** OPEN
+**Why:** the daemon knew each panel's model and size, and three clients kept
+their OWN answers to "what kind of panel is this": the web UI decided the
+chassis family from the model with its own regexes and a table of its own, the
+web UI decided the FM-radio and VJ abilities from the DEVICE NAME, and the CLI
+kept a per-model capability table whose FM rows were wrong for fifteen models.
+The name-based one reached the screen: the FM card was offered to every panel
+whose name contained "tivoo" or "ditoo", and the vendor app offers the radio to
+the Timebox and the Tiivoo 2 and to no other panel -- the opposite.
+**Done when:** the daemon's `device_status` carries the chassis, the app's
+per-model switches (including the radio and the microphone) and the app's home
+list for the model; the web UI carries no per-model derivation of its own; the
+CLI has no capability table, and the daemon refuses to tune a panel it knows
+has no radio.
+
+#### P3.5 — the MCP says what the daemon says
+**Status:** OPEN
+**Why:** `get_capabilities` returned the daemon's description, but its own
+description of the description was wrong ("There is no FM-radio flag: the
+vendor app does not decide FM per model"), and it did not carry the chassis
+or the screens.
+**Done when:** the tool's text matches the daemon's table, and the whole
+description is what it returns.
+
 ### Phase 4 — MCP as a display surface
 
 **Goal:** an external agent can discover each panel, draw on it at its real
