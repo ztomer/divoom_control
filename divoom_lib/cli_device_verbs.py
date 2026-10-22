@@ -9,6 +9,15 @@ the radio, decide which panel this is, and hand over. The other three
 from Python, because the capability table that refuses them on a panel without
 the feature exists only in Python.
 
+WHAT A PANEL IS (P3.4): the capability table that used to live here is gone.
+"The daemon knows what each panel is" -- its model, its size, its chassis, the
+features the vendor app enables for its model and the screens the app offers
+it -- so the CLI asks the daemon (`device_status`) instead of carrying a
+second table of per-model facts. The two gates that table fed could not fire
+(`has_alarm` and `has_weather` were true of every row), and the third -- the
+FM radio -- is enforced by the DAEMON, which is the one place that knows the
+panel has no radio.
+
 The shared helpers — `_err`, `_daemon_client`, `_scan`, `_divoomd_binary` —
 stay in `cli_commands`, and they are called as `cli_commands._err(...)` rather
 than imported by name. That is deliberate and looks like noise: a
@@ -25,19 +34,6 @@ import sys
 from pathlib import Path
 
 from divoom_lib import cli_commands
-from divoom_lib.models.capabilities import (
-    Capabilities,
-    DeviceRegistry,
-    capabilities_for,
-)
-
-def _capabilities(args: argparse.Namespace, mac: str) -> Capabilities:
-    """The capability table for this panel: explicit --type, else the MAC
-    registry, else the baseline. Pure data -- no device I/O."""
-    if getattr(args, "device_type", None):
-        return capabilities_for(args.device_type)
-    caps = DeviceRegistry().lookup(mac)
-    return caps if caps is not None else capabilities_for(None)
 
 
 async def resolve_target_mac(args: argparse.Namespace) -> str:
@@ -76,22 +72,6 @@ async def resolve_target_mac(args: argparse.Namespace) -> str:
     return mac
 
 
-async def _resolve_device(args: argparse.Namespace):
-    """Return (device proxy, id) for a verb that still calls the daemon itself.
-
-    `--mac` names the panel; without it, `resolve_target_mac` decides. Only the
-    verbs whose CAPABILITY table is still Python need the proxy — the ones that
-    moved to `divoomd` need the mac and nothing else.
-    """
-    if args.command == "pair" or args.command == "identify":
-        # These commands don't need a connected device.
-        return None, (args.mac or "")
-    from divoom_client.daemon_proxy import DaemonDeviceProxy
-    client = cli_commands._daemon_client(args)
-    mac = await resolve_target_mac(args)
-    return DaemonDeviceProxy(client, target="device", mac=mac), mac
-
-
 def _delegate_device_verb(verb: str, values: list[str], mac: str, args) -> None:
     """Hand a device command to `divoomd <verb>` and let it become the process.
 
@@ -125,43 +105,52 @@ def _delegate_device_verb(verb: str, values: list[str], mac: str, args) -> None:
 
 
 async def cmd_capabilities(args: argparse.Namespace) -> int:
-    d, mac = await _resolve_device(args)
-    try:
-        caps = _capabilities(args, mac)
-        if args.json:
-            cli_commands._print({
-                "mac": mac,
-                "panel_resolution": caps.panel_resolution,
-                "has_fm": caps.has_fm,
-                "has_sd": caps.has_sd,
-                "has_scoreboard": caps.has_scoreboard,
-                "has_anim_8b": caps.has_anim_8b,
-                "has_orientation": caps.has_orientation,
-                "has_screen_mirror": caps.has_screen_mirror,
-                "has_alarm": caps.has_alarm,
-                "has_sleep": caps.has_sleep,
-                "has_weather": caps.has_weather,
-                "has_mic": caps.has_mic,
-                "notes": list(caps.notes),
-            }, as_json=True)
+    """What this panel IS, as the daemon says (P3.4).
+
+    The daemon's own description: the model and how it was decided, the size,
+    the chassis, the features the vendor app enables for that model, and the
+    screens the app offers it. The CLI used to print a table of its own --
+    which is where the "a Ditoo has an FM radio" story came from.
+    """
+    client = cli_commands._daemon_client(args)
+    mac = await resolve_target_mac(args)
+    status = client.device_status(mac=mac) or {}
+    features = status.get("features") or {}
+    chassis = status.get("chassis") or {}
+    screens = status.get("screens")
+    if args.json:
+        cli_commands._print({
+            "mac": mac,
+            "model": status.get("model"),
+            "model_source": status.get("model_source"),
+            "width": status.get("width"),
+            "height": status.get("height"),
+            "chassis": chassis or None,
+            "features": features or None,
+            "screens": screens,
+        }, as_json=True)
+    else:
+        print(f"Device: {mac}")
+        print(f"  model:           {status.get('model') or 'unknown'} "
+              f"({status.get('model_source') or 'no name'})")
+        width = status.get("width")
+        print(f"  size:            {f'{width}x{width}' if width else 'unknown'}")
+        if chassis:
+            print(f"  chassis:         {chassis.get('family')} "
+                  f"({chassis.get('w_mm')}x{chassis.get('h_mm')} mm)")
+        if features:
+            for key in sorted(features):
+                if key in ("source", "clock_style"):
+                    continue
+                print(f"  {key + ':':<17}{features[key]}")
+            print(f"  clock_style:     {features.get('clock_style')}")
         else:
-            print(f"Device: {mac}")
-            print(f"  panel_resolution: {caps.panel_resolution}×{caps.panel_resolution}")
-            print(f"  has_fm:           {caps.has_fm}")
-            print(f"  has_sd:           {caps.has_sd}")
-            print(f"  has_scoreboard:   {caps.has_scoreboard}")
-            print(f"  has_anim_8b:      {caps.has_anim_8b}")
-            print(f"  has_orientation:  {caps.has_orientation}")
-            print(f"  has_screen_mirror:{caps.has_screen_mirror}")
-            print(f"  has_alarm:        {caps.has_alarm}")
-            print(f"  has_sleep:        {caps.has_sleep}")
-            print(f"  has_weather:      {caps.has_weather}")
-            print(f"  has_mic:          {caps.has_mic}")
-            if caps.notes:
-                print(f"  notes: {'; '.join(caps.notes)}")
-        return 0
-    finally:
-        pass  # the daemon keeps the link; the CLI never hangs up a panel
+            print("  features:        the daemon does not know this panel yet")
+        if screens is not None:
+            print(f"  screens:         {', '.join(screens)}")
+        else:
+            print("  screens:         the daemon does not know this panel yet")
+    return 0
 
 
 async def cmd_set_volume(args: argparse.Namespace) -> int:
@@ -181,12 +170,15 @@ async def cmd_set_brightness(args: argparse.Namespace) -> int:
 
 
 async def cmd_set_radio(args: argparse.Namespace) -> int:
-    """Tune the FM radio. The band is checked in `divoomd`; the CAPABILITY is
-    checked here, because the table that knows which panels have a radio is
-    Python's alone."""
+    """Tune the FM radio.
+
+    The band is checked in `divoomd`, and so is the CAPABILITY: the daemon
+    knows which panels have a radio (the vendor app offers the FM screen to
+    the Timebox and the Tiivoo 2, and to no other panel), so the daemon is
+    where the refusal happens. The CLI used to carry a table of its own for
+    this, and it said the opposite of the app.
+    """
     mac = await resolve_target_mac(args)
-    if not _capabilities(args, mac).has_fm:
-        cli_commands._err(f"device {mac} has no FM radio (capabilities.has_fm=False)", 1)
     _delegate_device_verb("set-radio", [str(args.freq_x10)], mac, args)
 
 
@@ -204,8 +196,6 @@ async def cmd_set_alarm(args: argparse.Namespace) -> int:
     except ValueError:
         cli_commands._err("time must be HH:MM (24h)", 2)
     mac = await resolve_target_mac(args)
-    if not _capabilities(args, mac).has_alarm:
-        cli_commands._err(f"device {mac} has no alarm (capabilities.has_alarm=False)", 1)
     # BEHAVIOUR CHANGE: this used to send trigger_mode=0, which the reference
     # implementation never documents — it defines the field as
     # ALARM_TRIGGER_MUSIC=1 / ALARM_TRIGGER_GIF=4, and its own usage example
@@ -237,8 +227,6 @@ async def cmd_set_temperature(args: argparse.Namespace) -> int:
     if not (-127 <= args.temperature <= 128):
         cli_commands._err("temperature must be -127..128", 2)
     mac = await resolve_target_mac(args)
-    if not _capabilities(args, mac).has_weather:
-        cli_commands._err(f"device {mac} has no weather channel (capabilities.has_weather=False)", 1)
     _delegate_device_verb("set-temperature", [str(args.temperature), args.weather], mac, args)
 
 

@@ -20,7 +20,11 @@ const B: &str = "BB:00:00:00:00:02";
 
 async fn two_panels_with_b_selected() -> Daemon {
     let d = Daemon::new();
-    for (mac, name) in [(A, "Ditoo-Plus"), (B, "Pixoo64")] {
+    // A is the Tiivoo 2, because one of the actions below tunes the FM radio
+    // and the daemon refuses that on a panel the vendor app says has no
+    // radio (P3.4) -- and the refusal must not be mistaken for the action
+    // not landing.
+    for (mac, name) in [(A, "Divoom Tiivoo 2"), (B, "Pixoo64")] {
         let reply = d
             .handle(make_request(
                 "connect",

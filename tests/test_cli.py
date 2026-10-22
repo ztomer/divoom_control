@@ -137,71 +137,65 @@ def test_push_image_accepts_path() -> None:
     assert str(args.path) == "/tmp/foo.png"
 
 
-# ── `capabilities` command with a fake Divoom ─────────────────────────
+# ── `capabilities` command: the DAEMON's description ───────────────────
+#
+# P3.4: what a panel IS comes from the daemon -- its model, its size, its
+# chassis, the vendor app's features for it and the screens it offers. The
+# CLI used to print a table of its own, which is where the "a Ditoo has an FM
+# radio" story came from.
 
 
-class _FakeCapabilities:
-    """Shape-compatible duck-type for a `Capabilities` instance, for unit
-    tests. The real one is a frozen dataclass; this needs nothing more."""
+class _FakeDaemonClient:
+    """The daemon as the CLI sees it: one panel, described."""
 
-    panel_resolution = 32
-    has_fm = True
-    has_sd = True
-    has_scoreboard = True
-    has_anim_8b = True
-    has_orientation = True
-    has_screen_mirror = True
-    has_alarm = True
-    has_sleep = True
-    has_weather = True
-    has_mic = True
-    notes = ()
-
-
-class _FakeDivoom:
-    def __init__(self, *args, **kwargs):
-        self.kwargs = kwargs
-
-    async def connect(self):
-        return None
-
-    async def disconnect(self):
-        return None
-
-    @property
-    def capabilities(self):
-        return _FakeCapabilities()
+    def device_status(self, mac=None):
+        return {
+            "success": True,
+            "connected": True,
+            "mac": "AA:BB:CC:DD:EE:FF",
+            "model": "PIXOO_MAX",
+            "model_source": "name",
+            "width": 32,
+            "height": 32,
+            "chassis": {"family": "pixoo", "w_mm": 200.0, "h_mm": 200.0, "screen_mm": 158.0},
+            "features": {"speaker": False, "sd_card": False, "radio": False, "mic": True,
+                         "clock_style": "ClockNormal32"},
+            "screens": ["design", "alarm", "weather"],
+        }
 
 
 @pytest.mark.asyncio
-async def test_cmd_capabilities_uses_fake_divoom(monkeypatch) -> None:
-    """Wire in a fake Divoom, run cmd_capabilities, assert the human-
-    readable output mentions the device's panel_resolution."""
+async def test_cmd_capabilities_prints_the_daemons_description(monkeypatch, capsys) -> None:
     async def fake_resolve(args):
-        return _FakeDivoom(), "AA:BB:CC:DD:EE:FF"
+        return "AA:BB:CC:DD:EE:FF"
 
-    monkeypatch.setattr(cli_device_verbs, "_resolve_device",fake_resolve)
-    monkeypatch.setattr(cli_device_verbs, "_capabilities", lambda args, mac: _FakeCapabilities())
+    monkeypatch.setattr(cli_device_verbs, "resolve_target_mac", fake_resolve)
+    monkeypatch.setattr(cli_commands, "_daemon_client", lambda *a, **k: _FakeDaemonClient())
     ns = cli_module.build_parser().parse_args(["capabilities", "--mac", "AA:BB:CC:DD:EE:FF"])
     rc = await cli_module.cmd_capabilities(ns)
     assert rc == 0
+    out = capsys.readouterr().out
+    assert "PIXOO_MAX" in out, out
+    assert "32x32" in out, out
+    assert "pixoo" in out, out
 
 
 @pytest.mark.asyncio
 async def test_cmd_capabilities_json_output(monkeypatch, capsys) -> None:
     async def fake_resolve(args):
-        return _FakeDivoom(), "AA:BB:CC:DD:EE:FF"
+        return "AA:BB:CC:DD:EE:FF"
 
-    monkeypatch.setattr(cli_device_verbs, "_resolve_device",fake_resolve)
-    monkeypatch.setattr(cli_device_verbs, "_capabilities", lambda args, mac: _FakeCapabilities())
+    monkeypatch.setattr(cli_device_verbs, "resolve_target_mac", fake_resolve)
+    monkeypatch.setattr(cli_commands, "_daemon_client", lambda *a, **k: _FakeDaemonClient())
     ns = cli_module.build_parser().parse_args(["capabilities", "--mac", "AA:BB:CC:DD:EE:FF", "--json"])
     rc = await cli_module.cmd_capabilities(ns)
     assert rc == 0
     captured = capsys.readouterr()
     obj = json.loads(captured.out)
-    assert obj["panel_resolution"] == 32
-    assert obj["has_fm"] is True
-    assert obj["has_alarm"] is True
+    assert obj["model"] == "PIXOO_MAX"
+    assert obj["width"] == 32
+    assert obj["features"]["radio"] is False
+    assert obj["screens"] == ["design", "alarm", "weather"]
 
 
 # ── `set-volume` validation (handler-level, no BLE) ────────────────────
@@ -267,7 +261,6 @@ async def test_cmd_set_temperature_hands_the_icon_name_to_divoomd(monkeypatch) -
     monkeypatch.setattr(
         cli_device_verbs, "resolve_target_mac", AsyncMock(return_value="AA:BB:CC:DD:EE:FF")
     )
-    monkeypatch.setattr(cli_device_verbs, "_capabilities", lambda args, mac: SimpleNamespace(has_weather=True))
     monkeypatch.setattr(cli_commands, "_divoomd_binary", lambda: "/opt/divoomd")
     monkeypatch.setattr(os, "execv", _execv)
 
@@ -282,26 +275,20 @@ async def test_cmd_set_temperature_hands_the_icon_name_to_divoomd(monkeypatch) -
     ]
 
 
-async def test_cmd_set_temperature_rejects_when_no_capability(monkeypatch) -> None:
-    """The capability check stayed in Python, and it stays BEFORE the handoff."""
+async def test_cmd_set_temperature_has_no_capability_gate_of_its_own(monkeypatch) -> None:
+    """P3.4: the CLI carries no per-model table any more.
+
+    The gate it used to have read a table whose `has_weather` was true of
+    every row -- a gate that could not fail. The panel's abilities are the
+    daemon's, and the daemon does the refusing.
+    """
     monkeypatch.setattr(
         cli_device_verbs, "resolve_target_mac", AsyncMock(return_value="AA:BB:CC:DD:EE:FF")
     )
-    monkeypatch.setattr(
-        cli_device_verbs, "_capabilities", lambda args, mac: SimpleNamespace(has_weather=False)
-    )
     monkeypatch.setattr(cli_commands, "_divoomd_binary", lambda: "/opt/divoomd")
-
-    def _boom(*a, **k):
-        raise AssertionError("it must not hand off for a panel with no weather channel")
-
-    monkeypatch.setattr(os, "execv", _boom)
-
-    p = cli_module.build_parser()
-    ns = p.parse_args(["set-temperature", "18", "--mac", "AA:BB:CC:DD:EE:FF"])
-    with pytest.raises(SystemExit) as exc:
-        await cli_module.cmd_set_temperature(ns)
-    assert exc.value.code == 1
+    assert not hasattr(cli_device_verbs, "_capabilities"), (
+        "the CLI still has a capability table of its own"
+    )
 
 
 async def test_cmd_set_temperature_rejects_out_of_range(monkeypatch) -> None:

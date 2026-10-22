@@ -171,20 +171,32 @@ def test_the_weather_verb_reaches_the_native_verb(live_daemon) -> None:
 
 
 def test_the_radio_verb_reaches_the_native_verb(live_daemon) -> None:
-    # FM is NOT in the baseline table, so the capability check refuses unless a
-    # type with a radio is named. That refusal is the point: it proves the check
-    # is still in Python and still runs BEFORE the handoff.
-    refused = _run("set-radio", "911", "--socket", live_daemon)
-    assert refused.returncode == 1, refused
-    assert "has no FM radio" in refused.stderr, refused.stderr
-    assert "handing off" not in refused.stderr, (
-        f"it must not have reached divoomd: {refused.stderr}"
-    )
-
-    # With a radio-capable type it goes through. DITOO is in the table.
-    proc = _run("set-radio", "911", "--type", "DITOO", "--socket", live_daemon)
+    # The panel the fixture links has no NAME, so the daemon cannot say
+    # whether it has a radio -- and unknown is not "no radio": the verb goes
+    # through. The refusal is the DAEMON's, and it needs a panel the daemon
+    # can name (the test below).
+    proc = _run("set-radio", "911", "--socket", live_daemon)
     assert proc.returncode == 0, f"stderr:\n{proc.stderr}"
     assert "91.1 MHz" in proc.stdout, proc.stdout
+
+
+def test_the_daemon_refuses_to_tune_a_panel_with_no_radio(live_daemon) -> None:
+    """P3.4: the daemon knows what each panel is, so the daemon refuses.
+
+    The vendor app offers the FM radio to the Timebox and the Tiivoo 2 and to
+    no other panel; a Ditoo has none. The CLI used to carry a table of its own
+    that said the opposite, and let the tuning through.
+    """
+    from divoom_client.daemon_client import DaemonClient
+
+    client = DaemonClient(live_daemon)
+    conn = client.send_command("connect", {"mock": True, "mac": "DITOO", "name": "Ditoo-light-2"})
+    assert conn.get("success") is True, conn
+
+    proc = _run("set-radio", "911", "--mac", "DITOO", "--socket", live_daemon)
+    assert proc.returncode != 0, proc
+    assert "no FM radio" in proc.stderr, proc.stderr
+    assert "unsupported" in proc.stderr, proc.stderr
 
 
 def test_the_alarm_verb_reaches_the_native_verb(live_daemon) -> None:

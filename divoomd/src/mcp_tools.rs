@@ -70,11 +70,11 @@ pub fn catalog() -> Value {
             &json!({"type":"object","properties":{"file":{"type":"string"},"data":{"type":"string"},"resize":resize,"size":IMAGE_SIZE.schema()},"oneOf":[{"required":["file"]},{"required":["data"]}]})),
         tool("play_sound", "Beep the device (best-effort; some firmware no-ops).",
             &json!({"type":"object","properties":{"duration_ms":SOUND_MS.schema()},"required":["duration_ms"]})),
-        tool("get_capabilities", "Describe a panel: link state, model, width/height in pixels (how it was decided: model_source), and the features the vendor app enables for that model (speaker, sd_card, temp_sensor, wifi, clock_style; null for an unrecognised model). There is no FM-radio flag: the vendor app does not decide FM per model.",
+        tool("get_capabilities", "Describe a panel: link state, model, width/height in pixels (how it was decided: model_source), the chassis (which product it is and how big it is), the features the vendor app enables for that model (speaker, sd_card, temp_sensor, wifi, radio, mic, vj, clock_style), and the screens the app offers that model (null for an unrecognised model).",
             &json!({"type":"object","properties":{},"additionalProperties":false})),
         tool("get_device_state", "Read the device's current volume, brightness, channel, orientation, mirror. A field the daemon could not read is null, and `errors` names it with the daemon's reason and code -- a null is never the only thing you know.",
             &json!({"type":"object","properties":{},"additionalProperties":false})),
-        tool("list_screens", "List every screen the daemon knows or the saved layout places (`screens`): each with mac, connected (live link), selected, model, width/height (null when never seen), features, and its saved x/y/room; plus wall state and slots.",
+        tool("list_screens", "List every screen the daemon knows or the saved layout places (`screens`): each with mac, connected (live link), selected, model, width/height (null when never seen), chassis, features, the screens the app offers it, and its saved x/y/room; plus wall state and slots.",
             &json!({"type":"object","properties":{},"additionalProperties":false})),
     ];
     tools.extend(crate::mcp_more_tools::catalog());

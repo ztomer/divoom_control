@@ -21,7 +21,6 @@ The wire assertions for the verbs themselves are in
 from __future__ import annotations
 
 import os
-from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -173,19 +172,17 @@ async def test_cmd_push_gif_keeps_its_name_and_the_same_call(monkeypatch, tmp_pa
 
 # ── cmd_set_radio / cmd_set_alarm / cmd_set_temperature ───────────────────
 #
-# These three moved to divoomd as well, and the interesting part is what stayed
-# behind: the CAPABILITY check. The table that knows which panels have a radio
-# or an alarm is Python's alone — the daemon has no capability table — so the
-# refusal is client policy, and it is asserted here on the real code path with
-# the exec instrumented, to prove the refusal happens BEFORE the handoff. After
-# the handoff there would be no point in it: the call would already be on its way
-# to a panel that cannot do it.
-
-
-def _capabilities_stub(monkeypatch, *, has_fm=True, has_alarm=True, has_weather=True):
-    caps = SimpleNamespace(has_fm=has_fm, has_alarm=has_alarm, has_weather=has_weather)
-    monkeypatch.setattr(cli_device_verbs, "_capabilities", lambda a, m: caps)
-    return caps
+# These three moved to divoomd, and what stayed behind was the CAPABILITY
+# check: the table that knew which panels have a radio or an alarm was
+# Python's alone, so the refusal was client policy. P3.4 ended that table --
+# the DAEMON knows what each panel is (the vendor app offers the FM home
+# screen to the Timebox and the Tiivoo 2, and to no other panel), so the
+# daemon is where the refusal happens. The CLI hands the verb over and
+# prints what the daemon says.
+#
+# The two gates that table fed could not fire -- `has_alarm` and
+# `has_weather` were true of every row -- so they are gone rather than
+# moved: a gate that cannot fail is not a gate.
 
 
 def _ready_to_hand_off(monkeypatch, mac="AA:BB"):
@@ -195,32 +192,10 @@ def _ready_to_hand_off(monkeypatch, mac="AA:BB"):
     return _recorded_exec(monkeypatch)
 
 
-@pytest.mark.parametrize("command,argv,flag", [
-    ("cmd_set_radio", ["set-radio", "875", "--mac", "AA:BB"], "has_fm"),
-    ("cmd_set_alarm", ["set-alarm", "07:30", "--mac", "AA:BB"], "has_alarm"),
-    ("cmd_set_temperature",
-     ["set-temperature", "18", "--weather", "clear", "--mac", "AA:BB"], "has_weather"),
-])
-async def test_a_panel_without_the_feature_is_refused_before_the_handoff(
-    monkeypatch, capsys, command, argv, flag
-) -> None:
-    _capabilities_stub(monkeypatch, **{flag: False})
-    calls = _ready_to_hand_off(monkeypatch)
-
-    with pytest.raises(SystemExit) as exc:
-        await getattr(cli_device_verbs, command)(_parse(*argv))
-
-    assert exc.value.code == 1
-    assert calls == [], f"{command} handed off to divoomd for a panel that cannot do it"
-    # `_err` writes to stderr and SystemExit carries only the code, so the text
-    # comes from the stream.
-    err = capsys.readouterr().err
-    assert "AA:BB" in err, f"the message must name the panel: {err}"
-    assert flag in err, f"and say which capability is missing: {err}"
-
-
-async def test_a_capable_panel_hands_off_to_divoomd(monkeypatch) -> None:
-    _capabilities_stub(monkeypatch)
+async def test_the_radio_is_handed_over_and_the_daemon_refuses_it(monkeypatch) -> None:
+    """No capability table in the CLI any more: the verb crosses, and the
+    daemon -- which knows the panel -- is the one that refuses a panel with
+    no radio."""
     calls = _ready_to_hand_off(monkeypatch)
 
     with pytest.raises(SystemExit):
@@ -235,7 +210,6 @@ async def test_an_alarm_is_handed_over_with_its_time_intact(monkeypatch) -> None
     """`HH:MM` crosses as written: splitting it into hour and minute is the
     native verb's business, and a script's argument should come back quoted in
     any error it causes."""
-    _capabilities_stub(monkeypatch)
     calls = _ready_to_hand_off(monkeypatch)
 
     with pytest.raises(SystemExit):
@@ -255,7 +229,6 @@ async def test_the_weather_verb_passes_the_icon_name_not_its_number(monkeypatch)
     like every other value it accepts. That is a grammar choice inside divoomd,
     and translating it here leaves both surfaces' own conventions intact.
     """
-    _capabilities_stub(monkeypatch)
     calls = _ready_to_hand_off(monkeypatch)
 
     with pytest.raises(SystemExit):

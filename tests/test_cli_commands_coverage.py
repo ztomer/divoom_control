@@ -66,14 +66,7 @@ def test_print_dict_non_json(capsys) -> None:
     assert "y: 2" in out
 
 
-# ── _resolve_device ─────────────────────────────────────────────────────
-
-
-async def test_resolve_device_bypasses_connect_for_pair_and_identify() -> None:
-    d, mac = await cli_device_verbs._resolve_device(SimpleNamespace(command="pair", mac="AA:BB"))
-    assert d is None and mac == "AA:BB"
-    d, mac = await cli_device_verbs._resolve_device(SimpleNamespace(command="identify", mac=None))
-    assert d is None and mac == ""
+# ── resolve_target_mac ──────────────────────────────────────────────────
 
 
 class _FakeClient:
@@ -114,53 +107,52 @@ def _use_client(monkeypatch, client):
     return client
 
 
-async def test_resolve_device_explicit_mac_connects_through_the_daemon(monkeypatch) -> None:
+async def test_resolve_target_mac_explicit_mac_connects_through_the_daemon(monkeypatch) -> None:
     client = _use_client(monkeypatch, _FakeClient())
     ns = SimpleNamespace(command="set-volume", mac="AA:BB", timeout=1.0, device_type=None)
-    d, mac = await cli_device_verbs._resolve_device(ns)
+    mac = await cli_device_verbs.resolve_target_mac(ns)
     assert mac == "AA:BB"
     assert ("connect", "AA:BB") in client.calls, "not linked yet: the daemon connects it"
     assert ("scan", 1.0) not in client.calls, "an explicit mac never scans"
-    assert d._mac == "AA:BB", "the proxy names its panel on every call"
 
 
-async def test_resolve_device_uses_the_single_linked_panel(monkeypatch) -> None:
+async def test_resolve_target_mac_uses_the_single_linked_panel(monkeypatch) -> None:
     client = _use_client(monkeypatch, _FakeClient(
         status={"success": True, "connected": True, "mac": "CC:DD", "devices": [{"mac": "CC:DD"}]},
         per_mac={"CC:DD": {"success": True, "connected": True, "mac": "CC:DD"}},
     ))
     ns = SimpleNamespace(command="set-volume", mac=None, timeout=1.0, device_type=None)
-    d, mac = await cli_device_verbs._resolve_device(ns)
+    mac = await cli_device_verbs.resolve_target_mac(ns)
     assert mac == "CC:DD"
     assert not any(c[0] in ("scan", "connect") for c in client.calls)
 
 
-async def test_resolve_device_refuses_to_guess_between_several_panels(monkeypatch) -> None:
+async def test_resolve_target_mac_refuses_to_guess_between_several_panels(monkeypatch) -> None:
     _use_client(monkeypatch, _FakeClient(
         status={"success": True, "connected": True, "mac": None,
                 "devices": [{"mac": "AA:AA"}, {"mac": "BB:BB"}]},
     ))
     ns = SimpleNamespace(command="set-volume", mac=None, timeout=1.0, device_type=None)
     with pytest.raises(SystemExit) as exc:
-        await cli_device_verbs._resolve_device(ns)
+        await cli_device_verbs.resolve_target_mac(ns)
     assert exc.value.code == 2
 
 
-async def test_resolve_device_scans_through_the_daemon_when_nothing_is_linked(monkeypatch) -> None:
+async def test_resolve_target_mac_scans_through_the_daemon_when_nothing_is_linked(monkeypatch) -> None:
     client = _use_client(monkeypatch, _FakeClient(
         scan={"success": True, "devices": [{"address": "EE:FF", "name": "Pixoo"}]},
     ))
     ns = SimpleNamespace(command="set-volume", mac=None, timeout=2.5, device_type=None)
-    d, mac = await cli_device_verbs._resolve_device(ns)
+    mac = await cli_device_verbs.resolve_target_mac(ns)
     assert mac == "EE:FF"
     assert ("scan", 2.5) in client.calls and ("connect", "EE:FF") in client.calls
 
 
-async def test_resolve_device_errors_when_no_devices_found(monkeypatch) -> None:
+async def test_resolve_target_mac_errors_when_no_devices_found(monkeypatch) -> None:
     _use_client(monkeypatch, _FakeClient())
     ns = SimpleNamespace(command="set-volume", mac=None, timeout=0.1, device_type=None)
     with pytest.raises(SystemExit) as exc:
-        await cli_device_verbs._resolve_device(ns)
+        await cli_device_verbs.resolve_target_mac(ns)
     assert exc.value.code == 1
 
 
@@ -209,7 +201,7 @@ async def test_a_refused_scan_is_an_error_not_an_empty_list(monkeypatch, capsys)
     assert "scan already in progress" in capsys.readouterr().err
     ns = SimpleNamespace(command="set-volume", mac=None, timeout=1.0, device_type=None)
     with pytest.raises(SystemExit) as exc:
-        await cli_device_verbs._resolve_device(ns)
+        await cli_device_verbs.resolve_target_mac(ns)
     assert exc.value.code == 1
     assert "scan already in progress" in capsys.readouterr().err
 
@@ -234,29 +226,33 @@ async def test_cmd_scan_json(monkeypatch, capsys) -> None:
     assert json.loads(capsys.readouterr().out) == [{"address": "AA:BB:CC:DD:EE:FF", "name": "Pixoo"}]
 
 
-# ── cmd_capabilities: notes formatting ─────────────────────────────────
+# ── cmd_capabilities: the DAEMON's description ──────────────────────────
 
 
-async def test_cmd_capabilities_prints_notes(monkeypatch, capsys) -> None:
-    class Caps:
-        panel_resolution = 16
-        has_fm = has_sd = has_scoreboard = has_anim_8b = False
-        has_orientation = has_screen_mirror = has_alarm = False
-        has_sleep = has_weather = has_mic = False
-        notes = ("quirk-a", "quirk-b")
-
-    class D:
-        capabilities = Caps()
-
-        async def disconnect(self):
-            pass
-
-    monkeypatch.setattr(cli_device_verbs, "_capabilities", lambda a, m: Caps())
+async def test_cmd_capabilities_prints_the_daemons_description(monkeypatch, capsys) -> None:
+    """P3.4: what a panel IS comes from the daemon -- its model, its size, its
+    chassis, the features the vendor app enables for it and the screens it
+    offers. The CLI used to print a table of its own."""
+    client = _use_client(monkeypatch, _FakeClient(
+        status={"success": True, "connected": True, "mac": "AA:BB:CC:DD:EE:FF",
+                "devices": [{"mac": "AA:BB:CC:DD:EE:FF"}]},
+        per_mac={"AA:BB:CC:DD:EE:FF": {
+            "success": True, "connected": True, "mac": "AA:BB:CC:DD:EE:FF",
+            "model": "DITOO", "model_source": "name", "width": 16, "height": 16,
+            "chassis": {"family": "ditoo", "w_mm": 90.0, "h_mm": 114.0, "screen_mm": 64.0},
+            "features": {"speaker": True, "sd_card": True, "radio": False, "mic": True,
+                         "clock_style": "ClockNormal16"},
+            "screens": ["design", "alarm", "weather"]}},
+    ))
 
     async def fake_resolve(args):
-        return D(), "AA:BB:CC:DD:EE:FF"
+        return "AA:BB:CC:DD:EE:FF"
 
-    monkeypatch.setattr(cli_device_verbs, "_resolve_device", fake_resolve)
+    monkeypatch.setattr(cli_device_verbs, "resolve_target_mac", fake_resolve)
     rc = await cli_device_verbs.cmd_capabilities(_parse("capabilities"))
     assert rc == 0
-    assert "quirk-a; quirk-b" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "DITOO" in out, out
+    assert "ditoo" in out, out
+    assert "radio" in out and "False" in out, out
+    assert "weather" in out, out
