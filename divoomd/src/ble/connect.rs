@@ -5,6 +5,8 @@ use btleplug::api::{Peripheral as _, ScanFilter};
 use futures::StreamExt;
 use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, Mutex};
+#[cfg(target_os = "macos")]
+use uuid::Uuid;
 
 use super::{BleCentral, BleTransport, CONNECT_TIMEOUT};
 use crate::autoprobe::Protocol;
@@ -98,6 +100,44 @@ pub(super) async fn connect(central: &BleCentral, id: &str) -> Result<BleTranspo
     Ok(transport)
 }
 
+/// A device discovered during a scan.
+#[derive(Debug, Clone)]
+pub struct Discovered {
+    pub name: String,
+    pub id: String,
+    /// Raw advertisement manufacturer data, company id -> bytes (hex). The
+    /// CLI's `identify` reads it to grow the fingerprint table; it used to
+    /// scan through bleak for this, a second radio owner.
+    pub manufacturer_data: std::collections::BTreeMap<u16, String>,
+    pub service_uuids: Vec<String>,
+}
+
+impl Discovered {
+    pub(super) fn from_props(
+        id: String,
+        name: String,
+        props: Option<&btleplug::api::PeripheralProperties>,
+    ) -> Self {
+        let manufacturer_data = props
+            .map(|pr| {
+                pr.manufacturer_data
+                    .iter()
+                    .map(|(k, v)| (*k, crate::wire::hex(v)))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let service_uuids = props
+            .map(|pr| pr.services.iter().map(ToString::to_string).collect())
+            .unwrap_or_default();
+        Self {
+            name,
+            id,
+            manufacturer_data,
+            service_uuids,
+        }
+    }
+}
+
 /// The short device tag stamped on debug lines: enough of the id to tell
 /// panels apart in a fleet trace, short enough to leave room for the bytes.
 fn wire_tag(id: &str) -> String {
@@ -111,6 +151,43 @@ fn wire_tag(id: &str) -> String {
 /// RECONNECT after a disconnect -- so the discovered set is polled,
 /// mirroring the Python daemon's reconnect-scan retries.
 async fn find_peripheral(central: &BleCentral, id: &str) -> Result<Peripheral, BleError> {
+    // Attempt instant retrieval for already-connected (or OS-known) devices.
+    // Under macOS CoreBluetooth, a peripheral connected at the system level does
+    // not advertise; retrieve_peripherals retrieves it in ~0.01s without scanning.
+    #[cfg(target_os = "macos")]
+    let identifiers = Uuid::parse_str(id)
+        .ok()
+        .map(|u| vec![btleplug::platform::PeripheralId::from(u)]);
+    #[cfg(not(target_os = "macos"))]
+    let identifiers = None;
+
+    let opts = btleplug::api::RetrievePeripheralsOptions {
+        identifiers,
+        services: Some(vec![super::SERVICE_UUID]),
+    };
+    match tokio::time::timeout(Duration::from_secs(3), central.retrieve_peripherals(opts)).await {
+        Ok(Ok(peripherals)) => {
+            if let Some(p) = peripherals
+                .into_iter()
+                .find(|p| p.id().to_string().eq_ignore_ascii_case(id))
+            {
+                if std::env::var("DIVOOMD_BLE_DEBUG").is_ok() {
+                    eprintln!("[ble][connect] found peripheral via retrieve_peripherals");
+                }
+                return Ok(p);
+            }
+        }
+        Ok(Err(e)) if e.fault() == crate::ble_fault::BleFault::DeadCentral => {
+            return Err(e);
+        }
+        Err(_) => {
+            return Err(BleError::dead_central(
+                "BLE retrieve timed out: central may be stale (Channel closed)",
+            ));
+        }
+        _ => {}
+    }
+
     // EVERY central await below is bounded by a timeout. On a dead
     // CoreBluetooth session `start_scan`/`peripherals`/`stop_scan` hang forever
     // with no error, which would wedge `connect` and defeat the caller's

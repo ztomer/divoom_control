@@ -108,6 +108,30 @@ impl BleCentral {
             Self::ChannelClosed => Err(channel_closed()),
         }
     }
+
+    /// Retrieve already-connected or known peripherals matching `options`.
+    /// Same wedge contract as `start_scan`.
+    ///
+    /// # Errors
+    ///
+    /// From the BLE stack below: the adapter is gone, or the operation fails.
+    pub async fn retrieve_peripherals(
+        &self,
+        options: btleplug::api::RetrievePeripheralsOptions,
+    ) -> Result<Vec<Peripheral>, BleError> {
+        match self {
+            Self::Real(a) => a
+                .retrieve_peripherals(options)
+                .await
+                .map_err(|e| BleError::from_btle(&e)),
+            #[cfg(test)]
+            Self::Faulty => std::future::pending().await,
+            #[cfg(test)]
+            Self::PromptError(m) => Err(prompt_error(m)),
+            #[cfg(test)]
+            Self::ChannelClosed => Err(channel_closed()),
+        }
+    }
 }
 
 /// The exact `btleplug::Error` 0.13 produces for a vanished peripheral, so the
@@ -148,6 +172,7 @@ mod tests {
             "scan timed out: central may be stale (Channel closed)",
             "BLE scan start timed out: central may be stale (Channel closed)",
             "BLE discovery timed out: central may be stale (Channel closed)",
+            "BLE retrieve timed out: central may be stale (Channel closed)",
             "BLE connect timed out",
             "BLE discover_services timed out",
             "BLE subscribe timed out",
@@ -262,5 +287,37 @@ mod tests {
         let res = r.unwrap();
         assert!(res.is_err(), "wedged connect should error");
         assert!(is_dead_central(&res.err().unwrap()));
+    }
+
+    #[tokio::test]
+    async fn wedged_retrieve_peripherals_times_out() {
+        let c = BleCentral::Faulty;
+        let r = timeout(
+            Duration::from_millis(50),
+            c.retrieve_peripherals(btleplug::api::RetrievePeripheralsOptions::default()),
+        )
+        .await;
+        assert!(r.is_err(), "retrieve on wedged central must not complete");
+    }
+
+    #[tokio::test]
+    async fn retrieve_peripherals_on_dead_central_returns_dead_central_fault() {
+        let c = BleCentral::ChannelClosed;
+        let err = c
+            .retrieve_peripherals(btleplug::api::RetrievePeripheralsOptions::default())
+            .await
+            .expect_err("must fail");
+        assert_eq!(err.fault(), BleFault::DeadCentral);
+        assert_eq!(err.text(), "Channel closed");
+    }
+
+    #[tokio::test]
+    async fn retrieve_peripherals_on_prompt_error_returns_other_fault() {
+        let c = BleCentral::PromptError("Device unavailable");
+        let err = c
+            .retrieve_peripherals(btleplug::api::RetrievePeripheralsOptions::default())
+            .await
+            .expect_err("must fail");
+        assert_eq!(err.fault(), BleFault::Other);
     }
 }

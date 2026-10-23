@@ -36,6 +36,7 @@ mod connect;
 // Divoom GATT (ISSC transparent-UART service), from divoom_lib/divoom.py.
 const WRITE_UUID: Uuid = Uuid::from_u128(0x49535343_8841_43f4_a8d4_ecbe34729bb3);
 const NOTIFY_UUID: Uuid = Uuid::from_u128(0x49535343_1e4d_4bd9_ba61_23c647249616);
+pub(crate) const SERVICE_UUID: Uuid = Uuid::from_u128(0x49535343_fe7d_4ae5_8fa9_9fafd205e455);
 
 const DEVICE_NAME_HINTS: &[&str] = &["Pixoo", "Divoom", "Tivoo", "Timoo", "Ditoo", "Timebox"];
 
@@ -57,17 +58,7 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 pub use crate::transport::BleResult;
 pub use crate::transport::Read;
 
-/// A device discovered during a scan.
-#[derive(Debug, Clone)]
-pub struct Discovered {
-    pub name: String,
-    pub id: String,
-    /// Raw advertisement manufacturer data, company id -> bytes (hex). The
-    /// CLI's `identify` reads it to grow the fingerprint table; it used to
-    /// scan through bleak for this, a second radio owner.
-    pub manufacturer_data: std::collections::BTreeMap<u16, String>,
-    pub service_uuids: Vec<String>,
-}
+pub use connect::Discovered;
 
 /// Create the platform adapter. The caller must keep it alive (see [`Adapter`]).
 ///
@@ -121,32 +112,34 @@ pub async fn scan(central: &BleCentral, timeout: Duration) -> Result<Vec<Discove
         tokio::time::sleep(dur).await;
         central.stop_scan().await?;
         let mut out = Vec::new();
-        for p in central.peripherals().await? {
+        let mut seen = std::collections::HashSet::new();
+        let mut candidates: Vec<(Peripheral, bool)> = central
+            .peripherals()
+            .await?
+            .into_iter()
+            .map(|p| (p, false))
+            .collect();
+        let opts = btleplug::api::RetrievePeripheralsOptions {
+            identifiers: None,
+            services: Some(vec![SERVICE_UUID]),
+        };
+        match central.retrieve_peripherals(opts).await {
+            Ok(retrieved) => candidates.extend(retrieved.into_iter().map(|p| (p, true))),
+            Err(e) if e.fault() == crate::ble_fault::BleFault::DeadCentral => return Err(e),
+            Err(_) => {}
+        }
+        for (p, is_retrieved) in candidates {
+            let id = p.id().to_string();
+            if !seen.insert(id.clone()) {
+                continue;
+            }
             let props = p.properties().await.map_err(|e| BleError::from_btle(&e))?;
             let name = props
                 .as_ref()
                 .and_then(|pr| pr.local_name.clone())
                 .unwrap_or_default();
-            if DEVICE_NAME_HINTS.iter().any(|h| name.contains(h)) {
-                let manufacturer_data = props
-                    .as_ref()
-                    .map(|pr| {
-                        pr.manufacturer_data
-                            .iter()
-                            .map(|(k, v)| (*k, crate::wire::hex(v)))
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                let service_uuids = props
-                    .as_ref()
-                    .map(|pr| pr.services.iter().map(ToString::to_string).collect())
-                    .unwrap_or_default();
-                out.push(Discovered {
-                    name,
-                    id: p.id().to_string(),
-                    manufacturer_data,
-                    service_uuids,
-                });
+            if is_retrieved || DEVICE_NAME_HINTS.iter().any(|h| name.contains(h)) {
+                out.push(Discovered::from_props(id, name, props.as_ref()));
             }
         }
         Ok(out)

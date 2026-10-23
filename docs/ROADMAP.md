@@ -259,6 +259,13 @@ carries the Bluetooth grant (the app's client) that asks for it
 (`divoomd/src/links.rs`, `divoomd/tests/link_restore.rs`,
 `tests/test_daemon_link_restore_e2e.py`).
 
+#### P2.9 — Discover and connect to already-connected BLE peripherals via CoreBluetooth retrieval
+
+**Status:** OPEN
+**Done when:** `divoomd`'s BLE scan and connect query `central.retrieve_peripherals` for connected and known devices (using the ISSC service UUID and known peripheral identifiers) so that panels already connected at the OS level (e.g. `Pixoo-1`) appear in scan results and connect without advertisement scan timeouts.
+
+The daemon's BLE scan (`divoomd/src/ble.rs`) and connect (`divoomd/src/ble/connect.rs`) currently rely exclusively on `central.start_scan(...)` and `central.peripherals()`. Under macOS CoreBluetooth, a peripheral that is already connected at the system level (or held by another system central) stops broadcasting advertisement packets; `start_scan` never observes it, and `find_peripheral` times out with "device not found in scan". `btleplug` 0.13.4 exposes `central.retrieve_peripherals(...)` (delegating on macOS to `retrieveConnectedPeripheralsWithServices:` and `retrievePeripheralsWithIdentifiers:`). Wires `retrieve_peripherals` into `ble::scan` and `ble::connect::find_peripheral` so already-connected devices are discovered and connected immediately.
+
 ### Phase 3 — the daemon knows what each panel is
 
 **Goal:** one owner (the daemon) for each panel's model, size and failure
