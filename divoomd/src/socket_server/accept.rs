@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::Value;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixListener;
 use tokio::sync::Semaphore;
 
@@ -29,7 +29,7 @@ use crate::subscriptions::{Registry, RENEGOTIATE_AFTER};
 /// gives the client something it can retry or show. Silence gives it nothing.
 async fn refuse_at_capacity<S>(mut stream: S, max_connections: usize)
 where
-    S: tokio::io::AsyncWrite + Unpin,
+    S: AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
     let mut reply = crate::protocol::err_code(
         crate::protocol::ErrorCode::ResourceExhausted,
@@ -63,7 +63,23 @@ where
     }
     let _ = write_line(&mut stream, &reply).await;
     let _ = stream.shutdown().await;
+    // LINGERING CLOSE (RFC 9112 section 9.6). A client sends its request the
+    // moment it connects; if this side has already closed, that send fails with
+    // EPIPE and the client never reads the refusal that is waiting for it. So
+    // after the reply, keep reading (and discarding) until the client closes or
+    // `REFUSAL_LINGER` passes. The wait is bounded, so a refused client still
+    // costs one short-lived task and never a connection slot.
+    let mut sink = [0u8; 512];
+    let _ = tokio::time::timeout(REFUSAL_LINGER, async {
+        while matches!(stream.read(&mut sink).await, Ok(n) if n > 0) {}
+    })
+    .await;
 }
+
+/// How long a refused client may keep sending before the connection is closed
+/// on it. Long enough for a request written right after `connect`, short enough
+/// that shedding stays cheap.
+const REFUSAL_LINGER: Duration = Duration::from_millis(500);
 
 /// The handler's shared connection table (or a private one), with this
 /// listener's budgets recorded on it.

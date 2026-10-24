@@ -22,6 +22,14 @@ shipped milestone (per the project planning docs).
   (`divoom-menubar/src/tray.rs`, `divoom-menubar/src/main.rs`), matching the
   native AppKit menubar popup placement across the estate (`ZoneWM` `4e56acbd`).
 
+- **A client refused at the connection cap now always reads the refusal.**
+  The daemon wrote its `resource_exhausted` line and closed at once, so a
+  client that sent its request after the close got `EPIPE` and never saw the
+  reply (tokio 1.54 scheduling made it deterministic in
+  `a_request_client_that_stops_reading_frees_its_connection_slot`). The refusal
+  now lingers, reading and discarding for at most 500 ms (RFC 9112 section 9.6),
+  on both the unix and TCP listeners (`divoomd/src/socket_server/accept.rs`).
+
 - **MCP e2e discovery assertions and shared JavaScript syntax gate.**
   `divoomd/tests/mcp_lease_e2e.rs` asserts the daemon's panel capability
   fields (`chassis`, `features`, `screens`) end-to-end over MCP, and the
