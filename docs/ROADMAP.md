@@ -265,7 +265,12 @@ peripherals the system already holds, so a panel connected at the OS level
 advertisement (`e5b0b92`: `divoomd/src/ble.rs`, `divoomd/src/ble/connect.rs`,
 `divoomd/src/central.rs`); D19, the menubar's popup menu anchored flush at the
 bottom of the status button (`8cccf6e`: `divoom-menubar/src/tray.rs`); both
-released as v0.41.8 (E75).
+released as v0.41.8 (E75; tag, GitHub release and DMG are out and the app is
+installed at 0.41.8, `9423ee0` also fixed the refusal-at-the-cap EPIPE the
+tokio 1.54.1 refresh exposed). OPEN: the Homebrew cask is still 0.41.7 --
+`tap_rewrite.py` rejects the cask's quoted heredoc (`<<~'DIVOOM_STOP_HELPERS'`)
+as an unbalanced block, a goh defect; re-run `scripts/release.sh --skip-build`
+after goh accepts quoted heredoc tags.
 
 ### Phase 3 — the daemon knows what each panel is
 
