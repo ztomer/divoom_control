@@ -470,3 +470,7 @@ pub fn clear_failure(socket_path: &str) {
 #[cfg(test)]
 #[path = "socket_bind_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "socket_bind_stale_tests.rs"]
+mod stale_tests;

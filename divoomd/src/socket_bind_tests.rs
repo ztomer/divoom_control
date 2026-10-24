@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 /// Unique per test — no clock or RNG here, so the test name is the uniqueness.
-fn tmp_path(tag: &str) -> String {
+pub(super) fn tmp_path(tag: &str) -> String {
     // Per-process: two test binaries (or a CI step and a stray run) sharing
     // one path saw each other's lock as StartupInProgress (flaked once,
     // 2026-09-12).
@@ -21,7 +21,7 @@ fn tmp_path(tag: &str) -> String {
 }
 
 /// Remove the socket and both sidecars.
-fn cleanup(p: &str) {
+pub(super) fn cleanup(p: &str) {
     let _ = std::fs::remove_file(p);
     let _ = std::fs::remove_file(lock_path(p));
     let _ = std::fs::remove_file(failure_path(p));
@@ -77,22 +77,6 @@ fn binds_a_free_path() {
     cleanup(&p);
     let got = acquire(&p).expect("free path must bind");
     assert!(std::path::Path::new(&p).exists(), "socket must exist");
-    drop(got);
-    cleanup(&p);
-}
-
-#[test]
-fn clears_a_stale_socket() {
-    // THE common case: the daemon died without unlinking. Dropping a
-    // UnixListener does not remove the file, so this is exactly what is left
-    // behind by a kill -9.
-    let p = tmp_path("stale");
-    cleanup(&p);
-    let dead = UnixListener::bind(&p).expect("bind");
-    drop(dead);
-    assert!(std::path::Path::new(&p).exists(), "stale file remains");
-
-    let got = acquire(&p).expect("a stale socket must be cleared, not fatal");
     drop(got);
     cleanup(&p);
 }
