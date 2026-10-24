@@ -1,6 +1,6 @@
 //! Stale-socket tests, split from `socket_bind_tests.rs` at the file-length cap.
 
-use super::tests::{cleanup, tmp_path};
+use super::tests::{cleanup, tmp_path, wait_until_refused};
 use super::*;
 
 /// Leave a socket file at `p` that nothing listens on, and return only once the
@@ -19,14 +19,7 @@ fn leave_stale_socket(p: &str, lingering_copy: Option<std::time::Duration>) {
         std::thread::sleep(lingering_copy.unwrap_or_default());
         drop(copy);
     });
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-    while UnixStream::connect(p).is_ok() {
-        assert!(
-            std::time::Instant::now() < deadline,
-            "the listener at {p} never went away"
-        );
-        std::thread::sleep(std::time::Duration::from_millis(5));
-    }
+    wait_until_refused(p);
     assert!(std::path::Path::new(p).exists(), "stale file remains");
 }
 

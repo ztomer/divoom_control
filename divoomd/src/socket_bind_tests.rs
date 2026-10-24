@@ -20,6 +20,23 @@ pub(super) fn tmp_path(tag: &str) -> String {
         .into_owned()
 }
 
+/// Return once the kernel refuses `connect` to `p`. Dropping a listener does not
+/// do that by itself: a `fork` in another test thread copies every open
+/// descriptor until its `exec`, so for that gap the "closed" listener still
+/// accepts into a backlog nobody reads, and the next `acquire` reads it as
+/// `UnresponsiveListener` (1 run in 40 locally, and red once in CI). Every test
+/// that drops a bound daemon and then expects the path free calls this first.
+pub(super) fn wait_until_refused(p: &str) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while UnixStream::connect(p).is_ok() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the listener at {p} never went away"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+}
+
 /// Remove the socket and both sidecars.
 pub(super) fn cleanup(p: &str) {
     let _ = std::fs::remove_file(p);
@@ -330,6 +347,7 @@ fn a_released_lock_is_released_even_when_a_child_inherited_the_descriptor() {
     std::thread::sleep(std::time::Duration::from_millis(200));
 
     drop(first); // the daemon exits: its own reference is gone
+    wait_until_refused(&p); // and no other test's fork still holds its listener
 
     let second = acquire(&p).expect(
         "a released lock must be released even when a child still holds a \
