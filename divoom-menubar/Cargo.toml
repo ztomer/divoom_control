@@ -1,6 +1,6 @@
 [package]
 name = "divoom-menubar"
-version = "0.41.7"
+version = "0.41.8"
 edition = "2021"
 description = "Native (Rust) menubar/tray agent for divoom-control. Talks to divoomd over the NDJSON socket, shows status + active devices, and launches the Python pywebview GUI. Replaced the pyobjc menubar, which was removed in R66 (2026-08-17)."
 publish = false
@@ -64,10 +64,26 @@ serde_json = "1"
 # Panel tiles: decode the daemon's PNG frame previews into menu icons.
 image = { version = "0.25", default-features = false, features = ["png"] }
 
-# macOS: wake the main CFRunLoop so the status item shows up on first paint, and
-# (via winit) run as an Accessory app (no Dock icon — it's a menubar agent).
+# macOS: wake the main CFRunLoop so the status item shows up on first paint,
+# pop up the status-item menu anchored flush at the bottom of NSStatusBarButton
+# via `NSMenu::popUpMenuPositioningItem_atLocation_inView`, and (via winit) run
+# as an Accessory app (no Dock icon — it's a menubar agent).
 [target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = { version = "0.3.2", default-features = false, features = [
+    "NSButton",
+    "NSControl",
+    "NSMenu",
+    "NSMenuItem",
+    "NSResponder",
+    "NSStatusBarButton",
+    "NSStatusItem",
+    "NSView",
+] }
 objc2-core-foundation = { version = "0.3", features = ["CFRunLoop"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = [
+    "NSGeometry",
+    "NSThread",
+] }
 
 # Linux/BSD: tray-icon 0.26 hard-fails to compile there unless `libappindicator`
 # or `ksni` is enabled, and the macOS `[dependencies]` entry above deliberately

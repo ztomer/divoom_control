@@ -4,6 +4,35 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## v0.41.8 — CoreBluetooth connected-peripheral discovery and native menubar popup anchoring (2026-10-24)
+
+- **BLE discovery includes peripherals macOS already holds connected (P2.9).**
+  CoreBluetooth's advertisement scan omits peripherals that macOS or another
+  process has already connected at the link layer. `divoomd` now queries
+  connected peripherals for the known Divoom GATT service UUIDs alongside
+  `start_scan` (`divoomd/src/ble.rs`, `divoomd/src/ble/connect.rs`,
+  `divoomd/src/central.rs`), so an already-connected panel is surfaced by
+  `scan` and reachable by `connect` without toggling Bluetooth.
+
+- **The menubar anchors its popup menu flush at the bottom edge of the status bar button (D19).**
+  Instead of `tray-icon`'s `setMenu` + `performClick(None)` + `setMenu(None)`
+  sequence, `divoom-menubar` handles left and right mouse-down events directly
+  and pops up the `NSMenu` via `popUpMenuPositioningItem:atLocation:inView:` at
+  `NSPoint(x: 0, y: button.bounds.height)` in `NSStatusBarButton` coordinates
+  (`divoom-menubar/src/tray.rs`, `divoom-menubar/src/main.rs`), matching the
+  native AppKit menubar popup placement across the estate (`ZoneWM` `4e56acbd`).
+
+- **MCP e2e discovery assertions and shared JavaScript syntax gate.**
+  `divoomd/tests/mcp_lease_e2e.rs` asserts the daemon's panel capability
+  fields (`chassis`, `features`, `screens`) end-to-end over MCP, and the
+  repository's JavaScript syntax check runs through the shared `goh js-syntax`
+  gate (`.gatesrc`).
+
+- **Release documentation aligned with shared-lifecycle quit behavior.**
+  Updated `docs/RELEASING.md` so the cask uninstall notes accurately describe
+  the default shared-lifecycle teardown (`keep_daemon_alive` defaults to false;
+  detached helpers remain only when configured or after an ungraceful exit).
+
 ## v0.41.7 — the daemon knows what each panel IS, and the clients read that (2026-10-22)
 
 The release where the PANEL is described in one place -- by the daemon -- and

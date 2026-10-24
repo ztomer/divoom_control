@@ -75,11 +75,14 @@ Verify: `brew install --cask ztomer/tap/divoom-control`.
 
 **Clean-upgrade contract (do NOT drop the `uninstall` stanza).** The cask must stop
 every process the app spawns before a swap. It does this with
-`uninstall quit: "com.divoom.control"` (graceful GUI quit → the app shuts the
-daemon down) **plus** a `script:` that `pkill`s the detached helpers
-(`divoom-menubar` orphans to launchd on GUI quit; a stubborn `divoomd` is reaped
-too). Verified end-to-end: `brew uninstall --cask` prints "Quitting application
-… quit successfully" + "Running uninstall script" and leaves zero survivors.
+`uninstall quit: "com.divoom.control"` (graceful GUI quit → by default
+`keep_daemon_alive` is false, so quitting the GUI or menubar tears down the
+shared stack) **plus** a `script:` that `pkill`s the detached helpers
+(`divoomd` and `divoom-menubar` run in their own process sessions and stay up
+if `keep_daemon_alive` is configured, `quit_menubar_on_exit` is cleared, or the
+GUI is killed/crashes before its shutdown hook runs). Verified end-to-end:
+`brew uninstall --cask` prints "Quitting application … quit successfully" +
+"Running uninstall script" and leaves zero survivors.
 
 **Gotcha — upgrade uses the INSTALLED version's uninstall stanza, not the new
 one.** `brew upgrade --cask` runs the uninstall directives from the version

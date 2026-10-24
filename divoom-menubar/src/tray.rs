@@ -7,7 +7,7 @@ use std::time::Duration;
 use tray_icon::menu::{
     CheckMenuItem, Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem, Submenu,
 };
-use tray_icon::{TrayIcon, TrayIconBuilder};
+use tray_icon::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 
 use crate::menu_model::{MenuChange, MenuModel, RowModel};
 use crate::state::{resolve_icon_state, IconState};
@@ -48,15 +48,20 @@ pub struct Tray {
     /// the menu (which dismisses it while the user has it open).
     rows: std::cell::RefCell<std::collections::HashMap<String, RowItems>>,
     notif: std::cell::RefCell<Option<NotifItems>>,
+    #[cfg(target_os = "macos")]
+    menu: std::cell::RefCell<Option<Menu>>,
 }
 
 impl Tray {
     pub fn build() -> Option<Self> {
-        let icon = TrayIconBuilder::new()
+        let builder = TrayIconBuilder::new()
             .with_tooltip("Divoom Control")
-            .with_icon(make_icon(IconState::Offline))
-            .build()
-            .ok()?;
+            .with_icon(make_icon(IconState::Offline));
+        #[cfg(target_os = "macos")]
+        let builder = builder
+            .with_menu_on_left_click(false)
+            .with_menu_on_right_click(false);
+        let icon = builder.build().ok()?;
         let mut tray = Self {
             icon,
             launch_id: MenuId::new("launch"),
@@ -70,6 +75,8 @@ impl Tray {
             tiles: std::cell::RefCell::new(crate::tiles::TileCache::default()),
             rows: std::cell::RefCell::new(std::collections::HashMap::new()),
             notif: std::cell::RefCell::new(None),
+            #[cfg(target_os = "macos")]
+            menu: std::cell::RefCell::new(None),
         };
         let empty = MenuModel::default();
         tray.rebuild(&[], &empty);
@@ -173,8 +180,59 @@ impl Tray {
             true,
             None,
         ));
-        self.icon.set_menu(Some(Box::new(menu)));
+        #[cfg(target_os = "macos")]
+        {
+            *self.menu.borrow_mut() = Some(menu);
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            self.icon.set_menu(Some(Box::new(menu)));
+        }
     }
+
+    /// Pop up the context menu anchored flush at the bottom edge of the status
+    /// bar button (`NSPoint(x: 0, y: button.bounds.height)` in button-local
+    /// coordinates), instead of `tray-icon`'s `setMenu` + `performClick(None)` +
+    /// `setMenu(None)` sequence.
+    #[cfg(target_os = "macos")]
+    pub fn show_menu(&self) {
+        use objc2_app_kit::NSMenu;
+        use objc2_foundation::{MainThreadMarker, NSPoint};
+        use tray_icon::menu::ContextMenu;
+
+        let Some(mtm) = MainThreadMarker::new() else {
+            return;
+        };
+        let Some(status_item) = self.icon.ns_status_item() else {
+            return;
+        };
+        let Some(button) = status_item.button(mtm) else {
+            return;
+        };
+        let menu_ptr = {
+            let borrow = self.menu.borrow();
+            let Some(menu) = borrow.as_ref() else {
+                return;
+            };
+            menu.ns_menu().cast::<NSMenu>().cast_const()
+        };
+        if menu_ptr.is_null() {
+            return;
+        }
+        let (x, y) = popup_anchor_in_button(button.bounds().size.height);
+        // SAFETY: `menu_ptr` is the live `NSMenu` owned by `self.menu` on the
+        // main thread (`MainThreadMarker::new()` succeeded above).
+        let ns_menu = unsafe { &*menu_ptr };
+        let _ = ns_menu.popUpMenuPositioningItem_atLocation_inView(
+            None,
+            NSPoint::new(x, y),
+            Some(&button),
+        );
+        button.highlight(false);
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    pub const fn show_menu(&self) {}
 
     /// Apply a model whose rows are the installed ones to the existing items,
     /// so an open menu stays open. Both patterns name every field with no
@@ -332,9 +390,88 @@ impl Tray {
     }
 }
 
+/// Whether a tray icon event should pop up the status-item context menu: left
+/// or right mouse-down opens the menu, while mouse-up, middle click, and hover
+/// events do not.
+pub const fn should_pop_up_menu(ev: &TrayIconEvent) -> bool {
+    matches!(
+        ev,
+        TrayIconEvent::Click {
+            button: MouseButton::Left | MouseButton::Right,
+            button_state: MouseButtonState::Down,
+            ..
+        }
+    )
+}
+
+/// Anchor point in the status bar button's flipped coordinate system (`x = 0`,
+/// `y = button.bounds.height`), placing the popup menu flush against the
+/// bottom edge of the `NSStatusBarButton`.
+#[cfg(any(target_os = "macos", test))]
+pub const fn popup_anchor_in_button(bounds_height: f64) -> (f64, f64) {
+    (0.0, bounds_height)
+}
+
 /// The status item's image for `state`. The pixels come from `glyph::draw`,
 /// which `tools/render_tray_icon.py` also compiles, so its sheets are this glyph.
 fn make_icon(state: IconState) -> tray_icon::Icon {
     let (rgba, w, h) = crate::glyph::draw(state.look());
     tray_icon::Icon::from_rgba(rgba, w, h).expect("valid tray icon")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tray_icon::dpi::PhysicalPosition;
+    use tray_icon::{Rect, TrayIconId};
+
+    fn click_event(button: MouseButton, button_state: MouseButtonState) -> TrayIconEvent {
+        TrayIconEvent::Click {
+            id: TrayIconId::new("divoom-test"),
+            position: PhysicalPosition::new(10.0, 12.0),
+            rect: Rect::default(),
+            button,
+            button_state,
+        }
+    }
+
+    #[test]
+    fn popup_anchor_sits_flush_at_button_bottom_edge() {
+        assert_eq!(popup_anchor_in_button(22.0), (0.0, 22.0));
+        assert_eq!(popup_anchor_in_button(24.0), (0.0, 24.0));
+    }
+
+    #[test]
+    fn left_and_right_mouse_down_pop_up_menu() {
+        assert!(should_pop_up_menu(&click_event(
+            MouseButton::Left,
+            MouseButtonState::Down
+        )));
+        assert!(should_pop_up_menu(&click_event(
+            MouseButton::Right,
+            MouseButtonState::Down
+        )));
+    }
+
+    #[test]
+    fn mouse_up_middle_click_and_move_do_not_pop_up_menu() {
+        assert!(!should_pop_up_menu(&click_event(
+            MouseButton::Left,
+            MouseButtonState::Up
+        )));
+        assert!(!should_pop_up_menu(&click_event(
+            MouseButton::Right,
+            MouseButtonState::Up
+        )));
+        assert!(!should_pop_up_menu(&click_event(
+            MouseButton::Middle,
+            MouseButtonState::Down
+        )));
+        let move_ev = TrayIconEvent::Move {
+            id: TrayIconId::new("divoom-test"),
+            position: PhysicalPosition::new(10.0, 12.0),
+            rect: Rect::default(),
+        };
+        assert!(!should_pop_up_menu(&move_ev));
+    }
 }

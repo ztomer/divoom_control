@@ -23,6 +23,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use tray_icon::menu::MenuEvent;
+use tray_icon::TrayIconEvent;
 use winit::application::ApplicationHandler;
 use winit::event::{StartCause, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
@@ -30,7 +31,8 @@ use winit::window::WindowId;
 
 use tray::{Tray, TrayAction};
 
-/// Menu clicks forwarded into the loop so it wakes on interaction; `DaemonEvent`
+/// Menu and tray-icon clicks forwarded into the loop so it wakes on
+/// interaction; `DaemonEvent`
 /// wakes it EARLY (before the next POLL tick) on a live `status/owned_devices`
 /// broadcast, so a connect/disconnect/degraded transition shows up promptly
 /// instead of waiting up to POLL seconds. `poll_daemon()` still does the actual
@@ -38,6 +40,7 @@ use tray::{Tray, TrayAction};
 /// a wake-up signal, never touches the `TrayIcon` itself off-thread.
 enum UserEvent {
     Menu(MenuEvent),
+    Tray(TrayIconEvent),
     DaemonEvent,
 }
 
@@ -122,10 +125,14 @@ fn main() {
         .build()
         .expect("menubar event loop must build on the main thread");
 
-    // Forward menu events to the loop so it wakes on each click.
+    // Forward menu and tray-icon events to the loop so it wakes on each click.
     let proxy = event_loop.create_proxy();
     MenuEvent::set_event_handler(Some(move |e| {
         let _ = proxy.send_event(UserEvent::Menu(e));
+    }));
+    let tray_proxy = event_loop.create_proxy();
+    TrayIconEvent::set_event_handler(Some(move |e| {
+        let _ = tray_proxy.send_event(UserEvent::Tray(e));
     }));
 
     // Background thread: subscribe to the daemon's live status/owned_devices
@@ -230,6 +237,14 @@ impl ApplicationHandler<UserEvent> for App {
         match event {
             UserEvent::DaemonEvent => {
                 self.poll_daemon();
+                Self::arm_poll_timer(event_loop);
+            }
+            UserEvent::Tray(ev) => {
+                if tray::should_pop_up_menu(&ev) {
+                    if let Some(t) = self.tray.as_ref() {
+                        t.show_menu();
+                    }
+                }
                 Self::arm_poll_timer(event_loop);
             }
             UserEvent::Menu(ev) => {
