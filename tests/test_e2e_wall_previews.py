@@ -62,7 +62,7 @@ def _colour_of(data_url: str):
     from PIL import Image
     head, body = data_url.split(";base64,", 1)
     img = Image.open(io.BytesIO(base64.b64decode(body))).convert("RGB")
-    return head, img.size, set(img.getdata())
+    return head, img.size, set(img.get_flattened_data())
 
 
 def test_a_wall_push_returns_each_panels_own_preview(stack, tmp_path):

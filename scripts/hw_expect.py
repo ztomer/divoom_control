@@ -171,7 +171,7 @@ def _pixels(png: bytes):
     """(size, pixel list) of a PNG — the imaging library's job."""
     from PIL import Image
     im = Image.open(io.BytesIO(png)).convert("RGB")
-    return im.size, list(im.getdata())
+    return im.size, list(im.get_flattened_data())
 
 
 def stats(png: bytes) -> dict:
