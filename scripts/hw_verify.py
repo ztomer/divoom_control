@@ -10,6 +10,7 @@ you SEE, then writes down the answer.
     scripts/hw_verify.py --list            # what it will ask
     scripts/hw_verify.py                   # run the packet
     scripts/hw_verify.py --only sysmon     # one check
+    scripts/hw_verify.py --only mcp_lease  # Phase 4's exit (a 64x64 panel)
     scripts/hw_verify.py --self-test       # prove it can report FAILURE
     scripts/hw_verify.py --out report.json # where the verdicts land
 
@@ -327,6 +328,10 @@ def main() -> int:
                          "to --out, else a temp directory)")
     ap.add_argument("--image", default=str(DEFAULT_IMAGE),
                     help="image for the custom_art check")
+    ap.add_argument("--divoomd", default="",
+                    help="the divoomd binary whose `mcp` entry point the "
+                         "mcp_lease check drives (default: the one the GUI "
+                         "would run)")
     ap.add_argument("--size", type=int, default=0,
                     help="panel size; 0 asks the daemon, falling back to 16")
     args = ap.parse_args()
@@ -363,7 +368,8 @@ def main() -> int:
         frames_dir = tempfile.mkdtemp(prefix="hw_verify_frames_")
     info(f"frames (the daemon's own pictures) are saved in: {frames_dir}")
 
-    ctx: dict = {"image": args.image, "frames_dir": frames_dir}
+    ctx: dict = {"image": args.image, "frames_dir": frames_dir,
+                 "socket": args.socket, "divoomd": args.divoomd}
     if args.size:
         ctx["size"] = args.size
     if not Path(args.image).is_file():

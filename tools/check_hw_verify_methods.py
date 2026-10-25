@@ -22,6 +22,7 @@ hardware fault in front of someone holding a device.
 """
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -33,12 +34,25 @@ from _tui import err, info, ok  # noqa: E402
 from capability_census import _ARM_BEFORE, daemon_capabilities  # noqa: E402
 
 COORDINATOR = REPO / "divoomd" / "src" / "live_jobs" / "coordinator.rs"
+# The MCP catalog: every `tool("name", ...)` entry `catalog()` assembles.
+MCP_CATALOG = (REPO / "divoomd" / "src" / "mcp_tools.rs",
+               REPO / "divoomd" / "src" / "mcp_more_tools.rs")
+_TOOL = re.compile(r'\btool\(\s*"([a-z_]+)"')
 
 # Below these, the extractor is not reading what it thinks it is reading, and a
 # gate that compares against an empty set reports compliance over nothing. The
 # real counts are ~444 and 4; these are floors, not targets.
 MIN_CAPABILITIES = 100
 MIN_KINDS = 2
+MIN_MCP_TOOLS = 10
+
+
+def mcp_tool_names() -> set[str]:
+    """The tools `divoomd mcp` lists, from the catalog's own entries."""
+    names: set[str] = set()
+    for path in MCP_CATALOG:
+        names |= set(_TOOL.findall(path.read_text(encoding="utf-8", errors="ignore")))
+    return names
 
 
 def live_job_kinds() -> set[str]:
@@ -59,12 +73,15 @@ def live_job_kinds() -> set[str]:
 def main() -> int:
     caps = daemon_capabilities()
     kinds = live_job_kinds()
+    tools = mcp_tool_names()
 
     # Calibrate before comparing: an extractor that silently returns nothing
     # passes every packet, which is the failure this whole file is about.
-    if len(caps) < MIN_CAPABILITIES or len(kinds) < MIN_KINDS:
+    if (len(caps) < MIN_CAPABILITIES or len(kinds) < MIN_KINDS
+            or len(tools) < MIN_MCP_TOOLS):
         err(f"[hw-verify-methods] extractor is not reading the daemon "
-            f"({len(caps)} commands, {len(kinds)} live-job kinds)")
+            f"({len(caps)} commands, {len(kinds)} live-job kinds, "
+            f"{len(tools)} MCP tools)")
         info("  Below the floor the comparison below is vacuous, so this is a")
         info("  FAILURE, not a pass over an empty set. Check that")
         info("  divoomd/src/daemon/dispatch.rs and live_jobs/coordinator.rs")
@@ -73,6 +90,11 @@ def main() -> int:
 
     from scripts.hw_verify import (CallCheck, CommandCheck, ImageCheck,
                                    LiveJobCheck, PANEL_LOOK, build_checks)
+    # The SAME modules `scripts.hw_verify` loaded (it puts scripts/ on the
+    # path): `scripts.hw_packet` would be a second copy, whose class no
+    # packet entry is an instance of.
+    import hw_mcp_lease
+    from hw_packet import McpLeaseCheck
 
     bad: list[str] = []
     for c in build_checks():
@@ -86,6 +108,18 @@ def main() -> int:
             if c.method not in caps:
                 bad.append(f"{c.id}: device_call method {c.method!r} is not a "
                            f"daemon capability")
+        elif isinstance(c, McpLeaseCheck):
+            for name in hw_mcp_lease.MCP_TOOLS:
+                if name not in tools:
+                    bad.append(f"{c.id}: MCP tool {name!r} is not in the "
+                               f"`divoomd mcp` catalog")
+            for name in hw_mcp_lease.SOCKET_COMMANDS:
+                if name not in caps:
+                    bad.append(f"{c.id}: socket command {name!r} is not a "
+                               f"daemon capability")
+            if "sysmon" not in kinds:
+                bad.append(f"{c.id}: live-job kind 'sysmon' is not one of "
+                           f"{sorted(kinds)}")
         elif isinstance(c, CommandCheck):
             if c.command not in caps:
                 bad.append(f"{c.id}: socket command {c.command!r} is not a "
@@ -117,7 +151,7 @@ def main() -> int:
         return 1
 
     ok(f"[hw-verify-methods] OK — packet checked against {len(caps)} daemon "
-       f"commands, {len(kinds)} live-job kinds")
+       f"commands, {len(kinds)} live-job kinds, {len(tools)} MCP tools")
     return 0
 
 

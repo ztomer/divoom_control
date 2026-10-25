@@ -357,6 +357,31 @@ are all 16x16, so a REAL 64x64 panel has never drawn a full-resolution
 multi-frame image through this path. The mock is a 64x64 panel in every way
 the daemon can see; the glass is the owner's eyes.
 
+**2026-10-24: the exit reads the wire, and the hardware half is one
+command.** The e2e now decodes the 0x8B stream the mock panel received (two
+frames of exactly 4096 pixels, red then blue, 100 ms each) instead of trusting
+the tool's `size: 64`, and requires the widget's own 64x64 frame on the wire
+after the lapse instead of trusting `restored: "job"` -- each watched red
+against a fault the old test passed. The owner's step:
+`scripts/hw_verify.py --only mcp_lease` with a 64x64 panel selected
+(`scripts/hw_mcp_lease.py`; the GUI running, as for the rest of the packet).
+It drives the real `divoomd mcp`, decides the lease, draw, refusal and lapse
+by machine, then shows the agent's frames and the widget's returning frame
+for the person at the panel to compare. Run as the owner will, against a mock
+64x64 panel, it ends UNKNOWN (nobody looked), never PASS
+(`tests/test_hw_mcp_lease.py`).
+**Two things the hardware run will settle besides the glass, measured against
+the code.** (1) The panel must be linked over Bluetooth or SPP: `show_image`
+and the live widgets are 0x8B-only and a LAN transport has neither (P6.2), so
+a Pixoo-64 reached over Wi-Fi cannot run the exit at all, and the check SKIPs
+it saying so. (2) The 64x64 frame the daemon streams -- one `AA` frame of 4096
+palette-indexed pixels -- has never been accepted by a 64x64 panel: the mock
+takes any bytes, and the cloud's own 64x64 art is the tiled magic-26 format
+(`divoomd/src/art_codec/iframe.rs`). So the first run tests the encoding as
+well as the eyes; a panel that shows nothing is that finding, not the lease's.
+**Done when:** `scripts/hw_verify.py --only mcp_lease` on a Bluetooth-linked
+64x64 panel records PASS, and Phase 4 is deleted from the Plan.
+
 ### Phase 5 — the GUI models each panel, not "the" panel
 
 **Goal:** every per-panel fact the GUI shows is read from and written to the

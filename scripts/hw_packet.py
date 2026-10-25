@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import hw_expect as expect
+import hw_mcp_lease
 
 # Re-exported so the runner and the gates can import everything from one place.
 from hw_expect import Expectation, PANEL_LOOK  # noqa: F401
@@ -202,6 +203,11 @@ class ImageCheck(Check):
         return Expectation(text=text)
 
 
+# Phase 4's exit, built on this file's `Check` (its module keeps this one
+# under the size cap).
+McpLeaseCheck = hw_mcp_lease.bind(Check)
+
+
 def build_checks() -> list[Check]:
     """The packet. Each entry names what a person must SEE, not what returned 0."""
     return [
@@ -232,6 +238,12 @@ def build_checks() -> list[Check]:
             setup="the daemon downsizes the file to the panel; the frame "
                   "below is that same downsize",
             method="display.show_image", path_arg="$image",
+        ),
+        McpLeaseCheck(
+            id="mcp_lease",
+            title="An MCP agent borrows a 64x64 panel and gives it back (P4 exit)",
+            setup="watch the panel from the moment this check starts: an agent "
+                  "takes it for about 8 s, then lets the lease lapse",
         ),
         CommandCheck(
             id="weather_city", tags=["P2.6"],

@@ -4,6 +4,37 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## Unreleased
+
+- **Phase 4's exit reads the wire, not the replies (P4).**
+  `divoomd/tests/mcp_lease_e2e.rs` took the MCP tool's own reply (`size: 64`,
+  `frames: 2`) plus "something was sent" as the full-resolution draw, and the
+  daemon's `restored: "job"` event as the panel going back to its widget. It
+  now decodes the 0x8B stream the mock panel received -- two `AA` frames of
+  exactly 4096 palette-indexed pixels each, red then blue, 100 ms each -- and
+  requires the widget's own 64x64 frame on the wire after the lease lapses.
+  Both new assertions were watched red against faults the old test passed: a
+  half-size draw that still answered `size: 64`, and a repaint that reported
+  `job` without sending anything.
+
+- **The hardware half of the exit is one command: `scripts/hw_verify.py --only mcp_lease`.**
+  `scripts/hw_mcp_lease.py` runs the exit through the real `divoomd mcp`
+  entry point (resolved as the GUI resolves it, or `--divoomd`) against the
+  selected panel: a sysmon widget, a lease, a four-frame 64x64 animation, a
+  second caller refused by name, the lease left to lapse, a renew refused --
+  each a machine FAIL when wrong -- and then the agent's frames and the
+  widget's returning frame are saved for the person at the panel to compare.
+  A panel the daemon does not describe as 64x64 is a SKIP that names its
+  size, and a Wi-Fi panel is a SKIP that names the missing LAN draw path
+  (ROADMAP P6.2). `tests/test_hw_mcp_lease.py` drives it with fakes and then
+  exactly as the owner will, against a real daemon with a mock 64x64 panel,
+  where the LOOK comes back UNKNOWN (nobody looked) and never PASS.
+  `tools/check_hw_verify_methods.py` holds its MCP tool names to the
+  `divoomd mcp` catalog (25 tools), watched red on a misspelt one.
+
+- **Pillow's deprecated `getdata()` replaced** with `get_flattened_data()` in
+  `scripts/hw_expect.py` and `tests/test_e2e_wall_previews.py`.
+
 ## v0.41.8 — CoreBluetooth connected-peripheral discovery and native menubar popup anchoring (2026-10-24)
 
 - **BLE discovery includes peripherals macOS already holds connected (P2.9).**
