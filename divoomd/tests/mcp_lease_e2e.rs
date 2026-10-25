@@ -68,7 +68,8 @@ fn two_frame_gif() -> String {
     base64::engine::general_purpose::STANDARD.encode(out.into_inner())
 }
 
-async fn sent(d: &Daemon) -> usize {
+/// Everything the mock panel was sent, in order: `(command, payload)`.
+async fn wire(d: &Daemon) -> Vec<(u8, Vec<u8>)> {
     let t = d
         .fleet
         .get(MAC)
@@ -78,9 +79,83 @@ async fn sent(d: &Daemon) -> usize {
         .await
         .expect("linked");
     match &*t {
-        DeviceTransport::Mock(m) => m.sent_commands.lock().unwrap().len(),
+        DeviceTransport::Mock(m) => m.sent_commands.lock().unwrap().clone(),
         _ => panic!("expected the mock"),
     }
+}
+
+/// The 0x8B animation blobs among `sent`, in order.
+fn blobs(sent: &[(u8, Vec<u8>)]) -> Vec<Vec<u8>> {
+    sent.iter()
+        .filter(|(id, _)| *id == 0x8B)
+        .map(|(_, b)| b.clone())
+        .collect()
+}
+
+/// One frame read back off the wire: its duration and its pixels.
+struct WireFrame {
+    time_ms: u16,
+    pixels: Vec<[u8; 3]>,
+}
+
+/// Read a 0x8B blob back as the panel would: `AA LLLL TTTT RR NN`, then NN
+/// palette colours (0 = 256), then `pixels` indices packed LSB-first at
+/// `ceil(log2 NN)` bits each (1 for one colour).
+///
+/// The pixel count is the panel's, not the blob's: a frame drawn at any other
+/// resolution has a different byte count, and that is refused here, so "full
+/// resolution" is read off the bytes the panel got, not off a reply that
+/// says so.
+fn frames_on_the_wire(blob: &[u8], pixels: usize) -> Vec<WireFrame> {
+    let mut out = Vec::new();
+    let mut at = 0;
+    while at < blob.len() {
+        let frame = &blob[at..];
+        assert!(frame.len() >= 7, "a whole header at {at}");
+        assert_eq!(frame[0], 0xAA, "frame {} starts at {at}", out.len());
+        let len = usize::from(u16::from_le_bytes([frame[1], frame[2]]));
+        let time_ms = u16::from_le_bytes([frame[3], frame[4]]);
+        let colours = match frame[6] {
+            0 => 256,
+            n => usize::from(n),
+        };
+        let bits = if colours > 1 {
+            usize::BITS as usize - (colours - 1).leading_zeros() as usize
+        } else {
+            1
+        };
+        let packed = (pixels * bits).div_ceil(8);
+        assert_eq!(
+            len,
+            7 + colours * 3 + packed,
+            "frame {} carries exactly {pixels} pixels at {bits} bits",
+            out.len()
+        );
+        let palette: Vec<[u8; 3]> = frame[7..7 + colours * 3]
+            .chunks(3)
+            .map(|c| [c[0], c[1], c[2]])
+            .collect();
+        let data = &frame[7 + colours * 3..len];
+        let px = (0..pixels)
+            .map(|i| {
+                let bit = i * bits;
+                let word = u32::from(data[bit / 8])
+                    | data.get(bit / 8 + 1).map_or(0, |b| u32::from(*b) << 8);
+                let index = (word >> (bit % 8)) & ((1 << bits) - 1);
+                palette[usize::try_from(index).expect("index")]
+            })
+            .collect();
+        out.push(WireFrame {
+            time_ms,
+            pixels: px,
+        });
+        at += len;
+    }
+    out
+}
+
+fn all(frame: &WireFrame, rgb: [u8; 3]) -> bool {
+    frame.pixels.iter().all(|p| *p == rgb)
 }
 
 async fn assert_mcp_discovery(mcp: &mut Mcp) {
@@ -111,6 +186,48 @@ async fn assert_mcp_discovery(mcp: &mut Mcp) {
         listed["chassis"]["family"],
         json!("pixoo64"),
         "each screen carries its kind too: {listed}"
+    );
+}
+
+/// The agent's animation as the panel got it: one 0x8B stream since `before`,
+/// two 64x64 frames, red then blue, 100 ms each. Returns where the wire was
+/// after it.
+async fn assert_drawn_at_full_resolution(d: &Daemon, before: usize) -> usize {
+    // The reply is the tool's word; the wire is the panel's. Read the frames
+    // back off the bytes the panel got.
+    let drawn_at = wire(d).await;
+    let theirs = blobs(&drawn_at[before..]);
+    assert_eq!(
+        theirs.len(),
+        1,
+        "one 0x8B stream carries the whole animation"
+    );
+    let frames = frames_on_the_wire(&theirs[0], 64 * 64);
+    assert_eq!(frames.len(), 2, "every frame reached the panel");
+    assert!(
+        all(&frames[0], [255, 0, 0]) && all(&frames[1], [0, 0, 255]),
+        "red then blue, every one of the 4096 pixels"
+    );
+    assert_eq!(
+        frames.iter().map(|f| f.time_ms).collect::<Vec<_>>(),
+        [100, 100],
+        "each frame with its own duration"
+    );
+    drawn_at.len()
+}
+
+/// After the lapse: the widget's own 64x64 frame on the wire past `drawn_at`.
+async fn assert_widget_frame_back(d: &Daemon, drawn_at: usize) {
+    // "restored: job" is the daemon's word too. The widget's frame must be ON
+    // the wire after the agent's animation: a 64x64 frame that is neither of
+    // the agent's two.
+    let back = blobs(&wire(d).await[drawn_at..]);
+    let repaint = back.first().expect("the widget's frame was sent back");
+    let repaint = frames_on_the_wire(repaint, 64 * 64);
+    assert_eq!(repaint.len(), 1, "one widget frame");
+    assert!(
+        !all(&repaint[0], [255, 0, 0]) && !all(&repaint[0], [0, 0, 255]),
+        "the widget's picture, not the agent's"
     );
 }
 
@@ -165,7 +282,7 @@ async fn an_agent_leases_draws_and_a_lapsed_lease_hands_the_panel_back() {
     assert!(!bad, "{lease}");
     let token = lease["lease"].as_str().expect("a lease token").to_string();
 
-    let before = sent(&d).await;
+    let before = wire(&d).await.len();
     let (bad, drawn) = mcp
         .call(
             "push_animation",
@@ -178,7 +295,7 @@ async fn an_agent_leases_draws_and_a_lapsed_lease_hands_the_panel_back() {
         (Some(64), Some(2)),
         "full resolution, every frame: {drawn}"
     );
-    assert!(sent(&d).await > before, "the animation reached the panel");
+    let drawn_at = assert_drawn_at_full_resolution(&d, before).await;
     let (bad, refused) = mcp
         .call("show_text", json!({ "mac": MAC, "text": "No", "size": 16 }))
         .await;
@@ -209,6 +326,7 @@ async fn an_agent_leases_draws_and_a_lapsed_lease_hands_the_panel_back() {
     }
     let ended = ended.expect("the lapsed lease ended by itself");
     assert_eq!(ended["restored"], json!("job"), "{ended}");
+    assert_widget_frame_back(&d, drawn_at).await;
     let (bad, after) = mcp
         .call("lease_renew", json!({ "lease": token, "ttl_ms": 1500 }))
         .await;
