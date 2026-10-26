@@ -241,7 +241,7 @@ impl DivoomWall {
         img_data: &[u8],
         source: crate::art_source::Source,
         default_time_ms: u16,
-    ) -> Result<WallOutcome, String> {
+    ) -> Result<WallOutcome, crate::art_source::ArtError> {
         if source == crate::art_source::Source::PixelArt {
             let (w, h) = crate::art_source::image_dims(img_data)?;
             self.pixel_art_fits(w, h)?;

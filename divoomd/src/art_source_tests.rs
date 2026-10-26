@@ -18,7 +18,15 @@ fn the_art_argument_has_no_default() {
 #[test]
 fn pixel_art_is_native_only_at_its_own_size() {
     assert!(native(16, 16, 16, 16).is_ok());
-    let why = native(64, 64, 16, 16).expect_err("64x64 art on a 16x16 panel");
+    let err = native(64, 64, 16, 16).expect_err("64x64 art on a 16x16 panel");
+    assert_eq!(
+        err,
+        ArtError::NotNative {
+            art: (64, 64),
+            screen: (16, 16)
+        }
+    );
+    let why = err.to_string();
     assert!(
         why.contains("64x64") && why.contains("16x16") && why.contains("never"),
         "{why}"
@@ -72,4 +80,18 @@ fn a_request_for_every_size_filters_nothing() {
     let mut v = listing();
     assert_eq!(keep_native(&mut v, 127), 0);
     assert_eq!(ids(&v).len(), 4);
+}
+
+#[test]
+fn a_refusal_is_its_own_code_carrying_both_sizes() {
+    let reply = native(64, 64, 16, 16)
+        .expect_err("refused")
+        .reply("display.show_image", ErrorCode::BadRequest);
+    assert_eq!(reply["code"], json!("art_not_native"));
+    assert_eq!(reply["art"], json!({"width": 64, "height": 64}));
+    assert_eq!(reply["panel"], json!({"width": 16, "height": 16}));
+    assert!(crate::error_code::uncoded_failure(&reply).is_none());
+
+    let other = ArtError::Other("not an image".into()).reply("x", ErrorCode::BadRequest);
+    assert_eq!(other["code"], json!("bad_request"));
 }

@@ -59,7 +59,7 @@ document.addEventListener("DOMContentLoaded", () => {
         window.DivoomState.selectedArtworkIndex = null;
         const targetSize = readTargetSize();
         if (window.pywebview && window.pywebview.api) {
-            window.pywebview.api.fetch_gallery(classify, targetSize, fileSort)
+            window.pywebview.api.fetch_gallery(classify, targetSize, fileSort, window._activeDeviceMac() || null)
                 .then(artworksJson => {
                     const artworks = JSON.parse(artworksJson);
                     if (artworks.error) {

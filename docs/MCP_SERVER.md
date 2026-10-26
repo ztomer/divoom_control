@@ -121,6 +121,7 @@ frame up for good. A lease is the borrow with the return built in:
 | `busy` | The daemon is already doing this (a scan, a connect, a hot update), or another session holds the panel exclusively. | Retry when it is done. |
 | `unauthorized` | The request's token does not match the daemon's. | Resend with the right token. |
 | `upstream_failed` | A network service the daemon calls for you (the Divoom cloud, a weather or quote provider) failed or refused. | Check the network or the account; the panel is not involved. |
+| `art_not_native` | Pixel art drawn for one panel size was sent to a screen of another (D14): it is never rescaled. The reply's `art` and `panel` are each `{width, height}`. | Choose art drawn for the panel's size; the gallery lists only that. |
 | `internal` | Something inside the daemon or on its host failed (a file it could not write, a host service that errored, a daemon not fully started). | Report it; not the request's or the panel's fault. |
 <!-- error-codes:end -->
 

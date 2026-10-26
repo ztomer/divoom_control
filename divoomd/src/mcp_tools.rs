@@ -445,6 +445,7 @@ async fn decode(
 ) -> Result<Vec<crate::image_proc::Frame>, String> {
     tokio::task::spawn_blocking(move || {
         crate::image_proc::prepare(bytes, crate::art_source::Source::Picture(policy), size, 100)
+            .map_err(String::from)
     })
     .await
     .map_err(|e| format!("decode task: {e}"))?

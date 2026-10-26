@@ -41,7 +41,7 @@ pub fn prepare(
     source: Source,
     size: u32,
     default_time_ms: u16,
-) -> Result<Vec<Frame>, String> {
+) -> Result<Vec<Frame>, crate::art_source::ArtError> {
     let policy = match source {
         Source::PixelArt => {
             let (w, h) = crate::art_source::image_dims(&data)?;
@@ -50,11 +50,11 @@ pub fn prepare(
         }
         Source::Picture(fit) => fit,
     };
-    if data.len() >= 3 && &data[0..3] == b"GIF" {
-        process_gif(data, size, policy, default_time_ms)
+    Ok(if data.len() >= 3 && &data[0..3] == b"GIF" {
+        process_gif(data, size, policy, default_time_ms)?
     } else {
-        process_static(&data, size, policy, default_time_ms)
-    }
+        process_static(&data, size, policy, default_time_ms)?
+    })
 }
 
 /// One frame of the panel's size, palette-limited.

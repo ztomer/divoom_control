@@ -144,14 +144,18 @@ class GallerySyncMixin(GalleryHotApiMixin):
             return self.display_wall_image(mac, str(target_path.absolute()), "pixel")
         return {"success": False, "error": "file not found in cache"}
 
-    FILE_SIZE_BITMASK: dict[int, int] = {16: 1, 32: 2, 64: 4, 128: 16, 256: 32}
+    # The cloud's per-item FileSize -> square edge (the APK's table).
+    SIZE_OF_BIT: dict[int, int] = {1: 16, 2: 32, 4: 64, 16: 128, 32: 256}
 
     def fetch_gallery(self, classify: int, target_size: int = 16,
-                      file_sort: int = 1) -> str:
-        """Fetch the gallery items drawn for a ``target_size`` panel.
+                      file_sort: int = 1, mac: str | None = None) -> str:
+        """Fetch the gallery items drawn for the panel ``mac`` names.
 
-        Only that size: pixel art is never rescaled to another panel (D14),
-        so the gallery no longer offers a size picker -- the panel decides."""
+        Only its size: pixel art is never rescaled to another panel (D14), so
+        there is no size picker -- the daemon lists by the panel's own size.
+        ``target_size`` is that size as the page knows it (for the offline
+        cache and the page's staleness check); with no panel named the
+        gallery is browsed unfiltered and nothing can be pushed."""
         logger.info(
             f"GUI Action: Fetching gallery classify={classify} "
             f"target_size={target_size} file_sort={file_sort}..."
@@ -176,12 +180,12 @@ class GallerySyncMixin(GalleryHotApiMixin):
                 # The daemon has done all of that correctly the whole time —
                 # including the auth retry, which is why none of it survives
                 # here.
-                file_size_bitmask = self.FILE_SIZE_BITMASK.get(target_size)
-                if file_size_bitmask is None:
-                    raise RuntimeError(f"the cloud has no gallery for a {target_size}x{target_size} panel")
-                file_list = client.fetch_gallery(
-                    classify, limit=30, file_sort=file_sort,
-                    file_size=file_size_bitmask) or []
+                if mac and mac != "MatrixWall":
+                    file_list = client.fetch_gallery(
+                        classify, limit=30, file_sort=file_sort, mac=mac) or []
+                else:
+                    file_list = client.fetch_gallery(
+                        classify, limit=30, file_sort=file_sort, all_sizes=True) or []
                 if isinstance(file_list, dict):
                     file_list = file_list.get("FileList", []) or []
 
@@ -208,7 +212,8 @@ class GallerySyncMixin(GalleryHotApiMixin):
                         "file_id": item.get("FileId"),
                         "likes": item.get("LikeCnt", 0),
                         "magic": item.get("FileType", 3),
-                        "size": target_size,
+                        # The item's own size, as the cloud states it.
+                        "size": self.SIZE_OF_BIT.get(item.get("FileSize")),
                         "preview_url": preview_url,
                     }
                     results.append(art_item)

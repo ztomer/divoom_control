@@ -75,7 +75,12 @@ pub fn iter_messages(buffer: &[u8]) -> (Vec<Result<Value, String>>, Vec<u8>) {
 ///
 /// Bump the MINOR when adding a command or a reply field (backwards
 /// compatible); bump the MAJOR when changing or removing one.
-pub const PROTOCOL_VERSION: &str = "1.1";
+///
+/// 2.0 (D14): `display.show_image` and the wall's `show_image` REQUIRE
+/// `art: "pixel" | "picture"` (a 1.x call without it is refused), and
+/// `display.show_image` draws at the panel's own size rather than a
+/// caller's `size`. `fetch_gallery` lists by the named panel's size.
+pub const PROTOCOL_VERSION: &str = "2.0";
 
 /// Commands this daemon can answer, for capability negotiation.
 ///
@@ -85,12 +90,19 @@ pub const PROTOCOL_VERSION: &str = "1.1";
 #[must_use]
 pub fn protocol_capabilities() -> Vec<&'static str> {
     vec![
+        // D14: `art` is required on image pushes, pixel art not drawn for the
+        // panel is refused `art_not_native`, and the gallery is listed by the
+        // named panel's size.
+        "art_source",
         "device_call",
         "hot_update",
+        "leases",
         "live_jobs",
         "notifications",
         "now_playing",
+        "owned_devices",
         "players",
+        "screen_previews",
         "sysmon",
         "wall",
         "weather",

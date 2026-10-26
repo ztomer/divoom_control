@@ -176,7 +176,7 @@ async fn push_image(
         Ok(img_data) => wall
             .show_image(&img_data, source, time_ms)
             .await
-            .map_err(|why| err_code(ErrorCode::Unsupported, &format!("wall show_image: {why}"))),
+            .map_err(|e| e.reply("wall show_image", ErrorCode::Unsupported)),
         Err(e) => Err(err_code(
             ErrorCode::BadRequest,
             &format!("wall show_image: read {path}: {e}"),

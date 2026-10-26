@@ -49,6 +49,21 @@ shipped milestone (per the project planning docs).
     scaled; a call without `art` refused; the wall refuses non-canvas pixel art
     and still scales a picture; the gallery filter by size (daemon and GUI
     cache). Each was proven to fail by breaking the check it guards.
+  - **Follow-up, the protocol says so.** A refusal is its own code,
+    `art_not_native`, carrying `art` and `panel` (`{width, height}` each), so
+    the MCP server, GUI and menubar branch on it instead of the prose
+    (`art_source::ArtError`; documented in `docs/MCP_SERVER.md`).
+    `fetch_gallery`'s size is decided in ONE place, from the panel `mac`
+    names (`cloud_cmds::gallery_size`); a caller's `file_size` is refused,
+    browsing with no panel is the explicit `all_sizes: true`
+    (`filtered: false`), and the reply counts what it left out
+    (`not_native`). The GUI names the panel and records each item's own
+    `FileSize`. The socket protocol is **2.0** (`art` is required on image
+    pushes, a breaking change by the file's own rule), and
+    `capabilities` now lists `art_source`, `leases`, `owned_devices` and
+    `screen_previews`. The other art listings (category files, dials,
+    playlists, sleep sounds, the custom-art page query) are not yet per
+    panel: ROADMAP P5.11.
   - Not covered: the device's declared format/animation limits beyond panel
     size -- the capability tables carry no per-model frame or format limit to
     filter on. No live hardware check (the owner's).

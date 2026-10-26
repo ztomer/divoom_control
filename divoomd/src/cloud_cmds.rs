@@ -9,11 +9,97 @@ use serde_json::{json, Value};
 use crate::command_args::missing;
 use crate::protocol::{err_code, ErrorCode, Request};
 
+/// `fetch_gallery {classify, mac | all_sizes, limit?, file_sort?}` -- the
+/// gallery, listed by the PANEL's size (D14).
+///
+/// The size is decided here, once, from the panel `mac` names: only art drawn
+/// for it is listed, and the reply says how many items were not
+/// (`not_native`). A caller-supplied `file_size` is refused -- it let a
+/// caller list (and then push) art of any size. Browsing with no panel at all
+/// says so with `all_sizes: true`, and its reply is `filtered: false`.
+pub async fn fetch_gallery(daemon: &crate::daemon::Daemon, req: &Request) -> Value {
+    let Some(classify) = req.args.get("classify").and_then(Value::as_i64) else {
+        return missing("fetch_gallery", "'classify'");
+    };
+    let limit = req.args.get("limit").and_then(Value::as_i64).unwrap_or(30);
+    let file_sort = req
+        .args
+        .get("file_sort")
+        .and_then(Value::as_i64)
+        .unwrap_or(1);
+    let (bit, pixels) = match gallery_size(daemon, &req.args).await {
+        Ok(decided) => decided,
+        Err(refusal) => return refusal,
+    };
+    match crate::cloud::fetch_gallery(classify, limit, file_sort, bit).await {
+        Ok((res, not_native)) => json!({
+            "success": true,
+            "result": res,
+            "panel_size": pixels,
+            "filtered": pixels.is_some(),
+            "not_native": not_native,
+        }),
+        Err(e) => err_code(ErrorCode::UpstreamFailed, &e),
+    }
+}
+
+/// The gallery's `FileSize` bit and the panel edge it stands for, decided by
+/// the panel `mac` names -- or every size, unfiltered, for `all_sizes`.
+///
+/// # Errors
+///
+/// The refusal reply: `file_size` given, neither or both of `mac` and
+/// `all_sizes`, a panel not linked, or one whose size is unknown.
+pub(crate) async fn gallery_size(
+    daemon: &crate::daemon::Daemon,
+    args: &Value,
+) -> Result<(i64, Option<u32>), Value> {
+    if args.get("file_size").is_some() {
+        return Err(err_code(
+            ErrorCode::BadRequest,
+            "fetch_gallery: file_size is gone -- name the panel (mac) and its own size decides \
+             (D14), or pass all_sizes: true to browse with no panel",
+        ));
+    }
+    let mac = args.get("mac").and_then(Value::as_str);
+    let all_sizes = args.get("all_sizes").and_then(Value::as_bool) == Some(true);
+    match (mac, all_sizes) {
+        (Some(_), true) => Err(err_code(
+            ErrorCode::BadRequest,
+            "fetch_gallery: name a panel (mac) or all_sizes, not both",
+        )),
+        (None, false) => Err(err_code(
+            ErrorCode::BadRequest,
+            "fetch_gallery: name the panel (mac) -- its size decides which art is listed \
+             (D14) -- or pass all_sizes: true to browse with no panel",
+        )),
+        (None, true) => Ok((127, None)),
+        (Some(m), false) => {
+            let device = match daemon.fleet.resolve_target(Some(m)).await {
+                Ok(d) => d,
+                Err(e) => return Err(e.reply()),
+            };
+            let Some(px) = device.panel_pixels().await else {
+                return Err(err_code(
+                    ErrorCode::Unsupported,
+                    "fetch_gallery: the panel does not say how big it is, so no art can be \
+                     matched to it",
+                ));
+            };
+            let Some(bit) = crate::art_source::size_bit(px) else {
+                return Err(err_code(
+                    ErrorCode::Unsupported,
+                    &format!("fetch_gallery: the cloud has no gallery for a {px}x{px} panel"),
+                ));
+            };
+            Ok((bit, Some(px)))
+        }
+    }
+}
+
 /// Handle a cloud command. The caller routes only the cloud command names here.
 pub async fn handle(command: &str, req: &Request) -> Value {
     match command {
-        "fetch_gallery" => fetch_gallery(req).await,
-
         "save_credentials" => save_credentials(req).await,
 
         "get_credentials" => get_credentials(req).await,
@@ -46,31 +132,6 @@ pub async fn handle(command: &str, req: &Request) -> Value {
         ),
     }
 }
-async fn fetch_gallery(req: &Request) -> Value {
-    let Some(classify) = req.args.get("classify").and_then(serde_json::Value::as_i64) else {
-        return missing("fetch_gallery", "'classify'");
-    };
-    let limit = req
-        .args
-        .get("limit")
-        .and_then(serde_json::Value::as_i64)
-        .unwrap_or(30);
-    let file_sort = req
-        .args
-        .get("file_sort")
-        .and_then(serde_json::Value::as_i64)
-        .unwrap_or(1);
-    let file_size = req
-        .args
-        .get("file_size")
-        .and_then(serde_json::Value::as_i64)
-        .unwrap_or(127);
-    match crate::cloud::fetch_gallery(classify, limit, file_sort, file_size).await {
-        Ok(res) => json!({ "success": true, "result": res }),
-        Err(e) => err_code(ErrorCode::UpstreamFailed, &e),
-    }
-}
-
 async fn save_credentials(req: &Request) -> Value {
     let email = req.args.get("email").and_then(|v| v.as_str()).unwrap_or("");
     let password = req

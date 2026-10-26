@@ -114,8 +114,9 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
 
         "set_routing" => notifications::set_routing(req).await,
 
-        "fetch_gallery"
-        | "save_credentials"
+        "fetch_gallery" => crate::cloud_cmds::fetch_gallery(daemon, &req).await,
+
+        "save_credentials"
         | "get_credentials"
         | "get_cached_credentials"
         | "get_category_file_list"

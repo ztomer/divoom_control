@@ -87,6 +87,14 @@ async fn sixty_four_pixel_art_is_refused_on_a_sixteen_panel_and_nothing_is_strea
     assert_eq!(reply["success"], json!(false), "{reply}");
     let why = reply["error"].as_str().unwrap_or_default();
     assert!(why.contains("64x64") && why.contains("16x16"), "{why}");
+    // A client branches on the code and reads both sizes, not the prose.
+    assert_eq!(reply["code"], json!("art_not_native"), "{reply}");
+    assert_eq!(reply["art"], json!({"width": 64, "height": 64}), "{reply}");
+    assert_eq!(
+        reply["panel"],
+        json!({"width": 16, "height": 16}),
+        "{reply}"
+    );
     assert_eq!(
         streamed(&d, SMALL).await.len(),
         0,
@@ -136,13 +144,15 @@ async fn an_image_that_does_not_say_what_it_is_is_refused() {
     let d = two_panels().await;
     let reply = show(&d, SMALL, &art(16), json!({})).await;
     assert_eq!(reply["success"], json!(false), "{reply}");
+    assert_eq!(reply["code"], json!("bad_request"), "{reply}");
     assert_eq!(streamed(&d, SMALL).await.len(), 0);
 }
 
 #[test]
 fn prepare_never_scales_pixel_art_and_still_scales_a_picture() {
     let refused = crate::image_proc::prepare(art(64), Source::PixelArt, 16, 100)
-        .expect_err("64x64 pixel art for a 16x16 panel");
+        .expect_err("64x64 pixel art for a 16x16 panel")
+        .to_string();
     assert!(refused.contains("never rescaled"), "{refused}");
 
     let native = crate::image_proc::prepare(art(64), Source::PixelArt, 64, 100).expect("native");
@@ -155,7 +165,9 @@ fn prepare_never_scales_pixel_art_and_still_scales_a_picture() {
 
 #[test]
 fn custom_art_is_encoded_only_for_a_panel_of_its_own_size() {
-    let why = crate::art::encode_custom_art(&art(64), 16).expect_err("64x64 art on a 16x16 page");
+    let why = crate::art::encode_custom_art(&art(64), 16)
+        .expect_err("64x64 art on a 16x16 page")
+        .to_string();
     assert!(why.contains("never rescaled"), "{why}");
     let frame = crate::art::encode_custom_art(&art(16), 16).expect("16x16 art on a 16x16 page");
     assert_eq!(
@@ -198,6 +210,12 @@ async fn pixel_art_not_drawn_for_the_wall_is_refused_and_no_panel_is_streamed() 
     assert_eq!(reply["success"], json!(false), "{reply}");
     let why = reply["error"].as_str().unwrap_or_default();
     assert!(why.contains("64x64") && why.contains("32x16"), "{why}");
+    assert_eq!(reply["code"], json!("art_not_native"), "{reply}");
+    assert_eq!(
+        reply["panel"],
+        json!({"width": 32, "height": 16}),
+        "{reply}"
+    );
     for mac in [A, B] {
         assert_eq!(
             wall_streams(&mock_of(&d, mac).await),
@@ -213,4 +231,53 @@ async fn pixel_art_not_drawn_for_the_wall_is_refused_and_no_panel_is_streamed() 
         assert_eq!(wall_streams(&mock_of(&d, mac).await), 1, "{mac}");
     }
     let _ = std::fs::remove_file(path);
+}
+
+#[tokio::test]
+async fn the_gallery_size_is_the_named_panels_and_nothing_else() {
+    use crate::cloud_cmds::gallery_size;
+    let d = two_panels().await;
+    assert_eq!(
+        gallery_size(&d, &json!({"mac": SMALL})).await,
+        Ok((1, Some(16)))
+    );
+    assert_eq!(
+        gallery_size(&d, &json!({"mac": BIG})).await,
+        Ok((4, Some(64)))
+    );
+    assert_eq!(
+        gallery_size(&d, &json!({"all_sizes": true})).await,
+        Ok((127, None))
+    );
+    for refused in [
+        json!({}),
+        json!({"file_size": 127}),
+        json!({"mac": SMALL, "file_size": 4}),
+        json!({"mac": SMALL, "all_sizes": true}),
+    ] {
+        let reply = gallery_size(&d, &refused).await.expect_err("refused");
+        assert_eq!(reply["code"], json!("bad_request"), "{refused}: {reply}");
+    }
+}
+
+#[tokio::test]
+async fn the_protocol_says_the_art_contract_changed() {
+    let d = two_panels().await;
+    let status = d.handle(make_request("get_status", None, None)).await;
+    let version = status["protocol_version"].as_str().unwrap_or_default();
+    assert!(version.starts_with("2."), "art is required now: {status}");
+    let caps: Vec<&str> = status["capabilities"]
+        .as_array()
+        .expect("capabilities")
+        .iter()
+        .filter_map(Value::as_str)
+        .collect();
+    for cap in ["art_source", "leases", "owned_devices", "screen_previews"] {
+        assert!(caps.contains(&cap), "{cap} missing: {caps:?}");
+    }
+    // The capabilities that are commands are answered by this daemon.
+    for cmd in ["owned_devices", "screen_previews"] {
+        let reply = d.handle(make_request(cmd, None, None)).await;
+        assert_ne!(reply["code"], json!("unknown_command"), "{cmd}: {reply}");
+    }
 }

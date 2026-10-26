@@ -23,7 +23,9 @@
 //! is required: a caller that does not say what it is sending is refused,
 //! rather than given the scaler by default.
 
-use serde_json::Value;
+use serde_json::{json, Value};
+
+use crate::error_code::{err_code, err_with, ErrorCode};
 
 use crate::image_fit::Fit;
 
@@ -73,16 +75,82 @@ pub fn mismatch(w: u32, h: u32, pw: u32, ph: u32) -> String {
     )
 }
 
+/// Why art could not be prepared for a screen.
+///
+/// The refusal D14 adds is its OWN variant, so a client branches on the
+/// reply's `code` (`art_not_native`) and reads both sizes from it, rather than
+/// matching the prose.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ArtError {
+    /// Pixel art drawn for `art` sent to a screen of `screen` (width, height).
+    NotNative { art: (u32, u32), screen: (u32, u32) },
+    /// Anything else: undecodable bytes, a frame that cannot be encoded.
+    Other(String),
+}
+
+impl std::fmt::Display for ArtError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotNative { art, screen } => {
+                f.write_str(&mismatch(art.0, art.1, screen.0, screen.1))
+            }
+            Self::Other(why) => f.write_str(why),
+        }
+    }
+}
+
+impl From<String> for ArtError {
+    fn from(why: String) -> Self {
+        Self::Other(why)
+    }
+}
+
+impl From<&str> for ArtError {
+    fn from(why: &str) -> Self {
+        Self::Other(why.to_string())
+    }
+}
+
+impl From<ArtError> for String {
+    fn from(e: ArtError) -> Self {
+        e.to_string()
+    }
+}
+
+impl ArtError {
+    /// The failure reply, its prose led by `what`. [`Self::NotNative`] is
+    /// `art_not_native` with `art` and `panel` sizes; anything else is
+    /// `other` (the code the caller's own failures already carry).
+    #[must_use]
+    pub fn reply(&self, what: &str, other: ErrorCode) -> Value {
+        let msg = format!("{what}: {self}");
+        match self {
+            Self::NotNative { art, screen } => err_with(
+                ErrorCode::ArtNotNative,
+                &msg,
+                json!({
+                    "art": {"width": art.0, "height": art.1},
+                    "panel": {"width": screen.0, "height": screen.1},
+                }),
+            ),
+            Self::Other(_) => err_code(other, &msg),
+        }
+    }
+}
+
 /// `Ok` when pixel art of `w`x`h` is native to a `pw`x`ph` screen.
 ///
 /// # Errors
 ///
-/// [`mismatch`] when it is not.
-pub fn native(w: u32, h: u32, pw: u32, ph: u32) -> Result<(), String> {
-    if (w, h) == (pw, ph) {
+/// [`ArtError::NotNative`] when it is not.
+pub const fn native(w: u32, h: u32, pw: u32, ph: u32) -> Result<(), ArtError> {
+    if w == pw && h == ph {
         Ok(())
     } else {
-        Err(mismatch(w, h, pw, ph))
+        Err(ArtError::NotNative {
+            art: (w, h),
+            screen: (pw, ph),
+        })
     }
 }
 

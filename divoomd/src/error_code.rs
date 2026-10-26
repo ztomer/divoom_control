@@ -80,6 +80,10 @@ pub enum ErrorCode {
     /// Divoom cloud, a weather or quote provider -- failed or refused; the
     /// panel is not involved (P5.10).
     UpstreamFailed,
+    /// Pixel art drawn for one panel size was sent to a screen of another
+    /// (D14). It is never rescaled; the reply carries `art` and `panel`,
+    /// each `{width, height}`. Choose art drawn for the panel.
+    ArtNotNative,
     /// Something inside the daemon or on its host failed: a file it could not
     /// write, a host service that errored, a daemon not fully started. Not the
     /// request's fault and not the panel's (P5.10).
@@ -106,6 +110,7 @@ impl ErrorCode {
         Self::Busy,
         Self::Unauthorized,
         Self::UpstreamFailed,
+        Self::ArtNotNative,
         Self::Internal,
     ];
 
@@ -130,6 +135,7 @@ impl ErrorCode {
             Self::Busy => "busy",
             Self::Unauthorized => "unauthorized",
             Self::UpstreamFailed => "upstream_failed",
+            Self::ArtNotNative => "art_not_native",
             Self::Internal => "internal",
         }
     }

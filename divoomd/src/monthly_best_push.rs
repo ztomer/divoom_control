@@ -135,7 +135,7 @@ pub async fn push_to_device(daemon: &Daemon, device: &RegisteredDevice) -> Devic
     );
     // `fetch_gallery` lists only the items drawn for this one size.
     let response = match crate::cloud::fetch_gallery(device.classify, LIMIT, SORT, bit).await {
-        Ok(response) => response,
+        Ok((response, _not_native)) => response,
         Err(e) => {
             outcome.error = Some(format!("could not fetch the gallery: {e}"));
             crate::monthly_best_link::disconnect(daemon).await;

@@ -187,7 +187,8 @@ mod tests {
     fn a_gallery_64x64_piece_is_refused_on_a_16x16_panel() {
         let gif = resolve_to_gif(&raw("gallery_magic26_jack_skellington.bin")).expect("resolve");
         let why = crate::image_proc::prepare(gif, crate::art_source::Source::PixelArt, 16, 100)
-            .expect_err("64x64 art on a 16x16 panel");
+            .expect_err("64x64 art on a 16x16 panel")
+            .to_string();
         assert!(why.contains("64x64") && why.contains("16x16"), "{why}");
     }
 }

@@ -144,11 +144,11 @@ def test_fetch_gallery_asks_the_daemon_and_streams_every_item(tmp_path, monkeypa
                   "bbb": "data:image/png;base64,iVBORw0KGgo="},
     )
     m = _daemon_host(tmp_path, monkeypatch, client)
-    assert m.fetch_gallery(classify=18, target_size=16) == "[]"
+    assert m.fetch_gallery(classify=18, target_size=16, mac="AA:BB") == "[]"
     _wait_for_fetch_thread()
 
     assert client.fetch_calls == [
-        {"classify": 18, "limit": 30, "file_sort": 1, "file_size": 1}]
+        {"classify": 18, "limit": 30, "file_sort": 1, "mac": "AA:BB", "all_sizes": False}]
     assert set(client.preview_calls) == {"aaa", "bbb"}
 
     saved = json.loads(
@@ -158,24 +158,21 @@ def test_fetch_gallery_asks_the_daemon_and_streams_every_item(tmp_path, monkeypa
     assert m.window.evaluate_js.call_count >= 4  # 3 progressive + 1 final
 
 
-def test_the_gallery_is_asked_only_for_the_panels_own_size(tmp_path, monkeypatch):
-    """D14: the size asked for is the panel's, with no override -- pixel art
-    is never rescaled, so art of another size is never offered."""
+def test_the_gallery_is_asked_for_by_the_panel_not_a_size(tmp_path, monkeypatch):
+    """D14: the daemon lists by the size of the panel the page names; the GUI
+    sends no size of its own. With no panel it browses unfiltered, saying so."""
     client = FakeDaemonClient(file_list=[])
     m = _daemon_host(tmp_path, monkeypatch, client)
+    m.fetch_gallery(classify=1, target_size=64, mac="AA:BB")
+    _wait_for_fetch_thread()
+    assert client.fetch_calls[-1]["mac"] == "AA:BB"
+    assert client.fetch_calls[-1]["all_sizes"] is False
+
+    client.fetch_calls.clear()
     m.fetch_gallery(classify=1, target_size=16)
     _wait_for_fetch_thread()
-    assert client.fetch_calls[-1]["file_size"] == 1  # 16x16 only
-
-    client.fetch_calls.clear()
-    m.fetch_gallery(classify=1, target_size=64)
-    _wait_for_fetch_thread()
-    assert client.fetch_calls[-1]["file_size"] == 4  # 64x64 only
-
-    client.fetch_calls.clear()
-    m.fetch_gallery(classify=1, target_size=999)
-    _wait_for_fetch_thread()
-    assert client.fetch_calls == []  # no gallery for that size; nothing guessed
+    assert client.fetch_calls[-1]["mac"] is None
+    assert client.fetch_calls[-1]["all_sizes"] is True
 
 
 def test_the_cached_gallery_lists_only_the_panels_own_size(tmp_path, monkeypatch):
@@ -202,13 +199,16 @@ def test_the_cached_gallery_lists_only_the_panels_own_size(tmp_path, monkeypatch
 
 
 def test_fetched_items_carry_the_size_they_were_fetched_for(tmp_path, monkeypatch):
-    client = FakeDaemonClient(file_list=[{"FileId": "group1_x", "FileName": "X"}])
+    client = FakeDaemonClient(file_list=[
+        {"FileId": "group1_x", "FileName": "X", "FileSize": 4},
+        {"FileId": "group1_y", "FileName": "Y"},
+    ])
     m = _daemon_host(tmp_path, monkeypatch, client)
-    m.fetch_gallery(classify=1, target_size=64)
+    m.fetch_gallery(classify=1, target_size=64, mac="AA:BB")
     _wait_for_fetch_thread()
     saved = json.loads(
         (tmp_path / ".config" / "divoom-control" / "gallery_cache.json").read_text())
-    assert [i["size"] for i in saved] == [64]
+    assert [i["size"] for i in saved] == [64, None]  # the item's own FileSize
 
 
 def test_an_auth_failure_marks_the_banner_expired(tmp_path, monkeypatch):

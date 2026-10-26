@@ -75,7 +75,7 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             .await
             {
                 Ok(Ok(f)) => f,
-                Ok(Err(e)) => return err_code(BadRequest, &format!("display.show_image: {e}")),
+                Ok(Err(e)) => return e.reply("display.show_image", BadRequest),
                 Err(e) => return err_code(Internal, &format!("image decode task: {e}")),
             };
 

@@ -399,6 +399,23 @@ P5.4, the weather card showing the PNG of `render_widget {kind: "weather"}` with
 P5.3, the menubar updating labels, the "Active panel" check and the notification items in place, rebuilding only when the set of rows changes, decided by diffing one `MenuModel` signature (`28f54cd`; `divoom-menubar/src/menu_model.rs`). That meets the exit's menubar half in code; holding the menu open through a fleet change on screen is not yet checked (2026-10-18: the console was locked, so no NSMenu could be held open or captured; 2026-10-18 unlocked, full-screen control for clicking the status item was declined, so it is still unchecked; a two-mock-panel smoke -- selection A, B, A and a row rename over the socket -- left the menubar running). **2026-10-20, the machine half is CONFIRMED and the on-screen half is still the owner's eyes:** the status item's AX "help" text tracks the live fleet model ("4 of 4 panels online — active: Pixoo-1 / Tivoo-Max-light-3 / Timoo-light-4") and changes when `select_device` changes the active panel, so the menubar's model is live; the MENU could not be opened from this session at all (the console is at the login window, and an AXPress on a known-good control — FineTune — opened no window and produced no AXMenu change, so the block is the environment, not divoom-menubar). Holding it open on screen is the last unchecked half;
 P5.1, brightness, volume and panel size read and written per mac through the daemon, both name-based size guessers deleted, switching panels shows that panel's values (`f1f7b3b`; `divoom_gui/panels.py`, `divoom_gui/web_ui/panel_facts.js`, `tests/test_e2e_panel_levels_per_panel.py`, `divoomd/src/mock_levels_tests.rs`).
 
+#### P5.11 — Every art listing is per panel, like the gallery (D14 follow-up)
+**Status:** OPEN
+**Why:** D14 made `fetch_gallery` list by the named panel's size and refuse
+pixel art not drawn for the panel (`art_not_native`), but five other listings
+still answer with no panel and no size: `get_category_file_list`,
+`get_dial_list`, `get_my_playlists`/`get_playlist_images`,
+`get_aid_sleep_list` and `custom_art_query_page`
+(`divoomd/src/daemon/dispatch.rs`, `divoomd/src/cloud_cmds.rs`). A GUI or
+MCP client can list art from them that the panel would then refuse, or a
+playlist the panel would play scaled. Which of them carry a per-item size
+(the gallery's `FileSize`), and which are already per device type on the
+cloud's side, is not yet measured.
+**Done when:** each listing either takes `mac` and lists only what that panel
+shows natively (the reply counting what it left out, as `fetch_gallery`'s
+`not_native` does), or is recorded here as device-type-scoped by the cloud
+with the evidence; a mock-panel test per command, 16x16 and 64x64.
+
 ### Phase 6 — the multi-panel wall
 
 **Goal:** a wall is placed by snapping, and LAN panels can join it.

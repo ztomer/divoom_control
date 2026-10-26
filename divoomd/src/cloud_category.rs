@@ -33,7 +33,7 @@ pub async fn fetch_gallery(
     limit: i64,
     file_sort: i64,
     file_size: i64,
-) -> Result<Value, String> {
+) -> Result<(Value, usize), String> {
     let mut creds = get_credentials(false).await?;
     let (device_id, device_pw, _, _) = load_virtual_device();
 
@@ -110,8 +110,8 @@ pub async fn fetch_gallery(
     // states its own (D14). Every caller -- the GUI's gallery, the monthly
     // push -- gets the filtered list, so none can offer a panel art it would
     // have to scale.
-    crate::art_source::keep_native(&mut data, file_size);
-    Ok(data)
+    let dropped = crate::art_source::keep_native(&mut data, file_size);
+    Ok((data, dropped))
 }
 
 /// Browse a cloud gallery category (clock faces, animations, …). Returns the

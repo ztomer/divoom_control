@@ -193,18 +193,23 @@ class CloudDataMixin:
 
     # ── gallery (GetCategoryFileListV2) ──────────────────────────────────────
     def fetch_gallery(self, classify: int, limit: int = 30, file_sort: int = 1,
-                      file_size: int = 127) -> Any:
+                      *, mac: str | None = None, all_sizes: bool = False) -> Any:
         """The cloud-voted gallery listing.
 
         The GUI used to POST this itself — its own credential cache, its own
         `config.ini` read, its own RC 9/10/11 retry and its own okhttp
         User-Agent, all against `appin.divoom-gz.com`. The daemon has done the
         same thing correctly the whole time.
+
+        The panel ``mac`` names decides the size listed (D14); ``all_sizes``
+        browses with no panel, unfiltered. The daemon refuses neither/both.
         """
-        return self.cloud_call("fetch_gallery", {
-            "classify": classify, "limit": limit,
-            "file_sort": file_sort, "file_size": file_size,
-        })
+        args: dict = {"classify": classify, "limit": limit, "file_sort": file_sort}
+        if mac:
+            args["mac"] = mac
+        if all_sizes:
+            args["all_sizes"] = True
+        return self.cloud_call("fetch_gallery", args)
 
     def get_category_file_list(self, classify: int | None = None,
                                limit: int = 20) -> Any:

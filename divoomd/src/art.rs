@@ -50,7 +50,10 @@ pub(crate) const fn device_type_for_size(size: u32) -> u32 {
 
 /// Download cloud art and encode it as one custom-art frame for a
 /// `panel`x`panel` device.
-async fn download_and_encode_art(fid: &str, panel: u32) -> Result<Vec<u8>, String> {
+async fn download_and_encode_art(
+    fid: &str,
+    panel: u32,
+) -> Result<Vec<u8>, crate::art_source::ArtError> {
     let raw = crate::sync_artwork::download_cloud_file(fid).await?;
     tokio::task::spawn_blocking(move || encode_custom_art(&raw, panel))
         .await
@@ -68,13 +71,18 @@ async fn download_and_encode_art(fid: &str, panel: u32) -> Result<Vec<u8>, Strin
 ///
 /// When the payload is no container this daemon reads, the art is not drawn
 /// for `panel`, or the frame cannot be encoded.
-pub(crate) fn encode_custom_art(raw: &[u8], panel: u32) -> Result<Vec<u8>, String> {
+pub(crate) fn encode_custom_art(
+    raw: &[u8],
+    panel: u32,
+) -> Result<Vec<u8>, crate::art_source::ArtError> {
     let gif =
         crate::media::resolve_to_gif(raw).ok_or_else(|| crate::media::why_not_resolvable(raw))?;
     let frames = crate::image_proc::prepare(gif, crate::art_source::Source::PixelArt, panel, 500)?;
     let (rgb, w, h, _) = frames.first().ok_or("the art has no frames")?;
-    crate::image_encode::encode_animation_frame(rgb, *w, *h, 500)
-        .map_err(|why| format!("frame {w}x{h}: {why}"))
+    Ok(
+        crate::image_encode::encode_animation_frame(rgb, *w, *h, 500)
+            .map_err(|why| format!("frame {w}x{h}: {why}"))?,
+    )
 }
 
 // ── custom art protocol helpers (APK LightMakeNewModel.java) ─────────────
@@ -251,12 +259,9 @@ pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
 async fn encode_page(slot_map: &[(usize, String)], panel: u32) -> Result<Vec<Vec<u8>>, Value> {
     let mut frames: Vec<Vec<u8>> = vec![Vec::new(); SLOTS_PER_PAGE];
     for (idx, fid) in slot_map {
-        frames[*idx] = download_and_encode_art(fid, panel).await.map_err(|why| {
-            err_code(
-                ErrorCode::Unsupported,
-                &format!("custom_art_push: {fid}: {why}"),
-            )
-        })?;
+        frames[*idx] = download_and_encode_art(fid, panel)
+            .await
+            .map_err(|e| e.reply(&format!("custom_art_push: {fid}"), ErrorCode::Unsupported))?;
     }
     Ok(frames)
 }

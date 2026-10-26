@@ -31,10 +31,11 @@ class FakeDaemonClient:
         self.fetch_calls = []
         self.preview_calls = []
 
-    def fetch_gallery(self, classify, limit=30, file_sort=1, file_size=127):
+    def fetch_gallery(self, classify, limit=30, file_sort=1, *, mac=None,
+                      all_sizes=False):
         self.fetch_calls.append(
-            {"classify": classify, "limit": limit,
-             "file_sort": file_sort, "file_size": file_size})
+            {"classify": classify, "limit": limit, "file_sort": file_sort,
+             "mac": mac, "all_sizes": all_sizes})
         if self.fetch_error is not None:
             raise self.fetch_error
         return self.file_list
