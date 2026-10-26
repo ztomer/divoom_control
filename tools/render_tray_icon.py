@@ -91,6 +91,7 @@ fn main() {
         r = subprocess.run(
             ["cargo", "run", "--quiet"], capture_output=True, text=True, cwd=d, timeout=900,
             stdin=subprocess.DEVNULL, env=probe_env(d, base),
+            check=False,
         )
     if r.returncode != 0:
         raise ProbeError("the glyph probe did not build:\n" + r.stderr[-2000:])

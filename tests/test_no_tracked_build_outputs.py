@@ -73,7 +73,7 @@ def test_every_build_output_is_ignored() -> None:
     for rel in BUILD_OUTPUTS:
         assert rel not in tracked(), f"{rel} is a build output but is tracked"
         ignored = subprocess.run(["git", "check-ignore", "-q", "--no-index", rel],
-                                 cwd=REPO, stdin=subprocess.DEVNULL).returncode == 0
+                                 cwd=REPO, stdin=subprocess.DEVNULL, check=False).returncode == 0
         assert ignored, f"{rel} is a build output but .gitignore does not ignore it"
 
 

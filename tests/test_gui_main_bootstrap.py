@@ -60,6 +60,7 @@ def test_locale_bootstrap_swallows_setlocale_failures_for_all_candidates():
     proc = subprocess.run(
         [sys.executable, "-c", script],
         cwd=str(_REPO), capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL,
+        check=False,
     )
     assert proc.returncode == 0, proc.stderr
     assert "IMPORTED_OK divoom_gui" in proc.stdout

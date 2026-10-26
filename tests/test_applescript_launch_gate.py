@@ -203,12 +203,12 @@ def test_gate_refuses_to_pass_over_an_empty_scope(tmp_path):
         (tmp_path / "tools" / src.name).write_bytes(src.read_bytes())
     gate_py = "tools/check_applescript_launch.py"
 
-    full = subprocess.run([sys.executable, gate_py], cwd=tmp_path, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    full = subprocess.run([sys.executable, gate_py], cwd=tmp_path, capture_output=True, text=True, stdin=subprocess.DEVNULL, check=False)
     assert full.returncode == 1, full.stdout
     assert "0 files" in full.stdout
 
     staged = subprocess.run([sys.executable, gate_py, "--staged"], cwd=tmp_path,
-                            capture_output=True, text=True, stdin=subprocess.DEVNULL)
+                            capture_output=True, text=True, stdin=subprocess.DEVNULL, check=False)
     assert staged.returncode == 0, staged.stdout
 
 
@@ -216,5 +216,6 @@ def test_gate_passes_on_current_tree():
     r = subprocess.run(
         [sys.executable, "tools/check_applescript_launch.py"],
         cwd=REPO, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+        check=False,
     )
     assert r.returncode == 0, r.stdout + r.stderr

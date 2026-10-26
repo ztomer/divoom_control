@@ -81,6 +81,7 @@ def process_started(pid: int) -> str | None:
             stdin=subprocess.DEVNULL,
             timeout=5,
             env={"LC_ALL": "C", "PATH": "/usr/bin:/bin"},
+            check=False,
         )
     except (OSError, subprocess.SubprocessError):
         return None

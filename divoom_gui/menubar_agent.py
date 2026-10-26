@@ -78,6 +78,7 @@ def _spawn_menubar_agent(resolve_bundled) -> None:
         existing = subprocess.run(
             ["pgrep", "-x", "divoom-menubar"],
             capture_output=True, text=True, stdin=subprocess.DEVNULL,
+            check=False,
         )
         if existing.returncode == 0 and existing.stdout.strip():
             logger.info("Menu-bar agent already running; not spawning another.")

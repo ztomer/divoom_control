@@ -271,7 +271,7 @@ def test_the_real_binaries_answer_version_without_starting(name):
     if not built:
         pytest.skip(f"{name} not built. Run: cargo build -p {name}")
     proc = subprocess.run([str(built[0]), "--version"], capture_output=True,
-                          text=True, timeout=15, stdin=subprocess.DEVNULL)
+                          text=True, timeout=15, stdin=subprocess.DEVNULL, check=False)
     assert proc.returncode == 0
     assert proc.stdout.startswith(f"{name} "), proc.stdout
 
@@ -285,7 +285,7 @@ def test_the_real_binaries_reject_an_unknown_argument(name):
         pytest.skip(f"{name} not built. Run: cargo build -p {name}")
     proc = subprocess.run([str(built[0]), "--definitely-not-a-flag"],
                           capture_output=True, text=True, timeout=15,
-                          stdin=subprocess.DEVNULL)
+                          stdin=subprocess.DEVNULL, check=False)
     assert proc.returncode == 2, proc.stdout + proc.stderr
     # The two binaries word it differently on purpose — divoomd rejects the one
     # argument it could not place, the menubar rejects the whole argv because it

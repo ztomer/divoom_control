@@ -163,3 +163,10 @@ exclude_lines = [
     "raise NotImplementedError",
     "if __name__ == .__main__.:",
 ]
+
+# ruff (goh G17b): ONE rule, deliberately. PLW1510 -- a `subprocess.run` must say what a failing
+# child does (`check=True` stops the caller, `check=False` says the exit code is judged below).
+# `ruff check .` is a GOH_CI_STEPS step, so a new call without `check=` is red at push. ruff's
+# defaults read ~1100 findings here and are not a gate.
+[tool.ruff.lint]
+select = ["PLW1510"]

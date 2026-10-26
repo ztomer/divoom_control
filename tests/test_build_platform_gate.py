@@ -90,6 +90,7 @@ def _run(script: str, os_name: str, arch: str) -> subprocess.CompletedProcess[st
                 "DIVOOM_BUILD_ARCH": arch,
                 "DIVOOM_BUILD_GATE_ONLY": "1",
             },
+            check=False,
         )
     except subprocess.TimeoutExpired:
         pytest.fail(

@@ -56,6 +56,7 @@ def _run_script(run_dir: Path) -> subprocess.CompletedProcess:
         stdin=subprocess.DEVNULL,
         timeout=60,
         env={**os.environ, "DIVOOM_IDENTITY_DIR": str(run_dir)},
+        check=False,
     )
 
 

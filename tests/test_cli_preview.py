@@ -77,7 +77,7 @@ def live_daemon(settings):
 
 def _run(*argv: str) -> sp.CompletedProcess:
     return sp.run([sys.executable, "-m", "divoom_lib.cli", *argv], capture_output=True,
-                  text=True, timeout=60, cwd=REPO_ROOT, stdin=sp.DEVNULL, env=os.environ.copy())
+                  text=True, timeout=60, cwd=REPO_ROOT, stdin=sp.DEVNULL, env=os.environ.copy(), check=False)
 
 
 def _gradient() -> bytes:

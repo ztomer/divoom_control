@@ -97,6 +97,7 @@ def _run(*argv: str) -> sp.CompletedProcess:
         text=True,
         timeout=60,
         cwd=REPO_ROOT, stdin=sp.DEVNULL,
+        check=False,
     )
 
 

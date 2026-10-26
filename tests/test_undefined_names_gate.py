@@ -152,5 +152,5 @@ def test_the_gate_runs_and_is_green_on_this_tree():
     """The gate itself must still run — a check that cannot fail is not a gate."""
     r = subprocess.run([sys.executable, str(REPO / "tools" / "check_scripts.py")],
                        capture_output=True, text=True, cwd=str(REPO),
-                       stdin=subprocess.DEVNULL)
+                       stdin=subprocess.DEVNULL, check=False)
     assert r.returncode == 0, r.stdout + r.stderr

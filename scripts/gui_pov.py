@@ -83,7 +83,7 @@ def _free_port() -> int:
 def _links_corebluetooth(binary: Path) -> bool:
     try:
         out = subprocess.run(["otool", "-L", str(binary)],
-                             capture_output=True, text=True, timeout=10, stdin=subprocess.DEVNULL).stdout
+                             capture_output=True, text=True, timeout=10, stdin=subprocess.DEVNULL, check=True).stdout
     except Exception:
         return False
     return "corebluetooth" in out.lower()

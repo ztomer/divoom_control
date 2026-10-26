@@ -179,6 +179,7 @@ def build_probe(version: str) -> Path:
         # Built inside PROBE_DIR, so clearing the temp dir clears the build
         # too, rather than orphaning it under ~/.cargo/build; see _cargo_env.
         env=probe_env(PROBE_DIR),
+        check=False,
     )
     if r.returncode != 0:
         raise RuntimeError("the sysinfo probe did not build:\n" + r.stderr[-2000:])

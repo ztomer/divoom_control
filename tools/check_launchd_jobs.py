@@ -150,6 +150,7 @@ def read_launchctl_status() -> dict[str, tuple[str, str]]:
             text=True,
             stdin=subprocess.DEVNULL,
             timeout=30,
+            check=False,
         )
     except (OSError, subprocess.SubprocessError):
         return {}

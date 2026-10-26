@@ -54,6 +54,7 @@ def _run(script: Path, *args: str, **env: str) -> subprocess.CompletedProcess:
     return subprocess.run(
         ["bash", str(script), *args],
         cwd=REPO, env=e, capture_output=True, text=True, timeout=120, stdin=subprocess.DEVNULL,
+        check=False,
     )
 
 
@@ -61,7 +62,7 @@ def test_repo_gates_is_executable_and_parses():
     """A layer that cannot execute is a layer that silently does nothing."""
     assert REPO_GATES.is_file(), "tools/repo_gates.sh is missing"
     assert os.access(REPO_GATES, os.X_OK), "tools/repo_gates.sh is not executable"
-    r = subprocess.run(["bash", "-n", str(REPO_GATES)], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    r = subprocess.run(["bash", "-n", str(REPO_GATES)], capture_output=True, text=True, stdin=subprocess.DEVNULL, check=False)
     assert r.returncode == 0, r.stderr
 
 

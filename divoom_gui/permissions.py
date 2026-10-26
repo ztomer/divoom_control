@@ -51,7 +51,7 @@ def _prime_automation() -> None:
         )
         try:
             subprocess.run(["osascript", "-e", script],
-                           capture_output=True, timeout=5, stdin=subprocess.DEVNULL)
+                           capture_output=True, timeout=5, stdin=subprocess.DEVNULL, check=False)
             logger.debug("primed Automation for %s", app)
         except Exception as e:
             logger.debug("automation prime for %s failed: %s", app, e)

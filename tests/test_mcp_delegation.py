@@ -104,6 +104,7 @@ def _serve(entry: list[str], socket_path: str, stdout=None) -> sp.CompletedProce
         timeout=60,
         cwd=REPO_ROOT,
         env=env,
+        check=False,
     )
 
 

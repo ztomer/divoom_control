@@ -92,7 +92,7 @@ def test_non_macos_reports_skipped_not_agreement(monkeypatch, capsys):
                     reason="cargo is needed to compile the locked sysinfo")
 def test_used_memory_matches_activity_monitor_definition():
     r = subprocess.run([sys.executable, str(TOOL), "--json"],
-                       capture_output=True, text=True, timeout=900, stdin=subprocess.DEVNULL)
+                       capture_output=True, text=True, timeout=900, stdin=subprocess.DEVNULL, check=False)
     assert r.returncode in (0, 1), f"harness could not measure:\n{r.stderr}{r.stdout}"
     m = json.loads(r.stdout)
     assert m["sysinfo_version"] == _locked_version()

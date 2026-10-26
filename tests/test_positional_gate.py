@@ -59,5 +59,5 @@ def test_string_literals_survive_stripping():
 
 def test_gate_passes_on_current_tree():
     r = subprocess.run([sys.executable, "tools/check_positional_args.py"],
-                       cwd=REPO, capture_output=True, text=True, timeout=120, stdin=subprocess.DEVNULL)
+                       cwd=REPO, capture_output=True, text=True, timeout=120, stdin=subprocess.DEVNULL, check=False)
     assert r.returncode == 0, r.stdout + r.stderr

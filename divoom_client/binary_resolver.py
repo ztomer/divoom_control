@@ -93,6 +93,7 @@ def binary_version(path: Path, timeout: float = PROBE_TIMEOUT) -> str | None:
                 [str(path), "--version", *extra],
                 capture_output=True, text=True, timeout=timeout,
                 stdin=subprocess.DEVNULL,
+                check=False,
             )
         except subprocess.TimeoutExpired:
             # subprocess.run kills the child on timeout, but a daemon spawned
