@@ -40,6 +40,13 @@ jobs:
           repository: ztomer/gates_of_heck
           path: goh
           token: ${{ secrets.GOH_TOKEN || github.token }}
+      # goh's tool floors (python3, shellcheck), met the ONE way goh provides:
+      # its goh-floors action reads them from goh's own floor table, so a floor
+      # raised there is met here with no edit (run 40291804362 went red when
+      # goh raised python3 to 3.15 and shellcheck to 0.11.0 over the runner's
+      # 3.12.3 and 0.9.0).
+      - name: Meet goh's tool floors
+        uses: ./goh/.github/actions/goh-floors
       - uses: actions/setup-python@v7
         with:
           python-version-file: .python-version
@@ -287,6 +294,13 @@ jobs:
           repository: ztomer/gates_of_heck
           path: goh
           token: ${{ secrets.GOH_TOKEN || github.token }}
+      # goh's tool floors (python3, shellcheck), met the ONE way goh provides:
+      # its goh-floors action reads them from goh's own floor table, so a floor
+      # raised there is met here with no edit (run 40291804362 went red when
+      # goh raised python3 to 3.15 and shellcheck to 0.11.0 over the runner's
+      # 3.12.3 and 0.9.0).
+      - name: Meet goh's tool floors
+        uses: ./goh/.github/actions/goh-floors
       - name: No #[allow] in tracked Rust source (house gate)
         # Through goh.sh, the one entry for a house check: the by-path Python
         # checkers are retired forwarders since gates_of_heck v0.24.0.
