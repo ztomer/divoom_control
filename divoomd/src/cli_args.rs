@@ -20,8 +20,8 @@
 pub enum Outcome {
     /// Run the daemon with this configuration.
     Run(Box<ConfigArgs>),
-    /// Run the MCP stdio server (`divoomd mcp`).
-    Mcp,
+    /// Run the MCP stdio server (`divoomd mcp [--allow-destructive]`).
+    Mcp(crate::mcp::Options),
     /// Run a device verb (`divoomd set-volume 5`).
     Verb(Box<crate::verbs::VerbRequest>),
     /// Print `divoomd <version>` and exit 0.
@@ -56,7 +56,10 @@ divoomd — the native Divoom daemon (unix-socket NDJSON protocol).
 
 USAGE:
     divoomd [OPTIONS]
-    divoomd mcp                 run the MCP stdio server against a live daemon
+    divoomd mcp [--allow-destructive]
+                                run the MCP stdio server against a live daemon;
+                                --allow-destructive also offers the tools that
+                                overwrite panel state it cannot read back
     divoomd set-volume <0-15>
     divoomd set-brightness <0-100>
     divoomd push-image <PATH>
@@ -82,7 +85,15 @@ Each option also accepts the --flag=value form.";
 pub fn parse(args: &[String], env_token: Option<String>) -> Outcome {
     // `divoomd mcp` is a subcommand, not a flag, and only in first position.
     if args.first().map(String::as_str) == Some("mcp") {
-        return Outcome::Mcp;
+        return match &args[1..] {
+            [] => Outcome::Mcp(crate::mcp::Options::default()),
+            [flag] if flag == "--allow-destructive" => Outcome::Mcp(crate::mcp::Options {
+                allow_destructive: true,
+            }),
+            rest => Outcome::Error(format!(
+                "divoomd mcp: unexpected argument(s) {rest:?}; the only flag is --allow-destructive"
+            )),
+        };
     }
 
     // Device verbs, likewise only in first position. An unrecognised first
@@ -266,7 +277,21 @@ mod tests {
 
     #[test]
     fn mcp_is_a_subcommand_only_in_first_position() {
-        assert_eq!(parse(&args(&["mcp"]), None), Outcome::Mcp);
+        assert_eq!(
+            parse(&args(&["mcp"]), None),
+            Outcome::Mcp(crate::mcp::Options::default())
+        );
+        assert_eq!(
+            parse(&args(&["mcp", "--allow-destructive"]), None),
+            Outcome::Mcp(crate::mcp::Options {
+                allow_destructive: true
+            })
+        );
+        // A typo must not start a server with the default surface.
+        assert!(matches!(
+            parse(&args(&["mcp", "--allow-destructiv"]), None),
+            Outcome::Error(_)
+        ));
         // Anywhere else it is just an unrecognised word, and must be refused
         // rather than quietly ignored.
         assert!(matches!(

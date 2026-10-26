@@ -156,8 +156,8 @@ async fn main() {
         // `divoomd mcp` runs the MCP stdio server (a client of the running
         // daemon), not the daemon itself. Ported from the Python
         // `divoom_lib.cli mcp-server`.
-        Outcome::Mcp => {
-            if let Err(e) = divoomd::mcp::run().await {
+        Outcome::Mcp(options) => {
+            if let Err(e) = divoomd::mcp::run(options).await {
                 eprintln!("divoomd mcp: {e}");
                 std::process::exit(1);
             }

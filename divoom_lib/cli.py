@@ -112,7 +112,7 @@ def build_parser() -> argparse.ArgumentParser:
     # MCP server (R15 §5; R28 routes through the daemon): stdio JSON-RPC
     # server. It does NOT open its own BLE connection — the daemon is the
     # sole device owner, so the MCP server is a thin daemon client and
-    # exposes 12 tools to MCP-compatible clients (Claude Desktop, Cursor,
+    # exposes its tools (docs/MCP_SERVER.md) to MCP-compatible clients (Claude Desktop, Cursor,
     # Cline, Continue, etc.).
     p_mcp = sub.add_parser(
         "mcp-server", parents=[shared],
@@ -120,6 +120,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     # --socket comes from `shared` now, so it works on every verb rather than
     # only this one. The auto-spawn note moved to the shared help text.
+    # The tools that overwrite panel state the daemon cannot read back
+    # (set_alarm, set_low_power, set_radio, set_screen_orientation) are
+    # offered only when asked for; passed through to `divoomd mcp`.
+    p_mcp.add_argument("--allow-destructive", action="store_true",
+                       help="Also offer the MCP tools that overwrite panel state "
+                            "the daemon cannot read back (alarms, orientation, "
+                            "low-power mode, radio).")
     p_mcp.add_argument("--host", default=None,
                        help="Connect to a remote daemon on this TCP host "
                             "instead of the local socket (sets DIVOOM_DAEMON_HOST).")

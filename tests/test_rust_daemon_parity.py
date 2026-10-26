@@ -411,8 +411,14 @@ def test_rust_mcp_via_daemon(rust_daemon_ctx):
         text=True,
         env=env,
     )
+    # The MCP handshake first: rmcp (lane MCP.DV) answers nothing before it,
+    # exactly as the spec says, where the hand-rolled loop answered anything.
     requests = (
-        json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}) + "\n"
+        json.dumps({"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {
+            "protocolVersion": "2025-11-25", "capabilities": {},
+            "clientInfo": {"name": "parity", "version": "0"}}}) + "\n"
+        + json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n"
+        + json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}) + "\n"
         + json.dumps({
             "jsonrpc": "2.0", "id": 2, "method": "tools/call",
             "params": {"name": "set_volume", "arguments": {"level": 8}},
@@ -424,8 +430,10 @@ def test_rust_mcp_via_daemon(rust_daemon_ctx):
         proc.kill()
         raise
 
-    replies = [json.loads(line) for line in out.splitlines() if line.strip()]
-    assert len(replies) >= 2, f"expected a handshake, got: {out!r}"
+    # Paired by id, not by line order: rmcp serves requests concurrently.
+    by_id = {r.get("id"): r for r in (json.loads(line) for line in out.splitlines() if line.strip())}
+    replies = [by_id.get(1, {}), by_id.get(2, {})]
+    assert all(replies), f"expected a handshake, got: {out!r}"
 
     names = {t["name"] for t in replies[0]["result"]["tools"]}
     assert "set_volume" in names and "set_brightness" in names, names

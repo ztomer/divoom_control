@@ -31,10 +31,11 @@ from tests.support.daemon_binary import require_divoomd
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# The 25 tools the native server ships: the 13 the Python catalog shipped,
-# `list_screens`, P4.5's seven (text, live jobs, the built-in tools),
-# P4.6's three screen-lease tools and P4.7's `notify`.
-# Written out in full rather than counted, because "25" alone would still pass
+# The 22 tools the native server offers by default: the 13 the Python catalog
+# shipped minus the four destructive ones (below), `list_screens`, P4.5's seven
+# (text, live jobs, the built-in tools), P4.6's three screen-lease tools,
+# P4.7's `notify` and API.DV's `get_screen_previews`.
+# Written out in full rather than counted, because "22" alone would still pass
 # if one tool were swapped for another; the superset assertion in
 # divoomd/src/mcp_tools.rs checks the same thing from the other side.
 NATIVE_TOOLS = {
@@ -42,10 +43,6 @@ NATIVE_TOOLS = {
     "set_brightness",
     "set_light_mode",
     "set_weather",
-    "set_alarm",
-    "set_radio",
-    "set_low_power",
-    "set_screen_orientation",
     "show_image",
     "push_animation",
     "play_sound",
@@ -63,10 +60,18 @@ NATIVE_TOOLS = {
     "lease_renew",
     "lease_release",
     "notify",
+    "get_screen_previews",
 }
 
+# Overwrite panel state the daemon cannot read back: offered only with
+# `--allow-destructive` (lane MCP.DV).
+DESTRUCTIVE_TOOLS = {"set_alarm", "set_radio", "set_low_power", "set_screen_orientation"}
+
 HANDSHAKE = (
-    json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}) + "\n"
+    json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+        "protocolVersion": "2025-11-25", "capabilities": {},
+        "clientInfo": {"name": "test_mcp_delegation", "version": "0"}}}) + "\n"
+    + json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n"
     + json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}) + "\n"
 )
 
@@ -188,6 +193,17 @@ def test_the_entry_point_serves_the_native_catalog(live_daemon) -> None:
     for t in tools:
         assert t["description"], f"{t['name']} has no description"
         assert t["inputSchema"]["type"] == "object", t["name"]
+
+
+def test_the_entry_point_offers_destructive_tools_only_when_asked(live_daemon) -> None:
+    """`--allow-destructive` reaches the native server through the entry point."""
+    proc = _serve([*_entry_point(), "--allow-destructive"], live_daemon)
+    assert proc.returncode == 0, f"stderr:\n{proc.stderr}"
+    replies = [json.loads(line) for line in proc.stdout.splitlines() if line.strip()]
+    names = {t["name"] for t in replies[1]["result"]["tools"]}
+    assert names == NATIVE_TOOLS | DESTRUCTIVE_TOOLS, names
+    for t in replies[1]["result"]["tools"]:
+        assert t["annotations"]["destructiveHint"] is (t["name"] in DESTRUCTIVE_TOOLS), t
 
 
 def test_the_handoff_is_visible_in_the_log(live_daemon) -> None:

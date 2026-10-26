@@ -248,7 +248,10 @@ async def cmd_mcp_server(args: argparse.Namespace) -> int:
 
     # Replaces this process; there is no return. On success the native server
     # owns stdin/stdout/exit status until the client closes the pipe.
-    os.execv(str(exe), [str(exe), "mcp"])
+    argv = [str(exe), "mcp"]
+    if getattr(args, "allow_destructive", False):
+        argv.append("--allow-destructive")
+    os.execv(str(exe), argv)
     # Only reachable if exec failed. execv raises OSError on a real failure
     # (missing file, not executable), so reaching here means it returned, which
     # it does not do — but a command that must not silently do nothing says so.

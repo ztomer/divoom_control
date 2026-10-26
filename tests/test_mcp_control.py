@@ -343,7 +343,12 @@ def test_the_spawned_process_really_answers_json_rpc(tmp_path) -> None:
                     stderr=sp.DEVNULL, text=True)
     try:
         requests = (
-            json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}) + "\n"
+            # rmcp (lane MCP.DV) refuses an initialize without the fields
+            # the spec requires, as a real MCP host always sends them.
+            json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+                "protocolVersion": "2025-11-25", "capabilities": {},
+                "clientInfo": {"name": "test_mcp_control", "version": "0"}}}) + "\n"
+            + json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n"
             + json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}) + "\n"
         )
         out, _ = proc.communicate(requests, timeout=30)

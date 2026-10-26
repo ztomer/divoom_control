@@ -30,19 +30,45 @@ struct Mcp {
 }
 
 impl Mcp {
-    async fn call(&mut self, name: &str, arguments: Value) -> (bool, Value) {
-        self.id += 1;
-        let req = json!({ "jsonrpc": "2.0", "id": self.id, "method": "tools/call",
-                          "params": { "name": name, "arguments": arguments } });
-        let mut line = serde_json::to_vec(&req).expect("json");
+    async fn send(&mut self, msg: &Value) {
+        let mut line = serde_json::to_vec(msg).expect("json");
         line.push(b'\n');
         self.stdin.write_all(&line).await.expect("write");
+    }
+
+    async fn request(&mut self, method: &str, params: Value) -> Value {
+        self.id += 1;
+        let req = json!({ "jsonrpc": "2.0", "id": self.id, "method": method, "params": params });
+        self.send(&req).await;
         let reply = tokio::time::timeout(Duration::from_secs(10), self.stdout.next_line())
             .await
             .expect("an answer in time")
             .expect("read")
             .expect("a line");
-        let reply: Value = serde_json::from_str(&reply).expect("json reply");
+        serde_json::from_str(&reply).expect("json reply")
+    }
+
+    /// The MCP handshake an MCP host makes before anything else.
+    async fn initialize(&mut self) {
+        let init = self
+            .request(
+                "initialize",
+                json!({ "protocolVersion": "2025-11-25", "capabilities": {},
+                        "clientInfo": { "name": "mcp_lease_e2e", "version": "0" } }),
+            )
+            .await;
+        assert!(init.get("result").is_some(), "{init}");
+        self.send(&json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }))
+            .await;
+    }
+
+    async fn call(&mut self, name: &str, arguments: Value) -> (bool, Value) {
+        let reply = self
+            .request(
+                "tools/call",
+                json!({ "name": name, "arguments": arguments }),
+            )
+            .await;
         let result = &reply["result"];
         let text = result["content"][0]["text"].as_str().expect("text content");
         (
@@ -158,6 +184,31 @@ fn all(frame: &WireFrame, rgb: [u8; 3]) -> bool {
     frame.pixels.iter().all(|p| *p == rgb)
 }
 
+/// `get_screen_previews` (API.DV) over the real wire, against the real
+/// daemon's record: the animation just drawn is the panel's `frame` state,
+/// and its pixels arrive as MCP image content at the index the entry names.
+async fn assert_preview_is_an_image(mcp: &mut Mcp) {
+    let reply = mcp
+        .request(
+            "tools/call",
+            json!({ "name": "get_screen_previews", "arguments": { "mac": MAC } }),
+        )
+        .await;
+    let result = &reply["result"];
+    assert_eq!(result["isError"], json!(false), "{reply}");
+    let preview = &result["structuredContent"];
+    assert_eq!(preview["daemon"]["state"], json!("running"), "{preview}");
+    let entry = &preview["devices"][0];
+    assert_eq!(entry["state"], json!("frame"), "{entry}");
+    let index = entry["frame"]["image"].as_u64().expect("an image index");
+    let block = &result["content"][usize::try_from(index).expect("small")];
+    assert_eq!(block["type"], json!("image"), "{block}");
+    assert!(block["mimeType"]
+        .as_str()
+        .is_some_and(|m| m.starts_with("image/")));
+    assert!(block["data"].as_str().is_some_and(|d| !d.is_empty()));
+}
+
 async fn assert_mcp_discovery(mcp: &mut Mcp) {
     let (bad, cap) = mcp.call("get_capabilities", json!({ "mac": MAC })).await;
     assert!(!bad, "get_capabilities answers: {cap}");
@@ -271,6 +322,7 @@ async fn an_agent_leases_draws_and_a_lapsed_lease_hands_the_panel_back() {
         id: 0,
     };
 
+    mcp.initialize().await;
     assert_mcp_discovery(&mut mcp).await;
 
     let (bad, lease) = mcp
@@ -296,6 +348,7 @@ async fn an_agent_leases_draws_and_a_lapsed_lease_hands_the_panel_back() {
         "full resolution, every frame: {drawn}"
     );
     let drawn_at = assert_drawn_at_full_resolution(&d, before).await;
+    assert_preview_is_an_image(&mut mcp).await;
     let (bad, refused) = mcp
         .call("show_text", json!({ "mac": MAC, "text": "No", "size": 16 }))
         .await;

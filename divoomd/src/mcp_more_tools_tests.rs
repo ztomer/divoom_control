@@ -235,8 +235,12 @@ fn every_tool_that_reaches_a_panel_offers_the_lease() {
         let name = t["name"].as_str().expect("named");
         let has = t["inputSchema"]["properties"].get("lease").is_some();
         // list_screens reads the topology file, not a panel; lease_acquire
-        // is how a lease starts.
-        let exempt = matches!(name, "list_screens" | "lease_acquire");
+        // is how a lease starts; get_screen_previews reads the daemon's
+        // record of what it sent and sends nothing.
+        let exempt = matches!(
+            name,
+            "list_screens" | "lease_acquire" | "get_screen_previews"
+        );
         assert_eq!(has, !exempt, "{name}: lease in its schema = {has}");
     }
 }

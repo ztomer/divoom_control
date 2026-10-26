@@ -118,6 +118,14 @@ async def test_cmd_mcp_server_local_happy_path(monkeypatch) -> None:
         )
 
     assert execs == [("/opt/divoomd", ["/opt/divoomd", "mcp"])]
+
+    # The opt-in reaches the native server, or the documented entry point
+    # could never offer the destructive tools (lane MCP.DV).
+    execs.clear()
+    with pytest.raises(SystemExit):
+        await cli_commands.cmd_mcp_server(_parse(
+            "mcp-server", "--socket", "/tmp/fake-divoom-test.sock", "--allow-destructive"))
+    assert execs == [("/opt/divoomd", ["/opt/divoomd", "mcp", "--allow-destructive"])]
     # The child inherits the daemon target; without this it would silently
     # connect to /tmp/divoom.sock and report the daemon as down.
     assert os.environ["DIVOOM_SOCKET"] == "/tmp/fake-divoom-test.sock"

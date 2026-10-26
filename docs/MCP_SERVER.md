@@ -1,6 +1,6 @@
 # MCP Server
 
-The `divoom-control` project ships a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server speaking JSON-RPC 2.0 over standard I/O (stdio) and exposing 14 device-control tools, allowing AI coding assistants and automation clients to monitor and control Divoom devices. Protocol negotiation follows SEP-2575: the server answers `initialize` with the client's requested `protocolVersion` when it is one it supports (`2024-11-05`, `2025-03-26`, `2025-06-18`, `2025-11-25`, `2026-07-28`), else the latest (`2026-07-28`). Extra `params` members such as `_meta` are tolerated.
+The `divoom-control` project ships a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server over standard I/O (stdio) with 26 tools, allowing AI coding assistants and automation clients to monitor and control Divoom devices. It is built on [rmcp](https://crates.io/crates/rmcp), the official Rust MCP SDK (since lane MCP.DV, owner ruling OW.60): framing, protocol negotiation and the `tools/call` envelope are upstream's. It speaks the newest protocol, `2026-07-28`, per request (`_meta` and `server/discover`; that version has no handshake), and answers the legacy `initialize` handshake for the older versions (`2024-11-05` through `2025-11-25`).
 
 ## Architecture
 
@@ -37,10 +37,38 @@ Command-line options:
 - `--host <ip_or_name>`: Remote daemon TCP host (sets `DIVOOM_DAEMON_HOST`).
 - `--port <number>`: Remote daemon TCP port (default: `9009`).
 - `--token <secret>`: Shared secret token for authenticated TCP connections.
+- `--allow-destructive`: Also offer the destructive tools (below). Both entry
+  points take it: `divoomd mcp --allow-destructive` and
+  `divoom-control mcp-server --allow-destructive`.
+
+### Read-only, write and destructive tools
+
+Every tool states what it does to the world in its MCP `annotations`
+(`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`, all
+four always present), declared beside the tool in the catalog
+(`divoomd/src/mcp_catalog.rs`, `Effect`):
+
+- **Read** (`readOnlyHint: true`): `get_capabilities`, `get_device_state`,
+  `list_screens`, `live_job_list`, `get_screen_previews`. They send nothing to
+  a panel.
+- **Write** (`readOnlyHint: false`, `destructiveHint: false`): every tool that
+  draws on a panel or changes a setting the caller can read back and restore
+  (volume, brightness, the channel), and the transient ones (an image, text, a
+  notification, a live widget, a lease, the scoreboard, timer and countdown).
+- **Destructive** (`destructiveHint: true`): `set_alarm`, `set_low_power`,
+  `set_radio`, `set_screen_orientation`. Each overwrites panel state the daemon
+  cannot read back, so the previous value is lost. **They are not listed, and a
+  call to one is refused (`not_enabled`) before anything reaches the daemon,
+  unless the server was started with `--allow-destructive`.** A bare
+  `divoomd mcp` offers 22 tools.
+
+Every tool also declares an `outputSchema` (`type: object`), and every success
+carries the same object as `structuredContent` beside the JSON text block that
+older clients read.
 
 ## Tool Catalog
 
-The server exposes 25 tools via `tools/list`. Every integer range below is stated once, in `divoomd/src/arg_bounds.rs`: the schema is generated from it, the tool checks it, and the daemon handler that receives the value refuses outside it.
+The catalog has 26 tools (22 listed unless `--allow-destructive`). Every integer range below is stated once, in `divoomd/src/arg_bounds.rs`: the schema is generated from it, the tool checks it, and the daemon handler that receives the value refuses outside it.
 
 | Tool | Arguments | Description / Returns |
 |------|-----------|------------------------|
@@ -68,6 +96,7 @@ The server exposes 25 tools via `tools/list`. Every integer range below is state
 | `lease_acquire` | `{ttl_ms: 1000..600000, holder?: string, mac?}` | Borrow the panel's screen. Returns `{ok, lease, mac, holder, ttl_ms}`. Pass `lease` to every call while you hold it; anyone else is refused with the holder's name and the time left. The panel's live widget pauses (its frames keep rendering and are held back, the widget is not stopped). |
 | `lease_renew` | `{lease, ttl_ms}` | Move the lease's end to `ttl_ms` from now. A lease that already ended cannot be renewed. |
 | `lease_release` | `{lease}` | Give the screen back. Returns `restored`: `"job"` (the live widget's newest frame is painted at once) or `"none"` (no widget was running; the panel keeps your last frame). |
+| `get_screen_previews` | `{mac?}` | What each panel is showing, as the daemon put it there (READ-ONLY; the daemon's `screen_previews`, the same answer as `divoom-control preview --json`). Returns `{daemon: {state, reason}, now_ms, devices: [...]}`: every panel gets an entry with its own `state` and `reason` -- `frame`, `nothing_sent`, `device_rendered`, `undecoded` or `offline` -- and only `state: "frame"` has pixels. Each frame travels as MCP **image** content after the text block; the entry's `frame.image` is that block's index in `content` (the base64 is not repeated in the JSON). `daemon.state` is `not_running` (no daemon answering) or `unsupported` (a daemon that predates previews) with `devices: []`; an unknown `mac` is an error with code `unknown_device`. |
 | `notify` | `{text: string, duration_ms: 1000..60000, color?: "#RRGGBB", size?: 8..128, mac?}` | Show a short message for `duration_ms`, then give the panel back. The text is drawn like `show_text`, under a screen lease whose TTL is the duration; the call returns at once and the lease lapses by itself, so a caller that dies cannot leave the message up. Refused (`screen_leased`) while someone else holds the panel. Returns `{ok, text, size, duration_ms, mac, lease}`; `lease_release` with that `lease` dismisses it early. |
 
 ### Screen leases
@@ -93,7 +122,10 @@ frame up for good. A lease is the borrow with the return built in:
   `{"type": "lease", "state": "acquired" | "released" | "expired", ...}`.
 
 ### Validation and Error Handling
-- Protocol-level validation errors (missing arguments, invalid JSON) return standard JSON-RPC error codes (`-32602`, `-32700`, etc.).
+- Protocol-level errors are rmcp's: an unknown method is `-32601`, a request
+  missing what the spec requires (an `initialize` with no `protocolVersion` or
+  `clientInfo`, a request before the handshake without the newest protocol's
+  `_meta`) is `-32602`, and a line that is not JSON-RPC is `-32600` or dropped.
 - Domain errors (values out of range, unparseable images, device communication timeouts) return a tool result with `isError: true` and an explanatory error message, enabling clients to recover and self-correct.
 - Every daemon failure carries a stable `code` beside the prose: the tool
   result's JSON is `{"error": "...", "code": "..."}`, and the CLI prints
@@ -209,17 +241,16 @@ Add to `~/.continue/config.json`:
 
 ## Wire Protocol Reference
 
-Negotiated per SEP-2575 (supported: `2024-11-05`, `2025-03-26`,
-`2025-06-18`, `2025-11-25`, `2026-07-28`; latest `2026-07-28`):
+The protocol itself is rmcp's (see the introduction for the versions).
 
-### Initialize Request
+### Initialize Request (legacy handshake)
 ```json
 {
   "jsonrpc": "2.0",
   "id": 1,
   "method": "initialize",
   "params": {
-    "protocolVersion": "2026-07-28",
+    "protocolVersion": "2025-11-25",
     "capabilities": {},
     "clientInfo": {
       "name": "mcp-client",
@@ -235,17 +266,23 @@ Negotiated per SEP-2575 (supported: `2024-11-05`, `2025-03-26`,
   "jsonrpc": "2.0",
   "id": 1,
   "result": {
-    "protocolVersion": "2026-07-28",
+    "protocolVersion": "2025-11-25",
     "capabilities": {
       "tools": {}
     },
     "serverInfo": {
       "name": "divoom-control",
-      "version": "0.34.0"
+      "version": "0.43.0"
     }
   }
 }
 ```
+
+A client asking for `2026-07-28` in `initialize` is answered `2025-11-25`: the
+newest version has no handshake, and is spoken per request instead, with
+`io.modelcontextprotocol/protocolVersion`, `.../clientCapabilities` and
+`.../clientInfo` in each request's `_meta` (`server/discover` lists the
+versions).
 
 ### Tool Execution Request
 ```json
@@ -271,9 +308,17 @@ Negotiated per SEP-2575 (supported: `2024-11-05`, `2025-03-26`,
     "content": [
       {
         "type": "text",
-        "text": "{\"ok\": true, \"level\": 75}"
+        "text": "{\"level\":75,\"ok\":true}"
       }
-    ]
+    ],
+    "structuredContent": {
+      "level": 75,
+      "ok": true
+    },
+    "isError": false
   }
 }
 ```
+
+Requests are served concurrently: pair each reply with its request by `id`,
+never by order.

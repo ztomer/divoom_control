@@ -333,10 +333,13 @@ not described.
 
 **Goal:** an external agent can discover each panel, draw on it at its real
 resolution, and share it with background jobs without collisions. The
-catalog had 14 tools when this phase opened; it has 25.
+catalog had 14 tools when this phase opened; it has 26 (22 offered unless
+`--allow-destructive`).
 **Exit:** an MCP client draws a full-resolution multi-frame image on a 64x64
 panel while a live job runs, and the panel returns to the job when the lease
 expires (e2e over the real `divoomd mcp` entry point). **Size:** L.
+
+Landed (2026-10-26, lanes MCP.DV + API.DV): the server on rmcp, every tool annotated (read / write / destructive, destructive behind `--allow-destructive`) with an `outputSchema` and `structuredContent`, `get_screen_previews` with image content, and goh's MCP wire gate on (`GOH_MCP_SERVERS`); see CHANGELOG.
 
 Landed (2026-10-17): P4.1, `get_capabilities` describing the named panel with model, size and the vendor app's per-model features (`divoomd/src/panel_features.rs`, derived by `tools/derive_panel_features.py`);
 P4.2, `list_screens` listing every known or placed screen with its size, live link and place (`screens` in `get_topology`);

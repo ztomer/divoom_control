@@ -36,7 +36,8 @@ from capability_census import _ARM_BEFORE, daemon_capabilities  # noqa: E402
 COORDINATOR = REPO / "divoomd" / "src" / "live_jobs" / "coordinator.rs"
 # The MCP catalog: every `tool("name", ...)` entry `catalog()` assembles.
 MCP_CATALOG = (REPO / "divoomd" / "src" / "mcp_tools.rs",
-               REPO / "divoomd" / "src" / "mcp_more_tools.rs")
+               REPO / "divoomd" / "src" / "mcp_more_tools.rs",
+               REPO / "divoomd" / "src" / "mcp_preview.rs")
 _TOOL = re.compile(r'\btool\(\s*"([a-z_]+)"')
 
 # Below these, the extractor is not reading what it thinks it is reading, and a

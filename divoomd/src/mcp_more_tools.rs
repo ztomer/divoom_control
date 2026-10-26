@@ -41,30 +41,30 @@ fn action(a: &Value, table: &[(&'static str, i64)], default: &str) -> Result<i64
 
 /// The tools this file adds, in catalog form.
 pub fn catalog() -> Vec<Value> {
-    use crate::mcp_tools::tool;
+    use crate::mcp_catalog::{tool, Effect};
     let kinds = crate::live_jobs::JOB_KINDS.to_vec();
     vec![
-        tool("show_text", "Draw text on the panel at its own resolution, in the device font (the frame render_widget's text kind previews). color is #RRGGBB, white by default.",
+        tool("show_text", Effect::Write, &[("ok","boolean"),("text","string"),("size","integer")], "Draw text on the panel at its own resolution, in the device font (the frame render_widget's text kind previews). color is #RRGGBB, white by default.",
             &json!({"type":"object","properties":{"text":{"type":"string"},"color":{"type":"string"},"size":IMAGE_SIZE.schema()},"required":["text"]})),
-        tool("live_job_start", "Start a live widget on the panel -- sysmon, stocks (params.symbol), weather (params.location), music (macOS) -- replacing the one it runs. Frames are rendered at the panel's size unless params.size says otherwise.",
+        tool("live_job_start", Effect::Write, &[("ok","boolean"),("mac","string"),("kind","string"),("params","object")], "Start a live widget on the panel -- sysmon, stocks (params.symbol), weather (params.location), music (macOS) -- replacing the one it runs. Frames are rendered at the panel's size unless params.size says otherwise.",
             &json!({"type":"object","properties":{"kind":{"type":"string","enum":kinds},"params":{"type":"object"}},"required":["kind"]})),
-        tool("live_job_stop", "Stop the panel's live widget of this kind.",
+        tool("live_job_stop", Effect::Write, &[("ok","boolean"),("mac","string"),("kind","string"),("stopped","any")], "Stop the panel's live widget of this kind.",
             &json!({"type":"object","properties":{"kind":{"type":"string","enum":kinds}},"required":["kind"]})),
-        tool("live_job_list", "List the live widgets running, on one panel (mac) or all of them.",
+        tool("live_job_list", Effect::Read, &[], "List the live widgets running, on one panel (mac) or all of them.",
             &json!({"type":"object","properties":{}})),
-        tool("set_scoreboard", "Show the scoreboard with these scores (0-999 each); on=false hides it.",
+        tool("set_scoreboard", Effect::Write, &[("ok","boolean"),("red_score","integer"),("blue_score","integer"),("on","boolean")], "Show the scoreboard with these scores (0-999 each); on=false hides it.",
             &json!({"type":"object","properties":{"red_score":RED_SCORE.schema(),"blue_score":BLUE_SCORE.schema(),"on":{"type":"boolean"}},"required":["red_score","blue_score"]})),
-        tool("set_timer", "Control the stopwatch: start, stop (pause) or reset.",
+        tool("set_timer", Effect::Write, &[("ok","boolean"),("action","any")], "Control the stopwatch: start, stop (pause) or reset.",
             &json!({"type":"object","properties":{"action":{"type":"string","enum":names(&TIMER_ACTIONS)}},"required":["action"]})),
-        tool("set_countdown", "Start a countdown of minutes:seconds, or stop the running one.",
+        tool("set_countdown", Effect::Write, &[("ok","boolean"),("action","any"),("minutes","integer"),("seconds","integer")], "Start a countdown of minutes:seconds, or stop the running one.",
             &json!({"type":"object","properties":{"action":{"type":"string","enum":names(&COUNTDOWN_ACTIONS)},"minutes":COUNTDOWN_MINUTES.schema(),"seconds":COUNTDOWN_SECONDS.schema()},"required":["action"]})),
-        tool("notify", "Show a short message on the panel for duration_ms, then give the panel back -- its live widget returns by itself; nothing waits. Refused while someone holds the panel's lease. Returns the notification's lease: lease_release dismisses it early.",
+        tool("notify", Effect::Write, &[("ok","boolean"),("text","string"),("size","integer"),("duration_ms","integer"),("mac","any"),("lease","string")], "Show a short message on the panel for duration_ms, then give the panel back -- its live widget returns by itself; nothing waits. Refused while someone holds the panel's lease. Returns the notification's lease: lease_release dismisses it early.",
             &json!({"type":"object","properties":{"text":{"type":"string"},"duration_ms":NOTIFY_DURATION_MS.schema(),"color":{"type":"string"},"size":IMAGE_SIZE.schema()},"required":["text","duration_ms"]})),
-        tool("lease_acquire", "Borrow the panel's screen for ttl_ms (renew before it runs out). Pass the returned lease to every drawing call; anyone else is refused, and the panel's live widget pauses. When the lease ends -- released, or expired because you stopped renewing -- the widget's newest frame comes back at once.",
+        tool("lease_acquire", Effect::Write, &[("ok","boolean")], "Borrow the panel's screen for ttl_ms (renew before it runs out). Pass the returned lease to every drawing call; anyone else is refused, and the panel's live widget pauses. When the lease ends -- released, or expired because you stopped renewing -- the widget's newest frame comes back at once.",
             &json!({"type":"object","properties":{"ttl_ms":LEASE_TTL_MS.schema(),"holder":{"type":"string","description":"Who is asking, shown to anyone refused."}},"required":["ttl_ms"]})),
-        tool("lease_renew", "Extend your lease to ttl_ms from now.",
+        tool("lease_renew", Effect::Write, &[("ok","boolean")], "Extend your lease to ttl_ms from now.",
             &json!({"type":"object","properties":{"lease":{"type":"string"},"ttl_ms":LEASE_TTL_MS.schema()},"required":["lease","ttl_ms"]})),
-        tool("lease_release", "Give the screen back now; says what the panel went back to (job: its live widget, none: nothing to restore).",
+        tool("lease_release", Effect::Write, &[("ok","boolean")], "Give the screen back now; says what the panel went back to (job: its live widget, none: nothing to restore).",
             &json!({"type":"object","properties":{"lease":{"type":"string"}},"required":["lease"]})),
     ]
 }

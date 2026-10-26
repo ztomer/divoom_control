@@ -15,6 +15,7 @@ use crate::arg_bounds::{
 use crate::daemon_target::DaemonTarget;
 use crate::error_code::ToolError;
 use crate::image_fit::Fit;
+use crate::mcp_catalog::{tool, Effect};
 
 // name -> channel int (LIGHT_MODE_NAMES in mcp_tools.py).
 const LIGHT_MODES: [(&str, i64); 8] = [
@@ -37,8 +38,8 @@ const WEATHER_TYPES: [(&str, i64); 6] = [
     ("fog", 9),
 ];
 
-/// The `tools/list` descriptors (name + description + inputSchema), matching the
-/// Python `_SCHEMAS`/`_DESCRIPTIONS`.
+/// Every tool's `tools/list` entry (`crate::mcp_catalog::tool`), destructive
+/// ones included; `crate::mcp` decides which a session offers.
 #[must_use]
 pub fn catalog() -> Value {
     let resize = json!({
@@ -48,63 +49,38 @@ pub fn catalog() -> Value {
     });
     let mut tools = vec![
 
-        tool("set_volume", "Set the device's speaker volume (0-15).",
+        tool("set_volume", Effect::Write, &[("ok","boolean"),("level","integer")], "Set the device's speaker volume (0-15).",
             &json!({"type":"object","properties":{"level":VOLUME.schema()},"required":["level"]})),
-        tool("set_brightness", "Set the device's display brightness (0-100).",
+        tool("set_brightness", Effect::Write, &[("ok","boolean"),("level","integer")], "Set the device's display brightness (0-100).",
             &json!({"type":"object","properties":{"level":BRIGHTNESS.schema()},"required":["level"]})),
-        tool("set_light_mode", "Switch the active channel (clock, lightning, cloud, vj, visualizer, design, scoreboard, animation).",
+        tool("set_light_mode", Effect::Write, &[("ok","boolean"),("mode","string"),("channel","integer")], "Switch the active channel (clock, lightning, cloud, vj, visualizer, design, scoreboard, animation).",
             &json!({"type":"object","properties":{"mode":{"type":"string","enum":LIGHT_MODES.iter().map(|(n,_)|*n).collect::<Vec<_>>()}},"required":["mode"]})),
-        tool("set_weather", "Push a temperature + weather icon to the device's built-in weather widget.",
+        tool("set_weather", Effect::Write, &[("ok","boolean"),("temperature_c","integer"),("weather","string")], "Push a temperature + weather icon to the device's built-in weather widget.",
             &json!({"type":"object","properties":{"temperature_c":TEMPERATURE_C.schema(),"weather":{"type":"string","enum":WEATHER_TYPES.iter().map(|(n,_)|*n).collect::<Vec<_>>()}},"required":["temperature_c","weather"]})),
-        tool("set_alarm", "Set or disable one of the device's 10 alarms.",
+        tool("set_alarm", Effect::Destructive, &[("ok","boolean"),("index","integer"),("hour","integer"),("minute","integer"),("weekday_mask","integer"),("enabled","boolean")], "Set or disable one of the device's 10 alarms.",
             &json!({"type":"object","properties":{"index":ALARM_INDEX.schema(),"hour":HOUR.schema(),"minute":MINUTE.schema(),"weekday_mask":WEEKDAY_MASK.schema(),"enabled":{"type":"boolean"}},"required":["index","hour","minute"]})),
-        tool("set_radio", "Tune the FM radio (freq_x10 = MHz x 10, e.g. 875 = 87.5).",
+        tool("set_radio", Effect::Destructive, &[("ok","boolean"),("freq_x10","integer")], "Tune the FM radio (freq_x10 = MHz x 10, e.g. 875 = 87.5).",
             &json!({"type":"object","properties":{"freq_x10":RADIO_FREQ_X10.schema()},"required":["freq_x10"]})),
-        tool("set_low_power", "Enable or disable the device's low-power mode.",
+        tool("set_low_power", Effect::Destructive, &[("ok","boolean"),("enabled","boolean")], "Enable or disable the device's low-power mode.",
             &json!({"type":"object","properties":{"enabled":{"type":"boolean"}},"required":["enabled"]})),
-        tool("set_screen_orientation", "Rotate the device's display 0/90/180/270 degrees; optionally mirror/flip.",
+        tool("set_screen_orientation", Effect::Destructive, &[("ok","boolean"),("degrees","integer"),("mirror","boolean")], "Rotate the device's display 0/90/180/270 degrees; optionally mirror/flip.",
             &json!({"type":"object","properties":{"degrees":{"type":"integer","enum":[0,90,180,270]},"mirror":{"type":"boolean"}},"required":["degrees"]})),
-        tool("show_image", "Draw a local image file on the panel at the panel's own resolution (from its model; pass size when it has none). resize: fit (whole image, padded black), fill (cover, cropped), exact (stretched), none (must already be the panel's size, else an error). Colours are reduced to the panel's 256-colour palette only when the image has more.",
+        tool("show_image", Effect::Write, &[("ok","boolean"),("file","string"),("size","integer"),("resize","string")], "Draw a local image file on the panel at the panel's own resolution (from its model; pass size when it has none). resize: fit (whole image, padded black), fill (cover, cropped), exact (stretched), none (must already be the panel's size, else an error). Colours are reduced to the panel's 256-colour palette only when the image has more.",
             &json!({"type":"object","properties":{"file":{"type":"string","description":"Local filesystem path to the image."},"resize":resize,"size":IMAGE_SIZE.schema()},"required":["file"]})),
-        tool("push_animation", "Play a GIF/animation on the panel: every frame, each for its own duration (GIF delays; 50 ms minimum), at the panel's resolution under the same resize policy as show_image. Provide 'file' (path) or 'data' (base64).",
+        tool("push_animation", Effect::Write, &[("ok","boolean"),("size","integer"),("resize","string"),("frames","integer")], "Play a GIF/animation on the panel: every frame, each for its own duration (GIF delays; 50 ms minimum), at the panel's resolution under the same resize policy as show_image. Provide 'file' (path) or 'data' (base64).",
             &json!({"type":"object","properties":{"file":{"type":"string"},"data":{"type":"string"},"resize":resize,"size":IMAGE_SIZE.schema()},"oneOf":[{"required":["file"]},{"required":["data"]}]})),
-        tool("play_sound", "Beep the device (best-effort; some firmware no-ops).",
+        tool("play_sound", Effect::Write, &[("ok","boolean"),("duration_ms","integer")], "Beep the device (best-effort; some firmware no-ops).",
             &json!({"type":"object","properties":{"duration_ms":SOUND_MS.schema()},"required":["duration_ms"]})),
-        tool("get_capabilities", "Describe a panel: link state, model, width/height in pixels (how it was decided: model_source), the chassis (which product it is and how big it is), the features the vendor app enables for that model (speaker, sd_card, temp_sensor, wifi, radio, vj, clock_style), and the screens the app offers that model (null for an unrecognised model).",
+        tool("get_capabilities", Effect::Read, &[], "Describe a panel: link state, model, width/height in pixels (how it was decided: model_source), the chassis (which product it is and how big it is), the features the vendor app enables for that model (speaker, sd_card, temp_sensor, wifi, radio, vj, clock_style), and the screens the app offers that model (null for an unrecognised model).",
             &json!({"type":"object","properties":{},"additionalProperties":false})),
-        tool("get_device_state", "Read the device's current volume, brightness, channel, orientation, mirror. A field the daemon could not read is null, and `errors` names it with the daemon's reason and code -- a null is never the only thing you know.",
+        tool("get_device_state", Effect::Read, &[("volume","any"),("brightness","any"),("light_mode","any"),("screen_orientation","any"),("mirror","any")], "Read the device's current volume, brightness, channel, orientation, mirror. A field the daemon could not read is null, and `errors` names it with the daemon's reason and code -- a null is never the only thing you know.",
             &json!({"type":"object","properties":{},"additionalProperties":false})),
-        tool("list_screens", "List every screen the daemon knows or the saved layout places (`screens`): each with mac, connected (live link), selected, model, width/height (null when never seen), chassis, features, the screens the app offers it, and its saved x/y/room; plus wall state and slots.",
+        tool("list_screens", Effect::Read, &[], "List every screen the daemon knows or the saved layout places (`screens`): each with mac, connected (live link), selected, model, width/height (null when never seen), chassis, features, the screens the app offers it, and its saved x/y/room; plus wall state and slots.",
             &json!({"type":"object","properties":{},"additionalProperties":false})),
     ];
     tools.extend(crate::mcp_more_tools::catalog());
+    tools.extend(crate::mcp_preview::catalog());
     Value::Array(tools)
-}
-
-pub(crate) fn tool(name: &str, desc: &str, schema: &Value) -> Value {
-    let mut s = schema.clone();
-    if let Some(props) = s.get_mut("properties").and_then(Value::as_object_mut) {
-        if name != "list_screens" {
-            props.insert(
-                "mac".into(),
-                json!({
-                    "type": "string",
-                    "description": "Optional MAC address of the target display (default: active display)."
-                }),
-            );
-        }
-        // Every tool that can reach a panel takes the caller's lease; one
-        // seam, so no tool can be the one that forgot it.
-        if !matches!(name, "list_screens" | "lease_acquire") {
-            props.entry("lease").or_insert_with(|| {
-                json!({
-                    "type": "string",
-                    "description": "The token from lease_acquire, while you hold the panel's lease."
-                })
-            });
-        }
-    }
-    json!({ "name": name, "description": desc, "inputSchema": s })
 }
 
 /// Dispatch a tools/call. Returns the tool's result dict, or Err(message) for a

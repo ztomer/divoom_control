@@ -177,3 +177,14 @@ GOH_SUBPROCESS_STDIN_MIN_CALLS=67     # read 75, every one declared (2026-10-21)
 # that GOH_CI_STEPS starts naming, is stale and red.
 GOH_CI_PARITY_EXEMPT='scripts/py_ci.sh: runs locally, through scripts/ci_local.sh --step (repo_gates.sh at pre-push), which the name match cannot see; only DIVOOM_GATE_FAST skips it, and it says so'
 GOH_CI_PARITY_MIN_SCRIPTS=12          # read 14
+
+# An MCP server is judged on the wire (goh check_mcp_wire.py, queue MCP.G;
+# lane MCP.DV). `divoomd mcp` owns no device: it is a client of a running
+# daemon's socket. Started here with NO device access at all -- built without
+# the BLE stack (--no-default-features), the remote-daemon variables unset, and
+# DIVOOM_SOCKET pointed at a path in the gate's scratch directory where no
+# daemon listens -- so the gate's tools/list can reach no panel, and a tool
+# call (the gate makes none) would answer "daemon not reachable".
+# Measured red on 1acd8b9 (the hand-rolled loop): 25 tools without
+# annotations or outputSchema, and 15 of them destructive-by-default listed.
+GOH_MCP_SERVERS='env -u DIVOOM_DAEMON_HOST -u DIVOOM_DAEMON_PORT -u DIVOOM_DAEMON_TOKEN DIVOOM_SOCKET="$GOH_MCP_SCRATCH/no-daemon.sock" cargo run --quiet --locked -p divoomd --no-default-features --bin divoomd -- mcp'

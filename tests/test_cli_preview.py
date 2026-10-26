@@ -177,3 +177,28 @@ def test_a_daemon_that_predates_the_command_says_so(settings):
     _assert_absent(registered, "daemon_unsupported")
     assert registered["id"] == UNLINKED
     assert fake.sent == ["screen_previews", "device_status", "owned_devices"], "reads only"
+
+
+def test_a_daemon_that_refuses_is_the_documented_error_state(settings):
+    fake = _Fake({"success": False, "error": "busy elsewhere", "code": "busy"})
+    answer = collect(fake)
+    assert answer["daemon"]["state"] == "error"
+    assert "busy elsewhere" in answer["daemon"]["reason"]
+    (entry,) = answer["devices"]
+    _assert_absent(entry, "error")
+
+
+def test_every_state_the_command_emits_is_documented():
+    """A state the code can produce and the docstring never names is a state
+    no consumer was told to expect (the audit's `state: error`, API.DV)."""
+    import re
+
+    import divoom_lib.cli_preview as mod
+
+    source = Path(mod.__file__).read_text(encoding="utf-8")
+    code = source[source.index('"""', 3) + 3:]
+    emitted = set(re.findall(r'_absent\([^,]+,\s*"([a-z_]+)"', code))
+    emitted |= set(re.findall(r'"state":\s*"([a-z_]+)"', code))
+    assert {"error", "not_running", "unsupported", "running"} <= emitted, emitted
+    for state in emitted:
+        assert f"``{state}``" in mod.__doc__ or f'"{state}"' in mod.__doc__, state

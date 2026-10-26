@@ -6,6 +6,56 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **`divoomd mcp` is rmcp, the official Rust MCP SDK (lane MCP.DV, OW.60),
+  and every tool says what it does to the world (API.DV).** The hand-rolled
+  JSON-RPC loop in `divoomd/src/mcp.rs` (framing, a five-version table, the
+  `tools/call` envelope) is gone; what stays is what only divoomd can say.
+  - **Characterised first.** `divoomd/tests/mcp_stdio.rs` drives the real
+    binary over stdio against a fake daemon socket, and was run green on the
+    v0.42.0 loop, then red with one reply mutated, before the move;
+    `tests/fixtures/mcp_tools_list_v0.42.json` is that loop's `tools/list`,
+    and every v0.42 tool keeps its name, description and input schema.
+  - **Effects, declared beside each tool** (`divoomd/src/mcp_catalog.rs`,
+    `Effect`): all four MCP hints on every tool. Read: `get_capabilities`,
+    `get_device_state`, `list_screens`, `live_job_list`,
+    `get_screen_previews`. Destructive (overwrites panel state the daemon
+    cannot read back): `set_alarm`, `set_low_power`, `set_radio`,
+    `set_screen_orientation` -- not listed, and refused (`not_enabled`) before
+    any daemon I/O, unless the server is started with `--allow-destructive`
+    (`divoomd mcp --allow-destructive`, passed through by
+    `divoom-control mcp-server --allow-destructive`). Everything else is a
+    non-destructive write. A bare server offers 22 of the 26 tools.
+  - **Structured replies.** Every tool declares an `outputSchema` (an
+    object; fields every success carries are `required`), and every success
+    carries the same object as `structuredContent` beside the compact JSON
+    text v0.42 sent.
+  - **`get_screen_previews`**, a new READ-ONLY tool: the daemon's
+    `screen_previews` (WG.5a), which reached only the socket and the CLI. The
+    CLI's shape (`daemon` state + reason, `now_ms`, one entry per panel with
+    its own `state` and `reason`), with each frame as MCP image content
+    (`frame.image` is its index in `content`). Proven against the real daemon
+    over the real wire in `tests/mcp_lease_e2e.rs`.
+  - **Docs held to the catalog.** `docs/MCP_SERVER.md` said 14 tools beside
+    a table of 25; a test now pins its table to the catalog and every count it
+    states. The CLI's `state: error` (`divoom_lib/cli_preview.py`) is
+    documented, and a test fails on any state the command emits that its
+    docstring does not name.
+  - **The house MCP wire gate is on** (`GOH_MCP_SERVERS`, goh
+    `check_mcp_wire.py`): red on v0.42 (25 tools, no annotations, no
+    outputSchema -- 50 findings), green now. The gated server has no device
+    access: built without BLE, remote-daemon variables unset, `DIVOOM_SOCKET`
+    in the gate's scratch directory where nothing listens.
+  - **Deliberate deltas (upstream's), each pinned in `mcp_stdio.rs`:**
+    `2026-07-28` is spoken per request (`_meta`, `server/discover`) and an
+    `initialize` asking for it is answered `2025-11-25`; an `initialize`
+    missing `protocolVersion`/`clientInfo`, or a request before the handshake
+    without `_meta`, is `-32602` and ends the session; a non-JSON line is
+    `-32600` with no id (was `-32700`); a `jsonrpc` other than `2.0` gets no
+    reply (was `-32600`); requests are served concurrently, so replies pair by
+    id. Three tests that sent a bare `initialize {}` or none now send the
+    spec's handshake. `syn` 2.x enters the graph beside 3.x through rmcp's
+    `tracing` (upstream's; cannot be removed from a consumer).
+
 - **Pixel art is never squeezed onto a panel it was not drawn for (D14).**
   The owner: "don't try to reduce pixel images from the hot channel or other
   sources from 64x64 or other sizes to 16x16 and upload them to the device, it

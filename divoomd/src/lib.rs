@@ -72,8 +72,10 @@ pub mod live_jobs;
 #[cfg(target_os = "macos")]
 pub mod macos_notifications;
 pub mod mcp;
+mod mcp_catalog;
 pub mod mcp_daemon;
 mod mcp_more_tools;
+mod mcp_preview;
 pub mod mcp_tools;
 pub mod media;
 #[cfg(test)]

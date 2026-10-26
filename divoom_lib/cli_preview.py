@@ -12,12 +12,18 @@ States the daemon reports: ``frame``, ``nothing_sent``, ``device_rendered``,
 ``undecoded``, ``offline``. States this command adds, for panels the daemon
 cannot speak for: ``not_linked`` (registered in the app's settings, but the
 daemon holds no link to it), ``unknown`` (``--mac`` named a panel the daemon
-has never linked), ``daemon_not_running`` and ``daemon_unsupported`` (the
-running daemon predates ``screen_previews``).
+has never linked), ``daemon_not_running``, ``daemon_unsupported`` (the
+running daemon predates ``screen_previews``) and ``error`` (a running daemon
+refused ``screen_previews`` for another reason; ``reason`` carries its error,
+and ``daemon.state`` is ``error`` too).
+
+The same answer is the MCP tool ``get_screen_previews`` (``divoomd mcp``,
+``divoomd/src/mcp_preview.rs``), with each frame as MCP image content.
 
 Output (``--json``)::
 
-    {"daemon": {"state": "running"|"not_running"|"unsupported", "reason": str|null},
+    {"daemon": {"state": "running"|"not_running"|"unsupported"|"error",
+                "reason": str|null},
      "now_ms": int|null,
      "devices": [{"id", "name", "connected", "selected", "model", "width",
                   "height", "model_source", "state", "reason", "source",
