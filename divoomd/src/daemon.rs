@@ -175,10 +175,15 @@ impl Daemon {
         // "no device connected" instead. Together with the address-casing bug in
         // ble/connect.rs, that is why the virtual wall did not work at all.
         if req.args.get("target").and_then(|v| v.as_str()) == Some("wall") {
-            if Self::is_display_disruptive(req) {
+            let repaints = Self::is_display_disruptive(req);
+            if repaints {
                 self.live_jobs.stop_all(self).await;
             }
-            return self.wall_device_call(req).await;
+            let reply = self.wall_device_call(req).await;
+            if repaints {
+                crate::screen_previews::after_wall_call(self, req).await;
+            }
+            return reply;
         }
 
         // The device's ONE link carries both the queue and the transport, so
@@ -234,10 +239,11 @@ impl Daemon {
             .unwrap_or(30.0)
             .clamp(1.0, 120.0);
         let timeout = Duration::from_secs_f64(req_timeout);
+        let shown = crate::device::screen::Sink::default();
 
         if let Ok(reply) = tokio::time::timeout(
             timeout,
-            crate::device_call::handle_device_call(self, &dev, req, timeout),
+            crate::device_call::handle_device_call(self, &dev, req, timeout, &shown),
         )
         .await
         {
@@ -269,6 +275,8 @@ impl Daemon {
                 ));
             }
             if !failed {
+                let repaints = Self::is_display_disruptive(req);
+                crate::screen_previews::after_device_call(&device, req, &shown, repaints).await;
                 if let Some(target) = id.as_deref() {
                     self.record_successful_call_activity(req, target).await;
                 }

@@ -209,10 +209,11 @@ async fn end(device: &Device, events: &Events, generation: u64, why: &str) -> &'
         link.queue.release(&lease.token);
     }
     let mut restored = "none";
-    if let (Some(link), Some(_kind), Some(frame)) =
+    if let (Some(link), Some(kind), Some(frame)) =
         (link, device.live_kind().await, device.job_frame())
     {
         let link_in = link.clone();
+        let repainted = (frame.rgb.clone(), frame.w, frame.h, frame.time_ms);
         let painted = link
             .run(None, async move {
                 if link_in.is_retired() {
@@ -231,6 +232,10 @@ async fn end(device: &Device, events: &Events, generation: u64, why: &str) -> &'
             .await
             .unwrap_or(false);
         if painted {
+            device.record_screen(crate::device::screen::Screen::of_frames(
+                &kind,
+                &[repainted],
+            ));
             restored = "job";
         }
     }

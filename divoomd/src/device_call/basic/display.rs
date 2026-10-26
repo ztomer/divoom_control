@@ -85,7 +85,10 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             }
 
             match dev.stream_animation_8b(&blob).await {
-                Ok(true) => json!({"success": true, "result": true}),
+                Ok(true) => {
+                    ctx.shown.put(frames);
+                    json!({"success": true, "result": true})
+                }
                 Ok(false) => err_code(BadRequest, "stream_animation_8b: empty blob"),
                 Err(e) => link_gone("stream_animation_8b", &e),
             }
@@ -181,7 +184,12 @@ async fn show_image(ctx: CallCtx<'_>) -> Value {
         }
     }
     match dev.stream_animation_8b(&blob).await {
-        Ok(true) => json!({"success": true, "result": true, "frames": frames.len()}),
+        Ok(true) => {
+            let n = frames.len();
+            ctx.shown
+                .put(frames.into_iter().map(|(rgb, t)| (rgb, w, h, t)).collect());
+            json!({"success": true, "result": true, "frames": n})
+        }
         Ok(false) => err_code(BadRequest, "stream_animation_8b: empty blob"),
         Err(e) => link_gone("stream_animation_8b", &e),
     }

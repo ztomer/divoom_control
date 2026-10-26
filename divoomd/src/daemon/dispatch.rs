@@ -67,6 +67,8 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
         // of stitching device_status and get_device_activity (the menubar
         // did that and read "No active devices" with two panels linked).
         "owned_devices" => owned_devices(daemon).await,
+        // WG.5a: what each panel shows, as the daemon put it there. Read-only.
+        "screen_previews" => crate::screen_previews::cmd_screen_previews(daemon, &req).await,
 
         // --- art / hot-channel commands ---
         "custom_art_push" => custom_art_push(daemon, req).await,

@@ -260,6 +260,7 @@ pub async fn store(
         .await
         .map_err(|e| format!("the device's queue refused the store: {e}"))?;
     let dev = link.transport.clone();
+    crate::screen_previews::mark_device_rendered(&device, "gallery_store");
 
     let (stored, failures) = store_items(&dev, items, &mut outcome).await;
     outcome.stored = stored;

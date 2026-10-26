@@ -74,6 +74,14 @@ pub(super) async fn push_live_frame(
         })
         .await;
     let landed = matches!(outcome, Some(Ok(())));
+    if landed {
+        device.record_screen(crate::device::screen::Screen::of_url(
+            kind,
+            preview.clone(),
+            w,
+            h,
+        ));
+    }
     // A frame whose command could not be sent means the panel's LINK is
     // gone: the panel must stop reading as connected, and the drop must be
     // reported -- the same two broadcasts a user-initiated call produces

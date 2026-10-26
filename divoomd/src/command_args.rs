@@ -90,6 +90,7 @@ pub const COMMAND_ARGS: &[(&str, &[Required])] = &[
     ("set_device_activity", &[&[("mac", Str)], &[("kind", Str)]]),
     ("get_device_activity", &[]),
     ("owned_devices", &[]),
+    ("screen_previews", &[]),
     (
         "custom_art_push",
         &[&[("slots", Object), ("file_ids", Array)]],

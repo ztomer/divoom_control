@@ -32,6 +32,12 @@ impl Previews {
         self.slots().insert(mac.to_string(), url);
     }
 
+    /// The `data:` URL `mac` took in the last push, if it took it.
+    #[must_use]
+    pub fn get(&self, mac: &str) -> Option<String> {
+        self.slots().get(mac).cloned()
+    }
+
     /// `get_last_previews`' reply: `result` maps each slot that took the
     /// last push to a `data:` URL of what it was sent.
     #[must_use]

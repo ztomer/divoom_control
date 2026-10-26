@@ -119,6 +119,7 @@ mod reply_code_sweep_tests;
 #[cfg(test)]
 mod reply_shape_scan_tests;
 pub mod response;
+pub mod screen_previews;
 pub mod secret_store;
 pub mod settings_devices;
 pub mod socket_bind;

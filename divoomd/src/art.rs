@@ -207,6 +207,7 @@ pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
             "custom_art_push requires BLE/SPP transport",
         );
     }
+    crate::screen_previews::mark_device_rendered(&device, "custom_art_push");
 
     // Build slot_map: {slot_index -> file_id}
     let mut slot_map: Vec<(usize, String)> = Vec::new();

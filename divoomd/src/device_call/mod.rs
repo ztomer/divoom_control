@@ -16,6 +16,8 @@ pub struct CallCtx<'a> {
     pub kwargs: Option<&'a serde_json::Map<String, Value>>,
     pub blob_map: &'a std::sync::Mutex<std::collections::HashMap<usize, Vec<u8>>>,
     pub timeout: Duration,
+    /// Where a handler that streamed frames leaves them (WG.5a).
+    pub shown: &'a crate::device::screen::Sink,
 }
 
 pub mod aid_sleep;
@@ -164,6 +166,7 @@ pub async fn handle_device_call(
     dev: &DeviceTransport,
     req: &Request,
     timeout: Duration,
+    shown: &crate::device::screen::Sink,
 ) -> Value {
     let Some(method) = req.args.get("method").and_then(|v| v.as_str()) else {
         return crate::command_args::missing("device_call", "'method'");
@@ -210,6 +213,7 @@ pub async fn handle_device_call(
         kwargs,
         blob_map: &blob_map,
         timeout,
+        shown,
     };
 
     routing::route(method, ctx).await

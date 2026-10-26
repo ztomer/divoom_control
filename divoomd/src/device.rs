@@ -142,6 +142,8 @@ pub struct Device {
     /// Bumped by every `show_image` push; a queued push that is no longer
     /// the newest is skipped (latest frame wins on a slow link).
     frame_gen: std::sync::atomic::AtomicU64,
+    /// What the daemon last put on the screen (WG.5a; `screen.rs`).
+    screen: std::sync::Mutex<Option<screen::Screen>>,
 }
 
 impl Device {
@@ -154,6 +156,7 @@ impl Device {
             lease: std::sync::Mutex::new(Slot::empty()),
             job_frame: std::sync::Mutex::new(None),
             frame_gen: std::sync::atomic::AtomicU64::new(0),
+            screen: std::sync::Mutex::new(None),
         })
     }
 
@@ -179,6 +182,9 @@ impl Device {
         if let Some(l) = self.lease() {
             let _ = link.queue.hold(&l.token);
         }
+        // A new link is a panel the daemon has not drawn on yet: it may have
+        // been power-cycled or driven by the vendor app since the last one.
+        self.clear_screen();
         let old = self.link.lock().await.replace(link.clone());
         if let Some(o) = old {
             o.retire();
@@ -203,6 +209,7 @@ impl Device {
             j.stop();
         }
         self.clear_job_frame();
+        self.clear_screen();
         self.activity.lock().await.close();
         // The lease goes with the link: its hold was on the queue that
         // `detach` retires, and its watcher finds nothing left to end.
@@ -392,6 +399,7 @@ impl Device {
 
 mod fleet;
 pub mod lease;
+pub mod screen;
 mod slot;
 #[cfg(test)]
 mod tests;

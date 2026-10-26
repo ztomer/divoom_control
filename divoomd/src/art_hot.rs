@@ -351,6 +351,7 @@ pub(crate) async fn run_hot_update(
             .live_jobs
             .stop_all_for_device(&daemon, &target.id)
             .await;
+        crate::screen_previews::mark_device_rendered(&target, "hot_update");
         let permit = link
             .queue
             .acquire(None)
