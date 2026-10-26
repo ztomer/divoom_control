@@ -299,3 +299,44 @@ def test_the_gate_is_wired_into_the_ci_steps_and_into_ci():
     assert "tools/check_launchd_jobs.py" in workflow, (
         "the launchd gate is not in CI — CI would not see it"
     )
+
+
+class _Done:
+    def __init__(self, returncode=0, stdout="", stderr=""):
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
+
+
+@pytest.mark.parametrize(
+    "run",
+    [
+        lambda *a, **k: _Done(returncode=1, stderr="Could not connect to launchd"),
+        lambda *a, **k: (_ for _ in ()).throw(FileNotFoundError("launchctl")),
+        lambda *a, **k: _Done(returncode=0, stdout="nothing the parser reads\n"),
+    ],
+    ids=["nonzero-exit", "cannot-run", "no-rows"],
+)
+def test_an_unreadable_launchctl_fails_closed(gate, run):
+    """A `launchctl list` that failed is NOT "launchd has no jobs"."""
+    with pytest.raises(gate.LaunchctlUnreadable):
+        gate.read_launchctl_status(run=run)
+
+
+def test_a_readable_launchctl_is_parsed(gate):
+    text = "PID\tStatus\tLabel\n-\t0\tcom.apple.x\n"
+    assert gate.read_launchctl_status(
+        run=lambda *a, **k: _Done(stdout=text)) == {"com.apple.x": ("-", "0")}
+
+
+def test_the_gate_is_red_when_launchctl_cannot_be_read(gate, tree, monkeypatch):
+    """Where there are LaunchAgents to judge, an unreadable launchd is red."""
+    agents = tree / "LaunchAgents"
+    agents.mkdir(exist_ok=True)
+    monkeypatch.setattr(gate, "AGENTS_DIR", agents)
+
+    def unreadable(run=None):
+        raise gate.LaunchctlUnreadable("`launchctl list` exited 1")
+
+    monkeypatch.setattr(gate, "read_launchctl_status", unreadable)
+    assert gate.main() == 1

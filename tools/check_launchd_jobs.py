@@ -141,10 +141,26 @@ def launchctl_status(text: str) -> dict[str, tuple[str, str]]:
     return out
 
 
-def read_launchctl_status() -> dict[str, tuple[str, str]]:
-    """The live `launchctl list`, or an empty map when it cannot be read."""
+class LaunchctlUnreadable(RuntimeError):
+    """`launchctl list` could not be read, so no job's state is known."""
+
+
+def read_launchctl_status(run=subprocess.run) -> dict[str, tuple[str, str]]:
+    """The live `launchctl list`, or `LaunchctlUnreadable`.
+
+    FAIL CLOSED. This used to return an empty map when `launchctl` failed,
+    and an empty map reads as "launchd has no jobs": another repo's dead job
+    was then simply not reported, and the answer for this repo's jobs came
+    from the wrong cause ("not loaded", when nothing had been read at all). A
+    status that could not be read is not a status of nothing, so it is an
+    error the caller must report. Output with no job rows at all is the same
+    case: `launchctl list` always lists launchd's own jobs, so an empty parse
+    means the format is not what this parser reads.
+
+    `run` is the seam the tests fail on purpose.
+    """
     try:
-        done = subprocess.run(
+        done = run(
             ["launchctl", "list"],
             capture_output=True,
             text=True,
@@ -152,11 +168,21 @@ def read_launchctl_status() -> dict[str, tuple[str, str]]:
             timeout=30,
             check=False,
         )
-    except (OSError, subprocess.SubprocessError):
-        return {}
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise LaunchctlUnreadable(f"`launchctl list` could not run: {exc}") from exc
     if done.returncode != 0:
-        return {}
-    return launchctl_status(done.stdout)
+        detail = (done.stderr or "").strip().splitlines()[:1]
+        raise LaunchctlUnreadable(
+            f"`launchctl list` exited {done.returncode}"
+            + (f": {detail[0]}" if detail else "")
+        )
+    statuses = launchctl_status(done.stdout)
+    if not statuses:
+        raise LaunchctlUnreadable(
+            "`launchctl list` printed no job rows — its output is not the "
+            "PID/Status/Label table this parser reads"
+        )
+    return statuses
 
 
 def in_scope(job: Job, repo_root: Path) -> bool:
@@ -418,9 +444,17 @@ def main() -> int:
             info(f"  {p}")
         return 1
 
-    findings, warnings, counts = check(
-        REPO, AGENTS_DIR, read_launchctl_status(), DECLARATION
-    )
+    # The live half reads launchd only where there are LaunchAgents to judge
+    # (not on a Linux CI runner, which has neither). Where there are, a
+    # launchd that cannot be read is RED, never "no jobs".
+    statuses: dict[str, tuple[str, str]] = {}
+    if AGENTS_DIR.is_dir():
+        try:
+            statuses = read_launchctl_status()
+        except LaunchctlUnreadable as exc:
+            err(f"[launchd-jobs] cannot judge the installed jobs: {exc}")
+            return 1
+    findings, warnings, counts = check(REPO, AGENTS_DIR, statuses, DECLARATION)
     if AGENTS_DIR.is_dir() and scope_is_empty(
         "launchd-jobs", counts["installed"], unit="launchd agents"
     ):
