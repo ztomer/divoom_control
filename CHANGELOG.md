@@ -6,6 +6,30 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **Each panel's screen, readable from outside: `divoom-control preview --json` (WG.5a).**
+  The owner asked for "divoom control preview for each device", a desktop
+  widget per panel showing what it displays. The daemon now keeps one record
+  per panel of what it last put on the screen (`divoomd/src/device/screen.rs`),
+  written where the pixels are streamed: a live widget's frame, a lease
+  handing the screen back, a `device_call` image push (through the call's
+  frame `Sink`), a wall slot's cut. So the preview is the frames the panel
+  took, never a second rendering. A repaint the daemon holds no pixels for (a
+  clock, a light, text, a gallery or custom-art page, a hot channel) replaces
+  the frame with `device_rendered`, and a pre-encoded 8B blob with
+  `undecoded`, so an older frame is never shown as the current one. A new link
+  clears the record (`nothing_sent`), and a panel with no link is `offline`.
+  The new read-only daemon command `screen_previews {mac?}`
+  (`divoomd/src/screen_previews.rs`) answers per panel with id, name, size,
+  state, reason, source, age and, only for `state: "frame"`, a PNG/GIF
+  `data:` URL. The CLI verb (`divoom_lib/cli_preview.py`) adds the states the
+  daemon cannot speak for: `not_linked` (registered in settings, no link),
+  `unknown` (`--mac` never linked), `daemon_not_running`,
+  `daemon_unsupported`. `--out DIR` writes each frame to a file. Nothing is
+  sent to any panel. Tests: `divoomd/tests/screen_previews.rs` (7) and
+  `tests/test_cli_preview.py` (4). Three planted faults went red first: a
+  repaint that kept the frame, an offline panel that showed a stale frame, and
+  a blank frame recorded in place of the pushed pixels.
+
 - **Phase 4's exit reads the wire, not the replies (P4).**
   `divoomd/tests/mcp_lease_e2e.rs` took the MCP tool's own reply (`size: 64`,
   `frames: 2`) plus "something was sent" as the full-resolution draw, and the

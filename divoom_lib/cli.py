@@ -13,6 +13,7 @@ Usage:
     divoom-control push-gif PATH    [--mac ...]
     divoom-control pair --mac ... --type TivooMax
     divoom-control identify
+    divoom-control preview [--json] [--out DIR] [--mac ...]   (read-only)
 
 A thin wrapper over the lib — it does connect / disconnect + one operation,
 then exits. The goal is to be scriptable from cron, the menubar, or
@@ -97,6 +98,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_gif = sub.add_parser("push-gif", parents=[shared], help="Push a local animated GIF.")
     p_gif.add_argument("path", type=Path)
 
+    # READ-ONLY (WG.5a): what each panel shows, as the daemon last drew it.
+    p_prev = sub.add_parser("preview", parents=[shared],
+                            help="Print what each panel is showing (read-only; --json, --out DIR).")
+    p_prev.add_argument("--out", default=None,
+                        help="Also write each frame to DIR/<id>.png|gif and report its path.")
+
     # REGISTRY — pair reuses the shared --mac and --type, both required
     # at the handler level (see cmd_pair). Defining them again here would
     # conflict with the inherited definitions.
@@ -175,6 +182,8 @@ from divoom_lib.cli_device_verbs import (
 )
 
 
+from divoom_lib.cli_preview import cmd_preview
+
 # ── Dispatcher ────────────────────────────────────────────────────────
 
 
@@ -191,6 +200,7 @@ COMMANDS: dict[str, Callable[[argparse.Namespace], Awaitable[int]]] = {
     "push-gif":      cmd_push_gif,
     "pair":          cmd_pair,
     "identify":      cmd_identify,
+    "preview":       cmd_preview,
     "mcp-server":    cmd_mcp_server,
     "daemon":        cmd_daemon,
     "menubar":       cmd_menubar,
