@@ -6,8 +6,9 @@
 
 
 class LightingForwardMixin:
-    def display_wall_image(self, mac: str, file_path: str, cell_size: int | None = None) -> dict:
-        return self.lighting.display_wall_image(mac, file_path, cell_size)
+    def display_wall_image(self, mac: str, file_path: str, art: str,
+                           cell_size: int | None = None) -> dict:
+        return self.lighting.display_wall_image(mac, file_path, art, cell_size)
 
     def push_playlist(self, mac: str, play_id: int) -> dict:
         return self.lighting.push_playlist(mac, play_id)

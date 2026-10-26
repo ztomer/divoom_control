@@ -157,7 +157,9 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
         # found by tests/test_bridge_commands_exist_in_daemon.py). The outcome
         # names the wall panel that did not take the frame (P6.4).
         show = target.show_image if mac == "MatrixWall" else target.display.show_image
-        return write_outcome("frame", mac, lambda: self._run_async(show(str(frame_path))))
+        # A rendered frame (cover art, a card) is a picture: scaled (D14).
+        return write_outcome("frame", mac,
+                             lambda: self._run_async(show(str(frame_path), art="picture")))
 
     @staticmethod
     def _frame_to_data_url(frame_path) -> str:

@@ -85,7 +85,8 @@ impl Daemon {
             "get_last_previews" => return wall.previews.reply(),
             "show_image" | "display_image" => {
                 let path = text(0, "file_path").or_else(|| text(0, "path"));
-                match push_image(wall, path, num(1, "time", 100).word()).await {
+                let art = kw.and_then(|m| m.get("art")).and_then(Value::as_str);
+                match push_image(wall, path, art, num(1, "time", 100).word()).await {
                     Ok(outcome) => outcome,
                     Err(refusal) => return refusal,
                 }
@@ -155,8 +156,16 @@ impl Daemon {
 async fn push_image(
     wall: &super::DivoomWall,
     path: Option<String>,
+    art: Option<&str>,
     time_ms: u16,
 ) -> Result<super::WallOutcome, Value> {
+    // What the image IS (D14): pixel art is cut, never scaled; required.
+    let source = crate::art_source::Source::from_wire(art).map_err(|why| {
+        err_code(
+            ErrorCode::BadRequest,
+            &format!("device_call wall show_image: {why}"),
+        )
+    })?;
     let Some(path) = path else {
         return Err(crate::command_args::missing(
             "device_call wall show_image",
@@ -164,7 +173,10 @@ async fn push_image(
         ));
     };
     match std::fs::read(&path) {
-        Ok(img_data) => Ok(wall.show_image(&img_data, time_ms).await),
+        Ok(img_data) => wall
+            .show_image(&img_data, source, time_ms)
+            .await
+            .map_err(|why| err_code(ErrorCode::Unsupported, &format!("wall show_image: {why}"))),
         Err(e) => Err(err_code(
             ErrorCode::BadRequest,
             &format!("wall show_image: read {path}: {e}"),

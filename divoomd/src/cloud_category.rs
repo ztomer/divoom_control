@@ -105,6 +105,12 @@ pub async fn fetch_gallery(
         return Err(format!("GetCategoryFileListV2 failed (RC={rc}): {msg}"));
     }
 
+    // A one-size request lists only art drawn for that size: the request's
+    // `FileSize` is a hint the cloud does not hold itself to, and every item
+    // states its own (D14). Every caller -- the GUI's gallery, the monthly
+    // push -- gets the filtered list, so none can offer a panel art it would
+    // have to scale.
+    crate::art_source::keep_native(&mut data, file_size);
     Ok(data)
 }
 

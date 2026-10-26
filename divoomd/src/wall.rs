@@ -12,6 +12,7 @@ mod bounds;
 mod cmds;
 mod dispatch;
 mod outcome;
+mod pixel_art;
 mod previews;
 mod refusal;
 
@@ -226,7 +227,29 @@ impl DivoomWall {
     ///
     /// The `daemon` parameter is gone: it existed to reach the C encoder
     /// through `Daemon::encoder()`, and `image_encode` is a free function now.
-    pub async fn show_image(&self, img_data: &[u8], default_time_ms: u16) -> WallOutcome {
+    ///
+    /// Pixel art is cut, never scaled (D14): it must be drawn for the wall's
+    /// whole canvas, and each slot then shows its own pixels one for one. A
+    /// picture is scaled to the canvas as before.
+    ///
+    /// # Errors
+    ///
+    /// Pixel art that is not drawn for this wall, or whose header cannot be
+    /// read; nothing is sent to any panel.
+    pub async fn show_image(
+        &self,
+        img_data: &[u8],
+        source: crate::art_source::Source,
+        default_time_ms: u16,
+    ) -> Result<WallOutcome, String> {
+        if source == crate::art_source::Source::PixelArt {
+            let (w, h) = crate::art_source::image_dims(img_data)?;
+            self.pixel_art_fits(w, h)?;
+        }
+        Ok(self.show_cut_image(img_data, default_time_ms).await)
+    }
+
+    async fn show_cut_image(&self, img_data: &[u8], default_time_ms: u16) -> WallOutcome {
         let is_gif = img_data.len() >= 3 && &img_data[0..3] == b"GIF";
         self.previews.clear();
         self.each_slot(|slot, dev| {

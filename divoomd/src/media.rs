@@ -1,8 +1,8 @@
 //! `resolve_to_gif` — port of Python `media_decoder.resolve_to_gif`.
 //!
 //! Turns any known cloud download into image bytes the unified
-//! `display.show_image` path can render (which then resizes NEAREST to the
-//! device size and 0x8B-streams):
+//! `display.show_image` path can render, at the art's OWN size: cloud art is
+//! pixel art, shown only on a panel of that size and never rescaled (D14):
 //!
 //! - plain GIF / PNG / JPG, and magic-43 embeds → handed back as-is
 //! - magic 9 / 18 / 26 (AES; 18/26 also LZO + tiled) → decoded frames → GIF
@@ -117,11 +117,19 @@ pub fn why_not_resolvable(raw: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     //! Verify the full resolve→GIF pipeline offline: decoded cloud frames encode to
-    //! a GIF that `display.show_image`'s decoder (`process_image_bytes`) reads back
+    //! a GIF that `display.show_image`'s decoder (`image_proc::prepare`) reads back
     //! with the right frame count + size — i.e. the device gets a real renderable
     //! animation, not undecodable bytes.
     use super::*;
     use std::path::PathBuf;
+
+    /// The resolved art as pixel art at its OWN size: cloud art is never
+    /// scaled (D14), so the re-decode is at the size the GIF declares.
+    fn native_frames(gif: Vec<u8>) -> Vec<crate::image_proc::Frame> {
+        let (w, _) = crate::art_source::image_dims(&gif).expect("a GIF header");
+        crate::image_proc::prepare(gif, crate::art_source::Source::PixelArt, w, 100)
+            .expect("re-decode at the native size")
+    }
 
     fn raw(name: &str) -> Vec<u8> {
         std::fs::read(
@@ -136,7 +144,7 @@ mod tests {
     fn magic9_resolves_to_decodable_gif() {
         let gif = resolve_to_gif(&raw("magic9.bin")).expect("resolve magic9");
         assert!(gif.starts_with(b"GIF"), "resolved output must be a GIF");
-        let frames = crate::image_proc::process_image_bytes(gif, 16, 100).expect("re-decode");
+        let frames = native_frames(gif);
         assert_eq!(frames.len(), 24, "24 frames survive the GIF round-trip");
         assert_eq!((frames[0].1, frames[0].2), (16, 16));
     }
@@ -145,12 +153,13 @@ mod tests {
     fn magic18_resolves_to_decodable_gif() {
         let gif = resolve_to_gif(&raw("magic18.bin")).expect("resolve magic18");
         assert!(gif.starts_with(b"GIF"), "resolved output must be a GIF");
-        let frames = crate::image_proc::process_image_bytes(gif, 16, 100).expect("re-decode");
+        let frames = native_frames(gif);
         assert_eq!(frames.len(), 6, "6 frames survive the GIF round-trip");
         assert_eq!(
             (frames[0].1, frames[0].2),
-            (16, 16),
-            "resized to device size"
+            (32, 32),
+            "drawn for a 32x32 panel, and kept at it -- this test used to pin a \
+             resize to 16x16 (D14)"
         );
     }
 
@@ -161,9 +170,24 @@ mod tests {
         let gif = resolve_to_gif(&raw("gallery_magic26_jack_skellington.bin"))
             .expect("resolve the gallery's magic-26");
         assert!(gif.starts_with(b"GIF"), "resolved output must be a GIF");
-        let frames = crate::image_proc::process_image_bytes(gif, 16, 100).expect("re-decode");
+        let frames = native_frames(gif);
         assert_eq!(frames.len(), 2, "both frames survive the GIF round-trip");
-        assert_eq!((frames[0].1, frames[0].2), (16, 16), "resized to the panel");
+        assert_eq!(
+            (frames[0].1, frames[0].2),
+            (64, 64),
+            "drawn for a 64x64 panel, and kept at it -- this test used to pin a \
+             resize to 16x16, which is the owner's 'it looks awful' (D14)"
+        );
         assert_eq!(frames[0].3, 500, "the frame's own display time survives");
+    }
+
+    /// D14: the gallery's 64x64 piece is refused on a 16x16 panel, never
+    /// squeezed onto it.
+    #[test]
+    fn a_gallery_64x64_piece_is_refused_on_a_16x16_panel() {
+        let gif = resolve_to_gif(&raw("gallery_magic26_jack_skellington.bin")).expect("resolve");
+        let why = crate::image_proc::prepare(gif, crate::art_source::Source::PixelArt, 16, 100)
+            .expect_err("64x64 art on a 16x16 panel");
+        assert!(why.contains("64x64") && why.contains("16x16"), "{why}");
     }
 }

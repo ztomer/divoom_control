@@ -19,7 +19,7 @@ def test_push_frame_does_not_read_blocking_attrs():
     pushed = {}
 
     class _Display:
-        async def show_image(self, path):
+        async def show_image(self, path, art=None):
             pushed["path"] = path
             return True
 

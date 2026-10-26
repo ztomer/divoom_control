@@ -52,10 +52,22 @@ pub async fn mock_of(d: &Daemon, mac: &str) -> MockTransport {
     }
 }
 
+///
+/// An image is sent as pixel art: every test image is drawn for the wall's
+/// 32x16 canvas, so it is native to it (D14).
 pub async fn wall_call(d: &Daemon, method: &str, args: Value) -> Value {
+    let kwargs = if method == "show_image" {
+        json!({"art": "pixel"})
+    } else {
+        json!({})
+    };
+    wall_call_kw(d, method, args, kwargs).await
+}
+
+pub async fn wall_call_kw(d: &Daemon, method: &str, args: Value, kwargs: Value) -> Value {
     d.handle(make_request(
         "device_call",
-        Some(json!({"method": method, "target": "wall", "args": args})),
+        Some(json!({"method": method, "target": "wall", "args": args, "kwargs": kwargs})),
         None,
     ))
     .await

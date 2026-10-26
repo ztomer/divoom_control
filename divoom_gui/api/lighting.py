@@ -97,8 +97,9 @@ class LightingApi(ApiBase, WidgetFrameMixin):
         except Exception as e:
             logger.error(f"push_text failed: {e}")
             return write_refused(f"the text could not be drawn: {e}")
-        return self._show(mac, "text", lambda t: t.show_image(str(png_path)),
-                          lambda t: t.display.show_image(str(png_path)))
+        # A rendered card is a picture, not pixel art (D14).
+        return self._show(mac, "text", lambda t: t.show_image(str(png_path), art="picture"),
+                          lambda t: t.display.show_image(str(png_path), art="picture"))
 
     def _device_size(self, mac: str) -> int:
         """The named display's pixel size as the daemon resolved it, or 16.
@@ -115,7 +116,8 @@ class LightingApi(ApiBase, WidgetFrameMixin):
         except Exception:
             return 16
 
-    def display_wall_image(self, mac: str, file_path: str, cell_size: int | None = None) -> dict:
+    def display_wall_image(self, mac: str, file_path: str, art: str,
+                           cell_size: int | None = None) -> dict:
         """Show an image on the display ``mac`` names: one panel, or the wall
         when it says `MatrixWall` (P5.7).
 
@@ -124,7 +126,12 @@ class LightingApi(ApiBase, WidgetFrameMixin):
         `current_divoom`, the panel the bench selected last, read when the
         push RAN: the wall now has to be NAMED, and a call naming nothing is
         refused like every other display write. ``cell_size`` is the edge of
-        a wall slot that carries no size of its own."""
+        a wall slot that carries no size of its own.
+
+        ``art`` is what the image IS, and it has no default (D14):
+        ``"pixel"`` (gallery art: shown only on a display of its own size,
+        refused on any other, never rescaled) or ``"picture"`` (a file the
+        user drops: scaled to fit)."""
         logger.info(f"GUI Action: Push image {file_path!r} to {mac} (cell size={cell_size})...")
         try:
             target = self._display(mac, cell_size=cell_size)
@@ -132,9 +139,9 @@ class LightingApi(ApiBase, WidgetFrameMixin):
                 return {**write_refused(self._unreachable(mac)), "previews": {}}
             self._stop_live_widgets(mac)
             if mac == WALL:
-                ok = self._run_async(target.show_image(file_path))
+                ok = self._run_async(target.show_image(file_path, art=art))
             else:
-                ok = self._run_async(target.display.show_image(file_path))
+                ok = self._run_async(target.display.show_image(file_path, art=art))
 
             previews = {}
             if ok and mac == WALL:

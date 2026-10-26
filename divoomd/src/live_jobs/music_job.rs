@@ -155,14 +155,19 @@ async fn push_cover(
     let Some(art) = track.artwork.as_ref() else {
         return Ok(false);
     };
-    let frames =
-        crate::image_proc::process_image_bytes(art.bytes.clone(), size, 100).map_err(|e| {
-            format!(
-                "could not decode {} cover art ({} bytes): {e}",
-                art.format.mime(),
-                art.len()
-            )
-        })?;
+    let frames = crate::image_proc::prepare(
+        art.bytes.clone(),
+        crate::art_source::Source::Picture(crate::image_fit::Fit::Exact),
+        size,
+        100,
+    )
+    .map_err(|e| {
+        format!(
+            "could not decode {} cover art ({} bytes): {e}",
+            art.format.mime(),
+            art.len()
+        )
+    })?;
     let Some((rgb, w, h_px, t)) = frames.first() else {
         return Ok(false);
     };

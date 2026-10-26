@@ -54,6 +54,7 @@ ARGS = {
     "token": 1, "email": "a@b.c", "password": "p", "json_text": "[]",
     "slots_json": "{}", "topology_data": {}, "config": "{}", "dial_type": "x",
     "sleep_type": 0, "timeout": 1, "limit": 1, "sort": 1, "file_size": 1,
+    "art": "picture",
 }
 
 

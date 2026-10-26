@@ -109,15 +109,6 @@ window.DivoomTemplates.pixelArt = `                <div class="tabs-section" sty
                                             <button class="tab-btn active" data-sort="1">Popular</button>
                                             <button class="tab-btn" data-sort="0">Latest</button>
                                         </div>
-                                        <select id="gallery-size-select" class="custom-select small" style="width:auto; flex-shrink:0;">
-                                            <option value="0">Auto</option>
-                                            <option value="1">16×16</option>
-                                            <option value="2">32×32</option>
-                                            <option value="4">64×64</option>
-                                            <option value="16">128×128</option>
-                                            <option value="32">256×256</option>
-                                            <option value="127">All</option>
-                                        </select>
                                     </div>
                                     <div class="gallery-grid" id="gallery-container" style="flex:1; overflow-y:auto; min-height:0;">
                                         <div class="empty-list">Loading community gallery...</div>

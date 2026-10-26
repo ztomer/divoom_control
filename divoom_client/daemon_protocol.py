@@ -403,18 +403,21 @@ class DaemonClient(HostDataMixin, CloudDataMixin):
         """R46 #3: {mac: {name, kind, at}} of what each device is showing."""
         return self.send_command("get_device_activity", {})
 
-    def sync_artwork(self, file_id: str, *, default_size: int = 16,
+    def sync_artwork(self, file_id: str, *, mac: str | None = None,
+                     default_size: int | None = None,
                      target: str = "device") -> dict:
         """Ask the daemon to download a gallery asset and stream it to the owned
         device/wall (binary stays in the daemon process).
 
         Uses the long ``sync_read_timeout`` — the daemon only replies after the
         download + full BLE stream, which takes far longer than the quick-command
-        timeout (a short read here falsely reported every upload as failed)."""
+        timeout (a short read here falsely reported every upload as failed).
+        Pixel art: shown only on a panel (``mac``) of its own size (D14)."""
         from divoom_client.daemon_config import load_daemon_config
-        return self.send_command("sync_artwork", {
-            "file_id": file_id, "default_size": default_size, "target": target,
-        }, read_timeout=load_daemon_config().sync_read_timeout)
+        args = {"file_id": file_id, "target": target, "mac": mac,
+                "default_size": default_size}
+        return self.send_command("sync_artwork", {k: v for k, v in args.items() if v is not None},
+                                 read_timeout=load_daemon_config().sync_read_timeout)
 
     def custom_art_push(self, file_ids: list[str], page: int,
                         slot: int | None = None,

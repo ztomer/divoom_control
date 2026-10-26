@@ -84,6 +84,24 @@ pub(crate) async fn dc(
     check(cmd(target, "device_call", device_call(method, args, None, mac)).await?)
 }
 
+/// `device_call` with positional AND keyword args.
+pub(crate) async fn dc_args_kw(
+    target: &DaemonTarget,
+    method: &str,
+    args: Value,
+    kwargs: Value,
+    mac: Option<&str>,
+) -> Result<Value, ToolError> {
+    check(
+        cmd(
+            target,
+            "device_call",
+            device_call(method, args, Some(kwargs), mac),
+        )
+        .await?,
+    )
+}
+
 /// `device_call` with keyword args.
 pub(crate) async fn dc_kw(
     target: &DaemonTarget,

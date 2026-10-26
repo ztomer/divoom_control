@@ -248,14 +248,26 @@ def test_set_gallery_style_preserves_existing_keys_and_handles_exception(tmp_pat
 def test_get_gallery_filter_defaults_when_no_config(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     m = _Host()
-    assert json.loads(m.get_gallery_filter()) == {"sort": 1, "file_size": 0}
+    assert json.loads(m.get_gallery_filter()) == {"sort": 1}
 
 
 def test_set_and_get_gallery_filter_roundtrip(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     m = _Host()
-    assert m.set_gallery_filter(sort=2, file_size=64) is True
-    assert json.loads(m.get_gallery_filter()) == {"sort": 2, "file_size": 64}
+    assert m.set_gallery_filter(sort=2) is True
+    assert json.loads(m.get_gallery_filter()) == {"sort": 2}
+
+
+def test_the_old_size_preference_is_dropped_not_kept(tmp_path, monkeypatch):
+    """D14: the size is the panel's, not a preference -- a stale key from the
+    removed picker does not survive the next save."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    m = _Host()
+    cfg_dir = tmp_path / ".config" / "divoom-control"
+    cfg_dir.mkdir(parents=True)
+    (cfg_dir / "config.ini").write_text("[gallery]\ngallery_file_size = 127\n")
+    assert m.set_gallery_filter(sort=1) is True
+    assert "gallery_file_size" not in (cfg_dir / "config.ini").read_text()
 
 
 def test_get_gallery_filter_exception_path_returns_default(tmp_path, monkeypatch):
@@ -264,11 +276,11 @@ def test_get_gallery_filter_exception_path_returns_default(tmp_path, monkeypatch
     cfg_dir = tmp_path / ".config" / "divoom-control"
     cfg_dir.mkdir(parents=True)
     (cfg_dir / "config.ini").write_text("[gallery]\ngallery_sort = not-an-int\n")
-    assert json.loads(m.get_gallery_filter()) == {"sort": 1, "file_size": 0}
+    assert json.loads(m.get_gallery_filter()) == {"sort": 1}
 
 
 def test_set_gallery_filter_exception_path_returns_false(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     m = _Host()
     with patch("divoom_gui.gallery_sync.atomic_write_config", side_effect=OSError("disk full")):
-        assert m.set_gallery_filter(sort=3, file_size=16) is False
+        assert m.set_gallery_filter(sort=3) is False

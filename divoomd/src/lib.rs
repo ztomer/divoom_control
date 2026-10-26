@@ -13,6 +13,7 @@ pub mod arg_bounds;
 pub mod art;
 pub mod art_codec;
 pub mod art_hot;
+pub mod art_source;
 pub mod autoprobe;
 pub mod bind_failure;
 #[cfg(feature = "ble")]
@@ -92,6 +93,7 @@ mod mock_tools_tests;
 pub mod mock_transport;
 pub mod models;
 pub mod monthly_best;
+pub mod monthly_best_link;
 pub mod monthly_best_push;
 #[cfg(test)]
 mod monthly_best_tests;
@@ -109,6 +111,8 @@ pub mod panel_features;
 pub mod panel_model;
 pub mod panel_screens;
 pub mod paths;
+#[cfg(test)]
+mod pixel_art_native_tests;
 pub mod preview_url;
 pub mod protocol;
 pub mod render_widget;

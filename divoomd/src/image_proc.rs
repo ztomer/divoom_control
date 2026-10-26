@@ -12,44 +12,44 @@
 
 use image::{AnimationDecoder, DynamicImage};
 
+use crate::art_source::Source;
 use crate::image_fit::{fit_frame, limit_palette, Fit};
 
 /// One decoded frame: (`rgb_bytes`, w, h, `time_ms`).
 pub type Frame = (Vec<u8>, i32, i32, u16);
 
-/// Load image bytes (PNG, JPEG, or GIF) and resize each frame to `size × size`.
-/// `default_time_ms` is used for static images and GIF frames with no delay.
+/// Load image bytes (PNG, JPEG, or GIF) as `size`x`size` frames, as what
+/// `source` says the image IS (D14).
 ///
-/// CPU-bound — callers should invoke via `tokio::task::spawn_blocking`.
-///
-/// # Errors
-///
-/// When the bytes are not an image this decoder recognises, or a GIF frame
-/// cannot be read. A file that decodes but is the wrong size is resized rather
-/// than refused.
-pub fn process_image_bytes(
-    data: Vec<u8>,
-    size: u32,
-    default_time_ms: u16,
-) -> Result<Vec<Frame>, String> {
-    process_image_bytes_with(data, size, Fit::Exact, default_time_ms)
-}
-
-/// [`process_image_bytes`] under a stated resize policy (P4.3).
+/// [`Source::PixelArt`] is never scaled: art drawn for another panel size is
+/// refused with the reason. [`Source::Picture`] is fitted under its policy.
+/// There is no entry point without a `Source`: the old one defaulted to
+/// stretching, and that default is how 64x64 gallery art reached 16x16 panels.
 ///
 /// Every frame leaves here with at most 256 colours ([`limit_palette`]): the
 /// encoder refuses more, and past 16 px a photograph always has more.
 ///
+/// CPU-bound -- callers should invoke via `tokio::task::spawn_blocking`.
+///
 /// # Errors
 ///
-/// As [`process_image_bytes`], and [`Fit::None`] with an image that is not
-/// already `size`x`size`.
-pub fn process_image_bytes_with(
+/// When the bytes are not an image this decoder recognises, a GIF frame
+/// cannot be read, pixel art is not `size`x`size`, or a picture under
+/// [`Fit::None`] is not already `size`x`size`.
+pub fn prepare(
     data: Vec<u8>,
+    source: Source,
     size: u32,
-    policy: Fit,
     default_time_ms: u16,
 ) -> Result<Vec<Frame>, String> {
+    let policy = match source {
+        Source::PixelArt => {
+            let (w, h) = crate::art_source::image_dims(&data)?;
+            crate::art_source::native(w, h, size, size)?;
+            Fit::None
+        }
+        Source::Picture(fit) => fit,
+    };
     if data.len() >= 3 && &data[0..3] == b"GIF" {
         process_gif(data, size, policy, default_time_ms)
     } else {

@@ -418,7 +418,7 @@ def test_push_animation_tempfile_write_failure_propagates(monkeypatch):
         "NamedTemporaryFile", lambda *a, **k: _BoomFile())
 
     with pytest.raises(OSError, match="disk full"):
-        _run(proxy.push_animation(b"GIF89a-payload"))
+        _run(proxy.push_animation(b"GIF89a-payload", art="pixel"))
 
 
 def test_push_animation_unlink_failure_is_swallowed(monkeypatch, tmp_path):
@@ -431,7 +431,7 @@ def test_push_animation_unlink_failure_is_swallowed(monkeypatch, tmp_path):
             class _P:
                 class display:
                     @staticmethod
-                    async def show_image(path):
+                    async def show_image(path, art=None):
                         calls.append(path)
                         return True
             return _P()
@@ -448,7 +448,7 @@ def test_push_animation_unlink_failure_is_swallowed(monkeypatch, tmp_path):
 
     monkeypatch.setattr(daemon_client.os, "unlink", boom_unlink)
 
-    result = _run(proxy.push_animation(b"GIF89a-payload"))
+    result = _run(proxy.push_animation(b"GIF89a-payload", art="pixel"))
     assert result is True
     assert len(calls) == 1
 

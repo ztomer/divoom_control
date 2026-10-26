@@ -423,13 +423,24 @@ pub async fn run(request: &VerbRequest, target: &DaemonTarget) -> Result<VerbOut
         //
         // `push-gif` is not a special case: it is this same call under the name
         // scripts use, exactly as it was in Python.
+        //
+        // A file the user names is a PICTURE (D14): it has no native panel, so
+        // it is scaled to this one. Pixel art from the cloud never comes this
+        // way -- it goes through `sync_artwork` and the gallery, which send
+        // `art: "pixel"` and are refused on a panel of another size.
         Verb::PushImage { path } | Verb::PushGif { path } => {
             let name = std::path::Path::new(path)
                 .file_name()
                 .map_or_else(|| path.clone(), |n| n.to_string_lossy().into_owned());
-            let reply = mcp_daemon::dc(target, "display.show_image", json!([path]), mac)
-                .await
-                .map_err(|e| e.cli_line())?;
+            let reply = mcp_daemon::dc_args_kw(
+                target,
+                "display.show_image",
+                json!([path]),
+                json!({"art": "picture"}),
+                mac,
+            )
+            .await
+            .map_err(|e| e.cli_line())?;
             let ok = reply
                 .get("success")
                 .and_then(Value::as_bool)

@@ -42,7 +42,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // ── 1. CLOUD GALLERY FETCH ──
     function readTargetSize() {
         // The selected panel's resolution as the daemon resolved it (P5.1; it
-        // was guessed from the name). The cloud serves 16, 32 and 64.
+        // was guessed from the name). The cloud serves 16, 32 and 64. It is
+        // the ONLY size listed: pixel art is never rescaled to another panel,
+        // so there is no size picker any more (D14).
         const size = window.panelPixels(window._activeDeviceMac()) || window.PANEL_FALLBACK_PIXELS;
         return size === 64 ? 64 : (size === 32 ? 32 : 16);
     }
@@ -52,13 +54,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const classifyTabs = document.getElementById("gallery-classify-tabs");
         const classify = parseInt(classifyTabs?.querySelector(".cat-btn.active")?.getAttribute("data-style")) || 18;
         const fileSort = readGallerySort();
-        const fileSize = readGalleryFileSize();
         if (galleryContainer) galleryContainer.innerHTML = `<div class="empty-list">Fetching public community gallery...</div>`;
         window.DivoomState.loadedArtworks = [];
         window.DivoomState.selectedArtworkIndex = null;
         const targetSize = readTargetSize();
         if (window.pywebview && window.pywebview.api) {
-            window.pywebview.api.fetch_gallery(classify, targetSize, fileSort, fileSize)
+            window.pywebview.api.fetch_gallery(classify, targetSize, fileSort)
                 .then(artworksJson => {
                     const artworks = JSON.parse(artworksJson);
                     if (artworks.error) {
@@ -110,16 +111,10 @@ document.addEventListener("DOMContentLoaded", () => {
         return parseInt(tabs?.querySelector(".tab-btn.active")?.getAttribute("data-sort")) || 1;
     }
 
-    function readGalleryFileSize() {
-        const sel = document.getElementById("gallery-size-select");
-        return parseInt(sel?.value) || 0;
-    }
-
     function persistGalleryFilter() {
         const sort = readGallerySort();
-        const fileSize = readGalleryFileSize();
         if (window.pywebview?.api?.set_gallery_filter) {
-            window.pywebview.api.set_gallery_filter(sort, fileSize);
+            window.pywebview.api.set_gallery_filter(sort);
         }
     }
 
@@ -134,8 +129,6 @@ document.addEventListener("DOMContentLoaded", () => {
                             b.classList.toggle("active", b.getAttribute("data-sort") === String(f.sort));
                         });
                     }
-                    const sizeSel = document.getElementById("gallery-size-select");
-                    if (sizeSel && f.file_size != null) sizeSel.value = String(f.file_size);
                 } catch (e) { /* ignore */ }
             });
         }
@@ -157,13 +150,6 @@ document.addEventListener("DOMContentLoaded", () => {
         btn.classList.add("active");
         persistGalleryFilter();
         loadGallery();
-    });
-
-    document.addEventListener("change", (e) => {
-        if (e.target.id === "gallery-size-select") {
-            persistGalleryFilter();
-            loadGallery();
-        }
     });
 
     function buildGalleryItem(art, idx) {
@@ -326,15 +312,14 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    window.onGalleryItemLoaded = function(classify, targetSize, index, total, itemB64, fileSort, fileSize) {
+    window.onGalleryItemLoaded = function(classify, targetSize, index, total, itemB64, fileSort) {
         try {
             const classifyTabs = document.getElementById("gallery-classify-tabs");
             const currentClassify = parseInt(classifyTabs?.querySelector(".cat-btn.active")?.getAttribute("data-style")) || 18;
             const currentTargetSize = readTargetSize();
             const currentSort = readGallerySort();
-            const currentFileSize = readGalleryFileSize();
             if (currentClassify !== classify || currentTargetSize !== targetSize
-                || currentSort !== (fileSort ?? 1) || currentFileSize !== (fileSize ?? 0)) return;
+                || currentSort !== (fileSort ?? 1)) return;
 
             const rawJson = atob(itemB64);
             const art = JSON.parse(rawJson);
@@ -373,7 +358,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
-    window.onGalleryBackgroundFetched = function(classify, targetSize, b64Data, fileSort, fileSize) {
+    window.onGalleryBackgroundFetched = function(classify, targetSize, b64Data, fileSort) {
         try {
             const rawJson = atob(b64Data);
             const artworks = JSON.parse(rawJson);
@@ -381,9 +366,8 @@ document.addEventListener("DOMContentLoaded", () => {
             const currentClassify = parseInt(classifyTabs?.querySelector(".cat-btn.active")?.getAttribute("data-style")) || 18;
             const currentTargetSize = readTargetSize();
             const currentSort = readGallerySort();
-            const currentFileSize = readGalleryFileSize();
             if (currentClassify === classify && currentTargetSize === targetSize
-                && currentSort === (fileSort ?? 1) && currentFileSize === (fileSize ?? 0)) {
+                && currentSort === (fileSort ?? 1)) {
                 // Only re-render if the number of items changed significantly,
                 // otherwise progressive items already filled the gallery.
                 const currentCount = window.DivoomState.loadedArtworks?.length || 0;

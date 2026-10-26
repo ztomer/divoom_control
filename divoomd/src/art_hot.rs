@@ -307,6 +307,15 @@ pub(crate) async fn run_hot_update(
     // 1+2. Manifest + bodies, cached per device_type so N same-size devices
     // don't each re-hit the CDN (load_hot_files emits the "downloading" progress
     // on a miss; a hit returns instantly).
+    // The hot channel is pixel art served per panel class, so the class is
+    // the TARGET panel's own size whenever its model names one; the caller's
+    // `device_size` speaks only for a panel that names none. Two independent
+    // arguments (a size and an address) could otherwise send 64x64 art to a
+    // 16x16 panel (D14).
+    let device_size = match daemon.fleet.resolve_target(address_hint.as_deref()).await {
+        Ok(target) => target.panel_pixels().await.unwrap_or(device_size),
+        Err(_) => device_size,
+    };
     progress.set(&json!({"phase": "fetching_manifest"}));
     let device_type = device_type_for_size(device_size);
     let (files, ok_dl, from_cache) = load_hot_files(&client, device_type, &progress).await?;

@@ -47,7 +47,7 @@ class TestGuiApiCoreBasics(GuiApiTestBase):
         dev.is_connected = True
         captured = {}
 
-        async def _show_image(path):
+        async def _show_image(path, art=None):
             # Capture while the file still exists on disk.
             captured["path"] = path
             captured["exists"] = os.path.isfile(path)

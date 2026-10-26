@@ -70,7 +70,7 @@ def test_push_animation_deletes_its_temp_file(tmp_path):
     class _PushProxy:
         class display:
             @staticmethod
-            async def show_image(path):
+            async def show_image(path, art=None):
                 seen["path"] = path
                 seen["existed_during"] = os.path.exists(path)
                 return True
@@ -84,7 +84,7 @@ def test_push_animation_deletes_its_temp_file(tmp_path):
     proxy = DaemonDeviceProxy.__new__(DaemonDeviceProxy)
     proxy.exclusive = lambda token: _Ctx()
 
-    ok = asyncio.new_event_loop().run_until_complete(proxy.push_animation(b"GIF89a-data"))
+    ok = asyncio.new_event_loop().run_until_complete(proxy.push_animation(b"GIF89a-data", art="pixel"))
     assert ok is True
     assert seen["existed_during"] is True          # present while streaming
     assert not os.path.exists(seen["path"])         # cleaned up after
@@ -98,7 +98,7 @@ def test_push_animation_deletes_temp_file_on_error():
     class _BoomProxy:
         class display:
             @staticmethod
-            async def show_image(path):
+            async def show_image(path, art=None):
                 seen["path"] = path
                 raise RuntimeError("push failed")
 
@@ -112,5 +112,5 @@ def test_push_animation_deletes_temp_file_on_error():
     proxy.exclusive = lambda token: _Ctx()
 
     with pytest.raises(RuntimeError):
-        asyncio.new_event_loop().run_until_complete(proxy.push_animation(b"data"))
+        asyncio.new_event_loop().run_until_complete(proxy.push_animation(b"data", art="pixel"))
     assert not os.path.exists(seen["path"])         # temp removed even on failure

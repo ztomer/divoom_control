@@ -4,6 +4,55 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## Unreleased
+
+- **Pixel art is never squeezed onto a panel it was not drawn for (D14).**
+  The owner: "don't try to reduce pixel images from the hot channel or other
+  sources from 64x64 or other sizes to 16x16 and upload them to the device, it
+  looks awful (album art is of course exempted)". The class is *pixel art
+  scaled to a panel it was not drawn for*, and it had five instances, each a
+  resize that defaulted on: the custom-art page (`resolve_to_rgb16x16`, every
+  payload to 16x16), the monthly-best push (asked the cloud for every size,
+  showed at a fixed 16 and stored at a fixed 16), `sync_artwork` (`default_size`
+  16), the GUI's gallery play (`display.show_image` defaulted to 16 whatever the
+  panel), and the wall (stretched any image to its canvas). Two pinned tests
+  were part of the defect: `media.rs` asserted the gallery's 64x64 magic-26
+  piece and a 32x32 magic-18 piece came out "resized to the panel" at 16x16;
+  they now pin the native size, and a new one pins the refusal.
+  - **The rule is a type.** `art_source::Source` is `PixelArt` or
+    `Picture(Fit)`, with no default; `image_proc::prepare` is the only way an
+    image becomes panel frames, and it takes one. `process_image_bytes` (which
+    stretched by default) is gone. Pixel art whose native size is not the
+    panel's is REFUSED with the reason ("this pixel art is drawn for 64x64 and
+    the panel is 16x16; pixel art is never rescaled ..."), before anything is
+    written to the panel. Album art (`music_job`, `render_widget album_art`), a
+    rendered card and a file the user pushes are `Picture` and are scaled as
+    before.
+  - **On the wire the choice is required.** `display.show_image` and the
+    wall's `show_image` take `art: "pixel" | "picture"`; a call that does not
+    say is refused rather than given the scaler. `display.show_image` now draws
+    at the panel's OWN size from its model (a caller's `size` speaks only for
+    a panel that names none), and decodes before the channel switch, so a
+    refusal writes nothing. On the wall, pixel art must be drawn for the whole
+    canvas and is cut one pixel per LED. `hot_update` takes the panel class
+    from the target panel, so a size and an address can no longer disagree.
+  - **Listing per device.** `cloud::fetch_gallery` keeps only items whose own
+    `FileSize` is the requested size (the APK's table: 1=16, 2=32, 4=64,
+    16=128, 32=256), for every caller. The monthly push connects first, learns
+    the panel's size, and asks for that size only. The GUI gallery lists only
+    the selected panel's size, its offline cache records each item's size and
+    is filtered by it, and the size picker (16/32/64/128/256/All) is REMOVED:
+    it offered art the panel cannot show natively, and the panel decides.
+  - Tests against the mock panels (16x16 Ditoo-Plus, 64x64 Pixoo64):
+    mismatched pixel art refused with nothing streamed, both ways; native art
+    sent to each; a caller's `size` cannot override the panel; album art still
+    scaled; a call without `art` refused; the wall refuses non-canvas pixel art
+    and still scales a picture; the gallery filter by size (daemon and GUI
+    cache). Each was proven to fail by breaking the check it guards.
+  - Not covered: the device's declared format/animation limits beyond panel
+    size -- the capability tables carry no per-model frame or format limit to
+    filter on. No live hardware check (the owner's).
+
 ## v0.42.0 — each panel's screen, readable from outside (2026-10-26)
 
 Minor bump: `divoom-control preview --json` and the daemon's read-only

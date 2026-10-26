@@ -24,16 +24,12 @@ pub use crate::hot_progress::HotProgress;
 
 // ── constants ─────────────────────────────────────────────────────────────
 
-const CDN_BASE: &str = "https://fin.divoom-gz.com/";
-
 /// 256-byte chunks — matches APK `n().q(256)`.
 #[cfg(feature = "ble")]
 const CHUNK_SIZE: usize = 256;
 /// 40 ms inter-chunk sleep — APK old-mode `q.s().I(true)` sleeps 40 ms.
 #[cfg(feature = "ble")]
 const INTER_CHUNK_MS: u64 = 40;
-/// 15 s HTTP timeout.
-const HTTP_TIMEOUT_SECS: u64 = 15;
 
 const SLOTS_PER_PAGE: usize = 12;
 
@@ -50,73 +46,35 @@ pub(crate) const fn device_type_for_size(size: u32) -> u32 {
 
 // ── progress state (shared between hot_update caller and background task) ─
 
-use crate::art_codec::{decode_cloud_magic9, decode_hot_file, decode_magic43};
+// ── download + resolve a cloud file to ONE frame at its own size ───────────
 
-// ── download + resolve cloud file to 16x16 RGB frame ─────────────────────
-
-async fn download_and_encode_art(fid: String) -> Option<Vec<u8>> {
-    let url = format!("{CDN_BASE}{fid}");
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(HTTP_TIMEOUT_SECS))
-        .user_agent("okhttp/4.12.0")
-        .build()
-        .ok()?;
-    let resp = client.get(&url).send().await.ok()?;
-    if resp.status() != 200 {
-        return None;
-    }
-    let raw = resp.bytes().await.ok()?;
-    if raw.len() < 4 {
-        return None;
-    }
-
-    // Resolve to 768-byte RGB in a blocking thread (image decoding is CPU-bound).
-    let raw_vec = raw.to_vec();
-    tokio::task::spawn_blocking(move || {
-        let rgb = resolve_to_rgb16x16(&raw_vec)?;
-        crate::image_encode::encode_animation_frame(&rgb, 16, 16, 500).ok()
-    })
-    .await
-    .ok()
-    .flatten()
+/// Download cloud art and encode it as one custom-art frame for a
+/// `panel`x`panel` device.
+async fn download_and_encode_art(fid: &str, panel: u32) -> Result<Vec<u8>, String> {
+    let raw = crate::sync_artwork::download_cloud_file(fid).await?;
+    tokio::task::spawn_blocking(move || encode_custom_art(&raw, panel))
+        .await
+        .map_err(|e| format!("decode task: {e}"))?
 }
 
-/// Turn any cloud CDN payload into a 768-byte 16x16 RGB buffer.
-pub(crate) fn resolve_to_rgb16x16(data: &[u8]) -> Option<Vec<u8>> {
-    if data.len() < 4 {
-        return None;
-    }
-    // Already GIF/PNG/JPG — open with image crate, resize to 16x16
-    let is_gif = data.starts_with(b"GIF");
-    let is_png = data.starts_with(b"\x89PNG");
-    let is_jpg = data[0] == 0xFF && data[1] == 0xD8;
-    if is_gif || is_png || is_jpg {
-        return decode_image_to_rgb(data, 16, 16);
-    }
-    // Magic 43 — embedded image
-    if data[0] == 43 {
-        let inner = decode_magic43(data)?;
-        return decode_image_to_rgb(&inner, 16, 16);
-    }
-    // Magic 9 — AES cloud container (16x16 frames)
-    if data[0] == 9 {
-        let (frames, _) = decode_cloud_magic9(data)?;
-        return frames.into_iter().next();
-    }
-    // 0xAA hot file
-    if data[0] == 0xAA {
-        let frames = decode_hot_file(data)?;
-        return Some(frames.into_iter().next()?.0);
-    }
-    None
-}
-
-/// Decode an image (GIF/PNG/JPG bytes) to a 16x16 RGB flat buffer via the `image` crate.
-pub(crate) fn decode_image_to_rgb(data: &[u8], w: u32, h: u32) -> Option<Vec<u8>> {
-    use image::imageops::FilterType;
-    let img = image::load_from_memory(data).ok()?;
-    let resized = img.resize_exact(w, h, FilterType::Nearest);
-    Some(resized.to_rgb8().into_raw())
+/// One custom-art frame from a cloud payload, for a `panel`x`panel` device.
+///
+/// The payload is pixel art, so it is used only at its own size: art drawn
+/// for another panel is refused, never scaled (D14). This used to resize
+/// every payload to 16x16 (`resolve_to_rgb16x16`), whatever it was drawn for
+/// and whatever panel it was going to.
+///
+/// # Errors
+///
+/// When the payload is no container this daemon reads, the art is not drawn
+/// for `panel`, or the frame cannot be encoded.
+pub(crate) fn encode_custom_art(raw: &[u8], panel: u32) -> Result<Vec<u8>, String> {
+    let gif =
+        crate::media::resolve_to_gif(raw).ok_or_else(|| crate::media::why_not_resolvable(raw))?;
+    let frames = crate::image_proc::prepare(gif, crate::art_source::Source::PixelArt, panel, 500)?;
+    let (rgb, w, h, _) = frames.first().ok_or("the art has no frames")?;
+    crate::image_encode::encode_animation_frame(rgb, *w, *h, 500)
+        .map_err(|why| format!("frame {w}x{h}: {why}"))
 }
 
 // ── custom art protocol helpers (APK LightMakeNewModel.java) ─────────────
@@ -207,6 +165,12 @@ pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
             "custom_art_push requires BLE/SPP transport",
         );
     }
+    let Some(panel) = device.panel_pixels().await else {
+        return err_code(
+            ErrorCode::Unsupported,
+            "custom_art_push: the panel does not say how big it is, so no pixel art can be matched to it",
+        );
+    };
     crate::screen_previews::mark_device_rendered(&device, "custom_art_push");
 
     // Build slot_map: {slot_index -> file_id}
@@ -238,24 +202,17 @@ pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
         return crate::command_args::missing("custom_art_push", "'slots' or 'file_ids'");
     }
 
+    // Fetched and checked BEFORE the panel's job is stopped: art the panel
+    // cannot show natively is refused with no effect on it (D14).
+    let frames = match encode_page(&slot_map, panel).await {
+        Ok(f) => f,
+        Err(refusal) => return refusal,
+    };
+
     daemon
         .live_jobs
         .stop_all_for_device(&daemon, &device.id)
         .await;
-
-    // Download + encode all files
-    let mut frames: Vec<Vec<u8>> = vec![Vec::new(); SLOTS_PER_PAGE];
-    for (idx, fid) in &slot_map {
-        match download_and_encode_art(fid.clone()).await {
-            Some(e) => frames[*idx] = e,
-            None => {
-                return err_code(
-                    ErrorCode::UpstreamFailed,
-                    &format!("could not fetch/decode {fid}"),
-                )
-            }
-        }
-    }
 
     // The panel's one queue: a multi-packet page transfer must not be
     // interleaved with a live-widget frame or a GUI device_call, and
@@ -287,6 +244,21 @@ pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
             detail,
         )
     }
+}
+
+/// Every slot's frame, at the panel's own size: custom art is pixel art, and
+/// art drawn for another size is refused, not scaled (D14).
+async fn encode_page(slot_map: &[(usize, String)], panel: u32) -> Result<Vec<Vec<u8>>, Value> {
+    let mut frames: Vec<Vec<u8>> = vec![Vec::new(); SLOTS_PER_PAGE];
+    for (idx, fid) in slot_map {
+        frames[*idx] = download_and_encode_art(fid, panel).await.map_err(|why| {
+            err_code(
+                ErrorCode::Unsupported,
+                &format!("custom_art_push: {fid}: {why}"),
+            )
+        })?;
+    }
+    Ok(frames)
 }
 
 /// Whether `dev` can take a custom-art page: only a Bluetooth link can, and

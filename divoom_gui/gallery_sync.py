@@ -13,6 +13,17 @@ logger = logging.getLogger("divoom_gui")
 from divoom_gui.gallery_hot_api import GalleryHotApiMixin
 
 
+def native_only(items: list, panel: int) -> list:
+    """The art a ``panel``x``panel`` display can show as drawn (D14).
+
+    Pixel art is never rescaled to another panel (the daemon refuses it), so
+    the gallery does not offer it: an item drawn for another size -- or one
+    whose size nothing states (a cache written before items carried one) --
+    is not listed. The size is the one the daemon fetched the item for; the
+    GUI does not open images to find out (it is a client)."""
+    return [a for a in items if isinstance(a, dict) and a.get("size") == panel]
+
+
 class GallerySyncMixin(GalleryHotApiMixin):
     """Mixin for cloud-voted gallery fetching and hot-channel schedule orchestration."""
     def _load_cached_gallery(self) -> str:
@@ -105,6 +116,8 @@ class GallerySyncMixin(GalleryHotApiMixin):
         otherwise the panel the bench selected last -- read when the push
         RAN. `display_wall_image` now stops and pushes on the named display."""
         logger.info(f"GUI Action: Play gallery artwork file_id={file_id!r} on {mac}")
+        # Gallery art is pixel art: the daemon shows it only on a display of
+        # its own size and refuses it on any other, never squeezing it (D14).
         if not mac:
             return {"success": False, "error": "No panel selected"}
         if not file_id:
@@ -128,20 +141,27 @@ class GallerySyncMixin(GalleryHotApiMixin):
                 except Exception as e:
                     logger.warning(f"Failed to fetch gallery preview for {file_id}: {e}")
         if target_path and target_path.exists():
-            return self.display_wall_image(mac, str(target_path.absolute()))
+            return self.display_wall_image(mac, str(target_path.absolute()), "pixel")
         return {"success": False, "error": "file not found in cache"}
 
     FILE_SIZE_BITMASK: dict[int, int] = {16: 1, 32: 2, 64: 4, 128: 16, 256: 32}
 
     def fetch_gallery(self, classify: int, target_size: int = 16,
-                      file_sort: int = 1, file_size: int = 0) -> str:
-        """Fetch gallery items. file_size=0 means auto-detect from target_size."""
+                      file_sort: int = 1) -> str:
+        """Fetch the gallery items drawn for a ``target_size`` panel.
+
+        Only that size: pixel art is never rescaled to another panel (D14),
+        so the gallery no longer offers a size picker -- the panel decides."""
         logger.info(
             f"GUI Action: Fetching gallery classify={classify} "
-            f"target_size={target_size} file_sort={file_sort} file_size={file_size}..."
+            f"target_size={target_size} file_sort={file_sort}..."
         )
-        
-        cached_data = self._load_cached_gallery()
+
+        try:
+            cached = json.loads(self._load_cached_gallery())
+        except ValueError:
+            cached = []
+        cached_data = json.dumps(native_only(cached if isinstance(cached, list) else [], target_size))
 
         def background_fetch_worker():
             try:
@@ -156,8 +176,9 @@ class GallerySyncMixin(GalleryHotApiMixin):
                 # The daemon has done all of that correctly the whole time —
                 # including the auth retry, which is why none of it survives
                 # here.
-                file_size_bitmask = (file_size if file_size > 0
-                                     else self.FILE_SIZE_BITMASK.get(target_size, 1))
+                file_size_bitmask = self.FILE_SIZE_BITMASK.get(target_size)
+                if file_size_bitmask is None:
+                    raise RuntimeError(f"the cloud has no gallery for a {target_size}x{target_size} panel")
                 file_list = client.fetch_gallery(
                     classify, limit=30, file_sort=file_sort,
                     file_size=file_size_bitmask) or []
@@ -187,6 +208,7 @@ class GallerySyncMixin(GalleryHotApiMixin):
                         "file_id": item.get("FileId"),
                         "likes": item.get("LikeCnt", 0),
                         "magic": item.get("FileType", 3),
+                        "size": target_size,
                         "preview_url": preview_url,
                     }
                     results.append(art_item)
@@ -195,7 +217,7 @@ class GallerySyncMixin(GalleryHotApiMixin):
                         try:
                             item_json = json.dumps(art_item)
                             b64_item_data = base64.b64encode(item_json.encode("utf-8")).decode("utf-8")
-                            js_code = f"if (window.onGalleryItemLoaded) {{ window.onGalleryItemLoaded({classify}, {target_size}, {idx}, {len(file_list)}, '{b64_item_data}', {file_sort}, {file_size}); }}"
+                            js_code = f"if (window.onGalleryItemLoaded) {{ window.onGalleryItemLoaded({classify}, {target_size}, {idx}, {len(file_list)}, '{b64_item_data}', {file_sort}); }}"
                             self.window.evaluate_js(js_code)
                         except Exception as js_err:
                             logger.warning(f"Failed to send progressive gallery item: {js_err}")
@@ -213,7 +235,7 @@ class GallerySyncMixin(GalleryHotApiMixin):
                 if self.window:
                     js_data = json.dumps(results)
                     b64_js_data = base64.b64encode(js_data.encode("utf-8")).decode("utf-8")
-                    js_code = f"if (window.onGalleryBackgroundFetched) {{ window.onGalleryBackgroundFetched({classify}, {target_size}, '{b64_js_data}', {file_sort}, {file_size}); }}"
+                    js_code = f"if (window.onGalleryBackgroundFetched) {{ window.onGalleryBackgroundFetched({classify}, {target_size}, '{b64_js_data}', {file_sort}); }}"
                     self.window.evaluate_js(js_code)
             except Exception as e:
                 from divoom_client.daemon_cloud import CloudUnavailable
@@ -366,7 +388,7 @@ class GallerySyncMixin(GalleryHotApiMixin):
             return False
 
     def get_gallery_filter(self) -> str:
-        """Return current sort + file_size preferences as JSON."""
+        """Return the current sort preference as JSON (the size is the panel's)."""
         import configparser
         try:
             path = self._gallery_config_path()
@@ -374,13 +396,12 @@ class GallerySyncMixin(GalleryHotApiMixin):
                 cfg = configparser.ConfigParser()
                 cfg.read(path)
                 sort = int(cfg.get("gallery", "gallery_sort", fallback="1"))
-                file_size = int(cfg.get("gallery", "gallery_file_size", fallback="0"))
-                return json.dumps({"sort": sort, "file_size": file_size})
+                return json.dumps({"sort": sort})
         except Exception as e:
             logger.warning(f"get_gallery_filter failed: {e}")
-        return json.dumps({"sort": 1, "file_size": 0})
+        return json.dumps({"sort": 1})
 
-    def set_gallery_filter(self, sort: int = 1, file_size: int = 0) -> bool:
+    def set_gallery_filter(self, sort: int = 1) -> bool:
         import configparser
         try:
             path = self._gallery_config_path()
@@ -391,7 +412,9 @@ class GallerySyncMixin(GalleryHotApiMixin):
             if "gallery" not in cfg:
                 cfg["gallery"] = {}
             cfg["gallery"]["gallery_sort"] = str(int(sort))
-            cfg["gallery"]["gallery_file_size"] = str(int(file_size))
+            # The size is the panel's, not a preference (D14): a stale key
+            # from the old picker is dropped rather than left to mislead.
+            cfg["gallery"].pop("gallery_file_size", None)
             atomic_write_config(path, cfg, mode=0o600)  # config.ini holds creds
             return True
         except Exception as e:

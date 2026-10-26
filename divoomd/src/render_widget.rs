@@ -187,7 +187,12 @@ pub async fn cmd_render_widget(args: &Value) -> Value {
             // docstring asks for it. Decoding a large cover on the reactor
             // thread stalls every other socket client for the duration.
             let frames = match tokio::task::spawn_blocking(move || {
-                crate::image_proc::process_image_bytes(raw, size, 100)
+                crate::image_proc::prepare(
+                    raw,
+                    crate::art_source::Source::Picture(crate::image_fit::Fit::Exact),
+                    size,
+                    100,
+                )
             })
             .await
             {

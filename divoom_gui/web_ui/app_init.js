@@ -109,7 +109,8 @@ document.addEventListener("DOMContentLoaded", () => {
                                      : "Splitting image and syncing wall...", "success");
             if (window.pywebview && window.pywebview.api) {
                 window.pywebview.api.update_wall_slots(JSON.stringify(activeSlots));
-                window.pywebview.api.display_wall_image("MatrixWall", path, 16).then(res => {
+                // A file the user drops is a PICTURE: it is scaled across the wall (D14).
+                window.pywebview.api.display_wall_image("MatrixWall", path, "picture", 16).then(res => {
                     if (window.DisplayWrite.report(res, { done: "Synchronized display wall", what: "the image",
                                                           failed: "Failed to split and sync wall image", slots: activeSlots })) {
                         const previews = (res && typeof res === "object" && res.previews) || {};

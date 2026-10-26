@@ -93,7 +93,7 @@ class TestGuiApiTopLevelCoverage(unittest.TestCase):
         self.assertTrue(self.api.set_clock_rich("AA:00:00:00:00:01", style=1))
 
         self.api.lighting.display_wall_image.return_value = True
-        self.assertTrue(self.api.display_wall_image("/tmp/a.png", 16))
+        self.assertTrue(self.api.display_wall_image("MatrixWall", "/tmp/a.png", "picture", 16))
         # set_brightness / set_volume name their panel now: divoom_gui/panels.py,
         # tests/test_gui_panels.py (P5.1).
 

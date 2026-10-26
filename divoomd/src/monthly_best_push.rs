@@ -32,8 +32,6 @@ use crate::settings_devices::RegisteredDevice;
 const LIMIT: i64 = 5;
 /// The cloud's sort order — the same one the app's gallery uses.
 const SORT: i64 = 1;
-/// Every art size, not one bitmask.
-const FILE_SIZE: i64 = 127;
 /// Seconds to wait between two pushes to the same device.
 const PUSH_GAP_SECS: u64 = 15;
 
@@ -113,15 +111,34 @@ pub async fn push_to_device(daemon: &Daemon, device: &RegisteredDevice) -> Devic
         warnings: Vec::new(),
     };
 
+    // The panel is reached FIRST: its size decides which art the gallery may
+    // offer it. Pixel art is shown only on a panel of its own size (D14); the
+    // push asked the cloud for every size (127) and squeezed 64x64 art onto
+    // 16x16 panels.
+    let pixels = match crate::monthly_best_link::connect(daemon, &device.address).await {
+        Ok(p) => p,
+        Err(e) => {
+            outcome.error = Some(e);
+            return outcome;
+        }
+    };
+    let Some(bit) = crate::art_source::size_bit(pixels) else {
+        outcome.error = Some(format!(
+            "the cloud has no gallery for a {pixels}x{pixels} panel"
+        ));
+        crate::monthly_best_link::disconnect(daemon).await;
+        return outcome;
+    };
     println!(
-        "divoomd: fetching gallery for {} (classify={})...",
+        "divoomd: fetching gallery for {} (classify={}, {pixels}x{pixels})...",
         device.address, device.classify
     );
-    let response = match crate::cloud::fetch_gallery(device.classify, LIMIT, SORT, FILE_SIZE).await
-    {
+    // `fetch_gallery` lists only the items drawn for this one size.
+    let response = match crate::cloud::fetch_gallery(device.classify, LIMIT, SORT, bit).await {
         Ok(response) => response,
         Err(e) => {
             outcome.error = Some(format!("could not fetch the gallery: {e}"));
+            crate::monthly_best_link::disconnect(daemon).await;
             return outcome;
         }
     };
@@ -130,9 +147,10 @@ pub async fn push_to_device(daemon: &Daemon, device: &RegisteredDevice) -> Devic
     outcome.files = files.len();
     if files.is_empty() {
         outcome.error = Some(format!(
-            "the gallery (classify={}) came back with no files",
+            "the gallery (classify={}) came back with no {pixels}x{pixels} files",
             device.classify
         ));
+        crate::monthly_best_link::disconnect(daemon).await;
         return outcome;
     }
 
@@ -151,7 +169,7 @@ pub async fn push_to_device(daemon: &Daemon, device: &RegisteredDevice) -> Devic
         eprintln!("divoomd: could not record the fetch snapshot: {e}");
     }
 
-    match sync_files_to_device(daemon, &device.address, &files).await {
+    match sync_files_to_device(daemon, &device.address, pixels, &files).await {
         Ok(counts) => {
             outcome.pushed = counts.pushed;
             outcome.stored = counts.stored;
@@ -165,6 +183,7 @@ pub async fn push_to_device(daemon: &Daemon, device: &RegisteredDevice) -> Devic
         }
         Err(e) => {
             outcome.error = Some(e);
+            crate::monthly_best_link::disconnect(daemon).await;
         }
     }
     outcome
@@ -224,13 +243,15 @@ fn resolve(file_bytes: &[u8], file_name: &str) -> Result<Vec<u8>, String> {
     Ok(img)
 }
 
-/// Show a resolved image on the device.
-async fn show(daemon: &Daemon, img: &[u8], file_name: &str) -> Result<(), String> {
+/// Show resolved pixel art on the panel `target` names, at the panel's own
+/// size -- `display.show_image` refuses art drawn for another size (D14).
+async fn show(daemon: &Daemon, target: &str, img: &[u8], file_name: &str) -> Result<(), String> {
     let req_show = Request {
         command: "device_call".to_string(),
         args: json!({
             "method": "display.show_image",
-            "kwargs": {"size": 16},
+            "mac": target,
+            "kwargs": {"art": "pixel"},
             "blobs": {
                 "0": base64::engine::general_purpose::STANDARD.encode(img)
             }
@@ -250,7 +271,7 @@ async fn show(daemon: &Daemon, img: &[u8], file_name: &str) -> Result<(), String
     }
 }
 
-/// Connect, push every file, disconnect — and count what actually landed.
+/// Push every file to the connected panel, disconnect — and count what actually landed.
 ///
 /// Two things are counted, because they are two things: the files the device
 /// SHOWED (the `0x8B` stream) and the files it STORED (the art written into
@@ -260,38 +281,9 @@ async fn show(daemon: &Daemon, img: &[u8], file_name: &str) -> Result<(), String
 async fn sync_files_to_device(
     daemon: &Daemon,
     target: &str,
+    pixels: u32,
     files: &[crate::hotchannel_fetches::FetchedFile],
 ) -> Result<PushCounts, String> {
-    // 1. Connect
-    let connect_args = target.strip_prefix("LAN:").map_or_else(
-        || {
-            json!({
-                "mac": target,
-                "use_ios_le_protocol": true
-            })
-        },
-        |ip| json!({ "lan_ip": ip }),
-    );
-
-    let req_connect = Request {
-        command: "connect".to_string(),
-        args: connect_args,
-        token: None,
-    };
-
-    let res = daemon.dispatch(req_connect).await;
-    if !res
-        .get("success")
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false)
-    {
-        let err = res
-            .get("error")
-            .and_then(|v| v.as_str())
-            .unwrap_or("unknown connection error");
-        return Err(format!("Connection to {target} failed: {err}"));
-    }
-
     // 2. Download and stream each file
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(15))
@@ -309,7 +301,15 @@ async fn sync_files_to_device(
             file.name,
             file.id
         );
-        push_one_file(daemon, &client, file, &mut counts, &mut items).await;
+        push_one_file(
+            daemon,
+            &client,
+            (target, pixels),
+            file,
+            &mut counts,
+            &mut items,
+        )
+        .await;
 
         if idx < files.len() - 1 {
             sleep(Duration::from_secs(PUSH_GAP_SECS)).await;
@@ -339,6 +339,7 @@ async fn sync_files_to_device(
 async fn push_one_file(
     daemon: &Daemon,
     client: &reqwest::Client,
+    (target, pixels): (&str, u32),
     file: &crate::hotchannel_fetches::FetchedFile,
     counts: &mut PushCounts,
     items: &mut Vec<ArtItem>,
@@ -374,7 +375,7 @@ async fn push_one_file(
         }
     };
 
-    match show(daemon, &img, file_name).await {
+    match show(daemon, target, &img, file_name).await {
         Ok(()) => {
             counts.pushed += 1;
             println!("divoomd: pushed {file_name}");
@@ -391,7 +392,7 @@ async fn push_one_file(
     // The frames the device will KEEP: the same art, in the device's own
     // encoding. A file whose frames cannot be made is a file the device
     // cannot hold, and the run says so.
-    match gallery_store::frames_for(&img) {
+    match gallery_store::frames_for(&img, pixels) {
         Ok(frames) => items.push(ArtItem {
             name: file_name.to_string(),
             frames,

@@ -253,6 +253,11 @@ async fn an_image_is_pushed_by_path_so_the_daemon_can_size_it() {
         json!([p]),
         "the daemon must receive the PATH, not pre-resized RGB"
     );
+    assert_eq!(
+        sent[0]["args"]["kwargs"]["art"],
+        json!("picture"),
+        "a file the user names is a picture: the daemon is told so (D14)"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 

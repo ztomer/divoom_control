@@ -55,9 +55,6 @@ use std::time::Duration;
 use crate::daemon::Daemon;
 use crate::monthly_best_push::FileFailure;
 
-/// The panel size the art is stored at — the same size the push shows it.
-pub const ART_SIZE: u32 = 16;
-
 /// The stored-gallery page the push writes: the device's FIRST page.
 ///
 /// The app gives a device three pages and the user picks one; the push owns
@@ -110,19 +107,25 @@ pub struct StoreOutcome {
     pub readback: Option<String>,
 }
 
-/// Encode a resolved image into the frames the device stores.
+/// Encode resolved pixel art into the frames a `panel`x`panel` device stores.
 ///
 /// The same encoder the SHOW path uses (`image_encode::encode_animation_frame`
-/// over `image_proc::process_image_bytes`), so the art that is stored is the
-/// art that was shown, byte for byte.
+/// over `image_proc::prepare`), so the art that is stored is the art that was
+/// shown, byte for byte. It is pixel art, so it is stored only on a panel of
+/// its own size and never rescaled (D14).
 ///
 /// # Errors
 ///
-/// When the image cannot be prepared for the panel, or a frame cannot be
-/// encoded. The message says which.
-pub fn frames_for(gif: &[u8]) -> Result<Vec<Vec<u8>>, String> {
-    let frames = crate::image_proc::process_image_bytes(gif.to_vec(), ART_SIZE, 100)
-        .map_err(|e| format!("the image could not be prepared for the panel: {e}"))?;
+/// When the art is not drawn for `panel`, the image cannot be prepared, or a
+/// frame cannot be encoded. The message says which.
+pub fn frames_for(gif: &[u8], panel: u32) -> Result<Vec<Vec<u8>>, String> {
+    let frames = crate::image_proc::prepare(
+        gif.to_vec(),
+        crate::art_source::Source::PixelArt,
+        panel,
+        100,
+    )
+    .map_err(|e| format!("the image could not be prepared for the panel: {e}"))?;
     let mut out = Vec::with_capacity(frames.len());
     for (rgb, w, h, time_ms) in frames {
         out.push(

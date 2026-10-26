@@ -42,7 +42,7 @@ fn item(name: &str, frames: Vec<Vec<u8>>) -> ArtItem {
 #[test]
 fn the_stored_frames_are_the_frames_the_device_is_shown() {
     let gif = crate::media::resolve_to_gif(&raw("magic9.bin")).expect("resolve the cloud art");
-    let frames = frames_for(&gif).expect("frames for the device");
+    let frames = frames_for(&gif, 16).expect("frames for the 16x16 device");
 
     assert!(
         frames.len() > 1,

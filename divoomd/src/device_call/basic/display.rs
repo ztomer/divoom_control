@@ -9,7 +9,7 @@ use crate::protocol::{
     err_code,
     ErrorCode::{BadRequest, Internal, UnknownCommand},
 };
-use crate::wire::WireNarrow as _;
+use crate::wire::WireNarrow;
 use serde_json::{json, Value};
 
 pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
@@ -26,11 +26,25 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
         "device.show_clock" | "show_clock" => show_clock(ctx).await,
         "device.show_image" | "show_image" => show_image(ctx).await,
         "display.show_image" | "display.display_image" => {
-            let size = kw
+            // What the image IS (D14): required, as the default was "scale it".
+            let source = match crate::art_source::Source::from_wire(
+                kw.and_then(|v| v.get("art")).and_then(Value::as_str),
+            ) {
+                Ok(s) => s,
+                Err(why) => return err_code(BadRequest, &format!("display.show_image: {why}")),
+            };
+            // The panel's own size; `size` only for one that names none (LAN).
+            let named = crate::panel_model::from_name(dev.device_name().as_deref()).pixels;
+            let asked = kw
                 .and_then(|v| v.get("size"))
                 .and_then(serde_json::Value::as_u64)
-                .unwrap_or(16)
-                .dword();
+                .map(WireNarrow::dword);
+            let Some(size) = named.or(asked) else {
+                return err_code(
+                    BadRequest,
+                    "display.show_image: the panel does not say how big it is; pass size",
+                );
+            };
             let default_time_ms = raw_args
                 .get(1)
                 .and_then(serde_json::Value::as_u64)
@@ -53,6 +67,18 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
                 }
             };
 
+            // Prepared BEFORE the panel is touched: art the panel cannot show
+            // natively is refused with nothing written (D14).
+            let frames = match tokio::task::spawn_blocking(move || {
+                crate::image_proc::prepare(img_data, source, size, default_time_ms)
+            })
+            .await
+            {
+                Ok(Ok(f)) => f,
+                Ok(Err(e)) => return err_code(BadRequest, &format!("display.show_image: {e}")),
+                Err(e) => return err_code(Internal, &format!("image decode task: {e}")),
+            };
+
             if let Err(e) = dev
                 .send_command(
                     CMD_SET_LIGHT_MODE,
@@ -63,16 +89,6 @@ pub(super) async fn handle(method: &str, ctx: CallCtx<'_>) -> Value {
             {
                 return link_gone("show_design", &e);
             }
-
-            let frames = match tokio::task::spawn_blocking(move || {
-                crate::image_proc::process_image_bytes(img_data, size, default_time_ms)
-            })
-            .await
-            {
-                Ok(Ok(f)) => f,
-                Ok(Err(e)) => return err_code(BadRequest, &format!("image decode: {e}")),
-                Err(e) => return err_code(Internal, &format!("image decode task: {e}")),
-            };
 
             let mut blob = Vec::new();
             for (rgb, w, h, t) in &frames {

@@ -78,7 +78,7 @@ def test_a_wall_push_returns_each_panels_own_preview(stack, tmp_path):
     assert sorted(p["mac"] for p in panels["panels"]) == [A, B], panels
     _bridge(stack, "update_wall_slots", json.dumps({
         A: {"x": 0, "y": 0, "size": 16}, B: {"x": 1, "y": 0, "size": 16}}))
-    result = _bridge(stack, "display_wall_image", WALL, str(path), 16)
+    result = _bridge(stack, "display_wall_image", WALL, str(path), "picture", 16)
 
     assert result.get("success") is True, result
     previews = result.get("previews") or {}

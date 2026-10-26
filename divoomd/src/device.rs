@@ -169,6 +169,14 @@ impl Device {
         self.link().await.map(|l| l.transport.clone())
     }
 
+    /// The panel's square edge in pixels, from the model its link names;
+    /// `None` when nothing names it (a LAN panel, no link). Pixel art is
+    /// matched against THIS, never against a size a caller passed (D14).
+    pub async fn panel_pixels(&self) -> Option<u32> {
+        let transport = self.transport().await?;
+        crate::panel_model::from_name(transport.device_name().as_deref()).pixels
+    }
+
     pub async fn is_connected(&self) -> bool {
         self.link.lock().await.is_some()
     }

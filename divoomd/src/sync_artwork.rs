@@ -2,9 +2,10 @@
 //! `media_decoder.resolve_to_gif`).
 //!
 //! Download a cloud artwork by `file_id`, resolve it to a renderable image, and
-//! show it on the connected device via `display.show_image` (which resizes
-//! NEAREST to the device size and 0x8B-streams, matching the Python
-//! resize-then-show path).
+//! show it on the named device via `display.show_image` as PIXEL ART: at its
+//! own size on a panel of that size, refused on any other (D14). The Python
+//! path this ports resized it to the device; that squeezed 64x64 art onto
+//! 16x16 panels.
 //!
 //! PARITY NOTE: Python's `media_decoder.resolve_to_gif` decodes AES cloud
 //! containers (magic 9/18/26, with LZO for 18/26) and 0xAA hot files. The native
@@ -122,10 +123,14 @@ pub async fn sync_artwork(daemon: &Daemon, args: &Value) -> Value {
             return crate::command_args::missing("sync_artwork", "'file_id'");
         }
     };
-    let size = args
-        .get("default_size")
-        .and_then(serde_json::Value::as_u64)
-        .unwrap_or(16);
+    // The panel's own size decides (display.show_image reads it from the
+    // model); `default_size` only speaks for a panel that names none. It
+    // used to default to 16 and the art was squeezed to it (D14).
+    let mut kwargs = json!({"art": "pixel"});
+    if let Some(size) = args.get("default_size").and_then(serde_json::Value::as_u64) {
+        kwargs["size"] = json!(size);
+    }
+    let mac = args.get("mac").cloned().unwrap_or(Value::Null);
 
     let file_bytes = match download_cloud_file(&file_id).await {
         Ok(b) => b,
@@ -151,13 +156,15 @@ pub async fn sync_artwork(daemon: &Daemon, args: &Value) -> Value {
         );
     };
 
-    // display.show_image resizes (NEAREST) to `size` and 0x8B-streams. Box the
+    // display.show_image shows the art at its own size on a panel of that
+    // size, and refuses it on any other -- cloud art is pixel art. Box the
     // recursive dispatch (sync_artwork is itself reached via dispatch).
     let res = Box::pin(daemon.dispatch(Request {
         command: "device_call".to_string(),
         args: json!({
             "method": "display.show_image",
-            "kwargs": {"size": size},
+            "mac": mac,
+            "kwargs": kwargs,
             "blobs": {"0": base64::engine::general_purpose::STANDARD.encode(&img)},
         }),
         token: None,

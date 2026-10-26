@@ -146,11 +146,14 @@ class DaemonDeviceProxy:
 
     async def push_animation(self, file_or_data: str | bytes,
                               *,
+                              art: str,
                               token: str | None = None) -> bool:
         """Push an animation (GIF/image) to the device inside an exclusive
         session.  ``file_or_data`` is either a local path *or* raw bytes
         (written to a temp file first).  Calls ``display.show_image()``
-        which does the 0x8B 3-phase streaming internally.
+        which does the 0x8B 3-phase streaming internally. ``art`` is what it
+        IS, with no default (D14): ``"pixel"`` is shown only on a panel of its
+        own size, ``"picture"`` is scaled.
 
         Returns ``True`` on success.
         """
@@ -173,7 +176,7 @@ class DaemonDeviceProxy:
         effective_token = token or f"push-anim-{id(path)}"
         try:
             async with self.exclusive(effective_token) as p:
-                return bool(await p.display.show_image(path))
+                return bool(await p.display.show_image(path, art=art))
         finally:
             # Delete the temp file WE created (bytes input) — on success AND on
             # error. Without this every byte-payload animation push leaked one

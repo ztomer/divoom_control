@@ -158,23 +158,57 @@ def test_fetch_gallery_asks_the_daemon_and_streams_every_item(tmp_path, monkeypa
     assert m.window.evaluate_js.call_count >= 4  # 3 progressive + 1 final
 
 
-def test_fetch_gallery_file_size_bitmask_explicit_vs_lookup(tmp_path, monkeypatch):
-    """file_size>0 is passed through; 0 falls back to the size lookup."""
+def test_the_gallery_is_asked_only_for_the_panels_own_size(tmp_path, monkeypatch):
+    """D14: the size asked for is the panel's, with no override -- pixel art
+    is never rescaled, so art of another size is never offered."""
     client = FakeDaemonClient(file_list=[])
     m = _daemon_host(tmp_path, monkeypatch, client)
-    m.fetch_gallery(classify=1, target_size=16, file_size=32)
+    m.fetch_gallery(classify=1, target_size=16)
     _wait_for_fetch_thread()
-    assert client.fetch_calls[-1]["file_size"] == 32
+    assert client.fetch_calls[-1]["file_size"] == 1  # 16x16 only
 
     client.fetch_calls.clear()
-    m.fetch_gallery(classify=1, target_size=64, file_size=0)
+    m.fetch_gallery(classify=1, target_size=64)
     _wait_for_fetch_thread()
-    assert client.fetch_calls[-1]["file_size"] == 4  # FILE_SIZE_BITMASK[64]
+    assert client.fetch_calls[-1]["file_size"] == 4  # 64x64 only
 
     client.fetch_calls.clear()
-    m.fetch_gallery(classify=1, target_size=999, file_size=0)
+    m.fetch_gallery(classify=1, target_size=999)
     _wait_for_fetch_thread()
-    assert client.fetch_calls[-1]["file_size"] == 1  # unknown size -> default
+    assert client.fetch_calls == []  # no gallery for that size; nothing guessed
+
+
+def test_the_cached_gallery_lists_only_the_panels_own_size(tmp_path, monkeypatch):
+    """D14: the offline cache holds items fetched for every panel; a panel is
+    shown only those drawn for it, and an item whose size is unknown (a cache
+    from before items carried one) is not offered at all."""
+    client = FakeDaemonClient(file_list=[])
+    m = _daemon_host(tmp_path, monkeypatch, client)
+    cache = tmp_path / ".config" / "divoom-control" / "gallery_cache.json"
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    items = json.dumps([
+        {"file_id": "group1_a", "name": "small", "size": 16},
+        {"file_id": "group1_b", "name": "big", "size": 64},
+        {"file_id": "group1_c", "name": "unknown"},
+    ])
+    cache.write_text(items)
+    small = json.loads(m.fetch_gallery(classify=1, target_size=16))
+    _wait_for_fetch_thread()  # the background fetch rewrites the cache
+    cache.write_text(items)
+    big = json.loads(m.fetch_gallery(classify=1, target_size=64))
+    _wait_for_fetch_thread()
+    assert [a["name"] for a in small] == ["small"]
+    assert [a["name"] for a in big] == ["big"]
+
+
+def test_fetched_items_carry_the_size_they_were_fetched_for(tmp_path, monkeypatch):
+    client = FakeDaemonClient(file_list=[{"FileId": "group1_x", "FileName": "X"}])
+    m = _daemon_host(tmp_path, monkeypatch, client)
+    m.fetch_gallery(classify=1, target_size=64)
+    _wait_for_fetch_thread()
+    saved = json.loads(
+        (tmp_path / ".config" / "divoom-control" / "gallery_cache.json").read_text())
+    assert [i["size"] for i in saved] == [64]
 
 
 def test_an_auth_failure_marks_the_banner_expired(tmp_path, monkeypatch):
