@@ -4,7 +4,17 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
-## Unreleased
+## v0.42.0 — each panel's screen, readable from outside (2026-10-26)
+
+Minor bump: `divoom-control preview --json` and the daemon's read-only
+`screen_previews` command are new features.
+
+- **CI meets the house gates' tool floors the one way the gates provide.**
+  gates_of_heck raised its floors to Python 3.15 and shellcheck 0.11.0, over
+  the runners' 3.12.3 and 0.9.0, and run 40291804362 went red in `rust-core`
+  and `no-emoji`. Both jobs now run goh's `goh-floors` action right after the
+  goh checkout; it reads the floors from goh's own table, so a floor raised
+  there is met here with no edit to this workflow.
 
 - **Each panel's screen, readable from outside: `divoom-control preview --json` (WG.5a).**
   The owner asked for "divoom control preview for each device", a desktop
