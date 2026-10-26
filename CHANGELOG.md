@@ -4,7 +4,11 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
-## Unreleased
+## v0.43.0 — MCP on rmcp, every tool's effect stated, a preview tool (2026-10-26)
+
+Minor bump: the MCP server moves onto rmcp, gains `get_screen_previews` and
+`--allow-destructive`, and pixel art is never rescaled to a panel it was not
+drawn for (D14, protocol 2.0).
 
 - **`divoomd mcp` is rmcp, the official Rust MCP SDK (lane MCP.DV, OW.60),
   and every tool says what it does to the world (API.DV).** The hand-rolled
