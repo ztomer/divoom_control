@@ -4,7 +4,9 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
-## Unreleased
+## v0.43.1 — a room lists exactly its panels; hot-channel status options (2026-10-31)
+
+Patch: the Spatial Bench's rooms (U.4) and the hot-channel status inventory (U.5).
 
 - **A room lists exactly the panels assigned to it (P5.12, umbrella U.4).**
   The owner moved the Timoo to a new room and every room then showed every
