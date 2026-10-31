@@ -419,6 +419,89 @@ shows natively (the reply counting what it left out, as `fetch_gallery`'s
 `not_native` does), or is recorded here as device-type-scoped by the cloud
 with the evidence; a mock-panel test per command, 16x16 and 64x64.
 
+#### P5.12 — A room lists exactly the panels assigned to it (umbrella U.4)
+**Status:** OPEN
+**Why:** the owner, 2026-10-26, verbatim: "2. divoom-control a. when removing a
+device from a location, it should not show there (I moved the timoo device to a
+new location and all the devices show up everywhere, grayed out)." Measured
+2026-10-31 against the owner's stored state (read only): `topology.json` and the
+GUI's local store agree -- the Timoo in "Ethan", the other three on "Shelf" -- so
+the move was stored correctly; the bench is what shows it wrong. A room filter
+draws every panel and greys the ones not in it (`divoom_gui/web_ui/spatial_stage.js`),
+and the bench keeps its own copy of the room map merged with `Object.assign`,
+which never loses a removed room, so a removal is shown as still there and the
+next drag writes it back.
+**Done when:** each room draws exactly its panels and no others (absent, not
+greyed); a panel taken out of a room stays out after a drag, Center or Snap; an
+unassigned panel is "no room" in the bench, the wall and the daemon alike; a
+browser test that fails on the old code; the installed app shows the Timoo
+only in its new room.
+
+#### P5.13 — The hot-channel update status, redesigned (umbrella U.5)
+**Status:** DECISION (owner)
+**Why:** the owner, 2026-10-26, verbatim: "b. The hot channel update status is
+very unclear and need to be rethought. propose options." Nothing is built
+before the owner picks.
+
+**What exists today (inventoried 2026-10-31 from the code; every state below
+rendered in `docs/assets/hot-status-today.png` and `docs/assets/hot-autosync-today.png`).**
+Three paths update a panel's hot art, and they keep three separate records:
+
+1. *Update Hot Channel* (Pixel Art → Hot, one panel; `divoom_gui/web_ui/gallery_hot.js`):
+   the daemon's `hot_update` streams `hot_progress` events, which name no panel.
+   The button IS the status: "Preparing…", "1/2 Fetching hot list…", "1/2
+   Downloading from Divoom 9/23", "1/2 Using cached files", "2/2 Uploading to
+   device 4/23", then for 3 s one of "3 files updated" (green), "Up to date"
+   (the same green), "Checked 19/23" (amber), "Failed: <raw error>" (red), then
+   back to "Update Hot Channel" -- the verdict is gone. Under it, "Last checked
+   2 hours ago" (grey; amber past 14 days; blank if never), written only by a
+   SUCCESSFUL manual run, so after a failure it still shows the old success.
+   The manifest grid has its own states: "Loading hot channel manifest...",
+   the raw error, "No hot files available for this device.".
+2. *Sync Now* (Schedule → Auto-Sync; `divoom_gui/gallery_hot_api.py`): a GUI
+   thread runs the same `hot_update` for each registered panel; each row says
+   "Connecting…", "Syncing…", "✓ 0" or "✗ Could not connect", the card "Synced
+   1/2 devices, 1 failed". Not stored: gone on the next render. Its progress
+   events also drive the Hot tab's button for whichever panel is shown.
+3. *The daily schedule* (the Auto-Sync switch; `divoomd/src/monthly_best.rs`):
+   a DIFFERENT content set (the Recommend gallery) by a different mechanism
+   (store and show, not the panel's own pull), recorded per panel in
+   `hotchannel_state.json` (outcome, stored, shown, error) and sent to the
+   owner's phone on failure. The GUI shows none of it -- only "Auto-sync on".
+   The owner's last run (2026-10-26) failed on all four panels ("connect
+   already in progress"), and no screen says so.
+
+Underneath: "served 0" reads "Up to date" whether the panel had every file or
+never asked; "Up to date" and "3 files updated" differ in text only.
+
+**Options** (each needs one per-panel record that all three paths write,
+failures included, and progress events that name their panel):
+
+- **A -- one verdict line per panel, where you look.** The button only starts
+  and shows progress; under it a line that stays: "✓ Up to date · checked 2 h
+  ago by the schedule", "↓ 3 new files · 2 h ago", "⚠ 19 of 23 files could not
+  be fetched · 2 h ago", "✗ Failed 2 h ago: could not connect", "· Never
+  checked", "· Checking now (Sync Now, 2 of 4)". The Auto-Sync rows show the
+  same line, shorter. Small: one record, one renderer.
+- **B -- a status table in Schedule, the Hot tab just links to it.** The
+  Auto-Sync card becomes per panel: last run (when, which path), verdict
+  (glyph + text as in A), next run ("in 21 h", or "off"). The Hot tab keeps
+  the grid and button and shows one line, "✗ failed 2 h ago -- see Schedule".
+  Clearer for the fleet, one click further from the panel you are on.
+- **C -- one pipeline, then one status.** Make "hot channel" one feature:
+  the schedule, Sync Now and the button push the same content the same way
+  (pick: the panel's own Hot pull, or the stored Recommend push), so "up to
+  date" means one thing. Status is then A. Largest: a product decision first.
+
+**Recommendation: A**, with its record shared by the Auto-Sync rows (two
+zoom levels of one fact). It fixes what makes the status unclear today -- a
+verdict that vanishes after 3 s, failures that leave an old success showing,
+and a scheduled run nobody can see -- without first deciding C, which is
+worth asking separately: today the switch and the "Sync Now" button beside
+it run different things.
+**Done when:** the owner has picked an option (or none), recorded here with
+the date; the pick is then a separate item.
+
 ### Phase 6 — the multi-panel wall
 
 **Goal:** a wall is placed by snapping, and LAN panels can join it.
