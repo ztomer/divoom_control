@@ -70,7 +70,7 @@ async def test_scan_shows_progress_then_result():
             assert await eval_js(page, 
                 "() => document.getElementById('scan-indicator').hidden") is False
             await eval_js(page, "() => window.__release()")
-            # Afterwards: hidden again + a 'Discovered 2' toast that's actually shown.
+            # Afterwards: hidden again + a 'Found 2 screens' toast that's actually shown.
             await wait_js(page, 
                 "() => document.getElementById('scan-indicator').hidden === true",
                 timeout=4000)
@@ -78,7 +78,7 @@ async def test_scan_shows_progress_then_result():
                 "() => ({c: document.getElementById('toast').className,"
                 "        t: document.getElementById('toast').textContent})")
             assert "show" in toast["c"]
-            assert "Discovered" in toast["t"] and "2" in toast["t"]
+            assert "Found 2 screens" in toast["t"]
         finally:
             await browser.close()
 
