@@ -4,6 +4,41 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## Unreleased
+
+- **A room lists exactly the panels assigned to it (P5.12, umbrella U.4).**
+  The owner moved the Timoo to a new room and every room then showed every
+  panel, the others greyed out. The stored state was right (the daemon's
+  `topology.json` and the GUI's store agreed); the bench was wrong, twice:
+  - a room filter drew every panel and greyed the ones not in it -- now a
+    room draws its own panels and no others, and an empty room says so by
+    name ("No panels in Desk. Add one with Devices.");
+  - the bench kept its own copy of the room map, refreshed with
+    `Object.assign`, which never drops a key: a panel taken out of a room
+    (the Devices popover) stayed drawn there, and the next drag, Center or
+    Snap wrote the old room back. The copy is gone: one reader,
+    `SpatialRooms.roomOf` (stored key matched without regard to case), and
+    one writer, `SpatialRooms.assignRoom`; `savePositions` writes positions
+    only.
+  - "No room" meant three things -- `''` on the bench, `'Desk'` in the
+    daemon sync and the wall's slot list. It is now no room everywhere: the
+    sync omits the room (the daemon replaces the entry whole, so the removal
+    reaches it), and on load the daemon's entry decides, "none" included.
+  - `set_topology` keeps one key per panel whatever its letter case
+    (`merge_topology`), so a re-spelled key cannot leave a stale entry that
+    `screens` finds first.
+  - Center and Snap arrange the room's panels, not the hidden ones.
+  - Red first: `tests/test_e2e_room_lists_its_panels.py` (3 browser tests:
+    the owner's move through the deck select, a removal surviving a drag,
+    the owner's stored shape read back) failed 3/3 on the old code; the
+    `merge_topology` test failed with the case-blind `retain` removed.
+  - `spatial_rooms.js` split: the pills, popover and select are
+    `spatial_rooms_ui.js` (500-line cap).
+- **The hot-channel status, inventoried (P5.13, umbrella U.5).** Every state
+  the three hot-channel paths show today, rendered in
+  `docs/assets/hot-status-today.png` and `docs/assets/hot-autosync-today.png`,
+  with three redesign options in `docs/ROADMAP.md` for the owner to pick.
+
 ## v0.43.0 — MCP on rmcp, every tool's effect stated, a preview tool (2026-10-26)
 
 Minor bump: the MCP server moves onto rmcp, gains `get_screen_previews` and

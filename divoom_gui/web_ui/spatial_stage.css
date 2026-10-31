@@ -169,7 +169,6 @@ body {
 }
 
 .spatial-room-select:focus { border-color: var(--primary); }
-.spatial-node.dimmed { opacity: 0.28; filter: grayscale(40%); }
 
 .spatial-node-header {
     display: flex;

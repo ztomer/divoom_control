@@ -107,43 +107,46 @@ async fn screens(daemon: &Daemon, top: &Value) -> Vec<Value> {
     out
 }
 
+/// `new` merged over `current`: top-level keys replace, and each device entry
+/// in `new` replaces the stored one for that panel WHOLE -- so an entry sent
+/// without a `room` is how the GUI takes a panel out of every room (U.4). A
+/// panel is one key whatever its letter case (`screens` matches without
+/// regard to case): a stored entry spelled differently is replaced, not
+/// kept beside the new one, where a lookup could find the stale one first.
+fn merge_topology(mut current: Value, new: &Value) -> Value {
+    let (Some(cur_obj), Some(new_obj)) = (current.as_object_mut(), new.as_object()) else {
+        return new.clone();
+    };
+    for (k, v) in new_obj {
+        if k == "devices" {
+            if let (Some(cur_devs), Some(new_devs)) = (
+                cur_obj.get_mut("devices").and_then(Value::as_object_mut),
+                v.as_object(),
+            ) {
+                for (dev_k, dev_v) in new_devs {
+                    cur_devs.retain(|stored, _| !stored.eq_ignore_ascii_case(dev_k));
+                    cur_devs.insert(dev_k.clone(), dev_v.clone());
+                }
+                continue;
+            }
+        }
+        cur_obj.insert(k.clone(), v.clone());
+    }
+    current
+}
+
 pub async fn cmd_set_topology(_daemon: &Daemon, req: &Request) -> Value {
     let top = req
         .args
         .get("topology")
         .cloned()
         .unwrap_or_else(|| req.args.clone());
-    let mut current = load_topology();
-    if let (Some(cur_obj), Some(new_obj)) = (current.as_object_mut(), top.as_object()) {
-        for (k, v) in new_obj {
-            if k == "devices" {
-                if let (Some(cur_devs), Some(new_devs)) = (
-                    cur_obj.get_mut("devices").and_then(Value::as_object_mut),
-                    v.as_object(),
-                ) {
-                    for (dev_k, dev_v) in new_devs {
-                        cur_devs.insert(dev_k.clone(), dev_v.clone());
-                    }
-                    continue;
-                }
-            }
-            cur_obj.insert(k.clone(), v.clone());
-        }
-        match save_topology(&current) {
-            Ok(()) => json!({"success": true}),
-            Err(e) => err_code(
-                ErrorCode::Internal,
-                &format!("failed to save topology: {e}"),
-            ),
-        }
-    } else {
-        match save_topology(&top) {
-            Ok(()) => json!({"success": true}),
-            Err(e) => err_code(
-                ErrorCode::Internal,
-                &format!("failed to save topology: {e}"),
-            ),
-        }
+    match save_topology(&merge_topology(load_topology(), &top)) {
+        Ok(()) => json!({"success": true}),
+        Err(e) => err_code(
+            ErrorCode::Internal,
+            &format!("failed to save topology: {e}"),
+        ),
     }
 }
 
@@ -314,5 +317,35 @@ mod tests {
 
         let _ = std::fs::remove_file(&file_path);
         std::env::remove_var("DIVOOM_TOPOLOGY_PATH");
+    }
+
+    #[test]
+    fn a_device_entry_replaces_the_stored_one_whole_and_whatever_its_case() {
+        let stored = json!({"rooms": ["Desk", "Shelf"], "wall_linked": true, "devices": {
+            "AA:BB:CC:00:00:01": {"room": "Shelf", "x": 1, "y": 2},
+            "aa:bb:cc:00:00:02": {"room": "Shelf", "x": 3, "y": 4}
+        }});
+        let sent = json!({"devices": {"aa:bb:cc:00:00:01": {"x": 9, "y": 9}}});
+        let merged = merge_topology(stored, &sent);
+        let devs = merged["devices"].as_object().expect("devices");
+        assert_eq!(
+            devs.len(),
+            2,
+            "one key per panel, whatever its case: {devs:?}"
+        );
+        assert_eq!(
+            merged["devices"]["aa:bb:cc:00:00:01"],
+            json!({"x": 9, "y": 9}),
+            "an entry sent without a room takes the panel out of its room"
+        );
+        assert_eq!(
+            merged["devices"]["aa:bb:cc:00:00:02"]["room"], "Shelf",
+            "other panels are kept"
+        );
+        assert_eq!(
+            merged["rooms"],
+            json!(["Desk", "Shelf"]),
+            "keys not sent are kept"
+        );
     }
 }

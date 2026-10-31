@@ -15,9 +15,9 @@
         if (e.button !== 0) return;
         const bench = document.getElementById('spatial-bench');
         if (!bench) return;
-        const { addr, node, dev, positions, rooms, nameOf } = ctx;
+        const { addr, node, dev, positions, nameOf } = ctx;
         activeDrag = {
-            addr, dev, node, positions, rooms, nameOf, startX: e.clientX, startY: e.clientY,
+            addr, dev, node, positions, nameOf, startX: e.clientX, startY: e.clientY,
             initialX: positions[addr] ? positions[addr].x : 0,
             initialY: positions[addr] ? positions[addr].y : 0,
             benchWidth: bench.clientWidth, benchHeight: bench.clientHeight,
@@ -51,12 +51,12 @@
 
     function end() {
         if (activeDrag) {
-            const { addr, dev, positions, rooms, nameOf } = activeDrag;
+            const { addr, dev, positions, nameOf } = activeDrag;
             if (!activeDrag.hasMoved && typeof window.connectDevice === 'function') {
                 window.connectDevice(nameOf(dev), addr);
             } else {
-                if (window.SpatialRooms) window.SpatialRooms.savePositions(positions, rooms);
-                else try { localStorage.setItem('divoom_stage_positions', JSON.stringify(positions)); } catch (_) {}
+                // Positions only: a drag never writes a room (U.4).
+                window.SpatialRooms.savePositions(positions);
                 if (window.DivoomState?.assignedSlots?.[addr]) {
                     window.DivoomState.assignedSlots[addr].x = positions[addr].x;
                     window.DivoomState.assignedSlots[addr].y = positions[addr].y;

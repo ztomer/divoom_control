@@ -13,7 +13,10 @@
     let isWallMode = false;
     let tick = 0;
     const devicePositions = {};
-    const deviceRooms = {};
+    // Which room the bench draws. A panel's room itself is read through
+    // SpatialRooms.roomOf every time and written by assignRoom alone: the
+    // bench keeps no copy (U.4 -- a copy merged with Object.assign never lost
+    // a removed room, and the next drag wrote it back).
     let activeRoomFilter = 'all';
 
     function initSpatialStage() {
@@ -75,38 +78,19 @@
         const roomSelect = document.getElementById('deck-room-select');
         if (roomSelect) {
             roomSelect.addEventListener('change', (e) => {
+                // assignRoom announces the change; the listener below redraws.
                 if (e.target.value === '__add_new__') {
                     const name = prompt('Enter new room name:');
-                    if (name && window.SpatialRooms) {
-                        const added = window.SpatialRooms.addRoom(name);
-                        if (added && selectedMac) {
-                            deviceRooms[selectedMac] = added;
-                            window.SpatialRooms.saveDeviceRooms(deviceRooms);
-                            window.SpatialRooms.syncTopology(null, devicePositions, deviceRooms);
-                        }
-                    }
-                    if (selectedMac) updateInspector(getSelectedDevice());
-                    updateRoomFilterTabs();
-                    refreshBenchNodes();
+                    const added = name ? window.SpatialRooms.addRoom(name) : false;
+                    if (added && selectedMac) window.SpatialRooms.assignRoom(selectedMac, added);
+                    else if (selectedMac) updateInspector(getSelectedDevice());
                     return;
                 }
-                if (!selectedMac) return;
-                const newRoom = e.target.value;
-                if (newRoom) deviceRooms[selectedMac] = newRoom;
-                else delete deviceRooms[selectedMac];
-                if (window.SpatialRooms) {
-                    window.SpatialRooms.saveDeviceRooms(deviceRooms);
-                    window.SpatialRooms.syncTopology(null, devicePositions, deviceRooms);
-                } else {
-                    try { localStorage.setItem('divoom_stage_rooms', JSON.stringify(deviceRooms)); } catch (_) {}
-                }
-                updateRoomFilterTabs();
-                refreshBenchNodes();
+                if (selectedMac) window.SpatialRooms.assignRoom(selectedMac, e.target.value);
             });
         }
 
         window.addEventListener('divoom:rooms-updated', () => {
-            if (window.SpatialRooms) Object.assign(deviceRooms, window.SpatialRooms.getDeviceRooms());
             updateRoomFilterTabs();
             if (selectedMac) { const dev = getSelectedDevice(); if (dev) updateInspector(dev); }
             refreshBenchNodes();
@@ -116,17 +100,8 @@
         // (P5.1): one sender each, naming the panel, read from the daemon.
 
         // Load topology and rooms from cache & daemon
-        if (window.SpatialRooms) {
-            Object.assign(devicePositions, window.SpatialRooms.getSavedPositions());
-            Object.assign(deviceRooms, window.SpatialRooms.getDeviceRooms());
-            window.SpatialRooms.loadTopology();
-        } else {
-            try {
-                const saved = localStorage.getItem('divoom_stage_positions'), r = localStorage.getItem('divoom_stage_rooms');
-                if (saved) Object.assign(devicePositions, JSON.parse(saved));
-                if (r) Object.assign(deviceRooms, JSON.parse(r));
-            } catch (_) {}
-        }
+        Object.assign(devicePositions, window.SpatialRooms.getSavedPositions());
+        window.SpatialRooms.loadTopology();
 
         window.addEventListener('divoom:topology-loaded', (e) => {
             const top = e.detail || {};
@@ -134,7 +109,6 @@
                 Object.keys(top.devices).forEach(a => {
                     const d = top.devices[a];
                     if (d && typeof d.x === 'number' && typeof d.y === 'number') devicePositions[a] = { x: d.x, y: d.y };
-                    if (d && d.room) deviceRooms[a] = d.room;
                 });
             }
             updateRoomFilterTabs();
@@ -189,10 +163,7 @@
         if (window.SpatialDrag?.deferWhileDragging(refreshBenchNodes)) return;
         bench.innerHTML = '';
 
-        if (window.SpatialRooms) {
-            Object.assign(devicePositions, window.SpatialRooms.getSavedPositions());
-            Object.assign(deviceRooms, window.SpatialRooms.getDeviceRooms());
-        }
+        Object.assign(devicePositions, window.SpatialRooms.getSavedPositions());
 
         const devices = getDeviceList();
         const ribbonChips = document.getElementById('spatial-ribbon-chips');
@@ -217,13 +188,15 @@
             if (idx === 0 && (!selectedMac || !devices.some(d => (d.address || 'dev-0') === selectedMac))) setSelected(addr, true);
             const isSelected = selectedMac === addr;
 
-            const devRoom = deviceRooms[addr] !== undefined ? deviceRooms[addr] : (dev.room || '');
-            const isDimmed = (activeRoomFilter !== 'all' && (devRoom || '').toLowerCase() !== activeRoomFilter.toLowerCase());
+            if (isSelected) updateInspector(dev);
+            if (ribbonChips) ribbonChips.appendChild(ribbonChip(addr, dev, isSelected));
+            // A room draws exactly its own panels; the rest are absent, not greyed (U.4).
+            if (!window.SpatialRooms.inRoom(addr, activeRoomFilter)) return;
 
             // Create node element with model-proportional sizing
             const node = document.createElement('div');
             node.id = `spatial-node-${addr}`;
-            node.className = `spatial-node form-${spec.form}` + (isSelected ? ' selected' : '') + (isDimmed ? ' dimmed' : '');
+            node.className = `spatial-node form-${spec.form}` + (isSelected ? ' selected' : '');
             node.style.left = `${pos.x}px`;
             node.style.top = `${pos.y}px`;
             node.style.width = `${w}px`;
@@ -246,23 +219,12 @@
             // Node Click Selection & Drag
             node.addEventListener('mousedown', (e) => {
                 highlightNode(addr, dev);
-                window.SpatialDrag.start(e, { addr, node, dev, positions: devicePositions, rooms: deviceRooms, nameOf: (d) => d.name || resolveSpec(d).name });
+                window.SpatialDrag.start(e, { addr, node, dev, positions: devicePositions, nameOf: (d) => d.name || resolveSpec(d).name });
             });
 
             bench.appendChild(node);
-
-            // Ribbon chip
-            if (ribbonChips) {
-                const chip = document.createElement('button');
-                chip.type = 'button';
-                chip.className = 'spatial-ribbon-chip' + (isSelected ? ' active' : '');
-                chip.innerHTML = `<span class="spatial-jewel ${jewelClass(dev)}"></span> ${dev.name || 'Screen'}`;
-                chip.addEventListener('click', () => selectDevice(addr, dev));
-                ribbonChips.appendChild(chip);
-            }
-
-            if (isSelected) updateInspector(dev);
         });
+        if (!bench.querySelector('.spatial-node')) showEmptyRoom(bench);
 
         // Show the selected panel's preview and channel controls the first time
         // the bench shows it -- not on every refresh: a scan result re-renders
@@ -282,6 +244,27 @@
                 window.restoreDevicePreview(activeAddr, null, { keepTab: !!window.DivoomState?.channelChosen });
             }
         }
+    }
+
+    // The ribbon (the collapsed bench) shows no room filter, so it lists every panel.
+    function ribbonChip(addr, dev, isSelected) {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'spatial-ribbon-chip' + (isSelected ? ' active' : '');
+        chip.innerHTML = `<span class="spatial-jewel ${jewelClass(dev)}"></span> ${dev.name || 'Screen'}`;
+        chip.addEventListener('click', () => selectDevice(addr, dev));
+        return chip;
+    }
+
+    // A room with no panels says so, by name, and where to add one.
+    function showEmptyRoom(bench) {
+        const box = document.createElement('div');
+        box.id = 'spatial-bench-room-empty';
+        box.className = 'spatial-bench-empty';
+        const msg = document.createElement('span');
+        msg.textContent = `No panels in ${activeRoomFilter}. Add one with Devices.`;
+        box.appendChild(msg);
+        bench.appendChild(box);
     }
 
     const jewelClass = (dev) => window.jewelClassFor(dev);
@@ -393,9 +376,7 @@
         if (tagEl) tagEl.textContent = spec.pixels ? `${spec.pixels}×${spec.pixels}` : '–';
         const deckDot = document.getElementById('deck-device-dot'); if (deckDot) deckDot.className = `spatial-jewel ${jewelClass(dev)}`;
         if (roomSelect) {
-            const rm = deviceRooms[addr] !== undefined ? deviceRooms[addr] : (dev.room || '');
-            if (window.SpatialRooms) window.SpatialRooms.populateSelect(roomSelect, rm);
-            else roomSelect.value = rm;
+            window.SpatialRooms.populateSelect(roomSelect, window.SpatialRooms.roomOf(addr));
         }
         // Why it is not a wall slot, when the daemon says it cannot be (P6.1).
         const wallNote = document.getElementById('deck-wall-note');
@@ -413,8 +394,11 @@
         });
     }
 
+    // Center and Snap arrange the panels the bench is drawing: the room's.
+    const shownDevices = () => getDeviceList().filter(d => window.SpatialRooms.inRoom(d.address, activeRoomFilter));
+
     function centerDevices() {
-        const devs = getDeviceList(), bench = document.getElementById('spatial-bench');
+        const devs = shownDevices(), bench = document.getElementById('spatial-bench');
         if (!devs.length || !bench) return;
         let minX = Infinity, maxX = -Infinity;
         devs.forEach(d => {
@@ -426,20 +410,18 @@
         if (minX === Infinity) return;
         const dx = Math.max(10, Math.round((bench.clientWidth - (maxX - minX)) / 2)) - minX;
         devs.forEach(d => { const a = d.address || 'dev'; if (devicePositions[a]) devicePositions[a].x += dx; });
-        if (window.SpatialRooms) window.SpatialRooms.savePositions(devicePositions, deviceRooms);
-        else try { localStorage.setItem('divoom_stage_positions', JSON.stringify(devicePositions)); } catch (_) {}
+        window.SpatialRooms.savePositions(devicePositions);
         refreshBenchNodes();
     }
 
     function snapToDesk() {
         let curX = 20;
-        getDeviceList().forEach((dev) => {
+        shownDevices().forEach((dev) => {
             const addr = dev.address || 'dev', spec = resolveSpec(dev);
             devicePositions[addr] = { x: curX, y: Math.max(10, 165 - Math.round(spec.h_mm * SCALE)) };
             curX += Math.round(spec.w_mm * SCALE) + 12;
         });
-        if (window.SpatialRooms) window.SpatialRooms.savePositions(devicePositions, deviceRooms);
-        else try { localStorage.setItem('divoom_stage_positions', JSON.stringify(devicePositions)); } catch (_) {}
+        window.SpatialRooms.savePositions(devicePositions);
         refreshBenchNodes();
     }
 

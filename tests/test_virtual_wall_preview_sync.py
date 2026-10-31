@@ -179,12 +179,11 @@ async def test_virtual_wall_spatial_rooms_preset_sync():
             window.renderArrangerCanvas();
             if (window.SpatialRooms) {
                 const pos = window.SpatialRooms.getSavedPositions();
-                const devRooms = window.SpatialRooms.getDeviceRooms();
                 Object.keys(samplePreset).forEach(addr => {
                     pos[addr] = { x: samplePreset[addr].x, y: samplePreset[addr].y };
-                    devRooms[addr] = "Wall";
+                    window.SpatialRooms.assignRoom(addr, "Wall");
                 });
-                window.SpatialRooms.savePositions(pos, devRooms);
+                window.SpatialRooms.savePositions(pos);
             }
 
             const savedPos = window.SpatialRooms.getSavedPositions()[d1];

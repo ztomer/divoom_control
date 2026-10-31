@@ -2,7 +2,8 @@
  * spatial_rooms.js — Room lifecycle & management engine
  * Dieter Rams & Susan Kare inspired room grouping and spatial filtering.
  * Manages custom rooms, default Desk baseline, and persistence across
- * localStorage and divoomd topology.
+ * localStorage and divoomd topology. The pills, the Devices popover and the
+ * room select are spatial_rooms_ui.js (500-line cap).
  */
 (function() {
     'use strict';
@@ -44,6 +45,47 @@
         return null;
     }
 
+    // The ONE reader of a panel's room (U.4): the stored room, the stored key
+    // matched without regard to letter case (as findPosition and the daemon
+    // match), spelled as the room list spells it; '' when it has none. No
+    // caller invents a default room -- "unassigned" is '' everywhere.
+    function keyFor(map, mac) {
+        if (!map || !mac) return null;
+        if (Object.prototype.hasOwnProperty.call(map, mac)) return mac;
+        const lower = mac.toLowerCase();
+        return Object.keys(map).find(k => k.toLowerCase() === lower) || null;
+    }
+
+    function roomOf(mac, map) {
+        const m = map || getDeviceRooms();
+        const k = keyFor(m, mac);
+        const r = k ? String(m[k] || '') : '';
+        if (!r) return '';
+        return getRooms().find(rm => rm.toLowerCase() === r.toLowerCase()) || r;
+    }
+
+    // Is the panel drawn under this filter? 'all' draws every panel; a room
+    // draws exactly its own (U.4: it dimmed the rest, so every room showed all).
+    function inRoom(mac, filter) {
+        if (!filter || filter === 'all') return true;
+        return roomOf(mac).toLowerCase() === filter.toLowerCase();
+    }
+
+    // The ONE writer of a panel's room: '' or null takes it out of every room.
+    // It writes the store, tells the daemon and announces the change; nothing
+    // keeps a copy, so a removal cannot be written back over (U.4).
+    function assignRoom(mac, room) {
+        if (!mac) return;
+        const map = getDeviceRooms();
+        const k = keyFor(map, mac);
+        const clean = (room || '').trim();
+        if (clean) map[k || mac] = clean;
+        else if (k) delete map[k];
+        saveDeviceRooms(map);
+        syncTopology(null, null, map);
+        window.dispatchEvent(new CustomEvent('divoom:rooms-updated', { detail: { action: 'devices-updated' } }));
+    }
+
     function saveRooms(rooms) {
         if (!rooms.includes('Desk')) rooms.unshift('Desk');
         try {
@@ -57,16 +99,18 @@
         const posMap = positions || getSavedPositions();
         const roomMap = devRooms || getDeviceRooms();
 
+        // A panel's entry carries what is known: its place, and its room only
+        // when it has one (the daemon replaces the entry, so a missing room is
+        // how a removal reaches it -- never filled in as 'Desk').
         const devices = {};
         Object.keys(posMap).forEach(addr => {
             const p = posMap[addr];
-            if (p && typeof p.x === 'number' && typeof p.y === 'number') {
-                devices[addr] = {
-                    x: p.x,
-                    y: p.y,
-                    room: roomMap[addr] || 'Desk'
-                };
-            }
+            if (p && typeof p.x === 'number' && typeof p.y === 'number') devices[addr] = { x: p.x, y: p.y };
+        });
+        Object.keys(roomMap).forEach(addr => {
+            const k = keyFor(devices, addr) || addr;
+            const room = roomOf(addr, roomMap);
+            if (room) devices[k] = Object.assign(devices[k] || {}, { room });
         });
 
         if (window.pywebview && window.pywebview.api && window.pywebview.api.set_topology) {
@@ -112,8 +156,13 @@
                         posMap[addr] = { x: dev.x, y: dev.y };
                         changedPos = true;
                     }
-                    if (dev && dev.room) {
-                        roomMap[addr] = dev.room;
+                    // The daemon's entry is the stored truth for this panel's
+                    // room, "none" included: a stale local room is dropped.
+                    if (dev && typeof dev === 'object') {
+                        const k = keyFor(roomMap, addr);
+                        if (k && k !== addr) delete roomMap[k];
+                        if (dev.room) roomMap[addr] = dev.room;
+                        else delete roomMap[addr];
                         changedRooms = true;
                     }
                 });
@@ -133,12 +182,12 @@
         }
     }
 
-    function savePositions(positions, devRooms) {
+    // Positions only: a room is written by assignRoom alone.
+    function savePositions(positions) {
         try {
             localStorage.setItem(POSITIONS_KEY, JSON.stringify(positions));
         } catch (_) {}
-        if (devRooms) saveDeviceRooms(devRooms);
-        syncTopology(null, positions, devRooms);
+        syncTopology(null, positions);
     }
 
     function getDeviceRooms() {
@@ -188,253 +237,10 @@
                 changed = true;
             }
         });
-        if (changed) saveDeviceRooms(devRooms);
+        if (changed) { saveDeviceRooms(devRooms); syncTopology(null, null, devRooms); }
 
         window.dispatchEvent(new CustomEvent('divoom:rooms-updated', { detail: { action: 'remove', room: clean } }));
         return true;
-    }
-
-    function populateSelect(selectEl, currentRoom) {
-        if (!selectEl) return;
-        const rooms = getRooms();
-        const val = (currentRoom !== undefined && currentRoom !== null) ? currentRoom : '';
-
-        selectEl.innerHTML = '';
-
-        const unassignedOpt = document.createElement('option');
-        unassignedOpt.value = '';
-        unassignedOpt.textContent = '(Unassigned / No Room)';
-        if (!val || val === 'unassigned') unassignedOpt.selected = true;
-        selectEl.appendChild(unassignedOpt);
-
-        rooms.forEach(r => {
-            const opt = document.createElement('option');
-            opt.value = r;
-            opt.textContent = r;
-            if (r.toLowerCase() === val.toLowerCase()) opt.selected = true;
-            selectEl.appendChild(opt);
-        });
-
-        const addOpt = document.createElement('option');
-        addOpt.value = '__add_new__';
-        addOpt.textContent = '+ Add Room...';
-        selectEl.appendChild(addOpt);
-    }
-
-    function renderFilterPills(containerEl, activeFilter, onFilterChange, deviceList) {
-        if (!containerEl) return;
-        containerEl.innerHTML = '';
-
-        const rooms = getRooms();
-        const allFilters = ['all', ...rooms];
-        const devRooms = getDeviceRooms();
-        const devices = Array.isArray(deviceList) ? deviceList : [];
-        const counts = { all: devices.length };
-        rooms.forEach(r => { counts[r] = 0; });
-        devices.forEach(d => {
-            const r = devRooms[d.address] !== undefined ? devRooms[d.address] : (d.room || '');
-            if (r) {
-                const match = rooms.find(rm => rm.toLowerCase() === r.toLowerCase());
-                if (match) counts[match] = (counts[match] || 0) + 1;
-            }
-        });
-
-        allFilters.forEach(r => {
-            const isAll = (r === 'all');
-            const isActive = (activeFilter.toLowerCase() === r.toLowerCase());
-            const pill = document.createElement('div');
-            pill.className = `stage-room-pill ${isActive ? 'active' : ''}`;
-            pill.dataset.room = r;
-
-            const label = document.createElement('span');
-            label.className = 'stage-room-pill-label';
-            label.textContent = isAll ? 'All' : r;
-            pill.appendChild(label);
-
-            const countSpan = document.createElement('span');
-            countSpan.className = 'stage-room-pill-count';
-            countSpan.textContent = `(${counts[r] !== undefined ? counts[r] : 0})`;
-            pill.appendChild(countSpan);
-
-            // Allow deletion for custom rooms (not All and not default Desk)
-            if (!isAll && r.toLowerCase() !== 'desk') {
-                const delBtn = document.createElement('button');
-                delBtn.type = 'button';
-                delBtn.className = 'stage-room-del-btn';
-                delBtn.title = `Delete ${r} room`;
-                delBtn.setAttribute('aria-label', `Delete ${r} room`);
-                delBtn.textContent = '×';
-                delBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    if (confirm(`Remove room "${r}"? Devices in this room will move to Desk.`)) {
-                        removeRoom(r);
-                        if (typeof onFilterChange === 'function') {
-                            onFilterChange(activeFilter.toLowerCase() === r.toLowerCase() ? 'all' : activeFilter);
-                        }
-                    }
-                });
-                pill.appendChild(delBtn);
-            }
-
-            pill.addEventListener('click', () => {
-                if (typeof onFilterChange === 'function') {
-                    onFilterChange(r);
-                }
-            });
-
-            containerEl.appendChild(pill);
-        });
-
-        // Manage Devices button when a specific room is selected
-        if (activeFilter !== 'all') {
-            const manageBtn = document.createElement('button');
-            manageBtn.type = 'button';
-            manageBtn.className = 'stage-room-manage-btn';
-            manageBtn.title = `Add or remove devices in ${activeFilter}`;
-            manageBtn.setAttribute('aria-label', `Add or remove devices in ${activeFilter}`);
-            manageBtn.innerHTML = '<svg class="kare-icon" viewBox="0 0 16 16"><circle cx="4" cy="4" r="2" fill="currentColor"/><circle cx="12" cy="4" r="2" fill="currentColor"/><circle cx="8" cy="11" r="2" fill="currentColor"/></svg> Devices';
-            manageBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                showRoomDevicesPopover(containerEl, activeFilter, devices, onFilterChange);
-            });
-            containerEl.appendChild(manageBtn);
-        }
-
-        // Add Room button at the end
-        const addBtn = document.createElement('button');
-        addBtn.type = 'button';
-        addBtn.className = 'stage-room-add-btn';
-        addBtn.title = 'Add new room';
-        addBtn.setAttribute('aria-label', 'Add new room');
-        addBtn.innerHTML = '<svg class="kare-icon" viewBox="0 0 16 16"><path d="M8,2 L8,14 M2,8 L14,8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
-
-        addBtn.addEventListener('click', () => {
-            showInlineAddInput(containerEl, addBtn, onFilterChange);
-        });
-
-        containerEl.appendChild(addBtn);
-    }
-
-    function showRoomDevicesPopover(containerEl, roomName, deviceList, onFilterChange) {
-        const existing = document.querySelector('.stage-room-devices-popover');
-        if (existing) { existing.remove(); return; }
-
-        const pop = document.createElement('div');
-        pop.className = 'stage-room-devices-popover';
-
-        const hdr = document.createElement('div');
-        hdr.className = 'stage-room-popover-header';
-        hdr.innerHTML = `<span>Devices in ${roomName}</span>`;
-        const closeBtn = document.createElement('button');
-        closeBtn.type = 'button';
-        closeBtn.className = 'stage-room-popover-close';
-        closeBtn.textContent = '×';
-        closeBtn.addEventListener('click', () => pop.remove());
-        hdr.appendChild(closeBtn);
-        pop.appendChild(hdr);
-
-        const devRooms = getDeviceRooms();
-        if (!deviceList || deviceList.length === 0) {
-            const empty = document.createElement('div');
-            empty.style.cssText = 'font-size:10px;color:var(--text-muted);padding:4px;';
-            empty.textContent = 'No devices detected';
-            pop.appendChild(empty);
-        } else {
-            deviceList.forEach(dev => {
-                const item = document.createElement('label');
-                item.className = 'room-device-item';
-                const chk = document.createElement('input');
-                chk.type = 'checkbox';
-                const currentRm = devRooms[dev.address] !== undefined ? devRooms[dev.address] : (dev.room || '');
-                chk.checked = (currentRm.toLowerCase() === roomName.toLowerCase());
-                chk.addEventListener('change', () => {
-                    if (chk.checked) {
-                        devRooms[dev.address] = roomName;
-                    } else {
-                        delete devRooms[dev.address];
-                    }
-                    saveDeviceRooms(devRooms);
-                    syncTopology(null, null, devRooms);
-                    window.dispatchEvent(new CustomEvent('divoom:rooms-updated', { detail: { action: 'devices-updated' } }));
-                    if (typeof onFilterChange === 'function') onFilterChange(roomName);
-                });
-                const lbl = document.createElement('span');
-                lbl.textContent = dev.name || dev.address;
-                item.appendChild(chk);
-                item.appendChild(lbl);
-                pop.appendChild(item);
-            });
-        }
-
-        document.body.appendChild(pop);
-        const rect = containerEl.getBoundingClientRect();
-        pop.style.top = `${rect.bottom + 4}px`;
-        pop.style.left = `${Math.max(10, rect.left)}px`;
-
-        const onDocClick = (e) => {
-            if (!pop.contains(e.target) && !e.target.closest('.stage-room-manage-btn')) {
-                pop.remove();
-                document.removeEventListener('click', onDocClick);
-            }
-        };
-        setTimeout(() => document.addEventListener('click', onDocClick), 50);
-    }
-
-
-    function showInlineAddInput(containerEl, addBtn, onFilterChange) {
-        addBtn.style.display = 'none';
-
-        const form = document.createElement('div');
-        form.className = 'stage-room-input-form';
-
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = 'stage-room-input';
-        input.placeholder = 'Room name';
-        input.maxLength = 20;
-
-        const confirmBtn = document.createElement('button');
-        confirmBtn.type = 'button';
-        confirmBtn.className = 'stage-room-confirm-btn';
-        confirmBtn.textContent = 'Add';
-
-        const cancelBtn = document.createElement('button');
-        cancelBtn.type = 'button';
-        cancelBtn.className = 'stage-room-cancel-btn';
-        cancelBtn.textContent = '×';
-
-        const closeForm = () => {
-            form.remove();
-            addBtn.style.display = 'inline-flex';
-        };
-
-        const doAdd = () => {
-            const val = input.value.trim();
-            if (val) {
-                const added = addRoom(val);
-                if (added) {
-                    closeForm();
-                    if (typeof onFilterChange === 'function') {
-                        onFilterChange(added);
-                    }
-                    return;
-                }
-            }
-            closeForm();
-        };
-
-        confirmBtn.addEventListener('click', doAdd);
-        cancelBtn.addEventListener('click', closeForm);
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') { e.preventDefault(); doAdd(); }
-            if (e.key === 'Escape') { e.preventDefault(); closeForm(); }
-        });
-
-        form.appendChild(input);
-        form.appendChild(confirmBtn);
-        form.appendChild(cancelBtn);
-        containerEl.appendChild(form);
-        input.focus();
     }
 
     function getWallSlots(devices) {
@@ -459,7 +265,7 @@
                 height: dims.height,
                 size: dims.size,
                 name: dev.name || 'Divoom Screen',
-                room: roomMap[addr] || 'Desk'
+                room: roomOf(addr, roomMap)
             };
         });
         return slots;
@@ -470,7 +276,7 @@
         const devList = devices || (window.DivoomState && window.DivoomState.discoveredDevices) || [];
         const roomMap = getDeviceRooms();
         return devList.filter(d => d.address && d.wallRefusal).map(d => ({
-            mac: d.address, name: d.name || d.address, reason: d.wallRefusal, room: roomMap[d.address] || 'Desk' }));
+            mac: d.address, name: d.name || d.address, reason: d.wallRefusal, room: roomOf(d.address, roomMap) }));
     }
 
     window.SpatialRooms = {
@@ -478,17 +284,16 @@
         addRoom,
         removeRoom,
         getDeviceRooms,
-        saveDeviceRooms,
+        roomOf,
+        inRoom,
+        assignRoom,
         getSavedPositions,
         savePositions,
         findPosition,
         getWallSlots,
         getWallRefusals,
         syncTopology,
-        loadTopology,
-        populateSelect,
-        renderFilterPills,
-        showRoomDevicesPopover
+        loadTopology
     };
 
     window.addEventListener('pywebviewready', () => {

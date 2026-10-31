@@ -391,6 +391,8 @@ well as the eyes; a panel that shows nothing is that finding, not the lease's.
 daemon by mac. **Exit:** browser tests across two panels for P5.1/P5.2; the
 menubar no longer closes on a status change. **Size:** M.
 
+Landed (2026-10-31): P5.12 (umbrella U.4), a room lists exactly the panels assigned to it -- the bench draws a room's panels and no others, absent rather than greyed; a panel's room is read by one `SpatialRooms.roomOf` and written by one `SpatialRooms.assignRoom`, so the bench keeps no copy a drag, Center or Snap could write back over a removal; "no room" is no room in the bench, the wall and the daemon (no invented Desk); the daemon's stored entry decides a panel's room on load, and `set_topology` keeps one key per panel whatever its letter case (`divoom_gui/web_ui/spatial_rooms.js`, `divoom_gui/web_ui/spatial_rooms_ui.js`, `tests/test_e2e_room_lists_its_panels.py`, `divoomd/src/wall/cmds.rs`).
+
 Landed (2026-10-18): P5.10, every failure reply carrying an `ErrorCode` -- the code-less `err_reply` deleted, `error_code.rs` the only place a reply's `success` is written, the wire checking every reply, five codes added (`device_failed`, `busy`, `unauthorized`, `upstream_failed`, `internal`) and the code table in `docs/MCP_SERVER.md` held to the enum (`3459280`; `divoomd/src/reply_code_sweep_tests.rs`, `divoomd/src/reply_shape_scan_tests.rs`, `divoomd/src/ancs.rs`);
 P5.9, a job, activity record or screen lease refused on a panel a racing `disconnect` forgot (its slots closed for whoever still holds it, pinned by a forced interleaving) and `Fleet::adopt` attaching under one lock hold, the web UI sending `set_device_activity` only for a panel the daemon reported, and every missing required argument refused `bad_request` from one command table the dispatcher checks first (`58898ed`; `divoomd/src/device/slot.rs`, `divoomd/src/command_args.rs`, `tests/test_e2e_activity_only_for_reported_panels.py`);
 P5.8, a live job or activity record naming a panel no link ever made a fleet entry refused with `unknown_device` naming the mac, the fleet's only constructor private behind `Fleet::adopt` and the client path a `Fleet::known` lookup, a linked-then-dropped panel keeping a new job waiting, `MatrixWall` refused as the wall surface rather than a panel, and MCP/CLI tool errors carrying the daemon's `code` (`0f73dda`; `divoomd/src/device/fleet.rs`, `divoomd/src/error_code.rs`, `divoomd/tests/unknown_panel.rs`);
@@ -418,24 +420,6 @@ cloud's side, is not yet measured.
 shows natively (the reply counting what it left out, as `fetch_gallery`'s
 `not_native` does), or is recorded here as device-type-scoped by the cloud
 with the evidence; a mock-panel test per command, 16x16 and 64x64.
-
-#### P5.12 — A room lists exactly the panels assigned to it (umbrella U.4)
-**Status:** OPEN
-**Why:** the owner, 2026-10-26, verbatim: "2. divoom-control a. when removing a
-device from a location, it should not show there (I moved the timoo device to a
-new location and all the devices show up everywhere, grayed out)." Measured
-2026-10-31 against the owner's stored state (read only): `topology.json` and the
-GUI's local store agree -- the Timoo in "Ethan", the other three on "Shelf" -- so
-the move was stored correctly; the bench is what shows it wrong. A room filter
-draws every panel and greys the ones not in it (`divoom_gui/web_ui/spatial_stage.js`),
-and the bench keeps its own copy of the room map merged with `Object.assign`,
-which never loses a removed room, so a removal is shown as still there and the
-next drag writes it back.
-**Done when:** each room draws exactly its panels and no others (absent, not
-greyed); a panel taken out of a room stays out after a drag, Center or Snap; an
-unassigned panel is "no room" in the bench, the wall and the daemon alike; a
-browser test that fails on the old code; the installed app shows the Timoo
-only in its new room.
 
 #### P5.13 — The hot-channel update status, redesigned (umbrella U.5)
 **Status:** DECISION (owner)
