@@ -109,7 +109,10 @@ All data chunks use the same cmd as the N2 header and K0 end for the chosen mode
 
 ## Implementation Status
 
-The custom art push (`custom_art_push.py` + `divoomd/src/art.rs`) and page
-query (`query_page`) are **DONE**, wire-tested, and the gallery UI
-(`custom_art.js`/`custom_art.css`) is shipped. The monthly-best → hot channel
+The custom art push (`custom_art_push.py` + `divoomd/src/art.rs`) is **DONE**,
+wire-tested, and the gallery UI (`custom_art.js`/`custom_art.css`) is shipped.
+The page query (`0x8E`, "App get user define info") was REMOVED (D.DV1, owner
+ruling OW.36, 2026-10-31: "drop gallery read, keep local record"): no panel in
+the house answers it -- it timed out on all four -- so what a page holds is the
+app's own record of what it sent. The monthly-best → hot channel
 push reuses `hot_update.py`. See `CHANGELOG.md` for shipped rounds.

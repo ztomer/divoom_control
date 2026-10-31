@@ -391,6 +391,8 @@ well as the eyes; a panel that shows nothing is that finding, not the lease's.
 daemon by mac. **Exit:** browser tests across two panels for P5.1/P5.2; the
 menubar no longer closes on a status change. **Size:** M.
 
+Landed (2026-10-31): P5.13 (umbrella U.5, the owner's pick 2026-10-31: "A: verdict line (Recommended)"), one lasting hot-channel verdict line per panel under Update Hot Channel and, shorter, in each Auto-Sync row -- glyph + words, colour only on the glyph -- read from ONE per-panel record in `hotchannel_state.json` (`panels`) that the button, Sync Now and the daily schedule all write, failures included, broadcast as `hot_status`; progress events name their panel; the startup scan reports in the scan card, never as a toast (`divoomd/src/hot_verdict.rs`, `divoom_gui/web_ui/hot_verdict.js`, `tests/test_e2e_hot_verdict.py`, `tests/test_e2e_no_background_toasts.py`, `tools/render_hot_verdict.py`). D.DV2: stored state admits only panel ids a real device reported, the invented fleet and test-mac wall dropped on load (`divoomd/src/reported_panels.rs`); one owner holds a panel's link -- `connect` waits for the radio and answers a held panel from the fleet, the scheduler borrows and gives back only what it opened (`divoomd/src/monthly_best_link.rs`, `divoomd/src/connection_owner_tests.rs`); the Linux all-features gate starts and stops colima itself (`tests/test_linux_all_features_runtime.py`). D.DV1: the stored-gallery read (`0x8E`) removed.
+
 Landed (2026-10-31): P5.12 (umbrella U.4), a room lists exactly the panels assigned to it -- the bench draws a room's panels and no others, absent rather than greyed; a panel's room is read by one `SpatialRooms.roomOf` and written by one `SpatialRooms.assignRoom`, so the bench keeps no copy a drag, Center or Snap could write back over a removal; "no room" is no room in the bench, the wall and the daemon (no invented Desk); the daemon's stored entry decides a panel's room on load, and `set_topology` keeps one key per panel whatever its letter case (`divoom_gui/web_ui/spatial_rooms.js`, `divoom_gui/web_ui/spatial_rooms_ui.js`, `tests/test_e2e_room_lists_its_panels.py`, `divoomd/src/wall/cmds.rs`).
 
 Landed (2026-10-18): P5.10, every failure reply carrying an `ErrorCode` -- the code-less `err_reply` deleted, `error_code.rs` the only place a reply's `success` is written, the wire checking every reply, five codes added (`device_failed`, `busy`, `unauthorized`, `upstream_failed`, `internal`) and the code table in `docs/MCP_SERVER.md` held to the enum (`3459280`; `divoomd/src/reply_code_sweep_tests.rs`, `divoomd/src/reply_shape_scan_tests.rs`, `divoomd/src/ancs.rs`);
@@ -409,8 +411,9 @@ P5.1, brightness, volume and panel size read and written per mac through the dae
 **Why:** D14 made `fetch_gallery` list by the named panel's size and refuse
 pixel art not drawn for the panel (`art_not_native`), but five other listings
 still answer with no panel and no size: `get_category_file_list`,
-`get_dial_list`, `get_my_playlists`/`get_playlist_images`,
-`get_aid_sleep_list` and `custom_art_query_page`
+`get_dial_list`, `get_my_playlists`/`get_playlist_images` and
+`get_aid_sleep_list` (the fifth, `custom_art_query_page`, was removed by
+D.DV1)
 (`divoomd/src/daemon/dispatch.rs`, `divoomd/src/cloud_cmds.rs`). A GUI or
 MCP client can list art from them that the panel would then refuse, or a
 playlist the panel would play scaled. Which of them carry a per-item size
@@ -421,70 +424,16 @@ shows natively (the reply counting what it left out, as `fetch_gallery`'s
 `not_native` does), or is recorded here as device-type-scoped by the cloud
 with the evidence; a mock-panel test per command, 16x16 and 64x64.
 
-#### P5.13 — The hot-channel update status, redesigned (umbrella U.5)
+#### P5.14 — One hot-channel pipeline? (U.5 follow-up)
 **Status:** DECISION (owner)
-**Why:** the owner, 2026-10-26, verbatim: "b. The hot channel update status is
-very unclear and need to be rethought. propose options." Nothing is built
-before the owner picks.
-
-**What exists today (inventoried 2026-10-31 from the code; every state below
-rendered in `docs/assets/hot-status-today.png` and `docs/assets/hot-autosync-today.png`).**
-Three paths update a panel's hot art, and they keep three separate records:
-
-1. *Update Hot Channel* (Pixel Art → Hot, one panel; `divoom_gui/web_ui/gallery_hot.js`):
-   the daemon's `hot_update` streams `hot_progress` events, which name no panel.
-   The button IS the status: "Preparing…", "1/2 Fetching hot list…", "1/2
-   Downloading from Divoom 9/23", "1/2 Using cached files", "2/2 Uploading to
-   device 4/23", then for 3 s one of "3 files updated" (green), "Up to date"
-   (the same green), "Checked 19/23" (amber), "Failed: <raw error>" (red), then
-   back to "Update Hot Channel" -- the verdict is gone. Under it, "Last checked
-   2 hours ago" (grey; amber past 14 days; blank if never), written only by a
-   SUCCESSFUL manual run, so after a failure it still shows the old success.
-   The manifest grid has its own states: "Loading hot channel manifest...",
-   the raw error, "No hot files available for this device.".
-2. *Sync Now* (Schedule → Auto-Sync; `divoom_gui/gallery_hot_api.py`): a GUI
-   thread runs the same `hot_update` for each registered panel; each row says
-   "Connecting…", "Syncing…", "✓ 0" or "✗ Could not connect", the card "Synced
-   1/2 devices, 1 failed". Not stored: gone on the next render. Its progress
-   events also drive the Hot tab's button for whichever panel is shown.
-3. *The daily schedule* (the Auto-Sync switch; `divoomd/src/monthly_best.rs`):
-   a DIFFERENT content set (the Recommend gallery) by a different mechanism
-   (store and show, not the panel's own pull), recorded per panel in
-   `hotchannel_state.json` (outcome, stored, shown, error) and sent to the
-   owner's phone on failure. The GUI shows none of it -- only "Auto-sync on".
-   The owner's last run (2026-10-26) failed on all four panels ("connect
-   already in progress"), and no screen says so.
-
-Underneath: "served 0" reads "Up to date" whether the panel had every file or
-never asked; "Up to date" and "3 files updated" differ in text only.
-
-**Options** (each needs one per-panel record that all three paths write,
-failures included, and progress events that name their panel):
-
-- **A -- one verdict line per panel, where you look.** The button only starts
-  and shows progress; under it a line that stays: "✓ Up to date · checked 2 h
-  ago by the schedule", "↓ 3 new files · 2 h ago", "⚠ 19 of 23 files could not
-  be fetched · 2 h ago", "✗ Failed 2 h ago: could not connect", "· Never
-  checked", "· Checking now (Sync Now, 2 of 4)". The Auto-Sync rows show the
-  same line, shorter. Small: one record, one renderer.
-- **B -- a status table in Schedule, the Hot tab just links to it.** The
-  Auto-Sync card becomes per panel: last run (when, which path), verdict
-  (glyph + text as in A), next run ("in 21 h", or "off"). The Hot tab keeps
-  the grid and button and shows one line, "✗ failed 2 h ago -- see Schedule".
-  Clearer for the fleet, one click further from the panel you are on.
-- **C -- one pipeline, then one status.** Make "hot channel" one feature:
-  the schedule, Sync Now and the button push the same content the same way
-  (pick: the panel's own Hot pull, or the stored Recommend push), so "up to
-  date" means one thing. Status is then A. Largest: a product decision first.
-
-**Recommendation: A**, with its record shared by the Auto-Sync rows (two
-zoom levels of one fact). It fixes what makes the status unclear today -- a
-verdict that vanishes after 3 s, failures that leave an old success showing,
-and a scheduled run nobody can see -- without first deciding C, which is
-worth asking separately: today the switch and the "Sync Now" button beside
-it run different things.
-**Done when:** the owner has picked an option (or none), recorded here with
-the date; the pick is then a separate item.
+**Why:** P5.13's option C, held back to be asked on its own: the Auto-Sync
+switch (the daily schedule) stores the cloud's Recommend gallery on each panel,
+while Sync Now beside it and the Hot tab's button run the panel's own Hot pull
+-- two contents under one card. Since U.5 the verdict line says which path ran
+("by the schedule", "by Sync Now"), so the difference is visible, not solved.
+**Done when:** the owner has picked one pipeline for all three paths (the
+panel's Hot pull, or the stored Recommend push) or kept both, recorded here
+with the date.
 
 ### Phase 6 — the multi-panel wall
 

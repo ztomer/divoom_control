@@ -4,6 +4,77 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## Unreleased
+
+- **One lasting hot-channel verdict per panel (P5.13, umbrella U.5; the
+  owner's pick 2026-10-31: "A: verdict line (Recommended)").** Under Update
+  Hot Channel, a line that stays: "✓ Up to date · checked 2 h ago",
+  "↓ 3 new files · 2 h ago", "⚠ 4 of 23 files could not be fetched · 2 h ago",
+  "✗ Failed 2 h ago: connect already in progress · by the schedule",
+  "· Never checked", "→ Checking now"; each Auto-Sync row shows the same
+  record, shorter ("✗ Failed · 2 h ago"). Glyph and words carry it; colour
+  only tints the glyph.
+  - ONE record per panel (`hotchannel_state.json` `panels`,
+    `divoomd/src/hot_verdict.rs`), written by every path -- the button and
+    Sync Now (`hot_update`, `by`) and the daily schedule -- failures included,
+    a panel that is not linked included; the newest run replaces the
+    panel's verdict, and each write is broadcast as `hot_status`. The button's
+    old `hot_update_state.json` (success-only) and the schedule's `devices`
+    list are folded in once at daemon start, then retired.
+  - The button only starts and shows progress; the 3 s result and its toasts
+    are gone. Progress events name their panel (`mac`), so another panel's
+    Sync Now no longer drives this panel's button; `sync_artwork` no longer
+    emits `hot_progress` at all (the Hot button took a gallery push for a
+    hot run).
+  - Sync Now no longer connects panels itself (through the connect click,
+    which also re-wrote the "last connected" panel); it asks the daemon,
+    `by: "sync_now"`, and the rows read the record.
+  - The dead second Hot template (`templates_hot_channel.js`) is deleted.
+  - Sheets of every state, light and dark: `docs/assets/hot-verdict-dark.png`,
+    `docs/assets/hot-verdict-light.png` (`tools/render_hot_verdict.py`).
+- **Background work never toasts (UI rule 4).** The inventory's screenshot
+  showed "Scan failed (device backend unavailable). See logs." on every Hot
+  row: the app's startup scan, which nobody asked for, toasting over whatever
+  screen was open (plus "Startup: Auto-scanning screens..."). The startup
+  scan now reports in the scan card (`#scan-result`); a scan the user clicks
+  still toasts. `tests/test_e2e_no_background_toasts.py` loads the page with a
+  failing scan, touches nothing, and requires zero toasts (red on the old code
+  with both toasts; a bridge that failed EVERY call was a blind instrument --
+  startup stopped before its scan -- and passed on the old code).
+- **One owner holds a panel's link (D.DV2c).** The scheduled run of
+  2026-10-26 failed on all four panels with "connect already in progress":
+  the push sent `connect` for panels the daemon's startup restore was linking,
+  and the daemon refused a second connect at once. Worse, after a push it sent
+  the bare, fleet-wide `disconnect`, which drops every panel and forgets every
+  saved link -- the owner's `links.json` holds no links. Now `connect`
+  answers a panel the fleet holds from the fleet (radio untouched) and WAITS
+  (bounded, 45 s) for the radio instead of refusing, stopping the wait the
+  moment the holder links the panel asked for; the restore's own retry loop is
+  deleted; the scheduler BORROWS a link (`monthly_best_link::Lease`) and gives
+  back only one it opened that nobody wanted linked. A source scan fails the
+  build if daemon code sends a `disconnect` request again.
+- **Stored state admits only panels a real device reported (D.DV2a/b).** The
+  owner's `topology.json` carried four placements `11:22:33:44:55:01-04` from
+  an invented fleet (listed by `get_topology`/`list_screens` as offline
+  panels), and `links.json` a wall of test macs `AA:00…01`/`BB:00…02`.
+  `divoomd/src/reported_panels.rs` admits an id only if a BLE scan found it
+  (`discovered_devices.json`) or a real transport linked it (`links.json`), or
+  it is `LAN:<ip>`; the topology and wall-slot writers and their LOADS apply
+  it in the owner's default location (a named path is a test's), so the
+  invented entries are dropped by the app's own read and new ones refused
+  (`set_topology` names what it dropped). The GUI's local layout drops any
+  panel the daemon's layout does not hold.
+- **The stored-gallery read is gone (D.DV1, owner ruling OW.36, 2026-10-31:
+  "drop gallery read, keep local record").** No panel answers `0x8E`: the
+  scheduler's read-back and the `custom_art_query_page` command (daemon,
+  client) are removed; what the panel holds is the app's own record (the fetch
+  snapshot and the panel's verdict).
+- **The Linux all-features pre-push gate starts what it needs (OW.27,
+  2026-10-31).** Docker down was a red gate; it now starts colima and stops it
+  on the way out -- only if it started it, and not while another container
+  runs on it (`tests/test_linux_all_features_runtime.py`, stub `docker` and
+  `colima` through the `DIVOOM_COLIMA` seam).
+
 ## v0.43.1 — a room lists exactly its panels; hot-channel status options (2026-10-31)
 
 Patch: the Spatial Bench's rooms (U.4) and the hot-channel status inventory (U.5).
