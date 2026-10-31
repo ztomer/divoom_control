@@ -71,9 +71,36 @@ if [ -n "$missing" ]; then
     printf '  type DIVOOM_SKIP_LINUX_ALL_FEATURES=1 to skip it loudly.\n' >&2
     exit 1
 fi
+# The container runtime. A gate that goes red because docker happens to be
+# down is a gate people learn to skip, so when it is down this gate starts it
+# (colima), and stops it again on the way out -- ONLY what this run started,
+# and not while anyone else's container is running on it (owner ruling OW.27,
+# 2026-10-31). `DIVOOM_COLIMA` is the seam the test drives.
+COLIMA="${DIVOOM_COLIMA:-colima}"
+STARTED_RUNTIME=""
+stop_started_runtime() {
+    [ -n "$STARTED_RUNTIME" ] || return 0
+    if [ -n "$(docker ps -q 2>/dev/null)" ]; then
+        warn "[linux-all-features] leaving colima running: other containers are on it"
+        return 0
+    fi
+    info "[linux-all-features] stopping colima (this gate started it)"
+    "$COLIMA" stop >/dev/null 2>&1 || warn "[linux-all-features] \`$COLIMA stop\` failed; stop it by hand"
+}
+trap stop_started_runtime EXIT
 if ! docker info >/dev/null 2>&1; then
-    printf '✗ [linux-all-features] docker is installed but not running (start it, e.g. `colima start`)\n' >&2
-    exit 1
+    if ! command -v "$COLIMA" >/dev/null 2>&1; then
+        printf '✗ [linux-all-features] docker is not running and there is no colima to start it with\n' >&2
+        printf '  Start your container runtime, or type DIVOOM_SKIP_LINUX_ALL_FEATURES=1 to skip loudly.\n' >&2
+        exit 1
+    fi
+    info "[linux-all-features] docker is not answering: starting colima (stopped again when this gate ends)"
+    STARTED_RUNTIME=1
+    START_LOG="${TMPDIR:-/tmp}/divoom_colima_start.log"
+    if ! "$COLIMA" start >"$START_LOG" 2>&1 || ! docker info >/dev/null 2>&1; then
+        err "[linux-all-features] colima did not bring docker up (log: $START_LOG)"
+        exit 1
+    fi
 fi
 
 mkdir -p "$CACHE/target"
