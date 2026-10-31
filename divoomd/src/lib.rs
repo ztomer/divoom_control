@@ -40,6 +40,8 @@ pub mod command_model;
 pub mod command_names;
 pub mod command_queue;
 pub mod commands;
+#[cfg(test)]
+mod connection_owner_tests;
 pub mod connections;
 pub mod daemon;
 #[cfg(feature = "ble")]
@@ -58,7 +60,7 @@ pub mod gallery_store;
 #[cfg(test)]
 mod gallery_store_tests;
 pub mod hot_progress;
-pub mod hot_state;
+pub mod hot_verdict;
 pub mod hotchannel_fetches;
 pub mod image_encode;
 pub mod image_fit;
@@ -124,6 +126,7 @@ mod render_widget_tests;
 mod reply_code_sweep_tests;
 #[cfg(test)]
 mod reply_shape_scan_tests;
+pub mod reported_panels;
 pub mod response;
 pub mod screen_previews;
 pub mod secret_store;

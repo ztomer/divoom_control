@@ -218,6 +218,10 @@ async fn main() {
     //
     // A daemon restart does not push: the loop waits out the remainder of
     // the interval (`monthly_best::should_run_now`).
+    // U.5: the button's old stamp file and the schedule's `devices` list
+    // become each panel's one hot-channel verdict, once.
+    divoomd::hot_verdict::migrate();
+
     if matches!(
         std::env::var("DIVOOM_MONTHLY_BEST").as_deref(),
         Ok("1" | "true" | "yes")

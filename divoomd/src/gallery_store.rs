@@ -8,14 +8,13 @@
 //! table: the `0x8B` path is "Transient display, one-shot", while the app's
 //! OTHER path — the custom-art page — is "**Persistent storage, 3×12 slots**".
 //!
-//! That other path IS the device's stored gallery, and it is four commands:
+//! That other path IS the device's stored gallery, and it is three commands:
 //!
 //! | What | Command | Where it comes from |
 //! |---|---|---|
 //! | SAVE a page of art | `0xB1` "Set user gif": header `[0x00,0x00,page]`, packets `[0x01][len:2 LE][data]`, end `[0x02]` | `CmdManager.N2` — the app's page writer (`references/apk/.../bluetooth/CmdManager.java`) |
 //! | SHOW a stored page | `0xBD [0x17,page]` — "use user define index" | `SPP_SECOND_USE_USER_DEFINE_INDEX` (0x17) |
 //! | FORGET a page | `0xBD [0x16,page]` | ditto (0x16) |
-//! | ASK what is stored | `0x8E` "App get user define info" | `SPP_APP_GET_USER_DEFINE_INFO` |
 //!
 //! The app sends the SAVE in its NEW form (`0x8C`, "App new user define")
 //! only for the models whose `DeviceFunction.NewAniSendMode2020` is set
@@ -41,14 +40,17 @@
 //!
 //! # What can be PROVEN from this side
 //!
-//! The write is the device's own acknowledgement of the save command, and the
-//! daemon ASKS the device what it holds afterwards (`0x8E`, bounded). On the
-//! owner's panels `0x8E` does not answer (measured 2026-10-21, and the
-//! CHANGELOG's own 2026-06 finding: "Pixoo never answers the 0x8E user-define
-//! read"), so the store CANNOT be read back on this hardware and the run says
-//! so in words rather than claiming a confirmation it does not have.
+//! The write is the device's own acknowledgement of each save packet, and
+//! that is all. The app's "what is stored" query (`0x8E`, "App get user
+//! define info") is answered by no panel in this house -- it timed out on all
+//! four (measured 2026-10-21, and the CHANGELOG's 2026-06 finding: "Pixoo
+//! never answers the 0x8E user-define read") -- so the read was REMOVED
+//! (D.DV1, owner ruling OW.36, 2026-10-31: "drop gallery read, keep local
+//! record"). What the device was given is the app's own record: the fetch
+//! snapshot (`hotchannel_fetches.json`) and the panel's verdict
+//! (`hotchannel_state.json`, `crate::hot_verdict`).
 //! `0xBD [0x15]` ("get user define time") does answer, and it says the device
-//! HAS a user-define configuration — it does not say what is in it.
+//! HAS a user-define configuration -- it does not say what is in it.
 
 use std::time::Duration;
 
@@ -68,14 +70,8 @@ pub const ITEMS_PER_PAGE: usize = 12;
 /// "Set user gif" (0xB1) — the app's save path for the panels in this house.
 const CMD_SET_USER_GIF: u8 = 0xB1;
 
-/// "App get user define info" (0x8E) — the read-back of what is stored.
-const CMD_GET_USER_DEFINE: u8 = 0x8E;
-
 /// "Set design" (0xBD) — the extended command that selects a stored page.
 const CMD_SET_DESIGN: u8 = 0xBD;
-
-/// The read-back's bound. A panel that does not answer must not wedge a push.
-const READBACK_TIMEOUT: Duration = Duration::from_secs(4);
 
 /// Bytes per data packet — the app's `n().q(256)`.
 const CHUNK: usize = 256;
@@ -92,7 +88,7 @@ pub struct ArtItem {
     pub frames: Vec<Vec<u8>>,
 }
 
-/// What the store did, and what the device said about it.
+/// What the store did.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct StoreOutcome {
     /// Files whose art is in the device's gallery.
@@ -103,8 +99,6 @@ pub struct StoreOutcome {
     pub failures: Vec<FileFailure>,
     /// The frames the device holds.
     pub frames: usize,
-    /// What the device said it holds — when it answers.
-    pub readback: Option<String>,
 }
 
 /// Encode resolved pixel art into the frames a `panel`x`panel` device stores.
@@ -181,49 +175,6 @@ pub fn page_packets(body: &[u8]) -> Vec<Vec<u8>> {
     out
 }
 
-/// What the device says it holds for a page.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum WhatItHolds {
-    /// The page holds these file ids.
-    Ids(Vec<u32>),
-    /// The page is empty.
-    Empty,
-    /// The answer was not a shape this reader knows.
-    Unknown(u8),
-}
-
-/// Read the device's answer to "what does this page hold?".
-///
-/// The answer is the `0x8E` reply: a type byte, then (for type 1) the total,
-/// the offset, the count and that many 4-byte file ids.
-///
-/// Returns `None` when the answer is too short to read.
-#[must_use]
-pub fn parse_what_it_holds(data: &[u8]) -> Option<WhatItHolds> {
-    let rtype = *data.first()?;
-    match rtype {
-        1 if data.len() >= 8 => {
-            let count = u16::from_le_bytes([data[6], data[7]]) as usize;
-            let mut ids = Vec::with_capacity(count.min(64));
-            for i in 0..count {
-                let at = 8 + i * 4;
-                if data.len() < at + 4 {
-                    break;
-                }
-                ids.push(u32::from_be_bytes([
-                    data[at],
-                    data[at + 1],
-                    data[at + 2],
-                    data[at + 3],
-                ]));
-            }
-            Some(WhatItHolds::Ids(ids))
-        }
-        2 => Some(WhatItHolds::Empty),
-        other => Some(WhatItHolds::Unknown(other)),
-    }
-}
-
 /// Put the run's art into the device's own gallery.
 ///
 /// The device must be CONNECTED: the save packets go down the link the push
@@ -268,12 +219,6 @@ pub async fn store(
     let (stored, failures) = store_items(&dev, items, &mut outcome).await;
     outcome.stored = stored;
     outcome.failures.extend(failures);
-
-    // The read-back: ASK the device what it holds. A panel that does not
-    // answer must not be reported as holding nothing — the run says the store
-    // could not be confirmed, which is a different sentence from "it failed".
-    outcome.readback = read_back(&dev).await;
-
     Ok(outcome)
 }
 
@@ -359,40 +304,4 @@ async fn store_items(
     let _ = dev.send_command(CMD_SET_DESIGN, &[0x17, PAGE], true).await;
 
     (fitting.len(), failures)
-}
-
-/// ASK the device what it holds.
-///
-/// `None` when the device does not answer (or answers in a shape this reader
-/// does not know) — which is a fact about the panel, not a failure of the
-/// store, and the caller says so in words.
-async fn read_back(dev: &crate::daemon::DeviceTransport) -> Option<String> {
-    let answer = dev
-        .send_command_and_wait(CMD_GET_USER_DEFINE, &[PAGE], READBACK_TIMEOUT)
-        .await;
-    let crate::transport::Read::Answered(data) = answer else {
-        return None;
-    };
-    match parse_what_it_holds(&data) {
-        Some(WhatItHolds::Ids(ids)) => Some(format!(
-            "the device says it holds {} item(s) on the page{}",
-            ids.len(),
-            if ids.is_empty() {
-                String::new()
-            } else {
-                format!(
-                    " ({})",
-                    ids.iter()
-                        .map(u32::to_string)
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            }
-        )),
-        Some(WhatItHolds::Empty) => Some("the device says the page is empty".to_string()),
-        Some(WhatItHolds::Unknown(t)) => {
-            Some(format!("the device answered with an unknown type {t}"))
-        }
-        None => None,
-    }
 }

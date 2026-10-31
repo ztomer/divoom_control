@@ -44,8 +44,6 @@ pub struct PushCounts {
     pub stored: usize,
     /// The files that did not make it, and why each one did not.
     pub failures: Vec<FileFailure>,
-    /// What the device said it holds, when it answers the read-back.
-    pub readback: Option<String>,
 }
 
 /// One file that did not make it to the device, and why.
@@ -99,6 +97,10 @@ pub fn device_verdict(
 }
 
 /// Fetch the category for one device, write down what came back, and push it.
+///
+/// The panel's link is BORROWED for the push and given back once, whatever
+/// happened ([`crate::monthly_best_link`]): a panel the fleet held stays
+/// linked, and nothing here can drop another panel's link.
 pub async fn push_to_device(daemon: &Daemon, device: &RegisteredDevice) -> DeviceOutcome {
     let mut outcome = DeviceOutcome {
         address: device.address.clone(),
@@ -106,7 +108,6 @@ pub async fn push_to_device(daemon: &Daemon, device: &RegisteredDevice) -> Devic
         files: 0,
         pushed: 0,
         stored: 0,
-        readback: None,
         error: None,
         warnings: Vec::new(),
     };
@@ -115,19 +116,30 @@ pub async fn push_to_device(daemon: &Daemon, device: &RegisteredDevice) -> Devic
     // offer it. Pixel art is shown only on a panel of its own size (D14); the
     // push asked the cloud for every size (127) and squeezed 64x64 art onto
     // 16x16 panels.
-    let pixels = match crate::monthly_best_link::connect(daemon, &device.address).await {
+    let (lease, pixels) = match crate::monthly_best_link::connect(daemon, &device.address).await {
         Ok(p) => p,
         Err(e) => {
             outcome.error = Some(e);
             return outcome;
         }
     };
+    push_borrowed(daemon, device, pixels, &mut outcome).await;
+    crate::monthly_best_link::release(daemon, lease).await;
+    outcome
+}
+
+/// The push itself, on a panel whose link is held for it.
+async fn push_borrowed(
+    daemon: &Daemon,
+    device: &RegisteredDevice,
+    pixels: u32,
+    outcome: &mut DeviceOutcome,
+) {
     let Some(bit) = crate::art_source::size_bit(pixels) else {
         outcome.error = Some(format!(
             "the cloud has no gallery for a {pixels}x{pixels} panel"
         ));
-        crate::monthly_best_link::disconnect(daemon).await;
-        return outcome;
+        return;
     };
     println!(
         "divoomd: fetching gallery for {} (classify={}, {pixels}x{pixels})...",
@@ -138,8 +150,7 @@ pub async fn push_to_device(daemon: &Daemon, device: &RegisteredDevice) -> Devic
         Ok((response, _not_native)) => response,
         Err(e) => {
             outcome.error = Some(format!("could not fetch the gallery: {e}"));
-            crate::monthly_best_link::disconnect(daemon).await;
-            return outcome;
+            return;
         }
     };
 
@@ -150,13 +161,14 @@ pub async fn push_to_device(daemon: &Daemon, device: &RegisteredDevice) -> Devic
             "the gallery (classify={}) came back with no {pixels}x{pixels} files",
             device.classify
         ));
-        crate::monthly_best_link::disconnect(daemon).await;
-        return outcome;
+        return;
     }
 
     // What came back, with the dates it carries. The owner's question — is
     // "monthly best" a sliding window? — is answered by diffing two of these
-    // lines a day apart, not by a belief.
+    // lines a day apart, not by a belief. This snapshot is also the app's own
+    // record of what it sent: no panel answers the stored-gallery query
+    // (D.DV1), so nothing on this side can ask the panel instead.
     for (index, file) in files.iter().enumerate() {
         println!(
             "divoomd: gallery[{index}] {} — date={} by={} id={}",
@@ -173,7 +185,6 @@ pub async fn push_to_device(daemon: &Daemon, device: &RegisteredDevice) -> Devic
         Ok(counts) => {
             outcome.pushed = counts.pushed;
             outcome.stored = counts.stored;
-            outcome.readback.clone_from(&counts.readback);
             // The rule, in one place: a device that was reached and stored
             // NOTHING failed; a device that stored the art and could not show
             // one file only warns — and the warning names the file.
@@ -181,12 +192,8 @@ pub async fn push_to_device(daemon: &Daemon, device: &RegisteredDevice) -> Devic
             outcome.error = error;
             outcome.warnings = warnings;
         }
-        Err(e) => {
-            outcome.error = Some(e);
-            crate::monthly_best_link::disconnect(daemon).await;
-        }
+        Err(e) => outcome.error = Some(e),
     }
-    outcome
 }
 
 /// Pull a gallery file's bytes, or say why not.
@@ -322,14 +329,6 @@ async fn sync_files_to_device(
     // custom-art page — see `gallery_store`), and the run counts what the
     // device took and what it says it holds.
     store_page(daemon, target, &items, &mut counts).await;
-
-    // 4. Disconnect
-    let req_disconnect = Request {
-        command: "disconnect".to_string(),
-        args: json!({}),
-        token: None,
-    };
-    daemon.dispatch(req_disconnect).await;
     println!("divoomd: sync completed for target {target}");
 
     Ok(counts)
@@ -412,21 +411,14 @@ async fn store_page(daemon: &Daemon, target: &str, items: &[ArtItem], counts: &m
     match gallery_store::store(daemon, target, items).await {
         Ok(store) => {
             counts.stored = store.stored;
-            counts.readback.clone_from(&store.readback);
             counts.failures.extend(store.failures);
             if store.stored > 0 {
                 println!(
-                    "divoomd: stored {} of {} file(s) in the device's own gallery",
+                    "divoomd: stored {} of {} file(s) in the device's own gallery (the \
+                     panel took every packet; no panel answers a read-back, D.DV1)",
                     store.stored,
                     items.len()
                 );
-            }
-            match &store.readback {
-                Some(what) => println!("divoomd: the device's own answer — {what}"),
-                None => println!(
-                    "divoomd: the device did not answer the read-back query, so the store \
-                     cannot be confirmed from this side"
-                ),
             }
         }
         Err(e) => {

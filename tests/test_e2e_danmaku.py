@@ -267,7 +267,7 @@ _RAISE_APP_TOAST = """
 async def test_a_toast_this_test_did_not_create_cannot_satisfy_its_wait():
     """The order-dependent failure, made deterministic.
 
-    The page raises toasts nobody asked for — ``app_init.js`` fires "Startup:
+    The page raised toasts nobody asked for (before U.5) — ``app_init.js`` fired "Startup:
     Auto-scanning screens..." after load and the scan behind it answers with its
     own failure — on timers no test controls, in every e2e page. The wait these
     two tests used counted ``showToast`` calls, so any of those satisfied it and

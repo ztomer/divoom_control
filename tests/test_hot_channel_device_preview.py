@@ -45,8 +45,8 @@ window.pywebview = {{
             }}, 100);
             return JSON.stringify({{ success: true, started: true }});
         }},
-        hot_get_check: async () => {{
-            return JSON.stringify({{ checked_at: Math.floor(Date.now() / 1000), manifest: 2, downloaded: 2, served: 2 }});
+        hot_verdict: async () => {{
+            return JSON.stringify({{ at: Math.floor(Date.now() / 1000), by: "button", outcome: "ok", offered: 2, fetched: 2, delivered: 2 }});
         }},
         get_cached_gallery_files: async () => "[]",
         get_device_state: async () => JSON.stringify({{}}),

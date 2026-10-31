@@ -272,8 +272,12 @@
     // daemon's active panel move together (provisional = bench placeholder,
     // the daemon is not told).
     function setSelected(addr, provisional) {
+        const changed = addr !== selectedMac;
         selectedMac = addr;
         try { window.pywebview?.api?.select_device?.(addr, !!provisional); } catch (_) {}
+        // Per-panel views that are not channel controls (the hot verdict line)
+        // follow the selection from here.
+        if (changed) window.dispatchEvent(new CustomEvent('divoom:panel-selected', { detail: { mac: addr } }));
     }
 
     // The daemon said which panel is active (a menubar switch, a CLI call,

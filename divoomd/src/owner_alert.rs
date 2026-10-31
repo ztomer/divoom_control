@@ -161,40 +161,27 @@ pub fn last_run_at() -> Option<u64> {
 }
 
 /// Remember the last run's outcome, so the next one can tell a recovery from
-/// a first run.
+/// a first run, and when it ran (the cadence).
+///
+/// What each panel got is its hot-channel verdict (`crate::hot_verdict`),
+/// recorded as the run reaches it; this writes the run's own keys beside
+/// those verdicts and leaves them be.
 ///
 /// # Errors
 ///
 /// When the state file cannot be written.
 pub fn record_outcome(outcome: &str, detail: &str) -> Result<(), String> {
-    record_outcome_with(outcome, detail, &Value::Null)
-}
-
-/// Remember the last run's outcome AND what each device holds.
-///
-/// The state has to say WHICH happened, not only that the run was "ok": the
-/// owner's question about a push is whether the art landed on the device, and
-/// that is the difference between the files a device was SHOWN and the files
-/// it STORED.
-///
-/// # Errors
-///
-/// When the state file cannot be written.
-pub fn record_outcome_with(outcome: &str, detail: &str, devices: &Value) -> Result<(), String> {
     let Some(path) = state_path() else {
         return Err("no config directory to record the run's outcome in".to_string());
     };
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    let state = json!({
-        "last_outcome": outcome,
-        "last_detail": detail,
-        "last_run_utc": crate::civil_time::unix_seconds(),
-        "devices": devices,
-    });
-    let text = serde_json::to_string_pretty(&state).map_err(|e| e.to_string())?;
-    std::fs::write(&path, text + "\n").map_err(|e| e.to_string())
+    crate::hot_verdict::update_at(&path, |state| {
+        state.insert("last_outcome".into(), json!(outcome));
+        state.insert("last_detail".into(), json!(detail));
+        state.insert(
+            "last_run_utc".into(),
+            json!(crate::civil_time::unix_seconds()),
+        );
+    })
 }
 
 #[cfg(test)]

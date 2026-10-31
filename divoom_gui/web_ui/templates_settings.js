@@ -55,6 +55,10 @@ window.DivoomTemplates.settings = `                <!-- R15 §1+§7: tab chrome 
                                 <button id="scan-btn" class="glow-btn">
                                     <span class="spinner" id="scan-spinner"></span> Scan Devices
                                 </button>
+                                <!-- The last scan's outcome, where the scan lives: the
+                                     startup scan reports here, never as a toast over
+                                     whatever screen is open. -->
+                                <p id="scan-result" class="panel-hint" role="status" style="margin-top:8px;"></p>
 
                                 <div style="margin-top: 20px;">
                                     <label class="label-caption">Discovered Bluetooth Screens</label>

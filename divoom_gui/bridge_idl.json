@@ -1,5 +1,5 @@
 {
- "version": 1,
+ "version": 2,
  "denylist": [
   "close_window",
   "maximize_window",
@@ -53,8 +53,9 @@
   "get_weather_preview",
   "get_work_mode",
   "hot_channel_update",
-  "hot_get_check",
   "hot_update_preview",
+  "hot_verdict",
+  "hot_verdicts",
   "import_settings_dialog",
   "js_log",
   "live_job_list",
@@ -129,7 +130,8 @@
   "notif_status": "onNotifStatus",
   "hot_progress": "onHotProgress",
   "activity": "onActivity",
-  "selection": "onSelection"
+  "selection": "onSelection",
+  "hot_status": "onHotStatus"
  },
  "lifecycle": {
   "shutdown": "destroy-window-when-following",

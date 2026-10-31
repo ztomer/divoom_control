@@ -45,7 +45,7 @@ use serde_json::{json, Map, Value};
 use std::path::PathBuf;
 
 use crate::daemon::Daemon;
-use crate::protocol::{make_request, ErrorCode};
+use crate::protocol::make_request;
 
 /// How long the daemon waits before it starts restoring, so the client that
 /// started it gets the radio first.
@@ -56,15 +56,6 @@ use crate::protocol::{make_request, ErrorCode};
 /// would fail. The restore is the BACKSTOP (it covers the CLI, the MCP
 /// server and the wall, which have no client-side memory), so it waits.
 const RESTORE_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
-
-/// How long to wait before retrying a link whose connect was refused because
-/// the radio was busy. A client mid-connect is a few seconds at most.
-const BUSY_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(750);
-
-/// How many times to retry a busy connect before giving the panel up. The
-/// panel stays in the saved list either way, so the next daemon start tries
-/// again.
-const BUSY_RETRIES: usize = 8;
 
 /// One panel this daemon holds, and the connect request that made it.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -154,6 +145,22 @@ pub fn save_to(path: &std::path::Path, state: &State) -> Result<(), String> {
     std::fs::rename(&tmp, path).map_err(|e| e.to_string())
 }
 
+/// Drop the wall slots `reported` does not admit (a wall left with none is
+/// no wall); the dropped slot ids.
+pub fn drop_unreported_slots(
+    state: &mut State,
+    reported: &crate::reported_panels::Reported,
+) -> Vec<String> {
+    let Some(wall) = state.wall.as_mut() else {
+        return Vec::new();
+    };
+    let dropped = reported.retain_admitted(&mut wall.slots);
+    if wall.slots.is_empty() {
+        state.wall = None;
+    }
+    dropped
+}
+
 /// The daemon's saved list, and the only writer of it.
 pub struct Wanted {
     inner: tokio::sync::Mutex<State>,
@@ -183,7 +190,24 @@ impl Wanted {
     /// A daemon that keeps its list in `path`, reading what is already there.
     #[must_use]
     pub fn at(location: Location) -> Self {
-        let state = load_from(&location.path);
+        let mut state = load_from(&location.path);
+        if !location.named {
+            // D.DV2: a wall slot no real device ever reported is dropped on
+            // the way in and the list rewritten without it -- the owner's
+            // list carried two test macs as slots, and every start replayed a
+            // wall over them.
+            let dropped =
+                drop_unreported_slots(&mut state, &crate::reported_panels::Reported::load());
+            if !dropped.is_empty() {
+                eprintln!(
+                    "divoomd: links.json held wall slots no device ever reported; dropped: {}",
+                    dropped.join(", ")
+                );
+                if let Err(e) = save_to(&location.path, &state) {
+                    eprintln!("divoomd: cannot save the linked panels: {e}");
+                }
+            }
+        }
         Self {
             inner: tokio::sync::Mutex::new(state),
             path: Some(location.path),
@@ -258,10 +282,18 @@ impl Wanted {
         self.persist(&snapshot);
     }
 
-    /// Remember the wall's slots.
-    pub async fn remember_wall(&self, slots: Map<String, Value>, cell_size: i64) {
+    /// Remember the wall's slots -- in the owner's default list, only the
+    /// slots a real device has reported (D.DV2).
+    pub async fn remember_wall(&self, mut slots: Map<String, Value>, cell_size: i64) {
+        if self.path.is_some() && !self.named {
+            crate::reported_panels::Reported::load().retain_admitted(&mut slots);
+        }
         let mut state = self.inner.lock().await;
-        state.wall = Some(WantedWall { slots, cell_size });
+        state.wall = if slots.is_empty() {
+            None
+        } else {
+            Some(WantedWall { slots, cell_size })
+        };
         let snapshot = state.clone();
         drop(state);
         self.persist(&snapshot);
@@ -277,6 +309,17 @@ impl Wanted {
         let snapshot = state.clone();
         drop(state);
         self.persist(&snapshot);
+    }
+
+    /// Whether a link to `id` is written down: the user (or a client) linked
+    /// it, so it is wanted linked whoever else borrows it.
+    pub async fn remembers(&self, id: &str) -> bool {
+        self.inner
+            .lock()
+            .await
+            .links
+            .iter()
+            .any(|l| l.id.eq_ignore_ascii_case(id))
     }
 
     /// The saved list, as it is right now.
@@ -308,10 +351,11 @@ pub async fn restore(daemon: &Daemon) {
     }
     tokio::time::sleep(RESTORE_DELAY).await;
     for link in &saved.links {
-        if daemon.fleet.connected(&link.id).await.is_some() {
-            continue; // a client got there first
-        }
-        let reply = connect_with_retry(daemon, &link.id, &link.args).await;
+        // `connect` waits while a client holds the radio and answers a panel
+        // that client already linked from the fleet (D.DV2c), so the restore
+        // needs no retry loop of its own.
+        let req = make_request("connect", Some(link.args.clone()), None);
+        let reply = crate::daemon_connect::cmd_connect(daemon, &req).await;
         let ok = reply
             .get("success")
             .and_then(Value::as_bool)
@@ -335,31 +379,4 @@ pub async fn restore(daemon: &Daemon) {
             if ok { "configured" } else { "failed" }
         );
     }
-}
-
-/// Connect one panel, retrying while the radio is busy.
-///
-/// `busy` is the daemon's own answer to a second concurrent connect, and the
-/// one this restore is most likely to meet: the client that started the
-/// daemon is connecting its own panel at the same moment.
-async fn connect_with_retry(daemon: &Daemon, id: &str, args: &Value) -> Value {
-    let mut reply = Value::Null;
-    for attempt in 0..=BUSY_RETRIES {
-        // A client may have linked it while we waited: that is the same
-        // outcome, and a second connect on a linked panel is not free.
-        if daemon.fleet.connected(id).await.is_some() {
-            return json!({"success": true});
-        }
-        let req = make_request("connect", Some(args.clone()), None);
-        reply = crate::daemon_connect::cmd_connect(daemon, &req).await;
-        let busy = reply.get("code").and_then(Value::as_str) == Some(ErrorCode::Busy.as_str());
-        if !busy {
-            return reply;
-        }
-        if attempt == BUSY_RETRIES {
-            break;
-        }
-        tokio::time::sleep(BUSY_RETRY_DELAY).await;
-    }
-    reply
 }

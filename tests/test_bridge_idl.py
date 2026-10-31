@@ -27,6 +27,7 @@ EXPECTED_PUSH = {
     "owned_devices": "onOwnedDevices",
     "notif_status": "onNotifStatus",
     "hot_progress": "onHotProgress",
+    "hot_status": "onHotStatus",
     "activity": "onActivity",
     "selection": "onSelection",
 }
@@ -44,8 +45,8 @@ def _real_api():
 
 def test_idl_file_is_versioned():
     idl = _load_idl()
-    assert idl["version"] == 1, "bump version with any seam change"
-    assert len(idl["methods"]) > 0 and len(idl["push_events"]) == 7
+    assert idl["version"] == 2, "bump version with any seam change"
+    assert len(idl["methods"]) > 0 and len(idl["push_events"]) == 8
 
 
 def test_bridge_methods_match_idl_exactly():

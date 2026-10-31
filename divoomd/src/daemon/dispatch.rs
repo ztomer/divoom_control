@@ -73,9 +73,7 @@ pub(super) async fn dispatch(daemon: &Daemon, req: Request) -> Value {
         // --- art / hot-channel commands ---
         "custom_art_push" => custom_art_push(daemon, req).await,
 
-        "custom_art_query_page" => custom_art_query_page(daemon, req).await,
-
-        "hot_update" => hot_update(daemon, &req),
+        "hot_update" => hot_update(daemon, &req).await,
 
         "hot_update_progress" => crate::art::cmd_hot_update_progress(&daemon.hot_progress),
 
@@ -320,18 +318,7 @@ async fn custom_art_push(daemon: &Daemon, req: Request) -> Value {
     crate::art::cmd_custom_art_push(daemon_arc, &req.args).await
 }
 
-async fn custom_art_query_page(daemon: &Daemon, req: Request) -> Value {
-    let self_weak = match daemon.self_weak.get() {
-        Some(w) => w.clone(),
-        None => return err_code(ErrorCode::Internal, "Daemon self_weak not initialized"),
-    };
-    let Some(daemon_arc) = self_weak.upgrade() else {
-        return err_code(ErrorCode::Internal, "Daemon was dropped");
-    };
-    crate::art::cmd_custom_art_query_page(daemon_arc, &req.args).await
-}
-
-fn hot_update(daemon: &Daemon, req: &Request) -> Value {
+async fn hot_update(daemon: &Daemon, req: &Request) -> Value {
     let self_weak = match daemon.self_weak.get() {
         Some(w) => w.clone(),
         None => return err_code(ErrorCode::Internal, "Daemon self_weak not initialized"),
@@ -340,5 +327,5 @@ fn hot_update(daemon: &Daemon, req: &Request) -> Value {
         return err_code(ErrorCode::Internal, "Daemon was dropped");
     };
     let progress = daemon.hot_progress.clone();
-    crate::art::cmd_hot_update(daemon_arc, &req.args, progress)
+    crate::art::cmd_hot_update(daemon_arc, &req.args, progress).await
 }

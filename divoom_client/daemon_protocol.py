@@ -434,22 +434,15 @@ class DaemonClient(HostDataMixin, CloudDataMixin):
         return self.send_command("custom_art_push", args,
                                  read_timeout=load_daemon_config().sync_read_timeout)
 
-    def custom_art_query_page(self, page: int = 0) -> dict:
-        """Query device for filled slot IDs on a custom art page."""
-        from divoom_client.daemon_config import load_daemon_config
-        return self.send_command(
-            "custom_art_query_page", {"page": page},
-            read_timeout=load_daemon_config().sync_read_timeout)
-
     def hot_update(self, *, device_size: int = 16, show: bool = True,
-                   address: str = "") -> dict:
+                   address: str = "", by: str = "button") -> dict:
         """Start a HOT channel update in the background on the daemon (returns
-        immediately). Call ``hot_update_progress()`` to poll progress. ``address``
-        is the caller's device key; the daemon stamps the last-checked state
-        under it (R53)."""
+        immediately). Call ``hot_update_progress()`` to poll progress.
+        ``address`` names the panel; the daemon records the run's verdict under
+        it, ``by`` saying which path ran it (``button`` or ``sync_now``; U.5)."""
         return self.send_command(
             "hot_update",
-            {"device_size": device_size, "show": show, "address": address},
+            {"device_size": device_size, "show": show, "address": address, "by": by},
             read_timeout=30)
 
     def hot_update_progress(self) -> dict:

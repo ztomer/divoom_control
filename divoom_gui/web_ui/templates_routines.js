@@ -43,7 +43,6 @@ window.DivoomTemplates.routines = `
                     </div>
 
                     <span id="routines-auto-sync-status" class="panel-hint" style="display:block; margin-top:8px;"></span>
-                    <span id="sync-now-status" class="panel-hint" style="display:block; margin-top:4px;"></span>
                 </div>
             </div>
         </div>

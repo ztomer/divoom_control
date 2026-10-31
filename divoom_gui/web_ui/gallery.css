@@ -368,18 +368,37 @@
     align-items: stretch;
 }
 
-/* R53: per-device "Last checked <when>" stamp under the Update button. Empty
-   (and collapsed) when the device has never been checked. Amber when >2 weeks
-   old so an undated "up to date" can't quietly mislead. */
-.hot-last-checked {
+/* U.5: a panel's hot-channel verdict line (hot_verdict.js) -- under the Hot
+   tab's Update button, and shorter in each Auto-Sync row. The glyph and the
+   words carry the verdict; colour only reinforces it, on the GLYPH, so the
+   words keep the theme's text contrast. */
+.hot-verdict {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 6px;
     font-size: 11px;
     color: var(--text-muted);
-    text-align: center;
     margin-top: 6px;
     min-height: 14px;
 }
-.hot-last-checked:empty { margin-top: 0; }
-.hot-last-checked.stale { color: #f59e0b; }
+/* The glyphs are not in Inter: name the symbol fonts that carry them, so the
+   fallback is chosen up front instead of by a late system lookup (which drew
+   a missing-glyph box for ✓ in the first frames). */
+.hot-verdict-glyph {
+    font-weight: 700;
+    font-family: var(--font-sans), "Apple Symbols", "Segoe UI Symbol", "DejaVu Sans", sans-serif;
+}
+.hot-verdict[data-kind="fail"],
+.hot-verdict[data-kind="warn"] { color: var(--text-main); }
+.hot-verdict[data-kind="fail"] .hot-verdict-text { font-weight: 600; }
+.hot-verdict[data-kind="ok"] .hot-verdict-glyph { color: var(--accent); }
+.hot-verdict[data-kind="new"] .hot-verdict-glyph { color: var(--info-text); }
+.hot-verdict[data-kind="warn"] .hot-verdict-glyph { color: var(--warn-text); }
+.hot-verdict[data-kind="fail"] .hot-verdict-glyph { color: var(--error); }
+.hot-verdict[data-kind="busy"] .hot-verdict-glyph { color: var(--primary-text); }
+.hot-verdict.stale .hot-verdict-text { color: var(--warn-text); }
+.sync-now-row-status.hot-verdict { justify-content: flex-end; margin-top: 0; }
 
 /* ── Gallery Card Item Info and Ellipsis ────────────────────────────── */
 .gallery-item-info {

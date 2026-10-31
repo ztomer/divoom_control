@@ -245,11 +245,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
                     if (window.refreshKnownDevices) window.refreshKnownDevices();
 
+                    // The startup scan reports in the scan card, not as a toast.
                     if (window.runBleScan) {
-                        setTimeout(() => {
-                            window.showToast("Startup: Auto-scanning screens...", "success");
-                            window.runBleScan();
-                        }, 1000);
+                        setTimeout(() => window.runBleScan({ auto: true }), 1000);
                     }
                     
                     window.renderCloudStatus(conf.cloud_connected ? "connected" : "signed_out", conf);

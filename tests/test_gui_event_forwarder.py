@@ -101,6 +101,15 @@ def test_hot_progress_forwarded():
     assert js, "hot_progress event not forwarded to onHotProgress"
 
 
+def test_hot_status_forwarded():
+    """U.5: a panel's hot-channel record changed -- the verdict line repaints."""
+    w = FakeWindow()
+    on_event = _make_daemon_event_handler(w)
+    on_event({"type": "hot_status", "mac": "P", "verdict": {"at": 1, "outcome": "ok"}})
+    js = next((c for c in w.calls if "onHotStatus(" in c), None)
+    assert js, "hot_status event not forwarded to onHotStatus"
+
+
 def test_shutdown_follows_when_lifecycle_says_yes():
     w = FakeWindow()
     on_event = _make_daemon_event_handler(w)

@@ -139,9 +139,10 @@ window.DivoomTemplates.pixelArt = `                <div class="tabs-section" sty
                                             <span id="hot-progress-text" class="hot-progress-text"></span>
                                         </div>
                                     </button>
-                                    <!-- R53: per-device last-checked stamp so the
-                                         "up to date" verdict is dated, not blind. -->
-                                    <div id="hot-last-checked" class="hot-last-checked"></div>
+                                    <!-- U.5: the panel's lasting verdict -- the newest
+                                         run by any path (this button, Sync Now, the
+                                         schedule), from the daemon's record. -->
+                                    <div id="hot-verdict" class="hot-verdict" role="status" aria-live="polite"></div>
                                 </div>
                             </div>
                         </div>

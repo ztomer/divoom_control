@@ -1,68 +1,63 @@
-/* sync_now.js — manual "run Auto-Sync now" trigger (Routines > Auto-Sync).
- * Pushes hot-channel content to every toggled sync target immediately
- * instead of waiting for the scheduled interval, with per-device progress
- * on the existing #sync-targets-list rows (see gallery.js's
- * renderSyncTargets). Mirrors gallery_hot.js's single-device update button:
- * disable while running, show status, re-enable when the daemon reports
- * every device done/error. */
+/* sync_now.js — manual "run Auto-Sync now" trigger (Schedule > Auto-Sync).
+ * Runs the hot-channel update on every toggled panel now instead of at the
+ * scheduled time. Each Auto-Sync row shows that panel's verdict line, the
+ * SHORT form of the line under the Hot tab's Update button (U.5,
+ * hot_verdict.js): the daemon's record of the panel's newest run by any path
+ * -- this button, the Update button, the daily schedule -- failures included.
+ * While a run is under way the row says "→ Checking now (2 of 4)"; when it
+ * ends the row re-reads the record. Nothing here is kept apart from that
+ * record, so nothing vanishes on the next render. */
 document.addEventListener("DOMContentLoaded", () => {
     const btn = document.getElementById("sync-now-btn");
     if (!btn) return;
-
-    const PHASE_LABEL = {
-        connecting: "Connecting…",
-        syncing: "Syncing…",
-        done: "Done",
-        error: "Failed",
-    };
 
     function rowStatusEl(address) {
         return document.querySelector(`.sync-now-row-status[data-addr="${CSS.escape(address)}"]`);
     }
 
+    // Paint one row (or every row) from the panel's record.
+    function paintRow(address) {
+        const el = rowStatusEl(address);
+        if (el && window.HotVerdict) window.HotVerdict.render(el, window.HotVerdict.get(address), { short: true });
+    }
+    function paintAll() {
+        document.querySelectorAll(".sync-now-row-status").forEach(el => paintRow(el.dataset.addr));
+    }
+    window.paintSyncRows = function () {
+        if (window.HotVerdict) window.HotVerdict.refreshAll().then(paintAll); else paintAll();
+    };
+    window.addEventListener("divoom:hot-verdict", (e) => {
+        if (e.detail && e.detail.mac && !running.has(e.detail.mac)) paintRow(e.detail.mac);
+    });
+
+    const running = new Set();
+
     btn.addEventListener("click", () => {
         if (btn.disabled) return;
         if (!window.pywebview?.api?.sync_now) return;
-
         btn.disabled = true;
         btn.textContent = "Syncing…";
-        document.querySelectorAll(".sync-now-row-status").forEach(el => { el.textContent = ""; });
-        const statusEl = document.getElementById("sync-now-status");
-        if (statusEl) statusEl.textContent = "Sync started…";
-
         window.pywebview.api.sync_now();
     });
 
     window.onSyncNowProgress = function(ev) {
         if (!ev || !ev.address) return;
         const row = rowStatusEl(ev.address);
-        if (!row) return;
-        if (ev.phase === "done") {
-            row.textContent = `✓ ${ev.served ?? ""}`.trim();
-            row.style.color = "var(--success, #22c55e)";
-        } else if (ev.phase === "error") {
-            row.textContent = `✗ ${ev.error || "failed"}`;
-            row.title = ev.error || "";
-            row.style.color = "var(--error, #ef4444)";
-        } else {
-            row.textContent = PHASE_LABEL[ev.phase] || ev.phase;
-            row.style.color = "var(--text-muted)";
+        if (ev.phase === "checking") {
+            running.add(ev.address);
+            if (row && window.HotVerdict) {
+                window.HotVerdict.renderChecking(row, ev.total > 1 ? `${ev.index} of ${ev.total}` : "");
+            }
+        } else if (ev.phase === "finished") {
+            running.delete(ev.address);
+            if (window.HotVerdict) window.HotVerdict.refresh(ev.address).then(() => paintRow(ev.address));
         }
     };
 
-    window.onSyncNowComplete = function(summary) {
+    window.onSyncNowComplete = function() {
+        running.clear();
         btn.disabled = false;
         btn.textContent = "Sync Now";
-        const statusEl = document.getElementById("sync-now-status");
-        if (!statusEl || !summary) return;
-        const { total = 0, ok = 0, failed = 0 } = summary;
-        if (total === 0) {
-            statusEl.textContent = "No devices selected — toggle one above.";
-        } else {
-            statusEl.textContent = `Synced ${ok}/${total} device${total > 1 ? "s" : ""}` + (failed ? `, ${failed} failed` : "");
-        }
-        window.showToast(
-            failed ? `Sync Now: ${ok} synced, ${failed} failed` : `Sync Now: ${ok} device${ok !== 1 ? "s" : ""} synced`,
-            failed && !ok ? "error" : "success", " BLE");
+        window.paintSyncRows();
     };
 });

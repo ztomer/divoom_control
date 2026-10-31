@@ -204,7 +204,22 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    window.runBleScan = function() {
+    // The scan's outcome, said where the scan lives (#scan-result). A scan
+    // the user asked for ALSO toasts; the app's own startup scan does not --
+    // it was nobody's gesture, and its toast landed on whatever screen was
+    // open ("Scan failed (device backend unavailable)" over the Hot tab).
+    // Alarm is for faults, in context (UI rule 4).
+    function sayScan(text, kind, opts) {
+        const el = document.getElementById("scan-result");
+        if (el) {
+            el.textContent = text;
+            el.dataset.kind = kind;
+        }
+        if (!opts?.auto) window.showToast(text, kind);
+    }
+
+    window.runBleScan = function(opts) {
+        if (!(opts && typeof opts === "object" && "auto" in opts)) opts = { auto: false };
         const timeout = parseInt(document.getElementById("scan-timeout")?.value) || window.SCAN_TIMEOUT_DEFAULT;
         const limit = parseInt(document.getElementById("scan-limit")?.value) || 0;
 
@@ -226,7 +241,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     const merged = window.mergeDiscoveredDevices
                         ? window.mergeDiscoveredDevices(devices) : devices;
                     populateDeviceSelectors(merged);
-                    window.showToast(`Discovered ${devices.length} screens!`, "success");
+                    sayScan(`✓ Found ${devices.length} screen${devices.length === 1 ? "" : "s"}`, "success", opts);
                     window.renderArrangerCanvas();
                     if (window.renderDeviceDots) window.renderDeviceDots();
                     if (window.refreshKnownDevices) window.refreshKnownDevices();
@@ -238,14 +253,15 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (scanSpinner) scanSpinner.style.display = "none";
                     if (scanBtn) scanBtn.disabled = false;
                     window.setScanning?.(false);
-                    window.showToast("Scan failed (device backend unavailable). See logs.", "error");
+                    const why = (err && err.message) ? err.message : "the background service did not answer";
+                    sayScan(`✗ Scan failed: ${why}`, "error", opts);
                     console.error("scan_devices failed:", err);
                 });
         } else {
             if (scanSpinner) scanSpinner.style.display = "none";
             if (scanBtn) scanBtn.disabled = false;
             window.setScanning?.(false);
-            window.showToast("Web interface API unavailable.", "error");
+            sayScan("✗ Scan failed: the app's bridge is not available", "error", opts);
         }
     }
 

@@ -30,7 +30,6 @@ def _cat(paths: list[Path]) -> str:
 TEMPLATES_JS = _cat([
     REPO_ROOT / "divoom_gui" / "web_ui" / "templates_tools.js",
     REPO_ROOT / "divoom_gui" / "web_ui" / "templates_gallery.js",
-    REPO_ROOT / "divoom_gui" / "web_ui" / "templates_hot_channel.js",
     REPO_ROOT / "divoom_gui" / "web_ui" / "templates_widgets.js",
     REPO_ROOT / "divoom_gui" / "web_ui" / "templates_settings.js",
 ])

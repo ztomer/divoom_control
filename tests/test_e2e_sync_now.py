@@ -71,7 +71,10 @@ async def test_sync_now_button_calls_backend_and_disables_while_running():
 
 
 @pytest.mark.asyncio
-async def test_sync_now_progress_updates_the_right_device_row():
+async def test_sync_now_rows_show_checking_then_the_panels_record():
+    """U.5: while a panel is being checked its row says so; when its run ends
+    the row is the daemon's record of that panel -- the short verdict line --
+    and nothing of it vanishes on the next render."""
     require_browser()
     from playwright.async_api import async_playwright
 
@@ -79,31 +82,33 @@ async def test_sync_now_progress_updates_the_right_device_row():
         browser, page = await _open_auto_sync_tab(p)
         try:
             await page.click("#sync-now-btn")
-
-            # Fire the progress/complete events and read the resulting row
-            # text in ONE synchronous evaluate. The app's 1500ms
-            # auto-refresh timer (gallery.js) can re-render the targets
-            # list; collapsing render→assert into a single JS turn makes
-            # the test immune to that race.
-            result = await eval_js(page, """() => {
-                window.renderSyncTargets(window.__syncTargets);
-                window.onSyncNowProgress({address: "AA:BB", phase: "connecting"});
-                window.onSyncNowProgress({address: "CC:DD", phase: "error", error: "unreachable"});
-                const aa = document.querySelector('.sync-now-row-status[data-addr="AA:BB"]').textContent;
-                const cc = document.querySelector('.sync-now-row-status[data-addr="CC:DD"]').textContent;
-                window.onSyncNowProgress({address: "AA:BB", phase: "done", served: 3});
-                window.onSyncNowComplete({total: 2, ok: 1, failed: 1});
-                const aaDone = document.querySelector('.sync-now-row-status[data-addr="AA:BB"]').textContent;
-                return { aa, cc, aaDone };
+            result = await eval_js(page, """async () => {
+                const now = Math.floor(Date.now() / 1000);
+                window.__verdicts = {};
+                window.__api.hot_verdict = (mac) => JSON.stringify(window.__verdicts[mac] || {});
+                window.__api.hot_verdicts = () => JSON.stringify(window.__verdicts);
+                const row = (m) => document.querySelector(`.sync-now-row-status[data-addr="${m}"]`);
+                window.onSyncNowProgress({address: "AA:BB", phase: "checking", index: 1, total: 2});
+                const checking = row("AA:BB").textContent;
+                window.__verdicts["AA:BB"] = {at: now - 60, by: "sync_now", outcome: "ok",
+                                              offered: 23, fetched: 23, delivered: 3};
+                window.__verdicts["CC:DD"] = {at: now - 30, by: "sync_now", outcome: "failed",
+                                              error: "device 'CC:DD' not connected"};
+                window.onSyncNowProgress({address: "AA:BB", phase: "finished"});
+                window.onSyncNowProgress({address: "CC:DD", phase: "finished"});
+                window.onSyncNowComplete({total: 2});
+                await new Promise(r => setTimeout(r, 50));
+                window.renderSyncTargets(window.__syncTargets);   // a re-render keeps it
+                await new Promise(r => setTimeout(r, 50));
+                return {checking, aa: row("AA:BB").textContent, aaKind: row("AA:BB").dataset.kind,
+                        cc: row("CC:DD").textContent, ccKind: row("CC:DD").dataset.kind};
             }""")
-
-            assert "Connecting" in result["aa"]
-            assert "unreachable" in result["cc"]
-            assert "3" in result["aaDone"]
-
-            await wait_js(page, 
+            assert "Checking now (1 of 2)" in result["checking"], result
+            assert result["aa"].startswith("↓") and "3 new" in result["aa"], result
+            assert result["aaKind"] == "new", result
+            assert result["cc"].startswith("✗") and "Failed" in result["cc"], result
+            assert result["ccKind"] == "fail", result
+            await wait_js(page,
                 "() => document.getElementById('sync-now-btn').disabled === false")
-            status = await page.text_content("#sync-now-status")
-            assert "1/2" in status
         finally:
             await browser.close()

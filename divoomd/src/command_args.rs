@@ -95,7 +95,6 @@ pub const COMMAND_ARGS: &[(&str, &[Required])] = &[
         "custom_art_push",
         &[&[("slots", Object), ("file_ids", Array)]],
     ),
-    ("custom_art_query_page", &[]),
     ("hot_update", &[]),
     ("hot_update_progress", &[]),
     ("hot_manifest", &[]),

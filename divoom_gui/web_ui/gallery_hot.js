@@ -1,11 +1,11 @@
 /* gallery_hot.js — device HOT channel update with in-button progress bar.
  * On tab activation the hot manifest is fetched automatically so the user
  * can see what Divoom's curated set contains before clicking the update
- * button. The button transforms into a progress bar during upload:
- *   - smooth animated fill with a readable status label
- *   - disabled + non-interactive while running
- *   - auto-resets after 3s on completion or failure
- * Rams: honest, self-explanatory, minimal. Kare: clear at a glance. */
+ * button. The button only STARTS a run and shows its progress (disabled while
+ * it runs, for whichever path started it on this panel); the run's result is
+ * the lasting verdict line under it (U.5, hot_verdict.js) -- the daemon's
+ * record of the panel's newest run by any path, which a failure replaces and
+ * nothing clears after 3 s. Rams: honest, self-explanatory, minimal. */
 document.addEventListener("DOMContentLoaded", () => {
     const btn = document.getElementById("hot-update-btn");
     if (!btn) return;
@@ -14,6 +14,10 @@ document.addEventListener("DOMContentLoaded", () => {
     // selection is by then.
     const shownMac = () => window.ChannelSettings.selected()?.mac || null;
     let updateMac = null;
+    // The panel a run is under way on (from the daemon's progress events,
+    // which name it), or null. The button shows progress only for the panel
+    // shown; a run on another panel leaves this one's button alone.
+    let runningFor = null;
 
     // ── Auto-fetch hot channel manifest on tab activation ──────────────
     window.addEventListener("tab-changed", (e) => {
@@ -43,42 +47,29 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // ── R53: per-device "last checked" stamp ──────────────────────────────
-    // The daemon writes the stamp (it owns the update) under the panel the
-    // update named; we READ it for the panel shown.
-    function formatChecked(seconds) {
-        const then = seconds * 1000;
-        const diff = Date.now() - then;
-        const day = 86400000;
-        if (diff < 60000) return "just now";
-        if (diff < 3600000) { const m = Math.round(diff / 60000); return `${m} min${m > 1 ? "s" : ""} ago`; }
-        if (diff < day) { const h = Math.round(diff / 3600000); return `${h} hour${h > 1 ? "s" : ""} ago`; }
-        if (diff < 30 * day) { const d = Math.round(diff / day); return `${d} day${d > 1 ? "s" : ""} ago`; }
-        return new Date(then).toLocaleDateString();
-    }
-
-    function renderLastChecked(entry) {
-        const el = document.getElementById("hot-last-checked");
-        if (!el) return;
-        if (!entry || !entry.checked_at) { el.textContent = ""; el.title = ""; el.classList.remove("stale"); return; }
-        el.textContent = `Last checked ${formatChecked(entry.checked_at)}`;
-        // >2 weeks old → flag it, so an undated "up to date" can't mislead.
-        const stale = (Date.now() - entry.checked_at * 1000) > 14 * 86400000;
-        el.classList.toggle("stale", stale);
-        el.title = new Date(entry.checked_at * 1000).toLocaleString()
-            + ` — manifest ${entry.manifest}, downloaded ${entry.downloaded}, pushed ${entry.served}`;
+    // ── U.5: the panel's verdict line ──────────────────────────────────────
+    // The daemon writes the record (every path that updates the panel); we
+    // READ it for the panel shown, and repaint when it changes.
+    function renderVerdict() {
+        const el = document.getElementById("hot-verdict");
+        if (!el || !window.HotVerdict) return;
+        const mac = shownMac();
+        if (!mac) { el.textContent = ""; el.removeAttribute("data-kind"); return; }
+        if (runningFor === mac) { window.HotVerdict.renderChecking(el); return; }
+        window.HotVerdict.render(el, window.HotVerdict.get(mac));
     }
 
     function loadLastChecked() {
         const mac = shownMac();
-        if (!mac || !window.pywebview?.api?.hot_get_check) { renderLastChecked(null); return; }
-        window.pywebview.api.hot_get_check(mac).then(json => {
-            if (shownMac() !== mac) return;
-            let e; try { e = JSON.parse(json); } catch { e = null; }
-            renderLastChecked(e);
-        });
+        if (!mac || !window.HotVerdict) { renderVerdict(); return; }
+        window.HotVerdict.refresh(mac).then(() => { if (shownMac() === mac) renderVerdict(); });
     }
     window.loadLastChecked = loadLastChecked;
+    window.addEventListener("divoom:hot-verdict", (e) => {
+        if (e.detail && e.detail.mac && e.detail.mac === shownMac()) renderVerdict();
+    });
+    // Another panel selected: its line, its progress.
+    window.addEventListener("divoom:panel-selected", () => { syncButtonToShown(); loadLastChecked(); });
     // R42 §4: the pixel-art sub-tab handler (settings_features.js) calls
     // window.loadHotPreview — without this exposure the hot panel stayed on
     // "Loading hot channel manifest..." forever when the sub-tab was clicked.
@@ -127,30 +118,52 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // ── Update button ───────────────────────────────────────────────────
+
     btn.addEventListener("click", () => {
         if (btn.disabled) return;
         const mac = window.ChannelSettings.mac(true);
         if (!mac) return;
         updateMac = mac;
+        enterProgress(mac);
 
-        const label = document.getElementById("hot-update-label");
-        const wrap = document.getElementById("hot-progress-wrap");
-        label.style.display = "none";
-        wrap.style.display = "flex";
-        btn.disabled = true;
-        btn.classList.add("progress-active");
-
-        window.pywebview?.api?.hot_channel_update?.(mac).then(r => {
-            // R59/event-driven: the daemon broadcasts `hot_progress` (starting/
-            // done/error) for every phase, so the 600ms poll is gone — progress
-            // is pushed live via window.Divoom.onHotProgress.
-            if (window.Divoom && window.Divoom.onHotProgress) {
-                window.Divoom.onHotProgress({ type: "hot_progress", progress: 0, phase: "starting" });
+        Promise.resolve(window.pywebview?.api?.hot_channel_update?.(mac)).then(r => {
+            let reply = r;
+            if (typeof r === "string") { try { reply = JSON.parse(r); } catch (_) { reply = null; } }
+            // Refused before it ran (not linked, another run under way): no
+            // progress will come. A refusal the daemon recorded is the line.
+            if (reply && reply.success === false) {
+                if (runningFor === mac) runningFor = null;
+                resetButton();
+                loadLastChecked();
             }
         });
     });
 
+    function enterProgress(mac) {
+        runningFor = mac;
+        const label = document.getElementById("hot-update-label");
+        const wrap = document.getElementById("hot-progress-wrap");
+        if (label) label.style.display = "none";
+        if (wrap) wrap.style.display = "flex";
+        btn.disabled = true;
+        btn.classList.add("progress-active");
+        renderVerdict();
+    }
+
+    function syncButtonToShown() {
+        if (runningFor && runningFor === shownMac()) enterProgress(runningFor);
+        else resetButton();
+    }
+
+    // Is a progress event for the panel shown? An event that names no panel
+    // is the old daemon's; it is taken as the shown panel's.
+    function forShown(p) { return !p.mac || p.mac === shownMac(); }
+
     function applyProgress(p) {
+        if (p.phase === "done" || p.phase === "error") return; // finishProgress's
+        if (p.mac) runningFor = p.mac;
+        if (!forShown(p)) return;
+        if (!btn.disabled) enterProgress(p.mac || shownMac());
         const fill = document.getElementById("hot-progress-fill");
         const text = document.getElementById("hot-progress-text");
         if (!fill || !text) return;
@@ -188,68 +201,27 @@ document.addEventListener("DOMContentLoaded", () => {
         text.textContent = msg;
     }
 
+    // The run ended. Its verdict is the daemon's record (written before this
+    // event), so the line re-reads it; the button goes back to "Update".
     function finishProgress(p) {
-        const fill = document.getElementById("hot-progress-fill");
-        const text = document.getElementById("hot-progress-text");
-
+        const mac = p.mac || runningFor || shownMac();
+        if (runningFor === mac) runningFor = null;
+        if (mac && window.HotVerdict) window.HotVerdict.refresh(mac);
+        if (!forShown(p)) return;
+        resetButton();
+        renderVerdict();
         if (p.phase === "done") {
-            fill.style.width = "100%";
-            const result = p.result || {};
-            const served = (result.served || []).length;
-            const manifest = result.manifest || 0;
-            // downloaded may be absent on older daemons — assume complete then.
-            const downloaded = (result.downloaded != null) ? result.downloaded : manifest;
-            // Some curated files couldn't be fetched from the CDN, so the device
-            // was never offered them. Reporting "Up to date" here is the false
-            // positive the user hit — be honest instead.
-            const incomplete = manifest > 0 && downloaded < manifest;
-
-            btn.classList.remove("progress-active");
-            if (served) {
-                text.textContent = `${served} file${served > 1 ? "s" : ""} updated`;
-                fill.style.background = "linear-gradient(90deg, #166534, #22c55e)";
-                btn.classList.add("progress-ok");
-                window.showToast(
-                    `Hot channel updated (${served} file${served > 1 ? "s" : ""})`,
-                    "success", " BLE");
-            } else if (incomplete) {
-                const missing = manifest - downloaded;
-                text.textContent = `Checked ${downloaded}/${manifest}`;
-                fill.style.background = "linear-gradient(90deg, #78350f, #f59e0b)";
-                btn.classList.add("progress-ok");
-                window.showToast(
-                    `Hot channel: ${missing} file${missing > 1 ? "s" : ""} couldn't be fetched — not fully checked`,
-                    "error");
-            } else {
-                text.textContent = "Up to date";
-                fill.style.background = "linear-gradient(90deg, #166534, #22c55e)";
-                btn.classList.add("progress-ok");
-                window.showToast("Hot channel already up to date", "success", " BLE");
-            }
-            // R53: the DAEMON stamped the last-checked state on completion; just
-            // re-read it so the label reflects the daemon-owned source of truth.
-            loadLastChecked();
             // The manifest can rotate while the app sits on this tab, so the grid
             // goes stale (it only re-fetches on tab activation). Re-fetch now so
-            // the tiles reflect the set the device was just synced against — the
-            // newest file was missing from the preview until this refresh.
+            // the tiles reflect the set the device was just synced against.
             loadHotPreview();
-            const mac = updateMac;
-            if (mac && window.setDeviceActivity) {
+            const target = updateMac || mac;
+            if (target && window.setDeviceActivity) {
                 const firstThumb = document.querySelector("#hot-preview-list .hot-preview-thumb");
                 const src = (firstThumb && firstThumb.src && !firstThumb.src.includes("pixoo.png")) ? firstThumb.src : null;
-                window.setDeviceActivity(mac, "cloud", src ? { src } : {});
+                window.setDeviceActivity(target, "cloud", src ? { src } : {});
             }
-        } else {
-            fill.style.width = "100%";
-            text.textContent = p.error ? `Failed: ${p.error}` : "Update failed";
-            fill.style.background = "linear-gradient(90deg, #7f1d1d, #ef4444)";
-            btn.classList.remove("progress-active");
-            btn.classList.add("progress-fail");
-            window.showToast(`Hot update failed: ${p.error || "unknown"}`, "error");
         }
-
-        setTimeout(resetButton, 3000);
     }
     // connection_events.js's window.Divoom.onHotProgress calls these by name
     // on window — without this exposure they're closure-local and the calls
@@ -263,9 +235,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const wrap = document.getElementById("hot-progress-wrap");
         const fill = document.getElementById("hot-progress-fill");
 
-        label.style.display = "";
-        wrap.style.display = "none";
-        if (fill) fill.style.width = "0%";
+        if (label) label.style.display = "";
+        if (wrap) wrap.style.display = "none";
+        if (fill) { fill.style.width = "0%"; fill.style.background = ""; }
         btn.disabled = false;
         btn.classList.remove("progress-active", "progress-ok", "progress-fail");
     }

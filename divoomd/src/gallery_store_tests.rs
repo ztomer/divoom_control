@@ -1,5 +1,4 @@
-//! The stored gallery's rules, pinned: what goes on the wire, and what the
-//! device's answer means.
+//! The stored gallery's rules, pinned: what goes on the wire.
 //!
 //! Every test here is a RULE the owner's ruling rests on ("art should be
 //! stored", 2026-10-21), and every one of them can be checked without a
@@ -8,13 +7,13 @@
 //! * the art that is STORED is the art that was SHOWN — the same frames, in
 //!   the device's own encoding;
 //! * the page goes on the wire in the app's own form, so the panel reads it
-//!   the way the app writes it;
-//! * the read-back's answer is read as the app reads it, and an answer this
-//!   reader does not know is NAMED rather than guessed at.
+//!   the way the app writes it.
+//!
+//! There is no read-back to pin: no panel answers the stored-gallery query,
+//! and it was removed (D.DV1).
 
 use crate::gallery_store::{
-    frames_for, page_body, page_end, page_header, page_packets, parse_what_it_holds,
-    split_for_page, ArtItem, WhatItHolds,
+    frames_for, page_body, page_end, page_header, page_packets, split_for_page, ArtItem,
 };
 use std::path::PathBuf;
 
@@ -141,38 +140,4 @@ fn the_items_that_do_not_fit_a_page_are_the_ones_left_over() {
     assert_eq!(fitting.len(), 12, "a page holds twelve items");
     assert_eq!(overflow.len(), 3, "the rest are named by the store");
     assert_eq!(overflow[0].name, "file 12", "and they are the last ones");
-}
-
-/// The device's answer is read as the app reads it.
-#[test]
-fn the_read_back_reads_the_ids_the_device_holds() {
-    // Type 1: user_index, total, offset, num, then num 4-byte file ids.
-    let mut answer = vec![1u8, 0, 2, 0, 0, 0, 2, 0];
-    answer.extend_from_slice(&[0x00, 0x00, 0x00, 0x07]);
-    answer.extend_from_slice(&[0x00, 0x00, 0x00, 0x09]);
-
-    match parse_what_it_holds(&answer) {
-        Some(WhatItHolds::Ids(ids)) => assert_eq!(ids, vec![7, 9]),
-        other => panic!("the answer must be the ids the device holds: {other:?}"),
-    }
-}
-
-/// An empty page says so, and an answer this reader does not know is NAMED.
-#[test]
-fn an_empty_page_and_an_unknown_answer_are_told_apart() {
-    assert_eq!(
-        parse_what_it_holds(&[2, 0]),
-        Some(WhatItHolds::Empty),
-        "type 2 is an empty page"
-    );
-    assert_eq!(
-        parse_what_it_holds(&[9, 0]),
-        Some(WhatItHolds::Unknown(9)),
-        "an answer this reader does not know is named, not guessed at"
-    );
-    assert_eq!(
-        parse_what_it_holds(&[]),
-        None,
-        "no answer at all is no answer"
-    );
 }

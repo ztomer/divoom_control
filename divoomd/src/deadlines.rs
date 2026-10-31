@@ -39,7 +39,6 @@ pub const BUDGETS: &[(&str, Duration)] = &[
     ("sync_artwork", Duration::from_secs(600)),
     ("get_animated_preview", Duration::from_secs(600)),
     ("custom_art_push", Duration::from_secs(600)),
-    ("custom_art_query_page", Duration::from_secs(600)),
     ("device_call", Duration::from_secs(600)),
     ("wall_configure", Duration::from_secs(600)),
 ];

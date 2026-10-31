@@ -18,9 +18,15 @@ use std::sync::{Arc, Mutex};
 /// the phase without telling subscribers, because there is no setter that only
 /// stores. `hot_update_progress` remains as an explicit resync path for a
 /// client that connects mid-update or misses an event.
+///
+/// U.5: every phase names the panel the run is for (`mac`, set by
+/// [`HotProgress::try_begin`]). The events named no panel, so the Hot tab
+/// showed another panel's Sync Now on whichever panel it was showing.
 #[derive(Clone)]
 pub struct HotProgress {
     inner: Arc<Mutex<Value>>,
+    /// The panel the running (or last) update is for.
+    panel: Arc<Mutex<String>>,
     /// Event sink. `None` only in tests that construct a bare progress cell;
     /// the daemon always wires this to its broadcast channel.
     tx: Option<Arc<crate::events::Events>>,
@@ -30,6 +36,7 @@ impl Default for HotProgress {
     fn default() -> Self {
         Self {
             inner: Arc::new(Mutex::new(json!({"phase": "idle"}))),
+            panel: Arc::new(Mutex::new(String::new())),
             tx: None,
         }
     }
@@ -41,6 +48,7 @@ impl HotProgress {
     pub fn with_events(tx: Arc<crate::events::Events>) -> Self {
         Self {
             inner: Arc::new(Mutex::new(json!({"phase": "idle"}))),
+            panel: Arc::new(Mutex::new(String::new())),
             tx: Some(tx),
         }
     }
@@ -62,10 +70,21 @@ impl HotProgress {
     /// Store the new phase AND tell every subscriber. There is deliberately no
     /// store-only variant — that split is what broke the UI.
     pub fn set(&self, val: &Value) {
+        let val = self.named(val);
         if let Ok(mut g) = self.inner.lock() {
             *g = val.clone();
         }
-        self.broadcast(val);
+        self.broadcast(&val);
+    }
+
+    /// `val` carrying the panel the update is for, when one is named.
+    fn named(&self, val: &Value) -> Value {
+        let mut v = val.clone();
+        let panel = self.panel.lock().map(|p| p.clone()).unwrap_or_default();
+        if let (false, Some(obj)) = (panel.is_empty(), v.as_object_mut()) {
+            obj.insert("mac".into(), json!(panel));
+        }
+        v
     }
 
     #[must_use]
@@ -73,10 +92,11 @@ impl HotProgress {
         self.inner.lock().map_or_else(|_| json!({}), |g| g.clone())
     }
 
-    /// Atomically claim the slot; returns false if an update is already running.
+    /// Atomically claim the slot for the panel `mac` names; returns false if
+    /// an update is already running.
     #[must_use]
-    pub fn try_begin(&self) -> bool {
-        {
+    pub fn try_begin(&self, mac: &str) -> bool {
+        let starting = {
             let Ok(mut g) = self.inner.lock() else {
                 return false;
             };
@@ -87,10 +107,15 @@ impl HotProgress {
             ) {
                 return false;
             }
-            *g = json!({"phase": "starting"});
-        } // release the lock before broadcasting — a subscriber callback must
-          // never be able to re-enter this mutex.
-        self.broadcast(&json!({"phase": "starting"}));
+            if let Ok(mut p) = self.panel.lock() {
+                *p = mac.to_string();
+            }
+            let starting = self.named(&json!({"phase": "starting"}));
+            *g = starting.clone();
+            starting
+        }; // release the lock before broadcasting — a subscriber callback must
+           // never be able to re-enter this mutex.
+        self.broadcast(&starting);
         true
     }
 
@@ -100,7 +125,9 @@ impl HotProgress {
         // coherent to reset, so there is nothing to broadcast.
         let stuck = self.inner.lock().ok().and_then(|mut g| {
             if g.get("phase").and_then(|v| v.as_str()) == Some("starting") {
-                let v = json!({"phase":"error","error":"hot update did not start (queue timeout)"});
+                let v = self.named(
+                    &json!({"phase":"error","error":"hot update did not start (queue timeout)"}),
+                );
                 *g = v.clone();
                 Some(v)
             } else {
@@ -175,19 +202,39 @@ mod hot_progress_tests {
     fn try_begin_broadcasts_the_starting_phase() {
         let (tx, mut rx) = crate::events::Events::channel(8);
         let p = HotProgress::with_events(tx);
-        assert!(p.try_begin());
+        assert!(p.try_begin("P1"));
         let events = drain(&mut rx);
         assert_eq!(events.len(), 1, "claiming the slot is a phase change");
         assert_eq!(events[0]["phase"], json!("starting"));
+    }
+
+    /// U.5: every phase names its panel, so a client shows a run only on the
+    /// panel it is for.
+    #[test]
+    fn every_phase_names_the_panel_the_run_is_for() {
+        let (tx, mut rx) = crate::events::Events::channel(8);
+        let p = HotProgress::with_events(tx);
+        assert!(p.try_begin("f90d2cc9"));
+        p.set(&json!({"phase": "uploading", "current": 1, "total": 2}));
+        p.set(&json!({"phase": "done", "result": {}}));
+        let events = drain(&mut rx);
+        assert_eq!(events.len(), 3);
+        for e in &events {
+            assert_eq!(e["mac"], json!("f90d2cc9"), "{e}");
+        }
+        assert_eq!(p.get()["mac"], json!("f90d2cc9"), "the poll names it too");
     }
 
     #[test]
     fn try_begin_refuses_a_second_run_and_stays_silent() {
         let (tx, mut rx) = crate::events::Events::channel(8);
         let p = HotProgress::with_events(tx);
-        assert!(p.try_begin());
+        assert!(p.try_begin("P1"));
         drain(&mut rx);
-        assert!(!p.try_begin(), "a second concurrent update must be refused");
+        assert!(
+            !p.try_begin("P2"),
+            "a second concurrent update must be refused"
+        );
         assert_eq!(
             drain(&mut rx).len(),
             0,
@@ -201,7 +248,7 @@ mod hot_progress_tests {
         // daemon had given up — the exact hang, one layer down.
         let (tx, mut rx) = crate::events::Events::channel(8);
         let p = HotProgress::with_events(tx);
-        assert!(p.try_begin());
+        assert!(p.try_begin("P1"));
         drain(&mut rx);
         p.clear_stuck_starting();
         let events = drain(&mut rx);

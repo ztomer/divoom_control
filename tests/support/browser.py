@@ -290,10 +290,11 @@ TOAST_ELEMENT_ID = "toast"
 #: then a 3s timer drops ``show``. It has no id, no history, and no queue, and
 #: it is the only writer of that element in the whole app. So a toast's identity
 #: is its rendered text plus its kind class plus its transport marker, and
-#: nothing about "a toast exists" identifies one: ``app_init.js:281`` raises
-#: "Startup: Auto-scanning screens..." about a second after load and the scan
-#: behind it answers with its own failure, on timers no test controls, in every
-#: e2e page.
+#: nothing about "a toast exists" identifies one. (The app's startup scan used
+#: to raise "Startup: Auto-scanning screens..." and then its own failure in
+#: every e2e page; background work no longer toasts --
+#: ``tests/test_e2e_no_background_toasts.py`` -- but a wait still names its
+#: own toast.)
 #:
 #: A ``defineProperty`` trap rather than a spy assignment, because it is in place
 #: BEFORE ``app_globals.js`` defines the real function: a spy installed after

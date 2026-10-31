@@ -110,16 +110,15 @@ pub async fn get_animated_preview(args: &Value) -> Value {
     )
 }
 
+/// Show one gallery file on a panel.
+///
+/// It used to broadcast `hot_progress` for its own steps, and the Hot tab's
+/// Update button -- the only listener -- took a gallery push for a hot-channel
+/// run and finished it (U.5). The reply is this command's outcome.
 pub async fn sync_artwork(daemon: &Daemon, args: &Value) -> Value {
-    let _ = daemon
-        .tx
-        .send(json!({"type":"hot_progress","progress":0,"phase":"starting"}));
     let file_id = match args.get("file_id").and_then(|v| v.as_str()) {
         Some(f) if !f.is_empty() => f.to_string(),
         _ => {
-            let _ = daemon
-                .tx
-                .send(json!({"type":"hot_progress","progress":100,"phase":"error"}));
             return crate::command_args::missing("sync_artwork", "'file_id'");
         }
     };
@@ -135,17 +134,11 @@ pub async fn sync_artwork(daemon: &Daemon, args: &Value) -> Value {
     let file_bytes = match download_cloud_file(&file_id).await {
         Ok(b) => b,
         Err(e) => {
-            let _ = daemon
-                .tx
-                .send(json!({"type":"hot_progress","progress":100,"phase":"error"}));
             return err_code(ErrorCode::UpstreamFailed, &format!("sync_artwork: {e}"));
         }
     };
 
     let Some(img) = resolve_to_gif(&file_bytes) else {
-        let _ = daemon
-            .tx
-            .send(json!({"type":"hot_progress","progress":100,"phase":"error"}));
         return err_code(
             ErrorCode::UpstreamFailed,
             &format!(
@@ -175,7 +168,6 @@ pub async fn sync_artwork(daemon: &Daemon, args: &Value) -> Value {
         .and_then(serde_json::Value::as_bool)
         .unwrap_or(false);
     // The push's own reply, so a failure keeps the code it was given (P5.10).
-    let _ = daemon.tx.send(json!({"type":"hot_progress","progress":100,"phase":if ok {"done"} else {"error"}, "result": res}));
     if ok {
         ok_reply(json!({}))
     } else {

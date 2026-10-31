@@ -187,7 +187,6 @@ fn device(address: &str, pushed: usize, error: Option<&str>) -> DeviceOutcome {
         files: 10,
         pushed,
         stored: pushed,
-        readback: None,
         error: error.map(str::to_string),
         warnings: Vec::new(),
     }
@@ -347,43 +346,5 @@ fn a_device_that_stored_some_of_the_art_is_not_a_failed_run() {
     assert!(
         warnings[0].contains("Jack Skellington"),
         "the warning names the file: {warnings:?}"
-    );
-}
-
-/// E63: the state after a run says WHICH happened.
-///
-/// "ok" cannot answer the owner's question — did the art land on the device?
-/// The state carries the files each device was SHOWN and the files it
-/// STORED, and what the device said it holds.
-#[test]
-fn the_state_says_what_was_shown_and_what_was_stored() {
-    use crate::monthly_best::{device_states, CycleOutcome, DeviceOutcome};
-
-    let mut stored_device = DeviceOutcome {
-        address: "A".to_string(),
-        classify: 18,
-        files: 5,
-        pushed: 5,
-        stored: 3,
-        readback: Some("the device says it holds 3 item(s) on the page".to_string()),
-        error: None,
-        warnings: vec!["Jack Skellington: the download failed".to_string()],
-    };
-    stored_device.warnings.clear();
-
-    let states = device_states(&CycleOutcome {
-        devices: vec![stored_device],
-        failures: Vec::new(),
-    });
-
-    let device = &states[0];
-    assert_eq!(device["shown"], serde_json::json!(5), "the shown count");
-    assert_eq!(device["stored"], serde_json::json!(3), "the stored count");
-    assert!(
-        device["readback"]
-            .as_str()
-            .unwrap_or_default()
-            .contains("3 item(s)"),
-        "and what the device said it holds: {states}"
     );
 }

@@ -86,20 +86,6 @@ async fn mock_connect_succeeds_and_owns_device() {
     );
 }
 
-// The connecting guard must reject a second connect while one is in flight
-// (prevents two scans/connects clobbering the one shared central).
-#[tokio::test]
-async fn connect_guard_rejects_when_in_progress() {
-    let daemon = Daemon::new();
-    daemon.connecting.store(true, Ordering::SeqCst); // simulate an in-flight connect
-    let req = make_request("connect", Some(json!({"mock": true})), None);
-    let res = cmd_connect(&daemon, &req).await;
-    assert_eq!(res["success"], json!(false));
-    assert_eq!(res["error"], json!("connect already in progress"));
-    // The simulated in-flight connect still holds the flag (we didn't run one).
-    assert!(daemon.connecting.load(Ordering::SeqCst));
-}
-
 // Disconnect with no device owned must be a clean success, not a crash.
 #[tokio::test]
 async fn disconnect_with_no_device_is_safe() {

@@ -75,12 +75,14 @@ def test_gallery_has_no_device_list():
 def test_hot_channel_has_no_gallery_grid():
     """Hot Channel has the hot preview + update button but NO gallery
     grid or classify tabs."""
-    src = TEMPLATES_JS
+    # The LIVE Hot Channel is the Pixel Art sub-tab; a second, unused copy of
+    # it (templates_hot_channel.js) was deleted in U.5.
+    src = (REPO_ROOT / "divoom_gui" / "web_ui" / "templates_pixel_art.js").read_text()
     hc_match = re.search(
-        r'<div class="hot-channel-layout">(.*?)</div>\s*`;',
+        r'id="pixel-hot-channel">(.*?)<!-- PLAYLISTS sub-tab -->',
         src, re.DOTALL,
     )
-    assert hc_match is not None, "hot-channel-layout block not found in templates"
+    assert hc_match is not None, "the Hot Channel sub-tab was not found in templates_pixel_art.js"
     block = hc_match.group(1)
     assert 'class="gallery-grid"' not in block, (
         "Hot Channel must not have a gallery grid."

@@ -158,7 +158,7 @@ impl Drop for ScanGuard<'_> {
 /// Resets the daemon's `connecting` flag on drop, so a connect that returns via
 /// ANY path (incl. an early error or a timeout) can't wedge the guard.
 #[cfg(feature = "ble")]
-struct ConnectGuard<'a>(&'a std::sync::atomic::AtomicBool);
+pub(crate) struct ConnectGuard<'a>(&'a std::sync::atomic::AtomicBool);
 
 #[cfg(feature = "ble")]
 impl Drop for ConnectGuard<'_> {
@@ -282,34 +282,63 @@ async fn connect_mock(daemon: &Daemon, req: &Request) -> Value {
     .await
 }
 
+mod radio;
+use radio::{already_linked, requested_id};
+#[cfg(feature = "ble")]
+use radio::{take_radio, CONNECT_WAIT};
+
 /// Handle `connect_device` command (BLE or LAN).
 pub(crate) async fn cmd_connect(daemon: &Daemon, req: &Request) -> Value {
-    // Reject a concurrent connect: two would clobber the one shared central and
-    // overwrite the owned device. Held for the whole command via Drop-on-return.
-    #[cfg(feature = "ble")]
-    {
-        if daemon
-            .connecting
-            .compare_exchange(
-                false,
-                true,
-                std::sync::atomic::Ordering::SeqCst,
-                std::sync::atomic::Ordering::SeqCst,
-            )
-            .is_err()
+    connect_waiting(daemon, req, {
+        #[cfg(feature = "ble")]
         {
-            return err_code(ErrorCode::Busy, "connect already in progress");
+            CONNECT_WAIT
         }
-    }
-    #[cfg(feature = "ble")]
-    let _guard = ConnectGuard(&daemon.connecting);
+        #[cfg(not(feature = "ble"))]
+        {
+            std::time::Duration::ZERO
+        }
+    })
+    .await
+}
+
+/// `cmd_connect` with the radio wait as a parameter (tests shorten it).
+pub(crate) async fn connect_waiting(
+    daemon: &Daemon,
+    req: &Request,
+    wait: std::time::Duration,
+) -> Value {
+    // Without `ble` there is no radio to wait for.
+    #[cfg(not(feature = "ble"))]
+    let _ = wait;
     let mock = req
         .args
         .get("mock")
         .and_then(serde_json::Value::as_bool)
         .unwrap_or(false);
+    // A mock is a test double with no radio: it neither waits for the radio
+    // nor is answered from the fleet (a test relinks one to change its model).
     if mock {
         return connect_mock(daemon, req).await;
+    }
+    let id = requested_id(req);
+    if let Some(id) = id.as_deref() {
+        if let Some(reply) = already_linked(daemon, id).await {
+            return reply;
+        }
+    }
+    // Two connects at once would clobber the one shared central; the second
+    // waits. Held for the whole command via Drop-on-return.
+    #[cfg(feature = "ble")]
+    let _guard = match take_radio(daemon, id.as_deref(), wait).await {
+        Ok(g) => g,
+        Err(reply) => return reply,
+    };
+    // Whoever held the radio may have linked this very panel.
+    if let Some(id) = id.as_deref() {
+        if let Some(reply) = already_linked(daemon, id).await {
+            return reply;
+        }
     }
 
     let lan_ip = req.args.get("lan_ip").and_then(|v| v.as_str());

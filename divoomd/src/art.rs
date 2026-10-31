@@ -91,8 +91,6 @@ pub(crate) fn encode_custom_art(
 /// BLE/SPP push path only; with `ble` off there is no transport to send them.
 #[cfg(feature = "ble")]
 const CMD_OLD: u8 = 0xB1; // set user gif
-#[cfg(feature = "ble")]
-const CMD_QUERY: u8 = 0x8E; // app get user define info
 
 #[cfg(feature = "ble")]
 async fn push_custom_art_page(
@@ -293,104 +291,19 @@ fn push_page(
     std::future::ready(false)
 }
 
-/// Handle `custom_art_query_page` command.
-#[cfg(feature = "ble")]
-pub async fn cmd_custom_art_query_page(daemon: Arc<Daemon>, args: &Value) -> Value {
-    let page = args
-        .get("page")
-        .and_then(serde_json::Value::as_u64)
-        .unwrap_or(0)
-        .byte();
-    let target_mac = args
-        .get("mac")
-        .and_then(Value::as_str)
-        .or_else(|| args.get("target_mac").and_then(Value::as_str));
-    let link = match daemon.resolve_target_link(target_mac).await {
-        Ok(l) => l,
-        Err(e) => return e,
-    };
-    let _permit = match link.queue.acquire(None).await {
-        Ok(p) => p,
-        Err(e) => return e.reply(),
-    };
-    let dev = link.transport.clone();
-    if matches!(
-        &*dev,
-        crate::daemon::DeviceTransport::Ble(_) | crate::daemon::DeviceTransport::Spp(_)
-    ) {
-        let resp = dev
-            .send_command_and_wait(CMD_QUERY, &[page], std::time::Duration::from_secs(4))
-            .await;
-        match resp {
-            crate::transport::Read::Answered(data) if data.len() >= 8 => {
-                let rtype = data[0];
-                if rtype == 2 {
-                    return json!({"success": true, "ids": []});
-                }
-                if rtype == 1 {
-                    let item_count = u16::from_le_bytes([data[6], data[7]]) as usize;
-                    let mut ids = Vec::new();
-                    let mut pos = 8;
-                    for _ in 0..item_count {
-                        if pos + 4 > data.len() {
-                            break;
-                        }
-                        let fid =
-                            u32::from_le_bytes(data[pos..pos + 4].try_into().unwrap_or([0; 4]));
-                        ids.push(fid);
-                        pos += 4;
-                    }
-                    return json!({"success": true, "ids": ids});
-                }
-                return err_code(
-                    ErrorCode::DeviceFailed,
-                    &format!("unexpected response type {rtype}"),
-                );
-            }
-            crate::transport::Read::Silent => {
-                return err_with(
-                    ErrorCode::DeviceFailed,
-                    "no response (device timed out)",
-                    json!({"ids": []}),
-                )
-            }
-            crate::transport::Read::LinkFailed(why) => {
-                return err_with(
-                    ErrorCode::DeviceDisconnected,
-                    &format!("the panel's link failed: {why}"),
-                    json!({"ids": []}),
-                )
-            }
-            crate::transport::Read::Answered(_) => {
-                return err_with(
-                    ErrorCode::DeviceFailed,
-                    "the panel's answer was too short to read",
-                    json!({"ids": []}),
-                )
-            }
-        }
-    }
-    err_code(
-        ErrorCode::Unsupported,
-        "custom_art_query_page requires BLE transport",
-    )
-}
-
-/// Without `ble` there is no transport to query: the stub keeps the dispatch
-/// table's shape (a future) and answers at once.
-#[cfg(not(feature = "ble"))]
-pub fn cmd_custom_art_query_page(
-    _daemon: Arc<Daemon>,
-    _args: &Value,
-) -> impl std::future::Future<Output = Value> + Send {
-    std::future::ready(err_code(
-        ErrorCode::Unsupported,
-        "custom_art_query_page requires BLE transport",
-    ))
-}
-
 /// Handle `hot_update` command — starts a background task, returns immediately.
-pub fn cmd_hot_update(daemon: Arc<Daemon>, args: &Value, progress: Arc<HotProgress>) -> Value {
+///
+/// The run's verdict is the panel's hot-channel record (U.5,
+/// `crate::hot_verdict`): written when it ends, failed or not, under the
+/// panel it ran on, with `by` saying which path asked (`button` -- the
+/// default -- or `sync_now`). A panel that is not linked is a verdict too: the
+/// run was asked for and could not happen, and that replaces whatever the
+/// panel's line said before.
+pub async fn cmd_hot_update(
+    daemon: Arc<Daemon>,
+    args: &Value,
+    progress: Arc<HotProgress>,
+) -> Value {
     let device_size = args
         .get("device_size")
         .and_then(serde_json::Value::as_u64)
@@ -400,18 +313,50 @@ pub fn cmd_hot_update(daemon: Arc<Daemon>, args: &Value, progress: Arc<HotProgre
         .get("show")
         .and_then(serde_json::Value::as_bool)
         .unwrap_or(true);
-    // R53: the GUI passes the device address it displays; we stamp the outcome
-    // under it so "Last checked <when>" is dated and daemon-owned.
-    let address = args
+    let Some(by) = crate::hot_verdict::RunBy::from_request(args.get("by").and_then(Value::as_str))
+    else {
+        return err_code(
+            ErrorCode::BadRequest,
+            "hot_update: 'by' is 'button' or 'sync_now'",
+        );
+    };
+    let named = args
         .get("address")
         .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
+        .filter(|a| !a.is_empty());
+    // The panel the run is for, resolved NOW: the verdict and every progress
+    // event name it.
+    let target = match daemon.fleet.resolve_target(named).await {
+        Ok(t) => t,
+        Err(e) => {
+            if let Some(addr) = named {
+                let verdict = crate::hot_verdict::Verdict::from_hot_update(
+                    by,
+                    crate::civil_time::unix_seconds(),
+                    &Err(e.message.clone()),
+                );
+                crate::hot_verdict::record(&daemon, addr, &verdict);
+            }
+            return e.reply();
+        }
+    };
+    let address = target.id.clone();
+    if target.link().await.is_none() {
+        let why = format!("device '{address}' not connected");
+        let verdict = crate::hot_verdict::Verdict::from_hot_update(
+            by,
+            crate::civil_time::unix_seconds(),
+            &Err(why.clone()),
+        );
+        crate::hot_verdict::record(&daemon, &address, &verdict);
+        return err_code(ErrorCode::DeviceDisconnected, &why);
+    }
 
-    if !progress.try_begin() {
+    if !progress.try_begin(&address) {
         return err_code(ErrorCode::Busy, "hot update already in progress");
     }
 
+    let reply = json!({"success": true, "started": true, "mac": address});
     let daemon_arc = daemon;
     let progress_arc = progress;
     tokio::spawn(async move {
@@ -420,22 +365,24 @@ pub fn cmd_hot_update(daemon: Arc<Daemon>, args: &Value, progress: Arc<HotProgre
             device_size,
             show_after,
             progress_arc.clone(),
-            (!address.is_empty()).then(|| address.clone()),
+            Some(address.clone()),
         )
         .await;
+        // The verdict is recorded BEFORE the terminal phase is published, so a
+        // client that re-reads the record on `done`/`error` finds this run.
+        let verdict = crate::hot_verdict::Verdict::from_hot_update(
+            by,
+            crate::civil_time::unix_seconds(),
+            &result,
+        );
+        crate::hot_verdict::record(&daemon_arc, &address, &verdict);
         match result {
-            Ok(summary) => {
-                // Stamp the per-device last-checked state before publishing done.
-                if let Err(e) = crate::hot_state::record_check(&address, &summary) {
-                    eprintln!("[ Wrn ] hot_state record_check failed: {e}");
-                }
-                progress_arc.set(&json!({"phase": "done", "result": summary}));
-            }
+            Ok(summary) => progress_arc.set(&json!({"phase": "done", "result": summary})),
             Err(e) => progress_arc.set(&json!({"phase": "error", "error": e})),
         }
     });
 
-    json!({"success": true, "started": true})
+    reply
 }
 
 /// Handle `hot_update_progress` command.

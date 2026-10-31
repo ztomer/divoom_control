@@ -290,6 +290,8 @@ document.addEventListener("DOMContentLoaded", () => {
             row.append(accent, name, status, toggle);
             el.appendChild(row);
         });
+        // Each row's status is the panel's hot-channel verdict (U.5).
+        if (window.paintSyncRows) window.paintSyncRows();
     }
 
     function persistSyncTargets() {

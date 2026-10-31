@@ -150,6 +150,16 @@
                 let changedPos = false;
                 let changedRooms = false;
 
+                // The daemon's layout is the stored truth for WHICH panels are
+                // placed (D.DV2): a key it does not hold is dropped here, or
+                // the next sync would write it back. This is how an invented
+                // fleet (the owner's 11:22:33:44:55:0x placements, refused by
+                // the daemon as never reported) leaves this store too.
+                const held = Object.keys(top.devices).map(k => k.toLowerCase());
+                const unheld = (m) => Object.keys(m).filter(k => !held.includes(k.toLowerCase()));
+                unheld(posMap).forEach(k => { delete posMap[k]; changedPos = true; });
+                unheld(roomMap).forEach(k => { delete roomMap[k]; changedRooms = true; });
+
                 Object.keys(top.devices).forEach(addr => {
                     const dev = top.devices[addr];
                     if (dev && typeof dev.x === 'number' && typeof dev.y === 'number') {

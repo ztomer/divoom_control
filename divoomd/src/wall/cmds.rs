@@ -9,19 +9,57 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-fn topology_path() -> Option<PathBuf> {
+/// Where the layout lives, and whether the operator NAMED the file
+/// (`DIVOOM_TOPOLOGY_PATH`) rather than it being the owner's default.
+fn topology_location() -> Option<(PathBuf, bool)> {
     if let Ok(p) = std::env::var("DIVOOM_TOPOLOGY_PATH") {
-        return Some(PathBuf::from(p));
+        return Some((PathBuf::from(p), true));
     }
     let mut dir = crate::cloud::config_dir()?;
     dir.push("topology.json");
-    Some(dir)
+    Some((dir, false))
 }
 
+fn topology_path() -> Option<PathBuf> {
+    topology_location().map(|(p, _)| p)
+}
+
+/// Drop every placement no real device ever reported (D.DV2), in the
+/// owner's default layout only: a named layout is a test's, and its doubles
+/// belong there. The dropped ids, for the caller to say.
+fn drop_unreported(top: &mut Value, named: bool) -> Vec<String> {
+    if named {
+        return Vec::new();
+    }
+    retain_reported(top, &crate::reported_panels::Reported::load())
+}
+
+/// The layout's placements `reported` admits, the rest dropped and named.
+fn retain_reported(top: &mut Value, reported: &crate::reported_panels::Reported) -> Vec<String> {
+    top.get_mut("devices")
+        .and_then(Value::as_object_mut)
+        .map(|devices| reported.retain_admitted(devices))
+        .unwrap_or_default()
+}
+
+/// The saved layout. In the owner's default location a placement no real
+/// device ever reported is dropped on the way in, and the file is rewritten
+/// without it -- the migration that took the invented fleet out of the
+/// owner's `topology.json` is this read.
 pub fn load_topology() -> Value {
-    if let Some(path) = topology_path() {
+    if let Some((path, named)) = topology_location() {
         if let Ok(s) = std::fs::read_to_string(&path) {
-            if let Ok(val) = serde_json::from_str::<Value>(&s) {
+            if let Ok(mut val) = serde_json::from_str::<Value>(&s) {
+                let dropped = drop_unreported(&mut val, named);
+                if !dropped.is_empty() {
+                    eprintln!(
+                        "divoomd: topology.json placed panels no device ever reported; dropped: {}",
+                        dropped.join(", ")
+                    );
+                    if let Err(e) = save_topology(&val) {
+                        eprintln!("divoomd: could not rewrite topology.json: {e}");
+                    }
+                }
                 return val;
             }
         }
@@ -141,8 +179,14 @@ pub async fn cmd_set_topology(_daemon: &Daemon, req: &Request) -> Value {
         .get("topology")
         .cloned()
         .unwrap_or_else(|| req.args.clone());
-    match save_topology(&merge_topology(load_topology(), &top)) {
-        Ok(()) => json!({"success": true}),
+    let named = topology_location().is_some_and(|(_, named)| named);
+    let mut merged = merge_topology(load_topology(), &top);
+    // A placement for a panel no real device reported is not stored (D.DV2):
+    // the reply names it, so the writer learns it was refused.
+    let dropped = drop_unreported(&mut merged, named);
+    match save_topology(&merged) {
+        Ok(()) if dropped.is_empty() => json!({"success": true}),
+        Ok(()) => json!({"success": true, "dropped": dropped}),
         Err(e) => err_code(
             ErrorCode::Internal,
             &format!("failed to save topology: {e}"),
@@ -317,6 +361,37 @@ mod tests {
 
         let _ = std::fs::remove_file(&file_path);
         std::env::remove_var("DIVOOM_TOPOLOGY_PATH");
+    }
+
+    /// D.DV2: the owner's `topology.json` of 2026-10-31, read back -- the
+    /// invented fleet's four placements are dropped, the real panels and the
+    /// rooms kept.
+    #[test]
+    fn the_invented_fleet_is_dropped_from_the_owners_layout() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let discovered = tmp.path().join("discovered_devices.json");
+        std::fs::write(
+            &discovered,
+            json!([{"address": "f90d2cc9-420e-65f9-9e06-f9554470fced"},
+                   {"address": "a9fccb71-3d3d-4de3-c381-0de382cdc4aa"}])
+            .to_string(),
+        )
+        .unwrap();
+        let reported = crate::reported_panels::Reported::from_files(Some(&discovered), None);
+        let mut top = json!({"rooms": ["Desk", "Shelf"], "wall_linked": true, "devices": {
+            "11:22:33:44:55:01": {"room": "Desk", "x": 50, "y": 100},
+            "11:22:33:44:55:02": {"room": "Desk", "x": 91, "y": 101},
+            "11:22:33:44:55:03": {"room": "Desk", "x": 157, "y": 86},
+            "11:22:33:44:55:04": {"room": "Desk", "x": 228, "y": 10},
+            "a9fccb71-3d3d-4de3-c381-0de382cdc4aa": {"room": "Shelf", "x": 681, "y": 39},
+            "f90d2cc9-420e-65f9-9e06-f9554470fced": {"room": "Ethan", "x": 448, "y": 110}
+        }});
+        let dropped = retain_reported(&mut top, &reported);
+        assert_eq!(dropped.len(), 4, "{dropped:?}");
+        assert!(dropped.iter().all(|d| d.starts_with("11:22:33:44:55:")));
+        let devs = top["devices"].as_object().unwrap();
+        assert_eq!(devs.len(), 2, "{devs:?}");
+        assert_eq!(top["rooms"], json!(["Desk", "Shelf"]), "rooms are kept");
     }
 
     #[test]

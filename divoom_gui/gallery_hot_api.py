@@ -41,32 +41,30 @@ class GalleryHotApiMixin:
         """Start the HOT channel update on the panel ``mac`` names, in the
         daemon's background. Returns immediately.
 
-        The address is the daemon's TARGET (art_hot.rs) and the key it stamps
-        the last-checked state under (R53, read back by `hot_get_check`). It
-        was the wall whenever wall slots existed, else the panel the bench
-        selected last, read when the call RAN (P5.7)."""
+        The daemon records the run's verdict under that panel when it ends,
+        failed or not (U.5; read back by `hot_verdict`)."""
         logger.info(f"GUI Action: Hot channel update on {mac} (start)...")
         if not mac or mac == "MatrixWall":
             return json.dumps({"success": False, "error": "the hot channel updates one panel; name it"})
         client = self._client()
         if client is None:
             return json.dumps({"success": False, "error": "no daemon available"})
-        r = client.hot_update(device_size=int(self._size_of(mac)), show=True, address=mac)
+        r = client.hot_update(device_size=int(self._size_of(mac)), show=True, address=mac, by="button")
         return json.dumps(r)
 
     def sync_now(self) -> str:
-        """Manually run Auto-Sync immediately, instead of waiting for the
-        scheduled interval. Pushes hot-channel content to every device the
-        app's settings register (`settings_devices.registered_devices()` —
-        the same table the Routines > Auto-Sync device toggles edit and the
-        daemon's scheduled loop reads) one at a time — the daemon
-        owns a single active device, so this connects, runs the same
-        `hot_update` the "Update Hot Channel" button uses, waits for it to
-        finish, disconnects (implicitly, on the next `connect_single_device`),
-        and moves on. A device that can't connect or fails to sync is
-        reported and skipped, not fatal to the run (mirrors
-        `monthly_best_daemon.py::_push_items_to_target`'s per-address
-        try/except). Runs in a background thread; returns immediately."""
+        """Run Auto-Sync's hot-channel update now, on every panel the app's
+        settings register (`settings_devices.registered_devices()` -- the
+        table the Auto-Sync rows edit), one after another. Runs in a thread;
+        returns immediately.
+
+        Each panel's run is the daemon's `hot_update` with ``by="sync_now"``,
+        and the DAEMON records its verdict, failures included -- a panel that
+        is not linked is a recorded failure, the line the row then shows (U.5).
+        It used to connect each panel first, through the GUI's own connect
+        click (which also re-wrote the app's "last connected" panel), and to
+        report into rows that kept nothing: the panel's link is the fleet's
+        (D.DV2c), and the verdict is the daemon's record."""
         logger.info("GUI Action: Sync Now (start)...")
         from divoom_lib import settings_devices
 
@@ -80,53 +78,38 @@ class GalleryHotApiMixin:
             except Exception as e:
                 logger.warning(f"Failed to send sync-now progress: {e}")
 
+        def wait_idle(client, deadline):
+            status = {"phase": "starting"}
+            while time.monotonic() < deadline:
+                status = client.hot_update_progress()
+                if status.get("phase") not in ("starting", "fetching_manifest", "downloading", "uploading"):
+                    return status
+                time.sleep(0.6)
+            return status
+
         def worker():
             targets = [addr for addr, _ in settings_devices.registered_devices()]
-            summary = {"total": len(targets), "ok": 0, "failed": 0}
-            for address in targets:
-                notify(address, "connecting")
-                try:
-                    if not self.connect_single_device(address):
-                        summary["failed"] += 1
-                        notify(address, "error", error="Could not connect")
-                        continue
-                except Exception as e:
-                    summary["failed"] += 1
-                    notify(address, "error", error=str(e))
-                    continue
-
+            for index, address in enumerate(targets, start=1):
+                notify(address, "checking", index=index, total=len(targets))
                 try:
                     client = self._client()
                     if client is None:
                         raise RuntimeError("no daemon available")
-                    size = self._size_of(address)
-                    start = client.hot_update(device_size=int(size), show=True, address=address)
-                    if not start.get("success"):
-                        raise RuntimeError(start.get("error") or "could not start hot update")
-                    notify(address, "syncing")
-
-                    status = {"phase": "starting"}
-                    deadline = time.monotonic() + 120
-                    while time.monotonic() < deadline:
-                        status = client.hot_update_progress()
-                        if status.get("phase") in ("done", "error"):
-                            break
-                        time.sleep(0.6)
-
-                    if status.get("phase") == "done":
-                        summary["ok"] += 1
-                        served = len((status.get("result") or {}).get("served", []))
-                        notify(address, "done", served=served)
-                    else:
-                        summary["failed"] += 1
-                        notify(address, "error", error=status.get("error") or "timed out")
+                    # One update at a time on the daemon: wait out one already
+                    # running (a button press) rather than be refused.
+                    wait_idle(client, time.monotonic() + 120)
+                    start = client.hot_update(device_size=int(self._size_of(address)), show=True,
+                                              address=address, by="sync_now")
+                    if start.get("success"):
+                        wait_idle(client, time.monotonic() + 120)
                 except Exception as e:
-                    summary["failed"] += 1
-                    notify(address, "error", error=str(e))
+                    logger.warning(f"Sync Now on {address} failed: {e}")
+                # The row shows the daemon's record: re-read it now.
+                notify(address, "finished")
 
             if self.window:
                 try:
-                    js = f"if (window.onSyncNowComplete) {{ window.onSyncNowComplete({json.dumps(summary)}); }}"
+                    js = f"if (window.onSyncNowComplete) {{ window.onSyncNowComplete({json.dumps({'total': len(targets)})}); }}"
                     self.window.evaluate_js(js)
                 except Exception as e:
                     logger.warning(f"Failed to send sync-now completion: {e}")
@@ -134,14 +117,17 @@ class GalleryHotApiMixin:
         threading.Thread(target=worker, name="DivoomSyncNow", daemon=True).start()
         return json.dumps({"success": True})
 
-    def hot_get_check(self, address: str) -> str:
-        """R53: the daemon-recorded last hot-channel check for the panel
-        ``address`` names (or ``{}``). Reads the shared ``hot_update_state.json``
-        the daemon writes, under the same key ``hot_channel_update`` passes
-        for the write. It no longer resolves "the active device" when none is
-        named (P5.7): that read the selection when the call RAN."""
-        from divoom_lib import hot_update_state
-        return json.dumps(hot_update_state.get_check(address or ""))
+    def hot_verdict(self, address: str) -> str:
+        """U.5: the hot-channel verdict the daemon recorded for the panel
+        ``address`` names (or ``{}``) -- the newest run by any path."""
+        from divoom_lib import hot_verdict
+        return json.dumps(hot_verdict.get(address or ""))
+
+    def hot_verdicts(self) -> str:
+        """U.5: every panel's hot-channel verdict, ``{panel id: entry}`` -- the
+        Auto-Sync rows' shorter form of the same record."""
+        from divoom_lib import hot_verdict
+        return json.dumps(hot_verdict.all_verdicts())
 
     def hot_update_preview(self, mac: str) -> str:
         """Fetch the hot channel manifest from Divoom's cloud for the panel
