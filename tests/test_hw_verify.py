@@ -88,7 +88,17 @@ class FakeClient:
         self.calls.append(("device_call", method, args, mac))
         if self._raises:
             raise RuntimeError("socket closed")
-        return self._replies.get(method, self._call_reply)
+        if method in self._replies:
+            return self._replies[method]
+        # The daemon's own refusal (D14): a pushed image must say whether it
+        # is pixel art or a picture. A fake that took a bare path modelled a
+        # daemon that no longer exists, and the packet's custom_art push was
+        # refused on the bench while every test here stayed green.
+        if method.rsplit(".", 1)[-1] == "show_image" and \
+                (kwargs or {}).get("art") not in ("pixel", "picture"):
+            return {"success": False, "code": "bad_request",
+                    "error": "display.show_image: say what the image is"}
+        return self._call_reply
 
     def send_command(self, command, args=None):
         self.calls.append(("send_command", command, args))
@@ -99,7 +109,9 @@ class FakeClient:
         if command in self._replies:
             return self._replies[command]
         if command == "now_playing":
-            return {"success": True, "playing": True}
+            # The daemon's shape: `playing` says a track is in the session,
+            # `is_playing` says it is not paused.
+            return {"success": True, "playing": True, "is_playing": True}
         if command == "get_device_activity":
             return {"success": True,
                     "activity": {"AA:BB": {"kind": self._kind,
@@ -411,3 +423,36 @@ def test_the_image_expectation_is_the_daemons_own_rendering(tmp_path):
     sent = [c for c in client.calls if c[0] == "send_command" and c[1] == "render_widget"]
     assert sent, "the expectation must come from the daemon's own renderer"
 
+
+
+def test_the_image_check_says_what_the_image_is(tmp_path):
+    """The daemon refuses a pushed image that does not say pixel or picture.
+
+    The packet's file is an arbitrary image scaled to the panel, so it is a
+    picture -- and the bench (2026-11-01, Ditoo) refused the bare push.
+    """
+    image = tmp_path / "img.png"
+    image.write_bytes(hw_expect.raw_to_png(bytes((1, 2, 3)) * 256, 16))
+    client = _widget_client()
+    check = hw.ImageCheck(id="custom_art", title="t",
+                          method="display.show_image", path_arg="$image")
+    ctx = _ctx(tmp_path)
+    ctx["image"] = str(image)
+    fired, detail = check.drive(client, ctx)
+    assert fired, detail
+
+
+def test_a_paused_track_is_SKIP_not_graded(tmp_path):
+    """A paused track is in the session but the music job pushes nothing.
+
+    `now_playing` says `playing: true` for it and `is_playing: false`; the
+    bench (2026-11-01) showed the previous widget's frame recorded as the
+    music job's, which an operator would have graded as album art.
+    """
+    client = _widget_client(now_playing={"success": True, "playing": True,
+                                         "is_playing": False})
+    check = hw.LiveJobCheck(id="album_art", title="t", kind="music",
+                            needs_now_playing=True)
+    exp = check.expectation(client, _ctx(tmp_path))
+    assert exp.verdict == hw.SKIP
+    assert "paused" in exp.detail.lower()

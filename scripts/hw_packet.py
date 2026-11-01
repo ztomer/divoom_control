@@ -136,6 +136,14 @@ class LiveJobCheck(Check):
                     detail="nothing is playing — the music job has nothing to "
                            "push, so there is no cover to grade. Start some "
                            "music and run this check again.")
+            # `playing` is a track in the session; a PAUSED one is still
+            # there, and the music job pushes nothing for it.
+            if playing.get("is_playing") is False:
+                return Expectation(
+                    verdict="SKIP",
+                    detail=f"the track is paused ({playing.get('display', '?')})"
+                           " — the music job pushes nothing for a paused "
+                           "track. Press play and run this check again.")
         png, record = expect.painted_png(
             client, ctx["mac"], kind=self.kind, wait=expect.FRAME_WAIT)
         if png is None:
@@ -168,12 +176,16 @@ class ImageCheck(Check):
     """
     method: str = ""
     path_arg: str = ""              # the ctx key holding the file path
+    # The daemon refuses a push that does not say what it is (D14): this
+    # file is any image, scaled to fit the panel, so it is a picture.
+    art: str = "picture"
     settle: float = 3.0
     render_kind: str = "album_art"
 
     def drive(self, client, ctx):
         path = ctx[self.path_arg[1:]] if self.path_arg.startswith("$") else self.path_arg
-        reply = client.device_call(self.method, [path], mac=ctx.get("mac"))
+        reply = client.device_call(self.method, [path], {"art": self.art},
+                                   mac=ctx.get("mac"))
         time.sleep(self.settle)
         if not isinstance(reply, dict):
             return False, f"non-dict reply: {reply!r}"

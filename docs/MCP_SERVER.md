@@ -116,8 +116,12 @@ frame up for good. A lease is the borrow with the return built in:
   others answer `superseded`.
 - **`notify` is a lease that ends by itself**: its TTL is the notification's
   duration, so the message comes down when the lease lapses, with the same
-  hand-back as any other lease (the widget's newest frame, or `restored:
-  "none"` on a panel with no widget; ROADMAP P9.7).
+  hand-back as any other lease: the widget's newest frame (`restored:
+  "job"`); on a panel with no widget, the firmware channel it was on when
+  re-selecting that channel puts the same screen back -- the clock or the
+  cloud channel (`restored: "channel"`); otherwise `restored: "none"`, which
+  is what a panel showing a pushed image gets, because re-selecting its
+  channel shows the custom gallery instead (P9.7, CHANGELOG 2026-11-01).
 - Every change is announced on the daemon's event stream as
   `{"type": "lease", "state": "acquired" | "released" | "expired", ...}`.
 

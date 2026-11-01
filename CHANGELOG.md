@@ -15,6 +15,19 @@ shipped milestone (per the project planning docs).
   now point `GOH_DIR` at a stub whose `structural.sh` exits 0 (the house TUI
   linked in): 7 tests in 5 s, and the layer-3 test still goes red with the
   `repo_gates.sh` line disabled.
+- **The Ditoo bench checks, read through a webcam (2026-11-01, D4/D6/OW.1).**
+  Calibrated first (solid red, a 4x4 checker, an orientation marker each read
+  back as pushed). P9.7: re-selecting channel 5 after a pushed image shows the
+  custom gallery, not the image; the clock (0) and the cloud channel (2) come
+  back. A lease on a widgetless panel now reads 0x46 at acquire and gives back
+  those two channels (`restored: "channel"`), and nothing else. The four
+  `hw_verify` widget pushes: sysmon and weather PASS (the panel showed the
+  daemon's own frame), custom_art PASS once sent -- the packet's push was
+  REFUSED (`art` must say pixel or picture, D14) while its fake client took
+  the bare path; album_art SKIP, the track was paused, and the packet now says
+  so instead of grading the previous widget's frame, which the daemon had
+  relabelled as the music job's. The activity record drops its picture when
+  its kind changes. P3.3's weather visual pass is done on a 16x16 panel.
 - **D3 and D5 decided by the agent, with evidence (2026-11-01, owner ruling
   "automate everything you can").** P9.3 (D5): PASS after the minus fix, from
   `docs/assets/widget-backdrops.png` -- every inked diode of all four widgets

@@ -226,7 +226,44 @@ async fn a_forgotten_panel_takes_no_job_activity_or_lease() {
         holder: "agent".into(),
         expires: std::time::Instant::now() + std::time::Duration::from_secs(60),
         generation: 1,
+        channel: None,
     };
     assert_eq!(held.set_lease(lease), Err(Forgotten));
     assert!(held.lease().is_none());
+}
+
+/// The activity record's picture belongs to its kind. Starting a job used
+/// to relabel the record with the new kind and keep the OLD job's preview,
+/// so a music job that had pushed nothing (the track was paused) read back
+/// as `kind: "music"` with the weather frame -- on the bench 2026-11-01 --
+/// and anything grading "the music job's picture" graded the weather.
+#[tokio::test]
+async fn a_new_kind_does_not_inherit_the_old_kinds_picture() {
+    let f = Fleet::default();
+    let d = f.adopt("A", mock()).await;
+    d.set_activity("weather", None, Some("data:weather".into()))
+        .await
+        .expect("linked");
+    let h = tokio::spawn(std::future::pending::<()>());
+    d.install_live_job("music", json!({}), Arc::new(AtomicBool::new(true)), h)
+        .await
+        .expect("a linked panel takes a job");
+    let a = d.activity().await.expect("a record");
+    assert_eq!(a.kind, "music");
+    assert_eq!(a.preview, None, "the weather frame is not the music job's");
+
+    d.set_activity("music", None, Some("data:cover".into()))
+        .await
+        .expect("linked");
+    d.set_activity("music", Some("Ditoo".into()), None)
+        .await
+        .expect("linked");
+    let a = d.activity().await.expect("a record");
+    assert_eq!(
+        a.preview.as_deref(),
+        Some("data:cover"),
+        "the same kind keeps its own picture"
+    );
+    d.set_activity("clock", None, None).await.expect("linked");
+    assert_eq!(d.activity().await.expect("a record").preview, None);
 }

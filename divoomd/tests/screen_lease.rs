@@ -328,3 +328,69 @@ async fn leased_frames_conflate_on_a_slow_link() {
     }
     assert_eq!(superseded, 2, "unleased, latest frame wins as well");
 }
+
+/// What the mock panel was sent, in order.
+async fn sent_log(d: &Daemon) -> Vec<(u8, Vec<u8>)> {
+    let t = d
+        .fleet
+        .get(MAC)
+        .await
+        .expect("known")
+        .transport()
+        .await
+        .expect("linked");
+    match &*t {
+        DeviceTransport::Mock(m) => m.sent_commands.lock().unwrap().clone(),
+        _ => panic!("expected the mock"),
+    }
+}
+
+/// The panel answers 0x46 with `channel` in byte 0, as a Ditoo does.
+async fn on_channel(d: &Daemon, channel: u8) {
+    let t = d
+        .fleet
+        .get(MAC)
+        .await
+        .expect("known")
+        .transport()
+        .await
+        .expect("linked");
+    let DeviceTransport::Mock(m) = &*t else {
+        panic!("expected the mock")
+    };
+    let mut reply = vec![0u8; 20];
+    reply[0] = channel;
+    m.simulated_responses.lock().unwrap().insert(0x46, reply);
+}
+
+/// A lease on a panel with no live widget gives back the firmware channel
+/// it found -- where re-selecting that channel puts the same screen back
+/// (ROADMAP P9.7, photographed on a Ditoo 2026-11-01): the clock (0) and
+/// the cloud channel (2) come back as they were; a re-selected channel 5
+/// shows the custom GALLERY, not the image that was pushed, so a lease that
+/// found a pushed image restores nothing and says so; and re-selecting the
+/// light channel (1) with the one-byte form put the panel dark.
+#[tokio::test]
+async fn a_widgetless_lease_gives_back_only_a_channel_that_comes_back() {
+    for (channel, restored) in [(0u8, "channel"), (2, "channel"), (5, "none"), (1, "none")] {
+        let d = daemon().await;
+        on_channel(&d, channel).await;
+        let token = acquire(&d, 30_000).await;
+        let mine = call(&d, "show_image", Some(&token), frame(16)).await;
+        assert_eq!(mine["success"], json!(true), "{mine}");
+        let before = sent_log(&d).await.len();
+        let r = ask(&d, "lease_release", json!({ "token": token })).await;
+        assert_eq!(r["restored"], json!(restored), "channel {channel}: {r}");
+        let after = sent_log(&d).await;
+        let selects: Vec<_> = after[before..]
+            .iter()
+            .filter(|(id, _)| *id == 0x45)
+            .cloned()
+            .collect();
+        if restored == "channel" {
+            assert_eq!(selects, vec![(0x45, vec![channel])], "channel {channel}");
+        } else {
+            assert!(selects.is_empty(), "channel {channel}: {selects:?}");
+        }
+    }
+}

@@ -296,7 +296,10 @@ after goh accepts quoted heredoc tags.
 codes. **Exit:** `device_status` carries model/size and errors carry codes,
 with tests per model class. **Size:** M. **Release check (needs a panel):**
 P3.3 changed what the weather widget looks like on every panel; it needs the
-R12-style visual pass on hardware before release.
+R12-style visual pass on hardware before release. **Done on a 16x16 Ditoo
+2026-11-01** (bench webcam, calibrated): the panel showed the daemon's own
+weather frame -- the cloud and the temperature with its degree mark -- pixel
+for pixel. The 64x64 half (P4's multi-frame draw) needs a 64x64 panel in view.
 
 Landed (2026-10-17): P3.1, `device_status` carrying each panel's model and resolution from the APK's own tables (`divoomd/src/panel_model.rs`);
 P3.2, a stable `code` on every device failure, branched on by the Settings card (`divoomd/src/error_code.rs`);
@@ -580,6 +583,8 @@ refusal is deleted — which needs a Wi-Fi panel bound to the account first.
 
 Landed (2026-11-01): P9.3 (queue D5, the owner's ruling "automate everything you can"), the four widgets judged against a light AND a dark room from the daemon's own frames -- `render_widget` is byte-identical to what the panel is sent (P9.3's 2026-10-20 round) -- drawn as LEDs on the panel face at a real-scale pitch and MEASURED, since no camera here can see the bench: sysmon, weather (clear, cloudy, rain, snow at 23 and -5 degrees), album_art and custom_art (a light and a dark cover) all draw every inked diode at 3:1 or better against the frame's own ground, on both backdrops (`tools/render_widget_backdrops.py`, `docs/assets/widget-backdrops.png`; the dim counter calibrated both ways). Verdict PASS after one fix the pass found: a 16 px weather frame wrote -5 as an overline beside a 5, because the half-size font blob stores every glyph from row 0 (`2e9d0e1`, `divoomd/src/live_jobs/font.rs`). Not judged, and not judgeable without a photograph: how the widgets' near-black ground (5,6,12) glows on the physical diodes in a dark room.
 
+Landed (2026-11-01): P9.7 (queue D4), a widgetless lease gives back the firmware channel that re-selecting puts back -- the clock (0) and the cloud channel (2), photographed on a Ditoo through the calibrated bench webcam; a pushed image (0x46 = 5) gets `restored: "none"` because a re-selected channel 5 shows the custom gallery, and the light channel (1) is not restored because its one-byte select left the panel dark with brightness 0 (`divoomd/src/lease.rs` `RESTORABLE_CHANNELS`; CHANGELOG 2026-11-01).
+
 #### P9.1 — `search_weather_city` fails server-side
 **Status:** BLOCKED (on a capture of the official app's city search)
 **Why:** the endpoint returns RC=1 for every keyword on a valid account while
@@ -626,40 +631,6 @@ or becomes its own OPEN item with a reproduction.
 **Why:** `multidict` 7 (aiohttp caps <7), `pyee` 14 (playwright caps <14) and
 `playwright` 1.63 (camoufox 0.5.5 caps <1.61) are unreachable, not declined.
 **Done when:** each parent widens its cap and the major moves in its own commit.
-
-#### P9.7 — A lease on a panel with no live widget gives back the firmware channel
-**Status:** BLOCKED (on eyes on the panel: does re-selecting channel 5 show the
-pushed image again, or the custom gallery?)
-**Measured 2026-10-18** (Pixoo-1, `DIVOOMD_BLE_DEBUG` trace, 0x46 byte 0 =
-`current_light_effect_mode`): after `show_clock` 0; after `set_channel 1`
-(light) 1, with brightness and on/off reading 0; after a pushed image
-(`display.show_image`, `0x45 05..` then 0x8B) 5; `set_channel 3` (VJ, a
-one-byte `0x45 03`) drew no echo while `0x45 01` echoed in the same window,
-and 0x46 stayed 0 -- this panel does not take that form.
-**Measured again 2026-10-20, and the channel half is now settled:** 0x46 byte 0
-reads the channel back in every case (clock -> 0, `set_channel 1` -> 1, a
-pushed image -> 5), the device ECHOES 0x45 for every channel except 3 (VJ),
-which draws no echo in either the one-byte or the 10-byte form — the
-panel-specific gap this item already recorded — while the control `0x45 01`
-echoed in the SAME window, so the silence is the panel and not the trace. A
-re-selected channel 5 is ACCEPTED: 0x46 reads 5 back after it.
-**What is left is a pixel question, and it is the whole item:** whether
-`0x45 05` puts the pushed image back up or the channel's own custom gallery.
-Both are plausible; only eyes can tell, and the lease must not restore a
-screen the user never chose.
-**Why:** a screen lease (`divoomd/src/lease.rs`) hands a panel back to its
-live widget by repainting the widget's newest frame. A panel with no widget
-is left showing the holder's last frame, and `lease_release` says so
-(`restored: "none"`). Reading the channel with 0x46 at acquire and selecting
-it again at the end is the obvious fix, but nobody has watched what 0x46
-reports after a pushed image, or whether re-selecting that channel shows the
-image again or the channel's own gallery. Restoring a guess would put up a
-screen the user never chose.
-**Done when:** a `DIVOOMD_BLE_DEBUG` trace on a panel shows what 0x46 reads
-after a clock, a channel and a pushed image (done, 2026-10-20), AND a
-photograph says what re-selecting channel 5 shows, and the lease then
-restores each case it can restore faithfully, saying `restored: "channel"`,
-with the rest left as `"none"` by measurement rather than assumption.
 
 #### P9.8 — Is the "monthly best" category a sliding window?
 **Status:** WATCH

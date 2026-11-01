@@ -21,6 +21,9 @@ pub struct Lease {
     /// Distinguishes this lease from a later one with the same token slot,
     /// so a stale expiry watcher can never end its successor.
     pub generation: u64,
+    /// The firmware channel 0x46 read back when the lease was taken, if
+    /// the panel answered: what a widgetless panel is given back.
+    pub channel: Option<u8>,
 }
 
 /// A frame as the live job rendered it, kept to repaint the screen with.

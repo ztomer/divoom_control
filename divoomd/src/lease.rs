@@ -18,10 +18,11 @@
 //! * When the lease ends -- released, or expired with nobody renewing -- the
 //!   queue is let go and the job's newest frame is painted at once, so the
 //!   panel is back to its widget without waiting for the job's next tick
-//!   (weather ticks every 15 minutes). A panel with no live job is left
-//!   showing the last thing drawn and the reply says `restored: "none"`:
-//!   giving back the firmware channel waits on a panel to measure what 0x46
-//!   reads after a pushed image (ROADMAP P9.7).
+//!   (weather ticks every 15 minutes). A panel with no live job is given
+//!   back the firmware channel 0x46 read at acquire, `restored: "channel"`,
+//!   when re-selecting that channel puts the same screen back
+//!   ([`RESTORABLE_CHANNELS`]); otherwise it is left showing the last thing
+//!   drawn and the reply says `restored: "none"` (P9.7, CHANGELOG 2026-11-01).
 //! * Frame pushes conflate, leased or not: a queued push that is no longer
 //!   the newest is skipped, so a fast agent on a slow link sees its latest
 //!   frame, not a backlog.
@@ -40,6 +41,39 @@ use crate::events::Events;
 use crate::protocol::{err_code, ErrorCode, Request};
 
 static GENERATION: AtomicU64 = AtomicU64::new(1);
+
+/// The firmware channels a widgetless lease gives back by selecting them again.
+///
+/// They are the ones whose screen re-selecting puts back as it was, each
+/// photographed on a Ditoo on 2026-11-01 (P9.7, CHANGELOG). The clock (0) and
+/// the cloud channel (2) come back. Channel 5 does NOT: it is what 0x46
+/// reads after a pushed image, and re-selecting it shows the custom
+/// gallery, not that image -- restoring it would put up a screen nobody
+/// chose. The light channel (1) does not either: the one-byte select left
+/// the panel dark, brightness read back 0. Every other channel is
+/// unmeasured, so it is not restored.
+pub const RESTORABLE_CHANNELS: [u8; 2] = [0, 2];
+
+/// How long acquire waits for the panel to say which channel it is on.
+const CHANNEL_READ: Duration = Duration::from_millis(1500);
+
+/// The channel the panel is showing (0x46 byte 0), or `None` when it did
+/// not say.
+async fn read_channel(link: &Arc<crate::device::Link>) -> Option<u8> {
+    let link_in = link.clone();
+    link.run(None, async move {
+        match link_in
+            .transport
+            .send_command_and_wait(0x46, &[], CHANNEL_READ)
+            .await
+        {
+            crate::transport::Read::Answered(p) => p.first().copied(),
+            _ => None,
+        }
+    })
+    .await
+    .flatten()
+}
 
 fn ttl(req: &Request) -> Result<Duration, Value> {
     LEASE_TTL_MS
@@ -85,6 +119,8 @@ impl Daemon {
         if let Some(held) = device.lease() {
             return refused(&held);
         }
+        // Read before the hold: a held queue runs only the holder's calls.
+        let channel = read_channel(&link).await;
         let generation = GENERATION.fetch_add(1, Ordering::SeqCst);
         let token = format!(
             "lease-{generation}-{:x}",
@@ -103,6 +139,7 @@ impl Daemon {
             holder: holder.clone(),
             expires: Instant::now() + ttl,
             generation,
+            channel,
         });
         if granted.is_err() {
             link.queue.release(&token);
@@ -199,7 +236,8 @@ async fn watch(device: Arc<Device>, events: Arc<Events>, generation: u64) {
 }
 
 /// Give the screen back: free the queue, repaint the live job's newest frame,
-/// announce it. Returns what was restored (`"job"` or `"none"`).
+/// or select the channel it found again, and announce it. Returns what was
+/// restored (`"job"`, `"channel"` or `"none"`).
 async fn end(device: &Device, events: &Events, generation: u64, why: &str) -> &'static str {
     let Some(lease) = device.take_lease(generation) else {
         return "none";
@@ -237,6 +275,25 @@ async fn end(device: &Device, events: &Events, generation: u64, why: &str) -> &'
                 &[repainted],
             ));
             restored = "job";
+        }
+    } else if let (Some(link), Some(channel)) = (
+        device.link().await,
+        lease.channel.filter(|c| RESTORABLE_CHANNELS.contains(c)),
+    ) {
+        let link_in = link.clone();
+        let selected = link
+            .run(None, async move {
+                !link_in.is_retired()
+                    && link_in
+                        .transport
+                        .send_command(0x45, &[channel], true)
+                        .await
+                        .is_ok()
+            })
+            .await
+            .unwrap_or(false);
+        if selected {
+            restored = "channel";
         }
     }
     let _ = events.send(json!({

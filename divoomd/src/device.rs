@@ -114,6 +114,18 @@ pub struct Activity {
     pub state: String,
 }
 
+impl Activity {
+    /// Say the panel now shows `kind`. A different kind drops the picture:
+    /// the preview is the old kind's frame, and keeping it under the new
+    /// label is a placeholder passing for the real thing.
+    fn relabel(&mut self, kind: &str) {
+        if self.kind != kind {
+            self.preview = None;
+            kind.clone_into(&mut self.kind);
+        }
+    }
+}
+
 fn now_secs() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -344,7 +356,7 @@ impl Device {
         }) else {
             return;
         };
-        a.kind = kind.to_string();
+        a.relabel(kind);
         a.state = state.to_string();
         a.at = now_secs();
         drop(guard);
@@ -372,7 +384,7 @@ impl Device {
                 state: "active".to_string(),
             })
             .ok_or(Forgotten)?;
-        a.kind = kind.to_string();
+        a.relabel(kind);
         if let Some(n) = name {
             a.name = n;
         }
