@@ -218,6 +218,24 @@ the socket listening, and the probe finds a listener that never answers). Its
 production exposure is bounded -- the daemon unlinks the socket path before it
 exits, so the path is gone -- and it is left as a named variant, not as a fix.
 
+#### P1.14 — The pre-push export keeps a binary six of its own steps rebuild
+**Status:** OPEN
+**Why:** measured 2026-11-01: six pre-push steps printed "the tree or the
+gates moved while the step ran". Neither moved. `.gatesrc` names
+`target/debug/divoomd` in `GOH_EXPORT_KEEP` (eleven Python tests spawn it), the
+proven cache's key reads a kept file's content, and every step that builds or
+tests the daemon (`cargo build`/`cargo test` with and without `ble`, the
+coverage run) rewrites that binary -- one tree gave three keys across the BLE
+and BLE-free builds. So those steps are never recorded as proven and re-run
+on every push. goh now names the cause instead of blaming the tree
+(gates_of_heck `0dd4092`, `proven_what_moved`); the divoom side is that a
+build output is declared as an input. The two feature sets also share one path,
+the trap `AGENTS.md` already warns about after `cargo test`.
+**Done when:** the tests that spawn the daemon get it from a path no gate step
+rewrites (or build it themselves), `GOH_EXPORT_KEEP` no longer names a build
+output, and a second `tools/gate.sh --full` on an unchanged tree reports those
+steps proven.
+
 ### Phase 2 — daemon liveness and safety
 
 **Goal:** the daemon can say who holds it, never hangs on one peer, and
@@ -407,7 +425,7 @@ P5.6, every channel bridge call naming the panel its click resolved, through one
 P5.5, with no panel known the bench showing an empty state that says how to add one and the deck "No panel selected" with no levels, the active-panel lookup answering null instead of an invented mac (`f56b550`; `window.isKnownTarget` in `divoom_gui/web_ui/app_globals.js`, `tests/test_e2e_no_invented_fleet.py`);
 P5.2, every channel control writing the selected display's own per-channel settings through one funnel that resolves the display at the gesture via `DisplayPreviewRegistry.getActive()`, the app-wide channel globals deleted (`78608ea`; `divoom_gui/web_ui/channel_settings.js`, `tests/test_e2e_channel_settings_per_panel.py`);
 P5.4, the weather card showing the PNG of `render_widget {kind: "weather"}` with the reading beside it, the SVG renderer and `get_weather` deleted, loading and failure as distinct placeholders that say why (`4ac2bcf`; `divoom_gui/web_ui/widgets_weather.js`, the converse call-site check in `tests/test_widget_drift.py`);
-P5.3, the menubar updating labels, the "Active panel" check and the notification items in place, rebuilding only when the set of rows changes, decided by diffing one `MenuModel` signature (`28f54cd`; `divoom-menubar/src/menu_model.rs`). That meets the exit's menubar half in code; holding the menu open through a fleet change on screen is not yet checked (2026-10-18: the console was locked, so no NSMenu could be held open or captured; 2026-10-18 unlocked, full-screen control for clicking the status item was declined, so it is still unchecked; a two-mock-panel smoke -- selection A, B, A and a row rename over the socket -- left the menubar running). **2026-10-20, the machine half is CONFIRMED and the on-screen half is still the owner's eyes:** the status item's AX "help" text tracks the live fleet model ("4 of 4 panels online — active: Pixoo-1 / Tivoo-Max-light-3 / Timoo-light-4") and changes when `select_device` changes the active panel, so the menubar's model is live; the MENU could not be opened from this session at all (the console is at the login window, and an AXPress on a known-good control — FineTune — opened no window and produced no AXMenu change, so the block is the environment, not divoom-menubar). Holding it open on screen is the last unchecked half;
+P5.3, the menubar updating labels, the "Active panel" check and the notification items in place, rebuilding only when the set of rows changes, decided by diffing one `MenuModel` signature (`28f54cd`; `divoom-menubar/src/menu_model.rs`). That meets the exit's menubar half in code; holding the menu open through a fleet change on screen is not yet checked (2026-10-18: the console was locked, so no NSMenu could be held open or captured; 2026-10-18 unlocked, full-screen control for clicking the status item was declined, so it is still unchecked; a two-mock-panel smoke -- selection A, B, A and a row rename over the socket -- left the menubar running). **2026-10-20, the machine half is CONFIRMED and the on-screen half is still the owner's eyes:** the status item's AX "help" text tracks the live fleet model ("4 of 4 panels online — active: Pixoo-1 / Tivoo-Max-light-3 / Timoo-light-4") and changes when `select_device` changes the active panel, so the menubar's model is live; the MENU could not be opened from this session at all (the console is at the login window, and an AXPress on a known-good control — FineTune — opened no window and produced no AXMenu change, so the block is the environment, not divoom-menubar). Holding it open on screen is the last unchecked half. **2026-11-01 (queue D3, installed v0.43.1, the owner's ruling "automate everything you can"):** still not capturable from an agent session, for a measured reason: full-screen control was refused twice ("user interrupt" -- the owner was at the machine), and the status item's only AX action, `AXPress`, opens no menu (no `AXMenu` child appears, before or after a 1 s wait), so neither route can hold the NSMenu open. The pass did find and fix a map-versus-territory defect on the same surface: the AX help text read "no device connected (3 of 3 panels online)" with the hollow Idle glyph, because the daemon's `active` link word was online for the count and not for the icon (`1d8f34e`, `state::link_online`). The held-open check is now P5.16;
 P5.1, brightness, volume and panel size read and written per mac through the daemon, both name-based size guessers deleted, switching panels shows that panel's values (`f1f7b3b`; `divoom_gui/panels.py`, `divoom_gui/web_ui/panel_facts.js`, `tests/test_e2e_panel_levels_per_panel.py`, `divoomd/src/mock_levels_tests.rs`).
 
 #### P5.11 — Every art listing is per panel, like the gallery (D14 follow-up)
@@ -427,6 +445,30 @@ cloud's side, is not yet measured.
 shows natively (the reply counting what it left out, as `fetch_gallery`'s
 `not_native` does), or is recorded here as device-type-scoped by the cloud
 with the evidence; a mock-panel test per command, 16x16 and 64x64.
+
+#### P5.16 — The menubar's menu held open through a fleet change, on screen (P5.3's last half)
+**Status:** BLOCKED (on a session that may take the screen)
+**Why:** P5.3 updates rows in place and rebuilds only when the set of rows
+changes (`divoom-menubar/src/menu_model.rs`); the model half is unit-tested
+and the live model is confirmed through the status item's AX help text. What
+no agent has seen is the NSMenu itself staying open while a row renames. On
+2026-11-01 full-screen control was refused ("user interrupt") and `AXPress`
+on the status item opens no menu, so there is no route from a session that
+must leave the owner's screen alone.
+**Done when:** the menu is held open (a real click) while `select_device`
+moves the active panel and a row renames over the socket, and two captures
+show the check and the name change in the open menu with no close/reopen.
+
+#### P5.17 — The bench's 16x16 previews crop the clock to "12:0"
+**Status:** OPEN
+**Why:** seen in `docs/assets/bench-light.png` and on the installed app
+(2026-11-01): every bench node showing the Full Screen clock draws "12:0",
+its leading "1" clipped too, while the channel card beside it draws "12:00".
+A preview that crops what the panel shows is a parallel renderer drifting from
+the product (house rule 9), on the surface the owner looks at most.
+**Done when:** a bench node draws exactly the frame the panel is sent (or the
+channel card's renderer at the panel's resolution), with a browser test that
+fails on a cropped glyph at 16x16.
 
 #### P5.14 — One hot-channel pipeline? (U.5 follow-up)
 **Status:** DECISION (owner)
@@ -535,6 +577,9 @@ refusal is deleted — which needs a Wi-Fi panel bound to the account first.
 
 **Goal:** none until the named trigger fires; each item says what unparks it.
 
+
+Landed (2026-11-01): P9.3 (queue D5, the owner's ruling "automate everything you can"), the four widgets judged against a light AND a dark room from the daemon's own frames -- `render_widget` is byte-identical to what the panel is sent (P9.3's 2026-10-20 round) -- drawn as LEDs on the panel face at a real-scale pitch and MEASURED, since no camera here can see the bench: sysmon, weather (clear, cloudy, rain, snow at 23 and -5 degrees), album_art and custom_art (a light and a dark cover) all draw every inked diode at 3:1 or better against the frame's own ground, on both backdrops (`tools/render_widget_backdrops.py`, `docs/assets/widget-backdrops.png`; the dim counter calibrated both ways). Verdict PASS after one fix the pass found: a 16 px weather frame wrote -5 as an overline beside a 5, because the half-size font blob stores every glyph from row 0 (`2e9d0e1`, `divoomd/src/live_jobs/font.rs`). Not judged, and not judgeable without a photograph: how the widgets' near-black ground (5,6,12) glows on the physical diodes in a dark room.
+
 #### P9.1 — `search_weather_city` fails server-side
 **Status:** BLOCKED (on a capture of the official app's city search)
 **Why:** the endpoint returns RC=1 for every keyword on a valid account while
@@ -551,29 +596,6 @@ Tivoo-Max acked nothing for 0x6E/0x7C/0x86 while the bytes were proven correct.
 The GUI Text channel pushes a static image and ignores its speed/effect
 arguments (`divoom_gui/api/lighting.py`).
 **Done when:** a device acks 0x7C in a trace, then a GUI control is wired.
-
-#### P9.3 — Light/dark backdrop check of the four widgets on a real panel
-**Status:** BLOCKED (on a photograph against both backdrops; eyes are the blocker)
-(2026-10-18: the four bench panels were all in scan range and the packet's
-four widget pushes were sent OK by `scripts/hw_verify.py`, each UNKNOWN for
-want of anyone looking; panels are not the blocker, eyes are.)
-**2026-10-20, the machine half of the four pushes is CONFIRMED** (Pixoo-1,
-installed v0.41.3): `sysmon` paints a frame that CHANGES with load (three
-distinct pictures, CPU 12 -> 50) and equals `render_widget sysmon`; `weather`
-paints a frame byte-identical to `render_widget weather` (0 of 256 pixels
-differ) and it is ONE combined icon + temperature frame — the firmware's
-cycling face is gone (P3.3); `custom_art` paints the source image downscaled
-NEAREST (18 of 256 pixels differ by 1-2, palette quantisation) rather than the
-216 that a BILINEAR smear would give, so it is neither a smear nor a crop;
-`album_art` pushes nothing because nothing is playing (`now_playing` answers
-"Kaset (not playing)") — the documented precondition, not a failure.
-**Why:** the R12 visual pass verified the widgets on the panel but never judged
-them against a light AND a dark surrounding. It is a photograph, not code.
-**Still open:** a camera on this machine cannot see a panel (after a blue push
-it counted 0 blue-dominant pixels — it sees a lamp, not the panels), so the
-backdrop judgement is the owner's photograph.
-**Done when:** photos against both backdrops are judged and filed with the
-round's notes.
 
 #### P9.4 — Two `objc2` majors in the lock
 **Status:** WATCH

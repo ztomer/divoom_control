@@ -6,6 +6,19 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **D3 and D5 decided by the agent, with evidence (2026-11-01, owner ruling
+  "automate everything you can").** P9.3 (D5): PASS after the minus fix, from
+  `docs/assets/widget-backdrops.png` -- every inked diode of all four widgets
+  at 3:1 or better against its ground, on a light and a dark room. P5.3 (D3):
+  the held-open menu cannot be captured from an agent session (full-screen
+  control refused while the owner was at the machine; `AXPress` on the status
+  item opens no menu), now P5.16; the pass fixed the menubar's link
+  vocabulary. The bench in both themes from the daemon's live fleet and
+  arrangement: `tools/render_bench.py`, `docs/assets/bench-light.png`,
+  `docs/assets/bench-dark.png` (found P5.17, the 16x16 previews cropping the
+  clock to "12:0"). The pre-push "tree or gates moved" lines were the kept
+  `target/debug/divoomd` being rebuilt by the gate's own steps (P1.14; goh
+  now names the cause, gates_of_heck `0dd4092`).
 - **A bench panel never hangs below the bench (2026-11-01).** Seen on the
   installed app: the Timoo, off and so drawn at the generic 120 mm size,
   saved at y=110, hung 8 px under the 180 px bench and lost its bottom edge.
