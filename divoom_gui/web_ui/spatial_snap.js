@@ -74,5 +74,34 @@
         return { x: candidates[0].x, y: candidates[0].y, snapped: true };
     }
 
-    root.SpatialSnap = { snap, THRESHOLD };
+    /**
+     * Saved places drawn at real sizes, made not to overlap (rule 3 for a
+     * stored layout). The places were often saved when every panel was drawn
+     * as the generic chassis, so at real sizes neighbours overlap. The
+     * arrangement is the owner's, so nothing is re-laid-out: rows (y), the
+     * left-to-right order and every gap that was not an overlap are kept. In
+     * x order, a panel overlapping one already placed moves right until it
+     * touches, and every panel after it moves by the same amount -- the
+     * arrangement only opens up. The bench and the wall's slots both go
+     * through here, so the wall cuts the image where the bench draws.
+     *
+     * `rects` is [{id, x, y, w, h}]; the answer is {id: {x, y}}.
+     */
+    function separate(rects) {
+        const order = rects.map(rc => ({ id: rc.id, x: rc.x, y: rc.y, w: rc.w, h: rc.h }));
+        order.sort((a, b) => (a.x - b.x) || (a.y - b.y) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+        order.forEach((m, i) => {
+            let need = 0;
+            for (let j = 0; j < i; j++) {
+                const o = order[j];
+                if (overlaps(m, o)) need = Math.max(need, o.x + o.w - m.x);
+            }
+            if (need > 0) for (let k = i; k < order.length; k++) order[k].x += need;
+        });
+        const out = {};
+        order.forEach(m => { out[m.id] = { x: m.x, y: m.y }; });
+        return out;
+    }
+
+    root.SpatialSnap = { snap, separate, THRESHOLD };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -6,6 +6,20 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **Saved bench places drawn at real sizes no longer overlap (2026-11-01).**
+  The places were laid out when every panel was drawn as the generic 120 mm
+  chassis; at the daemon's real sizes (Pixoo 200 mm, Tivoo Max 184 mm)
+  neighbours overlapped. `SpatialSnap.separate` (`divoom_gui/web_ui/spatial_snap.js`)
+  opens the arrangement up rather than re-laying it out: in x order a panel
+  overlapping one before it moves right until it touches, and every panel
+  after it moves by the same amount, so rows, order and every non-overlap gap
+  are kept. The bench draws every panel through it (one place per panel in
+  every room filter, the drag starting from the drawn place), and the wall's
+  slots go through the same function so the image is cut where the bench
+  draws. Nothing is written to the daemon until the owner moves a panel.
+  `tests/test_spatial_separate.py` pins the geometry;
+  `tests/test_e2e_bench_overlap.py` draws a generic-era layout at real sizes
+  and was red without the wiring (the Tivoo and the Pixoo overlapping).
 - **The bench reads in the light theme (2026-11-01).** A panel's name on its
   bench node read 1.03:1: the chassis was a gradient fixed dark
   (`#242630`→`#191a22`) under the theme's ink, which is near-black in the

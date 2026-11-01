@@ -182,15 +182,28 @@
         if (!window.SpatialRooms.isLoaded()) { showLoading(bench, ribbonChips); return; }
 
         let defaultX = 20;
-        devices.forEach((dev, idx) => {
+        const placed = devices.map((dev, idx) => {
             const addr = dev.address || ('dev-' + idx), spec = resolveSpec(dev);
             const w = Math.round(spec.w_mm * SCALE), h = Math.round(spec.h_mm * SCALE);
-            const sw = Math.round(spec.screen_mm * SCALE), pw = spec.pw, ph = spec.ph;
-
             let pos = window.SpatialRooms ? window.SpatialRooms.findPosition(devicePositions, addr) : devicePositions[addr];
             if (!pos) pos = { x: defaultX, y: Math.max(10, 160 - h) };
-            devicePositions[addr] = pos;
             defaultX += w + 12;
+            return { addr, spec, w, h, pos };
+        });
+        // Saved places are often older than the panel's real size (laid out
+        // for the generic chassis): drawn at real sizes, the panels are made
+        // not to overlap, keeping their order and rows (SpatialSnap.separate,
+        // which the wall's slots go through too). Every panel, whatever the
+        // room filter, so a panel is drawn in one place in every view. The
+        // drawn place is what a drag starts from; the store changes only when
+        // the owner moves a panel.
+        const apart = window.SpatialSnap.separate(
+            placed.map(p => ({ id: p.addr, x: p.pos.x, y: p.pos.y, w: p.w, h: p.h })));
+        placed.forEach(p => { if (apart[p.addr]) p.pos = apart[p.addr]; devicePositions[p.addr] = p.pos; });
+
+        devices.forEach((dev, idx) => {
+            const { addr, spec, w, h, pos } = placed[idx];
+            const sw = Math.round(spec.screen_mm * SCALE), pw = spec.pw, ph = spec.ph;
 
             // A restored selection that is not a listed panel: fall back to the
             // first -- PROVISIONALLY: the daemon owns the active panel and may

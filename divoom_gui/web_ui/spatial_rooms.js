@@ -283,13 +283,23 @@
             if (!addr || dev.wallRefusal) return;
             slots[addr] = slotFor(dev, addr, posMap, roomMap);
         });
-        if (devices) return slots;
+        if (devices) return apart(slots);
         Object.keys(posMap).forEach(id => {
             if (devList.some(d => d.address && d.address.toLowerCase() === id.toLowerCase())) return;
             if (id.startsWith('LAN:')) return; // a LAN panel is never a wall slot (P6.1)
             const scr = screens.find(s => s && typeof s.mac === 'string' && s.mac.toLowerCase() === id.toLowerCase()) || {};
             slots[id] = slotFor(Object.assign({ address: id }, scr), id, posMap, roomMap);
         });
+        return apart(slots);
+    }
+
+    // The slots where the bench draws them: saved places at real sizes, made
+    // not to overlap by the bench's own rule (SpatialSnap.separate).
+    function apart(slots) {
+        if (!window.SpatialSnap) return slots;
+        const at = window.SpatialSnap.separate(Object.keys(slots).map(id =>
+            ({ id, x: slots[id].x, y: slots[id].y, w: slots[id].width, h: slots[id].height })));
+        Object.keys(slots).forEach(id => Object.assign(slots[id], at[id]));
         return slots;
     }
 
