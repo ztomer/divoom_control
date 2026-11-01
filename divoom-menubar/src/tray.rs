@@ -320,7 +320,7 @@ impl Tray {
         // "3 of 4 online".
         let linked = devices
             .iter()
-            .filter(|d| matches!(d.link.as_deref(), Some("active" | "connected" | "degraded")))
+            .filter(|d| crate::state::link_online(d.link.as_deref()))
             .count();
         let mut tooltip = if devices.len() > 1 {
             format!(

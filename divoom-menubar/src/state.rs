@@ -70,6 +70,16 @@ impl IconState {
     }
 }
 
+/// Whether a panel's link word is online: the ONE reading of the daemon's
+/// link vocabulary, shared by the fleet count in the tooltip and the icon
+/// (`resolve_icon_state`), so the two cannot disagree about one panel. The
+/// daemon calls a linked panel `active` in its fleet events and `connected`
+/// in `device_status`.
+#[must_use]
+pub fn link_online(link: Option<&str>) -> bool {
+    matches!(link, Some("active" | "connected" | "degraded"))
+}
+
 /// `connection_state` is the daemon's `device_status`/broadcast field —
 /// `Some("connected")`, `Some("degraded")`, `Some("disconnected")`, or `None`
 /// when no device is owned at all. `notif_active` is the (now secondary)
@@ -81,7 +91,7 @@ pub fn resolve_icon_state(
 ) -> (IconState, String) {
     let (state, mut tooltip) = if daemon_reachable {
         match connection_state {
-            Some("connected") => (
+            Some("connected" | "active") => (
                 IconState::Connected,
                 "Divoom Control — device connected".to_string(),
             ),
@@ -109,6 +119,36 @@ pub fn resolve_icon_state(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 2026-11-01, installed v0.43.1: the status item said "no device
+    /// connected (3 of 3 panels online)" and wore the hollow Idle glyph. The
+    /// daemon names a linked panel `active`; the fleet count read that as
+    /// online and the icon did not, so one tooltip said both.
+    #[test]
+    fn an_active_link_is_a_connected_device() {
+        let (s, t) = resolve_icon_state(true, Some("active"), false);
+        assert_eq!(s, IconState::Connected, "{t}");
+        assert!(!t.contains("no device"), "{t}");
+    }
+
+    /// The count and the icon read one vocabulary: every link word is
+    /// online for both or for neither.
+    #[test]
+    fn the_fleet_count_and_the_icon_agree_on_every_link_word() {
+        for word in [
+            "active",
+            "connected",
+            "degraded",
+            "disconnected",
+            "dropped",
+            "idle",
+            "",
+        ] {
+            let (s, _) = resolve_icon_state(true, Some(word), false);
+            let icon_online = matches!(s, IconState::Connected | IconState::Degraded);
+            assert_eq!(link_online(Some(word)), icon_online, "{word}");
+        }
+    }
 
     #[test]
     fn offline_wins_regardless_of_connection_state_or_notif() {
