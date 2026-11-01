@@ -298,7 +298,8 @@
     function apart(slots) {
         if (!window.SpatialSnap) return slots;
         const at = window.SpatialSnap.separate(Object.keys(slots).map(id =>
-            ({ id, x: slots[id].x, y: slots[id].y, w: slots[id].width, h: slots[id].height })));
+            ({ id, x: slots[id].x, y: slots[id].y, w: slots[id].width, h: slots[id].height })),
+            { height: window.SpatialSnap.BENCH_HEIGHT });
         Object.keys(slots).forEach(id => Object.assign(slots[id], at[id]));
         return slots;
     }

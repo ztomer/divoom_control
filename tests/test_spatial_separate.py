@@ -26,7 +26,7 @@ const vm = require("vm");
 const [jsPath, casesJson] = process.argv.slice(-2);
 const ctx = { window: {} };
 vm.runInNewContext(fs.readFileSync(jsPath, "utf8"), ctx);
-const out = JSON.parse(casesJson).map(([rects, opts]) => ctx.window.SpatialSnap.separate(rects));
+const out = JSON.parse(casesJson).map(([rects, opts]) => ctx.window.SpatialSnap.separate(rects, opts));
 process.stdout.write(JSON.stringify(out));
 """
 
@@ -96,3 +96,21 @@ def test_two_panels_on_one_spot_are_set_side_by_side():
     (out,) = _separate([saved, {}])
     assert {out["a"]["x"], out["b"]["x"]} == {10, 70}
 
+
+
+def test_a_panel_below_the_bench_floor_is_lifted_inside_it():
+    # The Timoo the daemon had not described (off, out of range) is drawn at
+    # the generic 78 px: saved at y=110 it hung 8 px below the 180 px bench.
+    saved = [r("timoo", 448, 110, 78, 78), r("ditoo", 526, 95, 59, 74)]
+    (out,) = _separate([saved, {"height": 180}])
+    assert out["timoo"] == {"x": 448, "y": 102}
+    assert out["ditoo"] == {"x": 526, "y": 95}
+
+
+def test_the_bench_height_constant_is_the_stylesheet_s():
+    import re
+    css = (SNAP_JS.parent / "spatial_stage.css").read_text()
+    block = re.search(r"\.spatial-bench \{([^}]*)\}", css).group(1)
+    px = int(re.search(r"height:\s*(\d+)px", block).group(1))
+    js = int(re.search(r"BENCH_HEIGHT = (\d+);", SNAP_JS.read_text()).group(1))
+    assert px == js, f"the bench is {px}px tall in CSS and {js}px in spatial_snap.js"

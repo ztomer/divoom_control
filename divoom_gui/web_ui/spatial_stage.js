@@ -198,7 +198,8 @@
         // drawn place is what a drag starts from; the store changes only when
         // the owner moves a panel.
         const apart = window.SpatialSnap.separate(
-            placed.map(p => ({ id: p.addr, x: p.pos.x, y: p.pos.y, w: p.w, h: p.h })));
+            placed.map(p => ({ id: p.addr, x: p.pos.x, y: p.pos.y, w: p.w, h: p.h })),
+            { height: window.SpatialSnap.BENCH_HEIGHT });
         placed.forEach(p => { if (apart[p.addr]) p.pos = apart[p.addr]; devicePositions[p.addr] = p.pos; });
 
         devices.forEach((dev, idx) => {

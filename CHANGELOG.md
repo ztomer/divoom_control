@@ -6,6 +6,13 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **A bench panel never hangs below the bench (2026-11-01).** Seen on the
+  installed app: the Timoo, off and so drawn at the generic 120 mm size,
+  saved at y=110, hung 8 px under the 180 px bench and lost its bottom edge.
+  `SpatialSnap.separate` lifts a panel inside the bench before opening the
+  arrangement up, for the bench and the wall's slots alike, with the height
+  read from one `SpatialSnap.BENCH_HEIGHT` that a test holds to the
+  stylesheet's `.spatial-bench` height.
 - **The menubar says a linked panel is connected (2026-11-01).** On the
   installed v0.43.1 the status item read "Divoom Control -- no device
   connected (3 of 3 panels online)" and wore the hollow Idle glyph: the

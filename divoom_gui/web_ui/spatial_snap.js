@@ -82,13 +82,21 @@
      * left-to-right order and every gap that was not an overlap are kept. In
      * x order, a panel overlapping one already placed moves right until it
      * touches, and every panel after it moves by the same amount -- the
-     * arrangement only opens up. The bench and the wall's slots both go
-     * through here, so the wall cuts the image where the bench draws.
+     * arrangement only opens up. A panel that would hang below the bench
+     * (`opts.height`; the bench is BENCH_HEIGHT tall) is first lifted inside
+     * it -- a panel the daemon has not described is drawn at the generic size,
+     * which is often taller than the place was saved for. The bench and the
+     * wall's slots both go through here, so the wall cuts the image where the
+     * bench draws.
      *
      * `rects` is [{id, x, y, w, h}]; the answer is {id: {x, y}}.
      */
-    function separate(rects) {
-        const order = rects.map(rc => ({ id: rc.id, x: rc.x, y: rc.y, w: rc.w, h: rc.h }));
+    function separate(rects, opts) {
+        const height = opts && opts.height;
+        const order = rects.map(rc => ({
+            id: rc.id, w: rc.w, h: rc.h, x: rc.x,
+            y: height && rc.h <= height ? Math.max(0, Math.min(rc.y, height - rc.h)) : rc.y,
+        }));
         order.sort((a, b) => (a.x - b.x) || (a.y - b.y) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
         order.forEach((m, i) => {
             let need = 0;
@@ -103,5 +111,10 @@
         return out;
     }
 
-    root.SpatialSnap = { snap, separate, THRESHOLD };
+    // The bench's height in px: `.spatial-bench { height }` in
+    // spatial_stage.css says the same (tests/test_spatial_separate.py holds
+    // the two together).
+    const BENCH_HEIGHT = 180;
+
+    root.SpatialSnap = { snap, separate, THRESHOLD, BENCH_HEIGHT };
 })(typeof window !== 'undefined' ? window : globalThis);
