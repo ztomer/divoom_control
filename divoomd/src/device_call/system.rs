@@ -256,9 +256,27 @@ async fn set_channel(ctx: CallCtx<'_>) -> Value {
             kw.and_then(|v| v.get("channel"))
                 .and_then(serde_json::Value::as_i64)
         })
-        .unwrap_or(0)
-        .byte();
-    match dev.send_command(0x45, &[channel_id], true).await {
+        .unwrap_or(0);
+    // D.FX1: a one-byte `0x45 01` turned a Ditoo dark -- the light channel's
+    // brightness and power ride in the bytes it left out. Every channel is
+    // built whole by the shared table, and a number no channel has is refused.
+    let Some(channel) = u8::try_from(channel_id)
+        .ok()
+        .and_then(crate::packets::Channel::from_id)
+    else {
+        return crate::protocol::err_code(
+            crate::protocol::ErrorCode::BadRequest,
+            &format!("set_channel: no channel {channel_id} (0-6)"),
+        );
+    };
+    match dev
+        .send_command(
+            crate::packets::CMD_SET_LIGHT_MODE,
+            &channel.select_packet(),
+            true,
+        )
+        .await
+    {
         Ok(()) => json!({"success": true, "result": true}),
         Err(e) => link_gone("set_channel", &e),
     }

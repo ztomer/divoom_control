@@ -24,6 +24,8 @@ pub mod ble_fault;
 mod c7_positional_tests;
 #[cfg(feature = "ble")]
 pub mod central;
+#[cfg(test)]
+mod channel_select_tests;
 pub mod civil_time;
 pub mod cli_args;
 pub mod cloud;

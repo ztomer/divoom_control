@@ -296,10 +296,13 @@ pub fn parse_hex_color(s: &str) -> Option<[u8; 3]> {
 /// Visualization each have a real builder (`ClockPacket`, [`vj_effect`],
 /// [`visualization`]); they are absent here so that reaching for the bare
 /// helper instead of the builder does not compile.
+///
+/// Lighting is absent for the same reason (D.FX1, 2026-11-01): its nine bytes
+/// are `R, G, B, brightness, type, power` ([`LightPacket`]), so a bare switch
+/// asked for a black light at brightness 0, switched off -- a dark panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum BareChannel {
-    Lighting = Channel::Lighting as u8,
     Cloud = Channel::Cloud as u8,
     Design = Channel::Design as u8,
     Scoreboard = Channel::Scoreboard as u8,
@@ -349,15 +352,54 @@ pub const fn visualization(number: u8) -> [u8; 10] {
 /// packets -- the blank clock face [`BareChannel`] exists to prevent.
 #[must_use]
 pub fn channel_payload(name: &str) -> Option<[u8; 10]> {
-    Some(match name.to_ascii_lowercase().as_str() {
-        "clock" => ClockPacket::default().to_bytes(),
-        "visualizer" | "eq" => visualization(0),
-        // VJ effects are 1-indexed on the wire; vj_effect(0) sends 1.
-        "vj" => vj_effect(0),
-        "design" | "custom" | "image" => channel_switch(BareChannel::Design),
-        "scoreboard" => channel_switch(BareChannel::Scoreboard),
-        "cloud" | "hot" => channel_switch(BareChannel::Cloud),
-        "ambient" | "lighting" | "light" => channel_switch(BareChannel::Lighting),
-        _ => return None,
-    })
+    Some(
+        match name.to_ascii_lowercase().as_str() {
+            "clock" => Channel::Clock,
+            "visualizer" | "eq" => Channel::Visualization,
+            "vj" => Channel::Vj,
+            "design" | "custom" | "image" => Channel::Design,
+            "scoreboard" => Channel::Scoreboard,
+            "cloud" | "hot" => Channel::Cloud,
+            "ambient" | "lighting" | "light" => Channel::Lighting,
+            _ => return None,
+        }
+        .select_packet(),
+    )
+}
+
+impl Channel {
+    /// The channel the panel numbers `id`, or `None` for a number no channel has.
+    #[must_use]
+    pub const fn from_id(id: u8) -> Option<Self> {
+        Some(match id {
+            0x00 => Self::Clock,
+            0x01 => Self::Lighting,
+            0x02 => Self::Cloud,
+            0x03 => Self::Vj,
+            0x04 => Self::Visualization,
+            0x05 => Self::Design,
+            0x06 => Self::Scoreboard,
+            _ => return None,
+        })
+    }
+
+    /// The whole 0x45 packet that selects this channel in its default look.
+    ///
+    /// The ONE place a plain channel select becomes bytes: every route that
+    /// switches channel by number or by name comes here, so each channel is
+    /// built by its own builder and none is ever sent short or zero-filled
+    /// over bytes that are its configuration (D.FX1).
+    #[must_use]
+    pub fn select_packet(self) -> [u8; 10] {
+        match self {
+            Self::Clock => ClockPacket::default().to_bytes(),
+            Self::Lighting => LightPacket::default().to_bytes(),
+            Self::Cloud => channel_switch(BareChannel::Cloud),
+            // VJ effects are 1-indexed on the wire; vj_effect(0) sends 1.
+            Self::Vj => vj_effect(0),
+            Self::Visualization => visualization(0),
+            Self::Design => channel_switch(BareChannel::Design),
+            Self::Scoreboard => channel_switch(BareChannel::Scoreboard),
+        }
+    }
 }
