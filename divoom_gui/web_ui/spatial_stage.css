@@ -42,12 +42,42 @@ body {
 .stage-btn:hover { background: var(--surface-sunken); border-color: var(--text-muted); }
 .stage-btn:active { background: var(--surface-sunken); transform: translateY(1px); }
 
+/* The bench's own grounds, per theme (2026-11-01). The node chassis and the
+   dot grid were fixed dark colours under theme ink, so in the light theme a
+   panel's name read 1.03:1 on its chassis and the grid's dots sat under the
+   loading text at 1.06:1. A ground and the ink drawn on it are one value:
+   every ground the bench paints text on is a token here, redefined with the
+   theme. tests/test_e2e_theme_contrast.py measures every gradient stop. */
+:root {
+    --bench-dot: #20222a;
+    --node-top: #242630;
+    --node-bottom: #191a22;
+    --node-border: #333644;
+    --node-shadow: rgba(0, 0, 0, 0.6);
+}
+body.theme-light {
+    --bench-dot: #d2d4da;
+    --node-top: #ffffff;
+    --node-bottom: #eceef2;
+    --node-border: #b9bcc6;
+    --node-shadow: rgba(0, 0, 0, 0.18);
+}
+@media (prefers-color-scheme: light) {
+    body.theme-system {
+        --bench-dot: #d2d4da;
+        --node-top: #ffffff;
+        --node-bottom: #eceef2;
+        --node-border: #b9bcc6;
+        --node-shadow: rgba(0, 0, 0, 0.18);
+    }
+}
+
 /* 2D Freeform Bench Canvas */
 .spatial-bench {
     position: relative;
     height: 180px;
     background: var(--bg-base);
-    background-image: radial-gradient(circle, #20222a 1px, transparent 1px);
+    background-image: radial-gradient(circle, var(--bench-dot) 1px, transparent 1px);
     background-size: 16px 16px;
     overflow: hidden;
 }
@@ -58,6 +88,8 @@ body {
     position: absolute; inset: 0;
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
     color: var(--text-muted); font-size: 13px; text-align: center; padding: 0 16px;
+    /* Nothing to place: the grid is not drawn under the words. */
+    background: var(--bg-base);
 }
 .spatial-ribbon-empty { color: var(--text-muted); font-size: 12px; }
 /* Loading the daemon's arrangement: a title, not a fault (no alarm colour). */
@@ -67,10 +99,10 @@ body {
 /* Draggable Device Node Chassis */
 .spatial-node {
     position: absolute;
-    background: linear-gradient(180deg, #242630 0%, #191a22 100%);
-    border: 1px solid #333644;
+    background: linear-gradient(180deg, var(--node-top) 0%, var(--node-bottom) 100%);
+    border: 1px solid var(--node-border);
     border-radius: 5px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06);
+    box-shadow: 0 2px 6px var(--node-shadow), inset 0 1px 0 rgba(255,255,255,0.06);
     cursor: grab;
     touch-action: none;
     padding: 5px;
@@ -149,7 +181,7 @@ body {
 .stage-room-pill-count { font-family: var(--font-mono); font-size: 9px; opacity: 0.6; margin-left: 2px; }
 .stage-room-manage-btn { background: var(--surface-raised); border: 1px solid var(--border-color); border-radius: 3px; color: var(--text-muted); font-family: var(--font-sans); font-size: 10px; padding: 2px 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
 .stage-room-manage-btn:hover { color: var(--text-main); border-color: var(--text-muted); background: var(--surface-sunken); }
-.stage-room-devices-popover { position: absolute; top: calc(100% + 4px); left: 0; background: #1a1c24; border: 1px solid var(--border-color); border-radius: 5px; padding: 8px; z-index: 1000; box-shadow: 0 4px 16px rgba(0,0,0,0.6); display: flex; flex-direction: column; gap: 6px; min-width: 190px; }
+.stage-room-devices-popover { position: absolute; top: calc(100% + 4px); left: 0; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 5px; padding: 8px; z-index: 1000; box-shadow: 0 4px 16px rgba(0,0,0,0.6); display: flex; flex-direction: column; gap: 6px; min-width: 190px; }
 .stage-room-popover-header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.06); font-family: var(--font-sans); font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); }
 .room-device-item { display: flex; align-items: center; gap: 8px; font-family: var(--font-sans); font-size: 11px; color: var(--text-main); cursor: pointer; padding: 3px 4px; border-radius: 3px; }
 .room-device-item:hover { background: rgba(255,255,255,0.05); }
@@ -161,7 +193,7 @@ body {
 .spatial-room-select {
     font-family: var(--font-sans);
     font-size: 10px;
-    background: #242630;
+    background: var(--input-bg);
     color: var(--text-main);
     border: 1px solid var(--border-color);
     border-radius: 3px;
@@ -244,7 +276,7 @@ body {
     font-family: var(--font-sans);
     font-weight: 500;
     font-size: 10px;
-    background: #22242c;
+    background: var(--surface-raised);
     border: 1px solid var(--border-color);
     color: var(--text-muted);
     cursor: pointer;
@@ -257,7 +289,7 @@ body {
 
 .spatial-ribbon-chip:hover {
     color: var(--text-main);
-    border-color: #40434f;
+    border-color: var(--text-muted);
 }
 
 .spatial-ribbon-chip.active {

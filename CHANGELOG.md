@@ -6,6 +6,22 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **The bench reads in the light theme (2026-11-01).** A panel's name on its
+  bench node read 1.03:1: the chassis was a gradient fixed dark
+  (`#242630`→`#191a22`) under the theme's ink, which is near-black in the
+  light theme. The bench's dot grid (a radial gradient, fixed `#20222a`) sat
+  under the loading and empty-state text (1.06:1 and 2.65:1). The theme
+  contrast gate was green throughout because it SKIPPED any text over a
+  gradient, and its mock fleet drew no node. Fixed the instrument first:
+  `tests/test_e2e_theme_contrast.py` now measures every gradient stop (worst
+  stop wins), measures settled colours (transitions off), and draws the bench
+  with real panels, with none, and loading, in both themes -- red on the old
+  stylesheet with exactly those five findings. Then the class: every ground
+  the bench paints text on is a theme token (`--node-top`, `--node-bottom`,
+  `--node-border`, `--bench-dot`), the empty/loading overlay covers the grid,
+  and the three sibling surfaces fixed dark under theme ink (the room popover,
+  the room select, the ribbon chip) take the theme's own surface tokens
+  (`divoom_gui/web_ui/spatial_stage.css`).
 - **CI's `test` job has gates_of_heck (2026-11-01).** Three tests in
   `tests/test_linux_all_features_runtime.py` source goh's
   `lib/container_runtime.sh`; the job ran `pytest` with no goh checkout, the
