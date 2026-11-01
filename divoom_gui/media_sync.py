@@ -48,7 +48,10 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
                 # Honest unavailable state: say WHY rather than looking idle.
                 return json.dumps({"available": False,
                                    "reason": reply.get("reason", "unavailable")})
-            if not reply.get("playing", False):
+            # `has_track`, not `playing`: since D.FX2 the daemon's `playing`
+            # is false for a PAUSED track, which the card still shows (with
+            # is_playing false) rather than going idle.
+            if not reply.get("has_track", False):
                 # Idle, but say WHY when the daemon can: a stopped player
                 # holding the Now Playing session hides a playing one.
                 return json.dumps({"available": True, "playing": False,
@@ -80,7 +83,7 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
                 # Paused is not playing: MediaRemote keeps reporting a session's
                 # track after it is paused, so the card must be able to say so
                 # rather than showing a stopped player as live.
-                "is_playing": reply.get("is_playing", True),
+                "is_playing": reply.get("is_playing", False),
                 "preview": preview,
                 "artwork": artwork,
             })

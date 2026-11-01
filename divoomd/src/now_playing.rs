@@ -178,6 +178,7 @@ fn now_playing_blocking(include_artwork: bool) -> Value {
                 "success": true,
                 "available": false,
                 "playing": false,
+                "has_track": false,
                 "reason": reason.reason(),
             });
         }
@@ -192,7 +193,7 @@ fn now_playing_blocking(include_artwork: bool) -> Value {
                     .into_iter()
                     .map(|p| player_with_state(&p))
                     .collect();
-                let mut out = json!({"success": true, "available": true, "playing": false});
+                let mut out = json!({"success": true, "available": true, "playing": false, "has_track": false});
                 if !players.is_empty() {
                     out["players"] = json!(players);
                     out["hint"] = json!(format!(
@@ -206,7 +207,7 @@ fn now_playing_blocking(include_artwork: bool) -> Value {
             Err(e) => crate::protocol::err_with(
                 ErrorCode::Internal,
                 &e,
-                json!({"available": true, "playing": false}),
+                json!({"available": true, "playing": false, "has_track": false}),
             ),
         }
     }
@@ -217,6 +218,7 @@ fn now_playing_blocking(include_artwork: bool) -> Value {
             "success": true,
             "available": false,
             "playing": false,
+            "has_track": false,
             "reason": "now-playing metadata is only available on macOS",
         })
     }
@@ -229,7 +231,10 @@ fn track_to_json(track: &nowplaying::Track, include_artwork: bool) -> Value {
     let mut out = json!({
         "success": true,
         "available": true,
-        "playing": true,
+        // D.FX2: `playing` is whether it is PLAYING, as its name says; a
+        // paused session's track still arrives, under `has_track`.
+        "playing": track.is_playing,
+        "has_track": true,
         "title": track.title,
         "artist": track.artist,
         "album": track.album,
@@ -438,12 +443,27 @@ mod paused_tests {
     }
 
     #[test]
-    fn a_paused_track_is_still_reported_not_hidden() {
-        // Showing what is cued up beats showing nothing; the caller decides
-        // whether to push it.
+    fn a_paused_track_is_reported_paused_not_playing() {
+        // D.FX2: `playing: true` for a paused track told every reader of the
+        // reply's headline field that a stopped player was live. Paused is
+        // not playing -- in EVERY field that says so -- and the track is
+        // still reported (`has_track`), because showing what is cued up beats
+        // showing nothing; the caller decides whether to push it.
         let reply = track_to_json(&track(false), false);
-        assert_eq!(reply["playing"], json!(true), "there IS a track");
-        assert_eq!(reply["is_playing"], json!(false), "but it is paused");
+        assert_eq!(
+            reply["playing"],
+            json!(false),
+            "a paused track is not playing"
+        );
+        assert_eq!(reply["is_playing"], json!(false), "it is paused");
+        assert_eq!(reply["has_track"], json!(true), "but there IS a track");
         assert_eq!(reply["title"], json!("Golden Spires"));
+    }
+
+    #[test]
+    fn a_playing_track_is_playing_and_has_a_track() {
+        let reply = track_to_json(&track(true), false);
+        assert_eq!(reply["playing"], json!(true));
+        assert_eq!(reply["has_track"], json!(true));
     }
 }

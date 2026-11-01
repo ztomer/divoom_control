@@ -31,7 +31,8 @@ class _Host(MediaSyncMixin):
 def test_track_info_carries_original_artwork_and_device_frame_separately():
     art = base64.b64encode(b"\xff\xd8\xff\xe0real-jpeg-bytes").decode()
     host = _Host({
-        "available": True, "playing": True, "title": "T", "artist": "A",
+        "available": True, "playing": True, "has_track": True,
+        "title": "T", "artist": "A", "is_playing": True,
         "artwork_b64": art, "artwork_mime": "image/jpeg",
     })
     info = json.loads(host.get_current_track_info("AA:00:00:00:00:01"))
@@ -41,9 +42,27 @@ def test_track_info_carries_original_artwork_and_device_frame_separately():
 
 
 def test_track_info_without_artwork_has_neither():
-    host = _Host({"available": True, "playing": True, "title": "T", "artist": "A"})
+    host = _Host({"available": True, "playing": True, "has_track": True,
+                  "title": "T", "artist": "A", "is_playing": True})
     info = json.loads(host.get_current_track_info("AA:00:00:00:00:01"))
     assert info["artwork"] == "" and info["preview"] == ""
+
+
+def test_a_paused_track_is_shown_paused_not_idle_and_not_live():
+    """D.FX2: the daemon says `playing: false` for a paused track (it is not
+    playing) and `has_track: true` (there is one). The card shows the track,
+    marked paused -- neither the idle card nor a live player."""
+    host = _Host({"available": True, "playing": False, "has_track": True,
+                  "is_playing": False, "title": "Golden Spires", "artist": "Mastodon"})
+    info = json.loads(host.get_current_track_info("AA:00:00:00:00:01"))
+    assert info["track"] == "Golden Spires", "a paused track is still shown"
+    assert info["is_playing"] is False, "and it is shown paused"
+
+
+def test_no_track_is_the_idle_card():
+    host = _Host({"available": True, "playing": False, "has_track": False})
+    info = json.loads(host.get_current_track_info("AA:00:00:00:00:01"))
+    assert info == {"available": True, "playing": False, "hint": ""}
 
 
 def _declarations(css: str, selector: str) -> str:
