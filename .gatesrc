@@ -188,3 +188,7 @@ GOH_CI_PARITY_MIN_SCRIPTS=12          # read 14
 # Measured red on 1acd8b9 (the hand-rolled loop): 25 tools without
 # annotations or outputSchema, and 15 of them destructive-by-default listed.
 GOH_MCP_SERVERS='env -u DIVOOM_DAEMON_HOST -u DIVOOM_DAEMON_PORT -u DIVOOM_DAEMON_TOKEN DIVOOM_SOCKET="$GOH_MCP_SCRATCH/no-daemon.sock" cargo run --quiet --locked -p divoomd --no-default-features --bin divoomd -- mcp'
+
+# A commit that ADDS a test names, in a `Red-run:` trailer, the mutation that
+# turned that test red (goh red-run, BACKLOG 4.11; owner OW.8, 2026-10-31).
+GOH_RED_RUN=1
