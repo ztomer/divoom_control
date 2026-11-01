@@ -62,14 +62,35 @@ def test_the_budget_is_the_house_ui_budget():
 def test_the_budget_is_applied_to_a_page():
     class Fake:
         def __init__(self):
-            self.ms = None
+            self.ms = {}
 
         def set_default_navigation_timeout(self, ms):
-            self.ms = ms
+            self.ms["navigation"] = ms
+
+        def set_default_timeout(self, ms):
+            self.ms["action"] = ms
 
     fake = Fake()
     N.give_navigation_budget(fake)
-    assert fake.ms == N.NAVIGATION_TIMEOUT_MS
+    # Actions too: a `click` that names no timeout (tools/check_ui_budgets.py
+    # refuses one that does) would otherwise get playwright's 30s.
+    assert fake.ms == {"navigation": N.NAVIGATION_TIMEOUT_MS, "action": N.NAVIGATION_TIMEOUT_MS}
+
+
+def test_a_real_page_gets_the_budget_for_actions():
+    """The seam, end to end: a page opened the ordinary way times an action out
+    at the house budget, not playwright's 30s. Read back through playwright's own
+    timeout settings, so a seam that stopped setting it goes red here."""
+    B.require_browser()
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser = B.launch_sync(p)
+        try:
+            page = browser.new_page()
+            assert page._impl_obj._timeout_settings.timeout() == N.NAVIGATION_TIMEOUT_MS
+        finally:
+            browser.close()
 
 
 def test_an_object_that_is_neither_a_page_nor_a_context_is_left_alone():

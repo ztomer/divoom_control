@@ -194,7 +194,7 @@ async def test_real_connect_then_refresh_shows_active_dot(gui_daemon_stack):
             await eval_js(page, "() => window.refreshConnectionState()")
             await wait_js(page, 
                 "() => document.getElementById('global-status-dot')"
-                ".className === 'transport-mark mark-ble mark-linked'", timeout=4000)
+                ".className === 'transport-mark mark-ble mark-linked'")
             assert (await _dot_class(page)).split() == [
                 "transport-mark", "mark-ble", "mark-linked"]
 
@@ -270,10 +270,10 @@ async def test_real_drop_then_refresh_shows_inactive_dot(gui_daemon_stack):
             # LAN-failure test above; it surfaced when R66 moved these suites
             # to camoufox/Firefox, where the ordering differs from Chromium.
             await wait_js(page, 
-                "() => window.DivoomState.appConnected === false", timeout=4000)
+                "() => window.DivoomState.appConnected === false")
             await wait_js(page, 
                 "() => document.getElementById('global-status-dot')"
-                ".className === 'transport-mark mark-ble mark-open'", timeout=4000)
+                ".className === 'transport-mark mark-ble mark-open'")
             assert await eval_js(page,
                 "() => document.getElementById('global-status-dot')"
                 ".getAttribute('aria-label')") == "Connection status: disconnected"
@@ -307,7 +307,7 @@ async def test_real_event_relay_degraded_then_disconnected(gui_daemon_stack):
 
             await wait_js(page, 
                 "() => document.getElementById('global-status-dot')"
-                ".className === 'transport-mark mark-ble mark-open'", timeout=4000)
+                ".className === 'transport-mark mark-ble mark-open'")
 
             # Wait on the channel this test actually asserts about.
             #
@@ -360,7 +360,7 @@ async def test_real_connect_single_device_failure_unreachable_lan(gui_daemon_sta
             # words as well as its kind: the ERROR class alone is a proxy the
             # app satisfies on its own (app_init.js:281 raises an unasked scan
             # failure), and a proxy here is the bug that was just fixed.
-            toast = await wait_toast(page, "Unreachable", kind="error", timeout=8000)
+            toast = await wait_toast(page, "Unreachable", kind="error")
             assert "error" in toast["rendered"]["className"].split(), toast
             assert "Unreachable" in toast["rendered"]["text"]
             # The dot must still settle with no link — kept as a separate
@@ -370,6 +370,6 @@ async def test_real_connect_single_device_failure_unreachable_lan(gui_daemon_sta
             # because there is no link.
             await wait_js(page,
                 "() => document.getElementById('global-status-dot')"
-                ".className === 'transport-mark mark-lan mark-open'", timeout=4000)
+                ".className === 'transport-mark mark-lan mark-open'")
         finally:
             await browser.close()

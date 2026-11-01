@@ -85,7 +85,6 @@ async def test_one_brightness_gesture_writes_the_device_once():
             await wait_js(
                 page,
                 "() => window.__deviceCalls.some(c => c.name === 'set_brightness')",
-                timeout=4000,
             )
             writes = await _brightness_writes(page)
             assert len(writes) == 1, (
@@ -133,7 +132,6 @@ async def test_a_dragged_slider_does_not_write_every_intermediate_value():
             await wait_js(
                 page,
                 "() => window.__deviceCalls.some(c => c.name === 'set_brightness')",
-                timeout=4000,
             )
             writes = await _brightness_writes(page)
             # One write for the value the gesture settled on.

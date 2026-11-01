@@ -93,7 +93,7 @@ def main():
         page.on("console", lambda msg: console_msgs.append((msg.type, msg.text)))
 
         page.goto(url, wait_until="domcontentloaded")
-        page.wait_for_selector(".nav-btn[data-tab='data-sources']", timeout=5000)
+        page.wait_for_selector(".nav-btn[data-tab='data-sources']")
         # Click the Live Widgets tab
         page.click(".nav-btn[data-tab='data-sources']")
         time.sleep(1.0)  # let any setTimeouts fire

@@ -275,12 +275,12 @@ async def test_gallery_and_hot_channel_layouts_render_cleanly():
         await page.wait_for_load_state("domcontentloaded")
 
         # R39+: Gallery + Hot Channel are sub-tabs of the Pixel Art section.
-        await page.click('.nav-btn[data-tab="pixel-art"]', timeout=2000)
-        await page.wait_for_selector("#pixel-art.active", timeout=2000)
+        await page.click('.nav-btn[data-tab="pixel-art"]')
+        await page.wait_for_selector("#pixel-art.active")
 
         # ── Gallery sub-tab ──
-        await page.click('[data-pixel-tab="pixel-gallery"]', timeout=2000)
-        await page.wait_for_selector("#pixel-gallery.active", timeout=2000)
+        await page.click('[data-pixel-tab="pixel-gallery"]')
+        await page.wait_for_selector("#pixel-gallery.active")
         assert await page.locator("#gallery-classify-tabs").count() == 1, (
             "Gallery sub-tab should have classify tabs."
         )
@@ -289,8 +289,8 @@ async def test_gallery_and_hot_channel_layouts_render_cleanly():
         )
 
         # ── Hot Channel sub-tab ──
-        await page.click('[data-pixel-tab="pixel-hot-channel"]', timeout=2000)
-        await page.wait_for_selector("#pixel-hot-channel.active", timeout=2000)
+        await page.click('[data-pixel-tab="pixel-hot-channel"]')
+        await page.wait_for_selector("#pixel-hot-channel.active")
         assert await page.locator("#hot-update-btn").count() == 1, (
             "Hot Channel sub-tab should have the update button."
         )
@@ -303,8 +303,8 @@ async def test_gallery_and_hot_channel_layouts_render_cleanly():
             "appbar-volume-slider not found in the rendered DOM"
         )
         # And the Control Panel must have the Scoreboard tab.
-        await page.click('[data-tab="control-panel"]', timeout=2000)
-        await page.wait_for_selector("#control-panel.active", timeout=2000)
+        await page.click('[data-tab="control-panel"]')
+        await page.wait_for_selector("#control-panel.active")
         assert await page.locator(
             '.tab-btn[data-channel="scoreboard"]'
         ).count() == 1, "Scoreboard tab-btn not found in Control Panel"

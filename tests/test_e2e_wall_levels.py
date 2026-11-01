@@ -103,14 +103,13 @@ async def _wall_page(p, stack, names, bench_on):
         {address: b, name: nb, kind: 'clock', state: 'active'}]})""", [A, B, *names])
     # What each panel IS (its speaker) is the daemon's word, read after the
     # fleet arrives.
-    await wait_js(page, f"() => {json.dumps([A, B])}.every(m => typeof window.panelHasSpeaker(m) === 'boolean')",
-                  timeout=10000)
+    await wait_js(page, f"() => {json.dumps([A, B])}.every(m => typeof window.panelHasSpeaker(m) === 'boolean')")
     await eval_js(page, "(m) => window.Divoom.onSelection({type: 'selection', mac: m})", bench_on)
     await eval_js(page, """async (slots) => {
         window.DivoomState.assignedSlots = slots;
         await window.pywebview.api.update_wall_slots(JSON.stringify(slots));
         window.connectDevice('Virtual Wall', 'MatrixWall'); }""", SLOTS)
-    await wait_js(page, "() => window._activeDeviceMac() === 'MatrixWall'", timeout=10000)
+    await wait_js(page, "() => window._activeDeviceMac() === 'MatrixWall'")
     return browser, page
 
 
@@ -135,7 +134,7 @@ async def test_one_slider_gesture_reaches_every_slot_of_the_wall():
                     got = _wait_sent(stack, (A, B), cid, before)
                     assert got == {A: [[value]], B: [[value]]}, (
                         f"one {slider} gesture on the wall must reach each slot once: {got}")
-                    await wait_toast(page, "Wall", kind="success", timeout=10000)
+                    await wait_toast(page, "Wall", kind="success")
                 assert await eval_js(page, _VOLUME_SHOWN), "both slots have a speaker; the wall's volume must show"
             finally:
                 await browser.close()
@@ -157,7 +156,7 @@ async def test_the_wall_volume_is_hidden_when_a_slot_has_no_speaker():
                 facts = await eval_js(page, "([a, b]) => [window.panelHasSpeaker(a), window.panelHasSpeaker(b)]", [A, B])
                 assert facts == [True, False], f"the daemon's speaker facts for Desk and Shelf: {facts}"
                 try:
-                    await wait_js(page, f"() => !({_VOLUME_SHOWN})()", timeout=10000)
+                    await wait_js(page, f"() => !({_VOLUME_SHOWN})()")
                 except Exception as exc:
                     pytest.fail(f"Shelf has no speaker; the wall must offer no volume ({exc})")
                 name = await eval_js(page, "() => document.getElementById('deck-device-name').textContent")

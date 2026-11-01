@@ -141,14 +141,14 @@ async def test_each_wall_write_names_the_panel_that_did_not_take_it(stack, tmp_p
                 window.DivoomState.assignedSlots = slots;
                 await window.pywebview.api.update_wall_slots(JSON.stringify(slots));
                 window.connectDevice('Virtual Wall', 'MatrixWall'); }""", slots)
-            await wait_js(page, "() => window._activeDeviceMac() === 'MatrixWall'", timeout=10000)
+            await wait_js(page, "() => window._activeDeviceMac() === 'MatrixWall'")
 
             missed = {}
             for name, (failed, gesture) in GESTURES.items():
                 # One toast history per gesture: two writes share a message.
                 await eval_js(page, f"() => {{ window.__divoomToasts.length = 0; {gesture}; }}")
                 try:
-                    toast = await wait_toast(page, f"{failed}: Shelf", kind="error", timeout=15000)
+                    toast = await wait_toast(page, f"{failed}: Shelf", kind="error")
                 except Exception as exc:
                     missed[name] = f"no error toast naming Shelf ({exc})"
                     continue

@@ -32,15 +32,23 @@ import os
 NAVIGATION_TIMEOUT_MS = int(os.environ.get("DIVOOM_E2E_TIMEOUT_MS", "60000"))
 
 
+#: The setters a page and a context carry: navigation (``goto``), and every
+#: other action and wait (``click``, ``wait_for_selector``...). Both, because a
+#: suite's ``click`` with no ``timeout=`` otherwise gets playwright's 30s, and
+#: ``tools/check_ui_budgets.py`` tells it to name no ``timeout=`` at all.
+BUDGET_SETTERS = ("set_default_navigation_timeout", "set_default_timeout")
+
+
 def give_navigation_budget(obj) -> None:
-    """Give a page or a context the house's navigation budget."""
-    setter = getattr(obj, "set_default_navigation_timeout", None)
-    if setter is None:  # not a page and not a context
-        return
-    try:
-        setter(NAVIGATION_TIMEOUT_MS)
-    except Exception:  # pragma: no cover - a stub without the setter
-        pass
+    """Give a page or a context the house's budget, for navigations and actions."""
+    for name in BUDGET_SETTERS:
+        setter = getattr(obj, name, None)
+        if setter is None:  # not a page and not a context
+            continue
+        try:
+            setter(NAVIGATION_TIMEOUT_MS)
+        except Exception:  # pragma: no cover - a stub without the setter
+            pass
 
 
 def _wrap(original):

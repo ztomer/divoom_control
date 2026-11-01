@@ -248,8 +248,7 @@ async def test_owned_devices_event_adds_daemon_owned_missing_from_scan():
                     {address:'AA', name:'Ditoo', kind:'weather', state:'connected'}]});
             }""")
             await wait_js(page, 
-                "() => !!document.querySelector('#device-dots .device-chip')",
-                timeout=4000)
+                "() => !!document.querySelector('#device-dots .device-chip')")
             res = await eval_js(page, """() => {
                 const c = document.querySelector('#device-dots .device-chip');
                 return { value: c.dataset.value,

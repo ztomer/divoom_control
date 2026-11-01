@@ -6,6 +6,18 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **A browser test's wait carries the house budget, by gate.** A pre-push run
+  was refused by `Page.click: Timeout 2000ms exceeded` on the Gallery tab
+  (visible, enabled and stable) at host load: the 2026-09-12 sweep onto
+  `UI_TIMEOUT_MS` was by hand and left 44 literal budgets (2000-15000 ms) in
+  15 browser suites. All 44 are gone; `tools/check_ui_budgets.py` (local CI
+  and CI) refuses a literal `timeout=` on a Playwright action or `wait_js` /
+  `wait_toast`, exempting by shape only the waits whose short timeout IS the
+  assertion (`state="hidden"`/`"detached"`, inside `pytest.raises`). The
+  page seam (`tests/support/navigation_budget.py`) now sets the action
+  default too (`set_default_timeout`), so a `click` that names no budget gets
+  60 s, not playwright's 30 s.
+
 - **One lasting hot-channel verdict per panel (P5.13, umbrella U.5; the
   owner's pick 2026-10-31: "A: verdict line (Recommended)").** Under Update
   Hot Channel, a line that stays: "✓ Up to date · checked 2 h ago",

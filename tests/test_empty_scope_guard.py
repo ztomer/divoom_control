@@ -30,6 +30,7 @@ GUARDED = [
     "check_positional_args.py",
     "check_scripts.py",
     "check_applescript_launch.py",
+    "check_ui_budgets.py",
 ]
 
 #: The gates that are EXCUSED instead of guarded, and why each is a different thing. Kept beside

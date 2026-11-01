@@ -77,8 +77,7 @@ async def test_hot_channel_button_reenables_after_done_event():
             }""")
 
             await wait_js(page, 
-                "() => document.getElementById('hot-update-btn').disabled === false",
-                timeout=5000)
+                "() => document.getElementById('hot-update-btn').disabled === false")
             disabled = await eval_js(page, 
                 "() => document.getElementById('hot-update-btn').disabled")
             assert disabled is False
@@ -103,7 +102,6 @@ async def test_hot_channel_button_reenables_after_error_event():
             }""")
 
             await wait_js(page, 
-                "() => document.getElementById('hot-update-btn').disabled === false",
-                timeout=5000)
+                "() => document.getElementById('hot-update-btn').disabled === false")
         finally:
             await browser.close()

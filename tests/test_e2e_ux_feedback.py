@@ -72,8 +72,7 @@ async def test_scan_shows_progress_then_result():
             await eval_js(page, "() => window.__release()")
             # Afterwards: hidden again + a 'Found 2 screens' toast that's actually shown.
             await wait_js(page, 
-                "() => document.getElementById('scan-indicator').hidden === true",
-                timeout=4000)
+                "() => document.getElementById('scan-indicator').hidden === true")
             toast = await eval_js(page, 
                 "() => ({c: document.getElementById('toast').className,"
                 "        t: document.getElementById('toast').textContent})")
@@ -115,7 +114,7 @@ async def test_connect_shows_connecting_then_connected():
             await eval_js(page, "() => window.__release()")
             # After success: connected toast + active state + banner names the device.
             await wait_js(page, 
-                "() => window.DivoomState.appConnected === true", timeout=4000)
+                "() => window.DivoomState.appConnected === true")
             done = await eval_js(page, """() => ({
                 toast: document.getElementById('toast').textContent,
                 active: !!document.querySelector('#device-dots .device-chip.chip-active'),
@@ -147,8 +146,7 @@ async def test_connect_failure_surfaces_the_reason():
                 window.connectDevice('Ditoo', 'AA');
             }""")
             # On the toast this connect raised, by its own words and kind.
-            toast = await wait_toast(page, "Asleep or out of range", kind="error",
-                                     timeout=4000)
+            toast = await wait_toast(page, "Asleep or out of range", kind="error")
             res = await eval_js(page, """() => ({
                 banner: document.getElementById('banner-device-name').textContent,
                 connected: window.DivoomState.appConnected
@@ -238,7 +236,7 @@ async def test_scan_failure_is_surfaced_not_silent():
             # auto-scan failure carry the SAME words ("Scan failed (device
             # backend unavailable)"), so what this test can claim is that the
             # user was told and the spinner cleared — not which scan told them.
-            toast = await wait_toast(page, "Scan failed", kind="error", timeout=4000)
+            toast = await wait_toast(page, "Scan failed", kind="error")
             res = await eval_js(page, """() => ({
                 spinnerHidden: document.getElementById('scan-indicator').hidden
             })""")
@@ -266,7 +264,7 @@ async def test_degraded_link_shows_distinct_state():
             }""")
             await wait_js(page,
                 "() => (document.getElementById('global-status-dot')||{}).className"
-                "        ?.includes('mark-fault')", timeout=4000)
+                "        ?.includes('mark-fault')")
             # P7.2: the dot has no title (it is pointer-events:none, so a title
             # could never be seen); the state is in the aria-label.
             label = await eval_js(page,
@@ -364,8 +362,7 @@ async def test_known_but_undetected_device_shows_distinct_state():
             }""")
             # Wait for the async fetch + re-render to land the CC chip.
             await wait_js(page, 
-                "() => !!document.querySelector('#device-dots .device-chip[data-value=\"CC\"]')",
-                timeout=4000)
+                "() => !!document.querySelector('#device-dots .device-chip[data-value=\"CC\"]')")
             res = await eval_js(page, """() => {
                 const chips = [...document.querySelectorAll('#device-dots .device-chip')];
                 const cc = chips.find(c => c.dataset.value === 'CC');

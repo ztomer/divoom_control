@@ -86,8 +86,7 @@ async def _select(page, mac, n):
     """Select `mac` and wait until the backend has taken it (the n-th select)."""
     await eval_js(page, "(m) => window.Divoom.onSelection({type: 'selection', mac: m})", mac)
     await wait_js(page, f"() => window.SpatialStage.getSelectedMac() === '{mac}'")
-    await wait_js(page, f"() => window.__landed.filter(n => n === 'select_device').length >= {n}",
-                  timeout=5000)
+    await wait_js(page, f"() => window.__landed.filter(n => n === 'select_device').length >= {n}")
 
 
 def _alive(stack, page_calls):
@@ -113,7 +112,7 @@ async def test_a_rename_lands_on_the_panel_clicked_not_the_one_selected_since(st
             assert stack.client.send_command("device_status", {}).get("selected") == B, (
                 "the selection reached the backend before the held write")
 
-            await wait_js(page, "() => window.__landed.includes('set_device_name')", timeout=10000)
+            await wait_js(page, "() => window.__landed.includes('set_device_name')")
             _alive(stack, await eval_js(page, "() => window.__sent.map(c => c.name)"))
             on_a, reply = _name_of(stack, A)
             on_b, _ = _name_of(stack, B)
@@ -137,7 +136,7 @@ async def test_a_live_widget_starts_on_the_panel_clicked_not_the_one_selected_si
             await eval_js(page, "() => document.getElementById('widget-card-sysmon').click()")
             await _select(page, B, 2)
 
-            await wait_js(page, "() => window.__landed.includes('toggle_sysmon_sync')", timeout=10000)
+            await wait_js(page, "() => window.__landed.includes('toggle_sysmon_sync')")
             sent = await eval_js(page, "() => window.__sent.filter(c => c.name.startsWith('toggle_'))")
             _alive(stack, sent)
             on_a, reply = _jobs_on(stack, A)

@@ -116,7 +116,6 @@ async def test_a_wall_write_is_sent_while_a_connect_is_in_flight():
             await wait_js(
                 page,
                 "() => window.__deviceCalls.some(c => c.name === 'set_clock')",
-                timeout=4000,
             )
             writes = await _writes(page, "set_clock")
             assert writes, "the clock write never reached the daemon"
@@ -161,7 +160,6 @@ async def test_a_panel_write_is_sent_while_a_connect_is_in_flight():
             await wait_js(
                 page,
                 "() => window.__deviceCalls.some(c => c.name === 'set_clock')",
-                timeout=4000,
             )
             writes = await _writes(page, "set_clock")
             assert writes, "the clock write never reached the daemon"

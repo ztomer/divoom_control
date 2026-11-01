@@ -104,7 +104,7 @@ async def test_a_channel_switch_lands_on_the_panel_clicked_not_the_one_selected_
             await eval_js(page, "(m) => window.Divoom.onSelection({type: 'selection', mac: m})", A)
             await wait_js(page, f"() => window.SpatialStage.getSelectedMac() === '{A}'")
             # The backend has taken A as the selection.
-            await wait_js(page, "() => window.__landed.includes('select_device')", timeout=5000)
+            await wait_js(page, "() => window.__landed.includes('select_device')")
             assert stack.client.send_command("device_status", {}).get("selected") == A
 
             # Click VJ on A; its write is held while the user moves to B.
@@ -112,12 +112,11 @@ async def test_a_channel_switch_lands_on_the_panel_clicked_not_the_one_selected_
             await eval_js(page, "() => document.querySelector('.tab-btn[data-channel=\"vj\"]').click()")
             await eval_js(page, "(m) => window.Divoom.onSelection({type: 'selection', mac: m})", B)
             await wait_js(page, f"() => window.SpatialStage.getSelectedMac() === '{B}'")
-            await wait_js(page, "() => window.__landed.filter(n => n === 'select_device').length >= 2",
-                          timeout=5000)
+            await wait_js(page, "() => window.__landed.filter(n => n === 'select_device').length >= 2")
             assert stack.client.send_command("device_status", {}).get("selected") == B, (
                 "the selection reached the backend before the held write")
 
-            await wait_js(page, "() => window.__landed.includes('switch_channel')", timeout=10000)
+            await wait_js(page, "() => window.__landed.includes('switch_channel')")
             on_a, reply = _kind_on(stack, A)
             on_b, _ = _kind_on(stack, B)
             sent = [c for c in await eval_js(page, "() => window.__sent")

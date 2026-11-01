@@ -165,8 +165,7 @@ async def test_the_button_starts_and_shows_progress_and_the_line_carries_the_res
                 window.Divoom.onHotProgress({type: 'hot_progress', mac: m, phase: 'done',
                                              result: {served: ['a', 'b', 'c'], manifest: 23, downloaded: 23}});
             }""", [PANEL, now()])
-            await wait_js(page, "() => document.getElementById('hot-update-btn').disabled === false",
-                          timeout=1000)
+            await wait_js(page, "() => document.getElementById('hot-update-btn').disabled === false")
             await wait_js(page, "() => document.getElementById('hot-verdict').dataset.kind === 'new'")
             line = await eval_js(page, _LINE)
             assert line["glyph"] == "↓" and "3 new files · just now" in line["text"], line

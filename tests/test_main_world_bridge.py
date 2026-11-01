@@ -205,7 +205,7 @@ async def test_wait_toast_ignores_a_foreign_toast():
             # what was RENDERED, kind and transport marker included.
             await B.eval_js(
                 page, "() => window.showToast('no LAN API on this device', 'error', ' LAN')")
-            toast = await B.wait_toast(page, "no LAN API", kind="error", timeout=300)
+            toast = await B.wait_toast(page, "no LAN API", kind="error")
             assert toast["rendered"]["text"] == "no LAN API on this device LAN"
             assert "error" in toast["rendered"]["className"].split()
             assert toast["rendered"]["transport"] == "LAN"

@@ -122,7 +122,7 @@ async def test_status_dot_connected_wall():
             await eval_js(page, "() => window.connectDevice('Virtual Wall', 'MatrixWall')")
             await wait_js(page, 
                 "() => document.getElementById('global-status-dot')"
-                ".className.includes('wall')", timeout=4000)
+                ".className.includes('wall')")
             cls = await _dot_cls(page)
             assert "mark-linked" in cls and "mark-wall" in cls
         finally:
@@ -257,7 +257,7 @@ async def test_status_dot_safety_net_refresh_connection_state():
             }""")
             await wait_js(page,
                 "() => document.getElementById('global-status-dot')"
-                ".className.includes('mark-open')", timeout=4000)
+                ".className.includes('mark-open')")
             info = await _dot_info(page)
             assert "mark-open" in info["cls"]
             assert info["connected"] is False
