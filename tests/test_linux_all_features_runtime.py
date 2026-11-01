@@ -67,6 +67,8 @@ def _run(tmp_path: pathlib.Path, *, up: bool, busy: bool = False) -> tuple[int, 
         "DIVOOM_COLIMA": "colima-stub",
         "DIVOOM_LINUX_LINT_CACHE": str(tmp_path / "cache"),
         "TMPDIR": str(tmp_path),
+        # The leases live here, never in the machine's real state dir.
+        "GOH_CONTAINER_STATE": str(tmp_path / "runtime_state"),
         "NO_COLOR": "1",
     })
     env.pop("DIVOOM_SKIP_LINUX_ALL_FEATURES", None)
@@ -95,4 +97,4 @@ def test_a_runtime_someone_else_is_using_is_not_stopped(tmp_path):
     rc, calls, out = _run(tmp_path, up=False, busy=True)
     assert rc == 0, out
     assert "colima start" in calls and "colima stop" not in calls, calls
-    assert "leaving colima running" in out, out
+    assert "leaving colima-stub running" in out, out
