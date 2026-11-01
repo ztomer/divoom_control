@@ -27,8 +27,15 @@ PANEL = "f90d2cc9-420e-65f9-9e06-f9554470fced"
 OTHER = "a9fccb71-3d3d-4de3-c381-0de382cdc4aa"
 
 
+# One instant for the whole module: the fixtures stamp records against it and
+# every page's Date.now() is pinned to it (`_open`), so an age the page renders
+# ("checked 10 min ago") cannot tick over to 11 while a loaded machine is
+# still rendering - the flake that refused a push gate on 2026-11-01.
+_NOW = int(time.time())
+
+
 def now() -> int:
-    return int(time.time())
+    return _NOW
 
 
 _MOCK_API = """
@@ -63,6 +70,9 @@ async def _open(p, verdicts):
     import json
     browser = await launch(p)
     page = await browser.new_page()
+    # Date.now() pinned (what hot_verdict.js reads); timers still run. Not
+    # page.clock: on the e2e browser (Firefox) it measured no effect.
+    await add_init_js(page, f"Date.now = () => {_NOW * 1000};")
     await add_init_js(page, _MOCK_API.replace("%VERDICTS%", json.dumps(verdicts)))
     await install_toast_recorder(page)
     await page.goto(f"file://{INDEX_HTML}")
