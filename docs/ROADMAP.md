@@ -391,6 +391,8 @@ well as the eyes; a panel that shows nothing is that finding, not the lease's.
 daemon by mac. **Exit:** browser tests across two panels for P5.1/P5.2; the
 menubar no longer closes on a status change. **Size:** M.
 
+Landed (2026-11-01): the arrangement survives a restart -- the daemon's topology is its ONE store: the bench holds the daemon's copy and nothing else, shows a loading state (with the reason) until it is read, retries the read, refuses every write before it, and sends only what changed; a room list merges and a room leaves it only by `remove_rooms`; an off panel keeps its wall slot; the page keeps its storage across launches (`private_mode=False`); and the Python suite runs under a throwaway HOME with its own daemon log, so no test reaches the owner's state (`divoom_gui/web_ui/spatial_rooms.js`, `divoomd/src/wall/cmds.rs`, `tests/conftest.py`, `tests/test_e2e_arrangement_is_the_daemons.py`, `tests/test_suite_leaves_the_owner_alone.py`).
+
 Landed (2026-10-31): P5.13 (umbrella U.5, the owner's pick 2026-10-31: "A: verdict line (Recommended)"), one lasting hot-channel verdict line per panel under Update Hot Channel and, shorter, in each Auto-Sync row -- glyph + words, colour only on the glyph -- read from ONE per-panel record in `hotchannel_state.json` (`panels`) that the button, Sync Now and the daily schedule all write, failures included, broadcast as `hot_status`; progress events name their panel; the startup scan reports in the scan card, never as a toast (`divoomd/src/hot_verdict.rs`, `divoom_gui/web_ui/hot_verdict.js`, `tests/test_e2e_hot_verdict.py`, `tests/test_e2e_no_background_toasts.py`, `tools/render_hot_verdict.py`). D.DV2: stored state admits only panel ids a real device reported, the invented fleet and test-mac wall dropped on load (`divoomd/src/reported_panels.rs`); one owner holds a panel's link -- `connect` waits for the radio and answers a held panel from the fleet, the scheduler borrows and gives back only what it opened (`divoomd/src/monthly_best_link.rs`, `divoomd/src/connection_owner_tests.rs`); the Linux all-features gate starts and stops colima itself (`tests/test_linux_all_features_runtime.py`). D.DV1: the stored-gallery read (`0x8E`) removed.
 
 Landed (2026-10-31): P5.12 (umbrella U.4), a room lists exactly the panels assigned to it -- the bench draws a room's panels and no others, absent rather than greyed; a panel's room is read by one `SpatialRooms.roomOf` and written by one `SpatialRooms.assignRoom`, so the bench keeps no copy a drag, Center or Snap could write back over a removal; "no room" is no room in the bench, the wall and the daemon (no invented Desk); the daemon's stored entry decides a panel's room on load, and `set_topology` keeps one key per panel whatever its letter case (`divoom_gui/web_ui/spatial_rooms.js`, `divoom_gui/web_ui/spatial_rooms_ui.js`, `tests/test_e2e_room_lists_its_panels.py`, `divoomd/src/wall/cmds.rs`).
@@ -423,6 +425,22 @@ cloud's side, is not yet measured.
 shows natively (the reply counting what it left out, as `fetch_gallery`'s
 `not_native` does), or is recorded here as device-type-scoped by the cloud
 with the evidence; a mock-panel test per command, 16x16 and 64x64.
+
+#### P5.15 — The daemon's own unit tests still see the developer's HOME
+**Status:** OPEN
+**Why:** the 2026-11-01 isolation (`tests/conftest.py`) covers the Python
+suite and every daemon it spawns. `cargo test` does not go through it: the
+reply-code sweep drives `get_topology` on a `Daemon::new()`, and
+`load_topology` resolves `~/.config/divoom-control/topology.json` from HOME
+and REWRITES it when it holds a placement no device reported
+(`divoomd/src/reply_code_sweep_tests.rs`, `divoomd/src/wall/cmds.rs`). Other
+handlers the sweep drives read HOME the same way (`divoomd/src/cloud.rs`
+`config_dir`). Several unit tests set HOME process-wide themselves, so a
+`cfg(test)` redirect has to keep honouring theirs.
+**Done when:** no `cargo test` run reads or writes under the real
+`~/.config/divoom-control` (a test that records the directory's mtimes
+around a sweep of every command, red before the fix), with the HOME-setting
+unit tests still green.
 
 #### P5.14 — One hot-channel pipeline? (U.5 follow-up)
 **Status:** DECISION (owner)

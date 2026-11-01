@@ -43,7 +43,7 @@ window.__calls = [];
 window.__api = {
   get_panels: () => JSON.stringify({ok: true, panels: window.__panels}),
   get_panel_levels: (mac) => JSON.stringify({ok: true, mac, brightness: 50, volume: null}),
-  get_topology: () => window.__topology ? {success: true, topology: window.__topology} : {success: false},
+  get_topology: () => ({success: true, topology: window.__topology}),
   set_topology: (t) => { window.__calls.push({m: 'set_topology', args: [t]}); return {success: true}; },
 };
 window.pywebview = { api: new Proxy({}, { get: (_t, name) => (...args) => {
@@ -60,15 +60,21 @@ _ON_BENCH = """() => [...document.querySelectorAll('#spatial-bench .spatial-node
 async def _open(p, macs, topology=None, stored_rooms=None):
     browser = await launch(p)
     page = await browser.new_page(viewport={"width": 1280, "height": 900})
+    # The daemon's copy is the bench's one store; a test that names none gets
+    # the daemon's default layout. `stored_rooms` is a STALE page-storage copy
+    # (what the owner's machine held), seeded before load: it must count for
+    # nothing.
+    topology = topology or {"rooms": ["Desk", "Shelf", "Wall"], "wall_linked": True, "devices": {}}
     init = (_MOCK_API.replace("%PANELS%", json.dumps([_panel(m) for m in macs]))
             .replace("%TOPOLOGY%", json.dumps(topology)))
+    if stored_rooms:
+        init = (f"try {{ localStorage.setItem('divoom_stage_rooms', {json.dumps(json.dumps(stored_rooms))}); }}"
+                " catch (_) {}\n" + init)
     await add_init_js(page, init)
     await install_toast_recorder(page)
     await page.goto(f"file://{INDEX_HTML}")
     await wait_js(page, "() => !!window.Divoom?.onOwnedDevices && !!window.SpatialStage && !!window.SpatialRooms")
-    await eval_js(page, """(rooms) => { try { localStorage.clear();
-        if (rooms) localStorage.setItem('divoom_stage_rooms', JSON.stringify(rooms)); } catch (_) {} }""",
-                  stored_rooms)
+    await wait_js(page, "() => window.SpatialRooms.isLoaded()")
     owned = [{"address": m, "name": NAMES[m], "kind": "clock", "state": "active"} for m in macs]
     await eval_js(page, "(devs) => window.Divoom.onOwnedDevices({type: 'owned_devices', devices: devs})", owned)
     await eval_js(page, "() => window.refreshPanelFacts()")
@@ -149,16 +155,21 @@ async def test_a_panel_taken_out_of_a_room_stays_out_after_a_drag():
             await wait_js(page, f"() => !document.getElementById('spatial-node-{B}')")
             assert await eval_js(page, _ON_BENCH) == [A], "a panel taken out of the room is not drawn in it"
 
+            before = await eval_js(page, "() => window.__calls.length")
             await _drag(page, A, 40, 0)
-            await wait_js(page, "() => window.__calls.length > 0")
+            await wait_js(page, f"() => window.__calls.length > {before}")
             assert await eval_js(page, _ON_BENCH) == [A], "the drag must not put it back"
             assert await eval_js(page, f"() => window.SpatialRooms.roomOf('{B}')") == "", (
                 "the stored room stays empty after the drag saved the layout")
             sent = [c["args"][0] for c in await eval_js(page, "() => window.__calls")]
-            last = sent[-1]["devices"]
-            assert last[A]["room"] == "Shelf", last
-            assert last.get(B, {}).get("room") is None, (
-                f"the daemon is told the panel has no room -- not Shelf, and not an invented Desk: {last}")
+            # What the daemon holds is each panel's LAST entry sent (it replaces
+            # an entry whole): fold the writes.
+            held = {}
+            for w in sent:
+                held.update(w.get("devices", {}))
+            assert held[A]["room"] == "Shelf", held
+            assert B in held and held[B].get("room") is None, (
+                f"the daemon is told the panel has no room -- not Shelf, and not an invented Desk: {held}")
         finally:
             await browser.close()
 

@@ -6,6 +6,7 @@ Frame, Wall), and two-way coordinate synchronization with SpatialRooms.
 import asyncio
 from pathlib import Path
 import pytest
+from tests.support.arrangement import answer_arrangement
 from tests.support.browser import launch as launch_browser, eval_js, wait_js
 
 INDEX_HTML = Path(__file__).resolve().parent.parent / "divoom_gui" / "web_ui" / "index.html"
@@ -25,6 +26,7 @@ async def test_virtual_wall_arranger_retired_and_bench_clock_rendering():
         await page.goto(f"file://{INDEX_HTML}")
         await page.wait_for_load_state("domcontentloaded")
         await wait_js(page, "() => !!window.DisplayPreviewRegistry && !!window.renderArrangerCanvas")
+        await answer_arrangement(page)
 
         dev1 = "11:22:33:44:55:01"
         res = await eval_js(page, """(d1) => {
@@ -98,6 +100,7 @@ async def test_main_bench_frame_and_eq_rendering():
         await page.goto(f"file://{INDEX_HTML}")
         await page.wait_for_load_state("domcontentloaded")
         await wait_js(page, "() => !!window.DisplayPreviewRegistry && !!window.renderArrangerCanvas")
+        await answer_arrangement(page)
 
         dev1 = "11:22:33:44:55:01"
         res = await eval_js(page, """(d1) => {
@@ -161,6 +164,7 @@ async def test_virtual_wall_spatial_rooms_preset_sync():
         await page.goto(f"file://{INDEX_HTML}")
         await page.wait_for_load_state("domcontentloaded")
         await wait_js(page, "() => !!window.SpatialRooms && !!window.renderArrangerCanvas")
+        await answer_arrangement(page)
 
         dev1 = "AA:BB:CC:DD:EE:01"
         sync_res = await eval_js(page, """(d1) => {

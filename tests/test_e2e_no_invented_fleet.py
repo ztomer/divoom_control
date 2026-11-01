@@ -38,6 +38,7 @@ window.__panels = [];
 window.__api = {
   get_panels: () => JSON.stringify({ok: true, panels: window.__panels}),
   get_panel_levels: (mac) => JSON.stringify({ok: true, mac, brightness: 40, volume: null}),
+  get_topology: () => ({success: true, topology: {rooms: ['Desk', 'Shelf', 'Wall'], wall_linked: true, devices: {}}}),
 };
 window.pywebview = { api: new Proxy({}, { get: (_t, name) => (...args) => {
     window.__calls.push({name: String(name), args: JSON.stringify(args)});

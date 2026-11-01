@@ -6,6 +6,57 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **The arrangement survives a restart: the daemon's topology is its ONE
+  store (2026-11-01).** The owner: "divoom control seems to be forgetting the
+  device arrangements on each restart... is this only when the devices are
+  not connected?" It was not about connection. Root causes, each verified:
+  - pywebview's default `private_mode=True` wipes WKWebView's website data
+    at every launch, and the bench kept places, rooms and the room list in
+    localStorage. `webview.start(..., private_mode=False)` now
+    (`divoom_gui/gui_main.py`); the page's storage keeps preferences only.
+  - The daemon's copy (`topology.json`, which held all four placements and
+    the custom room) was read once on load, a failure swallowed and never
+    retried, and the bench drew from the empty store meanwhile. Now
+    `divoom_gui/web_ui/spatial_rooms.js` holds the daemon's copy in memory
+    and nothing else, retries the read (250 ms to 4 s) until it lands, and
+    the bench shows "Loading the arrangement…" with the reason while it
+    waits (rule #12). The old localStorage keys are dropped on load.
+  - A write before that read sent the GUI's guesses: `getRooms()` fell back
+    to Desk/Shelf/Wall, every sync sent `rooms`, and `merge_topology`
+    REPLACED the stored list -- the custom room "Ethan" could be erased for
+    good. Now every write is refused until the copy is read, a write sends
+    only what changed (a panel's whole entry, or the one room added), a room
+    list MERGES in the daemon, and a room leaves it only through an explicit
+    `remove_rooms`, which also takes its panels out of it
+    (`divoomd/src/wall/cmds.rs`). The default room list lives in the daemon.
+  - A panel that is off or out of range keeps its wall slot: the slots are
+    made from the daemon's placements, not from this session's scan.
+  - `links.json` reading `links: [], wall: null` (02:04) was a TEST: the
+    suite spawned real daemons with the developer's HOME, and one read the
+    owner's list, dropped its (already test-written) wall slots and saved it.
+    Every test daemon also logged into `/tmp/divoom_client.log`, the app's
+    own daemon log. `tests/conftest.py` now gives the whole suite a throwaway
+    HOME (toolchains named by their own variables or linked in) and a log of
+    its own, so no test can reach the owner's state by forgetting an override.
+  - Tests: `divoomd/src/wall/cmds_tests.rs` (rooms merge, explicit removal,
+    default rooms; red before the fix), `tests/test_e2e_arrangement_is_the_daemons.py`
+    (loading state, no write before the read, retry, writes send only what
+    changed, an off panel keeps its slot; 3 red on the old JS),
+    `tests/test_suite_leaves_the_owner_alone.py` (red without the isolation),
+    `tests/test_gui_main_storage.py`. Eight browser suites now give their fake
+    bridge a daemon topology, as the real one has; a suite that loads the page
+    with no bridge answers the one read through `tests/support/arrangement.py`.
+  - With no panel known the bench still says "No panels yet" (that is true
+    whatever the arrangement holds); the loading state is for panels whose
+    places are not read yet.
+  - Verified in the installed app (v0.43.1 bundle): a GUI-only restart, a
+    full app-and-daemon restart with three panels linked (the Timoo was out
+    of reach the whole session), and a full restart with the Pixoo
+    disconnected too -- every place, the three Shelf panels, the Ethan room
+    and the Timoo in it survived each one.
+  - Python suite: 2179 passed, 196 skipped (browser suites run separately:
+    every one that failed on the new store now passes).
+
 - **A browser test's wait carries the house budget, by gate.** A pre-push run
   was refused by `Page.click: Timeout 2000ms exceeded` on the Gallery tab
   (visible, enabled and stable) at host load: the 2026-09-12 sweep onto

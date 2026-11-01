@@ -60,6 +60,8 @@ body {
     color: var(--text-muted); font-size: 13px; text-align: center; padding: 0 16px;
 }
 .spatial-ribbon-empty { color: var(--text-muted); font-size: 12px; }
+/* Loading the daemon's arrangement: a title, not a fault (no alarm colour). */
+.spatial-bench-loading-title { color: var(--text-main); font-weight: 600; }
 .sidebar-device-deck [hidden] { display: none !important; }
 
 /* Draggable Device Node Chassis */

@@ -36,6 +36,9 @@ const __rec = (m, ret) => (...args) => { window.__calls.push({m, args}); return 
 window.__api = {
   get_panels: () => JSON.stringify({ok: true, panels: window.__panels}),
   get_panel_levels: (mac) => JSON.stringify({ok: true, mac, brightness: 50, volume: null}),
+  // The daemon's copy of the arrangement: the bench's one store.
+  get_topology: () => ({success: true, topology: {rooms: ['Desk', 'Shelf', 'Wall'], wall_linked: true, devices: {}}}),
+  set_topology: __rec('set_topology', {success: true}),
   update_wall_slots: __rec('update_wall_slots', null),
   display_wall_image: __rec('display_wall_image', {success: true, previews: {}}),
 };

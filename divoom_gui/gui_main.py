@@ -313,7 +313,12 @@ def main():
     # DIVOOM_GUI_DEBUG=1 → enable the WebKit inspector (right-click → Inspect
     # Element) so a blank/broken page can be diagnosed from the JS console.
     _debug = os.environ.get("DIVOOM_GUI_DEBUG") in ("1", "true", "yes")
-    webview.start(debug=_debug)
+    # private_mode=False: pywebview's default (True) wipes WKWebView's website
+    # data at every launch, so every preference the page keeps was forgotten on
+    # each restart. The page is a file:// URL, so no HTTP server (and no fixed
+    # port) comes with it. The arrangement does not depend on this: it is the
+    # daemon's (spatial_rooms.js); the page's storage holds preferences only.
+    webview.start(debug=_debug, private_mode=False)
 
     # webview.start() blocks until the window closes. On close, when lifecycles
     # are shared, stop the daemon too (which broadcasts → the menu bar follows).

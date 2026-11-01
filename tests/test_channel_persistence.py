@@ -9,6 +9,7 @@ Verifies that:
 import asyncio
 from pathlib import Path
 import pytest
+from tests.support.arrangement import answer_arrangement
 from tests.support.browser import launch as launch_browser, eval_js, wait_js
 
 INDEX_HTML = Path(__file__).resolve().parent.parent / "divoom_gui" / "web_ui" / "index.html"
@@ -62,6 +63,7 @@ async def test_rehydration_on_bench_refresh():
         await page.goto(f"file://{INDEX_HTML}")
         await page.wait_for_load_state("domcontentloaded")
         await wait_js(page, "() => !!window.DisplayPreviewRegistry && !!window.SpatialStage")
+        await answer_arrangement(page)
 
         dev = "22:33:44:55:66:77"
         res = await eval_js(page, """(mac) => {

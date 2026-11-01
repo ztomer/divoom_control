@@ -42,6 +42,13 @@ async def test_status_moves_only_the_named_panel_and_the_jewel_is_honest():
         await page.goto(f"file://{INDEX_HTML}")
         await page.wait_for_load_state("domcontentloaded")
         await wait_js(page, "() => !!window.Divoom?.onDaemonEvent && !!window.SpatialStage && !!window.jewelClassFor")
+        # The bench draws once the daemon's arrangement is read; this test has
+        # no bridge otherwise, so one answers that read and is taken away.
+        await eval_js(page, """async () => {
+            window.pywebview = { api: { %s } };
+            await window.SpatialRooms.loadTopology();
+            delete window.pywebview;
+        }""" % "get_topology: () => Promise.resolve({success: true, topology: {rooms: ['Desk'], wall_linked: true, devices: {}}})")
 
         ditoo, pixoo = "E9:DITOO", "A9:PIXOO"
         state = await eval_js(page, """([d, px, stateJs]) => {
@@ -135,9 +142,11 @@ async def test_bench_selection_always_reaches_python_including_the_fallback():
         await page.goto(f"file://{INDEX_HTML}")
         await page.wait_for_load_state("domcontentloaded")
         await wait_js(page, "() => !!window.SpatialStage")
-        res = await eval_js(page, """() => {
+        res = await eval_js(page, """async () => {
             const calls = [];
-            window.pywebview = { api: { select_device: (m, prov) => { calls.push([m, !!prov]); return Promise.resolve(true); } } };
+            window.pywebview = { api: { select_device: (m, prov) => { calls.push([m, !!prov]); return Promise.resolve(true); },
+                                        get_topology: () => Promise.resolve({success: true, topology: {rooms: ['Desk'], wall_linked: true, devices: {}}}), set_topology: () => Promise.resolve({success: true}) } };
+            await window.SpatialRooms.loadTopology();
             window.DivoomState.discoveredDevices = [
                 { address: 'T1:TIMOO', name: 'Timoo' }, { address: 'E9:DITOO', name: 'Ditoo' }];
             // Restored selection is a panel that no longer exists.
@@ -226,10 +235,11 @@ async def test_bench_node_drag_moves_the_panel_and_a_still_click_connects_it():
         await page.goto(f"file://{INDEX_HTML}")
         await page.wait_for_load_state("domcontentloaded")
         await wait_js(page, "() => !!window.SpatialStage && !!window.SpatialDrag")
-        await eval_js(page, """() => {
+        await eval_js(page, """async () => {
             window.__connects = [];
             window.connectDevice = (name, addr) => { window.__connects.push(addr); };
-            window.pywebview = { api: { select_device: () => Promise.resolve(true) } };
+            window.pywebview = { api: { select_device: () => Promise.resolve(true), get_topology: () => Promise.resolve({success: true, topology: {rooms: ['Desk'], wall_linked: true, devices: {}}}), set_topology: () => Promise.resolve({success: true}) } };
+            await window.SpatialRooms.loadTopology();
             window.DivoomState.discoveredDevices = [{ address: 'E9:DITOO', name: 'Ditoo' }];
             window.SpatialStage.refresh();
         }""")

@@ -390,6 +390,9 @@ window.updateDeviceSelectorDropdown = function() {
 
 // ── 4. DISPLAY WALL SLOTS SYNCHRONIZATION ──
 window.syncArrangerToPython = function() {
+    // No slots are made from an arrangement that has not been read: the
+    // daemon's copy is the wall's source (spatial_rooms.js).
+    if (window.SpatialRooms && !window.SpatialRooms.isLoaded()) return;
     const slots = window.SpatialRooms ? window.SpatialRooms.getWallSlots() : (window.DivoomState.assignedSlots || {});
     window.DivoomState.assignedSlots = slots;
     if (window.pywebview && window.pywebview.api) {

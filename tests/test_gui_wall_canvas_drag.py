@@ -97,7 +97,9 @@ SEED_BENCH_NODE_JS = """
     if (window.SpatialStage?.refresh) window.SpatialStage.refresh();
 """
 
-SEED_TWO_BENCH_NODES_JS = """
+SEED_TWO_BENCH_NODES_JS = """(async () => {
+    // The arrangement is the daemon's: the bench draws once its copy is read.
+    await window.SpatialRooms.loadTopology();
     window.DivoomState.discoveredDevices = [
         { address: 'AA:BB:CC:DD:EE:01', name: 'Timoo-A', room: 'Wall' },
         { address: 'AA:BB:CC:DD:EE:02', name: 'Timoo-B', room: 'Desk' }
@@ -109,7 +111,7 @@ SEED_TWO_BENCH_NODES_JS = """
         window.SpatialRooms.savePositions(pos);
     }
     if (window.SpatialStage?.refresh) window.SpatialStage.refresh();
-"""
+})()"""
 
 
 PYWEBVIEW_STUB = """
@@ -122,6 +124,8 @@ PYWEBVIEW_STUB = """
             close_window: () => {},
             drag_window: (dx, dy) => window._dragCalls.push([dx, dy]),
             update_wall_slots: (slotsJson) => window._syncCalls.push(JSON.parse(slotsJson)),
+            get_topology: () => Promise.resolve({success: true, topology: {rooms: ['Desk', 'Shelf', 'Wall'], wall_linked: true, devices: {}}}),
+            set_topology: () => Promise.resolve({success: true}),
         }
     };
 """

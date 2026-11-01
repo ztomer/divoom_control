@@ -88,6 +88,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 window.showToast("Please select an image file first", "error");
                 return;
             }
+            if (window.SpatialRooms && !window.SpatialRooms.isLoaded()) {
+                window.showToast("The saved arrangement is still loading from the daemon. Try again in a moment.", "info");
+                return;
+            }
             const allSlots = window.SpatialRooms ? window.SpatialRooms.getWallSlots() : (window.DivoomState.assignedSlots || {});
             const wallMacs = Object.keys(allSlots).filter(mac => (allSlots[mac].room || '').toLowerCase() === 'wall');
             const activeSlots = (wallMacs.length > 0)

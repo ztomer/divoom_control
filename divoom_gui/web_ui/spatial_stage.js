@@ -99,18 +99,13 @@
         // The deck's brightness, volume and power controls are panel_facts.js's
         // (P5.1): one sender each, naming the panel, read from the daemon.
 
-        // Load topology and rooms from cache & daemon
-        Object.assign(devicePositions, window.SpatialRooms.getSavedPositions());
+        // The arrangement is the daemon's (spatial_rooms.js): the bench says
+        // it is loading until that copy is here, and draws from it after.
         window.SpatialRooms.loadTopology();
-
-        window.addEventListener('divoom:topology-loaded', (e) => {
-            const top = e.detail || {};
-            if (top.devices) {
-                Object.keys(top.devices).forEach(a => {
-                    const d = top.devices[a];
-                    if (d && typeof d.x === 'number' && typeof d.y === 'number') devicePositions[a] = { x: d.x, y: d.y };
-                });
-            }
+        window.addEventListener('divoom:topology-state', () => { if (!window.SpatialRooms.isLoaded()) refreshBenchNodes(); });
+        window.addEventListener('divoom:topology-loaded', () => {
+            Object.keys(devicePositions).forEach(k => delete devicePositions[k]);
+            Object.assign(devicePositions, window.SpatialRooms.getSavedPositions());
             updateRoomFilterTabs();
             refreshBenchNodes();
         });
@@ -142,6 +137,18 @@
     const SCALE = 0.65;
     const resolveSpec = (dev) => window.panelEnclosure(dev);
 
+    // Until the daemon's copy of the arrangement is here there is nothing
+    // true to draw: the bench says so, and why it is still waiting (rule #12).
+    function showLoading(bench, ribbonChips) {
+        const st = window.SpatialRooms.loadStatus();
+        const why = st.state === 'retrying'
+            ? `Still waiting for the daemon (try ${st.attempts}${st.error ? `: ${st.error}` : ''}). Retrying.`
+            : 'Reading the saved arrangement from the daemon.';
+        bench.innerHTML = `<div id="spatial-bench-loading" class="spatial-bench-empty" role="status" aria-live="polite">
+            <span class="spatial-bench-loading-title">Loading the arrangement…</span><span>${why}</span></div>`;
+        if (ribbonChips) ribbonChips.innerHTML = '<span class="spatial-ribbon-empty">Loading the arrangement…</span>';
+    }
+
     function getSelectedDevice() {
         const list = getDeviceList();
         return list.find(d => d.address === selectedMac) || list[0];
@@ -169,7 +176,10 @@
         const ribbonChips = document.getElementById('spatial-ribbon-chips');
         if (ribbonChips) ribbonChips.innerHTML = '';
         updateRoomFilterTabs();
+        // "No panels" is true whatever the arrangement says; with panels, the
+        // bench waits for the daemon's arrangement before drawing any.
         if (devices.length === 0) { showNoPanels(bench, ribbonChips); return; }
+        if (!window.SpatialRooms.isLoaded()) { showLoading(bench, ribbonChips); return; }
 
         let defaultX = 20;
         devices.forEach((dev, idx) => {
@@ -402,6 +412,7 @@
     const shownDevices = () => getDeviceList().filter(d => window.SpatialRooms.inRoom(d.address, activeRoomFilter));
 
     function centerDevices() {
+        if (!window.SpatialRooms.isLoaded()) return;
         const devs = shownDevices(), bench = document.getElementById('spatial-bench');
         if (!devs.length || !bench) return;
         let minX = Infinity, maxX = -Infinity;
@@ -419,6 +430,7 @@
     }
 
     function snapToDesk() {
+        if (!window.SpatialRooms.isLoaded()) return;
         let curX = 20;
         shownDevices().forEach((dev) => {
             const addr = dev.address || 'dev', spec = resolveSpec(dev);
