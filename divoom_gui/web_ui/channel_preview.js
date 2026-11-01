@@ -6,41 +6,13 @@
 // Image content (live widgets / custom art / cover art) supplies a real frame
 // and bypasses this. Split out of app_globals.js to stay under the 500-LOC cap.
 
-// 1-bit bitmap font tables (3x5 pixel grid for compact crisp digits)
-const CLOCK_DIGITS_3X5 = {
-    "0": [0b111, 0b101, 0b101, 0b101, 0b111],
-    "1": [0b010, 0b110, 0b010, 0b010, 0b111],
-    "2": [0b111, 0b001, 0b111, 0b100, 0b111],
-    "3": [0b111, 0b001, 0b111, 0b001, 0b111],
-    "4": [0b101, 0b101, 0b111, 0b001, 0b001],
-    "5": [0b111, 0b100, 0b111, 0b001, 0b111],
-    "6": [0b111, 0b100, 0b111, 0b101, 0b111],
-    "7": [0b111, 0b001, 0b010, 0b010, 0b010],
-    "8": [0b111, 0b101, 0b111, 0b101, 0b111],
-    "9": [0b111, 0b101, 0b111, 0b001, 0b111],
-    ":": [0b000, 0b010, 0b000, 0b010, 0b000]
-};
-
-function renderBitmapDigitsSVG(text, startX, startY, pixelSize, colors) {
-    let svg = "";
-    const digitW = 3 * pixelSize;
-    const gap = pixelSize;
-    for (let i = 0; i < text.length; i++) {
-        const char = text[i];
-        const matrix = CLOCK_DIGITS_3X5[char];
-        if (!matrix) continue;
-        const dx = startX + i * (digitW + gap);
-        const color = Array.isArray(colors) ? colors[i % colors.length] : colors;
-        for (let r = 0; r < 5; r++) {
-            const rowBits = matrix[r];
-            for (let c = 0; c < 3; c++) {
-                if (rowBits & (1 << (2 - c))) {
-                    svg += `<rect x="${dx + c * pixelSize}" y="${startY + r * pixelSize}" width="${pixelSize}" height="${pixelSize}" fill="${color}"/>`;
-                }
-            }
-        }
-    }
-    return svg;
+// The digits are clock_digits.js's layout on the panel's 16-cell grid, 4 px a
+// cell here: the bench node draws the same cells at its own resolution (P5.17).
+// This card had its own font and a 19-column layout, which a 16x16 node could
+// not hold -- the node drew "12:0" beside a card that drew "12:00".
+function renderBitmapDigitsSVG(colors, withBox) {
+    const colorOf = (i) => (Array.isArray(colors) ? colors[Math.max(0, i) % colors.length] : colors);
+    return window.ClockDigits.svg("12:00", 4, colorOf, withBox);
 }
 
 // R50: render the SPECIFIC clock face the user picked (6 styles), not a generic
@@ -53,11 +25,10 @@ window._clockFaceSVG = function(style, color) {
 
     switch (Number(style)) {
         case 1: // Rainbow — per-digit hue
-            inner = renderBitmapDigitsSVG("12:00", 4, 25, 3, rainbowHues);
+            inner = renderBitmapDigitsSVG(rainbowHues);
             break;
-        case 2: // With Box — border encloses the digits
-            inner = `<rect x="1" y="21" width="62" height="23" rx="2" fill="none" stroke="${c}" stroke-width="2"/>`
-                  + renderBitmapDigitsSVG("12:00", 4, 25, 3, c);
+        case 2: // With Box — a rule above and below the digits (the 16-grid has no room for sides)
+            inner = renderBitmapDigitsSVG(c, true);
             break;
         case 3: // Analog Square
             inner = `<rect x="12" y="12" width="40" height="40" rx="2" fill="none" stroke="${c}" stroke-width="2.5"/>`
@@ -66,7 +37,7 @@ window._clockFaceSVG = function(style, color) {
             break;
         case 4: // Full Screen Neg — inverted: color fills the screen, dark digits
             bg = c;
-            inner = renderBitmapDigitsSVG("12:00", 4, 25, 3, "#15171c");
+            inner = renderBitmapDigitsSVG("#15171c");
             break;
         case 5: // Analog Round
             inner = `<circle cx="32" cy="32" r="20" fill="none" stroke="${c}" stroke-width="2.5"/>`
@@ -74,7 +45,7 @@ window._clockFaceSVG = function(style, color) {
                   + `<line x1="32" y1="32" x2="43" y2="37" stroke="${c}" stroke-width="2" stroke-linecap="square"/>`;
             break;
         default: // 0 Full Screen digital
-            inner = renderBitmapDigitsSVG("12:00", 4, 25, 3, c);
+            inner = renderBitmapDigitsSVG(c);
     }
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" style="image-rendering:pixelated;">`
               + `<rect width="64" height="64" fill="${bg}"/>${inner}</svg>`;

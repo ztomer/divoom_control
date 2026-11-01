@@ -57,7 +57,8 @@ def test_preview_controller_js_syntax_and_structure():
     assert "class DisplayPreviewRegistry" in content
     assert "window.DisplayPreview = DisplayPreview;" in content
     assert "window.DisplayPreviewRegistry = new DisplayPreviewRegistry();" in content
-    assert "BITMAP_FONT_3X5" in content
+    assert "window.ClockDigits.drawCanvas" in content, "digits come from the shared layout (P5.17)"
+    assert "BITMAP_FONT_3X5" not in content, "no second copy of the font"
     assert "renderClockGlyph" in content
     assert "renderEqGlyph" in content
     assert "renderCloudGlyph" in content
@@ -68,7 +69,8 @@ def test_channel_preview_bitmap_digits():
     js_path = Path("divoom_gui/web_ui/channel_preview.js")
     content = js_path.read_text(encoding="utf-8")
     assert "renderBitmapDigitsSVG" in content
-    assert "CLOCK_DIGITS_3X5" in content
+    assert "window.ClockDigits.svg" in content, "digits come from the shared layout (P5.17)"
+    assert "CLOCK_DIGITS_3X5" not in content, "no second copy of the font"
     assert "image-rendering:pixelated;" in content
 
 

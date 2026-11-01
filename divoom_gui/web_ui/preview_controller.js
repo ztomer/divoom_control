@@ -10,21 +10,8 @@
 (function () {
     "use strict";
 
-    // 1-bit bitmap font tables (3x5 pixel grid for compact crisp digits)
-    const BITMAP_FONT_3X5 = {
-        "0": [0b111, 0b101, 0b101, 0b101, 0b111],
-        "1": [0b010, 0b110, 0b010, 0b010, 0b111],
-        "2": [0b111, 0b001, 0b111, 0b100, 0b111],
-        "3": [0b111, 0b001, 0b111, 0b001, 0b111],
-        "4": [0b101, 0b101, 0b111, 0b001, 0b001],
-        "5": [0b111, 0b100, 0b111, 0b001, 0b111],
-        "6": [0b111, 0b100, 0b111, 0b101, 0b111],
-        "7": [0b111, 0b001, 0b010, 0b010, 0b010],
-        "8": [0b111, 0b101, 0b111, 0b101, 0b111],
-        "9": [0b111, 0b101, 0b111, 0b001, 0b111],
-        ":": [0b000, 0b010, 0b000, 0b010, 0b000],
-        " ": [0b000, 0b000, 0b000, 0b000, 0b000]
-    };
+    // Digits (the 3x5 font and the clock's layout) are clock_digits.js's (P5.17):
+    // one copy, which the channel card draws too.
 
     /**
      * DisplayPreview: encapsulates state and rendering for a single display.
@@ -222,42 +209,12 @@
                 return;
             }
 
-            // Digital Clock: draw authentic 1-bit bitmap digits "12:00"
-            const text = "12:00";
-            const digitW = 3 * scale;
-            const digitH = 5 * scale;
-            const gap = 1 * scale;
-            const totalW = (text.length * 3 + (text.length - 1)) * scale;
-            const startX = Math.max(0, Math.floor((w - totalW) / 2));
-            const startY = Math.max(0, Math.floor((h - digitH) / 2));
-
+            // Digital clock: the shared 16-grid layout at this canvas's resolution, so a
+            // 16x16 node draws all of "12:00" and the same cells as the channel card (P5.17).
             const rainbowColors = ["#ff5a5a", "#ffc864", "#5ede91", "#5aabff", "#c89bff"];
-
-            for (let i = 0; i < text.length; i++) {
-                const char = text[i];
-                const matrix = BITMAP_FONT_3X5[char] || BITMAP_FONT_3X5[" "];
-                const dx = startX + i * (digitW + gap);
-                const charColor = (style === 1) ? rainbowColors[i % rainbowColors.length]
-                                : (style === 4 ? "#15171c" : color);
-
-                ctx.fillStyle = charColor;
-
-                for (let r = 0; r < 5; r++) {
-                    const rowBits = matrix[r];
-                    for (let c = 0; c < 3; c++) {
-                        if (rowBits & (1 << (2 - c))) {
-                            ctx.fillRect(dx + c * scale, startY + r * scale, scale, scale);
-                        }
-                    }
-                }
-            }
-
-            if (style === 2) {
-                // Style 2: With Box border
-                ctx.strokeStyle = color;
-                ctx.lineWidth = scale;
-                ctx.strokeRect(startX - scale * 2, startY - scale * 2, totalW + scale * 4, digitH + scale * 4);
-            }
+            const ink = style === 4 ? "#15171c" : color;
+            window.ClockDigits.drawCanvas(ctx, "12:00", w, h,
+                (i) => (style === 1 && i >= 0 ? rainbowColors[i % rainbowColors.length] : ink), style === 2);
         }
 
         renderEqGlyph(ctx, w, h, tick) {
@@ -321,29 +278,8 @@
         }
 
         renderScoreboardGlyph(ctx, w, h) {
-            const scale = Math.max(1, Math.floor(w / 16));
-            ctx.fillStyle = "#ffffff";
-            // Draw "0:0"
-            const text = "0:0";
-            const digitW = 3 * scale;
-            const digitH = 5 * scale;
-            const gap = 1 * scale;
-            const totalW = (text.length * 3 + (text.length - 1)) * scale;
-            const startX = Math.max(0, Math.floor((w - totalW) / 2));
-            const startY = Math.max(0, Math.floor((h - digitH) / 2));
-
-            for (let i = 0; i < text.length; i++) {
-                const matrix = BITMAP_FONT_3X5[text[i]] || BITMAP_FONT_3X5[" "];
-                const dx = startX + i * (digitW + gap);
-                for (let r = 0; r < 5; r++) {
-                    const row = matrix[r];
-                    for (let c = 0; c < 3; c++) {
-                        if (row & (1 << (2 - c))) {
-                            ctx.fillRect(dx + c * scale, startY + r * scale, scale, scale);
-                        }
-                    }
-                }
-            }
+            // "0:0" on the shared 16-grid (clock_digits.js), like every digit a preview draws.
+            window.ClockDigits.drawCanvas(ctx, "0:0", w, h, () => "#ffffff", false);
         }
 
         renderTextGlyph(ctx, w, h, tick) {
