@@ -6,6 +6,15 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **The gate-wiring tests take a stub structural layer (2026-11-01).** With
+  goh checked out in CI's `test` job, `test_repo_gates.py` stopped skipping,
+  and `test_gate_full_reaches_layer_three` timed out at 120 s (run
+  41319075149): `tools/gate.sh --full` ran the whole structural layer, and on a
+  fresh runner built goh's binary, before reaching layer 3 -- the docstring's
+  "milliseconds" had not been true since structural ran first. The wiring tests
+  now point `GOH_DIR` at a stub whose `structural.sh` exits 0 (the house TUI
+  linked in): 7 tests in 5 s, and the layer-3 test still goes red with the
+  `repo_gates.sh` line disabled.
 - **D3 and D5 decided by the agent, with evidence (2026-11-01, owner ruling
   "automate everything you can").** P9.3 (D5): PASS after the minus fix, from
   `docs/assets/widget-backdrops.png` -- every inked diode of all four widgets

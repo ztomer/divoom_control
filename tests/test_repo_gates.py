@@ -74,16 +74,34 @@ def test_recursion_guard_fires():
     assert "re-entered" in (r.stdout + r.stderr)
 
 
+def _wiring_goh(tmp_path: Path) -> str:
+    """A GOH_DIR whose structural layer passes at once, for the wiring tests.
+
+    They ask whether `tools/gate.sh` reaches layer 3, not whether the house's
+    structural gates pass. Run against the real goh, `--full` first ran the
+    whole structural layer (and, on a fresh CI runner, built goh's binary):
+    two minutes before layer 3 was reached, and CI's `test` job timed out at
+    120 s the day it first had goh (2026-11-01). The house TUI is linked in,
+    since the scripts speak through it.
+    """
+    stub = tmp_path / "goh"
+    (stub / "gates").mkdir(parents=True)
+    (stub / "gates" / "structural.sh").write_text("#!/usr/bin/env bash\nexit 0\n")
+    (stub / "gates" / "structural.sh").chmod(0o755)
+    (stub / "tui").symlink_to(GOH / "tui")
+    return str(stub)
+
+
 @requires_goh
-def test_gate_full_reaches_layer_three():
+def test_gate_full_reaches_layer_three(tmp_path):
     """THE wiring test. If `--full` stops at structural.sh again, this fails.
 
-    The guard is preset, so reaching repo_gates.sh costs milliseconds instead
-    of a full CI run — and its exit 2 is proof of arrival that a green run
+    The guard is preset and the structural layer is a stub (`_wiring_goh`), so
+    reaching repo_gates.sh costs milliseconds instead of a full CI run — and its exit 2 is proof of arrival that a green run
     could not give us (a green `--full` looks identical whether layer 3 ran or
     was commented out, which is exactly how the hole survived).
     """
-    r = _run(GATE, "--full", DIVOOM_IN_REPO_GATES="1")
+    r = _run(GATE, "--full", DIVOOM_IN_REPO_GATES="1", GOH_DIR=_wiring_goh(tmp_path))
     combined = r.stdout + r.stderr
     assert "re-entered" in combined, (
         "tools/gate.sh --full did not reach tools/repo_gates.sh — layer 3 is "
@@ -93,9 +111,9 @@ def test_gate_full_reaches_layer_three():
 
 
 @requires_goh
-def test_gate_staged_does_not_reach_layer_three():
+def test_gate_staged_does_not_reach_layer_three(tmp_path):
     """Pre-commit stays narrow: staged scope must not run the whole CI."""
-    r = _run(GATE, "--staged", DIVOOM_IN_REPO_GATES="1")
+    r = _run(GATE, "--staged", DIVOOM_IN_REPO_GATES="1", GOH_DIR=_wiring_goh(tmp_path))
     assert "re-entered" not in (r.stdout + r.stderr), (
         "tools/gate.sh --staged reached layer 3; the pre-commit hook is "
         "supposed to be the fast, staged-only scope"
