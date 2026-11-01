@@ -6,6 +6,21 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **Four defects from the 2026-11-01 pass (D.FX1-D.FX4).** (1) A one-byte
+  `set_channel 1` turned a Ditoo dark at brightness 0: the light channel's
+  nine trailing bytes are its colour, brightness and power, and
+  `switch_channel("light")` sent them as zeros too. Every channel select now
+  comes from one table, `Channel::select_packet`, with the light channel built
+  by `LightPacket` (white, 100, on); Lighting left `BareChannel`, and a channel
+  number no panel has is refused (`d79bf24`). Not verified on the Ditoo, which
+  did not answer a BLE connect this round. (2) `now_playing` said
+  `playing: true` for a paused track; `playing` is now whether it plays, and
+  `has_track` says whether there is one, which the music card reads
+  (`6b06413`). (3) P1.14: the pre-push export no longer keeps
+  `target/debug/divoomd`, which six gate steps rebuilt; `scripts/py_ci.sh`
+  builds its own (`7313f81`). (4) P5.17: the bench's 16x16 nodes and the
+  channel card draw one clock layout, `clock_digits.js`, whole at 16 columns
+  (`9f774b5`).
 - **The gate-wiring tests take a stub structural layer (2026-11-01).** With
   goh checked out in CI's `test` job, `test_repo_gates.py` stopped skipping,
   and `test_gate_full_reaches_layer_three` timed out at 120 s (run

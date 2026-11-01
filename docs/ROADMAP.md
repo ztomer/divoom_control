@@ -218,23 +218,13 @@ the socket listening, and the probe finds a listener that never answers). Its
 production exposure is bounded -- the daemon unlinks the socket path before it
 exits, so the path is gone -- and it is left as a named variant, not as a fix.
 
-#### P1.14 — The pre-push export keeps a binary six of its own steps rebuild
-**Status:** OPEN
-**Why:** measured 2026-11-01: six pre-push steps printed "the tree or the
-gates moved while the step ran". Neither moved. `.gatesrc` names
-`target/debug/divoomd` in `GOH_EXPORT_KEEP` (eleven Python tests spawn it), the
-proven cache's key reads a kept file's content, and every step that builds or
-tests the daemon (`cargo build`/`cargo test` with and without `ble`, the
-coverage run) rewrites that binary -- one tree gave three keys across the BLE
-and BLE-free builds. So those steps are never recorded as proven and re-run
-on every push. goh now names the cause instead of blaming the tree
-(gates_of_heck `0dd4092`, `proven_what_moved`); the divoom side is that a
-build output is declared as an input. The two feature sets also share one path,
-the trap `AGENTS.md` already warns about after `cargo test`.
-**Done when:** the tests that spawn the daemon get it from a path no gate step
-rewrites (or build it themselves), `GOH_EXPORT_KEEP` no longer names a build
-output, and a second `tools/gate.sh --full` on an unchanged tree reports those
-steps proven.
+Landed (2026-11-01): P1.14 (D.FX3), the pre-push export keeps no build
+output: `GOH_EXPORT_KEEP` no longer names `target/debug/divoomd` (a kept file's
+bytes key goh's proven cache, and six steps rebuilt it, so none was ever
+recorded as proven), and `scripts/py_ci.sh` builds the daemon its spawning
+tests run, as CI's Python job does (`7313f81`;
+`tests/test_export_keeps_no_build_output.py`). Not yet observed: a second
+`tools/gate.sh --full` on an unchanged tree reporting those steps proven.
 
 ### Phase 2 — daemon liveness and safety
 
@@ -412,6 +402,8 @@ well as the eyes; a panel that shows nothing is that finding, not the lease's.
 daemon by mac. **Exit:** browser tests across two panels for P5.1/P5.2; the
 menubar no longer closes on a status change. **Size:** M.
 
+Landed (2026-11-01): P5.17 (D.FX4), a bench node draws the whole clock at 16x16 and the same cells as the channel card: the digital layout lives once, in `divoom_gui/web_ui/clock_digits.js`, on the panel's 16-cell grid ("12:00" in exactly 16 columns), drawn by the node at its resolution and by the card at 4 px a cell; both private font tables deleted (`9f774b5`; `tests/test_browser_bench_clock_fits.py` at 16, 32 and 64). `docs/assets/bench-light.png` still shows the old crop until `tools/render_bench.py` is re-run.
+
 Landed (2026-11-01): the arrangement survives a restart -- the daemon's topology is its ONE store: the bench holds the daemon's copy and nothing else, shows a loading state (with the reason) until it is read, retries the read, refuses every write before it, and sends only what changed; a room list merges and a room leaves it only by `remove_rooms`; an off panel keeps its wall slot; the page keeps its storage across launches (`private_mode=False`); and the Python suite runs under a throwaway HOME with its own daemon log, so no test reaches the owner's state (`divoom_gui/web_ui/spatial_rooms.js`, `divoomd/src/wall/cmds.rs`, `tests/conftest.py`, `tests/test_e2e_arrangement_is_the_daemons.py`, `tests/test_suite_leaves_the_owner_alone.py`).
 
 Landed (2026-11-01): P5.15, no `cargo test` run reaches the developer's HOME: one `divoomd::home::home()` is the only HOME reader (config dir, estate secrets, routing, notification DB), and inside a cargo test binary (`deps/<crate>-<16 hex>`) a HOME outside the temp directory is replaced by a throwaway one for the process, a test's own temp HOME honoured; the two integration tests that spawn the binary hand it that home, held by a source scan (`divoomd/src/home.rs`, `divoomd/src/home_isolation_tests.rs`).
@@ -461,17 +453,6 @@ must leave the owner's screen alone.
 **Done when:** the menu is held open (a real click) while `select_device`
 moves the active panel and a row renames over the socket, and two captures
 show the check and the name change in the open menu with no close/reopen.
-
-#### P5.17 — The bench's 16x16 previews crop the clock to "12:0"
-**Status:** OPEN
-**Why:** seen in `docs/assets/bench-light.png` and on the installed app
-(2026-11-01): every bench node showing the Full Screen clock draws "12:0",
-its leading "1" clipped too, while the channel card beside it draws "12:00".
-A preview that crops what the panel shows is a parallel renderer drifting from
-the product (house rule 9), on the surface the owner looks at most.
-**Done when:** a bench node draws exactly the frame the panel is sent (or the
-channel card's renderer at the panel's resolution), with a browser test that
-fails on a cropped glyph at 16x16.
 
 #### P5.14 — One hot-channel pipeline? (U.5 follow-up)
 **Status:** DECISION (owner)
