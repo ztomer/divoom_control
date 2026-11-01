@@ -6,6 +6,26 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **The menubar says a linked panel is connected (2026-11-01).** On the
+  installed v0.43.1 the status item read "Divoom Control -- no device
+  connected (3 of 3 panels online)" and wore the hollow Idle glyph: the
+  daemon calls a linked panel `active` in its fleet events, the tooltip's
+  count read that as online, and `resolve_icon_state` matched only
+  `connected`. `state::link_online` is now the one reading of the link
+  vocabulary, used by the count and the icon
+  (`divoom-menubar/src/state.rs`); a test walks every link word through both.
+  Found reading the status item's AX help text during the P5.3 pass.
+- **A 16 px weather frame writes -5 degrees with a minus, not an overline
+  (P9.3 pass, 2026-11-01).** The half-size font blob stores every glyph from
+  row 0 with no baseline, so `-`, `.`, `_` and short lowercase hung from the
+  cap line. The full font carries each glyph's place; `half_on_band`
+  (`divoomd/src/live_jobs/font.rs`) centres a half glyph where the full font
+  centres it, leaving digits and capitals (which span the band) where they
+  are. Glyph bytes uploaded to a panel (`device_glyph_bytes`) are untouched.
+  `divoomd/src/live_jobs/font_band_tests.rs` was red on the minus, the full
+  stop and short lowercase. `tools/render_widget_backdrops.py` draws the four
+  widgets from the daemon's own frames as LEDs on the panel face against a
+  light and a dark room and measures each (`docs/assets/widget-backdrops.png`).
 - **Saved bench places drawn at real sizes no longer overlap (2026-11-01).**
   The places were laid out when every panel was drawn as the generic 120 mm
   chassis; at the daemon's real sizes (Pixoo 200 mm, Tivoo Max 184 mm)

@@ -8,6 +8,8 @@ use crate::daemon::{Daemon, DeviceTransport};
 
 mod coordinator;
 pub mod font;
+#[cfg(test)]
+mod font_band_tests;
 mod frame;
 #[cfg(test)]
 mod frame_link_tests;

@@ -48,9 +48,81 @@ pub fn device_glyph_bytes(cp: u32) -> Option<&'static [u8]> {
     FONT_BYTES.get(o..o + GLYPH_BYTES)
 }
 
+fn raw_rows(blob: &[u8], off: usize) -> [u16; 16] {
+    let g = &blob[off..off + GLYPH_BYTES];
+    let mut r = [0u16; 16];
+    for i in 0..16 {
+        r[i] = (u16::from(g[i * 2]) << 8) | u16::from(g[i * 2 + 1]);
+    }
+    r
+}
+
+/// First and last rows with ink.
+fn ink_span(rows: &[u16; 16]) -> Option<(i32, i32)> {
+    let lit = || (0i32..16).filter(|&i| rows[usize::try_from(i).unwrap_or(0)] != 0);
+    Some((lit().next()?, lit().next_back()?))
+}
+
+const fn const_eq(a: &[u8], b: &[u8]) -> bool {
+    let mut i = 0;
+    while i < a.len() {
+        if a[i] != b[i] {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+/// `a / b` rounded half up, for small non-negative-denominator integers.
+const fn round_div(a: i32, b: i32) -> i32 {
+    (2 * a + b).div_euclid(2 * b)
+}
+
+/// A half-size glyph moved to the band the vendor's FULL font gives it.
+///
+/// The half blob stores every glyph from row 0 with no baseline, so `-`, `.`,
+/// `_` and short lowercase all hang from the cap line (a 16px weather frame
+/// wrote -5 as an overline beside a 5). The full blob carries each glyph's
+/// place; a glyph it draws over the whole cap band (digits, capitals) keeps its
+/// rows, and any other is centred where the full font centres it, scaled from
+/// the full cap band (`0`'s ink) onto the half one. Device-bound glyph bytes
+/// (`device_glyph_bytes`) are uploaded verbatim and never pass through here.
+fn half_on_band(rows: [u16; 16], off: usize) -> [u16; 16] {
+    let cap = |blob: &[u8]| {
+        BitmapFont::find_glyph_offset(u32::from('0')).and_then(|o| ink_span(&raw_rows(blob, o)))
+    };
+    let (Some((hct, hcb)), Some((fct, fcb))) = (cap(FONT_BYTES), cap(FONT_BYTES_FULL)) else {
+        return rows;
+    };
+    let (Some((top, bottom)), Some((ft, fb))) =
+        (ink_span(&rows), ink_span(&raw_rows(FONT_BYTES_FULL, off)))
+    else {
+        return rows;
+    };
+    if ft <= fct && fb >= fcb {
+        return rows;
+    }
+    let h = bottom - top + 1;
+    let centre_x2 = 2 * hct + round_div((ft + fb - 2 * fct) * (hcb - hct), fcb - fct);
+    let want = round_div(centre_x2 - (h - 1), 2).clamp(0, 16 - h);
+    let mut out = [0u16; 16];
+    for (i, &v) in rows.iter().enumerate() {
+        let i = i32::try_from(i).unwrap_or(0);
+        if let Ok(j) = usize::try_from(i - top + want) {
+            if j < 16 && v != 0 {
+                out[j] = v;
+            }
+        }
+    }
+    out
+}
+
 pub(crate) struct BitmapFont {
     blob: &'static [u8],
     space_width: i32,
+    /// The half-size blob, whose glyphs `half_on_band` places.
+    half: bool,
 }
 
 /// How a line of text is drawn: its colour, the gap between glyphs, and the
@@ -67,6 +139,7 @@ impl BitmapFont {
         Self {
             blob,
             space_width: 3,
+            half: blob.len() == FONT_BYTES.len() && const_eq(blob, FONT_BYTES),
         }
     }
 
@@ -85,10 +158,9 @@ impl BitmapFont {
             off = Self::find_glyph_offset(FALLBACK_CP);
         }
         let Some(off) = off else { return [0; 16] };
-        let g = &self.blob[off..off + GLYPH_BYTES];
-        let mut r = [0u16; 16];
-        for i in 0..16 {
-            r[i] = (u16::from(g[i * 2]) << 8) | u16::from(g[i * 2 + 1]);
+        let r = raw_rows(self.blob, off);
+        if self.half {
+            return half_on_band(r, off);
         }
         r
     }
