@@ -116,6 +116,14 @@ ACTUAL_PY="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.versi
 COV_MIN="${DIVOOM_PY_COV_MIN:-89.0}"
 COV_PRECISION=2
 
+# The daemon 11 of these tests SPAWN (P1.14). Built HERE, as CI's Python job
+# builds it right before its pytest: the pre-push export has no target/, and
+# borrowing a binary another step left behind is both a build output declared
+# as an input (it moved those steps' proven keys) and absent whenever that step
+# was proven and skipped.
+info "cargo build -p divoomd --locked (the daemon the spawning tests run)"
+cargo build -p divoomd --locked
+
 info "pytest (coverage floor ${COV_MIN}% over divoom_gui + divoom_client;" \
     "browser suites run in scripts/browser_e2e.sh, a GOH_CI_STEPS step)"
 python3 -m pytest -q \
