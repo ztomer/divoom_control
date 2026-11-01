@@ -47,7 +47,13 @@ fn retain_reported(top: &mut Value, reported: &crate::reported_panels::Reported)
 /// without it -- the migration that took the invented fleet out of the
 /// owner's `topology.json` is this read.
 pub fn load_topology() -> Value {
-    if let Some((path, named)) = topology_location() {
+    load_topology_at(topology_location())
+}
+
+/// `load_topology` from the location given: the seam its tests use, so no
+/// test has to set the process-wide `DIVOOM_TOPOLOGY_PATH` another reads.
+fn load_topology_at(location: Option<(PathBuf, bool)>) -> Value {
+    if let Some((path, named)) = location {
         if let Ok(s) = std::fs::read_to_string(&path) {
             if let Ok(mut val) = serde_json::from_str::<Value>(&s) {
                 let dropped = drop_unreported(&mut val, named);
@@ -67,7 +73,7 @@ pub fn load_topology() -> Value {
     json!({
         "devices": {},
         "wall_linked": true,
-        "rooms": ["Desk"]
+        "rooms": ["Desk", "Shelf", "Wall"]
     })
 }
 
@@ -145,17 +151,48 @@ async fn screens(daemon: &Daemon, top: &Value) -> Vec<Value> {
     out
 }
 
+/// The room names in `v`, each once (case-insensitively), in order.
+fn room_names(v: Option<&Value>) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for r in v.and_then(Value::as_array).into_iter().flatten() {
+        if let Some(r) = r.as_str().map(str::trim).filter(|r| !r.is_empty()) {
+            if !out.iter().any(|o| o.eq_ignore_ascii_case(r)) {
+                out.push(r.to_string());
+            }
+        }
+    }
+    out
+}
+
 /// `new` merged over `current`: top-level keys replace, and each device entry
 /// in `new` replaces the stored one for that panel WHOLE -- so an entry sent
 /// without a `room` is how the GUI takes a panel out of every room (U.4). A
 /// panel is one key whatever its letter case (`screens` matches without
 /// regard to case): a stored entry spelled differently is replaced, not
 /// kept beside the new one, where a lookup could find the stale one first.
+///
+/// The room list is the exception to "replace": it MERGES (2026-11-01, the
+/// owner's "Ethan" erased by a GUI that sent its defaults before it had read
+/// this copy). A room leaves the list only when `remove_rooms` names it, which
+/// also takes every panel out of it; the operation itself is not stored.
 fn merge_topology(mut current: Value, new: &Value) -> Value {
     let (Some(cur_obj), Some(new_obj)) = (current.as_object_mut(), new.as_object()) else {
         return new.clone();
     };
     for (k, v) in new_obj {
+        if k == "remove_rooms" {
+            continue;
+        }
+        if k == "rooms" {
+            let mut rooms = room_names(cur_obj.get("rooms"));
+            for r in room_names(Some(v)) {
+                if !rooms.iter().any(|o| o.eq_ignore_ascii_case(&r)) {
+                    rooms.push(r);
+                }
+            }
+            cur_obj.insert(k.clone(), json!(rooms));
+            continue;
+        }
         if k == "devices" {
             if let (Some(cur_devs), Some(new_devs)) = (
                 cur_obj.get_mut("devices").and_then(Value::as_object_mut),
@@ -169,6 +206,22 @@ fn merge_topology(mut current: Value, new: &Value) -> Value {
             }
         }
         cur_obj.insert(k.clone(), v.clone());
+    }
+    let removed = room_names(new_obj.get("remove_rooms"));
+    if !removed.is_empty() {
+        let gone = |r: &str| removed.iter().any(|x| x.eq_ignore_ascii_case(r));
+        let kept: Vec<String> = room_names(cur_obj.get("rooms"))
+            .into_iter()
+            .filter(|r| !gone(r))
+            .collect();
+        cur_obj.insert("rooms".into(), json!(kept));
+        if let Some(devs) = cur_obj.get_mut("devices").and_then(Value::as_object_mut) {
+            for entry in devs.values_mut().filter_map(Value::as_object_mut) {
+                if entry.get("room").and_then(Value::as_str).is_some_and(gone) {
+                    entry.remove("room");
+                }
+            }
+        }
     }
     current
 }
@@ -329,98 +382,5 @@ pub async fn cmd_wall_configure(daemon: &Daemon, req: &Request) -> Value {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_topology_save_and_load() {
-        let temp_dir = std::env::temp_dir().join("divoom_test_topology");
-        let _ = std::fs::create_dir_all(&temp_dir);
-        let file_path = temp_dir.join("test_topology.json");
-        std::env::set_var("DIVOOM_TOPOLOGY_PATH", &file_path);
-
-        let data = json!({
-            "devices": {
-                "11:22:33:44:55:01": {
-                    "name": "Ditoo Left",
-                    "model": "Ditoo Pro",
-                    "x": 30,
-                    "y": 40,
-                    "brightness": 85
-                }
-            },
-            "wall_linked": true,
-            "rooms": ["Desk"]
-        });
-
-        assert!(save_topology(&data).is_ok());
-        let loaded = load_topology();
-        assert_eq!(loaded["wall_linked"], true);
-        assert_eq!(loaded["devices"]["11:22:33:44:55:01"]["name"], "Ditoo Left");
-        assert_eq!(loaded["devices"]["11:22:33:44:55:01"]["brightness"], 85);
-
-        let _ = std::fs::remove_file(&file_path);
-        std::env::remove_var("DIVOOM_TOPOLOGY_PATH");
-    }
-
-    /// D.DV2: the owner's `topology.json` of 2026-10-31, read back -- the
-    /// invented fleet's four placements are dropped, the real panels and the
-    /// rooms kept.
-    #[test]
-    fn the_invented_fleet_is_dropped_from_the_owners_layout() {
-        let tmp = tempfile::TempDir::new().unwrap();
-        let discovered = tmp.path().join("discovered_devices.json");
-        std::fs::write(
-            &discovered,
-            json!([{"address": "f90d2cc9-420e-65f9-9e06-f9554470fced"},
-                   {"address": "a9fccb71-3d3d-4de3-c381-0de382cdc4aa"}])
-            .to_string(),
-        )
-        .unwrap();
-        let reported = crate::reported_panels::Reported::from_files(Some(&discovered), None);
-        let mut top = json!({"rooms": ["Desk", "Shelf"], "wall_linked": true, "devices": {
-            "11:22:33:44:55:01": {"room": "Desk", "x": 50, "y": 100},
-            "11:22:33:44:55:02": {"room": "Desk", "x": 91, "y": 101},
-            "11:22:33:44:55:03": {"room": "Desk", "x": 157, "y": 86},
-            "11:22:33:44:55:04": {"room": "Desk", "x": 228, "y": 10},
-            "a9fccb71-3d3d-4de3-c381-0de382cdc4aa": {"room": "Shelf", "x": 681, "y": 39},
-            "f90d2cc9-420e-65f9-9e06-f9554470fced": {"room": "Ethan", "x": 448, "y": 110}
-        }});
-        let dropped = retain_reported(&mut top, &reported);
-        assert_eq!(dropped.len(), 4, "{dropped:?}");
-        assert!(dropped.iter().all(|d| d.starts_with("11:22:33:44:55:")));
-        let devs = top["devices"].as_object().unwrap();
-        assert_eq!(devs.len(), 2, "{devs:?}");
-        assert_eq!(top["rooms"], json!(["Desk", "Shelf"]), "rooms are kept");
-    }
-
-    #[test]
-    fn a_device_entry_replaces_the_stored_one_whole_and_whatever_its_case() {
-        let stored = json!({"rooms": ["Desk", "Shelf"], "wall_linked": true, "devices": {
-            "AA:BB:CC:00:00:01": {"room": "Shelf", "x": 1, "y": 2},
-            "aa:bb:cc:00:00:02": {"room": "Shelf", "x": 3, "y": 4}
-        }});
-        let sent = json!({"devices": {"aa:bb:cc:00:00:01": {"x": 9, "y": 9}}});
-        let merged = merge_topology(stored, &sent);
-        let devs = merged["devices"].as_object().expect("devices");
-        assert_eq!(
-            devs.len(),
-            2,
-            "one key per panel, whatever its case: {devs:?}"
-        );
-        assert_eq!(
-            merged["devices"]["aa:bb:cc:00:00:01"],
-            json!({"x": 9, "y": 9}),
-            "an entry sent without a room takes the panel out of its room"
-        );
-        assert_eq!(
-            merged["devices"]["aa:bb:cc:00:00:02"]["room"], "Shelf",
-            "other panels are kept"
-        );
-        assert_eq!(
-            merged["rooms"],
-            json!(["Desk", "Shelf"]),
-            "keys not sent are kept"
-        );
-    }
-}
+#[path = "cmds_tests.rs"]
+mod tests;
