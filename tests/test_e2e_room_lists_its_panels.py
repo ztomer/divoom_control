@@ -201,3 +201,32 @@ async def test_the_rooms_the_daemon_stored_are_read_as_stored():
             assert await _show(page, "Desk") == [], "the placements of panels nobody reports are drawn nowhere"
         finally:
             await browser.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("event", ["divoom:rooms-updated", "divoom:topology-loaded"])
+async def test_an_open_add_room_form_survives_a_redraw_of_the_pills(event):
+    """The add-room form lived inside the pills' container, and every redraw of
+    the pills (`renderFilterPills` clears it) destroyed it: a room assignment's
+    announcement, a topology load or a fleet refresh arriving between "+" and
+    "Add" took the typed name with it. CI saw it three times as a 60 s timeout
+    on `.stage-room-confirm-btn` (runs 41325215656 and 41357616000, and under
+    -n 4 locally) -- the click waited for a button no longer in the page. A
+    redraw must give the form back, with what was typed."""
+    require_browser()
+    from playwright.async_api import async_playwright
+
+    async with async_playwright() as p:
+        browser, page = await _open(p, [A, B, T])
+        try:
+            await page.click(".stage-room-add-btn")
+            await page.fill(".stage-room-input", "Ethan")
+            await eval_js(page, "(e) => window.dispatchEvent(new CustomEvent(e, {detail: {}}))", event)
+            assert await eval_js(page, "() => document.querySelector('.stage-room-input')?.value") == "Ethan", (
+                "the redraw took the open form and its typed name")
+            await page.click(".stage-room-confirm-btn")
+            await wait_js(page, "() => !!document.querySelector('.stage-room-pill[data-room=\"Ethan\"]')")
+            assert await eval_js(page, "() => document.querySelector('.stage-room-input')") is None, (
+                "the form closes once the room is added")
+        finally:
+            await browser.close()

@@ -37,6 +37,14 @@
 
     function renderFilterPills(containerEl, activeFilter, onFilterChange, deviceList) {
         if (!containerEl) return;
+        // An open add-room form lives in this container, and a redraw (a room
+        // assigned, the topology loaded, the fleet refreshed) clears it: the
+        // form and its typed name vanished between "+" and "Add" -- CI's
+        // timeout on .stage-room-confirm-btn. The redraw gives it back.
+        const openInput = containerEl.querySelector('.stage-room-input');
+        const reopen = openInput
+            ? { value: openInput.value, focused: document.activeElement === openInput }
+            : null;
         containerEl.innerHTML = '';
 
         const rooms = R.getRooms();
@@ -124,6 +132,7 @@
         });
 
         containerEl.appendChild(addBtn);
+        if (reopen) showInlineAddInput(containerEl, addBtn, onFilterChange, reopen);
     }
 
     function showRoomDevicesPopover(containerEl, roomName, deviceList, onFilterChange) {
@@ -184,7 +193,7 @@
     }
 
 
-    function showInlineAddInput(containerEl, addBtn, onFilterChange) {
+    function showInlineAddInput(containerEl, addBtn, onFilterChange, restore) {
         addBtn.style.display = 'none';
 
         const form = document.createElement('div');
@@ -213,17 +222,11 @@
 
         const doAdd = () => {
             const val = input.value.trim();
-            if (val) {
-                const added = R.addRoom(val);
-                if (added) {
-                    closeForm();
-                    if (typeof onFilterChange === 'function') {
-                        onFilterChange(added);
-                    }
-                    return;
-                }
-            }
+            // Closed FIRST: addRoom announces the change, the pills redraw at
+            // once, and a form still open then would be given back as open.
             closeForm();
+            const added = val ? R.addRoom(val) : false;
+            if (added && typeof onFilterChange === 'function') onFilterChange(added);
         };
 
         confirmBtn.addEventListener('click', doAdd);
@@ -237,7 +240,12 @@
         form.appendChild(confirmBtn);
         form.appendChild(cancelBtn);
         containerEl.appendChild(form);
-        input.focus();
+        if (restore) {
+            input.value = restore.value;
+            if (restore.focused) input.focus();
+        } else {
+            input.focus();
+        }
     }
 
     Object.assign(window.SpatialRooms, { populateSelect, renderFilterPills, showRoomDevicesPopover });
