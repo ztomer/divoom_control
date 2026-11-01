@@ -76,8 +76,8 @@ fi
 # (colima), and stops it again on the way out -- ONLY what goh started, not
 # while another gate holds it, and not while anyone else's container is
 # running on it (owner ruling OW.27, 2026-10-31). The seam is goh's
-# lib/container_runtime.sh (GOH.CR1); `DIVOOM_COLIMA` is the stub the test drives.
-COLIMA="${DIVOOM_COLIMA:-colima}"
+# lib/container_runtime.sh (GOH.CR1), which takes the colima binary from `COLIMA`
+# (the stub the test drives).
 # shellcheck source=/Users/ztomer/Projects/gates_of_heck/lib/container_runtime.sh
 . "$GOH/lib/container_runtime.sh"
 trap goh_container_runtime_down EXIT

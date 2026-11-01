@@ -8,7 +8,7 @@ gate people learn to skip. So it starts colima when docker is not answering,
 and stops it again on the way out -- only if this run started it, and not
 while another container is running on it.
 
-Driven with stub `docker` and `colima` executables on PATH (the `DIVOOM_COLIMA`
+Driven with stub `docker` and `colima` executables on PATH (the `COLIMA`
 seam names the stub), so both directions are proven on any machine, with no
 container runtime at all.
 """
@@ -64,7 +64,7 @@ def _run(tmp_path: pathlib.Path, *, up: bool, busy: bool = False) -> tuple[int, 
         "PATH": f"{bin_dir}:/usr/bin:/bin",
         "STUB_LOG": str(log),
         "STUB_STATE": str(state),
-        "DIVOOM_COLIMA": "colima-stub",
+        "COLIMA": "colima-stub",
         "DIVOOM_LINUX_LINT_CACHE": str(tmp_path / "cache"),
         "TMPDIR": str(tmp_path),
         # The leases live here, never in the machine's real state dir.
