@@ -109,9 +109,10 @@ class FakeClient:
         if command in self._replies:
             return self._replies[command]
         if command == "now_playing":
-            # The daemon's shape: `playing` says a track is in the session,
-            # `is_playing` says it is not paused.
-            return {"success": True, "playing": True, "is_playing": True}
+            # The daemon's shape (D.FX2): `has_track` says a track is in the
+            # session, `playing` and `is_playing` that it is not paused.
+            return {"success": True, "playing": True, "has_track": True,
+                    "is_playing": True}
         if command == "get_device_activity":
             return {"success": True,
                     "activity": {"AA:BB": {"kind": self._kind,
@@ -445,12 +446,13 @@ def test_the_image_check_says_what_the_image_is(tmp_path):
 def test_a_paused_track_is_SKIP_not_graded(tmp_path):
     """A paused track is in the session but the music job pushes nothing.
 
-    `now_playing` says `playing: true` for it and `is_playing: false`; the
-    bench (2026-11-01) showed the previous widget's frame recorded as the
-    music job's, which an operator would have graded as album art.
+    `now_playing` says `has_track: true` for it, and `playing` and
+    `is_playing` false (D.FX2); the bench (2026-11-01) showed the previous
+    widget's frame recorded as the music job's, which an operator would have
+    graded as album art. The SKIP must say PAUSED, not "nothing is playing".
     """
-    client = _widget_client(now_playing={"success": True, "playing": True,
-                                         "is_playing": False})
+    client = _widget_client(now_playing={"success": True, "playing": False,
+                                         "has_track": True, "is_playing": False})
     check = hw.LiveJobCheck(id="album_art", title="t", kind="music",
                             needs_now_playing=True)
     exp = check.expectation(client, _ctx(tmp_path))

@@ -130,14 +130,16 @@ class LiveJobCheck(Check):
     def expectation(self, client, ctx):
         if self.needs_now_playing:
             playing = expect.reply_of(client, "now_playing")
-            if not playing.get("playing"):
+            # `has_track`: is there a track at all (D.FX2 -- `playing` is
+            # false for a paused one, which gets its own SKIP below).
+            if not playing.get("has_track"):
                 return Expectation(
                     verdict="SKIP",
                     detail="nothing is playing — the music job has nothing to "
                            "push, so there is no cover to grade. Start some "
                            "music and run this check again.")
-            # `playing` is a track in the session; a PAUSED one is still
-            # there, and the music job pushes nothing for it.
+            # A PAUSED track is still in the session, and the music job
+            # pushes nothing for it.
             if playing.get("is_playing") is False:
                 return Expectation(
                     verdict="SKIP",
