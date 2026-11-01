@@ -129,10 +129,25 @@ jobs:
   test:
     # macOS so clang builds the dylib and the native (C) encoder tests actually run.
     runs-on: macos-latest
+    # The suite needs goh: test_linux_all_features_runtime.py sources its
+    # lib/container_runtime.sh, and test_repo_gates.py skips without it. With
+    # no checkout the script fell back to a developer's path
+    # ($HOME/Projects/gates_of_heck) and three tests were red (2026-11-01).
+    # tests/test_ci_jobs_have_goh.py fails a pytest step with no goh before it.
+    env:
+      GOH_DIR: ${{ github.workspace }}/goh
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      # The browser step below and the TUI library use the same checkout.
+      - name: Check out gates_of_heck
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          repository: ztomer/gates_of_heck
+          path: goh
+          token: ${{ secrets.GOH_TOKEN || github.token }}
 
       - uses: actions/setup-python@v7
         with:
@@ -258,14 +273,8 @@ jobs:
       # scripts/browser_e2e.sh is the same command the local gate runs
       # (.gatesrc GOH_CI_STEPS); CI only narrows it to serial for its 3-core
       # runner.
-      # The script speaks through the house TUI library (gates_of_heck tui/lib.sh).
-      - name: Check out gates_of_heck
-        uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-          repository: ztomer/gates_of_heck
-          path: goh
-          token: ${{ secrets.GOH_TOKEN || github.token }}
+      # The script speaks through the house TUI library (gates_of_heck tui/lib.sh),
+      # from the job's goh checkout above.
       - name: Run the browser e2e suites (--run-browser, serialized)
         env:
           DIVOOM_BROWSER_WORKERS: "0"

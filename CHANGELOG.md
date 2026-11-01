@@ -6,6 +6,16 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **CI's `test` job has gates_of_heck (2026-11-01).** Three tests in
+  `tests/test_linux_all_features_runtime.py` source goh's
+  `lib/container_runtime.sh`; the job ran `pytest` with no goh checkout, the
+  script fell back to `$HOME/Projects/gates_of_heck`, and the job had been red
+  since the seam landed (runs 41263405514, 41283397642, 41312067479). The
+  checkout the browser step already made moves to the top of the job, with
+  `GOH_DIR` set for the whole job, so `test_repo_gates.py`'s goh-dependent
+  tests also stop skipping in CI. `tests/test_ci_jobs_have_goh.py` fails any
+  job whose pytest step has no goh checkout before it or no `GOH_DIR` naming
+  it (red on the old workflow).
 - **`cargo test` never sees the developer's HOME (P5.15, 2026-11-01).** The
   Python suite was isolated in `b83c96b`; the daemon's own tests were not:
   the reply-code sweep drove `get_topology` on a `Daemon::new()`, and its
