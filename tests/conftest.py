@@ -24,6 +24,49 @@ import pytest
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
+
+# The suite never sees the user's home (2026-11-01). Test daemons were started
+# with the developer's HOME, so each one read and REWROTE the owner's
+# `~/.config/divoom-control` -- one pytest run at 02:04 rewrote the owner's
+# `links.json` to `links: [], wall: null`, and every daemon a test spawned
+# logged into `/tmp/divoom_client.log`, the installed app's daemon log. A
+# per-file override (`DIVOOM_LINKS_PATH`, `DIVOOM_TOPOLOGY_PATH`, ...) is a
+# rule every new test and every new state file has to remember, so the ONE
+# root they all derive from is replaced instead, here, before any test module
+# imports a module-level `Path.home()`. Toolchains the suite needs (cargo,
+# rustup, git's identity, the e2e browser, the user site-packages) are named
+# by their own variables or linked in read-only-by-intent; nothing under
+# `.config/divoom-control` is. `tests/test_suite_leaves_the_owner_alone.py`
+# holds this.
+def _isolate_home() -> None:
+    import atexit
+    import pwd
+    import shutil
+    import site
+    import tempfile
+
+    real = Path(pwd.getpwuid(os.getuid()).pw_dir)
+    if os.environ.get("DIVOOM_TEST_HOME") == os.environ.get("HOME"):
+        return  # a child of an isolated run: already isolated
+    os.environ.setdefault("CARGO_HOME", str(real / ".cargo"))
+    os.environ.setdefault("RUSTUP_HOME", str(real / ".rustup"))
+    os.environ.setdefault("GOH_DIR", str(real / "Projects" / "gates_of_heck"))
+    os.environ.setdefault("PYTHONUSERBASE", site.getuserbase())
+    fake = Path(tempfile.mkdtemp(prefix="divoom-test-home-"))
+    for rel in (".gitconfig", ".config/git", ".cache", "Library/Caches/camoufox",
+                "Library/Caches/ms-playwright", "Library/Caches/Mozilla.sccache"):
+        src = real / rel
+        if src.exists():
+            (fake / rel).parent.mkdir(parents=True, exist_ok=True)
+            (fake / rel).symlink_to(src)
+    os.environ["HOME"] = str(fake)
+    os.environ["DIVOOM_TEST_HOME"] = str(fake)
+    # Every daemon a test spawns logs here, never into the app's own log.
+    os.environ["DIVOOM_DAEMON_LOG"] = str(fake / "divoomd.log")
+    atexit.register(shutil.rmtree, fake, True)
+
+
+_isolate_home()
 # The native dylib this conftest used to rebuild on every run is GONE, with
 # the C sources and the build script (phase L4, 2026-09-25). The dual-impl
 # anti-drift guarantee it provided is now structural instead: the daemon's
