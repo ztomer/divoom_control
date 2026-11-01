@@ -69,6 +69,6 @@ def test_a_module_that_drives_no_page_is_out_of_scope(tmp_path):
 
 
 def test_the_repo_holds_no_literal_ui_budget():
-    r = subprocess.run([sys.executable, "tools/check_ui_budgets.py"], cwd=REPO,
+    r = subprocess.run([sys.executable, "tools/check_ui_budgets.py"], cwd=REPO, check=False,
                        capture_output=True, text=True, stdin=subprocess.DEVNULL)
     assert r.returncode == 0, r.stdout + r.stderr
