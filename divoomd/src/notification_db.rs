@@ -9,8 +9,7 @@
 /// sandbox layout — try `DARWIN_USER_DIR`, then the Group Containers path).
 #[must_use]
 pub fn find_notification_db_path() -> Option<std::path::PathBuf> {
-    let home = std::env::var("HOME").ok()?;
-    let home_path = std::path::PathBuf::from(&home);
+    let home_path = crate::home::home()?;
 
     // 1. Probing DARWIN_USER_DIR
     if let Ok(out) = std::process::Command::new("getconf")

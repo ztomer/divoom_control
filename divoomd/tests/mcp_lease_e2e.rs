@@ -307,20 +307,7 @@ async fn an_agent_leases_draws_and_a_lapsed_lease_hands_the_panel_back() {
     let listener = Arc::new(UnixListener::bind(&path).expect("bind"));
     tokio::spawn(serve(listener, d.clone(), 8, Duration::from_secs(60)));
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_divoomd"))
-        .arg("mcp")
-        .env("DIVOOM_SOCKET", &path)
-        .env_remove("DIVOOM_DAEMON_HOST")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()
-        .expect("divoomd mcp starts");
-    let mut mcp = Mcp {
-        stdin: child.stdin.take().expect("stdin"),
-        stdout: BufReader::new(child.stdout.take().expect("stdout")).lines(),
-        id: 0,
-    };
+    let (mut child, mut mcp) = spawn_mcp(&path);
 
     mcp.initialize().await;
     assert_mcp_discovery(&mut mcp).await;
@@ -392,4 +379,27 @@ async fn an_agent_leases_draws_and_a_lapsed_lease_hands_the_panel_back() {
     drop(mcp);
     let _ = child.wait().await;
     let _ = std::fs::remove_file(&path);
+}
+
+/// `divoomd mcp` against the socket at `path`, under the isolated test home.
+fn spawn_mcp(path: &std::path::Path) -> (tokio::process::Child, Mcp) {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_divoomd"))
+        .arg("mcp")
+        .env("DIVOOM_SOCKET", path)
+        .env(
+            "HOME",
+            divoomd::home::home().expect("the isolated test home"),
+        )
+        .env_remove("DIVOOM_DAEMON_HOST")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .expect("divoomd mcp starts");
+    let mcp = Mcp {
+        stdin: child.stdin.take().expect("stdin"),
+        stdout: BufReader::new(child.stdout.take().expect("stdout")).lines(),
+        id: 0,
+    };
+    (child, mcp)
 }

@@ -13,7 +13,7 @@
 //! wire check, so a defect in that check cannot hide one here.
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use std::sync::Arc;
 
     use serde_json::{json, Map, Value};
@@ -26,7 +26,7 @@ mod tests {
     /// Commands the sweep does not send, each with what sending it would
     /// touch. Everything else in `COMMAND_ARGS` is driven; the source scan in
     /// `reply_shape_scan_tests` covers these handlers' replies.
-    const NOT_DRIVEN: &[(&str, &str)] = &[
+    pub const NOT_DRIVEN: &[(&str, &str)] = &[
         ("scan", "the Bluetooth radio"),
         ("sync_artwork", "the Divoom cloud"),
         ("get_animated_preview", "the Divoom cloud"),
@@ -134,7 +134,7 @@ mod tests {
         Value::Object(base)
     }
 
-    fn variants(command: &str, required: &[Required]) -> Vec<Value> {
+    pub fn variants(command: &str, required: &[Required]) -> Vec<Value> {
         if command == "connect" {
             // Any real mac or address reaches the radio or the network.
             return vec![json!({}), json!({"mock": true, "mac": "SWEEP_B"})];
@@ -158,13 +158,13 @@ mod tests {
         out
     }
 
-    fn daemon() -> Arc<Daemon> {
+    pub fn daemon() -> Arc<Daemon> {
         let d = Arc::new(Daemon::new());
         d.initialize_self_weak(Arc::downgrade(&d));
         d
     }
 
-    async fn with_panel(failing: bool) -> Arc<Daemon> {
+    pub async fn with_panel(failing: bool) -> Arc<Daemon> {
         let d = daemon();
         let r = d
             .handle(make_request(

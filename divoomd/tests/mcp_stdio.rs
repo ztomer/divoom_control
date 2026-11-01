@@ -116,6 +116,10 @@ impl Session {
             .arg("mcp")
             .args(extra)
             .env("DIVOOM_SOCKET", socket)
+            .env(
+                "HOME",
+                divoomd::home::home().expect("the isolated test home"),
+            )
             .env_remove("DIVOOM_DAEMON_HOST")
             .env_remove("DIVOOM_DAEMON_PORT")
             .env_remove("DIVOOM_DAEMON_TOKEN")

@@ -66,8 +66,7 @@ pub fn push_url() -> Option<String> {
 /// The estate's secrets file, if this home has one.
 #[must_use]
 pub fn estate_env_path() -> Option<PathBuf> {
-    let home = std::env::var("HOME").ok()?;
-    let mut path = PathBuf::from(home);
+    let mut path = crate::home::home()?;
     for part in ESTATE_ENV_FILE.split('/') {
         path.push(part);
     }

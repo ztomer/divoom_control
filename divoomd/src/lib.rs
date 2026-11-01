@@ -59,6 +59,9 @@ pub mod framing;
 pub mod gallery_store;
 #[cfg(test)]
 mod gallery_store_tests;
+pub mod home;
+#[cfg(test)]
+mod home_isolation_tests;
 pub mod hot_progress;
 pub mod hot_verdict;
 pub mod hotchannel_fetches;

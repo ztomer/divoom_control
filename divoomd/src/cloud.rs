@@ -44,8 +44,7 @@ fn last_auth_fail_at() -> &'static Mutex<Option<SystemTime>> {
 }
 
 pub(crate) fn config_dir() -> Option<PathBuf> {
-    let home = std::env::var("HOME").ok()?;
-    Some(PathBuf::from(home).join(".config").join("divoom-control"))
+    Some(crate::home::home()?.join(".config").join("divoom-control"))
 }
 
 use crate::cloud_store::{load_cache, load_config, save_cache};

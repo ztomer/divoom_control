@@ -6,6 +6,23 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **`cargo test` never sees the developer's HOME (P5.15, 2026-11-01).** The
+  Python suite was isolated in `b83c96b`; the daemon's own tests were not:
+  the reply-code sweep drove `get_topology` on a `Daemon::new()`, and its
+  migration rewrites the owner's `topology.json` when it places a panel no
+  device reported. `divoomd/src/home.rs` is now the one place the daemon
+  reads HOME (`cloud::config_dir`, `owner_alert`, `notification_routing`,
+  `notification_db` all go through it). Inside a cargo test binary --
+  recognised by cargo's own `deps/<crate>-<16 hex>` layout, which no shipped
+  binary has -- a HOME outside the temp directory is replaced for the whole
+  process by a throwaway one (HOME itself moves, so children inherit it); a
+  test that points HOME at its own temp directory is honoured. The two
+  integration tests that spawn `divoomd mcp` hand it that home, and a source
+  scan fails a new spawn that does not. Red: `home_isolation_tests` plants an
+  owner-like home outside the temp directory with a migratable layout,
+  sweeps every command, and saw `topology.json` rewritten before the seam;
+  the spawn scan named `mcp_stdio.rs` and `mcp_lease_e2e.rs` before they
+  passed HOME. `cargo test -p divoomd --no-default-features`: 654 passed.
 - **The arrangement survives a restart: the daemon's topology is its ONE
   store (2026-11-01).** The owner: "divoom control seems to be forgetting the
   device arrangements on each restart... is this only when the devices are

@@ -33,8 +33,8 @@ pub fn get_routing_path() -> std::path::PathBuf {
     if let Ok(p) = std::env::var("DIVOOM_CONTROL_ROUTING") {
         return std::path::PathBuf::from(p);
     }
-    if let Ok(home) = std::env::var("HOME") {
-        return std::path::PathBuf::from(home)
+    if let Some(home) = crate::home::home() {
+        return home
             .join(".config")
             .join("divoom-control")
             .join("notification_routing.json");
