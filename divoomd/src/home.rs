@@ -110,7 +110,9 @@ mod tests {
                 spawns += 1;
                 let chain = &src[at..];
                 let chain = &chain[..chain.find(".spawn()").unwrap_or(chain.len())];
-                if !chain.contains(".env(\"HOME\", ") {
+                // Whitespace-blind: rustfmt breaks a long `.env(` across lines.
+                let flat: String = chain.split_whitespace().collect();
+                if !flat.contains(".env(\"HOME\",") {
                     bare.push(path.display().to_string());
                 }
             }
