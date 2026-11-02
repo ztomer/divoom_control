@@ -6,6 +6,17 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **The recycled-pid launch probe is a repo tool (`scripts/recycled_pid_probe.py`,
+  2026-11-02).** The D.CFXSBX repro (launch camoufox AT a quit app's recycled
+  pid, report its exit and the unified log's `launchedByLS` line) lived in a
+  scratchpad. Landed with the camoufox path discovered rather than pinned to
+  one version, a temporary profile, a `--deadline`, an exit status that says
+  what happened (0 launched, 1 the D.CFXSBX signature, 2 the probe could not
+  run), and its pid-advance loop, verdict and lookups as functions of injected
+  collaborators: `tests/test_recycled_pid_probe.py` (11 cases) spends no pid
+  and starts no browser. Red before green: dropping the "every pid between is
+  taken" condition failed 2 of them.
+
 - **An open menu is driven by the daemon's event stream, not a timer
   (D.MENUEVENT, 2026-11-02).** D.MENULIVE refreshed the open menu on a 250 ms
   run-loop timer. The daemon DOES offer a state-change stream (`subscribe`:
