@@ -40,6 +40,7 @@ owner is dead and which no live process holds (:func:`sweep_dead_homes`).
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 import shutil
@@ -331,6 +332,18 @@ def register_launched() -> list[int]:
     _known.update(fresh)
     _frames[-1].extend(fresh)
     return fresh
+
+
+@contextlib.contextmanager
+def session_owned():
+    """Launches inside the block belong to the SESSION (its end reaps them),
+    not to the fixture or test that happens to be running. For a browser many
+    tests share (``tests/support/browser_shared.py``)."""
+    _frames.append(_frames[0])
+    try:
+        yield
+    finally:
+        _frames.pop()
 
 
 def reap_frame(frame: list[int]) -> int:

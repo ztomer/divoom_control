@@ -227,10 +227,25 @@ lists fonts the host lacks and every `new_page` took 2.5-2.6 s instead of
 `tests/test_e2e_browser_host_os.py`: red unpinned (7 of 8 processes drew
 `Win32`; pages 2.56/2.55/4.02 s).
 
-Open: P1.21, one browser per suite, not per test. 58 suites, one shares its
-browser (a module fixture); the rest launch their own, about 2.2 s per launch
-locally before any page. A session or module browser with a fresh context per
-test (0.01 s) keeps isolation and drops the launch from the per-test cost.
+Landed (2026-11-02): P1.21, one browser per session, a fresh context per test
+(`tests/support/browser_shared.py`; `launch` in `tests/support/browser.py` hands
+every async suite a handle on it). 57 of 58 suites launched a browser per test,
+about 2.2 s each before any page. The browser belongs to one event loop, so
+`tests/conftest.py` puts the browser suites' async tests on the session loop;
+a handle's `close()` closes its contexts, and the next `launch` closes any a
+test left open. A launch from another loop is `SharedBrowserWrongLoop`, never a
+quiet second browser. Test `tests/test_e2e_browser_shared.py` (isolation, one
+browser, session loop, no suite names the launchers). Serial browser step
+(`DIVOOM_BROWSER_WORKERS=0 scripts/browser_e2e.sh`), measured back to back on
+this machine at load 30-57 (other repos building): 11 min 52 s, 307 passed
+before; 5 min 15 s, 313 passed after (the six new tests included); an earlier
+quiet-machine "before" was 6 min 50 s. Not shared, by design: the sync API
+(`launch_sync`; `sync_playwright()` keeps its loop registered while a test's own
+`with` block is open, so a second instance fails), whose suites already hold one
+browser per module or one test. CI browser step: see the commit's CI run (was
+942 s on run 41520841922). Also fixed: `test_recycled_pid_probe.py`'s
+`994 not in kernel.spawned` could never fail (the fake kernel skips taken pids);
+it now asserts the exact pids spent, red when the stop condition is broken.
 
 Landed (2026-11-02): P1.19, the cask's uninstall stops the menu-bar helper app
 (tap `365f463`: every process running out of the installed bundle, and the

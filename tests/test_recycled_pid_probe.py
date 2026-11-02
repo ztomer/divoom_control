@@ -74,8 +74,12 @@ def test_it_does_not_stop_early_while_a_pid_below_the_target_is_free():
         clock=lambda: 0.0,
         deadline_s=60,
     )
+    # Every free pid below the stop was spent, in order, and none after it: a
+    # stop condition that fires early (970 is inside the window; 971-993 are
+    # free) or late ends the run elsewhere. (`994 not in spawned` could never
+    # fail: the kernel never hands out a taken pid.)
+    assert kernel.spawned == list(range(970, 994))
     assert last == 993
-    assert 994 not in kernel.spawned
 
 
 def test_it_says_when_it_overshoots_and_laps_again():

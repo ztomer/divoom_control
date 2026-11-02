@@ -13,6 +13,7 @@ hardware tests are skipped by default. Run them against a real device with::
     pytest --run-hardware
 """
 
+import inspect
 import os
 import sys
 import threading
@@ -20,6 +21,7 @@ import pathlib
 from pathlib import Path
 
 import pytest
+import pytest_asyncio
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
@@ -186,6 +188,17 @@ def pytest_configure(config):
 
 
 def pytest_collection_modifyitems(config, items):
+    # The browser suites share ONE browser per session, which belongs to one
+    # event loop, so their async tests run on the session loop
+    # (tests/support/browser_shared.py). `append=False`: ahead of the plain
+    # `asyncio` marker auto mode adds, which would otherwise win.
+    from tests.support import browser_shared
+
+    for item in items:
+        if (inspect.iscoroutinefunction(getattr(item, "obj", None))
+                and browser_shared.runs_on_session_loop(item.module)):
+            item.add_marker(pytest.mark.asyncio(loop_scope="session"), append=False)
+
     run_hw = config.getoption("--run-hardware")
     if run_hw:
         return
@@ -243,3 +256,14 @@ def _no_leaked_device_loop_threads():
         "fixture) without owner.stop() running on a guaranteed teardown path, "
         "or stop() returned before its loop thread fully exited."
     )
+
+
+# The shared browser's end of life (tests/support/browser_shared.py): closed on
+# the loop that started it, once, at session end.
+@pytest_asyncio.fixture(scope="session", loop_scope="session", autouse=True)
+async def _shared_browser_async():
+    yield
+    from tests.support import browser_shared
+
+    await browser_shared.shutdown_async()
+

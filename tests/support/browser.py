@@ -93,6 +93,7 @@ import time
 import pytest
 
 from tests.support.browser_launch import launch_async, launch_blocking
+from tests.support.browser_shared import shared_browser
 from tests.support.browser_options import launch_options_for
 
 # How long a UI wait may take before a test gives up.
@@ -156,15 +157,14 @@ def require_browser(*, opted_in: bool = False) -> None:
 
 
 async def launch(p, *, opted_in: bool = False, network: bool = False):
-    """Launch the e2e browser from an ``async_playwright()`` instance.
+    """The e2e browser: a handle on the session's one, a fresh context per test.
 
-    Hermetic unless ``network`` (``tests/support/browser_options.py``); ``scripts/gui_pov.py``
-    asks for the network so its screenshots carry the app's real web fonts.
-
-    Calls :func:`require_browser` itself (see :func:`launch_sync`); a launch
-    that fails is ``BrowserLaunchFailed`` (``tests/support/browser_launch.py``)."""
+    Hermetic unless ``network`` (``scripts/gui_pov.py``: real fonts; its own browser). Calls :func:`require_browser` itself (see :func:`launch_sync`);
+    a failed launch is ``BrowserLaunchFailed``."""
     require_browser(opted_in=opted_in)
-    return await launch_async(lambda: p.firefox.launch(**launch_options_for(network=network)))
+    if opted_in or network:  # not a test: its own browser, its own run
+        return await launch_async(lambda: p.firefox.launch(**launch_options_for(network=network)))
+    return await shared_browser()  # one per session, a fresh context each (browser_shared.py)
 
 
 def launch_sync(p):
