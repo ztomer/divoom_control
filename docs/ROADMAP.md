@@ -218,6 +218,10 @@ the socket listening, and the probe finds a listener that never answers). Its
 production exposure is bounded -- the daemon unlinks the socket path before it
 exits, so the path is gone -- and it is left as a named variant, not as a fix.
 
+Landed (2026-11-02): P1.19, the cask's uninstall stops the menu-bar helper app
+(tap `365f463`: every process running out of the installed bundle, and the
+holder of the tray's lock, are stopped after the identity pass).
+
 Landed (2026-11-01): P1.17 (D.FX3; its commits, `42e3dc4` among them, cite it as P1.14, the JS-syntax gate's number), the pre-push export keeps no build
 output: `GOH_EXPORT_KEEP` no longer names `target/debug/divoomd` (a kept file's
 bytes key goh's proven cache, and six steps rebuilt it, so none was ever
@@ -225,19 +229,6 @@ recorded as proven), and `scripts/py_ci.sh` builds the daemon its spawning
 tests run, as CI's Python job does (`42e3dc4`;
 `tests/test_export_keeps_no_build_output.py`). Not yet observed: a second
 `tools/gate.sh --full` on an unchanged tree reporting those steps proven.
-
-#### P1.19 — The cask's uninstall stops the menu-bar helper app
-**Status:** OPEN. Since D.HELPER (2026-11-02) the menu-bar agent is a helper
-app (`Contents/Helpers/Divoom Menubar.app`, bundle id `com.divoom.menubar`)
-opened through LaunchServices, so it writes no identity file, and the
-tap's `uninstall script:` stops helpers only by identity (the daemon still
-writes one). A tray the user kept past the GUI (`quit_menubar_on_exit` off)
-survives an uninstall. The fix is in the tap, through its own gate (`release.sh`
-bumps it): add `com.divoom.menubar` to `uninstall quit:`, or stop the holder
-of `~/.config/divoom-control/run/divoom-menubar.lock` as
-`scripts/stop_helpers.sh` does.
-**Done when:** with the tray running and the GUI quit, `brew uninstall
---cask divoom-control` leaves no `divoom-menubar` process. **Size:** S.
 
 ### Phase 2 — daemon liveness and safety
 

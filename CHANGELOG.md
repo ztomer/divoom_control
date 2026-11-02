@@ -6,6 +6,20 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **The cask's uninstall stops the menu-bar helper app (P1.19, 2026-11-02).**
+  The tap's `uninstall script:` stopped helpers only by identity, and since
+  D.HELPER the menu-bar agent is a helper app that writes none, so a tray kept
+  past the GUI survived `brew uninstall --cask divoom-control`. The fix is in
+  `ztomer/homebrew-tap` (`365f463`, through that tap's gate): after the
+  identity pass the script stops every process whose executable lives under
+  `<appdir>/Divoom.app/Contents/` and the holder of
+  `~/.config/divoom-control/run/divoom-menubar.lock`. Its test
+  (`tools/tests/test_cask_uninstall_identity.sh`, section 8) starts a fake
+  menu-bar helper app, a fake MCP `divoomd`, a lock holder and a look-alike
+  decoy with no identity files, runs the cask's own script, and asserts the
+  first three gone and the decoy alive. Red before green: with the
+  identity-only script, 4 of the 5 new checks failed.
+
 - **The recycled-pid launch probe is a repo tool (`scripts/recycled_pid_probe.py`,
   2026-11-02).** The D.CFXSBX repro (launch camoufox AT a quit app's recycled
   pid, report its exit and the unified log's `launchedByLS` line) lived in a
