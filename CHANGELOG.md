@@ -6,14 +6,33 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **The test browser's window never moves under a gesture; the room pills
+  keep their elements; the wall's light select keeps each panel's brightness
+  (D.SLIDE, D.WALLCH, 2026-11-01).** (1) CI runs 41367764353 and 41370988097
+  went red on two tests -- a brightness drag that left the thumb at 50, a
+  `Page.fill` that waited 60 s for the add-room input -- with one cause:
+  camoufox drew a random window per launch, and one shorter than the page
+  (outerHeight 744 or 860 against a 900 px viewport) was later laid out by
+  moving the content up 125-241 px, so the test's first pointer event landed
+  above its target (it pressed `#nav-menu`). 4 of 72 launches under load did
+  it; the launch seam now fixes the window (1600x1100) and its screen, and
+  `tests/test_e2e_browser_window.py` holds every suite's viewport to it.
+  (2) A redraw of the room pills between a press and its release rebuilt
+  the button under the pointer, so the browser fired no click -- "+" opened
+  no form, a pill selected nothing. The redraw now keeps each control's
+  element (and the open form, without fd6a5a8's give-back). (3) The wall's
+  `switch_channel` broadcast the default light, white at 100; each panel's
+  light is now read back and re-sent through D.FX5's `channel_select`, and
+  the dead `packets::channel_payload` is gone.
+
 - **A channel select keeps the brightness (D.FX5, 2026-11-01).** Live:
   brightness 50, `set_channel 1`, and `get_brightness` read 100 -- the light
   select carried a fixed white at 100. The light is now read back (0x46) and
   re-sent as it was (`7bec265`); a lease restores channels 0/2 with the whole
   select packet, not `0x45 [ch]` (`a6b3d72`); the D.FX3 export item is
   renumbered P1.17, P1.14 stays the JS-syntax gate (`0f1d472`); the bench
-  images are re-rendered after P5.17's crop fix. Open: the wall's
-  `switch_channel` still sends the default light to every panel.
+  images are re-rendered after P5.17's crop fix. The wall's `switch_channel`
+  followed in D.WALLCH, above.
 
 - **Four defects from the 2026-11-01 pass (D.FX1-D.FX4).** (1) A one-byte
   `set_channel 1` turned a Ditoo dark at brightness 0: the light channel's
