@@ -9,6 +9,7 @@ use crate::daemon::{Daemon, DeviceTransport};
 use crate::image_encode;
 
 mod bounds;
+mod channel;
 mod cmds;
 mod dispatch;
 mod outcome;
@@ -383,13 +384,6 @@ impl DivoomWall {
 
     pub async fn set_volume(&self, volume: u8) -> WallOutcome {
         self.broadcast_command(0x08, &[volume]).await
-    }
-
-    /// Switch every panel to a channel, `packet` from
-    /// [`crate::packets::channel_payload`] -- the table one panel uses (P6.3).
-    pub async fn switch_channel(&self, packet: &[u8; 10]) -> WallOutcome {
-        self.broadcast_command(crate::packets::CMD_SET_LIGHT_MODE, packet)
-            .await
     }
 
     async fn broadcast_command(&self, command_id: u8, args: &[u8]) -> WallOutcome {

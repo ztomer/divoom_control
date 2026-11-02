@@ -232,13 +232,8 @@ impl Daemon {
         // (120s): this is a safety net against a *hung* op, NOT a cliff for
         // slow-but-valid ones (some ops — e.g. hotchannel updates — can run long;
         // verify exact durations on real hardware before tightening).
-        let req_timeout = req
-            .args
-            .get("timeout")
-            .and_then(serde_json::Value::as_f64)
-            .unwrap_or(30.0)
-            .clamp(1.0, 120.0);
-        let timeout = Duration::from_secs_f64(req_timeout);
+        let timeout = crate::device_call::call_timeout(req);
+        let req_timeout = timeout.as_secs_f64();
         let shown = crate::device::screen::Sink::default();
 
         if let Ok(reply) = tokio::time::timeout(

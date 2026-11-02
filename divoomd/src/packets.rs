@@ -362,17 +362,6 @@ pub const fn visualization(number: u8) -> [u8; 10] {
     [Channel::Visualization as u8, number, 0, 0, 0, 0, 0, 0, 0, 0]
 }
 
-/// The 0x45 packet that switches to the channel `name` calls it.
-///
-/// `None` for a name no channel has. One table for one panel and the wall
-/// (P6.3): the wall kept its own, which lacked `visualizer` and `ambient`
-/// (the names the GUI sends) and switched to Clock and VJ with zero-filled
-/// packets -- the blank clock face [`BareChannel`] exists to prevent.
-#[must_use]
-pub fn channel_payload(name: &str) -> Option<[u8; 10]> {
-    Channel::from_name(name).map(Channel::select_packet)
-}
-
 impl Channel {
     /// The channel `name` calls, or `None` for a name no channel has.
     #[must_use]

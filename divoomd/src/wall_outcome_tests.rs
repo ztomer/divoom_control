@@ -311,3 +311,38 @@ async fn a_panel_linked_failing_is_named_by_the_wall() {
     let reply = wall_call(&d, "show_clock", json!([1])).await;
     assert_eq!(failed_macs(&reply), vec![B.to_string()], "{reply}");
 }
+
+/// D.WALLCH: a light-channel select on the wall never changes a brightness
+/// the caller did not ask to change -- on EACH panel, at its own level. The
+/// wall sent `LightPacket::default()` (white at 100) to every slot, the class
+/// D.FX5 fixed for one panel (7bec265).
+#[tokio::test]
+async fn the_walls_light_select_keeps_each_panels_own_brightness_and_colour() {
+    let d = two_panel_wall().await;
+    let (a, b) = (mock_of(&d, A).await, mock_of(&d, B).await);
+    // 0x46 answer: [mode, temp, vj, R, G, B, brightness, type, power, ...]
+    let lights = [
+        (&a, [0x10, 0x20, 0x30], 30_u8),
+        (&b, [0x40, 0x50, 0x60], 70_u8),
+    ];
+    for (m, rgb, level) in &lights {
+        let answer = vec![0, 0, 0, rgb[0], rgb[1], rgb[2], *level, 0, 1, 0, 80, 0];
+        m.simulated_responses.lock().unwrap().insert(0x46, answer);
+    }
+    let reply = wall_call(&d, "switch_channel", json!(["light"])).await;
+    assert_eq!(reply["success"], json!(true), "{reply}");
+    for (m, rgb, level) in &lights {
+        let (_, select) = m
+            .sent_commands
+            .lock()
+            .unwrap()
+            .iter()
+            .rfind(|(id, _)| *id == 0x45)
+            .cloned()
+            .expect("a 0x45 channel select");
+        assert_eq!(select[0], 0x01, "the light channel: {select:?}");
+        assert_eq!(select[4], *level, "the panel's own brightness: {select:?}");
+        assert_eq!(&select[1..4], rgb, "the panel's own colour: {select:?}");
+        assert_eq!(select[6], 1, "the light was sent OFF: {select:?}");
+    }
+}

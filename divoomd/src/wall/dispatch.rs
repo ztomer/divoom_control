@@ -124,13 +124,14 @@ impl Daemon {
             }
             "switch_channel" => {
                 let ch = text(0, "channel").unwrap_or_default();
-                let Some(packet) = crate::packets::channel_payload(&ch) else {
+                let Some(channel) = crate::packets::Channel::from_name(&ch) else {
                     return err_code(
                         ErrorCode::BadRequest,
                         &format!("wall switch_channel: unknown channel '{ch}'"),
                     );
                 };
-                wall.switch_channel(&packet).await
+                wall.switch_channel(channel, crate::device_call::call_timeout(req))
+                    .await
             }
             other => {
                 // Honest refusal. Silently returning success for something the

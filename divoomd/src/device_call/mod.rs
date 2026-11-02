@@ -218,3 +218,16 @@ pub async fn handle_device_call(
 
     routing::route(method, ctx).await
 }
+
+/// The time one `device_call` may take: the caller's `timeout` in seconds,
+/// clamped to 1-120, 30 by default. One rule for a panel's call and the
+/// wall's per-panel reads (see `Daemon::cmd_device_call`).
+pub fn call_timeout(req: &crate::protocol::Request) -> Duration {
+    let secs = req
+        .args
+        .get("timeout")
+        .and_then(serde_json::Value::as_f64)
+        .unwrap_or(30.0)
+        .clamp(1.0, 120.0);
+    Duration::from_secs_f64(secs)
+}
