@@ -57,23 +57,19 @@ done
 # Both paths need this: an upgrade must not leave the OLD daemon holding the
 # device while the new app starts, and an uninstall must not orphan one.
 stop_running() {
-  local found=0
-  for pat in "divoom_gui.gui_main" "divoom_gui/gui_main.py" "Divoom.app/Contents/MacOS/Divoom" \
-             "divoomd" "divoom-menubar"; do
-    if pgrep -f "$pat" >/dev/null 2>&1; then
-      pkill -f "$pat" 2>/dev/null || true
-      found=1
-    fi
-  done
-  if [[ "$found" == "1" ]]; then
-    sleep 2
-    # Second pass for anything that ignored SIGTERM.
-    for pat in "divoomd" "divoom-menubar"; do
-      pkill -9 -f "$pat" 2>/dev/null || true
-    done
-    ok "stopped running Divoom processes"
-  else
+  # Quit the app by BUNDLE ID (a name can reach a stranger's app of that name),
+  # then stop the helpers and the GUI by what they OWN: the identity files they
+  # wrote, and the lock and sockets they hold (scripts/stop_helpers.sh). A name
+  # pattern reaches every process whose command line looks like Divoom's.
+  osascript -e "tell application id \"com.divoom.control\" to quit" >/dev/null 2>&1 || true
+  sleep 2
+  local out
+  out="$(bash "$ROOT/scripts/stop_helpers.sh" 2>&1)" || die "could not stop the running Divoom processes: $out"
+  if [[ "$out" == *"nothing to stop"* ]]; then
     info "nothing running"
+  else
+    sleep 1
+    ok "stopped running Divoom processes"
   fi
   # The daemon only unlinks a socket it still owns (R67/C5), so a socket can
   # outlive a SIGKILL. Clear the well-known paths after everything is down.

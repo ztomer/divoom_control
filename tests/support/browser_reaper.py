@@ -29,6 +29,12 @@ leader's process group.
    browser under any ``divoom-test-home-*`` whose driver is gone. A browser
    whose driver is alive belongs to a live session and is left alone.
 
+The fake HOME itself has the same owner problem: only an ``atexit`` rmtree
+removes it, and a SIGKILLed run never reaches ``atexit`` (ten of them sat in
+TMPDIR on 2026-11-02). So the session CLAIMS its home -- an owner file naming
+its pid and start time -- and the next session start removes every home whose
+owner is dead and which no live process holds (:func:`sweep_dead_homes`).
+
 ``tests/test_e2e_browser_reaped.py`` holds all three.
 """
 
@@ -50,6 +56,15 @@ TEST_BROWSER = re.compile(
 #: The process Playwright starts a browser under. A browser whose parent is
 #: not this has lost its driver, and nothing will ever close it.
 DRIVER_MARK = "run-driver"
+#: The fake HOME a session creates, and the file in it naming the session.
+HOME_PREFIX = "divoom-test-home-"
+OWNER_FILE = ".divoom-owner"
+#: A home with no readable owner file (made before the claim existed) is
+#: removed only once it is older than any session can run: the gate's own
+#: deadline is 40 minutes.
+LEGACY_HOME_AGE_S = 6 * 3600
+#: How long `lsof` may take to say who holds a home; no answer counts as held.
+LSOF_WAIT_S = 20.0
 #: How long a SIGKILLed tree may take to disappear from the process table.
 REAP_WAIT_S = 10.0
 
@@ -188,6 +203,97 @@ def sweep_orphans() -> int:
     return kill(orphans(table()))
 
 
+# ── Ownership: who removes a fake HOME ───────────────────────────────────────
+
+def process_started(pid: int) -> str | None:
+    """The process's start time as the OS reports it, or None if it is gone.
+    A pid alone is not an identity (the OS reuses them); pid + start time is."""
+    done = subprocess.run(
+        ["/bin/ps", "-p", str(pid), "-o", "lstart="], stdin=subprocess.DEVNULL,
+        capture_output=True, text=True, check=False, env={**os.environ, "LC_ALL": "C"})
+    started = done.stdout.strip()
+    return started if done.returncode == 0 and started else None
+
+
+def claim_home(home: str, pid: int | None = None) -> None:
+    """Name the session that owns ``home``: its pid and start time."""
+    pid = os.getpid() if pid is None else pid
+    with open(os.path.join(home, OWNER_FILE), "w") as f:
+        f.write(f"{pid}\n{process_started(pid) or ''}\n")
+
+
+def owner_alive(home: str) -> bool | None:
+    """True when the session that claimed ``home`` is still running, False when
+    it is gone (or its pid now belongs to another process), None when the home
+    names no owner."""
+    try:
+        with open(os.path.join(home, OWNER_FILE)) as f:
+            pid_text, _, started = f.read().partition("\n")
+        pid = int(pid_text)
+    except (OSError, ValueError):
+        return None
+    live = process_started(pid)
+    return live is not None and live == started.strip()
+
+
+def held_by_process(home: str, procs: list[Proc]) -> bool:
+    """Does a live process hold ``home``: it is named in a command line, or a
+    process has a file open under it (`lsof`; no answer counts as held)."""
+    real = os.path.realpath(home)
+    if any(home in p.command or real in p.command for p in procs):
+        return True
+    try:
+        done = subprocess.run(
+            ["lsof", "-t", "+D", real], stdin=subprocess.DEVNULL,
+            capture_output=True, text=True, timeout=LSOF_WAIT_S, check=False)
+    except FileNotFoundError:
+        return False  # no lsof here: the command-line check above is all there is
+    except subprocess.TimeoutExpired:
+        return True
+    return bool(done.stdout.strip())
+
+
+def dead_homes(tmpdir: str | None = None, *, now: float | None = None) -> list[str]:
+    """The ``divoom-test-home-*`` directories nobody owns any more: the
+    claiming session is dead and no live process holds the directory. A home
+    with no owner file qualifies once it is older than LEGACY_HOME_AGE_S."""
+    base = tmpdir or tempfile.gettempdir()
+    now = time.time() if now is None else now
+    procs = table()
+    mine = active_home()
+    dead = []
+    try:
+        names = sorted(os.listdir(base))
+    except OSError:
+        return []
+    for name in names:
+        path = os.path.join(base, name)
+        if not name.startswith(HOME_PREFIX) or os.path.islink(path) or not os.path.isdir(path):
+            continue
+        if os.stat(path).st_uid != os.getuid() or path == mine:
+            continue
+        alive = owner_alive(path)
+        if alive:
+            continue
+        if alive is None:
+            born = getattr(os.stat(path), "st_birthtime", os.stat(path).st_ctime)
+            if now - born < LEGACY_HOME_AGE_S:
+                continue
+        if not held_by_process(path, procs):
+            dead.append(path)
+    return dead
+
+
+def sweep_dead_homes(tmpdir: str | None = None) -> int:
+    """Remove every fake HOME whose session is dead (the SIGKILLed run's
+    ``atexit`` never ran). Returns how many were removed."""
+    removed = 0
+    for path in dead_homes(tmpdir):
+        shutil.rmtree(path, ignore_errors=True)  # symlinks inside are unlinked, not followed
+        removed += 1
+    return removed
+
+
 # ── Ownership: who reaps a browser ───────────────────────────────────────────
 
 #: The owners currently running, innermost last. The bottom frame is the
@@ -296,6 +402,8 @@ class ReaperPlugin:
     def pytest_sessionstart(self, session):
         if not hasattr(session.config, "workerinput"):
             sweep_orphans()
+            # After the browsers: a browser still running under a home holds it.
+            sweep_dead_homes()
 
     @_pytest.hookimpl(trylast=True)
     def pytest_sessionfinish(self, session):

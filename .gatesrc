@@ -113,8 +113,11 @@ GOH_CI_STEPS='"$GOH_DIR/gates/structural.sh" --full:ruff check .:python3 "$GOH_D
 
 # No process kill by name (gates_of_heck check_no_kill_by_name.py, 2026-09-23).
 # A name matches processes this repo does not own. Today's survivors are in
-# kill_by_name_allow.json (8 entries, 8 unreviewed); a new kill by
-# name fails, and a fixed one must take its entry with it.
+# kill_by_name_allow.json (every entry is a recorded decision: `legitimate`
+# with the reason, or it is not there); a new kill by name fails, and a fixed
+# one must take its entry with it. The scripts stop what they own -- identity
+# files, the lock and sockets a process holds (scripts/stop_helpers.sh), a pid
+# recorded at launch -- so today the file holds none.
 GOH_NO_KILL_BY_NAME=1
 
 # Every child process names its stdin (`goh subprocess-stdin`, the house stdin

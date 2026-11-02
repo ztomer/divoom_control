@@ -6,6 +6,19 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **No process is stopped by name; no test HOME outlives its run (D.KBNA,
+  2026-11-02).** The five `unreviewed` entries in `kill_by_name_allow.json`
+  are gone: `install.sh` and `scripts/install_local.sh` now quit the app by
+  bundle id and stop the rest through `scripts/stop_helpers.sh` -- the
+  identity files the helpers wrote, then whatever HOLDS the GUI's lock or the
+  daemon's sockets (`lsof`), which also reaches a helper from a build too old
+  to write an identity. `scripts/linux_remote/test_host.sh` records the pid
+  it launched and stops a leftover only if that pid is still its binary. The
+  `.gatesrc` comment no longer carries a count. A SIGKILLed test run's
+  `divoom-test-home-*` is removed at the next session start: the session
+  claims its home (pid + start time) and the sweep removes homes whose owner
+  is dead and which no live process holds.
+
 - **No camoufox outlives the test session that started it (D.CFXORPH,
   2026-11-02).** On 2026-11-01 eighteen camoufox processes this suite started
   were found orphaned. Playwright starts the browser in its own process

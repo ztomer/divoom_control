@@ -55,8 +55,9 @@ osascript -e "tell application id \"$BUNDLE_ID\" to quit" >/dev/null 2>&1 || tru
 sleep 2
 # The supervisor is what respawns the daemon, so it has to go too, and the
 # install must not proceed until nothing is left holding the old binary.
-pkill -f "Divoom.app/Contents/Frameworks/bin/" >/dev/null 2>&1 || true
-pkill -f "Divoom.app/Contents/MacOS/Divoom" >/dev/null 2>&1 || true
+# Stopped by what they OWN, not by a name pattern that reaches strangers: the
+# identity files the helpers wrote, and the lock/sockets the GUI and daemon hold.
+bash "$ROOT/scripts/stop_helpers.sh" >/dev/null 2>&1 || true
 sleep 2
 if pgrep -f "Divoom.app/Contents/" >/dev/null 2>&1; then
     pgrep -fl "Divoom.app/Contents/" >&2 || true

@@ -52,7 +52,12 @@ def _isolate_home() -> None:
     os.environ.setdefault("RUSTUP_HOME", str(real / ".rustup"))
     os.environ.setdefault("GOH_DIR", str(real / "Projects" / "gates_of_heck"))
     os.environ.setdefault("PYTHONUSERBASE", site.getuserbase())
-    fake = Path(tempfile.mkdtemp(prefix="divoom-test-home-"))
+    from tests.support import browser_reaper
+
+    fake = Path(tempfile.mkdtemp(prefix=browser_reaper.HOME_PREFIX))
+    # Name the owner: a SIGKILLed run never reaches the atexit rmtree below, so
+    # the next session start removes this home once this process is gone.
+    browser_reaper.claim_home(str(fake))
     for rel in (".gitconfig", ".config/git", ".cache", "Library/Caches/camoufox",
                 "Library/Caches/ms-playwright", "Library/Caches/Mozilla.sccache"):
         src = real / rel
@@ -66,8 +71,6 @@ def _isolate_home() -> None:
     atexit.register(shutil.rmtree, fake, True)
     # Registered after the rmtree, so it runs FIRST (atexit is last-in,
     # first-out): no browser of this session outlives the home it runs from.
-    from tests.support import browser_reaper
-
     atexit.register(browser_reaper.reap_home, str(fake))
 
 

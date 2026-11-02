@@ -33,13 +33,24 @@ bluetoothctl power off >/dev/null 2>&1 || true
 sleep 1
 bluetoothctl power on  >/dev/null 2>&1 || true
 sleep 1
-pkill -f target/release/divoomd 2>/dev/null
+# A daemon this script left behind (the run was killed) is stopped by the pid it
+# recorded at launch, and only if that pid is still this binary -- never by name.
+PIDFILE=/tmp/divoomd-test-host.pid
+if [ -f "$PIDFILE" ]; then
+  OLD=$(cat "$PIDFILE" 2>/dev/null)
+  if [ -n "$OLD" ] && [ "$(readlink "/proc/$OLD/exe" 2>/dev/null)" = "$PWD/target/release/divoomd" ]; then
+    kill "$OLD" 2>/dev/null
+  fi
+  rm -f "$PIDFILE"
+fi
 rm -f /tmp/divoomd.sock
 ./target/release/divoomd --socket /tmp/divoomd.sock >/tmp/divoomd.log 2>&1 &
 DPID=$!
+echo "$DPID" >"$PIDFILE"
 for _ in $(seq 1 50); do [ -S /tmp/divoomd.sock ] && break; sleep 0.2; done
 python3 scripts/linux_remote/scan.py /tmp/divoomd.sock || true
 kill "$DPID" 2>/dev/null
+rm -f "$PIDFILE"
 echo "--- daemon log tail ---"; tail -6 /tmp/divoomd.log 2>/dev/null
 
 sect "SUMMARY"
