@@ -218,6 +218,20 @@ the socket listening, and the probe finds a listener that never answers). Its
 production exposure is bounded -- the daemon unlinks the socket path before it
 exits, so the path is gone -- and it is left as a named variant, not as a fix.
 
+Landed (2026-11-02): P1.20, the browser suites' fingerprint claims the host's OS
+(`tests/support/browser_options.py` `fingerprint_os`). camoufox drew the OS at
+random, weighted toward Windows, once per process; a Windows fingerprint on a Mac
+lists fonts the host lacks and every `new_page` took 2.5-2.6 s instead of
+0.12-0.16 s, so CI's serial browser step took 58-91 min on a Windows draw and
+13-23 min on a macOS one, the same 278 tests. Test
+`tests/test_e2e_browser_host_os.py`: red unpinned (7 of 8 processes drew
+`Win32`; pages 2.56/2.55/4.02 s).
+
+Open: P1.21, one browser per suite, not per test. 58 suites, one shares its
+browser (a module fixture); the rest launch their own, about 2.2 s per launch
+locally before any page. A session or module browser with a fresh context per
+test (0.01 s) keeps isolation and drops the launch from the per-test cost.
+
 Landed (2026-11-02): P1.19, the cask's uninstall stops the menu-bar helper app
 (tap `365f463`: every process running out of the installed bundle, and the
 holder of the tray's lock, are stopped after the identity pass).

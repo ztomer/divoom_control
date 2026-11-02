@@ -6,7 +6,20 @@ shipped milestone (per the project planning docs).
 
 ## v0.44.0 — the open menu follows the daemon; helpers are helper apps; uninstall stops the tray (2026-11-02)
 
-Minor: D.MENUEVENT, D.CFXSBX, D.REV1, D.BLEDBG and D.UNINSTDIR, with the menu-bar and helper-app work before them.
+Minor: D.MENUEVENT, D.CFXSBX, D.REV1, D.BLEDBG, D.UNINSTDIR and D.E2EOS, with the menu-bar and helper-app work before them.
+
+- **The browser suites' fingerprint claims the host's OS (P1.20, D.E2EOS,
+  2026-11-02).** camoufox drew the fingerprint's OS at random, weighted toward
+  Windows, once per Python process. A Windows fingerprint on a Mac lists fonts
+  the host does not have, and every `new_page` took 2.5-2.6 s instead of
+  0.12-0.16 s (22 launches over 9 processes: 16 Windows draws, all slow; 6
+  macOS draws, all fast). `scripts/browser_e2e.sh` runs the suites in one
+  process, so a whole CI run drew once: the browser step took 58-91 min on a
+  Windows draw and 13-23 min on a macOS one. `launch_options_for` now passes
+  `os=fingerprint_os()` (macOS or Linux; any other host is refused). Test
+  `tests/test_e2e_browser_host_os.py`: eight fresh processes all draw the
+  host's platform, and a warm browser opens a page in under a second; both red
+  unpinned (7 of 8 drew `Win32`; pages 2.56/2.55/4.02 s).
 
 - **Overlapping open-menu refreshers no longer unregister each other (D.REV1,
   2026-11-02).** `menu_live` kept ONE shared slot for the open menu's run-loop

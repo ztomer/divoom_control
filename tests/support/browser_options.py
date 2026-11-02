@@ -6,6 +6,8 @@ under the house line cap.
 
 from __future__ import annotations
 
+import platform
+
 #: Where a test browser's off-machine requests go: a closed local port, so they
 #: fail in milliseconds. index.html links Google Fonts, and `page.goto` waits for
 #: that stylesheet: probed 2026-10-19, 2.7-6.0 s per goto over the network vs
@@ -32,6 +34,23 @@ HARNESS_GEOMETRY = {
 }
 
 
+#: The fingerprint OS for each host this suite runs on (macOS on Apple silicon,
+#: Linux): camoufox draws the OS at random, weighted toward Windows, once per
+#: process, and a foreign OS lists fonts the host lacks (Calibri, Consolas, ...)
+#: so every new page costs 2.5-2.6 s instead of 0.12-0.16 s. CI's browser step
+#: took 58-91 min on a Windows draw and 13-23 min on a macOS one, the same 278
+#: tests (2026-11-02; tests/test_e2e_browser_host_os.py).
+_HOST_OS = {"Darwin": "macos", "Linux": "linux"}
+
+
+def fingerprint_os() -> str:
+    """The host's OS as camoufox names it; any other host is refused, never guessed."""
+    host = platform.system()
+    if host not in _HOST_OS:
+        raise RuntimeError(f"the browser suites run on macOS and Linux, not {host}")
+    return _HOST_OS[host]
+
+
 def launch_options_for(*, network: bool) -> dict:
     from camoufox.utils import launch_options
 
@@ -40,9 +59,10 @@ def launch_options_for(*, network: bool) -> dict:
     # above its target (CI runs 41367764353, 41370988097). Both the window AND
     # the screen are fixed: camoufox clamps a window to the drawn screen, and
     # its screen constraint is not always honoured (1600x900 screens were still
-    # drawn under min_height=1300, 4 in 1000). The rest stays random.
+    # drawn under min_height=1300, 4 in 1000). The OS is the host's (fingerprint_os).
+    # The rest stays random.
     opts = launch_options(headless=True, main_world_eval=True, config=HARNESS_GEOMETRY,
-                          i_know_what_im_doing=True)
+                          os=fingerprint_os(), i_know_what_im_doing=True)
     if not network:
         opts["proxy"] = OFFLINE_PROXY
     return opts
