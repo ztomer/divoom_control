@@ -92,6 +92,7 @@ import time
 
 import pytest
 
+from tests.support.browser_launch import launch_async, launch_blocking
 from tests.support.browser_options import launch_options_for
 
 # How long a UI wait may take before a test gives up.
@@ -157,14 +158,13 @@ def require_browser(*, opted_in: bool = False) -> None:
 async def launch(p, *, opted_in: bool = False, network: bool = False):
     """Launch the e2e browser from an ``async_playwright()`` instance.
 
-    Drop-in for the old ``p.chromium.launch(headless=True)``. Hermetic unless
-    ``network`` (see ``tests/support/browser_options.py``); ``scripts/gui_pov.py`` asks for
-    the network so its screenshots carry the app's real web fonts.
+    Hermetic unless ``network`` (``tests/support/browser_options.py``); ``scripts/gui_pov.py``
+    asks for the network so its screenshots carry the app's real web fonts.
 
-    Calls :func:`require_browser` itself -- see the note on :func:`launch_sync`.
-    """
+    Calls :func:`require_browser` itself (see :func:`launch_sync`); a launch
+    that fails is ``BrowserLaunchFailed`` (``tests/support/browser_launch.py``)."""
     require_browser(opted_in=opted_in)
-    return await p.firefox.launch(**launch_options_for(network=network))
+    return await launch_async(lambda: p.firefox.launch(**launch_options_for(network=network)))
 
 
 def launch_sync(p):
@@ -181,7 +181,7 @@ def launch_sync(p):
     guard, so getting a browser now requires passing it by construction.
     """
     require_browser()
-    return p.firefox.launch(**launch_options_for(network=False))
+    return launch_blocking(lambda: p.firefox.launch(**launch_options_for(network=False)))
 
 
 # ── Reaching the page's main world ────────────────────────────────────────────

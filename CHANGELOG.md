@@ -6,6 +6,25 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **A browser that does not start is a named outcome (D.CFXSBX,
+  2026-11-02).** One pre-push run failed a wall e2e test on
+  `BrowserType.launch: Failed to launch the browser process`: camoufox
+  exited 1 after 130 ms. Its `sandbox_extension_issue_file_to_process ...
+  Operation not permitted` line is printed by every launch and was not the
+  cause. The unified log names it: the launch got pid 41929, which the
+  owner's installed Divoom.app had held until it quit seven hours earlier;
+  its `divoom-menubar` child kept running, so LaunchServices kept the dead
+  app's record by pid and bound the new browser to it (`launchedByLS=1`,
+  the dead app's ASN -- 1 of 2,603 launches in three days of logs).
+  Reproduced on demand: an applet that quits leaving a child, then a launch
+  at its recycled pid, fails the same way every time (3 of 3). The cause is
+  outside the repo and spent by the one launch it hits, so
+  `tests/support/browser_launch.py` makes a failed launch
+  `BrowserLaunchFailed` with its cause named, relaunches ONCE on exactly
+  that signature, and records the relaunch as a `BrowserRelaunched`
+  warning in the pytest summary. The same probe through the harness: 3 of
+  3 launched, each with the warning.
+
 - **No process is stopped by name; no test HOME outlives its run (D.KBNA,
   2026-11-02).** The five `unreviewed` entries in `kill_by_name_allow.json`
   are gone: `install.sh` and `scripts/install_local.sh` now quit the app by
