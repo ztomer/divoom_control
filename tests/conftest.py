@@ -64,6 +64,11 @@ def _isolate_home() -> None:
     # Every daemon a test spawns logs here, never into the app's own log.
     os.environ["DIVOOM_DAEMON_LOG"] = str(fake / "divoomd.log")
     atexit.register(shutil.rmtree, fake, True)
+    # Registered after the rmtree, so it runs FIRST (atexit is last-in,
+    # first-out): no browser of this session outlives the home it runs from.
+    from tests.support import browser_reaper
+
+    atexit.register(browser_reaper.reap_home, str(fake))
 
 
 _isolate_home()
@@ -167,6 +172,14 @@ def pytest_configure(config):
     # suites. The patch lives in its own module because the harness file is
     # already at the 500-line cap.
     from tests.support import navigation_budget  # noqa: F401  (the import IS the patch)
+
+    # A browser a test launches is reaped by its owner, pass or fail, and the
+    # session sweeps what a killed run left (tests/support/browser_reaper.py).
+    from tests.support import browser_reaper
+
+    browser_reaper.patch_launch()
+    if not config.pluginmanager.has_plugin("divoom-browser-reaper"):
+        config.pluginmanager.register(browser_reaper.ReaperPlugin(), "divoom-browser-reaper")
 
 
 def pytest_collection_modifyitems(config, items):

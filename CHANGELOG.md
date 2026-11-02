@@ -6,6 +6,21 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **No camoufox outlives the test session that started it (D.CFXORPH,
+  2026-11-02).** On 2026-11-01 eighteen camoufox processes this suite started
+  were found orphaned. Playwright starts the browser in its own process
+  group, so a killed run's group kill never reaches it. Every
+  `BrowserType.launch` now registers the new browser's process group with
+  its owner -- the fixture being set up, or the test body -- which kills the
+  whole tree at its teardown, pass or fail; the session end kills everything
+  under its fake HOME, and the next session start kills any test browser
+  whose driver is gone. Every process is named by the session's own path
+  (argv[0] runs through `divoom-test-home-*/Library/Caches/camoufox`), never
+  by name. `tests/test_e2e_browser_reaped.py` runs real inner sessions: a
+  failing test, a SIGKILLed run and a killed xdist worker each leave nothing.
+  The 11-01 cause itself was not reproduced -- a healthy browser exits when
+  its driver dies; the tests model a browser wedged at that moment.
+
 - **The test browser's window never moves under a gesture; the room pills
   keep their elements; the wall's light select keeps each panel's brightness
   (D.SLIDE, D.WALLCH, 2026-11-01).** (1) CI runs 41367764353 and 41370988097
