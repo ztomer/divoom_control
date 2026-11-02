@@ -6,6 +6,21 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **An open menu follows the daemon (D.MENULIVE, 2026-11-02).** QA held the
+  menu open, made Pixoo-1 active from the CLI, and the menu still read
+  "Tivoo-Max-light-3 (active)" two seconds later. The in-place update (P5.3)
+  never ran while the menu was open: `popUpMenuPositioningItem` tracks the
+  menu in a nested run loop and is called from inside winit's handler, which
+  winit does not re-enter, so the poll timer and every broadcast queued
+  behind the open menu. Now the open menu runs its own CF run-loop timer in
+  `NSEventTrackingRunLoopMode` and the common modes (250 ms), reads the
+  snapshot the subscribe thread keeps current, and applies in-place changes
+  (`divoom-menubar/src/menu_live.rs`; the items it changes moved to
+  `menu_items.rs`, shared with the poll). A change in WHICH rows exist still
+  waits for the menu to close: it needs a new root menu. Red before green:
+  the timer added only to the default mode -> the open-menu test saw 0
+  refreshes. The on-screen half is still P5.16.
+
 - **The app's helpers leave its coalition, and there is one tray (D.HELPER,
   P1.18, 2026-11-02).** Two `divoom-menubar` agents were running (pids 42068
   and 30142), and the quit app's LaunchServices record was still alive

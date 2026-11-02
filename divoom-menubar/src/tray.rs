@@ -3,30 +3,21 @@
 //! Notifications / Quit) plus a read-only active-device section. State is refreshed
 //! by polling the daemon (`poll_daemon`); menu clicks are dispatched in `on_menu`.
 
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::time::Duration;
 use tray_icon::menu::{
     CheckMenuItem, Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem, Submenu,
 };
 use tray_icon::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 
-use crate::menu_model::{MenuChange, MenuModel, RowModel};
+use crate::menu_items::{apply_in_place, refresh_tiles, NotifItems, RowItems};
+use crate::menu_model::{MenuChange, MenuModel};
 use crate::state::{resolve_icon_state, IconState};
 use crate::{daemon, launch};
 
 pub enum TrayAction {
     Quit,
-}
-
-/// The items of one device row that change without a rebuild.
-struct RowItems {
-    submenu: Submenu,
-    active: CheckMenuItem,
-}
-
-/// The notification items, whose enabled state follows the monitor.
-struct NotifItems {
-    start: MenuItem,
-    stop: MenuItem,
 }
 
 pub struct Tray {
@@ -41,13 +32,15 @@ pub struct Tray {
     installed: Option<MenuModel>,
     last_icon_state: Option<IconState>,
     last_tooltip: String,
-    /// Frame previews decoded into menu icons, once per frame.
-    tiles: std::cell::RefCell<crate::tiles::TileCache>,
+    /// Frame previews decoded into menu icons, once per frame. Shared (`Rc`)
+    /// with the refresh an OPEN menu runs (`menu_live`), as are the rows and
+    /// the notification items.
+    tiles: Rc<RefCell<crate::tiles::TileCache>>,
     /// The device rows of the installed menu, by mac, so a new frame, name,
     /// kind or active panel updates the row IN PLACE instead of rebuilding
     /// the menu (which dismisses it while the user has it open).
-    rows: std::cell::RefCell<std::collections::HashMap<String, RowItems>>,
-    notif: std::cell::RefCell<Option<NotifItems>>,
+    rows: Rc<RefCell<std::collections::HashMap<String, RowItems>>>,
+    notif: Rc<RefCell<Option<NotifItems>>>,
     #[cfg(target_os = "macos")]
     menu: std::cell::RefCell<Option<Menu>>,
 }
@@ -72,9 +65,9 @@ impl Tray {
             installed: None,
             last_icon_state: None, // forces the first poll_daemon() to set icon + tooltip
             last_tooltip: String::new(),
-            tiles: std::cell::RefCell::new(crate::tiles::TileCache::default()),
-            rows: std::cell::RefCell::new(std::collections::HashMap::new()),
-            notif: std::cell::RefCell::new(None),
+            tiles: Rc::new(RefCell::new(crate::tiles::TileCache::default())),
+            rows: Rc::new(RefCell::new(std::collections::HashMap::new())),
+            notif: Rc::new(RefCell::new(None)),
             #[cfg(target_os = "macos")]
             menu: std::cell::RefCell::new(None),
         };
@@ -223,6 +216,10 @@ impl Tray {
         // SAFETY: `menu_ptr` is the live `NSMenu` owned by `self.menu` on the
         // main thread (`MainThreadMarker::new()` succeeded above).
         let ns_menu = unsafe { &*menu_ptr };
+        // The popup TRACKS the menu in a nested run loop until it closes, and
+        // winit cannot re-enter its handler meanwhile, so the open menu
+        // refreshes itself from the daemon's state (D.MENULIVE).
+        let _live = self.refresh_while_open();
         let _ = ns_menu.popUpMenuPositioningItem_atLocation_inView(
             None,
             NSPoint::new(x, y),
@@ -235,43 +232,37 @@ impl Tray {
     pub const fn show_menu(&self) {}
 
     /// Apply a model whose rows are the installed ones to the existing items,
-    /// so an open menu stays open. Both patterns name every field with no
-    /// `..`: a field added to the model does not compile until it is named
-    /// here (E0027), and one named but not applied is an unused binding.
+    /// so an open menu stays open.
     fn apply_in_place(&self, model: &MenuModel) {
-        let MenuModel {
-            rows: row_models,
-            notif_running,
-        } = model;
-        let rows = self.rows.borrow();
-        for RowModel {
-            mac,
-            label,
-            selected,
-        } in row_models
-        {
-            if let Some(items) = rows.get(mac) {
-                items.submenu.set_text(label);
-                items.active.set_checked(*selected);
-                items.active.set_enabled(!*selected);
-            }
-        }
-        if let Some(notif) = self.notif.borrow().as_ref() {
-            notif.start.set_enabled(!*notif_running);
-            notif.stop.set_enabled(*notif_running);
-        }
+        apply_in_place(&self.rows, &self.notif, model);
     }
 
     /// Same rows, maybe new frames: refresh the tiles in place.
     fn refresh_tiles(&self, devices: &[daemon::DeviceView]) {
-        let rows = self.rows.borrow();
-        for d in devices {
-            if let Some(items) = rows.get(&d.mac) {
-                items
-                    .submenu
-                    .set_icon(self.tiles.borrow_mut().icon_for(d.preview.as_deref()));
-            }
-        }
+        refresh_tiles(&self.rows, &self.tiles, devices);
+    }
+
+    /// While the menu is open: re-read the daemon's state on a run-loop timer
+    /// that fires in the menu-tracking mode, and apply what changed IN PLACE.
+    #[cfg(target_os = "macos")]
+    fn refresh_while_open(&self) -> Option<crate::menu_live::WhileOpen> {
+        let (rows, notif, tiles) = (self.rows.clone(), self.notif.clone(), self.tiles.clone());
+        let shown = RefCell::new(self.installed.clone().unwrap_or_default());
+        crate::menu_live::WhileOpen::start(
+            &*objc2_core_foundation::CFRunLoop::main()?,
+            crate::menu_live::OPEN_REFRESH,
+            Box::new(move || {
+                let Some(snap) = daemon::get_cached_snapshot() else {
+                    return;
+                };
+                let next = crate::menu_live::open_menu_update(&shown.borrow(), &snap);
+                if let Some(next) = next {
+                    apply_in_place(&rows, &notif, &next);
+                    *shown.borrow_mut() = next;
+                }
+                refresh_tiles(&rows, &tiles, &snap.devices);
+            }),
+        )
     }
 
     /// Poll the daemon and refresh the glyph colour + menu: in place when the

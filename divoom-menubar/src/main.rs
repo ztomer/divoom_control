@@ -11,6 +11,9 @@
 mod daemon;
 mod glyph;
 mod launch;
+mod menu_items;
+#[cfg(target_os = "macos")]
+mod menu_live;
 mod menu_model;
 mod resubscribe;
 mod single_instance;
