@@ -45,21 +45,28 @@ pub fn open_menu_update(shown: &MenuModel, snap: &DaemonSnapshot) -> Option<Menu
     }
 }
 
-/// The addresses of the open menu's run-loop source and run loop, which the
-/// subscribe thread signals and wakes. Addresses, not references: a
-/// `CFRetained` is not `Send`, and the one thing this slot is for is the pair
-/// of calls CoreFoundation documents as safe from any thread.
-static OPEN: Mutex<Option<(usize, usize)>> = Mutex::new(None);
+/// The addresses of every live [`WhileOpen`]'s run-loop source and run loop,
+/// which the subscribe thread signals and wakes. Addresses, not references: a
+/// `CFRetained` is not `Send`, and the one thing this registry is for is the
+/// pair of calls CoreFoundation documents as safe from any thread.
+///
+/// A REGISTRY keyed by source, not one slot (D.REV1): two `WhileOpen`s can
+/// overlap -- `self.live = start(..)` builds the new one before the old one
+/// drops, and a menu can open while another is tracking -- and a single slot
+/// that each drop cleared unconditionally let the old drop wipe the new
+/// registration, so the open menu stopped following the daemon. Each drop now
+/// removes exactly its own entry.
+static OPEN: Mutex<Vec<(usize, usize)>> = Mutex::new(Vec::new());
 
 /// Tell the open menu, if there is one, that the daemon's state changed. Cheap
 /// and callable from any thread: the subscribe thread calls it after folding
 /// each broadcast into the snapshot.
 pub fn notify() {
     let open = OPEN.lock().unwrap_or_else(PoisonError::into_inner);
-    if let Some((source, run_loop)) = *open {
+    for &(source, run_loop) in open.iter() {
         // SAFETY: the two addresses are those of the source and run loop that
-        // the live `WhileOpen` holds a retain on, and `WhileOpen::drop` clears
-        // this slot -- under the lock held here -- before it releases either,
+        // a live `WhileOpen` holds a retain on, and `WhileOpen::drop` removes
+        // its entry -- under the lock held here -- before it releases either,
         // so both are alive for as long as this guard is. `signal` is
         // `CFRunLoopSourceSignal` and `wake_up` is `CFRunLoopWakeUp`: the two
         // CoreFoundation calls documented as safe from any thread (that is
@@ -115,7 +122,7 @@ impl WhileOpen {
         run_loop.add_source(Some(&source), unsafe { kCFRunLoopCommonModes });
         // Catch up on whatever changed since the last poll: the first tick.
         source.signal();
-        *OPEN.lock().unwrap_or_else(PoisonError::into_inner) = Some((
+        OPEN.lock().unwrap_or_else(PoisonError::into_inner).push((
             std::ptr::from_ref::<CFRunLoopSource>(&source).expose_provenance(),
             std::ptr::from_ref::<CFRunLoop>(&run_loop).expose_provenance(),
         ));
@@ -129,8 +136,12 @@ impl WhileOpen {
 
 impl Drop for WhileOpen {
     fn drop(&mut self) {
-        // Out of the shared slot first, so no `notify` signals a dead source.
-        *OPEN.lock().unwrap_or_else(PoisonError::into_inner) = None;
+        // Out of the registry first, so no `notify` signals a dead source --
+        // and only this source's entry: another `WhileOpen` may be live.
+        let mine = std::ptr::from_ref::<CFRunLoopSource>(&self.source).expose_provenance();
+        OPEN.lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .retain(|&(source, _)| source != mine);
         self.source.invalidate();
     }
 }
@@ -165,6 +176,32 @@ mod tests {
         )
     }
 
+    /// `OPEN` is process-wide and the test harness runs tests in parallel, so
+    /// a test that registers a source or calls `notify` holds this lock: one
+    /// test's `notify` must not tick another test's source.
+    static SERIAL: Mutex<()> = Mutex::new(());
+
+    fn serial() -> std::sync::MutexGuard<'static, ()> {
+        SERIAL.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// A `WhileOpen` on the current thread's run loop that counts its ticks.
+    fn counting() -> (WhileOpen, Rc<RefCell<u32>>) {
+        let ticks = Rc::new(RefCell::new(0_u32));
+        let t = ticks.clone();
+        let live = WhileOpen::start(
+            CFRunLoop::current().expect("run loop"),
+            Box::new(move || *t.borrow_mut() += 1),
+        )
+        .expect("source");
+        (live, ticks)
+    }
+
+    fn run_tracking(seconds: f64) {
+        let tracking = CFString::from_static_str(TRACKING_MODE);
+        CFRunLoop::run_in_mode(Some(&tracking), seconds, false);
+    }
+
     fn active_label(m: &MenuModel) -> Option<&str> {
         m.rows.iter().find(|r| r.selected).map(|r| r.label.as_str())
     }
@@ -191,17 +228,54 @@ mod tests {
     /// what changed since the last poll); an event from another thread -- the
     /// subscribe thread -- runs it again, in the menu-tracking mode, and the
     /// shown model follows the new active panel.
+    /// D.REV1: two `WhileOpen`s overlap whenever the new one is built before
+    /// the old one drops (`self.live = start(..)`), or a menu opens while
+    /// another tracks. Whichever drops first, the survivor still follows
+    /// `notify` -- a drop removes its own registration, never the other's.
+    #[test]
+    fn an_overlapping_drop_does_not_unregister_the_survivor() {
+        let _serial = serial();
+        // The old one drops after the new one registered (assignment order).
+        let (old, _) = counting();
+        let (new, new_ticks) = counting();
+        drop(old);
+        run_tracking(0.05);
+        assert_eq!(*new_ticks.borrow(), 1, "the opening tick");
+        notify();
+        run_tracking(0.05);
+        assert_eq!(*new_ticks.borrow(), 2, "the survivor still follows events");
+        // The inner one drops first (nested): the outer one still follows.
+        let (inner, _) = counting();
+        drop(inner);
+        notify();
+        run_tracking(0.05);
+        assert_eq!(*new_ticks.borrow(), 3, "the outer one still follows events");
+        drop(new);
+        assert_eq!(
+            OPEN.lock().unwrap().len(),
+            0,
+            "every drop removed its own registration"
+        );
+    }
+
     #[test]
     fn an_open_menu_follows_an_event_and_does_not_poll() {
-        use std::sync::{Arc, Mutex};
-        use std::time::Duration;
+        use std::sync::{mpsc, Arc, Mutex};
+        let _serial = serial();
         // A broadcast that lands while no menu is open finds no waker and does
         // nothing -- the subscribe thread calls `notify` for every event.
         notify();
         let state = Arc::new(Mutex::new(snap("AA")));
         let sub_state = state.clone();
+        // The event lands AFTER the opening tick has shown the old state:
+        // ordered by a channel the first tick sends on, not by a sleep, so a
+        // loaded run cannot reorder them (D.REV1). (An event that lands before
+        // the opening tick fires coalesces into it -- a signalled source fires
+        // once -- and that tick reads the newer snapshot, which is correct but
+        // is not the case this test is about.)
+        let (opened, is_open) = mpsc::channel::<()>();
         let subscriber = std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(250));
+            is_open.recv().expect("the menu opened");
             // The daemon's `selection` event lands in the snapshot, then wakes
             // the open menu.
             *sub_state.lock().unwrap() = snap("BB");
@@ -223,11 +297,13 @@ mod tests {
                     if let Some(next) = next {
                         *m.borrow_mut() = next;
                     }
+                    if *t.borrow() == 1 {
+                        opened.send(()).expect("subscriber waiting");
+                    }
                 }),
             )
             .expect("source");
-            let tracking = CFString::from_static_str(TRACKING_MODE);
-            CFRunLoop::run_in_mode(Some(&tracking), 0.8, false);
+            run_tracking(0.8);
             drop(live);
             let label = active_label(&shown.borrow()).map(str::to_string);
             let count = *ticks.borrow();

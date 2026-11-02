@@ -6,6 +6,20 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **Overlapping open-menu refreshers no longer unregister each other (D.REV1,
+  2026-11-02).** `menu_live` kept ONE shared slot for the open menu's run-loop
+  source and `WhileOpen::drop` cleared it unconditionally, so whenever two
+  overlapped (`self.live = start(..)` registers the new one before the old one
+  drops; a nested or repeated open) the first drop wiped the survivor and the
+  open menu stopped following the daemon. The slot is now a registry: each
+  drop removes only its own source, and `notify` signals every live one. No
+  current caller overlaps (the tray holds one in a scoped local), so this was
+  latent. Test `an_overlapping_drop_does_not_unregister_the_survivor`; red with
+  the unconditional clear (1 tick where 2). The event test's ordering is a
+  channel sent from the opening tick, not a 250 ms sleep: with the opener
+  delayed 300 ms, the sleep version failed (1 tick where 2) and the channel
+  version passed.
+
 - **The cask's uninstall stops the menu-bar helper app (P1.19, 2026-11-02).**
   The tap's `uninstall script:` stopped helpers only by identity, and since
   D.HELPER the menu-bar agent is a helper app that writes none, so a tray kept
