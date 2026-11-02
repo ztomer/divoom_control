@@ -230,3 +230,30 @@ async def test_an_open_add_room_form_survives_a_redraw_of_the_pills(event):
                 "the form closes once the room is added")
         finally:
             await browser.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("target", [".stage-room-add-btn", '.stage-room-pill[data-room="Shelf"]'])
+async def test_a_redraw_between_press_and_release_does_not_swallow_the_click(target):
+    """A click is a press and a release on ONE element. The pills' redraw rebuilt
+    every button, so a redraw landing between the two (a scan result, a room
+    announcement) left the release on a new button and the browser fired no
+    click at all: "+" opened no form, a pill selected nothing -- a dead button.
+    The redraw keeps each control's element, so the click still lands."""
+    require_browser()
+    from playwright.async_api import async_playwright
+
+    async with async_playwright() as p:
+        browser, page = await _open(p, [A, B, T])
+        try:
+            box = await page.locator(target).bounding_box()
+            await page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+            await page.mouse.down()
+            await eval_js(page, "() => window.dispatchEvent(new CustomEvent('divoom:rooms-updated', {detail: {}}))")
+            await page.mouse.up()
+            if target == ".stage-room-add-btn":
+                await wait_js(page, "() => !!document.querySelector('.stage-room-input')")
+            else:
+                await wait_js(page, "() => document.querySelector('.stage-room-pill.active')?.dataset.room === 'Shelf'")
+        finally:
+            await browser.close()

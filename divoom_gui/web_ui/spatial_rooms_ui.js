@@ -37,15 +37,37 @@
 
     function renderFilterPills(containerEl, activeFilter, onFilterChange, deviceList) {
         if (!containerEl) return;
-        // An open add-room form lives in this container, and a redraw (a room
-        // assigned, the topology loaded, the fleet refreshed) clears it: the
-        // form and its typed name vanished between "+" and "Add" -- CI's
-        // timeout on .stage-room-confirm-btn. The redraw gives it back.
-        const openInput = containerEl.querySelector('.stage-room-input');
-        const reopen = openInput
-            ? { value: openInput.value, focused: document.activeElement === openInput }
-            : null;
-        containerEl.innerHTML = '';
+        // A redraw (a room assigned, the topology loaded, the fleet refreshed)
+        // KEEPS each control's element and updates it in place. It used to
+        // rebuild them all, and that broke two things a user does:
+        // - a click is a press and a release on ONE element; a redraw between
+        //   them left the release on a new button, so the browser fired no
+        //   click -- "+" opened no form, a pill selected nothing;
+        // - the open add-room form, and the name typed into it, went with the
+        //   old elements (CI's timeout on .stage-room-confirm-btn).
+        // Handlers read the CURRENT callback from the container, so a kept
+        // element never acts on a stale one.
+        containerEl._onFilterChange = onFilterChange;
+        const change = (v) => {
+            const f = containerEl._onFilterChange;
+            if (typeof f === 'function') f(v);
+        };
+        const old = new Map();
+        [...containerEl.children].forEach(el => { if (el.dataset.key) old.set(el.dataset.key, el); });
+        const keep = (key, make) => {
+            let el = old.get(key);
+            if (el) { old.delete(key); return el; }
+            el = make();
+            el.dataset.key = key;
+            return el;
+        };
+        const button = (cls) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = cls;
+            return b;
+        };
+        const wanted = [];
 
         const rooms = R.getRooms();
         const allFilters = ['all', ...rooms];
@@ -61,78 +83,77 @@
         allFilters.forEach(r => {
             const isAll = (r === 'all');
             const isActive = (activeFilter.toLowerCase() === r.toLowerCase());
-            const pill = document.createElement('div');
+            const pill = keep(`pill:${r}`, () => {
+                const el = document.createElement('div');
+                el.dataset.room = r;
+                const label = document.createElement('span');
+                label.className = 'stage-room-pill-label';
+                label.textContent = isAll ? 'All' : r;
+                el.appendChild(label);
+                const countSpan = document.createElement('span');
+                countSpan.className = 'stage-room-pill-count';
+                el.appendChild(countSpan);
+                // Allow deletion for custom rooms (not All and not default Desk)
+                if (!isAll && r.toLowerCase() !== 'desk') {
+                    const delBtn = button('stage-room-del-btn');
+                    delBtn.title = `Delete ${r} room`;
+                    delBtn.setAttribute('aria-label', `Delete ${r} room`);
+                    delBtn.textContent = '×';
+                    el.appendChild(delBtn);
+                }
+                return el;
+            });
             pill.className = `stage-room-pill ${isActive ? 'active' : ''}`;
-            pill.dataset.room = r;
-
-            const label = document.createElement('span');
-            label.className = 'stage-room-pill-label';
-            label.textContent = isAll ? 'All' : r;
-            pill.appendChild(label);
-
-            const countSpan = document.createElement('span');
-            countSpan.className = 'stage-room-pill-count';
-            countSpan.textContent = `(${counts[r] !== undefined ? counts[r] : 0})`;
-            pill.appendChild(countSpan);
-
-            // Allow deletion for custom rooms (not All and not default Desk)
-            if (!isAll && r.toLowerCase() !== 'desk') {
-                const delBtn = document.createElement('button');
-                delBtn.type = 'button';
-                delBtn.className = 'stage-room-del-btn';
-                delBtn.title = `Delete ${r} room`;
-                delBtn.setAttribute('aria-label', `Delete ${r} room`);
-                delBtn.textContent = '×';
-                delBtn.addEventListener('click', (e) => {
+            pill.querySelector('.stage-room-pill-count').textContent = `(${counts[r] !== undefined ? counts[r] : 0})`;
+            const delBtn = pill.querySelector('.stage-room-del-btn');
+            if (delBtn) {
+                delBtn.onclick = (e) => {
                     e.stopPropagation();
                     if (confirm(`Remove room "${r}"? Devices in this room will move to Desk.`)) {
                         R.removeRoom(r);
-                        if (typeof onFilterChange === 'function') {
-                            onFilterChange(activeFilter.toLowerCase() === r.toLowerCase() ? 'all' : activeFilter);
-                        }
+                        change(activeFilter.toLowerCase() === r.toLowerCase() ? 'all' : activeFilter);
                     }
-                });
-                pill.appendChild(delBtn);
+                };
             }
-
-            pill.addEventListener('click', () => {
-                if (typeof onFilterChange === 'function') {
-                    onFilterChange(r);
-                }
-            });
-
-            containerEl.appendChild(pill);
+            pill.onclick = () => change(r);
+            wanted.push(pill);
         });
 
         // Manage Devices button when a specific room is selected
         if (activeFilter !== 'all') {
-            const manageBtn = document.createElement('button');
-            manageBtn.type = 'button';
-            manageBtn.className = 'stage-room-manage-btn';
+            const manageBtn = keep('manage', () => {
+                const b = button('stage-room-manage-btn');
+                b.innerHTML = '<svg class="kare-icon" viewBox="0 0 16 16"><circle cx="4" cy="4" r="2" fill="currentColor"/><circle cx="12" cy="4" r="2" fill="currentColor"/><circle cx="8" cy="11" r="2" fill="currentColor"/></svg> Devices';
+                return b;
+            });
             manageBtn.title = `Add or remove devices in ${activeFilter}`;
             manageBtn.setAttribute('aria-label', `Add or remove devices in ${activeFilter}`);
-            manageBtn.innerHTML = '<svg class="kare-icon" viewBox="0 0 16 16"><circle cx="4" cy="4" r="2" fill="currentColor"/><circle cx="12" cy="4" r="2" fill="currentColor"/><circle cx="8" cy="11" r="2" fill="currentColor"/></svg> Devices';
-            manageBtn.addEventListener('click', (e) => {
+            manageBtn.onclick = (e) => {
                 e.stopPropagation();
-                showRoomDevicesPopover(containerEl, activeFilter, devices, onFilterChange);
-            });
-            containerEl.appendChild(manageBtn);
+                showRoomDevicesPopover(containerEl, activeFilter, devices, change);
+            };
+            wanted.push(manageBtn);
         }
 
-        // Add Room button at the end
-        const addBtn = document.createElement('button');
-        addBtn.type = 'button';
-        addBtn.className = 'stage-room-add-btn';
-        addBtn.title = 'Add new room';
-        addBtn.setAttribute('aria-label', 'Add new room');
-        addBtn.innerHTML = '<svg class="kare-icon" viewBox="0 0 16 16"><path d="M8,2 L8,14 M2,8 L14,8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
-
-        addBtn.addEventListener('click', () => {
-            showInlineAddInput(containerEl, addBtn, onFilterChange);
+        // Add Room button at the end, then its form while one is open
+        const addBtn = keep('add', () => {
+            const b = button('stage-room-add-btn');
+            b.title = 'Add new room';
+            b.setAttribute('aria-label', 'Add new room');
+            b.innerHTML = '<svg class="kare-icon" viewBox="0 0 16 16"><path d="M8,2 L8,14 M2,8 L14,8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+            return b;
         });
+        addBtn.onclick = () => showInlineAddInput(containerEl, addBtn, change);
+        wanted.push(addBtn);
+        const form = old.get('form');
+        if (form) { old.delete('form'); wanted.push(form); }
 
-        containerEl.appendChild(addBtn);
-        if (reopen) showInlineAddInput(containerEl, addBtn, onFilterChange, reopen);
+        // Only what is out of place moves; a kept element that is already in
+        // position is never detached, so a press on it still ends in a click.
+        wanted.forEach((el, i) => {
+            if (containerEl.children[i] !== el) containerEl.insertBefore(el, containerEl.children[i] || null);
+        });
+        [...containerEl.children].slice(wanted.length).forEach(el => el.remove());
     }
 
     function showRoomDevicesPopover(containerEl, roomName, deviceList, onFilterChange) {
@@ -193,11 +214,12 @@
     }
 
 
-    function showInlineAddInput(containerEl, addBtn, onFilterChange, restore) {
+    function showInlineAddInput(containerEl, addBtn, onFilterChange) {
         addBtn.style.display = 'none';
 
         const form = document.createElement('div');
         form.className = 'stage-room-input-form';
+        form.dataset.key = 'form';   // a redraw keeps it (renderFilterPills)
 
         const input = document.createElement('input');
         input.type = 'text';
@@ -223,7 +245,7 @@
         const doAdd = () => {
             const val = input.value.trim();
             // Closed FIRST: addRoom announces the change, the pills redraw at
-            // once, and a form still open then would be given back as open.
+            // once, and a form still open then would be kept open.
             closeForm();
             const added = val ? R.addRoom(val) : false;
             if (added && typeof onFilterChange === 'function') onFilterChange(added);
@@ -240,12 +262,7 @@
         form.appendChild(confirmBtn);
         form.appendChild(cancelBtn);
         containerEl.appendChild(form);
-        if (restore) {
-            input.value = restore.value;
-            if (restore.focused) input.focus();
-        } else {
-            input.focus();
-        }
+        input.focus();
     }
 
     Object.assign(window.SpatialRooms, { populateSelect, renderFilterPills, showRoomDevicesPopover });
