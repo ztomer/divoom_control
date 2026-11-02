@@ -226,6 +226,19 @@ tests run, as CI's Python job does (`42e3dc4`;
 `tests/test_export_keeps_no_build_output.py`). Not yet observed: a second
 `tools/gate.sh --full` on an unchanged tree reporting those steps proven.
 
+#### P1.19 — The cask's uninstall stops the menu-bar helper app
+**Status:** OPEN. Since D.HELPER (2026-11-02) the menu-bar agent is a helper
+app (`Contents/Helpers/Divoom Menubar.app`, bundle id `com.divoom.menubar`)
+opened through LaunchServices, so it writes no identity file, and the
+tap's `uninstall script:` stops helpers only by identity (the daemon still
+writes one). A tray the user kept past the GUI (`quit_menubar_on_exit` off)
+survives an uninstall. The fix is in the tap, through its own gate (`release.sh`
+bumps it): add `com.divoom.menubar` to `uninstall quit:`, or stop the holder
+of `~/.config/divoom-control/run/divoom-menubar.lock` as
+`scripts/stop_helpers.sh` does.
+**Done when:** with the tray running and the GUI quit, `brew uninstall
+--cask divoom-control` leaves no `divoom-menubar` process. **Size:** S.
+
 ### Phase 2 — daemon liveness and safety
 
 **Goal:** the daemon can say who holds it, never hangs on one peer, and
@@ -450,6 +463,12 @@ no agent has seen is the NSMenu itself staying open while a row renames. On
 2026-11-01 full-screen control was refused ("user interrupt") and `AXPress`
 on the status item opens no menu, so there is no route from a session that
 must leave the owner's screen alone.
+**2026-11-02 (D.MENULIVE):** QA found the open menu frozen (the active
+panel still the old one 2 s after a CLI select) and the cause was in code: the
+popup tracks in a nested run loop inside winit's handler, so nothing refreshed
+it; an open menu now refreshes itself on a tracking-mode run-loop timer
+(`divoom-menubar/src/menu_live.rs`, unit-tested). The capture below is still
+the on-screen proof.
 **Done when:** the menu is held open (a real click) while `select_device`
 moves the active panel and a row renames over the socket, and two captures
 show the check and the name change in the open menu with no close/reopen.
