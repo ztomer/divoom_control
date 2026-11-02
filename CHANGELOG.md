@@ -4,7 +4,9 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
-## Unreleased
+## v0.44.0 — the open menu follows the daemon; helpers are helper apps; uninstall stops the tray (2026-11-02)
+
+Minor: D.MENUEVENT, D.CFXSBX, D.REV1, D.BLEDBG and D.UNINSTDIR, with the menu-bar and helper-app work before them.
 
 - **Overlapping open-menu refreshers no longer unregister each other (D.REV1,
   2026-11-02).** `menu_live` kept ONE shared slot for the open menu's run-loop
