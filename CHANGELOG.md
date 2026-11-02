@@ -16,7 +16,7 @@ shipped milestone (per the project planning docs).
   did not answer a BLE connect this round. (2) `now_playing` said
   `playing: true` for a paused track; `playing` is now whether it plays, and
   `has_track` says whether there is one, which the music card reads
-  (`b5199b9`). (3) P1.14: the pre-push export no longer keeps
+  (`b5199b9`). (3) P1.17: the pre-push export no longer keeps
   `target/debug/divoomd`, which six gate steps rebuilt; `scripts/py_ci.sh`
   builds its own (`42e3dc4`). (4) P5.17: the bench's 16x16 nodes and the
   channel card draw one clock layout, `clock_digits.js`, whole at 16 columns
@@ -54,7 +54,7 @@ shipped milestone (per the project planning docs).
   arrangement: `tools/render_bench.py`, `docs/assets/bench-light.png`,
   `docs/assets/bench-dark.png` (found P5.17, the 16x16 previews cropping the
   clock to "12:0"). The pre-push "tree or gates moved" lines were the kept
-  `target/debug/divoomd` being rebuilt by the gate's own steps (P1.14; goh
+  `target/debug/divoomd` being rebuilt by the gate's own steps (P1.17; goh
   now names the cause, gates_of_heck `0dd4092`).
 - **A bench panel never hangs below the bench (2026-11-01).** Seen on the
   installed app: the Timoo, off and so drawn at the generic 120 mm size,

@@ -218,7 +218,7 @@ the socket listening, and the probe finds a listener that never answers). Its
 production exposure is bounded -- the daemon unlinks the socket path before it
 exits, so the path is gone -- and it is left as a named variant, not as a fix.
 
-Landed (2026-11-01): P1.14 (D.FX3), the pre-push export keeps no build
+Landed (2026-11-01): P1.17 (D.FX3; its commits, `42e3dc4` among them, cite it as P1.14, the JS-syntax gate's number), the pre-push export keeps no build
 output: `GOH_EXPORT_KEEP` no longer names `target/debug/divoomd` (a kept file's
 bytes key goh's proven cache, and six steps rebuilt it, so none was ever
 recorded as proven), and `scripts/py_ci.sh` builds the daemon its spawning

@@ -15,7 +15,7 @@ export GOH_EXCLUDE='docs/divoom_docs/'   # captured Divoom API responses + sampl
 # GOH_SWIFT_COV_MIN=95
 # GOH_MAX_SCRATCH_GB=25           # disk-hygiene ceiling (full runs only)
 
-# GOH_EXPORT_KEEP is deliberately UNSET (P1.14, 2026-11-01). It once named
+# GOH_EXPORT_KEEP is deliberately UNSET (P1.17, 2026-11-01). It once named
 # target/debug/divoomd, because 11 tests in scripts/py_ci.sh SPAWN the daemon
 # and the export worktree has no target/. But the proven cache keys every step
 # on a kept file's bytes, and six steps rebuild that binary, so each moved its

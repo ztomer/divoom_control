@@ -1,4 +1,4 @@
-"""P1.14: the pre-push export carries no file a gate step itself produces.
+"""P1.17: the pre-push export carries no file a gate step itself produces.
 
 `.gatesrc` named `target/debug/divoomd` in `GOH_EXPORT_KEEP` so the eleven
 tests that SPAWN the daemon could find one in the export. But goh's proven
@@ -36,7 +36,7 @@ def test_the_export_keeps_no_build_output():
     built = [k for k in _export_keep() if k == "target" or k.startswith("target/")]
     assert not built, (
         f"GOH_EXPORT_KEEP carries a build output into the export: {built} -- a "
-        "step that rebuilds it moves its own proven key (P1.14)")
+        "step that rebuilds it moves its own proven key (P1.17)")
 
 
 def test_the_python_step_builds_the_daemon_its_tests_spawn():
