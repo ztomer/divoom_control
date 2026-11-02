@@ -121,6 +121,10 @@ COV_PRECISION=2
 # borrowing a binary another step left behind is both a build output declared
 # as an input (it moved those steps' proven keys) and absent whenever that step
 # was proven and skipped.
+# That build is BLE-enabled (the default features, as CI builds it) and would
+# stay in target/debug/divoomd for every later local run (D.BLEDBG): restore the
+# BLE-free dev build however this script ends, before the build can happen.
+trap '"$ROOT/scripts/ble_free_after.sh" --restore || true' EXIT
 info "cargo build -p divoomd --locked (the daemon the spawning tests run)"
 cargo build -p divoomd --locked
 
