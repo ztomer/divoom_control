@@ -10,6 +10,9 @@ jobs:
     # permitted (the canonical checker in gates_of_heck: checks/check_no_emoji.py,
     # consumed via GOH_DIR). Fast, no build needed.
     runs-on: ubuntu-latest
+    # A dead runner hung the browser e2e step 70+ min; headroom over the no-emoji: 3.0 min max
+    # measured on runs 41467559335/41485639091/41520841922 (2026-11-02).
+    timeout-minutes: 10
     steps:
       # persist-credentials: false on EVERY checkout in this file: by default
       # checkout leaves the job token in git config (http.<host>.extraheader),
@@ -129,6 +132,9 @@ jobs:
   test:
     # macOS so clang builds the dylib and the native (C) encoder tests actually run.
     runs-on: macos-latest
+    # A dead runner hung the browser e2e step 70+ min; headroom over the test: 27.7 min max (browser e2e step 942 s on 41520841922)
+    # measured on runs 41467559335/41485639091/41520841922 (2026-11-02).
+    timeout-minutes: 60
     # The suite needs goh: test_linux_all_features_runtime.py sources its
     # lib/container_runtime.sh, and test_repo_gates.py skips without it. With
     # no checkout the script fell back to a developer's path
@@ -291,6 +297,9 @@ jobs:
     # cover every member; --no-default-features stays pinned to `-p divoomd`
     # because the no-BLE core gate is about that crate specifically.
     runs-on: ubuntu-latest
+    # A dead runner hung the browser e2e step 70+ min; headroom over the rust-core: 6.7 min max
+    # measured on runs 41467559335/41485639091/41520841922 (2026-11-02).
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
         with:
@@ -358,6 +367,9 @@ jobs:
     # workspace-wide lint runs: divoom-menubar (winit/ksni) is macOS-only
     # (Apple-target code, no Linux build).
     runs-on: macos-latest
+    # A dead runner hung the browser e2e step 70+ min; headroom over the rust-ble: 5.2 min max
+    # measured on runs 41467559335/41485639091/41520841922 (2026-11-02).
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
         with:
@@ -381,6 +393,9 @@ jobs:
     # Best-effort: prove the btleplug BlueZ backend COMPILES on Linux. No device,
     # no runtime claim (maintainer has no Linux hardware). Non-blocking.
     runs-on: ubuntu-latest
+    # A dead runner hung the browser e2e step 70+ min; headroom over the rust-ble-linux: 1.7 min max
+    # measured on runs 41467559335/41485639091/41520841922 (2026-11-02).
+    timeout-minutes: 10
     continue-on-error: true
     steps:
       - uses: actions/checkout@v7

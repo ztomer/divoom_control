@@ -8,7 +8,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
-# shellcheck source=/Users/ztomer/Projects/gates_of_heck/tui/lib.sh
+# shellcheck source=/dev/null  # goh lives outside this repo (GOH_DIR)
 source "${GOH_DIR:-$HOME/Projects/gates_of_heck}/tui/lib.sh"
 
 # Python version must match the committed source (.python-version), the same
