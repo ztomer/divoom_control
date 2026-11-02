@@ -242,8 +242,8 @@ before; 5 min 15 s, 313 passed after (the six new tests included); an earlier
 quiet-machine "before" was 6 min 50 s. Not shared, by design: the sync API
 (`launch_sync`; `sync_playwright()` keeps its loop registered while a test's own
 `with` block is open, so a second instance fails), whose suites already hold one
-browser per module or one test. CI browser step: see the commit's CI run (was
-942 s on run 41520841922). Also fixed: `test_recycled_pid_probe.py`'s
+browser per module or one test. CI browser step on `24ab74e` (run 41544702215, success): 331 s, was
+942 s on run 41520841922. Also fixed: `test_recycled_pid_probe.py`'s
 `994 not in kernel.spawned` could never fail (the fake kernel skips taken pids);
 it now asserts the exact pids spent, red when the stop condition is broken.
 
