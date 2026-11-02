@@ -173,3 +173,16 @@ def test_the_script_leaves_a_socket_with_no_holder_alone(tmp_path):
         bystander.kill()
         bystander.wait(timeout=5)
         shutil.rmtree(work, ignore_errors=True)
+
+
+def test_the_script_stops_the_holder_of_the_menubar_lock(tmp_path):
+    """The menu-bar agent holds `<run dir>/divoom-menubar.lock` for its whole
+    life (divoom-menubar/src/single_instance.rs), so its holder IS the
+    running agent -- whoever started it, with or without an identity file
+    (D.HELPER: two agents ran, and the second had overwritten the first's
+    identity)."""
+    lock = tmp_path / "divoom-menubar.lock"
+    with _holder("lock", lock) as agent:
+        done = _run_script(tmp_path)
+        assert done.returncode == 0, done.stderr
+        assert _wait_gone(agent), "the process holding the menubar lock was not stopped"

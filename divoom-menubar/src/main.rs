@@ -13,6 +13,7 @@ mod glyph;
 mod launch;
 mod menu_model;
 mod resubscribe;
+mod single_instance;
 mod state;
 mod tiles;
 mod tray;
@@ -42,6 +43,8 @@ enum UserEvent {
     Menu(MenuEvent),
     Tray(TrayIconEvent),
     DaemonEvent,
+    /// A newer agent asked this one to step down (`single_instance`).
+    Replaced,
 }
 
 const POLL: Duration = Duration::from_secs(2);
@@ -49,6 +52,20 @@ const POLL: Duration = Duration::from_secs(2);
 // loop; back off between attempts. Matches POLL's cadence roughly, so a
 // daemon coming back up is noticed about as fast either way.
 const SUBSCRIBE_RETRY_DELAY: Duration = Duration::from_secs(2);
+
+/// How long a new agent waits for the running one to step down.
+const STEP_DOWN_WITHIN: Duration = Duration::from_secs(5);
+
+/// Where the single-instance lock and socket live: the helpers' run
+/// directory, shared with the identity files (`divoom_client/helper_identity.py`
+/// honours the same `DIVOOM_IDENTITY_DIR` override).
+fn run_dir() -> std::path::PathBuf {
+    if let Some(d) = std::env::var_os("DIVOOM_IDENTITY_DIR").filter(|d| !d.is_empty()) {
+        return d.into();
+    }
+    let home = std::env::var_os("HOME").unwrap_or_else(|| "/tmp".into());
+    std::path::PathBuf::from(home).join(".config/divoom-control/run")
+}
 
 const USAGE: &str = "\
 divoom-menubar — the native Divoom tray agent.
@@ -114,6 +131,15 @@ fn main() {
         }
         CliOutcome::Run => {}
     }
+    // One agent per user, the newest wins: take the instance BEFORE claiming
+    // a tray slot, asking any running agent to step down (D.HELPER).
+    let instance = match single_instance::acquire(&run_dir(), STEP_DOWN_WITHIN) {
+        Ok(i) => i,
+        Err(e) => {
+            eprintln!("divoom-menubar: not starting: {e}");
+            std::process::exit(1);
+        }
+    };
     let mut builder = EventLoop::<UserEvent>::with_user_event();
     // macOS: run as a menubar agent (no Dock icon).
     #[cfg(target_os = "macos")]
@@ -130,6 +156,10 @@ fn main() {
     MenuEvent::set_event_handler(Some(move |e| {
         let _ = proxy.send_event(UserEvent::Menu(e));
     }));
+    let replace_proxy = event_loop.create_proxy();
+    instance.serve(move || {
+        let _ = replace_proxy.send_event(UserEvent::Replaced);
+    });
     let tray_proxy = event_loop.create_proxy();
     TrayIconEvent::set_event_handler(Some(move |e| {
         let _ = tray_proxy.send_event(UserEvent::Tray(e));
@@ -238,6 +268,13 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::DaemonEvent => {
                 self.poll_daemon();
                 Self::arm_poll_timer(event_loop);
+            }
+            UserEvent::Replaced => {
+                // Step down for the successor: drop the status item and exit,
+                // leaving the daemon alone (this is not the user's Quit).
+                self.tray.take();
+                self.quitting.store(true, Ordering::Relaxed);
+                event_loop.exit();
             }
             UserEvent::Tray(ev) => {
                 if tray::should_pop_up_menu(&ev) {

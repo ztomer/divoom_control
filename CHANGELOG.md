@@ -6,6 +6,33 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **The app's helpers leave its coalition, and there is one tray (D.HELPER,
+  P1.18, 2026-11-02).** Two `divoom-menubar` agents were running (pids 42068
+  and 30142), and the quit app's LaunchServices record was still alive
+  (`lsappinfo list`: `(exited-with-subordinates)`, `coalition: 24677 {30138
+  30142 42068}`). Three causes, each closed for the class: (1) the GUI's only
+  guard was `pgrep -x divoom-menubar`, and pgrep excludes its own ANCESTORS,
+  so the GUI that the tray's "Launch Dashboard" opened could not see that
+  tray and started a second -- the agent now holds a single-instance flock
+  for its life and a new one asks the holder to step down over a socket
+  beside it, so the newest wins and two can never run
+  (`divoom-menubar/src/single_instance.rs`); (2) every helper was a forked
+  child, and a child stays in its parent's coalition however detached -- the
+  menubar and a detached daemon are now launchd jobs of their own
+  (`divoom_client/launchd_job.py`; measured: a bootstrapped job leaves the
+  launcher's coalition, a fork does not), and starting a label boots its old
+  process out first; (3) the tray exec'd the frozen GUI as its own child and
+  never waited for it (pid 30134 sat defunct under 42068) -- it now opens the
+  bundle through LaunchServices (`open -a`) and waits for every child it
+  starts. `scripts/stop_helpers.sh` also stops whatever holds the agent's
+  lock. Red before green: the single-instance tests with the lock skipped (2
+  of 3 failed; the stale-socket one failed with the socket left in place),
+  the bundle-launch test with the bundle branch off, the launchd-job caller
+  tests against the old spawns (4 failed), the stop-helpers lock test
+  against the old script. The D.CFXSBX repro against the old install: camoufox
+  started at the dead app's recycled pid 30134 exited 1 after 0.22 s, bound
+  to the dead app's ASN 0x0-0x11791780.
+
 - **A browser that does not start is a named outcome (D.CFXSBX,
   2026-11-02).** One pre-push run failed a wall e2e test on
   `BrowserType.launch: Failed to launch the browser process`: camoufox

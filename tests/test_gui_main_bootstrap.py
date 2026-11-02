@@ -318,61 +318,55 @@ def test_spawn_menubar_agent_noop_on_non_darwin(monkeypatch):
 
 
 def test_spawn_menubar_agent_already_running_skips_spawn(monkeypatch):
+    """A running `com.divoom.menubar` job is left alone (the tray that may
+    have opened this GUI); the launchd-job rules are in
+    tests/test_helper_launchd_jobs.py."""
     monkeypatch.setattr(menubar_agent.sys, "platform", "darwin")
-
-    class _Match:
-        returncode = 0
-        stdout = "1234\n"
-
-    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _Match())
-    monkeypatch.setattr(subprocess, "Popen", lambda *a, **kw: (_ for _ in ()).throw(AssertionError("must not spawn")))
+    from divoom_client import launchd_job
+    monkeypatch.setattr(launchd_job, "running_pid", lambda label: 1234)
+    monkeypatch.setattr(launchd_job, "start", lambda *a, **kw: (_ for _ in ()).throw(AssertionError("must not start")))
     menubar_agent._spawn_menubar_agent(gui_main._resolve_bundled_binary)
 
 
 def test_spawn_menubar_agent_binary_not_found_warns(monkeypatch):
     monkeypatch.setattr(menubar_agent.sys, "platform", "darwin")
-
-    class _NoMatch:
-        returncode = 1
-        stdout = ""
-
-    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _NoMatch())
+    from divoom_client import launchd_job
+    monkeypatch.setattr(launchd_job, "running_pid", lambda label: None)
     monkeypatch.setattr(menubar_agent, "_resolve_menubar_binary", lambda resolve: None)
-    monkeypatch.setattr(subprocess, "Popen", lambda *a, **kw: (_ for _ in ()).throw(AssertionError("must not spawn")))
+    monkeypatch.setattr(launchd_job, "start", lambda *a, **kw: (_ for _ in ()).throw(AssertionError("must not start")))
     menubar_agent._spawn_menubar_agent(gui_main._resolve_bundled_binary)
 
 
 def test_spawn_menubar_agent_frozen_uses_executable(monkeypatch):
     monkeypatch.setattr(menubar_agent.sys, "platform", "darwin")
     monkeypatch.setattr(menubar_agent.sys, "frozen", True, raising=False)
-
-    class _NoMatch:
-        returncode = 1
-        stdout = ""
-
-    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _NoMatch())
+    from divoom_client import launchd_job
+    monkeypatch.setattr(launchd_job, "running_pid", lambda label: None)
     monkeypatch.setattr(menubar_agent, "_resolve_menubar_binary", lambda resolve: "/bin/divoom-menubar")
+    monkeypatch.setattr(menubar_agent, "_record_menubar_identity", lambda pid, cmd: None)
     seen = {}
 
-    def fake_popen(args, env=None, **kw):
-        seen["args"] = args
+    def fake_start(label, argv, env, log_path, **kw):
+        seen["argv"] = argv
         seen["env"] = env
-        return types.SimpleNamespace(pid=4321)
+        return 4321
 
-    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(launchd_job, "start", fake_start)
     menubar_agent._spawn_menubar_agent(gui_main._resolve_bundled_binary)
 
+    assert seen["argv"] == ["/bin/divoom-menubar"]
     assert seen["env"]["DIVOOM_GUI_PYTHON"] == sys.executable
     assert seen["env"]["DIVOOM_GUI_SCRIPT"] == ""
 
 
 def test_spawn_menubar_agent_swallows_exceptions(monkeypatch):
     monkeypatch.setattr(menubar_agent.sys, "platform", "darwin")
+    from divoom_client import launchd_job
 
     def raiser(*a, **kw):
-        raise OSError("pgrep missing")
+        raise OSError("launchctl missing")
 
-    monkeypatch.setattr(subprocess, "run", raiser)
+    monkeypatch.setattr(launchd_job, "running_pid", raiser)
     menubar_agent._spawn_menubar_agent(gui_main._resolve_bundled_binary)
 
 

@@ -43,6 +43,10 @@ RUN_DIR="${DIVOOM_IDENTITY_DIR:-$HOME/.config/divoom-control/run}"
 # lock lives in the temp dir (`tempfile.gettempdir()` in single_instance.py).
 GUI_LOCK="${DIVOOM_GUI_LOCK:-${TMPDIR:-/tmp}/divoom_gui.lock}"
 DAEMON_SOCKETS="${DIVOOM_DAEMON_SOCKETS:-/tmp/divoom.sock:/tmp/divoomd.sock}"
+# The menu-bar agent's single-instance lock, held for its whole life
+# (divoom-menubar/src/single_instance.rs): its holder IS the running agent,
+# whoever started it.
+MENUBAR_LOCK="$RUN_DIR/divoom-menubar.lock"
 
 stopped=0
 
@@ -115,6 +119,7 @@ for identity in "$RUN_DIR"/*.pid; do
     rm -f "$identity"
 done
 
+stop_holders "menubar" "$MENUBAR_LOCK"
 stop_holders "daemon" "$DAEMON_SOCKETS"
 
 if [ "$stopped" -eq 0 ]; then

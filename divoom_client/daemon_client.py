@@ -230,6 +230,24 @@ def spawn_daemon(
     # daemon the instant it scans. Disclaim so divoomd is its OWN responsible
     # process, via its embedded com.divoom.divoomd Info.plist (build.rs
     # __TEXT,__info_plist).
+    if sys.platform == "darwin" and detach:
+        # A DETACHED daemon outlives its launcher, so it is a launchd job of
+        # its own, never a child: a child stays in the launcher's coalition
+        # however detached, and alive there it keeps a quit app's
+        # LaunchServices record alive by pid (P1.18, D.CFXSBX). A job is its
+        # own responsible process, which is what the disclaim below buys for
+        # TCC, so the Bluetooth grant is the same divoomd's either way.
+        from divoom_client import launchd_job
+        try:
+            pid = launchd_job.start(
+                launchd_job.daemon_label(socket_path, DEFAULT_SOCKET_PATH),
+                cmd, dict(spawn_env), log_path)
+            logger.info("Spawned daemon (launchd job) pid=%s", pid)
+        except Exception as e:
+            logger.warning("launchd job spawn failed (%s); forking it instead.", e)
+        else:
+            _record_identity(pid, rust_bin)
+            return pid
     if sys.platform == "darwin":
         try:
             pid = _spawn_disclaimed_macos(cmd, log_path, env=dict(spawn_env))

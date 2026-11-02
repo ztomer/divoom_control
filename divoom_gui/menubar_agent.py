@@ -4,8 +4,9 @@ Split out of `divoom_gui/gui_main.py` at the house 500-line cap, at the seam
 that names itself: everything here is about the native Rust status item
 (`divoom-menubar`) and nothing else in the app is.
 
-The agent is a bare binary in its OWN session: it does not die with the app,
-and it is reparented to launchd when the app exits. It is also not an
+The agent is a bare binary run as its OWN launchd job (`com.divoom.menubar`,
+`divoom_client/launchd_job.py`): it does not die with the app, and it is not
+in the app's coalition, so the app's LaunchServices record dies with the app. It is also not an
 NSApplication, so `quit:` cannot reach it. The only way to stop it used to be
 a NAME PATTERN (`pkill -f divoom-menubar`), which reaches every process whose
 command line looks like the agent's — including ones this app does not own.
@@ -19,7 +20,6 @@ from __future__ import annotations
 
 import logging
 import os
-import subprocess
 import sys
 from pathlib import Path
 
@@ -53,8 +53,9 @@ def _spawn_menubar_agent(resolve_bundled) -> None:
     """Best-effort: launch the native Rust menu-bar agent (divoom-menubar)
     alongside the GUI so its status item appears on launch. The agent talks to the
     daemon over the socket and relaunches THIS GUI on demand, so we hand it our
-    launch command via env (DIVOOM_GUI_PYTHON/SCRIPT). Detached + dupe-guarded;
-    never blocks or fails the GUI if it can't start. macOS only.
+    launch command via env (DIVOOM_GUI_PYTHON/SCRIPT). Started as its own
+    launchd job (outside the app's coalition) unless that job is already
+    running; never blocks or fails the GUI if it can't start. macOS only.
 
     `resolve_bundled` is this app's binary resolver (it knows the packaging
     layouts); it is passed in so this module does not have to know how the app
@@ -64,24 +65,20 @@ def _spawn_menubar_agent(resolve_bundled) -> None:
     if sys.platform != "darwin":
         return
     try:
-        # Don't spawn a second status item if one is already running. Match the
-        # EXACT process name (-x), not a loose command-line substring (-f): under
-        # LaunchServices (`open` / Finder / Dock) some coalition process
-        # transiently carries "divoom-menubar" in its args, so `-f` false-matched
-        # and the agent never launched (no tray icon on a normal launch). `-x`
-        # matches only a real `divoom-menubar` process, path-independent.
-        #
-        # This is a "is one already running" check, NOT a way to find the agent
-        # to stop it: stopping it goes through its identity (below). The check
-        # stays a name match because it also catches an agent left behind by an
-        # OLDER version of the app, which wrote no identity.
-        existing = subprocess.run(
-            ["pgrep", "-x", "divoom-menubar"],
-            capture_output=True, text=True, stdin=subprocess.DEVNULL,
-            check=False,
-        )
-        if existing.returncode == 0 and existing.stdout.strip():
-            logger.info("Menu-bar agent already running; not spawning another.")
+        from divoom_client import launchd_job
+        # One agent per user. The agent's JOB is asked, never a process name:
+        # `pgrep -x divoom-menubar` was the old check, and pgrep EXCLUDES ITS
+        # OWN ANCESTORS -- from the GUI that the tray's "Launch Dashboard"
+        # opened, it could not see that very tray, so a second was spawned
+        # (two status items, pids 42068 and 30142, 2026-11-02). A running job
+        # is the tray that may have opened us: leave it alone. Anything else
+        # running the agent (a hand start, an older app) is replaced by the
+        # agent itself: it holds a single-instance lock and the newest one
+        # wins (`divoom-menubar/src/single_instance.rs`).
+        running = launchd_job.running_pid(launchd_job.MENUBAR_LABEL)
+        if running:
+            logger.info("Menu-bar agent already running (pid %s); not starting another.",
+                        running)
             return
         binary = _resolve_menubar_binary(resolve_bundled)
         if not binary:
@@ -91,26 +88,23 @@ def _spawn_menubar_agent(resolve_bundled) -> None:
         # Tell the agent how to relaunch this GUI from "Launch Dashboard".
         env = dict(os.environ)
         if getattr(sys, "frozen", False):
-            # PyInstaller .app: sys.executable IS the GUI launcher — run it alone
-            # (no script; the agent runs DIVOOM_GUI_PYTHON with no args).
+            # PyInstaller .app: sys.executable IS the GUI launcher -- the agent
+            # opens its bundle through LaunchServices (launch.rs).
             env["DIVOOM_GUI_PYTHON"] = sys.executable
             env["DIVOOM_GUI_SCRIPT"] = ""
         else:
             from divoom_client.daemon_client import bundle_python
             env["DIVOOM_GUI_PYTHON"] = bundle_python() or sys.executable
             env["DIVOOM_GUI_SCRIPT"] = str(Path(__file__).resolve().parent / "gui_main.py")
-        agent = subprocess.Popen(
-            [binary],
-            env=env,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
-            start_new_session=True,
-        )
+        # Its OWN launchd job, not a child: a child stays in the app's
+        # coalition however detached, and an agent alive there keeps the quit
+        # app's LaunchServices record alive by pid (P1.18, D.CFXSBX).
+        pid = launchd_job.start(launchd_job.MENUBAR_LABEL, [binary], env,
+                                "/dev/null", interactive=True)
         # The agent's identity, so it can be addressed by it and not by a name
-        # pattern: it is a bare binary in its own session, and a `pkill -f
-        # divoom-menubar` reaches every process whose COMMAND LINE looks like
-        # it -- including ones this app does not own.
-        _record_menubar_identity(agent.pid, binary)
-        logger.info("Launched native Rust menu-bar agent (divoom-menubar).")
+        # pattern.
+        _record_menubar_identity(pid, binary)
+        logger.info("Launched native Rust menu-bar agent (launchd job, pid %s).", pid)
     except Exception as e:
         logger.warning(f"Could not launch menu-bar agent: {e}")
 
