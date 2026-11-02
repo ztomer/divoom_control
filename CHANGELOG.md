@@ -6,6 +6,15 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **A channel select keeps the brightness (D.FX5, 2026-11-01).** Live:
+  brightness 50, `set_channel 1`, and `get_brightness` read 100 -- the light
+  select carried a fixed white at 100. The light is now read back (0x46) and
+  re-sent as it was (`7bec265`); a lease restores channels 0/2 with the whole
+  select packet, not `0x45 [ch]` (`a6b3d72`); the D.FX3 export item is
+  renumbered P1.17, P1.14 stays the JS-syntax gate (`0f1d472`); the bench
+  images are re-rendered after P5.17's crop fix. Open: the wall's
+  `switch_channel` still sends the default light to every panel.
+
 - **Four defects from the 2026-11-01 pass (D.FX1-D.FX4).** (1) A one-byte
   `set_channel 1` turned a Ditoo dark at brightness 0: the light channel's
   nine trailing bytes are its colour, brightness and power, and
