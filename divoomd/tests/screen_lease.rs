@@ -388,7 +388,13 @@ async fn a_widgetless_lease_gives_back_only_a_channel_that_comes_back() {
             .cloned()
             .collect();
         if restored == "channel" {
-            assert_eq!(selects, vec![(0x45, vec![channel])], "channel {channel}");
+            // D.FX5: the restore is the whole select packet set_channel sends,
+            // never the one-byte `0x45 [ch]` that leaves configuration bytes out.
+            let whole = divoomd::packets::Channel::from_id(channel)
+                .expect("a restorable channel exists")
+                .select_packet()
+                .to_vec();
+            assert_eq!(selects, vec![(0x45, whole)], "channel {channel}");
         } else {
             assert!(selects.is_empty(), "channel {channel}: {selects:?}");
         }

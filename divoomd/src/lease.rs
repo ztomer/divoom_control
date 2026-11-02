@@ -280,13 +280,20 @@ async fn end(device: &Device, events: &Events, generation: u64, why: &str) -> &'
         device.link().await,
         lease.channel.filter(|c| RESTORABLE_CHANNELS.contains(c)),
     ) {
+        // D.FX5: the whole select packet set_channel sends, never a bare
+        // `0x45 [ch]` that leaves the channel's configuration bytes out.
+        let Some(packet) =
+            crate::packets::Channel::from_id(channel).map(crate::packets::Channel::select_packet)
+        else {
+            return restored;
+        };
         let link_in = link.clone();
         let selected = link
             .run(None, async move {
                 !link_in.is_retired()
                     && link_in
                         .transport
-                        .send_command(0x45, &[channel], true)
+                        .send_command(crate::packets::CMD_SET_LIGHT_MODE, &packet, true)
                         .await
                         .is_ok()
             })
