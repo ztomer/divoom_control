@@ -38,31 +38,46 @@ from typing import Any, Awaitable, Callable
 # ── Argument parsing ───────────────────────────────────────────────────
 
 
-def build_parser() -> argparse.ArgumentParser:
-    # Shared options that should also be accepted AFTER the subcommand.
-    # `parents=` makes argparse attach the same args to the top-level
-    # parser (where they're available as `args.mac` etc.) — argparse
-    # allows parent-parser flags to appear before or after the
-    # subcommand position, so users can write either order.
+def _shared_flags(*, defaults: bool) -> argparse.ArgumentParser:
+    """The flags every verb accepts, before or after the subcommand.
+
+    Built twice. The top-level copy carries the defaults; the copy attached to
+    each subparser carries NONE (`argparse.SUPPRESS`): a subparser writes its
+    defaults over the namespace, so with defaults of its own it reset a flag
+    given BEFORE the subcommand -- `divoom-control --mac X select` failed with
+    "--mac is required" (D.CLIMAC). Suppressed, the subcommand writes only
+    what it was actually given, in either position.
+    """
+    def d(value):
+        return value if defaults else argparse.SUPPRESS
+
     shared = argparse.ArgumentParser(add_help=False)
-    shared.add_argument("--mac", help="Target device MAC (default: first discovered).")
-    shared.add_argument("--socket", default=None,
+    shared.add_argument("--mac", default=d(None),
+                        help="Target device MAC (default: first discovered).")
+    shared.add_argument("--socket", default=d(None),
                         help="Daemon Unix socket to talk to (default: /tmp/divoom.sock). "
                              "Needed to reach a dev daemon on its own path; the "
                              "device verbs had no way to say this before.")
-    shared.add_argument("--timeout", type=float, default=10.0,
+    shared.add_argument("--timeout", type=float, default=d(10.0),
                         help="BLE scan timeout in seconds (default: 10).")
-    shared.add_argument("--type", dest="device_type",
+    shared.add_argument("--type", dest="device_type", default=d(None),
                         help="Explicit device_type (overrides registry).")
-    shared.add_argument("--json", action="store_true",
+    shared.add_argument("--json", action="store_true", default=d(False),
                         help="Output JSON instead of human-readable text.")
-    shared.add_argument("--verbose", "-v", action="store_true",
+    shared.add_argument("--verbose", "-v", action="store_true", default=d(False),
                         help="Verbose logging.")
+    return shared
+
+
+def build_parser() -> argparse.ArgumentParser:
+    # The shared flags are accepted before or after the subcommand; see
+    # `_shared_flags` for why the subcommands get a copy without defaults.
+    shared = _shared_flags(defaults=False)
 
     p = argparse.ArgumentParser(
         prog="divoom-control",
         description="Command-line interface for the divoom_lib.",
-        parents=[shared],
+        parents=[_shared_flags(defaults=True)],
     )
     sub = p.add_subparsers(dest="command", required=True)
 

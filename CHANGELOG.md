@@ -6,6 +6,19 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **A global flag reaches every subcommand, in either position (D.CLIMAC,
+  2026-11-02).** `divoom-control --mac X select` failed with "--mac is
+  required": the shared flags were on the top-level parser AND each
+  subparser, and a subparser writes its own defaults over the namespace, so
+  a flag given before the subcommand was reset to None. The subparsers now
+  get a copy of the shared flags with `argparse.SUPPRESS` defaults
+  (`divoom_lib/cli.py`, `_shared_flags`). `tests/test_cli_global_flags.py`
+  walks the parser itself: every shared flag on every subcommand, before and
+  after, plus the defaults when absent (113 cases). Red before green: 96
+  before-the-subcommand cases failed. Live: `--mac <Pixoo-1> select` then
+  `--mac <Tivoo-Max-light-3> select` against the installed daemon, both rc 0,
+  Tivoo-Max-light-3 active again.
+
 - **An open menu follows the daemon (D.MENULIVE, 2026-11-02).** QA held the
   menu open, made Pixoo-1 active from the CLI, and the menu still read
   "Tivoo-Max-light-3 (active)" two seconds later. The in-place update (P5.3)
