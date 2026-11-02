@@ -20,11 +20,28 @@ mod tests {
     use serde_json::{json, Value};
 
     async fn sent(method: &str, args: Value) -> Result<(u8, Vec<u8>), Value> {
+        sent_over(method, args, None).await
+    }
+
+    /// The 0x45 the call sent, with the panel's 0x46 answer staged as `light`.
+    async fn sent_over(
+        method: &str,
+        args: Value,
+        light: Option<Vec<u8>>,
+    ) -> Result<(u8, Vec<u8>), Value> {
         let d = Daemon::new();
         let conn = d
             .handle(make_request("connect", Some(json!({"mock": true})), None))
             .await;
         assert!(conn["success"].as_bool().unwrap_or(false));
+        if let Some(light) = light {
+            let guard = d.current_transport().await;
+            let transport = guard.as_ref().expect("connected device");
+            let DeviceTransport::Mock(ref mock) = **transport else {
+                panic!("expected mock transport")
+            };
+            mock.simulated_responses.lock().unwrap().insert(0x46, light);
+        }
         let res = d
             .handle(make_request(
                 "device_call",
@@ -40,8 +57,15 @@ mod tests {
         let DeviceTransport::Mock(ref mock) = **transport else {
             panic!("expected mock transport")
         };
-        let first = mock.sent_commands.lock().unwrap()[0].clone();
-        Ok(first)
+        let select = mock
+            .sent_commands
+            .lock()
+            .unwrap()
+            .iter()
+            .rfind(|(id, _)| *id == 0x45)
+            .cloned()
+            .expect("a 0x45 channel select");
+        Ok(select)
     }
 
     /// The rule every channel packet must satisfy, whatever route built it.
@@ -118,5 +142,27 @@ mod tests {
             .await
             .expect_err("channel 7 does not exist");
         assert_eq!(err["code"], "bad_request", "{err}");
+    }
+
+    /// D.FX5: selecting the light channel never changes a brightness the
+    /// caller did not ask to change. Live: brightness 50, `set_channel 1`,
+    /// and `get_brightness` read 100 -- the select carried a fixed 100.
+    #[tokio::test]
+    async fn the_light_select_keeps_the_panels_brightness_and_colour() {
+        // 0x46 answer: [mode, temp, vj, R, G, B, brightness, type, power, ...]
+        let light = vec![0, 0, 0, 0x10, 0x20, 0x30, 50, 0, 1, 0, 80, 0];
+        for (method, args) in [
+            ("set_channel", json!([1])),
+            ("control.set_light_mode", json!([1])),
+            ("display.switch_channel", json!(["light"])),
+        ] {
+            let (cmd, payload) = sent_over(method, args.clone(), Some(light.clone()))
+                .await
+                .unwrap_or_else(|e| panic!("{method}({args}) failed: {e}"));
+            assert_eq!(cmd, 0x45, "{method}");
+            assert_eq!(payload[4], 50, "{method}: brightness changed: {payload:?}");
+            assert_eq!(&payload[1..4], &[0x10, 0x20, 0x30], "{method}: colour");
+            assert_eq!(payload[6], 1, "{method}: the light was sent OFF");
+        }
     }
 }

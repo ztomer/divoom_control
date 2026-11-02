@@ -269,17 +269,7 @@ async fn set_channel(ctx: CallCtx<'_>) -> Value {
             &format!("set_channel: no channel {channel_id} (0-6)"),
         );
     };
-    match dev
-        .send_command(
-            crate::packets::CMD_SET_LIGHT_MODE,
-            &channel.select_packet(),
-            true,
-        )
-        .await
-    {
-        Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => link_gone("set_channel", &e),
-    }
+    select_channel(dev, channel, ctx.timeout, "set_channel").await
 }
 
 async fn set_hot(ctx: CallCtx<'_>) -> Value {
@@ -334,5 +324,59 @@ async fn send_sd_status(ctx: CallCtx<'_>) -> Value {
     match dev.send_command(0x15, &[status], true).await {
         Ok(()) => json!({"success": true, "result": true}),
         Err(e) => link_gone("send_sd_status", &e),
+    }
+}
+
+/// The whole 0x45 that selects `channel` WITHOUT changing what the caller did
+/// not ask to change (D.FX5).
+///
+/// Every channel but the light comes from the shared table. The light's
+/// packet carries its colour and brightness, so it is built from the light
+/// the panel reports (0x46): a select at brightness 50 stays at 50. A panel
+/// that does not answer gets the table's default -- the only light we can
+/// name -- and a failed link is the error the caller returns.
+///
+/// # Errors
+///
+/// The `device_disconnected` reply when the link failed during the read.
+pub async fn channel_select(
+    dev: &crate::transport::DeviceTransport,
+    channel: crate::packets::Channel,
+    timeout: std::time::Duration,
+) -> Result<[u8; 10], Value> {
+    use crate::packets::{Channel, LightPacket};
+    use crate::transport::Read;
+    if channel != Channel::Lighting {
+        return Ok(channel.select_packet());
+    }
+    match dev.send_command_and_wait(0x46, &[], timeout).await {
+        Read::Answered(p) => Ok(LightPacket::from_light_mode(&p)
+            .map_or_else(|| channel.select_packet(), LightPacket::to_bytes)),
+        Read::Silent => Ok(channel.select_packet()),
+        Read::LinkFailed(why) => Err(err_code(
+            crate::protocol::ErrorCode::DeviceDisconnected,
+            &format!("set_channel: the panel's link failed: {why}"),
+        )),
+    }
+}
+
+/// Select `channel` with [`channel_select`]'s packet and answer the call
+/// `what` names.
+pub async fn select_channel(
+    dev: &crate::transport::DeviceTransport,
+    channel: crate::packets::Channel,
+    timeout: std::time::Duration,
+    what: &str,
+) -> Value {
+    let packet = match channel_select(dev, channel, timeout).await {
+        Ok(p) => p,
+        Err(e) => return e,
+    };
+    match dev
+        .send_command(crate::packets::CMD_SET_LIGHT_MODE, &packet, true)
+        .await
+    {
+        Ok(()) => json!({"success": true, "result": true}),
+        Err(e) => link_gone(what, &e),
     }
 }

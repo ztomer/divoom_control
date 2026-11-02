@@ -391,16 +391,14 @@ async fn switch_channel(ctx: CallCtx<'_>) -> Value {
     // R67/C1 sibling: these were five hand-written byte arrays, and the
     // "clock" one was a full ClockPacket spelled out by hand. They come from
     // the one channel table, which the wall uses too (P6.3).
-    let Some(payload) = crate::packets::channel_payload(&channel) else {
+    let Some(selected) = crate::packets::Channel::from_name(&channel) else {
         return err_code(
             BadRequest,
             &format!("switch_channel: unknown channel '{channel}'"),
         );
     };
-    match dev.send_command(CMD_SET_LIGHT_MODE, &payload, true).await {
-        Ok(()) => json!({"success": true, "result": true}),
-        Err(e) => link_gone("display.switch_channel", &e),
-    }
+    crate::device_call::system::select_channel(dev, selected, ctx.timeout, "display.switch_channel")
+        .await
 }
 
 /// Build a `ClockPacket` from a `device_call`'s positional + keyword arguments.

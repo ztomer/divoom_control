@@ -181,6 +181,24 @@ impl Default for LightPacket {
 }
 
 impl LightPacket {
+    /// The light the panel already shows, from its 0x46 answer
+    /// (`[mode, temp, vj, R, G, B, brightness, type, power, ...]`), switched
+    /// on -- selecting the light channel asks for the light, and nothing else.
+    ///
+    /// D.FX5: the select used to carry [`Self::default`]'s fixed 100, so
+    /// `set_channel 1` at brightness 50 left the panel at 100. `None` for an
+    /// answer too short to hold the light's fields.
+    #[must_use]
+    pub fn from_light_mode(answer: &[u8]) -> Option<Self> {
+        let f = answer.get(3..8)?;
+        Some(Self {
+            rgb: [f[0], f[1], f[2]],
+            brightness: f[3],
+            kind: LightingType::from_i64(i64::from(f[4])),
+            power: true,
+        })
+    }
+
     /// The ONLY place a lighting packet becomes bytes.
     #[must_use]
     pub fn to_bytes(self) -> [u8; 10] {
@@ -352,22 +370,25 @@ pub const fn visualization(number: u8) -> [u8; 10] {
 /// packets -- the blank clock face [`BareChannel`] exists to prevent.
 #[must_use]
 pub fn channel_payload(name: &str) -> Option<[u8; 10]> {
-    Some(
-        match name.to_ascii_lowercase().as_str() {
-            "clock" => Channel::Clock,
-            "visualizer" | "eq" => Channel::Visualization,
-            "vj" => Channel::Vj,
-            "design" | "custom" | "image" => Channel::Design,
-            "scoreboard" => Channel::Scoreboard,
-            "cloud" | "hot" => Channel::Cloud,
-            "ambient" | "lighting" | "light" => Channel::Lighting,
-            _ => return None,
-        }
-        .select_packet(),
-    )
+    Channel::from_name(name).map(Channel::select_packet)
 }
 
 impl Channel {
+    /// The channel `name` calls, or `None` for a name no channel has.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        Some(match name.to_ascii_lowercase().as_str() {
+            "clock" => Self::Clock,
+            "visualizer" | "eq" => Self::Visualization,
+            "vj" => Self::Vj,
+            "design" | "custom" | "image" => Self::Design,
+            "scoreboard" => Self::Scoreboard,
+            "cloud" | "hot" => Self::Cloud,
+            "ambient" | "lighting" | "light" => Self::Lighting,
+            _ => return None,
+        })
+    }
+
     /// The channel the panel numbers `id`, or `None` for a number no channel has.
     #[must_use]
     pub const fn from_id(id: u8) -> Option<Self> {
