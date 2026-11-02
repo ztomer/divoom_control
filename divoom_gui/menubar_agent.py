@@ -4,9 +4,10 @@ Split out of `divoom_gui/gui_main.py` at the house 500-line cap, at the seam
 that names itself: everything here is about the native Rust status item
 (`divoom-menubar`) and nothing else in the app is.
 
-The agent is a bare binary run as its OWN launchd job (`com.divoom.menubar`,
-`divoom_client/launchd_job.py`): it does not die with the app, and it is not
-in the app's coalition, so the app's LaunchServices record dies with the app. It is also not an
+In a built app the agent is a helper APP (`Contents/Helpers/Divoom
+Menubar.app`, `divoom_client/helper_app.py`) opened through LaunchServices: it
+does not die with the app, and it does not keep the app's LaunchServices
+record alive either (P1.18). It is also not an
 NSApplication, so `quit:` cannot reach it. The only way to stop it used to be
 a NAME PATTERN (`pkill -f divoom-menubar`), which reaches every process whose
 command line looks like the agent's — including ones this app does not own.
@@ -20,6 +21,7 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -53,9 +55,8 @@ def _spawn_menubar_agent(resolve_bundled) -> None:
     """Best-effort: launch the native Rust menu-bar agent (divoom-menubar)
     alongside the GUI so its status item appears on launch. The agent talks to the
     daemon over the socket and relaunches THIS GUI on demand, so we hand it our
-    launch command via env (DIVOOM_GUI_PYTHON/SCRIPT). Started as its own
-    launchd job (outside the app's coalition) unless that job is already
-    running; never blocks or fails the GUI if it can't start. macOS only.
+    launch command via env (DIVOOM_GUI_PYTHON/SCRIPT). Opened as a helper app
+    of its own; never blocks or fails the GUI if it can't start. macOS only.
 
     `resolve_bundled` is this app's binary resolver (it knows the packaging
     layouts); it is passed in so this module does not have to know how the app
@@ -65,21 +66,15 @@ def _spawn_menubar_agent(resolve_bundled) -> None:
     if sys.platform != "darwin":
         return
     try:
-        from divoom_client import launchd_job
-        # One agent per user. The agent's JOB is asked, never a process name:
-        # `pgrep -x divoom-menubar` was the old check, and pgrep EXCLUDES ITS
-        # OWN ANCESTORS -- from the GUI that the tray's "Launch Dashboard"
-        # opened, it could not see that very tray, so a second was spawned
-        # (two status items, pids 42068 and 30142, 2026-11-02). A running job
-        # is the tray that may have opened us: leave it alone. Anything else
-        # running the agent (a hand start, an older app) is replaced by the
-        # agent itself: it holds a single-instance lock and the newest one
-        # wins (`divoom-menubar/src/single_instance.rs`).
-        running = launchd_job.running_pid(launchd_job.MENUBAR_LABEL)
-        if running:
-            logger.info("Menu-bar agent already running (pid %s); not starting another.",
-                        running)
-            return
+        # No "is one already running" check, and never a process NAME: the
+        # old guard was `pgrep -x divoom-menubar`, and pgrep EXCLUDES ITS OWN
+        # ANCESTORS -- from the GUI the tray's "Launch Dashboard" opened, it
+        # could not see that very tray, so a second one was spawned (two
+        # status items, pids 42068 and 30142, 2026-11-02). The agent keeps
+        # the rule itself: it holds a single-instance lock and the newest one
+        # replaces any other (`divoom-menubar/src/single_instance.rs`), so
+        # starting one is always safe and a relaunch after a reinstall runs
+        # the binary now on disk.
         binary = _resolve_menubar_binary(resolve_bundled)
         if not binary:
             logger.warning("Native menu-bar binary (divoom-menubar) not found; "
@@ -96,17 +91,47 @@ def _spawn_menubar_agent(resolve_bundled) -> None:
             from divoom_client.daemon_client import bundle_python
             env["DIVOOM_GUI_PYTHON"] = bundle_python() or sys.executable
             env["DIVOOM_GUI_SCRIPT"] = str(Path(__file__).resolve().parent / "gui_main.py")
-        # Its OWN launchd job, not a child: a child stays in the app's
-        # coalition however detached, and an agent alive there keeps the quit
-        # app's LaunchServices record alive by pid (P1.18, D.CFXSBX).
-        pid = launchd_job.start(launchd_job.MENUBAR_LABEL, [binary], env,
-                                "/dev/null", interactive=True)
-        # The agent's identity, so it can be addressed by it and not by a name
-        # pattern.
-        _record_menubar_identity(pid, binary)
-        logger.info("Launched native Rust menu-bar agent (launchd job, pid %s).", pid)
+        from divoom_client import helper_app
+        bundle = helper_app.helper_bundle(binary)
+        if bundle is not None:
+            # An app of its own, NOT this app's child: a helper this app
+            # starts keeps this app's LaunchServices record alive by pid after
+            # it quits (P1.18, D.CFXSBX); one opened through LaunchServices
+            # does not.
+            helper_app.open_helper(bundle, [], env)
+            logger.info("Opened the menu-bar agent (%s).", bundle.name)
+            return
+        # A dev tree's binary has no helper app to open: fork it.
+        agent = subprocess.Popen(
+            [binary],
+            env=env,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        _record_menubar_identity(agent.pid, binary)
+        logger.info("Launched native Rust menu-bar agent (divoom-menubar).")
     except Exception as e:
         logger.warning(f"Could not launch menu-bar agent: {e}")
+
+
+def _ask_agent_to_step_down(timeout: float = 2.0) -> bool:
+    """Ask the running agent to exit, over the socket it listens on while it
+    holds the single-instance lock (`divoom-menubar/src/single_instance.rs`).
+
+    That socket is what the agent OWNS, so this reaches the running agent
+    however it was started -- an opened helper app has no identity file.
+    """
+    import socket
+    from divoom_client import helper_identity
+    path = helper_identity.run_dir() / "divoom-menubar.sock"
+    try:
+        with socket.socket(socket.AF_UNIX) as s:
+            s.settimeout(timeout)
+            s.connect(str(path))
+            s.sendall(b"replace\n")
+            return s.recv(16).strip() == b"ok"
+    except OSError:
+        return False
 
 
 def _record_menubar_identity(pid: int, command: str) -> None:
@@ -138,7 +163,7 @@ def _terminate_menubar_agent() -> None:
         return
     try:
         from divoom_client import helper_identity
-        stopped = helper_identity.stop(helper_identity.MENUBAR)
+        stopped = _ask_agent_to_step_down() or helper_identity.stop(helper_identity.MENUBAR)
         logger.info("Terminated menu-bar agent (shared-lifecycle quit): %s",
                     "stopped" if stopped else "not running")
     except Exception as e:

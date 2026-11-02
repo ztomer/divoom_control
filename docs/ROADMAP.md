@@ -226,20 +226,6 @@ tests run, as CI's Python job does (`42e3dc4`;
 `tests/test_export_keeps_no_build_output.py`). Not yet observed: a second
 `tools/gate.sh --full` on an unchanged tree reporting those steps proven.
 
-#### P1.18 — Divoom.app's children keep a dead app's LaunchServices record alive
-**Status:** OPEN. Found by D.CFXSBX (2026-11-02). When Divoom.app quits, `divoom-menubar` (and
-`divoomd`) keep running in the app's coalition, so launchservicesd keeps the
-dead app's record keyed by its pid ("ExitedApps ... exited = 1" with live
-`coalitionPIDs`). The next AppKit process to get that pid is bound to the dead
-record (the old ASN, `launchedByLS=1`) and, for camoufox, exits 1 at once --
-the e2e harness now names and relaunches that once
-(`tests/support/browser_launch.py`), but any app on the owner's Mac can draw
-the pid. Fix in the app: start the helpers outside the app's coalition (their
-own LaunchServices or launchd job) so the app's record dies with the app.
-**Done when:** quit Divoom.app with the menubar running, then a probe launch at its
-recycled pid (advance pids with `/usr/bin/true` until the next is the app's,
-then launch camoufox) checks in with `launchedByLS=0` in the unified log. **Size:** M.
-
 ### Phase 2 — daemon liveness and safety
 
 **Goal:** the daemon can say who holds it, never hangs on one peer, and

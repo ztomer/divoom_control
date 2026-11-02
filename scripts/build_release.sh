@@ -116,6 +116,11 @@ for b in divoomd divoom-menubar; do
   echo "  ✓ ${b} ${got}"
 done
 
+# 2d. The long-lived helpers become helper APPS, opened through LaunchServices
+# so a quit app's record is not kept alive by them (D.HELPER, P1.18).
+echo "→ wrapping the helpers in helper apps"
+DIVOOM_HELPER_VERSION="${BUNDLE_VERSION}" bash "$(dirname "$0")/make_helper_apps.sh" "${APP}"
+
 # 3. Guard: the reverse-engineered APK / references must never be in the bundle.
 # `-print -quit`, not `| grep -q .`: under pipefail grep's early exit SIGPIPEs
 # find, the pipeline reads as false, and a bundle full of leaks passed (proven

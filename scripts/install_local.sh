@@ -75,7 +75,11 @@ if divoom_codesign "$DEST" 2>/dev/null; then
 else
     warn "codesign failed (an unsigned bundle still runs locally)"
 fi
-DEST_INODE="$(stat -f '%i' "$DEST/$DAEMON_REL")"
+# The daemon is a helper app's main executable and Frameworks/bin/divoomd a
+# symlink to it (scripts/make_helper_apps.sh): prove against the REAL file,
+# which is also the path the running process's command line carries.
+DAEMON_EXE="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$DEST/$DAEMON_REL")"
+DEST_INODE="$(stat -f '%i' "$DAEMON_EXE")"
 info "installed daemon inode $DEST_INODE"
 "$DEST/$DAEMON_REL" --version | sed 's/^/  /'
 
@@ -89,7 +93,8 @@ open "$DEST"
 PID=""
 for _ in $(seq 1 15); do
     sleep 1
-    PID="$(pgrep -f "$DEST/$DAEMON_REL" | head -1 || true)"
+    PID="$(pgrep -f "$DAEMON_EXE" || true)"
+    PID="${PID%%$'\n'*}"
     [ -n "$PID" ] && break
 done
 [ -n "$PID" ] || die "no daemon appeared from $DEST after 15s"

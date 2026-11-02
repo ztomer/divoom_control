@@ -231,23 +231,24 @@ def spawn_daemon(
     # process, via its embedded com.divoom.divoomd Info.plist (build.rs
     # __TEXT,__info_plist).
     if sys.platform == "darwin" and detach:
-        # A DETACHED daemon outlives its launcher, so it is a launchd job of
-        # its own, never a child: a child stays in the launcher's coalition
-        # however detached, and alive there it keeps a quit app's
-        # LaunchServices record alive by pid (P1.18, D.CFXSBX). A job is its
-        # own responsible process, which is what the disclaim below buys for
-        # TCC, so the Bluetooth grant is the same divoomd's either way.
-        from divoom_client import launchd_job
-        try:
-            pid = launchd_job.start(
-                launchd_job.daemon_label(socket_path, DEFAULT_SOCKET_PATH),
-                cmd, dict(spawn_env), log_path)
-            logger.info("Spawned daemon (launchd job) pid=%s", pid)
-        except Exception as e:
-            logger.warning("launchd job spawn failed (%s); forking it instead.", e)
-        else:
-            _record_identity(pid, rust_bin)
-            return pid
+        # A DETACHED daemon outlives its launcher. Forked, it keeps the
+        # launcher's LaunchServices record alive by pid after the launcher
+        # quits (P1.18, D.CFXSBX), so when it is a helper app it is OPENED
+        # as an app of its own -- which also makes it its own responsible
+        # process for TCC, what the disclaim below buys a fork.
+        from divoom_client import helper_app
+        bundle = helper_app.helper_bundle(rust_bin)
+        if bundle is not None:
+            try:
+                helper_app.open_helper(bundle, cmd[1:], spawn_env, log_path)
+                pid = _socket_holder(socket_path)
+                logger.info("Opened the daemon (%s) pid=%s", bundle.name, pid)
+            except Exception as e:
+                logger.warning("Opening %s failed (%s); forking it instead.",
+                               bundle.name, e)
+            else:
+                _record_identity(pid, rust_bin)
+                return pid
     if sys.platform == "darwin":
         try:
             pid = _spawn_disclaimed_macos(cmd, log_path, env=dict(spawn_env))
@@ -274,6 +275,22 @@ def spawn_daemon(
     if isinstance(pid, int):
         _record_identity(pid, rust_bin)
     return proc
+
+
+def _socket_holder(socket_path: str, wait: float = 8.0) -> int:
+    """The pid listening on ``socket_path``, once one is: an opened app's pid
+    is not returned by `open`, and the socket is what the daemon owns."""
+    deadline = time.monotonic() + wait
+    while True:
+        done = subprocess.run(["/usr/sbin/lsof", "-t", socket_path],
+                              capture_output=True, text=True,
+                              stdin=subprocess.DEVNULL, check=False)
+        pids = [int(p) for p in (done.stdout or "").split() if p.isdigit()]
+        if pids:
+            return pids[0]
+        if time.monotonic() >= deadline:
+            raise OSError(f"nothing is listening on {socket_path}")
+        time.sleep(0.1)
 
 
 def _record_identity(pid: int, command: str) -> None:

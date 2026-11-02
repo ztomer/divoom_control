@@ -16,22 +16,35 @@ shipped milestone (per the project planning docs).
   tray and started a second -- the agent now holds a single-instance flock
   for its life and a new one asks the holder to step down over a socket
   beside it, so the newest wins and two can never run
-  (`divoom-menubar/src/single_instance.rs`); (2) every helper was a forked
-  child, and a child stays in its parent's coalition however detached -- the
-  menubar and a detached daemon are now launchd jobs of their own
-  (`divoom_client/launchd_job.py`; measured: a bootstrapped job leaves the
-  launcher's coalition, a fork does not), and starting a label boots its old
-  process out first; (3) the tray exec'd the frozen GUI as its own child and
-  never waited for it (pid 30134 sat defunct under 42068) -- it now opens the
-  bundle through LaunchServices (`open -a`) and waits for every child it
+  (`divoom-menubar/src/single_instance.rs`); (2) every helper was STARTED by
+  the app, and measured with a throwaway applet every way of starting one
+  keeps the quit applet's record: a fork stays in its coalition, a
+  `launchctl bootstrap`ped job leaves the coalition but is listed under the
+  record's `loadedJobs` (also through a trampoline job and with a cleared
+  environment -- the first cut, 609a78a, shipped that and the repro still
+  failed), and only an app bundle opened through LaunchServices lets the
+  record go -- so the build wraps both helpers in helper apps
+  (`scripts/make_helper_apps.sh`: `Contents/Helpers/Divoom Menubar.app`,
+  `Contents/Helpers/divoomd.app`, with `Frameworks/bin/<name>` a symlink in)
+  and the GUI opens them with `open -n -g` (`divoom_client/helper_app.py`);
+  the daemon's Bluetooth grant held (same identifier and signing identity:
+  three panels active under the opened daemon); (3) the tray exec'd the
+  frozen GUI as its own child and never waited for it (pid 30134 sat
+  defunct under 42068) -- it now opens the bundle through LaunchServices
+  (`open -a`) and waits for every child it
   starts. `scripts/stop_helpers.sh` also stops whatever holds the agent's
   lock. Red before green: the single-instance tests with the lock skipped (2
   of 3 failed; the stale-socket one failed with the socket left in place),
   the bundle-launch test with the bundle branch off, the launchd-job caller
-  tests against the old spawns (4 failed), the stop-helpers lock test
-  against the old script. The D.CFXSBX repro against the old install: camoufox
-  started at the dead app's recycled pid 30134 exited 1 after 0.22 s, bound
-  to the dead app's ASN 0x0-0x11791780.
+  tests against the old spawns (6 of 8 failed), the stop-helpers lock test
+  against the old script. The D.CFXSBX repro (camoufox started at the quit
+  app's recycled pid): old install, pid 30134 -> exit 1 after 0.22 s, bound
+  to the dead app's ASN 0x0-0x11791780; launchd-job cut, pid 81116 -> exit 1,
+  dead ASN, `launchedByLS=1`; helper-app install, pid 74557 -> still running
+  at 4 s, fresh ASN, `launchedByLS=0`, and `lsappinfo` holds no Divoom
+  Control record once the app quits. After install: one `divoom-menubar`,
+  one "Divoom Menubar" record; opening it again, or running the binary by
+  hand, replaced the agent each time.
 
 - **A browser that does not start is a named outcome (D.CFXSBX,
   2026-11-02).** One pre-push run failed a wall e2e test on
