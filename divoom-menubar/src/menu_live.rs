@@ -1,4 +1,4 @@
-//! An OPEN menu follows the daemon (D.MENULIVE, 2026-11-02).
+//! An OPEN menu follows the daemon (D.MENULIVE 2026-11-02, D.MENUEVENT).
 //!
 //! QA held the menu open, made Pixoo-1 the active panel from the CLI, and two
 //! seconds later the menu still read "Tivoo-Max-light-3 (active)". The model
@@ -9,19 +9,23 @@
 //! timer and every daemon broadcast queued behind the open menu -- the menu
 //! was frozen exactly while someone was looking at it.
 //!
-//! So while the menu is open a run-loop timer of its own refreshes it, in the
-//! mode `AppKit` tracks menus in (`NSEventTrackingRunLoopMode`, and the common
-//! modes besides). It reads the snapshot the subscribe thread keeps current
-//! and applies only IN-PLACE changes: a change in which rows exist needs a new
-//! root menu, which would dismiss the open one, so that waits for the next
-//! poll after the menu closes.
+//! The fix is a run-loop SOURCE of our own, added in the mode `AppKit` tracks
+//! menus in (`NSEventTrackingRunLoopMode`, and the common modes besides). The
+//! daemon DOES offer an event stream -- the subscribe thread already folds
+//! every `selection`, `owned_devices`, `status` and `activity` broadcast into
+//! the snapshot -- so that thread signals the source ([`notify`]) and the open
+//! menu re-reads the snapshot exactly when it changed, instead of on a clock.
+//! D.MENULIVE first used a 250 ms timer, which woke the process four times a
+//! second for as long as a menu stayed open and could show a change up to 250
+//! ms late. The menu applies only IN-PLACE changes: a change in which rows
+//! exist needs a new root menu, which would dismiss the open one, so that
+//! waits for the next poll after the menu closes.
 
 use std::ffi::c_void;
-use std::time::Duration;
+use std::sync::{Mutex, PoisonError};
 
 use objc2_core_foundation::{
-    kCFRunLoopCommonModes, CFAbsoluteTimeGetCurrent, CFRetained, CFRunLoop, CFRunLoopTimer,
-    CFRunLoopTimerContext, CFString,
+    kCFRunLoopCommonModes, CFRetained, CFRunLoop, CFRunLoopSource, CFRunLoopSourceContext, CFString,
 };
 
 use crate::daemon::DaemonSnapshot;
@@ -29,8 +33,6 @@ use crate::menu_model::{MenuChange, MenuModel};
 
 /// The run-loop mode `AppKit` tracks an open menu in.
 pub const TRACKING_MODE: &str = "NSEventTrackingRunLoopMode";
-/// How often an open menu re-reads the daemon's state.
-pub const OPEN_REFRESH: Duration = Duration::from_millis(250);
 
 /// The model an open menu should now show, when it can show it without
 /// closing: `Some` for an in-place change, `None` when nothing changed or the
@@ -43,58 +45,93 @@ pub fn open_menu_update(shown: &MenuModel, snap: &DaemonSnapshot) -> Option<Menu
     }
 }
 
-/// Calls `tick` every `every` on `run_loop` -- in the menu-tracking mode as
-/// well as the common modes -- until dropped.
+/// The addresses of the open menu's run-loop source and run loop, which the
+/// subscribe thread signals and wakes. Addresses, not references: a
+/// `CFRetained` is not `Send`, and the one thing this slot is for is the pair
+/// of calls CoreFoundation documents as safe from any thread.
+static OPEN: Mutex<Option<(usize, usize)>> = Mutex::new(None);
+
+/// Tell the open menu, if there is one, that the daemon's state changed. Cheap
+/// and callable from any thread: the subscribe thread calls it after folding
+/// each broadcast into the snapshot.
+pub fn notify() {
+    let open = OPEN.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some((source, run_loop)) = *open {
+        // SAFETY: the two addresses are those of the source and run loop that
+        // the live `WhileOpen` holds a retain on, and `WhileOpen::drop` clears
+        // this slot -- under the lock held here -- before it releases either,
+        // so both are alive for as long as this guard is. `signal` is
+        // `CFRunLoopSourceSignal` and `wake_up` is `CFRunLoopWakeUp`: the two
+        // CoreFoundation calls documented as safe from any thread (that is
+        // what a run-loop source is for).
+        unsafe {
+            (*std::ptr::with_exposed_provenance::<CFRunLoopSource>(source)).signal();
+            (*std::ptr::with_exposed_provenance::<CFRunLoop>(run_loop)).wake_up();
+        }
+    }
+}
+
+/// Calls `tick` on `run_loop` -- in the menu-tracking mode as well as the
+/// common modes -- once on opening and again after every [`notify`], until
+/// dropped.
 pub struct WhileOpen {
-    timer: CFRetained<CFRunLoopTimer>,
-    // Boxed twice so the pointer handed to the timer is a thin, stable one.
+    source: CFRetained<CFRunLoopSource>,
+    // Held so the address in `OPEN` stays valid until `drop` clears it.
+    _run_loop: CFRetained<CFRunLoop>,
+    // Boxed twice so the pointer handed to the source is a thin, stable one.
     _tick: Box<Box<dyn Fn()>>,
 }
 
-unsafe extern "C-unwind" fn fire(_timer: *mut CFRunLoopTimer, info: *mut c_void) {
+unsafe extern "C-unwind" fn fire(info: *mut c_void) {
     // SAFETY: `info` is the `Box<dyn Fn()>` owned by the `WhileOpen` that
-    // created this timer, and that `WhileOpen` invalidates the timer before
-    // it drops the box, so the pointer is live whenever the timer fires.
+    // created this source, and that `WhileOpen` invalidates the source before
+    // it drops the box, so the pointer is live whenever the source fires.
     let tick = unsafe { &*info.cast::<Box<dyn Fn()>>() };
     tick();
 }
 
 impl WhileOpen {
-    pub fn start(run_loop: &CFRunLoop, every: Duration, tick: Box<dyn Fn()>) -> Option<Self> {
+    pub fn start(run_loop: CFRetained<CFRunLoop>, tick: Box<dyn Fn()>) -> Option<Self> {
         let tick = Box::new(tick);
-        let mut context = CFRunLoopTimerContext {
+        let mut context = CFRunLoopSourceContext {
             version: 0,
             info: std::ptr::from_ref::<Box<dyn Fn()>>(&tick).cast_mut().cast(),
             retain: None,
             release: None,
             copyDescription: None,
+            equal: None,
+            hash: None,
+            schedule: None,
+            cancel: None,
+            perform: Some(fire),
         };
-        let interval = every.as_secs_f64();
-        // SAFETY: `fire` matches `CFRunLoopTimerCallBack`; `context` is a
-        // valid pointer for the duration of the call (CF copies it), and its
-        // `info` outlives the timer (see `fire`).
-        let timer = unsafe {
-            CFRunLoopTimer::new(
-                None,
-                CFAbsoluteTimeGetCurrent() + interval,
-                interval,
-                0,
-                0,
-                Some(fire),
-                &raw mut context,
-            )
-        }?;
+        // SAFETY: `context` is a valid pointer for the duration of the call
+        // (CF copies it), `fire` matches `perform`, and its `info` outlives
+        // the source (see `fire`).
+        let source = unsafe { CFRunLoopSource::new(None, 0, &raw mut context) }?;
         let tracking = CFString::from_static_str(TRACKING_MODE);
-        run_loop.add_timer(Some(&timer), Some(&tracking));
+        run_loop.add_source(Some(&source), Some(&tracking));
         // SAFETY: reading an immutable CoreFoundation constant.
-        run_loop.add_timer(Some(&timer), unsafe { kCFRunLoopCommonModes });
-        Some(Self { timer, _tick: tick })
+        run_loop.add_source(Some(&source), unsafe { kCFRunLoopCommonModes });
+        // Catch up on whatever changed since the last poll: the first tick.
+        source.signal();
+        *OPEN.lock().unwrap_or_else(PoisonError::into_inner) = Some((
+            std::ptr::from_ref::<CFRunLoopSource>(&source).expose_provenance(),
+            std::ptr::from_ref::<CFRunLoop>(&run_loop).expose_provenance(),
+        ));
+        Some(Self {
+            source,
+            _run_loop: run_loop,
+            _tick: tick,
+        })
     }
 }
 
 impl Drop for WhileOpen {
     fn drop(&mut self) {
-        self.timer.invalidate();
+        // Out of the shared slot first, so no `notify` signals a dead source.
+        *OPEN.lock().unwrap_or_else(PoisonError::into_inner) = None;
+        self.source.invalidate();
     }
 }
 
@@ -149,39 +186,48 @@ mod tests {
         );
     }
 
-    /// The defect itself: with the menu OPEN (its run loop in `AppKit`'s
-    /// tracking mode, where winit's handler cannot run), the active panel
-    /// changes in the daemon's state -- and the shown model follows it,
-    /// without the menu closing.
+    /// D.MENUEVENT: an open menu is driven by the daemon's event stream, not by
+    /// a clock. With no event the tick runs once (on opening, to catch up with
+    /// what changed since the last poll); an event from another thread -- the
+    /// subscribe thread -- runs it again, in the menu-tracking mode, and the
+    /// shown model follows the new active panel.
     #[test]
-    fn an_open_menu_follows_the_active_panel() {
-        let applied = std::thread::spawn(|| {
+    fn an_open_menu_follows_an_event_and_does_not_poll() {
+        use std::sync::{Arc, Mutex};
+        use std::time::Duration;
+        // A broadcast that lands while no menu is open finds no waker and does
+        // nothing -- the subscribe thread calls `notify` for every event.
+        notify();
+        let state = Arc::new(Mutex::new(snap("AA")));
+        let sub_state = state.clone();
+        let subscriber = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(250));
+            // The daemon's `selection` event lands in the snapshot, then wakes
+            // the open menu.
+            *sub_state.lock().unwrap() = snap("BB");
+            notify();
+        });
+        let (label, ticks) = std::thread::spawn(move || {
             let run_loop = CFRunLoop::current().expect("run loop");
-            let state = Rc::new(RefCell::new(snap("AA")));
             let shown = Rc::new(RefCell::new(MenuModel::from_devices(
-                &state.borrow().devices,
+                &state.lock().unwrap().devices,
                 false,
             )));
             let ticks = Rc::new(RefCell::new(0_u32));
-            let (s, m, t) = (state, shown.clone(), ticks.clone());
+            let (m, t) = (shown.clone(), ticks.clone());
             let live = WhileOpen::start(
-                &run_loop,
-                Duration::from_millis(50),
+                run_loop,
                 Box::new(move || {
                     *t.borrow_mut() += 1;
-                    // The CLI makes Pixoo-1 active while the menu is open.
-                    if *t.borrow() == 2 {
-                        *s.borrow_mut() = snap("BB");
-                    }
-                    let next = open_menu_update(&m.borrow(), &s.borrow());
+                    let next = open_menu_update(&m.borrow(), &state.lock().unwrap());
                     if let Some(next) = next {
                         *m.borrow_mut() = next;
                     }
                 }),
             )
-            .expect("timer");
+            .expect("source");
             let tracking = CFString::from_static_str(TRACKING_MODE);
-            CFRunLoop::run_in_mode(Some(&tracking), 0.6, false);
+            CFRunLoop::run_in_mode(Some(&tracking), 0.8, false);
             drop(live);
             let label = active_label(&shown.borrow()).map(str::to_string);
             let count = *ticks.borrow();
@@ -189,11 +235,12 @@ mod tests {
         })
         .join()
         .expect("thread");
-        assert!(
-            applied.1 >= 3,
-            "the open menu was refreshed {} times",
-            applied.1
+        subscriber.join().expect("subscriber");
+        notify(); // and after the menu closed
+        assert_eq!(label.as_deref(), Some("Pixoo-1 (active)"));
+        assert_eq!(
+            ticks, 2,
+            "one tick on opening, one for the event, none else"
         );
-        assert_eq!(applied.0.as_deref(), Some("Pixoo-1 (active)"));
     }
 }

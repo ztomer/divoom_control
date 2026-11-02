@@ -185,6 +185,10 @@ fn main() {
                     daemon::subscribe(
                         |ev| {
                             daemon::update_snapshot_from_event(&ev);
+                            // An OPEN menu cannot take winit's event below (it
+                            // is tracking in a nested run loop): wake it directly.
+                            #[cfg(target_os = "macos")]
+                            menu_live::notify();
                             let _ = proxy.send_event(UserEvent::DaemonEvent);
                         },
                         || quitting.load(Ordering::Relaxed),

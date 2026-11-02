@@ -6,6 +6,23 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **An open menu is driven by the daemon's event stream, not a timer
+  (D.MENUEVENT, 2026-11-02).** D.MENULIVE refreshed the open menu on a 250 ms
+  run-loop timer. The daemon DOES offer a state-change stream (`subscribe`:
+  `selection`, `owned_devices`, `status`, `activity`), and the menu-bar's
+  subscribe thread already folds each broadcast into the snapshot, so the
+  timer was polling a value that announces its own changes. `menu_live.rs` now
+  adds a run-loop SOURCE in `NSEventTrackingRunLoopMode` and the common modes
+  (the D.MENULIVE run-loop-mode fix, kept); the subscribe thread signals it
+  (`menu_live::notify`, after `update_snapshot_from_event`) and the open menu
+  re-reads the snapshot once on opening and once per event, applying in-place
+  changes only. An idle open menu no longer wakes the process four times a
+  second, and a change shows when it arrives rather than up to 250 ms later.
+  `an_open_menu_follows_an_event_and_does_not_poll` runs the tracking-mode
+  loop with a second thread standing in for the subscriber. Red before green:
+  with the timer still in place it counted 16 ticks where 2 are allowed. The
+  on-screen half is still P5.16.
+
 - **A global flag reaches every subcommand, in either position (D.CLIMAC,
   2026-11-02).** `divoom-control --mac X select` failed with "--mac is
   required": the shared flags were on the top-level parser AND each

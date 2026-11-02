@@ -242,15 +242,15 @@ impl Tray {
         refresh_tiles(&self.rows, &self.tiles, devices);
     }
 
-    /// While the menu is open: re-read the daemon's state on a run-loop timer
-    /// that fires in the menu-tracking mode, and apply what changed IN PLACE.
+    /// While the menu is open: re-read the daemon's state whenever the
+    /// subscribe thread reports an event (a run-loop source that fires in the
+    /// menu-tracking mode), and apply what changed IN PLACE.
     #[cfg(target_os = "macos")]
     fn refresh_while_open(&self) -> Option<crate::menu_live::WhileOpen> {
         let (rows, notif, tiles) = (self.rows.clone(), self.notif.clone(), self.tiles.clone());
         let shown = RefCell::new(self.installed.clone().unwrap_or_default());
         crate::menu_live::WhileOpen::start(
-            &*objc2_core_foundation::CFRunLoop::main()?,
-            crate::menu_live::OPEN_REFRESH,
+            objc2_core_foundation::CFRunLoop::main()?,
             Box::new(move || {
                 let Some(snap) = daemon::get_cached_snapshot() else {
                     return;

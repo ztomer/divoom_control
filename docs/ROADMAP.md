@@ -466,9 +466,10 @@ must leave the owner's screen alone.
 **2026-11-02 (D.MENULIVE):** QA found the open menu frozen (the active
 panel still the old one 2 s after a CLI select) and the cause was in code: the
 popup tracks in a nested run loop inside winit's handler, so nothing refreshed
-it; an open menu now refreshes itself on a tracking-mode run-loop timer
-(`divoom-menubar/src/menu_live.rs`, unit-tested). The capture below is still
-the on-screen proof.
+it; an open menu now refreshes itself from a tracking-mode run-loop source that
+the subscribe thread signals on each daemon event (D.MENUEVENT; first a 250 ms
+timer) (`divoom-menubar/src/menu_live.rs`, unit-tested). The capture below is
+still the on-screen proof.
 **Done when:** the menu is held open (a real click) while `select_device`
 moves the active panel and a row renames over the socket, and two captures
 show the check and the name change in the open menu with no close/reopen.
