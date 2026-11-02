@@ -16,11 +16,33 @@ from __future__ import annotations
 #: before the proxy.
 OFFLINE_PROXY = {"server": "http://127.0.0.1:9", "bypass": "localhost,127.0.0.1"}
 
+#: What the browser's own chrome takes from the outer window: measured
+#: 2026-11-01, the content starts 89 px down and 4 px in (mozInnerScreenY/X at
+#: screenY 0), with margin.
+BROWSER_CHROME = (16, 120)
+#: The test browser's outer window, fixed. Larger than every suite's viewport
+#: plus the chrome (tests/test_e2e_browser_window.py scans them), so the window
+#: never has to move to hold a page.
+HARNESS_WINDOW = (1600, 1100)
+#: The camoufox fingerprint keys that fix the window, on a screen that holds it.
+HARNESS_GEOMETRY = {
+    "window.outerWidth": HARNESS_WINDOW[0], "window.outerHeight": HARNESS_WINDOW[1],
+    "window.screenX": 0, "window.screenY": 0,
+    "screen.width": 2560, "screen.height": 1440, "screen.availWidth": 2560, "screen.availHeight": 1415,
+}
+
 
 def launch_options_for(*, network: bool) -> dict:
     from camoufox.utils import launch_options
 
-    opts = launch_options(headless=True, main_world_eval=True)
+    # The fingerprint's window is otherwise random, and one shorter than the
+    # page made Firefox move the content up mid-test, so a gesture landed
+    # above its target (CI runs 41367764353, 41370988097). Both the window AND
+    # the screen are fixed: camoufox clamps a window to the drawn screen, and
+    # its screen constraint is not always honoured (1600x900 screens were still
+    # drawn under min_height=1300, 4 in 1000). The rest stays random.
+    opts = launch_options(headless=True, main_world_eval=True, config=HARNESS_GEOMETRY,
+                          i_know_what_im_doing=True)
     if not network:
         opts["proxy"] = OFFLINE_PROXY
     return opts
