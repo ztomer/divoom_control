@@ -4,6 +4,12 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## v0.45.0 — Camoufox 0.5.9 and browser 158.0.1-beta.41 (2026-11-05)
+
+- **Camoufox dependency and browser pin update.** Updates `camoufox==0.5.9` and
+  `.camoufox-build` to `official/stable/158.0.1-beta.41`, fixing browser auto-download
+  ordering and switching to the stable release channel.
+
 ## v0.44.0 — the open menu follows the daemon; helpers are helper apps; uninstall stops the tray (2026-11-02)
 
 Minor: D.MENUEVENT, D.CFXSBX, D.REV1, D.BLEDBG, D.UNINSTDIR and D.E2EOS, with the menu-bar and helper-app work before them.

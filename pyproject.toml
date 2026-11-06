@@ -27,7 +27,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "divoom-control"
-version = "0.44.0"
+version = "0.45.0"
 description = "macOS control surface for Divoom pixel displays (Pixoo / Tivoo / Ditoo / Timoo)"
 readme = "README.md"
 license = { text = "MIT" }
@@ -88,7 +88,7 @@ test = [
 # `.camoufox-build` (the one declaration CI and the local gate both read).
 e2e = [
     "playwright",
-    "camoufox==0.5.5",
+    "camoufox==0.5.9",
 ]
 dev = [
     "divoom-control[gui,test]",
