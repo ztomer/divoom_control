@@ -31,6 +31,12 @@ shipped milestone (per the project planning docs).
   `tests/test_installed_dependencies_are_published.py` fails when any file of
   the [e2e] closure no longer matches what pip installed, so a privately
   repaired dependency cannot mask a fresh install again.
+  With that fixed, CI's browser step ran on camoufox 0.5.9 for the first
+  time and seven pixel tests read canvas noise: 0.5.9 covers the canvas
+  unless the host GPU is one fpgen records, and CI's macOS VM's is not. The
+  seam passes `canvas_noise=False`; the host-OS draw test answers
+  camoufox's per-process GPU-probe browser launch, so a draw costs 6 s for
+  eight, not 50-80 s. CI green on main: run 42409564495.
 
 - **Council on P6.1 and P6.2 (umbrella D7, D8; owner: "council",
   2026-11-07).** `docs/council-p6.md`: the facts read from the code, the

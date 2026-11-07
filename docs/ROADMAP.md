@@ -532,9 +532,9 @@ is judged against; when one moves, change it here in the same commit.
 | Measure | Value | Where it is enforced |
 |---|---|---|
 | Local gate | 30 `GOH_CI_STEPS` (incl. the browser suites and CI's Linux `--all-features` lint, 2026-10-20) + `scripts/py_ci.sh` = 31 steps, run by `pre-push` on the pushed commit in a clean worktree | `.gatesrc`, `tools/gate.sh`, `scripts/ci_local.sh` |
-| Python tests (default) | 2364 passed, 222 skipped, 5 failed (CI run 42158513910, 2026-11-06; the 5 were P1.22, fixed by the fpgen shim) | `pytest.ini` (`testpaths = tests`) |
+| Python tests (default) | 2397 passed, 224 skipped (CI run 42409564495, 2026-11-07) | `pytest.ini` (`testpaths = tests`) |
 | `examples/tests` | 1022 passed, 73 skipped (2026-10-19) | `scripts/py_ci.sh` |
-| Browser subset (serial) | 313 passed, 5 min 15 s (2026-11-02, `24ab74e`); CI step 331 s on run 41544702215 | `scripts/browser_e2e.sh` |
+| Browser subset (serial) | 313 passed, 5 min 15 s (2026-11-02, `24ab74e`); CI step 317 passed, 10 skipped, 504 s on run 42409564495 | `scripts/browser_e2e.sh` |
 | Rust tests | 659 (2026-10-20) | `cargo test --locked` |
 | Python coverage floor | 89.0 | `scripts/py_ci.sh` |
 | Rust coverage floor | 42 | `scripts/rust_coverage.sh` |
