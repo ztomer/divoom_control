@@ -78,6 +78,15 @@ jobs:
         # (GOH_NO_NATIVE is retired and ignored); structural.sh builds it from
         # the checkout with cargo, which the manifest step above guarantees.
         run: GOH_DIR="$GITHUB_WORKSPACE/goh" bash goh/gates/structural.sh --full
+      # The same command GOH_CI_STEPS runs locally (.gatesrc): ruff check on the declared rule
+      # set, ruff format --check and noqa parity over every tracked .py. ruff is pinned to a
+      # released version so a formatter bump arrives in a commit, not in a runner image.
+      - name: Ruff (lint + format, every tracked .py)
+        env:
+          GOH_DIR: ${{ github.workspace }}/goh
+        run: |
+          python3 -m pip install --quiet ruff==0.17.4
+          bash goh/gates/py_staged.sh --all .
       - name: Every script CI runs, the local gate runs too (ci_local_parity)
         # The same command GOH_CI_STEPS runs first in .gatesrc. Here it guards
         # the other direction of the same edit: a script added to THIS file

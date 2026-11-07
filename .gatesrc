@@ -117,7 +117,7 @@ export GOH_LCI_TIMEOUT=2400
 # tests/test_ci_local_leaves_ble_free_daemon.py). No `:` in a step, so the
 # wrapper is a script and not an inline `cmd; restore`.
 export GOH_DIR="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
-GOH_CI_STEPS='"$GOH_DIR/gates/structural.sh" --full:ruff check .:python3 "$GOH_DIR/checks/check_ci_local_parity.py":python3 tools/check_scripts.py:python3 tools/check_test_placement.py:python3 tools/check_examples.py:python3 tools/check_version_consistency.py:python3 tools/check_positional_args.py:python3 tools/check_bounded_writes.py:python3 tools/check_ui_budgets.py:python3 tools/check_weather_parity.py:python3 tools/check_hotchannel_parity.py:python3 tools/check_launchd_jobs.py:python3 tools/capability_census.py:python3 tools/check_gui_is_a_client.py:python3 tools/check_gui_api_reachable.py:python3 tools/check_hw_verify_methods.py:python3 tools/check_applescript_launch.py:python3 tools/check_cargo_features.py:"$GOH_DIR/gates/rust_gate.sh":python3 "$GOH_DIR/lib/advisory_db.py" run --fetch -- cargo audit:cargo clippy -p divoomd --no-default-features --all-targets --locked -- -D warnings:cargo build -p divoomd --no-default-features --locked:cargo test -p divoomd --no-default-features --locked:./scripts/check_linux_build.sh:./scripts/check_linux_all_features.sh:./scripts/ble_free_after.sh cargo test --locked:python3 tools/check_built_binaries.py:"$GOH_DIR/gates/goh.sh" status-markers:./scripts/rust_coverage.sh:./scripts/ble_free_after.sh cargo build -p divoomd --locked:python3 tools/camoufox_installed.py:./scripts/browser_e2e.sh'
+GOH_CI_STEPS='"$GOH_DIR/gates/structural.sh" --full:"$GOH_DIR/gates/py_staged.sh" --all .:python3 "$GOH_DIR/checks/check_ci_local_parity.py":python3 tools/check_scripts.py:python3 tools/check_test_placement.py:python3 tools/check_examples.py:python3 tools/check_version_consistency.py:python3 tools/check_positional_args.py:python3 tools/check_bounded_writes.py:python3 tools/check_ui_budgets.py:python3 tools/check_weather_parity.py:python3 tools/check_hotchannel_parity.py:python3 tools/check_launchd_jobs.py:python3 tools/capability_census.py:python3 tools/check_gui_is_a_client.py:python3 tools/check_gui_api_reachable.py:python3 tools/check_hw_verify_methods.py:python3 tools/check_applescript_launch.py:python3 tools/check_cargo_features.py:"$GOH_DIR/gates/rust_gate.sh":python3 "$GOH_DIR/lib/advisory_db.py" run --fetch -- cargo audit:cargo clippy -p divoomd --no-default-features --all-targets --locked -- -D warnings:cargo build -p divoomd --no-default-features --locked:cargo test -p divoomd --no-default-features --locked:./scripts/check_linux_build.sh:./scripts/check_linux_all_features.sh:./scripts/ble_free_after.sh cargo test --locked:python3 tools/check_built_binaries.py:"$GOH_DIR/gates/goh.sh" status-markers:./scripts/rust_coverage.sh:./scripts/ble_free_after.sh cargo build -p divoomd --locked:python3 tools/camoufox_installed.py:./scripts/browser_e2e.sh'
 
 # No process kill by name (gates_of_heck check_no_kill_by_name.py, 2026-09-23).
 # A name matches processes this repo does not own. Today's survivors are in
@@ -193,6 +193,14 @@ GOH_CI_PARITY_MIN_SCRIPTS=12          # read 14
 # Measured red on 1acd8b9 (the hand-rolled loop): 25 tools without
 # annotations or outputSchema, and 15 of them destructive-by-default listed.
 GOH_MCP_SERVERS='env -u DIVOOM_DAEMON_HOST -u DIVOOM_DAEMON_PORT -u DIVOOM_DAEMON_TOKEN DIVOOM_SOCKET="$GOH_MCP_SCRATCH/no-daemon.sock" cargo run --quiet --locked -p divoomd --no-default-features --bin divoomd -- mcp'
+
+# Python lint + format over EVERY tracked .py (goh gates/py_staged.sh --all, RUFF.ESTATE
+# 2026-11-07): `ruff check` on the declared rule set (pyproject.toml: PLW1510), `ruff format
+# --check`, and noqa parity, with the list read from git so a ruff `exclude` cannot hide a tracked
+# file. It replaced the bare `ruff check .` step (which judged lint only, so 548 files drifted
+# from the formatter unread). references/ is untracked (.gitignore), so the vendored third-party
+# trees are never in scope; GOH_EXCLUDE above still carries docs/divoom_docs/. CI runs the same
+# command in the no-emoji job (.github/workflows/tests.yml).
 
 # A commit that ADDS a test names, in a `Red-run:` trailer, the mutation that
 # turned that test red (goh red-run, BACKLOG 4.11; owner OW.8, 2026-10-31).
