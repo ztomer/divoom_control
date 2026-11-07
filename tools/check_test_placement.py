@@ -24,6 +24,7 @@ that needs rustc, which is what `cargo clippy --all-targets` (also in
 GOH_CI_STEPS) is for; this gate catches the declaration-level regression
 without compiling.
 """
+
 from __future__ import annotations
 
 import re
@@ -51,7 +52,10 @@ ATTR_RE = re.compile(r"^\s*#\[")
 def tracked(pattern: str) -> list[str]:
     r = subprocess.run(
         ["git", "ls-files", pattern],
-        cwd=str(REPO), capture_output=True, text=True, stdin=subprocess.DEVNULL,
+        cwd=str(REPO),
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
         check=False,
     )
     if r.returncode != 0:
@@ -103,10 +107,7 @@ def declaration_gated(lines: list[str], idx: int) -> bool:
 
 def check_rust_gating(failures: list[str]) -> int:
     """Every file-backed test module declaration is cfg(test)-gated."""
-    rs_files = [
-        f for d in RUST_SRC_DIRS
-        for f in tracked(f"{d}/*.rs")
-    ]
+    rs_files = [f for d in RUST_SRC_DIRS for f in tracked(f"{d}/*.rs")]
     for f in rs_files:
         try:
             lines = (REPO / f).read_text(encoding="utf-8").splitlines()
@@ -121,8 +122,7 @@ def check_rust_gating(failures: list[str]) -> int:
                 continue
             if not declaration_gated(lines, i):
                 failures.append(
-                    f"{f}:{i + 1}: `mod {name};` without #[cfg(test)] — "
-                    f"ships an empty public module in release"
+                    f"{f}:{i + 1}: `mod {name};` without #[cfg(test)] — ships an empty public module in release"
                 )
     return len(rs_files)
 
@@ -135,16 +135,17 @@ def main() -> int:
     if scope_is_empty("test-placement", n_py + n_rs, unit="files"):
         return 1
     if n_rs < MIN_RS_FILES:
-        err(f"[test-placement] only {n_rs} .rs files scanned "
-            f"(floor {MIN_RS_FILES}) — the file pattern is blind, not clean")
+        err(
+            f"[test-placement] only {n_rs} .rs files scanned "
+            f"(floor {MIN_RS_FILES}) — the file pattern is blind, not clean"
+        )
         return 1
     if failures:
         err(f"[test-placement] {len(failures)} problem(s)")
         for fl in failures:
             info(fl)
         return 1
-    ok(f"[test-placement] OK — {n_py} test files under tests/, "
-       f"{n_rs} .rs files all gated")
+    ok(f"[test-placement] OK — {n_py} test files under tests/, {n_rs} .rs files all gated")
     return 0
 
 

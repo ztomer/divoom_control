@@ -25,14 +25,18 @@ from pathlib import Path
 def print_info(message):
     print(f"[ ==> ] {message}")
 
+
 def print_wrn(message):
     print(f"[ Wrn ] {message}")
+
 
 def print_err(message):
     print(f"[ Err ] {message}")
 
+
 def print_ok(message):
     print(f"[ Ok  ] {message}")
+
 
 def _redact(secret) -> str:
     """Mask a bearer token for logs: keep a short prefix for correlation, never
@@ -44,11 +48,11 @@ def _redact(secret) -> str:
     return f"{s[:4]}…({len(s)} chars)"
 
 
-BASE_URL   = "https://appin.divoom-gz.com"
-HMAC_KEY   = b"DivoomBluetoothDevice<>?"  # from P2/a.java
-TIMEOUT    = 15
+BASE_URL = "https://appin.divoom-gz.com"
+HMAC_KEY = b"DivoomBluetoothDevice<>?"  # from P2/a.java
+TIMEOUT = 15
 CONFIG_FILE = Path.home() / ".config" / "divoom-control" / "config.ini"
-CACHE_FILE  = Path.home() / ".config" / "divoom-control" / "auth_token.json"
+CACHE_FILE = Path.home() / ".config" / "divoom-control" / "auth_token.json"
 VIRTUAL_DEVICE_PATHS = [
     Path.home() / ".config" / "divoom-control" / "virtual_device.json",
     Path(__file__).resolve().parent.parent / "api_scraper" / "divoom_docs" / "virtual_device.json",
@@ -70,10 +74,10 @@ def _load_virtual_device() -> dict:
 
 @dataclass
 class DivoomCredentials:
-    token:   int
+    token: int
     user_id: int
-    email:   str = ""
-    utc:     int = 0
+    email: str = ""
+    utc: int = 0
 
     def is_valid(self) -> bool:
         return self.token != 0 and self.user_id != 0
@@ -85,7 +89,7 @@ def _load_config() -> tuple[str, str]:
     if not CONFIG_FILE.exists():
         return "", ""
     cfg.read(CONFIG_FILE)
-    email    = cfg.get("divoom", "email",    fallback="")
+    email = cfg.get("divoom", "email", fallback="")
     password = cfg.get("divoom", "password", fallback="")
     return email, password
 
@@ -101,15 +105,15 @@ def _md5(s: str) -> str:
 
 
 def _post(path: str, body: dict) -> dict:
-    url     = f"{BASE_URL}/{path}"
+    url = f"{BASE_URL}/{path}"
     payload = json.dumps(body).encode("utf-8")
     req = urllib.request.Request(
         url,
         data=payload,
         headers={
             "Content-Type": "application/json; charset=utf-8",
-            "Connection":   "close",
-            "User-Agent":   "okhttp/4.12.0",
+            "Connection": "close",
+            "User-Agent": "okhttp/4.12.0",
         },
         method="POST",
     )
@@ -135,6 +139,7 @@ def _post(path: str, body: dict) -> dict:
 # identically) immediately unblocked AidSleep/GetAllList (RC=3 -> RC=0, real
 # sleep-sound catalog returned).
 
+
 def _register_virtual_device(creds: "DivoomCredentials") -> dict:
     """Register a new virtual Bluetooth device identity with the cloud
     (``BlueDevice/NewDevice``), returning ``{"BluetoothDeviceId", "DevicePassword",
@@ -145,14 +150,14 @@ def _register_virtual_device(creds: "DivoomCredentials") -> dict:
     utc_encrypt = _hmac_md5(utc_str)
     type_, subtype = 1, 1
     body = {
-        "Command":  "BlueDevice/NewDevice",
-        "Token":    creds.token,
-        "UserId":   creds.user_id,
+        "Command": "BlueDevice/NewDevice",
+        "Token": creds.token,
+        "UserId": creds.user_id,
         "DeviceId": 0,
-        "UTC":      utc_str,
+        "UTC": utc_str,
         "UTCEncrypt": utc_encrypt,
-        "Type":     type_,
-        "SubType":  subtype,
+        "Type": type_,
+        "SubType": subtype,
     }
     data = _post("BlueDevice/NewDevice", body)
     rc = data.get("ReturnCode", -1)
@@ -160,9 +165,9 @@ def _register_virtual_device(creds: "DivoomCredentials") -> dict:
         raise RuntimeError(f"BlueDevice/NewDevice failed: RC={rc} msg={data.get('ReturnMessage')}")
     return {
         "BluetoothDeviceId": data.get("BluetoothDeviceId", 0),
-        "DevicePassword":    data.get("DevicePassword", 0),
-        "Type":              type_,
-        "SubType":           subtype,
+        "DevicePassword": data.get("DevicePassword", 0),
+        "Type": type_,
+        "SubType": subtype,
     }
 
 
@@ -179,6 +184,7 @@ def ensure_virtual_device(creds: "DivoomCredentials") -> dict:
     dev = _register_virtual_device(creds)
     print_ok(f"Registered virtual device: BluetoothDeviceId={dev['BluetoothDeviceId']}")
     from divoom_lib.utils.atomic_io import atomic_write_text
+
     path = VIRTUAL_DEVICE_PATHS[0]
     path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_text(path, json.dumps(dev, indent=2), mode=0o600)
@@ -187,6 +193,7 @@ def ensure_virtual_device(creds: "DivoomCredentials") -> dict:
 
 # ── Auth path 1: Email / Password ─────────────────────────────────────────────
 
+
 def _login_email(email: str, password: str) -> DivoomCredentials:
     """
     POST /UserLogin with MD5-hashed password.
@@ -194,17 +201,17 @@ def _login_email(email: str, password: str) -> DivoomCredentials:
     """
     print_info(f"Logging in as {email!r} ...")
     body = {
-        "Email":         email,
-        "Password":      _md5(password),
-        "TimeZone":      "+0",
+        "Email": email,
+        "Password": _md5(password),
+        "TimeZone": "+0",
         "CountryISOCode": "US",
-        "Language":      "en",
-        "Token":         0,
-        "UserId":        0,
-        "DeviceId":      0,
+        "Language": "en",
+        "Token": 0,
+        "UserId": 0,
+        "DeviceId": 0,
     }
     data = _post("UserLogin", body)
-    rc   = data.get("ReturnCode", -1)
+    rc = data.get("ReturnCode", -1)
 
     if rc == 4:
         raise RuntimeError(f"Email not registered: {email!r}")
@@ -213,7 +220,7 @@ def _login_email(email: str, password: str) -> DivoomCredentials:
     if rc != 0:
         raise RuntimeError(f"UserLogin failed: RC={rc} msg={data.get('ReturnMessage')}")
 
-    token   = data.get("Token",  0)
+    token = data.get("Token", 0)
     user_id = data.get("UserId", 0)
     print_ok(f"Logged in: UserId={user_id} Token={_redact(token)}")
     return DivoomCredentials(token=token, user_id=user_id, email=email)
@@ -221,10 +228,11 @@ def _login_email(email: str, password: str) -> DivoomCredentials:
 
 # ── Auth path 2: Guest (HMAC-UTC) ─────────────────────────────────────────────
 
+
 def _get_server_utc() -> int:
     try:
         data = _post("APP/GetServerUTC", {"Command": "APP/GetServerUTC"})
-        utc  = data.get("UTC", 0)
+        utc = data.get("UTC", 0)
         if utc:
             print_ok(f"Server UTC: {utc}")
             return utc
@@ -238,8 +246,8 @@ def _login_guest() -> DivoomCredentials:
     HMAC-UTC guest login. From LoginServer.java q() + P2/a.java.
     """
     print_info("Attempting guest authentication ...")
-    utc         = _get_server_utc()
-    utc_str     = str(utc)
+    utc = _get_server_utc()
+    utc_str = str(utc)
     utc_encrypt = _hmac_md5(utc_str)
     print_info(f"UTC={utc_str}  UTCEncrypt={utc_encrypt}")
 
@@ -251,23 +259,23 @@ def _login_guest() -> DivoomCredentials:
     # (DeviceId/devicePassword).
     dev = _load_virtual_device()
     body = {
-        "Command":       "User/NewGuest",
-        "UTC":           utc_str,
-        "UTCEncrypt":    utc_encrypt,
-        "Type":          dev.get("Type", 0),
-        "SubType":       dev.get("SubType", 0),
-        "DeviceId":      dev.get("BluetoothDeviceId", 0),
+        "Command": "User/NewGuest",
+        "UTC": utc_str,
+        "UTCEncrypt": utc_encrypt,
+        "Type": dev.get("Type", 0),
+        "SubType": dev.get("SubType", 0),
+        "DeviceId": dev.get("BluetoothDeviceId", 0),
         "devicePassword": dev.get("DevicePassword", 0),
-        "Token":         0,
-        "UserId":        0,
+        "Token": 0,
+        "UserId": 0,
     }
     data = _post("User/NewGuest", body)
-    rc   = data.get("ReturnCode", -1)
+    rc = data.get("ReturnCode", -1)
 
     if rc != 0:
         raise RuntimeError(f"UserNewGuest failed: RC={rc} msg={data.get('ReturnMessage')}")
 
-    token   = data.get("Token",  0)
+    token = data.get("Token", 0)
     user_id = data.get("UserId", 0)
     print_ok(f"Guest credentials: UserId={user_id} Token={_redact(token)}")
     return DivoomCredentials(token=token, user_id=user_id, utc=utc)
@@ -275,17 +283,26 @@ def _login_guest() -> DivoomCredentials:
 
 # ── Cache ─────────────────────────────────────────────────────────────────────
 
+
 def _save_cache(creds: DivoomCredentials) -> None:
     from divoom_lib.utils.atomic_io import atomic_write_text
+
     # A1 atomic + A4 0600: the token cache is a secret — never world-readable,
     # never half-written.
-    atomic_write_text(CACHE_FILE, json.dumps({
-        "token":    creds.token,
-        "user_id":  creds.user_id,
-        "email":    creds.email,
-        "utc":      creds.utc,
-        "saved_at": int(time.time()),
-    }, indent=2), mode=0o600)
+    atomic_write_text(
+        CACHE_FILE,
+        json.dumps(
+            {
+                "token": creds.token,
+                "user_id": creds.user_id,
+                "email": creds.email,
+                "utc": creds.utc,
+                "saved_at": int(time.time()),
+            },
+            indent=2,
+        ),
+        mode=0o600,
+    )
     print_info(f"Credentials cached to {CACHE_FILE}")
 
 
@@ -294,14 +311,16 @@ def _load_cache() -> DivoomCredentials | None:
         return None
     try:
         data = json.loads(CACHE_FILE.read_text(encoding="utf-8"))
-        age  = int(time.time()) - data.get("saved_at", 0)
+        age = int(time.time()) - data.get("saved_at", 0)
         # Email login tokens seem long-lived; cache for 23 hours
         if age > 23 * 3600:
             print_info("Cached token expired (>23h), re-authenticating")
             return None
         creds = DivoomCredentials(
-            token=data["token"], user_id=data["user_id"],
-            email=data.get("email", ""), utc=data.get("utc", 0),
+            token=data["token"],
+            user_id=data["user_id"],
+            email=data.get("email", ""),
+            utc=data.get("utc", 0),
         )
         if creds.is_valid():
             print_ok(f"Using cached credentials: UserId={creds.user_id} (email={creds.email or 'guest'})")
@@ -373,10 +392,7 @@ def get_credentials(force_refresh: bool = False) -> DivoomCredentials:
 
     # Fail fast inside the cooldown window so a down cloud can't be hammered.
     if in_cooldown:
-        raise RuntimeError(
-            f"Divoom cloud auth unavailable (retry in "
-            f"{int(_AUTH_FAIL_COOLDOWN - since_fail)}s)"
-        )
+        raise RuntimeError(f"Divoom cloud auth unavailable (retry in {int(_AUTH_FAIL_COOLDOWN - since_fail)}s)")
 
     try:
         creds = _login_guest()
@@ -389,6 +405,7 @@ def get_credentials(force_refresh: bool = False) -> DivoomCredentials:
 
 if __name__ == "__main__":
     import sys
+
     force = "--refresh" in sys.argv
     creds = get_credentials(force_refresh=force)
     print(f"\nToken:  {creds.token}")

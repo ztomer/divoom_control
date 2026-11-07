@@ -50,7 +50,7 @@ def load_config() -> dict:
             data = json.loads(path.read_text(encoding="utf-8"))
             if isinstance(data, dict):
                 cfg.update({k: data[k] for k in DEFAULTS if k in data})
-        except (OSError, ValueError):
+        except OSError, ValueError:
             pass
     return _normalize(cfg)
 
@@ -61,7 +61,7 @@ def get_device_classify(cfg: dict, address: str) -> int:
     if address in per_device:
         try:
             return int(per_device[address])
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             pass
     return cfg.get("classify", DEFAULTS["classify"])
 
@@ -73,11 +73,11 @@ def _normalize(cfg: dict) -> dict:
     out["enabled"] = bool(out.get("enabled", False))
     try:
         out["interval"] = max(MIN_INTERVAL, min(MAX_INTERVAL, int(out.get("interval", 3600))))
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         out["interval"] = DEFAULTS["interval"]
     try:
         out["classify"] = int(out.get("classify", 18))
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         out["classify"] = DEFAULTS["classify"]
     targets = out.get("targets") or []
     if not isinstance(targets, list):
@@ -98,7 +98,7 @@ def _normalize(cfg: dict) -> dict:
             continue
         try:
             clean_dg[k] = int(v)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             continue
     out["device_galleries"] = clean_dg
     return out

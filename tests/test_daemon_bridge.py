@@ -5,6 +5,7 @@ The proxy-dispatch tests (built on a real in-process DivoomDaemon over a temp
 socket) depend on the archived divoom_client.daemon server module and moved to
 archive/tests/ (removed in R66; in git history) test_daemon_bridge.py.
 """
+
 import os
 import sys
 from pathlib import Path
@@ -74,15 +75,16 @@ def test_bundle_python_resolves_in_frozen_app(monkeypatch, tmp_path):
     the GUI executable (sys.executable is the app stub, not a python)."""
     macos = tmp_path / "Divoom.app" / "Contents" / "MacOS"
     macos.mkdir(parents=True)
-    (macos / "Divoom").write_text("")        # the GUI app stub
+    (macos / "Divoom").write_text("")  # the GUI app stub
     py = macos / "python"
-    py.write_text("")                        # the bundled interpreter
+    py.write_text("")  # the bundled interpreter
     monkeypatch.setattr(sys, "frozen", "macosx_app", raising=False)
     monkeypatch.setattr(sys, "executable", str(macos / "Divoom"))
     assert daemon_bridge.bundle_python() == str(py)
 
 
 # ── R53.25: exclusive_end failure is logged, never raised, never silent ──────
+
 
 def test_exclusive_end_failure_is_logged_not_raised(caplog):
     """A dropped exclusive release wedges the device ~30s (until G3 auto-release);
@@ -102,7 +104,7 @@ def test_exclusive_end_failure_is_logged_not_raised(caplog):
     loop = asyncio.new_event_loop()
     try:
         with caplog.at_level(logging.WARNING, logger="divoom_gui"):
-            loop.run_until_complete(ctx.__aexit__(None, None, None))   # must NOT raise
+            loop.run_until_complete(ctx.__aexit__(None, None, None))  # must NOT raise
     finally:
         loop.close()
     assert any("did not confirm release" in r.message for r in caplog.records)
@@ -131,6 +133,7 @@ def test_exclusive_end_success_is_quiet(caplog):
 
 
 # ── R53.31: proxy device_status short-TTL cache ─────────────────────────────
+
 
 def test_proxy_status_cache_dedupes_intra_op_reads():
     """is_connected/lan/_conn read back-to-back in one op must share ONE
@@ -187,8 +190,7 @@ def test_proxy_bound_to_a_mac_names_it_on_calls_and_status():
             seen["status_mac"] = mac
             return {"connected": True, "mac": mac}
 
-        def device_call(self, method, args=None, kwargs=None, *, target="device",
-                        blobs=None, token=None, mac=None):
+        def device_call(self, method, args=None, kwargs=None, *, target="device", blobs=None, token=None, mac=None):
             seen["call"] = (method, mac, target)
             return {"success": True, "result": True}
 

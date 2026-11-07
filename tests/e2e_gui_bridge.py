@@ -32,6 +32,7 @@ A Playwright test then replaces the JS-side canned-response mock with a real
 device(...)`` etc. really executes the production GUI code path against a
 real (but fully isolated) daemon.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -118,11 +119,13 @@ def _make_handler(api, isolated_socket_path: str):
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--socket-path", required=True,
-                         help="Isolated daemon Unix socket path this bridge must exclusively use.")
+    parser.add_argument(
+        "--socket-path", required=True, help="Isolated daemon Unix socket path this bridge must exclusively use."
+    )
     parser.add_argument("--port", type=int, required=True)
-    parser.add_argument("--fake-home", required=True,
-                         help="Throwaway HOME so ~/.config/divoom-control is never touched.")
+    parser.add_argument(
+        "--fake-home", required=True, help="Throwaway HOME so ~/.config/divoom-control is never touched."
+    )
     args = parser.parse_args()
 
     # Must happen before ANY divoom_gui/divoom_lib import — Path.home() is
@@ -146,9 +149,12 @@ def main() -> None:
     # their own local `from divoom_gui.daemon_bridge import ensure_daemon` at
     # call time — must target this exact module, not daemon_client.py (a
     # patch there wouldn't reach this already-rebound name).
-    with mock.patch.object(daemon_bridge, "ensure_daemon", _isolated_ensure_daemon), \
-         mock.patch.object(daemon_bridge, "daemon_alive", _isolated_daemon_alive):
+    with (
+        mock.patch.object(daemon_bridge, "ensure_daemon", _isolated_ensure_daemon),
+        mock.patch.object(daemon_bridge, "daemon_alive", _isolated_daemon_alive),
+    ):
         from divoom_gui.gui_api import DivoomGuiAPI
+
         api = DivoomGuiAPI()
 
         handler_cls = _make_handler(api, args.socket_path)

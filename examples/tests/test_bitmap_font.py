@@ -1,5 +1,6 @@
 """R28 — device-bound text must use the crisp APK bitmap font, never an
 anti-aliased TrueType font (the matrix is only 16/32/64px)."""
+
 from __future__ import annotations
 
 from pathlib import Path

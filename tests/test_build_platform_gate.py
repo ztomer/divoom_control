@@ -135,8 +135,7 @@ def test_unsupported_os_is_rejected(script: str, os_name: str) -> None:
     r = _run(script, os_name, "x86_64")
     assert r.returncode == 1, f"{script}: {os_name} should be rejected, got {r.returncode}"
     assert "Unsupported OS" in r.stderr
-    assert "generic" not in (r.stdout + r.stderr).lower(), (
-        "the gate must refuse, not announce a fallback build")
+    assert "generic" not in (r.stdout + r.stderr).lower(), "the gate must refuse, not announce a fallback build"
 
 
 @pytest.mark.parametrize("script", ALL_SCRIPTS)
@@ -191,7 +190,10 @@ GATE_CALL_RE = re.compile(r"^\s*divoom_platform_gate\s+(core|macos)\b")
 def _tracked_shell_scripts() -> list[str]:
     out = subprocess.run(
         ["git", "ls-files", "*.sh"],
-        cwd=REPO, capture_output=True, text=True, check=True,
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        check=True,
         stdin=subprocess.DEVNULL,
     ).stdout
     return [line for line in out.splitlines() if line.strip()]
@@ -211,9 +213,8 @@ def test_uname_is_read_only_through_the_gate() -> None:
             continue
         if rel not in UNAME_ALLOWED:
             offenders.append(f"{rel}: reads `uname` outside {GATE}")
-    assert not offenders, (
-        "expected every platform decision to go through divoom_platform_gate:\n  "
-        + "\n  ".join(offenders)
+    assert not offenders, "expected every platform decision to go through divoom_platform_gate:\n  " + "\n  ".join(
+        offenders
     )
 
 
@@ -235,8 +236,6 @@ def test_the_uname_allowlist_has_no_stale_entries() -> None:
 def test_every_entry_point_goes_through_the_gate(script: str) -> None:
     """A gateway that one caller can skip is not a gateway."""
     text = (REPO / script).read_text(encoding="utf-8", errors="replace")
-    calls = [line for line in text.splitlines()
-             if GATE_CALL_RE.match(line) and not line.strip().startswith("#")]
+    calls = [line for line in text.splitlines() if GATE_CALL_RE.match(line) and not line.strip().startswith("#")]
     assert calls, f"{script} never calls divoom_platform_gate"
-    assert f'scripts/lib/platform_gate.sh' in text, (
-        f"{script} calls the gate without sourcing {GATE}")
+    assert f"scripts/lib/platform_gate.sh" in text, f"{script} calls the gate without sourcing {GATE}"

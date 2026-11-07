@@ -28,6 +28,7 @@ approach is what works today for any open-source notification monitor.
 **Tests:** See ``tests/test_macos_notifications.py``. The DB layer is
 fully mocked — tests don't require macOS or notifications enabled.
 """
+
 from __future__ import annotations
 
 import logging
@@ -48,17 +49,15 @@ logger = logging.getLogger(__name__)
 # exists wins. If none exist, the monitor can't run —
 # `find_notification_db_path()` returns None.
 _CANDIDATE_RELATIVE_PATHS = (
-    "com.apple.notificationcenter/db2/db",          # Sonoma + earlier
-    "com.apple.usernotifications/db2/db",           # some Sequoia builds
+    "com.apple.notificationcenter/db2/db",  # Sonoma + earlier
+    "com.apple.usernotifications/db2/db",  # some Sequoia builds
 )
 
 
 def _candidate_absolute_paths(home: Path) -> tuple[Path, ...]:
     """Candidates that are NOT under DARWIN_USER_DIR. macOS 26 moved the
     store into usernoted's group container (R42 §2 — verified on 26.5)."""
-    return (
-        home / "Library" / "Group Containers" / "group.com.apple.usernoted" / "db2" / "db",
-    )
+    return (home / "Library" / "Group Containers" / "group.com.apple.usernoted" / "db2" / "db",)
 
 
 def find_notification_db_path() -> Optional[Path]:
@@ -68,11 +67,15 @@ def find_notification_db_path() -> Optional[Path]:
         return None
     try:
         r = subprocess.run(
-            ["getconf", "DARWIN_USER_DIR"], capture_output=True, text=True, timeout=2, stdin=subprocess.DEVNULL,
+            ["getconf", "DARWIN_USER_DIR"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            stdin=subprocess.DEVNULL,
             check=False,
         )
         base = Path(r.stdout.strip()) if r.returncode == 0 else None
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except FileNotFoundError, subprocess.TimeoutExpired:
         base = None
     if base is None:
         # Fallback to ~/Library/Application Support (matches the typical
@@ -109,5 +112,3 @@ from divoom_client.notification_router import (  # noqa: F401,E402
     _validate_rules,
     _VALID_APP_TYPES,
 )
-
-

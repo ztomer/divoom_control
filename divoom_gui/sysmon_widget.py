@@ -10,6 +10,7 @@ Now the daemon answers with the stats AND the exact frame it would push, and
 this module only encodes those bytes to a PNG. The tile and the matrix have one
 origin (R67/C2).
 """
+
 from __future__ import annotations
 
 import json
@@ -47,8 +48,7 @@ class SysmonWidgetMixin(WidgetFrameMixin):
         rewritten around it.
         """
         extras, frame_path = self._widget_frame("sysmon", size)
-        stats = {"cpu": extras.get("cpu", 0), "mem": extras.get("mem", 0),
-                 "battery": extras.get("battery")}
+        stats = {"cpu": extras.get("cpu", 0), "mem": extras.get("mem", 0), "battery": extras.get("battery")}
         return stats, frame_path
 
     def _daemon_unreachable_reason(self, client=None, exc: Exception | None = None) -> str:
@@ -73,8 +73,7 @@ class SysmonWidgetMixin(WidgetFrameMixin):
             from divoom_client.daemon_protocol import DEFAULT_SOCKET_PATH
             from divoom_client.socket_failure import explain_daemon_failure
 
-            path = getattr(client, "socket_path", None) or os.environ.get(
-                "DIVOOM_SOCKET", DEFAULT_SOCKET_PATH)
+            path = getattr(client, "socket_path", None) or os.environ.get("DIVOOM_SOCKET", DEFAULT_SOCKET_PATH)
             return explain_daemon_failure(path, fallback)
         except Exception:
             return fallback
@@ -84,11 +83,14 @@ class SysmonWidgetMixin(WidgetFrameMixin):
         try:
             sz = int(size) if size and int(size) > 0 else self._size_of(mac or None)
             stats, frame_path = self._sysmon_frame(sz)
-            return json.dumps({
-                "ok": True, "size": sz, "stats": stats,
-                "preview": self._frame_to_data_url(frame_path),
-            })
+            return json.dumps(
+                {
+                    "ok": True,
+                    "size": sz,
+                    "stats": stats,
+                    "preview": self._frame_to_data_url(frame_path),
+                }
+            )
         except Exception as e:
             logger.error(f"get_system_stats_preview failed: {e}")
             return json.dumps({"ok": False, "error": str(e)})
-

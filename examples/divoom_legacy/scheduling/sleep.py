@@ -1,15 +1,26 @@
-
 from divoom_legacy.sender_protocol import CommandSender
 from divoom_lib.models import (
     COMMANDS,
-    SHOW_SLEEP_DEFAULT_SLEEPTIME, SHOW_SLEEP_DEFAULT_SLEEPMODE,
-    SHOW_SLEEP_DEFAULT_VOLUME, SHOW_SLEEP_DEFAULT_BRIGHTNESS,
-    SHOW_SLEEP_DEFAULT_ON, SHOW_SLEEP_DEFAULT_COLOR_RGB,
-    GSS_RESPONSE_LENGTH, GSS_TIME, GSS_MODE, GSS_ON, GSS_FM_FREQ_START,
-    GSS_VOLUME, GSS_COLOR_R, GSS_COLOR_G, GSS_COLOR_B, GSS_LIGHT,
-    SET_SLEEP_COLOR_RGB_LENGTH
+    SHOW_SLEEP_DEFAULT_SLEEPTIME,
+    SHOW_SLEEP_DEFAULT_SLEEPMODE,
+    SHOW_SLEEP_DEFAULT_VOLUME,
+    SHOW_SLEEP_DEFAULT_BRIGHTNESS,
+    SHOW_SLEEP_DEFAULT_ON,
+    SHOW_SLEEP_DEFAULT_COLOR_RGB,
+    GSS_RESPONSE_LENGTH,
+    GSS_TIME,
+    GSS_MODE,
+    GSS_ON,
+    GSS_FM_FREQ_START,
+    GSS_VOLUME,
+    GSS_COLOR_R,
+    GSS_COLOR_G,
+    GSS_COLOR_B,
+    GSS_LIGHT,
+    SET_SLEEP_COLOR_RGB_LENGTH,
 )
 from divoom_lib.utils.converters import parse_frequency, to_int_if_str, bool_to_byte
+
 
 class Sleep:
     """
@@ -23,7 +34,7 @@ class Sleep:
         async def main():
             device_address = "XX:XX:XX:XX:XX:XX"  # Replace with your device's address
             divoom = Divoom(mac=device_address)
-            
+
             try:
                 await divoom.connect()
                 await divoom.sleep.show_sleep(on=1, sleeptime=10)
@@ -45,7 +56,17 @@ class Sleep:
         self._divoom = divoom
         self.logger = divoom.logger
 
-    async def show_sleep(self, value=None, sleeptime: int = SHOW_SLEEP_DEFAULT_SLEEPTIME, sleepmode: int = SHOW_SLEEP_DEFAULT_SLEEPMODE, volume: int = SHOW_SLEEP_DEFAULT_VOLUME, color: list | None = None, brightness: int = SHOW_SLEEP_DEFAULT_BRIGHTNESS, frequency: int | None = None, on: int = SHOW_SLEEP_DEFAULT_ON) -> bool:
+    async def show_sleep(
+        self,
+        value=None,
+        sleeptime: int = SHOW_SLEEP_DEFAULT_SLEEPTIME,
+        sleepmode: int = SHOW_SLEEP_DEFAULT_SLEEPMODE,
+        volume: int = SHOW_SLEEP_DEFAULT_VOLUME,
+        color: list | None = None,
+        brightness: int = SHOW_SLEEP_DEFAULT_BRIGHTNESS,
+        frequency: int | None = None,
+        on: int = SHOW_SLEEP_DEFAULT_ON,
+    ) -> bool:
         """
         Show sleep mode on the Divoom device.
 
@@ -63,9 +84,9 @@ class Sleep:
 
         Returns:
             bool: True if the command was sent successfully, False otherwise.
-        
+
         Usage::
-            
+
             # Turn on sleep mode for 10 minutes
             await divoom.sleep.show_sleep(on=1, sleeptime=10)
         """
@@ -75,17 +96,17 @@ class Sleep:
         brightness = to_int_if_str(brightness)
 
         args = []
-        args += sleeptime.to_bytes(1, byteorder='big')
-        args += sleepmode.to_bytes(1, byteorder='big')
+        args += sleeptime.to_bytes(1, byteorder="big")
+        args += sleepmode.to_bytes(1, byteorder="big")
         args.append(bool_to_byte(on))  # Use bool_to_byte directly
         args += parse_frequency(frequency)
-        args += volume.to_bytes(1, byteorder='big')
+        args += volume.to_bytes(1, byteorder="big")
 
         if color is None or len(color) < SET_SLEEP_COLOR_RGB_LENGTH:
             args += SHOW_SLEEP_DEFAULT_COLOR_RGB
         else:
             args += self._divoom.convert_color(color)
-        args += brightness.to_bytes(1, byteorder='big')
+        args += brightness.to_bytes(1, byteorder="big")
 
         return await self._divoom.send_command(COMMANDS["set sleeptime"], args)
 
@@ -96,9 +117,9 @@ class Sleep:
         Returns:
             dict | None: A dictionary containing the sleep scene settings,
                          or None if the command fails.
-        
+
         Usage::
-            
+
             sleep_scene = await divoom.sleep.get_sleep_scene()
             if sleep_scene:
                 print(f"Sleep scene: {sleep_scene}")
@@ -110,7 +131,7 @@ class Sleep:
                 "time": response[GSS_TIME],
                 "mode": response[GSS_MODE],
                 "on": response[GSS_ON],
-                "fm_freq": int.from_bytes(response[GSS_FM_FREQ_START:GSS_FM_FREQ_START + 2], byteorder='little'),
+                "fm_freq": int.from_bytes(response[GSS_FM_FREQ_START : GSS_FM_FREQ_START + 2], byteorder="little"),
                 "volume": response[GSS_VOLUME],
                 "color_r": response[GSS_COLOR_R],
                 "color_g": response[GSS_COLOR_G],
@@ -130,18 +151,17 @@ class Sleep:
 
         Returns:
             bool: True if the command was sent successfully, False otherwise.
-        
+
         Usage::
-            
+
             # Turn on sleep scene listen
             await divoom.sleep.set_sleep_scene_listen(1, 0, 50)
         """
-        self.logger.info(
-            f"Setting sleep scene listen: on_off={on_off}, mode={mode}, volume={volume} (0xa3)...")
+        self.logger.info(f"Setting sleep scene listen: on_off={on_off}, mode={mode}, volume={volume} (0xa3)...")
         args = []
         args.append(bool_to_byte(on_off))
-        args += mode.to_bytes(1, byteorder='big')
-        args += volume.to_bytes(1, byteorder='big')
+        args += mode.to_bytes(1, byteorder="big")
+        args += volume.to_bytes(1, byteorder="big")
         return await self._divoom.send_command(COMMANDS["set sleep scene listen"], args)
 
     async def set_scene_volume(self, volume: int) -> bool:
@@ -153,9 +173,9 @@ class Sleep:
 
         Returns:
             bool: True if the command was sent successfully, False otherwise.
-        
+
         Usage::
-            
+
             await divoom.sleep.set_scene_volume(50)
         """
         self.logger.info(f"Setting scene volume to {volume} (0xa4)...")
@@ -171,9 +191,9 @@ class Sleep:
 
         Returns:
             bool: True if the command was sent successfully, False otherwise.
-        
+
         Usage::
-            
+
             # Set sleep color to blue
             await divoom.sleep.set_sleep_color([0, 0, 255])
         """
@@ -193,9 +213,9 @@ class Sleep:
 
         Returns:
             bool: True if the command was sent successfully, False otherwise.
-        
+
         Usage::
-            
+
             await divoom.sleep.set_sleep_light(50)
         """
         self.logger.info(f"Setting sleep light to {light} (0xae)...")
@@ -216,19 +236,20 @@ class Sleep:
 
         Returns:
             bool: True if the command was sent successfully, False otherwise.
-        
+
         Usage::
-            
+
             # This is a low-level command.
             # await divoom.sleep.set_sleep_scene(mode=0, on=1, fm_freq=[0x03, 0x6c], volume=50, color=[255, 0, 0], light=50)
         """
         self.logger.info(
-            f"Setting sleep scene: mode={mode}, on={on}, fm_freq={fm_freq}, volume={volume}, color={color}, light={light} (0x41)...")
+            f"Setting sleep scene: mode={mode}, on={on}, fm_freq={fm_freq}, volume={volume}, color={color}, light={light} (0x41)..."
+        )
         args = []
-        args += mode.to_bytes(1, byteorder='big')
+        args += mode.to_bytes(1, byteorder="big")
         args.append(bool_to_byte(on))
         args.extend(fm_freq)  # Expecting a list of 2 bytes
-        args += volume.to_bytes(1, byteorder='big')
+        args += volume.to_bytes(1, byteorder="big")
         args.extend(self._divoom.convert_color(color))
-        args += light.to_bytes(1, byteorder='big')
+        args += light.to_bytes(1, byteorder="big")
         return await self._divoom.send_command(COMMANDS["set sleep scene"], args)

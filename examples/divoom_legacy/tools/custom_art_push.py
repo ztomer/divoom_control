@@ -31,8 +31,8 @@ INTER_CHUNK_DELAY = 0.04  # APK old-mode q.s().I(true) sleeps 40ms between sends
 # queue for the full 10s default — every other op for that device blocks behind it.
 QUERY_TIMEOUT = 4.0
 
-_CMD_OLD = COMMANDS["set user gif"]           # 0xB1
-_CMD_NEW = COMMANDS["app new user define"]     # 0x8C
+_CMD_OLD = COMMANDS["set user gif"]  # 0xB1
+_CMD_NEW = COMMANDS["app new user define"]  # 0x8C
 
 
 def _le16(v: int) -> list[int]:
@@ -44,6 +44,7 @@ def _le32(v: int) -> list[int]:
 
 
 # ── N2 header ────────────────────────────────────────────────────────────
+
 
 def build_n2_header(page: int, total_encoded_len: int | None = None) -> tuple[int, list[int]]:
     """Build the N2() header command + args.
@@ -63,8 +64,8 @@ def build_n2_header(page: int, total_encoded_len: int | None = None) -> tuple[in
 
 # ── Data chunk packets ───────────────────────────────────────────────────
 
-def build_data_packets(encoded_blob: bytes, total_len: int,
-                       use_new_mode: bool) -> list[tuple[int, list[int]]]:
+
+def build_data_packets(encoded_blob: bytes, total_len: int, use_new_mode: bool) -> list[tuple[int, list[int]]]:
     """Chunk encoded data into hVar.d()-compatible SPP command payloads.
 
     Returns list of (command_id, args_list) suitable for send_command().
@@ -81,7 +82,7 @@ def build_data_packets(encoded_blob: bytes, total_len: int,
     offset = 0
     idx = 0
     while offset < len(encoded_blob):
-        chunk = encoded_blob[offset:offset + CHUNK_SIZE]
+        chunk = encoded_blob[offset : offset + CHUNK_SIZE]
         chunk_size = len(chunk)
         if use_new_mode:
             args = [0x01] + _le32(total_len) + _le16(idx) + list(chunk)
@@ -95,6 +96,7 @@ def build_data_packets(encoded_blob: bytes, total_len: int,
 
 # ── K0 end signal ────────────────────────────────────────────────────────
 
+
 def build_k0(use_new_mode: bool) -> tuple[int, list[int]]:
     """Build the K0() end-of-transmission signal.
 
@@ -106,9 +108,8 @@ def build_k0(use_new_mode: bool) -> tuple[int, list[int]]:
 
 # ── Push entry points ────────────────────────────────────────────────────
 
-async def push_page(divoom, page: int,
-                    encoded_frames: list[bytes],
-                    use_new_mode: bool = True) -> bool:
+
+async def push_page(divoom, page: int, encoded_frames: list[bytes], use_new_mode: bool = True) -> bool:
     """Push encoded frames to a custom art page on the device.
 
     This matches the APK's LightMakeNewModel.r() → v() → y() + K0() flow.
@@ -154,10 +155,14 @@ async def push_page(divoom, page: int,
     return True
 
 
-async def push_slot(divoom, page: int, slot: int,
-                    encoded_frame: bytes,
-                    existing_frames: list[bytes] | None = None,
-                    use_new_mode: bool = True) -> bool:
+async def push_slot(
+    divoom,
+    page: int,
+    slot: int,
+    encoded_frame: bytes,
+    existing_frames: list[bytes] | None = None,
+    use_new_mode: bool = True,
+) -> bool:
     """Push one frame to a specific slot by merging with existing page data.
 
     The APK's o() method loads existing 12-slot page data, finds the
@@ -194,12 +199,12 @@ async def push_slot(divoom, page: int, slot: int,
                 slot = i
                 break
 
-    logger.info("Pushing frame to page=%d slot=%d (mode=%s)", page, slot,
-                "new" if use_new_mode else "old")
+    logger.info("Pushing frame to page=%d slot=%d (mode=%s)", page, slot, "new" if use_new_mode else "old")
     return await push_page(divoom, page, frames, use_new_mode=use_new_mode)
 
 
 # ── Page query (0x8E) ────────────────────────────────────────────────────
+
 
 async def query_page(divoom, page: int, timeout: float = QUERY_TIMEOUT) -> list[int] | None:
     """Query device for filled slot IDs on a page via 0x8E.
@@ -238,7 +243,7 @@ async def query_page(divoom, page: int, timeout: float = QUERY_TIMEOUT) -> list[
         for _ in range(item_count):
             if pos + 4 > len(response):
                 break
-            fid = int.from_bytes(response[pos:pos+4], byteorder="little")
+            fid = int.from_bytes(response[pos : pos + 4], byteorder="little")
             ids.append(fid)
             pos += 4
         return ids

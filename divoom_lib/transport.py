@@ -19,13 +19,14 @@ from functools import wraps
 
 # ── Enum ──────────────────────────────────────────────────────────────────────
 
+
 class Transport(Enum):
     """The four network paths a command can take."""
 
-    BLE   = "ble"      #  Bluetooth Low Energy — 100 % local
-    LAN   = "lan"      #  LAN HTTP :9000       — 100 % local (WiFi devices)
-    CLOUD = "cloud"    #  appin.divoom-gz.com  — Divoom's servers
-    EXT   = "external" #  3rd-party internet   — weather / stocks / fonts
+    BLE = "ble"  #  Bluetooth Low Energy — 100 % local
+    LAN = "lan"  #  LAN HTTP :9000       — 100 % local (WiFi devices)
+    CLOUD = "cloud"  #  appin.divoom-gz.com  — Divoom's servers
+    EXT = "external"  #  3rd-party internet   — weather / stocks / fonts
 
     # ── Display helpers ───────────────────────────────────────────────────────
 
@@ -56,35 +57,36 @@ class Transport(Enum):
 
 
 _BADGES: dict[Transport, str] = {
-    Transport.BLE:   "",
-    Transport.LAN:   "",
+    Transport.BLE: "",
+    Transport.LAN: "",
     Transport.CLOUD: "",
-    Transport.EXT:   "",
+    Transport.EXT: "",
 }
 
 _LABELS: dict[Transport, str] = {
-    Transport.BLE:   "BLE",
-    Transport.LAN:   "LAN",
+    Transport.BLE: "BLE",
+    Transport.LAN: "LAN",
     Transport.CLOUD: "Divoom Cloud",
-    Transport.EXT:   "External",
+    Transport.EXT: "External",
 }
 
 _DESCRIPTIONS: dict[Transport, str] = {
-    Transport.BLE:   "Bluetooth Low Energy — 100 % local, never leaves your device.",
-    Transport.LAN:   "Local Wi-Fi HTTP (:9000) — 100 % local, talks directly to the device.",
+    Transport.BLE: "Bluetooth Low Energy — 100 % local, never leaves your device.",
+    Transport.LAN: "Local Wi-Fi HTTP (:9000) — 100 % local, talks directly to the device.",
     Transport.CLOUD: "Divoom cloud (appin.divoom-gz.com) — requires internet & Divoom account.",
-    Transport.EXT:   "3rd-party internet APIs (weather, stocks) — no login required.",
+    Transport.EXT: "3rd-party internet APIs (weather, stocks) — no login required.",
 }
 
 _COLORS: dict[Transport, str] = {
-    Transport.BLE:   "#3b82f6",   # blue-500
-    Transport.LAN:   "#22c55e",   # green-500
-    Transport.CLOUD: "#f59e0b",   # amber-500
-    Transport.EXT:   "#ef4444",   # red-500
+    Transport.BLE: "#3b82f6",  # blue-500
+    Transport.LAN: "#22c55e",  # green-500
+    Transport.CLOUD: "#f59e0b",  # amber-500
+    Transport.EXT: "#ef4444",  # red-500
 }
 
 
 # ── Decorator ─────────────────────────────────────────────────────────────────
+
 
 def via(transport: Transport):
     """
@@ -102,6 +104,7 @@ def via(transport: Transport):
             async def set_brightness(self, brightness: int) -> bool:
                 ...
     """
+
     def decorator(fn):
         @wraps(fn)
         async def wrapper(*args, **kwargs):
@@ -111,14 +114,18 @@ def via(transport: Transport):
         # Preserve sync functions (non-coroutines) as-is
         if not hasattr(fn, "__wrapped__"):
             import inspect
+
             if not inspect.iscoroutinefunction(fn):
+
                 @wraps(fn)
                 def sync_wrapper(*args, **kwargs):
                     return fn(*args, **kwargs)
+
                 sync_wrapper.transport = transport
                 return sync_wrapper
 
         return wrapper
+
     return decorator
 
 
@@ -126,60 +133,57 @@ def via(transport: Transport):
 
 COMMAND_TRANSPORT_MAP: dict[str, Transport] = {
     # ──  BLE — always local, Bluetooth only ────────────────────────────────
-    "brightness":       Transport.BLE,
-    "channel":          Transport.BLE,
-    "clock_display":    Transport.BLE,
-    "animation":        Transport.BLE,
-    "text_scroll":      Transport.BLE,
-    "timer":            Transport.BLE,
-    "scoreboard":       Transport.BLE,
-    "alarm":            Transport.BLE,
-    "fm_radio":         Transport.BLE,
-    "volume":           Transport.BLE,
-    "notifications":    Transport.BLE,
-    "screen_rotation":  Transport.BLE,
-    "boot_animation":   Transport.BLE,
-    "factory_reset":    Transport.BLE,
-    "device_name":      Transport.BLE,
-    "sleep":            Transport.BLE,
-    "drawing":          Transport.BLE,
-    "sand_paint":       Transport.BLE,
-    "font_transfer":    Transport.BLE,
-    "temp_unit":        Transport.BLE,
-    "work_mode":        Transport.BLE,
-    "auto_power_off":   Transport.BLE,
-    "sound_control":    Transport.BLE,
-    "net_temp":         Transport.BLE,   # push weather data over BLE
-
+    "brightness": Transport.BLE,
+    "channel": Transport.BLE,
+    "clock_display": Transport.BLE,
+    "animation": Transport.BLE,
+    "text_scroll": Transport.BLE,
+    "timer": Transport.BLE,
+    "scoreboard": Transport.BLE,
+    "alarm": Transport.BLE,
+    "fm_radio": Transport.BLE,
+    "volume": Transport.BLE,
+    "notifications": Transport.BLE,
+    "screen_rotation": Transport.BLE,
+    "boot_animation": Transport.BLE,
+    "factory_reset": Transport.BLE,
+    "device_name": Transport.BLE,
+    "sleep": Transport.BLE,
+    "drawing": Transport.BLE,
+    "sand_paint": Transport.BLE,
+    "font_transfer": Transport.BLE,
+    "temp_unit": Transport.BLE,
+    "work_mode": Transport.BLE,
+    "auto_power_off": Transport.BLE,
+    "sound_control": Transport.BLE,
+    "net_temp": Transport.BLE,  # push weather data over BLE
     # ──  LAN — local WiFi HTTP :9000 (WiFi-capable devices only) ───────────
-    "lan_brightness":   Transport.LAN,
-    "lan_channel":      Transport.LAN,
-    "lan_clock":        Transport.LAN,
-    "lan_timer":        Transport.LAN,
-    "lan_scoreboard":   Transport.LAN,
-    "lan_noise":        Transport.LAN,
-    "lan_screen":       Transport.LAN,
-    "lan_ambient":      Transport.LAN,
-    "lan_rgb":          Transport.LAN,
-    "lan_photo_album":  Transport.LAN,
-    "lan_eq":           Transport.LAN,
-
+    "lan_brightness": Transport.LAN,
+    "lan_channel": Transport.LAN,
+    "lan_clock": Transport.LAN,
+    "lan_timer": Transport.LAN,
+    "lan_scoreboard": Transport.LAN,
+    "lan_noise": Transport.LAN,
+    "lan_screen": Transport.LAN,
+    "lan_ambient": Transport.LAN,
+    "lan_rgb": Transport.LAN,
+    "lan_photo_album": Transport.LAN,
+    "lan_eq": Transport.LAN,
     # ──  Divoom Cloud — appin.divoom-gz.com (requires account) ─────────────
-    "gallery_browse":   Transport.CLOUD,
+    "gallery_browse": Transport.CLOUD,
     "clock_face_store": Transport.CLOUD,
-    "user_auth":        Transport.CLOUD,
-    "upload_artwork":   Transport.CLOUD,
-    "community":        Transport.CLOUD,
-    "cloud_alarm":      Transport.CLOUD,
-    "pomodoro":         Transport.CLOUD,
-    "white_noise":      Transport.CLOUD,
-    "tts_voice":        Transport.CLOUD,
-
+    "user_auth": Transport.CLOUD,
+    "upload_artwork": Transport.CLOUD,
+    "community": Transport.CLOUD,
+    "cloud_alarm": Transport.CLOUD,
+    "pomodoro": Transport.CLOUD,
+    "white_noise": Transport.CLOUD,
+    "tts_voice": Transport.CLOUD,
     # ──  External — 3rd-party APIs, no account required ────────────────────
-    "weather":          Transport.EXT,
-    "stock_ticker":     Transport.EXT,
-    "music_metadata":   Transport.EXT,
-    "album_art":        Transport.EXT,
+    "weather": Transport.EXT,
+    "stock_ticker": Transport.EXT,
+    "music_metadata": Transport.EXT,
+    "album_art": Transport.EXT,
 }
 
 

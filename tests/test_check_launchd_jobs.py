@@ -13,6 +13,7 @@ must not be — and the tool's own self-test (which runs on CI, where there is
 no LaunchAgents) must be able to fail, or the CI step would be a step that
 cannot fail.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -96,13 +97,14 @@ def test_a_declared_job_whose_file_was_deleted_is_a_finding(gate, tree):
     (repo / "divoom_lib").mkdir(parents=True)
     agents = tree / "LaunchAgents"
     agents.mkdir()
-    declaration = _declaration(repo, [
-        {"label": "com.divoom.monthlybest",
-         "program": "divoom_lib/monthly_best_daemon.py"},
-    ])
+    declaration = _declaration(
+        repo,
+        [
+            {"label": "com.divoom.monthlybest", "program": "divoom_lib/monthly_best_daemon.py"},
+        ],
+    )
     findings, _warnings, _counts = gate.check(repo, agents, {}, declaration)
-    assert any("monthly_best_daemon.py" in f and "does not exist" in f
-               for f in findings), findings
+    assert any("monthly_best_daemon.py" in f and "does not exist" in f for f in findings), findings
 
 
 def test_an_installed_job_nobody_declared_is_a_finding(gate, tree):
@@ -111,11 +113,9 @@ def test_an_installed_job_nobody_declared_is_a_finding(gate, tree):
     repo.mkdir(parents=True)
     agents = tree / "LaunchAgents"
     agents.mkdir()
-    _plist(agents / "com.divoom.monthlybest.plist", "com.divoom.monthlybest",
-           [sys.executable])
+    _plist(agents / "com.divoom.monthlybest.plist", "com.divoom.monthlybest", [sys.executable])
     declaration = _declaration(repo, [])
-    findings, _warnings, counts = gate.check(
-        repo, agents, {"com.divoom.monthlybest": ("-", "0")}, declaration)
+    findings, _warnings, counts = gate.check(repo, agents, {"com.divoom.monthlybest": ("-", "0")}, declaration)
     assert counts["mine"] == 1
     assert any("NOT declared" in f for f in findings), findings
 
@@ -125,16 +125,19 @@ def test_an_installed_job_naming_a_deleted_file_is_a_finding(gate, tree):
     (repo / "divoom_lib").mkdir(parents=True)
     agents = tree / "LaunchAgents"
     agents.mkdir()
-    _plist(agents / "com.divoom.monthlybest.plist", "com.divoom.monthlybest",
-           [sys.executable, str(repo / "divoom_lib" / "monthly_best_daemon.py")])
-    declaration = _declaration(repo, [
-        {"label": "com.divoom.monthlybest",
-         "program": "divoom_lib/monthly_best_daemon.py"},
-    ])
-    findings, _warnings, _counts = gate.check(
-        repo, agents, {"com.divoom.monthlybest": ("-", "0")}, declaration)
-    assert any("monthly_best_daemon.py" in f and "does not exist" in f
-               for f in findings), findings
+    _plist(
+        agents / "com.divoom.monthlybest.plist",
+        "com.divoom.monthlybest",
+        [sys.executable, str(repo / "divoom_lib" / "monthly_best_daemon.py")],
+    )
+    declaration = _declaration(
+        repo,
+        [
+            {"label": "com.divoom.monthlybest", "program": "divoom_lib/monthly_best_daemon.py"},
+        ],
+    )
+    findings, _warnings, _counts = gate.check(repo, agents, {"com.divoom.monthlybest": ("-", "0")}, declaration)
+    assert any("monthly_best_daemon.py" in f and "does not exist" in f for f in findings), findings
 
 
 def test_a_dead_job_of_this_repo_is_a_finding(gate, tree):
@@ -143,13 +146,14 @@ def test_a_dead_job_of_this_repo_is_a_finding(gate, tree):
     repo.mkdir(parents=True)
     agents = tree / "LaunchAgents"
     agents.mkdir()
-    _plist(agents / "com.divoom.monthlybest.plist", "com.divoom.monthlybest",
-           [sys.executable])
-    declaration = _declaration(repo, [
-        {"label": "com.divoom.monthlybest", "program": "tools/x.py"},
-    ])
-    findings, _warnings, _counts = gate.check(
-        repo, agents, {"com.divoom.monthlybest": ("-", "2")}, declaration)
+    _plist(agents / "com.divoom.monthlybest.plist", "com.divoom.monthlybest", [sys.executable])
+    declaration = _declaration(
+        repo,
+        [
+            {"label": "com.divoom.monthlybest", "program": "tools/x.py"},
+        ],
+    )
+    findings, _warnings, _counts = gate.check(repo, agents, {"com.divoom.monthlybest": ("-", "2")}, declaration)
     assert any("dead" in f and "exit status is 2" in f for f in findings), findings
 
 
@@ -159,13 +163,14 @@ def test_a_running_job_is_not_dead(gate, tree):
     repo.mkdir(parents=True)
     agents = tree / "LaunchAgents"
     agents.mkdir()
-    _plist(agents / "com.divoom.monthlybest.plist", "com.divoom.monthlybest",
-           [sys.executable])
-    declaration = _declaration(repo, [
-        {"label": "com.divoom.monthlybest", "program": "tools/x.py"},
-    ])
-    findings, _warnings, _counts = gate.check(
-        repo, agents, {"com.divoom.monthlybest": ("4242", "2")}, declaration)
+    _plist(agents / "com.divoom.monthlybest.plist", "com.divoom.monthlybest", [sys.executable])
+    declaration = _declaration(
+        repo,
+        [
+            {"label": "com.divoom.monthlybest", "program": "tools/x.py"},
+        ],
+    )
+    findings, _warnings, _counts = gate.check(repo, agents, {"com.divoom.monthlybest": ("4242", "2")}, declaration)
     assert not any("dead" in f for f in findings), findings
 
 
@@ -177,13 +182,14 @@ def test_a_healthy_declared_and_installed_job_is_not_a_finding(gate, tree):
     script.write_text("# present\n")
     agents = tree / "LaunchAgents"
     agents.mkdir()
-    _plist(agents / "com.divoom.monthlybest.plist", "com.divoom.monthlybest",
-           [sys.executable, str(script)])
-    declaration = _declaration(repo, [
-        {"label": "com.divoom.monthlybest", "program": "tools/x.py"},
-    ])
-    findings, _warnings, _counts = gate.check(
-        repo, agents, {"com.divoom.monthlybest": ("-", "0")}, declaration)
+    _plist(agents / "com.divoom.monthlybest.plist", "com.divoom.monthlybest", [sys.executable, str(script)])
+    declaration = _declaration(
+        repo,
+        [
+            {"label": "com.divoom.monthlybest", "program": "tools/x.py"},
+        ],
+    )
+    findings, _warnings, _counts = gate.check(repo, agents, {"com.divoom.monthlybest": ("-", "0")}, declaration)
     assert findings == [], findings
 
 
@@ -195,11 +201,15 @@ def test_a_disabled_job_is_not_a_finding(gate, tree):
     agents.mkdir()
     import plistlib
 
-    (agents / "com.divoom.monthlybest.plist").write_bytes(plistlib.dumps({
-        "Label": "com.divoom.monthlybest",
-        "ProgramArguments": ["/nonexistent/python3"],
-        "Disabled": True,
-    }))
+    (agents / "com.divoom.monthlybest.plist").write_bytes(
+        plistlib.dumps(
+            {
+                "Label": "com.divoom.monthlybest",
+                "ProgramArguments": ["/nonexistent/python3"],
+                "Disabled": True,
+            }
+        )
+    )
     declaration = _declaration(repo, [])
     findings, _warnings, _counts = gate.check(repo, agents, {}, declaration)
     assert findings == [], findings
@@ -211,11 +221,9 @@ def test_another_repos_dead_job_is_a_warning_not_a_failure(gate, tree):
     repo.mkdir(parents=True)
     agents = tree / "LaunchAgents"
     agents.mkdir()
-    _plist(agents / "com.someone.else.plist", "com.someone.else",
-           [sys.executable])
+    _plist(agents / "com.someone.else.plist", "com.someone.else", [sys.executable])
     declaration = _declaration(repo, [])
-    findings, warnings, _counts = gate.check(
-        repo, agents, {"com.someone.else": ("-", "2")}, declaration)
+    findings, warnings, _counts = gate.check(repo, agents, {"com.someone.else": ("-", "2")}, declaration)
     assert findings == [], findings
     assert any("com.someone.else" in w for w in warnings), warnings
 
@@ -226,8 +234,7 @@ def test_another_repos_job_with_a_gone_program_is_a_warning(gate, tree):
     repo.mkdir(parents=True)
     agents = tree / "LaunchAgents"
     agents.mkdir()
-    _plist(agents / "com.someone.else.plist", "com.someone.else",
-           ["/nonexistent/binary"])
+    _plist(agents / "com.someone.else.plist", "com.someone.else", ["/nonexistent/binary"])
     declaration = _declaration(repo, [])
     findings, warnings, _counts = gate.check(repo, agents, {}, declaration)
     assert findings == [], findings
@@ -239,13 +246,14 @@ def test_this_repos_job_with_a_gone_program_is_a_failure(gate, tree):
     repo.mkdir(parents=True)
     agents = tree / "LaunchAgents"
     agents.mkdir()
-    _plist(agents / "com.divoom.monthlybest.plist", "com.divoom.monthlybest",
-           ["/nonexistent/python3"])
-    declaration = _declaration(repo, [
-        {"label": "com.divoom.monthlybest", "program": "tools/x.py"},
-    ])
-    findings, _warnings, _counts = gate.check(
-        repo, agents, {"com.divoom.monthlybest": ("-", "0")}, declaration)
+    _plist(agents / "com.divoom.monthlybest.plist", "com.divoom.monthlybest", ["/nonexistent/python3"])
+    declaration = _declaration(
+        repo,
+        [
+            {"label": "com.divoom.monthlybest", "program": "tools/x.py"},
+        ],
+    )
+    findings, _warnings, _counts = gate.check(repo, agents, {"com.divoom.monthlybest": ("-", "0")}, declaration)
     assert any("can never start" in f for f in findings), findings
 
 
@@ -255,8 +263,7 @@ def test_a_missing_declaration_is_a_finding_not_an_empty_list(gate, tree):
     repo.mkdir(parents=True)
     agents = tree / "LaunchAgents"
     agents.mkdir()
-    findings, _warnings, _counts = gate.check(
-        repo, agents, {}, repo / "docs" / "launchd_jobs.json")
+    findings, _warnings, _counts = gate.check(repo, agents, {}, repo / "docs" / "launchd_jobs.json")
     assert any("is missing" in f for f in findings), findings
 
 
@@ -272,9 +279,7 @@ def test_the_self_test_can_fail(gate, monkeypatch):
 
 
 def test_launchctl_output_is_parsed_into_pid_and_status(gate):
-    text = ("PID\tStatus\tLabel\n"
-            "-\t2\tcom.divoom.monthlybest\n"
-            "4242\t0\tcom.ztomer.other\n")
+    text = "PID\tStatus\tLabel\n-\t2\tcom.divoom.monthlybest\n4242\t0\tcom.ztomer.other\n"
     statuses = gate.launchctl_status(text)
     assert statuses["com.divoom.monthlybest"] == ("-", "2")
     assert statuses["com.ztomer.other"] == ("4242", "0")
@@ -294,11 +299,8 @@ def test_the_gate_is_wired_into_the_ci_steps_and_into_ci():
     assert "tools/check_launchd_jobs.py" in steps.group(1), (
         "the launchd gate is not in GOH_CI_STEPS — it would be a gate nobody runs"
     )
-    workflow = (REPO / ".github" / "workflows" / "tests.yml").read_text(
-        encoding="utf-8")
-    assert "tools/check_launchd_jobs.py" in workflow, (
-        "the launchd gate is not in CI — CI would not see it"
-    )
+    workflow = (REPO / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8")
+    assert "tools/check_launchd_jobs.py" in workflow, "the launchd gate is not in CI — CI would not see it"
 
 
 class _Done:
@@ -325,8 +327,7 @@ def test_an_unreadable_launchctl_fails_closed(gate, run):
 
 def test_a_readable_launchctl_is_parsed(gate):
     text = "PID\tStatus\tLabel\n-\t0\tcom.apple.x\n"
-    assert gate.read_launchctl_status(
-        run=lambda *a, **k: _Done(stdout=text)) == {"com.apple.x": ("-", "0")}
+    assert gate.read_launchctl_status(run=lambda *a, **k: _Done(stdout=text)) == {"com.apple.x": ("-", "0")}
 
 
 def test_the_gate_is_red_when_launchctl_cannot_be_read(gate, tree, monkeypatch):

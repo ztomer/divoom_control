@@ -57,6 +57,7 @@ def _table(*rows):
 
 # ── Which processes are a test's: pure, no browser ───────────────────────────
 
+
 def test_a_browser_is_named_by_its_test_home_never_by_its_name():
     # The USER'S camoufox (the gemini-camoufox transport) runs from the real
     # cache. Same name, same binary: not ours, so never a candidate.
@@ -84,8 +85,7 @@ def test_a_browser_whose_driver_died_is_an_orphan_with_its_whole_group():
     # A parent that is not a driver (pid reused by something else).
     leader2 = _row(41, 50, 41, f"{HOME_A}{CAMOUFOX}")
     other = _row(50, 1, 50, "/usr/bin/some-daemon")
-    assert set(R.orphans(_table(leader, child, stray, leader2, other))) == {
-        leader, child, stray, leader2}
+    assert set(R.orphans(_table(leader, child, stray, leader2, other))) == {leader, child, stray, leader2}
 
 
 def test_another_users_browser_is_never_a_candidate():
@@ -101,7 +101,7 @@ def test_only_the_browser_launched_under_this_process_is_registered(monkeypatch)
         _row(70, me, me, "/x/node /x/cli.js run-driver"),
         _row(71, 70, 71, f"{home}{CAMOUFOX}"),
         _row(72, 71, 71, f"{home}{CHILD}"),
-        _row(80, 99, 99, "/x/node /x/cli.js run-driver"),   # a sibling worker's
+        _row(80, 99, 99, "/x/node /x/cli.js run-driver"),  # a sibling worker's
         _row(81, 80, 81, f"{home}{CAMOUFOX}"),
     ]
     monkeypatch.setenv("HOME", home)
@@ -126,7 +126,7 @@ def test_outside_a_test_session_nothing_is_registered(monkeypatch):
 
 # ── The real thing: inner sessions with a real browser ───────────────────────
 
-INNER_TEST = '''
+INNER_TEST = """
 import os, signal, time
 from playwright.sync_api import sync_playwright
 from tests.support import browser as B
@@ -156,7 +156,7 @@ def test_killed():
 def test_sees_no_orphan_of_the_killed_run():
     dead = os.environ["REAP_DEAD_HOME"]
     assert R.under_home(dead, R.table()) == []
-'''
+"""
 
 
 def _real_home() -> str:
@@ -173,18 +173,38 @@ def _inner_session(tmp_path, select, *extra, env_extra=None, timeout=240):
     env = {k: v for k, v in os.environ.items() if k != "DIVOOM_TEST_HOME"}
     env.update(HOME=_real_home(), PYTHONPATH=str(REPO), REAP_PROBE_OUT=str(probe))
     env.update(env_extra or {})
-    cmd = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider",
-           "-p", "tests.conftest", "--run-browser", "-c", str(tmp_path / "pytest.ini"),
-           "--rootdir", str(tmp_path), *extra, f"{tmp_path / 'test_inner.py'}::{select}"]
-    proc = subprocess.Popen(cmd, cwd=REPO, env=env, stdin=subprocess.DEVNULL,
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                            start_new_session=True)
+    cmd = [
+        sys.executable,
+        "-m",
+        "pytest",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "-p",
+        "tests.conftest",
+        "--run-browser",
+        "-c",
+        str(tmp_path / "pytest.ini"),
+        "--rootdir",
+        str(tmp_path),
+        *extra,
+        f"{tmp_path / 'test_inner.py'}::{select}",
+    ]
+    proc = subprocess.Popen(
+        cmd,
+        cwd=REPO,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+    )
     try:
         out, _ = proc.communicate(timeout=timeout)
     finally:
         try:
             os.killpg(proc.pid, signal.SIGKILL)
-        except (ProcessLookupError, PermissionError):
+        except ProcessLookupError, PermissionError:
             pass
         proc.wait()
     home = probe.read_text() if probe.exists() else ""
@@ -206,7 +226,7 @@ def test_a_failing_test_leaves_no_browser(tmp_path, inner_homes):
     code, home, out = _inner_session(tmp_path, "test_fails")
     inner_homes.append(home)
     assert home, out
-    assert code == 1, out          # it failed, as written
+    assert code == 1, out  # it failed, as written
     left = R.under_home(home, R.table())
     assert left == [], f"{len(left)} camoufox process(es) outlived the session:\n{out}"
 
@@ -219,8 +239,7 @@ def test_a_killed_run_is_cleaned_at_the_next_session_start(tmp_path, inner_homes
     assert code == -signal.SIGKILL, out
     # The instrument can see the leak: the killed run's browser IS still up.
     assert R.under_home(dead, R.table()), "the killed run left no browser to clean"
-    code, _, out = _inner_session(tmp_path, "test_sees_no_orphan_of_the_killed_run",
-                                  env_extra={"REAP_DEAD_HOME": dead})
+    code, _, out = _inner_session(tmp_path, "test_sees_no_orphan_of_the_killed_run", env_extra={"REAP_DEAD_HOME": dead})
     assert code == 0, out
 
 

@@ -18,6 +18,7 @@ covered: ~90 lines of in-GUI download and decode (magic-43, raw GIF/PNG/JPEG,
 cloud containers, a PIL catch-all) replaced by one daemon call whose decoder
 handles strictly more. `tests/test_gallery_assets.py` covers what remains.
 """
+
 from __future__ import annotations
 
 import json
@@ -34,8 +35,7 @@ class _FakeClient:
     """Records the device_size the preview asks for."""
 
     def __init__(self, items=None, error=None):
-        self.items = items if items is not None else [
-            {"file_id": "g/abc", "version": 3, "vendor_id": 1, "sha1": "x"}]
+        self.items = items if items is not None else [{"file_id": "g/abc", "version": 3, "vendor_id": 1, "sha1": "x"}]
         self.error = error
         self.sizes = []
 
@@ -85,8 +85,7 @@ def test_preview_size_tracks_the_device_at_every_size(monkeypatch, tmp_path):
     for size in (16, 32, 64, 128, 256):
         api = _Api(size)
         api.hot_update_preview(PANEL)
-        assert api._fake.sizes == [size], (
-            f"preview at size {size} asked for the wrong manifest")
+        assert api._fake.sizes == [size], f"preview at size {size} asked for the wrong manifest"
 
 
 def test_the_daemon_maps_every_size_this_gui_can_report(monkeypatch, tmp_path):
@@ -103,21 +102,18 @@ def test_the_daemon_maps_every_size_this_gui_can_report(monkeypatch, tmp_path):
     """
     import re
     from pathlib import Path as _P
-    src = (_P(__file__).resolve().parent.parent
-           / "divoomd" / "src" / "art.rs").read_text()
-    body = re.search(r"fn device_type_for_size\(size: u32\) -> u32 \{(.*?)\n\}",
-                     src, re.S)
+
+    src = (_P(__file__).resolve().parent.parent / "divoomd" / "src" / "art.rs").read_text()
+    body = re.search(r"fn device_type_for_size\(size: u32\) -> u32 \{(.*?)\n\}", src, re.S)
     assert body, "device_type_for_size is gone from art.rs — fix this test's scope"
-    arms = {int(k): int(v) for k, v in
-            re.findall(r"(\d+)\s*=>\s*(\d+),", body.group(1))}
+    arms = {int(k): int(v) for k, v in re.findall(r"(\d+)\s*=>\s*(\d+),", body.group(1))}
     fallback = re.search(r"_\s*=>\s*(\d+)", body.group(1))
     assert fallback, "no wildcard arm — an unlisted size would not compile"
     default = int(fallback.group(1))
 
     for size, device_type in DEVICE_TYPE_BY_SIZE.items():
         got = arms.get(size, default)
-        assert got == device_type, (
-            f"art.rs maps {size}px to DeviceType {got}, expected {device_type}")
+        assert got == device_type, f"art.rs maps {size}px to DeviceType {got}, expected {device_type}"
 
 
 def test_preview_uses_gallery_cache_names_and_marks_has_cache(monkeypatch, tmp_path):
@@ -129,9 +125,14 @@ def test_preview_uses_gallery_cache_names_and_marks_has_cache(monkeypatch, tmp_p
     cache_dir = tmp_path / ".config" / "divoom-control"
     cache_dir.mkdir(parents=True)
     cache_file = cache_dir / "gallery_cache.json"
-    cache_file.write_text(json.dumps([
-        {"file_id": "g/abc", "name": "Cool Art", "likes": 42, "preview_url": "http://x/y.gif"},
-    ]), encoding="utf-8")
+    cache_file.write_text(
+        json.dumps(
+            [
+                {"file_id": "g/abc", "name": "Cool Art", "likes": 42, "preview_url": "http://x/y.gif"},
+            ]
+        ),
+        encoding="utf-8",
+    )
 
     out = json.loads(_Api(16).hot_update_preview(PANEL))
     assert out["success"] is True
@@ -204,8 +205,7 @@ def test_preview_and_send_share_one_manifest_source():
 
     preview_src = inspect.getsource(_M.hot_update_preview)
     assert "hot_manifest" in preview_src
-    assert "fetch_hot_manifest" not in preview_src, (
-        "the preview must not fetch the manifest itself")
+    assert "fetch_hot_manifest" not in preview_src, "the preview must not fetch the manifest itself"
 
     send_src = inspect.getsource(_M.hot_channel_update)
     assert "hot_update" in send_src

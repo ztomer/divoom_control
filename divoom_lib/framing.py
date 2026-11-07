@@ -50,12 +50,8 @@ def parse_ios_le_notification(data: bytes) -> dict | None:
     command_id = data[models.IOS_LE_COMMAND_IDENTIFIER]
     packet_number = data[models.IOS_LE_PACKET_NUMBER]
     # Payload sits between the data offset and the (checksum + end marker).
-    payload = bytes(
-        data[models.IOS_LE_DATA_OFFSET : -models.IOS_LE_CHECKSUM_LENGTH - 1]
-    )
-    checksum = int.from_bytes(
-        data[-models.IOS_LE_CHECKSUM_LENGTH - 1:-1], byteorder="little"
-    )
+    payload = bytes(data[models.IOS_LE_DATA_OFFSET : -models.IOS_LE_CHECKSUM_LENGTH - 1])
+    checksum = int.from_bytes(data[-models.IOS_LE_CHECKSUM_LENGTH - 1 : -1], byteorder="little")
     return {
         "command_id": command_id,
         "payload": payload,
@@ -91,7 +87,7 @@ def _parse_basic_message(message: bytes) -> "Tuple[int, bytes] | None":
     # `& 0xFFFF`); without this, large frames (e.g. images) whose checksum
     # overflows 16 bits were wrongly rejected.
     calculated_checksum = sum(message[1:-3]) & 0xFFFF
-    received_checksum = int.from_bytes(bytes(message[-3:-1]), byteorder='little')
+    received_checksum = int.from_bytes(bytes(message[-3:-1]), byteorder="little")
     if received_checksum != calculated_checksum:
         return None
 
@@ -114,7 +110,7 @@ def parse_basic_protocol_frames(buf: bytearray) -> Tuple[list, bytearray]:
         if len(buf) < 4:
             break
 
-        length = int.from_bytes(buf[1:3], byteorder='little')
+        length = int.from_bytes(buf[1:3], byteorder="little")
         total_message_len = 4 + length
 
         # A corrupt 2-byte length (line noise / firmware glitch) would otherwise
@@ -143,6 +139,6 @@ def parse_basic_protocol_frames(buf: bytearray) -> Tuple[list, bytearray]:
 
         del buf[:total_message_len]
         command_id, payload = parsed
-        messages.append({'command_id': command_id, 'payload': bytearray(payload)})
+        messages.append({"command_id": command_id, "payload": bytearray(payload)})
 
     return messages, buf

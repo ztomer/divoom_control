@@ -163,7 +163,4 @@ def test_every_e2e_module_gets_its_browser_through_the_seam() -> None:
         for engine in ("p.firefox.launch", "p.chromium.launch", "p.webkit.launch"):
             if engine in text:
                 offenders.append(f"{path.name}: {engine}")
-    assert not offenders, (
-        "e2e suites must launch via tests.support.browser, not directly: "
-        + ", ".join(offenders)
-    )
+    assert not offenders, "e2e suites must launch via tests.support.browser, not directly: " + ", ".join(offenders)

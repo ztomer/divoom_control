@@ -5,6 +5,7 @@ know whether the device speaks the iOS-LE framing or the Basic framing. We probe
 by sending a 0x46 query in each framing and seeing which one the device answers.
 Extracted from ``ble_transport.py`` to keep that file under the 500-LOC cap.
 """
+
 from __future__ import annotations
 
 import asyncio

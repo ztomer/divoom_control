@@ -5,17 +5,17 @@ import datetime
 from typing import Optional, Dict, Any
 import asyncio
 
+
 class DateTimeCommand:
     """
     This class is used to set the date and time on the Divoom Timebox Evo.
     """
+
     _PACKAGE_PREFIX = "18"
 
     def __init__(self, divoom_instance: DivoomBase, opts: Optional[Dict[str, Any]] = None):
         self._divoom_instance = divoom_instance
-        self._opts = {
-            "date": datetime.datetime.now()
-        }
+        self._opts = {"date": datetime.datetime.now()}
         if opts:
             self._opts.update(opts)
 
@@ -46,9 +46,9 @@ class DateTimeCommand:
         second = number2HexString(current_date.second)
 
         time_string_hex = year_lsb + year_msb + month + day + hour + minute + second + "00"
-        
-        command_code = int(self._PACKAGE_PREFIX, 16) # 0x18
-        args = [int(time_string_hex[i:i+2], 16) for i in range(0, len(time_string_hex), 2)]
+
+        command_code = int(self._PACKAGE_PREFIX, 16)  # 0x18
+        args = [int(time_string_hex[i : i + 2], 16) for i in range(0, len(time_string_hex), 2)]
 
         await self._divoom_instance.send_command(command_code, args)
 

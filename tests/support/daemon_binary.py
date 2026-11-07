@@ -27,6 +27,7 @@ The identity assertion below stays regardless. Selecting correctly and
 VERIFYING what actually came up are different guarantees, and the second one is
 what turns a mystery socket error into a sentence naming the version.
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -51,11 +52,11 @@ def require_divoomd() -> Path:
     if found is None:
         stale = binary_resolver.stale_report("divoomd")
         if stale:
-            detail = "; ".join(
-                f"{p} reports {v or '<no --version>'}" for p, v in stale)
+            detail = "; ".join(f"{p} reports {v or '<no --version>'}" for p, v in stale)
             pytest.skip(
                 f"no divoomd matching this tree's version — {detail}. "
-                f"Rebuild: {binary_resolver.rebuild_hint('divoomd')}")
+                f"Rebuild: {binary_resolver.rebuild_hint('divoomd')}"
+            )
         pytest.skip("divoomd binary not built. Run: cargo build -p divoomd")
     return found
 

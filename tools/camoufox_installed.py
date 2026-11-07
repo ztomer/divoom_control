@@ -68,7 +68,9 @@ from pathlib import Path
 PIN_FILE = Path(__file__).resolve().parent.parent / ".camoufox-build"
 
 # repo/channel/version-build, the 3-part form `camoufox set` accepts.
-_SPEC = re.compile(r"^(?P<repo>[a-z0-9_-]+)/(?P<channel>stable|prerelease)/(?P<build>\d+(?:\.\d+)*-(?:alpha|beta)\.\d+)$")
+_SPEC = re.compile(
+    r"^(?P<repo>[a-z0-9_-]+)/(?P<channel>stable|prerelease)/(?P<build>\d+(?:\.\d+)*-(?:alpha|beta)\.\d+)$"
+)
 
 
 class PinError(ValueError):

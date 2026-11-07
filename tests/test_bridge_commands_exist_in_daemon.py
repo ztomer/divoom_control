@@ -21,6 +21,7 @@ What the GUI sends is read two ways: the literal command names in the client
 and GUI source, and what EVERY public bridge method actually sends when called
 on a panel and on the wall (`tests/support/bridge_calls.py`).
 """
+
 from __future__ import annotations
 
 import ast
@@ -30,7 +31,13 @@ from pathlib import Path
 import pytest
 
 from tests.support.bridge_calls import (
-    A, NOT_CALLED, WALL, args_for, call, public_methods, recorded_api,
+    A,
+    NOT_CALLED,
+    WALL,
+    args_for,
+    call,
+    public_methods,
+    recorded_api,
 )
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -40,7 +47,7 @@ RUST = ROOT / "divoomd" / "src"
 def _block(path: Path, const: str) -> str:
     src = path.read_text(encoding="utf-8")
     start = src.index(f"const {const}:")
-    return src[start:src.index("\n];", start)]
+    return src[start : src.index("\n];", start)]
 
 
 def socket_commands() -> set[str]:
@@ -101,11 +108,11 @@ def test_every_socket_command_the_client_sends_is_one_the_daemon_answers():
 
 # ── what every bridge method sends, on a panel and on the wall ────────────
 
+
 @pytest.fixture
 def api(tmp_path):
     with recorded_api(tmp_path) as gui:
-        gui.wall_slots = {A: {"x": 0, "y": 0, "size": 16},
-                          "BB:00:00:00:00:02": {"x": 1, "y": 0, "size": 16}}
+        gui.wall_slots = {A: {"x": 0, "y": 0, "size": 16}, "BB:00:00:00:00:02": {"x": 1, "y": 0, "size": 16}}
         yield gui
 
 
@@ -115,7 +122,7 @@ METHODS = [m for m in public_methods() if m[0] not in NOT_CALLED]
 #: only: on the wall the name would be this test's choice, not the GUI's.
 PASSTHROUGH = {
     "device_call": "forwards its caller's method; its one caller, the custom-art "
-                   "page switch (web_ui/custom_art.js), never names the wall",
+    "page switch (web_ui/custom_art.js), never names the wall",
 }
 
 
@@ -132,7 +139,7 @@ def test_every_device_call_a_bridge_method_makes_is_answered(api, name, fn):
     method the daemon routes for that target."""
     panel, wall = panel_methods(), wall_methods()
     unanswered = []
-    for target in ((A,) if name in PASSTHROUGH else (A, WALL)):
+    for target in (A,) if name in PASSTHROUGH else (A, WALL):
         for kind, method in _sends(api, name, fn, target):
             known = _bare(method) in wall if kind == "wall" else method in panel
             if not known:

@@ -23,6 +23,7 @@ app (`scripts/make_helper_apps.sh`: ``Contents/Helpers/<Name>.app``, with
 that is not inside a helper app (a dev tree's ``target/``) has no bundle to
 open, and the caller forks it as before.
 """
+
 from __future__ import annotations
 
 import os
@@ -55,12 +56,10 @@ def helper_bundle(binary: str | os.PathLike) -> Path | None:
 
 def passed_env(env: dict[str, str]) -> dict[str, str]:
     """The part of ``env`` a helper reads."""
-    return {k: v for k, v in env.items()
-            if k.startswith(_PASSED_PREFIXES) or k in _PASSED_NAMES}
+    return {k: v for k, v in env.items() if k.startswith(_PASSED_PREFIXES) or k in _PASSED_NAMES}
 
 
-def open_command(bundle: Path, args: list[str], env: dict[str, str],
-                 log_path: str | None) -> list[str]:
+def open_command(bundle: Path, args: list[str], env: dict[str, str], log_path: str | None) -> list[str]:
     """The ``open`` invocation that starts ``bundle`` as a new instance.
 
     ``-n``: always a NEW instance, so a relaunch or a reinstall starts the
@@ -78,12 +77,16 @@ def open_command(bundle: Path, args: list[str], env: dict[str, str],
     return cmd
 
 
-def open_helper(bundle: Path, args: list[str], env: dict[str, str],
-                log_path: str | None = None, run=None) -> None:
+def open_helper(bundle: Path, args: list[str], env: dict[str, str], log_path: str | None = None, run=None) -> None:
     """Open ``bundle`` through LaunchServices. Raises OSError if `open` fails."""
     run = run or subprocess.run
-    done = run(open_command(bundle, args, env, log_path), capture_output=True,
-               text=True, stdin=subprocess.DEVNULL, check=False, timeout=15)
+    done = run(
+        open_command(bundle, args, env, log_path),
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        check=False,
+        timeout=15,
+    )
     if done.returncode != 0:
-        raise OSError(f"open {bundle.name} failed ({done.returncode}): "
-                      f"{(done.stderr or '').strip()}")
+        raise OSError(f"open {bundle.name} failed ({done.returncode}): {(done.stderr or '').strip()}")

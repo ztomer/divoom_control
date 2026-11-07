@@ -10,6 +10,7 @@ The second runs the check EXACTLY as the owner will (`run_packet`, the real
 daemon with a mock 64x64 panel: everything up to the glass. With nobody at a
 terminal the LOOK is UNKNOWN, never PASS -- the packet's own rule.
 """
+
 from __future__ import annotations
 
 import inspect
@@ -33,8 +34,7 @@ packet = pytest.importorskip("hw_packet")
 lease_mod = pytest.importorskip("hw_mcp_lease")
 
 MAC = "AA:BB"
-STATUS_64 = {"success": True, "connected": True, "mac": MAC, "lan_ip": None,
-             "width": 64, "height": 64}
+STATUS_64 = {"success": True, "connected": True, "mac": MAC, "lan_ip": None, "width": 64, "height": 64}
 
 
 class FakeClient:
@@ -52,9 +52,13 @@ class FakeClient:
         if command == "get_device_activity":
             png = lease_mod.expect.raw_to_png(bytes((9, 200, 9)) * 4096, 64)
             import base64
-            return {"success": True, "activity": {MAC: {
-                "kind": "sysmon",
-                "preview": "data:image/png;base64," + base64.b64encode(png).decode()}}}
+
+            return {
+                "success": True,
+                "activity": {
+                    MAC: {"kind": "sysmon", "preview": "data:image/png;base64," + base64.b64encode(png).decode()}
+                },
+            }
         return {"success": True}
 
 
@@ -83,11 +87,8 @@ class FakeSession:
 
 
 def _run(status, session, tmp_path):
-    check = packet.McpLeaseCheck(
-        id="mcp_lease", title="t", ttl_ms=10,
-        session_factory=lambda: session)
-    ctx = {"mac": MAC, "size": 64, "frames_dir": str(tmp_path),
-           "job_settle": 0, "lapse_margin": 0, "socket": "unused"}
+    check = packet.McpLeaseCheck(id="mcp_lease", title="t", ttl_ms=10, session_factory=lambda: session)
+    ctx = {"mac": MAC, "size": 64, "frames_dir": str(tmp_path), "job_settle": 0, "lapse_margin": 0, "socket": "unused"}
     client = FakeClient(status)
     fired, detail = check.drive(client, ctx)
     return fired, detail, check.expectation(client, ctx), client
@@ -121,24 +122,25 @@ def test_a_clean_run_asks_a_person_with_the_frames_to_compare(tmp_path):
     fired, _, exp, client = _run(STATUS_64, session, tmp_path)
     assert fired and exp.verdict == "", exp.detail
     assert session.closed
-    assert ("live_job_start", {"mac": MAC, "kind": "sysmon",
-                               "params": {"size": 64}}) in client.commands
-    assert session.calls == ["get_capabilities", "lease_acquire", "push_animation",
-                             "show_text", "lease_renew"]
+    assert ("live_job_start", {"mac": MAC, "kind": "sysmon", "params": {"size": 64}}) in client.commands
+    assert session.calls == ["get_capabilities", "lease_acquire", "push_animation", "show_text", "lease_renew"]
     for i in range(len(lease_mod.AGENT_FRAMES)):
         assert (tmp_path / f"mcp_lease_agent_{i}.png").is_file()
     assert (tmp_path / "mcp_lease_widget.png").is_file()
     assert "the widget came back" in exp.text
 
 
-@pytest.mark.parametrize("wrong, says", [
-    ({"show_text": (False, {"ok": True})}, "not refused"),
-    ({"lease_renew": (False, {"ttl_ms": 10})}, "still be renewed"),
-    ({"push_animation": (False, {"size": 32, "frames": 4})}, "was not 64 px"),
-    ({"push_animation": (False, {"size": 64, "frames": 1})}, "was not 64 px"),
-    ({"lease_acquire": (True, {"error": "busy"})}, "not granted"),
-    ({"get_capabilities": (False, {"width": 16, "height": 16})}, "does not say 64x64"),
-])
+@pytest.mark.parametrize(
+    "wrong, says",
+    [
+        ({"show_text": (False, {"ok": True})}, "not refused"),
+        ({"lease_renew": (False, {"ttl_ms": 10})}, "still be renewed"),
+        ({"push_animation": (False, {"size": 32, "frames": 4})}, "was not 64 px"),
+        ({"push_animation": (False, {"size": 64, "frames": 1})}, "was not 64 px"),
+        ({"lease_acquire": (True, {"error": "busy"})}, "not granted"),
+        ({"get_capabilities": (False, {"width": 16, "height": 16})}, "does not say 64x64"),
+    ],
+)
 def test_each_machine_fault_is_a_fail_with_the_reply(tmp_path, wrong, says):
     _, _, exp, _ = _run(STATUS_64, FakeSession(**wrong), tmp_path)
     assert exp.verdict == "FAIL", exp
@@ -151,12 +153,12 @@ def test_the_declared_tool_names_are_the_ones_called():
     called = set(re.findall(r'session\.call\(\s*"([a-z_]+)"', source))
     assert called == set(lease_mod.MCP_TOOLS)
     sent = set(re.findall(r'client\.send_command\(\s*"([a-z_]+)"', source))
-    sent |= set(re.findall(r'client\.send_command\(\s*"([a-z_]+)"',
-                           inspect.getsource(packet.McpLeaseCheck.drive)))
+    sent |= set(re.findall(r'client\.send_command\(\s*"([a-z_]+)"', inspect.getsource(packet.McpLeaseCheck.drive)))
     assert sent == set(lease_mod.SOCKET_COMMANDS)
 
 
 # --- everything up to the glass: the real daemon and the real `divoomd mcp` ---
+
 
 @pytest.fixture
 def daemon():
@@ -168,9 +170,13 @@ def daemon():
         pytest.skip("divoomd for this tree is not built (cargo build -p divoomd)")
     sock = f"/tmp/divoomd_mcp_lease_{os.getpid()}_{uuid.uuid4().hex[:8]}.sock"
     home = tempfile.mkdtemp(prefix="divoom_mcp_lease_home_")
-    proc = subprocess.Popen([str(binary), "--socket", sock],
-                            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL, env={**os.environ, "HOME": home})
+    proc = subprocess.Popen(
+        [str(binary), "--socket", sock],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        env={**os.environ, "HOME": home},
+    )
     try:
         deadline = time.monotonic() + 10
         while not os.path.exists(sock):
@@ -191,9 +197,13 @@ def _packet(daemon, name, tmp_path):
     assert reply.get("success") is True, reply
     check = packet.McpLeaseCheck(id="mcp_lease", title="P4 exit", ttl_ms=1500)
     results: list = []
-    hw.run_packet(client, [check], False, results,
-                  {"frames_dir": str(tmp_path), "socket": sock, "divoomd": binary,
-                   "job_settle": 1.0, "lapse_margin": 1.5})
+    hw.run_packet(
+        client,
+        [check],
+        False,
+        results,
+        {"frames_dir": str(tmp_path), "socket": sock, "divoomd": binary, "job_settle": 1.0, "lapse_margin": 1.5},
+    )
     return results
 
 

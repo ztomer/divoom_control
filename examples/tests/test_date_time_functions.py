@@ -1,4 +1,3 @@
-
 import asyncio
 import logging
 import unittest
@@ -12,11 +11,11 @@ from divoom_legacy.divoom import Divoom as DivoomBase
 from divoom_lib import models as constants
 
 # Setup basic logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("test_date_time_functions")
 
-class TestDateTimeFunctions(unittest.IsolatedAsyncioTestCase):
 
+class TestDateTimeFunctions(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         """Set up a mock Divoom instance for testing."""
         self.mock_divoom_instance = AsyncMock(spec=DivoomBase)
@@ -34,14 +33,14 @@ class TestDateTimeFunctions(unittest.IsolatedAsyncioTestCase):
     async def test_update_message_sends_correct_command(self):
         """Test that _update_message constructs and sends the correct date/time command."""
         logger.info("--- Running test_update_message_sends_correct_command ---")
-        
+
         # Set a specific date and time for predictable testing
         test_datetime = datetime.datetime(2025, 11, 15, 10, 30, 45)
         self.date_time_command.date = test_datetime
-        
+
         # Explicitly trigger the update
         await self.date_time_command.update_date_time()
-        
+
         self.mock_divoom_instance.send_command.assert_called_once()
 
         # Expected command ID is 0x18
@@ -53,7 +52,7 @@ class TestDateTimeFunctions(unittest.IsolatedAsyncioTestCase):
         # real number2HexString encoding (the masked test never checked it).
         self.assertEqual(
             self.mock_divoom_instance.send_command.call_args[0][1],
-            [0x19, 0x14, 0x0b, 0x0f, 0x0a, 0x1e, 0x2d, 0x00],
+            [0x19, 0x14, 0x0B, 0x0F, 0x0A, 0x1E, 0x2D, 0x00],
         )
 
         # Expected args: year_lsb, year_msb, month, day, hour, minute, second, 0x00
@@ -69,37 +68,38 @@ class TestDateTimeFunctions(unittest.IsolatedAsyncioTestCase):
     async def test_date_setter_updates_internal_state(self):
         """Test that setting the date property updates the internal state."""
         logger.info("--- Running test_date_setter_updates_internal_state ---")
-        
+
         new_datetime = datetime.datetime(2026, 1, 1, 0, 0, 0)
         self.date_time_command.date = new_datetime
-        
+
         self.assertEqual(self.date_time_command.date, new_datetime)
-        
+
         # Ensure send_command was NOT called automatically by the setter
         self.mock_divoom_instance.send_command.assert_not_called()
 
     async def test_update_date_time_with_default_date(self):
         """Test update_date_time when initialized with default date (current time)."""
         logger.info("--- Running test_update_date_time_with_default_date ---")
-        
+
         # Reset mock for this test
         self.mock_divoom_instance.send_command.reset_mock()
-        
+
         # Instantiate with default date (current time)
         date_time_command_default = DateTimeCommand(self.mock_divoom_instance)
-        
+
         # Explicitly trigger the update
         await date_time_command_default.update_date_time()
-        
+
         self.mock_divoom_instance.send_command.assert_called_once()
-        
+
         # Verify command ID
         self.assertEqual(self.mock_divoom_instance.send_command.call_args[0][0], 0x18)
-        
+
         # Verify args structure (values will be current time, so just check length and type)
         args = self.mock_divoom_instance.send_command.call_args[0][1]
         self.assertIsInstance(args, list)
-        self.assertEqual(len(args), 8) # 7 date/time bytes + 1 padding byte
+        self.assertEqual(len(args), 8)  # 7 date/time bytes + 1 padding byte
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

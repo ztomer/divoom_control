@@ -5,6 +5,7 @@ from typing import Any
 
 logger = logging.getLogger("divoom_lib")
 
+
 def resolve_classic_mac(name: str, mac_or_uuid: str, log=None) -> str | None:
     """Resolves Classic Bluetooth MAC address using IOBluetooth on macOS."""
     if log is None:
@@ -13,6 +14,7 @@ def resolve_classic_mac(name: str, mac_or_uuid: str, log=None) -> str | None:
         return mac_or_uuid.replace(":", "-")
     try:
         from IOBluetooth import IOBluetoothDevice
+
         paired = IOBluetoothDevice.pairedDevices() or []
         if name:
             for dev in paired:
@@ -33,6 +35,7 @@ def resolve_classic_mac(name: str, mac_or_uuid: str, log=None) -> str | None:
     except Exception as e:
         log.warning(f"Failed to resolve Classic MAC address via IOBluetooth: {e}")
     return None
+
 
 # read_spp_notifications_loop / disconnect_spp were dead (superseded by
 # BTSppTransport._rx_loop / .disconnect) — removed R53.12.

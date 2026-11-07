@@ -16,6 +16,7 @@ button.
 
 Drives the real web UI with a mocked bridge; skipped without --run-browser.
 """
+
 import time
 
 import pytest
@@ -54,12 +55,18 @@ window.pywebview = { api: new Proxy({}, { get: (_t, name) => (...args) => {
 """
 
 
-
 def schedule_failed(age_s: int) -> dict:
     """The owner's scheduled run of 2026-10-26, as the daemon now records it."""
-    return {"at": now() - age_s, "by": "schedule", "outcome": "failed",
-            "error": f"Connection to {PANEL} failed: connect already in progress",
-            "offered": 0, "fetched": 0, "delivered": 0}
+    return {
+        "at": now() - age_s,
+        "by": "schedule",
+        "outcome": "failed",
+        "error": f"Connection to {PANEL} failed: connect already in progress",
+        "offered": 0,
+        "fetched": 0,
+        "delivered": 0,
+    }
+
 
 _LINE = """() => { const el = document.getElementById('hot-verdict');
     return {text: el.textContent, kind: el.dataset.kind,
@@ -68,6 +75,7 @@ _LINE = """() => { const el = document.getElementById('hot-verdict');
 
 async def _open(p, verdicts):
     import json
+
     browser = await launch(p)
     page = await browser.new_page()
     # Date.now() pinned (what hot_verdict.js reads); timers still run. Not
@@ -76,11 +84,17 @@ async def _open(p, verdicts):
     await add_init_js(page, _MOCK_API.replace("%VERDICTS%", json.dumps(verdicts)))
     await install_toast_recorder(page)
     await page.goto(f"file://{INDEX_HTML}")
-    await wait_js(page, "() => !!window.DivoomState && !!window.Divoom?.onOwnedDevices"
-                        " && !!window.SpatialStage && !!window.HotVerdict")
-    await eval_js(page, """([a, b]) => window.Divoom.onOwnedDevices({type: 'owned_devices', devices: [
+    await wait_js(
+        page,
+        "() => !!window.DivoomState && !!window.Divoom?.onOwnedDevices && !!window.SpatialStage && !!window.HotVerdict",
+    )
+    await eval_js(
+        page,
+        """([a, b]) => window.Divoom.onOwnedDevices({type: 'owned_devices', devices: [
         {address: a, name: 'Timoo-light-4', kind: 'clock', state: 'active'},
-        {address: b, name: 'Pixoo-1', kind: 'clock', state: 'active'}]})""", [PANEL, OTHER])
+        {address: b, name: 'Pixoo-1', kind: 'clock', state: 'active'}]})""",
+        [PANEL, OTHER],
+    )
     await eval_js(page, "(m) => window.Divoom.onSelection({type: 'selection', mac: m})", PANEL)
     await wait_js(page, f"() => window.SpatialStage.getSelectedMac() === '{PANEL}'")
     await page.click('.nav-btn[data-tab="pixel-art"]')
@@ -122,16 +136,24 @@ async def test_a_failure_replaces_the_success_and_nothing_vanishes():
             line = await eval_js(page, _LINE)
             assert line["glyph"] == "✓" and "Up to date · checked 10 min ago" in line["text"], line
 
-            await eval_js(page, """([m, v]) => window.Divoom.onHotStatus(
-                {type: 'hot_status', mac: m, verdict: v})""", [PANEL, schedule_failed(60)])
+            await eval_js(
+                page,
+                """([m, v]) => window.Divoom.onHotStatus(
+                {type: 'hot_status', mac: m, verdict: v})""",
+                [PANEL, schedule_failed(60)],
+            )
             await wait_js(page, "() => document.getElementById('hot-verdict').dataset.kind === 'fail'")
-            await page.wait_for_timeout(3500)   # the old verdict was gone after 3 s
+            await page.wait_for_timeout(3500)  # the old verdict was gone after 3 s
             line = await eval_js(page, _LINE)
             assert line["kind"] == "fail" and line["glyph"] == "✗", line
 
             # Another panel's record changes nothing here.
-            await eval_js(page, """([m, v]) => window.Divoom.onHotStatus(
-                {type: 'hot_status', mac: m, verdict: v})""", [OTHER, ok])
+            await eval_js(
+                page,
+                """([m, v]) => window.Divoom.onHotStatus(
+                {type: 'hot_status', mac: m, verdict: v})""",
+                [OTHER, ok],
+            )
             assert (await eval_js(page, _LINE))["kind"] == "fail"
         finally:
             await browser.close()
@@ -152,19 +174,27 @@ async def test_the_button_starts_and_shows_progress_and_the_line_carries_the_res
 
             await page.click("#hot-update-btn")
             assert await eval_js(page, "() => window.__updates") == [PANEL]
-            await eval_js(page, """(m) => window.Divoom.onHotProgress(
-                {type: 'hot_progress', mac: m, phase: 'uploading', current: 4, total: 23})""", PANEL)
+            await eval_js(
+                page,
+                """(m) => window.Divoom.onHotProgress(
+                {type: 'hot_progress', mac: m, phase: 'uploading', current: 4, total: 23})""",
+                PANEL,
+            )
             text = await eval_js(page, "() => document.getElementById('hot-progress-text').textContent")
             assert "2/2 Uploading to device 4/23" in text
             assert (await eval_js(page, _LINE))["kind"] == "busy"
 
             # The daemon records the verdict, THEN publishes `done`.
-            await eval_js(page, """([m, now]) => {
+            await eval_js(
+                page,
+                """([m, now]) => {
                 window.__verdicts[m] = {at: now, by: 'button', outcome: 'ok',
                                         offered: 23, fetched: 23, delivered: 3};
                 window.Divoom.onHotProgress({type: 'hot_progress', mac: m, phase: 'done',
                                              result: {served: ['a', 'b', 'c'], manifest: 23, downloaded: 23}});
-            }""", [PANEL, now()])
+            }""",
+                [PANEL, now()],
+            )
             await wait_js(page, "() => document.getElementById('hot-update-btn').disabled === false")
             await wait_js(page, "() => document.getElementById('hot-verdict').dataset.kind === 'new'")
             line = await eval_js(page, _LINE)
@@ -185,11 +215,19 @@ async def test_a_run_on_another_panel_leaves_this_panels_button_alone():
     async with async_playwright() as p:
         browser, page = await _open(p, {})
         try:
-            await eval_js(page, """(m) => window.Divoom.onHotProgress(
-                {type: 'hot_progress', mac: m, phase: 'downloading', current: 3, total: 23})""", OTHER)
+            await eval_js(
+                page,
+                """(m) => window.Divoom.onHotProgress(
+                {type: 'hot_progress', mac: m, phase: 'downloading', current: 3, total: 23})""",
+                OTHER,
+            )
             assert await eval_js(page, "() => document.getElementById('hot-update-btn').disabled") is False
-            await eval_js(page, """(m) => window.Divoom.onHotProgress(
-                {type: 'hot_progress', mac: m, phase: 'error', error: 'boom'})""", OTHER)
+            await eval_js(
+                page,
+                """(m) => window.Divoom.onHotProgress(
+                {type: 'hot_progress', mac: m, phase: 'error', error: 'boom'})""",
+                OTHER,
+            )
             assert await eval_js(page, "() => document.getElementById('hot-update-btn').disabled") is False
         finally:
             await browser.close()
@@ -205,7 +243,9 @@ async def test_every_verdict_is_told_apart_by_glyph_and_words_not_colour():
     async with async_playwright() as p:
         browser, page = await _open(p, {})
         try:
-            lines = await eval_js(page, """(now) => {
+            lines = await eval_js(
+                page,
+                """(now) => {
                 const L = (e, o) => window.HotVerdict.line(e, Object.assign({nowMs: now * 1000}, o || {}));
                 const base = {at: now - 7200, offered: 23, fetched: 23};
                 const kinds = {
@@ -218,7 +258,9 @@ async def test_every_verdict_is_told_apart_by_glyph_and_words_not_colour():
                     short_failed: L({at: now - 7200, by: 'schedule', outcome: 'failed', error: 'x'}, {short: true}),
                 };
                 return kinds;
-            }""", now())
+            }""",
+                now(),
+            )
             core = [lines[k] for k in ("never", "ok", "fresh", "partial", "failed")]
             assert len({line["glyph"] for line in core}) == 5, lines
             assert len({line["text"] for line in core}) == 5, lines

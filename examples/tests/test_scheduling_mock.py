@@ -58,28 +58,41 @@ class MockSender:
 async def test_set_alarm_builds_args():
     s = MockSender()
     ok = await Alarm(s).set_alarm(
-        alarm_index=2, status=1, hour=8, minute=30, week=0b0111110,
-        mode=0, trigger_mode=1, fm_freq=0x036c, volume=50,
+        alarm_index=2,
+        status=1,
+        hour=8,
+        minute=30,
+        week=0b0111110,
+        mode=0,
+        trigger_mode=1,
+        fm_freq=0x036C,
+        volume=50,
     )
     assert ok is True
     cmd, args = s.last
     assert cmd == COMMANDS["set alarm"]
     # index, status, hour, minute, week, mode, trigger_mode, fm[2 LE], volume
-    assert args == [2, 1, 8, 30, 0b0111110, 0, 1, 0x6c, 0x03, 50]
+    assert args == [2, 1, 8, 30, 0b0111110, 0, 1, 0x6C, 0x03, 50]
 
 
 async def test_get_alarm_time_parses_response():
     # APK-verified (u1/b.a()): 10 alarms × 10 bytes, each record STARTS with
     # the alarm index byte. Alarm 0: idx=0,status=1,hour=7,min=15,week=2,
     # mode=0,trigger=1, fm=0x036c (LE at bytes 7,8), volume@9=40.
-    block = bytes([0, 1, 7, 15, 2, 0, 1, 0x6c, 0x03, 40])
+    block = bytes([0, 1, 7, 15, 2, 0, 1, 0x6C, 0x03, 40])
     rest = b"".join(bytes([i, 0, 0, 0, 0, 0, 0, 0, 0, 0]) for i in range(1, 10))
     s = MockSender(response=block + rest)
     alarms = await Alarm(s).get_alarm_time()
     assert alarms is not None and len(alarms) == 10
     assert alarms[0] == {
-        "status": 1, "hour": 7, "minute": 15, "week": 2, "mode": 0,
-        "trigger_mode": 1, "fm_freq": 0x036c, "volume": 40,
+        "status": 1,
+        "hour": 7,
+        "minute": 15,
+        "week": 2,
+        "mode": 0,
+        "trigger_mode": 1,
+        "fm_freq": 0x036C,
+        "volume": 40,
     }
     # Index bytes must NOT bleed into the next record's fields.
     assert alarms[1]["status"] == 0 and alarms[1]["week"] == 0
@@ -111,8 +124,14 @@ async def test_set_memorial_gif_header():
 async def test_set_memorial_time_pads_title_to_32():
     s = MockSender()
     await Alarm(s).set_memorial_time(
-        dialy_id=0, on_off=1, month=1, day=1, hour=0, minute=0,
-        have_flag=1, title_name="NYE",
+        dialy_id=0,
+        on_off=1,
+        month=1,
+        day=1,
+        hour=0,
+        minute=0,
+        have_flag=1,
+        title_name="NYE",
     )
     cmd, args = s.last
     assert cmd == COMMANDS["set memorial"]
@@ -219,21 +238,33 @@ async def test_set_sleep_color_valid_and_invalid():
 async def test_set_sleep_scene_full():
     s = MockSender()
     await Sleep(s).set_sleep_scene(
-        mode=0, on=1, fm_freq=[0x03, 0x6c], volume=50, color=[255, 0, 0], light=8,
+        mode=0,
+        on=1,
+        fm_freq=[0x03, 0x6C],
+        volume=50,
+        color=[255, 0, 0],
+        light=8,
     )
     cmd, args = s.last
     assert cmd == COMMANDS["set sleep scene"]
     # mode, on, fm[2], volume, rgb[3], light
-    assert args == [0, 1, 0x03, 0x6c, 50, 255, 0, 0, 8]
+    assert args == [0, 1, 0x03, 0x6C, 50, 255, 0, 0, 8]
 
 
 async def test_get_sleep_scene_parses_response():
     # 10 bytes: time, mode, on, fm[2 LE], volume, r, g, b, light
-    response = bytes([20, 1, 1, 0x6c, 0x03, 40, 10, 20, 30, 5])
+    response = bytes([20, 1, 1, 0x6C, 0x03, 40, 10, 20, 30, 5])
     scene = await Sleep(MockSender(response=response)).get_sleep_scene()
     assert scene == {
-        "time": 20, "mode": 1, "on": 1, "fm_freq": 0x036c, "volume": 40,
-        "color_r": 10, "color_g": 20, "color_b": 30, "light": 5,
+        "time": 20,
+        "mode": 1,
+        "on": 1,
+        "fm_freq": 0x036C,
+        "volume": 40,
+        "color_r": 10,
+        "color_g": 20,
+        "color_b": 30,
+        "light": 5,
     }
 
 
@@ -247,21 +278,35 @@ async def test_get_sleep_scene_short_response_returns_none():
 async def test_set_time_manage_info_type1_no_animation():
     s = MockSender()
     ok = await Timeplan(s).set_time_manage_info(
-        status=1, hour=9, minute=0, week=0b0111110, mode=0,
-        trigger_mode=1, fm_freq=0x036c, volume=50, type=1,
+        status=1,
+        hour=9,
+        minute=0,
+        week=0b0111110,
+        mode=0,
+        trigger_mode=1,
+        fm_freq=0x036C,
+        volume=50,
+        type=1,
     )
     assert ok is True
     cmd, args = s.last
     assert cmd == COMMANDS["set time manage info"]
     # status,hour,minute,week,mode,trigger,fm[2 LE],volume,type
-    assert args == [1, 9, 0, 0b0111110, 0, 1, 0x6c, 0x03, 50, 1]
+    assert args == [1, 9, 0, 0b0111110, 0, 1, 0x6C, 0x03, 50, 1]
 
 
 async def test_set_time_manage_info_type0_animation_defaults():
     s = MockSender()
     await Timeplan(s).set_time_manage_info(
-        status=1, hour=9, minute=0, week=0, mode=0, trigger_mode=1,
-        fm_freq=0, volume=50, type=0,
+        status=1,
+        hour=9,
+        minute=0,
+        week=0,
+        mode=0,
+        trigger_mode=1,
+        fm_freq=0,
+        volume=50,
+        type=0,
     )
     args = s.last[1]
     # type 0 appends 5 animation default bytes (all 0) after the type byte
@@ -271,9 +316,20 @@ async def test_set_time_manage_info_type0_animation_defaults():
 async def test_set_time_manage_info_type0_animation_data():
     s = MockSender()
     await Timeplan(s).set_time_manage_info(
-        status=1, hour=9, minute=0, week=0, mode=0, trigger_mode=1,
-        fm_freq=0, volume=50, type=0, animation_id=3, animation_speed=4,
-        animation_direction=1, animation_frame_count=2, animation_frame_delay=10,
+        status=1,
+        hour=9,
+        minute=0,
+        week=0,
+        mode=0,
+        trigger_mode=1,
+        fm_freq=0,
+        volume=50,
+        type=0,
+        animation_id=3,
+        animation_speed=4,
+        animation_direction=1,
+        animation_frame_count=2,
+        animation_frame_delay=10,
         animation_frame_data=[0xAA, 0xBB],
     )
     args = s.last[1]
@@ -284,8 +340,15 @@ async def test_set_time_manage_info_unknown_type_returns_false():
     s = MockSender()
     before = len(s.sent)
     ok = await Timeplan(s).set_time_manage_info(
-        status=1, hour=0, minute=0, week=0, mode=0, trigger_mode=0,
-        fm_freq=0, volume=0, type=9,
+        status=1,
+        hour=0,
+        minute=0,
+        week=0,
+        mode=0,
+        trigger_mode=0,
+        fm_freq=0,
+        volume=0,
+        type=9,
     )
     assert ok is False
     assert len(s.sent) == before  # nothing sent for unknown type

@@ -34,6 +34,7 @@ WHAT IT CHECKS, beyond "did it render":
   * with `--kill-daemon`, that the UI SAYS the backend is gone rather than
     leaving the last good values on screen looking current.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -82,8 +83,14 @@ def _free_port() -> int:
 
 def _links_corebluetooth(binary: Path) -> bool:
     try:
-        out = subprocess.run(["otool", "-L", str(binary)],
-                             capture_output=True, text=True, timeout=10, stdin=subprocess.DEVNULL, check=True).stdout
+        out = subprocess.run(
+            ["otool", "-L", str(binary)],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            stdin=subprocess.DEVNULL,
+            check=True,
+        ).stdout
     except Exception:
         return False
     return "corebluetooth" in out.lower()
@@ -96,16 +103,19 @@ def _divoomd() -> Path:
     if found is None:
         sys.exit("divoomd is not built. Run: cargo build -p divoomd --no-default-features")
     if sys.platform == "darwin" and _links_corebluetooth(found):
-        print(f"WARNING: {found} links CoreBluetooth.\n"
-              "  macOS Bluetooth access is granted per RESPONSIBLE PROCESS. A daemon\n"
-              "  launched from a shell has no grant, so the first BLE scan the GUI\n"
-              "  triggers gets the process killed with SIGABRT and NO message --\n"
-              "  which reads exactly like a crash in your change and is not one.\n"
-              "  (The real app is fine: the GUI launches the daemon and holds the grant.)\n"
-              "  Build a BLE-free daemon for this harness:\n"
-              "      cargo build -p divoomd --no-default-features\n"
-              "  NOTE: `cargo test` rebuilds target/debug/divoomd WITH default features,\n"
-              "  so re-run that build after any test run.\n", file=sys.stderr)
+        print(
+            f"WARNING: {found} links CoreBluetooth.\n"
+            "  macOS Bluetooth access is granted per RESPONSIBLE PROCESS. A daemon\n"
+            "  launched from a shell has no grant, so the first BLE scan the GUI\n"
+            "  triggers gets the process killed with SIGABRT and NO message --\n"
+            "  which reads exactly like a crash in your change and is not one.\n"
+            "  (The real app is fine: the GUI launches the daemon and holds the grant.)\n"
+            "  Build a BLE-free daemon for this harness:\n"
+            "      cargo build -p divoomd --no-default-features\n"
+            "  NOTE: `cargo test` rebuilds target/debug/divoomd WITH default features,\n"
+            "  so re-run that build after any test run.\n",
+            file=sys.stderr,
+        )
     return found
 
 
@@ -129,16 +139,32 @@ class Stack:
         self._daemon_log_fh = open(self.daemon_log, "w")
         self.daemon = subprocess.Popen(
             [str(_divoomd()), "--socket", self.socket_path],
-            stdout=subprocess.DEVNULL, stderr=self._daemon_log_fh, text=True,
+            stdout=subprocess.DEVNULL,
+            stderr=self._daemon_log_fh,
+            text=True,
             # A backtrace costs nothing here and is the difference between
             # "the daemon died" and knowing which call killed it.
-            env={**os.environ, "RUST_BACKTRACE": os.environ.get("RUST_BACKTRACE", "full")}, stdin=subprocess.DEVNULL)
+            env={**os.environ, "RUST_BACKTRACE": os.environ.get("RUST_BACKTRACE", "full")},
+            stdin=subprocess.DEVNULL,
+        )
         self._await_socket()
 
         self.bridge = subprocess.Popen(
-            [sys.executable, str(BRIDGE), "--socket-path", self.socket_path,
-             "--port", str(self.port), "--fake-home", self.home],
-            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, stdin=subprocess.DEVNULL)
+            [
+                sys.executable,
+                str(BRIDGE),
+                "--socket-path",
+                self.socket_path,
+                "--port",
+                str(self.port),
+                "--fake-home",
+                self.home,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+            stdin=subprocess.DEVNULL,
+        )
         self._await_http()
 
     def _await_socket(self, timeout: float = 15.0) -> None:
@@ -157,8 +183,7 @@ class Stack:
         prefix = f"exit code {code}; " if code is not None else ""
         report = Path(f"{self.socket_path}.failure")
         if report.exists():
-            recorded = " / ".join(
-                x.strip() for x in report.read_text().splitlines() if x.strip())
+            recorded = " / ".join(x.strip() for x in report.read_text().splitlines() if x.strip())
             return prefix + recorded
         try:
             self._daemon_log_fh.flush()
@@ -170,15 +195,15 @@ class Stack:
         # Surface the PANIC line, not the tail. Truncating a subject's error
         # output to its last N characters throws away the one line that names
         # the fault whenever a backtrace follows it.
-        panic = [ln for ln in err.splitlines()
-                 if "panic" in ln.lower() or "Cannot drop" in ln
-                 or "abort" in ln.lower()]
+        panic = [ln for ln in err.splitlines() if "panic" in ln.lower() or "Cannot drop" in ln or "abort" in ln.lower()]
         if panic:
-            frames = [ln.strip() for ln in err.splitlines()
-                      if "divoomd::" in ln or "nowplaying::" in ln][:4]
-            return (prefix + " | ".join(x.strip() for x in panic[:3])
-                    + (f"  [frames: {' <- '.join(frames)}]" if frames else "")
-                    + f"  (full log: {self.daemon_log})")
+            frames = [ln.strip() for ln in err.splitlines() if "divoomd::" in ln or "nowplaying::" in ln][:4]
+            return (
+                prefix
+                + " | ".join(x.strip() for x in panic[:3])
+                + (f"  [frames: {' <- '.join(frames)}]" if frames else "")
+                + f"  (full log: {self.daemon_log})"
+            )
         return prefix + err.strip()[-400:] + f"  (full log: {self.daemon_log})"
 
     def _await_http(self, timeout: float = 60.0) -> None:
@@ -203,8 +228,7 @@ class Stack:
         except subprocess.TimeoutExpired:
             self.bridge.kill()
             _, err = self.bridge.communicate(timeout=3)
-        sys.exit(f"GUI bridge never opened port {self.port} in {timeout}s: "
-                 f"{(err or '(no stderr)').strip()[-1200:]}")
+        sys.exit(f"GUI bridge never opened port {self.port} in {timeout}s: {(err or '(no stderr)').strip()[-1200:]}")
 
     def note_tcc_if_likely(self, called: list) -> None:
         """SIGABRT + empty stderr + a BLE call = macOS TCC, not a code defect.
@@ -221,12 +245,15 @@ class Stack:
             return  # a real panic; let the normal report speak
         if not any("scan" in c or "connect" in c for c in called[-30:]):
             return
-        print("\nLIKELY CAUSE: macOS Bluetooth TCC, not a bug in the daemon.\n"
-              "  SIGABRT with an empty stderr is the OS killing the process; a Rust\n"
-              "  panic would have printed. The UI asked for a scan, and a\n"
-              "  shell-launched daemon has no Bluetooth grant.\n"
-              "  Rebuild BLE-free and re-run:\n"
-              "      cargo build -p divoomd --no-default-features\n", file=sys.stderr)
+        print(
+            "\nLIKELY CAUSE: macOS Bluetooth TCC, not a bug in the daemon.\n"
+            "  SIGABRT with an empty stderr is the OS killing the process; a Rust\n"
+            "  panic would have printed. The UI asked for a scan, and a\n"
+            "  shell-launched daemon has no Bluetooth grant.\n"
+            "  Rebuild BLE-free and re-run:\n"
+            "      cargo build -p divoomd --no-default-features\n",
+            file=sys.stderr,
+        )
 
     @property
     def daemon_alive(self) -> bool:
@@ -295,26 +322,32 @@ async def run(args) -> int:
             before = await eval_js(page, "() => (window.__calls || []).length")
             samples = []
             for _ in range(4):
-                samples.append(await eval_js(
-                    page, "() => document.getElementById('sysmon-cpu')?.textContent"))
+                samples.append(await eval_js(page, "() => document.getElementById('sysmon-cpu')?.textContent"))
                 await page.wait_for_timeout(2500)
-            refreshes = await eval_js(page, f"""() => (window.__calls || [])
+            refreshes = await eval_js(
+                page,
+                f"""() => (window.__calls || [])
                 .slice({before})
-                .filter(c => c.m === 'get_system_stats_preview').length""")
+                .filter(c => c.m === 'get_system_stats_preview').length""",
+            )
             print(f"sysmon cpu over ~10s: {samples}  (refresh calls: {refreshes})")
             if args.widget == "sysmon" and refreshes < 2:
                 problems.append(
                     f"the sysmon live refresh is not running — only {refreshes} "
-                    f"get_system_stats_preview call(s) in ~10s with the widget selected")
+                    f"get_system_stats_preview call(s) in ~10s with the widget selected"
+                )
 
             if args.kill_daemon:
                 print("killing the daemon; the UI must SAY so, not go quiet")
                 stack.kill_daemon()
                 await page.wait_for_timeout(9000)
-                state = await eval_js(page, """() => ({
+                state = await eval_js(
+                    page,
+                    """() => ({
                     note: document.getElementById('sysmon-unavailable')?.textContent || '',
                     cpu: document.getElementById('sysmon-cpu')?.textContent,
-                    img: document.getElementById('sysmon-device-preview')?.style.display })""")
+                    img: document.getElementById('sysmon-device-preview')?.style.display })""",
+                )
                 print("after daemon death:", json.dumps(state))
                 if not state.get("note"):
                     problems.append("daemon is gone and the System Monitor card says nothing")
@@ -331,7 +364,8 @@ async def run(args) -> int:
                         f"the daemon DIED while the GUI was driving it: "
                         f"{stack._why_no_daemon()}\n"
                         f"    last api calls: {tail}\n"
-                        f"    full call log: {out / 'api_calls.json'}")
+                        f"    full call log: {out / 'api_calls.json'}"
+                    )
 
             if errors:
                 problems.append(f"{len(errors)} page/console error(s): {errors[:3]}")
@@ -351,12 +385,9 @@ async def run(args) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--widget", default="sysmon",
-                    help="widget card to select first (sysmon, music, stock, weather)")
-    ap.add_argument("--kill-daemon", action="store_true",
-                    help="kill the daemon mid-session and check the UI says so")
-    ap.add_argument("--out", default="/tmp/divoom_gui_pov",
-                    help="directory for screenshots")
+    ap.add_argument("--widget", default="sysmon", help="widget card to select first (sysmon, music, stock, weather)")
+    ap.add_argument("--kill-daemon", action="store_true", help="kill the daemon mid-session and check the UI says so")
+    ap.add_argument("--out", default="/tmp/divoom_gui_pov", help="directory for screenshots")
     return asyncio.run(run(ap.parse_args()))
 
 

@@ -17,6 +17,7 @@ radio, no device), spawned on a temporary socket. A fake would do for the
 protocol but not for `ensure_daemon`'s version handshake, which is the step that
 actually breaks when it drifts.
 """
+
 from __future__ import annotations
 
 import json
@@ -68,11 +69,23 @@ NATIVE_TOOLS = {
 DESTRUCTIVE_TOOLS = {"set_alarm", "set_radio", "set_low_power", "set_screen_orientation"}
 
 HANDSHAKE = (
-    json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-        "protocolVersion": "2025-11-25", "capabilities": {},
-        "clientInfo": {"name": "test_mcp_delegation", "version": "0"}}}) + "\n"
-    + json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n"
-    + json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}) + "\n"
+    json.dumps(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-11-25",
+                "capabilities": {},
+                "clientInfo": {"name": "test_mcp_delegation", "version": "0"},
+            },
+        }
+    )
+    + "\n"
+    + json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"})
+    + "\n"
+    + json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
+    + "\n"
 )
 
 
@@ -218,9 +231,7 @@ def test_the_handoff_is_visible_in_the_log(live_daemon) -> None:
     proc = _serve(_entry_point(), live_daemon)
     assert "handing off to" in proc.stderr, proc.stderr
     assert "divoomd" in proc.stderr, proc.stderr
-    assert live_daemon in proc.stderr, (
-        f"the log must name the daemon it connected to: {proc.stderr}"
-    )
+    assert live_daemon in proc.stderr, f"the log must name the daemon it connected to: {proc.stderr}"
 
 
 def test_a_redirected_stdout_gets_a_diagnosis_not_a_traceback(live_daemon, tmp_path) -> None:
@@ -238,9 +249,7 @@ def test_a_redirected_stdout_gets_a_diagnosis_not_a_traceback(live_daemon, tmp_p
         proc = _serve(_entry_point(), live_daemon, stdout=handle)
 
     stderr = proc.stderr
-    assert "not connected to an MCP client" in stderr, (
-        f"expected the stdio diagnosis, got: {stderr}"
-    )
+    assert "not connected to an MCP client" in stderr, f"expected the stdio diagnosis, got: {stderr}"
     assert "MCP client" in stderr, "the message must say what to do instead"
     assert "Traceback" not in stderr, f"a traceback is the failure this replaces:\n{stderr}"
     # Nothing was written to the redirected stdout: the server refused rather
@@ -248,9 +257,7 @@ def test_a_redirected_stdout_gets_a_diagnosis_not_a_traceback(live_daemon, tmp_p
     assert out.read_text() == ""
 
 
-def test_a_missing_daemon_binary_says_so_instead_of_silently_serving(
-    monkeypatch, capsys
-) -> None:
+def test_a_missing_daemon_binary_says_so_instead_of_silently_serving(monkeypatch, capsys) -> None:
     """The failure path must name what is missing, and must be loud.
 
     In-process, deliberately. The first version of this test ran the entry point
@@ -280,7 +287,7 @@ def test_a_missing_daemon_binary_says_so_instead_of_silently_serving(
 
 
 def test_a_stale_binary_is_named_rather_than_reported_as_missing(monkeypatch, capsys) -> None:
-    """"No binary" and "a binary that is the wrong version" are different bugs.
+    """ "No binary" and "a binary that is the wrong version" are different bugs.
 
     The second is the one that bit this repo: a `target/release/divoomd` left
     over from the last release satisfies a location-based search and then serves
@@ -327,9 +334,7 @@ def test_the_handoff_reaches_the_binary_the_resolver_named(monkeypatch) -> None:
     monkeypatch.setattr(os_mod, "execv", fake_execv)
     monkeypatch.setattr(cli_commands, "_divoomd_binary", lambda: "/opt/divoomd")
 
-    args = argparse.Namespace(
-        host=None, port=9009, token=None, socket="/tmp/divoom-x.sock", mac=None
-    )
+    args = argparse.Namespace(host=None, port=9009, token=None, socket="/tmp/divoom-x.sock", mac=None)
 
     # ensure_daemon is imported inside the function from the client module, so
     # patch it where it lives.

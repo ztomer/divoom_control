@@ -1,6 +1,7 @@
 """Tests for unified DisplayPreview object model, multi-device isolation,
 and the play_gallery_art API bridge.
 """
+
 import json
 import pytest
 from pathlib import Path
@@ -39,7 +40,9 @@ def test_play_gallery_art_cached_file(tmp_path: Path):
     file_id = "group1/M00/01/TEST/art123"
     safe_name = file_id.replace("/", "_")
     gif_file = cache_dir / f"{safe_name}.gif"
-    gif_file.write_bytes(b"GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;")
+    gif_file.write_bytes(
+        b"GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;"
+    )
 
     with patch.object(Path, "home", return_value=tmp_path):
         res = api.play_gallery_art("11:22:33:44:55:01", file_id)
@@ -80,7 +83,7 @@ def test_channel_controls_sync_structure():
     content = js_path.read_text(encoding="utf-8")
     assert "window.syncChannelControlsToDisplay = function" in content
     # The values come from the display's own settings (P5.2), never a global.
-    assert 'window.ChannelSettings.of(disp, channel)' in content
+    assert "window.ChannelSettings.of(disp, channel)" in content
 
 
 def test_spatial_rooms_get_wall_slots_structure():

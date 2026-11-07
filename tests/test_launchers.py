@@ -4,6 +4,7 @@ left run_gui.sh + Makefile pointing at dead paths; R20 moved the dylib).
 These assert that the *referenced* files actually exist on disk, so a future
 move/rename that forgets a script fails the suite instead of the user.
 """
+
 import re
 from pathlib import Path
 
@@ -12,8 +13,7 @@ import pytest
 _REPO = Path(__file__).resolve().parents[1]
 
 # Patterns that capture a repo-relative path argument from shell/Make recipes.
-_RUNNERS = re.compile(
-    r"""(?:python3?|bash|sh)\s+([A-Za-z0-9_./-]+\.(?:py|sh))""")
+_RUNNERS = re.compile(r"""(?:python3?|bash|sh)\s+([A-Za-z0-9_./-]+\.(?:py|sh))""")
 
 
 def _referenced_paths(text: str) -> list[str]:

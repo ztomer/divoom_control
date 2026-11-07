@@ -11,6 +11,7 @@ Any gate that regexes Rust source shares that exposure — a commented-out
 `(113, WeatherType::Clear)` would be read as a live table entry — so the
 stripper lives here once instead of being re-derived per gate.
 """
+
 from __future__ import annotations
 
 import re

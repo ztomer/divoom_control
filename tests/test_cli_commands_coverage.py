@@ -10,6 +10,7 @@ via ``cli_module.build_parser().parse_args([...])`` where practical, and a
 lightweight ``FakeDivoom`` double for the command handlers that need a
 connected device.
 """
+
 from __future__ import annotations
 
 import json
@@ -117,10 +118,13 @@ async def test_resolve_target_mac_explicit_mac_connects_through_the_daemon(monke
 
 
 async def test_resolve_target_mac_uses_the_single_linked_panel(monkeypatch) -> None:
-    client = _use_client(monkeypatch, _FakeClient(
-        status={"success": True, "connected": True, "mac": "CC:DD", "devices": [{"mac": "CC:DD"}]},
-        per_mac={"CC:DD": {"success": True, "connected": True, "mac": "CC:DD"}},
-    ))
+    client = _use_client(
+        monkeypatch,
+        _FakeClient(
+            status={"success": True, "connected": True, "mac": "CC:DD", "devices": [{"mac": "CC:DD"}]},
+            per_mac={"CC:DD": {"success": True, "connected": True, "mac": "CC:DD"}},
+        ),
+    )
     ns = SimpleNamespace(command="set-volume", mac=None, timeout=1.0, device_type=None)
     mac = await cli_device_verbs.resolve_target_mac(ns)
     assert mac == "CC:DD"
@@ -128,10 +132,12 @@ async def test_resolve_target_mac_uses_the_single_linked_panel(monkeypatch) -> N
 
 
 async def test_resolve_target_mac_refuses_to_guess_between_several_panels(monkeypatch) -> None:
-    _use_client(monkeypatch, _FakeClient(
-        status={"success": True, "connected": True, "mac": None,
-                "devices": [{"mac": "AA:AA"}, {"mac": "BB:BB"}]},
-    ))
+    _use_client(
+        monkeypatch,
+        _FakeClient(
+            status={"success": True, "connected": True, "mac": None, "devices": [{"mac": "AA:AA"}, {"mac": "BB:BB"}]},
+        ),
+    )
     ns = SimpleNamespace(command="set-volume", mac=None, timeout=1.0, device_type=None)
     with pytest.raises(SystemExit) as exc:
         await cli_device_verbs.resolve_target_mac(ns)
@@ -139,9 +145,12 @@ async def test_resolve_target_mac_refuses_to_guess_between_several_panels(monkey
 
 
 async def test_resolve_target_mac_scans_through_the_daemon_when_nothing_is_linked(monkeypatch) -> None:
-    client = _use_client(monkeypatch, _FakeClient(
-        scan={"success": True, "devices": [{"address": "EE:FF", "name": "Pixoo"}]},
-    ))
+    client = _use_client(
+        monkeypatch,
+        _FakeClient(
+            scan={"success": True, "devices": [{"address": "EE:FF", "name": "Pixoo"}]},
+        ),
+    )
     ns = SimpleNamespace(command="set-volume", mac=None, timeout=2.5, device_type=None)
     mac = await cli_device_verbs.resolve_target_mac(ns)
     assert mac == "EE:FF"
@@ -160,10 +169,13 @@ def test_no_daemon_is_a_refusal_not_a_spawn(monkeypatch) -> None:
     # A shell-spawned daemon has no Bluetooth grant and dies on its first
     # scan, so the CLI attaches to a running one or says what to start.
     import divoom_client.daemon_client as dc
+
     seen = {}
+
     def fake_ensure(*a, **kw):
         seen.update(kw)
         return None
+
     monkeypatch.setattr(dc, "ensure_daemon", fake_ensure)
     with pytest.raises(SystemExit) as exc:
         cli_commands._daemon_client()
@@ -175,8 +187,9 @@ def test_no_daemon_is_a_refusal_not_a_spawn(monkeypatch) -> None:
 
 
 async def test_cmd_scan_prints_results(monkeypatch, capsys) -> None:
-    _use_client(monkeypatch, _FakeClient(
-        scan={"success": True, "devices": [{"address": "AA:BB:CC:DD:EE:FF", "name": "Pixoo"}]}))
+    _use_client(
+        monkeypatch, _FakeClient(scan={"success": True, "devices": [{"address": "AA:BB:CC:DD:EE:FF", "name": "Pixoo"}]})
+    )
     rc = await cli_commands.cmd_scan(_parse("scan"))
     assert rc == 0
     assert "AA:BB:CC:DD:EE:FF  Pixoo" in capsys.readouterr().out
@@ -193,8 +206,7 @@ async def test_a_refused_scan_is_an_error_not_an_empty_list(monkeypatch, capsys)
     # Live 2026-09-12: the GUI's own scan was running, the daemon answered
     # "scan already in progress", and the CLI printed "(no Divoom devices
     # found)". A refusal must read as a refusal, on every scan path.
-    _use_client(monkeypatch, _FakeClient(
-        scan={"success": False, "error": "scan already in progress"}))
+    _use_client(monkeypatch, _FakeClient(scan={"success": False, "error": "scan already in progress"}))
     with pytest.raises(SystemExit) as exc:
         await cli_commands.cmd_scan(_parse("scan"))
     assert exc.value.code == 1
@@ -208,7 +220,7 @@ async def test_a_refused_scan_is_an_error_not_an_empty_list(monkeypatch, capsys)
 
 async def test_cmd_select_makes_a_panel_active_through_the_daemon(monkeypatch, capsys) -> None:
     client = _use_client(monkeypatch, _FakeClient())
-    client.select_device = lambda mac: (client.calls.append(("select", mac)) or {"success": True, "selected": mac})
+    client.select_device = lambda mac: client.calls.append(("select", mac)) or {"success": True, "selected": mac}
     rc = await cli_commands.cmd_select(_parse("select", "--mac", "AA:BB"))
     assert rc == 0
     assert ("select", "AA:BB") in client.calls
@@ -219,8 +231,9 @@ async def test_cmd_select_makes_a_panel_active_through_the_daemon(monkeypatch, c
 
 
 async def test_cmd_scan_json(monkeypatch, capsys) -> None:
-    _use_client(monkeypatch, _FakeClient(
-        scan={"success": True, "devices": [{"address": "AA:BB:CC:DD:EE:FF", "name": "Pixoo"}]}))
+    _use_client(
+        monkeypatch, _FakeClient(scan={"success": True, "devices": [{"address": "AA:BB:CC:DD:EE:FF", "name": "Pixoo"}]})
+    )
     rc = await cli_commands.cmd_scan(_parse("scan", "--json"))
     assert rc == 0
     assert json.loads(capsys.readouterr().out) == [{"address": "AA:BB:CC:DD:EE:FF", "name": "Pixoo"}]
@@ -233,17 +246,37 @@ async def test_cmd_capabilities_prints_the_daemons_description(monkeypatch, caps
     """P3.4: what a panel IS comes from the daemon -- its model, its size, its
     chassis, the features the vendor app enables for it and the screens it
     offers. The CLI used to print a table of its own."""
-    client = _use_client(monkeypatch, _FakeClient(
-        status={"success": True, "connected": True, "mac": "AA:BB:CC:DD:EE:FF",
-                "devices": [{"mac": "AA:BB:CC:DD:EE:FF"}]},
-        per_mac={"AA:BB:CC:DD:EE:FF": {
-            "success": True, "connected": True, "mac": "AA:BB:CC:DD:EE:FF",
-            "model": "DITOO", "model_source": "name", "width": 16, "height": 16,
-            "chassis": {"family": "ditoo", "w_mm": 90.0, "h_mm": 114.0, "screen_mm": 64.0},
-            "features": {"speaker": True, "sd_card": True, "radio": False, "mic": True,
-                         "clock_style": "ClockNormal16"},
-            "screens": ["design", "alarm", "weather"]}},
-    ))
+    client = _use_client(
+        monkeypatch,
+        _FakeClient(
+            status={
+                "success": True,
+                "connected": True,
+                "mac": "AA:BB:CC:DD:EE:FF",
+                "devices": [{"mac": "AA:BB:CC:DD:EE:FF"}],
+            },
+            per_mac={
+                "AA:BB:CC:DD:EE:FF": {
+                    "success": True,
+                    "connected": True,
+                    "mac": "AA:BB:CC:DD:EE:FF",
+                    "model": "DITOO",
+                    "model_source": "name",
+                    "width": 16,
+                    "height": 16,
+                    "chassis": {"family": "ditoo", "w_mm": 90.0, "h_mm": 114.0, "screen_mm": 64.0},
+                    "features": {
+                        "speaker": True,
+                        "sd_card": True,
+                        "radio": False,
+                        "mic": True,
+                        "clock_style": "ClockNormal16",
+                    },
+                    "screens": ["design", "alarm", "weather"],
+                }
+            },
+        ),
+    )
 
     async def fake_resolve(args):
         return "AA:BB:CC:DD:EE:FF"

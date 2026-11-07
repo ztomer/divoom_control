@@ -28,6 +28,7 @@ The metric is the tray's own (``divoom-menubar/src/glyph.rs:210``): a luma
 step of 64, and a floor of 5% of the mark's square — 400 device px at 2x for a
 10 CSS px dot, so 20 device px.
 """
+
 from __future__ import annotations
 
 import io
@@ -88,9 +89,7 @@ EXPECTED_CLASS = {
 
 #: Motion off. The pulse is the one thing in the mark that a still frame
 #: cannot hold, and the fill is what this gate measures.
-NO_MOTION_CSS = (
-    "*, *::before, *::after { animation: none !important; transition: none !important; }"
-)
+NO_MOTION_CSS = "*, *::before, *::after { animation: none !important; transition: none !important; }"
 
 
 def _luma(png: bytes) -> list[list[float]]:
@@ -99,39 +98,26 @@ def _luma(png: bytes) -> list[list[float]]:
 
     img = Image.open(io.BytesIO(png)).convert("RGB")
     return [
-        [
-            0.2126 * r + 0.7152 * g + 0.0722 * b
-            for (r, g, b) in (img.getpixel((x, y)) for x in range(img.width))
-        ]
+        [0.2126 * r + 0.7152 * g + 0.0722 * b for (r, g, b) in (img.getpixel((x, y)) for x in range(img.width))]
         for y in range(img.height)
     ]
 
 
 def _differing(a: list[list[float]], b: list[list[float]]) -> int:
     """Pixels the eye would call different: the tray's metric, unchanged."""
-    return sum(
-        1
-        for row_a, row_b in zip(a, b)
-        for pa, pb in zip(row_a, row_b)
-        if abs(pa - pb) >= VISIBLE
-    )
+    return sum(1 for row_a, row_b in zip(a, b) for pa, pb in zip(row_a, row_b) if abs(pa - pb) >= VISIBLE)
 
 
 def _ink(rows: list[list[float]], backdrop: list[list[float]]) -> int:
     """Pixels that stand out from the backdrop by the tray's step."""
-    return sum(
-        1
-        for row, brow in zip(rows, backdrop)
-        for px, pb in zip(row, brow)
-        if abs(px - pb) >= VISIBLE
-    )
+    return sum(1 for row, brow in zip(rows, backdrop) for px, pb in zip(row, brow) if abs(px - pb) >= VISIBLE)
 
 
 def _assert_pairs_distinct(rendered: dict[str, list[list[float]]]) -> None:
     """The gate itself: every pair of states must differ by the floor."""
     names = list(rendered)
     for i, a in enumerate(names):
-        for b in names[i + 1:]:
+        for b in names[i + 1 :]:
             n = _differing(rendered[a], rendered[b])
             assert n >= FLOOR, (
                 f"{a} and {b} differ in only {n} px in greyscale "
@@ -148,14 +134,18 @@ async def _open(p):
     await page.goto(f"file://{INDEX_HTML}")
     await page.wait_for_load_state("domcontentloaded")
     await wait_js(page, "() => !!window.DivoomState && !!window.setConnectionState")
-    await eval_js(page, """(css) => {
+    await eval_js(
+        page,
+        """(css) => {
         const style = document.createElement('style');
         style.id = 'no-motion';
         style.textContent = css;
         document.head.appendChild(style);
         window.DivoomState.discoveredDevices = [];
         return true;
-    }""", NO_MOTION_CSS)
+    }""",
+        NO_MOTION_CSS,
+    )
     return browser, page
 
 
@@ -170,12 +160,8 @@ async def _render_states(page) -> dict[str, list[list[float]]]:
     rendered: dict[str, list[list[float]]] = {}
     for name, args in STATES:
         await eval_js(page, "() => window.setConnectionState(%s)" % json.dumps(args))
-        cls = await eval_js(
-            page, "() => document.getElementById('global-status-dot').className"
-        )
-        assert cls == EXPECTED_CLASS[name], (
-            f"{name}: the funnel wrote {cls!r}, expected {EXPECTED_CLASS[name]!r}"
-        )
+        cls = await eval_js(page, "() => document.getElementById('global-status-dot').className")
+        assert cls == EXPECTED_CLASS[name], f"{name}: the funnel wrote {cls!r}, expected {EXPECTED_CLASS[name]!r}"
         rendered[name] = await _shoot(page)
     return rendered
 
@@ -186,19 +172,25 @@ async def _backdrop(page) -> list[list[float]]:
     The dot is made transparent rather than hidden: a hidden element has no
     box to screenshot, and the box is exactly what the backdrop is read from.
     """
-    await eval_js(page, """() => {
+    await eval_js(
+        page,
+        """() => {
         const style = document.createElement('style');
         style.id = 'hide-dot';
         style.textContent = '#global-status-dot { opacity: 0 !important; }';
         document.head.appendChild(style);
         return true;
-    }""")
+    }""",
+    )
     rows = await _shoot(page)
-    await eval_js(page, """() => {
+    await eval_js(
+        page,
+        """() => {
         const s = document.getElementById('hide-dot');
         if (s) s.remove();
         return true;
-    }""")
+    }""",
+    )
     return rows
 
 
@@ -221,7 +213,9 @@ async def test_the_key_teaches_the_vocabulary_in_settings_devices():
         await page.goto(f"file://{INDEX_HTML}")
         await page.wait_for_load_state("domcontentloaded")
         await wait_js(page, "() => !!document.querySelector('.transport-key')")
-        key = await eval_js(page, """() => {
+        key = await eval_js(
+            page,
+            """() => {
             const items = Array.from(
                 document.querySelectorAll('.transport-key .transport-key-item'));
             return {
@@ -231,7 +225,8 @@ async def test_the_key_teaches_the_vocabulary_in_settings_devices():
                     return m ? m.className : null;
                 }),
             };
-        }""")
+        }""",
+        )
         assert len(key["classes"]) == 3, key
         assert key["classes"] == [
             "transport-mark mark-ble mark-linked",
@@ -310,11 +305,14 @@ async def test_the_gate_goes_red_when_two_states_share_a_look():
             rendered = await _render_states(page)
             # The Wi-Fi state now wears the Bluetooth mark: two different
             # states, one look.
-            await eval_js(page, """() => {
+            await eval_js(
+                page,
+                """() => {
                 const d = document.getElementById('global-status-dot');
                 d.className = 'transport-mark mark-ble mark-linked';
                 return true;
-            }""")
+            }""",
+            )
             rendered["linked · Wi-Fi"] = await _shoot(page)
             with pytest.raises(AssertionError):
                 _assert_pairs_distinct(rendered)

@@ -440,10 +440,9 @@ async def wait_toast(
         raise ToastRecorderMissing(
             "no toast recorder on this page — call "
             "await install_toast_recorder(page) before page.goto() "
-            "(tests.support.browser)")
-    return await wait_js(
-        page, toast_condition(needle, kind=kind, transport=transport), timeout=timeout
-    )
+            "(tests.support.browser)"
+        )
+    return await wait_js(page, toast_condition(needle, kind=kind, transport=transport), timeout=timeout)
 
 
 def _timeout_message(script: str, budget_ms: int, last_error: Exception | None) -> str:

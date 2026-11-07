@@ -15,12 +15,21 @@ from divoom_lib import models as constants
 from divoom_lib.utils.converters import to_int_if_str, bool_to_byte
 from divoom_legacy.sender_protocol import CommandSender
 
+
 class Display:
     def __init__(self, communicator: CommandSender) -> None:
         self.communicator = communicator
         self.logger = communicator.logger
 
-    async def set_clock_rich(self, style: int = 0, twentyfour: bool = True, humidity: bool = False, weather: bool = False, date: bool = False, color: str = "#ffffff") -> bool:
+    async def set_clock_rich(
+        self,
+        style: int = 0,
+        twentyfour: bool = True,
+        humidity: bool = False,
+        weather: bool = False,
+        date: bool = False,
+        color: str = "#ffffff",
+    ) -> bool:
         """Set CLOCK channel using APK C2() 10-byte format (0x45).
 
         Wire: 0x45 [0x00, time_type, style, 0x01, humidity, weather, date, R, G, B]
@@ -28,13 +37,29 @@ class Display:
         """
         rgb = self.communicator.convert_color(color)
         payload = [
-            0x00, int(twentyfour), style & 0xFF, 0x01,
-            int(humidity), int(weather), int(date),
-            rgb[0], rgb[1], rgb[2],
+            0x00,
+            int(twentyfour),
+            style & 0xFF,
+            0x01,
+            int(humidity),
+            int(weather),
+            int(date),
+            rgb[0],
+            rgb[1],
+            rgb[2],
         ]
         return await self.communicator.send_command("set light mode", payload)
 
-    async def show_clock(self, clock: int = 0, twentyfour: bool = True, humidity: bool = False, weather: bool = False, date: bool = False, color: str | None = None, hot: bool | None = None) -> bool:
+    async def show_clock(
+        self,
+        clock: int = 0,
+        twentyfour: bool = True,
+        humidity: bool = False,
+        weather: bool = False,
+        date: bool = False,
+        color: str | None = None,
+        hot: bool | None = None,
+    ) -> bool:
         """Show clock on the Divoom device in the color.
 
         Wire frame is the APK ``C2()`` canonical 10-byte env-mode layout
@@ -58,7 +83,7 @@ class Display:
         args = [constants.BOOLEAN_FALSE]
         args += [bool_to_byte(twentyfour)]
         if clock >= 0 and clock <= 15:
-            args += clock.to_bytes(1, byteorder='big')  # clock mode/style
+            args += clock.to_bytes(1, byteorder="big")  # clock mode/style
             args += [constants.BOOLEAN_TRUE]  # clock activated
         else:
             args += [constants.BOOLEAN_FALSE, constants.BOOLEAN_FALSE]  # clock mode/style = 0 and clock deactivated
@@ -157,9 +182,7 @@ class Display:
         # Resize to the device pixel grid BEFORE encoding. Without this, a
         # full-resolution source (e.g. a gallery gif) overflows the 2-byte
         # per-frame length field → "int too big to convert" (R11 item 1b).
-        frames, frames_count, _w, _h = process_image(
-            file, time=time, size=screensize
-        )
+        frames, frames_count, _w, _h = process_image(file, time=time, size=screensize)
         if frames_count >= 1:
             # Route ALL pushes (single still AND multi-frame) through the
             # 0x8B 3-phase protocol. This matches the futpib reference, whose
@@ -175,18 +198,14 @@ class Display:
             # pre-frames and RR=0x03 are NOT in the APK. 0x8B now works for
             # 32×32 devices too.
             from divoom_legacy.display.animation_8b import _build_animation_blob
+
             blob = _build_animation_blob(frames)
             anim = getattr(self.communicator, "animation", None)
             if blob and anim is not None:
-                self.logger.info(
-                    f"show_image: streaming {frames_count} frame(s) via 0x8B "
-                    f"3-phase ({len(blob)} bytes)"
-                )
+                self.logger.info(f"show_image: streaming {frames_count} frame(s) via 0x8B 3-phase ({len(blob)} bytes)")
                 if await anim.stream_animation_8b(blob):
                     return True
-                self.logger.warning(
-                    "show_image: 0x8B stream failed, falling back to 0x49"
-                )
+                self.logger.warning("show_image: 0x8B stream failed, falling back to 0x49")
 
         # Fallback path: 0x49 chunked animation.
         blobs = encode_animation(frames)
@@ -194,9 +213,7 @@ class Display:
         # failure rather than returning None (the annotated return type is bool).
         result: bool = False
         for packet in blobs:
-            result = await self.communicator.send_command(
-                "set animation frame", list(packet)
-            )
+            result = await self.communicator.send_command("set animation frame", list(packet))
             if not result:
                 return False
         return bool(result)
@@ -213,8 +230,11 @@ class Display:
         return 16
 
     async def display_image(
-        self, file: str, time: int | None = None,
-        wait_for_display: bool = False, poll_timeout_s: float = 2.0,
+        self,
+        file: str,
+        time: int | None = None,
+        wait_for_display: bool = False,
+        poll_timeout_s: float = 2.0,
     ) -> bool:
         """High-level wrapper for showing a user-provided image on the device.
 
@@ -299,7 +319,9 @@ class Display:
             return response[0]
         return None
 
-    async def show_light(self, color: str, brightness: int | None = None, power: bool | None = None, lightning_type: int | None = None) -> bool:
+    async def show_light(
+        self, color: str, brightness: int | None = None, power: bool | None = None, lightning_type: int | None = None
+    ) -> bool:
         """Show light on the Divoom device in the color.
 
         ``lightning_type`` selects the ambient effect (0 Plain, 1 Love,
@@ -321,15 +343,16 @@ class Display:
         brightness = to_int_if_str(brightness)
 
         rgb_color = self.communicator.convert_color(color)
-        effect = to_int_if_str(lightning_type) if lightning_type is not None \
-            else constants.LIGHTNING_TYPE_PLAIN_COLOR
+        effect = to_int_if_str(lightning_type) if lightning_type is not None else constants.LIGHTNING_TYPE_PLAIN_COLOR
 
         if self.communicator.lan:
             if effect != constants.LIGHTNING_TYPE_PLAIN_COLOR:
                 self.logger.warning(
                     "Ambient effect %s is not supported on Wi-Fi (LAN) devices — "
                     "Channel/SetAmbientLight has no effect field. Only Plain "
-                    "Colour is reachable over LAN.", effect)
+                    "Colour is reachable over LAN.",
+                    effect,
+                )
                 return False
             await self.communicator.lan.set_ambient_light(
                 brightness, rgb_color[0], rgb_color[1], rgb_color[2], 1 if power else 0
@@ -340,11 +363,15 @@ class Display:
         # Mirrors divoomd/src/packets.rs::LightPacket — keep the two in step.
         args = [
             constants.LIGHTNING_CHANNEL_NUMBER,
-            rgb_color[0], rgb_color[1], rgb_color[2],
+            rgb_color[0],
+            rgb_color[1],
+            rgb_color[2],
             brightness,
             effect,
             bool_to_byte(power),
-            constants.FIXED_STRING_BYTE, constants.FIXED_STRING_BYTE, constants.FIXED_STRING_BYTE
+            constants.FIXED_STRING_BYTE,
+            constants.FIXED_STRING_BYTE,
+            constants.FIXED_STRING_BYTE,
         ]
         return await self.communicator.send_command("set channel light", args)
 
@@ -390,5 +417,6 @@ class Display:
         elif channel_lower in ("ambient", "lighting"):
             return await self.communicator.send_command("set light mode", [0x01] + [0x00] * 9)
         return False
+
 
 __all__ = ["Display", "Light", "Drawing", "Animation", "Text"]

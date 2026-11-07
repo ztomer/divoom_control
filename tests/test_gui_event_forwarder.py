@@ -36,11 +36,12 @@ class FakeWindow:
 def _forwarded_payload(window):
     """Return the parsed event object from the last evaluate_js call, or None."""
     import json
+
     for js in reversed(window.calls):
         marker = "window.Divoom.onDaemonEvent("
         i = js.find(marker)
         if i != -1:
-            rest = js[i + len(marker):]
+            rest = js[i + len(marker) :]
             json_str = rest.split(");", 1)[0]
             return json.loads(json_str)
     return None
@@ -49,8 +50,7 @@ def _forwarded_payload(window):
 def test_status_connected_forwarded_with_mac():
     w = FakeWindow()
     on_event = _make_daemon_event_handler(w)
-    on_event({"type": "status", "state": "active", "connected": True,
-              "mac": "MOCK_MAC", "counters": {}})
+    on_event({"type": "status", "state": "active", "connected": True, "mac": "MOCK_MAC", "counters": {}})
     assert w.calls, "no evaluate_js call for status event"
     ev = _forwarded_payload(w)
     assert ev["connected"] is True
@@ -113,10 +113,10 @@ def test_hot_status_forwarded():
 def test_shutdown_follows_when_lifecycle_says_yes():
     w = FakeWindow()
     on_event = _make_daemon_event_handler(w)
-    with patch("divoom_lib.lifecycle_config.should_follow_daemon_shutdown",
-               return_value=True), \
-         patch("divoom_lib.lifecycle_config.get_keep_daemon_alive",
-               return_value=False):
+    with (
+        patch("divoom_lib.lifecycle_config.should_follow_daemon_shutdown", return_value=True),
+        patch("divoom_lib.lifecycle_config.get_keep_daemon_alive", return_value=False),
+    ):
         on_event({"type": "shutdown"})
     assert w.destroyed is True
     assert w.calls == [], "shutdown must not be forwarded as JS"
@@ -125,9 +125,9 @@ def test_shutdown_follows_when_lifecycle_says_yes():
 def test_shutdown_ignored_when_lifecycle_says_no():
     w = FakeWindow()
     on_event = _make_daemon_event_handler(w)
-    with patch("divoom_lib.lifecycle_config.should_follow_daemon_shutdown",
-               return_value=False), \
-         patch("divoom_lib.lifecycle_config.get_keep_daemon_alive",
-               return_value=True):
+    with (
+        patch("divoom_lib.lifecycle_config.should_follow_daemon_shutdown", return_value=False),
+        patch("divoom_lib.lifecycle_config.get_keep_daemon_alive", return_value=True),
+    ):
         on_event({"type": "shutdown"})
     assert w.destroyed is False

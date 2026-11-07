@@ -60,21 +60,29 @@ def _run(tmp_path: pathlib.Path, *, up: bool, busy: bool = False) -> tuple[int, 
     log = tmp_path / "calls.log"
     log.touch()
     env = dict(os.environ)
-    env.update({
-        "PATH": f"{bin_dir}:/usr/bin:/bin",
-        "STUB_LOG": str(log),
-        "STUB_STATE": str(state),
-        "COLIMA": "colima-stub",
-        "DIVOOM_LINUX_LINT_CACHE": str(tmp_path / "cache"),
-        "TMPDIR": str(tmp_path),
-        # The leases live here, never in the machine's real state dir.
-        "GOH_CONTAINER_STATE": str(tmp_path / "runtime_state"),
-        "NO_COLOR": "1",
-    })
+    env.update(
+        {
+            "PATH": f"{bin_dir}:/usr/bin:/bin",
+            "STUB_LOG": str(log),
+            "STUB_STATE": str(state),
+            "COLIMA": "colima-stub",
+            "DIVOOM_LINUX_LINT_CACHE": str(tmp_path / "cache"),
+            "TMPDIR": str(tmp_path),
+            # The leases live here, never in the machine's real state dir.
+            "GOH_CONTAINER_STATE": str(tmp_path / "runtime_state"),
+            "NO_COLOR": "1",
+        }
+    )
     env.pop("DIVOOM_SKIP_LINUX_ALL_FEATURES", None)
-    r = subprocess.run(["bash", str(SCRIPT)], env=env, capture_output=True, text=True,
-                       stdin=subprocess.DEVNULL,
-                       timeout=60, check=False)
+    r = subprocess.run(
+        ["bash", str(SCRIPT)],
+        env=env,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        timeout=60,
+        check=False,
+    )
     return r.returncode, log.read_text().splitlines(), r.stdout + r.stderr
 
 

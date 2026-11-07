@@ -19,6 +19,7 @@ The daemon's feature table (`divoomd/src/panel_features.rs`) is the output of
   They are local-only (`references/` is never published), so elsewhere that
   half says why it did not run.
 """
+
 from __future__ import annotations
 
 import re
@@ -40,8 +41,10 @@ FLAG_KEYS = ("speaker", "sd_card", "temp_sensor", "wifi", "radio", "vj")
 # the long ones across lines, and a gate that cried wolf over formatting
 # would be ignored, and the next real drift would go with it. The VALUES are
 # not normalised: a wrong flag is a wrong flag.
-_ROW = (r'\(\s*"([A-Za-z0-9_]+)",\s*([A-Z_]+(?:\s*\|\s*[A-Z_]+)*),'
-        r'\s*"(\w+)",\s*"(\w+)",\s*"(\w+)",?\s*\)')
+_ROW = (
+    r'\(\s*"([A-Za-z0-9_]+)",\s*([A-Z_]+(?:\s*\|\s*[A-Z_]+)*),'
+    r'\s*"(\w+)",\s*"(\w+)",\s*"(\w+)",?\s*\)'
+)
 
 sys.path.insert(0, str(REPO / "tools"))
 import derive_panel_features as derive  # noqa: E402
@@ -49,7 +52,7 @@ import derive_panel_features as derive  # noqa: E402
 
 def _rust_features() -> dict[str, dict]:
     src = RUST.read_text()
-    block = src[src.index("pub const FEATURES"):]
+    block = src[src.index("pub const FEATURES") :]
     block = block[: block.index("];")]
     out = {}
     for model, on, clock, _discover, _arch in re.findall(_ROW, block, re.S):
@@ -60,19 +63,17 @@ def _rust_features() -> dict[str, dict]:
 
 def _rust_pixels() -> dict[str, int]:
     src = PIXELS.read_text()
-    block = src[src.index("pub const LARGER_THAN_16"):]
+    block = src[src.index("pub const LARGER_THAN_16") :]
     block = block[: block.index("];")]
     return {m: int(px) for m, px in re.findall(r'\("([A-Za-z0-9_]+)",\s*(\d+)\)', block)}
 
 
 def _rust_chassis() -> dict[str, tuple[str, float, float, float]]:
     src = PIXELS.read_text()
-    block = src[src.index("pub const FAMILIES"):]
+    block = src[src.index("pub const FAMILIES") :]
     block = block[: block.index("];")]
     out = {}
-    for family, w, h, screen in re.findall(
-        r'\("(\w+)",\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)\)', block
-    ):
+    for family, w, h, screen in re.findall(r'\("(\w+)",\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)\)', block):
         out[family] = (family, float(w), float(h), float(screen))
     return out
 
@@ -80,7 +81,7 @@ def _rust_chassis() -> dict[str, tuple[str, float, float, float]]:
 def _rust_screens() -> dict[str, list[str]]:
     """`DiscoverFunEnum` -> the home screens the app offers for it."""
     src = SCREENS_RUST.read_text()
-    block = src[src.index("pub const SCREENS"):]
+    block = src[src.index("pub const SCREENS") :]
     block = block[: block.index("];")]
     out = {}
     for name, screens in re.findall(r'\(\s*"(\w+)",\s*"([a-z_ ]*)"', block, re.S):
@@ -91,7 +92,7 @@ def _rust_screens() -> dict[str, list[str]]:
 def _rust_model_screens() -> dict[str, list[str]]:
     """Model -> the screens the app offers it."""
     src = RUST.read_text()
-    block = src[src.index("pub const FEATURES"):]
+    block = src[src.index("pub const FEATURES") :]
     block = block[: block.index("];")]
     screens = _rust_screens()
     out = {}
@@ -149,8 +150,7 @@ def test_the_web_ui_fallback_chassis_is_the_daemons_generic_one():
     assert m, "the web UI's generic chassis row is gone"
     generic = _rust_chassis()["panel"]
     assert (float(m.group(1)), float(m.group(2)), float(m.group(3))) == generic[1:], (
-        f"the web UI's generic chassis {(m.group(1), m.group(2), m.group(3))} is not the "
-        f"daemon's {generic[1:]}"
+        f"the web UI's generic chassis {(m.group(1), m.group(2), m.group(3))} is not the daemon's {generic[1:]}"
     )
 
 
@@ -164,8 +164,7 @@ def test_the_rust_table_is_what_the_vendor_app_computes():
     # The same run checks P3.1's pixel table independently of how it was
     # first transcribed.
     larger = _rust_pixels()
-    assert {r["model"]: r["pixels"] for r in rows} == {
-        r["model"]: larger.get(r["model"], 16) for r in rows}
+    assert {r["model"]: r["pixels"] for r in rows} == {r["model"]: larger.get(r["model"], 16) for r in rows}
     # ...and the app's home list, which is what the panel CAN SHOW (P3.4).
     screens = {r["model"]: r["screens"] for r in rows}
     assert screens["DITOO"], screens

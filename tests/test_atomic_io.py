@@ -1,4 +1,5 @@
 """A1/A4: atomic config writes — crash-safe + optional 0600 perms."""
+
 import json
 import os
 import stat
@@ -56,6 +57,7 @@ def test_failure_leaves_original_intact_and_no_temp(tmp_path):
 
 def test_atomic_write_config_roundtrips(tmp_path):
     import configparser
+
     cfg = configparser.ConfigParser()
     cfg["divoom"] = {"email": "a@b.c"}
     p = tmp_path / "config.ini"

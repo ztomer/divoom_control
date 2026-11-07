@@ -1,4 +1,5 @@
 """R16 Phase 1 — daemon wire protocol (NDJSON framing, shapes, client)."""
+
 import json
 import socket
 import sys
@@ -12,9 +13,15 @@ sys.path.append(str(Path(__file__).parent.parent))
 sys.path.append(str(Path(__file__).parent.parent / "divoom_gui"))
 
 from divoom_client.daemon_protocol import (
-    EVENT_STATUS, EVENT_NOTIFICATION, SUBSCRIBE_COMMAND,
-    encode_message, iter_messages, make_request,
-    make_status_event, make_notification_event, DaemonClient,
+    EVENT_STATUS,
+    EVENT_NOTIFICATION,
+    SUBSCRIBE_COMMAND,
+    encode_message,
+    iter_messages,
+    make_request,
+    make_status_event,
+    make_notification_event,
+    DaemonClient,
 )
 
 
@@ -44,15 +51,18 @@ def test_message_constructors():
     assert make_request("ping") == {"command": "ping", "args": {}}
     assert make_request("x", {"a": 1}) == {"command": "x", "args": {"a": 1}}
     assert make_status_event("active", {"seen": 2}) == {
-        "type": EVENT_STATUS, "state": "active", "counters": {"seen": 2}}
+        "type": EVENT_STATUS,
+        "state": "active",
+        "counters": {"seen": 2},
+    }
     ev = make_notification_event(6, "T", "B", True)
-    assert ev == {"type": EVENT_NOTIFICATION, "app_type": 6,
-                  "title": "T", "body": "B", "routed": True}
+    assert ev == {"type": EVENT_NOTIFICATION, "app_type": 6, "title": "T", "body": "B", "routed": True}
 
 
 # ── client against a tiny fake daemon ───────────────────────────────────
 def _sock_path() -> str:
     import os
+
     return f"/tmp/divoom_proto_{os.getpid()}.sock"
 
 
@@ -72,6 +82,7 @@ def _serve_one(sock_path, handler, ready):
 def test_send_command_round_trip():
     sp = _sock_path()
     import os
+
     if os.path.exists(sp):
         os.remove(sp)
 
@@ -104,6 +115,7 @@ def test_send_command_no_daemon_returns_error():
 def test_subscribe_streams_events():
     sp = _sock_path()
     import os
+
     if os.path.exists(sp):
         os.remove(sp)
 
@@ -140,6 +152,7 @@ def test_subscribe_names_its_client_when_asked():
     """P2.4: a named subscribe lets a reconnecting client take its own slot
     back; an unnamed one sends no client_id at all."""
     import os
+
     seen = []
     for client_id in ("divoom-gui", None):
         sp = _sock_path()

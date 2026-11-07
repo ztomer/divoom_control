@@ -24,17 +24,21 @@ from divoom_lib import divoom_auth
 from divoom_legacy.divoom import Divoom
 from divoom_legacy.utils import discovery
 
+
 def print_info(message):
     """Prints an informational message."""
     print(f"[ ==> ] {message}")
+
 
 def print_wrn(message):
     """Prints a warning message."""
     print(f"[ Wrn ] {message}")
 
+
 def print_err(message):
     """Prints an error message."""
     print(f"[ Err ] {message}")
+
 
 def print_ok(message):
     """Prints a success message."""
@@ -60,18 +64,18 @@ def extract_gif_from_magic_43(file_data: bytes) -> bytes | None:
         text_len = struct.unpack("<I", file_data[6:10])[0]
         text_start = 10
         text_end = text_start + text_len
-        
+
         gif_len_offset = text_end
         if len(file_data) < gif_len_offset + 4:
             return None
-            
-        gif_len = struct.unpack("<I", file_data[gif_len_offset:gif_len_offset+4])[0]
+
+        gif_len = struct.unpack("<I", file_data[gif_len_offset : gif_len_offset + 4])[0]
         gif_start = gif_len_offset + 4
         gif_end = gif_start + gif_len
-        
+
         if gif_end > len(file_data):
             gif_end = len(file_data)
-            
+
         gif_data = file_data[gif_start:gif_end]
         if gif_data.startswith(b"GIF89a") or gif_data.startswith(b"GIF87a"):
             return gif_data
@@ -103,18 +107,27 @@ async def main_async():
     parser = argparse.ArgumentParser(description="Divoom Monthly Best Automation Scraper & BLE Daemon")
     parser.add_argument("--address", help="BLE address of the physical Divoom device")
     parser.add_argument("--name", default="Timoo", help="Device name substring to search for (e.g. 'Timoo')")
-    parser.add_argument("--limit", type=int, default=5, help="Number of gallery items to download and display (default: 5)")
-    parser.add_argument("--classify", type=int, default=18, help="Divoom gallery classification ID (default: 18 = Recommend)")
-    parser.add_argument("--dry-run", action="store_true", help="Run without connecting to physical BLE device (downloads only)")
+    parser.add_argument(
+        "--limit", type=int, default=5, help="Number of gallery items to download and display (default: 5)"
+    )
+    parser.add_argument(
+        "--classify", type=int, default=18, help="Divoom gallery classification ID (default: 18 = Recommend)"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Run without connecting to physical BLE device (downloads only)"
+    )
     parser.add_argument("--loop", action="store_true", help="Run as a daemon looping indefinitely")
     parser.add_argument("--interval", type=int, default=3600, help="Loop interval in seconds (default: 3600)")
-    parser.add_argument("--use-config", action="store_true",
-                        help="Drive classify/interval/targets from the GUI-persisted "
-                             "hot-channel config (~/.config/divoom-control/hotchannel.json)")
+    parser.add_argument(
+        "--use-config",
+        action="store_true",
+        help="Drive classify/interval/targets from the GUI-persisted "
+        "hot-channel config (~/.config/divoom-control/hotchannel.json)",
+    )
     args = parser.parse_args()
 
     # Configure logging
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     logger = logging.getLogger("monthly_best_daemon")
 
     # Resolve run parameters. With --use-config, the GUI-selected targets and
@@ -123,6 +136,7 @@ async def main_async():
     # (examples/divoom_legacy/hotchannel_config.py): the live module moved on,
     # and a frozen artifact must not depend on a module that has.
     from divoom_legacy import hotchannel_config
+
     hc_cfg = hotchannel_config.load_config()
     if args.use_config:
         classify = hc_cfg["classify"]
@@ -131,8 +145,9 @@ async def main_async():
         if not args.loop:
             args.loop = bool(hc_cfg["enabled"])
         if not targets:
-            print_wrn("Hot-channel config has no selected target devices; "
-                      "select devices in the Monthly Best tab first.")
+            print_wrn(
+                "Hot-channel config has no selected target devices; select devices in the Monthly Best tab first."
+            )
     else:
         classify = args.classify
         interval = args.interval
@@ -229,7 +244,7 @@ async def _fetch_and_download(classify, args, creds, device_id, device_pw, scrat
         "Version": 19,
         "StartNum": 1,
         "EndNum": args.limit * 2,
-        "RefreshIndex": 0
+        "RefreshIndex": 0,
     }
     if device_pw:
         body["DevicePassword"] = device_pw
@@ -244,7 +259,7 @@ async def _fetch_and_download(classify, args, creds, device_id, device_pw, scrat
             "Connection": "close",
             "User-Agent": "okhttp/4.12.0",
         },
-        method="POST"
+        method="POST",
     )
 
     items_to_display = []
@@ -252,7 +267,9 @@ async def _fetch_and_download(classify, args, creds, device_id, device_pw, scrat
         with urllib.request.urlopen(req, timeout=15) as resp:
             resp_data = json.loads(resp.read().decode("utf-8"))
             if resp_data.get("ReturnCode") != 0:
-                print_err(f"GetCategoryFileListV2 (classify={classify}) failed: RC={resp_data.get('ReturnCode')} msg={resp_data.get('ReturnMessage')}")
+                print_err(
+                    f"GetCategoryFileListV2 (classify={classify}) failed: RC={resp_data.get('ReturnCode')} msg={resp_data.get('ReturnMessage')}"
+                )
                 return items_to_display
             file_list = resp_data.get("FileList", [])
             print_ok(f"Found {len(file_list)} items (classify={classify}).")
@@ -286,7 +303,9 @@ async def _fetch_and_download(classify, args, creds, device_id, device_pw, scrat
                         else:
                             bin_path = scratch_dir / f"native_{downloaded_count}.bin"
                             bin_path.write_bytes(file_bytes)
-                            items_to_display.append({"type": "bin", "path": str(bin_path), "name": file_name, "bytes": file_bytes})
+                            items_to_display.append(
+                                {"type": "bin", "path": str(bin_path), "name": file_name, "bytes": file_bytes}
+                            )
                         downloaded_count += 1
                 except Exception as dl_err:
                     print_wrn(f"Failed to download {file_name!r}: {dl_err}")
@@ -315,7 +334,9 @@ async def _push_items_to_target(target_addr, name_substring, items_to_display, l
         print_ok(f"Connected to {target_addr} successfully!")
 
         for idx, item in enumerate(items_to_display):
-            print_info(f"[{target_addr}] Displaying item [{idx+1}/{len(items_to_display)}]: {item['name']!r} ({item['type']})")
+            print_info(
+                f"[{target_addr}] Displaying item [{idx + 1}/{len(items_to_display)}]: {item['name']!r} ({item['type']})"
+            )
             if item["type"] == "gif":
                 success = await divoom.display.show_image(item["path"])
             elif item["type"] == "bin":
@@ -333,6 +354,7 @@ async def _push_items_to_target(target_addr, name_substring, items_to_display, l
         if divoom and divoom.is_connected:
             await divoom.disconnect()
             print_info(f"Disconnected from {target_addr}.")
+
 
 if __name__ == "__main__":
     try:

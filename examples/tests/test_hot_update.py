@@ -5,6 +5,7 @@ replays the EXACT exchange observed on a real Ditoo (2026-06-09): device
 requests v1099 → info ack [0][start:2] → 201 packets → done [1] → device
 requests v1100 → no newer file → clean end.
 """
+
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -66,16 +67,16 @@ def test_packets_zero_padded_256():
 def test_pick_file_apk_fallback_rules():
     old, new = _file(version=1098), _file(version=1099)
     files = [old, new]
-    assert HotUpdate._pick_file(files, 40005454, 1099) is new   # exact
-    assert HotUpdate._pick_file(files, 40005454, 1000) is old   # lowest >= req
+    assert HotUpdate._pick_file(files, 40005454, 1099) is new  # exact
+    assert HotUpdate._pick_file(files, 40005454, 1000) is old  # lowest >= req
     assert HotUpdate._pick_file(files, 40005454, 1100) is None  # nothing newer
-    assert HotUpdate._pick_file(files, 1, 1099) is None         # wrong vendor
+    assert HotUpdate._pick_file(files, 1, 1099) is None  # wrong vendor
 
 
 @pytest.mark.asyncio
 async def test_session_replays_real_ditoo_exchange(monkeypatch):
     """Full session against a fake transport, mirroring the live Ditoo run."""
-    f = _file(body=b"\xAB" * 600)  # 3 packets
+    f = _file(body=b"\xab" * 600)  # 3 packets
 
     divoom = MagicMock()
     divoom.logger = MagicMock()
@@ -84,12 +85,14 @@ async def test_session_replays_real_ditoo_exchange(monkeypatch):
     conn._listen_commands = set()
     req_1099 = bytes((40005454).to_bytes(4, "little")) + bytes((1099).to_bytes(4, "little"))
     req_1100 = bytes((40005454).to_bytes(4, "little")) + bytes((1100).to_bytes(4, "little"))
-    conn.wait_for_any_response = AsyncMock(side_effect=[
-        (CMD_REQUEST, req_1099),       # device asks for v1099
-        (CMD_INFO, bytes([0, 0, 0])),  # accept, start at packet 0
-        (CMD_DATA, bytes([1])),        # file done
-        (CMD_REQUEST, req_1100),       # device asks for v1100 (nothing newer)
-    ])
+    conn.wait_for_any_response = AsyncMock(
+        side_effect=[
+            (CMD_REQUEST, req_1099),  # device asks for v1099
+            (CMD_INFO, bytes([0, 0, 0])),  # accept, start at packet 0
+            (CMD_DATA, bytes([1])),  # file done
+            (CMD_REQUEST, req_1100),  # device asks for v1100 (nothing newer)
+        ]
+    )
     divoom._conn = conn
 
     hu = HotUpdate(divoom)
@@ -105,13 +108,13 @@ async def test_session_replays_real_ditoo_exchange(monkeypatch):
 
     sent = [c.args for c in divoom.send_command.await_args_list]
     cmds = [a[0] for a in sent]
-    assert cmds[0] == CMD_LIST                      # manifest first
-    assert cmds.count(CMD_INFO) == 1                # one file info
+    assert cmds[0] == CMD_LIST  # manifest first
+    assert cmds.count(CMD_INFO) == 1  # one file info
     data = [a[1] for a in sent if a[0] == CMD_DATA]
-    assert len(data) == 3                           # 3 packets, no resends
+    assert len(data) == 3  # 3 packets, no resends
     assert [int.from_bytes(bytes(d[:2]), "little") for d in data] == [0, 1, 2]
-    assert all(len(d) == 2 + 256 for d in data)     # idx:2 + zero-padded 256
-    assert conn._listen_commands == set()           # listen set restored
+    assert all(len(d) == 2 + 256 for d in data)  # idx:2 + zero-padded 256
+    assert conn._listen_commands == set()  # listen set restored
 
 
 @pytest.mark.asyncio
@@ -124,13 +127,15 @@ async def test_session_serves_resend_requests(monkeypatch):
     conn = MagicMock()
     conn._listen_commands = set()
     req = bytes((40005454).to_bytes(4, "little")) + bytes((1099).to_bytes(4, "little"))
-    conn.wait_for_any_response = AsyncMock(side_effect=[
-        (CMD_REQUEST, req),
-        (CMD_INFO, bytes([0, 0, 0])),
-        (CMD_DATA, bytes([0, 1, 0])),  # resend packet 1
-        (CMD_DATA, bytes([2])),        # done
-        None,                          # session quiet
-    ])
+    conn.wait_for_any_response = AsyncMock(
+        side_effect=[
+            (CMD_REQUEST, req),
+            (CMD_INFO, bytes([0, 0, 0])),
+            (CMD_DATA, bytes([0, 1, 0])),  # resend packet 1
+            (CMD_DATA, bytes([2])),  # done
+            None,  # session quiet
+        ]
+    )
     divoom._conn = conn
 
     hu = HotUpdate(divoom)
@@ -140,8 +145,11 @@ async def test_session_serves_resend_requests(monkeypatch):
 
     result = await hu.update(device_size=16)
     assert result["success"] is True
-    data_idx = [int.from_bytes(bytes(c.args[1][:2]), "little")
-                for c in divoom.send_command.await_args_list if c.args[0] == CMD_DATA]
+    data_idx = [
+        int.from_bytes(bytes(c.args[1][:2]), "little")
+        for c in divoom.send_command.await_args_list
+        if c.args[0] == CMD_DATA
+    ]
     assert data_idx == [0, 1, 1]  # packet 1 re-sent on request
 
 
@@ -160,12 +168,14 @@ async def test_silent_device_file_marked_unconfirmed(monkeypatch):
     conn = MagicMock()
     conn._listen_commands = set()
     req = bytes((40005454).to_bytes(4, "little")) + bytes((1099).to_bytes(4, "little"))
-    conn.wait_for_any_response = AsyncMock(side_effect=[
-        (CMD_REQUEST, req),            # device asks for v1099
-        (CMD_INFO, bytes([0, 0, 0])),  # accept, start at packet 0
-        None,                          # _stream_file done-wait: device SILENT
-        None,                          # outer loop: quiet -> end session
-    ])
+    conn.wait_for_any_response = AsyncMock(
+        side_effect=[
+            (CMD_REQUEST, req),  # device asks for v1099
+            (CMD_INFO, bytes([0, 0, 0])),  # accept, start at packet 0
+            None,  # _stream_file done-wait: device SILENT
+            None,  # outer loop: quiet -> end session
+        ]
+    )
     divoom._conn = conn
 
     hu = HotUpdate(divoom)
@@ -181,6 +191,7 @@ async def test_silent_device_file_marked_unconfirmed(monkeypatch):
 
 # ── device_type-keyed download cache (no redundant per-device fetch) ───────
 
+
 @pytest.mark.asyncio
 async def test_load_hot_files_caches_per_device_type(monkeypatch):
     """Two syncs of the same device class reuse one CDN fetch+download instead of
@@ -192,7 +203,7 @@ async def test_load_hot_files_caches_per_device_type(monkeypatch):
     def fake_fetch(dt):
         fetch_calls.append(dt)
         f = _file(version=1099 + dt)
-        f.body = None          # force the download path to populate it
+        f.body = None  # force the download path to populate it
         return [f]
 
     def fake_dl(f):
@@ -232,8 +243,7 @@ async def test_clear_hot_manifest_cache_forces_refetch(monkeypatch):
         return [f]
 
     monkeypatch.setattr(hu_mod, "fetch_hot_manifest", fake_fetch)
-    monkeypatch.setattr(hu_mod, "download_hot_file",
-                        lambda f: (setattr(f, "body", b"\x03" * 300), True)[1])
+    monkeypatch.setattr(hu_mod, "download_hot_file", lambda f: (setattr(f, "body", b"\x03" * 300), True)[1])
 
     await hu_mod._load_hot_files(1)
     hu_mod.clear_hot_manifest_cache()

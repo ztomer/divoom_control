@@ -8,6 +8,7 @@ non-zero error_code.
 These are the FIRST tests for LanTransport (the bug went unnoticed because there
 were none).
 """
+
 import sys
 from pathlib import Path
 
@@ -110,11 +111,9 @@ def _fake_aiohttp(resp=None, raise_exc=None):
 
 
 class TestLanTransportPost(unittest.IsolatedAsyncioTestCase):
-
     async def test_post_success_returns_parsed_json(self):
         fake = _fake_aiohttp(resp=_FakeResp(200, '{"error_code": 0, "x": 1}'))
-        with patch.object(lan_mod, "aiohttp", fake), \
-             patch.object(lan_mod, "_AIOHTTP_AVAILABLE", True):
+        with patch.object(lan_mod, "aiohttp", fake), patch.object(lan_mod, "_AIOHTTP_AVAILABLE", True):
             lan = LanTransport(device_ip="10.0.0.5")
             out = await lan.post("Channel/GetIndex")
             assert out == {"error_code": 0, "x": 1}
@@ -123,8 +122,7 @@ class TestLanTransportPost(unittest.IsolatedAsyncioTestCase):
         """extra=... must be merged into the request body (not just Command
         + LocalToken) — covers the `if extra: body.update(extra)` branch."""
         fake = _fake_aiohttp(resp=_FakeResp(200, '{"error_code": 0}'))
-        with patch.object(lan_mod, "aiohttp", fake), \
-             patch.object(lan_mod, "_AIOHTTP_AVAILABLE", True):
+        with patch.object(lan_mod, "aiohttp", fake), patch.object(lan_mod, "_AIOHTTP_AVAILABLE", True):
             lan = LanTransport(device_ip="10.0.0.5")
             out = await lan.post("Channel/SetIndex", {"SelectIndex": 2})
             assert out == {"error_code": 0}
@@ -137,24 +135,21 @@ class TestLanTransportPost(unittest.IsolatedAsyncioTestCase):
 
     async def test_post_connector_error_raises_with_actionable_message(self):
         fake = _fake_aiohttp(raise_exc=_FakeConnectorError("refused"))
-        with patch.object(lan_mod, "aiohttp", fake), \
-             patch.object(lan_mod, "_AIOHTTP_AVAILABLE", True):
+        with patch.object(lan_mod, "aiohttp", fake), patch.object(lan_mod, "_AIOHTTP_AVAILABLE", True):
             lan = LanTransport(device_ip="10.0.0.5")
             with pytest.raises(lan_mod.LanTransportError, match="Cannot reach device"):
                 await lan.post("Channel/GetIndex")
 
     async def test_post_timeout_raises_with_actionable_message(self):
         fake = _fake_aiohttp(raise_exc=asyncio.TimeoutError())
-        with patch.object(lan_mod, "aiohttp", fake), \
-             patch.object(lan_mod, "_AIOHTTP_AVAILABLE", True):
+        with patch.object(lan_mod, "aiohttp", fake), patch.object(lan_mod, "_AIOHTTP_AVAILABLE", True):
             lan = LanTransport(device_ip="10.0.0.5")
             with pytest.raises(lan_mod.LanTransportError, match="did not respond within"):
                 await lan.post("Channel/GetIndex")
 
     async def test_post_generic_exception_wrapped(self):
         fake = _fake_aiohttp(raise_exc=RuntimeError("boom"))
-        with patch.object(lan_mod, "aiohttp", fake), \
-             patch.object(lan_mod, "_AIOHTTP_AVAILABLE", True):
+        with patch.object(lan_mod, "aiohttp", fake), patch.object(lan_mod, "_AIOHTTP_AVAILABLE", True):
             lan = LanTransport(device_ip="10.0.0.5")
             with pytest.raises(lan_mod.LanTransportError, match="LAN request failed"):
                 await lan.post("Channel/GetIndex")
@@ -164,8 +159,7 @@ class TestLanTransportPost(unittest.IsolatedAsyncioTestCase):
         rejection (non-zero error_code) must surface its OWN message, not get
         re-labeled 'LAN request failed' by the broad except above it."""
         fake = _fake_aiohttp(resp=_FakeResp(200, '{"error_code": 7}'))
-        with patch.object(lan_mod, "aiohttp", fake), \
-             patch.object(lan_mod, "_AIOHTTP_AVAILABLE", True):
+        with patch.object(lan_mod, "aiohttp", fake), patch.object(lan_mod, "_AIOHTTP_AVAILABLE", True):
             lan = LanTransport(device_ip="10.0.0.5")
             with pytest.raises(lan_mod.LanTransportError, match="error_code=7"):
                 await lan.post("Channel/SetBrightness")
@@ -222,27 +216,46 @@ class TestLanTransportCommandWrappers(unittest.IsolatedAsyncioTestCase):
 
     async def test_set_ambient_light(self):
         await self.lan.set_ambient_light(80, 255, 128, 0, power=1)
-        self.lan.post.assert_called_once_with("Channel/SetAmbientLight", {
-            "Brightness": 80, "Color": "#FF8000", "Power": 1,
-        })
+        self.lan.post.assert_called_once_with(
+            "Channel/SetAmbientLight",
+            {
+                "Brightness": 80,
+                "Color": "#FF8000",
+                "Power": 1,
+            },
+        )
 
     async def test_set_rgb_info(self):
         await self.lan.set_rgb_info(mode=1, speed=50, r=255, g=0, b=128)
-        self.lan.post.assert_called_once_with("Channel/SetRGBInfo", {
-            "RgbMode": 1, "RgbSpeed": 50, "RgbColor": "#FF0080",
-        })
+        self.lan.post.assert_called_once_with(
+            "Channel/SetRGBInfo",
+            {
+                "RgbMode": 1,
+                "RgbSpeed": 50,
+                "RgbColor": "#FF0080",
+            },
+        )
 
     async def test_set_timer(self):
         await self.lan.set_timer(5, 30, 1)
-        self.lan.post.assert_called_once_with("Tools/SetTimer", {
-            "Minute": 5, "Second": 30, "Status": 1,
-        })
+        self.lan.post.assert_called_once_with(
+            "Tools/SetTimer",
+            {
+                "Minute": 5,
+                "Second": 30,
+                "Status": 1,
+            },
+        )
 
     async def test_set_scoreboard(self):
         await self.lan.set_scoreboard(blue=3, red=1)
-        self.lan.post.assert_called_once_with("Tools/SetScoreBoard", {
-            "BlueScore": 3, "RedScore": 1,
-        })
+        self.lan.post.assert_called_once_with(
+            "Tools/SetScoreBoard",
+            {
+                "BlueScore": 3,
+                "RedScore": 1,
+            },
+        )
 
     async def test_set_stopwatch(self):
         await self.lan.set_stopwatch(1)
@@ -258,34 +271,57 @@ class TestLanTransportCommandWrappers(unittest.IsolatedAsyncioTestCase):
 
     async def test_set_album_cover(self):
         await self.lan.set_album_cover(clock_id=7, file_id="abc123", photo_id=1)
-        self.lan.post.assert_called_once_with("Photo/SetAlbumCover", {
-            "ClockId": 7, "FileId": "abc123", "PhotoId": 1,
-        })
+        self.lan.post.assert_called_once_with(
+            "Photo/SetAlbumCover",
+            {
+                "ClockId": 7,
+                "FileId": "abc123",
+                "PhotoId": 1,
+            },
+        )
 
     async def test_delete_photo(self):
         await self.lan.delete_photo(clock_id=7, photo_list=[1, 2])
-        self.lan.post.assert_called_once_with("Photo/DeletePhoto", {
-            "ClockId": 7, "PhotoList": [1, 2],
-        })
+        self.lan.post.assert_called_once_with(
+            "Photo/DeletePhoto",
+            {
+                "ClockId": 7,
+                "PhotoList": [1, 2],
+            },
+        )
 
     async def test_remove_photo_from_album(self):
         await self.lan.remove_photo_from_album(clock_id=7, photo_list=[1, 2])
-        self.lan.post.assert_called_once_with("Photo/RemovePhotoFromAlbum", {
-            "ClockId": 7, "PhotoList": [1, 2],
-        })
+        self.lan.post.assert_called_once_with(
+            "Photo/RemovePhotoFromAlbum",
+            {
+                "ClockId": 7,
+                "PhotoList": [1, 2],
+            },
+        )
 
     async def test_move_photo_to_album(self):
         await self.lan.move_photo_to_album(to_clock_id=8, photo_list=[1, 2])
-        self.lan.post.assert_called_once_with("Photo/DevicePhotoToAlbum", {
-            "ToClockId": 8, "PhotoList": [1, 2],
-        })
+        self.lan.post.assert_called_once_with(
+            "Photo/DevicePhotoToAlbum",
+            {
+                "ToClockId": 8,
+                "PhotoList": [1, 2],
+            },
+        )
 
     async def test_get_photo_list(self):
         await self.lan.get_photo_list(clock_id=7, limit=10, page=2)
-        self.lan.post.assert_called_once_with("Photo/GetPhotoList", {
-            "ClockId": 7, "ParentClockId": 0, "ParentItemId": 0,
-            "StartNum": 11, "EndNum": 20,
-        })
+        self.lan.post.assert_called_once_with(
+            "Photo/GetPhotoList",
+            {
+                "ClockId": 7,
+                "ParentClockId": 0,
+                "ParentItemId": 0,
+                "StartNum": 11,
+                "EndNum": 20,
+            },
+        )
 
     async def test_get_eq_position(self):
         await self.lan.get_eq_position()
@@ -321,9 +357,13 @@ class TestLanTransportCommandWrappers(unittest.IsolatedAsyncioTestCase):
 
     async def test_set_5lcd_channel_type(self):
         await self.lan.set_5lcd_channel_type(2, lcd_independence=1)
-        self.lan.post.assert_called_once_with("Channel/Set5LcdChannelType", {
-            "ChannelType": 2, "LcdIndependence": 1,
-        })
+        self.lan.post.assert_called_once_with(
+            "Channel/Set5LcdChannelType",
+            {
+                "ChannelType": 2,
+                "LcdIndependence": 1,
+            },
+        )
 
     async def test_set_5lcd_whole_clock_id(self):
         await self.lan.set_5lcd_whole_clock_id(182)
@@ -342,18 +382,27 @@ class TestLanTransportCommandWrappers(unittest.IsolatedAsyncioTestCase):
         self.lan.post.assert_called_once_with("Channel/ExitNightPreview")
 
     async def test_send_voice_text(self):
-        await self.lan.send_voice_text("Hello", nickname="Bot", background="#000000",
-                                        text_color="#FF0000", speed=30)
-        self.lan.post.assert_called_once_with("Voice/SendText", {
-            "Text": "Hello", "NickName": "Bot", "Background": "#000000",
-            "TextColor": "#FF0000", "Speed": 30,
-        })
+        await self.lan.send_voice_text("Hello", nickname="Bot", background="#000000", text_color="#FF0000", speed=30)
+        self.lan.post.assert_called_once_with(
+            "Voice/SendText",
+            {
+                "Text": "Hello",
+                "NickName": "Bot",
+                "Background": "#000000",
+                "TextColor": "#FF0000",
+                "Speed": 30,
+            },
+        )
 
     async def test_send_danmaku_text(self):
         await self.lan.send_danmaku_text("Hello", text_color="#00FF00")
-        self.lan.post.assert_called_once_with("Danmaku/SendText", {
-            "Text": "Hello", "TextColor": "#00FF00",
-        })
+        self.lan.post.assert_called_once_with(
+            "Danmaku/SendText",
+            {
+                "Text": "Hello",
+                "TextColor": "#00FF00",
+            },
+        )
 
     async def test_danmaku_random_face(self):
         await self.lan.danmaku_random_face()
@@ -363,6 +412,7 @@ class TestLanTransportCommandWrappers(unittest.IsolatedAsyncioTestCase):
 class TestLanTransportMisc(unittest.TestCase):
     def test_transport_property_is_lan(self):
         from divoom_lib.transport import Transport
+
         lan = LanTransport(device_ip="10.0.0.5")
         assert lan.transport is Transport.LAN
 

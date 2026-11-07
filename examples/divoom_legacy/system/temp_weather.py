@@ -14,6 +14,7 @@ use ``Divoom.weather`` directly. The shim is preserved so
 ``tests/test_temp_weather_functions.py`` and any external code
 that imported ``TempWeatherCommand`` continue to work.
 """
+
 from typing import Optional
 
 from divoom_legacy.system.weather import Weather

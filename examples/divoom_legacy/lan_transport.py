@@ -25,6 +25,7 @@ from typing import Any
 
 try:
     import aiohttp
+
     _AIOHTTP_AVAILABLE = True
 except ImportError:
     _AIOHTTP_AVAILABLE = False
@@ -51,8 +52,7 @@ def _validate_lan_response(status: int, text: str, command: str) -> dict:
     try:
         result = json.loads(text)
     except (ValueError, json.JSONDecodeError) as e:
-        raise LanTransportError(
-            f"device returned non-JSON for {command}: {text[:120]!r}") from e
+        raise LanTransportError(f"device returned non-JSON for {command}: {text[:120]!r}") from e
     if status != 200:
         raise LanTransportError(f"device returned HTTP {status} for {command}")
     err = result.get("error_code") if isinstance(result, dict) else None
@@ -116,10 +116,7 @@ class LanTransport(LanPhotoMixin, LanExtrasMixin):
             LanTransportError: If the device is unreachable or returns an error.
         """
         if not _AIOHTTP_AVAILABLE:
-            raise LanTransportError(
-                "aiohttp is required for LAN transport. "
-                "Install it with: pip install aiohttp"
-            )
+            raise LanTransportError("aiohttp is required for LAN transport. Install it with: pip install aiohttp")
 
         body: dict[str, Any] = {
             "Command": command,
@@ -146,9 +143,7 @@ class LanTransport(LanPhotoMixin, LanExtrasMixin):
                 f"Check that the device is on the same Wi-Fi network. ({e})"
             ) from e
         except asyncio.TimeoutError:
-            raise LanTransportError(
-                f"Device at {self.device_ip} did not respond within {self.TIMEOUT}s."
-            )
+            raise LanTransportError(f"Device at {self.device_ip} did not respond within {self.TIMEOUT}s.")
         except Exception as e:
             raise LanTransportError(f"LAN request failed: {e}") from e
 
@@ -179,9 +174,7 @@ class LanTransport(LanPhotoMixin, LanExtrasMixin):
             result = await self.post("Channel/GetIndex")
             reachable = isinstance(result, dict)
             if reachable:
-                self.logger.info(
-                    f"[LAN ] Device at {self.device_ip} is reachable."
-                )
+                self.logger.info(f"[LAN ] Device at {self.device_ip} is reachable.")
             return reachable
         except LanTransportError:
             return False
@@ -293,9 +286,7 @@ class LanTransport(LanPhotoMixin, LanExtrasMixin):
     # ── Ambient Light & RGB ───────────────────────────────────────────────────
 
     @via(Transport.LAN)
-    async def set_ambient_light(
-        self, brightness: int, r: int, g: int, b: int, power: int = 1
-    ) -> dict:
+    async def set_ambient_light(self, brightness: int, r: int, g: int, b: int, power: int = 1) -> dict:
         """
         Configure the ambient light / LED ring.
 
@@ -310,11 +301,14 @@ class LanTransport(LanPhotoMixin, LanExtrasMixin):
 
             await lan.set_ambient_light(80, 255, 128, 0)
         """
-        return await self.post("Channel/SetAmbientLight", {
-            "Brightness": brightness,
-            "Color": f"#{r:02X}{g:02X}{b:02X}",
-            "Power": power,
-        })
+        return await self.post(
+            "Channel/SetAmbientLight",
+            {
+                "Brightness": brightness,
+                "Color": f"#{r:02X}{g:02X}{b:02X}",
+                "Power": power,
+            },
+        )
 
     @via(Transport.LAN)
     async def set_rgb_info(self, mode: int, speed: int, r: int, g: int, b: int) -> dict:
@@ -327,11 +321,14 @@ class LanTransport(LanPhotoMixin, LanExtrasMixin):
 
             await lan.set_rgb_info(mode=1, speed=50, r=255, g=0, b=128)
         """
-        return await self.post("Channel/SetRGBInfo", {
-            "RgbMode": mode,
-            "RgbSpeed": speed,
-            "RgbColor": f"#{r:02X}{g:02X}{b:02X}",
-        })
+        return await self.post(
+            "Channel/SetRGBInfo",
+            {
+                "RgbMode": mode,
+                "RgbSpeed": speed,
+                "RgbColor": f"#{r:02X}{g:02X}{b:02X}",
+            },
+        )
 
     # ── Tools ─────────────────────────────────────────────────────────────────
 
@@ -351,11 +348,14 @@ class LanTransport(LanPhotoMixin, LanExtrasMixin):
 
             await lan.set_timer(5, 0, 1)   # 5-minute countdown, start
         """
-        return await self.post("Tools/SetTimer", {
-            "Minute": minute,
-            "Second": second,
-            "Status": status,
-        })
+        return await self.post(
+            "Tools/SetTimer",
+            {
+                "Minute": minute,
+                "Second": second,
+                "Status": status,
+            },
+        )
 
     @via(Transport.LAN)
     async def set_scoreboard(self, blue: int, red: int) -> dict:
@@ -368,10 +368,13 @@ class LanTransport(LanPhotoMixin, LanExtrasMixin):
 
             await lan.set_scoreboard(blue=3, red=1)
         """
-        return await self.post("Tools/SetScoreBoard", {
-            "BlueScore": blue,
-            "RedScore": red,
-        })
+        return await self.post(
+            "Tools/SetScoreBoard",
+            {
+                "BlueScore": blue,
+                "RedScore": red,
+            },
+        )
 
     @via(Transport.LAN)
     async def set_stopwatch(self, status: int) -> dict:

@@ -26,12 +26,15 @@ broken the drag in prior rounds (custom JS handler re-added, custom
 Python `drag_window` re-added, `pywebview-drag-region` class dropped,
 #1820 patch removed or wrong).
 """
+
 import re
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 INDEX_HTML = REPO_ROOT / "divoom_gui" / "web_ui" / "index.html"
+
+
 def _cat(paths: list[Path]) -> str:
     parts = []
     for p in paths:
@@ -39,10 +42,13 @@ def _cat(paths: list[Path]) -> str:
             parts.append(p.read_text())
     return "\n".join(parts)
 
-APP_JS = _cat([
-    REPO_ROOT / "divoom_gui" / "web_ui" / "app_globals.js",
-    REPO_ROOT / "divoom_gui" / "web_ui" / "app_init.js",
-])
+
+APP_JS = _cat(
+    [
+        REPO_ROOT / "divoom_gui" / "web_ui" / "app_globals.js",
+        REPO_ROOT / "divoom_gui" / "web_ui" / "app_init.js",
+    ]
+)
 GUI_MAIN = REPO_ROOT / "divoom_gui" / "gui_main.py"
 
 
@@ -53,8 +59,9 @@ def _read_cocoa_browser_view_move_source():
     try:
         import inspect
         from webview.platforms.cocoa import BrowserView
+
         return inspect.getsource(BrowserView.move)
-    except (ImportError, OSError, TypeError):
+    except ImportError, OSError, TypeError:
         return None
 
 
@@ -68,9 +75,7 @@ def test_appbar_has_pywebview_drag_region_class():
     m = re.search(r'<header[^>]*class="([^"]*)"[^>]*>', html)
     assert m is not None, "could not find <header> in gui/web_ui/index.html"
     classes = m.group(1).split()
-    assert "integrated-appbar" in classes, (
-        "header is missing 'integrated-appbar' class"
-    )
+    assert "integrated-appbar" in classes, "header is missing 'integrated-appbar' class"
     assert "pywebview-drag-region" in classes, (
         "header is missing 'pywebview-drag-region' class — pywebview will "
         "not start a native window drag from the appbar. Add it to use "
@@ -142,6 +147,7 @@ def test_gui_api_has_no_drag_window():
     patch in gui_main.py. A custom Python drag_window would be
     dead code (and is the source of multiple regressions)."""
     from divoom_gui import gui_api as _api_mod
+
     assert not hasattr(_api_mod.DivoomGuiAPI, "drag_window"), (
         "DivoomGuiAPI.drag_window still exists — this is the OLD custom "
         "Python drag path. Delete it; pywebview handles drag natively."
@@ -166,6 +172,7 @@ def test_pywebview_1820_detection_matches_source():
     cocoa_src = _read_cocoa_browser_view_move_source()
     if cocoa_src is None:
         import pytest
+
         pytest.skip("pywebview cocoa backend not importable in this env")
 
     # The exact bug token from issue #1820 (May 2026).
@@ -179,9 +186,11 @@ def test_pywebview_1820_detection_matches_source():
     sys.path.insert(0, str(REPO_ROOT / "divoom_gui"))
     # Import the helper without triggering main()/webview.start().
     import importlib
+
     if "gui_main" in sys.modules:
         importlib.reload(sys.modules["gui_main"])
     from gui_main import _pywebview_1820_bug_present
+
     detected_bug_present = _pywebview_1820_bug_present()
 
     assert detected_bug_present == actual_bug_present, (
@@ -213,15 +222,14 @@ def test_pywebview_1820_detection_simulates_upstream_fix():
         from webview.platforms import cocoa as _cocoa
     except ImportError:
         import pytest
+
         pytest.skip("pywebview cocoa backend not importable in this env")
 
     # Upstream-recommended fix shape (per the bug description's
     # "Suggested fix" section): drop the `self.screen.origin.x` term.
     def _fixed_move(self, x, y):
         flipped_y = self.screen.size.height - y
-        self.window.setFrameTopLeftPoint_(
-            _cocoa.AppKit.NSPoint(x, self.screen.origin.y + flipped_y)
-        )
+        self.window.setFrameTopLeftPoint_(_cocoa.AppKit.NSPoint(x, self.screen.origin.y + flipped_y))
 
     original = _cocoa.BrowserView.move
     _cocoa.BrowserView.move = _fixed_move
@@ -230,6 +238,7 @@ def test_pywebview_1820_detection_simulates_upstream_fix():
         sys.path.insert(0, str(REPO_ROOT))
         sys.path.insert(0, str(REPO_ROOT / "divoom_gui"))
         import importlib
+
         if "gui_main" in sys.modules:
             importlib.reload(sys.modules["gui_main"])
         from gui_main import _pywebview_1820_bug_present

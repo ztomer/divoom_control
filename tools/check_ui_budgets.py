@@ -21,6 +21,7 @@ Exempt by SHAPE, never by list, the two places where a short timeout IS the
 assertion: a wait for absence (`state="hidden"` / `state="detached"`), and a
 wait inside `pytest.raises(...)`, which asserts that the wait times out.
 """
+
 from __future__ import annotations
 
 import ast
@@ -37,12 +38,30 @@ TESTS = REPO / "tests"
 
 #: Calls whose `timeout=` is a UI budget: Playwright's page/locator actions and
 #: waits, plus the house helpers in tests/support/browser.py.
-WAITS = frozenset({
-    "check", "click", "dblclick", "fill", "focus", "goto", "hover", "press",
-    "select_option", "set_checked", "tap", "type", "uncheck",
-    "wait_for", "wait_for_function", "wait_for_load_state", "wait_for_selector",
-    "wait_for_url", "wait_js", "wait_toast",
-})
+WAITS = frozenset(
+    {
+        "check",
+        "click",
+        "dblclick",
+        "fill",
+        "focus",
+        "goto",
+        "hover",
+        "press",
+        "select_option",
+        "set_checked",
+        "tap",
+        "type",
+        "uncheck",
+        "wait_for",
+        "wait_for_function",
+        "wait_for_load_state",
+        "wait_for_selector",
+        "wait_for_url",
+        "wait_js",
+        "wait_toast",
+    }
+)
 ABSENCE = frozenset({"hidden", "detached"})
 
 
@@ -76,8 +95,7 @@ def _expected_timeouts(tree: ast.AST) -> list[tuple[int, int]]:
     spans = []
     for node in ast.walk(tree):
         if isinstance(node, (ast.With, ast.AsyncWith)) and any(
-            isinstance(item.context_expr, ast.Call) and _name(item.context_expr.func) == "raises"
-            for item in node.items
+            isinstance(item.context_expr, ast.Call) and _name(item.context_expr.func) == "raises" for item in node.items
         ):
             spans.append((node.lineno, node.end_lineno or node.lineno))
     return spans

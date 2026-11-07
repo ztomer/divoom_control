@@ -31,9 +31,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-VECTORS_PATH = (
-    Path(__file__).resolve().parents[2] / "divoomd" / "tests" / "framing_vectors.json"
-)
+VECTORS_PATH = Path(__file__).resolve().parents[2] / "divoomd" / "tests" / "framing_vectors.json"
 
 BASIC = "encode_basic"
 IOS_LE = "encode_ios_le"

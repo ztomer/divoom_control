@@ -22,6 +22,7 @@ the device frame disagree on 100% of pixels on hard-edged input — not a drift,
 different picture — because the GUI resamples LANCZOS and the device pipeline
 uses NEAREST. See `test_the_album_art_filters_disagree_on_every_pixel`.
 """
+
 from __future__ import annotations
 
 import base64
@@ -36,6 +37,7 @@ import pytest
 
 
 # ── a daemon, without the radio ──────────────────────────────────────────────
+
 
 @pytest.fixture(scope="module")
 def daemon_socket():
@@ -52,8 +54,9 @@ def daemon_socket():
     sock = f"/tmp/divoomd_r70_parity_{os.getpid()}.sock"
     if os.path.exists(sock):
         os.remove(sock)
-    proc = subprocess.Popen([str(bin_path), "--socket", sock],
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL)
+    proc = subprocess.Popen(
+        [str(bin_path), "--socket", sock], stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL
+    )
     try:
         for _ in range(60):
             if os.path.exists(sock):
@@ -92,6 +95,7 @@ def call(sock: str, command: str, args: dict) -> dict:
 
 # ── fixtures that can actually show a difference ─────────────────────────────
 
+
 def hard_edged_cover(size: int = 64):
     """A cover with an edge at every block boundary.
 
@@ -101,6 +105,7 @@ def hard_edged_cover(size: int = 64):
     is the whole reason this fixture is described rather than just used.
     """
     from PIL import Image
+
     img = Image.new("RGB", (size, size))
     for y in range(size):
         for x in range(size):
@@ -117,10 +122,11 @@ def as_png_b64(img) -> str:
 
 def pixels_differing(a: bytes, b: bytes) -> int:
     assert len(a) == len(b)
-    return sum(1 for i in range(0, len(a), 3) if a[i:i + 3] != b[i:i + 3])
+    return sum(1 for i in range(0, len(a), 3) if a[i : i + 3] != b[i : i + 3])
 
 
 # ── album art: the decision P3.2 rests on ────────────────────────────────────
+
 
 def test_the_album_art_filters_disagree_on_every_pixel(daemon_socket):
     """The magnitude of what P3.2 changes, measured rather than asserted.
@@ -134,18 +140,23 @@ def test_the_album_art_filters_disagree_on_every_pixel(daemon_socket):
     from PIL import Image
 
     src = hard_edged_cover(64)
-    reply = call(daemon_socket, "render_widget", {
-        "kind": "album_art", "size": 16,
-        "params": {"image_b64": as_png_b64(src)},
-    })
+    reply = call(
+        daemon_socket,
+        "render_widget",
+        {
+            "kind": "album_art",
+            "size": 16,
+            "params": {"image_b64": as_png_b64(src)},
+        },
+    )
     assert reply.get("success"), reply
     device = base64.b64decode(reply["frame_rgb_b64"])
     gui = src.resize((16, 16), Image.LANCZOS).convert("RGB").tobytes()
 
     differing = pixels_differing(device, gui)
     assert differing == 256, (
-        f"expected the two filters to disagree everywhere on hard-edged input; "
-        f"{differing}/256 pixels differ")
+        f"expected the two filters to disagree everywhere on hard-edged input; {differing}/256 pixels differ"
+    )
 
 
 def test_the_daemon_album_art_filter_is_nearest(daemon_socket):
@@ -158,10 +169,15 @@ def test_the_daemon_album_art_filter_is_nearest(daemon_socket):
     from PIL import Image
 
     src = hard_edged_cover(64)
-    reply = call(daemon_socket, "render_widget", {
-        "kind": "album_art", "size": 16,
-        "params": {"image_b64": as_png_b64(src)},
-    })
+    reply = call(
+        daemon_socket,
+        "render_widget",
+        {
+            "kind": "album_art",
+            "size": 16,
+            "params": {"image_b64": as_png_b64(src)},
+        },
+    )
     assert reply.get("success"), reply
     device = base64.b64decode(reply["frame_rgb_b64"])
     assert device == src.resize((16, 16), Image.NEAREST).convert("RGB").tobytes()
@@ -174,18 +190,25 @@ def test_the_fixture_can_show_a_difference_at_all(daemon_socket):
     from PIL import Image
 
     flat = Image.new("RGB", (64, 64), (120, 30, 200))
-    reply = call(daemon_socket, "render_widget", {
-        "kind": "album_art", "size": 16, "params": {"image_b64": as_png_b64(flat)},
-    })
+    reply = call(
+        daemon_socket,
+        "render_widget",
+        {
+            "kind": "album_art",
+            "size": 16,
+            "params": {"image_b64": as_png_b64(flat)},
+        },
+    )
     assert reply.get("success"), reply
     device = base64.b64decode(reply["frame_rgb_b64"])
     gui = flat.resize((16, 16), Image.LANCZOS).convert("RGB").tobytes()
     assert pixels_differing(device, gui) == 0, (
-        "a flat fixture cannot distinguish the filters — which is why the real "
-        "tests use a hard-edged one")
+        "a flat fixture cannot distinguish the filters — which is why the real tests use a hard-edged one"
+    )
 
 
 # ── sysmon: already migrated, so parity must HOLD ────────────────────────────
+
 
 def test_sysmon_frame_is_the_daemons_own_renderer_at_every_size(daemon_socket):
     """Sysmon was fixed in R67/C2 and must stay fixed through the P1.2 refactor.
@@ -206,6 +229,7 @@ def test_sysmon_frame_is_the_daemons_own_renderer_at_every_size(daemon_socket):
 
 # ── stocks: the Python renderer still exists; it is not the device's ─────────
 
+
 def test_the_python_stock_renderer_is_reference_only_not_the_devices():
     """`divoom_lib` renders a stock tile too — and nothing pushes it.
 
@@ -215,6 +239,7 @@ def test_the_python_stock_renderer_is_reference_only_not_the_devices():
     removal reads as intentional rather than as lost functionality.
     """
     from divoom_legacy.utils import media_source
+
     assert hasattr(media_source, "render_stock_ticker_frame")
     assert hasattr(media_source, "fetch_stock_ticker")
 
@@ -222,8 +247,7 @@ def test_the_python_stock_renderer_is_reference_only_not_the_devices():
 def test_the_daemon_exposes_the_kinds_p3_will_route_to(daemon_socket):
     """P3 cannot route a panel to a kind the shipped daemon does not have."""
     for kind in ("sysmon", "album_art"):
-        reply = call(daemon_socket, "render_widget", {"kind": kind, "size": 16,
-                                                      "params": {}})
+        reply = call(daemon_socket, "render_widget", {"kind": kind, "size": 16, "params": {}})
         # album_art without an image fails, but it must fail as a KNOWN kind.
         err = str(reply.get("error", ""))
         assert "unknown kind" not in err, f"{kind} is not a known kind: {err}"

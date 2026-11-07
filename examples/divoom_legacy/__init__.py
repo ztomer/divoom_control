@@ -12,6 +12,7 @@ other way round.
     PYTHONPATH=examples:. python3 examples/discover_and_connect.py
     python3 -m pytest examples/tests -q
 """
+
 from divoom_lib.exceptions import (  # noqa: F401 — the names examples expect here
     CharacteristicConfigError,
     DeviceAddressMissingError,
@@ -24,9 +25,11 @@ from divoom_lib.transport import COMMAND_TRANSPORT_MAP, Transport, transport_for
 def __getattr__(name):
     if name == "Divoom":
         from .divoom import Divoom
+
         return Divoom
     if name == "LanTransport":
         from .lan_transport import LanTransport
+
         return LanTransport
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 

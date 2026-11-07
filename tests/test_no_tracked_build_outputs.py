@@ -17,6 +17,7 @@ number as well as by suffix, because a Mach-O or ELF file needs no extension.
 The second test pins the one producer this repo has: its output path must be
 ignored, so the build cannot dirty the tree again.
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -27,8 +28,12 @@ REPO = Path(__file__).resolve().parent.parent
 BINARY_SUFFIXES = (".dylib", ".so", ".a", ".o", ".dll", ".exe", ".node", ".pyd")
 # Mach-O (thin, both byte orders, 32/64), fat/universal, and ELF.
 BINARY_MAGIC = (
-    b"\xcf\xfa\xed\xfe", b"\xce\xfa\xed\xfe", b"\xfe\xed\xfa\xcf", b"\xfe\xed\xfa\xce",
-    b"\xca\xfe\xba\xbe", b"\x7fELF",
+    b"\xcf\xfa\xed\xfe",
+    b"\xce\xfa\xed\xfe",
+    b"\xfe\xed\xfa\xcf",
+    b"\xfe\xed\xfa\xce",
+    b"\xca\xfe\xba\xbe",
+    b"\x7fELF",
 )
 
 # Outputs written by the repo's own build scripts, which must never be tracked.
@@ -36,8 +41,9 @@ BUILD_OUTPUTS = ("nowplaying/native/libnp_helper.dylib",)
 
 
 def tracked() -> list[str]:
-    out = subprocess.run(["git", "ls-files", "-z"], cwd=REPO, check=True,
-                         capture_output=True, stdin=subprocess.DEVNULL).stdout.decode()
+    out = subprocess.run(
+        ["git", "ls-files", "-z"], cwd=REPO, check=True, capture_output=True, stdin=subprocess.DEVNULL
+    ).stdout.decode()
     paths = [p for p in out.split("\0") if p]
     assert paths, "git lists no tracked files: the scan would pass over nothing"
     return paths
@@ -54,7 +60,7 @@ def compiled(paths: list[str], root: Path = REPO) -> list[str]:
         try:
             with path.open("rb") as fh:
                 head = fh.read(4)
-        except (FileNotFoundError, IsADirectoryError):
+        except FileNotFoundError, IsADirectoryError:
             continue
         if head in BINARY_MAGIC:
             found.append(rel)
@@ -63,17 +69,18 @@ def compiled(paths: list[str], root: Path = REPO) -> list[str]:
 
 def test_no_compiled_binary_is_tracked() -> None:
     bad = compiled(tracked())
-    assert not bad, (
-        "compiled binaries are tracked; build them, ignore the output, and "
-        f"`git rm --cached` them: {bad}"
-    )
+    assert not bad, f"compiled binaries are tracked; build them, ignore the output, and `git rm --cached` them: {bad}"
 
 
 def test_every_build_output_is_ignored() -> None:
     for rel in BUILD_OUTPUTS:
         assert rel not in tracked(), f"{rel} is a build output but is tracked"
-        ignored = subprocess.run(["git", "check-ignore", "-q", "--no-index", rel],
-                                 cwd=REPO, stdin=subprocess.DEVNULL, check=False).returncode == 0
+        ignored = (
+            subprocess.run(
+                ["git", "check-ignore", "-q", "--no-index", rel], cwd=REPO, stdin=subprocess.DEVNULL, check=False
+            ).returncode
+            == 0
+        )
         assert ignored, f"{rel} is a build output but .gitignore does not ignore it"
 
 
@@ -82,5 +89,6 @@ def test_the_magic_check_sees_an_extensionless_binary(tmp_path: Path) -> None:
     (tmp_path / "notes").write_bytes(b"plain text")
     (tmp_path / "lib.dylib").write_bytes(b"")
     assert compiled(["helper", "notes", "lib.dylib", "missing"], tmp_path) == [
-        "helper", "lib.dylib",
+        "helper",
+        "lib.dylib",
     ]

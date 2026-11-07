@@ -11,6 +11,7 @@ canvas.save(); if save failed the file was orphaned because push_text's
 caller-side `finally: unlink` never ran (png_path never bound). Now the temp is
 unlinked on a save failure before re-raising.
 """
+
 import asyncio
 import os
 import sys
@@ -26,6 +27,7 @@ from divoom_legacy.tools.scoreboard import Scoreboard
 
 
 # ── R53.45: scoreboard bounds ───────────────────────────────────────────────
+
 
 def test_set_scoreboard_clamps_out_of_range_instead_of_crashing():
     captured = {}
@@ -68,4 +70,3 @@ def test_set_scoreboard_passes_valid_values_through():
 
 
 # ── R53.46: render-text temp cleanup on save failure ────────────────────────
-

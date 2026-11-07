@@ -16,6 +16,7 @@ future reader has to act on, exists in one place.
 kind a gate polices legitimately has nothing to inspect, and failing there would
 make the pre-commit hook fire on unrelated work.
 """
+
 from __future__ import annotations
 
 

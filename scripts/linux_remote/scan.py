@@ -2,6 +2,7 @@
 """Drive the running divoomd over its Unix socket: scan, and if a Divoom device
 is in range, run a connect -> brightness round-trip -> disconnect. Used by
 test_host.sh to validate the btleplug/BlueZ BLE path on Linux end-to-end."""
+
 import json
 import socket
 import sys

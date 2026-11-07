@@ -12,6 +12,7 @@ grep-based rather than import-based: the point is to catch a new
 `tell application "..."` that someone adds without touching the registry, and an
 import cannot see a string that was never wired up.
 """
+
 from __future__ import annotations
 
 import re
@@ -51,8 +52,7 @@ def addressed_apps(path: Path) -> set[str]:
 # `tell application "Python" to activate` (the GUI focusing its own window) is an
 # Apple Event too, and a self-targeting one needs no Automation grant — so the
 # gate keys on the player idioms, not on the mere presence of `application "X"`.
-PLAYER_IDIOMS = ("player state", "player info", "player position",
-                 "current track", "playerState", "playerInfo")
+PLAYER_IDIOMS = ("player state", "player info", "player position", "current track", "playerState", "playerInfo")
 
 
 def apple_event_consumers() -> dict[Path, set[str]]:
@@ -102,12 +102,12 @@ def test_kaset_is_primed_while_anything_still_addresses_it() -> None:
     """
     still_addressed = any("Kaset" in apps for apps in apple_event_consumers().values())
     if still_addressed:
-        assert "Kaset" in apple_event_players(), (
-            "Kaset is still addressed over Apple Events, so it must be primed")
+        assert "Kaset" in apple_event_players(), "Kaset is still addressed over Apple Events, so it must be primed"
     else:
         assert "Kaset" not in apple_event_players(), (
             "nothing addresses Kaset any more — priming it would prompt the user "
-            "for an Automation grant this app no longer uses")
+            "for an Automation grant this app no longer uses"
+        )
 
 
 def test_permissions_module_uses_the_registry() -> None:

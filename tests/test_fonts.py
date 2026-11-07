@@ -14,6 +14,7 @@ this test's ``ALLOWED_FONT_FAMILIES`` allow-list.
 
 This file is the regression net for R14 §5.
 """
+
 from __future__ import annotations
 
 import re
@@ -84,12 +85,10 @@ def test_style_css_font_variables_use_allowed_families() -> None:
             t = token.strip().strip("'\"")
             if not t:
                 continue
-            if t in {"sans-serif", "serif", "ui-monospace", "monospace",
-                     "cursive", "fantasy", "system-ui", "inherit"}:
+            if t in {"sans-serif", "serif", "ui-monospace", "monospace", "cursive", "fantasy", "system-ui", "inherit"}:
                 continue
             assert t in ALLOWED_FONT_FAMILIES, (
-                f"{var} references unknown family {t!r}; "
-                f"allowed: {sorted(ALLOWED_FONT_FAMILIES)}"
+                f"{var} references unknown family {t!r}; allowed: {sorted(ALLOWED_FONT_FAMILIES)}"
             )
 
 
@@ -149,8 +148,7 @@ def test_index_html_google_fonts_matches_style_css() -> None:
         # We accept either ``Inter`` or ``Inter+Mono`` style in the URL.
         url_form = family.replace(" ", "+")
         assert url_form in html, (
-            f"index.html <link> does not request {family!r} (looking for "
-            f"{url_form!r}). Add it to the Google Fonts URL."
+            f"index.html <link> does not request {family!r} (looking for {url_form!r}). Add it to the Google Fonts URL."
         )
 
 
@@ -166,6 +164,5 @@ def test_allow_list_includes_all_required_families() -> None:
         used.add(m.group(1))
     for family in used:
         assert family in ALLOWED_FONT_FAMILIES, (
-            f"style.css uses {family!r} but it's not in "
-            f"ALLOWED_FONT_FAMILIES. Add it to the allow-list."
+            f"style.css uses {family!r} but it's not in ALLOWED_FONT_FAMILIES. Add it to the allow-list."
         )

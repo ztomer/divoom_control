@@ -25,6 +25,7 @@ This module is deliberately dependency-free (stdlib only) so it can
 be used from any caller without pulling in NumPy. Performance is
 acceptable for typical device sizes (16×16 to 160×140).
 """
+
 import math
 from typing import List, Tuple
 
@@ -34,7 +35,9 @@ Frame = Tuple[bytes, int, int, int]
 
 
 def build_palette_and_pixels(
-    rgb_bytes: bytes, w: int, h: int,
+    rgb_bytes: bytes,
+    w: int,
+    h: int,
 ) -> Tuple[List[Tuple[int, int, int]], List[int], int]:
     """Deduplicate colors and assign each pixel its palette index.
 
@@ -61,9 +64,7 @@ def build_palette_and_pixels(
         ValueError: if the image has more than 256 unique colors.
     """
     if len(rgb_bytes) != w * h * 3:
-        raise ValueError(
-            f"rgb_bytes length {len(rgb_bytes)} != {w}*{h}*3 = {w*h*3}"
-        )
+        raise ValueError(f"rgb_bytes length {len(rgb_bytes)} != {w}*{h}*3 = {w * h * 3}")
     color_to_index: dict[tuple[int, int, int], int] = {}
     palette: List[Tuple[int, int, int]] = []
     pixels: List[int] = []
@@ -128,14 +129,11 @@ def encode_pixels(pixels: List[int], nb_bits: int) -> bytes:
         raise ValueError(f"nb_bits must be in [1, 8], got {nb_bits}")
     max_val = (1 << nb_bits) - 1
     out = bytearray()
-    acc = 0          # bit accumulator (LSB-first)
-    acc_bits = 0     # number of valid bits currently in `acc`
+    acc = 0  # bit accumulator (LSB-first)
+    acc_bits = 0  # number of valid bits currently in `acc`
     for idx in pixels:
         if idx < 0 or idx > max_val:
-            raise ValueError(
-                f"pixel index {idx} doesn't fit in {nb_bits} bits "
-                f"(max value {max_val})"
-            )
+            raise ValueError(f"pixel index {idx} doesn't fit in {nb_bits} bits (max value {max_val})")
         acc |= (idx & max_val) << acc_bits
         acc_bits += nb_bits
         while acc_bits >= 8:
@@ -205,7 +203,10 @@ def encode_static_image(rgb_bytes: bytes, w: int, h: int) -> bytes:
 
 
 def encode_animation_frame(
-    rgb_bytes: bytes, w: int, h: int, time_ms: int,
+    rgb_bytes: bytes,
+    w: int,
+    h: int,
+    time_ms: int,
 ) -> bytes:
     """Encode a single animation frame.
 
@@ -251,10 +252,7 @@ def encode_animation_frame(
     # NN is u8; 256 colors is encoded as 0 per the device's protocol.
     nn = len(palette) if len(palette) < 256 else 0
     header = (
-        bytes([0xAA])
-        + _u16_le(llll)
-        + _u16_le(t)
-        + bytes([0x00, nn])  # RR=0 (reset palette), NN
+        bytes([0xAA]) + _u16_le(llll) + _u16_le(t) + bytes([0x00, nn])  # RR=0 (reset palette), NN
     )
     return header + color_data + pixel_data
 
@@ -289,6 +287,7 @@ def encode_animation(frames: List[Frame]) -> List[bytes]:
         return []
     try:
         from divoom_legacy.native import image_encoder
+
         if image_encoder.is_native_available():
             return image_encoder.encode_animation(frames)
     except Exception:
@@ -312,9 +311,7 @@ def _py_encode_animation(frames: List[Frame]) -> List[bytes]:
     """
     if not frames:
         return []
-    encoded_frames = [
-        encode_animation_frame(rgb, w, h, t) for (rgb, w, h, t) in frames
-    ]
+    encoded_frames = [encode_animation_frame(rgb, w, h, t) for (rgb, w, h, t) in frames]
     blob = b"".join(encoded_frames)
     total_len = len(blob) & 0xFFFF  # protocol u16 limit
     packets: List[bytes] = []

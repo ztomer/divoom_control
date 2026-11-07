@@ -20,6 +20,7 @@ daemon process or hardware:
   * ``subscribe``'s reply-size cap (``MAX_REPLY_BYTES``) — a malformed/never
     -terminated broadcast must not let the buffer grow unbounded.
 """
+
 import socket
 import threading
 import time
@@ -102,8 +103,7 @@ def test_send_command_zero_attempts_hits_defensive_fallback():
     """``connect_retries=-1`` makes ``range(connect_retries + 1)`` empty, so
     the for-loop body never runs at all — the trailing fallback return must
     still produce a clean error dict (not a NameError on an unset last_err)."""
-    reply = DaemonClient("/tmp/divoom_cov_unused.sock").send_command(
-        "ping", connect_retries=-1)
+    reply = DaemonClient("/tmp/divoom_cov_unused.sock").send_command("ping", connect_retries=-1)
     assert reply == {"success": False, "error": "daemon unreachable", "unreachable": True}
 
 
@@ -146,8 +146,7 @@ def test_live_job_wrapper_methods_delegate():
     c = DaemonClient("/tmp/divoom_cov_livejob.sock")
     with patch.object(c, "send_command", return_value={"success": True}) as sc:
         c.live_job_start("AA:BB", "music", {"size": 16})
-        sc.assert_called_with(
-            "live_job_start", {"mac": "AA:BB", "kind": "music", "params": {"size": 16}})
+        sc.assert_called_with("live_job_start", {"mac": "AA:BB", "kind": "music", "params": {"size": 16}})
 
         c.live_job_stop("AA:BB", "music")
         sc.assert_called_with("live_job_stop", {"mac": "AA:BB", "kind": "music"})
@@ -164,8 +163,8 @@ def test_activity_and_hot_update_progress_wrapper_methods_delegate():
     with patch.object(c, "send_command", return_value={"success": True}) as sc:
         c.set_device_activity("AA:BB", "music", name="Song", preview="data:x")
         sc.assert_called_with(
-            "set_device_activity",
-            {"mac": "AA:BB", "kind": "music", "name": "Song", "preview": "data:x"})
+            "set_device_activity", {"mac": "AA:BB", "kind": "music", "name": "Song", "preview": "data:x"}
+        )
 
         c.get_device_activity()
         sc.assert_called_with("get_device_activity", {})
@@ -179,6 +178,7 @@ def test_activity_and_hot_update_progress_wrapper_methods_delegate():
 
 def _sock_path() -> str:
     import os
+
     return f"/tmp/divoom_proto_cov_{os.getpid()}.sock"
 
 
@@ -202,6 +202,7 @@ def test_subscribe_returns_false_when_reply_exceeds_max_size(monkeypatch):
 
     sp = _sock_path()
     import os
+
     if os.path.exists(sp):
         os.remove(sp)
 

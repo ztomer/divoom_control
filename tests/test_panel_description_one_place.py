@@ -17,6 +17,7 @@ They read the sources, so they are cheap and they run without a browser; the
 behaviour they guard is covered by the browser suite and by the daemon's own
 tests (`divoomd/tests/panel_model_status.rs`).
 """
+
 from __future__ import annotations
 
 import re
@@ -75,13 +76,9 @@ def test_the_channel_cards_follow_the_panel_in_hand():
     assert "updateChannelButtonsVisibility(address)" not in conn, (
         "a connect reply still decides the channel cards for the panel that answered"
     )
-    assert "updateChannelButtonsVisibility(name)" not in conn, (
-        "the channel cards are still told a device NAME"
-    )
+    assert "updateChannelButtonsVisibility(name)" not in conn, "the channel cards are still told a device NAME"
     facts = _read(PANEL_FACTS)
-    assert "updateChannelButtonsVisibility(mac)" in facts, (
-        "the daemon's description does not reach the channel cards"
-    )
+    assert "updateChannelButtonsVisibility(mac)" in facts, "the daemon's description does not reach the channel cards"
 
 
 def test_no_call_site_decides_the_channel_cards_for_a_name():
@@ -93,9 +90,7 @@ def test_no_call_site_decides_the_channel_cards_for_a_name():
         src = path.read_text(encoding="utf-8")
         for m in re.finditer(r"updateChannelButtonsVisibility\(\s*([A-Za-z_][\w.]*)\s*\)", src):
             arg = m.group(1)
-            assert arg not in ("name", "dev.name"), (
-                f"{path.name} decides the channel cards from {arg!r}"
-            )
+            assert arg not in ("name", "dev.name"), f"{path.name} decides the channel cards from {arg!r}"
 
 
 def test_the_bridge_carries_the_whole_description():

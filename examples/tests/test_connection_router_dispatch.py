@@ -1,5 +1,6 @@
 """Connection-router coverage: internal payload/response dispatch (_send_*
 and _wait_for_response) (split from test_connection_router_coverage.py)."""
+
 import asyncio
 import json
 import logging
@@ -25,6 +26,7 @@ from support.connection_router_common import (  # noqa: F401
 
 
 # ── _send_basic_protocol_payload(): SPP path, forward path, fallback path ───
+
 
 def test_send_basic_protocol_payload_spp_path_success(monkeypatch):
     conn = _make_conn(monkeypatch)
@@ -97,6 +99,7 @@ def test_send_basic_protocol_payload_falls_back_to_send_payload(monkeypatch):
 
 # ── _send_ios_le_payload(): SPP path, forward path, fallback path ───────────
 
+
 def test_send_ios_le_payload_spp_path_success(monkeypatch):
     conn = _make_conn(monkeypatch)
     sent = {}
@@ -168,6 +171,7 @@ def test_send_ios_le_payload_falls_back_to_send_payload(monkeypatch):
 
 # ── _send_payload() (internal router dispatch): SPP vs non-SPP ─────────────
 
+
 def test_send_payload_dunder_delegates_to_basic_protocol_when_spp(monkeypatch):
     conn = _make_conn(monkeypatch)
     conn._use_spp = True
@@ -201,6 +205,7 @@ def test_send_payload_dunder_delegates_to_transport_when_not_spp(monkeypatch):
 
 
 # ── _wait_for_response() (internal router dispatch) ─────────────────────────
+
 
 def test_wait_for_response_dunder_forwards_when_supported(monkeypatch):
     conn = _make_conn(monkeypatch)

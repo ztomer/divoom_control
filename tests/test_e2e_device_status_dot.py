@@ -13,6 +13,7 @@ is in ``test_device_status.py``; per-device chips in
 ``test_e2e_device_status_chips.py``. Skipped if Playwright / a browser isn't
 installed.
 """
+
 import pytest
 from pathlib import Path
 from tests.support.browser import (
@@ -48,15 +49,15 @@ async def _open(p):
     await add_init_js(page, _MOCK_API)
     await page.goto(f"file://{INDEX_HTML}")
     await page.wait_for_load_state("domcontentloaded")
-    await wait_js(page, 
-        "() => !!window.DivoomState && !!window.renderDeviceDots"
-        " && !!window.Divoom && !!window.Divoom.onDaemonEvent")
+    await wait_js(
+        page,
+        "() => !!window.DivoomState && !!window.renderDeviceDots && !!window.Divoom && !!window.Divoom.onDaemonEvent",
+    )
     return browser, page
 
 
 def _dot_cls(page):
-    return eval_js(page, 
-        "() => document.getElementById('global-status-dot').className")
+    return eval_js(page, "() => document.getElementById('global-status-dot').className")
 
 
 def _dot_info(page):
@@ -64,26 +65,33 @@ def _dot_info(page):
     # It has no `title`: the dot is pointer-events:none, so the pointer never
     # reached it and the browser never showed the title the funnel used to
     # write — a name no user had ever been able to see.
-    return eval_js(page, """() => ({
+    return eval_js(
+        page,
+        """() => ({
         cls: document.getElementById('global-status-dot').className,
         label: document.getElementById('global-status-dot')
             .getAttribute('aria-label'),
         title: document.getElementById('global-status-dot').getAttribute('title'),
-        connected: window.DivoomState.appConnected })""")
+        connected: window.DivoomState.appConnected })""",
+    )
 
 
 @pytest.mark.asyncio
 async def test_status_dot_connected_ble():
     require_browser()
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await eval_js(page, f"""() => {{
+            await eval_js(
+                page,
+                f"""() => {{
                 window.DivoomState.discoveredDevices = [{{address:'AA:BB:CC', name:'Ditoo'}}];
                 {_STATUS_EVENT}({{type:'status', connected:true,
                     state:'connected', mac:'AA:BB:CC'}});
-            }}""")
+            }}""",
+            )
             info = await _dot_info(page)
             assert "transport-mark" in info["cls"]
             assert "mark-linked" in info["cls"] and "mark-ble" in info["cls"]
@@ -97,13 +105,17 @@ async def test_status_dot_connected_ble():
 async def test_status_dot_connected_lan():
     require_browser()
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await eval_js(page, f"""() => {{
+            await eval_js(
+                page,
+                f"""() => {{
                 {_STATUS_EVENT}({{type:'status', connected:true,
                     state:'connected', lan_ip:'10.0.0.5'}});
-            }}""")
+            }}""",
+            )
             cls = await _dot_cls(page)
             assert "mark-linked" in cls and "mark-lan" in cls
         finally:
@@ -116,13 +128,12 @@ async def test_status_dot_connected_wall():
     # real connectDevice path (connection_events.js:53), which is the live code.
     require_browser()
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
             await eval_js(page, "() => window.connectDevice('Virtual Wall', 'MatrixWall')")
-            await wait_js(page, 
-                "() => document.getElementById('global-status-dot')"
-                ".className.includes('wall')")
+            await wait_js(page, "() => document.getElementById('global-status-dot').className.includes('wall')")
             cls = await _dot_cls(page)
             assert "mark-linked" in cls and "mark-wall" in cls
         finally:
@@ -133,17 +144,21 @@ async def test_status_dot_connected_wall():
 async def test_status_dot_degraded_keeps_appconnected():
     require_browser()
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await eval_js(page, f"""() => {{
+            await eval_js(
+                page,
+                f"""() => {{
                 window.DivoomState.appConnected = true;
                 {_STATUS_EVENT}({{type:'status', connected:true,
                     state:'degraded', mac:'AA'}});
-            }}""")
+            }}""",
+            )
             info = await _dot_info(page)
             assert "mark-fault" in info["cls"]
-            assert info["connected"] is True           # self-heal may revive it
+            assert info["connected"] is True  # self-heal may revive it
             assert "reconnect" in info["label"].lower()
         finally:
             await browser.close()
@@ -153,16 +168,20 @@ async def test_status_dot_degraded_keeps_appconnected():
 async def test_status_dot_disconnected_flips_appconnected():
     require_browser()
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await eval_js(page, f"""() => {{
+            await eval_js(
+                page,
+                f"""() => {{
                 window.DivoomState.appConnected = true;
                 {_STATUS_EVENT}({{type:'status', connected:false}});
-            }}""")
+            }}""",
+            )
             info = await _dot_info(page)
             assert "mark-open" in info["cls"]
-            assert info["connected"] is False          # UI stops claiming a link
+            assert info["connected"] is False  # UI stops claiming a link
             assert info["label"] == "Connection status: disconnected"
         finally:
             await browser.close()
@@ -174,14 +193,18 @@ async def test_status_dot_state_disconnected_overrides_stale_connected():
     show DISCONNECTED (amber/green would lie). This is the honest-state fix."""
     require_browser()
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await eval_js(page, f"""() => {{
+            await eval_js(
+                page,
+                f"""() => {{
                 window.DivoomState.appConnected = true;
                 {_STATUS_EVENT}({{type:'status', connected:true,
                     state:'disconnected', mac:'AA'}});
-            }}""")
+            }}""",
+            )
             connected = await eval_js(page, "() => window.DivoomState.appConnected")
             cls = await _dot_cls(page)
             assert "mark-open" in cls
@@ -196,19 +219,23 @@ async def test_status_dot_malformed_event_leaves_dot_untouched():
     # dot keeps whatever the last valid event set.
     require_browser()
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await eval_js(page, f"""() => {{
+            await eval_js(
+                page,
+                f"""() => {{
                 window.DivoomState.appConnected = true;
                 const d = document.getElementById('global-status-dot');
                 d.className = 'transport-mark mark-ble mark-linked';
                 d.setAttribute('aria-label', 'pinned');
                 {_STATUS_EVENT}(null);
                 {_STATUS_EVENT}({{}});
-            }}""")
+            }}""",
+            )
             info = await _dot_info(page)
-            assert info["cls"] == "transport-mark mark-ble mark-linked"   # unchanged
+            assert info["cls"] == "transport-mark mark-ble mark-linked"  # unchanged
             assert info["label"] == "pinned"
             assert info["connected"] is True
         finally:
@@ -222,17 +249,23 @@ async def test_status_dot_event_is_authoritative():
     # appConnected gate like the old polling safety net had.
     require_browser()
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await eval_js(page, f"""() => {{
+            await eval_js(
+                page,
+                f"""() => {{
                 window.DivoomState.appConnected = true;
                 {_STATUS_EVENT}({{type:'status', connected:false}});
-            }}""")
-            res = await eval_js(page,
+            }}""",
+            )
+            res = await eval_js(
+                page,
                 "() => { const d=document.getElementById('global-status-dot');"
                 " return {cls:d.className, hasOpen:d.classList.contains('mark-open'),"
-                " hasLinked:d.classList.contains('mark-linked')}; }")
+                " hasLinked:d.classList.contains('mark-linked')}; }",
+            )
             assert res["hasOpen"] is True and res["hasLinked"] is False
         finally:
             await browser.close()
@@ -245,19 +278,21 @@ async def test_status_dot_safety_net_refresh_connection_state():
     # driven directly (e.g. a future re-enable).
     require_browser()
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await eval_js(page, """() => {
+            await eval_js(
+                page,
+                """() => {
                 window.DivoomState.appConnected = true;
                 document.getElementById('banner-device-mac').textContent = 'AA:BB:CC';
                 window.__api.get_connection_state = () =>
                     JSON.stringify({connected:false, state:'disconnected'});
                 return window.refreshConnectionState();
-            }""")
-            await wait_js(page,
-                "() => document.getElementById('global-status-dot')"
-                ".className.includes('mark-open')")
+            }""",
+            )
+            await wait_js(page, "() => document.getElementById('global-status-dot').className.includes('mark-open')")
             info = await _dot_info(page)
             assert "mark-open" in info["cls"]
             assert info["connected"] is False

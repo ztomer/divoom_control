@@ -4,6 +4,7 @@ with a mock ``window.pywebview.api``, same harness as test_e2e_clock_faces.py.
 
 Skipped if Playwright / a browser isn't installed.
 """
+
 import pytest
 from pathlib import Path
 from tests.support.browser import (
@@ -56,10 +57,10 @@ async def test_playlists_tab_loads_the_users_cloud_playlists():
     async with async_playwright() as p:
         browser, page = await _open_playlists_tab(p)
         try:
-            await wait_js(page, 
-                "() => document.querySelectorAll('#cloud-playlist-list .cloud-clock-row').length > 0")
+            await wait_js(page, "() => document.querySelectorAll('#cloud-playlist-list .cloud-clock-row').length > 0")
             names = await page.eval_on_selector_all(
-                "#cloud-playlist-list .cloud-clock-name", "els => els.map(e => e.textContent)")
+                "#cloud-playlist-list .cloud-clock-name", "els => els.map(e => e.textContent)"
+            )
             assert names == ["Chill (3 items)", "Party (12 items)"]
         finally:
             await browser.close()
@@ -73,12 +74,14 @@ async def test_push_without_a_device_shows_connect_prompt_and_does_not_call_push
     async with async_playwright() as p:
         browser, page = await _open_playlists_tab(p)
         try:
-            await eval_js(page, """() => {
+            await eval_js(
+                page,
+                """() => {
                 window.__pushPlaylistCalls = [];
                 window.__api.push_playlist = (mac, playId) => { window.__pushPlaylistCalls.push([mac, playId]); return { ok: true, error: '', cause: '' }; };
-            }""")
-            await wait_js(page, 
-                "() => document.querySelectorAll('#cloud-playlist-list .cloud-clock-row').length > 0")
+            }""",
+            )
+            await wait_js(page, "() => document.querySelectorAll('#cloud-playlist-list .cloud-clock-row').length > 0")
             await page.click("#cloud-playlist-list .cloud-clock-apply-btn")
             # On the guard toast's own words and kind, not on "a toast is
             # showing": this page raises its own on a timer (app_init.js:281),
@@ -104,14 +107,16 @@ async def test_push_with_a_device_calls_push_playlist_with_the_real_play_id():
     async with async_playwright() as p:
         browser, page = await _open_playlists_tab(p)
         try:
-            await eval_js(page, """() => {
+            await eval_js(
+                page,
+                """() => {
                 window.DivoomState.discoveredDevices = [{ address: 'E9:DITOO', name: 'Ditoo-light-2' }];
                 window.DivoomState.appConnected = true;
                 window.__pushPlaylistCalls = [];
                 window.__api.push_playlist = (mac, playId) => { window.__pushPlaylistCalls.push([mac, playId]); return { ok: true, error: '', cause: '' }; };
-            }""")
-            await wait_js(page, 
-                "() => document.querySelectorAll('#cloud-playlist-list .cloud-clock-row').length > 0")
+            }""",
+            )
+            await wait_js(page, "() => document.querySelectorAll('#cloud-playlist-list .cloud-clock-row').length > 0")
             await page.click("#cloud-playlist-list .cloud-clock-apply-btn")
             await wait_js(page, "() => (window.__pushPlaylistCalls || []).length > 0")
             calls = await eval_js(page, "() => window.__pushPlaylistCalls")

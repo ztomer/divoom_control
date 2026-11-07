@@ -18,6 +18,7 @@ Gaps closed here, all against mocks — no real subprocess, socket, or daemon:
     leading-underscore AttributeError guard, and the remote-client blob
     -shipping path in __call__.
 """
+
 import ctypes
 import os
 import sys
@@ -37,6 +38,7 @@ from divoom_client.daemon_protocol import ENV_HOST, DaemonClient
 
 def _run(coro):
     import asyncio
+
     return asyncio.new_event_loop().run_until_complete(coro)
 
 
@@ -87,8 +89,7 @@ def test_spawn_disclaimed_macos_success_returns_pid(monkeypatch, tmp_path):
 
     fake_libc.posix_spawn.side_effect = fake_posix_spawn
     monkeypatch.setattr(ctypes, "CDLL", lambda *a, **k: fake_libc)
-    pid = daemon_client._spawn_disclaimed_macos(
-        ["/bin/true"], str(tmp_path / "log.txt"), env={"FOO": "bar"})
+    pid = daemon_client._spawn_disclaimed_macos(["/bin/true"], str(tmp_path / "log.txt"), env={"FOO": "bar"})
     assert pid == 4242
 
 
@@ -99,8 +100,7 @@ def test_spawn_disclaimed_macos_success_returns_pid(monkeypatch, tmp_path):
 def _clean_spawn_env(monkeypatch):
     """spawn_daemon() reads several env vars / sys attrs; keep each test's
     view of them isolated."""
-    for var in ("DIVOOM_RUST_BINARY", "DIVOOM_USE_RUST_DAEMON", "RESOURCEPATH",
-                "DIVOOM_DAEMON_LOG"):
+    for var in ("DIVOOM_RUST_BINARY", "DIVOOM_USE_RUST_DAEMON", "RESOURCEPATH", "DIVOOM_DAEMON_LOG"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.delattr(sys, "_MEIPASS", raising=False)
     yield
@@ -120,8 +120,7 @@ def test_spawn_daemon_rust_binary_env_invalid_path_falls_through(monkeypatch, tm
     pid = daemon_client.spawn_daemon(str(tmp_path / "sock"))
     assert pid == 999
     # Resolved via the dev build tree fallback, not the discarded env path.
-    assert seen["cmd"][0].endswith("/target/release/divoomd") or \
-        seen["cmd"][0].endswith("/target/debug/divoomd")
+    assert seen["cmd"][0].endswith("/target/release/divoomd") or seen["cmd"][0].endswith("/target/debug/divoomd")
 
 
 def test_spawn_daemon_raises_when_no_rust_binary_resolves(monkeypatch, tmp_path):
@@ -206,8 +205,7 @@ def test_spawn_daemon_log_open_failure_is_swallowed(monkeypatch, tmp_path):
     rust_bin.write_text("")
     monkeypatch.setenv("DIVOOM_RUST_BINARY", str(rust_bin))
     monkeypatch.setenv("DIVOOM_DAEMON_LOG", str(tmp_path / "no" / "such" / "dir" / "log.txt"))
-    monkeypatch.setattr(daemon_client, "_spawn_disclaimed_macos",
-                         lambda cmd, log_path, env=None: 555)
+    monkeypatch.setattr(daemon_client, "_spawn_disclaimed_macos", lambda cmd, log_path, env=None: 555)
     pid = daemon_client.spawn_daemon(str(tmp_path / "sock"))
     assert pid == 555
 
@@ -317,6 +315,7 @@ def test_exclusive_ctx_aexit_swallows_exception_from_exclusive_end(caplog):
     must be caught and logged, never propagated — it runs during cleanup and
     must not mask whatever exception the `async with` body raised."""
     import logging
+
     client = _FakeClient(end_raises=RuntimeError("socket blew up"))
     ctx = _ProxyExclusiveCtx(_FakeProxy(client), "tok-err")
     with caplog.at_level(logging.WARNING, logger="divoom_gui"):
@@ -415,7 +414,9 @@ def test_push_animation_tempfile_write_failure_propagates(monkeypatch):
 
     monkeypatch.setattr(
         daemon_client.tempfile if hasattr(daemon_client, "tempfile") else __import__("tempfile"),
-        "NamedTemporaryFile", lambda *a, **k: _BoomFile())
+        "NamedTemporaryFile",
+        lambda *a, **k: _BoomFile(),
+    )
 
     with pytest.raises(OSError, match="disk full"):
         _run(proxy.push_animation(b"GIF89a-payload", art="pixel"))
@@ -434,6 +435,7 @@ def test_push_animation_unlink_failure_is_swallowed(monkeypatch, tmp_path):
                     async def show_image(path, art=None):
                         calls.append(path)
                         return True
+
             return _P()
 
         async def __aexit__(self_inner, *exc):
@@ -465,4 +467,3 @@ def test_daemon_client_get_set_topology():
     res_set = client.set_topology(top_data)
     assert res_set["success"] is True
     client.send_command.assert_called_with("set_topology", {"topology": top_data})
-

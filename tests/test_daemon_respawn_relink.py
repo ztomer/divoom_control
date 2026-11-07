@@ -10,6 +10,7 @@ No radio: the daemon is a fake client at the `ensure_daemon` seam, its
 identity is its `get_status` uptime (a fresh daemon reports ~0 s), and the
 panel it holds is whatever `connect_device` has linked on THAT instance.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -50,8 +51,7 @@ class FakeDaemon:
 def daemons(monkeypatch):
     """`ensure_daemon` returns whichever daemon is currently 'running'."""
     state = {"current": FakeDaemon(uptime_s=500)}
-    monkeypatch.setattr("divoom_gui.daemon_bridge.ensure_daemon",
-                        lambda *a, **k: state["current"])
+    monkeypatch.setattr("divoom_gui.daemon_bridge.ensure_daemon", lambda *a, **k: state["current"])
     return state
 
 
@@ -74,7 +74,8 @@ def test_respawned_daemon_gets_the_linked_panel_back(host, daemons):  # noqa: F8
     _settle(host)
 
     assert [c.get("mac") for c in new.connects] == [MAC], (
-        "the respawned daemon was never asked to link the panel the old one held")
+        "the respawned daemon was never asked to link the panel the old one held"
+    )
 
 
 def test_a_live_daemon_is_not_asked_to_relink(host, daemons):  # noqa: F811

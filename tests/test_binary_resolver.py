@@ -14,6 +14,7 @@ each of those was green under the previous rules:
 means the timeout case is exercised by a stub that HANGS the way a
 pre-`--version` binary does, not by a mock that returns None.
 """
+
 from __future__ import annotations
 
 import os
@@ -27,8 +28,7 @@ import pytest
 from divoom_client import binary_resolver
 
 
-def stub_binary(path: Path, *, prints: str | None = None, exit_code: int = 0,
-                hangs: bool = False) -> Path:
+def stub_binary(path: Path, *, prints: str | None = None, exit_code: int = 0, hangs: bool = False) -> Path:
     """A fake divoomd. `hangs=True` models a binary too old to have --version."""
     path.parent.mkdir(parents=True, exist_ok=True)
     if hangs:
@@ -55,6 +55,7 @@ def tree(tmp_path, monkeypatch):
 
 
 # ── binary_version ────────────────────────────────────────────────────────────
+
 
 def test_version_is_read_from_the_binarys_own_output(tmp_path):
     b = stub_binary(tmp_path / "divoomd", prints="divoomd 0.28.2")
@@ -119,6 +120,7 @@ def test_the_menubar_is_probed_without_a_socket_argument(tmp_path):
 
 # ── resolve ───────────────────────────────────────────────────────────────────
 
+
 def test_the_matching_version_wins_over_the_newer_stale_one(tree, monkeypatch):
     """The regression, stated exactly.
 
@@ -128,7 +130,7 @@ def test_the_matching_version_wins_over_the_newer_stale_one(tree, monkeypatch):
     """
     stub_binary(tree / "target" / "debug" / "divoomd", prints="divoomd 0.28.2")
     rel = stub_binary(tree / "target" / "release" / "divoomd", prints="divoomd 0.27.0")
-    os.utime(rel, (2 ** 31 - 1, 2 ** 31 - 1))  # newest by a wide margin
+    os.utime(rel, (2**31 - 1, 2**31 - 1))  # newest by a wide margin
     monkeypatch.setattr(binary_resolver, "_expected_version", lambda: "0.28.2")
 
     assert binary_resolver.resolve("divoomd") == tree / "target" / "debug" / "divoomd"
@@ -151,7 +153,7 @@ def test_an_unknowable_expectation_falls_back_to_recency(tree, monkeypatch):
     old = stub_binary(tree / "target" / "release" / "divoomd", prints="divoomd 0.27.0")
     new = stub_binary(tree / "target" / "debug" / "divoomd", prints="divoomd 0.26.0")
     os.utime(old, (1, 1))
-    os.utime(new, (2 ** 31 - 1, 2 ** 31 - 1))
+    os.utime(new, (2**31 - 1, 2**31 - 1))
     monkeypatch.setattr(binary_resolver, "_expected_version", lambda: None)
 
     assert binary_resolver.resolve("divoomd") == new
@@ -197,9 +199,8 @@ def test_a_bundled_binary_wins_over_the_dev_tree(tree, monkeypatch, tmp_path):
     assert binary_resolver.resolve("divoomd") == bundled
 
 
-def test_an_unverifiable_bundled_binary_is_used_rather_than_the_dev_tree(
-        tree, monkeypatch, tmp_path):
-    """"Rebuild" is not an action available to someone running an installed app.
+def test_an_unverifiable_bundled_binary_is_used_rather_than_the_dev_tree(tree, monkeypatch, tmp_path):
+    """ "Rebuild" is not an action available to someone running an installed app.
 
     So a bundle whose version cannot be confirmed is still the right answer:
     refusing to start is worse than starting the only daemon that shipped, and
@@ -220,6 +221,7 @@ def test_nothing_built_resolves_to_none(tree):
 
 
 # ── stale_report ──────────────────────────────────────────────────────────────
+
 
 def test_stale_report_names_the_binary_and_what_it_claims(tree, monkeypatch):
     stub_binary(tree / "target" / "release" / "divoomd", prints="divoomd 0.27.0")
@@ -270,8 +272,9 @@ def test_the_real_binaries_answer_version_without_starting(name):
     built = binary_resolver.built_candidates(name)
     if not built:
         pytest.skip(f"{name} not built. Run: cargo build -p {name}")
-    proc = subprocess.run([str(built[0]), "--version"], capture_output=True,
-                          text=True, timeout=15, stdin=subprocess.DEVNULL, check=False)
+    proc = subprocess.run(
+        [str(built[0]), "--version"], capture_output=True, text=True, timeout=15, stdin=subprocess.DEVNULL, check=False
+    )
     assert proc.returncode == 0
     assert proc.stdout.startswith(f"{name} "), proc.stdout
 
@@ -283,9 +286,14 @@ def test_the_real_binaries_reject_an_unknown_argument(name):
     built = binary_resolver.built_candidates(name)
     if not built:
         pytest.skip(f"{name} not built. Run: cargo build -p {name}")
-    proc = subprocess.run([str(built[0]), "--definitely-not-a-flag"],
-                          capture_output=True, text=True, timeout=15,
-                          stdin=subprocess.DEVNULL, check=False)
+    proc = subprocess.run(
+        [str(built[0]), "--definitely-not-a-flag"],
+        capture_output=True,
+        text=True,
+        timeout=15,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    )
     assert proc.returncode == 2, proc.stdout + proc.stderr
     # The two binaries word it differently on purpose — divoomd rejects the one
     # argument it could not place, the menubar rejects the whole argv because it

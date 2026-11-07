@@ -25,6 +25,7 @@ The tag check is skipped in a shallow clone or a fresh repo with no tags, and it
 deliberately allows the version to be AHEAD of the newest tag: that is the
 normal state between bumping and tagging. Being BEHIND is the failure.
 """
+
 from __future__ import annotations
 
 import os
@@ -66,10 +67,13 @@ def newest_tag_version() -> str | None:
     try:
         out = subprocess.run(
             ["git", "-C", str(REPO), "tag", "--list", "v*", "--sort=-v:refname"],
-            capture_output=True, text=True, timeout=15, stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            stdin=subprocess.DEVNULL,
             check=True,
         ).stdout
-    except (OSError, subprocess.SubprocessError):
+    except OSError, subprocess.SubprocessError:
         return None
     for line in out.splitlines():
         m = re.fullmatch(r"v(\d+\.\d+\.\d+)", line.strip())
@@ -104,7 +108,8 @@ def main() -> int:
             failures.append(
                 f"{crate}/Cargo.toml says {m.group(1)} but pyproject says "
                 f"{version}. divoomd reports this over the wire in get_status, "
-                f"so a stale value misinforms every client.")
+                f"so a stale value misinforms every client."
+            )
 
     tag = newest_tag_version()
     if tag is not None and parse_version(version) < parse_version(tag):

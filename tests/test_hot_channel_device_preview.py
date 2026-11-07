@@ -1,4 +1,5 @@
 """Tests for Hot Channel preview and Device Preview integration."""
+
 import asyncio
 import json
 from pathlib import Path
@@ -62,6 +63,7 @@ window.pywebview = {{
 async def test_hot_preview_and_device_preview():
     """Verify that hot channel grid loads GIFs and hot update sets device preview."""
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser = await launch_browser(p)
         page = await browser.new_page(viewport={"width": 1200, "height": 850})
@@ -72,7 +74,9 @@ async def test_hot_preview_and_device_preview():
         await eval_js(page, "() => { window.DivoomState.appConnected = true; }")
 
         # Setup 2 devices
-        await eval_js(page, """() => {
+        await eval_js(
+            page,
+            """() => {
             window.DivoomState.discoveredDevices = [
                 { address: "11:22:33:44:55:01", name: "Timebox-Evo-1", connected: true },
                 { address: "11:22:33:44:55:02", name: "Ditoo-Pro-2", connected: true }
@@ -80,7 +84,8 @@ async def test_hot_preview_and_device_preview():
             if (window.connectDevice) {
                 window.connectDevice("Timebox-Evo-1", "11:22:33:44:55:01");
             }
-        }""")
+        }""",
+        )
         await page.wait_for_timeout(300)
 
         # 1. Hot Channel Grid
@@ -89,10 +94,13 @@ async def test_hot_preview_and_device_preview():
         await page.click('.tab-btn[data-pixel-tab="pixel-hot-channel"]')
         await page.wait_for_timeout(500)
 
-        thumbs = await eval_js(page, """() => {
+        thumbs = await eval_js(
+            page,
+            """() => {
             const list = document.getElementById("hot-preview-list");
             return list ? Array.from(list.querySelectorAll(".hot-preview-thumb")).map(t => t.src) : [];
-        }""")
+        }""",
+        )
         assert len(thumbs) == 2
         assert "data:image/gif" in thumbs[0]
 
@@ -100,18 +108,24 @@ async def test_hot_preview_and_device_preview():
         await page.click("#hot-update-btn")
         await page.wait_for_timeout(300)
 
-        act = await eval_js(page, """() => {
+        act = await eval_js(
+            page,
+            """() => {
             const mac = "11:22:33:44:55:01";
             return window.DivoomState.deviceActivity ? window.DivoomState.deviceActivity[mac] : null;
-        }""")
+        }""",
+        )
         assert act is not None
         assert act["kind"] == "cloud"
         assert act["src"].startswith("data:image/gif")
 
         # 3. Device 2 independence
-        dev2_act = await eval_js(page, """() => {
+        dev2_act = await eval_js(
+            page,
+            """() => {
             return window.DivoomState.deviceActivity ? window.DivoomState.deviceActivity["11:22:33:44:55:02"] : null;
-        }""")
+        }""",
+        )
         assert dev2_act is None or dev2_act.get("kind") != "cloud"
 
         await browser.close()

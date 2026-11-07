@@ -4,6 +4,7 @@ with a mock ``window.pywebview.api``, same harness as test_e2e_playlists.py.
 
 Skipped if Playwright / a browser isn't installed.
 """
+
 import pytest
 from pathlib import Path
 from tests.support.browser import (
@@ -56,10 +57,12 @@ async def test_photo_albums_tab_loads_the_devices_albums():
     async with async_playwright() as p:
         browser, page = await _open_photo_albums_tab(p)
         try:
-            await wait_js(page, 
-                "() => document.querySelectorAll('#cloud-photo-album-list .cloud-clock-row').length > 0")
+            await wait_js(
+                page, "() => document.querySelectorAll('#cloud-photo-album-list .cloud-clock-row').length > 0"
+            )
             names = await page.eval_on_selector_all(
-                "#cloud-photo-album-list .cloud-clock-name", "els => els.map(e => e.textContent)")
+                "#cloud-photo-album-list .cloud-clock-name", "els => els.map(e => e.textContent)"
+            )
             assert names == ["Trip", "Family"]
         finally:
             await browser.close()
@@ -73,12 +76,16 @@ async def test_play_without_a_device_shows_connect_prompt_and_does_not_call_play
     async with async_playwright() as p:
         browser, page = await _open_photo_albums_tab(p)
         try:
-            await eval_js(page, """() => {
+            await eval_js(
+                page,
+                """() => {
                 window.__playAlbumCalls = [];
                 window.__api.play_album = (mac, albumId) => { window.__playAlbumCalls.push([mac, albumId]); return { ok: true, error: '', cause: '' }; };
-            }""")
-            await wait_js(page, 
-                "() => document.querySelectorAll('#cloud-photo-album-list .cloud-clock-row').length > 0")
+            }""",
+            )
+            await wait_js(
+                page, "() => document.querySelectorAll('#cloud-photo-album-list .cloud-clock-row').length > 0"
+            )
             await page.click("#cloud-photo-album-list .cloud-clock-apply-btn")
             # On the guard toast's own words and kind, not on "a toast is
             # showing": this page raises its own on a timer (app_init.js:281),
@@ -104,14 +111,18 @@ async def test_play_with_a_device_calls_play_album_with_the_real_album_id():
     async with async_playwright() as p:
         browser, page = await _open_photo_albums_tab(p)
         try:
-            await eval_js(page, """() => {
+            await eval_js(
+                page,
+                """() => {
                 window.DivoomState.discoveredDevices = [{ address: 'E9:DITOO', name: 'Ditoo-light-2' }];
                 window.DivoomState.appConnected = true;
                 window.__playAlbumCalls = [];
                 window.__api.play_album = (mac, albumId) => { window.__playAlbumCalls.push([mac, albumId]); return { ok: true, error: '', cause: '' }; };
-            }""")
-            await wait_js(page, 
-                "() => document.querySelectorAll('#cloud-photo-album-list .cloud-clock-row').length > 0")
+            }""",
+            )
+            await wait_js(
+                page, "() => document.querySelectorAll('#cloud-photo-album-list .cloud-clock-row').length > 0"
+            )
             await page.click("#cloud-photo-album-list .cloud-clock-apply-btn")
             await wait_js(page, "() => (window.__playAlbumCalls || []).length > 0")
             calls = await eval_js(page, "() => window.__playAlbumCalls")

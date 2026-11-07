@@ -14,5 +14,5 @@ class DivoomProtocol(Divoom):
         super().__init__(mac=mac, logger=logger, **kwargs)
         self.type = models.DEFAULT_DEVICE_TYPE
         self.screensize = models.DEFAULT_SCREEN_SIZE
-        self.chunksize = kwargs.get('chunksize', models.DEFAULT_CHUNK_SIZE)
+        self.chunksize = kwargs.get("chunksize", models.DEFAULT_CHUNK_SIZE)
         self.colorpalette = None

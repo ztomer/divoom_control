@@ -29,6 +29,7 @@ firmware expects 0x8B to actually play a multi-frame animation.
 
 This module implements the encoder + a high-level send helper.
 """
+
 from __future__ import annotations
 
 import logging
@@ -61,7 +62,7 @@ def _build_animation_blob(frames: List[Frame]) -> bytes:
     the same standard format as 16×16.
     """
     out = bytearray()
-    for (rgb, w, h, t) in frames:
+    for rgb, w, h, t in frames:
         if w == 32 and h == 32:
             out += encode_animation_frame_32(rgb, w, h, t)
         else:
@@ -80,12 +81,7 @@ def _phase_data(file_size: int, offset_id: int, data: bytes) -> bytes:
     `offset_id` is the sequential chunk INDEX (0,1,2,...), not a byte offset —
     see build_8b_phases / futpib.
     """
-    return (
-        bytes([CONTROL_SENDING_DATA])
-        + file_size.to_bytes(4, "little")
-        + offset_id.to_bytes(2, "little")
-        + data
-    )
+    return bytes([CONTROL_SENDING_DATA]) + file_size.to_bytes(4, "little") + offset_id.to_bytes(2, "little") + data
 
 
 def _phase_terminate() -> bytes:
@@ -140,14 +136,9 @@ class Animation8B:
         phases = build_8b_phases(frames)
         if not phases:
             return False
-        self.logger.info(
-            f"0x8B 3-phase animation: {len(phases)} SPP frames "
-            f"({len(phases) - 2} data chunks)"
-        )
+        self.logger.info(f"0x8B 3-phase animation: {len(phases)} SPP frames ({len(phases) - 2} data chunks)")
         for args in phases:
-            ok = await self.communicator.send_command(
-                COMMANDS["app new send gif cmd"], list(args)
-            )
+            ok = await self.communicator.send_command(COMMANDS["app new send gif cmd"], list(args))
             if not ok:
                 self.logger.error(f"0x8B phase failed: args={args.hex()}")
                 return False

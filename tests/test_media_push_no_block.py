@@ -3,6 +3,7 @@ BLOCKING daemon device_status() RPC, and is_connected was read INSIDE the loop
 coroutine, stalling the whole asyncio loop. The daemon's device_call already
 ensures the device is connected + routes the transport, so the GUI pushes directly.
 """
+
 import asyncio
 import sys
 from pathlib import Path
@@ -36,7 +37,7 @@ def test_push_frame_does_not_read_blocking_attrs():
 
     dev = _Dev()
 
-    class _Lighting:   # the ONE resolution of a named display (P5.7)
+    class _Lighting:  # the ONE resolution of a named display (P5.7)
         @staticmethod
         def _display(mac, **_kw):
             return dev if mac == "AA:00:00:00:00:01" else None

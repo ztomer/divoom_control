@@ -17,7 +17,6 @@ if str(_REPO) not in sys.path:
 from divoom_gui import gui_main  # noqa: E402
 
 
-
 # ────────────────────────────────────── main() ────────────────────────────────
 # main() is the real bootstrap: argument parsing, the single-instance gate,
 # optional control-server surfaces, the eager daemon spawn, permission
@@ -28,6 +27,7 @@ from divoom_gui import gui_main  # noqa: E402
 # part — `webview.create_window`/`webview.start` actually driving a real
 # Cocoa/GTK window — is exactly what we mock away here; that real mainloop is
 # left to user-POV / real-app verification, not a unit test.
+
 
 class _ClosingEvent:
     def __init__(self):
@@ -102,9 +102,11 @@ def _patch_main_common(monkeypatch, tmp_path, *, fire_closing=True):
     monkeypatch.setattr(gui_main, "_start_shutdown_follower", lambda w: None)
 
     import divoom_gui.daemon_bridge as daemon_bridge
+
     monkeypatch.setattr(daemon_bridge, "ensure_daemon", lambda detach=True: object())
 
     import divoom_gui.permissions as permissions
+
     monkeypatch.setattr(permissions, "prime_permissions", lambda: None)
 
     exits = []
@@ -116,9 +118,12 @@ def _patch_main_common(monkeypatch, tmp_path, *, fire_closing=True):
     monkeypatch.setattr(gui_main.os, "_exit", fake_exit)
 
     return types.SimpleNamespace(
-        window=window, api=fake_api,
-        create_window_calls=create_window_calls, start_calls=start_calls,
-        exits=exits, web_ui_dir=web_ui_dir,
+        window=window,
+        api=fake_api,
+        create_window_calls=create_window_calls,
+        start_calls=start_calls,
+        exits=exits,
+        web_ui_dir=web_ui_dir,
     )
 
 
@@ -138,8 +143,11 @@ def test_main_darwin_already_running_focuses_the_incumbent_by_pid(monkeypatch):
     monkeypatch.setattr(gui_main, "_running_gui_pid", lambda: 4242)
     osascript_calls = []
     monkeypatch.setattr(subprocess, "run", lambda *a, **kw: osascript_calls.append(a) or types.SimpleNamespace())
-    monkeypatch.setattr(gui_main.webview, "create_window",
-                         lambda **kw: (_ for _ in ()).throw(AssertionError("must not create a window")))
+    monkeypatch.setattr(
+        gui_main.webview,
+        "create_window",
+        lambda **kw: (_ for _ in ()).throw(AssertionError("must not create a window")),
+    )
 
     result = gui_main.main()
 
@@ -160,8 +168,7 @@ def test_main_darwin_already_running_without_a_pid_launches_nothing(monkeypatch)
     monkeypatch.setattr(sys, "argv", ["gui_main.py"])
     monkeypatch.setattr(gui_main, "_ensure_single_instance", lambda: False)
     monkeypatch.setattr(gui_main, "_running_gui_pid", lambda: None)
-    monkeypatch.setattr(subprocess, "run",
-                        lambda *a, **kw: pytest.fail("must not shell out without a pid"))
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: pytest.fail("must not shell out without a pid"))
 
     assert gui_main.main() is None
 
@@ -280,9 +287,9 @@ def test_main_control_server_env_enabled(monkeypatch, tmp_path):
     monkeypatch.setenv("DIVOOM_CONTROL_PORT", "9999")
 
     import control_server
+
     calls = []
-    monkeypatch.setattr(control_server, "serve_in_background",
-                         lambda api, port=8787: calls.append(port))
+    monkeypatch.setattr(control_server, "serve_in_background", lambda api, port=8787: calls.append(port))
 
     with pytest.raises(SystemExit):
         gui_main.main()
@@ -314,9 +321,9 @@ def test_main_unix_control_socket_enabled(monkeypatch, tmp_path):
     monkeypatch.setenv("DIVOOM_CONTROL_SOCKET", "/tmp/fake-divoom-test.sock")
 
     import control_server
+
     calls = []
-    monkeypatch.setattr(control_server, "serve_unix_in_background",
-                         lambda api, path: calls.append(path))
+    monkeypatch.setattr(control_server, "serve_unix_in_background", lambda api, path: calls.append(path))
 
     with pytest.raises(SystemExit):
         gui_main.main()
@@ -347,6 +354,7 @@ def test_main_eager_daemon_spawn_returns_none_logs_warning(monkeypatch, tmp_path
     monkeypatch.setattr("divoom_lib.lifecycle_config.get_quit_menubar_on_exit", lambda: True)
 
     import divoom_gui.daemon_bridge as daemon_bridge
+
     monkeypatch.setattr(daemon_bridge, "ensure_daemon", lambda detach=True: None)
 
     with pytest.raises(SystemExit):
@@ -420,6 +428,7 @@ def test_main_applies_1820_patch_when_bug_present(monkeypatch, tmp_path):
     assertion rather than mocking `_pywebview_1820_bug_present` to False like
     the other main() tests do."""
     from webview.platforms.cocoa import BrowserView
+
     original_move = BrowserView.move
 
     ctx = _patch_main_common(monkeypatch, tmp_path)
@@ -464,6 +473,7 @@ def test_main_1820_patch_check_import_error_is_caught(monkeypatch, tmp_path):
     monkeypatch.setattr("divoom_lib.lifecycle_config.get_quit_menubar_on_exit", lambda: True)
 
     import builtins
+
     real_import = builtins.__import__
 
     def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
@@ -483,8 +493,11 @@ def test_main_non_darwin_skips_single_instance_and_menubar_patch(monkeypatch, tm
     "darwin"` guards — main() still builds and shows the window."""
     ctx = _patch_main_common(monkeypatch, tmp_path)
     monkeypatch.setattr(gui_main.sys, "platform", "linux")
-    monkeypatch.setattr(gui_main, "_ensure_single_instance",
-                         lambda: (_ for _ in ()).throw(AssertionError("must not be called on non-darwin")))
+    monkeypatch.setattr(
+        gui_main,
+        "_ensure_single_instance",
+        lambda: (_ for _ in ()).throw(AssertionError("must not be called on non-darwin")),
+    )
 
     with pytest.raises(SystemExit):
         gui_main.main()

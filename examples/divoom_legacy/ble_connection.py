@@ -9,6 +9,7 @@ The helper operates on any object with an async ``connect()`` and an
 ``is_connected`` property (the real ``Divoom``/transport, or the fake in
 ``tests/support/fake_ble.py``), so every path is unit-testable without hardware.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -24,36 +25,30 @@ class ConnectionState(str, Enum):
     DISCONNECTED = "disconnected"
     CONNECTING = "connecting"
     CONNECTED = "connected"
-    DEGRADED = "degraded"      # connected but a write/verify just failed
+    DEGRADED = "degraded"  # connected but a write/verify just failed
     FAILED = "failed"
 
 
 class FailureReason(str, Enum):
     NONE = "none"
-    NOT_ADVERTISING = "not_advertising"   # asleep / out of range / not found
+    NOT_ADVERTISING = "not_advertising"  # asleep / out of range / not found
     TIMEOUT = "timeout"
-    DROPPED = "dropped"                    # connected then lost / GATT race
-    PERMISSION = "permission"              # TCC / not authorized
-    ADAPTER_OFF = "adapter_off"            # Bluetooth powered off
-    BUSY = "busy"                          # likely held by another central (phone)
+    DROPPED = "dropped"  # connected then lost / GATT race
+    PERMISSION = "permission"  # TCC / not authorized
+    ADAPTER_OFF = "adapter_off"  # Bluetooth powered off
+    BUSY = "busy"  # likely held by another central (phone)
     UNKNOWN = "unknown"
 
 
 # Human-actionable messages keyed by reason (shown in the GUI / menubar).
 REASON_MESSAGE = {
-    FailureReason.NOT_ADVERTISING:
-        "Device not found — wake it (press a button) or move it closer, then retry.",
-    FailureReason.TIMEOUT:
-        "Connection timed out — the device may be asleep or busy. Retry in a moment.",
-    FailureReason.DROPPED:
-        "The Bluetooth link dropped during connect. Retrying usually fixes it.",
-    FailureReason.PERMISSION:
-        "Bluetooth permission is missing — grant it to this app and restart.",
-    FailureReason.ADAPTER_OFF:
-        "Bluetooth is turned off — enable it and retry.",
-    FailureReason.BUSY:
-        "The device looks connected to another app (e.g. the Divoom phone app). "
-        "Disconnect it there, then retry.",
+    FailureReason.NOT_ADVERTISING: "Device not found — wake it (press a button) or move it closer, then retry.",
+    FailureReason.TIMEOUT: "Connection timed out — the device may be asleep or busy. Retry in a moment.",
+    FailureReason.DROPPED: "The Bluetooth link dropped during connect. Retrying usually fixes it.",
+    FailureReason.PERMISSION: "Bluetooth permission is missing — grant it to this app and restart.",
+    FailureReason.ADAPTER_OFF: "Bluetooth is turned off — enable it and retry.",
+    FailureReason.BUSY: "The device looks connected to another app (e.g. the Divoom phone app). "
+    "Disconnect it there, then retry.",
     FailureReason.UNKNOWN: "Could not connect to the device.",
     FailureReason.NONE: "",
 }
@@ -62,6 +57,7 @@ REASON_MESSAGE = {
 class BleConnectionError(RuntimeError):
     """Raised when a connect/reconnect genuinely fails, carrying the typed
     ConnectResult so callers can surface an actionable reason."""
+
     def __init__(self, result: "ConnectResult"):
         super().__init__(result.message or result.detail or "connect failed")
         self.result = result
@@ -72,7 +68,7 @@ class ConnectResult:
     ok: bool
     state: ConnectionState
     reason: FailureReason = FailureReason.NONE
-    detail: str = ""           # the raw exception text, for logs
+    detail: str = ""  # the raw exception text, for logs
 
     @property
     def message(self) -> str:
@@ -102,8 +98,7 @@ def classify_connect_error(exc: BaseException) -> FailureReason:
         return FailureReason.TIMEOUT
     if "powered off" in text or "is off" in text or "turn on bluetooth" in text:
         return FailureReason.ADAPTER_OFF
-    if "not authorized" in text or "unauthorized" in text or "permission" in text \
-            or "denied" in text:
+    if "not authorized" in text or "unauthorized" in text or "permission" in text or "denied" in text:
         return FailureReason.PERMISSION
     if "already" in text and "connect" in text:
         return FailureReason.BUSY
@@ -114,10 +109,10 @@ def classify_connect_error(exc: BaseException) -> FailureReason:
 
 # Tunables (overridable per call; defaults are sane for Divoom BLE).
 DEFAULT_ATTEMPTS = 3
-DEFAULT_BASE_DELAY = 0.4       # seconds; grows 0.4, 0.8, 1.6 …
+DEFAULT_BASE_DELAY = 0.4  # seconds; grows 0.4, 0.8, 1.6 …
 DEFAULT_MAX_DELAY = 4.0
 DEFAULT_ATTEMPT_TIMEOUT = 12.0  # per-attempt connect timeout
-WALL_CONNECT_CONCURRENCY = 2    # P3: how many wall slots may connect at once
+WALL_CONNECT_CONCURRENCY = 2  # P3: how many wall slots may connect at once
 
 
 # BLE Hardening P3 — serialize the *connect* handshake. The CoreBluetooth
@@ -199,8 +194,7 @@ async def ensure_connected(
                 raise
             last = classify_connect_error(e)
             detail = str(e)
-            logger.warning("connect attempt %d/%d failed: %s (%s)",
-                           attempt + 1, attempts, last.value, detail)
+            logger.warning("connect attempt %d/%d failed: %s (%s)", attempt + 1, attempts, last.value, detail)
             # A wedged half-open handle must be torn down before the next try.
             try:
                 if hasattr(device, "disconnect"):
@@ -208,7 +202,7 @@ async def ensure_connected(
             except Exception:
                 pass
             if attempt < attempts - 1:
-                delay = min(max_delay, base_delay * (2 ** attempt))
+                delay = min(max_delay, base_delay * (2**attempt))
                 delay += random.uniform(0, delay * 0.25)  # jitter
                 await sleep(delay)
 

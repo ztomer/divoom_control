@@ -17,7 +17,6 @@ from .capabilities import (
 __all__ = [
     "COMMANDS",
     "DivoomConfig",
-    
     # Constants
     "PAYLOAD_START_BYTE_COLOR_MODE",
     "CHANNEL_ID_2",

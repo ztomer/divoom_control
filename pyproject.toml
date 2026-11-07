@@ -168,5 +168,13 @@ exclude_lines = [
 # child does (`check=True` stops the caller, `check=False` says the exit code is judged below).
 # `ruff check .` is a GOH_CI_STEPS step, so a new call without `check=` is red at push. ruff's
 # defaults read ~1100 findings here and are not a gate.
+#
+# `ruff format --check` over every tracked .py is a gate (goh py_staged.sh --all, .gatesrc). The
+# line length is 120, not ruff's 88: this tree was written to ~120 columns, and measured on
+# 2026-11-07 at 88 the formatter changed 548 files (+21305/-8676) and pushed 21 files over the
+# 500-line cap; at 100, 543 (net +7.9k, 12 over); at 120, 542 (net +4k, 9 over).
+[tool.ruff]
+line-length = 120
+
 [tool.ruff.lint]
 select = ["PLW1510"]

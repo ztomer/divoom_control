@@ -17,6 +17,7 @@ This test file verifies:
 Requires: pip install playwright camoufox && python3 -m camoufox fetch
 Runs in the normal pytest suite. Skips if Playwright is unavailable.
 """
+
 import contextlib
 import http.server
 import socket
@@ -133,7 +134,9 @@ PYWEBVIEW_STUB = """
 
 def _open_bench(page) -> None:
     """Expand the spatial bench mount so #spatial-bench is visible for dragging."""
-    eval_js(page, """
+    eval_js(
+        page,
+        """
         (() => {
             const mount = document.getElementById('spatial-stage-mount');
             if (mount) mount.style.display = 'block';
@@ -143,19 +146,25 @@ def _open_bench(page) -> None:
             if (ribbonView) ribbonView.style.display = 'none';
             if (window.SpatialStage?.refresh) window.SpatialStage.refresh();
         })()
-    """)
+    """,
+    )
     page.wait_for_selector("#spatial-bench", state="visible", timeout=UI_TIMEOUT_MS)
 
 
 def _get_bench_origin(page) -> tuple:
     """Get the bench's viewport-space (x, y) top-left."""
-    return tuple(eval_js(page, """
+    return tuple(
+        eval_js(
+            page,
+            """
         (() => {
             const c = document.getElementById('spatial-bench');
             const r = c.getBoundingClientRect();
             return [r.left, r.top];
         })()
-    """))
+    """,
+        )
+    )
 
 
 def _node_bench_position(page, node) -> tuple:
@@ -262,7 +271,9 @@ def test_bench_canvas_drag_node_clamped(browser):
         page.wait_for_timeout(50)
 
         nx, ny = _node_bench_position(page, node)
-        dims = eval_js(page, """
+        dims = eval_js(
+            page,
+            """
             (() => {
                 const c = document.getElementById('spatial-bench');
                 const n = document.querySelector('.spatial-node');
@@ -271,7 +282,8 @@ def test_bench_canvas_drag_node_clamped(browser):
                     nw: n.offsetWidth, nh: n.offsetHeight,
                 };
             })()
-        """)
+        """,
+        )
         max_x = dims["cw"] - dims["nw"]
         max_y = dims["ch"] - dims["nh"]
         assert nx <= max_x + 2, f"node x={nx} exceeds clamp {max_x}"
@@ -349,4 +361,3 @@ def test_two_nodes_can_be_dragged_independently(browser):
         assert abs(bx_after - bx_before) < 2
         assert abs(by_after - by_before) < 2
         context.close()
-

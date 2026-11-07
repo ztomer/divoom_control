@@ -10,6 +10,7 @@ Five contract tests:
 4. WTTrInProvider falls back to StubProvider on network/parse error.
 5. get_weather() returns a WeatherInfo with the right fields.
 """
+
 from __future__ import annotations
 
 import json
@@ -38,22 +39,22 @@ from divoom_lib.weather_provider import (
 @pytest.mark.parametrize(
     "wmo_code,expected",
     [
-        (113, WeatherType.Clear),        # Sunny
-        (116, WeatherType.CloudySky),    # Partly cloudy
-        (119, WeatherType.CloudySky),    # Cloudy
-        (122, WeatherType.CloudySky),    # Overcast
-        (143, WeatherType.Fog),          # Mist
-        (248, WeatherType.Fog),          # Fog
-        (260, WeatherType.Fog),          # Freezing fog
-        (176, WeatherType.Rain),         # Patchy rain
-        (296, WeatherType.Rain),         # Light rain
-        (308, WeatherType.Rain),         # Heavy rain
-        (359, WeatherType.Rain),         # Torrential
-        (179, WeatherType.Snow),         # Patchy snow
-        (332, WeatherType.Snow),         # Moderate snow
-        (338, WeatherType.Snow),         # Heavy snow
-        (200, WeatherType.Thunderstorm), # Thundery outbreaks
-        (386, WeatherType.Thunderstorm), # Rain w/ thunder
+        (113, WeatherType.Clear),  # Sunny
+        (116, WeatherType.CloudySky),  # Partly cloudy
+        (119, WeatherType.CloudySky),  # Cloudy
+        (122, WeatherType.CloudySky),  # Overcast
+        (143, WeatherType.Fog),  # Mist
+        (248, WeatherType.Fog),  # Fog
+        (260, WeatherType.Fog),  # Freezing fog
+        (176, WeatherType.Rain),  # Patchy rain
+        (296, WeatherType.Rain),  # Light rain
+        (308, WeatherType.Rain),  # Heavy rain
+        (359, WeatherType.Rain),  # Torrential
+        (179, WeatherType.Snow),  # Patchy snow
+        (332, WeatherType.Snow),  # Moderate snow
+        (338, WeatherType.Snow),  # Heavy snow
+        (200, WeatherType.Thunderstorm),  # Thundery outbreaks
+        (386, WeatherType.Thunderstorm),  # Rain w/ thunder
     ],
 )
 def test_wmo_code_to_weather_type(wmo_code: int, expected: int) -> None:
@@ -68,9 +69,7 @@ def test_wmo_code_unknown_falls_back_to_clear() -> None:
 
 def test_wmo_mapping_covers_all_six_weather_types() -> None:
     """Every internal WeatherType must be reachable from the WMO map."""
-    internal_types = {
-        v for v in WEATHER_CODE_TO_DIVOOM.values()
-    }
+    internal_types = {v for v in WEATHER_CODE_TO_DIVOOM.values()}
     expected_types = {
         WeatherType.Clear,
         WeatherType.CloudySky,
@@ -79,9 +78,7 @@ def test_wmo_mapping_covers_all_six_weather_types() -> None:
         WeatherType.Snow,
         WeatherType.Fog,
     }
-    assert expected_types.issubset(internal_types), (
-        f"Missing WeatherType mappings: {expected_types - internal_types}"
-    )
+    assert expected_types.issubset(internal_types), f"Missing WeatherType mappings: {expected_types - internal_types}"
 
 
 # ── 2. StubProvider is deterministic ──────────────────────────────────
@@ -222,6 +219,7 @@ async def test_get_weather_returns_weather_info(monkeypatch) -> None:
     assert isinstance(info, WeatherInfo)
     # Frozen — assignment should raise.
     import dataclasses
+
     with pytest.raises(dataclasses.FrozenInstanceError):
         info.temperature_c = 99  # type: ignore[misc]
 
@@ -242,6 +240,7 @@ def test_resolve_location_priority() -> None:
     assert resolve_location("explicit") == "explicit"
     # Lat/lon env.
     import os
+
     os.environ["DIVOOM_CONTROL_WEATHER_LAT"] = "52.5"
     os.environ["DIVOOM_CONTROL_WEATHER_LON"] = "13.4"
     os.environ["DIVOOM_CONTROL_WEATHER_LOCATION"] = "fallback"
@@ -259,6 +258,7 @@ def test_resolve_location_priority() -> None:
 def test_resolve_location_uses_location_env_when_no_lat_lon() -> None:
     """Without lat/lon set, the location env is used."""
     import os
+
     for k in ("DIVOOM_CONTROL_WEATHER_LAT", "DIVOOM_CONTROL_WEATHER_LON"):
         os.environ.pop(k, None)
     os.environ["DIVOOM_CONTROL_WEATHER_LOCATION"] = "Tokyo"
@@ -281,6 +281,7 @@ def test_resolve_location_default(tmp_path, monkeypatch) -> None:
     testing the code.
     """
     import os
+
     for k in ("DIVOOM_CONTROL_WEATHER_LAT", "DIVOOM_CONTROL_WEATHER_LON", "DIVOOM_CONTROL_WEATHER_LOCATION"):
         os.environ.pop(k, None)
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)

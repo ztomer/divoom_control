@@ -20,6 +20,7 @@ arms, read the packet, and fail when the packet names something the daemon does
 not answer. A moved API now reddens a push instead of masquerading as a
 hardware fault in front of someone holding a device.
 """
+
 from __future__ import annotations
 
 import re
@@ -35,9 +36,11 @@ from capability_census import _ARM_BEFORE, daemon_capabilities  # noqa: E402
 
 COORDINATOR = REPO / "divoomd" / "src" / "live_jobs" / "coordinator.rs"
 # The MCP catalog: every `tool("name", ...)` entry `catalog()` assembles.
-MCP_CATALOG = (REPO / "divoomd" / "src" / "mcp_tools.rs",
-               REPO / "divoomd" / "src" / "mcp_more_tools.rs",
-               REPO / "divoomd" / "src" / "mcp_preview.rs")
+MCP_CATALOG = (
+    REPO / "divoomd" / "src" / "mcp_tools.rs",
+    REPO / "divoomd" / "src" / "mcp_more_tools.rs",
+    REPO / "divoomd" / "src" / "mcp_preview.rs",
+)
 _TOOL = re.compile(r'\btool\(\s*"([a-z_]+)"')
 
 # Below these, the extractor is not reading what it thinks it is reading, and a
@@ -62,7 +65,7 @@ def live_job_kinds() -> set[str]:
     marker = "match kind.as_str() {"
     if marker not in text:
         return set()
-    body = text[text.index(marker) + len(marker):]
+    body = text[text.index(marker) + len(marker) :]
     # `_ => return Err(...)` closes the match; anything after it belongs to
     # another one and would inflate the set with names `start` never accepts.
     cut = body.find("_ =>")
@@ -78,19 +81,20 @@ def main() -> int:
 
     # Calibrate before comparing: an extractor that silently returns nothing
     # passes every packet, which is the failure this whole file is about.
-    if (len(caps) < MIN_CAPABILITIES or len(kinds) < MIN_KINDS
-            or len(tools) < MIN_MCP_TOOLS):
-        err(f"[hw-verify-methods] extractor is not reading the daemon "
+    if len(caps) < MIN_CAPABILITIES or len(kinds) < MIN_KINDS or len(tools) < MIN_MCP_TOOLS:
+        err(
+            f"[hw-verify-methods] extractor is not reading the daemon "
             f"({len(caps)} commands, {len(kinds)} live-job kinds, "
-            f"{len(tools)} MCP tools)")
+            f"{len(tools)} MCP tools)"
+        )
         info("  Below the floor the comparison below is vacuous, so this is a")
         info("  FAILURE, not a pass over an empty set. Check that")
         info("  divoomd/src/daemon/dispatch.rs and live_jobs/coordinator.rs")
         info("  still hold their match arms in the expected shape.")
         return 1
 
-    from scripts.hw_verify import (CallCheck, CommandCheck, ImageCheck,
-                                   LiveJobCheck, PANEL_LOOK, build_checks)
+    from scripts.hw_verify import CallCheck, CommandCheck, ImageCheck, LiveJobCheck, PANEL_LOOK, build_checks
+
     # The SAME modules `scripts.hw_verify` loaded (it puts scripts/ on the
     # path): `scripts.hw_packet` would be a second copy, whose class no
     # packet entry is an instance of.
@@ -103,31 +107,24 @@ def main() -> int:
             if "live_job_start" not in caps:
                 bad.append(f"{c.id}: daemon has no 'live_job_start' command")
             if c.kind not in kinds:
-                bad.append(f"{c.id}: live-job kind {c.kind!r} is not one of "
-                           f"{sorted(kinds)}")
+                bad.append(f"{c.id}: live-job kind {c.kind!r} is not one of {sorted(kinds)}")
         elif isinstance(c, (CallCheck, ImageCheck)):
             if c.method not in caps:
-                bad.append(f"{c.id}: device_call method {c.method!r} is not a "
-                           f"daemon capability")
+                bad.append(f"{c.id}: device_call method {c.method!r} is not a daemon capability")
         elif isinstance(c, McpLeaseCheck):
             for name in hw_mcp_lease.MCP_TOOLS:
                 if name not in tools:
-                    bad.append(f"{c.id}: MCP tool {name!r} is not in the "
-                               f"`divoomd mcp` catalog")
+                    bad.append(f"{c.id}: MCP tool {name!r} is not in the `divoomd mcp` catalog")
             for name in hw_mcp_lease.SOCKET_COMMANDS:
                 if name not in caps:
-                    bad.append(f"{c.id}: socket command {name!r} is not a "
-                               f"daemon capability")
+                    bad.append(f"{c.id}: socket command {name!r} is not a daemon capability")
             if "sysmon" not in kinds:
-                bad.append(f"{c.id}: live-job kind 'sysmon' is not one of "
-                           f"{sorted(kinds)}")
+                bad.append(f"{c.id}: live-job kind 'sysmon' is not one of {sorted(kinds)}")
         elif isinstance(c, CommandCheck):
             if c.command not in caps:
-                bad.append(f"{c.id}: socket command {c.command!r} is not a "
-                           f"daemon capability")
+                bad.append(f"{c.id}: socket command {c.command!r} is not a daemon capability")
         else:
-            bad.append(f"{c.id}: unknown check type {type(c).__name__} — this "
-                       f"gate cannot vouch for it")
+            bad.append(f"{c.id}: unknown check type {type(c).__name__} — this gate cannot vouch for it")
 
         # THE SECOND HALF OF THIS GATE: a panel check must show the frame the
         # DAEMON painted, not a sentence this repo wrote about what the panel
@@ -138,21 +135,26 @@ def main() -> int:
         # answer. Only a socket-level check (no picture exists) may answer in
         # words.
         if not isinstance(c, CommandCheck) and c.look != PANEL_LOOK:
-            bad.append(f"{c.id}: a panel check carries a hand-written LOOK — "
-                       f"it must show the daemon's own frame instead")
+            bad.append(
+                f"{c.id}: a panel check carries a hand-written LOOK — it must show the daemon's own frame instead"
+            )
 
     if bad:
         one = len(bad) == 1
-        err(f"[hw-verify-methods] {len(bad)} packet entr{'y' if one else 'ies'} "
-            f"name{'s' if one else ''} something the daemon does not answer")
+        err(
+            f"[hw-verify-methods] {len(bad)} packet entr{'y' if one else 'ies'} "
+            f"name{'s' if one else ''} something the daemon does not answer"
+        )
         for b in bad:
             print(f"  ✗ {b}", flush=True)
         info("  These fail at the socket, before any pixel is drawn, and read")
         info("  to an operator as a hardware fault. Fix the name, not the device.")
         return 1
 
-    ok(f"[hw-verify-methods] OK — packet checked against {len(caps)} daemon "
-       f"commands, {len(kinds)} live-job kinds, {len(tools)} MCP tools")
+    ok(
+        f"[hw-verify-methods] OK — packet checked against {len(caps)} daemon "
+        f"commands, {len(kinds)} live-job kinds, {len(tools)} MCP tools"
+    )
     return 0
 
 

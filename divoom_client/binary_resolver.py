@@ -30,6 +30,7 @@ why nobody could ask cheaply).
 to start something that might be perfectly current, so the fallback there is
 newest-by-mtime — the old behaviour, kept deliberately for exactly that case.
 """
+
 from __future__ import annotations
 
 import logging
@@ -91,7 +92,9 @@ def binary_version(path: Path, timeout: float = PROBE_TIMEOUT) -> str | None:
         try:
             proc = subprocess.run(
                 [str(path), "--version", *extra],
-                capture_output=True, text=True, timeout=timeout,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
                 stdin=subprocess.DEVNULL,
                 check=False,
             )
@@ -100,8 +103,10 @@ def binary_version(path: Path, timeout: float = PROBE_TIMEOUT) -> str | None:
             # with setsid would survive; divoomd does not do that to itself, so
             # the kill is sufficient here.
             logger.warning(
-                "%s did not answer --version within %.1fs — too old to have the "
-                "flag, so it is stale by definition", path, timeout)
+                "%s did not answer --version within %.1fs — too old to have the flag, so it is stale by definition",
+                path,
+                timeout,
+            )
             return None
         except OSError as e:
             logger.warning("cannot execute %s: %s", path, e)
@@ -142,8 +147,7 @@ def bundled_candidates(name: str = "divoomd") -> list[Path]:
     out: list[Path] = []
     mei = getattr(sys, "_MEIPASS", None)
     if mei:
-        out += [Path(mei) / "bin" / name,
-                Path(mei).parent / "Resources" / "bin" / name]
+        out += [Path(mei) / "bin" / name, Path(mei).parent / "Resources" / "bin" / name]
     rp = os.environ.get("RESOURCEPATH")
     if rp:
         out += [Path(rp) / name, Path(rp) / "bin" / name]
@@ -188,8 +192,11 @@ def resolve(name: str = "divoomd", *, override: str | None = None) -> Path | Non
             if not expected or binary_version(path) == expected:
                 return path
         logger.warning(
-            "no bundled %s reports %s; using %s anyway — a packaged app has no "
-            "other daemon to fall back to", name, expected, bundled[0])
+            "no bundled %s reports %s; using %s anyway — a packaged app has no other daemon to fall back to",
+            name,
+            expected,
+            bundled[0],
+        )
         return bundled[0]
 
     built = built_candidates(name)

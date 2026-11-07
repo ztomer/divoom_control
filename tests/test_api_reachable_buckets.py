@@ -20,6 +20,7 @@ of it -- but it is an `ast.Attribute` named `probe_lan` like any other. Counting
 those reported 13 methods as Python-reached when the true figure was 4. The
 instrument was confident, repeatable, and measuring the wrong thing.
 """
+
 from __future__ import annotations
 
 import sys
@@ -42,11 +43,9 @@ def _mod(tmp_path: Path, name: str, body: str) -> tuple[Path, ...]:
 
 def test_delegation_is_not_a_caller(tmp_path):
     """The trap: a method forwarding to its own implementation."""
-    roots = _mod(tmp_path, "api", (
-        "class Api:\n"
-        "    def probe_lan(self):\n"
-        "        return self.connection.probe_lan()\n"
-    ))
+    roots = _mod(
+        tmp_path, "api", ("class Api:\n    def probe_lan(self):\n        return self.connection.probe_lan()\n")
+    )
     assert gate.python_callers({"probe_lan"}, roots)["probe_lan"] == []
 
 
@@ -59,11 +58,7 @@ def test_a_real_call_in_another_module_is_found(tmp_path):
     a caller of the BRIDGE method. A test pinning the old behaviour is part of
     that defect, so it moves to the shape that is actually correct.
     """
-    roots = _mod(tmp_path, "caller", (
-        "class C:\n"
-        "    def go(self):\n"
-        "        return self.probe_lan()\n"
-    ))
+    roots = _mod(tmp_path, "caller", ("class C:\n    def go(self):\n        return self.probe_lan()\n"))
     hits = gate.python_callers({"probe_lan"}, roots)["probe_lan"]
     assert len(hits) == 1 and hits[0].endswith(":3")
 
@@ -74,11 +69,11 @@ def test_docstring_mention_is_not_a_caller(tmp_path):
     `batch_sync_artwork`'s entry says "called from Python (gallery_sync)". The
     only thing in gallery_sync.py is a docstring saying the name.
     """
-    roots = _mod(tmp_path, "gallery", (
-        "def helper():\n"
-        '    """Core of batch_sync_artwork that keeps the failure REASON."""\n'
-        "    return None\n"
-    ))
+    roots = _mod(
+        tmp_path,
+        "gallery",
+        ('def helper():\n    """Core of batch_sync_artwork that keeps the failure REASON."""\n    return None\n'),
+    )
     assert gate.python_callers({"batch_sync_artwork"}, roots)["batch_sync_artwork"] == []
 
 
@@ -89,11 +84,7 @@ def test_comment_mention_is_not_a_caller(tmp_path):
 
 def test_recursive_only_method_counts_as_dead(tmp_path):
     """Excluded deliberately: calling yourself is not being reached."""
-    roots = _mod(tmp_path, "r", (
-        "class A:\n"
-        "    def loop(self):\n"
-        "        return self.loop()\n"
-    ))
+    roots = _mod(tmp_path, "r", ("class A:\n    def loop(self):\n        return self.loop()\n"))
     assert gate.python_callers({"loop"}, roots)["loop"] == []
 
 
@@ -102,8 +93,7 @@ def test_unparseable_file_does_not_abort_the_scan(tmp_path):
     pkg = tmp_path / "pkg"
     pkg.mkdir()
     (pkg / "broken.py").write_text("def (((\n")
-    (pkg / "good.py").write_text(
-        "class C:\n    def go(self):\n        return self.probe_lan()\n")
+    (pkg / "good.py").write_text("class C:\n    def go(self):\n        return self.probe_lan()\n")
     assert len(gate.python_callers({"probe_lan"}, (pkg,))["probe_lan"]) == 1
 
 
@@ -122,6 +112,7 @@ def test_divoom_lib_is_outside_the_scanned_surface():
 # P1.0 stopped a Python DOCSTRING from vouching for a method and left the JS
 # side scanning raw text -- half a class fixed. `live_job_start` stayed
 # "reachable" on one `//` comment in app_globals.js and nothing else.
+
 
 def test_js_line_comment_is_not_a_caller():
     blob = gate.strip_comments("// the daemon sets it on live_job_start\n")
@@ -160,8 +151,13 @@ def test_known_live_callers_all_survive_the_real_scan():
     on the real blob. Kept for that, described for what it is.
     """
     blob = gate.web_ui_blob()
-    for name in ("custom_art_push", "hot_update_preview", "mcp_server_status",
-                 "get_notification_listener_status", "live_job_list"):
+    for name in (
+        "custom_art_push",
+        "hot_update_preview",
+        "mcp_server_status",
+        "get_notification_listener_status",
+        "live_job_list",
+    ):
         assert name in blob, f"{name} lost to comment stripping"
 
 
@@ -171,18 +167,14 @@ def test_daemon_client_call_is_not_an_api_caller(tmp_path):
     DaemonClient mirrors these names by design, so counting any base made both
     live_job wrappers look alive when nothing called either.
     """
-    roots = _mod(tmp_path, "media", (
-        "def toggle(self):\n"
-        "    client = self._client()\n"
-        "    return client.live_job_start('AA', 'sysmon', {})\n"
-    ))
+    roots = _mod(
+        tmp_path,
+        "media",
+        ("def toggle(self):\n    client = self._client()\n    return client.live_job_start('AA', 'sysmon', {})\n"),
+    )
     assert gate.python_callers({"live_job_start"}, roots)["live_job_start"] == []
 
 
 def test_self_call_is_an_api_caller(tmp_path):
-    roots = _mod(tmp_path, "gal", (
-        "class G:\n"
-        "    def fetch(self):\n"
-        "        return self.load_cached_gallery()\n"
-    ))
+    roots = _mod(tmp_path, "gal", ("class G:\n    def fetch(self):\n        return self.load_cached_gallery()\n"))
     assert len(gate.python_callers({"load_cached_gallery"}, roots)["load_cached_gallery"]) == 1

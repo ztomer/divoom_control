@@ -24,6 +24,7 @@ around a decoder being deleted here, so it is deleted with it, and the cache is
 cleared once instead. The first gallery open after upgrading re-fetches; every
 later one is served from disk.
 """
+
 from __future__ import annotations
 
 import base64
@@ -61,7 +62,9 @@ def ensure_cache_dir(cache_dir: Path) -> Path:
     if removed:
         logger.info(
             "Gallery cache: cleared %d file(s) written by the old in-GUI decoder; "
-            "previews will be re-fetched from the background service.", removed)
+            "previews will be re-fetched from the background service.",
+            removed,
+        )
     try:
         stamp.write_text("previews come from divoomd (R70 P2.2)\n", encoding="utf-8")
     except OSError:
@@ -80,8 +83,7 @@ def cached_preview(cache_dir: Path, file_id: str) -> str:
         path = stem.with_suffix(ext)
         if path.exists() and path.stat().st_size > 0:
             try:
-                return f"data:{mime};base64," + base64.b64encode(
-                    path.read_bytes()).decode("ascii")
+                return f"data:{mime};base64," + base64.b64encode(path.read_bytes()).decode("ascii")
             except OSError as exc:
                 logger.warning("gallery cache read failed for %s: %s", path.name, exc)
     return ""
@@ -92,7 +94,7 @@ def _store(cache_dir: Path, file_id: str, data_url: str) -> None:
     try:
         header, b64 = data_url.split(",", 1)
         mime = header.split(":", 1)[1].split(";", 1)[0]
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         logger.warning("gallery: daemon returned a malformed data url for %s", file_id)
         return
     ext = _MIME_EXT.get(mime)
@@ -102,8 +104,7 @@ def _store(cache_dir: Path, file_id: str, data_url: str) -> None:
         logger.info("gallery: not caching %s (unhandled mime %s)", file_id, mime)
         return
     try:
-        (cache_dir / file_id.replace("/", "_")).with_suffix(ext).write_bytes(
-            base64.b64decode(b64))
+        (cache_dir / file_id.replace("/", "_")).with_suffix(ext).write_bytes(base64.b64decode(b64))
     except (OSError, ValueError) as exc:
         logger.warning("gallery: could not cache %s: %s", file_id, exc)
 
@@ -127,8 +128,7 @@ def preview_for(client, cache_dir: Path, file_id: str) -> str:
     try:
         data_url = client.get_animated_preview(file_id)
     except CloudUnavailable as exc:
-        logger.warning("gallery preview %s unavailable (%s): %s",
-                       file_id, exc.cause, exc.reason)
+        logger.warning("gallery preview %s unavailable (%s): %s", file_id, exc.cause, exc.reason)
         return ""
     if not data_url:
         return ""

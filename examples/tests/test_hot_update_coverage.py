@@ -9,6 +9,7 @@ failure accounting, mid-stream write failures, device-jumps-ahead handling,
 malformed/short device payloads, a missing wait_for_any_response transport, and
 show_hot_channel().
 """
+
 import json
 import sys
 import time
@@ -26,7 +27,13 @@ from support.hot_update_common import (  # noqa: F401
     _clear_hot_cache,
     _file,
 )
-from divoom_legacy.tools.hot_update import HotFile, HotUpdate, clear_hot_manifest_cache, download_hot_file, fetch_hot_manifest
+from divoom_legacy.tools.hot_update import (
+    HotFile,
+    HotUpdate,
+    clear_hot_manifest_cache,
+    download_hot_file,
+    fetch_hot_manifest,
+)
 
 CMD_LIST = COMMANDS["send hot file list"]
 CMD_INFO = COMMANDS["hot update file info"]
@@ -36,6 +43,7 @@ CMD_PAUSE = COMMANDS["hot pause file send"]
 
 
 # ── _load_hot_files: cache-expiry / empty-manifest / download-failure edges ─
+
 
 @pytest.mark.asyncio
 async def test_load_hot_files_empty_manifest_returns_early(monkeypatch):
@@ -48,8 +56,7 @@ async def test_load_hot_files_empty_manifest_returns_early(monkeypatch):
 async def test_load_hot_files_reports_progress(monkeypatch):
     f1, f2 = _file(version=1, body=None), _file(version=2, body=None)
     monkeypatch.setattr(hu_mod, "fetch_hot_manifest", lambda dt: [f1, f2])
-    monkeypatch.setattr(hu_mod, "download_hot_file",
-                        lambda f: (setattr(f, "body", b"\x01"), True)[1])
+    monkeypatch.setattr(hu_mod, "download_hot_file", lambda f: (setattr(f, "body", b"\x01"), True)[1])
     events = []
     files, dl, from_cache = await hu_mod._load_hot_files(4, progress_cb=events.append)
     assert dl == 2 and from_cache is False
@@ -100,6 +107,7 @@ async def test_load_hot_files_cache_hit_with_no_bodies_refetches(monkeypatch):
 
 # ── _manifest_payload: files without a downloaded body are excluded ────────
 
+
 def test_manifest_payload_skips_files_without_body():
     with_body = _file(vendor=1, version=5, body=b"\x01")
     no_body = _file(vendor=2, version=9, body=None)
@@ -109,6 +117,7 @@ def test_manifest_payload_skips_files_without_body():
 
 
 # ── _stream_file: mid-stream failure, device-jumps-ahead, junk payload ─────
+
 
 @pytest.mark.asyncio
 async def test_stream_file_write_failure_returns_false():
@@ -150,16 +159,19 @@ async def test_stream_file_ignores_junk_payload_then_confirms():
     divoom.logger = MagicMock()
     divoom.send_command = AsyncMock(return_value=True)
     hu = HotUpdate(divoom)
-    wait_any = AsyncMock(side_effect=[
-        (CMD_DATA, bytes([5])),   # junk: not a done code, too short to be resend
-        (CMD_DATA, bytes([1])),   # done
-    ])
+    wait_any = AsyncMock(
+        side_effect=[
+            (CMD_DATA, bytes([5])),  # junk: not a done code, too short to be resend
+            (CMD_DATA, bytes([1])),  # done
+        ]
+    )
     ok, confirmed = await hu._stream_file(f, 0, wait_any)
     assert (ok, confirmed) == (True, True)
     assert wait_any.await_count == 2
 
 
 # ── update(): transport / manifest / download error paths ──────────────────
+
 
 @pytest.mark.asyncio
 async def test_update_returns_error_when_transport_lacks_wait_any():
@@ -219,8 +231,7 @@ async def test_update_cache_hit_jumps_progress_bar(monkeypatch):
     cached = _file(body=b"\x01" * 10)
     hu_mod._manifest_cache[16] = (time.monotonic(), [cached])
     fetch_calls = []
-    monkeypatch.setattr(hu_mod, "fetch_hot_manifest",
-                        lambda dt: fetch_calls.append(dt) or [cached])
+    monkeypatch.setattr(hu_mod, "fetch_hot_manifest", lambda dt: fetch_calls.append(dt) or [cached])
 
     divoom = MagicMock()
     divoom.logger = MagicMock()
@@ -267,10 +278,12 @@ async def test_update_ignores_short_request_payload_then_ends(monkeypatch):
     divoom.send_command = AsyncMock(return_value=True)
     conn = MagicMock()
     conn._listen_commands = set()
-    conn.wait_for_any_response = AsyncMock(side_effect=[
-        (CMD_REQUEST, bytes([1, 2, 3])),  # too short (< 8 bytes) -> ignored
-        None,                             # then quiet -> session ends
-    ])
+    conn.wait_for_any_response = AsyncMock(
+        side_effect=[
+            (CMD_REQUEST, bytes([1, 2, 3])),  # too short (< 8 bytes) -> ignored
+            None,  # then quiet -> session ends
+        ]
+    )
     divoom._conn = conn
     result = await HotUpdate(divoom).update(device_size=16)
     assert result["success"] is True
@@ -306,10 +319,12 @@ async def test_update_no_ack_for_file_info_ends_session(monkeypatch):
     conn = MagicMock()
     conn._listen_commands = set()
     req = bytes((40005454).to_bytes(4, "little")) + bytes((1099).to_bytes(4, "little"))
-    conn.wait_for_any_response = AsyncMock(side_effect=[
-        (CMD_REQUEST, req),
-        None,  # no 0x9D ack -> ends the session
-    ])
+    conn.wait_for_any_response = AsyncMock(
+        side_effect=[
+            (CMD_REQUEST, req),
+            None,  # no 0x9D ack -> ends the session
+        ]
+    )
     divoom._conn = conn
     result = await HotUpdate(divoom).update(device_size=16)
     assert result["success"] is True
@@ -331,11 +346,13 @@ async def test_update_device_jumps_ahead_of_file_info_ack(monkeypatch):
     conn._listen_commands = set()
     req1 = bytes((1).to_bytes(4, "little")) + bytes((1).to_bytes(4, "little"))
     req2 = bytes((1).to_bytes(4, "little")) + bytes((2).to_bytes(4, "little"))
-    conn.wait_for_any_response = AsyncMock(side_effect=[
-        (CMD_REQUEST, req1),
-        (CMD_REQUEST, req2),  # jumps ahead instead of acking f1's 0x9D
-        None,                 # then quiet
-    ])
+    conn.wait_for_any_response = AsyncMock(
+        side_effect=[
+            (CMD_REQUEST, req1),
+            (CMD_REQUEST, req2),  # jumps ahead instead of acking f1's 0x9D
+            None,  # then quiet
+        ]
+    )
     divoom._conn = conn
     result = await HotUpdate(divoom).update(device_size=16)
     assert result["success"] is True
@@ -353,11 +370,13 @@ async def test_update_device_declines_file(monkeypatch):
     conn = MagicMock()
     conn._listen_commands = set()
     req = bytes((40005454).to_bytes(4, "little")) + bytes((1099).to_bytes(4, "little"))
-    conn.wait_for_any_response = AsyncMock(side_effect=[
-        (CMD_REQUEST, req),
-        (CMD_INFO, bytes([1])),  # non-zero status -> declined
-        None,
-    ])
+    conn.wait_for_any_response = AsyncMock(
+        side_effect=[
+            (CMD_REQUEST, req),
+            (CMD_INFO, bytes([1])),  # non-zero status -> declined
+            None,
+        ]
+    )
     divoom._conn = conn
     result = await HotUpdate(divoom).update(device_size=16)
     assert result["success"] is True
@@ -379,11 +398,13 @@ async def test_update_mid_stream_write_failure_not_served(monkeypatch):
     conn = MagicMock()
     conn._listen_commands = set()
     req = bytes((40005454).to_bytes(4, "little")) + bytes((1099).to_bytes(4, "little"))
-    conn.wait_for_any_response = AsyncMock(side_effect=[
-        (CMD_REQUEST, req),
-        (CMD_INFO, bytes([0, 0, 0])),
-        None,  # end session after the failed stream
-    ])
+    conn.wait_for_any_response = AsyncMock(
+        side_effect=[
+            (CMD_REQUEST, req),
+            (CMD_INFO, bytes([0, 0, 0])),
+            None,  # end session after the failed stream
+        ]
+    )
     divoom._conn = conn
     result = await HotUpdate(divoom).update(device_size=16)
     assert result["success"] is True
@@ -392,7 +413,7 @@ async def test_update_mid_stream_write_failure_not_served(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_update_progress_cb_full_success_reports_all_phases(monkeypatch):
-    f = _file(body=b"\xAB" * 10)  # 1 packet
+    f = _file(body=b"\xab" * 10)  # 1 packet
     monkeypatch.setattr(hu_mod, "fetch_hot_manifest", lambda dt: [f])
     monkeypatch.setattr(hu_mod, "download_hot_file", lambda f: True)
     monkeypatch.setattr(hu_mod, "INTER_PACKET_DELAY", 0)
@@ -402,12 +423,14 @@ async def test_update_progress_cb_full_success_reports_all_phases(monkeypatch):
     conn = MagicMock()
     conn._listen_commands = set()
     req = bytes((40005454).to_bytes(4, "little")) + bytes((1099).to_bytes(4, "little"))
-    conn.wait_for_any_response = AsyncMock(side_effect=[
-        (CMD_REQUEST, req),
-        (CMD_INFO, bytes([0, 0, 0])),
-        (CMD_DATA, bytes([1])),  # done
-        None,
-    ])
+    conn.wait_for_any_response = AsyncMock(
+        side_effect=[
+            (CMD_REQUEST, req),
+            (CMD_INFO, bytes([0, 0, 0])),
+            (CMD_DATA, bytes([1])),  # done
+            None,
+        ]
+    )
     divoom._conn = conn
     events = []
     result = await HotUpdate(divoom).update(device_size=16, progress_cb=events.append)
@@ -437,6 +460,7 @@ async def test_update_without_listen_commands_set_skips_listen_bookkeeping(monke
 
 
 # ── show_hot_channel() ──────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_show_hot_channel_without_page():

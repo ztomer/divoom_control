@@ -7,6 +7,7 @@
 16). These drive the real mixin against a fake daemon client that records
 every request with the mac it named.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -24,13 +25,29 @@ class _FakeClient:
     def __init__(self):
         self.calls: list[tuple[str, str | None, list]] = []
         self.status = {
-            A: {"mac": A, "connected": True, "model": "DitooPlus", "width": 16, "height": 16,
-                "model_source": "name", "features": {"speaker": True}},
-            B: {"mac": B, "connected": True, "model": "Pixoo64Wifi", "width": 64, "height": 64,
-                "model_source": "name", "features": {"speaker": False}},
+            A: {
+                "mac": A,
+                "connected": True,
+                "model": "DitooPlus",
+                "width": 16,
+                "height": 16,
+                "model_source": "name",
+                "features": {"speaker": True},
+            },
+            B: {
+                "mac": B,
+                "connected": True,
+                "model": "Pixoo64Wifi",
+                "width": 64,
+                "height": 64,
+                "model_source": "name",
+                "features": {"speaker": False},
+            },
         }
-        self.levels = {A: {"device.get_brightness": 30, "music.get_volume": 5},
-                       B: {"device.get_brightness": 90, "music.get_volume": 2}}
+        self.levels = {
+            A: {"device.get_brightness": 30, "music.get_volume": 5},
+            B: {"device.get_brightness": 90, "music.get_volume": 2},
+        }
 
     def device_status(self, mac=None):
         if mac is None:

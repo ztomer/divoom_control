@@ -10,12 +10,14 @@ from divoom_lib.transport_interface import DeviceTransport
 from divoom_legacy.ble_transport import BLETransport
 from divoom_lib import bt_spp_transport
 
+
 class DivoomConnection(DeviceTransport):
     """
     Acts as a transport router implementing the DeviceTransport interface.
     Instantiates and delegates to either BLETransport or BTSppTransport
     based on the device properties and automatic discovery.
     """
+
     def __init__(self, divoom: Any, cfg: models.DivoomConfig):
         self._divoom = divoom
         self.cfg = cfg
@@ -49,13 +51,16 @@ class DivoomConnection(DeviceTransport):
     async def connect(self) -> None:
         mac = self.mac
         device_name = self.device_name
-        is_mock = (self.client and "MockBleakClient" in self.client.__class__.__name__) or os.environ.get("DIVOOM_MOCK_BLE") in ("1", "true", "yes")
+        is_mock = (self.client and "MockBleakClient" in self.client.__class__.__name__) or os.environ.get(
+            "DIVOOM_MOCK_BLE"
+        ) in ("1", "true", "yes")
 
         # 1. Resolve device name dynamically if not set
         if not is_mock and not device_name and mac:
             if len(mac) == 17 and ("-" in mac or ":" in mac):
                 try:
                     from IOBluetooth import IOBluetoothDevice
+
                     dev = IOBluetoothDevice.deviceWithAddressString_(mac.replace(":", "-"))
                     if dev:
                         device_name = dev.getName()
@@ -66,6 +71,7 @@ class DivoomConnection(DeviceTransport):
                 try:
                     import json
                     from pathlib import Path
+
                     cache_file = Path.home() / ".config" / "divoom-control" / "discovered_devices.json"
                     if cache_file.exists():
                         devices = json.loads(cache_file.read_text(encoding="utf-8"))
@@ -97,6 +103,7 @@ class DivoomConnection(DeviceTransport):
             # raised NameError and crashed every second connect to an SPP device.
             if not self._use_spp or not isinstance(self._active_transport, bt_spp_transport.BTSppTransport):
                 from divoom_legacy import spp_connection
+
                 classic_mac = spp_connection.resolve_classic_mac(device_name, mac, log=self.logger)
                 if classic_mac:
                     name_lower = device_name.lower()
@@ -109,18 +116,17 @@ class DivoomConnection(DeviceTransport):
                         device_kind = "ditoo"
                     elif "tivoo" in name_lower:
                         device_kind = "tivoo"
-                    
+
                     self.logger.info(f"Switching transport to BTSppTransport for {device_name}...")
                     await self._teardown_outgoing_transport()
                     self._active_transport = bt_spp_transport.BTSppTransport(
-                        mac_address=classic_mac,
-                        device_kind=device_kind,
-                        logger=self.logger,
-                        device_name=device_name
+                        mac_address=classic_mac, device_kind=device_kind, logger=self.logger, device_name=device_name
                     )
                     self._use_spp = True
                 else:
-                    self.logger.warning(f"Could not resolve Bluetooth Classic MAC for {device_name}. Falling back to BLE.")
+                    self.logger.warning(
+                        f"Could not resolve Bluetooth Classic MAC for {device_name}. Falling back to BLE."
+                    )
                     use_spp = False
 
         if not use_spp:
@@ -154,7 +160,9 @@ class DivoomConnection(DeviceTransport):
         if hasattr(self._active_transport, "notification_handler"):
             self._active_transport.notification_handler(sender, data)
 
-    async def send_command(self, command: int | str, args: list | None = None, write_with_response: bool = False) -> bool:
+    async def send_command(
+        self, command: int | str, args: list | None = None, write_with_response: bool = False
+    ) -> bool:
         if args is None:
             args = []
         if isinstance(command, str):
@@ -175,13 +183,16 @@ class DivoomConnection(DeviceTransport):
     async def send_payload(self, payload_bytes: list, max_retries: int = 3, **kwargs) -> bool:
         return await self._active_transport.send_payload(payload_bytes, max_retries, **kwargs)
 
-    async def send_command_and_wait_for_response(self, command: int | str, args: list | None = None, timeout: float = 10.0) -> bytes | None:
+    async def send_command_and_wait_for_response(
+        self, command: int | str, args: list | None = None, timeout: float = 10.0
+    ) -> bytes | None:
         command_id = models.COMMANDS.get(command, command) if isinstance(command, str) else command
         if self._response_lock.locked():
             self.logger.warning(
                 "send_command_and_wait_for_response(0x%02x) contended — another "
                 "response wait is in flight; serializing to avoid cross-talk",
-                command_id if isinstance(command_id, int) else 0)
+                command_id if isinstance(command_id, int) else 0,
+            )
         # Hold the lock across drain→set-scalar→send→wait. We keep delegating the
         # actual send/wait to self._divoom (the HW-tuned path) rather than the
         # transport's send_command_and_wait_for_response, so routing is unchanged.
@@ -339,34 +350,75 @@ class DivoomConnection(DeviceTransport):
 
     # ── Diagnostic / Probing API Forwards ─────────────────────────────────────
 
-    async def probe_write_characteristics_and_try_channel_switch(self, write_chars: list, notify_chars: list, read_chars: list, cached_data: dict, cache_dir: str, device_id: str, colors: list = None, cache_mod: Any = None):
+    async def probe_write_characteristics_and_try_channel_switch(
+        self,
+        write_chars: list,
+        notify_chars: list,
+        read_chars: list,
+        cached_data: dict,
+        cache_dir: str,
+        device_id: str,
+        colors: list = None,
+        cache_mod: Any = None,
+    ):
         if hasattr(self._active_transport, "probe_write_characteristics_and_try_channel_switch"):
-            return await self._active_transport.probe_write_characteristics_and_try_channel_switch(write_chars, notify_chars, read_chars, cached_data, cache_dir, device_id, colors, cache_mod)
+            return await self._active_transport.probe_write_characteristics_and_try_channel_switch(
+                write_chars, notify_chars, read_chars, cached_data, cache_dir, device_id, colors, cache_mod
+            )
         from divoom_legacy import probing
-        return await probing.probe_write_characteristics_and_try_channel_switch(self, write_chars, notify_chars, read_chars, cached_data, cache_dir, device_id, colors, cache_mod)
+
+        return await probing.probe_write_characteristics_and_try_channel_switch(
+            self, write_chars, notify_chars, read_chars, cached_data, cache_dir, device_id, colors, cache_mod
+        )
 
     async def set_canonical_light(self, cache_dir: str, device_id: str, cache_mod: Any = None, rgb: list = None):
         if hasattr(self._active_transport, "set_canonical_light"):
             return await self._active_transport.set_canonical_light(cache_dir, device_id, cache_mod, rgb)
         from divoom_legacy import probing
+
         return await probing.set_canonical_light(self, cache_dir, device_id, cache_mod, rgb)
 
-    async def _try_send_command_with_framing(self, command_id: int, payload: list, timeout: float = 3.0, use_ios: bool = False, escape: bool = False):
+    async def _try_send_command_with_framing(
+        self, command_id: int, payload: list, timeout: float = 3.0, use_ios: bool = False, escape: bool = False
+    ):
         if hasattr(self._active_transport, "_try_send_command_with_framing"):
-            return await self._active_transport._try_send_command_with_framing(command_id, payload, timeout, use_ios, escape)
+            return await self._active_transport._try_send_command_with_framing(
+                command_id, payload, timeout, use_ios, escape
+            )
         from divoom_legacy import probing
-        return await probing._try_send_command_with_framing(self, command_id, payload, timeout=timeout, use_ios=use_ios, escape=escape)
 
-    async def _send_diagnostic_payload(self, write_uuid: str, args_payload: list, cache_data: dict, cache_dir: str, device_id: str, cache_mod: Any = None):
+        return await probing._try_send_command_with_framing(
+            self, command_id, payload, timeout=timeout, use_ios=use_ios, escape=escape
+        )
+
+    async def _send_diagnostic_payload(
+        self,
+        write_uuid: str,
+        args_payload: list,
+        cache_data: dict,
+        cache_dir: str,
+        device_id: str,
+        cache_mod: Any = None,
+    ):
         if hasattr(self._active_transport, "_send_diagnostic_payload"):
-            return await self._active_transport._send_diagnostic_payload(write_uuid, args_payload, cache_data, cache_dir, device_id, cache_mod)
+            return await self._active_transport._send_diagnostic_payload(
+                write_uuid, args_payload, cache_data, cache_dir, device_id, cache_mod
+            )
         from divoom_legacy import probing
-        return await probing._send_diagnostic_payload(self, write_uuid, args_payload, cache_data, cache_dir, device_id, cache_mod)
 
-    async def _handle_cached_payload(self, write_uuid: str, cached_data: dict, cache_dir: str, device_id: str, cache_mod: Any = None):
+        return await probing._send_diagnostic_payload(
+            self, write_uuid, args_payload, cache_data, cache_dir, device_id, cache_mod
+        )
+
+    async def _handle_cached_payload(
+        self, write_uuid: str, cached_data: dict, cache_dir: str, device_id: str, cache_mod: Any = None
+    ):
         if hasattr(self._active_transport, "_handle_cached_payload"):
-            return await self._active_transport._handle_cached_payload(write_uuid, cached_data, cache_dir, device_id, cache_mod)
+            return await self._active_transport._handle_cached_payload(
+                write_uuid, cached_data, cache_dir, device_id, cache_mod
+            )
         from divoom_legacy import probing
+
         return await probing._handle_cached_payload(self, write_uuid, cached_data, cache_dir, device_id, cache_mod)
 
     # ── Lower-level compatibility hooks ───────────────────────────────────────
@@ -407,7 +459,9 @@ class DivoomConnection(DeviceTransport):
 
     async def _send_payload(self, payload_bytes: list, max_retries: int = 3, **kwargs) -> bool:
         if self._use_spp:
-            return await self._send_basic_protocol_payload(payload_bytes, write_with_response=kwargs.get("write_with_response", False))
+            return await self._send_basic_protocol_payload(
+                payload_bytes, write_with_response=kwargs.get("write_with_response", False)
+            )
         return await self._active_transport.send_payload(payload_bytes, max_retries, **kwargs)
 
     async def _wait_for_response(self, command_id: int, timeout: float = 10.0) -> bytes | None:

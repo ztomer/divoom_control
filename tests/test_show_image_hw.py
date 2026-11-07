@@ -10,11 +10,13 @@ Hardware-gated via tests/conftest.py HARDWARE_TEST_MODULES — skipped
 without --run-hardware. Manual use unchanged:
 python3 tests/test_show_image_hw.py [mac_address]
 """
+
 import os
 import sys, socket, json, time
 
 SOCK = "/tmp/divoom.sock"
 TEST_MAC = os.environ.get("DIVOOM_TEST_MAC")
+
 
 def call(sock_path, req):
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -28,6 +30,7 @@ def call(sock_path, req):
         data += chunk
     s.close()
     return json.loads(data.split(b"\n")[0])
+
 
 def main(mac=None):
     if mac is None and len(sys.argv) > 1:
@@ -70,24 +73,30 @@ def main(mac=None):
     for y in range(h):
         for x in range(w):
             if x < 8 and y < 8:
-                rgb += [255, 0, 0]      # top-left: red
+                rgb += [255, 0, 0]  # top-left: red
             elif x >= 8 and y < 8:
-                rgb += [0, 255, 0]      # top-right: green
+                rgb += [0, 255, 0]  # top-right: green
             elif x < 8 and y >= 8:
-                rgb += [0, 0, 255]      # bottom-left: blue
+                rgb += [0, 0, 255]  # bottom-left: blue
             else:
                 rgb += [255, 255, 255]  # bottom-right: white
     assert len(rgb) == w * h * 3
 
-    print(f"pushing {w}x{h} test image ({len(rgb)} RGB bytes, {len(rgb)//3} pixels)...")
+    print(f"pushing {w}x{h} test image ({len(rgb)} RGB bytes, {len(rgb) // 3} pixels)...")
     t0 = time.time()
-    r = call(SOCK, {"command": "device_call", "args": {
-        "method": "device.show_image",
-        "w": w,
-        "h": h,
-        "time_ms": 100,
-        "rgb": rgb,
-    }})
+    r = call(
+        SOCK,
+        {
+            "command": "device_call",
+            "args": {
+                "method": "device.show_image",
+                "w": w,
+                "h": h,
+                "time_ms": 100,
+                "rgb": rgb,
+            },
+        },
+    )
     elapsed = time.time() - t0
     print(f"show_image ({elapsed:.2f}s):", r)
     if not r.get("success"):

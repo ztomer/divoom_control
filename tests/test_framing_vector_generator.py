@@ -34,9 +34,7 @@ def _load_generator():
 
 def test_generator_reproduces_the_committed_vectors():
     built = _load_generator().build(VECTORS)
-    assert built == json.loads(VECTORS.read_text()), (
-        "the generator no longer reproduces framing_vectors.json"
-    )
+    assert built == json.loads(VECTORS.read_text()), "the generator no longer reproduces framing_vectors.json"
 
 
 def test_generator_renders_the_committed_file_byte_for_byte():

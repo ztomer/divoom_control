@@ -12,6 +12,7 @@
 All tests redirect Path.home() to a pytest tmp_path so nothing touches the
 real user cache directory.
 """
+
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -48,9 +49,7 @@ def test_free_form_layout_computes_absolute_bounding_box(mock_divoom, tmp_path, 
 
 
 @patch("divoom_legacy.wall.Divoom", new_callable=MagicMock)
-def test_free_form_layout_defaults_when_width_height_missing_on_other_slots(
-    mock_divoom, tmp_path, monkeypatch
-):
+def test_free_form_layout_defaults_when_width_height_missing_on_other_slots(mock_divoom, tmp_path, monkeypatch):
     """Only ONE config needs "width" to trigger is_free_form; a sibling config
     without width/height must still get the (120, 120) defaults, not KeyError."""
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
@@ -77,7 +76,7 @@ def test_geometry_first_run_purges_and_writes_hash(mock_divoom, tmp_path, monkey
     configs = [{"mac": "AA:01", "x": 0, "y": 0, "size": 16}]
     DivoomWall(configs)
 
-    assert not stale.exists()                       # purged
+    assert not stale.exists()  # purged
     geom_file = cache_dir / "last_geometry.txt"
     assert geom_file.exists() and geom_file.read_text().strip()  # hash written
 

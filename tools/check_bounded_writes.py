@@ -26,6 +26,7 @@ a split for the line cap silently shrank the gate's subject. It makes no claim a
 (a probe with its own timeout) -- different resources, different failure modes.
 Widening it would need a seam in those files first.
 """
+
 from __future__ import annotations
 
 import re
@@ -99,15 +100,15 @@ def self_test() -> int:
         ("the tree as committed passes", not bad_lines and total >= 1),
         (
             "a write_all outside the seam fails",
-            bool(audit(clean + "\nfn extra() { s.write_all(b\"x\"); }\n")[0]),
+            bool(audit(clean + '\nfn extra() { s.write_all(b"x"); }\n')[0]),
         ),
         (
             "a write_all in a COMMENT passes",
-            not audit(clean + "\n// s.write_all(b\"x\");\n")[0],
+            not audit(clean + '\n// s.write_all(b"x");\n')[0],
         ),
         (
             "a write_all in a submodule fails",
-            bool(audit_submodule("fn x() { s.write_all(b\"x\"); }\n")),
+            bool(audit_submodule('fn x() { s.write_all(b"x"); }\n')),
         ),
         ("the submodules are read at all", len(submodules()) >= 2),
         (

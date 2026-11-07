@@ -44,6 +44,7 @@ exit, never a warning: the neighbours of this file reported a NameError as
 `⚠` and exited 0, so a run that had found four panels was announced as a
 clean run whose reporting had failed.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -141,9 +142,11 @@ def device_connected(client: DaemonClient) -> tuple[bool, str, dict]:
     if not isinstance(st, dict):
         return False, f"unexpected status: {st!r}", {}
     mac = st.get("mac")
-    return (bool(st.get("connected")),
-            f"mac={mac} connected={st.get('connected')}",
-            {"mac": mac, "size": st.get("size")})
+    return (
+        bool(st.get("connected")),
+        f"mac={mac} connected={st.get('connected')}",
+        {"mac": mac, "size": st.get("size")},
+    )
 
 
 def ask(prompt: str, interactive: bool) -> tuple[str, str]:
@@ -231,8 +234,7 @@ def run_packet(client, checks, interactive, results, ctx=None):
             info(f"  {line}")
         verdict, note = ask("did you see it?", interactive)
         results.append(Result(c.id, verdict, detail, note))
-        (ok if verdict == PASS else warn if verdict in (SKIP, UNKNOWN) else err)(
-            f"{c.id}: {verdict}")
+        (ok if verdict == PASS else warn if verdict in (SKIP, UNKNOWN) else err)(f"{c.id}: {verdict}")
 
 
 def self_test(client) -> int:
@@ -248,9 +250,14 @@ def self_test(client) -> int:
     PARTIAL until a device is connected, 0 once it is.
     """
     section("self-test: can this packet report FAILURE?")
-    probe = CallCheck(id="_probe", title="deliberately invalid device call",
-                      look="n/a", method="definitely.not.a.real.method", args=[],
-                      needs_device=False)
+    probe = CallCheck(
+        id="_probe",
+        title="deliberately invalid device call",
+        look="n/a",
+        method="definitely.not.a.real.method",
+        args=[],
+        needs_device=False,
+    )
     try:
         fired, detail = probe.drive(client, {})
     except Exception as exc:
@@ -315,25 +322,28 @@ def self_test(client) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--socket", default=DEFAULT_SOCKET_PATH)
-    ap.add_argument("--only", action="append", default=[],
-                    help="run only these check ids (repeatable)")
+    ap.add_argument("--only", action="append", default=[], help="run only these check ids (repeatable)")
     ap.add_argument("--list", action="store_true", help="list checks and exit")
-    ap.add_argument("--self-test", action="store_true",
-                    help="prove the packet can report FAILURE, then exit")
-    ap.add_argument("--out", default="",
-                    help="write a JSON report here (gitignored: a verdict file "
-                         "is evidence about one run on one machine)")
-    ap.add_argument("--frames-dir", default="",
-                    help="where the daemon's frames are saved (default: next "
-                         "to --out, else a temp directory)")
-    ap.add_argument("--image", default=str(DEFAULT_IMAGE),
-                    help="image for the custom_art check")
-    ap.add_argument("--divoomd", default="",
-                    help="the divoomd binary whose `mcp` entry point the "
-                         "mcp_lease check drives (default: the one the GUI "
-                         "would run)")
-    ap.add_argument("--size", type=int, default=0,
-                    help="panel size; 0 asks the daemon, falling back to 16")
+    ap.add_argument("--self-test", action="store_true", help="prove the packet can report FAILURE, then exit")
+    ap.add_argument(
+        "--out",
+        default="",
+        help="write a JSON report here (gitignored: a verdict file is evidence about one run on one machine)",
+    )
+    ap.add_argument(
+        "--frames-dir",
+        default="",
+        help="where the daemon's frames are saved (default: next to --out, else a temp directory)",
+    )
+    ap.add_argument("--image", default=str(DEFAULT_IMAGE), help="image for the custom_art check")
+    ap.add_argument(
+        "--divoomd",
+        default="",
+        help="the divoomd binary whose `mcp` entry point the "
+        "mcp_lease check drives (default: the one the GUI "
+        "would run)",
+    )
+    ap.add_argument("--size", type=int, default=0, help="panel size; 0 asks the daemon, falling back to 16")
     args = ap.parse_args()
 
     checks = build_checks()
@@ -368,8 +378,7 @@ def main() -> int:
         frames_dir = tempfile.mkdtemp(prefix="hw_verify_frames_")
     info(f"frames (the daemon's own pictures) are saved in: {frames_dir}")
 
-    ctx: dict = {"image": args.image, "frames_dir": frames_dir,
-                 "socket": args.socket, "divoomd": args.divoomd}
+    ctx: dict = {"image": args.image, "frames_dir": frames_dir, "socket": args.socket, "divoomd": args.divoomd}
     if args.size:
         ctx["size"] = args.size
     if not Path(args.image).is_file():
@@ -384,16 +393,14 @@ def main() -> int:
     for r in results:
         tally[r.verdict] = tally.get(r.verdict, 0) + 1
         line = f"{r.verdict:<8} {r.check}"
-        (ok if r.verdict in (PASS, XPASS) else err if r.verdict == FAIL
-         else warn)(line)
+        (ok if r.verdict in (PASS, XPASS) else err if r.verdict == FAIL else warn)(line)
         if r.note:
             info(f"         {r.note}")
     hr()
     info("  ".join(f"{k}={v}" for k, v in sorted(tally.items())))
 
     if args.out:
-        Path(args.out).write_text(json.dumps(
-            [r.__dict__ for r in results], indent=2), encoding="utf-8")
+        Path(args.out).write_text(json.dumps([r.__dict__ for r in results], indent=2), encoding="utf-8")
         ok(f"report written to {args.out}")
 
     # The exit code IS the verdict, and it follows the same contract as

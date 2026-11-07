@@ -3,6 +3,7 @@
 Every path is driven by the fault-injecting FakeBleDevice (no hardware, no
 real waiting — sleep is stubbed).
 """
+
 import asyncio
 import sys
 from pathlib import Path
@@ -11,7 +12,13 @@ import pytest
 
 sys.path.append(str(Path(__file__).parent.parent))
 
-from divoom_legacy.ble_connection import ConnectionState, FailureReason, ConnectResult, classify_connect_error, ensure_connected
+from divoom_legacy.ble_connection import (
+    ConnectionState,
+    FailureReason,
+    ConnectResult,
+    classify_connect_error,
+    ensure_connected,
+)
 from support.fake_ble import FakeBleDevice
 
 
@@ -25,15 +32,19 @@ async def _nosleep(_):
 
 # ── classification ─────────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("text,reason", [
-    ("Device with address AA was not found", FailureReason.NOT_ADVERTISING),
-    ("Operation timed out", FailureReason.TIMEOUT),
-    ("Bluetooth device is powered off", FailureReason.ADAPTER_OFF),
-    ("Not authorized to use Bluetooth", FailureReason.PERMISSION),
-    ("Device already connected", FailureReason.BUSY),
-    ("Disconnected during operation", FailureReason.DROPPED),
-    ("some weird CoreBluetooth thing", FailureReason.UNKNOWN),
-])
+
+@pytest.mark.parametrize(
+    "text,reason",
+    [
+        ("Device with address AA was not found", FailureReason.NOT_ADVERTISING),
+        ("Operation timed out", FailureReason.TIMEOUT),
+        ("Bluetooth device is powered off", FailureReason.ADAPTER_OFF),
+        ("Not authorized to use Bluetooth", FailureReason.PERMISSION),
+        ("Device already connected", FailureReason.BUSY),
+        ("Disconnected during operation", FailureReason.DROPPED),
+        ("some weird CoreBluetooth thing", FailureReason.UNKNOWN),
+    ],
+)
 def test_classify_connect_error(text, reason):
     assert classify_connect_error(Exception(text)) is reason
 
@@ -43,6 +54,7 @@ def test_classify_timeout_type():
 
 
 # ── ensure_connected ───────────────────────────────────────────────────────
+
 
 def test_connects_first_try():
     dev = FakeBleDevice()
@@ -63,7 +75,7 @@ def test_fast_path_uses_is_alive_not_lying_is_connected():
     """R53: a device whose link dropped but whose cached is_connected still reads
     True (the CoreBluetooth lag) must NOT short-circuit the fast-path — the honest
     is_alive signal forces a real reconnect instead of handing back a dead handle."""
-    dev = FakeBleDevice(lie_connected=True)   # is_connected=True, is_alive=False
+    dev = FakeBleDevice(lie_connected=True)  # is_connected=True, is_alive=False
     assert dev.is_connected is True and dev.is_alive is False
     res = _run(ensure_connected(dev, sleep=_nosleep))
     assert res.ok and dev.connect_calls == 1  # it actually reconnected, not a no-op
@@ -71,8 +83,7 @@ def test_fast_path_uses_is_alive_not_lying_is_connected():
 
 def test_retries_then_succeeds():
     # fail twice (not-found), then succeed
-    dev = FakeBleDevice(connect_results=[
-        Exception("was not found"), Exception("was not found"), True])
+    dev = FakeBleDevice(connect_results=[Exception("was not found"), Exception("was not found"), True])
     res = _run(ensure_connected(dev, attempts=3, sleep=_nosleep))
     assert res.ok and dev.connect_calls == 3
 
@@ -84,7 +95,7 @@ def test_exhausts_and_returns_typed_reason_not_dead_handle():
     assert res.state is ConnectionState.FAILED
     assert res.reason is FailureReason.NOT_ADVERTISING
     assert res.message  # actionable text present
-    assert dev.is_connected is False        # NOT a live-looking dead handle
+    assert dev.is_connected is False  # NOT a live-looking dead handle
     assert dev.connect_calls == 3
 
 
@@ -103,7 +114,7 @@ def test_verify_failure_retries():
 
     async def verify(_):
         calls["n"] += 1
-        return calls["n"] >= 2   # first verify fails, second passes
+        return calls["n"] >= 2  # first verify fails, second passes
 
     res = _run(ensure_connected(dev, attempts=3, verify=verify, sleep=_nosleep))
     assert res.ok and calls["n"] == 2 and dev.connect_calls == 2
@@ -112,4 +123,4 @@ def test_verify_failure_retries():
 def test_tears_down_half_open_handle_between_attempts():
     dev = FakeBleDevice(connect_results=[Exception("disconnected"), True])
     _run(ensure_connected(dev, attempts=2, sleep=_nosleep))
-    assert dev.disconnect_calls >= 1   # cleaned up before the retry
+    assert dev.disconnect_calls >= 1  # cleaned up before the retry

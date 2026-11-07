@@ -39,15 +39,16 @@ async def test_device(address: str, name: str):
         return False
 
 
-
 # Manual hardware harness — run directly:
 #   python3 tests/test_hardware_smoke.py
 # Not a pytest test (the function takes real device args, not fixtures);
 # without this marker pytest collects it and errors on missing fixtures.
 test_device.__test__ = False
 
+
 async def main():
     from divoom_legacy.utils.discovery import discover_all_divoom_devices
+
     devices = await discover_all_divoom_devices(timeout=8)
     if not devices:
         print("FAIL: no Divoom devices found")
@@ -63,7 +64,7 @@ async def main():
             all_ok = False
         await asyncio.sleep(3)
 
-    print(f"\n{'='*40}")
+    print(f"\n{'=' * 40}")
     print(f"Overall: {'ALL PASS' if all_ok else 'SOME FAILED'}")
     sys.exit(0 if all_ok else 1)
 

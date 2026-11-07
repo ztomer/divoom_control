@@ -13,6 +13,7 @@ What these pin:
   preview a different city than the panel shows;
 * a failure is a stated reason, never a fabricated reading.
 """
+
 from __future__ import annotations
 
 import base64
@@ -25,9 +26,7 @@ from divoom_gui.media_sync import MediaSyncMixin
 
 
 def _checker(size: int) -> bytes:
-    return b"".join(
-        b"\xff\x00\x80" if (x + y) % 2 == 0 else b"\x00\x40\xff"
-        for y in range(size) for x in range(size))
+    return b"".join(b"\xff\x00\x80" if (x + y) % 2 == 0 else b"\x00\x40\xff" for y in range(size) for x in range(size))
 
 
 class _Daemon:
@@ -60,8 +59,12 @@ class _Host(MediaSyncMixin):
 
 
 def _ok_reply(size=16, **extras):
-    reply = {"success": True, "kind": "weather", "size": size,
-             "frame_rgb_b64": base64.b64encode(_checker(size)).decode()}
+    reply = {
+        "success": True,
+        "kind": "weather",
+        "size": size,
+        "frame_rgb_b64": base64.b64encode(_checker(size)).decode(),
+    }
     reply.update(extras)
     return reply
 
@@ -69,6 +72,7 @@ def _ok_reply(size=16, **extras):
 @pytest.fixture
 def location(monkeypatch):
     import divoom_lib.weather_provider as wp
+
     monkeypatch.setattr(wp, "resolve_location", lambda _explicit: "59.91,10.75")
     return "59.91,10.75"
 
@@ -120,8 +124,9 @@ def test_size_defaults_to_the_live_jobs_size(location):
 
 
 def test_a_daemon_failure_is_a_reason_not_a_reading(location):
-    r = json.loads(_Host(_Daemon(
-        {"success": False, "error": "weather: wttr.in returned 503"})).get_weather_preview(PANEL, 16))
+    r = json.loads(
+        _Host(_Daemon({"success": False, "error": "weather: wttr.in returned 503"})).get_weather_preview(PANEL, 16)
+    )
 
     assert r["ok"] is False
     assert "503" in r["error"]
@@ -139,6 +144,7 @@ def test_no_city_from_anyone_says_unknown(monkeypatch):
     """Neither the daemon nor an override named a city: the card says unknown
     rather than a stand-in that would read as the user's location."""
     import divoom_lib.weather_provider as wp
+
     monkeypatch.setattr(wp, "resolve_location", lambda _explicit: "")
     r = json.loads(_Host(_Daemon(_ok_reply(temperature_c=4, weather=1))).get_weather_preview(PANEL, 16))
 

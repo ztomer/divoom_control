@@ -7,6 +7,7 @@ a MagicMock daemon client (never real BLE/network) and a per-test tmp_path
 standing in for ``Path.home()`` — so these tests are safe to run in any shell
 (no CoreBluetooth, no sockets).
 """
+
 import json
 import sys
 import configparser
@@ -25,6 +26,7 @@ from tests.support.scanner_support import (  # noqa: F401
 
 
 # ── save_scan_settings ────────────────────────────────────────────────────
+
 
 def test_save_scan_settings_new_file(host, tmp_path):
     assert host.save_scan_settings(30, 5) is True
@@ -48,12 +50,14 @@ def test_save_scan_settings_merges_existing_gui_section(host, tmp_path):
 
 
 def test_save_scan_settings_exception_returns_false(host, monkeypatch):
-    monkeypatch.setattr("divoom_gui.scanner_mixin.atomic_write_config",
-                        lambda *a, **k: (_ for _ in ()).throw(OSError("disk full")))
+    monkeypatch.setattr(
+        "divoom_gui.scanner_mixin.atomic_write_config", lambda *a, **k: (_ for _ in ()).throw(OSError("disk full"))
+    )
     assert host.save_scan_settings(30, 5) is False
 
 
 # ── get_last_connect_error ─────────────────────────────────────────────────
+
 
 def test_get_last_connect_error_default_empty(host):
     assert host.get_last_connect_error() == ""
@@ -65,6 +69,7 @@ def test_get_last_connect_error_returns_set_value(host):
 
 
 # ── set_device_activity ───────────────────────────────────────────────────
+
 
 def test_set_device_activity_no_client(host):
     host._daemon_client = None
@@ -82,6 +87,7 @@ def test_set_device_activity_success(host):
 
 def test_set_device_activity_exception_returns_false(host):
     from unittest.mock import MagicMock
+
     client = MagicMock()
     client.set_device_activity.side_effect = RuntimeError("boom")
     host._daemon_client = client
@@ -90,6 +96,7 @@ def test_set_device_activity_exception_returns_false(host):
 
 # ── get_device_activity ───────────────────────────────────────────────────
 
+
 def test_get_device_activity_no_client(host):
     host._daemon_client = None
     assert host.get_device_activity() == "{}"
@@ -97,6 +104,7 @@ def test_get_device_activity_no_client(host):
 
 def test_get_device_activity_success(host):
     from unittest.mock import MagicMock
+
     client = MagicMock()
     client.get_device_activity.return_value = {"activity": {"AA:BB": {"kind": "clock"}}}
     host._daemon_client = client
@@ -105,6 +113,7 @@ def test_get_device_activity_success(host):
 
 def test_get_device_activity_exception_returns_empty(host):
     from unittest.mock import MagicMock
+
     client = MagicMock()
     client.get_device_activity.side_effect = RuntimeError("boom")
     host._daemon_client = client
@@ -113,8 +122,10 @@ def test_get_device_activity_exception_returns_empty(host):
 
 # ── get_scan_settings ──────────────────────────────────────────────────────
 
+
 def test_get_scan_settings_no_file_uses_defaults(host):
     from divoom_client.daemon_config import DEFAULT_SCAN_TIMEOUT, DEFAULT_SCAN_LIMIT
+
     out = json.loads(host.get_scan_settings())
     assert out == {"timeout": int(DEFAULT_SCAN_TIMEOUT), "limit": DEFAULT_SCAN_LIMIT}
 
@@ -129,12 +140,14 @@ def test_get_scan_settings_exception_falls_back_to_defaults(host, tmp_path):
     """A malformed config.ini raises inside the try; the except branch must
     still return sane (default) values rather than propagate."""
     from divoom_client.daemon_config import DEFAULT_SCAN_TIMEOUT, DEFAULT_SCAN_LIMIT
+
     _write_ini(tmp_path, "not an ini file *** broken\n")
     out = json.loads(host.get_scan_settings())
     assert out == {"timeout": int(DEFAULT_SCAN_TIMEOUT), "limit": DEFAULT_SCAN_LIMIT}
 
 
 # ── get_known_devices ──────────────────────────────────────────────────────
+
 
 def test_get_known_devices_no_cache_file(host):
     assert json.loads(host.get_known_devices()) == []
@@ -150,12 +163,17 @@ def test_get_known_devices_cache_not_a_list(host, tmp_path):
 def test_get_known_devices_filters_detected_and_dupes(host, tmp_path):
     cache_file = tmp_path / CACHE_REL
     cache_file.parent.mkdir(parents=True, exist_ok=True)
-    cache_file.write_text(json.dumps([
-        {"address": "AA:11", "name": "Pixoo-1"},   # detected this scan -> excluded
-        {"address": "BB:22", "name": "Timoo"},      # undetected -> included
-        {"address": "BB:22", "name": "Timoo-dupe"}, # dup addr already in `seen` -> skipped
-        {"name": "no-addr-entry"},                  # missing address -> skipped
-    ]), encoding="utf-8")
+    cache_file.write_text(
+        json.dumps(
+            [
+                {"address": "AA:11", "name": "Pixoo-1"},  # detected this scan -> excluded
+                {"address": "BB:22", "name": "Timoo"},  # undetected -> included
+                {"address": "BB:22", "name": "Timoo-dupe"},  # dup addr already in `seen` -> skipped
+                {"name": "no-addr-entry"},  # missing address -> skipped
+            ]
+        ),
+        encoding="utf-8",
+    )
     # discovered_list has one entry with no address (skip branch) and one
     # detected device that should be excluded from the known-undetected list.
     host.discovered_list = [{"name": "no-address-here"}, {"address": "AA:11"}]
@@ -165,8 +183,10 @@ def test_get_known_devices_filters_detected_and_dupes(host, tmp_path):
 
 # ── scan_devices ───────────────────────────────────────────────────────────
 
+
 def test_scan_devices_explicit_timeout_and_limit(host, tmp_path):
     from unittest.mock import MagicMock
+
     client = MagicMock()
     client.scan.return_value = {"success": True, "devices": [{"address": "AA:11", "name": "Pixoo"}]}
     host._daemon_client = client
@@ -178,6 +198,7 @@ def test_scan_devices_explicit_timeout_and_limit(host, tmp_path):
 def test_scan_devices_defaults_from_daemon_config(host, tmp_path):
     from unittest.mock import MagicMock
     from divoom_client.daemon_config import load_daemon_config
+
     cfg = load_daemon_config()
     client = MagicMock()
     client.scan.return_value = {"success": True, "devices": []}
@@ -201,6 +222,7 @@ def test_scan_devices_no_daemon_returns_empty(host):
 
 def test_scan_devices_failed_reply_returns_empty(host):
     from unittest.mock import MagicMock
+
     client = MagicMock()
     client.scan.return_value = {"success": False}
     host._daemon_client = client
@@ -209,15 +231,21 @@ def test_scan_devices_failed_reply_returns_empty(host):
 
 # ── _cache_discovered ──────────────────────────────────────────────────────
 
+
 def test_cache_discovered_existing_not_a_list_is_ignored(host, tmp_path):
     cache_file = tmp_path / CACHE_REL
     cache_file.parent.mkdir(parents=True, exist_ok=True)
     cache_file.write_text(json.dumps({"not": "a list"}), encoding="utf-8")
     host._cache_discovered([{"address": "AA:11", "name": "Pixoo"}])
     merged = json.loads(cache_file.read_text(encoding="utf-8"))
-    assert merged == [{"address": "AA:11", "name": "Pixoo",
-                        "first_seen": merged[0]["first_seen"],
-                        "last_seen": merged[0]["last_seen"]}]
+    assert merged == [
+        {
+            "address": "AA:11",
+            "name": "Pixoo",
+            "first_seen": merged[0]["first_seen"],
+            "last_seen": merged[0]["last_seen"],
+        }
+    ]
 
 
 def test_cache_discovered_existing_entry_without_address_skipped(host, tmp_path):
@@ -225,10 +253,15 @@ def test_cache_discovered_existing_entry_without_address_skipped(host, tmp_path)
     cache_file.parent.mkdir(parents=True, exist_ok=True)
     # One entry has no address (skip branch), one has an address (kept branch)
     # -- exercises both arms of the existing-entries loop in one pass.
-    cache_file.write_text(json.dumps([
-        {"name": "no-addr"},
-        {"address": "CC:33", "name": "Kept"},
-    ]), encoding="utf-8")
+    cache_file.write_text(
+        json.dumps(
+            [
+                {"name": "no-addr"},
+                {"address": "CC:33", "name": "Kept"},
+            ]
+        ),
+        encoding="utf-8",
+    )
     host._cache_discovered([])
     merged = json.loads(cache_file.read_text(encoding="utf-8"))
     assert [d["address"] for d in merged] == ["CC:33"]
@@ -262,8 +295,9 @@ def test_cache_discovered_reads_existing_config_and_preserves_gui_section(host, 
 
 
 def test_cache_discovered_config_write_exception_is_caught(host, monkeypatch, tmp_path):
-    monkeypatch.setattr("divoom_gui.scanner_mixin.atomic_write_config",
-                        lambda *a, **k: (_ for _ in ()).throw(OSError("nope")))
+    monkeypatch.setattr(
+        "divoom_gui.scanner_mixin.atomic_write_config", lambda *a, **k: (_ for _ in ()).throw(OSError("nope"))
+    )
     # Should not raise despite the config write failing.
     host._cache_discovered([{"address": "AA:11", "name": "Pixoo"}])
     # The devices cache (a separate atomic_write_text call) still succeeded.
@@ -271,9 +305,8 @@ def test_cache_discovered_config_write_exception_is_caught(host, monkeypatch, tm
     assert json.loads(cache_file.read_text(encoding="utf-8"))[0]["address"] == "AA:11"
 
 
-
-
 # ── _persist_last_connected ─────────────────────────────────────────────
+
 
 def test_persist_last_connected_writes_config(host, tmp_path):
     host._persist_last_connected("AA:BB:CC:DD:EE:FF")
@@ -294,17 +327,20 @@ def test_persist_last_connected_merges_existing_gui_section(host, tmp_path):
 
 
 def test_persist_last_connected_exception_is_caught(host, monkeypatch):
-    monkeypatch.setattr("divoom_gui.scanner_mixin.atomic_write_config",
-                        lambda *a, **k: (_ for _ in ()).throw(OSError("nope")))
+    monkeypatch.setattr(
+        "divoom_gui.scanner_mixin.atomic_write_config", lambda *a, **k: (_ for _ in ()).throw(OSError("nope"))
+    )
     # Must not raise.
     host._persist_last_connected("AA:BB")
 
 
 # ── update_wall_slots ────────────────────────────────────────────────────
 
+
 def test_update_wall_slots_save_exception_is_caught(host, monkeypatch):
-    monkeypatch.setattr("divoom_gui.scanner_mixin.atomic_write_text",
-                        lambda *a, **k: (_ for _ in ()).throw(OSError("nope")))
+    monkeypatch.setattr(
+        "divoom_gui.scanner_mixin.atomic_write_text", lambda *a, **k: (_ for _ in ()).throw(OSError("nope"))
+    )
     # Must not raise even though persisting _last_active_slots_ fails.
     host.update_wall_slots(json.dumps({"0": {"mac": "AA:BB"}}))
     assert host.wall_slots == {"0": {"mac": "AA:BB"}}
@@ -312,6 +348,7 @@ def test_update_wall_slots_save_exception_is_caught(host, monkeypatch):
 
 
 # ── _rebuild_wall_instance ───────────────────────────────────────────────
+
 
 def test_rebuild_wall_instance_no_slots(host):
     host.wall_slots = {}
@@ -326,6 +363,7 @@ def test_rebuild_wall_instance_no_daemon(host):
 
 def test_rebuild_wall_instance_failed_reply(host):
     from unittest.mock import MagicMock
+
     host.wall_slots = {"0": {"mac": "AA:BB"}}
     client = MagicMock()
     client.wall_configure.return_value = {"success": False, "error": "no such wall"}

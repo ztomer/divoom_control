@@ -17,6 +17,7 @@ not the recorder missing them.
 
 Skipped if a browser isn't installed (runs with --run-browser).
 """
+
 import json
 from pathlib import Path
 
@@ -55,28 +56,36 @@ async def test_activity_is_sent_only_for_a_panel_the_daemon_reported():
             await add_init_js(page, _MOCK_API)
             await page.goto(f"file://{INDEX_HTML}")
             await wait_js(page, "() => !!window.setDeviceActivity && !!window.Divoom?.onOwnedDevices")
-            await eval_js(page, """(m) => {
+            await eval_js(
+                page,
+                """(m) => {
                 window.Divoom.onOwnedDevices({type: 'owned_devices', devices: [
                     {address: m, name: 'Shelf', kind: 'clock', state: 'active'}]});
                 // A wall is placed, so the GUI treats MatrixWall as a target.
                 window.DivoomState.assignedSlots = {[m]: {x: 0, y: 0}};
                 window.__calls = [];
-            }""", REPORTED)
+            }""",
+                REPORTED,
+            )
             assert await eval_js(page, "() => window.isKnownTarget('MatrixWall')"), (
-                "the wall must be a GUI target for this to test anything")
+                "the wall must be a GUI target for this to test anything"
+            )
 
-            await eval_js(page, """([wall, stranger, mine]) => {
+            await eval_js(
+                page,
+                """([wall, stranger, mine]) => {
                 window.setDeviceActivity(wall, 'playlist', {playId: 1});
                 window.setDeviceActivity(stranger, 'clock', {});
                 window.setDeviceActivity(mine, 'clock', {});
-            }""", ["MatrixWall", UNREPORTED, REPORTED])
+            }""",
+                ["MatrixWall", UNREPORTED, REPORTED],
+            )
             # The thumbnail is rasterised asynchronously before the call goes.
             await wait_js(page, "() => window.__calls.some(c => c.name === 'set_device_activity')")
             await eval_js(page, "() => new Promise(r => setTimeout(r, 300))")
 
             sent = await _activity_macs(page)
             assert REPORTED in sent, f"calibration: the reported panel's record was not seen: {sent}"
-            assert sent == [REPORTED], (
-                f"set_device_activity named ids the daemon never reported: {sent}")
+            assert sent == [REPORTED], f"set_device_activity named ids the daemon never reported: {sent}"
         finally:
             await browser.close()

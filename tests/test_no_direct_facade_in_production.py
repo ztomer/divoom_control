@@ -12,6 +12,7 @@ So the rule is one line: no production module imports `divoom_legacy`, or
 instantiates `Divoom(...)`, or subclasses `DivoomProtocol`. Scope is
 AST-based, so docstrings and comments never trip it. Seed: zero hits.
 """
+
 from __future__ import annotations
 
 import ast
@@ -86,7 +87,7 @@ def test_scanner_sees_retired_imports() -> None:
 def test_scanner_ignores_docs_comments_and_daemon_client() -> None:
     source = (
         '"""\nUsage:\n    divoom = Divoom(mac="...")\n"""\n'
-        "# divoom = Divoom(mac=\"...\")\n"
+        '# divoom = Divoom(mac="...")\n'
         "proxy = DaemonDeviceProxy(client)\n"
         "reply = client.wall_configure(slots)\n"
         "server.tools = build_tool_catalog(proxy)\n"

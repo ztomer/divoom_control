@@ -14,8 +14,7 @@ logger = logging.getLogger("divoom_gui")
 
 
 class GalleryHotApiMixin:
-    def custom_art_push(self, mac: str, payload_json: str, page: int,
-                        slot: int | None = None) -> str:
+    def custom_art_push(self, mac: str, payload_json: str, page: int, slot: int | None = None) -> str:
         """Push cloud files to a custom art page on the panel ``mac`` names.
         JSON summary.
 
@@ -31,7 +30,7 @@ class GalleryHotApiMixin:
             return json.dumps({"success": False, "error": "no daemon available"})
         try:
             payload = json.loads(payload_json)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return json.dumps({"success": False, "error": "invalid payload"})
         if isinstance(payload, dict):
             return json.dumps(client.custom_art_push([], int(page), slots=payload, mac=mac))
@@ -98,8 +97,9 @@ class GalleryHotApiMixin:
                     # One update at a time on the daemon: wait out one already
                     # running (a button press) rather than be refused.
                     wait_idle(client, time.monotonic() + 120)
-                    start = client.hot_update(device_size=int(self._size_of(address)), show=True,
-                                              address=address, by="sync_now")
+                    start = client.hot_update(
+                        device_size=int(self._size_of(address)), show=True, address=address, by="sync_now"
+                    )
                     if start.get("success"):
                         wait_idle(client, time.monotonic() + 120)
                 except Exception as e:
@@ -121,12 +121,14 @@ class GalleryHotApiMixin:
         """U.5: the hot-channel verdict the daemon recorded for the panel
         ``address`` names (or ``{}``) -- the newest run by any path."""
         from divoom_lib import hot_verdict
+
         return json.dumps(hot_verdict.get(address or ""))
 
     def hot_verdicts(self) -> str:
         """U.5: every panel's hot-channel verdict, ``{panel id: entry}`` -- the
         Auto-Sync rows' shorter form of the same record."""
         from divoom_lib import hot_verdict
+
         return json.dumps(hot_verdict.all_verdicts())
 
     def hot_update_preview(self, mac: str) -> str:
@@ -167,15 +169,17 @@ class GalleryHotApiMixin:
                 # Don't send raw CDN URL as preview — it's a binary container the
                 # browser can't render. Animated previews are loaded lazily via
                 # get_animated_preview() which handles download+decode.
-                items.append({
-                    "file_id": file_id,
-                    "version": f.get("version", 0),
-                    "vendor_id": f.get("vendor_id", 0),
-                    "name": meta.get("name") or file_id.rsplit("/", 1)[-1],
-                    "likes": meta.get("likes", 0),
-                    "preview_url": meta.get("preview_url", ""),
-                    "has_cache": file_id in name_map,
-                })
+                items.append(
+                    {
+                        "file_id": file_id,
+                        "version": f.get("version", 0),
+                        "vendor_id": f.get("vendor_id", 0),
+                        "name": meta.get("name") or file_id.rsplit("/", 1)[-1],
+                        "likes": meta.get("likes", 0),
+                        "preview_url": meta.get("preview_url", ""),
+                        "has_cache": file_id in name_map,
+                    }
+                )
 
             # Show newest-first deterministically. The hot API's list order is
             # not a stable contract (it can reorder its "featured" set between
@@ -210,8 +214,7 @@ class GalleryHotApiMixin:
         if client is None:
             logger.warning("no daemon: cannot fetch preview for %s", file_id)
             return ""
-        cache_dir = gallery_assets.ensure_cache_dir(
-            Path.home() / ".config" / "divoom-control" / "cache_gallery")
+        cache_dir = gallery_assets.ensure_cache_dir(Path.home() / ".config" / "divoom-control" / "cache_gallery")
         return gallery_assets.preview_for(client, cache_dir, file_id)
 
     @staticmethod

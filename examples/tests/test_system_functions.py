@@ -1,4 +1,3 @@
-
 import asyncio
 import logging
 import unittest
@@ -13,22 +12,22 @@ DEVICE_NAME_SUBSTRING = "Timoo"
 LOG_LEVEL = logging.INFO
 
 # Setup basic logging
-logging.basicConfig(level=LOG_LEVEL, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("system_functions_test")
 
-class TestSystemFunctions(unittest.IsolatedAsyncioTestCase):
 
+class TestSystemFunctions(unittest.IsolatedAsyncioTestCase):
     divoom: Divoom = None
-    
+
     async def asyncSetUp(self):
         """Discover and connect to the device before each test."""
         ble_device, _ = await discover_device(name_substring=DEVICE_NAME_SUBSTRING)
         if not ble_device:
             self.fail(f"No device found with name containing '{DEVICE_NAME_SUBSTRING}'.")
-        
+
         self.divoom = Divoom(mac=ble_device.address, logger=logger, use_ios_le_protocol=False)
         await self.divoom.connect()
-        
+
         # We know from previous tests which characteristics and protocol work
         self.divoom.WRITE_CHARACTERISTIC_UUID = "49535343-8841-43f4-a8d4-ecbe34729bb3"
         self.divoom.NOTIFY_CHARACTERISTIC_UUID = "49535343-1e4d-4bd9-ba61-23c647249616"
@@ -51,20 +50,20 @@ class TestSystemFunctions(unittest.IsolatedAsyncioTestCase):
     async def test_set_and_get_brightness(self):
         """Test setting the brightness and then getting it to verify."""
         logger.info("--- Running test_set_and_get_brightness ---")
-        
+
         # Set brightness to a known value
         test_brightness = 50
         logger.info(f"Setting brightness to {test_brightness}...")
         await self.divoom.system.set_brightness(test_brightness)
-        
+
         # Give the device a moment to process
         await asyncio.sleep(2.0)
-        
+
         # Get brightness and verify
         logger.info("Getting brightness to verify...")
         current_brightness = await self.divoom.system.get_brightness()
         logger.info(f"Got brightness: {current_brightness}")
-        
+
         # The getter might be flaky, so we add a retry
         retries = 3
         while current_brightness != test_brightness and retries > 0:
@@ -91,7 +90,7 @@ class TestSystemFunctions(unittest.IsolatedAsyncioTestCase):
     async def test_set_work_mode(self):
         """Test setting the work mode."""
         logger.info("--- Running test_set_work_mode ---")
-        
+
         # Get original work mode
         original_mode = await self.divoom.system.get_work_mode()
         logger.info(f"Original work mode: {original_mode}")
@@ -100,8 +99,8 @@ class TestSystemFunctions(unittest.IsolatedAsyncioTestCase):
         # Set to a new work mode (e.g., 1)
         new_mode = 1
         if original_mode == new_mode:
-            new_mode = 2 # Ensure we are changing the mode
-        
+            new_mode = 2  # Ensure we are changing the mode
+
         logger.info(f"Setting work mode to {new_mode}...")
         result = await self.divoom.system.set_work_mode(new_mode)
         self.assertTrue(result)
@@ -126,7 +125,7 @@ class TestSystemFunctions(unittest.IsolatedAsyncioTestCase):
     async def test_set_channel(self):
         """Test setting the channel."""
         logger.info("--- Running test_set_channel ---")
-        
+
         # Note: We can't easily get the current channel, so we'll just set it
         # and assume the default is 0 (Time).
 
@@ -136,7 +135,7 @@ class TestSystemFunctions(unittest.IsolatedAsyncioTestCase):
         result = await self.divoom.system.set_channel(new_channel)
         self.assertTrue(result)
         await asyncio.sleep(2.0)
-        
+
         # There's no get_channel, so we can't verify directly.
         # We'll just check that the command sends successfully.
 
@@ -161,13 +160,13 @@ class TestSystemFunctions(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(temp_data, dict)
         self.assertIn("format", temp_data)
         self.assertIn("value", temp_data)
-        self.assertIn(temp_data["format"], [0, 1]) # Celsius or Fahrenheit
+        self.assertIn(temp_data["format"], [0, 1])  # Celsius or Fahrenheit
         self.assertIsInstance(temp_data["value"], int)
 
     async def test_set_and_get_device_name(self):
         """Test setting and getting the device name."""
         logger.info("--- Running test_set_and_get_device_name ---")
-        
+
         # Get original device name
         original_name = await self.divoom.system.get_device_name()
         logger.info(f"Original device name: {original_name}")
@@ -178,7 +177,7 @@ class TestSystemFunctions(unittest.IsolatedAsyncioTestCase):
         logger.info(f"Setting device name to {new_name}...")
         result = await self.divoom.system.set_device_name(new_name)
         self.assertTrue(result)
-        await asyncio.sleep(5.0) # Changing name can take time
+        await asyncio.sleep(5.0)  # Changing name can take time
 
         # NOTE: After changing the name, the device may disconnect.
         # Reconnecting to verify the new name is complex and might fail.
@@ -197,7 +196,7 @@ class TestSystemFunctions(unittest.IsolatedAsyncioTestCase):
         result = await self.divoom.system.set_device_name(long_name)
         self.assertTrue(result)
         await asyncio.sleep(5.0)
-        
+
         # Set back to original name again
         logger.info(f"Setting device name back to {original_name} one last time...")
         result = await self.divoom.system.set_device_name(original_name)
@@ -206,7 +205,7 @@ class TestSystemFunctions(unittest.IsolatedAsyncioTestCase):
     async def test_set_and_get_low_power_switch(self):
         """Test setting and getting the low power switch status."""
         logger.info("--- Running test_set_and_get_low_power_switch ---")
-        
+
         # Get original status
         original_status = await self.divoom.system.get_low_power_switch()
         logger.info(f"Original low power switch status: {original_status}")
@@ -236,7 +235,7 @@ class TestSystemFunctions(unittest.IsolatedAsyncioTestCase):
     async def test_set_hour_type(self):
         """Test setting the hour type."""
         logger.info("--- Running test_set_hour_type ---")
-        
+
         # Set to 24-hour format
         logger.info("Setting hour type to 24-hour...")
         result = await self.divoom.system.set_hour_type(1)
@@ -254,7 +253,7 @@ class TestSystemFunctions(unittest.IsolatedAsyncioTestCase):
     async def test_set_and_get_auto_power_off(self):
         """Test setting and getting the auto power-off timer."""
         logger.info("--- Running test_set_and_get_auto_power_off ---")
-        
+
         # Get original timer
         original_timer = await self.divoom.system.get_auto_power_off()
         logger.info(f"Original auto power-off timer: {original_timer} minutes")
@@ -277,7 +276,7 @@ class TestSystemFunctions(unittest.IsolatedAsyncioTestCase):
         result = await self.divoom.system.set_auto_power_off(original_timer)
         self.assertTrue(result)
         await asyncio.sleep(2.0)
-        
+
         # Verify it's back to original
         current_timer = await self.divoom.system.get_auto_power_off()
         logger.info(f"Final auto power-off timer: {current_timer} minutes")
@@ -286,7 +285,7 @@ class TestSystemFunctions(unittest.IsolatedAsyncioTestCase):
     async def test_set_and_get_sound_control(self):
         """Test setting and getting the sound control status."""
         logger.info("--- Running test_set_and_get_sound_control ---")
-        
+
         # Get original status
         original_status = await self.divoom.system.get_sound_control()
         logger.info(f"Original sound control status: {original_status}")
@@ -313,5 +312,6 @@ class TestSystemFunctions(unittest.IsolatedAsyncioTestCase):
         result = await self.divoom.system.set_sound_control(original_status)
         self.assertTrue(result)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

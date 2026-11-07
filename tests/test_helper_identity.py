@@ -17,6 +17,7 @@ These tests are the three properties the identity has to have:
      process's start time, and a pid that is alive but started at a different
      moment is NOT the helper.
 """
+
 from __future__ import annotations
 
 import json
@@ -98,9 +99,7 @@ def test_the_identity_of_a_dead_process_names_nothing(monkeypatch, tmp_path):
     assert helper_identity.resolve(helper_identity.MENUBAR) is None
 
 
-def test_stopping_by_identity_kills_that_process_and_clears_the_identity(
-    monkeypatch, tmp_path
-):
+def test_stopping_by_identity_kills_that_process_and_clears_the_identity(monkeypatch, tmp_path):
     monkeypatch.setenv(helper_identity.ENV_DIR, str(tmp_path))
     proc = _spawn_sleeper()
     try:
@@ -113,9 +112,7 @@ def test_stopping_by_identity_kills_that_process_and_clears_the_identity(
         proc.wait(timeout=5)
 
 
-def test_stopping_a_stale_identity_leaves_the_live_process_alone(
-    monkeypatch, tmp_path
-):
+def test_stopping_a_stale_identity_leaves_the_live_process_alone(monkeypatch, tmp_path):
     """A stale identity must not stop the innocent process that took the pid."""
     monkeypatch.setenv(helper_identity.ENV_DIR, str(tmp_path))
     proc = _spawn_sleeper()
@@ -156,6 +153,7 @@ def test_the_quit_path_stops_the_menubar_by_its_identity(monkeypatch, tmp_path):
     """The menu-bar agent is stopped by its identity, not by a name pattern."""
     monkeypatch.setenv(helper_identity.ENV_DIR, str(tmp_path))
     from divoom_gui import gui_main
+
     monkeypatch.setattr(gui_main.sys, "platform", "darwin")
     proc = _spawn_sleeper()
     try:

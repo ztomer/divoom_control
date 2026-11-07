@@ -16,6 +16,7 @@ Thin Python client mirroring ``divoomd/src/cloud.rs`` + the decompiled APK
 
 All network I/O goes through ``divoom_auth._post``; tests mock that single seam.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -126,9 +127,7 @@ class CloudClient:
         data = self._post_with_refresh("GetCategoryFileListV2", _body)
         rc = data.get("ReturnCode", -1)
         if rc != 0:
-            raise RuntimeError(
-                f"GetCategoryFileListV2 failed: RC={rc} {data.get('ReturnMessage')}"
-            )
+            raise RuntimeError(f"GetCategoryFileListV2 failed: RC={rc} {data.get('ReturnMessage')}")
         return data.get("FileList", data.get("List", []))
 
     # ── clock-face store (Channel/GetDialType + Channel/GetDialList) ───────
@@ -164,9 +163,7 @@ class CloudClient:
         data = _auth._post(DIAL_TYPE_CMD, {})
         rc = data.get("ReturnCode", -1)
         if rc != 0:
-            raise RuntimeError(
-                f"{DIAL_TYPE_CMD} failed: RC={rc} {data.get('ReturnMessage')}"
-            )
+            raise RuntimeError(f"{DIAL_TYPE_CMD} failed: RC={rc} {data.get('ReturnMessage')}")
         return data.get("DialTypeList", [])
 
     def get_dial_list(self, dial_type: str, page: int = 1) -> list[dict]:
@@ -174,14 +171,10 @@ class CloudClient:
         data = _auth._post(DIAL_LIST_CMD, {"DialType": dial_type, "Page": page})
         rc = data.get("ReturnCode", -1)
         if rc != 0:
-            raise RuntimeError(
-                f"{DIAL_LIST_CMD} failed: RC={rc} {data.get('ReturnMessage')}"
-            )
+            raise RuntimeError(f"{DIAL_LIST_CMD} failed: RC={rc} {data.get('ReturnMessage')}")
         return data.get("DialList", [])
 
-    def list_clock_faces(
-        self, dial_type: str | None = None, page: int = 1
-    ) -> list[dict]:
+    def list_clock_faces(self, dial_type: str | None = None, page: int = 1) -> list[dict]:
         """Browse the cloud clock-face store. With no ``dial_type``, use the
         first category from :meth:`get_dial_types`."""
         if dial_type is None:
@@ -225,9 +218,7 @@ class CloudClient:
     # that actually needs it); the registration is cached to
     # ``virtual_device.json`` and reused forever after.
 
-    def _get_aid_sleep_list(
-        self, cmd: str, sleep_type: int, *, limit: int = 30, page: int = 1
-    ) -> list[dict]:
+    def _get_aid_sleep_list(self, cmd: str, sleep_type: int, *, limit: int = 30, page: int = 1) -> list[dict]:
         start = (page - 1) * limit + 1
         end = page * limit
         if not self.device_id:
@@ -255,24 +246,18 @@ class CloudClient:
             raise RuntimeError(f"{cmd} failed: RC={rc} {data.get('ReturnMessage')}")
         return data.get("SleepList", [])
 
-    def get_aid_sleep_list(
-        self, sleep_type: int, *, limit: int = 30, page: int = 1
-    ) -> list[dict]:
+    def get_aid_sleep_list(self, sleep_type: int, *, limit: int = 30, page: int = 1) -> list[dict]:
         """Browse Divoom's full cloud AidSleep catalog.
 
         Args:
             sleep_type: 0=Natural Sound, 1=White Noise, 2=Music.
         """
-        return self._get_aid_sleep_list(
-            AID_SLEEP_GET_ALL_CMD, sleep_type, limit=limit, page=page)
+        return self._get_aid_sleep_list(AID_SLEEP_GET_ALL_CMD, sleep_type, limit=limit, page=page)
 
-    def get_my_aid_sleep_list(
-        self, sleep_type: int, *, limit: int = 30, page: int = 1
-    ) -> list[dict]:
+    def get_my_aid_sleep_list(self, sleep_type: int, *, limit: int = 30, page: int = 1) -> list[dict]:
         """Same shape as :meth:`get_aid_sleep_list`, scoped to the user's own
         saved/added tracks."""
-        return self._get_aid_sleep_list(
-            AID_SLEEP_GET_MY_CMD, sleep_type, limit=limit, page=page)
+        return self._get_aid_sleep_list(AID_SLEEP_GET_MY_CMD, sleep_type, limit=limit, page=page)
 
     # ── Playlist browse + push to device ────────────────────────────────────
     #
@@ -311,13 +296,10 @@ class CloudClient:
         data = self._post_with_refresh(PLAYLIST_GET_MY_LIST_CMD, _body)
         rc = data.get("ReturnCode", -1)
         if rc != 0:
-            raise RuntimeError(
-                f"{PLAYLIST_GET_MY_LIST_CMD} failed: RC={rc} {data.get('ReturnMessage')}")
+            raise RuntimeError(f"{PLAYLIST_GET_MY_LIST_CMD} failed: RC={rc} {data.get('ReturnMessage')}")
         return data.get("PlayList", [])
 
-    def get_playlist_images(
-        self, play_id: int, *, limit: int = 30, page: int = 1
-    ) -> list[dict]:
+    def get_playlist_images(self, play_id: int, *, limit: int = 30, page: int = 1) -> list[dict]:
         """List the images/animations inside one of the user's own playlists."""
         start = (page - 1) * limit + 1
         end = page * limit * 2
@@ -344,8 +326,7 @@ class CloudClient:
         data = self._post_with_refresh(PLAYLIST_GET_MY_IMAGE_LIST_CMD, _body)
         rc = data.get("ReturnCode", -1)
         if rc != 0:
-            raise RuntimeError(
-                f"{PLAYLIST_GET_MY_IMAGE_LIST_CMD} failed: RC={rc} {data.get('ReturnMessage')}")
+            raise RuntimeError(f"{PLAYLIST_GET_MY_IMAGE_LIST_CMD} failed: RC={rc} {data.get('ReturnMessage')}")
         return data.get("FileList", [])
 
     # ── Photo album browse (Photo/GetAlbumList) ─────────────────────────────
@@ -374,8 +355,7 @@ class CloudClient:
         data = self._post_with_refresh(PHOTO_GET_ALBUM_LIST_CMD, _body)
         rc = data.get("ReturnCode", -1)
         if rc != 0:
-            raise RuntimeError(
-                f"{PHOTO_GET_ALBUM_LIST_CMD} failed: RC={rc} {data.get('ReturnMessage')}")
+            raise RuntimeError(f"{PHOTO_GET_ALBUM_LIST_CMD} failed: RC={rc} {data.get('ReturnMessage')}")
         return data.get("AlbumList", [])
 
     # ── weather city search ───────────────────────────────────────────────
@@ -396,7 +376,5 @@ class CloudClient:
         data = self._post_with_refresh(WEATHER_SEARCH_CMD, _body)
         rc = data.get("ReturnCode", -1)
         if rc != 0:
-            raise RuntimeError(
-                f"Weather/SearchCity failed: RC={rc} {data.get('ReturnMessage')}"
-            )
+            raise RuntimeError(f"Weather/SearchCity failed: RC={rc} {data.get('ReturnMessage')}")
         return data.get("CityList", data.get("List", []))

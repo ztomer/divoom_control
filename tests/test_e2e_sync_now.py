@@ -5,6 +5,7 @@ Drives the real web_ui with a mocked ``window.pywebview.api.sync_now`` and
 the ``onSyncNowProgress``/``onSyncNowComplete`` events the backend fires
 (see divoom_gui/gallery_hot_api.py::sync_now).
 """
+
 import pytest
 from pathlib import Path
 from tests.support.browser import (
@@ -44,12 +45,15 @@ async def _open_auto_sync_tab(p):
     await wait_js(page, "() => !!window.DivoomState && !!window.renderSyncTargets")
     await page.click('.nav-btn[data-tab="routines"]')
     await page.wait_for_selector("#routines-schedule.active")
-    await eval_js(page, """() => {
+    await eval_js(
+        page,
+        """() => {
         window.renderSyncTargets([
             {address: "AA:BB", name: "Pixoo", selected: true},
             {address: "CC:DD", name: "Timoo", selected: true},
         ]);
-    }""")
+    }""",
+    )
     return browser, page
 
 
@@ -64,8 +68,7 @@ async def test_sync_now_button_calls_backend_and_disables_while_running():
             await page.click("#sync-now-btn")
             calls = await eval_js(page, "() => window.__syncNowCalls")
             assert calls == 1
-            await wait_js(page, 
-                "() => document.getElementById('sync-now-btn').disabled === true")
+            await wait_js(page, "() => document.getElementById('sync-now-btn').disabled === true")
         finally:
             await browser.close()
 
@@ -82,7 +85,9 @@ async def test_sync_now_rows_show_checking_then_the_panels_record():
         browser, page = await _open_auto_sync_tab(p)
         try:
             await page.click("#sync-now-btn")
-            result = await eval_js(page, """async () => {
+            result = await eval_js(
+                page,
+                """async () => {
                 const now = Math.floor(Date.now() / 1000);
                 window.__verdicts = {};
                 window.__api.hot_verdict = (mac) => JSON.stringify(window.__verdicts[mac] || {});
@@ -102,13 +107,13 @@ async def test_sync_now_rows_show_checking_then_the_panels_record():
                 await new Promise(r => setTimeout(r, 50));
                 return {checking, aa: row("AA:BB").textContent, aaKind: row("AA:BB").dataset.kind,
                         cc: row("CC:DD").textContent, ccKind: row("CC:DD").dataset.kind};
-            }""")
+            }""",
+            )
             assert "Checking now (1 of 2)" in result["checking"], result
             assert result["aa"].startswith("↓") and "3 new" in result["aa"], result
             assert result["aaKind"] == "new", result
             assert result["cc"].startswith("✗") and "Failed" in result["cc"], result
             assert result["ccKind"] == "fail", result
-            await wait_js(page,
-                "() => document.getElementById('sync-now-btn').disabled === false")
+            await wait_js(page, "() => document.getElementById('sync-now-btn').disabled === false")
         finally:
             await browser.close()

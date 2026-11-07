@@ -13,6 +13,7 @@ Usage:
     python -m examples.set_alarm 07:30
     python -m examples.set_alarm 07:30 --mac AA:BB:CC:DD:EE:FF
 """
+
 from __future__ import annotations
 
 import argparse
@@ -33,6 +34,7 @@ async def main(time_str: str, mac: str | None, timeout: float) -> int:
         return 2
     if mac is None:
         from divoom_legacy.utils.discovery import discover_all_divoom_devices
+
         devices = await discover_all_divoom_devices(timeout=timeout)
         if not devices:
             print("No Divoom devices found.", file=sys.stderr)

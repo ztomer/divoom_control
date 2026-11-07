@@ -28,6 +28,7 @@ What these pin, against the fake bridge's record of every write:
 
 Skipped if a browser isn't installed (runs with --run-browser).
 """
+
 from pathlib import Path
 
 import pytest
@@ -99,11 +100,18 @@ async def _open(p):
     page = await browser.new_page(viewport={"width": 1280, "height": 900})
     await add_init_js(page, _MOCK_API)
     await page.goto(f"file://{INDEX_HTML}")
-    await wait_js(page, "() => !!window.Divoom?.onOwnedDevices && !!window.SpatialStage"
-                        " && !!document.querySelector('#clock-faces-grid .selector-cell')")
-    await eval_js(page, """([a, b]) => window.Divoom.onOwnedDevices({type: 'owned_devices', devices: [
+    await wait_js(
+        page,
+        "() => !!window.Divoom?.onOwnedDevices && !!window.SpatialStage"
+        " && !!document.querySelector('#clock-faces-grid .selector-cell')",
+    )
+    await eval_js(
+        page,
+        """([a, b]) => window.Divoom.onOwnedDevices({type: 'owned_devices', devices: [
         {address: a, name: 'Desk', kind: 'clock', state: 'active'},
-        {address: b, name: 'Kitchen', kind: 'clock', state: 'active'}]})""", [A, B])
+        {address: b, name: 'Kitchen', kind: 'clock', state: 'active'}]})""",
+        [A, B],
+    )
     return browser, page
 
 
@@ -122,8 +130,12 @@ async def _click(page, selector):
 
 
 async def _colour(page, input_id, value, event):
-    await eval_js(page, """([id, v, ev]) => { const i = document.getElementById(id);
-        i.value = v; i.dispatchEvent(new Event(ev, {bubbles: true})); }""", [input_id, value, event])
+    await eval_js(
+        page,
+        """([id, v, ev]) => { const i = document.getElementById(id);
+        i.value = v; i.dispatchEvent(new Event(ev, {bubbles: true})); }""",
+        [input_id, value, event],
+    )
     await _settle(page)
 
 
@@ -156,13 +168,18 @@ async def test_changing_a_clock_style_on_one_panel_leaves_the_other_untouched():
             await _select(page, B)
             b = await eval_js(page, _CONTROLS)
             assert (b["clockStyle"], b["clockColor"]) == ("5", "#0000ff"), (
-                f"B shows B's own clock, not A's last write: {b}")
+                f"B shows B's own clock, not A's last write: {b}"
+            )
             await _select(page, A)
             a = await eval_js(page, _CONTROLS)
             assert (a["clockStyle"], a["clockColor"]) == ("3", "#ff0000"), a
 
-            state = await eval_js(page, """([a, b]) => ({
-                a: window.getDeviceChannel(a).opts, b: window.getDeviceChannel(b).opts})""", [A, B])
+            state = await eval_js(
+                page,
+                """([a, b]) => ({
+                a: window.getDeviceChannel(a).opts, b: window.getDeviceChannel(b).opts})""",
+                [A, B],
+            )
             assert (state["a"]["style"], state["a"]["color"]) == (3, "#ff0000"), state
             assert (state["b"]["style"], state["b"]["color"]) == (5, "#0000ff"), state
         finally:
@@ -222,8 +239,12 @@ async def test_every_channel_control_is_the_selected_panels_own():
                 await _colour(page, "ambient-color-input", amb, "change")
                 await _colour(page, "scoreboard-red", red, "change")
                 await _colour(page, "scoreboard-blue", blue, "change")
-                await eval_js(page, """(on) => { const c = document.getElementById('clock-rich-weather');
-                    c.checked = on; c.dispatchEvent(new Event('change', {bubbles: true})); }""", weather)
+                await eval_js(
+                    page,
+                    """(on) => { const c = document.getElementById('clock-rich-weather');
+                    c.checked = on; c.dispatchEvent(new Event('change', {bubbles: true})); }""",
+                    weather,
+                )
                 await _settle(page)
 
             for mac in (A, B, A):
@@ -231,7 +252,13 @@ async def test_every_channel_control_is_the_selected_panels_own():
                 got = await eval_js(page, _CONTROLS)
                 vj, eq, amb, red, blue, weather = picks[mac]
                 assert (got["vj"], got["eq"], got["ambientColor"], got["red"], got["blue"], got["weather"]) == (
-                    vj, eq, amb, red, blue, weather), f"{mac} shows another panel's picks: {got}"
+                    vj,
+                    eq,
+                    amb,
+                    red,
+                    blue,
+                    weather,
+                ), f"{mac} shows another panel's picks: {got}"
         finally:
             await browser.close()
 
@@ -248,14 +275,19 @@ async def test_a_write_lands_on_the_panel_it_was_made_for():
             await _click(page, '#clock-faces-grid .selector-cell[data-value="0"]')
             await _select(page, A)
             await eval_js(page, "() => { window.__fleet.delay.set_clock = 400; }")
-            await eval_js(page, "() => document.querySelector('#clock-faces-grid .selector-cell[data-value=\"4\"]').click()")
-            await _select(page, B)   # moved on before A's panel answered
+            await eval_js(
+                page, "() => document.querySelector('#clock-faces-grid .selector-cell[data-value=\"4\"]').click()"
+            )
+            await _select(page, B)  # moved on before A's panel answered
             await _settle(page, 700)
 
-            state = await eval_js(page, """([a, b]) => ({
+            state = await eval_js(
+                page,
+                """([a, b]) => ({
                 a: window.getDeviceChannel(a), b: window.getDeviceChannel(b),
                 controls: (document.querySelector('#clock-faces-grid .selector-cell.active') || {}).dataset?.value})""",
-                [A, B])
+                [A, B],
+            )
             assert state["a"]["opts"]["style"] == 4, f"A's reply must land on A: {state}"
             assert state["b"]["opts"]["style"] == 0, f"A's reply landed on B: {state}"
             assert state["controls"] == "0", f"B is shown; its controls must not move: {state}"
@@ -267,18 +299,33 @@ async def test_a_write_lands_on_the_panel_it_was_made_for():
 # its first argument, the panel selected at the CLICK.
 _EVERY_WRITE = [
     ("set_clock", "() => document.querySelector('#clock-faces-grid .selector-cell[data-value=\"2\"]').click()"),
-    ("set_clock_rich", """() => { const c = document.getElementById('clock-rich-weather');
-        c.checked = !c.checked; c.dispatchEvent(new Event('change', {bubbles: true})); }"""),
+    (
+        "set_clock_rich",
+        """() => { const c = document.getElementById('clock-rich-weather');
+        c.checked = !c.checked; c.dispatchEvent(new Event('change', {bubbles: true})); }""",
+    ),
     ("switch_channel", "() => document.querySelector('.tab-btn[data-channel=\"vj\"]').click()"),
     ("set_vj_effect", "() => document.querySelector('#vj-effects-grid .selector-cell[data-value=\"3\"]').click()"),
-    ("set_visualization", "() => document.querySelector('#eq-visualizer-grid .selector-cell[data-value=\"1\"]').click()"),
+    (
+        "set_visualization",
+        "() => document.querySelector('#eq-visualizer-grid .selector-cell[data-value=\"1\"]').click()",
+    ),
     ("set_solid_light", "() => document.querySelector('#ambient-mode-grid .selector-cell[data-value=\"0\"]').click()"),
-    ("set_scoreboard", """() => { const i = document.getElementById('scoreboard-red');
-        i.value = 4; i.dispatchEvent(new Event('change', {bubbles: true})); }"""),
-    ("push_text", """() => { document.getElementById('text-content-input').value = 'HI';
-        document.getElementById('push-text-btn').click(); }"""),
-    ("send_danmaku_text", """() => { document.getElementById('text-content-input').value = 'HI';
-        document.getElementById('send-danmaku-btn').click(); }"""),
+    (
+        "set_scoreboard",
+        """() => { const i = document.getElementById('scoreboard-red');
+        i.value = 4; i.dispatchEvent(new Event('change', {bubbles: true})); }""",
+    ),
+    (
+        "push_text",
+        """() => { document.getElementById('text-content-input').value = 'HI';
+        document.getElementById('push-text-btn').click(); }""",
+    ),
+    (
+        "send_danmaku_text",
+        """() => { document.getElementById('text-content-input').value = 'HI';
+        document.getElementById('send-danmaku-btn').click(); }""",
+    ),
 ]
 
 
@@ -294,11 +341,10 @@ async def test_every_channel_write_names_the_panel_clicked():
                 await _select(page, A)
                 await _clear_writes(page)
                 await eval_js(page, gesture)
-                await _select(page, B)   # the user moves on at once
+                await _select(page, B)  # the user moves on at once
                 await _settle(page)
                 sent = await _writes(page, method)
-                assert sent and all(args[0] == A for args in sent), (
-                    f"{method} must name A, the panel clicked: {sent}")
+                assert sent and all(args[0] == A for args in sent), f"{method} must name A, the panel clicked: {sent}"
         finally:
             await browser.close()
 
@@ -307,8 +353,14 @@ def test_the_write_path_resolves_the_panel_in_one_place():
     """No channel writer asks "which panel" itself: the selected display comes
     from ``DisplayPreviewRegistry.getActive()`` via ``ChannelSettings``, and the
     app-wide channel globals are gone."""
-    writers = ("channels_grids.js", "channels_core.js", "cloud_clock_faces.js",
-               "playlists.js", "photo_albums.js", "aid_sleep.js")
+    writers = (
+        "channels_grids.js",
+        "channels_core.js",
+        "cloud_clock_faces.js",
+        "playlists.js",
+        "photo_albums.js",
+        "aid_sleep.js",
+    )
     for name in writers:
         js = (WEB_UI / name).read_text(encoding="utf-8")
         assert "_activeDeviceMac" not in js, f"{name} resolves the panel itself"

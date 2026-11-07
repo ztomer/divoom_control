@@ -8,15 +8,15 @@ from divoom_legacy import Divoom
 from divoom_legacy.utils.discovery import discover_device
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(name)s:%(message)s')
+logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
 logger = logging.getLogger("test_sleep_functions")
 
-class TestSleepFunctions(unittest.IsolatedAsyncioTestCase):
 
+class TestSleepFunctions(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.divoom = None
         self.device_id = None
-        
+
         try:
             ble_device, device_id = await discover_device(name_substring="Timoo")
             if ble_device:
@@ -28,7 +28,7 @@ class TestSleepFunctions(unittest.IsolatedAsyncioTestCase):
                 logger.error("No Divoom device found for testing.")
         except Exception as e:
             logger.error(f"Error during device setup: {e}")
-            self.divoom = None # Ensure divoom is None if connection fails
+            self.divoom = None  # Ensure divoom is None if connection fails
 
         if not self.divoom or not self.divoom.is_connected:
             raise unittest.SkipTest("Could not connect to Divoom device, skipping this test.")
@@ -93,5 +93,6 @@ class TestSleepFunctions(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result, "Failed to set sleep scene.")
         logger.info("Successfully set sleep scene.")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

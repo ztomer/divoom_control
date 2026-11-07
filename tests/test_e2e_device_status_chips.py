@@ -8,6 +8,7 @@ scan missed. Backend honesty is in ``test_device_status.py``; the appbar dot in
 ``test_e2e_device_status_dot.py``. Skipped if Playwright / a browser isn't
 installed.
 """
+
 import pytest
 from pathlib import Path
 from tests.support.browser import (
@@ -46,17 +47,21 @@ async def _open(p):
 async def test_active_device_chip_is_marked_active():
     require_browser()
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await eval_js(page, """() => {
+            res = await eval_js(
+                page,
+                """() => {
                 window.DivoomState.discoveredDevices = [{address:'AA', name:'Ditoo'}];
                 document.getElementById('banner-device-mac').textContent = 'AA';
                 window.renderDeviceDots();
                 const c = document.querySelector('#device-dots .device-chip');
                 return { active: c.classList.contains('chip-active'),
                          aria: c.getAttribute('aria-selected') };
-            }""")
+            }""",
+            )
             assert res["active"] is True
             assert res["aria"] == "true"
         finally:
@@ -67,10 +72,13 @@ async def test_active_device_chip_is_marked_active():
 async def test_streaming_chip_shows_kind_and_clears_when_active():
     require_browser()
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            idle = await eval_js(page, """() => {
+            idle = await eval_js(
+                page,
+                """() => {
                 window.DivoomState.discoveredDevices = [{
                     address:'AA', name:'Ditoo', daemonOwned:true,
                     activityKind:'music', activityState:'connected'}];
@@ -79,18 +87,22 @@ async def test_streaming_chip_shows_kind_and_clears_when_active():
                 const c = document.querySelector('#device-dots .device-chip');
                 return { streaming: c.classList.contains('chip-streaming'),
                          badge: c.querySelector('.device-chip-state')?.textContent || '' };
-            }""")
+            }""",
+            )
             assert idle["streaming"] is True
             assert "music" in idle["badge"]
-            active = await eval_js(page, """() => {
+            active = await eval_js(
+                page,
+                """() => {
                 document.getElementById('banner-device-mac').textContent = 'AA';
                 window.renderDeviceDots();
                 const c = document.querySelector('#device-dots .device-chip');
                 return { active: c.classList.contains('chip-active'),
                          streaming: c.classList.contains('chip-streaming') };
-            }""")
+            }""",
+            )
             assert active["active"] is True
-            assert active["streaming"] is False   # active device isn't "streaming"
+            assert active["streaming"] is False  # active device isn't "streaming"
         finally:
             await browser.close()
 
@@ -99,10 +111,13 @@ async def test_streaming_chip_shows_kind_and_clears_when_active():
 async def test_degraded_chip_shows_reconnecting_badge():
     require_browser()
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await eval_js(page, """() => {
+            res = await eval_js(
+                page,
+                """() => {
                 window.DivoomState.discoveredDevices = [{
                     address:'AA', name:'Ditoo', activityState:'degraded'}];
                 document.getElementById('banner-device-mac').textContent = '';
@@ -110,17 +125,21 @@ async def test_degraded_chip_shows_reconnecting_badge():
                 const c = document.querySelector('#device-dots .device-chip');
                 return { degraded: c.classList.contains('chip-degraded'),
                          badge: c.querySelector('.device-chip-state')?.textContent || '' };
-            }""")
+            }""",
+            )
             assert res["degraded"] is True
             assert "reconnecting" in res["badge"]
             # A degraded link on the ACTIVE device still shows both states.
-            both = await eval_js(page, """() => {
+            both = await eval_js(
+                page,
+                """() => {
                 document.getElementById('banner-device-mac').textContent = 'AA';
                 window.renderDeviceDots();
                 const c = document.querySelector('#device-dots .device-chip');
                 return { active: c.classList.contains('chip-active'),
                          degraded: c.classList.contains('chip-degraded') };
-            }""")
+            }""",
+            )
             assert both["active"] and both["degraded"]
         finally:
             await browser.close()
@@ -130,10 +149,13 @@ async def test_degraded_chip_shows_reconnecting_badge():
 async def test_known_undetected_chip_is_distinct():
     require_browser()
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await eval_js(page, """() => {
+            res = await eval_js(
+                page,
+                """() => {
                 window.DivoomState.discoveredDevices = [{address:'AA', name:'Ditoo'}];
                 window.__knownUndetectedDevices = [{address:'BB', name:'Pixoo'}];
                 document.getElementById('banner-device-mac').textContent = '';
@@ -151,7 +173,8 @@ async def test_known_undetected_chip_is_distinct():
                     aaKnown: aa.classList.contains('chip-known'),
                     aaBadge: aa.querySelector('.device-chip-state')?.textContent || '',
                 };
-            }""")
+            }""",
+            )
             assert res["count"] == 2
             assert res["bbKnown"] is True
             assert res["bbActive"] is False
@@ -172,10 +195,13 @@ async def test_known_undetected_chip_is_distinct():
 async def test_detected_device_is_not_known_chip():
     require_browser()
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await eval_js(page, """() => {
+            res = await eval_js(
+                page,
+                """() => {
                 window.DivoomState.discoveredDevices = [{address:'AA', name:'Ditoo'}];
                 window.__knownUndetectedDevices = [{address:'AA', name:'Ditoo'}];
                 document.getElementById('banner-device-mac').textContent = '';
@@ -184,9 +210,10 @@ async def test_detected_device_is_not_known_chip():
                 const aa = chips.filter(c => c.dataset.value === 'AA');
                 return { count: aa.length,
                          known: aa[0]?.classList.contains('chip-known') };
-            }""")
-            assert res["count"] == 1          # not duplicated
-            assert res["known"] is False      # detected wins over cache
+            }""",
+            )
+            assert res["count"] == 1  # not duplicated
+            assert res["known"] is False  # detected wins over cache
         finally:
             await browser.close()
 
@@ -195,17 +222,21 @@ async def test_detected_device_is_not_known_chip():
 async def test_lan_device_renders_as_chip():
     require_browser()
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await eval_js(page, """() => {
+            res = await eval_js(
+                page,
+                """() => {
                 window.DivoomState.discoveredDevices = [];
                 window.__knownUndetectedDevices = [];
                 window.DivoomState.registeredLanDevices = [{ip:'10.0.0.5'}];
                 window.renderDeviceDots();
                 const c = document.querySelector('#device-dots .device-chip');
                 return { value: c?.dataset.value, text: c?.textContent || '' };
-            }""")
+            }""",
+            )
             assert res["value"] == "LAN:10.0.0.5"
             assert "Wi-Fi" in res["text"]
         finally:
@@ -216,17 +247,21 @@ async def test_lan_device_renders_as_chip():
 async def test_duplicate_known_address_not_double_rendered():
     require_browser()
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await eval_js(page, """() => {
+            res = await eval_js(
+                page,
+                """() => {
                 window.DivoomState.discoveredDevices = [{address:'AA', name:'Ditoo'}];
                 window.__knownUndetectedDevices = [{address:'AA', name:'Ditoo'}];
                 window.renderDeviceDots();
                 const aa = [...document.querySelectorAll('#device-dots .device-chip')]
                     .filter(c => c.dataset.value === 'AA');
                 return aa.length;
-            }""")
+            }""",
+            )
             assert res == 1
         finally:
             await browser.close()
@@ -239,22 +274,28 @@ async def test_owned_devices_event_adds_daemon_owned_missing_from_scan():
     # live handler window.Divoom.onOwnedDevices directly.
     require_browser()
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await eval_js(page, """() => {
+            await eval_js(
+                page,
+                """() => {
                 window.DivoomState.discoveredDevices = [];
                 return window.Divoom.onOwnedDevices({type:'owned_devices', devices:[
                     {address:'AA', name:'Ditoo', kind:'weather', state:'connected'}]});
-            }""")
-            await wait_js(page, 
-                "() => !!document.querySelector('#device-dots .device-chip')")
-            res = await eval_js(page, """() => {
+            }""",
+            )
+            await wait_js(page, "() => !!document.querySelector('#device-dots .device-chip')")
+            res = await eval_js(
+                page,
+                """() => {
                 const c = document.querySelector('#device-dots .device-chip');
                 return { value: c.dataset.value,
                          streaming: c.classList.contains('chip-streaming'),
                          badge: c.querySelector('.device-chip-state')?.textContent || '' };
-            }""")
+            }""",
+            )
             assert res["value"] == "AA"
             assert res["streaming"] is True
             assert "weather" in res["badge"]
@@ -266,18 +307,22 @@ async def test_owned_devices_event_adds_daemon_owned_missing_from_scan():
 async def test_merge_discovered_devices_unions_by_address():
     require_browser()
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await eval_js(page, """() => {
+            res = await eval_js(
+                page,
+                """() => {
                 window.DivoomState.discoveredDevices = [{address:'AA', name:'old'}];
                 const merged = window.mergeDiscoveredDevices([
                     {address:'AA', name:'new'}, {address:'BB', name:'Pixoo'}]);
                 const aa = merged.find(d => d.address === 'AA');
                 return { count: merged.length, aaName: aa.name };
-            }""")
-            assert res["count"] == 2          # AA not duplicated
-            assert res["aaName"] == "new"     # fresh scan wins
+            }""",
+            )
+            assert res["count"] == 2  # AA not duplicated
+            assert res["aaName"] == "new"  # fresh scan wins
         finally:
             await browser.close()
 
@@ -291,10 +336,13 @@ async def test_restored_device_shows_not_in_range_until_confirmed():
     # the knownPending merge already gets.
     require_browser()
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await eval_js(page, """() => {
+            res = await eval_js(
+                page,
+                """() => {
                 window.DivoomState.discoveredDevices =
                     [{address:'AA', name:'Ditoo', unconfirmed:true}];
                 window.renderDeviceDots();
@@ -302,7 +350,8 @@ async def test_restored_device_shows_not_in_range_until_confirmed():
                 return { known: c.classList.contains('chip-known'),
                          badge: c.querySelector('.device-chip-state')?.textContent || '',
                          title: c.title };
-            }""")
+            }""",
+            )
             assert res["known"] is True
             assert "not in range" in res["badge"]
             assert "not in range" in res["title"]
@@ -318,10 +367,13 @@ async def test_scan_merge_clears_unconfirmed_flag():
     # clearing unconfirmed explicitly on a scan hit is what actually fixes it.
     require_browser()
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await eval_js(page, """() => {
+            res = await eval_js(
+                page,
+                """() => {
                 window.DivoomState.discoveredDevices =
                     [{address:'AA', name:'Ditoo', unconfirmed:true}];
                 window.mergeDiscoveredDevices([{address:'AA', name:'Ditoo'}]);
@@ -329,7 +381,8 @@ async def test_scan_merge_clears_unconfirmed_flag():
                 const c = document.querySelector('#device-dots .device-chip');
                 return { known: c.classList.contains('chip-known'),
                          badge: c.querySelector('.device-chip-state')?.textContent || '' };
-            }""")
+            }""",
+            )
             assert res["known"] is False
             assert res["badge"] == ""
         finally:
@@ -343,17 +396,21 @@ async def test_single_scan_miss_does_not_downgrade():
     # single miss isn't reliable proof of absence.
     require_browser()
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await eval_js(page, """() => {
+            res = await eval_js(
+                page,
+                """() => {
                 window.DivoomState.discoveredDevices = [{address:'AA', name:'Ditoo'}];
                 window.mergeDiscoveredDevices([]);   // one miss
                 window.renderDeviceDots();
                 const c = document.querySelector('#device-dots .device-chip');
                 return { known: c.classList.contains('chip-known'),
                          badge: c.querySelector('.device-chip-state')?.textContent || '' };
-            }""")
+            }""",
+            )
             assert res["known"] is False
             assert res["badge"] == ""
         finally:
@@ -368,10 +425,13 @@ async def test_mid_session_scan_misses_downgrade_after_threshold():
     # now downgrade it live, the same badge the restore path already gets.
     require_browser()
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await eval_js(page, """() => {
+            res = await eval_js(
+                page,
+                """() => {
                 window.DivoomState.discoveredDevices = [{address:'AA', name:'Ditoo'}];
                 window.mergeDiscoveredDevices([]);   // miss 1 -- below threshold
                 window.mergeDiscoveredDevices([]);   // miss 2 -- hits threshold
@@ -379,7 +439,8 @@ async def test_mid_session_scan_misses_downgrade_after_threshold():
                 const c = document.querySelector('#device-dots .device-chip');
                 return { known: c.classList.contains('chip-known'),
                          badge: c.querySelector('.device-chip-state')?.textContent || '' };
-            }""")
+            }""",
+            )
             assert res["known"] is True
             assert "not in range" in res["badge"]
         finally:
@@ -390,10 +451,13 @@ async def test_mid_session_scan_misses_downgrade_after_threshold():
 async def test_redetection_resets_the_miss_counter():
     require_browser()
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await eval_js(page, """() => {
+            res = await eval_js(
+                page,
+                """() => {
                 window.DivoomState.discoveredDevices = [{address:'AA', name:'Ditoo'}];
                 window.mergeDiscoveredDevices([]);                    // miss 1
                 window.mergeDiscoveredDevices([{address:'AA', name:'Ditoo'}]);  // re-detected -- resets
@@ -401,7 +465,8 @@ async def test_redetection_resets_the_miss_counter():
                 window.renderDeviceDots();
                 const c = document.querySelector('#device-dots .device-chip');
                 return { known: c.classList.contains('chip-known') };
-            }""")
+            }""",
+            )
             assert res["known"] is False
         finally:
             await browser.close()
@@ -414,10 +479,13 @@ async def test_daemon_owned_device_exempt_from_scan_miss_downgrade():
     # read as "not in range".
     require_browser()
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await eval_js(page, """() => {
+            res = await eval_js(
+                page,
+                """() => {
                 window.DivoomState.discoveredDevices = [{
                     address:'AA', name:'Ditoo', daemonOwned:true,
                     activityKind:'music', activityState:'connected'}];
@@ -428,7 +496,8 @@ async def test_daemon_owned_device_exempt_from_scan_miss_downgrade():
                 const c = document.querySelector('#device-dots .device-chip');
                 return { known: c.classList.contains('chip-known'),
                          streaming: c.classList.contains('chip-streaming') };
-            }""")
+            }""",
+            )
             assert res["known"] is False
             assert res["streaming"] is True
         finally:
@@ -443,10 +512,13 @@ async def test_active_device_never_shows_not_in_range_even_if_unconfirmed():
     # signal and must never be contradicted by a "not in range" badge.
     require_browser()
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await eval_js(page, """() => {
+            res = await eval_js(
+                page,
+                """() => {
                 window.DivoomState.discoveredDevices =
                     [{address:'AA', name:'Ditoo', unconfirmed:true}];
                 document.getElementById('banner-device-mac').textContent = 'AA';
@@ -456,7 +528,8 @@ async def test_active_device_never_shows_not_in_range_even_if_unconfirmed():
                          known: c.classList.contains('chip-known'),
                          badge: c.querySelector('.device-chip-state')?.textContent || '',
                          title: c.title };
-            }""")
+            }""",
+            )
             assert res["active"] is True
             assert res["known"] is False
             assert res["badge"] == ""
@@ -469,16 +542,20 @@ async def test_active_device_never_shows_not_in_range_even_if_unconfirmed():
 async def test_render_device_dots_empty_state_no_crash():
     require_browser()
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            res = await eval_js(page, """() => {
+            res = await eval_js(
+                page,
+                """() => {
                 window.DivoomState.discoveredDevices = [];
                 window.__knownUndetectedDevices = [];
                 window.DivoomState.registeredLanDevices = [];
                 window.renderDeviceDots();
                 return document.querySelectorAll('#device-dots .device-chip').length;
-            }""")
+            }""",
+            )
             assert res == 0
         finally:
             await browser.close()

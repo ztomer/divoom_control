@@ -1,6 +1,7 @@
 """R61 coverage push for divoom_client.macos_notifications (split from
 test_macos_notifications.py): db-path branches, monitor construction,
 _run loop branches and CLI helpers."""
+
 from __future__ import annotations
 
 import sqlite3
@@ -32,6 +33,7 @@ def test_find_notification_db_path_falls_back_when_getconf_missing(monkeypatch, 
     the function falls back to ~/Library/Application Support — here
     redirected to an empty tmp_path via Path.home(), where nothing exists
     so it correctly returns None (L83 true-branch, L92->91, L94)."""
+
     def _raise(*a, **k):
         raise FileNotFoundError("no such file: getconf")
 
@@ -43,6 +45,7 @@ def test_find_notification_db_path_falls_back_when_getconf_missing(monkeypatch, 
 def test_find_notification_db_path_finds_relative_candidate(monkeypatch, tmp_path) -> None:
     """L83->87 (base resolved from getconf, skip the fallback) + L90 (found
     via the first relative candidate)."""
+
     class _Result:
         returncode = 0
         stdout = str(tmp_path) + "\n"
@@ -57,49 +60,28 @@ def test_find_notification_db_path_finds_relative_candidate(monkeypatch, tmp_pat
 def test_find_notification_db_path_finds_absolute_group_container_candidate(monkeypatch, tmp_path) -> None:
     """The R42 §2 absolute-path fallback (usernoted group container) when
     neither relative candidate exists."""
+
     class _Result:
         returncode = 0
         stdout = str(tmp_path / "no_such_base") + "\n"  # base exists but has no candidates
 
     monkeypatch.setattr(macos_notifications.subprocess, "run", lambda *a, **k: _Result())
     monkeypatch.setattr(macos_notifications.Path, "home", classmethod(lambda cls: tmp_path))
-    target = (tmp_path / "Library" / "Group Containers" /
-              "group.com.apple.usernoted" / "db2" / "db")
+    target = tmp_path / "Library" / "Group Containers" / "group.com.apple.usernoted" / "db2" / "db"
     target.parent.mkdir(parents=True)
     target.write_text("fake db")
     assert find_notification_db_path() == target
 
 
-
-
-
-
-
-
-
-
-
-
 # ── `_run` loop branches ────────────────────────────────────────────────
-
-
-
-
-
-
-
-
 
 
 # ── CLI helpers ──────────────────────────────────────────────────────────
 
 
-
-
-
-
 class _FakeCliMonitor:
     """Stand-in used by the CLI tests below — start/stop are no-ops."""
+
     db_path = "/fake/db"
     started_with = None
 
@@ -111,7 +93,3 @@ class _FakeCliMonitor:
 
     def stop(self):
         pass
-
-
-
-

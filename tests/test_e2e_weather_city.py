@@ -14,6 +14,7 @@ test_e2e_clock_faces.py. What these pin, beyond "the button works":
 
 Skipped if a browser isn't installed.
 """
+
 import pytest
 from pathlib import Path
 from tests.support.browser import (
@@ -116,12 +117,11 @@ async def test_typing_a_city_lists_matches():
             await _open_search(page)
             await page.fill("#weather-city-input", "berlin")
             await wait_js(
-                page,
-                "() => document.querySelectorAll('#weather-city-results "
-                ".weather-city-row').length === 2")
+                page, "() => document.querySelectorAll('#weather-city-results .weather-city-row').length === 2"
+            )
             labels = await page.eval_on_selector_all(
-                "#weather-city-results .weather-city-row",
-                "els => els.map(e => e.textContent)")
+                "#weather-city-results .weather-city-row", "els => els.map(e => e.textContent)"
+            )
             assert labels == ["Berlin, Germany", "Berlin, United States"]
         finally:
             await browser.close()
@@ -145,17 +145,13 @@ async def test_picking_a_city_saves_coordinates_not_the_name():
             await _open_search(page)
             await page.fill("#weather-city-input", "berlin")
             await wait_js(
-                page,
-                "() => document.querySelectorAll('#weather-city-results "
-                ".weather-city-row').length === 2")
+                page, "() => document.querySelectorAll('#weather-city-results .weather-city-row').length === 2"
+            )
             # The SECOND Berlin — a name-only save could not tell them apart.
-            await page.click(
-                "#weather-city-results .weather-city-row:nth-child(2)")
-            await wait_js(
-                page, "() => window.__calls.some(c => c[0] === 'save')")
+            await page.click("#weather-city-results .weather-city-row:nth-child(2)")
+            await wait_js(page, "() => window.__calls.some(c => c[0] === 'save')")
 
-            save = await eval_js(
-                page, "() => window.__calls.find(c => c[0] === 'save')")
+            save = await eval_js(page, "() => window.__calls.find(c => c[0] === 'save')")
             assert save[1] == "44.46", save
             assert save[2] == "-71.18", save
             assert save[3] == "Berlin, United States", save
@@ -176,20 +172,16 @@ async def test_saving_closes_the_panel_and_re_reads_the_card():
             await _open_search(page)
             await page.fill("#weather-city-input", "berlin")
             await wait_js(
-                page,
-                "() => document.querySelectorAll('#weather-city-results "
-                ".weather-city-row').length === 2")
+                page, "() => document.querySelectorAll('#weather-city-results .weather-city-row').length === 2"
+            )
             await eval_js(page, "() => window.__calls = []")
-            await page.click(
-                "#weather-city-results .weather-city-row:nth-child(1)")
+            await page.click("#weather-city-results .weather-city-row:nth-child(1)")
 
             await page.wait_for_selector("#weather-city-input", state="hidden")
+            await wait_js(page, "() => window.__calls.some(c => c[0] === 'get_weather_preview')")
             await wait_js(
-                page, "() => window.__calls.some(c => c[0] === 'get_weather_preview')")
-            await wait_js(
-                page,
-                "() => document.getElementById('weather-preview-location')"
-                ".textContent === 'Berlin, Germany'")
+                page, "() => document.getElementById('weather-preview-location').textContent === 'Berlin, Germany'"
+            )
         finally:
             await browser.close()
 
@@ -206,9 +198,8 @@ async def test_use_my_location_clears_the_override():
             await _open_search(page)
             await page.fill("#weather-city-input", "berlin")
             await wait_js(
-                page,
-                "() => document.querySelectorAll('#weather-city-results "
-                ".weather-city-row').length === 2")
+                page, "() => document.querySelectorAll('#weather-city-results .weather-city-row').length === 2"
+            )
             await page.click("#weather-city-results .weather-city-row:nth-child(1)")
             await wait_js(page, "() => window.__saved.location !== ''")
 
@@ -237,11 +228,9 @@ async def test_an_emptied_box_does_not_search():
             await eval_js(page, "() => window.__calls = []")
             await page.fill("#weather-city-input", "")
             await wait_js(
-                page,
-                "() => document.getElementById('weather-city-results')"
-                ".textContent.includes('Type a city')")
-            assert await eval_js(
-                page, "() => window.__calls.filter(c => c[0] === 'search').length") == 0
+                page, "() => document.getElementById('weather-city-results').textContent.includes('Type a city')"
+            )
+            assert await eval_js(page, "() => window.__calls.filter(c => c[0] === 'search').length") == 0
         finally:
             await browser.close()
 
@@ -259,8 +248,7 @@ async def test_the_panel_says_what_is_currently_set():
         try:
             await _open_search(page)
             await wait_js(
-                page,
-                "() => document.getElementById('weather-city-results')"
-                ".textContent.includes('IP geolocation')")
+                page, "() => document.getElementById('weather-city-results').textContent.includes('IP geolocation')"
+            )
         finally:
             await browser.close()

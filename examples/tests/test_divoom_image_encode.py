@@ -6,9 +6,18 @@ on the device that never resolves (the device is waiting for a
 valid `AA` start marker that never arrives). These tests verify
 the on-wire byte structure with no real hardware required.
 """
+
 import pytest
 
-from divoom_legacy.utils.divoom_image_encode import Frame, build_palette_and_pixels, encode_palette, encode_pixels, encode_static_image, encode_animation_frame, encode_animation
+from divoom_legacy.utils.divoom_image_encode import (
+    Frame,
+    build_palette_and_pixels,
+    encode_palette,
+    encode_pixels,
+    encode_static_image,
+    encode_animation_frame,
+    encode_animation,
+)
 
 
 # ───────────────────────── helpers ─────────────────────────
@@ -45,12 +54,22 @@ def test_palette_dedup_two_colors():
 
 def test_palette_dedup_four_colors():
     """A 4-color image has 4 palette entries, nbBits=2 (log2(4)=2)."""
-    rgb = bytes([
-        0xFF, 0x00, 0x00,  # red
-        0x00, 0xFF, 0x00,  # green
-        0x00, 0x00, 0xFF,  # blue
-        0xFF, 0xFF, 0xFF,  # white
-    ])
+    rgb = bytes(
+        [
+            0xFF,
+            0x00,
+            0x00,  # red
+            0x00,
+            0xFF,
+            0x00,  # green
+            0x00,
+            0x00,
+            0xFF,  # blue
+            0xFF,
+            0xFF,
+            0xFF,  # white
+        ]
+    )
     palette, pixels, nb_bits = build_palette_and_pixels(rgb, 4, 1)
     assert len(palette) == 4
     assert nb_bits == 2
@@ -94,12 +113,22 @@ def test_palette_too_many_colors_raises():
 def test_palette_first_seen_order_is_canonical():
     """The palette is in first-seen order (deterministic)."""
     # 2x2 image: green, red, red, green
-    rgb = bytes([
-        0x00, 0xFF, 0x00,  # green (first)
-        0xFF, 0x00, 0x00,  # red (second)
-        0xFF, 0x00, 0x00,  # red (already seen)
-        0x00, 0xFF, 0x00,  # green (already seen)
-    ])
+    rgb = bytes(
+        [
+            0x00,
+            0xFF,
+            0x00,  # green (first)
+            0xFF,
+            0x00,
+            0x00,  # red (second)
+            0xFF,
+            0x00,
+            0x00,  # red (already seen)
+            0x00,
+            0xFF,
+            0x00,  # green (already seen)
+        ]
+    )
     palette, pixels, nb_bits = build_palette_and_pixels(rgb, 2, 2)
     assert palette == [(0x00, 0xFF, 0x00), (0xFF, 0x00, 0x00)]
     assert pixels == [0, 1, 1, 0]
@@ -124,11 +153,19 @@ def test_encode_palette_empty():
 def test_encode_palette_three_colors():
     """Three colors → 9 bytes (3 per color, R G B)."""
     palette = [(0xFF, 0x00, 0x00), (0x00, 0xFF, 0x00), (0x00, 0x00, 0xFF)]
-    assert encode_palette(palette) == bytes([
-        0xFF, 0x00, 0x00,
-        0x00, 0xFF, 0x00,
-        0x00, 0x00, 0xFF,
-    ])
+    assert encode_palette(palette) == bytes(
+        [
+            0xFF,
+            0x00,
+            0x00,
+            0x00,
+            0xFF,
+            0x00,
+            0x00,
+            0x00,
+            0xFF,
+        ]
+    )
 
 
 # ───────────────────────── bit packing ─────────────────────────
@@ -214,6 +251,7 @@ def test_encode_pixels_round_trip_all_widths(nb_bits):
     """Encoding then LSB-first decoding recovers the indices for every width —
     this is the property the device's bitstream_io LE reader relies on."""
     import random
+
     rng = random.Random(nb_bits)
     maxv = (1 << nb_bits) - 1
     pixels = [rng.randint(0, maxv) for _ in range(256)]
@@ -245,14 +283,21 @@ def test_encode_static_image_1pixel_red():
     payload = encode_static_image(rgb, 1, 1)
     # Per RomRider reference: LLLL = 7 + 3N + p = 7 + 3 + 1 = 11.
     # Layout: AA LLLL 000000 NN COLOR_DATA PIXEL_DATA
-    expected = bytes([
-        0xAA,                              # start marker
-        0x0B, 0x00,                        # LLLL (LE u16) = 11
-        0x00, 0x00, 0x00,                  # 000000 (3 bytes padding)
-        0x01,                              # NN (num colors)
-        0xFF, 0x00, 0x00,                  # color
-        0x00,                              # pixel
-    ])
+    expected = bytes(
+        [
+            0xAA,  # start marker
+            0x0B,
+            0x00,  # LLLL (LE u16) = 11
+            0x00,
+            0x00,
+            0x00,  # 000000 (3 bytes padding)
+            0x01,  # NN (num colors)
+            0xFF,
+            0x00,
+            0x00,  # color
+            0x00,  # pixel
+        ]
+    )
     assert payload == expected
 
 
@@ -279,12 +324,22 @@ def test_encode_static_image_2colors_checkerboard():
     """A 2x2 checkerboard (red, green alternating)."""
     # Row 0: red green
     # Row 1: green red
-    rgb = bytes([
-        0xFF, 0x00, 0x00,  # red (palette idx 0)
-        0x00, 0xFF, 0x00,  # green (palette idx 1)
-        0x00, 0xFF, 0x00,  # green
-        0xFF, 0x00, 0x00,  # red
-    ])
+    rgb = bytes(
+        [
+            0xFF,
+            0x00,
+            0x00,  # red (palette idx 0)
+            0x00,
+            0xFF,
+            0x00,  # green (palette idx 1)
+            0x00,
+            0xFF,
+            0x00,  # green
+            0xFF,
+            0x00,
+            0x00,  # red
+        ]
+    )
     payload = encode_static_image(rgb, 2, 2)
     # pixels: [0, 1, 1, 0], nbBits=1, packed = 0x06 (1 byte)
     # LLLL = 7 + 6 + 1 = 14
@@ -326,15 +381,21 @@ def test_encode_animation_frame_1pixel_red_1000ms():
     # Per RomRider reference: LLLL = 7 + 3N + p = 11.
     # Layout: AA LLLL TTTT RR NN COLOR_DATA PIXEL_DATA
     # TTTT is LITTLE-ENDIAN (1000 = 0x03E8 → 0xE8 0x03)
-    expected = bytes([
-        0xAA,                              # start marker
-        0x0B, 0x00,                        # LLLL (LE u16) = 11
-        0xE8, 0x03,                        # TTTT (LE u16) = 1000
-        0x00,                              # RR = 0 (reset palette)
-        0x01,                              # NN
-        0xFF, 0x00, 0x00,                  # color
-        0x00,                              # pixel
-    ])
+    expected = bytes(
+        [
+            0xAA,  # start marker
+            0x0B,
+            0x00,  # LLLL (LE u16) = 11
+            0xE8,
+            0x03,  # TTTT (LE u16) = 1000
+            0x00,  # RR = 0 (reset palette)
+            0x01,  # NN
+            0xFF,
+            0x00,
+            0x00,  # color
+            0x00,  # pixel
+        ]
+    )
     assert frame == expected
 
 
@@ -351,9 +412,9 @@ def test_encode_animation_3_frames_fits_in_1_packet():
     # Each frame is 11 bytes (1+2+2+2+1+1+3+1), so 33 bytes total
     # Layout per frame: AA LLLL TTTT(LE) RR NN COLOR PIXEL
     blob = (
-        b"\xAA\x0B\x00\x64\x00\x00\x01\xFF\x00\x00\x00"  # red, 100ms
-        b"\xAA\x0B\x00\xC8\x00\x00\x01\x00\xFF\x00\x00"  # green, 200ms
-        b"\xAA\x0B\x00\x2C\x01\x00\x01\x00\x00\xFF\x00"  # blue, 300ms
+        b"\xaa\x0b\x00\x64\x00\x00\x01\xff\x00\x00\x00"  # red, 100ms
+        b"\xaa\x0b\x00\xc8\x00\x00\x01\x00\xff\x00\x00"  # green, 200ms
+        b"\xaa\x0b\x00\x2c\x01\x00\x01\x00\x00\xff\x00"  # blue, 300ms
     )
     # Per RomRider: [TOTAL_LEN LE u16][PACKET_NUM u8][chunk]
     assert packet == _u16_le(len(blob)) + bytes([0]) + blob

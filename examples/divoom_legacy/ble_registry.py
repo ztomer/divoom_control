@@ -15,6 +15,7 @@ The registry stores the owning transport (anything with ``mac`` + an async
 owner's ``disconnect()`` (in this app every BLE op runs on the daemon's single
 device loop, so that await is in-loop).
 """
+
 from __future__ import annotations
 
 import logging
@@ -22,7 +23,7 @@ from typing import Any
 
 logger = logging.getLogger("divoom_legacy.ble_registry")
 
-_active: dict[str, Any] = {}   # normalized address -> owning transport
+_active: dict[str, Any] = {}  # normalized address -> owning transport
 
 
 def _norm(address: Any) -> str | None:
@@ -48,8 +49,11 @@ async def evict(address: Any, keep: Any) -> None:
         # address may hit the ~16s double-connect timeout this registry exists to
         # prevent, and this WARNING is the breadcrumb for it.
         evicted = False
-        logger.warning("registry evict: disconnect of prior %s FAILED (%s); the OS "
-                       "link may survive and stall the next connect", key, e)
+        logger.warning(
+            "registry evict: disconnect of prior %s FAILED (%s); the OS link may survive and stall the next connect",
+            key,
+            e,
+        )
     # Drop our record regardless (the new owner registers over it next); keeping a
     # known-dead transport here would only mislead a later owner() lookup.
     if _active.get(key) is existing:
@@ -80,8 +84,7 @@ def reset() -> None:
     registered transport was bound to the dying loop, so the entries are stale
     bookkeeping that would mislead the next loop's eviction logic."""
     if _active:
-        logger.info("BLE registry: reset (%d stale entr%s dropped)",
-                    len(_active), "y" if len(_active) == 1 else "ies")
+        logger.info("BLE registry: reset (%d stale entr%s dropped)", len(_active), "y" if len(_active) == 1 else "ies")
     _active.clear()
 
 

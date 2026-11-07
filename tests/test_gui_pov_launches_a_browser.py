@@ -14,6 +14,7 @@ stack and the browser replaced by fakes, and requires that it get as far as
 asking Playwright for a browser. It runs WITHOUT `--run-browser`, which is the
 state a script is always in.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -79,6 +80,7 @@ def test_gui_pov_gets_to_the_browser_without_the_pytest_flag(monkeypatch, tmp_pa
     gui_pov = _load_gui_pov()
     monkeypatch.setattr(gui_pov, "Stack", _FakeStack)
     import playwright.async_api as pw
+
     monkeypatch.setattr(pw, "async_playwright", lambda: _FakePlaywright())
 
     args = argparse.Namespace(out=str(tmp_path), widget="sysmon", kill_daemon=False)
@@ -102,11 +104,11 @@ def test_the_opt_in_does_not_leak_into_the_test_session(monkeypatch, tmp_path):
     gui_pov = _load_gui_pov()
     monkeypatch.setattr(gui_pov, "Stack", _FakeStack)
     import playwright.async_api as pw
+
     monkeypatch.setattr(pw, "async_playwright", lambda: _FakePlaywright())
     args = argparse.Namespace(out=str(tmp_path), widget="sysmon", kill_daemon=False)
     try:
         asyncio.run(gui_pov.run(args))
-    except (_Reached, pytest.skip.Exception):
+    except _Reached, pytest.skip.Exception:
         pass
     assert browser_support.RUN_BROWSER is False
-

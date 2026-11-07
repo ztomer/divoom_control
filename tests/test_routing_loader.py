@@ -6,6 +6,7 @@ The loader is in ``gui/macos_notifications.py`` (the GUI module
 that owns the DB-poll monitor); tests live here because the loader
 is a lib-level concern, not a GUI rendering concern.
 """
+
 from __future__ import annotations
 
 import json
@@ -34,9 +35,7 @@ def test_load_returns_defaults_when_file_missing(tmp_path: Path) -> None:
     assert rules == DEFAULT_ROUTING
 
 
-def test_load_returns_defaults_when_configured_path_missing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_load_returns_defaults_when_configured_path_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # ROUTING_PATH is resolved (from the env var) at IMPORT time, so a
     # post-import setenv has no effect — patch the bound module attribute,
     # which is what load_routing_table(None) reads at call time. (Setting the
@@ -46,6 +45,7 @@ def test_load_returns_defaults_when_configured_path_missing(
     # routing concern was split out of macos_notifications for the 500-LOC cap);
     # patch the attribute load_routing_table actually reads.
     import divoom_client.notification_router as nrouter
+
     monkeypatch.setattr(nrouter, "ROUTING_PATH", tmp_path / "nope.json")
     rules = load_routing_table()
     assert rules == DEFAULT_ROUTING
@@ -53,10 +53,14 @@ def test_load_returns_defaults_when_configured_path_missing(
 
 def test_load_reads_valid_file(tmp_path: Path) -> None:
     p = tmp_path / "routing.json"
-    p.write_text(json.dumps([
-        ["whatsapp", NOTIFICATION_APPS["WHATSAPP"]],
-        ["com.apple.mail", NOTIFICATION_APPS["TEXT_MESSAGE"]],
-    ]))
+    p.write_text(
+        json.dumps(
+            [
+                ["whatsapp", NOTIFICATION_APPS["WHATSAPP"]],
+                ["com.apple.mail", NOTIFICATION_APPS["TEXT_MESSAGE"]],
+            ]
+        )
+    )
     rules = load_routing_table(p)
     assert ("whatsapp", NOTIFICATION_APPS["WHATSAPP"]) in rules
     assert ("com.apple.mail", NOTIFICATION_APPS["TEXT_MESSAGE"]) in rules
@@ -64,12 +68,16 @@ def test_load_reads_valid_file(tmp_path: Path) -> None:
 
 def test_load_drops_invalid_app_type(tmp_path: Path) -> None:
     p = tmp_path / "routing.json"
-    p.write_text(json.dumps([
-        ["valid",   NOTIFICATION_APPS["WHATSAPP"]],
-        ["invalid", 999],   # not in NOTIFICATION_APPS
-        ["zero",    0],     # not in NOTIFICATION_APPS
-        ["neg",    -1],     # not in NOTIFICATION_APPS
-    ]))
+    p.write_text(
+        json.dumps(
+            [
+                ["valid", NOTIFICATION_APPS["WHATSAPP"]],
+                ["invalid", 999],  # not in NOTIFICATION_APPS
+                ["zero", 0],  # not in NOTIFICATION_APPS
+                ["neg", -1],  # not in NOTIFICATION_APPS
+            ]
+        )
+    )
     rules = load_routing_table(p)
     substrs = [r[0] for r in rules]
     assert "valid" in substrs
@@ -80,13 +88,17 @@ def test_load_drops_invalid_app_type(tmp_path: Path) -> None:
 
 def test_load_drops_malformed_entries(tmp_path: Path) -> None:
     p = tmp_path / "routing.json"
-    p.write_text(json.dumps([
-        ["ok",         1],
-        ["missing"],                            # wrong arity
-        [2, "ok"],                              # wrong type
-        ["", 1],                                # empty substring
-        ["badtype",  "not-a-number"],           # non-int app_type
-    ]))
+    p.write_text(
+        json.dumps(
+            [
+                ["ok", 1],
+                ["missing"],  # wrong arity
+                [2, "ok"],  # wrong type
+                ["", 1],  # empty substring
+                ["badtype", "not-a-number"],  # non-int app_type
+            ]
+        )
+    )
     rules = load_routing_table(p)
     substrs = [r[0] for r in rules]
     assert substrs == ["ok"]
@@ -115,6 +127,7 @@ def test_load_returns_defaults_when_file_has_no_valid_entries(tmp_path: Path) ->
 
 def test_load_logs_warning_on_corrupt_file(tmp_path: Path, caplog) -> None:
     import logging
+
     p = tmp_path / "routing.json"
     p.write_text("not json at all")
     with caplog.at_level(logging.WARNING, logger="divoom_client.macos_notifications"):
@@ -133,11 +146,14 @@ def test_save_creates_parent_dirs(tmp_path: Path) -> None:
 
 def test_save_writes_sorted_json(tmp_path: Path) -> None:
     p = tmp_path / "routing.json"
-    save_routing_table([
-        ("zeta",  1),
-        ("alpha", 2),
-        ("mu",    3),
-    ], p)
+    save_routing_table(
+        [
+            ("zeta", 1),
+            ("alpha", 2),
+            ("mu", 3),
+        ],
+        p,
+    )
     written = json.loads(p.read_text())
     substrs = [entry[0] for entry in written]
     assert substrs == sorted(substrs) == ["alpha", "mu", "zeta"]
@@ -145,24 +161,27 @@ def test_save_writes_sorted_json(tmp_path: Path) -> None:
 
 def test_save_drops_invalid_entries(tmp_path: Path) -> None:
     p = tmp_path / "routing.json"
-    save_routing_table([
-        ("good",   1),
-        ("bad",    999),   # invalid app_type
-        ("empty",  1),     # valid, but...
-    ], p)
+    save_routing_table(
+        [
+            ("good", 1),
+            ("bad", 999),  # invalid app_type
+            ("empty", 1),  # valid, but...
+        ],
+        p,
+    )
     written = json.loads(p.read_text())
     substrs = [entry[0] for entry in written]
-    assert "good"  in substrs
+    assert "good" in substrs
     assert "empty" in substrs
-    assert "bad"   not in substrs
+    assert "bad" not in substrs
 
 
 def test_save_then_load_roundtrip(tmp_path: Path) -> None:
     p = tmp_path / "routing.json"
     rules_in = [
-        ("whatsapp",     NOTIFICATION_APPS["WHATSAPP"]),
+        ("whatsapp", NOTIFICATION_APPS["WHATSAPP"]),
         ("com.apple.sms", NOTIFICATION_APPS["TEXT_MESSAGE"]),
-        ("SLACK",        NOTIFICATION_APPS["MESSENGER"]),  # mixed case
+        ("SLACK", NOTIFICATION_APPS["MESSENGER"]),  # mixed case
     ]
     save_routing_table(rules_in, p)
     rules_out = load_routing_table(p)
@@ -216,9 +235,7 @@ def test_default_routing_path_is_under_xdg_config_home() -> None:
         assert ROUTING_PATH.parent.parent.name == ".config"
 
 
-def test_env_var_overrides_default_path(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_env_var_overrides_default_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     custom = tmp_path / "my-routing.json"
     custom.write_text(json.dumps([["custom", NOTIFICATION_APPS["WHATSAPP"]]]))
     monkeypatch.setenv("DIVOOM_CONTROL_ROUTING", str(custom))
@@ -230,9 +247,11 @@ def test_env_var_overrides_default_path(
     # is to pass routing_path explicitly. The env var is only
     # honored by reloading the module; document that behavior.
     from importlib import reload
+
     # ROUTING_PATH is resolved from the env var at import of notification_router
     # (where it now lives), so reload THAT module to pick up the override.
     import divoom_client.notification_router as nrouter
+
     reload(nrouter)
     try:
         assert str(nrouter.ROUTING_PATH) == str(custom)

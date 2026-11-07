@@ -14,6 +14,7 @@ No real network call is ever made: every HTTP path goes through a mocked
 urllib.request.urlopen. No real ~/.config file is touched: CONFIG_FILE /
 CACHE_FILE / VIRTUAL_DEVICE_PATHS are monkeypatched to pytest tmp_path.
 """
+
 import hashlib
 import json
 import time
@@ -42,10 +43,12 @@ def _mock_urlopen(monkeypatch, payload, capture=None):
         if capture is not None:
             capture.append(req)
         return _FakeResponse(payload)
+
     monkeypatch.setattr(divoom_auth.urllib.request, "urlopen", _fake)
 
 
 # ── print helpers / dataclass ────────────────────────────────────────────────
+
 
 def test_print_err_outputs_prefixed_message(capsys):
     divoom_auth.print_err("boom")
@@ -64,6 +67,7 @@ def test_md5_matches_hashlib():
 
 
 # ── _load_config ──────────────────────────────────────────────────────────────
+
 
 def test_load_config_missing_file_returns_blank(monkeypatch, tmp_path):
     monkeypatch.setattr(divoom_auth, "CONFIG_FILE", tmp_path / "nope" / "config.ini")
@@ -85,6 +89,7 @@ def test_load_config_missing_section_returns_blank(monkeypatch, tmp_path):
 
 
 # ── _load_virtual_device ────────────────────────────────────────────────────
+
 
 def test_load_virtual_device_no_paths_exist(monkeypatch, tmp_path):
     monkeypatch.setattr(divoom_auth, "VIRTUAL_DEVICE_PATHS", [tmp_path / "a.json", tmp_path / "b.json"])
@@ -113,33 +118,42 @@ def test_load_virtual_device_malformed_json_returns_empty(monkeypatch, tmp_path)
 # BlueDevice/NewDevice, not a client-side placeholder -- see cloud.py's
 # writeup. These test the registration + persist-once-and-reuse machinery.
 
+
 def _mock_urlopen_by_command(monkeypatch, responses: dict):
     """Route the mocked urlopen by the POSTed body's ``Command`` field
     (multiple distinct commands in one test, unlike ``_mock_urlopen``'s
     single fixed payload)."""
+
     def _fake(req, timeout=None):
         body = json.loads(req.data.decode("utf-8"))
         command = body["Command"]
         assert command in responses, f"unexpected command {command}"
         return _FakeResponse(responses[command])
+
     monkeypatch.setattr(divoom_auth.urllib.request, "urlopen", _fake)
 
 
 def test_register_virtual_device_success(monkeypatch):
-    _mock_urlopen_by_command(monkeypatch, {
-        "APP/GetServerUTC": {"ReturnCode": 0, "UTC": 1700000000},
-        "BlueDevice/NewDevice": {"ReturnCode": 0, "BluetoothDeviceId": 42, "DevicePassword": 99},
-    })
+    _mock_urlopen_by_command(
+        monkeypatch,
+        {
+            "APP/GetServerUTC": {"ReturnCode": 0, "UTC": 1700000000},
+            "BlueDevice/NewDevice": {"ReturnCode": 0, "BluetoothDeviceId": 42, "DevicePassword": 99},
+        },
+    )
     creds = divoom_auth.DivoomCredentials(token=1, user_id=2)
     dev = divoom_auth._register_virtual_device(creds)
     assert dev == {"BluetoothDeviceId": 42, "DevicePassword": 99, "Type": 1, "SubType": 1}
 
 
 def test_register_virtual_device_rc_nonzero_raises(monkeypatch):
-    _mock_urlopen_by_command(monkeypatch, {
-        "APP/GetServerUTC": {"ReturnCode": 0, "UTC": 1700000000},
-        "BlueDevice/NewDevice": {"ReturnCode": 3, "ReturnMessage": "Request data is incomplete"},
-    })
+    _mock_urlopen_by_command(
+        monkeypatch,
+        {
+            "APP/GetServerUTC": {"ReturnCode": 0, "UTC": 1700000000},
+            "BlueDevice/NewDevice": {"ReturnCode": 3, "ReturnMessage": "Request data is incomplete"},
+        },
+    )
     creds = divoom_auth.DivoomCredentials(token=1, user_id=2)
     with pytest.raises(RuntimeError, match="RC=3"):
         divoom_auth._register_virtual_device(creds)
@@ -151,6 +165,7 @@ def test_ensure_virtual_device_returns_existing_without_registering(monkeypatch,
 
     def _fail_if_called(req, timeout=None):
         raise AssertionError("should not register when a device is already on file")
+
     monkeypatch.setattr(divoom_auth.urllib.request, "urlopen", _fail_if_called)
 
     creds = divoom_auth.DivoomCredentials(token=1, user_id=2)
@@ -161,10 +176,13 @@ def test_ensure_virtual_device_registers_and_persists_when_missing(monkeypatch, 
     monkeypatch.setattr(divoom_auth, "_load_virtual_device", lambda: {})
     dest = tmp_path / "virtual_device.json"
     monkeypatch.setattr(divoom_auth, "VIRTUAL_DEVICE_PATHS", [dest])
-    _mock_urlopen_by_command(monkeypatch, {
-        "APP/GetServerUTC": {"ReturnCode": 0, "UTC": 1700000000},
-        "BlueDevice/NewDevice": {"ReturnCode": 0, "BluetoothDeviceId": 42, "DevicePassword": 99},
-    })
+    _mock_urlopen_by_command(
+        monkeypatch,
+        {
+            "APP/GetServerUTC": {"ReturnCode": 0, "UTC": 1700000000},
+            "BlueDevice/NewDevice": {"ReturnCode": 0, "BluetoothDeviceId": 42, "DevicePassword": 99},
+        },
+    )
     creds = divoom_auth.DivoomCredentials(token=1, user_id=2)
     dev = divoom_auth.ensure_virtual_device(creds)
     assert dev["BluetoothDeviceId"] == 42
@@ -173,6 +191,7 @@ def test_ensure_virtual_device_registers_and_persists_when_missing(monkeypatch, 
 
 
 # ── _post ──────────────────────────────────────────────────────────────────────
+
 
 def test_post_sends_json_body_and_parses_response(monkeypatch):
     captured = []
@@ -184,6 +203,7 @@ def test_post_sends_json_body_and_parses_response(monkeypatch):
 
 
 # ── _login_email ────────────────────────────────────────────────────────────────
+
 
 def test_login_email_success(monkeypatch):
     _mock_urlopen(monkeypatch, {"ReturnCode": 0, "Token": 111, "UserId": 222})
@@ -211,6 +231,7 @@ def test_login_email_other_failure_includes_rc_and_message(monkeypatch):
 
 # ── _get_server_utc ────────────────────────────────────────────────────────────
 
+
 def test_get_server_utc_success(monkeypatch):
     _mock_urlopen(monkeypatch, {"UTC": 12345})
     assert divoom_auth._get_server_utc() == 12345
@@ -219,6 +240,7 @@ def test_get_server_utc_success(monkeypatch):
 def test_get_server_utc_falls_back_on_network_error(monkeypatch):
     def _boom(req, timeout=None):
         raise divoom_auth.urllib.error.URLError("no net")
+
     monkeypatch.setattr(divoom_auth.urllib.request, "urlopen", _boom)
     before = int(time.time())
     assert divoom_auth._get_server_utc() >= before
@@ -232,6 +254,7 @@ def test_get_server_utc_falls_back_when_response_utc_zero(monkeypatch):
 
 # ── _login_guest ──────────────────────────────────────────────────────────────
 
+
 def test_login_guest_success_no_virtual_device(monkeypatch):
     monkeypatch.setattr(divoom_auth, "_get_server_utc", lambda: 999)
     monkeypatch.setattr(divoom_auth, "_load_virtual_device", lambda: {})
@@ -243,9 +266,16 @@ def test_login_guest_success_no_virtual_device(monkeypatch):
 def test_login_guest_includes_virtual_device_identity_in_request(monkeypatch):
     captured = []
     monkeypatch.setattr(divoom_auth, "_get_server_utc", lambda: 1)
-    monkeypatch.setattr(divoom_auth, "_load_virtual_device", lambda: {
-        "Type": 5, "SubType": 6, "BluetoothDeviceId": 7, "DevicePassword": 8,
-    })
+    monkeypatch.setattr(
+        divoom_auth,
+        "_load_virtual_device",
+        lambda: {
+            "Type": 5,
+            "SubType": 6,
+            "BluetoothDeviceId": 7,
+            "DevicePassword": 8,
+        },
+    )
     _mock_urlopen(monkeypatch, {"ReturnCode": 0, "Token": 1, "UserId": 2}, capture=captured)
     divoom_auth._login_guest()
     sent = json.loads(captured[0].data.decode())
@@ -262,6 +292,7 @@ def test_login_guest_rc_error_raises_with_message(monkeypatch):
 
 
 # ── _save_cache / _load_cache ──────────────────────────────────────────────────
+
 
 def test_save_cache_writes_expected_json_with_0600_mode(monkeypatch, tmp_path):
     cache_file = tmp_path / "auth_token.json"
@@ -281,10 +312,17 @@ def test_load_cache_missing_file_returns_none(monkeypatch, tmp_path):
 
 def test_load_cache_valid_recent_entry(monkeypatch, tmp_path):
     cache_file = tmp_path / "auth_token.json"
-    cache_file.write_text(json.dumps({
-        "token": 1, "user_id": 2, "email": "x@y.com", "utc": 3,
-        "saved_at": int(time.time()),
-    }))
+    cache_file.write_text(
+        json.dumps(
+            {
+                "token": 1,
+                "user_id": 2,
+                "email": "x@y.com",
+                "utc": 3,
+                "saved_at": int(time.time()),
+            }
+        )
+    )
     monkeypatch.setattr(divoom_auth, "CACHE_FILE", cache_file)
     creds = divoom_auth._load_cache()
     assert creds.token == 1 and creds.user_id == 2 and creds.email == "x@y.com"
@@ -292,18 +330,30 @@ def test_load_cache_valid_recent_entry(monkeypatch, tmp_path):
 
 def test_load_cache_expired_entry_returns_none(monkeypatch, tmp_path):
     cache_file = tmp_path / "auth_token.json"
-    cache_file.write_text(json.dumps({
-        "token": 1, "user_id": 2, "saved_at": int(time.time()) - 24 * 3600,
-    }))
+    cache_file.write_text(
+        json.dumps(
+            {
+                "token": 1,
+                "user_id": 2,
+                "saved_at": int(time.time()) - 24 * 3600,
+            }
+        )
+    )
     monkeypatch.setattr(divoom_auth, "CACHE_FILE", cache_file)
     assert divoom_auth._load_cache() is None
 
 
 def test_load_cache_invalid_creds_returns_none(monkeypatch, tmp_path):
     cache_file = tmp_path / "auth_token.json"
-    cache_file.write_text(json.dumps({
-        "token": 0, "user_id": 0, "saved_at": int(time.time()),
-    }))
+    cache_file.write_text(
+        json.dumps(
+            {
+                "token": 0,
+                "user_id": 0,
+                "saved_at": int(time.time()),
+            }
+        )
+    )
     monkeypatch.setattr(divoom_auth, "CACHE_FILE", cache_file)
     assert divoom_auth._load_cache() is None
 
@@ -317,6 +367,7 @@ def test_load_cache_corrupt_json_returns_none(monkeypatch, tmp_path, capsys):
 
 
 # ── get_credentials: remaining branches ────────────────────────────────────────
+
 
 def test_get_credentials_email_login_exception_falls_back_to_guest(monkeypatch):
     monkeypatch.setattr(divoom_auth, "_last_auth_fail_at", 0.0, raising=False)

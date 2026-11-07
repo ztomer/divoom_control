@@ -18,6 +18,7 @@ every config file, which is the point. A caller that set its own
 `CARGO_BUILD_BUILD_DIR` / `CARGO_TARGET_DIR` (a gate that owns a build root and
 cleans it, say) is left alone: that caller already decided where builds go.
 """
+
 from __future__ import annotations
 
 import os

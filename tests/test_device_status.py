@@ -17,6 +17,7 @@ now PUSHES ``status`` / ``owned_devices`` events (handled in
 ``test_e2e_device_status_dot.py`` / ``test_e2e_device_status_chips.py`` assert
 the dot + chips render those events faithfully.
 """
+
 import json
 from pathlib import Path
 from unittest.mock import patch
@@ -58,45 +59,39 @@ def _make():
 def test_get_connection_state_connected():
     s = _make()
     s._fake = _FakeClient({"connected": True, "connection_state": "connected"})
-    assert json.loads(s.get_connection_state()) == {
-        "connected": True, "state": "connected", "selected": None}
+    assert json.loads(s.get_connection_state()) == {"connected": True, "state": "connected", "selected": None}
 
 
 def test_get_connection_state_degraded():
     s = _make()
     s._fake = _FakeClient({"connected": True, "connection_state": "degraded"})
-    assert json.loads(s.get_connection_state()) == {
-        "connected": True, "state": "degraded", "selected": None}
+    assert json.loads(s.get_connection_state()) == {"connected": True, "state": "degraded", "selected": None}
 
 
 def test_get_connection_state_disconnected():
     s = _make()
     s._fake = _FakeClient({"connected": False})
-    assert json.loads(s.get_connection_state()) == {
-        "connected": False, "state": "disconnected", "selected": None}
+    assert json.loads(s.get_connection_state()) == {"connected": False, "state": "disconnected", "selected": None}
 
 
 def test_get_connection_state_no_daemon_reads_disconnected():
     # A missing/unreachable daemon must read as disconnected, NOT as connected.
     s = _make()
     s._fake = None
-    assert json.loads(s.get_connection_state()) == {
-        "connected": False, "state": "disconnected"}
+    assert json.loads(s.get_connection_state()) == {"connected": False, "state": "disconnected"}
 
 
 def test_get_connection_state_daemon_error_reads_disconnected():
     s = _make()
     s._fake = _BoomClient()
-    assert json.loads(s.get_connection_state()) == {
-        "connected": False, "state": "disconnected"}
+    assert json.loads(s.get_connection_state()) == {"connected": False, "state": "disconnected"}
 
 
 def test_get_connection_state_explicit_disconnected_not_masked_by_connected():
     # The daemon's honest `state` must win over a stale connected:true flag.
     s = _make()
     s._fake = _FakeClient({"connected": True, "connection_state": "disconnected"})
-    assert json.loads(s.get_connection_state()) == {
-        "connected": False, "state": "disconnected", "selected": None}
+    assert json.loads(s.get_connection_state()) == {"connected": False, "state": "disconnected", "selected": None}
 
 
 # ── get_known_devices ───────────────────────────────────────────────────────
@@ -110,8 +105,7 @@ def _write_cache(tmp, devices):
 def test_get_known_devices_excludes_detected(tmp_path):
     s = _make()
     s.discovered_list = [{"address": "AA"}]
-    _write_cache(tmp_path, [{"address": "AA", "name": "Ditoo"},
-                            {"address": "BB", "name": "Pixoo"}])
+    _write_cache(tmp_path, [{"address": "AA", "name": "Ditoo"}, {"address": "BB", "name": "Pixoo"}])
     with patch.object(Path, "home", return_value=tmp_path):
         out = json.loads(s.get_known_devices())
     assert out == [{"address": "BB", "name": "Pixoo", "detected": False}]
@@ -149,7 +143,7 @@ def test_get_known_devices_handles_malformed_cache(tmp_path):
     (p / "discovered_devices.json").write_text("{not json", encoding="utf-8")
     s = _make()
     with patch.object(Path, "home", return_value=tmp_path):
-        assert json.loads(s.get_known_devices()) == []   # graceful, not a crash
+        assert json.loads(s.get_known_devices()) == []  # graceful, not a crash
 
 
 # ── _cache_discovered (keeps the cache honest across scans) ─────────────────
@@ -157,16 +151,14 @@ def test_cache_discovered_merges_and_stamps(tmp_path):
     s = _make()
     cache = tmp_path / ".config" / "divoom-control" / "discovered_devices.json"
     cache.parent.mkdir(parents=True, exist_ok=True)
-    cache.write_text(json.dumps(
-        [{"address": "AA", "name": "Ditoo", "first_seen": 100.0}]))
+    cache.write_text(json.dumps([{"address": "AA", "name": "Ditoo", "first_seen": 100.0}]))
     with patch.object(Path, "home", return_value=tmp_path):
-        s._cache_discovered([{"address": "AA", "name": "Ditoo-X"},
-                             {"address": "BB", "name": "Pixoo"}])
+        s._cache_discovered([{"address": "AA", "name": "Ditoo-X"}, {"address": "BB", "name": "Pixoo"}])
         data = {d["address"]: d for d in json.loads(cache.read_text())}
     assert set(data) == {"AA", "BB"}
-    assert data["AA"]["first_seen"] == 100.0        # preserved across scans
-    assert data["AA"]["last_seen"] > 100.0          # bumped this scan
-    assert data["AA"]["name"] == "Ditoo-X"          # fresh scan wins
+    assert data["AA"]["first_seen"] == 100.0  # preserved across scans
+    assert data["AA"]["last_seen"] > 100.0  # bumped this scan
+    assert data["AA"]["name"] == "Ditoo-X"  # fresh scan wins
 
 
 def test_cache_discovered_updates_detected_count(tmp_path):
@@ -176,6 +168,7 @@ def test_cache_discovered_updates_detected_count(tmp_path):
     with patch.object(Path, "home", return_value=tmp_path):
         s._cache_discovered([{"address": "AA"}, {"address": "BB"}])
         import configparser
+
         c = configparser.ConfigParser()
         c.read(cfg)
         assert c.get("gui", "last_detected_count") == "2"

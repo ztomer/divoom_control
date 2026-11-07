@@ -15,6 +15,7 @@ Resolution order: `GOH_DIR`, then the CI checkout paths, then a plain-text
 fallback so a gate still RUNS and still reports pass/fail without the icons.
 Losing colour is acceptable; refusing to check anything is not.
 """
+
 from __future__ import annotations
 
 import os
@@ -41,9 +42,11 @@ def _load():
             sys.path.insert(0, str(d))
             try:
                 from tui.lib import err, hr, info, ok, section, warn  # noqa
+
                 return err, info, ok, warn, hr, section
             except Exception:
                 sys.path.pop(0)
+
     # Plain fallback: no icons, no colour, same pass/fail semantics.
     def _err(m):
         print(f"FAIL {m}", file=sys.stderr)

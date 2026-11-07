@@ -1,5 +1,6 @@
 """Export/import dialog + path helpers and preset file dialogs for
 presets_manager.py (split from test_presets_manager.py)."""
+
 import json
 import sys
 from unittest.mock import MagicMock
@@ -15,6 +16,7 @@ from tests.support.presets_manager_common import (  # noqa: F401
 
 
 # ── export_settings_dialog (lines 257-280, webview mocked) ─────────────────
+
 
 def test_export_settings_dialog_no_window(home):
     h = Host()
@@ -66,6 +68,7 @@ def test_export_settings_dialog_exception_returns_false(home, monkeypatch):
 
 # ── _export_settings_to_path: all optional-file branches (lines 288-330) ───
 
+
 def test_export_settings_to_path_no_optional_files(home, tmp_path):
     """None of presets/config/alarms/hotchannel/routing exist -> all
     exists()-False arms taken, export still succeeds with an empty dict."""
@@ -114,13 +117,15 @@ def test_export_settings_to_path_corrupt_optional_files_are_skipped(home, tmp_pa
 
 
 def test_export_settings_to_path_exception_returns_false(home, monkeypatch, tmp_path):
-    monkeypatch.setattr(presets_manager, "atomic_write_text",
-                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("fail")))
+    monkeypatch.setattr(
+        presets_manager, "atomic_write_text", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("fail"))
+    )
     h = Host()
     assert h._export_settings_to_path(str(tmp_path / "x.json")) is False
 
 
 # ── import_settings_dialog (lines 332-355, webview mocked) ─────────────────
+
 
 def test_import_settings_dialog_no_window(home):
     h = Host()
@@ -170,15 +175,21 @@ def test_import_settings_dialog_exception_returns_false(home, monkeypatch):
 
 # ── _import_settings_from_path: each optional key branch (lines 364-393) ───
 
+
 def test_import_settings_from_path_restores_all_keys(home, tmp_path):
     backup = tmp_path / "backup.json"
-    backup.write_text(json.dumps({
-        "presets": {"p": 1},
-        "config_ini": "[a]\nb = c\n",
-        "alarms": {"a": 1},
-        "hotchannel": {"h": 1},
-        "notification_routing": {"r": 1},
-    }), encoding="utf-8")
+    backup.write_text(
+        json.dumps(
+            {
+                "presets": {"p": 1},
+                "config_ini": "[a]\nb = c\n",
+                "alarms": {"a": 1},
+                "hotchannel": {"h": 1},
+                "notification_routing": {"r": 1},
+            }
+        ),
+        encoding="utf-8",
+    )
 
     h = Host()
     assert h._import_settings_from_path(str(backup)) is True
@@ -212,4 +223,3 @@ def test_import_settings_from_path_exception_returns_false(home, tmp_path):
     bad = tmp_path / "missing.json"  # never written -> read_text raises
     h = Host()
     assert h._import_settings_from_path(str(bad)) is False
-

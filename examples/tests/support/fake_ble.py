@@ -6,14 +6,14 @@ without hardware. Mirrors the minimal surface ``ble_connection.ensure_connected`
 (and later phases) rely on: async ``connect()`` / ``disconnect()`` and an
 ``is_connected`` property.
 """
+
 from __future__ import annotations
 
 import asyncio
 
 
 class FakeBleDevice:
-    def __init__(self, *, connect_results=None, raise_on_connect=None,
-                 lie_connected=False):
+    def __init__(self, *, connect_results=None, raise_on_connect=None, lie_connected=False):
         """``connect_results``: optional list consumed per connect() call; each
         item is True (connect succeeds), False (succeeds-but-stays-disconnected:
         the CoreBluetooth lie), or an Exception instance to raise.
@@ -46,7 +46,7 @@ class FakeBleDevice:
             outcome = self._results.pop(0) if self._results else True
             if isinstance(outcome, BaseException):
                 raise outcome
-            self._connected = bool(outcome)   # False = the "lie" (stays down)
+            self._connected = bool(outcome)  # False = the "lie" (stays down)
             return
         self._connected = True
 

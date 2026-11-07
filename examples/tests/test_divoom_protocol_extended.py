@@ -13,12 +13,16 @@ from divoom_legacy.scheduling.timeplan import Timeplan
 from bleak.exc import BleakError
 import logging
 
+
 @pytest.fixture
 def mock_divoom_instance():
     """Fixture for a mock Divoom instance with patched methods."""
-    with patch('divoom_legacy.divoom.Divoom.send_command_and_wait_for_response', new_callable=AsyncMock) as mock_send_command_and_wait, \
-         patch('divoom_legacy.divoom.Divoom.send_command', new_callable=AsyncMock) as mock_send_command:
-        
+    with (
+        patch(
+            "divoom_legacy.divoom.Divoom.send_command_and_wait_for_response", new_callable=AsyncMock
+        ) as mock_send_command_and_wait,
+        patch("divoom_legacy.divoom.Divoom.send_command", new_callable=AsyncMock) as mock_send_command,
+    ):
         divoom = Divoom(mac="AA:BB:CC:DD:EE:FF", device_name="MockDevice")
         divoom.client = AsyncMock()
         divoom.client.is_connected = True
@@ -30,10 +34,11 @@ def mock_divoom_instance():
         divoom.mock_send_command_and_wait_for_response = mock_send_command_and_wait
         divoom.mock_send_command = mock_send_command
 
-        divoom.mock_send_command_and_wait_for_response.return_value = b'\x01\x00\x00\x00\x00\x02'
+        divoom.mock_send_command_and_wait_for_response.return_value = b"\x01\x00\x00\x00\x00\x02"
         divoom.mock_send_command.return_value = True
 
         yield divoom
+
 
 @pytest.mark.asyncio
 async def test_divoom_init_detailed(mock_divoom_instance):
@@ -48,7 +53,7 @@ async def test_divoom_init_detailed(mock_divoom_instance):
     assert isinstance(divoom.sleep, Sleep)
     assert isinstance(divoom.game, Game)
     assert isinstance(divoom.timeplan, Timeplan)
-    
+
     assert divoom.WRITE_CHARACTERISTIC_UUID == "49535343-8841-43f4-a8d4-ecbe34729bb3"
     assert divoom.NOTIFY_CHARACTERISTIC_UUID == "49535343-1e4d-4bd9-ba61-23c647249616"
     assert divoom.READ_CHARACTERISTIC_UUID == "49535343-1e4d-4bd9-ba61-23c647249616"
@@ -57,24 +62,31 @@ async def test_divoom_init_detailed(mock_divoom_instance):
     assert divoom.use_ios_le_protocol is None
     assert divoom.device_name is None
 
+
 @pytest.mark.asyncio
 async def test_send_diagnostic_payload_with_existing_cache(mock_divoom_instance):
     """Test _send_diagnostic_payload with a non-empty device_cache."""
     divoom = mock_divoom_instance
     mock_cache_util = MagicMock()
     mock_cache_util.save_device_cache = MagicMock()
-    
-    divoom.mock_send_command_and_wait_for_response.return_value = b'\x01\x00\x00\x00\x00\x02'
+
+    divoom.mock_send_command_and_wait_for_response.return_value = b"\x01\x00\x00\x00\x00\x02"
 
     existing_cache = {"some_key": "some_value"}
     result = await divoom._send_diagnostic_payload(
-        "mock_uuid", [0x01, 0xFF, 0x00, 0x00, 0x64, 0x00, 0x01], existing_cache, "mock_cache_dir", "mock_device_id", mock_cache_util
+        "mock_uuid",
+        [0x01, 0xFF, 0x00, 0x00, 0x64, 0x00, 0x01],
+        existing_cache,
+        "mock_cache_dir",
+        "mock_device_id",
+        mock_cache_util,
     )
     assert result is True
     mock_cache_util.save_device_cache.assert_called_once()
     saved_cache = mock_cache_util.save_device_cache.call_args[0][2]
-    assert saved_cache['some_key'] == 'some_value'
-    assert 'last_successful_payload' in saved_cache
+    assert saved_cache["some_key"] == "some_value"
+    assert "last_successful_payload" in saved_cache
+
 
 @pytest.mark.asyncio
 async def test_handle_cached_payload_ios_success(mock_divoom_instance):
@@ -88,7 +100,7 @@ async def test_handle_cached_payload_ios_success(mock_divoom_instance):
         "last_successful_use_ios_le": True,
         "escapePayload": False,
     }
-    divoom.mock_send_command_and_wait_for_response.return_value = b'\x01\x00\x00\x00\x00\x02'
+    divoom.mock_send_command_and_wait_for_response.return_value = b"\x01\x00\x00\x00\x00\x02"
 
     result = await divoom._handle_cached_payload(
         "mock_uuid", cached_data, "mock_cache_dir", "mock_device_id", mock_cache_util
@@ -97,6 +109,7 @@ async def test_handle_cached_payload_ios_success(mock_divoom_instance):
     mock_cache_util.save_device_cache.assert_called_once()
     assert divoom.use_ios_le_protocol is True
     assert divoom.escapePayload is False
+
 
 @pytest.mark.asyncio
 async def test_handle_cached_payload_invalid_payload(mock_divoom_instance):
@@ -114,6 +127,7 @@ async def test_handle_cached_payload_invalid_payload(mock_divoom_instance):
     divoom.mock_send_command_and_wait_for_response.assert_not_called()
     mock_cache_util.save_device_cache.assert_not_called()
 
+
 @pytest.mark.asyncio
 async def test_probe_write_characteristics_no_chars(mock_divoom_instance):
     """Test probe_write_characteristics_and_try_channel_switch with an empty write_chars list."""
@@ -122,6 +136,7 @@ async def test_probe_write_characteristics_no_chars(mock_divoom_instance):
         [], [], [], {}, "mock_cache_dir", "mock_device_id", [], None
     )
     assert result is None
+
 
 @pytest.mark.asyncio
 async def test_probe_write_characteristics_fallback_exception(mock_divoom_instance):
@@ -132,7 +147,7 @@ async def test_probe_write_characteristics_fallback_exception(mock_divoom_instan
     mock_cache_util.save_device_cache = MagicMock()
 
     write_chars = [MagicMock(uuid="char1_uuid")]
-    divoom.mock_send_command_and_wait_for_response.return_value = None # All probes fail
+    divoom.mock_send_command_and_wait_for_response.return_value = None  # All probes fail
     divoom.mock_send_command.side_effect = BleakError("Test Exception")
 
     result = await divoom.probe_write_characteristics_and_try_channel_switch(
@@ -140,6 +155,7 @@ async def test_probe_write_characteristics_fallback_exception(mock_divoom_instan
     )
     assert result is None
     assert divoom.mock_send_command.call_count > 0
+
 
 @pytest.mark.asyncio
 async def test_set_canonical_light_with_custom_rgb(mock_divoom_instance):
@@ -149,16 +165,17 @@ async def test_set_canonical_light_with_custom_rgb(mock_divoom_instance):
     mock_cache_util.load_device_cache.return_value = {}
     mock_cache_util.save_device_cache = MagicMock()
 
-    divoom.mock_send_command_and_wait_for_response.return_value = b'\x01\x00\x00\x00\x00\x02'
+    divoom.mock_send_command_and_wait_for_response.return_value = b"\x01\x00\x00\x00\x00\x02"
     custom_rgb = [10, 20, 30]
 
     result = await divoom.set_canonical_light("mock_cache_dir", "mock_device_id", mock_cache_util, rgb=custom_rgb)
-    
+
     assert result is True
     divoom.mock_send_command_and_wait_for_response.assert_called_once()
     call_args = divoom.mock_send_command_and_wait_for_response.call_args[0]
     assert call_args[1][1:4] == custom_rgb
     mock_cache_util.save_device_cache.assert_called_once()
+
 
 @pytest.mark.asyncio
 async def test_set_canonical_light_cache_os_error(mock_divoom_instance):
@@ -168,10 +185,9 @@ async def test_set_canonical_light_cache_os_error(mock_divoom_instance):
     mock_cache_util.load_device_cache.return_value = {}
     mock_cache_util.save_device_cache.side_effect = OSError("Test OS Error")
 
-    divoom.mock_send_command_and_wait_for_response.return_value = b'\x01\x00\x00\x00\x00\x02'
+    divoom.mock_send_command_and_wait_for_response.return_value = b"\x01\x00\x00\x00\x00\x02"
 
     result = await divoom.set_canonical_light("mock_cache_dir", "mock_device_id", mock_cache_util)
-    
+
     assert result is True
     mock_cache_util.save_device_cache.assert_called_once()
-

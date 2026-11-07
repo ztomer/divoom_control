@@ -12,11 +12,13 @@ sys.path.append(str(Path(__file__).parent.parent / "divoom_gui"))
 
 from gui_main import DivoomGuiAPI
 
+
 class TestConnectionApiCoverage(unittest.TestCase):
     def setUp(self):
         self.presets_patcher = patch("pathlib.Path.exists", return_value=False)
         self.presets_patcher.start()
         import tempfile
+
         self.temp_dir = tempfile.TemporaryDirectory()
         self.home_patcher = patch("pathlib.Path.home", return_value=Path(self.temp_dir.name))
         self.home_patcher.start()
@@ -72,7 +74,11 @@ class TestConnectionApiCoverage(unittest.TestCase):
     def test_device_status_success(self):
         fake = MagicMock()
         fake.device_status.return_value = {
-            "success": True, "connected": True, "mac": "AA", "lan_ip": None, "wall": False,
+            "success": True,
+            "connected": True,
+            "mac": "AA",
+            "lan_ip": None,
+            "wall": False,
         }
         with patch.object(self.api.connection, "_client", return_value=fake):
             st = self.api.connection._device_status()

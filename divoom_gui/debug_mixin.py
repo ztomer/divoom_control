@@ -5,6 +5,7 @@ early error handler forwards window.onerror / unhandledrejection here so a
 blank/broken page is diagnosable even in the PACKAGED app — no WebKit inspector
 needed; just read /tmp/divoom-gui-js.log.
 """
+
 import logging
 
 logger = logging.getLogger("divoom_gui")

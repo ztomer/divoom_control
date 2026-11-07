@@ -4,6 +4,7 @@ The daemon already exposes connection_state; here the GUI's Python API hands it
 to the appbar and the JS heartbeat maps it to the dot. Python is unit-tested
 with a fake daemon client; the JS wiring is asserted against the source.
 """
+
 import json
 import sys
 from pathlib import Path
@@ -24,15 +25,18 @@ TRANSPORT_MARK_CSS = (REPO / "divoom_gui" / "web_ui" / "transport_mark.css").rea
 
 # ── Python API: get_connection_state ───────────────────────────────────────
 
+
 class _FakeClient:
     def __init__(self, status):
         self._status = status
+
     def device_status(self):
         return self._status
 
 
 def _mixin(client):
     from divoom_gui.scanner_mixin import ScannerMixin
+
     m = ScannerMixin.__new__(ScannerMixin)
     m._client = lambda: client
     return m
@@ -61,11 +65,13 @@ def test_get_connection_state_swallows_errors():
     class _Boom:
         def device_status(self):
             raise RuntimeError("socket gone")
+
     out = json.loads(_mixin(_Boom()).get_connection_state())
     assert out == {"connected": False, "state": "disconnected"}
 
 
 # ── JS wiring ───────────────────────────────────────────────────────────────
+
 
 def test_js_connection_state_is_event_driven():
     # R59: the dot is driven by the daemon's pushed `status` events, not a poll.

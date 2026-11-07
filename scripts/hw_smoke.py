@@ -16,6 +16,7 @@ found four panels was reported as a clean run whose reporting had failed.
 
 Style: Susan Kare icons + restrained Braun colours (matches ~/projects/scripts).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -60,6 +61,7 @@ class Failures:
 
 def _client():
     from divoom_client.daemon_protocol import DaemonClient
+
     return DaemonClient()
 
 
@@ -101,8 +103,7 @@ def _connect(c, mac: str, name: str, failures: Failures) -> tuple[bool, float]:
         if good:
             ok(f"connected {name} in {dt:.1f}s  {json.dumps(_conn_state(c))[:90]}")
         else:
-            failures.fail(f"{name} not connected in {dt:.1f}s — "
-                          f"reason={r.get('reason') or r.get('error')}")
+            failures.fail(f"{name} not connected in {dt:.1f}s — reason={r.get('reason') or r.get('error')}")
         return good, dt
     except Exception as e:
         dt = time.monotonic() - t0
@@ -115,7 +116,8 @@ def cycles(c, devs: list, failures: Failures) -> None:
     section("Connect / reconnect / eviction cycles")
     targets = [(d.get("name"), d.get("address")) for d in devs if isinstance(d, dict) and d.get("address")]
     if not targets:
-        warn("no connectable devices; skipping"); return
+        warn("no connectable devices; skipping")
+        return
     a_name, a_mac = targets[0]
     info(f"primary: {a_name}")
 
@@ -124,7 +126,8 @@ def cycles(c, devs: list, failures: Failures) -> None:
     g1, _ = _connect(c, a_mac, a_name, failures)
     if g1:
         try:
-            c.disconnect_device(); step("disconnected")
+            c.disconnect_device()
+            step("disconnected")
         except Exception as e:
             failures.fail(f"disconnect raised: {e}")
         time.sleep(1.0)
@@ -148,7 +151,8 @@ def cycles(c, devs: list, failures: Failures) -> None:
         _connect(c, a_mac, a_name, failures)
 
     try:
-        c.disconnect_device(); step("final disconnect")
+        c.disconnect_device()
+        step("final disconnect")
     except Exception:
         pass
 
@@ -160,8 +164,9 @@ def _status(c) -> dict:
         return {"_err": f"{type(e).__name__}: {e}"}
 
 
-def stress(c, devs: list, iterations: int, scan_every: int, fleet: int,
-           churn: bool = False, failures: Failures | None = None) -> int:
+def stress(
+    c, devs: list, iterations: int, scan_every: int, fleet: int, churn: bool = False, failures: Failures | None = None
+) -> int:
     """Hammer discover/connect/disconnect/switch in a tight loop to surface BLE
     flakiness. Records anomalies (identity mismatch, degraded-but-connected lies,
     duration spikes, reconnect failures, fleet-count drops, raised exceptions).
@@ -172,18 +177,19 @@ def stress(c, devs: list, iterations: int, scan_every: int, fleet: int,
     Returns the anomaly count (0 == clean run)."""
     failures = failures if failures is not None else Failures()
     section(f"Stress — {iterations} iterations")
-    targets = [(d.get("name"), d.get("address")) for d in devs
-               if isinstance(d, dict) and d.get("address")]
+    targets = [(d.get("name"), d.get("address")) for d in devs if isinstance(d, dict) and d.get("address")]
     if not targets:
-        warn("no connectable devices; cannot stress"); return 0
+        warn("no connectable devices; cannot stress")
+        return 0
 
     anomalies: list[str] = []
     # per-device tally: [attempts, oks, fails, dt_min, dt_max, dt_sum]
     tally: dict[str, list] = {a: [0, 0, 0, 9e9, 0.0, 0.0] for _, a in targets}
-    SPIKE = 15.0   # connect slower than this = near-timeout/stall
+    SPIKE = 15.0  # connect slower than this = near-timeout/stall
 
     def note(msg):
-        anomalies.append(msg); failures.fail(f"ANOMALY: {msg}")
+        anomalies.append(msg)
+        failures.fail(f"ANOMALY: {msg}")
 
     for i in range(1, iterations + 1):
         name, mac = targets[(i - 1) % len(targets)]
@@ -202,15 +208,19 @@ def stress(c, devs: list, iterations: int, scan_every: int, fleet: int,
                 note(f"scan#{i} raised {type(e).__name__}: {e}")
 
         # connect
-        t = tally[mac]; t[0] += 1
+        t = tally[mac]
+        t[0] += 1
         t0 = time.monotonic()
         try:
             r = c.connect_device(mac=mac)
             dt = time.monotonic() - t0
-            t[3] = min(t[3], dt); t[4] = max(t[4], dt); t[5] += dt
+            t[3] = min(t[3], dt)
+            t[4] = max(t[4], dt)
+            t[5] += dt
             good = bool(r.get("success") and r.get("connected"))
             if not good:
-                t[2] += 1; note(f"connect {name} failed: {r.get('reason') or r.get('error')}")
+                t[2] += 1
+                note(f"connect {name} failed: {r.get('reason') or r.get('error')}")
                 continue
             t[1] += 1
             if dt > SPIKE:
@@ -224,13 +234,14 @@ def stress(c, devs: list, iterations: int, scan_every: int, fleet: int,
                 note(f"{name} reports connected but DEGRADED (is_alive False)")
         except Exception as e:
             dt = time.monotonic() - t0
-            t[2] += 1; note(f"connect {name} raised in {dt:.1f}s: {type(e).__name__}: {e}")
+            t[2] += 1
+            note(f"connect {name} raised in {dt:.1f}s: {type(e).__name__}: {e}")
             continue
 
-        time.sleep(0.3)   # brief dwell
+        time.sleep(0.3)  # brief dwell
 
         if churn:
-            continue       # no disconnect — next connect must EVICT this device
+            continue  # no disconnect — next connect must EVICT this device
 
         # disconnect, then verify the daemon really released it
         try:
@@ -275,11 +286,11 @@ def main() -> int:
     try:
         c = _client()
     except Exception as e:
-        err(f"cannot reach daemon: {e}"); return 2
+        err(f"cannot reach daemon: {e}")
+        return 2
 
     # status snapshot
-    for name, call in (("connection_state", "get_connection_state"),
-                       ("device_activity", "get_device_activity")):
+    for name, call in (("connection_state", "get_connection_state"), ("device_activity", "get_device_activity")):
         try:
             fn = getattr(c, call, None)
             if fn:
@@ -294,8 +305,7 @@ def main() -> int:
     if args.phase in ("cycles", "all"):
         cycles(c, devs, failures)
     if args.phase in ("stress", "all"):
-        stress(c, devs, args.iterations, args.scan_every, args.fleet, args.churn,
-               failures)
+        stress(c, devs, args.iterations, args.scan_every, args.fleet, args.churn, failures)
     print()
     if failures:
         err(f"done — {len(failures)} failure(s) above.")

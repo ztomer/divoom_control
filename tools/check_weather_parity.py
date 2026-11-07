@@ -16,6 +16,7 @@ one side knows, or a code both know and disagree about. It is deliberately a
 comparison of DATA — the Rust side is a `const` table rather than a `match` for
 this reason, since a match arm is invisible to any checker.
 """
+
 from __future__ import annotations
 
 import os

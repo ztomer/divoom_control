@@ -18,6 +18,7 @@ These tests are the gate for that patch: a seam that stopped being patched
 would leave the suites with the library's 30s again, and the flake would
 come back as an intermittent pre-push refusal nobody could point at.
 """
+
 from __future__ import annotations
 
 from tests.support import browser as B

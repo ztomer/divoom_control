@@ -16,6 +16,7 @@ a click. A running job is real state worth ADOPTING; "no job running" is not
 evidence about what the user wants — most often it just means no device is
 connected yet, which is exactly when someone is clicking around the widgets.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -71,8 +72,7 @@ async def test_selecting_a_widget_survives_the_reconciler_with_no_active_job():
             await page.wait_for_timeout(400)
 
             assert await eval_js(page, "() => window.selectedWidgetIs('sysmon')") is True, (
-                "the reconciler must not override an explicit selection when the "
-                "device simply has no live job running"
+                "the reconciler must not override an explicit selection when the device simply has no live job running"
             )
         finally:
             await browser.close()
@@ -91,9 +91,8 @@ async def test_the_selected_card_keeps_its_active_styling():
             await eval_js(page, "() => window.restoreActiveWidgetForDevice('AA:BB:CC:DD:EE:FF')")
             await page.wait_for_timeout(400)
             active = await eval_js(
-                page,
-                "() => document.getElementById('widget-card-sysmon')"
-                ".classList.contains('widget-active')")
+                page, "() => document.getElementById('widget-card-sysmon').classList.contains('widget-active')"
+            )
             assert active is True
         finally:
             await browser.close()
@@ -114,10 +113,13 @@ async def test_a_running_job_is_still_adopted():
         browser, page = await _open(p)
         try:
             await eval_js(page, "() => document.getElementById('widget-card-sysmon').click()")
-            await eval_js(page, """() => {
+            await eval_js(
+                page,
+                """() => {
                 window.__api.live_job_list = () => JSON.stringify(
                     {success: true, jobs: [{kind: 'weather', done: false, cancelled: false}]});
-            }""")
+            }""",
+            )
             await eval_js(page, "() => window.restoreActiveWidgetForDevice('AA:BB:CC:DD:EE:FF')")
             await page.wait_for_timeout(400)
 

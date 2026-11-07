@@ -17,6 +17,7 @@ per docs/PLANNING_ROUND61.md item 1): the actual `webview.create_window(...)`
 window it produces, `webview.start()`'s real GTK/Cocoa event loop, and the
 `__main__` entrypoint — those are platform GUI mainloop plumbing, not logic.
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -46,6 +47,7 @@ from divoom_gui import single_instance  # noqa: E402  (gui_main re-exports these
 # imported. A subprocess gives us that clean slate without mutating the
 # current process's locale or reloading a module already used by other tests.
 
+
 def test_locale_bootstrap_swallows_setlocale_failures_for_all_candidates():
     script = (
         "import locale, sys\n"
@@ -59,7 +61,11 @@ def test_locale_bootstrap_swallows_setlocale_failures_for_all_candidates():
 
     proc = subprocess.run(
         [sys.executable, "-c", script],
-        cwd=str(_REPO), capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL,
+        cwd=str(_REPO),
+        capture_output=True,
+        text=True,
+        timeout=60,
+        stdin=subprocess.DEVNULL,
         check=False,
     )
     assert proc.returncode == 0, proc.stderr
@@ -68,24 +74,28 @@ def test_locale_bootstrap_swallows_setlocale_failures_for_all_candidates():
 
 # ─────────────────────────── _pywebview_1820_bug_present ────────────────────
 
+
 def test_bug_present_detects_token(monkeypatch):
     def fake_getsource(fn):
         return "AppKit.NSPoint(self.screen.origin.x + x, self.screen.origin.y + flipped_y)"
 
     # The function imports `inspect` locally; patch the real (shared) module.
     import inspect as real_inspect
+
     monkeypatch.setattr(real_inspect, "getsource", fake_getsource)
     assert gui_main._pywebview_1820_bug_present() is True
 
 
 def test_bug_present_false_when_fixed(monkeypatch):
     import inspect as real_inspect
+
     monkeypatch.setattr(real_inspect, "getsource", lambda fn: "NSPoint(x, self.screen.origin.y + flipped_y)")
     assert gui_main._pywebview_1820_bug_present() is False
 
 
 def test_bug_present_false_on_import_error(monkeypatch):
     import builtins
+
     real_import = builtins.__import__
 
     def fake_import(name, *a, **kw):
@@ -108,6 +118,7 @@ def test_bug_present_false_on_getsource_oserror(monkeypatch):
 
 
 # ─────────────────────────────── _resolve_web_ui ─────────────────────────────
+
 
 def test_resolve_web_ui_finds_dev_tree_index(tmp_path, monkeypatch):
     fake_module_file = tmp_path / "src" / "gui_main.py"
@@ -158,6 +169,7 @@ def test_resolve_web_ui_no_candidate_found_returns_first(tmp_path, monkeypatch):
 
 
 # ───────────────────────────── _resolve_bundled_binary ───────────────────────
+
 
 def test_resolve_bundled_binary_env_override(tmp_path, monkeypatch):
     binary = tmp_path / "divoomd"
@@ -226,10 +238,12 @@ def test_resolve_bundled_binary_none_found(tmp_path, monkeypatch):
 
 # ───────────────────────────── _ensure_single_instance ───────────────────────
 
+
 def test_ensure_single_instance_acquires_lock(tmp_path, monkeypatch):
     monkeypatch.setattr(single_instance, "_GUI_LOCK_FH", None)
     # `lock_path` imports `tempfile` locally; patch the shared module.
     import tempfile as real_tempfile
+
     monkeypatch.setattr(real_tempfile, "gettempdir", lambda: str(tmp_path))
 
     assert gui_main._ensure_single_instance() is True
@@ -248,6 +262,7 @@ def test_ensure_single_instance_false_when_locked(tmp_path, monkeypatch):
 
 
 # ─────────────────────────────── _resolve_menubar_binary ─────────────────────
+
 
 def test_resolve_menubar_binary_uses_bundled(monkeypatch):
     resolve = lambda name: "/bundled/divoom-menubar"  # noqa: E731
@@ -311,6 +326,7 @@ def test_resolve_menubar_binary_not_found(monkeypatch, tmp_path):
 
 # ─────────────────────────────── _spawn_menubar_agent ────────────────────────
 
+
 def test_spawn_menubar_agent_noop_on_non_darwin(monkeypatch):
     monkeypatch.setattr(menubar_agent.sys, "platform", "linux")
     monkeypatch.setattr(subprocess, "run", lambda *a, **kw: (_ for _ in ()).throw(AssertionError("must not run")))
@@ -362,14 +378,14 @@ def test_spawn_menubar_agent_swallows_exceptions(monkeypatch):
 
 # ────────────────────────────── _terminate_menubar_agent ─────────────────────
 
+
 def test_terminate_menubar_agent_noop_on_non_darwin(monkeypatch):
     monkeypatch.setattr(menubar_agent.sys, "platform", "linux")
     monkeypatch.setattr(subprocess, "run", lambda *a, **kw: (_ for _ in ()).throw(AssertionError("must not run")))
     menubar_agent._terminate_menubar_agent()
 
 
-def test_terminate_menubar_agent_stops_the_agent_by_its_identity(monkeypatch,
-                                                                    tmp_path):
+def test_terminate_menubar_agent_stops_the_agent_by_its_identity(monkeypatch, tmp_path):
     """The agent is stopped by its identity, not by a name pattern.
 
     `pkill -f divoom-menubar` reached every process whose COMMAND LINE looked
@@ -380,6 +396,7 @@ def test_terminate_menubar_agent_stops_the_agent_by_its_identity(monkeypatch,
     monkeypatch.setenv("DIVOOM_IDENTITY_DIR", str(tmp_path))
     monkeypatch.setattr(menubar_agent.sys, "platform", "darwin")
     from divoom_client import helper_identity
+
     seen = {}
 
     def fake_stop(name):
@@ -398,5 +415,6 @@ def test_terminate_menubar_agent_swallows_exceptions(monkeypatch):
         raise OSError("identity unreadable")
 
     from divoom_client import helper_identity
+
     monkeypatch.setattr(helper_identity, "stop", raiser)
     menubar_agent._terminate_menubar_agent()  # must not raise

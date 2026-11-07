@@ -2,19 +2,31 @@ import logging
 from divoom_legacy.sender_protocol import CommandSender
 from divoom_lib.models import (
     COMMANDS,
-    SUG_CONTROL_START_SAVING, SUG_CONTROL_TRANSMIT_DATA, SUG_CONTROL_TRANSMISSION_END,
-    SUG_DATA_LED_EDITOR, SUG_DATA_SCROLL_ANIMATION,
-    ANUD_CONTROL_START_SENDING, ANUD_CONTROL_SENDING_DATA, ANUD_CONTROL_TERMINATE_SENDING,
-    ABUD_CONTROL_START_SENDING, ABUD_CONTROL_SENDING_DATA, ABUD_CONTROL_TERMINATE_SENDING,
-    ABUD_CONTROL_DELETE, ABUD_CONTROL_PLAY_ARTWORK, ABUD_CONTROL_DELETE_ALL_BY_INDEX,
-    AGUDI_CONTROL_WORD_SUCCESS, AGUDI_CONTROL_WORD_FAILURE
+    SUG_CONTROL_START_SAVING,
+    SUG_CONTROL_TRANSMIT_DATA,
+    SUG_CONTROL_TRANSMISSION_END,
+    SUG_DATA_LED_EDITOR,
+    SUG_DATA_SCROLL_ANIMATION,
+    ANUD_CONTROL_START_SENDING,
+    ANUD_CONTROL_SENDING_DATA,
+    ANUD_CONTROL_TERMINATE_SENDING,
+    ABUD_CONTROL_START_SENDING,
+    ABUD_CONTROL_SENDING_DATA,
+    ABUD_CONTROL_TERMINATE_SENDING,
+    ABUD_CONTROL_DELETE,
+    ABUD_CONTROL_PLAY_ARTWORK,
+    ABUD_CONTROL_DELETE_ALL_BY_INDEX,
+    AGUDI_CONTROL_WORD_SUCCESS,
+    AGUDI_CONTROL_WORD_FAILURE,
 )
+
 
 class AnimationUserDefine:
     """
     Handles user-defined GIF/image drawing and upload commands
     to keep Animation class strictly <= 500 lines of code.
     """
+
     def __init__(self, divoom: CommandSender):
         self.communicator = divoom
         self.logger = divoom.logger
@@ -39,8 +51,8 @@ class AnimationUserDefine:
             elif data[0] == SUG_DATA_SCROLL_ANIMATION:  # Scroll animation
                 if mode is not None and speed is not None and len_val is not None:
                     args.append(mode)
-                    args.extend(speed.to_bytes(2, byteorder='little'))
-                    args.extend(len_val.to_bytes(2, byteorder='little'))
+                    args.extend(speed.to_bytes(2, byteorder="little"))
+                    args.extend(len_val.to_bytes(2, byteorder="little"))
                 else:
                     self.logger.error("Missing parameters for Scroll animation in set_user_gif.")
                     return None
@@ -51,7 +63,7 @@ class AnimationUserDefine:
     def _handle_sug_transmit_data(self, kwargs: dict) -> list | None:
         data = kwargs.get("data")
         if data is not None and len(data) >= 2:
-            args = list(len(data).to_bytes(2, byteorder='little'))
+            args = list(len(data).to_bytes(2, byteorder="little"))
             args.extend(data)  # Image data
             return args
         self.logger.error("Missing 'data' for Transmit data control word.")
@@ -94,7 +106,7 @@ class AnimationUserDefine:
         file_size = kwargs.get("file_size")
         index = kwargs.get("index")
         if file_size is not None and index is not None:
-            return list(file_size.to_bytes(4, byteorder='little')) + list(index.to_bytes(1, byteorder='big'))
+            return list(file_size.to_bytes(4, byteorder="little")) + list(index.to_bytes(1, byteorder="big"))
         self.logger.error("Missing 'file_size' or 'index' for Start Sending control word.")
         return None
 
@@ -103,14 +115,16 @@ class AnimationUserDefine:
         file_offset_id = kwargs.get("file_offset_id")
         file_data = kwargs.get("file_data")
         if file_size is not None and file_offset_id is not None and file_data is not None:
-            return list(file_size.to_bytes(4, byteorder='little')) + \
-                   list(file_offset_id.to_bytes(2, byteorder='little')) + \
-                   file_data
+            return (
+                list(file_size.to_bytes(4, byteorder="little"))
+                + list(file_offset_id.to_bytes(2, byteorder="little"))
+                + file_data
+            )
         self.logger.error("Missing 'file_size', 'file_offset_id', or 'file_data' for Sending Data control word.")
         return None
 
     def _handle_anud_terminate_sending(self, kwargs: dict) -> list | None:
-        return [] # No additional data
+        return []  # No additional data
 
     _anud_handlers = {
         ANUD_CONTROL_START_SENDING: _handle_anud_start_sending,
@@ -141,9 +155,11 @@ class AnimationUserDefine:
         index = kwargs.get("index")
         file_id = kwargs.get("file_id")
         if file_size is not None and index is not None and file_id is not None:
-            return list(file_size.to_bytes(4, byteorder='little')) + \
-                   list(index.to_bytes(1, byteorder='big')) + \
-                   list(file_id.to_bytes(4, byteorder='big'))
+            return (
+                list(file_size.to_bytes(4, byteorder="little"))
+                + list(index.to_bytes(1, byteorder="big"))
+                + list(file_id.to_bytes(4, byteorder="big"))
+            )
         self.logger.error("Missing 'file_size' or 'index' or 'file_id' for Start Sending control word.")
         return None
 
@@ -152,28 +168,29 @@ class AnimationUserDefine:
         file_offset_id = kwargs.get("file_offset_id")
         file_data = kwargs.get("file_data")
         if file_size is not None and file_offset_id is not None and file_data is not None:
-            return list(file_size.to_bytes(4, byteorder='little')) + \
-                   list(file_offset_id.to_bytes(2, byteorder='little')) + \
-                   file_data
+            return (
+                list(file_size.to_bytes(4, byteorder="little"))
+                + list(file_offset_id.to_bytes(2, byteorder="little"))
+                + file_data
+            )
         self.logger.error("Missing 'file_size', 'file_offset_id', or 'file_data' for Sending Data control word.")
         return None
 
     def _handle_abud_terminate_sending(self, kwargs: dict) -> list | None:
-        return [] # No additional data
+        return []  # No additional data
 
     def _handle_abud_delete_or_play_artwork(self, kwargs: dict) -> list | None:
         file_id = kwargs.get("file_id")
         index = kwargs.get("index")
         if file_id is not None and index is not None:
-            return list(file_id.to_bytes(4, byteorder='big')) + \
-                   list(index.to_bytes(1, byteorder='big'))
+            return list(file_id.to_bytes(4, byteorder="big")) + list(index.to_bytes(1, byteorder="big"))
         self.logger.error("Missing 'file_id' or 'index' for Delete/Play control word.")
         return None
 
     def _handle_abud_delete_all_by_index(self, kwargs: dict) -> list | None:
         index = kwargs.get("index")
         if index is not None:
-            return list(index.to_bytes(1, byteorder='big'))
+            return list(index.to_bytes(1, byteorder="big"))
         self.logger.error("Missing 'index' for Delete all files control word.")
         return None
 
@@ -207,21 +224,22 @@ class AnimationUserDefine:
     async def app_get_user_define_info(self, user_index: int) -> dict | None:
         """Get information about a 64x64 user-defined image frame."""
         self.logger.info(f"App get user define info for index {user_index} (0x8e)...")
-        args = user_index.to_bytes(1, byteorder='big')
-        response = await self.communicator.send_command_and_wait_for_response(COMMANDS["app get user define info"], list(args))
+        args = user_index.to_bytes(1, byteorder="big")
+        response = await self.communicator.send_command_and_wait_for_response(
+            COMMANDS["app get user define info"], list(args)
+        )
         if response and len(response) >= 1:
             control_word = response[0]
             if control_word == AGUDI_CONTROL_WORD_SUCCESS:
                 if len(response) >= 8:
                     user_index_resp = response[1]
-                    total = int.from_bytes(response[2:4], byteorder='little')
-                    offset = int.from_bytes(response[4:6], byteorder='little')
-                    num = int.from_bytes(response[6:8], byteorder='little')
+                    total = int.from_bytes(response[2:4], byteorder="little")
+                    offset = int.from_bytes(response[4:6], byteorder="little")
+                    num = int.from_bytes(response[6:8], byteorder="little")
                     file_ids = []
                     for i in range(num):
-                        if len(response) >= 8 + (i+1)*4:
-                            file_ids.append(int.from_bytes(
-                                response[8+i*4:8+(i+1)*4], byteorder='big'))
+                        if len(response) >= 8 + (i + 1) * 4:
+                            file_ids.append(int.from_bytes(response[8 + i * 4 : 8 + (i + 1) * 4], byteorder="big"))
                     return {
                         "control_word": control_word,
                         "user_index": user_index_resp,

@@ -8,6 +8,7 @@ that nothing collected: 112 of them, every one fingerprint
 `probe-b31fe2907f4634b8`. The fix is `tools/_cargo_env.py`; these tests hold it
 in place, independent of how the machine running them configures cargo.
 """
+
 from __future__ import annotations
 
 import json
@@ -66,12 +67,14 @@ def test_the_tray_icon_probe_leaves_no_build_behind(monkeypatch, tmp_path):
     control = parent / "control"
     (control / "src").mkdir(parents=True)
     (control / "src" / "main.rs").write_text("fn main() {}\n")
-    (control / "Cargo.toml").write_text(
-        '[package]\nname = "control"\nversion = "0.0.0"\nedition = "2024"\n'
-    )
+    (control / "Cargo.toml").write_text('[package]\nname = "control"\nversion = "0.0.0"\nedition = "2024"\n')
     meta = subprocess.run(
         ["cargo", "metadata", "--format-version", "1", "--no-deps"],
-        capture_output=True, text=True, cwd=control, timeout=120, check=True,
+        capture_output=True,
+        text=True,
+        cwd=control,
+        timeout=120,
+        check=True,
         stdin=subprocess.DEVNULL,
     )
     assert json.loads(meta.stdout)["build_directory"].startswith(str(leak)), meta.stdout
@@ -121,8 +124,6 @@ def test_every_python_cargo_build_in_tools_and_scripts_uses_probe_env():
     # Not vacuous: the two probe builds this test was written for are in scope.
     assert {f.name for f in scanned} >= {"render_tray_icon.py", "mem_gauge_compare.py"}
     bad = {
-        str(f.relative_to(REPO)): lines
-        for f in scanned
-        if (lines := _unguarded_builds(f.read_text(encoding="utf-8")))
+        str(f.relative_to(REPO)): lines for f in scanned if (lines := _unguarded_builds(f.read_text(encoding="utf-8")))
     }
     assert not bad, f"cargo builds without probe_env (tools/_cargo_env.py): {bad}"

@@ -16,6 +16,7 @@ The error half matters as much as the happy half: `CloudUnavailable.cause` is
 what lets a panel say "the background service is not running" instead of
 "nothing found", so the three causes are pinned as distinguishable.
 """
+
 from __future__ import annotations
 
 import json
@@ -37,8 +38,7 @@ class StubDaemon:
     def __init__(self, reply: dict):
         self.reply = reply
         self.requests: list[dict] = []
-        self.path = os.path.join(
-            tempfile.gettempdir(), f"divoom_cloud_stub_{uuid.uuid4().hex[:8]}.sock")
+        self.path = os.path.join(tempfile.gettempdir(), f"divoom_cloud_stub_{uuid.uuid4().hex[:8]}.sock")
         self._srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self._srv.bind(self.path)
         self._srv.listen(8)
@@ -99,35 +99,31 @@ OK = {"success": True, "result": ["a", "b"]}
 # is a wrapper that will return "nothing found" forever.
 CONTRACT = [
     (lambda c: c.get_dial_types(), "get_dial_types", {}),
-    (lambda c: c.get_dial_list("Social", 2), "get_dial_list",
-     {"dial_type": "Social", "page": 2}),
-    (lambda c: c.list_clock_faces("Normal", 3), "list_clock_faces",
-     {"dial_type": "Normal", "page": 3}),
+    (lambda c: c.get_dial_list("Social", 2), "get_dial_list", {"dial_type": "Social", "page": 2}),
+    (lambda c: c.list_clock_faces("Normal", 3), "list_clock_faces", {"dial_type": "Normal", "page": 3}),
     (lambda c: c.list_clock_faces(), "list_clock_faces", {"page": 1}),
-    (lambda c: c.get_my_playlists(10, 2), "get_my_playlists",
-     {"limit": 10, "page": 2}),
-    (lambda c: c.get_playlist_images(77, 5, 1), "get_playlist_images",
-     {"play_id": 77, "limit": 5, "page": 1}),
-    (lambda c: c.get_aid_sleep_list(1, 20, 1), "get_aid_sleep_list",
-     {"sleep_type": 1, "limit": 20, "page": 1}),
-    (lambda c: c.get_my_aid_sleep_list(0), "get_my_aid_sleep_list",
-     {"sleep_type": 0, "limit": 30, "page": 1}),
+    (lambda c: c.get_my_playlists(10, 2), "get_my_playlists", {"limit": 10, "page": 2}),
+    (lambda c: c.get_playlist_images(77, 5, 1), "get_playlist_images", {"play_id": 77, "limit": 5, "page": 1}),
+    (lambda c: c.get_aid_sleep_list(1, 20, 1), "get_aid_sleep_list", {"sleep_type": 1, "limit": 20, "page": 1}),
+    (lambda c: c.get_my_aid_sleep_list(0), "get_my_aid_sleep_list", {"sleep_type": 0, "limit": 30, "page": 1}),
     (lambda c: c.get_photo_albums(), "get_photo_albums", {}),
-    (lambda c: c.search_weather_city("Tel Aviv"), "search_weather_city",
-     {"keyword": "Tel Aviv"}),
-    (lambda c: c.fetch_gallery(9, 30, 1, mac="AA"), "fetch_gallery",
-     {"classify": 9, "limit": 30, "file_sort": 1, "mac": "AA"}),
-    (lambda c: c.fetch_gallery(9, 30, 1, all_sizes=True), "fetch_gallery",
-     {"classify": 9, "limit": 30, "file_sort": 1, "all_sizes": True}),
-    (lambda c: c.get_category_file_list(9, 20), "get_category_file_list",
-     {"classify": 9, "limit": 20}),
-    (lambda c: c.get_category_file_list(), "get_category_file_list",
-     {"limit": 20}),
+    (lambda c: c.search_weather_city("Tel Aviv"), "search_weather_city", {"keyword": "Tel Aviv"}),
+    (
+        lambda c: c.fetch_gallery(9, 30, 1, mac="AA"),
+        "fetch_gallery",
+        {"classify": 9, "limit": 30, "file_sort": 1, "mac": "AA"},
+    ),
+    (
+        lambda c: c.fetch_gallery(9, 30, 1, all_sizes=True),
+        "fetch_gallery",
+        {"classify": 9, "limit": 30, "file_sort": 1, "all_sizes": True},
+    ),
+    (lambda c: c.get_category_file_list(9, 20), "get_category_file_list", {"classify": 9, "limit": 20}),
+    (lambda c: c.get_category_file_list(), "get_category_file_list", {"limit": 20}),
 ]
 
 
-@pytest.mark.parametrize("call, command, args", CONTRACT,
-                         ids=[c[1] + str(i) for i, c in enumerate(CONTRACT)])
+@pytest.mark.parametrize("call, command, args", CONTRACT, ids=[c[1] + str(i) for i, c in enumerate(CONTRACT)])
 def test_wrapper_sends_exactly_the_expected_command(stub, call, command, args):
     s, client = stub(OK)
     call(client)
@@ -145,6 +141,7 @@ def test_every_command_this_module_sends_exists_in_the_daemon_dispatch():
     keeps this honest without a running daemon.
     """
     from pathlib import Path
+
     repo = Path(__file__).resolve().parent.parent
     dispatch = (repo / "divoomd" / "src" / "daemon" / "dispatch.rs").read_text()
     sync = (repo / "divoomd" / "src" / "sync_artwork.rs").read_text()
@@ -171,9 +168,9 @@ def test_get_cached_credentials_passes_null_through(stub):
 
 # ── the failure half: reasons, and causes that stay distinguishable ──────────
 
+
 def test_a_cloud_error_carries_the_daemon_reason(stub):
-    s, client = stub({"success": False,
-                      "error": "Photo/GetAlbumList failed (RC=3): Request data is incomplete"})
+    s, client = stub({"success": False, "error": "Photo/GetAlbumList failed (RC=3): Request data is incomplete"})
     with pytest.raises(CloudUnavailable) as exc:
         client.get_photo_albums()
     assert "RC=3" in exc.value.reason
@@ -230,6 +227,7 @@ def test_cloud_calls_use_the_cloud_timeout_not_the_2s_default(stub):
     on an expired token, so a 2s read would abandon replies that were on their
     way — indistinguishable, from the panel, from an empty result."""
     from divoom_client.daemon_config import load_daemon_config
+
     cfg = load_daemon_config()
     assert cfg.cloud_timeout >= 30, "cloud_timeout must outlast the daemon's retry path"
     assert cfg.cloud_timeout > cfg.client_timeout
@@ -255,9 +253,9 @@ def test_cloud_calls_use_the_cloud_timeout_not_the_2s_default(stub):
 # The GUI stopped calling divoom_lib.divoom_auth and now goes through these.
 # They were shipped with zero coverage, which the pre-push floor caught.
 
+
 def test_get_credentials_returns_a_value_object(stub):
-    s, client = stub({"success": True, "token": 42, "user_id": 7,
-                      "email": "a@b.com", "utc": 123})
+    s, client = stub({"success": True, "token": 42, "user_id": 7, "email": "a@b.com", "utc": 123})
     creds = client.get_credentials()
     assert creds.token == 42 and creds.user_id == 7
     assert creds.email == "a@b.com" and creds.utc == 123
@@ -323,5 +321,8 @@ def test_credentials_value_object_semantics():
     assert DaemonCredentials.from_reply({"token": None, "email": None}).token == 0
     # v0.37 step 6: the daemon says where it keeps the password; an older
     # daemon says nothing and the field reads "" rather than a guess.
-    assert DaemonCredentials.from_reply({"token": 1, "user_id": 1, "password_store": "Keychain"}).password_store == "Keychain"
+    assert (
+        DaemonCredentials.from_reply({"token": 1, "user_id": 1, "password_store": "Keychain"}).password_store
+        == "Keychain"
+    )
     assert DaemonCredentials.from_reply({"token": 1, "user_id": 1}).password_store == ""

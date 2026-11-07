@@ -1,4 +1,5 @@
 """Shared scaffolding for the split presets_manager test modules."""
+
 import sys
 from pathlib import Path
 

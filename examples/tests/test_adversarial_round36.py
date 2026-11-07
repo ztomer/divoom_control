@@ -7,6 +7,7 @@
 - cmd_set_temperature didn't range-validate before connecting → an out-of-range
   temp opened BLE then died with a raw ValueError traceback.
 """
+
 import argparse
 import asyncio
 import sys
@@ -18,6 +19,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 
 # ── Uncle Bob: show_clock(hot=True) enable byte ─────────────────────────────
+
 
 def test_show_clock_hot_sends_enable_byte():
     from divoom_legacy.display import Display
@@ -40,6 +42,7 @@ def test_show_clock_hot_sends_enable_byte():
 
 # ── Linus: zero-duration GIF frames use the default, not a 1ms strobe ────────
 
+
 def test_gif_zero_duration_uses_default(tmp_path):
     from PIL import Image
     from divoom_legacy.utils.image_processing import process_image
@@ -56,4 +59,3 @@ def test_gif_zero_duration_uses_default(tmp_path):
 
 
 # ── Hashimoto: set-temperature validates before connecting ──────────────────
-

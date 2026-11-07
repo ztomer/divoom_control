@@ -28,6 +28,7 @@ The start time is read with `ps -o lstart=` under `LC_ALL=C`, so the value
 is the same string on every machine and in every locale, and a reader (this
 app, or a shell script) can compare it without parsing a date.
 """
+
 from __future__ import annotations
 
 import json
@@ -83,7 +84,7 @@ def process_started(pid: int) -> str | None:
             env={"LC_ALL": "C", "PATH": "/usr/bin:/bin"},
             check=False,
         )
-    except (OSError, subprocess.SubprocessError):
+    except OSError, subprocess.SubprocessError:
         return None
     if done.returncode != 0:
         return None

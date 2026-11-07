@@ -1,4 +1,3 @@
-
 from divoom_legacy.tools.scoreboard import Scoreboard
 from divoom_legacy.tools.timer import Timer
 from divoom_legacy.tools.countdown import Countdown

@@ -8,6 +8,7 @@ of one fact drift (house rule 9); this pins the count of lit cells against the
 font itself (an independent oracle: a cropped glyph has fewer) and the node
 against the card, cell for cell.
 """
+
 import pytest
 from pathlib import Path
 
@@ -31,7 +32,9 @@ async def test_a_bench_node_draws_the_whole_clock_the_card_draws(size):
         await page.wait_for_load_state("domcontentloaded")
         await wait_js(page, "() => !!window.DisplayPreviewRegistry && !!window._clockFaceSVG")
 
-        res = await eval_js(page, """(size) => {
+        res = await eval_js(
+            page,
+            """(size) => {
             const disp = new window.DisplayPreview("bench-test", {width: size, height: size, size});
             disp.setActivity("clock", { style: 0, color: "#ffffff" });
             const canvas = document.createElement("canvas");
@@ -57,10 +60,12 @@ async def test_a_bench_node_draws_the_whole_clock_the_card_draws(size):
                 card.add(`${Number(r.getAttribute("x")) / w},${Number(r.getAttribute("y")) / w}`);
             });
             return { node: [...node].sort(), card: [...card].sort() };
-        }""", size)
+        }""",
+            size,
+        )
         await browser.close()
 
     assert len(res["node"]) == WHOLE_CLOCK_CELLS, (
-        f"{size}x{size}: the node lit {len(res['node'])} of the clock's "
-        f"{WHOLE_CLOCK_CELLS} cells -- a glyph is cropped")
+        f"{size}x{size}: the node lit {len(res['node'])} of the clock's {WHOLE_CLOCK_CELLS} cells -- a glyph is cropped"
+    )
     assert res["node"] == res["card"], "the node and the card draw different clocks"

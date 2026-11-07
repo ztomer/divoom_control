@@ -36,6 +36,7 @@ The socket path is also per-STACK now. It used to be keyed on `os.getpid()` —
 the pytest process PID, constant for a whole run — so every stack in a session
 shared one path and a single leak made the next test collide with it.
 """
+
 from __future__ import annotations
 
 import itertools
@@ -72,9 +73,14 @@ class IsolatedStack:
     too slow to test is a cleanup path nobody tests.
     """
 
-    def __init__(self, bin_path: Path, *, socket_timeout: float = 5.0,
-                 http_timeout: float = 30.0,
-                 bridge_script: Path | None = None) -> None:
+    def __init__(
+        self,
+        bin_path: Path,
+        *,
+        socket_timeout: float = 5.0,
+        http_timeout: float = 30.0,
+        bridge_script: Path | None = None,
+    ) -> None:
         # Set BEFORE anything can raise: close() runs against a half-built
         # object by definition.
         self.daemon_proc: subprocess.Popen | None = None
@@ -88,37 +94,45 @@ class IsolatedStack:
         # "another divoomd is starting up". Kept in /tmp and kept short: a unix
         # socket path has a hard ~104-byte limit, and the pytest tmp dirs under
         # /var/folders are long enough to blow it.
-        self.socket_path = (
-            f"/tmp/divoomd_e2e_{os.getpid()}_{next(_STACK_SEQ)}_"
-            f"{uuid.uuid4().hex[:8]}.sock")
+        self.socket_path = f"/tmp/divoomd_e2e_{os.getpid()}_{next(_STACK_SEQ)}_{uuid.uuid4().hex[:8]}.sock"
         self.bridge_port = free_port()
         self.bridge_url = f"http://127.0.0.1:{self.bridge_port}"
 
         try:
-            self._bring_up(bin_path, socket_timeout, http_timeout,
-                           bridge_script or BRIDGE_SCRIPT)
+            self._bring_up(bin_path, socket_timeout, http_timeout, bridge_script or BRIDGE_SCRIPT)
         except BaseException:
             # `pytest.fail` raises Failed <- OutcomeException <- BaseException,
             # so `except Exception` here would silently catch nothing.
             self.close()
             raise
 
-    def _bring_up(self, bin_path: Path, socket_timeout: float,
-                  http_timeout: float, bridge_script: Path) -> None:
+    def _bring_up(self, bin_path: Path, socket_timeout: float, http_timeout: float, bridge_script: Path) -> None:
         self.fake_home = tempfile.mkdtemp(prefix="divoom_e2e_home_")
 
         self.daemon_proc = subprocess.Popen(
             [str(bin_path), "--socket", self.socket_path],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            stdin=subprocess.DEVNULL,
         )
         self._wait_for_socket(self.socket_path, socket_timeout)
 
         self.bridge_proc = subprocess.Popen(
-            [sys.executable, str(bridge_script),
-             "--socket-path", self.socket_path,
-             "--port", str(self.bridge_port),
-             "--fake-home", self.fake_home],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, stdin=subprocess.DEVNULL,
+            [
+                sys.executable,
+                str(bridge_script),
+                "--socket-path",
+                self.socket_path,
+                "--port",
+                str(self.bridge_port),
+                "--fake-home",
+                self.fake_home,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            stdin=subprocess.DEVNULL,
         )
         self._wait_for_http(self.bridge_port, http_timeout)
 
@@ -162,15 +176,12 @@ class IsolatedStack:
             except OSError:
                 if self.bridge_proc.poll() is not None:
                     out, err = self.bridge_proc.communicate(timeout=1.0)
-                    pytest.fail(
-                        f"e2e_gui_bridge exited early. stdout={out} stderr={err}")
+                    pytest.fail(f"e2e_gui_bridge exited early. stdout={out} stderr={err}")
                 time.sleep(0.05)
         # Surface the bridge's output so a real hang is diagnosable rather than
         # an opaque timeout. Killing it is close()'s job now, not this one's.
         out, err = self._drain(self.bridge_proc)
-        pytest.fail(
-            f"e2e_gui_bridge never opened port {port} in {timeout}s. "
-            f"stdout={out} stderr={err}")
+        pytest.fail(f"e2e_gui_bridge never opened port {port} in {timeout}s. stdout={out} stderr={err}")
 
     @staticmethod
     def _drain(proc: subprocess.Popen) -> tuple[str, str]:
@@ -218,8 +229,7 @@ class IsolatedStack:
 
         # The daemon unlinks its own socket on a clean exit; this covers the
         # kill path, where Drop never ran.
-        for path in (self.socket_path, f"{self.socket_path}.lock",
-                     f"{self.socket_path}.failure"):
+        for path in (self.socket_path, f"{self.socket_path}.lock", f"{self.socket_path}.failure"):
             try:
                 os.remove(path)
             except OSError:

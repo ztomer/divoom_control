@@ -7,6 +7,7 @@ binary-opcode command already goes through (confirmed byte-for-byte
 against divoom_lib/framing.py). These tests pin that encoding: command id
 1, and a JSON payload with the exact field names/values.
 """
+
 import json
 import logging
 import pytest
@@ -57,14 +58,19 @@ async def test_add_sends_all_track_fields():
     aid_sleep = AidSleep(mock)
 
     await aid_sleep.add(
-        sleep_id=5, sleep_type=2, name="Rain", file_id="group1/abc",
-        language="en", audio_type=1, video_type=0)
+        sleep_id=5, sleep_type=2, name="Rain", file_id="group1/abc", language="en", audio_type=1, video_type=0
+    )
 
     body = _sent_command_json(mock)
     assert body == {
         "Command": "AidSleep/Add",
-        "SleepId": 5, "Type": 2, "Name": "Rain", "FileId": "group1/abc",
-        "Language": "en", "AudioType": 1, "VideoType": 0,
+        "SleepId": 5,
+        "Type": 2,
+        "Name": "Rain",
+        "FileId": "group1/abc",
+        "Language": "en",
+        "AudioType": 1,
+        "VideoType": 0,
     }
 
 

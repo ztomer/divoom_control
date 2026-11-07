@@ -26,9 +26,13 @@ class LanExtrasMixin:
     async def set_5lcd_channel_type(self, channel_type: int, lcd_independence: int = 0) -> dict:
         """Set which channel/mode type is shown on a panel of a 5-LCD
         multi-panel device. Transport: LAN."""
-        return await self.post("Channel/Set5LcdChannelType", {
-            "ChannelType": channel_type, "LcdIndependence": lcd_independence,
-        })
+        return await self.post(
+            "Channel/Set5LcdChannelType",
+            {
+                "ChannelType": channel_type,
+                "LcdIndependence": lcd_independence,
+            },
+        )
 
     @via(Transport.LAN)
     async def set_5lcd_whole_clock_id(self, clock_id: int) -> dict:
@@ -54,16 +58,27 @@ class LanExtrasMixin:
 
     @via(Transport.LAN)
     async def send_voice_text(
-        self, text: str, *, nickname: str = "", background: str = "",
-        text_color: str = "#FFFFFF", speed: int = 50,
+        self,
+        text: str,
+        *,
+        nickname: str = "",
+        background: str = "",
+        text_color: str = "#FFFFFF",
+        speed: int = 50,
     ) -> dict:
         """Send a text-to-speech-style greeting/banner. Transport: LAN.
         NOT confirmed to render on this project's target devices — see the
         module docstring."""
-        return await self.post("Voice/SendText", {
-            "Text": text, "NickName": nickname, "Background": background,
-            "TextColor": text_color, "Speed": speed,
-        })
+        return await self.post(
+            "Voice/SendText",
+            {
+                "Text": text,
+                "NickName": nickname,
+                "Background": background,
+                "TextColor": text_color,
+                "Speed": speed,
+            },
+        )
 
     @via(Transport.LAN)
     async def send_danmaku_text(self, text: str, *, text_color: str = "#FFFFFF") -> dict:

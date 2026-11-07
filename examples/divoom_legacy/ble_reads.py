@@ -20,6 +20,7 @@ without hardware. (The separate question of WHY the query frame is unanswered �
 a per-model 0x42/0x46 framing variant — is a hardware-protocol investigation
 tracked alongside; this layer makes the timeout degrade gracefully regardless.)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -36,7 +37,7 @@ logger = logging.getLogger("divoom_legacy.ble_reads")
 class ReadResult:
     ok: bool
     value: Any = None
-    from_cache: bool = False           # served a stale last-good value
+    from_cache: bool = False  # served a stale last-good value
     reason: FailureReason = FailureReason.NONE
     detail: str = ""
 
@@ -50,6 +51,7 @@ class ReadResult:
 class ReadCache:
     """Tiny last-good store keyed by read name (per device). Survives across
     calls so a transient unanswered query falls back to the last value."""
+
     def __init__(self) -> None:
         self._values: dict[str, Any] = {}
 
@@ -92,7 +94,7 @@ async def read_with_retry(
                 if cache is not None and cache_key is not None:
                     cache.put(cache_key, value)
                 return ReadResult(True, value, from_cache=False)
-            last_reason = FailureReason.DROPPED   # replied, but with junk/empty
+            last_reason = FailureReason.DROPPED  # replied, but with junk/empty
             detail = "read returned an invalid/empty value"
         except asyncio.TimeoutError:
             last_reason = FailureReason.TIMEOUT
@@ -100,14 +102,12 @@ async def read_with_retry(
         except Exception as e:  # noqa: BLE001 — a flaky read shouldn't raise out
             last_reason = FailureReason.UNKNOWN
             detail = str(e)
-        logger.debug("read %s attempt %d/%d: %s (%s)",
-                     cache_key, attempt + 1, attempts, last_reason.value, detail)
+        logger.debug("read %s attempt %d/%d: %s (%s)", cache_key, attempt + 1, attempts, last_reason.value, detail)
         if attempt < attempts - 1:
             await sleep(retry_delay)
 
     # Exhausted — degrade gracefully to the last known value if we have one.
     if cache is not None and cache_key is not None and cache_key in cache:
         logger.info("read %s unanswered; serving last-good cached value", cache_key)
-        return ReadResult(True, cache.get(cache_key), from_cache=True,
-                          reason=last_reason, detail=detail)
+        return ReadResult(True, cache.get(cache_key), from_cache=True, reason=last_reason, detail=detail)
     return ReadResult(False, None, reason=last_reason, detail=detail)

@@ -20,6 +20,7 @@ ios-le-retry branches, and the large-message chunking path in
 _send_basic_protocol_payload (never exercised elsewhere — DEFAULT_CHUNK_SIZE
 is 200 bytes and every existing test sends short payloads).
 """
+
 import asyncio
 import json
 import logging
@@ -60,6 +61,7 @@ def _transport(monkeypatch, **cfg_kwargs):
 
 # ── __init__: no mac, no client → client stays None ─────────────────────────
 
+
 def test_init_without_mac_or_client_leaves_client_none():
     cfg = models.DivoomConfig(mac=None, client=None)
     t = BLETransport(cfg, logging.getLogger("t"))
@@ -67,6 +69,7 @@ def test_init_without_mac_or_client_leaves_client_none():
 
 
 # ── connect(): device-name resolution (IOBluetooth + cache file) ────────────
+
 
 def test_connect_resolves_device_name_via_iobluetooth(monkeypatch):
     mock_iobluetooth = MagicMock()
@@ -77,10 +80,13 @@ def test_connect_resolves_device_name_via_iobluetooth(monkeypatch):
 
     with patch("divoom_legacy.divoom.BleakClient") as mk:
         mk.return_value = MagicMock()
-        cfg = models.DivoomConfig(mac="AA:BB:CC:DD:EE:FF", device_name=None,
-                                   write_characteristic_uuid=None,
-                                   notify_characteristic_uuid=None,
-                                   read_characteristic_uuid=None)
+        cfg = models.DivoomConfig(
+            mac="AA:BB:CC:DD:EE:FF",
+            device_name=None,
+            write_characteristic_uuid=None,
+            notify_characteristic_uuid=None,
+            read_characteristic_uuid=None,
+        )
         t = BLETransport(cfg, logging.getLogger("t"))
 
     # UUIDs are unset so connect() raises right after resolving the name —
@@ -97,14 +103,17 @@ def test_connect_iobluetooth_exception_is_swallowed(monkeypatch):
 
     with patch("divoom_legacy.divoom.BleakClient") as mk:
         mk.return_value = MagicMock()
-        cfg = models.DivoomConfig(mac="AA:BB:CC:DD:EE:FF", device_name=None,
-                                   write_characteristic_uuid=None,
-                                   notify_characteristic_uuid=None,
-                                   read_characteristic_uuid=None)
+        cfg = models.DivoomConfig(
+            mac="AA:BB:CC:DD:EE:FF",
+            device_name=None,
+            write_characteristic_uuid=None,
+            notify_characteristic_uuid=None,
+            read_characteristic_uuid=None,
+        )
         t = BLETransport(cfg, logging.getLogger("t"))
 
     with pytest.raises(CharacteristicConfigError):
-        _run(t.connect())            # must not raise from the swallowed IOBluetooth error
+        _run(t.connect())  # must not raise from the swallowed IOBluetooth error
     assert t.device_name is None
 
 
@@ -115,16 +124,20 @@ def test_connect_resolves_device_name_via_cache_file(monkeypatch, tmp_path):
 
     cache_dir = tmp_path / ".config" / "divoom-control"
     cache_dir.mkdir(parents=True)
-    (cache_dir / "discovered_devices.json").write_text(json.dumps(
-        [{"address": "AA:BB:CC:DD:EE:FF", "name": "Cached-Ditoo"}]))
+    (cache_dir / "discovered_devices.json").write_text(
+        json.dumps([{"address": "AA:BB:CC:DD:EE:FF", "name": "Cached-Ditoo"}])
+    )
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
     with patch("divoom_legacy.divoom.BleakClient") as mk:
         mk.return_value = MagicMock()
-        cfg = models.DivoomConfig(mac="AA:BB:CC:DD:EE:FF", device_name=None,
-                                   write_characteristic_uuid=None,
-                                   notify_characteristic_uuid=None,
-                                   read_characteristic_uuid=None)
+        cfg = models.DivoomConfig(
+            mac="AA:BB:CC:DD:EE:FF",
+            device_name=None,
+            write_characteristic_uuid=None,
+            notify_characteristic_uuid=None,
+            read_characteristic_uuid=None,
+        )
         t = BLETransport(cfg, logging.getLogger("t"))
 
     with pytest.raises(CharacteristicConfigError):
@@ -144,18 +157,22 @@ def test_connect_cache_file_read_error_is_swallowed(monkeypatch, tmp_path):
 
     with patch("divoom_legacy.divoom.BleakClient") as mk:
         mk.return_value = MagicMock()
-        cfg = models.DivoomConfig(mac="AA:BB:CC:DD:EE:FF", device_name=None,
-                                   write_characteristic_uuid=None,
-                                   notify_characteristic_uuid=None,
-                                   read_characteristic_uuid=None)
+        cfg = models.DivoomConfig(
+            mac="AA:BB:CC:DD:EE:FF",
+            device_name=None,
+            write_characteristic_uuid=None,
+            notify_characteristic_uuid=None,
+            read_characteristic_uuid=None,
+        )
         t = BLETransport(cfg, logging.getLogger("t"))
 
     with pytest.raises(CharacteristicConfigError):
-        _run(t.connect())            # malformed cache must not crash connect()
+        _run(t.connect())  # malformed cache must not crash connect()
     assert t.device_name is None
 
 
 # ── connect(): already-connected-mid-race / already-subscribed / no-notify ──
+
 
 def test_connect_skips_redundant_connect_when_client_already_connected(monkeypatch):
     """If self.client.is_connected flips True between the early return check
@@ -167,11 +184,11 @@ def test_connect_skips_redundant_connect_when_client_already_connected(monkeypat
 
     def _is_connected(_self):
         reads["n"] += 1
-        return reads["n"] > 1   # False the first read, True from then on
+        return reads["n"] > 1  # False the first read, True from then on
 
     type(t.client).is_connected = property(_is_connected)
     t.client.start_notify = AsyncMock()
-    t.use_ios_le_protocol = False       # skip autoprobe
+    t.use_ios_le_protocol = False  # skip autoprobe
     monkeypatch.setattr("divoom_legacy.ble_transport.asyncio.sleep", AsyncMock())
 
     _run(t.connect())
@@ -208,6 +225,7 @@ def test_connect_skips_start_notify_when_already_started(monkeypatch):
 
 # ── disconnect(): both swallowed-exception paths ────────────────────────────
 
+
 def test_disconnect_stop_notify_exception_is_logged_but_disconnect_still_runs(monkeypatch, caplog):
     t = _transport(monkeypatch)
     t._notifications_started = True
@@ -229,12 +247,13 @@ def test_disconnect_generic_exception_is_logged(monkeypatch, caplog):
     t.client.disconnect = AsyncMock(side_effect=RuntimeError("disc failed"))
 
     with caplog.at_level(logging.ERROR):
-        _run(t.disconnect())          # must not raise
+        _run(t.disconnect())  # must not raise
 
     assert any("Error disconnecting" in r.message for r in caplog.records)
 
 
 # ── send_command(): direct calls (bypasses DivoomConnection routing) ───────
+
 
 def test_send_command_success_builds_payload_and_delegates(monkeypatch):
     t = _transport(monkeypatch)
@@ -286,7 +305,6 @@ def test_send_command_exception_from_send_payload_is_caught(monkeypatch, caplog)
 # ── _send_payload_locked(): reconnect / retry branches ──────────────────────
 
 
-
 def test_send_payload_continues_after_reconnect_failure(monkeypatch):
     """A failed reconnect on a non-final attempt must `continue` to the next
     attempt rather than giving up immediately."""
@@ -334,6 +352,3 @@ def test_send_payload_ios_le_retries_before_success(monkeypatch):
 
 
 # ── _send_basic_protocol_payload(): chunking (never hit — 200-byte chunks) ──
-
-
-

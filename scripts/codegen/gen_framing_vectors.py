@@ -24,6 +24,7 @@ either reproduces the committed file byte for byte or fails the review; it can
 never silently rewrite the vectors. `tests/test_framing_vector_generator.py`
 holds that contract.
 """
+
 import json
 from pathlib import Path
 
@@ -55,11 +56,13 @@ def _parse_basic_cases(existing):
     for c in existing:
         buf = bytearray(bytes.fromhex(c["in"]))
         msgs, remainder = framing.parse_basic_protocol_frames(buf)
-        cases.append({
-            "in": c["in"],
-            "messages": [{"command_id": m["command_id"], "payload": _h(m["payload"])} for m in msgs],
-            "remainder": _h(remainder),
-        })
+        cases.append(
+            {
+                "in": c["in"],
+                "messages": [{"command_id": m["command_id"], "payload": _h(m["payload"])} for m in msgs],
+                "remainder": _h(remainder),
+            }
+        )
     return cases
 
 

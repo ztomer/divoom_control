@@ -1,5 +1,6 @@
 """Shared web-UI source aggregates for the split round6 layout test
 modules."""
+
 from pathlib import Path
 
 
@@ -12,6 +13,7 @@ GUI_API_PY = REPO_ROOT / "divoom_gui" / "gui_api.py"
 LIGHTING_FORWARD_PY = REPO_ROOT / "divoom_gui" / "lighting_forward.py"
 PANELS_PY = REPO_ROOT / "divoom_gui" / "panels.py"
 
+
 def _cat(paths: list[Path]) -> str:
     """Read and concatenate multiple source files."""
     parts = []
@@ -20,30 +22,39 @@ def _cat(paths: list[Path]) -> str:
             parts.append(p.read_text())
     return "\n".join(parts)
 
-TEMPLATES_JS = _cat([
-    REPO_ROOT / "divoom_gui" / "web_ui" / "templates_tools.js",
-    REPO_ROOT / "divoom_gui" / "web_ui" / "templates_gallery.js",
-    REPO_ROOT / "divoom_gui" / "web_ui" / "templates_widgets.js",
-    REPO_ROOT / "divoom_gui" / "web_ui" / "templates_settings.js",
-    REPO_ROOT / "divoom_gui" / "web_ui" / "templates_routines.js",
-    # R40 §8: device settings (clock/temp/power/display/danger) moved here.
-    REPO_ROOT / "divoom_gui" / "web_ui" / "templates_device_settings.js",
-])
+
+TEMPLATES_JS = _cat(
+    [
+        REPO_ROOT / "divoom_gui" / "web_ui" / "templates_tools.js",
+        REPO_ROOT / "divoom_gui" / "web_ui" / "templates_gallery.js",
+        REPO_ROOT / "divoom_gui" / "web_ui" / "templates_widgets.js",
+        REPO_ROOT / "divoom_gui" / "web_ui" / "templates_settings.js",
+        REPO_ROOT / "divoom_gui" / "web_ui" / "templates_routines.js",
+        # R40 §8: device settings (clock/temp/power/display/danger) moved here.
+        REPO_ROOT / "divoom_gui" / "web_ui" / "templates_device_settings.js",
+    ]
+)
 ROUTINES_JS = REPO_ROOT / "divoom_gui" / "web_ui" / "templates_routines.js"
 
-SETTINGS_JS = _cat([
-    REPO_ROOT / "divoom_gui" / "web_ui" / "settings_hardware.js",
-    REPO_ROOT / "divoom_gui" / "web_ui" / "settings_features.js",
-])
+SETTINGS_JS = _cat(
+    [
+        REPO_ROOT / "divoom_gui" / "web_ui" / "settings_hardware.js",
+        REPO_ROOT / "divoom_gui" / "web_ui" / "settings_features.js",
+    ]
+)
 
-APP_JS = _cat([
-    REPO_ROOT / "divoom_gui" / "web_ui" / "app_globals.js",
-    REPO_ROOT / "divoom_gui" / "web_ui" / "app_init.js",
-    # P5.1: the deck's brightness/volume senders and per-panel reads.
-    REPO_ROOT / "divoom_gui" / "web_ui" / "panel_facts.js",
-])
+APP_JS = _cat(
+    [
+        REPO_ROOT / "divoom_gui" / "web_ui" / "app_globals.js",
+        REPO_ROOT / "divoom_gui" / "web_ui" / "app_init.js",
+        # P5.1: the deck's brightness/volume senders and per-panel reads.
+        REPO_ROOT / "divoom_gui" / "web_ui" / "panel_facts.js",
+    ]
+)
 
-CHANNELS_JS = _cat([
-    REPO_ROOT / "divoom_gui" / "web_ui" / "channels_core.js",
-    REPO_ROOT / "divoom_gui" / "web_ui" / "channels_grids.js",
-])
+CHANNELS_JS = _cat(
+    [
+        REPO_ROOT / "divoom_gui" / "web_ui" / "channels_core.js",
+        REPO_ROOT / "divoom_gui" / "web_ui" / "channels_grids.js",
+    ]
+)

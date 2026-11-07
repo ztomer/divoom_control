@@ -1,8 +1,37 @@
 """
 Divoom Tool Commands
 """
-from divoom_lib.models import COMMANDS, TOOL_TYPE_TIMER, TOOL_TYPE_SCORE, TOOL_TYPE_NOISE, TOOL_TYPE_COUNTDOWN, TOOL_TYPE_NOT_IN_GAME_MODE, GTI_TIMER_STATUS, GTI_SCORE_ON_OFF, GTI_SCORE_RED_SCORE_START, GTI_SCORE_RED_SCORE_LENGTH, GTI_SCORE_BLUE_SCORE_START, GTI_SCORE_BLUE_SCORE_LENGTH, GTI_NOISE_STATUS, GTI_COUNTDOWN_STATUS, GTI_COUNTDOWN_MINUTES, GTI_COUNTDOWN_SECONDS, STI_CTRL_FLAG_TIMER_PAUSED, STI_CTRL_FLAG_TIMER_STARTED, STI_CTRL_FLAG_TIMER_RESET, STI_CTRL_FLAG_TIMER_ENTERING_STOPWATCH, STI_CTRL_FLAG_NOISE_START, STI_CTRL_FLAG_NOISE_STOP, STI_CTRL_FLAG_COUNTDOWN_START, STI_CTRL_FLAG_COUNTDOWN_CANCEL, STI_SCORE_OFF, STI_SCORE_ON
+
+from divoom_lib.models import (
+    COMMANDS,
+    TOOL_TYPE_TIMER,
+    TOOL_TYPE_SCORE,
+    TOOL_TYPE_NOISE,
+    TOOL_TYPE_COUNTDOWN,
+    TOOL_TYPE_NOT_IN_GAME_MODE,
+    GTI_TIMER_STATUS,
+    GTI_SCORE_ON_OFF,
+    GTI_SCORE_RED_SCORE_START,
+    GTI_SCORE_RED_SCORE_LENGTH,
+    GTI_SCORE_BLUE_SCORE_START,
+    GTI_SCORE_BLUE_SCORE_LENGTH,
+    GTI_NOISE_STATUS,
+    GTI_COUNTDOWN_STATUS,
+    GTI_COUNTDOWN_MINUTES,
+    GTI_COUNTDOWN_SECONDS,
+    STI_CTRL_FLAG_TIMER_PAUSED,
+    STI_CTRL_FLAG_TIMER_STARTED,
+    STI_CTRL_FLAG_TIMER_RESET,
+    STI_CTRL_FLAG_TIMER_ENTERING_STOPWATCH,
+    STI_CTRL_FLAG_NOISE_START,
+    STI_CTRL_FLAG_NOISE_STOP,
+    STI_CTRL_FLAG_COUNTDOWN_START,
+    STI_CTRL_FLAG_COUNTDOWN_CANCEL,
+    STI_SCORE_OFF,
+    STI_SCORE_ON,
+)
 from divoom_legacy.sender_protocol import CommandSender
+
 
 class Tool:
     def __init__(self, communicator: CommandSender):
@@ -12,10 +41,10 @@ class Tool:
     async def get_tool_info(self, tool_type: int) -> dict | None:
         """Get information about the tools available in the device (0x71)."""
         self.logger.info(f"Getting tool info for type {tool_type} (0x71)...")
-        
+
         command_id = COMMANDS["get tool info"]
         args = [tool_type]
-        
+
         # Set the command we are waiting for and send it with the correct protocol
         self.communicator._expected_response_command = command_id
         async with self.communicator._framing_context(use_ios=self.communicator.use_ios_le_protocol, escape=False):
@@ -23,7 +52,7 @@ class Tool:
 
         # Wait for the response using the default (Basic) protocol
         response = await self.communicator.wait_for_response(command_id)
-        
+
         if response:
             return self._parse_tool_info_response(tool_type, response)
         return None
@@ -37,8 +66,14 @@ class Tool:
             if len(response) >= 5:
                 return {
                     "on_off": response[GTI_SCORE_ON_OFF],
-                    "red_score": int.from_bytes(response[GTI_SCORE_RED_SCORE_START:GTI_SCORE_RED_SCORE_START + GTI_SCORE_RED_SCORE_LENGTH], byteorder='little'),
-                    "blue_score": int.from_bytes(response[GTI_SCORE_BLUE_SCORE_START:GTI_SCORE_BLUE_SCORE_START + GTI_SCORE_BLUE_SCORE_LENGTH], byteorder='little'),
+                    "red_score": int.from_bytes(
+                        response[GTI_SCORE_RED_SCORE_START : GTI_SCORE_RED_SCORE_START + GTI_SCORE_RED_SCORE_LENGTH],
+                        byteorder="little",
+                    ),
+                    "blue_score": int.from_bytes(
+                        response[GTI_SCORE_BLUE_SCORE_START : GTI_SCORE_BLUE_SCORE_START + GTI_SCORE_BLUE_SCORE_LENGTH],
+                        byteorder="little",
+                    ),
                 }
         elif tool_type == TOOL_TYPE_NOISE:  # DIVOOM_DISP_NOISE_MODE (Noise)
             if len(response) >= 1:
@@ -67,8 +102,8 @@ class Tool:
         if on_off is None:
             raise ValueError("Missing 'on_off' for Score mode.")
         args = [on_off]
-        args.extend(red_score.to_bytes(2, byteorder='little'))
-        args.extend(blue_score.to_bytes(2, byteorder='little'))
+        args.extend(red_score.to_bytes(2, byteorder="little"))
+        args.extend(blue_score.to_bytes(2, byteorder="little"))
         return args
 
     def _set_noise_tool(self, **kwargs) -> list:
@@ -82,15 +117,13 @@ class Tool:
         minutes = kwargs.get("minutes")
         seconds = kwargs.get("seconds")
         if not all(v is not None for v in [ctrl_flag, minutes, seconds]):
-            raise ValueError(
-                "Missing 'ctrl_flag', 'minutes', or 'seconds' for Countdown mode.")
+            raise ValueError("Missing 'ctrl_flag', 'minutes', or 'seconds' for Countdown mode.")
         return [ctrl_flag, minutes, seconds]
 
     async def set_tool_info(self, game_mode_index: int, **kwargs) -> bool:
         """Set information for the tools (games) available in the device (0x72).
         Handles different data structures based on game_mode_index."""
-        self.logger.info(
-            f"Setting tool info for game mode {game_mode_index} (0x72)...")
+        self.logger.info(f"Setting tool info for game mode {game_mode_index} (0x72)...")
 
         _set_tool_handlers = {
             TOOL_TYPE_TIMER: self._set_timer_tool,

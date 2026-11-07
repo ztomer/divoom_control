@@ -4,6 +4,7 @@ from divoom_legacy.display.vjeffect_channel import VJEffectChannel
 from divoom_legacy.divoom import Divoom as DivoomBase
 from divoom_lib.models import VJEffectType
 
+
 @pytest.fixture
 def mock_divoom_instance():
     """Fixture for a mock DivoomBase instance.
@@ -19,23 +20,24 @@ def mock_divoom_instance():
     mock.send_command = AsyncMock()
     return mock
 
+
 @pytest.mark.asyncio
 async def test_vjeffect_channel_init_defaults(mock_divoom_instance):
     """Test VJEffectChannel initialization with default options."""
     channel = VJEffectChannel(mock_divoom_instance)
-    
+
     assert channel._divoom_instance == mock_divoom_instance
     assert channel._opts["type"] == VJEffectType.Sparkles
+
 
 @pytest.mark.asyncio
 async def test_vjeffect_channel_init_custom_opts(mock_divoom_instance):
     """Test VJEffectChannel initialization with custom options."""
-    custom_opts = {
-        "type": VJEffectType.Lava
-    }
+    custom_opts = {"type": VJEffectType.Lava}
     channel = VJEffectChannel(mock_divoom_instance, opts=custom_opts)
-    
+
     assert channel._opts["type"] == VJEffectType.Lava
+
 
 @pytest.mark.asyncio
 async def test_vjeffect_channel_show(mock_divoom_instance):
@@ -44,6 +46,7 @@ async def test_vjeffect_channel_show(mock_divoom_instance):
 
     await channel.show()
     mock_divoom_instance.send_command.assert_called_once()
+
 
 @pytest.mark.asyncio
 async def test_vjeffect_channel_update_message(mock_divoom_instance):
@@ -61,6 +64,7 @@ async def test_vjeffect_channel_update_message(mock_divoom_instance):
     # is the teeth: revert the channel to self._divoom_instance.number2HexString
     # and this call raises AttributeError instead of reaching send_command.
     mock_divoom_instance.send_command.assert_called_once_with(0x45, expected_args)
+
 
 @pytest.mark.asyncio
 async def test_vjeffect_channel_type_setter(mock_divoom_instance):

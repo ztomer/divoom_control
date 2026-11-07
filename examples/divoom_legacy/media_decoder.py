@@ -15,15 +15,16 @@ try:
         lib = ctypes.CDLL(str(lib_path))
         lib.compact_tiles.argtypes = [
             ctypes.POINTER(ctypes.c_ubyte),  # const unsigned char* frame_data
-            ctypes.c_int,                    # int frame_data_len
+            ctypes.c_int,  # int frame_data_len
             ctypes.POINTER(ctypes.c_ubyte),  # unsigned char* output_pixels
-            ctypes.c_int,                    # int row_count
-            ctypes.c_int                     # int column_count
+            ctypes.c_int,  # int row_count
+            ctypes.c_int,  # int column_count
         ]
         lib.compact_tiles.restype = None
         logger.info("Successfully loaded native C compacting library!")
 except Exception as e:
     logger.warning(f"Failed to load native compact library, using pure python fallback: {e}")
+
 
 def extract_image_from_magic_43(file_data: bytes) -> tuple[bytes, str] | None:
     """Extracts raw GIF/PNG/JPG from Divoom Magic 43 payload."""
@@ -33,18 +34,18 @@ def extract_image_from_magic_43(file_data: bytes) -> tuple[bytes, str] | None:
         text_len = struct.unpack("<I", file_data[6:10])[0]
         text_start = 10
         text_end = text_start + text_len
-        
+
         img_len_offset = text_end
         if len(file_data) < img_len_offset + 4:
             return None
-            
-        img_len = struct.unpack("<I", file_data[img_len_offset:img_len_offset+4])[0]
+
+        img_len = struct.unpack("<I", file_data[img_len_offset : img_len_offset + 4])[0]
         img_start = img_len_offset + 4
         img_end = img_start + img_len
-        
+
         if img_end > len(file_data):
             img_end = len(file_data)
-            
+
         img_data = file_data[img_start:img_end]
         if img_data.startswith(b"GIF89a") or img_data.startswith(b"GIF87a"):
             return img_data, ".gif"
@@ -56,6 +57,7 @@ def extract_image_from_magic_43(file_data: bytes) -> tuple[bytes, str] | None:
         logger.warning(f"Failed to extract image from Magic 43: {e}")
     return None
 
+
 def extract_gif_from_magic_43(file_data: bytes) -> bytes | None:
     """Helper to extract pure GIF from Magic 43 payload."""
     res = extract_image_from_magic_43(file_data)
@@ -63,10 +65,11 @@ def extract_gif_from_magic_43(file_data: bytes) -> bytes | None:
         return res[0]
     return None
 
+
 # Divoom cloud-container crypto (same key/IV the official app uses; the
 # devices themselves cannot decrypt these — see decode_cloud_frames).
-_CLOUD_AES_KEY = b'78hrey23y28ogs89'
-_CLOUD_AES_IV = b'1234567890123456'
+_CLOUD_AES_KEY = b"78hrey23y28ogs89"
+_CLOUD_AES_IV = b"1234567890123456"
 
 CLOUD_CONTAINER_MAGICS = (8, 9, 12, 18, 26)
 
@@ -110,7 +113,7 @@ def decode_cloud_frames(raw_bytes: bytes, *, max_frames: int = 24):
             encrypted = raw_bytes[4:]
             decrypted = decrypt_aes(encrypted)
             total_frames = raw_bytes[1]
-            speed = struct.unpack('>H', raw_bytes[2:4])[0]
+            speed = struct.unpack(">H", raw_bytes[2:4])[0]
             frames = []
             for f_idx in range(min(total_frames, max_frames)):
                 start = f_idx * 768
@@ -138,7 +141,8 @@ def decode_cloud_frames(raw_bytes: bytes, *, max_frames: int = 24):
 
         if magic in (18, 26):
             import lzallright
-            total_frames, speed, row_count, column_count = struct.unpack('>BHBB', raw_bytes[1:6])
+
+            total_frames, speed, row_count, column_count = struct.unpack(">BHBB", raw_bytes[1:6])
             decrypted = decrypt_aes(raw_bytes[6:])
             lzo = lzallright.LZOCompressor()
             uncompressed_size = row_count * column_count * 768
@@ -147,11 +151,11 @@ def decode_cloud_frames(raw_bytes: bytes, *, max_frames: int = 24):
             for f_idx in range(min(total_frames, max_frames)):
                 if pos + 4 > len(decrypted):
                     break
-                frame_size = struct.unpack('>I', decrypted[pos:pos + 4])[0]
+                frame_size = struct.unpack(">I", decrypted[pos : pos + 4])[0]
                 pos += 4
                 if pos + frame_size > len(decrypted):
                     break
-                compressed_frame = decrypted[pos:pos + frame_size]
+                compressed_frame = decrypted[pos : pos + frame_size]
                 pos += frame_size
                 try:
                     frame_data = lzo.decompress(compressed_frame, uncompressed_size)
@@ -172,16 +176,14 @@ def decode_cloud_to_gif(raw_bytes: bytes, out_path: Path) -> bool:
     if not frames:
         return False
     try:
-        frames[0].save(out_path, save_all=len(frames) > 1,
-                       append_images=frames[1:], duration=duration, loop=0)
+        frames[0].save(out_path, save_all=len(frames) > 1, append_images=frames[1:], duration=duration, loop=0)
         return True
     except Exception as e:
         logger.warning(f"Failed to write decoded cloud GIF: {e}")
         return False
 
 
-def decode_hot_file_format(raw_bytes: bytes, *, max_frames: int = 60
-                           ) -> list[tuple[bytes, int]] | None:
+def decode_hot_file_format(raw_bytes: bytes, *, max_frames: int = 60) -> list[tuple[bytes, int]] | None:
     """Decode a Divoom hot channel file (magic 0xAA) into 16×16 RGB frames.
 
     A hot file is a sequence of palette-indexed frames, each laid out as:
@@ -206,8 +208,8 @@ def decode_hot_file_format(raw_bytes: bytes, *, max_frames: int = 60
     while off + 7 <= len(raw_bytes) and len(frames) < max_frames:
         if raw_bytes[off] != 0xAA:
             break
-        frame_len = int.from_bytes(raw_bytes[off + 1:off + 3], "little")
-        duration = int.from_bytes(raw_bytes[off + 3:off + 5], "little")
+        frame_len = int.from_bytes(raw_bytes[off + 1 : off + 3], "little")
+        duration = int.from_bytes(raw_bytes[off + 3 : off + 5], "little")
         flag = raw_bytes[off + 5]
         n_colors = raw_bytes[off + 6]
         if frame_len < 7 or off + frame_len > len(raw_bytes):
@@ -219,7 +221,7 @@ def decode_hot_file_format(raw_bytes: bytes, *, max_frames: int = 60
         if pos + n_colors * 3 > len(raw_bytes):
             break
         for _ in range(n_colors):
-            palette.append(bytes(raw_bytes[pos:pos + 3]))
+            palette.append(bytes(raw_bytes[pos : pos + 3]))
             pos += 3
         if not palette:
             break
@@ -230,13 +232,12 @@ def decode_hot_file_format(raw_bytes: bytes, *, max_frames: int = 60
             n_bytes = (256 * bpp + 7) // 8
             if pos + n_bytes > len(raw_bytes):
                 break
-            packed = int.from_bytes(raw_bytes[pos:pos + n_bytes], "little")
+            packed = int.from_bytes(raw_bytes[pos : pos + n_bytes], "little")
             mask = (1 << bpp) - 1
             indices = [(packed >> (i * bpp)) & mask for i in range(256)]
             if any(i >= len(palette) for i in indices):
                 return None
-        frames.append((b"".join(palette[i] for i in indices),
-                       duration if duration > 0 else 100))
+        frames.append((b"".join(palette[i] for i in indices), duration if duration > 0 else 100))
         off += frame_len
     return frames or None
 
@@ -247,15 +248,16 @@ def decode_hot_file_to_gif(raw_bytes: bytes, out_path: Path, *, max_frames: int 
     Returns ``True`` on success, ``False`` if the payload isn't decodable.
     """
     from PIL import Image
+
     frames = decode_hot_file_format(raw_bytes, max_frames=max_frames)
     if not frames:
         return False
-    pil_frames = [Image.frombytes("RGB", (16, 16), rgb).resize((128, 128), Image.Resampling.NEAREST)
-                  for rgb, _ in frames]
+    pil_frames = [
+        Image.frombytes("RGB", (16, 16), rgb).resize((128, 128), Image.Resampling.NEAREST) for rgb, _ in frames
+    ]
     durations = [d for _, d in frames]
     if len(pil_frames) > 1:
-        pil_frames[0].save(out_path, save_all=True, append_images=pil_frames[1:],
-                           duration=durations, loop=0)
+        pil_frames[0].save(out_path, save_all=True, append_images=pil_frames[1:], duration=durations, loop=0)
     else:
         # PIL chokes on a list duration for a single-frame save_all=False.
         pil_frames[0].save(out_path, duration=durations[0], loop=0)
@@ -269,6 +271,7 @@ def decode_and_save_preview(raw_bytes: bytes, cache_file_png: Path) -> bool:
     path)."""
     try:
         from PIL import Image
+
         frames, duration = decode_cloud_frames(raw_bytes)
         if not frames:
             return False
@@ -277,9 +280,10 @@ def decode_and_save_preview(raw_bytes: bytes, cache_file_png: Path) -> bool:
         previews[0].save(cache_file_png)  # static first-frame placeholder
         if len(previews) > 1:
             cache_file_gif = cache_file_png.with_suffix(".gif")
-            previews[0].save(cache_file_gif, save_all=True,
-                             append_images=previews[1:], duration=duration, loop=0)
-            logger.info(f"Gallery Cache: Decoded Magic {magic} animation with {len(previews)} frames to {cache_file_gif.name}")
+            previews[0].save(cache_file_gif, save_all=True, append_images=previews[1:], duration=duration, loop=0)
+            logger.info(
+                f"Gallery Cache: Decoded Magic {magic} animation with {len(previews)} frames to {cache_file_gif.name}"
+            )
         else:
             logger.info(f"Gallery Cache: Decoded Magic {magic} static frame to {cache_file_png.name}")
         return True
@@ -287,23 +291,25 @@ def decode_and_save_preview(raw_bytes: bytes, cache_file_png: Path) -> bool:
         logger.warning(f"Failed to transcode preview for Magic {raw_bytes[0] if raw_bytes else 0}: {e}")
     return False
 
+
 def _compact_tiles(frame_data: bytes, row_count: int, column_count: int):
     from PIL import Image
+
     width, height = column_count * 16, row_count * 16
-    
+
     if lib is not None:
         try:
             # Allocate ctypes array for output
             out_size = width * height * 3
             out_buf = (ctypes.c_ubyte * out_size)()
-            
+
             # Copy input buffer to ctypes array
             in_len = len(frame_data)
             in_buf = (ctypes.c_ubyte * in_len).from_buffer_copy(frame_data)
-            
+
             # Execute high-performance C compacting loop
             lib.compact_tiles(in_buf, in_len, out_buf, row_count, column_count)
-            
+
             # Create PIL image directly from buffer bytes
             return Image.frombytes("RGB", (width, height), bytes(out_buf))
         except Exception as e:
@@ -318,7 +324,11 @@ def _compact_tiles(frame_data: bytes, row_count: int, column_count: int):
             for y in range(16):
                 for x in range(16):
                     if pos + 3 <= len(frame_data):
-                        pixels[grid_x * 16 + x, grid_y * 16 + y] = (frame_data[pos], frame_data[pos+1], frame_data[pos+2])
+                        pixels[grid_x * 16 + x, grid_y * 16 + y] = (
+                            frame_data[pos],
+                            frame_data[pos + 1],
+                            frame_data[pos + 2],
+                        )
                         pos += 3
     return img
 
@@ -339,6 +349,7 @@ def is_black_image(path: Path) -> bool:
     flagged — dropping it would hide real community uploads."""
     try:
         from PIL import Image
+
         with Image.open(path) as im:
             w, h = im.size
             if w == 0 or h == 0:
@@ -373,9 +384,7 @@ def resolve_to_gif(raw_bytes: bytes, scratch_path: Path) -> bytes | None:
     if not raw_bytes or len(raw_bytes) < 4:
         return None
     # Already a displayable image (GIF/PNG/JPG) — hand it straight to PIL.
-    if (raw_bytes[:6] in (b"GIF89a", b"GIF87a")
-            or raw_bytes[:8] == b"\x89PNG\r\n\x1a\n"
-            or raw_bytes[:2] == b"\xff\xd8"):
+    if raw_bytes[:6] in (b"GIF89a", b"GIF87a") or raw_bytes[:8] == b"\x89PNG\r\n\x1a\n" or raw_bytes[:2] == b"\xff\xd8":
         return raw_bytes
     magic = raw_bytes[0]
     if magic == 43:

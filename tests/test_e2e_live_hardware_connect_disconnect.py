@@ -30,6 +30,7 @@ scanner_mixin.py::get_connection_state) both read UI feedback from — so a
 live run at least proves that contract holds against real (not mocked)
 daemon state, whatever it currently is.
 """
+
 from __future__ import annotations
 
 import sys

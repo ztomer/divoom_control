@@ -14,5 +14,4 @@ class AidSleepMixin(CloudPanelMixin):
     """
 
     def get_aid_sleep_list(self, sleep_type: int) -> dict:
-        return self._cloud_list(
-            "sleep sounds", lambda c: c.get_aid_sleep_list(int(sleep_type)))
+        return self._cloud_list("sleep sounds", lambda c: c.get_aid_sleep_list(int(sleep_type)))

@@ -12,6 +12,7 @@ can't wedge the whole toolchain.
 
 Deterministic: no hardware, a tiny fake daemon per case.
 """
+
 import os
 import socket
 import sys
@@ -111,7 +112,7 @@ def test_send_command_immediate_close_returns_no_reply():
 
     def on_accept(conn):
         conn.recv(4096)  # drain the request
-        conn.close()     # then drop the connection
+        conn.close()  # then drop the connection
 
     t = _start(sp, on_accept)
     start = time.monotonic()

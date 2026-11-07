@@ -41,6 +41,7 @@ a ratchet rather than a rug:
 The second is the one that is easy to omit and is why stale allowlists rot into
 rubber stamps.
 """
+
 from __future__ import annotations
 
 import ast
@@ -110,6 +111,7 @@ ALLOWLIST: list[tuple[str, str, str, str]] = [
     # twelve files now reports none, and any new one fails the commit.
 ]
 
+
 def _module_names(node: ast.AST) -> list[str]:
     """Dotted module paths an import statement brings in.
 
@@ -166,8 +168,7 @@ def scan_file(path: Path) -> list[tuple[str, str, str]]:
                 add("import", mod, node.lineno, why)
 
         if isinstance(node, ast.Attribute) and node.attr in FORBIDDEN_MODULE_ATTRS:
-            add("call", node.attr, node.lineno,
-                "drawing surfaces belong to the daemon")
+            add("call", node.attr, node.lineno, "drawing surfaces belong to the daemon")
 
         if not isinstance(node, ast.Call):
             continue
@@ -177,9 +178,12 @@ def scan_file(path: Path) -> list[tuple[str, str, str]]:
         # `Image.<attr>(...)` — construction unless it is the decode shape.
         if isinstance(fn.value, ast.Name) and fn.value.id == "Image":
             if fn.attr not in IMAGE_ALLOWED_ATTRS:
-                add("call", f"Image.{fn.attr}", node.lineno,
-                    "the GUI must not build frames; only Image.frombytes over "
-                    "daemon bytes is a decode")
+                add(
+                    "call",
+                    f"Image.{fn.attr}",
+                    node.lineno,
+                    "the GUI must not build frames; only Image.frombytes over daemon bytes is a decode",
+                )
             continue
         if fn.attr in FORBIDDEN_METHODS:
             add("call", fn.attr, node.lineno, FORBIDDEN_METHODS[fn.attr])
@@ -214,16 +218,13 @@ def main() -> int:
     # into, and it reads as "still broken" to anyone auditing the list.
     stale = sorted(allowed - used)
     if stale:
-        err(f"[gui-client] {len(stale)} stale allowlist entr(ies) — the code was "
-            f"fixed but the exemption stayed")
+        err(f"[gui-client] {len(stale)} stale allowlist entr(ies) — the code was fixed but the exemption stayed")
         for rel, kind, symbol in stale:
-            info(f"divoom_gui/{rel} — {kind} `{symbol}` no longer occurs; "
-                 f"delete it from ALLOWLIST")
+            info(f"divoom_gui/{rel} — {kind} `{symbol}` no longer occurs; delete it from ALLOWLIST")
         return 1
 
     if offenders:
-        err(f"[gui-client] {len(offenders)} violation(s) — the GUI is doing the "
-            f"daemon's work")
+        err(f"[gui-client] {len(offenders)} violation(s) — the GUI is doing the daemon's work")
         for o in offenders:
             info(o)
         info("The GUI is a client. Ask divoomd; do not reimplement it.")
@@ -231,8 +232,7 @@ def main() -> int:
 
     remaining = len(ALLOWLIST)
     if remaining:
-        ok(f"[gui-client] OK — {scanned} files, no new violations "
-           f"({remaining} allowlisted, R70 in progress)")
+        ok(f"[gui-client] OK — {scanned} files, no new violations ({remaining} allowlisted, R70 in progress)")
     else:
         ok(f"[gui-client] OK — {scanned} files, allowlist EMPTY")
     return 0

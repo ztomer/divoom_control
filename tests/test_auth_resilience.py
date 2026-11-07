@@ -5,6 +5,7 @@ match") must not crash or hammer the app.
 - get_credentials() fails fast inside a cooldown after a network failure, so a
   polled/transport-status path can't re-trigger a failing login every call.
 """
+
 import sys
 from pathlib import Path
 
@@ -97,8 +98,7 @@ def test_cooldown_still_gates_account_without_force_refresh(monkeypatch):
     monkeypatch.setattr(divoom_auth, "_last_auth_fail_at", 9e18, raising=False)  # in cooldown
     monkeypatch.setattr(divoom_auth, "_load_config", lambda: ("user@example.com", "pw"))
     calls = {"email": 0}
-    monkeypatch.setattr(divoom_auth, "_login_email",
-                        lambda e, p: calls.__setitem__("email", calls["email"] + 1))
+    monkeypatch.setattr(divoom_auth, "_login_email", lambda e, p: calls.__setitem__("email", calls["email"] + 1))
     with pytest.raises(RuntimeError):
-        divoom_auth.get_credentials()           # force_refresh defaults False
-    assert calls["email"] == 0                   # cooldown gated it
+        divoom_auth.get_credentials()  # force_refresh defaults False
+    assert calls["email"] == 0  # cooldown gated it

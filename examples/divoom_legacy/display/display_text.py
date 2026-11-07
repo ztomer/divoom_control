@@ -1,5 +1,6 @@
 # divoom_api/drawing/text.py — migrated to display/display_text.py
 from divoom_legacy.sender_protocol import CommandSender
+
 # number2HexString / color2HexString are module-level helpers in
 # utils.converters, NOT methods on Divoom — calling them via
 # self._divoom_instance.<helper> raised AttributeError at runtime
@@ -9,10 +10,12 @@ from typing import Optional, Dict, Any, List, Callable
 import asyncio
 import math
 
+
 class DisplayText:
     """
     This class is used to display text on the Divoom Timebox Evo.
     """
+
     _PACKAGE_INIT_MESSAGE = "6e01"
     _PALETTE_HEADER = "6c00000704aa070446000000"
 
@@ -22,7 +25,7 @@ class DisplayText:
         self._opts = {
             "text": "node-divoom-timebox-evo",
             "paletteFn": self.PALETTE_TEXT_ON_BACKGROUND,
-            "animFn": self.ANIM_STATIC_BACKGROUND
+            "animFn": self.ANIM_STATIC_BACKGROUND,
         }
         if opts:
             self._opts.update(opts)
@@ -42,11 +45,7 @@ class DisplayText:
         palette: List[str] = []
         r, g, b = 255, 0, 255
         for i in range(0, 254, 2):
-            palette.append(
-                number2HexString(r) +
-                number2HexString(g) +
-                number2HexString(b)
-            )
+            palette.append(number2HexString(r) + number2HexString(g) + number2HexString(b))
             if i < 85:
                 b = max(0, b - 6)
                 g = min(255, g + 6)
@@ -104,12 +103,12 @@ class DisplayText:
         encoded_bytes.append(len(text))
         for char in text:
             hex_str = self._divoom_instance._int2hexlittle(ord(char))
-            encoded_bytes.extend([int(hex_str[i:i+2], 16) for i in range(0, len(hex_str), 2)])
+            encoded_bytes.extend([int(hex_str[i : i + 2], 16) for i in range(0, len(hex_str), 2)])
         return encoded_bytes
 
     async def _update_message(self):
         if not callable(self._opts["animFn"]) or not callable(self._opts["paletteFn"]):
-            raise ValueError('paletteFn and animFn need to be functions')
+            raise ValueError("paletteFn and animFn need to be functions")
 
         self._anim_frame = 0
 
@@ -123,13 +122,13 @@ class DisplayText:
         palette_hex_list = self.color_palette
         pixels = self._opts["animFn"](self._anim_frame)
         if len(pixels) != 256:
-            raise ValueError('The animFn should always generate a 256 pixel array')
+            raise ValueError("The animFn should always generate a 256 pixel array")
 
         pixels_hex_string = "".join([number2HexString(p) for p in pixels])
 
         command_code_palette = int(self._PALETTE_HEADER[0:2], 16)
         args_hex_string_palette = self._PALETTE_HEADER[2:] + "".join(palette_hex_list) + pixels_hex_string
-        args_palette = [int(args_hex_string_palette[i:i+2], 16) for i in range(0, len(args_hex_string_palette), 2)]
+        args_palette = [int(args_hex_string_palette[i : i + 2], 16) for i in range(0, len(args_hex_string_palette), 2)]
         await self._divoom_instance.send_command(command_code_palette, args_palette)
 
         await self.get_next_animation_frame()
@@ -137,16 +136,16 @@ class DisplayText:
     async def get_next_animation_frame(self):
         pixel_array: List[int] = self._opts["animFn"](self._anim_frame)
         if len(pixel_array) != 256:
-            raise ValueError('The animFn should always generate a 256 pixel array')
+            raise ValueError("The animFn should always generate a 256 pixel array")
 
         pixel_string = ""
         for pixel in pixel_array:
             pixel_string += number2HexString(pixel)
 
-        command_code_anim = 0x6c
+        command_code_anim = 0x6C
         anim_frame_hex = self._divoom_instance._int2hexlittle(self._anim_frame)
         args_hex_string_anim = anim_frame_hex + "0701aa070143000100" + pixel_string
-        args_anim = [int(args_hex_string_anim[i:i+2], 16) for i in range(0, len(args_hex_string_anim), 2)]
+        args_anim = [int(args_hex_string_anim[i : i + 2], 16) for i in range(0, len(args_hex_string_anim), 2)]
 
         await self._divoom_instance.send_command(command_code_anim, args_anim)
         self._anim_frame = (self._anim_frame + 1) % 65536
@@ -158,14 +157,14 @@ class DisplayText:
     @palette_fn.setter
     def palette_fn(self, value: Callable):
         if not callable(value):
-            raise ValueError('paletteFn is not a function')
+            raise ValueError("paletteFn is not a function")
         self._opts["paletteFn"] = value
 
     @property
     def color_palette(self) -> List[str]:
         palette = self.palette_fn()
         if len(palette) != 256:
-            raise ValueError('The paletteFn should always generate 256 colors')
+            raise ValueError("The paletteFn should always generate 256 colors")
         result: List[str] = []
         for color in palette:
             result.append(color2HexString(color))
@@ -178,7 +177,7 @@ class DisplayText:
     @anim_fn.setter
     def anim_fn(self, value: Callable):
         if not callable(value):
-            raise ValueError('animFn is not a function')
+            raise ValueError("animFn is not a function")
         self._opts["animFn"] = value
 
     @property

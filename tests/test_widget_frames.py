@@ -19,6 +19,7 @@ customary:
 the funnel is wrong, it should show up in the path with the most prior scrutiny,
 not in the two being rewritten around it.
 """
+
 from __future__ import annotations
 
 import base64
@@ -41,8 +42,7 @@ class StubDaemon:
     def __init__(self, reply: dict):
         self.reply = reply
         self.requests: list[dict] = []
-        self.path = os.path.join(
-            tempfile.gettempdir(), f"divoom_wf_stub_{uuid.uuid4().hex[:8]}.sock")
+        self.path = os.path.join(tempfile.gettempdir(), f"divoom_wf_stub_{uuid.uuid4().hex[:8]}.sock")
         self._srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self._srv.bind(self.path)
         self._srv.listen(8)
@@ -116,7 +116,9 @@ def _checkerboard(size: int) -> bytes:
 def _ok_reply(size: int = 16, **extras) -> dict:
     raw = _checkerboard(size)
     return {
-        "success": True, "kind": "sysmon", "size": size,
+        "success": True,
+        "kind": "sysmon",
+        "size": size,
         "frame_rgb_b64": base64.b64encode(raw).decode(),
         **extras,
     }
@@ -137,6 +139,7 @@ def test_the_written_png_is_the_daemons_bytes_unaltered(stub):
     catches a filter being applied on the way to the screen.
     """
     from PIL import Image
+
     size = 16
     raw = _checkerboard(size)
     s, host = stub(_ok_reply(size))
@@ -200,6 +203,7 @@ def test_it_accepts_a_callable_client_as_sysmon_widget_provides(stub):
 
 # ── sysmon, the migrated widget, still behaves ───────────────────────────────
 
+
 def test_sysmon_widget_reports_the_same_stats_through_the_funnel(stub):
     from divoom_gui.sysmon_widget import SysmonWidgetMixin
 
@@ -238,8 +242,8 @@ def test_the_only_pil_call_in_the_funnel_is_frombytes():
     R70 findings began — so the funnel is pinned to the one call that is a pure
     encode, by the same gate that guards the rest of the package."""
     from pathlib import Path
-    src = (Path(__file__).resolve().parent.parent
-           / "divoom_gui" / "widget_frames.py").read_text()
+
+    src = (Path(__file__).resolve().parent.parent / "divoom_gui" / "widget_frames.py").read_text()
     assert "Image.frombytes" in src
     for forbidden in ("Image.new", "Image.open", ".resize(", "ImageDraw"):
         assert forbidden not in src, f"{forbidden} makes this a second renderer"

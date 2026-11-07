@@ -10,6 +10,7 @@ Usage::
 
 Weather types: clear, cloudy, thunderstorm, rain, snow, fog.
 """
+
 import argparse
 import asyncio
 import logging
@@ -20,22 +21,22 @@ from divoom_lib.models import WeatherType
 
 
 WEATHER_NAMES = {
-    "clear":        WeatherType.Clear,
-    "cloudy":       WeatherType.CloudySky,
+    "clear": WeatherType.Clear,
+    "cloudy": WeatherType.CloudySky,
     "thunderstorm": WeatherType.Thunderstorm,
-    "rain":         WeatherType.Rain,
-    "snow":         WeatherType.Snow,
-    "fog":          WeatherType.Fog,
+    "rain": WeatherType.Rain,
+    "snow": WeatherType.Snow,
+    "fog": WeatherType.Fog,
 }
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Set the Divoom device's weather channel.")
     parser.add_argument("--mac", required=True, help="BLE MAC address of the device")
-    parser.add_argument("--temperature", type=int, required=True,
-                        help="Temperature in Celsius (range: -127..128)")
-    parser.add_argument("--weather", choices=sorted(WEATHER_NAMES.keys()), default="clear",
-                        help="Weather condition (default: clear)")
+    parser.add_argument("--temperature", type=int, required=True, help="Temperature in Celsius (range: -127..128)")
+    parser.add_argument(
+        "--weather", choices=sorted(WEATHER_NAMES.keys()), default="clear", help="Weather condition (default: clear)"
+    )
     parser.add_argument("-v", "--verbose", action="store_true")
     return parser.parse_args()
 
@@ -52,8 +53,7 @@ async def main() -> int:
         weather_type = WEATHER_NAMES[args.weather]
         ok = await divoom.weather.set(args.temperature, weather_type)
         if ok:
-            print(f"OK: sent weather={args.weather} ({weather_type}), "
-                  f"temperature={args.temperature}°C")
+            print(f"OK: sent weather={args.weather} ({weather_type}), temperature={args.temperature}°C")
             return 0
         else:
             print("ERROR: send_command returned False", file=sys.stderr)

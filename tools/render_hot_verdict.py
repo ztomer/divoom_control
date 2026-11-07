@@ -45,20 +45,36 @@ def states(now: int) -> list[tuple[str, dict | None]]:
     return [
         ("never checked", None),
         # Oldest first: the page keeps the NEWER record, as the product must.
-        ("stale (20 days)", {"at": now - 20 * 86400, "by": "button", "outcome": "ok",
-                             "offered": 23, "fetched": 23, "delivered": 0}),
-        ("button: up to date", {"at": h2, "by": "button", "outcome": "ok",
-                                "offered": 23, "fetched": 23, "delivered": 0}),
-        ("button: new files", {"at": h2, "by": "button", "outcome": "ok",
-                               "offered": 23, "fetched": 23, "delivered": 3}),
-        ("button: files missing", {"at": h2, "by": "button", "outcome": "ok",
-                                   "offered": 23, "fetched": 19, "delivered": 0}),
-        ("Sync Now: failed", {"at": h2, "by": "sync_now", "outcome": "failed",
-                              "error": "device 'f90d2cc9' not connected"}),
-        ("schedule: stored", {"at": h2, "by": "schedule", "outcome": "ok",
-                              "offered": 5, "fetched": 5, "delivered": 5}),
-        ("schedule: failed", {"at": h2, "by": "schedule", "outcome": "failed",
-                              "error": f"Connection to {SHOWN} failed: connect already in progress"}),
+        (
+            "stale (20 days)",
+            {"at": now - 20 * 86400, "by": "button", "outcome": "ok", "offered": 23, "fetched": 23, "delivered": 0},
+        ),
+        (
+            "button: up to date",
+            {"at": h2, "by": "button", "outcome": "ok", "offered": 23, "fetched": 23, "delivered": 0},
+        ),
+        (
+            "button: new files",
+            {"at": h2, "by": "button", "outcome": "ok", "offered": 23, "fetched": 23, "delivered": 3},
+        ),
+        (
+            "button: files missing",
+            {"at": h2, "by": "button", "outcome": "ok", "offered": 23, "fetched": 19, "delivered": 0},
+        ),
+        (
+            "Sync Now: failed",
+            {"at": h2, "by": "sync_now", "outcome": "failed", "error": "device 'f90d2cc9' not connected"},
+        ),
+        ("schedule: stored", {"at": h2, "by": "schedule", "outcome": "ok", "offered": 5, "fetched": 5, "delivered": 5}),
+        (
+            "schedule: failed",
+            {
+                "at": h2,
+                "by": "schedule",
+                "outcome": "failed",
+                "error": f"Connection to {SHOWN} failed: connect already in progress",
+            },
+        ),
     ]
 
 
@@ -86,18 +102,21 @@ async def _render(theme: str, out: Path) -> list[str]:
     async with async_playwright() as p:
         browser = await launch(p, opted_in=True)
         try:
-            context = await browser.new_context(device_scale_factor=2,
-                                                viewport={"width": 1200, "height": 860})
+            context = await browser.new_context(device_scale_factor=2, viewport={"width": 1200, "height": 860})
             page = await context.new_page()
             await add_init_js(page, MOCK_API)
-            await add_init_js(page, "try { localStorage.setItem('aesthetic-theme', %s); } catch (_) {}"
-                              % json.dumps(theme))
+            await add_init_js(
+                page, "try { localStorage.setItem('aesthetic-theme', %s); } catch (_) {}" % json.dumps(theme)
+            )
             await page.goto(f"file://{INDEX_HTML}")
-            await wait_js(page, "() => !!window.HotVerdict && !!window.SpatialStage"
-                                " && !!window.Divoom?.onOwnedDevices")
-            await eval_js(page, """(panels) => window.Divoom.onOwnedDevices({type: 'owned_devices',
+            await wait_js(page, "() => !!window.HotVerdict && !!window.SpatialStage && !!window.Divoom?.onOwnedDevices")
+            await eval_js(
+                page,
+                """(panels) => window.Divoom.onOwnedDevices({type: 'owned_devices',
                 devices: Object.entries(panels).map(([a, n]) =>
-                    ({address: a, name: n, kind: 'clock', state: 'active'}))})""", PANELS)
+                    ({address: a, name: n, kind: 'clock', state: 'active'}))})""",
+                PANELS,
+            )
             await eval_js(page, "(m) => window.Divoom.onSelection({type: 'selection', mac: m})", SHOWN)
             await page.click('.nav-btn[data-tab="pixel-art"]')
             await page.click('[data-pixel-tab="pixel-hot-channel"]')
@@ -106,29 +125,49 @@ async def _render(theme: str, out: Path) -> list[str]:
             shots, lines = [], []
             area = page.locator("#pixel-hot-channel .gallery-actions")
             for label, verdict in states(now):
-                await eval_js(page, """([m, v]) => { window.__verdicts = v ? {[m]: v} : {};
-                    window.HotVerdict.refresh(m); }""", [SHOWN, verdict])
+                await eval_js(
+                    page,
+                    """([m, v]) => { window.__verdicts = v ? {[m]: v} : {};
+                    window.HotVerdict.refresh(m); }""",
+                    [SHOWN, verdict],
+                )
                 if verdict:
-                    await eval_js(page, """([m, v]) => window.Divoom.onHotStatus(
-                        {type: 'hot_status', mac: m, verdict: v})""", [SHOWN, verdict])
+                    await eval_js(
+                        page,
+                        """([m, v]) => window.Divoom.onHotStatus(
+                        {type: 'hot_status', mac: m, verdict: v})""",
+                        [SHOWN, verdict],
+                    )
                 await page.wait_for_timeout(120)
                 text = await eval_js(page, "() => document.getElementById('hot-verdict').textContent")
                 lines.append(f"{label:24s} {text}")
                 shots.append((label, await area.screenshot()))
             # A run under way on the shown panel.
-            await eval_js(page, """(m) => window.Divoom.onHotProgress(
-                {type: 'hot_progress', mac: m, phase: 'uploading', current: 4, total: 23})""", SHOWN)
+            await eval_js(
+                page,
+                """(m) => window.Divoom.onHotProgress(
+                {type: 'hot_progress', mac: m, phase: 'uploading', current: 4, total: 23})""",
+                SHOWN,
+            )
             await page.wait_for_timeout(120)
-            lines.append(f"{'checking now':24s} "
-                         + await eval_js(page, "() => document.getElementById('hot-verdict').textContent"))
+            lines.append(
+                f"{'checking now':24s} "
+                + await eval_js(page, "() => document.getElementById('hot-verdict').textContent")
+            )
             shots.append(("checking now", await area.screenshot()))
 
             # The Auto-Sync rows: the same record, shorter.
-            await eval_js(page, """([panels, vs]) => {
+            await eval_js(
+                page,
+                """([panels, vs]) => {
                 window.__verdicts = vs;
                 window.__candidates = Object.entries(panels).map(([a, n]) => ({address: a, name: n, selected: true}));
-            }""", [PANELS, dict(zip(PANELS, [states(now)[7][1], states(now)[3][1],
-                                                 states(now)[6][1], states(now)[4][1]]))])
+            }""",
+                [
+                    PANELS,
+                    dict(zip(PANELS, [states(now)[7][1], states(now)[3][1], states(now)[6][1], states(now)[4][1]])),
+                ],
+            )
             await page.click('.nav-btn[data-tab="routines"]')
             await page.wait_for_selector("#routines-schedule.active")
             await eval_js(page, "() => window.renderSyncTargets(window.__candidates)")
@@ -138,6 +177,7 @@ async def _render(theme: str, out: Path) -> list[str]:
             await browser.close()
 
     import io
+
     tiles = [(label, Image.open(io.BytesIO(raw)).convert("RGB")) for label, raw in shots]
     rows_img = Image.open(io.BytesIO(rows)).convert("RGB")
     bg = (18, 19, 22) if theme == "dark" else (244, 244, 246)
@@ -162,8 +202,9 @@ async def _render(theme: str, out: Path) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--theme", choices=("dark", "light"), default="dark")
-    parser.add_argument("--out", default=None,
-                        help="where the sheet lands (default: docs/assets/hot-verdict-<theme>.png)")
+    parser.add_argument(
+        "--out", default=None, help="where the sheet lands (default: docs/assets/hot-verdict-<theme>.png)"
+    )
     args = parser.parse_args(argv)
     out = Path(args.out or REPO / "docs" / "assets" / f"hot-verdict-{args.theme}.png")
     for line in asyncio.run(_render(args.theme, out)):

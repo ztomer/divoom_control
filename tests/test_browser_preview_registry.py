@@ -1,5 +1,5 @@
-"""Browser-driven verification for DisplayPreviewRegistry and per-display isolation.
-"""
+"""Browser-driven verification for DisplayPreviewRegistry and per-display isolation."""
+
 import asyncio
 import pytest
 from pathlib import Path
@@ -21,19 +21,24 @@ async def test_browser_display_preview_registry():
         await wait_js(page, "() => !!window.DisplayPreviewRegistry")
 
         # 1. Verify DisplayPreview and DisplayPreviewRegistry exist in window
-        res = await eval_js(page, """() => {
+        res = await eval_js(
+            page,
+            """() => {
             return {
                 hasDisplayPreview: typeof window.DisplayPreview === "function",
                 hasRegistry: typeof window.DisplayPreviewRegistry === "object" && window.DisplayPreviewRegistry !== null,
             };
-        }""")
+        }""",
+        )
         assert res["hasDisplayPreview"] is True
         assert res["hasRegistry"] is True
 
         # 2. Setup 2 distinct devices in DivoomState
         dev1 = "11:22:33:44:55:01"
         dev2 = "11:22:33:44:55:02"
-        isolation_res = await eval_js(page, """([d1, d2]) => {
+        isolation_res = await eval_js(
+            page,
+            """([d1, d2]) => {
             window.DivoomState = window.DivoomState || {};
             window.DivoomState.discoveredDevices = [
                 { address: d1, name: "Pixoo-Desk" },
@@ -61,7 +66,9 @@ async def test_browser_display_preview_registry():
                 d2_frame: p2.frameSrc,
                 isolated: (p1.frameSrc !== p2.frameSrc) && (p1.channel !== p2.channel)
             };
-        }""", [dev1, dev2])
+        }""",
+            [dev1, dev2],
+        )
 
         assert isolation_res["isolated"] is True
         assert isolation_res["d1_channel"] == "clock"
@@ -71,7 +78,9 @@ async def test_browser_display_preview_registry():
         assert isolation_res["d2_frame"] is None
 
         # 3. Verify Canvas rendering with integer pixel sharpness (non-blank)
-        canvas_res = await eval_js(page, """(d1) => {
+        canvas_res = await eval_js(
+            page,
+            """(d1) => {
             const p1 = window.DisplayPreviewRegistry.get(d1);
             p1.setActivity("clock", { style: 0, color: "#ffffff" });
 
@@ -93,7 +102,9 @@ async def test_browser_display_preview_registry():
                 }
             }
             return { nonBlackPixels, total: 256 };
-        }""", dev1)
+        }""",
+            dev1,
+        )
 
         assert canvas_res["nonBlackPixels"] > 0
         assert canvas_res["nonBlackPixels"] < 256
@@ -116,7 +127,9 @@ async def test_browser_channel_controls_two_way_sync():
         dev1 = "11:22:33:44:55:01"
         dev2 = "11:22:33:44:55:02"
 
-        sync_res = await eval_js(page, """([d1, d2]) => {
+        sync_res = await eval_js(
+            page,
+            """([d1, d2]) => {
             window.DivoomState = window.DivoomState || {};
             window.DivoomState.discoveredDevices = [
                 { address: d1, name: "Pixoo-Desk", room: "Desk" },
@@ -155,7 +168,9 @@ async def test_browser_channel_controls_two_way_sync():
                 d2_style, d2_activeTile, d2_color,
                 back_d1_style, back_d1_activeTile, back_d1_color
             };
-        }""", [dev1, dev2])
+        }""",
+            [dev1, dev2],
+        )
 
         assert sync_res["d1_style"] == 1
         assert sync_res["d1_activeTile"] == "1"
@@ -187,7 +202,9 @@ async def test_browser_multi_screen_streamer_isolation():
         dev1 = "11:22:33:44:55:01"
         dev2 = "11:22:33:44:55:02"
 
-        stream_res = await eval_js(page, """([d1, d2]) => {
+        stream_res = await eval_js(
+            page,
+            """([d1, d2]) => {
             window.DivoomState = window.DivoomState || {};
             window.DivoomState.discoveredDevices = [
                 { address: d1, name: "Pixoo-Desk" },
@@ -220,7 +237,9 @@ async def test_browser_multi_screen_streamer_isolation():
                 d2_mode: p2.mode,
                 d2_has_no_frame: p2.frameSrc === null,
             };
-        }""", [dev1, dev2])
+        }""",
+            [dev1, dev2],
+        )
 
         assert stream_res["d1_bound"] is True
         assert stream_res["d1_mode"] == "frame"
@@ -247,7 +266,9 @@ async def test_browser_stats_gallery_job_preemption():
         await wait_js(page, "() => !!window.DisplayPreviewRegistry && !!window.setDeviceActivity")
 
         dev1 = "11:22:33:44:55:01"
-        preempt_res = await eval_js(page, """([d1]) => {
+        preempt_res = await eval_js(
+            page,
+            """([d1]) => {
             window.DivoomState = window.DivoomState || {};
             window.DivoomState.discoveredDevices = [
                 { address: d1, name: "Pixoo-Desk" }
@@ -283,7 +304,9 @@ async def test_browser_stats_gallery_job_preemption():
                 wasClobbered: p1.frameSrc === clobberFrame,
                 retainedGallery: p1.frameSrc === galleryFrame
             };
-        }""", [dev1])
+        }""",
+            [dev1],
+        )
 
         assert preempt_res["boundBefore"] is True
         assert preempt_res["boundListBefore"] == 1
@@ -295,5 +318,3 @@ async def test_browser_stats_gallery_job_preemption():
         assert preempt_res["retainedGallery"] is True
 
         await browser.close()
-
-

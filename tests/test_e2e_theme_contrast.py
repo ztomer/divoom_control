@@ -24,6 +24,7 @@ its loading and empty states, because a page with no panel never draws a node.
 
 Skipped if a browser isn't installed (runs with --run-browser).
 """
+
 from pathlib import Path
 
 import pytest
@@ -107,8 +108,9 @@ async def test_every_label_and_switch_reads_at_3_to_1(theme):
         browser = await launch(p)
         try:
             page = await browser.new_page(viewport={"width": 1280, "height": 900})
-            await add_init_js(page, _MOCK_API
-                              + f"\ntry {{ localStorage.setItem('aesthetic-theme', '{theme}'); }} catch (e) {{}}\n")
+            await add_init_js(
+                page, _MOCK_API + f"\ntry {{ localStorage.setItem('aesthetic-theme', '{theme}'); }} catch (e) {{}}\n"
+            )
             await page.goto(f"file://{INDEX_HTML}")
             await wait_js(page, "() => !!window.DivoomState")
             await page.add_style_tag(content=_SETTLED)
@@ -122,8 +124,8 @@ async def test_every_label_and_switch_reads_at_3_to_1(theme):
                     failures.setdefault(line, tab)
             assert not failures, (
                 f"{len(failures)} element(s) below {MIN_RATIO}:1 in the {theme} theme "
-                "(ratio, element, first tab seen):\n  "
-                + "\n  ".join(f"{k}  [{t}]" for k, t in failures.items()))
+                "(ratio, element, first tab seen):\n  " + "\n  ".join(f"{k}  [{t}]" for k, t in failures.items())
+            )
         finally:
             await browser.close()
 
@@ -159,30 +161,39 @@ async def test_the_bench_reads_at_3_to_1_in_every_state(theme, state):
     names = {macs[0]: "Pixoo-1", macs[1]: "Timoo-light-4"}
     # Loading is drawn only once a panel is known (no panel says so first).
     panels = [] if state == "empty" else [_panel(m) for m in macs]
-    topology = ("null" if state == "loading" else
-                json.dumps({"rooms": ["Desk"], "wall_linked": True, "devices": {}}))
-    init = (_FLEET_API.replace("%PANELS%", json.dumps(panels)).replace("%TOPOLOGY%", topology)
-            + f"\ntry {{ localStorage.setItem('aesthetic-theme', '{theme}'); }} catch (e) {{}}\n")
+    topology = "null" if state == "loading" else json.dumps({"rooms": ["Desk"], "wall_linked": True, "devices": {}})
+    init = (
+        _FLEET_API.replace("%PANELS%", json.dumps(panels)).replace("%TOPOLOGY%", topology)
+        + f"\ntry {{ localStorage.setItem('aesthetic-theme', '{theme}'); }} catch (e) {{}}\n"
+    )
     if state == "loading":
-        init = init.replace("get_topology: () => ({success: true, topology: null})",
-                            "get_topology: () => new Promise(() => {})")
+        init = init.replace(
+            "get_topology: () => ({success: true, topology: null})", "get_topology: () => new Promise(() => {})"
+        )
     async with async_playwright() as p:
         browser = await launch(p)
         try:
             page = await browser.new_page(viewport={"width": 1280, "height": 900})
             await add_init_js(page, init)
             await page.goto(f"file://{INDEX_HTML}")
-            await wait_js(page, "() => !!window.SpatialStage && !!window.SpatialRooms && !!window.Divoom?.onOwnedDevices")
+            await wait_js(
+                page, "() => !!window.SpatialStage && !!window.SpatialRooms && !!window.Divoom?.onOwnedDevices"
+            )
             await page.add_style_tag(content=_SETTLED)
             if state != "empty":
                 owned = [{"address": m, "name": names[m], "kind": "clock", "state": "active"} for m in macs]
                 await eval_js(page, "(d) => window.Divoom.onOwnedDevices({type: 'owned_devices', devices: d})", owned)
                 await eval_js(page, "() => window.refreshPanelFacts()")
-            marker = {"panels": f"spatial-node-{macs[-1]}", "empty": "spatial-bench-empty",
-                      "loading": "spatial-bench-loading"}[state]
+            marker = {
+                "panels": f"spatial-node-{macs[-1]}",
+                "empty": "spatial-bench-empty",
+                "loading": "spatial-bench-loading",
+            }[state]
             await wait_js(page, f"() => !!document.getElementById('{marker}')")
             res = await eval_js(page, _PROBE, MIN_RATIO)
-            assert not res["bad"], (f"{len(res['bad'])} element(s) below {MIN_RATIO}:1 in the {theme} "
-                                    f"theme, bench {state}:\n  " + "\n  ".join(res["bad"]))
+            assert not res["bad"], (
+                f"{len(res['bad'])} element(s) below {MIN_RATIO}:1 in the {theme} "
+                f"theme, bench {state}:\n  " + "\n  ".join(res["bad"])
+            )
         finally:
             await browser.close()

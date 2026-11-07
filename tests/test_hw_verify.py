@@ -32,6 +32,7 @@ THE EXPECTATION IS DERIVED, NOT ASSERTED (the class this file also pins):
     FAIL and not a PASS;
   * the packet pushes to, and reads, the panel the operator is watching.
 """
+
 from __future__ import annotations
 
 import base64
@@ -94,10 +95,8 @@ class FakeClient:
         # is pixel art or a picture. A fake that took a bare path modelled a
         # daemon that no longer exists, and the packet's custom_art push was
         # refused on the bench while every test here stayed green.
-        if method.rsplit(".", 1)[-1] == "show_image" and \
-                (kwargs or {}).get("art") not in ("pixel", "picture"):
-            return {"success": False, "code": "bad_request",
-                    "error": "display.show_image: say what the image is"}
+        if method.rsplit(".", 1)[-1] == "show_image" and (kwargs or {}).get("art") not in ("pixel", "picture"):
+            return {"success": False, "code": "bad_request", "error": "display.show_image: say what the image is"}
         return self._call_reply
 
     def send_command(self, command, args=None):
@@ -111,18 +110,12 @@ class FakeClient:
         if command == "now_playing":
             # The daemon's shape (D.FX2): `has_track` says a track is in the
             # session, `playing` and `is_playing` that it is not paused.
-            return {"success": True, "playing": True, "has_track": True,
-                    "is_playing": True}
+            return {"success": True, "playing": True, "has_track": True, "is_playing": True}
         if command == "get_device_activity":
-            return {"success": True,
-                    "activity": {"AA:BB": {"kind": self._kind,
-                                           "preview": _frame_data_url()}}}
+            return {"success": True, "activity": {"AA:BB": {"kind": self._kind, "preview": _frame_data_url()}}}
         if command == "render_widget":
-            return {"success": True,
-                    "frame_rgb_b64": base64.b64encode(bytes((9, 9, 9)) * 256).decode()}
+            return {"success": True, "frame_rgb_b64": base64.b64encode(bytes((9, 9, 9)) * 256).decode()}
         return self._call_reply
-
-
 
 
 def test_look_is_unknown_when_nobody_is_watching():
@@ -144,8 +137,9 @@ def test_device_check_with_no_device_is_FAIL_not_SKIP():
 
 def test_rejected_command_is_FAIL_even_with_a_device():
     """A daemon that says success:False must not be read as 'sent, so fine'."""
-    client = FakeClient(status={"connected": True, "mac": "AA:BB"},
-                        call_reply={"success": False, "error": "unknown method"})
+    client = FakeClient(
+        status={"connected": True, "mac": "AA:BB"}, call_reply={"success": False, "error": "unknown method"}
+    )
     results = []
     # Any device-bound check exercises this path. Selected by PROPERTY, not
     # by id: R73 pruned the two checks these named, and a hardcoded id turns
@@ -195,21 +189,22 @@ def test_self_test_flags_a_precondition_refusal_as_partial():
     no-device precondition, before it ever looks at the name -- so 'the packet
     rejects a bogus method' is still untested and must not read as green.
     """
-    client = FakeClient(status={"connected": False, "mac": None},
-                        call_reply={"success": False, "error": "no device connected"})
+    client = FakeClient(
+        status={"connected": False, "mac": None}, call_reply={"success": False, "error": "no device connected"}
+    )
     assert hw.self_test(client) == 3
 
 
 def test_self_test_passes_when_the_rejection_is_about_the_method():
-    client = FakeClient(status={"connected": True, "mac": "AA:BB"},
-                        call_reply={"success": False, "error": "unknown method 'x'"})
+    client = FakeClient(
+        status={"connected": True, "mac": "AA:BB"}, call_reply={"success": False, "error": "unknown method 'x'"}
+    )
     assert hw.self_test(client) == 0
 
 
 def test_self_test_fails_loudly_if_a_bogus_call_reports_success():
     """If an invalid method returns success, no PASS in the packet means anything."""
-    client = FakeClient(status={"connected": True, "mac": "AA:BB"},
-                        call_reply={"success": True})
+    client = FakeClient(status={"connected": True, "mac": "AA:BB"}, call_reply={"success": True})
     assert hw.self_test(client) == 1
 
 
@@ -222,6 +217,7 @@ def test_self_test_fails_loudly_when_the_probe_ITSELF_raises():
     lies, but a self-test that reports FAIL with a non-zero exit is what the
     contract says: 1 = the instrument is broken.
     """
+
     class Boom(FakeClient):
         def device_call(self, method, args=None):
             raise RuntimeError("socket closed")
@@ -237,22 +233,24 @@ def test_the_self_test_proves_the_PACKET_records_the_failure():
     claims is 'I can report a failure', and that is only true if the verdict
     lands in the results and the exit code follows it.
     """
-    client = FakeClient(status={"connected": True, "mac": "AA:BB"},
-                        call_reply={"success": False, "error": "unknown method 'x'"})
+    client = FakeClient(
+        status={"connected": True, "mac": "AA:BB"}, call_reply={"success": False, "error": "unknown method 'x'"}
+    )
     assert hw.self_test(client) == 0
 
     results = []
-    probe = hw.CallCheck(id="_probe", title="t", look="l",
-                         method="definitely.not.a.real.method", args=[],
-                         needs_device=False)
+    probe = hw.CallCheck(
+        id="_probe", title="t", look="l", method="definitely.not.a.real.method", args=[], needs_device=False
+    )
     hw.run_packet(client, [probe], interactive=False, results=results)
     assert [r.verdict for r in results] == [hw.FAIL], results
 
 
 def test_the_run_exits_nonzero_when_a_check_fails(monkeypatch):
     """A FAIL in the results must be a non-zero exit, not a red line."""
-    client = FakeClient(status={"connected": True, "mac": "AA:BB"},
-                        call_reply={"success": False, "error": "unknown method"})
+    client = FakeClient(
+        status={"connected": True, "mac": "AA:BB"}, call_reply={"success": False, "error": "unknown method"}
+    )
     monkeypatch.setattr(hw, "require_daemon", lambda path: client)
     monkeypatch.setattr(sys, "argv", ["hw_verify.py"])
     assert hw.main() == 1
@@ -261,8 +259,7 @@ def test_the_run_exits_nonzero_when_a_check_fails(monkeypatch):
 def test_the_run_is_PARTIAL_when_nobody_was_watching(monkeypatch):
     """No tty means every LOOK is UNKNOWN — and a run that proved nothing
     must not exit 0. The silent pass is the thing this packet refuses."""
-    client = FakeClient(status={"connected": True, "mac": "AA:BB"},
-                        call_reply={"success": True})
+    client = FakeClient(status={"connected": True, "mac": "AA:BB"}, call_reply={"success": True})
     monkeypatch.setattr(hw, "require_daemon", lambda path: client)
     monkeypatch.setattr(sys, "argv", ["hw_verify.py"])
     assert hw.main() == 3
@@ -282,11 +279,12 @@ def test_an_expected_failure_is_XFAIL_and_does_not_redden_the_run():
     that is always red is one people stop reading — the same reason a randomly
     failing e2e gate teaches `--no-verify`.
     """
-    client = FakeClient(status={"connected": True, "mac": "AA:BB"},
-                        call_reply={"success": False, "error": "RC=1 Failed"})
-    check = hw.CommandCheck(id="canary", title="t", look="l",
-                            command="search_weather_city",
-                            expect_fail="known dead server-side")
+    client = FakeClient(
+        status={"connected": True, "mac": "AA:BB"}, call_reply={"success": False, "error": "RC=1 Failed"}
+    )
+    check = hw.CommandCheck(
+        id="canary", title="t", look="l", command="search_weather_city", expect_fail="known dead server-side"
+    )
     results = []
     hw.run_packet(client, [check], interactive=False, results=results)
     assert results[0].verdict == hw.XFAIL
@@ -295,11 +293,10 @@ def test_an_expected_failure_is_XFAIL_and_does_not_redden_the_run():
 
 def test_an_expected_failure_that_SUCCEEDS_is_surfaced_as_XPASS():
     """The canary singing is the whole point of keeping it in the packet."""
-    client = FakeClient(status={"connected": True, "mac": "AA:BB"},
-                        call_reply={"success": True, "cities": ["London"]})
-    check = hw.CommandCheck(id="canary", title="t", look="l",
-                            command="search_weather_city",
-                            expect_fail="known dead server-side")
+    client = FakeClient(status={"connected": True, "mac": "AA:BB"}, call_reply={"success": True, "cities": ["London"]})
+    check = hw.CommandCheck(
+        id="canary", title="t", look="l", command="search_weather_city", expect_fail="known dead server-side"
+    )
     results = []
     hw.run_packet(client, [check], interactive=False, results=results)
     assert results[0].verdict == hw.XPASS, "a revived endpoint must not read as a pass"
@@ -313,6 +310,7 @@ def test_an_expected_failure_that_SUCCEEDS_is_surfaced_as_XPASS():
 # was graded FAIL by a human holding the device. A description written here
 # is a claim about a renderer that lives in another language; nothing in CI
 # could tell when it stopped being true.
+
 
 def _ctx(tmp_path, mac="AA:BB"):
     return {"mac": mac, "size": 16, "frames_dir": str(tmp_path)}
@@ -342,7 +340,8 @@ def test_no_panel_check_carries_a_hand_written_description():
         if c.look != hw.PANEL_LOOK:
             assert isinstance(c, hw.CommandCheck), (
                 f"{c.id} carries a hand-written LOOK; a description written "
-                f"here goes stale when the daemon's renderer changes")
+                f"here goes stale when the daemon's renderer changes"
+            )
 
 
 def test_a_widget_that_painted_nothing_is_a_machine_FAIL(tmp_path):
@@ -350,8 +349,7 @@ def test_a_widget_that_painted_nothing_is_a_machine_FAIL(tmp_path):
     client = _widget_client()
     check = hw.LiveJobCheck(id="sysmon", title="t", kind="sysmon")
     results = []
-    hw.run_packet(client, [check], interactive=False, results=results,
-                  ctx=_ctx(tmp_path))
+    hw.run_packet(client, [check], interactive=False, results=results, ctx=_ctx(tmp_path))
     assert [r.verdict for r in results] == [hw.FAIL], results
     assert "painted no" in results[0].detail
 
@@ -370,8 +368,7 @@ def test_the_operator_is_shown_the_frame_the_daemon_painted(tmp_path):
 def test_nothing_playing_is_SKIP_not_FAIL(tmp_path):
     """An unmet precondition is neither a failure of the product nor a pass."""
     client = _widget_client(now_playing={"success": True, "playing": False})
-    check = hw.LiveJobCheck(id="album_art", title="t", kind="music",
-                            needs_now_playing=True)
+    check = hw.LiveJobCheck(id="album_art", title="t", kind="music", needs_now_playing=True)
     exp = check.expectation(client, _ctx(tmp_path))
     assert exp.verdict == hw.SKIP
     assert "nothing" in exp.detail.lower()
@@ -387,8 +384,7 @@ def test_a_raising_expectation_is_a_FAIL_not_a_crash(tmp_path):
 
     client = _widget_client()
     results = []
-    hw.run_packet(client, [Boom(id="x", title="t")], interactive=False,
-                  results=results, ctx=_ctx(tmp_path))
+    hw.run_packet(client, [Boom(id="x", title="t")], interactive=False, results=results, ctx=_ctx(tmp_path))
     assert [r.verdict for r in results] == [hw.FAIL], results
     assert "no frame" in results[0].detail
 
@@ -399,8 +395,7 @@ def test_the_packet_pushes_to_the_panel_it_reads(tmp_path):
     image.write_bytes(hw_expect.raw_to_png(bytes((1, 2, 3)) * 256, 16))
     rgb = base64.b64encode(bytes((4, 5, 6)) * 256).decode()
     client = _widget_client(render_widget={"success": True, "frame_rgb_b64": rgb})
-    check = hw.ImageCheck(id="custom_art", title="t",
-                          method="display.show_image", path_arg="$image")
+    check = hw.ImageCheck(id="custom_art", title="t", method="display.show_image", path_arg="$image")
     ctx = _ctx(tmp_path)
     ctx["image"] = str(image)
     fired, _ = check.drive(client, ctx)
@@ -414,8 +409,7 @@ def test_the_image_expectation_is_the_daemons_own_rendering(tmp_path):
     image.write_bytes(hw_expect.raw_to_png(bytes((1, 2, 3)) * 256, 16))
     rgb = base64.b64encode(bytes((4, 5, 6)) * 256).decode()
     client = _widget_client(render_widget={"success": True, "frame_rgb_b64": rgb})
-    check = hw.ImageCheck(id="custom_art", title="t",
-                          method="display.show_image", path_arg="$image")
+    check = hw.ImageCheck(id="custom_art", title="t", method="display.show_image", path_arg="$image")
     ctx = _ctx(tmp_path)
     ctx["image"] = str(image)
     exp = check.expectation(client, ctx)
@@ -423,7 +417,6 @@ def test_the_image_expectation_is_the_daemons_own_rendering(tmp_path):
     assert (tmp_path / "custom_art.png").is_file()
     sent = [c for c in client.calls if c[0] == "send_command" and c[1] == "render_widget"]
     assert sent, "the expectation must come from the daemon's own renderer"
-
 
 
 def test_the_image_check_says_what_the_image_is(tmp_path):
@@ -435,8 +428,7 @@ def test_the_image_check_says_what_the_image_is(tmp_path):
     image = tmp_path / "img.png"
     image.write_bytes(hw_expect.raw_to_png(bytes((1, 2, 3)) * 256, 16))
     client = _widget_client()
-    check = hw.ImageCheck(id="custom_art", title="t",
-                          method="display.show_image", path_arg="$image")
+    check = hw.ImageCheck(id="custom_art", title="t", method="display.show_image", path_arg="$image")
     ctx = _ctx(tmp_path)
     ctx["image"] = str(image)
     fired, detail = check.drive(client, ctx)
@@ -451,10 +443,8 @@ def test_a_paused_track_is_SKIP_not_graded(tmp_path):
     widget's frame recorded as the music job's, which an operator would have
     graded as album art. The SKIP must say PAUSED, not "nothing is playing".
     """
-    client = _widget_client(now_playing={"success": True, "playing": False,
-                                         "has_track": True, "is_playing": False})
-    check = hw.LiveJobCheck(id="album_art", title="t", kind="music",
-                            needs_now_playing=True)
+    client = _widget_client(now_playing={"success": True, "playing": False, "has_track": True, "is_playing": False})
+    check = hw.LiveJobCheck(id="album_art", title="t", kind="music", needs_now_playing=True)
     exp = check.expectation(client, _ctx(tmp_path))
     assert exp.verdict == hw.SKIP
     assert "paused" in exp.detail.lower()

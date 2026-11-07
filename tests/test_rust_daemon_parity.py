@@ -3,6 +3,7 @@
 Spawns the compiled Rust divoomd binary and drives it using the Python DaemonClient
 to assert that all notification/status commands produce identical JSON structures to the Python daemon.
 """
+
 import os
 import subprocess
 import sys
@@ -38,7 +39,8 @@ def rust_daemon_ctx():
         [str(bin_path), "--socket", sp],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True, stdin=subprocess.DEVNULL
+        text=True,
+        stdin=subprocess.DEVNULL,
     )
 
     # Wait for the socket to be bound
@@ -100,14 +102,14 @@ def test_rust_start_stop_notifications(rust_daemon_ctx):
     client = rust_daemon_ctx
     # start_notifications
     reply = client.send_command("start_notifications")
-    
+
     # On non-macOS, start_notifications returns success=false or unsupported=true.
     # On macOS, it should start or report access/TCC errors.
     # Let's assert the schema properties.
     assert "success" in reply
     assert "state" in reply
     assert "counters" in reply
-    
+
     # stop_notifications
     reply2 = client.send_command("stop_notifications")
     assert reply2["success"] is True
@@ -117,11 +119,7 @@ def test_rust_start_stop_notifications(rust_daemon_ctx):
 
 def test_rust_set_routing(rust_daemon_ctx):
     client = rust_daemon_ctx
-    rules = [
-        ("whatsapp", 6),
-        ("mail", 7),
-        ("slack", 13)
-    ]
+    rules = [("whatsapp", 6), ("mail", 7), ("slack", 13)]
     reply = client.set_routing(rules)
     assert reply["success"] is True
 
@@ -145,7 +143,8 @@ def test_rust_tcp_token_auth():
         [str(bin_path), "--socket", sp, "--host", host, "--port", str(port), "--token", token],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True, stdin=subprocess.DEVNULL
+        text=True,
+        stdin=subprocess.DEVNULL,
     )
 
     # Wait for the Unix socket (and TCP port) to be bound
@@ -210,7 +209,8 @@ def test_rust_status_with_nothing_connected_reports_nothing():
         [str(bin_path), "--socket", sp],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True, stdin=subprocess.DEVNULL
+        text=True,
+        stdin=subprocess.DEVNULL,
     )
     try:
         for _ in range(50):
@@ -233,15 +233,13 @@ def test_rust_status_with_nothing_connected_reports_nothing():
         if os.path.exists(sp):
             os.remove(sp)
 
+
 def test_rust_spp_connect_failure_integration(rust_daemon_ctx):
     client = rust_daemon_ctx
     # Attempting to connect to a dummy MAC with use_ios_le_protocol=False
     # should trigger the SppTransport path, spawning spp_bridge.py.
     # It will fail (due to no such device) and return an SPP-specific connection error.
-    reply = client.connect_device(
-        mac="11:22:33:44:55:66",
-        use_ios_le_protocol=False
-    )
+    reply = client.connect_device(mac="11:22:33:44:55:66", use_ios_le_protocol=False)
     assert reply["success"] is False
     # The error message should indicate SPP connection failure
     assert "spp" in reply.get("error", "").lower()
@@ -342,10 +340,7 @@ def test_rust_fetch_gallery(request, rust_daemon_ctx):
     client = rust_daemon_ctx
 
     # Query gallery classify=18 (Recommend), limit=3
-    reply = client.send_command("fetch_gallery", {
-        "classify": 18,
-        "limit": 3
-    })
+    reply = client.send_command("fetch_gallery", {"classify": 18, "limit": 3})
     assert reply["success"] is True
     assert "result" in reply
     res = reply["result"]
@@ -362,17 +357,20 @@ def test_rust_fetch_gallery(request, rust_daemon_ctx):
 def test_rust_set_clock_rich(rust_daemon_ctx):
     client = rust_daemon_ctx
 
-    reply = client.send_command("device_call", {
-        "method": "display.set_clock_rich",
-        "kw": {
-            "style": 3,
-            "twentyfour": True,
-            "humidity": True,
-            "weather": False,
-            "date": True,
-            "color": "#ff00ff"
-        }
-    })
+    reply = client.send_command(
+        "device_call",
+        {
+            "method": "display.set_clock_rich",
+            "kw": {
+                "style": 3,
+                "twentyfour": True,
+                "humidity": True,
+                "weather": False,
+                "date": True,
+                "color": "#ff00ff",
+            },
+        },
+    )
     assert reply["success"] is False
     err = reply["error"].lower()
     assert "no device connected" in err or "not connected" in err
@@ -414,15 +412,32 @@ def test_rust_mcp_via_daemon(rust_daemon_ctx):
     # The MCP handshake first: rmcp (lane MCP.DV) answers nothing before it,
     # exactly as the spec says, where the hand-rolled loop answered anything.
     requests = (
-        json.dumps({"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {
-            "protocolVersion": "2025-11-25", "capabilities": {},
-            "clientInfo": {"name": "parity", "version": "0"}}}) + "\n"
-        + json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n"
-        + json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}) + "\n"
-        + json.dumps({
-            "jsonrpc": "2.0", "id": 2, "method": "tools/call",
-            "params": {"name": "set_volume", "arguments": {"level": 8}},
-        }) + "\n"
+        json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 0,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-11-25",
+                    "capabilities": {},
+                    "clientInfo": {"name": "parity", "version": "0"},
+                },
+            }
+        )
+        + "\n"
+        + json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"})
+        + "\n"
+        + json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+        + "\n"
+        + json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": {"name": "set_volume", "arguments": {"level": 8}},
+            }
+        )
+        + "\n"
     )
     try:
         out, _err = proc.communicate(requests, timeout=30)
@@ -470,8 +485,7 @@ def test_rust_hardware_event_broadcast(request, rust_daemon_ctx):
             events.append(ev)
             if ev.get("type") == "status" and ev.get("connected") is True:
                 connected_ev.set()
-            if ev.get("type") == "owned_devices" and \
-               any(d.get("address") == mac for d in ev.get("devices", [])):
+            if ev.get("type") == "owned_devices" and any(d.get("address") == mac for d in ev.get("devices", [])):
                 owned_ev.set()
             if ev.get("type") == "owned_devices" and ev.get("devices") == []:
                 cleared_ev.set()
@@ -493,7 +507,3 @@ def test_rust_hardware_event_broadcast(request, rust_daemon_ctx):
     finally:
         # subscriber thread ends when the fixture shuts the daemon down
         pass
-
-
-
-

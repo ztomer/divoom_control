@@ -60,12 +60,13 @@ class TestGuiApiCoreBasics(GuiApiTestBase):
 
         client = MagicMock()
         client.render_widget.return_value = {
-            "success": True, "kind": "text", "size": 16,
+            "success": True,
+            "kind": "text",
+            "size": 16,
             "frame_rgb_b64": _b64.b64encode(bytes(16 * 16 * 3)).decode(),
             "text": "HI",
         }
-        with patch.object(type(self.api.lighting), "_client",
-                          property(lambda self: client)):
+        with patch.object(type(self.api.lighting), "_client", property(lambda self: client)):
             ok = self.api.push_text("AA:00:00:00:00:01", "HI", color="#FF0000", speed=40, effect_style=1)
 
         self.assertTrue(ok)
@@ -73,7 +74,8 @@ class TestGuiApiCoreBasics(GuiApiTestBase):
         self.assertTrue(captured.get("exists"), "text image should exist during the push")
         self.assertTrue(captured.get("ends_png"))
         client.render_widget.assert_called_once_with(
-            "text", size=16, params={"text": "HI", "color": "#FF0000", "font_size": 1})
+            "text", size=16, params={"text": "HI", "color": "#FF0000", "font_size": 1}
+        )
 
     def test_push_text_empty_noop(self):
         """Empty text is a no-op (returns False, pushes nothing)."""
@@ -117,12 +119,18 @@ class TestGuiApiCoreBasics(GuiApiTestBase):
         dev.countdown.set_countdown = AsyncMock(return_value=True)
         dev.noise.set_noise = AsyncMock(return_value=True)
         self._on(dev)
-        self.api.set_timer(A, "start"); dev.timer.set_timer.assert_called_with(1)
-        self.api.set_timer(A, "reset"); dev.timer.set_timer.assert_called_with(2)
-        self.api.set_countdown(A, "start", 5, 30); dev.countdown.set_countdown.assert_called_with(0, 5, 30)
-        self.api.set_countdown(A, "stop", 5, 30); dev.countdown.set_countdown.assert_called_with(1, 5, 30)
-        self.api.set_noise(A, "start"); dev.noise.set_noise.assert_called_with(1)
-        self.api.set_noise(A, "stop"); dev.noise.set_noise.assert_called_with(2)
+        self.api.set_timer(A, "start")
+        dev.timer.set_timer.assert_called_with(1)
+        self.api.set_timer(A, "reset")
+        dev.timer.set_timer.assert_called_with(2)
+        self.api.set_countdown(A, "start", 5, 30)
+        dev.countdown.set_countdown.assert_called_with(0, 5, 30)
+        self.api.set_countdown(A, "stop", 5, 30)
+        dev.countdown.set_countdown.assert_called_with(1, 5, 30)
+        self.api.set_noise(A, "start")
+        dev.noise.set_noise.assert_called_with(1)
+        self.api.set_noise(A, "stop")
+        dev.noise.set_noise.assert_called_with(2)
 
     def test_r8_device_settings(self):
         """R8: hour/temp/name/fm map to the right facade calls + bool coercion."""
@@ -132,11 +140,16 @@ class TestGuiApiCoreBasics(GuiApiTestBase):
         dev.device.set_device_name = AsyncMock(return_value=True)
         dev.radio.set_radio_frequency = AsyncMock(return_value=True)
         self._on(dev)
-        self.api.set_hour_type(A, True); dev.system.set_hour_type.assert_called_with(1)
-        self.api.set_hour_type(A, "false"); dev.system.set_hour_type.assert_called_with(0)
-        self.api.set_temp_unit(A, True); dev.device.set_temp_type.assert_called_with(1)
-        self.api.set_device_name(A, "Bedroom"); dev.device.set_device_name.assert_called_with("Bedroom")
-        self.api.set_fm_frequency(A, 1015); dev.radio.set_radio_frequency.assert_called_with(1015)
+        self.api.set_hour_type(A, True)
+        dev.system.set_hour_type.assert_called_with(1)
+        self.api.set_hour_type(A, "false")
+        dev.system.set_hour_type.assert_called_with(0)
+        self.api.set_temp_unit(A, True)
+        dev.device.set_temp_type.assert_called_with(1)
+        self.api.set_device_name(A, "Bedroom")
+        dev.device.set_device_name.assert_called_with("Bedroom")
+        self.api.set_fm_frequency(A, 1015)
+        dev.radio.set_radio_frequency.assert_called_with(1015)
 
     def test_r8_memorial_and_timeplan(self):
         """R8: memorial + timeplan pass through with status/have-flag derivation."""
@@ -182,19 +195,22 @@ class TestGuiApiCoreBasics(GuiApiTestBase):
         dev.design.set_screen_dir = AsyncMock(return_value=True)
         dev.design.set_screen_mirror = AsyncMock(return_value=True)
         self._on(dev)
-        self.api.set_screen_dir(A, 2); dev.design.set_screen_dir.assert_called_with(2)
-        self.api.set_screen_mirror(A, "on"); dev.design.set_screen_mirror.assert_called_with(True)
-        self.api.set_screen_mirror(A, 0); dev.design.set_screen_mirror.assert_called_with(False)
+        self.api.set_screen_dir(A, 2)
+        dev.design.set_screen_dir.assert_called_with(2)
+        self.api.set_screen_mirror(A, "on")
+        dev.design.set_screen_mirror.assert_called_with(True)
+        self.api.set_screen_mirror(A, 0)
+        dev.design.set_screen_mirror.assert_called_with(False)
 
     def test_r9_factory_reset_requires_token(self):
         """R9: factory_reset only fires with the literal 'RESET' token."""
         dev = MagicMock()
         dev.design.factory_reset = AsyncMock(return_value=True)
         self._on(dev)
-        self.assertFalse(self.api.factory_reset(A))          # no token
-        self.assertFalse(self.api.factory_reset(A, "yes"))     # wrong token
+        self.assertFalse(self.api.factory_reset(A))  # no token
+        self.assertFalse(self.api.factory_reset(A, "yes"))  # wrong token
         dev.design.factory_reset.assert_not_called()
-        self.assertTrue(self.api.factory_reset(A, "RESET"))    # correct token
+        self.assertTrue(self.api.factory_reset(A, "RESET"))  # correct token
         dev.design.factory_reset.assert_called_once()
 
     def test_r9_no_device(self):
@@ -229,12 +245,10 @@ class TestGuiApiCoreBasics(GuiApiTestBase):
         self._on(None)
         self.assertFalse(self.api.send_notification(A, 6))
 
-
     def test_scan_devices(self):
         """R17 P5: scanning is owned by the daemon; the GUI proxies via scan()."""
         fake = MagicMock()
-        fake.scan.return_value = {"success": True, "devices": [
-            {"name": "Pixoo-Test", "address": "11:22:33:44:55:66"}]}
+        fake.scan.return_value = {"success": True, "devices": [{"name": "Pixoo-Test", "address": "11:22:33:44:55:66"}]}
         self.api._daemon_client = fake
         with patch.object(type(self.api), "_cache_discovered", return_value=None):
             res = json.loads(self.api.scan_devices(timeout=2, limit=1))
@@ -252,9 +266,11 @@ class TestGuiApiCoreBasics(GuiApiTestBase):
         # R57's reconnect_daemon() resets self._daemon_client and re-runs
         # ensure_daemon(); patch the seam (as the sibling reconnect tests do),
         # not the instance attr that reconnect_daemon() overwrites.
-        with patch("divoom_gui.daemon_bridge.ensure_daemon", return_value=fake), \
-             patch.object(type(self.api), "_device_name_for", return_value=None), \
-             patch.object(type(self.api), "_persist_last_connected", return_value=None):
+        with (
+            patch("divoom_gui.daemon_bridge.ensure_daemon", return_value=fake),
+            patch.object(type(self.api), "_device_name_for", return_value=None),
+            patch.object(type(self.api), "_persist_last_connected", return_value=None),
+        ):
             success = self.api.connect_single_device("00:11:22:33:44:55")
         self.assertTrue(success)
         self.assertFalse(hasattr(self.api, "current_divoom"))

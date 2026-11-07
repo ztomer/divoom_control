@@ -5,14 +5,16 @@ import sys
 from typing import Callable, Any
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG, format='[MockDevice] %(message)s')
+logging.basicConfig(level=logging.DEBUG, format="[MockDevice] %(message)s")
 logger = logging.getLogger("MockDevice")
+
 
 class MockBleakClient:
     """
     A mock class that mimics the behavior of bleak.BleakClient for Divoom devices.
     It simulates connection, disconnection, and characteristic read/write/notify.
     """
+
     def __init__(self, address: str, **kwargs):
         self.address = address
         self._is_connected = False
@@ -31,7 +33,7 @@ class MockBleakClient:
 
     async def connect(self, **kwargs) -> bool:
         logger.info(f"Connecting to {self.address}...")
-        await asyncio.sleep(0.5) # Simulate connection delay
+        await asyncio.sleep(0.5)  # Simulate connection delay
         self._is_connected = True
         logger.info("Connected!")
         return True
@@ -72,18 +74,18 @@ class MockBleakClient:
         This is where the "device logic" lives.
         """
         # Basic Protocol Logic
-        if data.startswith(b'\x01'):
+        if data.startswith(b"\x01"):
             # Parse Basic Protocol
             try:
-                length = int.from_bytes(data[1:3], 'little')
-                payload = data[3:3+length-2] # Exclude checksum
+                length = int.from_bytes(data[1:3], "little")
+                payload = data[3 : 3 + length - 2]  # Exclude checksum
                 cmd = payload[0]
                 logger.debug(f"Received Basic Protocol CMD: 0x{cmd:02x}")
 
                 # Example: Get Settings (0x46) -> Respond with stateful settings
                 if cmd == 0x46:
                     resp_payload = bytearray(23)
-                    resp_payload[0:3] = b'\x04\x46\x55'
+                    resp_payload[0:3] = b"\x04\x46\x55"
                     resp_payload[3 + 6] = self.brightness
                     resp_payload[3 + 15] = self.clock_style
                     return self._frame_basic_response(bytes(resp_payload))
@@ -104,33 +106,33 @@ class MockBleakClient:
                 logger.error(f"Failed to parse Basic Protocol packet: {e}")
 
         # iOS LE Protocol Logic
-        elif data.startswith(b'\xfe\xef\xaa\x55'):
-             try:
+        elif data.startswith(b"\xfe\xef\xaa\x55"):
+            try:
                 # Header (4) + Len (2) + Cmd (1)
                 cmd = data[6]
-                payload = data[11:-2] # Exclude header, len, cmd, packetnum, crc
+                payload = data[11:-2]  # Exclude header, len, cmd, packetnum, crc
                 logger.debug(f"Received iOS LE Protocol CMD: 0x{cmd:02x}")
 
-                if cmd == 0x46: # Get Settings
-                     # Respond with 20-byte payload in iOS LE format
-                     resp_payload = bytearray(20)
-                     resp_payload[6] = self.brightness
-                     resp_payload[15] = self.clock_style
-                     return self._frame_ios_response(cmd, bytes(resp_payload))
+                if cmd == 0x46:  # Get Settings
+                    # Respond with 20-byte payload in iOS LE format
+                    resp_payload = bytearray(20)
+                    resp_payload[6] = self.brightness
+                    resp_payload[15] = self.clock_style
+                    return self._frame_ios_response(cmd, bytes(resp_payload))
 
                 elif cmd == 0x45:
-                     if len(payload) >= 4 and payload[1] == 0x00:
-                         self.clock_style = payload[3]
-                         logger.debug(f"MockDevice: Set clock style to {self.clock_style}")
-                     return self._frame_ios_response(cmd, b'\x00')
+                    if len(payload) >= 4 and payload[1] == 0x00:
+                        self.clock_style = payload[3]
+                        logger.debug(f"MockDevice: Set clock style to {self.clock_style}")
+                    return self._frame_ios_response(cmd, b"\x00")
 
                 elif cmd == 0x74:
-                     if len(payload) >= 2:
-                         self.brightness = payload[1]
-                         logger.debug(f"MockDevice: Set brightness to {self.brightness}")
-                     return self._frame_ios_response(cmd, b'\x00')
+                    if len(payload) >= 2:
+                        self.brightness = payload[1]
+                        logger.debug(f"MockDevice: Set brightness to {self.brightness}")
+                    return self._frame_ios_response(cmd, b"\x00")
 
-             except Exception as e:
+            except Exception as e:
                 logger.error(f"Failed to parse iOS LE packet: {e}")
 
         return None
@@ -138,28 +140,28 @@ class MockBleakClient:
     def _frame_basic_response(self, payload: bytes) -> bytes:
         """Frames a payload into a Basic Protocol message."""
         # 01 LEN_L LEN_H PAYLOAD CRC_L CRC_H 02
-        length = len(payload) + 2 # +2 for CRC
-        len_bytes = length.to_bytes(2, 'little')
+        length = len(payload) + 2  # +2 for CRC
+        len_bytes = length.to_bytes(2, "little")
 
         # Calculate CRC (sum of length + payload)
         checksum_val = sum(len_bytes) + sum(payload)
-        crc_bytes = checksum_val.to_bytes(2, 'little')
+        crc_bytes = checksum_val.to_bytes(2, "little")
 
-        return b'\x01' + len_bytes + payload + crc_bytes + b'\x02'
+        return b"\x01" + len_bytes + payload + crc_bytes + b"\x02"
 
     def _frame_ios_response(self, cmd: int, payload: bytes) -> bytes:
         """Frames a payload into an iOS LE Protocol message."""
-        header = b'\xfe\xef\xaa\x55'
-        packet_num = b'\x00\x00\x00\x00'
+        header = b"\xfe\xef\xaa\x55"
+        packet_num = b"\x00\x00\x00\x00"
 
         # Length = Cmd(1) + PacketNum(4) + Payload(N) + CRC(2)
         data_len = 1 + 4 + len(payload) + 2
-        len_bytes = data_len.to_bytes(2, 'little')
+        len_bytes = data_len.to_bytes(2, "little")
 
         # CRC Input = Len + Cmd + PacketNum + Payload
         crc_input = len_bytes + bytes([cmd]) + packet_num + payload
         crc_val = sum(crc_input)
-        crc_bytes = crc_val.to_bytes(2, 'little')
+        crc_bytes = crc_val.to_bytes(2, "little")
 
         return header + len_bytes + bytes([cmd]) + packet_num + payload + crc_bytes
 
@@ -179,11 +181,12 @@ class MockBleakClient:
             # Call the callback (sender_handle, data)
             # In bleak, callback is often a partial or bound method, but signature is (sender, data)
             if inspect.iscoroutinefunction(callback):
-                 await callback(1, data)
+                await callback(1, data)
             else:
-                 callback(1, data)
+                callback(1, data)
         else:
             logger.warning("No notification callback registered, dropping response.")
+
 
 async def main():
     """
@@ -205,7 +208,7 @@ async def main():
         user_input = await asyncio.to_thread(sys.stdin.readline)
         user_input = user_input.strip()
 
-        if user_input.lower() == 'exit':
+        if user_input.lower() == "exit":
             break
 
         try:
@@ -217,6 +220,7 @@ async def main():
             print(f"Error: {e}")
 
     await client.disconnect()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

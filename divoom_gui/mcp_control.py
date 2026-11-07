@@ -26,6 +26,7 @@ Usage::
     # ...later...
     ctl.stop()
 """
+
 from __future__ import annotations
 
 import json
@@ -51,6 +52,7 @@ DEFAULT_LOG_PATH = Path.home() / ".config" / "divoom-control" / "mcp-server.log"
 @dataclass
 class MCPStatus:
     """Snapshot of the subprocess state for the JS side."""
+
     running: bool
     pid: Optional[int] = None
     started_at: Optional[float] = None
@@ -136,9 +138,8 @@ class MCPController:
         exe = python or binary_resolver.resolve("divoomd")
         if not exe:
             return MCPStatus(
-                running=False,
-                error="no usable divoomd found — rebuild it (scripts/build.sh) "
-                      "or reinstall the app")
+                running=False, error="no usable divoomd found — rebuild it (scripts/build.sh) or reinstall the app"
+            )
         cmd = [str(exe), "mcp"]
         self._log_path.parent.mkdir(parents=True, exist_ok=True)
         # Truncate ("wb"), not append: each start gets a self-contained log so
@@ -181,14 +182,14 @@ class MCPController:
         try:
             # Send SIGTERM to the whole process group (set in start()).
             os.killpg(os.getpgid(pid), signal.SIGTERM)
-        except (ProcessLookupError, PermissionError):
+        except ProcessLookupError, PermissionError:
             pass
         try:
             self._proc.wait(timeout=timeout_s)
         except subprocess.TimeoutExpired:
             try:
                 os.killpg(os.getpgid(pid), signal.SIGKILL)
-            except (ProcessLookupError, PermissionError):
+            except ProcessLookupError, PermissionError:
                 pass
             try:
                 self._proc.wait(timeout=1.0)

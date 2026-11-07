@@ -13,6 +13,7 @@ that sent the wall a `device_call` must hand back that panel and its reason.
 On a panel, the same methods answer the same shape. A wall write added
 tomorrow is held to this on the day it is added.
 """
+
 from __future__ import annotations
 
 import json
@@ -20,21 +21,33 @@ import json
 import pytest
 
 from tests.support.bridge_calls import (
-    A, B, NOT_CALLED, WALL, RecordingDaemon, args_for, call, names_its_panel,
-    public_methods, recorded_api,
+    A,
+    B,
+    NOT_CALLED,
+    WALL,
+    RecordingDaemon,
+    args_for,
+    call,
+    names_its_panel,
+    public_methods,
+    recorded_api,
 )
 
 WHY = "the transfer failed"
-REFUSAL = {"success": False, "code": "device_failed", "result": False,
-           "error": f"wall: {B} did not take it ({WHY})",
-           "failed": {B: WHY}, "degraded": []}
+REFUSAL = {
+    "success": False,
+    "code": "device_failed",
+    "result": False,
+    "error": f"wall: {B} did not take it ({WHY})",
+    "failed": {B: WHY},
+    "degraded": [],
+}
 
 
 class _FailingWall(RecordingDaemon):
     """The wall's B did not take the write; a panel takes everything."""
 
-    def device_call(self, method, args=None, kwargs=None, target="device",
-                    blobs=None, token=None, mac=None):
+    def device_call(self, method, args=None, kwargs=None, target="device", blobs=None, token=None, mac=None):
         super().device_call(method, args, kwargs, target, blobs, token, mac)
         return dict(REFUSAL) if target == "wall" else {"success": True, "result": True}
 
@@ -55,16 +68,14 @@ def _reply(value):
 #: the wall the method would be this test's choice (see the existence test).
 PASSTHROUGH = {"device_call"}
 
-WRITES = [m for m in public_methods()
-          if m[0] not in NOT_CALLED and m[0] not in PASSTHROUGH and names_its_panel(m[1])]
+WRITES = [m for m in public_methods() if m[0] not in NOT_CALLED and m[0] not in PASSTHROUGH and names_its_panel(m[1])]
 
 
 def _wall_reply(api, name, fn):
     api.select_device(A)
     api._daemon_client.requests.clear()
     reply = _reply(getattr(api, name)(*args_for(fn, WALL)))
-    sent = [kw for r, kw in api._daemon_client.requests
-            if r == "device_call" and kw["target"] == "wall"]
+    sent = [kw for r, kw in api._daemon_client.requests if r == "device_call" and kw["target"] == "wall"]
     return reply, sent
 
 
@@ -81,9 +92,19 @@ def _wall_writes(api):
 def test_every_wall_write_names_the_panel_that_did_not_take_it(api):
     writes = _wall_writes(api)
     # Calibration: the walk reaches the writes this item is about.
-    expected = {"set_solid_light", "set_clock", "switch_channel", "set_vj_effect",
-                "set_visualization", "push_text", "set_clock_rich", "set_scoreboard",
-                "set_brightness", "set_volume", "display_wall_image"}
+    expected = {
+        "set_solid_light",
+        "set_clock",
+        "switch_channel",
+        "set_vj_effect",
+        "set_visualization",
+        "push_text",
+        "set_clock_rich",
+        "set_scoreboard",
+        "set_brightness",
+        "set_volume",
+        "display_wall_image",
+    }
     assert expected <= set(writes), f"not reached: {sorted(expected - set(writes))}"
     wrong = {}
     for name, reply in writes.items():
@@ -94,9 +115,18 @@ def test_every_wall_write_names_the_panel_that_did_not_take_it(api):
     assert wrong == {}, f"wall writes that do not hand the page the failing panel: {wrong}"
 
 
-DISPLAY_WRITES = ["set_solid_light", "set_clock", "switch_channel", "set_vj_effect",
-                  "set_visualization", "push_text", "set_clock_rich", "set_scoreboard",
-                  "set_brightness", "set_volume"]
+DISPLAY_WRITES = [
+    "set_solid_light",
+    "set_clock",
+    "switch_channel",
+    "set_vj_effect",
+    "set_visualization",
+    "push_text",
+    "set_clock_rich",
+    "set_scoreboard",
+    "set_brightness",
+    "set_volume",
+]
 
 
 @pytest.mark.parametrize("name", DISPLAY_WRITES)

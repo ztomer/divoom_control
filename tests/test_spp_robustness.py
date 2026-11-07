@@ -6,6 +6,7 @@ Two deferred SPP findings:
 - `_on_data` trusted the iOS-LE length field (bytes 4-5). A corrupt length made it
   wait FOREVER for bytes that never arrive, stalling all RX behind it.
 """
+
 import asyncio
 import logging
 import queue
@@ -45,6 +46,7 @@ def _t():
 
 # ── RX parser resync on corrupt length ──────────────────────────────────────
 
+
 def test_on_data_does_not_stall_on_corrupt_length():
     t = _t()
     t._rx_buf = bytearray()
@@ -66,6 +68,7 @@ def test_on_data_recovers_real_frame_after_corrupt_prefix():
     t._rx_buf = bytearray()
     t._rx_queue = queue.Queue()
     from tests.support.framing_fixtures import basic_frame
+
     good = basic_frame(0x44, 0x00, 0x0A)
     # a bogus iOS-LE header with an absurd length, then a real basic frame
     t._on_data(bytes(models.IOS_LE_HEADER) + b"\xff\xff" + bytes(good))

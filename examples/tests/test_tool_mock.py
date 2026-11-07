@@ -12,7 +12,10 @@ import pytest
 
 from divoom_lib.models import (
     COMMANDS,
-    TOOL_TYPE_TIMER, TOOL_TYPE_SCORE, TOOL_TYPE_NOISE, TOOL_TYPE_COUNTDOWN,
+    TOOL_TYPE_TIMER,
+    TOOL_TYPE_SCORE,
+    TOOL_TYPE_NOISE,
+    TOOL_TYPE_COUNTDOWN,
     TOOL_TYPE_NOT_IN_GAME_MODE,
 )
 from divoom_legacy.tool import Tool

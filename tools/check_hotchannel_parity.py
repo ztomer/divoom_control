@@ -23,6 +23,7 @@ the screen that is supposedly reporting it.
 
 Compares DATA, not behaviour: the field set, the defaults, and the clamp bounds.
 """
+
 from __future__ import annotations
 
 import ast
@@ -61,7 +62,7 @@ def python_side() -> tuple[set[str], dict, tuple[int, int]]:
             continue
         try:
             consts[name] = ast.literal_eval(node.value)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             continue
     for node in tree.body:
         if not isinstance(node, ast.Assign) or not node.targets:
@@ -116,11 +117,7 @@ def rust_side() -> tuple[set[str], dict, tuple[int, int]]:
     # source TEXT and a linter had legitimately changed the text. An instrument
     # that greps source has to accept every spelling the toolchain may produce.
     clamp = re.search(r"\.clamp\(([\d_]+),\s*([\d_]+)\)", src)
-    bounds = (
-        (int(clamp.group(1).replace("_", "")), int(clamp.group(2).replace("_", "")))
-        if clamp
-        else (None, None)
-    )
+    bounds = (int(clamp.group(1).replace("_", "")), int(clamp.group(2).replace("_", ""))) if clamp else (None, None)
     return fields, defaults, bounds
 
 
@@ -196,7 +193,8 @@ def main() -> int:
     if py_bounds != rs_bounds:
         problems.append(
             f"interval clamp differs: python={py_bounds} rust={rs_bounds} — the GUI "
-            f"would display a clamped value the daemon does not honour")
+            f"would display a clamped value the daemon does not honour"
+        )
 
     # The settings' `[gallery]` table is the OTHER half of the same fact: the
     # GUI writes it, the daemon reads it, and the keys that are settings
@@ -208,10 +206,10 @@ def main() -> int:
         problems.append(
             f"the [gallery] table's reserved keys differ: python={sorted(py_reserved)} "
             f"rust={sorted(rs_reserved)} — one side would treat the other's "
-            f"settings as devices")
+            f"settings as devices"
+        )
     if py_classify != rs_classify:
-        problems.append(
-            f"the fallback gallery differs: python={py_classify!r} rust={rs_classify!r}")
+        problems.append(f"the fallback gallery differs: python={py_classify!r} rust={rs_classify!r}")
 
     if problems:
         err(f"[hotchannel-parity] {len(problems)} divergence(s) in hotchannel.json")
@@ -220,9 +218,11 @@ def main() -> int:
         info("One file, two parsers: they must agree or the settings card lies.")
         return 1
 
-    ok(f"[hotchannel-parity] OK — {len(py_fields)} fields, defaults and "
-       f"clamp {py_bounds[0]}..{py_bounds[1]}s agree; "
-       f"{len(py_reserved)} reserved gallery keys agree")
+    ok(
+        f"[hotchannel-parity] OK — {len(py_fields)} fields, defaults and "
+        f"clamp {py_bounds[0]}..{py_bounds[1]}s agree; "
+        f"{len(py_reserved)} reserved gallery keys agree"
+    )
     return 0
 
 

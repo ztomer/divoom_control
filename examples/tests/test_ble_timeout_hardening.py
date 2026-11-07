@@ -5,6 +5,7 @@ forever (the reconnect path holds the write lock, so an unbounded connect there
 would wedge the whole transport). These drive a hanging fake bleak client and
 assert the bounded calls fail/return fast instead of blocking.
 """
+
 import asyncio
 import os
 
@@ -19,6 +20,7 @@ def _transport(monkeypatch):
     paths disabled (DIVOOM_MOCK_BLE), and tiny timeouts so tests are fast."""
     monkeypatch.setenv("DIVOOM_MOCK_BLE", "1")
     from unittest.mock import AsyncMock, patch
+
     with patch("divoom_legacy.divoom.BleakClient") as mk:
         mk.return_value = AsyncMock()
         proto = DivoomProtocol(mac="AA:BB:CC:DD:EE:FF", device_name="MockDevice")
@@ -83,7 +85,7 @@ def test_disconnect_calls_stop_notify(monkeypatch):
         return None
 
     _run(t.disconnect())
-    assert [c[0] for c in calls] == ["stop", "disc"]   # stop_notify BEFORE disconnect
+    assert [c[0] for c in calls] == ["stop", "disc"]  # stop_notify BEFORE disconnect
     assert t._notifications_started is False
 
 
@@ -103,6 +105,7 @@ def test_transport_swap_tears_down_old(monkeypatch):
     CoreBluetooth link open while the new transport connects to the same device."""
     monkeypatch.setenv("DIVOOM_MOCK_BLE", "1")
     from unittest.mock import AsyncMock, patch
+
     with patch("divoom_legacy.divoom.BleakClient") as mk:
         mk.return_value = AsyncMock()
         proto = DivoomProtocol(mac="AA:BB:CC:DD:EE:FF", device_name="MockDevice")
@@ -117,6 +120,7 @@ def test_teardown_swallows_old_transport_error(monkeypatch):
     """A failing teardown must not block the swap to the new transport."""
     monkeypatch.setenv("DIVOOM_MOCK_BLE", "1")
     from unittest.mock import AsyncMock, patch
+
     with patch("divoom_legacy.divoom.BleakClient") as mk:
         mk.return_value = AsyncMock()
         proto = DivoomProtocol(mac="AA:BB:CC:DD:EE:FF", device_name="MockDevice")
@@ -124,7 +128,7 @@ def test_teardown_swallows_old_transport_error(monkeypatch):
     bad = AsyncMock()
     bad.disconnect.side_effect = RuntimeError("boom")
     conn._active_transport = bad
-    _run(conn._teardown_outgoing_transport())   # must not raise
+    _run(conn._teardown_outgoing_transport())  # must not raise
 
 
 def test_reconnect_clears_stale_os_drop_flag(monkeypatch):
@@ -133,6 +137,7 @@ def test_reconnect_clears_stale_os_drop_flag(monkeypatch):
     `use_ios_le_protocol` is already known, so autoprobe is a no-op and never sends
     — nothing else would clear the flag until the next successful payload."""
     from unittest.mock import AsyncMock
+
     t = _transport(monkeypatch)
     # no real 1s settle wait
     monkeypatch.setattr("divoom_legacy.ble_transport.asyncio.sleep", AsyncMock())
@@ -145,12 +150,12 @@ def test_reconnect_clears_stale_os_drop_flag(monkeypatch):
     t.client.connect = _ok_connect
     type(t.client).is_connected = property(lambda s: state["connected"])
     t.client.start_notify = AsyncMock()
-    t.use_ios_le_protocol = False        # already known → autoprobe no-op (reconnect)
+    t.use_ios_le_protocol = False  # already known → autoprobe no-op (reconnect)
 
-    t._on_os_disconnect(None)            # simulate the OS drop
+    t._on_os_disconnect(None)  # simulate the OS drop
     assert t._connection_likely_broken is True
-    assert t.is_alive is False           # honestly degraded while down
+    assert t.is_alive is False  # honestly degraded while down
 
-    _run(t.connect())                    # reconnect
+    _run(t.connect())  # reconnect
     assert t._connection_likely_broken is False
-    assert t.is_alive is True            # truth restored without waiting for a send
+    assert t.is_alive is True  # truth restored without waiting for a send

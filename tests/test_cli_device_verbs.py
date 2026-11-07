@@ -22,6 +22,7 @@ printed `set volume to 5/15 (ok=True)`; the native one prints `set volume to
 therefore a real assertion about which implementation ran, not a formatting
 preference.
 """
+
 from __future__ import annotations
 
 import os
@@ -96,7 +97,8 @@ def _run(*argv: str) -> sp.CompletedProcess:
         capture_output=True,
         text=True,
         timeout=60,
-        cwd=REPO_ROOT, stdin=sp.DEVNULL,
+        cwd=REPO_ROOT,
+        stdin=sp.DEVNULL,
         check=False,
     )
 
@@ -158,9 +160,7 @@ def test_an_out_of_range_value_is_refused_before_the_daemon_is_touched(live_daem
     proc = _run("set-volume", "16", "--socket", live_daemon)
     assert proc.returncode == 2, proc
     assert "volume must be 0..15" in proc.stderr, proc.stderr
-    assert "handing off" not in proc.stderr, (
-        f"it must not have reached the native verb: {proc.stderr}"
-    )
+    assert "handing off" not in proc.stderr, f"it must not have reached the native verb: {proc.stderr}"
 
 
 def test_the_weather_verb_reaches_the_native_verb(live_daemon) -> None:

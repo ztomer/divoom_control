@@ -25,6 +25,7 @@ Design notes:
 - All commands log to stderr; results print to stdout (so they can be piped).
 - Exit codes: 0 = success, 1 = runtime error, 2 = usage error.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -48,24 +49,27 @@ def _shared_flags(*, defaults: bool) -> argparse.ArgumentParser:
     "--mac is required" (D.CLIMAC). Suppressed, the subcommand writes only
     what it was actually given, in either position.
     """
+
     def d(value):
         return value if defaults else argparse.SUPPRESS
 
     shared = argparse.ArgumentParser(add_help=False)
-    shared.add_argument("--mac", default=d(None),
-                        help="Target device MAC (default: first discovered).")
-    shared.add_argument("--socket", default=d(None),
-                        help="Daemon Unix socket to talk to (default: /tmp/divoom.sock). "
-                             "Needed to reach a dev daemon on its own path; the "
-                             "device verbs had no way to say this before.")
-    shared.add_argument("--timeout", type=float, default=d(10.0),
-                        help="BLE scan timeout in seconds (default: 10).")
-    shared.add_argument("--type", dest="device_type", default=d(None),
-                        help="Explicit device_type (overrides registry).")
-    shared.add_argument("--json", action="store_true", default=d(False),
-                        help="Output JSON instead of human-readable text.")
-    shared.add_argument("--verbose", "-v", action="store_true", default=d(False),
-                        help="Verbose logging.")
+    shared.add_argument("--mac", default=d(None), help="Target device MAC (default: first discovered).")
+    shared.add_argument(
+        "--socket",
+        default=d(None),
+        help="Daemon Unix socket to talk to (default: /tmp/divoom.sock). "
+        "Needed to reach a dev daemon on its own path; the "
+        "device verbs had no way to say this before.",
+    )
+    shared.add_argument("--timeout", type=float, default=d(10.0), help="BLE scan timeout in seconds (default: 10).")
+    shared.add_argument(
+        "--type", dest="device_type", default=d(None), help="Explicit device_type (overrides registry)."
+    )
+    shared.add_argument(
+        "--json", action="store_true", default=d(False), help="Output JSON instead of human-readable text."
+    )
+    shared.add_argument("--verbose", "-v", action="store_true", default=d(False), help="Verbose logging.")
     return shared
 
 
@@ -83,9 +87,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("scan", parents=[shared], help="Scan for nearby Divoom devices.")
     sub.add_parser("capabilities", parents=[shared], help="Print the active device's capabilities.")
-    sub.add_parser("select", parents=[shared],
-                   help="Make --mac the ACTIVE panel for every client (bench, menubar, mac-less commands).")
-    sub.add_parser("identify", parents=[shared], help="Print raw BLE manufacturer_data for a new device, for fingerprinting.")
+    sub.add_parser(
+        "select",
+        parents=[shared],
+        help="Make --mac the ACTIVE panel for every client (bench, menubar, mac-less commands).",
+    )
+    sub.add_parser(
+        "identify", parents=[shared], help="Print raw BLE manufacturer_data for a new device, for fingerprinting."
+    )
 
     # SETTERS (require a value)
     p_vol = sub.add_parser("set-volume", parents=[shared], help="Set volume (0-15).")
@@ -100,10 +109,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_al = sub.add_parser("set-alarm", parents=[shared], help="Set a one-shot alarm at HH:MM.")
     p_al.add_argument("time", help="HH:MM (24h)")
 
-    p_wx = sub.add_parser("set-temperature", parents=[shared], help="Set the device's weather channel (temperature + icon).")
+    p_wx = sub.add_parser(
+        "set-temperature", parents=[shared], help="Set the device's weather channel (temperature + icon)."
+    )
     p_wx.add_argument("temperature", type=int, help="Temperature in Celsius (range: -127..128).")
     p_wx.add_argument(
-        "--weather", default="clear", choices=["clear", "cloudy", "thunderstorm", "rain", "snow", "fog"],
+        "--weather",
+        default="clear",
+        choices=["clear", "cloudy", "thunderstorm", "rain", "snow", "fog"],
         help="Weather condition (default: clear).",
     )
 
@@ -114,10 +127,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_gif.add_argument("path", type=Path)
 
     # READ-ONLY (WG.5a): what each panel shows, as the daemon last drew it.
-    p_prev = sub.add_parser("preview", parents=[shared],
-                            help="Print what each panel is showing (read-only; --json, --out DIR).")
-    p_prev.add_argument("--out", default=None,
-                        help="Also write each frame to DIR/<id>.png|gif and report its path.")
+    p_prev = sub.add_parser(
+        "preview", parents=[shared], help="Print what each panel is showing (read-only; --json, --out DIR)."
+    )
+    p_prev.add_argument("--out", default=None, help="Also write each frame to DIR/<id>.png|gif and report its path.")
 
     # REGISTRY — pair reuses the shared --mac and --type, both required
     # at the handler level (see cmd_pair). Defining them again here would
@@ -130,7 +143,8 @@ def build_parser() -> argparse.ArgumentParser:
     # exposes its tools (docs/MCP_SERVER.md) to MCP-compatible clients (Claude Desktop, Cursor,
     # Cline, Continue, etc.).
     p_mcp = sub.add_parser(
-        "mcp-server", parents=[shared],
+        "mcp-server",
+        parents=[shared],
         help="Start the MCP stdio JSON-RPC server (routes through the daemon).",
     )
     # --socket comes from `shared` now, so it works on every verb rather than
@@ -138,39 +152,46 @@ def build_parser() -> argparse.ArgumentParser:
     # The tools that overwrite panel state the daemon cannot read back
     # (set_alarm, set_low_power, set_radio, set_screen_orientation) are
     # offered only when asked for; passed through to `divoomd mcp`.
-    p_mcp.add_argument("--allow-destructive", action="store_true",
-                       help="Also offer the MCP tools that overwrite panel state "
-                            "the daemon cannot read back (alarms, orientation, "
-                            "low-power mode, radio).")
-    p_mcp.add_argument("--host", default=None,
-                       help="Connect to a remote daemon on this TCP host "
-                            "instead of the local socket (sets DIVOOM_DAEMON_HOST).")
-    p_mcp.add_argument("--port", type=int, default=9009,
-                       help="TCP port of the remote daemon (default 9009).")
-    p_mcp.add_argument("--token", default=None,
-                       help="Shared secret for a remote (TCP) daemon "
-                            "(falls back to DIVOOM_DAEMON_TOKEN).")
+    p_mcp.add_argument(
+        "--allow-destructive",
+        action="store_true",
+        help="Also offer the MCP tools that overwrite panel state "
+        "the daemon cannot read back (alarms, orientation, "
+        "low-power mode, radio).",
+    )
+    p_mcp.add_argument(
+        "--host",
+        default=None,
+        help="Connect to a remote daemon on this TCP host instead of the local socket (sets DIVOOM_DAEMON_HOST).",
+    )
+    p_mcp.add_argument("--port", type=int, default=9009, help="TCP port of the remote daemon (default 9009).")
+    p_mcp.add_argument(
+        "--token", default=None, help="Shared secret for a remote (TCP) daemon (falls back to DIVOOM_DAEMON_TOKEN)."
+    )
 
     # Headless daemon (R16): owns the device + macOS notification routing and
     # serves status/notification events over a Unix socket. The GUI and menubar
     # are thin clients of it.
     p_daemon = sub.add_parser(
-        "daemon", parents=[shared],
+        "daemon",
+        parents=[shared],
         help="Run the headless daemon (device + macOS notification routing + event socket).",
     )
-    p_daemon.add_argument("--host", default=None,
-                          help="Also listen on this TCP host (e.g. 0.0.0.0 for LAN). "
-                               "Requires --token or DIVOOM_DAEMON_TOKEN.")
-    p_daemon.add_argument("--port", type=int, default=9009,
-                          help="TCP port for the network listener (default 9009).")
-    p_daemon.add_argument("--token", default=None,
-                          help="Shared secret required for TCP clients "
-                               "(falls back to DIVOOM_DAEMON_TOKEN).")
+    p_daemon.add_argument(
+        "--host",
+        default=None,
+        help="Also listen on this TCP host (e.g. 0.0.0.0 for LAN). Requires --token or DIVOOM_DAEMON_TOKEN.",
+    )
+    p_daemon.add_argument("--port", type=int, default=9009, help="TCP port for the network listener (default 9009).")
+    p_daemon.add_argument(
+        "--token", default=None, help="Shared secret required for TCP clients (falls back to DIVOOM_DAEMON_TOKEN)."
+    )
 
     # macOS menubar agent (R15 §6): native Cocoa status item that
     # connects to the daemon as a client. No BLE, no socket server.
     sub.add_parser(
-        "menubar", parents=[shared],
+        "menubar",
+        parents=[shared],
         help="Launch the macOS menubar agent (connects to daemon).",
     )
     return p
@@ -190,6 +211,7 @@ from divoom_lib.cli_commands import (
     cmd_scan,
     cmd_select,
 )
+
 # The device verbs live in their own module (they act on a panel; the rest do
 # not), and four of them are `divoomd` subcommands now.
 from divoom_lib.cli_device_verbs import (
@@ -210,22 +232,22 @@ from divoom_lib.cli_preview import cmd_preview
 
 
 COMMANDS: dict[str, Callable[[argparse.Namespace], Awaitable[int]]] = {
-    "scan":          cmd_scan,
-    "select":        cmd_select,
-    "capabilities":  cmd_capabilities,
-    "set-volume":    cmd_set_volume,
-    "set-brightness":cmd_set_brightness,
-    "set-radio":     cmd_set_radio,
-    "set-alarm":     cmd_set_alarm,
+    "scan": cmd_scan,
+    "select": cmd_select,
+    "capabilities": cmd_capabilities,
+    "set-volume": cmd_set_volume,
+    "set-brightness": cmd_set_brightness,
+    "set-radio": cmd_set_radio,
+    "set-alarm": cmd_set_alarm,
     "set-temperature": cmd_set_temperature,
-    "push-image":    cmd_push_image,
-    "push-gif":      cmd_push_gif,
-    "pair":          cmd_pair,
-    "identify":      cmd_identify,
-    "preview":       cmd_preview,
-    "mcp-server":    cmd_mcp_server,
-    "daemon":        cmd_daemon,
-    "menubar":       cmd_menubar,
+    "push-image": cmd_push_image,
+    "push-gif": cmd_push_gif,
+    "pair": cmd_pair,
+    "identify": cmd_identify,
+    "preview": cmd_preview,
+    "mcp-server": cmd_mcp_server,
+    "daemon": cmd_daemon,
+    "menubar": cmd_menubar,
 }
 
 
@@ -242,6 +264,7 @@ async def amain(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 2
     import inspect
+
     if inspect.iscoroutinefunction(handler):
         return await handler(args)
     else:

@@ -24,8 +24,19 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 INDEX_HTML = REPO / "divoom_gui" / "web_ui" / "index.html"
-PANEL_FIELDS = ("mac", "connected", "selected", "model", "width", "height", "model_source",
-                "chassis", "features", "screens", "wall_refusal")
+PANEL_FIELDS = (
+    "mac",
+    "connected",
+    "selected",
+    "model",
+    "width",
+    "height",
+    "model_source",
+    "chassis",
+    "features",
+    "screens",
+    "wall_refusal",
+)
 
 
 def _ask(sock: str, command: str) -> dict:
@@ -69,8 +80,15 @@ async def _render(theme: str, out: Path, sock: str) -> None:
     known = {p["mac"] for p in panels}
     names = {m: (topology.get("names") or {}).get(m) for m in topology.get("devices", {})}
     # Every panel the arrangement places is on the bench, linked or not, as in the app.
-    owned = [{"address": m, "name": names.get(m) or m[:8], "kind": "clock",
-              "state": "active" if m in known else "disconnected"} for m in topology.get("devices", {})]
+    owned = [
+        {
+            "address": m,
+            "name": names.get(m) or m[:8],
+            "kind": "clock",
+            "state": "active" if m in known else "disconnected",
+        }
+        for m in topology.get("devices", {})
+    ]
     for d in fleet:
         for o in owned:
             if o["address"] == d.get("mac") and d.get("name"):
@@ -80,8 +98,9 @@ async def _render(theme: str, out: Path, sock: str) -> None:
         try:
             ctx = await browser.new_context(device_scale_factor=2, viewport={"width": 900, "height": 640})
             page = await ctx.new_page()
-            await add_init_js(page, MOCK.replace("%PANELS%", json.dumps(panels))
-                              .replace("%TOPOLOGY%", json.dumps(topology)))
+            await add_init_js(
+                page, MOCK.replace("%PANELS%", json.dumps(panels)).replace("%TOPOLOGY%", json.dumps(topology))
+            )
             await add_init_js(page, f"try {{ localStorage.setItem('aesthetic-theme', '{theme}'); }} catch (_) {{}}")
             await page.goto(f"file://{INDEX_HTML}")
             await wait_js(page, "() => !!window.Divoom?.onOwnedDevices && !!window.SpatialRooms?.isLoaded()")

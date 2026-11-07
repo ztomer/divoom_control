@@ -2,18 +2,26 @@ import logging
 from divoom_legacy.sender_protocol import CommandSender
 from divoom_lib.models import (
     COMMANDS,
-    BOOT_GIF_OFF, BOOT_GIF_ON,
-    LOW_POWER_SWITCH_OFF, LOW_POWER_SWITCH_ON,
-    POVVC_GET, POVVC_SET,
-    POCC_GET, POCC_SET, POCC_CHANNEL_MIN, POCC_CHANNEL_MAX
+    BOOT_GIF_OFF,
+    BOOT_GIF_ON,
+    LOW_POWER_SWITCH_OFF,
+    LOW_POWER_SWITCH_ON,
+    POVVC_GET,
+    POVVC_SET,
+    POCC_GET,
+    POCC_SET,
+    POCC_CHANNEL_MIN,
+    POCC_CHANNEL_MAX,
 )
 from divoom_lib.utils.converters import bool_to_byte
+
 
 class DeviceSettings:
     """
     Handles system setting commands (power on settings, boot animation, power switch, timers)
     to keep Device class strictly <= 500 lines of code.
     """
+
     def __init__(self, divoom: CommandSender) -> None:
         self.communicator = divoom
         self.logger = divoom.logger
@@ -23,8 +31,8 @@ class DeviceSettings:
         self.logger.info(f"Setting boot GIF (0x52)...")
         args = []
         args.append(bool_to_byte(on_off))
-        args += total_length.to_bytes(2, byteorder='little')
-        args += gif_id.to_bytes(1, byteorder='big')
+        args += total_length.to_bytes(2, byteorder="little")
+        args += gif_id.to_bytes(1, byteorder="big")
         args.extend(data)
         return await self.communicator.send_command(COMMANDS["set boot gif"], args)
 
@@ -59,7 +67,7 @@ class DeviceSettings:
         return None
 
     def _handle_povvc_get(self, kwargs: dict) -> list | None:
-        return [] # No additional data
+        return []  # No additional data
 
     _povvc_handlers = {
         POVVC_SET: _handle_povvc_set,
@@ -94,7 +102,7 @@ class DeviceSettings:
         return None
 
     def _handle_pocc_get(self, kwargs: dict) -> list | None:
-        return [] # No additional data
+        return []  # No additional data
 
     _pocc_handlers = {
         POCC_SET: _handle_pocc_set,
@@ -121,7 +129,7 @@ class DeviceSettings:
     async def set_auto_power_off(self, minutes: int) -> bool:
         """Set the auto power-off timer (0xab)."""
         self.logger.info(f"Setting auto power-off to {minutes} minutes (0xab)...")
-        args = list(minutes.to_bytes(2, byteorder='little'))
+        args = list(minutes.to_bytes(2, byteorder="little"))
         return await self.communicator.send_command(COMMANDS["set auto power off"], args)
 
     async def get_auto_power_off(self) -> int | None:
@@ -129,7 +137,7 @@ class DeviceSettings:
         self.logger.info("Getting auto power-off timer (0xac)...")
         response = await self.communicator.send_command_and_wait_for_response(COMMANDS["get auto power off"])
         if response and len(response) >= 2:
-            return int.from_bytes(response[0:2], byteorder='little')
+            return int.from_bytes(response[0:2], byteorder="little")
         return None
 
     async def set_sound_control(self, enable: int) -> bool:

@@ -24,6 +24,7 @@ fake bridge whose ``get_topology`` the test controls.
 
 Skipped if a browser isn't installed (runs with --run-browser).
 """
+
 import json
 
 import pytest
@@ -34,11 +35,15 @@ from tests.test_e2e_bench_snap import INDEX_HTML, _drag, _panel
 A, B = "aa000000-0000-4000-8000-000000000001", "bb000000-0000-4000-8000-000000000002"
 OFF = "cc000000-0000-4000-8000-000000000003"  # placed, off, never seen this session
 NAMES = {A: "Pixoo-1", B: "Ditoo-light-2"}
-OWNERS = {"rooms": ["Desk", "Shelf", "Wall", "Ethan"], "wall_linked": True, "devices": {
-    A: {"room": "Shelf", "x": 300, "y": 40},
-    B: {"room": "Ethan", "x": 140, "y": 60},
-    OFF: {"room": "Wall", "x": 420, "y": 30},
-}}
+OWNERS = {
+    "rooms": ["Desk", "Shelf", "Wall", "Ethan"],
+    "wall_linked": True,
+    "devices": {
+        A: {"room": "Shelf", "x": 300, "y": 40},
+        B: {"room": "Ethan", "x": 140, "y": 60},
+        OFF: {"room": "Wall", "x": 420, "y": 30},
+    },
+}
 # What the page's storage held on the owner's machine: an invented fleet and
 # stale places. None of it may reach the bench or the daemon.
 STALE = {
@@ -79,10 +84,12 @@ _WRITES = "() => window.__calls.filter(c => c.m === 'set_topology').map(c => c.a
 async def _open(p, fails, macs=(A, B)):
     browser = await launch(p)
     page = await browser.new_page(viewport={"width": 1280, "height": 900})
-    init = (_MOCK_API.replace("%PANELS%", json.dumps([_panel(m) for m in macs]))
-            .replace("%TOPOLOGY%", json.dumps(OWNERS))
-            .replace("%FAILS%", str(fails))
-            .replace("%STALE%", json.dumps(STALE)))
+    init = (
+        _MOCK_API.replace("%PANELS%", json.dumps([_panel(m) for m in macs]))
+        .replace("%TOPOLOGY%", json.dumps(OWNERS))
+        .replace("%FAILS%", str(fails))
+        .replace("%STALE%", json.dumps(STALE))
+    )
     await add_init_js(page, init)
     await install_toast_recorder(page)
     await page.goto(f"file://{INDEX_HTML}")
@@ -94,8 +101,12 @@ async def _open(p, fails, macs=(A, B)):
 
 
 async def _place(page, mac):
-    return await eval_js(page, """(m) => { const n = document.getElementById('spatial-node-' + m);
-        return n ? {x: n.offsetLeft, y: n.offsetTop} : null; }""", mac)
+    return await eval_js(
+        page,
+        """(m) => { const n = document.getElementById('spatial-node-' + m);
+        return n ? {x: n.offsetLeft, y: n.offsetTop} : null; }""",
+        mac,
+    )
 
 
 @pytest.mark.asyncio
@@ -117,7 +128,9 @@ async def test_the_bench_waits_for_the_daemon_and_writes_nothing_meanwhile():
             await eval_js(page, "(m) => window.SpatialRooms.savePositions({[m]: {x: 1, y: 1}})", A)
             await eval_js(page, "() => document.getElementById('stage-snap-btn')?.click()")
             await eval_js(page, "() => window.syncArrangerToPython && window.syncArrangerToPython()")
-            await wait_js(page, "() => /try [2-9]/.test(document.getElementById('spatial-bench-loading')?.textContent || '')")
+            await wait_js(
+                page, "() => /try [2-9]/.test(document.getElementById('spatial-bench-loading')?.textContent || '')"
+            )
             text = await eval_js(page, "() => document.getElementById('spatial-bench-loading').textContent")
             assert "daemon unavailable" in text and "Retrying" in text, f"the loading state says why: {text!r}"
             assert await eval_js(page, _WRITES) == [], "nothing is written before the daemon's copy is read"

@@ -11,6 +11,7 @@ Two defects are pinned here, both from the 2026-09-07 crash investigation:
      Nothing noticed, because nothing read the pid back yet. Fixing (1) without
      (2) would have produced a focus path that silently never focused.
 """
+
 from __future__ import annotations
 
 import os
@@ -31,12 +32,14 @@ from divoom_gui import single_instance  # noqa: E402
 @pytest.fixture
 def lockdir(tmp_path, monkeypatch):
     import tempfile as real_tempfile
+
     monkeypatch.setattr(real_tempfile, "gettempdir", lambda: str(tmp_path))
     monkeypatch.setattr(single_instance, "_GUI_LOCK_FH", None)
     return tmp_path
 
 
 # ------------------------------------------------------------------ the lock
+
 
 def test_lock_records_our_pid(lockdir):
     assert single_instance.ensure_single_instance() is True
@@ -52,6 +55,7 @@ def test_a_losing_contender_does_not_erase_the_incumbent_pid(lockdir):
     # A second process would find the lock held. Simulate exactly that: the
     # contender opens the same path and is refused by flock.
     import fcntl as real_fcntl
+
     calls = []
 
     def refuse(fd, flags):
@@ -64,17 +68,19 @@ def test_a_losing_contender_does_not_erase_the_incumbent_pid(lockdir):
         assert single_instance.ensure_single_instance() is False
 
     assert calls, "the contender must actually have tried to lock"
-    assert single_instance.running_gui_pid() == incumbent, \
+    assert single_instance.running_gui_pid() == incumbent, (
         "the loser truncated the lock file and lost the incumbent's pid"
+    )
 
 
 def test_running_gui_pid_is_none_when_absent_or_junk(lockdir):
-    assert single_instance.running_gui_pid() is None          # no file at all
+    assert single_instance.running_gui_pid() is None  # no file at all
     Path(single_instance.lock_path()).write_text("not-a-pid")
     assert single_instance.running_gui_pid() is None
 
 
 # ----------------------------------------------------------------- the focus
+
 
 def test_focus_addresses_the_pid_and_never_an_app_name(monkeypatch):
     seen = []
@@ -95,12 +101,10 @@ def test_focus_addresses_the_pid_and_never_an_app_name(monkeypatch):
 
 
 def test_focus_without_a_pid_runs_nothing(monkeypatch):
-    monkeypatch.setattr(subprocess, "run",
-                        lambda *a, **kw: pytest.fail("must not shell out without a pid"))
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: pytest.fail("must not shell out without a pid"))
     single_instance.focus_running_gui(None)
 
 
 def test_focus_swallows_a_failing_osascript(monkeypatch):
-    monkeypatch.setattr(subprocess, "run",
-                        lambda *a, **kw: (_ for _ in ()).throw(OSError("no osascript")))
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: (_ for _ in ()).throw(OSError("no osascript")))
     single_instance.focus_running_gui(4242)  # must not raise

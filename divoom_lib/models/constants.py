@@ -18,21 +18,21 @@ GENERIC_ACK_COMMANDS = [
     COMMANDS["set light mode"],
     COMMANDS["set work mode"],
     COMMANDS["set poweron channel"],
-    COMMANDS["get light mode"], # Device responds with 0x46 to 0x45 commands
+    COMMANDS["get light mode"],  # Device responds with 0x46 to 0x45 commands
     COMMANDS["get alarm time"],
 ]
 
 # WORK MODES (from display.py)
 WORK_MODE_DESIGN = 0x05
 WORK_MODE_EFFECTS = 0x04
-WORK_MODE_VISUALIZATION = 0x04 # Same as effects, but explicit for context
+WORK_MODE_VISUALIZATION = 0x04  # Same as effects, but explicit for context
 
 # SUB-COMMANDS
 SUB_COMMAND_SET_DESIGN = 0x17
 
 # LIGHTNING CONSTANTS (from display.py)
 LIGHTNING_CHANNEL_NUMBER = 0x01
-TEMPRETURE_CHANNEL = 0x01   # APK canonical alias (TEMPRETURE display mode)
+TEMPRETURE_CHANNEL = 0x01  # APK canonical alias (TEMPRETURE display mode)
 LIGHTNING_TYPE_PLAIN_COLOR = 0x00
 
 # LIGHT PHONE WORD ATTRIBUTE CONTROL WORDS (from light.py)

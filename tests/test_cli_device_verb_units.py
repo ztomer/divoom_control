@@ -18,6 +18,7 @@ The split is by KIND, not by accident:
 The wire assertions for the verbs themselves are in
 `divoomd/src/verbs_tests.rs`, against a real socket with the request read back.
 """
+
 from __future__ import annotations
 
 import os
@@ -77,21 +78,20 @@ async def test_cmd_set_brightness_hands_off_with_json_when_asked(monkeypatch) ->
     calls = _recorded_exec(monkeypatch)
 
     with pytest.raises(SystemExit):
-        await cli_device_verbs.cmd_set_brightness(
-            _parse("set-brightness", "50", "--mac", "AA:BB", "--json")
-        )
+        await cli_device_verbs.cmd_set_brightness(_parse("set-brightness", "50", "--mac", "AA:BB", "--json"))
 
-    assert calls == [
-        ("/opt/divoomd", ["/opt/divoomd", "set-brightness", "50", "--mac", "AA:BB", "--json"])
-    ]
+    assert calls == [("/opt/divoomd", ["/opt/divoomd", "set-brightness", "50", "--mac", "AA:BB", "--json"])]
 
 
-@pytest.mark.parametrize("command,value,message", [
-    ("cmd_set_volume", "16", "volume must be 0..15"),
-    ("cmd_set_volume", "-1", "volume must be 0..15"),
-    ("cmd_set_brightness", "101", "brightness must be 0..100"),
-    ("cmd_set_brightness", "-1", "brightness must be 0..100"),
-])
+@pytest.mark.parametrize(
+    "command,value,message",
+    [
+        ("cmd_set_volume", "16", "volume must be 0..15"),
+        ("cmd_set_volume", "-1", "volume must be 0..15"),
+        ("cmd_set_brightness", "101", "brightness must be 0..100"),
+        ("cmd_set_brightness", "-1", "brightness must be 0..100"),
+    ],
+)
 async def test_an_out_of_range_value_is_refused_before_anything_is_resolved(
     monkeypatch, capsys, command, value, message
 ) -> None:
@@ -141,9 +141,7 @@ async def test_cmd_push_image_hands_the_path_to_the_native_verb(monkeypatch, tmp
     with pytest.raises(SystemExit):
         await cli_device_verbs.cmd_push_image(_parse("push-image", str(f), "--mac", "AA:BB"))
 
-    assert calls == [
-        ("/opt/divoomd", ["/opt/divoomd", "push-image", str(f), "--mac", "AA:BB"])
-    ]
+    assert calls == [("/opt/divoomd", ["/opt/divoomd", "push-image", str(f), "--mac", "AA:BB"])]
 
 
 async def test_cmd_push_gif_file_not_found(tmp_path) -> None:
@@ -165,9 +163,7 @@ async def test_cmd_push_gif_keeps_its_name_and_the_same_call(monkeypatch, tmp_pa
     with pytest.raises(SystemExit):
         await cli_device_verbs.cmd_push_gif(_parse("push-gif", str(f), "--mac", "AA:BB"))
 
-    assert calls == [
-        ("/opt/divoomd", ["/opt/divoomd", "push-gif", str(f), "--mac", "AA:BB"])
-    ]
+    assert calls == [("/opt/divoomd", ["/opt/divoomd", "push-gif", str(f), "--mac", "AA:BB"])]
 
 
 # ── cmd_set_radio / cmd_set_alarm / cmd_set_temperature ───────────────────
@@ -201,9 +197,7 @@ async def test_the_radio_is_handed_over_and_the_daemon_refuses_it(monkeypatch) -
     with pytest.raises(SystemExit):
         await cli_device_verbs.cmd_set_radio(_parse("set-radio", "911", "--mac", "AA:BB"))
 
-    assert calls == [
-        ("/opt/divoomd", ["/opt/divoomd", "set-radio", "911", "--mac", "AA:BB"])
-    ]
+    assert calls == [("/opt/divoomd", ["/opt/divoomd", "set-radio", "911", "--mac", "AA:BB"])]
 
 
 async def test_an_alarm_is_handed_over_with_its_time_intact(monkeypatch) -> None:
@@ -215,9 +209,7 @@ async def test_an_alarm_is_handed_over_with_its_time_intact(monkeypatch) -> None
     with pytest.raises(SystemExit):
         await cli_device_verbs.cmd_set_alarm(_parse("set-alarm", "07:30", "--mac", "AA:BB"))
 
-    assert calls == [
-        ("/opt/divoomd", ["/opt/divoomd", "set-alarm", "07:30", "--mac", "AA:BB"])
-    ]
+    assert calls == [("/opt/divoomd", ["/opt/divoomd", "set-alarm", "07:30", "--mac", "AA:BB"])]
 
 
 async def test_the_weather_verb_passes_the_icon_name_not_its_number(monkeypatch) -> None:
@@ -236,7 +228,4 @@ async def test_the_weather_verb_passes_the_icon_name_not_its_number(monkeypatch)
             _parse("set-temperature", "18", "--weather", "clear", "--mac", "AA:BB")
         )
 
-    assert calls == [
-        ("/opt/divoomd",
-         ["/opt/divoomd", "set-temperature", "18", "clear", "--mac", "AA:BB"])
-    ]
+    assert calls == [("/opt/divoomd", ["/opt/divoomd", "set-temperature", "18", "clear", "--mac", "AA:BB"])]

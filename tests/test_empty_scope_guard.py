@@ -9,6 +9,7 @@ needs: it must stay quiet on a real scope, bite on an empty one, and stay quiet
 for `--staged` (a commit touching none of a gate's file kinds legitimately has
 nothing to inspect).
 """
+
 from __future__ import annotations
 
 import json
@@ -80,7 +81,11 @@ def test_each_guarded_gate_imports_the_shared_helper(gate):
 def test_each_guarded_gate_still_passes_on_the_real_tree(gate):
     """Calibration in the other direction: the guard must not have broken them."""
     r = subprocess.run(
-        [sys.executable, f"tools/{gate}"], cwd=REPO, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+        [sys.executable, f"tools/{gate}"],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
         check=False,
     )
     assert r.returncode == 0, r.stdout + r.stderr

@@ -66,6 +66,7 @@ NOTE ON SCOPE: `git ls-files` means an untracked new file is invisible to the
 default run until it is staged or committed -- the same property every
 tools/check_*.py gate here has. `--staged` is what closes that in pre-commit.
 """
+
 from __future__ import annotations
 
 import ast
@@ -90,6 +91,7 @@ FIXTURE_MARKER = "check-applescript-launch: fixtures"
 def is_exempt(rel: str, text: str) -> bool:
     """A tests/ file may declare itself a fixture holder. Nothing else may."""
     return rel.startswith("tests/") and FIXTURE_MARKER in text
+
 
 # `tell application "X"`, `activate application "X"`, `launch application "X"`,
 # and the bundle-id form `tell application id "com.x"` -- every spelling that
@@ -127,18 +129,19 @@ def _python_code_strings(text: str) -> list[str]:
     bound or passed cannot reach osascript, so every `Expr` string is prose.
     """
     try:
-        with warnings.catch_warnings():   # a stray invalid escape elsewhere in
-            warnings.simplefilter("ignore")   # the tree is not this gate's news
+        with warnings.catch_warnings():  # a stray invalid escape elsewhere in
+            warnings.simplefilter("ignore")  # the tree is not this gate's news
             tree = ast.parse(text)
     except SyntaxError:
         return []
     prose = {
-        id(n.value) for n in ast.walk(tree)
-        if isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant)
-        and isinstance(n.value.value, str)
+        id(n.value)
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant) and isinstance(n.value.value, str)
     }
     return [
-        n.value for n in ast.walk(tree)
+        n.value
+        for n in ast.walk(tree)
         if isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) not in prose
     ]
 
@@ -167,10 +170,12 @@ def scan_text(text: str, suffix: str) -> list[str]:
     parts = _code_parts(text, suffix)
     whole = "\n".join(parts)
     bad = [
-        name for part in parts for name in _TELL.findall(part)
+        name
+        for part in parts
+        for name in _TELL.findall(part)
         if name not in ALLOWED_TARGETS and not _guard_for(name).search(whole)
     ]
-    return list(dict.fromkeys(bad))   # de-duped, order kept
+    return list(dict.fromkeys(bad))  # de-duped, order kept
 
 
 def _split(out: bytes) -> list[str]:
@@ -178,8 +183,11 @@ def _split(out: bytes) -> list[str]:
 
 
 def _files(root: Path, staged: bool) -> list[Path]:
-    cmd = (["git", "-C", str(root), "diff", "--cached", "--name-only", "-z", "--diff-filter=ACM"]
-           if staged else ["git", "-C", str(root), "ls-files", "-z"])
+    cmd = (
+        ["git", "-C", str(root), "diff", "--cached", "--name-only", "-z", "--diff-filter=ACM"]
+        if staged
+        else ["git", "-C", str(root), "ls-files", "-z"]
+    )
     out = subprocess.run(cmd, capture_output=True, check=True, stdin=subprocess.DEVNULL)
     return [root / f for f in _split(out.stdout) if f.endswith((".py", ".rs", ".sh"))]
 
@@ -200,12 +208,12 @@ def main() -> None:
         if is_exempt(rel, text):
             continue
         for name in scan_text(text, p.suffix):
-            hits.append(f"{rel}: tell application \"{name}\" (unguarded)")
+            hits.append(f'{rel}: tell application "{name}" (unguarded)')
     if hits:
         print(f"✗ [applescript_launch] {len(hits)} unguarded AppleScript app target(s):")
         for h in hits[:40]:
             print(f"    {h}")
-        print('address the process by identity (System Events + `unix id`), or guard the')
+        print("address the process by identity (System Events + `unix id`), or guard the")
         print('tell with `if application "X" is running then`. Never let LaunchServices')
         print("pick the bundle -- see tools/check_applescript_launch.py for the crash.")
         sys.exit(1)

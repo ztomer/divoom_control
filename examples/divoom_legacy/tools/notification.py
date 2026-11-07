@@ -40,12 +40,8 @@ class Notification:
     async def show_notification(self, app_type: int) -> bool:
         """Show the notification icon/blink for ``app_type`` (icon-only form)."""
         wire = self._wire_type(app_type)
-        self.logger.info(
-            f"Showing notification for app_type={app_type} (wire={wire}, 0x50)..."
-        )
-        return await self._divoom.send_command(
-            COMMANDS["set android ancs"], [wire]
-        )
+        self.logger.info(f"Showing notification for app_type={app_type} (wire={wire}, 0x50)...")
+        return await self._divoom.send_command(COMMANDS["set android ancs"], [wire])
 
     async def show_notification_text(self, app_type: int, text: str) -> bool:
         """Show ``app_type``'s icon plus ``text`` (truncated to 128 UTF-8 bytes).
@@ -55,10 +51,5 @@ class Notification:
         """
         utf8 = (text or "").encode("utf-8")[: self.MAX_TEXT_BYTES]
         args = [int(app_type) & 0xFF, len(utf8)] + list(utf8)
-        self.logger.info(
-            f"Showing notification text for app_type={app_type} "
-            f"({len(utf8)} bytes, 0x50)..."
-        )
-        return await self._divoom.send_command(
-            COMMANDS["set android ancs"], args
-        )
+        self.logger.info(f"Showing notification text for app_type={app_type} ({len(utf8)} bytes, 0x50)...")
+        return await self._divoom.send_command(COMMANDS["set android ancs"], args)

@@ -13,6 +13,7 @@ version from `importlib.metadata` (stale dist-info from an old editable install,
 0.22.21) instead of pyproject (0.26.0), and would have restarted the correct
 daemon on every startup.
 """
+
 from __future__ import annotations
 
 import sys
@@ -29,13 +30,15 @@ def test_expected_version_prefers_pyproject_over_stale_metadata(monkeypatch):
     expected = dc.expected_daemon_version()
 
     import tomllib
+
     root = Path(dc.__file__).resolve().parent.parent
     with open(root / "pyproject.toml", "rb") as f:
         pyproject_version = tomllib.load(f)["project"]["version"]
 
     assert expected == pyproject_version, (
         "expected_daemon_version must read pyproject, not installed metadata — "
-        "metadata lags a working checkout and would condemn a current daemon")
+        "metadata lags a working checkout and would condemn a current daemon"
+    )
 
 
 def test_a_matching_version_is_left_alone(monkeypatch):
@@ -43,10 +46,8 @@ def test_a_matching_version_is_left_alone(monkeypatch):
     monkeypatch.setattr(dc, "daemon_alive", lambda *a, **k: True)
     monkeypatch.setattr(dc, "expected_daemon_version", lambda: "1.2.3")
     monkeypatch.setattr(dc, "running_daemon_version", lambda *a, **k: "1.2.3")
-    monkeypatch.setattr(dc, "_stop_stale_daemon",
-                        lambda *a: calls.__setitem__("stopped", calls["stopped"] + 1) or True)
-    monkeypatch.setattr(dc, "spawn_daemon",
-                        lambda *a, **k: calls.__setitem__("spawned", calls["spawned"] + 1))
+    monkeypatch.setattr(dc, "_stop_stale_daemon", lambda *a: calls.__setitem__("stopped", calls["stopped"] + 1) or True)
+    monkeypatch.setattr(dc, "spawn_daemon", lambda *a, **k: calls.__setitem__("spawned", calls["spawned"] + 1))
 
     assert dc.ensure_daemon("/tmp/x.sock") is not None
     assert calls == {"stopped": 0, "spawned": 0}, "a current daemon must not be touched"
@@ -57,10 +58,8 @@ def test_a_stale_version_is_restarted(monkeypatch):
     monkeypatch.setattr(dc, "daemon_alive", lambda *a, **k: True)
     monkeypatch.setattr(dc, "expected_daemon_version", lambda: "0.26.0")
     monkeypatch.setattr(dc, "running_daemon_version", lambda *a, **k: "0.22.21")
-    monkeypatch.setattr(dc, "_stop_stale_daemon",
-                        lambda *a: calls.__setitem__("stopped", calls["stopped"] + 1) or True)
-    monkeypatch.setattr(dc, "spawn_daemon",
-                        lambda *a, **k: calls.__setitem__("spawned", calls["spawned"] + 1))
+    monkeypatch.setattr(dc, "_stop_stale_daemon", lambda *a: calls.__setitem__("stopped", calls["stopped"] + 1) or True)
+    monkeypatch.setattr(dc, "spawn_daemon", lambda *a, **k: calls.__setitem__("spawned", calls["spawned"] + 1))
 
     dc.ensure_daemon("/tmp/x.sock")
     assert calls["stopped"] == 1, "a stale daemon must be stopped"
@@ -73,8 +72,7 @@ def test_a_daemon_with_no_version_counts_as_stale(monkeypatch):
     monkeypatch.setattr(dc, "daemon_alive", lambda *a, **k: True)
     monkeypatch.setattr(dc, "expected_daemon_version", lambda: "0.26.0")
     monkeypatch.setattr(dc, "running_daemon_version", lambda *a, **k: None)
-    monkeypatch.setattr(dc, "_stop_stale_daemon",
-                        lambda *a: calls.__setitem__("stopped", calls["stopped"] + 1) or True)
+    monkeypatch.setattr(dc, "_stop_stale_daemon", lambda *a: calls.__setitem__("stopped", calls["stopped"] + 1) or True)
     monkeypatch.setattr(dc, "spawn_daemon", lambda *a, **k: None)
 
     dc.ensure_daemon("/tmp/x.sock")
@@ -90,8 +88,7 @@ def test_an_unknown_expectation_never_kills(monkeypatch):
     monkeypatch.setattr(dc, "daemon_alive", lambda *a, **k: True)
     monkeypatch.setattr(dc, "expected_daemon_version", lambda: None)
     monkeypatch.setattr(dc, "running_daemon_version", lambda *a, **k: "who knows")
-    monkeypatch.setattr(dc, "_stop_stale_daemon",
-                        lambda *a: calls.__setitem__("stopped", calls["stopped"] + 1) or True)
+    monkeypatch.setattr(dc, "_stop_stale_daemon", lambda *a: calls.__setitem__("stopped", calls["stopped"] + 1) or True)
 
     assert dc.ensure_daemon("/tmp/x.sock") is not None
     assert calls["stopped"] == 0
@@ -101,13 +98,13 @@ def test_check_can_be_disabled(monkeypatch):
     calls = {"checked": 0}
     monkeypatch.setattr(dc, "daemon_alive", lambda *a, **k: True)
     monkeypatch.setattr(dc, "expected_daemon_version", lambda: "0.26.0")
-    monkeypatch.setattr(dc, "running_daemon_version",
-                        lambda *a, **k: calls.__setitem__("checked", 1) or "old")
+    monkeypatch.setattr(dc, "running_daemon_version", lambda *a, **k: calls.__setitem__("checked", 1) or "old")
     dc.ensure_daemon("/tmp/x.sock", check_version=False)
     assert calls["checked"] == 0
 
 
 # ── R70 P4.1: the same trap, in the BUNDLE, where it actually shipped ────────
+
 
 def test_a_frozen_bundle_reads_its_version_stamp(monkeypatch, tmp_path):
     """The shipped app must know its own version without pyproject.
@@ -153,12 +150,10 @@ def test_the_metadata_fallback_is_gone():
     """
     import re
 
-    src = (Path(__file__).resolve().parent.parent
-           / "divoom_client" / "daemon_version.py").read_text()
-    code = re.sub(r'"""(?:.|\n)*?"""', "", src)   # docstrings may NAME it
-    code = re.sub(r"#.*", "", code)                # so may comments
-    assert "importlib.metadata" not in code, (
-        "the stale-metadata fallback is back in daemon_version.py")
+    src = (Path(__file__).resolve().parent.parent / "divoom_client" / "daemon_version.py").read_text()
+    code = re.sub(r'"""(?:.|\n)*?"""', "", src)  # docstrings may NAME it
+    code = re.sub(r"#.*", "", code)  # so may comments
+    assert "importlib.metadata" not in code, "the stale-metadata fallback is back in daemon_version.py"
 
 
 def test_the_spec_stamps_the_version_it_puts_in_the_plist():

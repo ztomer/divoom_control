@@ -1,6 +1,7 @@
 import pytest
 from divoom_legacy.utils import logger_utils
 
+
 def test_print_info(capsys):
     """Test print_info function."""
     message = "This is an informational message."
@@ -8,6 +9,7 @@ def test_print_info(capsys):
     captured = capsys.readouterr()
     assert captured.out == f"[ ==> ] {message}\n"
     assert captured.err == ""
+
 
 def test_print_wrn(capsys):
     """Test print_wrn function."""
@@ -17,6 +19,7 @@ def test_print_wrn(capsys):
     assert captured.out == f"[ Wrn ] {message}\n"
     assert captured.err == ""
 
+
 def test_print_err(capsys):
     """Test print_err function."""
     message = "This is an error message."
@@ -24,6 +27,7 @@ def test_print_err(capsys):
     captured = capsys.readouterr()
     assert captured.out == f"[ Err ] {message}\n"
     assert captured.err == ""
+
 
 def test_print_ok(capsys):
     """Test print_ok function."""

@@ -4,6 +4,7 @@ R14 §1 — tests for the Weather facade (``divoom.weather``).
 These tests run in-process; no BLE hardware required. The Divoom
 class is mocked at the ``send_command`` boundary.
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
@@ -17,16 +18,19 @@ from divoom_legacy.system.weather import Weather
 # ── Encoding ──────────────────────────────────────────────────────────
 
 
-@pytest.mark.parametrize("celsius,expected_byte", [
-    (0,    0x00),
-    (1,    0x01),
-    (25,   0x19),
-    (127,  0x7F),
-    (128,  0x80),  # 128 is the upper edge — the device accepts it.
-    (-1,   0xFF),  # 256 + (-1) = 255
-    (-10,  0xF6),  # 256 + (-10) = 246
-    (-127, 0x81),  # 256 + (-127) = 129
-])
+@pytest.mark.parametrize(
+    "celsius,expected_byte",
+    [
+        (0, 0x00),
+        (1, 0x01),
+        (25, 0x19),
+        (127, 0x7F),
+        (128, 0x80),  # 128 is the upper edge — the device accepts it.
+        (-1, 0xFF),  # 256 + (-1) = 255
+        (-10, 0xF6),  # 256 + (-10) = 246
+        (-127, 0x81),  # 256 + (-127) = 129
+    ],
+)
 def test_encode_temperature(celsius: int, expected_byte: int) -> None:
     assert Weather._encode_temperature(celsius) == expected_byte
 
@@ -54,7 +58,7 @@ async def test_set_sends_correct_wire_bytes_positive() -> None:
     ok = await w.set(25, WeatherType.Clear)
     assert ok is True
     divoom.send_command.assert_called_once_with(
-        COMMANDS["set temp"],   # 0x5F
+        COMMANDS["set temp"],  # 0x5F
         [0x19, WeatherType.Clear],
     )
 
@@ -65,7 +69,7 @@ async def test_set_sends_correct_wire_bytes_negative() -> None:
     await w.set(-10, WeatherType.Rain)
     divoom.send_command.assert_called_once_with(
         COMMANDS["set temp"],
-        [0xF6, WeatherType.Rain],   # 256 + (-10) = 246
+        [0xF6, WeatherType.Rain],  # 256 + (-10) = 246
     )
 
 
@@ -98,9 +102,9 @@ async def test_set_temperature_preserves_weather_type() -> None:
     """``set_temperature()`` updates only the temperature; the weather
     type is kept from the last ``set()`` call (or the default)."""
     w, divoom = _make_weather()
-    await w.set(20, WeatherType.Snow)         # sets type=Snow
+    await w.set(20, WeatherType.Snow)  # sets type=Snow
     divoom.send_command.reset_mock()
-    await w.set_temperature(15)                # keeps type=Snow
+    await w.set_temperature(15)  # keeps type=Snow
     divoom.send_command.assert_called_once_with(
         COMMANDS["set temp"],
         [0x0F, WeatherType.Snow],
@@ -141,6 +145,7 @@ async def test_set_updates_internal_state() -> None:
 def test_temp_weather_command_shim_preserves_state() -> None:
     """``TempWeatherCommand`` (the old class) still works via the shim."""
     from divoom_legacy.system.temp_weather import TempWeatherCommand
+
     divoom = MagicMock()
     divoom.logger = MagicMock()
     divoom.send_command = AsyncMock(return_value=True)
@@ -155,5 +160,6 @@ def test_temp_weather_command_shim_preserves_state() -> None:
 def test_divoom_weather_attribute_is_weather_instance() -> None:
     """``Divoom().weather`` is a ``Weather`` instance — R14 §1 wiring."""
     from divoom_legacy import Divoom
+
     d = Divoom(mac="AA:BB:CC:DD:EE:FF", device_name="fake")
     assert isinstance(d.weather, Weather)

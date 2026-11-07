@@ -1,6 +1,7 @@
 """gallery_sync coverage: sync_artwork, sync candidates/targets, hot-channel
 config and gallery style/filter persistence (split from
 test_gallery_sync_coverage.py)."""
+
 import json
 import logging
 from pathlib import Path
@@ -16,6 +17,7 @@ from tests.support.gallery_sync_common import (  # noqa: F401
 
 # ─────────────────────────── get_sync_candidates ───────────────────────────
 
+
 def test_get_sync_candidates_merges_and_dedupes_sources(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("DIVOOM_HOTCHANNEL_CONFIG", str(tmp_path / "hotchannel.json"))
@@ -23,10 +25,14 @@ def test_get_sync_candidates_merges_and_dedupes_sources(tmp_path, monkeypatch):
 
     cfg_dir = tmp_path / ".config" / "divoom-control"
     cfg_dir.mkdir(parents=True)
-    (cfg_dir / "discovered_devices.json").write_text(json.dumps([
-        {"address": "AA:BB", "name": "Discovered1"},
-        {"address": "", "name": "NoAddress"},  # falsy address -> skipped
-    ]))
+    (cfg_dir / "discovered_devices.json").write_text(
+        json.dumps(
+            [
+                {"address": "AA:BB", "name": "Discovered1"},
+                {"address": "", "name": "NoAddress"},  # falsy address -> skipped
+            ]
+        )
+    )
     m.wall_slots = {"AA:BB": {"name": "WallDup"}, "CC:DD": {"name": "WallOnly"}}
 
     # The devices are the app's SETTINGS now — the `[gallery]` table in
@@ -34,10 +40,13 @@ def test_get_sync_candidates_merges_and_dedupes_sources(tmp_path, monkeypatch):
     # an INI file, so a key cannot contain ':' (configparser's delimiter):
     # the addresses that live there are the UUID-shaped ones.
     from divoom_lib import settings_devices
-    settings_devices.set_registered([
-        "2b471aee-a9bd-24ab-7d5f-4afd88c16eeb",
-        "e9a41e1e-9a96-974f-ce44-54f16d616f28",
-    ])
+
+    settings_devices.set_registered(
+        [
+            "2b471aee-a9bd-24ab-7d5f-4afd88c16eeb",
+            "e9a41e1e-9a96-974f-ce44-54f16d616f28",
+        ]
+    )
 
     out = json.loads(m.get_sync_candidates())
     addrs = [c["address"] for c in out]
@@ -65,6 +74,7 @@ def test_get_sync_candidates_handles_malformed_discovered_file(tmp_path, monkeyp
 
 # ─────────────────────────── set_sync_targets ───────────────────────────
 
+
 def test_set_sync_targets_valid_list_and_galleries(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("DIVOOM_HOTCHANNEL_CONFIG", str(tmp_path / "hotchannel.json"))
@@ -72,16 +82,18 @@ def test_set_sync_targets_valid_list_and_galleries(tmp_path, monkeypatch):
     from divoom_lib import settings_devices
 
     ok = m.set_sync_targets(
-        targets_json=json.dumps({
-            "checked": [
-                "a9fccb71-3d3d-4de3-c381-0de382cdc4aa",
-                "f90d2cc9-420e-65f9-9e06-f9554470fced",
-            ],
-            "known": [
-                "a9fccb71-3d3d-4de3-c381-0de382cdc4aa",
-                "f90d2cc9-420e-65f9-9e06-f9554470fced",
-            ],
-        }),
+        targets_json=json.dumps(
+            {
+                "checked": [
+                    "a9fccb71-3d3d-4de3-c381-0de382cdc4aa",
+                    "f90d2cc9-420e-65f9-9e06-f9554470fced",
+                ],
+                "known": [
+                    "a9fccb71-3d3d-4de3-c381-0de382cdc4aa",
+                    "f90d2cc9-420e-65f9-9e06-f9554470fced",
+                ],
+            }
+        ),
         galleries_json=json.dumps({"a9fccb71-3d3d-4de3-c381-0de382cdc4aa": 9}),
     )
     assert ok is True
@@ -102,9 +114,7 @@ def test_set_sync_targets_never_unregisters_what_it_did_not_see(tmp_path, monkey
 
     cfg_dir = tmp_path / ".config" / "divoom-control"
     cfg_dir.mkdir(parents=True)
-    (cfg_dir / "config.ini").write_text(
-        "[gallery]\na9fccb71-3d3d-4de3-c381-0de382cdc4aa = 17\n", encoding="utf-8"
-    )
+    (cfg_dir / "config.ini").write_text("[gallery]\na9fccb71-3d3d-4de3-c381-0de382cdc4aa = 17\n", encoding="utf-8")
     before = settings_devices.registered_devices()
 
     assert m.set_sync_targets(targets_json=json.dumps({"checked": [], "known": []})) is True
@@ -117,8 +127,7 @@ def test_set_sync_targets_non_list_and_non_dict_payloads_are_ignored(tmp_path, m
     m = _Host()
     from divoom_lib import settings_devices
 
-    ok = m.set_sync_targets(targets_json=json.dumps({"not": "a list"}),
-                             galleries_json=json.dumps([1, 2, 3]))
+    ok = m.set_sync_targets(targets_json=json.dumps({"not": "a list"}), galleries_json=json.dumps([1, 2, 3]))
     assert ok is True  # registering nothing still succeeds
     assert settings_devices.registered_devices() == []
 
@@ -147,10 +156,7 @@ def test_the_sync_target_write_says_what_it_saw():
     card is re-rendering — and a write that said "these ARE the devices"
     would then empty the settings, which is how four registered devices
     disappeared from them in one write (measured 2026-10-21)."""
-    src = (
-        Path(__file__).resolve().parent.parent
-        / "divoom_gui" / "web_ui" / "gallery.js"
-    ).read_text(encoding="utf-8")
+    src = (Path(__file__).resolve().parent.parent / "divoom_gui" / "web_ui" / "gallery.js").read_text(encoding="utf-8")
     assert "set_sync_targets(JSON.stringify({ checked, known }))" in src, (
         "the write must carry both the checked devices and the ones it saw"
     )
@@ -160,6 +166,7 @@ def test_the_sync_target_write_says_what_it_saw():
 
 
 # ───────────────────── hot channel config get/save ─────────────────────
+
 
 def test_get_hot_channel_config_returns_defaults(tmp_path, monkeypatch):
     monkeypatch.setenv("DIVOOM_HOTCHANNEL_CONFIG", str(tmp_path / "hotchannel.json"))
@@ -196,6 +203,7 @@ def test_save_hot_channel_config_swallows_exception(tmp_path, monkeypatch):
 
 
 # ───────────────────────── gallery style persistence ─────────────────────────
+
 
 def test_get_gallery_style_defaults_when_no_config(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -244,6 +252,7 @@ def test_set_gallery_style_preserves_existing_keys_and_handles_exception(tmp_pat
 
 
 # ───────────────────────── gallery filter persistence ─────────────────────────
+
 
 def test_get_gallery_filter_defaults_when_no_config(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))

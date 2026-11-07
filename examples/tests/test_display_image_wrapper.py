@@ -86,12 +86,12 @@ async def test_display_image_calls_show_image(display: Display, test_image: str)
 
 
 @pytest.mark.asyncio
-async def test_display_image_returns_false_when_show_image_fails(
-    display: Display, test_image: str
-) -> None:
+async def test_display_image_returns_false_when_show_image_fails(display: Display, test_image: str) -> None:
     """If the underlying push fails, display_image() returns False without polling."""
-    with patch.object(display, "show_image", new=AsyncMock(return_value=False)) as mock_show, \
-         patch.object(display, "_get_work_mode", new=AsyncMock(return_value=WORK_MODE_DESIGN)) as mock_mode:
+    with (
+        patch.object(display, "show_image", new=AsyncMock(return_value=False)) as mock_show,
+        patch.object(display, "_get_work_mode", new=AsyncMock(return_value=WORK_MODE_DESIGN)) as mock_mode,
+    ):
         result = await display.display_image(test_image, wait_for_display=True)
     assert result is False
     mock_show.assert_awaited_once()
@@ -100,9 +100,7 @@ async def test_display_image_returns_false_when_show_image_fails(
 
 
 @pytest.mark.asyncio
-async def test_display_image_wait_for_display_polls_until_mode_matches(
-    display: Display, test_image: str
-) -> None:
+async def test_display_image_wait_for_display_polls_until_mode_matches(display: Display, test_image: str) -> None:
     """wait_for_display=True polls get_work_mode until device reports design channel."""
     mode_sequence = [WORK_MODE_CLOCK, WORK_MODE_CLOCK, WORK_MODE_DESIGN]
 
@@ -111,31 +109,32 @@ async def test_display_image_wait_for_display_polls_until_mode_matches(
             return mode_sequence.pop(0)
         return WORK_MODE_DESIGN
 
-    with patch.object(display, "show_image", new=AsyncMock(return_value=True)), \
-         patch.object(display, "_get_work_mode", new=AsyncMock(side_effect=fake_get_work_mode)):
+    with (
+        patch.object(display, "show_image", new=AsyncMock(return_value=True)),
+        patch.object(display, "_get_work_mode", new=AsyncMock(side_effect=fake_get_work_mode)),
+    ):
         result = await display.display_image(test_image, wait_for_display=True, poll_timeout_s=2.0)
     assert result is True
 
 
 @pytest.mark.asyncio
-async def test_display_image_wait_for_display_times_out(
-    display: Display, test_image: str
-) -> None:
+async def test_display_image_wait_for_display_times_out(display: Display, test_image: str) -> None:
     """If the device never reports the design channel, return False after timeout."""
+
     async def always_clock() -> int:
         return WORK_MODE_CLOCK
 
-    with patch.object(display, "show_image", new=AsyncMock(return_value=True)), \
-         patch.object(display, "_get_work_mode", new=AsyncMock(side_effect=always_clock)):
+    with (
+        patch.object(display, "show_image", new=AsyncMock(return_value=True)),
+        patch.object(display, "_get_work_mode", new=AsyncMock(side_effect=always_clock)),
+    ):
         # Short timeout so the test is fast.
         result = await display.display_image(test_image, wait_for_display=True, poll_timeout_s=0.5)
     assert result is False
 
 
 @pytest.mark.asyncio
-async def test_display_image_passes_time_kwarg_to_show_image(
-    display: Display, test_image: str
-) -> None:
+async def test_display_image_passes_time_kwarg_to_show_image(display: Display, test_image: str) -> None:
     """The `time` argument is forwarded to show_image for animation frame timing."""
     with patch.object(display, "show_image", new=AsyncMock(return_value=True)) as mock_show:
         result = await display.display_image(test_image, time=500)
@@ -164,9 +163,7 @@ async def test_get_work_mode_returns_none_on_empty_response(display: Display) ->
 @pytest.mark.asyncio
 async def test_get_work_mode_returns_none_on_exception(display: Display) -> None:
     """_get_work_mode swallows exceptions and returns None (used in polling loop)."""
-    display.communicator.send_command_and_wait_for_response = AsyncMock(
-        side_effect=Exception("BLE error")
-    )
+    display.communicator.send_command_and_wait_for_response = AsyncMock(side_effect=Exception("BLE error"))
     mode = await display._get_work_mode()
     assert mode is None
 
@@ -182,9 +179,7 @@ async def test_get_work_mode_uses_lan_when_present(display: Display) -> None:
 
 
 @pytest.mark.asyncio
-async def test_display_image_polling_loop_survives_get_work_mode_exception(
-    display: Display, test_image: str
-) -> None:
+async def test_display_image_polling_loop_survives_get_work_mode_exception(display: Display, test_image: str) -> None:
     """R61: display_image's own polling loop wraps `self._get_work_mode()` in a
     try/except (distinct from `_get_work_mode`'s internal exception handling) —
     a transient failure mid-poll must not abort the wait, and the loop should
@@ -198,9 +193,11 @@ async def test_display_image_polling_loop_survives_get_work_mode_exception(
             raise Exception("transient BLE hiccup")
         return WORK_MODE_DESIGN
 
-    with patch.object(display, "show_image", new=AsyncMock(return_value=True)), \
-         patch.object(display, "_get_work_mode", new=AsyncMock(side_effect=flaky_then_ok)), \
-         patch("divoom_legacy.display.asyncio.sleep", new=AsyncMock()):
+    with (
+        patch.object(display, "show_image", new=AsyncMock(return_value=True)),
+        patch.object(display, "_get_work_mode", new=AsyncMock(side_effect=flaky_then_ok)),
+        patch("divoom_legacy.display.asyncio.sleep", new=AsyncMock()),
+    ):
         result = await display.display_image(test_image, wait_for_display=True, poll_timeout_s=2.0)
     assert result is True
     assert call_count >= 2

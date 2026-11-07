@@ -9,6 +9,7 @@ layer) for the same message, not a different message. These tests pin that
 reuse, the guards around it, and the fact that the "not verified on hardware"
 caveat is actually on screen.
 """
+
 import pytest
 from pathlib import Path
 from tests.support.browser import (
@@ -57,8 +58,11 @@ async def _open(p, *, with_device=True):
         # simulating a full connect, which is another suite's subject.
         # A panel the daemon reported and the bench shows: the overlay names
         # the panel selected at the click (P5.6).
-        await eval_js(page, "() => { window.requireDevice = () => true; window.DivoomState"
-                            ".discoveredDevices = [{ address: 'E9:DITOO', name: 'Ditoo-light-2' }]; }")
+        await eval_js(
+            page,
+            "() => { window.requireDevice = () => true; window.DivoomState"
+            ".discoveredDevices = [{ address: 'E9:DITOO', name: 'Ditoo-light-2' }]; }",
+        )
     else:
         await eval_js(page, "() => { window.requireDevice = () => false; }")
     # The Text panel is not the default (Clock is). The channel tabs are
@@ -79,10 +83,7 @@ async def test_the_overlay_button_reuses_the_panels_text_and_colour():
         browser, page = await _open(p)
         try:
             await page.fill("#text-content-input", "hello wall")
-            await eval_js(
-                page,
-                "() => { document.getElementById('text-color-input')"
-                ".value = '#ff0000'; }")
+            await eval_js(page, "() => { document.getElementById('text-color-input').value = '#ff0000'; }")
             await page.click("#send-danmaku-btn")
             await wait_js(page, "() => window.__calls.length > 0")
 
@@ -148,7 +149,7 @@ async def test_the_overlay_button_does_not_also_push_text():
 
 @pytest.mark.asyncio
 async def test_a_failed_send_is_reported_as_a_failure():
-    """"Sent" and "worked" must not be the same signal (R67/C4)."""
+    """ "Sent" and "worked" must not be the same signal (R67/C4)."""
     require_browser()
     from playwright.async_api import async_playwright
 
@@ -179,8 +180,7 @@ async def test_the_unverified_caveat_is_visible_next_to_the_button():
         browser, page = await _open(p)
         try:
             assert await page.is_visible("#danmaku-hint") is True
-            text = await eval_js(
-                page, "() => document.getElementById('danmaku-hint').textContent")
+            text = await eval_js(page, "() => document.getElementById('danmaku-hint').textContent")
             assert "Not yet verified on real hardware" in text
         finally:
             await browser.close()
@@ -204,10 +204,13 @@ async def test_a_missing_capability_says_so_on_the_screen():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await eval_js(page, "() => { window.__result = { ok: false, "
-                                "error: 'Could not send the overlay: this device is "
-                                "connected over Bluetooth, which has no LAN API', "
-                                "cause: 'no_lan_capability' }; }")
+            await eval_js(
+                page,
+                "() => { window.__result = { ok: false, "
+                "error: 'Could not send the overlay: this device is "
+                "connected over Bluetooth, which has no LAN API', "
+                "cause: 'no_lan_capability' }; }",
+            )
             await page.fill("#text-content-input", "hello")
             await page.click("#send-danmaku-btn")
             # On the toast THIS click raises, keyed on the reason rather than on
@@ -286,16 +289,22 @@ async def test_a_toast_this_test_did_not_create_cannot_satisfy_its_wait():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await eval_js(page, "() => { window.__result = { ok: false, "
-                                "error: 'Could not send the overlay: this device is "
-                                "connected over Bluetooth, which has no LAN API', "
-                                "cause: 'no_lan_capability' }; }")
+            await eval_js(
+                page,
+                "() => { window.__result = { ok: false, "
+                "error: 'Could not send the overlay: this device is "
+                "connected over Bluetooth, which has no LAN API', "
+                "cause: 'no_lan_capability' }; }",
+            )
             await eval_js(page, _SPY_TWO_ARGS)
             # HELD until the test releases it, not a 3s timer: the race is
             # forced by the test's own order, so a loaded machine cannot let
             # this click's toast land first and turn the check vacuous.
-            await eval_js(page, "() => { window.__api.send_danmaku_text = (mac, text, color) =>"
-                                " new Promise(r => { window.__release = () => r(window.__result); }); }")
+            await eval_js(
+                page,
+                "() => { window.__api.send_danmaku_text = (mac, text, color) =>"
+                " new Promise(r => { window.__release = () => r(window.__result); }); }",
+            )
             await page.fill("#text-content-input", "hello")
             await page.click("#send-danmaku-btn")
             # The app's own toast, raised while this click's toast is still in

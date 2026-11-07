@@ -4,14 +4,27 @@ These use a mock divoom (``send_command = AsyncMock``) so no BLE is needed.
 The pure helper functions (``_le16``, ``_le32``, ``build_*``) are tested
 without any mock at all.
 """
+
 from __future__ import annotations
 
 import pytest
 from unittest.mock import AsyncMock
 
-from divoom_legacy.tools.custom_art_push import _le16, _le32, SLOTS_PER_PAGE, CHUNK_SIZE, build_n2_header, build_data_packets, build_k0, push_page, push_slot, query_page
+from divoom_legacy.tools.custom_art_push import (
+    _le16,
+    _le32,
+    SLOTS_PER_PAGE,
+    CHUNK_SIZE,
+    build_n2_header,
+    build_data_packets,
+    build_k0,
+    push_page,
+    push_slot,
+    query_page,
+)
 
 # ── helpers ──────────────────────────────────────────────────────────────────
+
 
 class TestHelpers:
     def test_le16_zero(self):
@@ -31,6 +44,7 @@ class TestHelpers:
 
 
 # ── N2 header ────────────────────────────────────────────────────────────────
+
 
 class TestBuildN2Header:
     def test_old_mode(self):
@@ -56,6 +70,7 @@ class TestBuildN2Header:
 
 
 # ── Data packets ─────────────────────────────────────────────────────────────
+
 
 class TestBuildDataPackets:
     def test_old_single_chunk(self):
@@ -113,6 +128,7 @@ class TestBuildDataPackets:
 
 # ── K0 end signal ────────────────────────────────────────────────────────────
 
+
 class TestBuildK0:
     def test_old_mode(self):
         cmd, args = build_k0(use_new_mode=False)
@@ -126,6 +142,7 @@ class TestBuildK0:
 
 
 # ── push_page (integration-style with mock divoom) ───────────────────────────
+
 
 @pytest.fixture
 def mock_divoom():
@@ -213,6 +230,7 @@ class TestPushPage:
 
 # ── push_slot ────────────────────────────────────────────────────────────────
 
+
 class TestPushSlot:
     @pytest.mark.asyncio
     async def test_push_slot_specific(self, mock_divoom):
@@ -232,18 +250,14 @@ class TestPushSlot:
     async def test_push_slot_with_existing(self, mock_divoom):
         existing = [b"existing"] * SLOTS_PER_PAGE
         frame = bytes(range(50))
-        result = await push_slot(
-            mock_divoom, page=1, slot=5, encoded_frame=frame, existing_frames=existing
-        )
+        result = await push_slot(mock_divoom, page=1, slot=5, encoded_frame=frame, existing_frames=existing)
         assert result is True
 
     @pytest.mark.asyncio
     async def test_push_slot_pads_partial(self, mock_divoom):
         existing = [b"a", b"b"]  # only 2 frames
         frame = bytes(range(50))
-        result = await push_slot(
-            mock_divoom, page=0, slot=2, encoded_frame=frame, existing_frames=existing
-        )
+        result = await push_slot(mock_divoom, page=0, slot=2, encoded_frame=frame, existing_frames=existing)
         assert result is True
 
     @pytest.mark.asyncio
@@ -255,9 +269,7 @@ class TestPushSlot:
     @pytest.mark.asyncio
     async def test_push_slot_old_mode(self, mock_divoom):
         frame = bytes(range(50))
-        result = await push_slot(
-            mock_divoom, page=0, slot=0, encoded_frame=frame, use_new_mode=False
-        )
+        result = await push_slot(mock_divoom, page=0, slot=0, encoded_frame=frame, use_new_mode=False)
         assert result is True
         n2_call = mock_divoom.send_command.call_args_list[0]
         assert n2_call.args[0] == 0xB1
@@ -269,7 +281,10 @@ class TestPushSlot:
         existing = [b"occupied"] * SLOTS_PER_PAGE
         frame = bytes([i % 256 for i in range(50)])
         result = await push_slot(
-            mock_divoom, page=0, slot=None, encoded_frame=frame,
+            mock_divoom,
+            page=0,
+            slot=None,
+            encoded_frame=frame,
             existing_frames=existing,
         )
         assert result is True
@@ -278,6 +293,7 @@ class TestPushSlot:
 
 
 # ── query_page ───────────────────────────────────────────────────────────────
+
 
 class TestQueryPage:
     @pytest.fixture
@@ -289,15 +305,30 @@ class TestQueryPage:
     @pytest.mark.asyncio
     async def test_query_type1_with_ids(self, mock_divoom_with_response):
         # type=1 response with 3 slot IDs: [0x01, page=0, total=3, cur=0, count=3, id1:4, id2:4, id3:4]
-        response = bytes([
-            0x01, 0x00,  # type=1, page=0
-            0x03, 0x00,  # total_count=3 LE
-            0x00, 0x00,  # cur_seq=0
-            0x03, 0x00,  # item_count=3 LE
-            0x01, 0x00, 0x00, 0x00,  # id=1
-            0x02, 0x00, 0x00, 0x00,  # id=2
-            0x03, 0x00, 0x00, 0x00,  # id=3
-        ])
+        response = bytes(
+            [
+                0x01,
+                0x00,  # type=1, page=0
+                0x03,
+                0x00,  # total_count=3 LE
+                0x00,
+                0x00,  # cur_seq=0
+                0x03,
+                0x00,  # item_count=3 LE
+                0x01,
+                0x00,
+                0x00,
+                0x00,  # id=1
+                0x02,
+                0x00,
+                0x00,
+                0x00,  # id=2
+                0x03,
+                0x00,
+                0x00,
+                0x00,  # id=3
+            ]
+        )
         mock_divoom_with_response.send_command_and_wait_for_response.return_value = response
         ids = await query_page(mock_divoom_with_response, page=0)
         assert ids == [1, 2, 3]
@@ -328,6 +359,7 @@ class TestQueryPage:
         a device that never answers (HW-verified: Pixoo) must not wedge the
         serialized command queue for 10s. Default and explicit override both apply."""
         from divoom_legacy.tools.custom_art_push import QUERY_TIMEOUT
+
         mock_divoom_with_response.send_command_and_wait_for_response.return_value = None
         await query_page(mock_divoom_with_response, page=0)
         _, kwargs = mock_divoom_with_response.send_command_and_wait_for_response.call_args
@@ -350,15 +382,30 @@ class TestQueryPage:
     async def test_query_page_truncated_ids(self, mock_divoom_with_response):
         """Response claims 5 IDs but only has 3 → returns only 3 without crashing."""
         # type=1, page=0, total=5, cur=0, count=5, but only 3×4=12 bytes of IDs
-        response = bytes([
-            0x01, 0x00,  # type=1, page=0
-            0x05, 0x00,  # total_count=5
-            0x00, 0x00,  # cur_seq=0
-            0x05, 0x00,  # item_count=5
-            0x01, 0x00, 0x00, 0x00,  # id=1
-            0x02, 0x00, 0x00, 0x00,  # id=2
-            0x03, 0x00, 0x00, 0x00,  # id=3 (only 12 bytes, not 20)
-        ])
+        response = bytes(
+            [
+                0x01,
+                0x00,  # type=1, page=0
+                0x05,
+                0x00,  # total_count=5
+                0x00,
+                0x00,  # cur_seq=0
+                0x05,
+                0x00,  # item_count=5
+                0x01,
+                0x00,
+                0x00,
+                0x00,  # id=1
+                0x02,
+                0x00,
+                0x00,
+                0x00,  # id=2
+                0x03,
+                0x00,
+                0x00,
+                0x00,  # id=3 (only 12 bytes, not 20)
+            ]
+        )
         mock_divoom_with_response.send_command_and_wait_for_response.return_value = response
         ids = await query_page(mock_divoom_with_response, page=0)
         assert ids == [1, 2, 3]

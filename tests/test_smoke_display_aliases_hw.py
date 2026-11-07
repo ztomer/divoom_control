@@ -12,6 +12,7 @@ Hardware-gated via tests/conftest.py HARDWARE_TEST_MODULES — skipped
 without --run-hardware. Manual use unchanged:
 python3 tests/test_smoke_display_aliases_hw.py [mac_address]
 """
+
 import os
 import sys, socket, json, time
 
@@ -69,28 +70,52 @@ def run_smoke(mac=None):
 
     # 4. show_clock face 0, 24h, with calendar
     print("-- show_clock --")
-    r = call({"command": "device_call", "args": {
-        "method": "display.show_clock",
-        "args": {"kwargs": {"clock": 0, "twentyfour": True, "weather": False, "temp": False, "calendar": True, "color": "#FFFFFF"}}
-    }})
+    r = call(
+        {
+            "command": "device_call",
+            "args": {
+                "method": "display.show_clock",
+                "args": {
+                    "kwargs": {
+                        "clock": 0,
+                        "twentyfour": True,
+                        "weather": False,
+                        "temp": False,
+                        "calendar": True,
+                        "color": "#FFFFFF",
+                    }
+                },
+            },
+        }
+    )
     check("display.show_clock", r, results)
     time.sleep(3)
 
     # 5. show_light — red
     print("-- show_light red --")
-    r = call({"command": "device_call", "args": {
-        "method": "display.show_light",
-        "args": {"kwargs": {"color": [255, 0, 0], "brightness": 80, "power": True}}
-    }})
+    r = call(
+        {
+            "command": "device_call",
+            "args": {
+                "method": "display.show_light",
+                "args": {"kwargs": {"color": [255, 0, 0], "brightness": 80, "power": True}},
+            },
+        }
+    )
     check("display.show_light red", r, results)
     time.sleep(3)
 
     # 6. show_light — blue via hex
     print("-- show_light blue (#0000FF) --")
-    r = call({"command": "device_call", "args": {
-        "method": "display.show_light",
-        "args": {"kwargs": {"color": "#0000FF", "brightness": 60, "power": True}}
-    }})
+    r = call(
+        {
+            "command": "device_call",
+            "args": {
+                "method": "display.show_light",
+                "args": {"kwargs": {"color": "#0000FF", "brightness": 60, "power": True}},
+            },
+        }
+    )
     check("display.show_light blue", r, results)
     time.sleep(3)
 

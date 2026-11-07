@@ -4,6 +4,7 @@ from divoom_legacy.display.lightning_channel import LightningChannel
 from divoom_legacy.divoom import Divoom as DivoomBase
 from divoom_lib.models import LightningType
 
+
 @pytest.fixture
 def mock_divoom_instance():
     """Fixture for a mock DivoomBase instance.
@@ -22,32 +23,30 @@ def mock_divoom_instance():
     mock.send_command = AsyncMock()
     return mock
 
+
 @pytest.mark.asyncio
 async def test_lightning_channel_init_defaults(mock_divoom_instance):
     """Test LightningChannel initialization with default options."""
     channel = LightningChannel(mock_divoom_instance)
-    
+
     assert channel._divoom_instance == mock_divoom_instance
     assert channel._opts["type"] == LightningType.PlainColor
     assert channel._opts["brightness"] == 100
     assert channel._opts["power"] is True
     assert channel._opts["color"] == "FFFFFF"
 
+
 @pytest.mark.asyncio
 async def test_lightning_channel_init_custom_opts(mock_divoom_instance):
     """Test LightningChannel initialization with custom options."""
-    custom_opts = {
-        "type": LightningType.Love,
-        "brightness": 50,
-        "power": False,
-        "color": "00FF00"
-    }
+    custom_opts = {"type": LightningType.Love, "brightness": 50, "power": False, "color": "00FF00"}
     channel = LightningChannel(mock_divoom_instance, opts=custom_opts)
-    
+
     assert channel._opts["type"] == LightningType.Love
     assert channel._opts["brightness"] == 50
     assert channel._opts["power"] is False
     assert channel._opts["color"] == "00FF00"
+
 
 @pytest.mark.asyncio
 async def test_lightning_channel_show(mock_divoom_instance):
@@ -57,10 +56,13 @@ async def test_lightning_channel_show(mock_divoom_instance):
     await channel.show()
     mock_divoom_instance.send_command.assert_called_once()
 
+
 @pytest.mark.asyncio
 async def test_lightning_channel_update_message(mock_divoom_instance):
     """Test _update_message sends the correct command with converted arguments."""
-    channel = LightningChannel(mock_divoom_instance, opts={"color": "FF0000", "brightness": 75, "type": LightningType.Plants, "power": True})
+    channel = LightningChannel(
+        mock_divoom_instance, opts={"color": "FF0000", "brightness": 75, "type": LightningType.Plants, "power": True}
+    )
 
     await channel._update_message()
 
@@ -78,6 +80,7 @@ async def test_lightning_channel_update_message(mock_divoom_instance):
     expected_args = [0x01, 0xFF, 0x00, 0x00, 0x4B, 0x02, 0x01, 0x00, 0x00, 0x00]
     mock_divoom_instance.send_command.assert_called_once_with(0x45, expected_args)
 
+
 @pytest.mark.asyncio
 async def test_lightning_channel_type_setter(mock_divoom_instance):
     """Test the type setter updates option."""
@@ -85,6 +88,7 @@ async def test_lightning_channel_type_setter(mock_divoom_instance):
 
     channel.type = LightningType.Sleeping
     assert channel._opts["type"] == LightningType.Sleeping
+
 
 @pytest.mark.asyncio
 async def test_lightning_channel_color_setter(mock_divoom_instance):
@@ -94,6 +98,7 @@ async def test_lightning_channel_color_setter(mock_divoom_instance):
     channel.color = "0000FF"
     assert channel._opts["color"] == "0000FF"
 
+
 @pytest.mark.asyncio
 async def test_lightning_channel_power_setter(mock_divoom_instance):
     """Test the power setter updates option."""
@@ -101,6 +106,7 @@ async def test_lightning_channel_power_setter(mock_divoom_instance):
 
     channel.power = False
     assert channel._opts["power"] is False
+
 
 @pytest.mark.asyncio
 async def test_lightning_channel_brightness_setter(mock_divoom_instance):

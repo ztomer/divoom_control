@@ -5,6 +5,7 @@ Split out of `daemon_client.py` in R67 when that file crossed the house
 builds a dotted method path and issues one `device_call` RPC, so existing
 call-sites work unchanged once `target` is a proxy.
 """
+
 from __future__ import annotations
 
 import base64
@@ -48,6 +49,7 @@ class _LanView:
     green in tests that faked ``t.lan``. Forwarding here closes the class: the
     attribute that answers "has a LAN?" is also the one that makes the call.
     """
+
     def __init__(self, device_ip: str | None, calls: "DaemonDeviceProxy | None" = None):
         self.device_ip = device_ip
         self._calls = calls
@@ -63,6 +65,7 @@ class _LanView:
 
 class _ConnView:
     """Minimal stand-in for ``divoom._conn`` (only ``.mac`` is read by the GUI)."""
+
     def __init__(self, mac: str | None):
         self.mac = mac
 
@@ -100,9 +103,11 @@ class _ProxyExclusiveCtx:
             logger.warning("exclusive_end raised for token %s: %s", self._token, e)
             return
         if not (reply or {}).get("success", False):
-            logger.warning("exclusive_end did not confirm release of token %s: %s "
-                           "(device wedged until the ~30s G3 auto-release)",
-                           self._token, (reply or {}).get("error"))
+            logger.warning(
+                "exclusive_end did not confirm release of token %s: %s (device wedged until the ~30s G3 auto-release)",
+                self._token,
+                (reply or {}).get("error"),
+            )
 
 
 class DaemonDeviceProxy:
@@ -127,9 +132,15 @@ class DaemonDeviceProxy:
     # self-heals the connection regardless of a slightly-stale GUI read).
     _STATUS_TTL = 0.25
 
-    def __init__(self, client: DaemonClient, _path: str = "", *,
-                 target: str = "device", _token: str | None = None,
-                 mac: str | None = None) -> None:
+    def __init__(
+        self,
+        client: DaemonClient,
+        _path: str = "",
+        *,
+        target: str = "device",
+        _token: str | None = None,
+        mac: str | None = None,
+    ) -> None:
         object.__setattr__(self, "_client", client)
         object.__setattr__(self, "_path", _path)
         object.__setattr__(self, "_target", target)
@@ -141,13 +152,9 @@ class DaemonDeviceProxy:
         object.__setattr__(self, "_status_cache_ts", 0.0)
 
     def _with_token(self, token: str) -> "DaemonDeviceProxy":
-        return DaemonDeviceProxy(self._client, self._path,
-                                 target=self._target, _token=token, mac=self._mac)
+        return DaemonDeviceProxy(self._client, self._path, target=self._target, _token=token, mac=self._mac)
 
-    async def push_animation(self, file_or_data: str | bytes,
-                              *,
-                              art: str,
-                              token: str | None = None) -> bool:
+    async def push_animation(self, file_or_data: str | bytes, *, art: str, token: str | None = None) -> bool:
         """Push an animation (GIF/image) to the device inside an exclusive
         session.  ``file_or_data`` is either a local path *or* raw bytes
         (written to a temp file first).  Calls ``display.show_image()``
@@ -159,6 +166,7 @@ class DaemonDeviceProxy:
         """
         import os
         import tempfile
+
         own_tmp = None
         if isinstance(file_or_data, bytes):
             tmp = tempfile.NamedTemporaryFile(suffix=".gif", delete=False)
@@ -203,6 +211,7 @@ class DaemonDeviceProxy:
 
     def _status(self) -> dict:
         import time
+
         now = time.monotonic()
         if self._status_cache is not None and (now - self._status_cache_ts) < self._STATUS_TTL:
             return self._status_cache
@@ -219,15 +228,16 @@ class DaemonDeviceProxy:
                 key = "wall" if self._target == "wall" else "connected"
                 return bool(st.get(key, False))
             if name == "lan":
-                return _LanView(st.get("lan_ip"), DaemonDeviceProxy(
-                    self._client, "lan", target=self._target, _token=self._token, mac=self._mac))
+                return _LanView(
+                    st.get("lan_ip"),
+                    DaemonDeviceProxy(self._client, "lan", target=self._target, _token=self._token, mac=self._mac),
+                )
             if name == "_conn":
                 return _ConnView(st.get("mac"))
         if name.startswith("_"):
             raise AttributeError(name)
         path = f"{self._path}.{name}" if self._path else name
-        return DaemonDeviceProxy(self._client, path, target=self._target,
-                                 _token=self._token, mac=self._mac)
+        return DaemonDeviceProxy(self._client, path, target=self._target, _token=self._token, mac=self._mac)
 
     def __call__(self, *args: Any, **kwargs: Any):
         method = self._path
@@ -252,13 +262,13 @@ class DaemonDeviceProxy:
                     pass
 
         async def _invoke():
-            reply = client.device_call(method, call_args, dict(kwargs),
-                                       target=target, blobs=blobs, token=token,
-                                       mac=self._mac)
+            reply = client.device_call(
+                method, call_args, dict(kwargs), target=target, blobs=blobs, token=token, mac=self._mac
+            )
             if not reply.get("success", False):
                 raise _DeviceCallError(
-                    reply.get("error", f"device_call {method} failed"),
-                    str(reply.get("cause") or ""), reply)
+                    reply.get("error", f"device_call {method} failed"), str(reply.get("cause") or ""), reply
+                )
             return reply.get("result")
 
         return _invoke()

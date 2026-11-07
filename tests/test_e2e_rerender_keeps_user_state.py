@@ -20,6 +20,7 @@ Both reached CI only when the page's own timer happened to land inside a test's
 gesture, which is why they looked like flakes on two different tests. Here the
 refresh is fired INSIDE the gesture on purpose, so the race is a certainty.
 """
+
 import pytest
 
 from tests.support.browser import eval_js, require_browser, wait_js
@@ -40,11 +41,15 @@ async def test_a_bench_refresh_does_not_move_the_user_off_the_channel_tab_they_o
             await page.wait_for_selector("#panel-text.active", state="visible")
             await eval_js(page, _REFRESH)  # what a scan result does
             await wait_js(page, "() => !!document.getElementById('spatial-node-" + A + "')")
-            active = await eval_js(page, """() => ({
+            active = await eval_js(
+                page,
+                """() => ({
                 panel: document.querySelector('#control-panel .channel-panel.active')?.id,
-                tab: document.querySelector('.tab-btn[data-channel].active')?.dataset.channel })""")
+                tab: document.querySelector('.tab-btn[data-channel].active')?.dataset.channel })""",
+            )
             assert active == {"panel": "panel-text", "tab": "text"}, (
-                f"a re-render is not a selection; the user's tab must stay: {active}")
+                f"a re-render is not a selection; the user's tab must stay: {active}"
+            )
         finally:
             await browser.close()
 
@@ -63,16 +68,21 @@ async def test_the_first_panel_arriving_after_the_user_opened_a_tab_does_not_mov
         try:
             await page.click('.tab-btn[data-channel="text"]')
             await page.wait_for_selector("#panel-text.active", state="visible")
-            await eval_js(page, "(devs) => window.Divoom.onOwnedDevices("
-                                "{type: 'owned_devices', devices: devs})", _owned(A, B))
+            await eval_js(
+                page, "(devs) => window.Divoom.onOwnedDevices({type: 'owned_devices', devices: devs})", _owned(A, B)
+            )
             await eval_js(page, "() => window.refreshPanelFacts()")
             await wait_js(page, "() => !!document.getElementById('spatial-node-" + A + "')")
             await eval_js(page, _REFRESH)
-            active = await eval_js(page, """() => ({
+            active = await eval_js(
+                page,
+                """() => ({
                 panel: document.querySelector('#control-panel .channel-panel.active')?.id,
-                tab: document.querySelector('.tab-btn[data-channel].active')?.dataset.channel })""")
+                tab: document.querySelector('.tab-btn[data-channel].active')?.dataset.channel })""",
+            )
             assert active == {"panel": "panel-text", "tab": "text"}, (
-                f"the first panel arriving is not the user choosing one: {active}")
+                f"the first panel arriving is not the user choosing one: {active}"
+            )
         finally:
             await browser.close()
 
@@ -91,8 +101,9 @@ async def test_a_selection_still_shows_the_selected_panels_channel():
             await page.wait_for_selector("#panel-text.active", state="visible")
             await eval_js(page, "(m) => window.Divoom.onSelection({type: 'selection', mac: m})", B)
             await wait_js(page, f"() => window.SpatialStage.getSelectedMac() === '{B}'")
-            await wait_js(page, "() => document.querySelector("
-                                "'#control-panel .channel-panel.active')?.id === 'panel-clock'")
+            await wait_js(
+                page, "() => document.querySelector('#control-panel .channel-panel.active')?.id === 'panel-clock'"
+            )
         finally:
             await browser.close()
 
@@ -120,10 +131,12 @@ async def test_a_bench_refresh_during_a_drag_keeps_the_drag():
             await wait_js(page, "() => !!document.getElementById('spatial-node-" + B + "')")
             got = await _box(page, B)
             assert (got["x"], got["y"]) == (a["x"] + a["w"], a["y"]), (
-                f"the drop must land where it was dropped, snapped: A={a} B={got}")
+                f"the drop must land where it was dropped, snapped: A={a} B={got}"
+            )
             saved = await eval_js(page, "(m) => window.SpatialRooms.getSavedPositions()[m]", B)
             assert (saved["x"], saved["y"]) == (got["x"], got["y"]), (
-                f"what is saved is what is shown: saved={saved} shown={got}")
+                f"what is saved is what is shown: saved={saved} shown={got}"
+            )
         finally:
             await browser.close()
 
@@ -140,8 +153,7 @@ async def test_a_bench_refresh_does_not_move_a_level_slider_the_user_is_holding(
         browser, page = await _open(p, [_panel(A), _panel(B)], _owned(A, B))
         try:
             slider = page.locator("#global-brightness-slider")
-            await wait_js(page, "() => document.getElementById('global-brightness-slider')"
-                                ".dataset.state === 'known'")
+            await wait_js(page, "() => document.getElementById('global-brightness-slider').dataset.state === 'known'")
             box = await slider.bounding_box()
             y = box["y"] + box["height"] / 2
             await page.mouse.move(box["x"] + box["width"] * 0.5, y)
@@ -152,7 +164,6 @@ async def test_a_bench_refresh_does_not_move_a_level_slider_the_user_is_holding(
             await eval_js(page, _REFRESH)
             during = await eval_js(page, "() => document.getElementById('global-brightness-slider').value")
             await page.mouse.up()
-            assert during == held, (
-                f"a re-render must not move a slider the user is holding: {held} -> {during}")
+            assert during == held, f"a re-render must not move a slider the user is holding: {held} -> {during}"
         finally:
             await browser.close()

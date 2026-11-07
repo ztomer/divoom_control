@@ -7,6 +7,7 @@ valid authenticated account to a guest token.
 Teeth: collapse the login/cache handling back into one try and this test sees
 the guest fallback instead of the real creds.
 """
+
 import sys
 from pathlib import Path
 

@@ -39,6 +39,7 @@ def _load_idl():
 
 def _real_api():
     import gui_main
+
     with patch("pathlib.Path.exists", return_value=False):
         return gui_main.DivoomGuiAPI()
 
@@ -52,12 +53,14 @@ def test_idl_file_is_versioned():
 def test_bridge_methods_match_idl_exactly():
     """New public method without an IDL entry fails; removed method fails."""
     from control_server import list_methods
+
     live = sorted(m["name"] for m in list_methods(_real_api()))
     assert live == _load_idl()["methods"]
 
 
 def test_denylist_matches_control_server():
     import control_server as cs
+
     assert sorted(cs._DENYLIST) == _load_idl()["denylist"]
 
 

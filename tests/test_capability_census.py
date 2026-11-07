@@ -21,6 +21,7 @@ The other direction matters too: a scan that flagged every divoom_lib import
 would "find" both and be useless. So there are tests that clean code produces
 nothing, and that the deliberately-excluded client-owned helpers stay excluded.
 """
+
 from __future__ import annotations
 
 import sys
@@ -36,11 +37,11 @@ census = pytest.importorskip("capability_census")
 
 # ── the OWNED half: read out of Rust, never hand-maintained ──────────────────
 
+
 def test_daemon_capabilities_are_extracted_from_the_rust():
     caps = census.daemon_capabilities()
     assert len(caps) > 200, f"only {len(caps)} — the match-arm scan is not working"
-    for expected in ("sync_time", "get_cached_credentials", "save_credentials",
-                     "set_auto_power_off", "probe_lan"):
+    for expected in ("sync_time", "get_cached_credentials", "save_credentials", "set_auto_power_off", "probe_lan"):
         assert expected in caps, f"{expected} missing from the owned list"
 
 
@@ -52,11 +53,7 @@ def test_multi_line_match_arms_are_all_captured(tmp_path, monkeypatch):
     """
     src = tmp_path / "device_call"
     src.mkdir()
-    (src / "x.rs").write_text(
-        '        "sound.set_thing"\n'
-        '        | "system.set_thing"\n'
-        '        | "set_thing" => {\n'
-    )
+    (src / "x.rs").write_text('        "sound.set_thing"\n        | "system.set_thing"\n        | "set_thing" => {\n')
     monkeypatch.setattr(census, "RUST", tmp_path)
     caps = census.daemon_capabilities()
     for expected in ("sound.set_thing", "system.set_thing", "set_thing"):
@@ -78,15 +75,18 @@ def test_multi_line_match_arms_are_all_captured(tmp_path, monkeypatch):
 # forever, including for the fifth defect of the same shape that nobody has
 # written yet.
 
+
 def test_the_census_detects_F1s_shape_the_auth_bypass(tmp_path, monkeypatch):
     """`mod.capability(...)` through a divoom_lib module."""
     direct, _w, _r = _scan_one(
-        tmp_path, monkeypatch,
+        tmp_path,
+        monkeypatch,
         "from divoom_lib import divoom_auth\n"
         "class Api:\n"
         "    def __init__(self):\n"
         "        self.cached = divoom_auth.get_cached_credentials()\n",
-        {"get_cached_credentials"})
+        {"get_cached_credentials"},
+    )
     assert [n for _w2, n, _l in direct] == ["get_cached_credentials"], direct
 
 
@@ -97,12 +97,14 @@ def test_the_census_detects_F2s_shape_a_reimplementation(tmp_path, monkeypatch):
     Python spelling is `DateTimeCommand.update_date_time`.
     """
     _d, wrapped, _r = _scan_one(
-        tmp_path, monkeypatch,
+        tmp_path,
+        monkeypatch,
         "class Api:\n"
         "    def sync_time(self):\n"
         "        from divoom_legacy.system.date_time import DateTimeCommand\n"
         "        return DateTimeCommand(self.dev).update_date_time()\n",
-        {"sync_time"})
+        {"sync_time"},
+    )
     assert [n for _w2, n, _l in wrapped] == ["sync_time"], wrapped
 
 
@@ -115,8 +117,7 @@ def test_the_live_tree_no_longer_has_F1(tmp_path, monkeypatch):
     ambiguous.
     """
     direct, _w, _r = census.scan_python(census.daemon_capabilities())
-    gui_auth = [w for w, n, lib in direct
-                if "divoom_auth" in lib and w.startswith("divoom_gui/")]
+    gui_auth = [w for w, n, lib in direct if "divoom_auth" in lib and w.startswith("divoom_gui/")]
     assert gui_auth == [], f"the auth bypass is back in the GUI: {gui_auth}"
 
 
@@ -132,14 +133,14 @@ def test_the_scan_covers_scripts_not_just_the_packages(tmp_path, monkeypatch):
     found.
     """
     assert any(p.name == "scripts" for p in census.PY_SURFACE), (
-        f"scripts/ dropped from the scanned surface: {census.PY_SURFACE}")
+        f"scripts/ dropped from the scanned surface: {census.PY_SURFACE}"
+    )
 
     scripts = tmp_path / "scripts"
     scripts.mkdir()
     (scripts / "tool.py").write_text(
-        "from divoom_lib import divoom_auth\n"
-        "def go():\n"
-        "    return divoom_auth.get_credentials()\n")
+        "from divoom_lib import divoom_auth\ndef go():\n    return divoom_auth.get_credentials()\n"
+    )
     monkeypatch.setattr(census, "PY_SURFACE", (scripts,))
     monkeypatch.setattr(census, "REPO", tmp_path)
     direct, _w, _r = census.scan_python({"get_credentials"})
@@ -147,6 +148,7 @@ def test_the_scan_covers_scripts_not_just_the_packages(tmp_path, monkeypatch):
 
 
 # ── the other direction: it must not flag everything ─────────────────────────
+
 
 def _scan_one(tmp_path, monkeypatch, body: str, caps: set[str]):
     pkg = tmp_path / "divoom_gui"
@@ -159,11 +161,13 @@ def _scan_one(tmp_path, monkeypatch, body: str, caps: set[str]):
 
 def test_clean_client_code_produces_no_findings(tmp_path, monkeypatch):
     direct, wrapped, reaches = _scan_one(
-        tmp_path, monkeypatch,
+        tmp_path,
+        monkeypatch,
         "from divoom_client.daemon_protocol import DaemonClient\n"
         "def sync_time(self):\n"
         "    return DaemonClient().send_command('sync_time')\n",
-        {"sync_time"})
+        {"sync_time"},
+    )
     assert direct == [] and wrapped == [] and reaches == [], (direct, wrapped, reaches)
 
 
@@ -174,13 +178,15 @@ def test_client_owned_helpers_are_deliberately_not_flagged(tmp_path, monkeypatch
     report stops being read.
     """
     direct, wrapped, reaches = _scan_one(
-        tmp_path, monkeypatch,
+        tmp_path,
+        monkeypatch,
         "from divoom_lib.utils.atomic_io import atomic_write_config\n"
         "from divoom_lib.lifecycle_config import get_keep_daemon_alive\n"
         "def sync_time(self):\n"
         "    atomic_write_config('x', {})\n"
         "    return get_keep_daemon_alive()\n",
-        {"sync_time"})
+        {"sync_time"},
+    )
     assert wrapped == [], wrapped
     assert direct == [], direct
     assert reaches == [], reaches
@@ -189,11 +195,11 @@ def test_client_owned_helpers_are_deliberately_not_flagged(tmp_path, monkeypatch
 def test_a_new_duplicate_would_be_caught(tmp_path, monkeypatch):
     """Prove it bites without waiting for someone to write the bug."""
     direct, wrapped, reaches = _scan_one(
-        tmp_path, monkeypatch,
-        "from divoom_lib import divoom_auth\n"
-        "def whatever():\n"
-        "    return divoom_auth.get_credentials()\n",
-        {"get_credentials"})
+        tmp_path,
+        monkeypatch,
+        "from divoom_lib import divoom_auth\ndef whatever():\n    return divoom_auth.get_credentials()\n",
+        {"get_credentials"},
+    )
     assert [n for _w, n, _l in direct] == ["get_credentials"], direct
     assert reaches == [], reaches
 

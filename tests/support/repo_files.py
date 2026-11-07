@@ -9,6 +9,7 @@ was silently reading the whole second copy too. Ask git instead: tracked files
 plus untracked files that are not ignored, so a brand-new file is still caught
 before it is staged.
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -23,12 +24,12 @@ def repo_files(root: Path, suffixes: tuple[str, ...] | None = None) -> list[Path
     """
     out = subprocess.run(
         ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
-        cwd=root, capture_output=True, check=True, stdin=subprocess.DEVNULL,
+        cwd=root,
+        capture_output=True,
+        check=True,
+        stdin=subprocess.DEVNULL,
     ).stdout.decode()
     paths = [root / rel for rel in out.split("\0") if rel]
     if not paths:
         raise RuntimeError(f"git lists no files under {root}")
-    return sorted(
-        p for p in paths
-        if p.is_file() and (suffixes is None or p.suffix in suffixes)
-    )
+    return sorted(p for p in paths if p.is_file() and (suffixes is None or p.suffix in suffixes))

@@ -128,9 +128,7 @@ async def test_show_scoreboard_lan_exception_returns_false(display: Display) -> 
 
 
 @pytest.mark.asyncio
-async def test_show_image_falls_back_to_0x49_when_no_animation_attr(
-    display: Display, test_image: str
-) -> None:
+async def test_show_image_falls_back_to_0x49_when_no_animation_attr(display: Display, test_image: str) -> None:
     """No `.animation` attribute on the communicator (or it's explicitly None)
     -> skip the 0x8B path entirely and stream via 'set animation frame'."""
     display.communicator.animation = None
@@ -140,17 +138,16 @@ async def test_show_image_falls_back_to_0x49_when_no_animation_attr(
     with patch("divoom_legacy.display.encode_animation", return_value=fake_packets):
         result = await display.show_image(test_image)
     assert result is True
-    calls = [c for c in display.communicator.send_command.await_args_list
-             if c.args and c.args[0] == "set animation frame"]
+    calls = [
+        c for c in display.communicator.send_command.await_args_list if c.args and c.args[0] == "set animation frame"
+    ]
     assert len(calls) == 2
     assert calls[0].args[1] == [1, 2, 3]
     assert calls[1].args[1] == [4, 5, 6]
 
 
 @pytest.mark.asyncio
-async def test_show_image_fallback_stops_on_first_failed_packet(
-    display: Display, test_image: str
-) -> None:
+async def test_show_image_fallback_stops_on_first_failed_packet(display: Display, test_image: str) -> None:
     display.communicator.animation = None
     display.communicator.cfg = None
     # show_design's "set light mode" call must succeed; the two animation-frame
@@ -160,15 +157,14 @@ async def test_show_image_fallback_stops_on_first_failed_packet(
     with patch("divoom_legacy.display.encode_animation", return_value=fake_packets):
         result = await display.show_image(test_image)
     assert result is False
-    calls = [c for c in display.communicator.send_command.await_args_list
-             if c.args and c.args[0] == "set animation frame"]
+    calls = [
+        c for c in display.communicator.send_command.await_args_list if c.args and c.args[0] == "set animation frame"
+    ]
     assert len(calls) == 2  # loop stopped after the failing packet, no 3rd attempt
 
 
 @pytest.mark.asyncio
-async def test_show_image_stream_8b_failure_falls_back_to_0x49(
-    display: Display, test_image: str
-) -> None:
+async def test_show_image_stream_8b_failure_falls_back_to_0x49(display: Display, test_image: str) -> None:
     """When the 0x8B streamer is present but fails, show_image must fall back
     to the 0x49 chunked path rather than giving up."""
     display.communicator.animation = MagicMock()
@@ -180,8 +176,9 @@ async def test_show_image_stream_8b_failure_falls_back_to_0x49(
         result = await display.show_image(test_image)
     assert result is True
     display.communicator.animation.stream_animation_8b.assert_awaited_once()
-    calls = [c for c in display.communicator.send_command.await_args_list
-             if c.args and c.args[0] == "set animation frame"]
+    calls = [
+        c for c in display.communicator.send_command.await_args_list if c.args and c.args[0] == "set animation frame"
+    ]
     assert len(calls) == 1
 
 
@@ -319,8 +316,7 @@ async def test_show_light_ble_carries_the_effect_byte(display: Display, effect: 
     display.communicator.send_command = AsyncMock(return_value=True)
     display.communicator.convert_color = MagicMock(return_value=[0, 255, 204])
 
-    await display.show_light(color="00FFCC", brightness=80, power=True,
-                             lightning_type=effect)
+    await display.show_light(color="00FFCC", brightness=80, power=True, lightning_type=effect)
 
     _, args = display.communicator.send_command.await_args.args
     assert args[5] == effect, f"effect byte must be {effect}, got {args[5]}"
@@ -338,16 +334,14 @@ async def test_show_light_ble_modes_produce_distinct_payloads(display: Display) 
     seen = set()
     for effect in range(5):
         display.communicator.send_command = AsyncMock(return_value=True)
-        await display.show_light(color="00FFCC", brightness=80, power=True,
-                                 lightning_type=effect)
+        await display.show_light(color="00FFCC", brightness=80, power=True, lightning_type=effect)
         seen.add(tuple(display.communicator.send_command.await_args.args[1]))
     assert len(seen) == 5, f"expected 5 distinct payloads, got {len(seen)}"
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("effect", [1, 2, 3, 4])
-async def test_show_light_lan_refuses_effects_it_cannot_express(
-        display: Display, effect: int) -> None:
+async def test_show_light_lan_refuses_effects_it_cannot_express(display: Display, effect: int) -> None:
     """LAN must REFUSE a non-Plain effect, not silently render Plain.
 
     Divoom's HTTP API has no effect field — Channel/SetAmbientLight takes only
@@ -359,8 +353,7 @@ async def test_show_light_lan_refuses_effects_it_cannot_express(
     display.communicator.lan.set_ambient_light = AsyncMock()
     display.communicator.convert_color = MagicMock(return_value=[0, 255, 204])
 
-    result = await display.show_light(color="00FFCC", brightness=80, power=True,
-                                      lightning_type=effect)
+    result = await display.show_light(color="00FFCC", brightness=80, power=True, lightning_type=effect)
 
     assert result is False, "LAN must not claim success for an unreachable effect"
     display.communicator.lan.set_ambient_light.assert_not_awaited()
@@ -373,8 +366,7 @@ async def test_show_light_lan_still_serves_plain_colour(display: Display) -> Non
     display.communicator.lan.set_ambient_light = AsyncMock()
     display.communicator.convert_color = MagicMock(return_value=[0, 255, 204])
 
-    result = await display.show_light(color="00FFCC", brightness=80, power=True,
-                                      lightning_type=0)
+    result = await display.show_light(color="00FFCC", brightness=80, power=True, lightning_type=0)
 
     assert result is True
     display.communicator.lan.set_ambient_light.assert_awaited_once_with(80, 0, 255, 204, 1)

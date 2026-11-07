@@ -11,6 +11,7 @@ the one root they derive from. These tests hold it, at the class level: the
 home the suite sees, the log a spawned daemon writes, and what a real daemon
 spawned by a test actually touches.
 """
+
 from __future__ import annotations
 
 import os
@@ -61,8 +62,7 @@ def test_a_daemon_a_test_spawns_writes_only_the_tests_home():
         while time.monotonic() < deadline and not daemon_alive(sock):
             time.sleep(0.1)
         assert daemon_alive(sock), f"the daemon never bound {sock}"
-        reply = DaemonClient(sock).send_command(
-            "set_topology", {"topology": {"rooms": ["Isolation-probe"]}})
+        reply = DaemonClient(sock).send_command("set_topology", {"topology": {"rooms": ["Isolation-probe"]}})
         assert reply.get("success") is True, reply
         written = Path.home() / ".config" / "divoom-control" / "topology.json"
         assert written.is_file() and "Isolation-probe" in written.read_text(), written
@@ -74,7 +74,7 @@ def test_a_daemon_a_test_spawns_writes_only_the_tests_home():
             try:
                 os.kill(handle, 15)
                 os.waitpid(handle, 0)
-            except (ProcessLookupError, ChildProcessError):
+            except ProcessLookupError, ChildProcessError:
                 pass
     after = _mtimes(OWNER_STATE)
     changed = sorted(k for k in after if before.get(k) != after[k])

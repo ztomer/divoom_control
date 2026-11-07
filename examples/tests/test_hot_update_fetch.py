@@ -1,5 +1,6 @@
 """fetch_hot_manifest / download_hot_file HTTP-boundary coverage (split
 from test_hot_update_coverage.py)."""
+
 import json
 
 import pytest
@@ -15,13 +16,17 @@ from support.hot_update_common import (  # noqa: F401
 
 # ── fetch_hot_manifest / download_hot_file: the HTTP boundary ──────────────
 
+
 def test_fetch_hot_manifest_parses_vendor_and_file_list(monkeypatch):
     payload = {
         "VendorList": [
-            {"VendorId": 40005454, "FileList": [
-                {"FileId": "group1/v1.bin", "Version": 1, "Sha1": "abc"},
-                {"FileId": "group1/v2.bin", "Version": 2, "Sha1": ""},
-            ]},
+            {
+                "VendorId": 40005454,
+                "FileList": [
+                    {"FileId": "group1/v1.bin", "Version": 1, "Sha1": "abc"},
+                    {"FileId": "group1/v2.bin", "Version": 2, "Sha1": ""},
+                ],
+            },
         ]
     }
 
@@ -41,15 +46,13 @@ def test_fetch_hot_manifest_parses_vendor_and_file_list(monkeypatch):
 
 
 def test_fetch_hot_manifest_handles_empty_response(monkeypatch):
-    monkeypatch.setattr(hu_mod.urllib.request, "urlopen",
-                        lambda req, timeout=None: _FakeResp(b"{}"))
+    monkeypatch.setattr(hu_mod.urllib.request, "urlopen", lambda req, timeout=None: _FakeResp(b"{}"))
     assert fetch_hot_manifest(1) == []
 
 
 def test_download_hot_file_success_sets_body(monkeypatch):
     body = b"\x01\x02\x03"
-    monkeypatch.setattr(hu_mod.urllib.request, "urlopen",
-                        lambda req, timeout=None: _FakeResp(body))
+    monkeypatch.setattr(hu_mod.urllib.request, "urlopen", lambda req, timeout=None: _FakeResp(body))
     f = _file(body=None)
     assert download_hot_file(f) is True
     assert f.body == body
@@ -57,9 +60,9 @@ def test_download_hot_file_success_sets_body(monkeypatch):
 
 def test_download_hot_file_sha1_mismatch_fails(monkeypatch):
     import hashlib
-    body = b"\xAA\xBB"
-    monkeypatch.setattr(hu_mod.urllib.request, "urlopen",
-                        lambda req, timeout=None: _FakeResp(body))
+
+    body = b"\xaa\xbb"
+    monkeypatch.setattr(hu_mod.urllib.request, "urlopen", lambda req, timeout=None: _FakeResp(body))
     f = HotFile(1, "bad.bin", 1, hashlib.sha1(b"other bytes").hexdigest())
     assert download_hot_file(f) is False
     assert f.body is None
@@ -67,9 +70,9 @@ def test_download_hot_file_sha1_mismatch_fails(monkeypatch):
 
 def test_download_hot_file_sha1_match_succeeds(monkeypatch):
     import hashlib
-    body = b"\xAA\xBB\xCC"
-    monkeypatch.setattr(hu_mod.urllib.request, "urlopen",
-                        lambda req, timeout=None: _FakeResp(body))
+
+    body = b"\xaa\xbb\xcc"
+    monkeypatch.setattr(hu_mod.urllib.request, "urlopen", lambda req, timeout=None: _FakeResp(body))
     f = HotFile(1, "good.bin", 1, hashlib.sha1(body).hexdigest().upper())
     assert download_hot_file(f) is True
     assert f.body == body

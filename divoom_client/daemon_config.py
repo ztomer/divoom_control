@@ -11,6 +11,7 @@ why the scan defaults are large. The user can always pass a per-scan ``timeout``
 from the GUI; these are the fallbacks + the slack the client adds when waiting
 for a scan reply.
 """
+
 from __future__ import annotations
 
 import configparser
@@ -25,20 +26,21 @@ CONFIG_FILE = CONFIG_DIR / "daemon.ini"
 SECTION = "daemon"
 
 # ── named defaults (no magic numbers at the call sites) ──────────────────────
-DEFAULT_SCAN_TIMEOUT = 20.0          # seconds to scan when the GUI sends no timeout
-DEFAULT_SCAN_LIMIT = 4               # stop after N devices (0 = no limit)
-DEFAULT_SCAN_READ_SLACK = 10.0       # client waits scan_timeout + this for the reply
-DEFAULT_CLIENT_TIMEOUT = 2.0         # socket read timeout for quick, non-scan commands
+DEFAULT_SCAN_TIMEOUT = 20.0  # seconds to scan when the GUI sends no timeout
+DEFAULT_SCAN_LIMIT = 4  # stop after N devices (0 = no limit)
+DEFAULT_SCAN_READ_SLACK = 10.0  # client waits scan_timeout + this for the reply
+DEFAULT_CLIENT_TIMEOUT = 2.0  # socket read timeout for quick, non-scan commands
 DEFAULT_RECONNECT_SCAN_TIMEOUT = 3.0  # short scan used during auto-reconnect
-DEFAULT_CONNECT_TIMEOUT = 30.0       # client read timeout for connect/disconnect (BLE is slow)
-DEFAULT_SYNC_READ_TIMEOUT = 120.0    # client read timeout for sync_artwork (download + BLE stream)
-DEFAULT_HOT_UPDATE_TIMEOUT = 600.0   # client read timeout for hot_update (manifest of ~30 files)
-DEFAULT_CLOUD_TIMEOUT = 40.0         # client read timeout for cloud browse (see the ini comment)
+DEFAULT_CONNECT_TIMEOUT = 30.0  # client read timeout for connect/disconnect (BLE is slow)
+DEFAULT_SYNC_READ_TIMEOUT = 120.0  # client read timeout for sync_artwork (download + BLE stream)
+DEFAULT_HOT_UPDATE_TIMEOUT = 600.0  # client read timeout for hot_update (manifest of ~30 files)
+DEFAULT_CLOUD_TIMEOUT = 40.0  # client read timeout for cloud browse (see the ini comment)
 
 
 @dataclass(frozen=True)
 class DaemonConfig:
     """Resolved daemon settings (see module docstring for the why of each)."""
+
     scan_timeout: float = DEFAULT_SCAN_TIMEOUT
     scan_limit: int = DEFAULT_SCAN_LIMIT
     scan_read_slack: float = DEFAULT_SCAN_READ_SLACK
@@ -110,7 +112,7 @@ _cache: DaemonConfig | None = None
 def _coerce(field_type, raw, fallback):
     try:
         return field_type(raw)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         logger.warning("daemon config: bad value %r; using %r", raw, fallback)
         return fallback
 
@@ -118,6 +120,7 @@ def _coerce(field_type, raw, fallback):
 def _write_default(path: Path, defaults: DaemonConfig) -> None:
     try:
         from divoom_lib.utils.atomic_io import atomic_write_text
+
         atomic_write_text(path, _DEFAULT_FILE.format(**defaults.__dict__))
         logger.info("Wrote default daemon config to %s", path)
     except OSError as e:
@@ -147,7 +150,10 @@ def load_daemon_config(path: Path = CONFIG_FILE, *, force: bool = False) -> Daem
     values = {}
     for f in fields(DaemonConfig):
         default = getattr(defaults, f.name)
-        values[f.name] = _coerce(f.type if callable(f.type) else type(default),
-                                 sect.get(f.name), default) if f.name in sect else default
+        values[f.name] = (
+            _coerce(f.type if callable(f.type) else type(default), sect.get(f.name), default)
+            if f.name in sect
+            else default
+        )
     _cache = DaemonConfig(**values)
     return _cache

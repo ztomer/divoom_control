@@ -1,4 +1,5 @@
 """Shared base for the split DivoomGuiAPI test modules (ex test_gui_api.py)."""
+
 import sys
 import tempfile
 import unittest
@@ -19,6 +20,7 @@ class GuiApiTestBase(unittest.TestCase):
         self.presets_patcher.start()
 
         import tempfile
+
         self.temp_dir = tempfile.TemporaryDirectory()
         self.home_patcher = patch("pathlib.Path.home", return_value=Path(self.temp_dir.name))
         self.home_patcher.start()

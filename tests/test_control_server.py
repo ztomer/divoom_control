@@ -79,8 +79,7 @@ def _get(url):
 
 def _post(url, payload):
     data = json.dumps(payload).encode() if payload is not None else b""
-    req = _auth(urllib.request.Request(url, data=data, method="POST",
-                                       headers={"Content-Type": "application/json"}))
+    req = _auth(urllib.request.Request(url, data=data, method="POST", headers={"Content-Type": "application/json"}))
     try:
         with urllib.request.urlopen(req, timeout=5) as r:
             return r.status, json.loads(r.read())
@@ -136,11 +135,18 @@ def test_lists_real_api_surface():
     """The reflection layer exposes the real Control Center bridges."""
     import gui_main
     from unittest.mock import patch
+
     with patch("pathlib.Path.exists", return_value=False):
         api = gui_main.DivoomGuiAPI()
     names = {m["name"] for m in list_methods(api)}
-    for expected in ("set_vj_effect", "set_visualization", "set_clock",
-                     "switch_channel", "set_solid_light", "scan_devices"):
+    for expected in (
+        "set_vj_effect",
+        "set_visualization",
+        "set_clock",
+        "switch_channel",
+        "set_solid_light",
+        "scan_devices",
+    ):
         assert expected in names, f"{expected} not exposed"
     # window controls are denylisted
     assert "close_window" not in names
@@ -153,7 +159,7 @@ def test_unix_socket_server():
 
     sock_path = "/tmp/t_div.sock"
     api = FakeApi()
-    
+
     # Start server in background
     httpd, thread = cs.serve_unix_in_background(api, sock_path)
     try:
@@ -254,8 +260,7 @@ def test_post_path_not_under_api_404(server):
 def test_post_malformed_json_body_400(server):
     """L115-117: an unparsable JSON body is rejected with 400, not a crash."""
     _, base = server
-    status, body = _post_auth(f"{base}/api/set_vj_effect", b"{not json",
-                              token=_TOK, raw=True)
+    status, body = _post_auth(f"{base}/api/set_vj_effect", b"{not json", token=_TOK, raw=True)
     assert status == 400 and not body["ok"] and "bad JSON" in body["error"]
 
 
@@ -319,6 +324,7 @@ def test_serve_unix_with_explicit_token_and_pre_existing_socket_file():
     Uses a short /tmp path directly (not tmp_path) — AF_UNIX rejects
     pytest's long tmp_path on macOS."""
     import time as _time
+
     sock_path = f"/tmp/t_div_stale_{os.getpid()}_{_time.time_ns()}.sock"
     Path(sock_path).write_text("stale, not a socket")  # pre-existing file
     api = FakeApi()
@@ -353,9 +359,11 @@ def test_build_api_constructs_real_gui_api():
     """L236-240: _build_api() wires up the real DivoomGuiAPI (used by the
     `python control_server.py` standalone entrypoint)."""
     from unittest.mock import patch
+
     with patch("pathlib.Path.exists", return_value=False):
         api = cs._build_api()
     import gui_main
+
     assert isinstance(api, gui_main.DivoomGuiAPI)
 
 
@@ -447,9 +455,7 @@ def _post_with_delayed_body(sock_path, path, token, delay=0.30):
 
 
 @pytest.mark.parametrize("path,token,expected", _EARLY_RETURN_PATHS)
-def test_early_return_paths_read_the_body_before_replying(
-    unix_token_server, path, token, expected
-):
+def test_early_return_paths_read_the_body_before_replying(unix_token_server, path, token, expected):
     """The client must finish writing and then READ our status code."""
     _api, sock_path = unix_token_server
     status = _post_with_delayed_body(sock_path, path, token)
@@ -479,4 +485,3 @@ def test_drain_is_bounded_in_both_size_and_time():
     handler = cs.make_handler(FakeApi(), "unix-tok")
     assert handler._MAX_DRAIN <= (4 << 20), "drain ceiling must stay modest"
     assert handler.timeout is not None, "an unauth'd read needs a time bound too"
-

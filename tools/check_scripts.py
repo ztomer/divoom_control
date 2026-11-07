@@ -38,6 +38,7 @@ reported as a warning, so the script exited 0. A gate that only checks that
 code parses is blind to the one class of bug that a script hits the first time
 somebody actually runs it.
 """
+
 from __future__ import annotations
 
 import ast
@@ -72,6 +73,7 @@ def tracked_scripts() -> list[Path]:
     found += sorted(p for p in REPO.glob("*.sh") if p.is_file())
     return found
 
+
 # `python -m foo.bar`, `python3.14 -m foo.bar`, `"$PY" -m foo.bar`
 RUN_MODULE_RE = re.compile(r"-m\s+([a-zA-Z_][\w.]*)")
 
@@ -104,12 +106,22 @@ def check_shell(failures: list[str]) -> None:
     have_shellcheck = shutil.which("shellcheck") is not None
     for sh in [p for p in tracked_scripts() if p.suffix == ".sh"]:
         rel = sh.relative_to(REPO)
-        if subprocess.run(["bash", "-n", str(sh)], capture_output=True, stdin=subprocess.DEVNULL, check=False).returncode != 0:
+        if (
+            subprocess.run(
+                ["bash", "-n", str(sh)], capture_output=True, stdin=subprocess.DEVNULL, check=False
+            ).returncode
+            != 0
+        ):
             failures.append(f"{rel}: bash syntax error")
             continue
         if have_shellcheck:
-            r = subprocess.run(["shellcheck", "-S", "warning", str(sh)],
-                               capture_output=True, text=True, stdin=subprocess.DEVNULL, check=False)
+            r = subprocess.run(
+                ["shellcheck", "-S", "warning", str(sh)],
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                check=False,
+            )
             if r.returncode != 0:
                 failures.append(f"{rel}: shellcheck\n{r.stdout.strip()}")
 
@@ -136,9 +148,7 @@ def check_module_refs(failures: list[str]) -> None:
             for m in RUN_MODULE_RE.finditer(line):
                 dotted = m.group(1)
                 if is_repo_module(dotted) and not module_exists(dotted):
-                    failures.append(
-                        f"{rel}:{line_no}: runs `-m {dotted}`, which does not "
-                        f"exist in this repo")
+                    failures.append(f"{rel}:{line_no}: runs `-m {dotted}`, which does not exist in this repo")
 
 
 def check_api_method_refs(failures: list[str]) -> None:
@@ -170,20 +180,22 @@ def check_api_method_refs(failures: list[str]) -> None:
         except SyntaxError:
             continue
         for node in ast.walk(tree):
-            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-                    and node.func.id == "step" and len(node.args) >= 2
-                    and isinstance(node.args[1], ast.Constant)
-                    and isinstance(node.args[1].value, str)):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "step"
+                and len(node.args) >= 2
+                and isinstance(node.args[1], ast.Constant)
+                and isinstance(node.args[1].value, str)
+            ):
                 name = node.args[1].value
                 if name not in have:
                     failures.append(
-                        f"{path.relative_to(REPO)}:{node.lineno}: drives "
-                        f"DivoomGuiAPI.{name}(), which does not exist")
+                        f"{path.relative_to(REPO)}:{node.lineno}: drives DivoomGuiAPI.{name}(), which does not exist"
+                    )
 
 
-SCRIPT_PATH_RE = re.compile(
-    r"(?<![\w./-])(\.?/?scripts/[\w./-]+\.(?:sh|py))"
-)
+SCRIPT_PATH_RE = re.compile(r"(?<![\w./-])(\.?/?scripts/[\w./-]+\.(?:sh|py))")
 
 
 def _caller_files() -> list[Path]:
@@ -223,18 +235,14 @@ def check_script_path_refs(failures: list[str]) -> None:
     callers = _caller_files() + [p for p in tracked_scripts() if p.is_file()]
     for path in callers:
         rel = path.relative_to(REPO)
-        for line_no, line in enumerate(
-            path.read_text(encoding="utf-8", errors="replace").splitlines(), 1
-        ):
+        for line_no, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
             stripped = line.strip()
             if stripped.startswith("#"):
                 continue
             for m in SCRIPT_PATH_RE.finditer(line):
                 target = (REPO / m.group(1).lstrip("./")).resolve()
                 if not target.exists():
-                    failures.append(
-                        f"{rel}:{line_no}: references {m.group(1)}, which does "
-                        f"not exist in this repo")
+                    failures.append(f"{rel}:{line_no}: references {m.group(1)}, which does not exist in this repo")
 
 
 def tooling_python_files() -> list[Path]:
@@ -285,8 +293,7 @@ def check_undefined_names(failures: list[str]) -> None:
             continue  # check_python owns the syntax error, and reports it
         for name, lineno in problems:
             failures.append(
-                f"{rel}:{lineno}: uses `{name}`, which this file never "
-                f"defines — a NameError waiting for the first run"
+                f"{rel}:{lineno}: uses `{name}`, which this file never defines — a NameError waiting for the first run"
             )
 
 
@@ -307,8 +314,7 @@ def main() -> int:
         for f in failures:
             info(f)
         return 1
-    ok(f"[scripts] OK — {n} scripts parse, lint, and reference live modules, "
-       f"API methods, and scripts")
+    ok(f"[scripts] OK — {n} scripts parse, lint, and reference live modules, API methods, and scripts")
     return 0
 
 

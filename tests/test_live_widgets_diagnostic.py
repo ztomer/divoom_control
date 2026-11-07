@@ -13,6 +13,7 @@ host without a Chromium can still run the rest of the suite. Previously
 this file did `sys.exit(2)` at import time, which crashed the entire
 pytest run before any test could collect.
 """
+
 import sys
 import time
 import contextlib
@@ -62,11 +63,12 @@ def main():
         print(f"web_ui not found at {WEB_UI_DIR}", file=sys.stderr)
         return 2
 
-    with _serve_directory(WEB_UI_DIR) as url, sync_playwright() as p, \
-         launch_sync(p) as browser:
+    with _serve_directory(WEB_UI_DIR) as url, sync_playwright() as p, launch_sync(p) as browser:
         ctx = browser.new_context(viewport={"width": 1280, "height": 800})
         # Stub a richer pywebview so the page's widget init doesn't fail
-        add_init_js(ctx, """
+        add_init_js(
+            ctx,
+            """
             window._calls = {};
             function rec(name) { window._calls[name] = (window._calls[name] || 0) + 1; }
             window.pywebview = {
@@ -84,7 +86,8 @@ def main():
                     }
                 })
             };
-        """)
+        """,
+        )
         page = ctx.new_page()
 
         console_msgs = []

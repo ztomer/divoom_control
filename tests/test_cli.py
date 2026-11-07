@@ -14,6 +14,7 @@ Strategy:
   is gated behind ``--mac <not-paired>`` so we keep these tests
   fully offline.
 """
+
 from __future__ import annotations
 
 import json
@@ -90,7 +91,11 @@ def test_cli_pair_writes_to_registry(tmp_path: Path) -> None:
     env["HOME"] = str(tmp_path)
     r = subprocess.run(
         CLI_CMD + ["pair", "--mac", "AA:BB:CC:DD:EE:FF", "--type", "TivooMax"],
-        capture_output=True, text=True, env=env, timeout=15, stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=15,
+        stdin=subprocess.DEVNULL,
         check=False,
     )
     assert r.returncode == 0, r.stderr
@@ -106,7 +111,11 @@ def test_cli_pair_rejects_unknown_device_type(tmp_path: Path) -> None:
     env["HOME"] = str(tmp_path)
     r = subprocess.run(
         CLI_CMD + ["pair", "--mac", "AA:BB:CC:DD:EE:FF", "--type", "NotARealDevice"],
-        capture_output=True, text=True, env=env, timeout=15, stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=15,
+        stdin=subprocess.DEVNULL,
         check=False,
     )
     assert r.returncode == 2, (r.stdout, r.stderr)
@@ -160,8 +169,13 @@ class _FakeDaemonClient:
             "width": 32,
             "height": 32,
             "chassis": {"family": "pixoo", "w_mm": 200.0, "h_mm": 200.0, "screen_mm": 158.0},
-            "features": {"speaker": False, "sd_card": False, "radio": False, "mic": True,
-                         "clock_style": "ClockNormal32"},
+            "features": {
+                "speaker": False,
+                "sd_card": False,
+                "radio": False,
+                "mic": True,
+                "clock_style": "ClockNormal32",
+            },
             "screens": ["design", "alarm", "weather"],
         }
 
@@ -260,9 +274,7 @@ async def test_cmd_set_temperature_hands_the_icon_name_to_divoomd(monkeypatch) -
         execs.append((path, argv))
         raise SystemExit(0)
 
-    monkeypatch.setattr(
-        cli_device_verbs, "resolve_target_mac", AsyncMock(return_value="AA:BB:CC:DD:EE:FF")
-    )
+    monkeypatch.setattr(cli_device_verbs, "resolve_target_mac", AsyncMock(return_value="AA:BB:CC:DD:EE:FF"))
     monkeypatch.setattr(cli_commands, "_divoomd_binary", lambda: "/opt/divoomd")
     monkeypatch.setattr(os, "execv", _execv)
 
@@ -271,10 +283,7 @@ async def test_cmd_set_temperature_hands_the_icon_name_to_divoomd(monkeypatch) -
     with pytest.raises(SystemExit):
         await cli_module.cmd_set_temperature(ns)
 
-    assert execs == [
-        ("/opt/divoomd",
-         ["/opt/divoomd", "set-temperature", "18", "clear", "--mac", "AA:BB:CC:DD:EE:FF"])
-    ]
+    assert execs == [("/opt/divoomd", ["/opt/divoomd", "set-temperature", "18", "clear", "--mac", "AA:BB:CC:DD:EE:FF"])]
 
 
 async def test_cmd_set_temperature_has_no_capability_gate_of_its_own(monkeypatch) -> None:
@@ -284,20 +293,14 @@ async def test_cmd_set_temperature_has_no_capability_gate_of_its_own(monkeypatch
     every row -- a gate that could not fail. The panel's abilities are the
     daemon's, and the daemon does the refusing.
     """
-    monkeypatch.setattr(
-        cli_device_verbs, "resolve_target_mac", AsyncMock(return_value="AA:BB:CC:DD:EE:FF")
-    )
+    monkeypatch.setattr(cli_device_verbs, "resolve_target_mac", AsyncMock(return_value="AA:BB:CC:DD:EE:FF"))
     monkeypatch.setattr(cli_commands, "_divoomd_binary", lambda: "/opt/divoomd")
-    assert not hasattr(cli_device_verbs, "_capabilities"), (
-        "the CLI still has a capability table of its own"
-    )
+    assert not hasattr(cli_device_verbs, "_capabilities"), "the CLI still has a capability table of its own"
 
 
 async def test_cmd_set_temperature_rejects_out_of_range(monkeypatch) -> None:
     """Before a panel is resolved, and so before any connection is opened."""
-    monkeypatch.setattr(
-        cli_device_verbs, "resolve_target_mac", AsyncMock(return_value="AA:BB:CC:DD:EE:FF")
-    )
+    monkeypatch.setattr(cli_device_verbs, "resolve_target_mac", AsyncMock(return_value="AA:BB:CC:DD:EE:FF"))
     p = cli_module.build_parser()
     ns = p.parse_args(["set-temperature", "200", "--mac", "AA:BB:CC:DD:EE:FF"])
     with pytest.raises((SystemExit, ValueError)):
@@ -315,6 +318,7 @@ def test_set_temperature_registered_in_dispatch_table() -> None:
 
 def test_cli_is_importable_as_module() -> None:
     import divoom_lib.cli as cli
+
     assert callable(cli.main)
     assert callable(cli.amain)
     assert callable(cli.build_parser)

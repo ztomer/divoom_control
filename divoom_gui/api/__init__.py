@@ -4,6 +4,7 @@ The old `DivoomGuiAPI` was a 891-line God Object assembled from three
 fat-interface mixins. This module provides the lightweight foundation
 for splitting it into independent, testable collaborators.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -17,15 +18,18 @@ logger = logging.getLogger("divoom_gui.api")
 WALL = "MatrixWall"
 
 
-
 def write_refused(error: str, reply: dict | None = None) -> dict:
     """A display write that did not happen, in the shape the page reads
     (`web_ui/display_write.js`): why, and -- when the daemon's reply names
     them -- each wall panel whose write failed (`failed`, mac to reason) and
     each slot with no panel (`degraded`)."""
     reply = reply or {}
-    return {"success": False, "error": error,
-            "failed": reply.get("failed") or {}, "degraded": reply.get("degraded") or []}
+    return {
+        "success": False,
+        "error": error,
+        "failed": reply.get("failed") or {},
+        "degraded": reply.get("degraded") or [],
+    }
 
 
 def write_outcome(what: str, mac, run) -> dict:
@@ -113,6 +117,7 @@ class ApiBase:
             logger.error("Wall build failed: no daemon available")
             return False
         from divoom_gui.daemon_bridge import DaemonDeviceProxy
+
         reply = client.wall_configure(self._wall_slots, cell_size=cell_size)
         if not reply.get("success") or not reply.get("wall"):
             logger.error(f"Failed to build display wall: {reply.get('error', reply)}")
@@ -150,6 +155,7 @@ class ApiBase:
         if client is None:
             return None
         from divoom_gui.daemon_bridge import DaemonDeviceProxy
+
         return DaemonDeviceProxy(client, target="device", mac=mac)
 
     def _unreachable(self, mac) -> str:
@@ -217,6 +223,7 @@ class ApiBase:
         # stopped answering, hung device op) froze the pywebview JS-API thread forever
         # (a dead button, no error). On expiry cancel + raise so the GUI surfaces it.
         import concurrent.futures
+
         future = asyncio.run_coroutine_threadsafe(coro, self._loop_thread.loop)
         try:
             return future.result(timeout=timeout)

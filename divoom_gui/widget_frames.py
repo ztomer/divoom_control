@@ -19,6 +19,7 @@ other way now means writing the fetch, the render and the encode yourself, and
 tile. A preview that silently shows nothing is indistinguishable from a widget
 with nothing to show, which is the confusion this whole round exists to end.
 """
+
 from __future__ import annotations
 
 import base64
@@ -36,8 +37,7 @@ class WidgetFrameError(RuntimeError):
 class WidgetFrameMixin:
     """`_widget_frame` and its encode step. Mixed into the GUI API."""
 
-    def _widget_frame(self, kind: str, size: int,
-                      params: dict | None = None) -> tuple[dict, Path]:
+    def _widget_frame(self, kind: str, size: int, params: dict | None = None) -> tuple[dict, Path]:
         """Ask the daemon to render ``kind`` and write the bytes to a PNG.
 
         Returns ``(extras, frame_path)`` — ``extras`` being whatever that kind
@@ -56,15 +56,13 @@ class WidgetFrameMixin:
         try:
             reply = client.render_widget(kind, size=size, params=params or {})
         except OSError as exc:
-            raise WidgetFrameError(
-                self._frame_unreachable_reason(client, exc)) from exc
+            raise WidgetFrameError(self._frame_unreachable_reason(client, exc)) from exc
 
         if not isinstance(reply, dict) or not reply.get("success"):
             reply = reply if isinstance(reply, dict) else {}
             if reply.get("unreachable"):
                 raise WidgetFrameError(self._frame_unreachable_reason(client))
-            raise WidgetFrameError(
-                str(reply.get("error") or f"{kind} is unavailable"))
+            raise WidgetFrameError(str(reply.get("error") or f"{kind} is unavailable"))
 
         sz = int(reply.get("size", size))
         raw = base64.b64decode(reply.get("frame_rgb_b64", ""))
@@ -72,11 +70,9 @@ class WidgetFrameMixin:
         if len(raw) != expected:
             # Never render a partial buffer as if it were the device's frame: a
             # truncated draw looks like a design, not like an error.
-            raise WidgetFrameError(
-                f"{kind} frame is {len(raw)} bytes, expected {expected}")
+            raise WidgetFrameError(f"{kind} frame is {len(raw)} bytes, expected {expected}")
 
-        extras = {k: v for k, v in reply.items()
-                  if k not in ("success", "frame_rgb_b64", "size", "kind")}
+        extras = {k: v for k, v in reply.items() if k not in ("success", "frame_rgb_b64", "size", "kind")}
         return extras, self._write_frame_png(kind, sz, raw)
 
     @staticmethod
@@ -88,6 +84,7 @@ class WidgetFrameMixin:
         `open`, `resize`) would make this a second renderer again.
         """
         from PIL import Image
+
         scratch = Path(__file__).parent.parent / "scratch"
         scratch.mkdir(parents=True, exist_ok=True)
         frame_path = scratch / f"{kind}_{size}.png"
@@ -117,8 +114,7 @@ class WidgetFrameMixin:
             return client()
         return client
 
-    def _frame_unreachable_reason(self, client=None,
-                                  exc: Exception | None = None) -> str:
+    def _frame_unreachable_reason(self, client=None, exc: Exception | None = None) -> str:
         """Why the daemon could not be reached, in words a user can act on.
 
         Delegates to the host class's own explainer when it has one (sysmon's
@@ -137,8 +133,8 @@ class WidgetFrameMixin:
         try:
             from divoom_client.daemon_protocol import DEFAULT_SOCKET_PATH
             from divoom_client.socket_failure import explain_daemon_failure
-            path = getattr(client, "socket_path", None) or os.environ.get(
-                "DIVOOM_SOCKET", DEFAULT_SOCKET_PATH)
+
+            path = getattr(client, "socket_path", None) or os.environ.get("DIVOOM_SOCKET", DEFAULT_SOCKET_PATH)
             return explain_daemon_failure(path, fallback)
         except Exception:
             return fallback

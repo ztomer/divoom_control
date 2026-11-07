@@ -9,6 +9,7 @@ therefore sees the loading state, exactly as the app would with no daemon.
 bridge that answers `get_topology`, waits for the read to land, and puts the
 page's own `window.pywebview` back (none, for most of these suites).
 """
+
 from __future__ import annotations
 
 import json

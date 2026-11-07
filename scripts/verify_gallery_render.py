@@ -30,6 +30,7 @@ checks THOSE bytes. What it verifies is what ships.
 `hw_verify.py` does: a shell-launched daemon has no Bluetooth TCC grant. It also
 needs a configured Divoom account, since the file list is a cloud call.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -73,7 +74,7 @@ def decode_data_url(data_url: str):
         return None
     try:
         raw = base64.b64decode(data_url.split(",", 1)[1], validate=False)
-    except (binascii.Error, ValueError):
+    except binascii.Error, ValueError:
         return None
     if not raw:
         return None
@@ -143,8 +144,7 @@ def main() -> int:
     cats = [int(c) for c in args.cats.split(",") if c.strip()] or CLASSIFY
     client = require_daemon(args.socket)
 
-    section(f"gallery render check — {len(cats)} categor(ies), "
-            f"{args.limit} file(s) each, via the daemon's decoder")
+    section(f"gallery render check — {len(cats)} categor(ies), {args.limit} file(s) each, via the daemon's decoder")
 
     total = total_blank = 0
     for classify in cats:
@@ -162,8 +162,7 @@ def main() -> int:
     if not total:
         warn("nothing was checked — is the account configured?")
         return 1
-    (err if total_blank else ok)(
-        f"{total} asset(s) checked, {total_blank} blank")
+    (err if total_blank else ok)(f"{total} asset(s) checked, {total_blank} blank")
     return 1 if total_blank else 0
 
 

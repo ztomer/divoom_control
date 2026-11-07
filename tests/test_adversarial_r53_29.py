@@ -5,6 +5,7 @@
   commands don't use. A wedged op froze the pywebview JS thread forever.
 - DaemonDeviceProxy.push_animation(bytes) leaked a /tmp/*.gif on every call.
 """
+
 import asyncio
 import os
 import sys
@@ -78,6 +79,7 @@ def test_push_animation_deletes_its_temp_file(tmp_path):
     class _Ctx:
         async def __aenter__(self):
             return _PushProxy()
+
         async def __aexit__(self, *a):
             return False
 
@@ -86,8 +88,8 @@ def test_push_animation_deletes_its_temp_file(tmp_path):
 
     ok = asyncio.new_event_loop().run_until_complete(proxy.push_animation(b"GIF89a-data", art="pixel"))
     assert ok is True
-    assert seen["existed_during"] is True          # present while streaming
-    assert not os.path.exists(seen["path"])         # cleaned up after
+    assert seen["existed_during"] is True  # present while streaming
+    assert not os.path.exists(seen["path"])  # cleaned up after
 
 
 def test_push_animation_deletes_temp_file_on_error():
@@ -105,6 +107,7 @@ def test_push_animation_deletes_temp_file_on_error():
     class _Ctx:
         async def __aenter__(self):
             return _BoomProxy()
+
         async def __aexit__(self, *a):
             return False
 
@@ -113,4 +116,4 @@ def test_push_animation_deletes_temp_file_on_error():
 
     with pytest.raises(RuntimeError):
         asyncio.new_event_loop().run_until_complete(proxy.push_animation(b"data", art="pixel"))
-    assert not os.path.exists(seen["path"])         # temp removed even on failure
+    assert not os.path.exists(seen["path"])  # temp removed even on failure

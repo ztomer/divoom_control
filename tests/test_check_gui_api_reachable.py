@@ -6,6 +6,7 @@ had 100% coverage on a 150-line pyaudio worker nothing could start, and
 REASON they survived. Only reachability finds that shape, so this gate needs
 the same both-directions proof as the others.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -68,6 +69,7 @@ def test_word_boundaries_are_respected():
 
 # ── the real tree ────────────────────────────────────────────────────────────
 
+
 def test_the_shipping_tree_passes():
     assert _load().main() == 0
 
@@ -77,7 +79,8 @@ def test_every_allowlist_entry_carries_a_reason():
     for name, reason in mod.ALLOWLIST.items():
         assert reason.strip(), f"{name} has no reason"
         assert reason.startswith(("r70-delete", "unreviewed")), (
-            f"{name}: {reason!r} must say which kind of decision it is")
+            f"{name}: {reason!r} must say which kind of decision it is"
+        )
 
 
 def test_the_four_audit_findings_are_gone_from_the_api_entirely():
@@ -89,8 +92,7 @@ def test_the_four_audit_findings_are_gone_from_the_api_entirely():
     """
     mod = _load()
     methods = mod.api_methods()
-    for name in ("push_weather", "trigger_notification",
-                 "toggle_audio_visualizer", "get_audio_levels"):
+    for name in ("push_weather", "trigger_notification", "toggle_audio_visualizer", "get_audio_levels"):
         assert name not in methods, f"{name} is back on DivoomGuiAPI"
         assert name not in mod.ALLOWLIST, f"{name} left a stale exemption behind"
 

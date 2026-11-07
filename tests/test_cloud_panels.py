@@ -22,6 +22,7 @@ Hole A, from the test plan: the existing e2e suites for these panels stub
 test at all. That is why four of these five panels sat at 38-50% coverage,
 the lowest in the tree.
 """
+
 from __future__ import annotations
 
 import json
@@ -40,8 +41,7 @@ class StubDaemon:
     def __init__(self, reply: dict):
         self.reply = reply
         self.requests: list[dict] = []
-        self.path = os.path.join(
-            tempfile.gettempdir(), f"divoom_panel_{uuid.uuid4().hex[:8]}.sock")
+        self.path = os.path.join(tempfile.gettempdir(), f"divoom_panel_{uuid.uuid4().hex[:8]}.sock")
         self._srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self._srv.bind(self.path)
         self._srv.listen(8)
@@ -89,14 +89,15 @@ def no_http(monkeypatch):
 
     def boom(*a, **kw):
         calls.append(str(a[:1]))
-        raise AssertionError(
-            "the GUI made an HTTP call — cloud access belongs to the daemon")
+        raise AssertionError("the GUI made an HTTP call — cloud access belongs to the daemon")
 
     import urllib.request
+
     monkeypatch.setattr(urllib.request, "urlopen", boom)
     monkeypatch.setattr(urllib.request, "Request", boom)
     try:
         import requests
+
         monkeypatch.setattr(requests, "get", boom)
         monkeypatch.setattr(requests, "post", boom)
     except ImportError:
@@ -120,8 +121,7 @@ def panel(no_http):
         made.append(stub)
         client = DaemonClient(socket_path=stub.path)
 
-        class Api(ClockFacesMixin, PlaylistsMixin, AidSleepMixin,
-                  PhotoAlbumsMixin, WeatherCityMixin):
+        class Api(ClockFacesMixin, PlaylistsMixin, AidSleepMixin, PhotoAlbumsMixin, WeatherCityMixin):
             def _client(self):
                 return client
 
@@ -156,8 +156,7 @@ def test_the_panel_asks_the_daemon_and_makes_no_http_call(panel, call, command):
 
 @pytest.mark.parametrize("call, command", PANELS, ids=[p[1] for p in PANELS])
 def test_a_failure_carries_the_daemons_reason_not_an_empty_list(panel, call, command):
-    stub, api = panel({"success": False,
-                       "error": "Photo/GetAlbumList failed (RC=3): Request data is incomplete"})
+    stub, api = panel({"success": False, "error": "Photo/GetAlbumList failed (RC=3): Request data is incomplete"})
     result = call(api)
     assert result["ok"] is False
     assert result["items"] == []
@@ -226,9 +225,9 @@ def test_no_panel_imports_the_cloud_client_any_more():
     """The structural half, in case someone re-adds a convenience import: the
     gate enforces this repo-wide, and this pins the five files by name."""
     from pathlib import Path
+
     gui = Path(__file__).resolve().parent.parent / "divoom_gui"
-    for name in ("clock_faces.py", "playlists.py", "aid_sleep.py",
-                 "photo_albums.py", "weather_city.py"):
+    for name in ("clock_faces.py", "playlists.py", "aid_sleep.py", "photo_albums.py", "weather_city.py"):
         src = (gui / name).read_text()
         assert "divoom_legacy.cloud" not in src, f"{name} still imports CloudClient"
         assert "CloudPanelMixin" in src, f"{name} must go through the funnel"

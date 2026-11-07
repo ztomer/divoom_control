@@ -1,5 +1,6 @@
 # divoom_api/drawing/drawing.py — migrated to display/display_animation.py
 from divoom_legacy.sender_protocol import CommandSender
+
 # number2HexString is a module-level helper in utils.converters, NOT a method
 # on Divoom — calling it via self._divoom_instance.number2HexString raised
 # AttributeError at runtime (R53.43). _int2hexlittle below IS a real Divoom
@@ -11,10 +12,12 @@ import math
 from PIL import Image, ImageSequence
 import io
 
+
 class DisplayAnimation:
     """
     This class is used to display static images and animations on the Divoom Timebox Evo.
     """
+
     def __init__(self, divoom_instance: CommandSender):
         self._divoom_instance = divoom_instance
 
@@ -24,7 +27,7 @@ class DisplayAnimation:
         It works with GIF, JPEG, PNG, and BMP.
         """
         if isinstance(input_data, str):
-            with open(input_data, 'rb') as f:
+            with open(input_data, "rb") as f:
                 buffer = f.read()
         elif isinstance(input_data, bytes):
             buffer = input_data
@@ -33,7 +36,7 @@ class DisplayAnimation:
 
         image = Image.open(io.BytesIO(buffer))
 
-        if hasattr(image, 'is_animated') and image.is_animated:
+        if hasattr(image, "is_animated") and image.is_animated:
             return await self._display_animation_from_gif(image)
         else:
             return await self._display_image(image)
@@ -46,11 +49,15 @@ class DisplayAnimation:
         frames_data = []
         for i, frame in enumerate(ImageSequence.Iterator(image)):
             resized_frame = frame.resize((16, 16), Image.NEAREST)
-            duration = frame.info.get('duration', 100)
-            frames_data.append(self._encode_image_data(resized_frame, is_animated=True, frame_delay=duration, frame_index=i))
+            duration = frame.info.get("duration", 100)
+            frames_data.append(
+                self._encode_image_data(resized_frame, is_animated=True, frame_delay=duration, frame_index=i)
+            )
         return frames_data
 
-    def _encode_image_data(self, image: Image.Image, is_animated: bool, frame_delay: int = 0, frame_index: int = 0) -> List[int]:
+    def _encode_image_data(
+        self, image: Image.Image, is_animated: bool, frame_delay: int = 0, frame_index: int = 0
+    ) -> List[int]:
         image = image.convert("RGB")
 
         colors_array = []
@@ -85,7 +92,7 @@ class DisplayAnimation:
 
         pixel_hex_string = ""
         for i in range(0, len(pixel_binary_string), 8):
-            byte_str = pixel_binary_string[i:i+8]
+            byte_str = pixel_binary_string[i : i + 8]
             pixel_hex_string += f"{int(byte_str, 2):02x}"
 
         if is_animated:
@@ -100,7 +107,7 @@ class DisplayAnimation:
 
             full_payload_hex = "aa" + size_hex + string_without_header
 
-            return [int(full_payload_hex[i:i+2], 16) for i in range(0, len(full_payload_hex), 2)]
+            return [int(full_payload_hex[i : i + 2], 16) for i in range(0, len(full_payload_hex), 2)]
 
         else:
             nb_colors_hex = number2HexString(nb_colors)
@@ -112,4 +119,4 @@ class DisplayAnimation:
 
             full_payload_hex = "aa" + size_hex + "000000" + string_without_header
 
-            return [int(full_payload_hex[i:i+2], 16) for i in range(0, len(full_payload_hex), 2)]
+            return [int(full_payload_hex[i : i + 2], 16) for i in range(0, len(full_payload_hex), 2)]

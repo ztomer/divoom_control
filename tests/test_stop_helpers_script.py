@@ -14,6 +14,7 @@ is tested against the same three properties:
      running, and no other process (queue D.KBNA: this replaced the by-name
      `pkill`s in install.sh and scripts/install_local.sh).
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -67,9 +68,12 @@ def _run_script(run_dir: Path, **endpoints: str) -> subprocess.CompletedProcess:
         text=True,
         stdin=subprocess.DEVNULL,
         timeout=60,
-        env={**os.environ, "DIVOOM_IDENTITY_DIR": str(run_dir),
-             "DIVOOM_GUI_LOCK": endpoints.get("lock", nowhere),
-             "DIVOOM_DAEMON_SOCKETS": endpoints.get("sockets", nowhere)},
+        env={
+            **os.environ,
+            "DIVOOM_IDENTITY_DIR": str(run_dir),
+            "DIVOOM_GUI_LOCK": endpoints.get("lock", nowhere),
+            "DIVOOM_DAEMON_SOCKETS": endpoints.get("sockets", nowhere),
+        },
         check=False,
     )
 
@@ -128,8 +132,9 @@ HOLDER = textwrap.dedent("""
 @contextlib.contextmanager
 def _holder(kind: str, path: Path):
     """A process holding ``path`` (a bound socket, or a flock'd file)."""
-    with subprocess.Popen([sys.executable, "-c", HOLDER, kind, str(path)],
-                          stdout=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True) as proc:
+    with subprocess.Popen(
+        [sys.executable, "-c", HOLDER, kind, str(path)], stdout=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True
+    ) as proc:
         try:
             assert proc.stdout.readline().strip() == "up"
             yield proc

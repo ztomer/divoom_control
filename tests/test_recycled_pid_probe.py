@@ -7,6 +7,7 @@ between is taken) and the verdict (a browser that exits is the failure
 signature). Both run here against injected spawn/clock/lookup functions, so
 no pid is consumed and no browser is started.
 """
+
 from __future__ import annotations
 
 import importlib.util

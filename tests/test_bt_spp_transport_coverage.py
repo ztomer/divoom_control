@@ -12,6 +12,7 @@ never a real BT call. `_open_blocking` / `_start_runloop` are monkeypatched
 directly rather than re-faking objc/IOBluetooth here (that's covered in depth
 by tests/test_bt_spp_rfcomm_coverage.py).
 """
+
 from __future__ import annotations
 
 import asyncio

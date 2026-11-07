@@ -44,7 +44,9 @@ async def _watch_gallery(page) -> None:
     a test that waited for a particular string would be waiting for the
     app's copy, not for the app to be done).
     """
-    watched = await eval_js(page, """
+    watched = await eval_js(
+        page,
+        """
         () => {
             const g = document.getElementById('gallery-container');
             if (!g) return false;
@@ -57,10 +59,10 @@ async def _watch_gallery(page) -> None:
             });
             return true;
         }
-    """)
+    """,
+    )
     assert watched, (
-        "#gallery-container is not in the page, so the watch cannot be "
-        "installed and the test would measure nothing"
+        "#gallery-container is not in the page, so the watch cannot be installed and the test would measure nothing"
     )
 
 
@@ -85,13 +87,16 @@ async def _wait_for_gallery_quiet(page, *, quiet_ms: int = GALLERY_QUIET_MS) -> 
     deadline = time.monotonic() + UI_TIMEOUT_MS / 1000
     state = None
     while True:
-        state = await eval_js(page, """
+        state = await eval_js(
+            page,
+            """
             () => {
                 const w = window.__galleryWatch;
                 if (!w) return null;
                 return { idleMs: Date.now() - w.last, writes: w.writes };
             }
-        """)
+        """,
+        )
         if state and state["writes"] >= 1 and state["idleMs"] >= quiet_ms:
             return state
         if time.monotonic() >= deadline:
@@ -131,7 +136,9 @@ async def test_hot_channel_button_visible_with_many_preview_items():
         # button is trivially inside its bounds -- so the test passed while
         # measuring nothing. A vacuous pass is worse than a timeout.
         await page.wait_for_selector("#hot-preview-list", timeout=UI_TIMEOUT_MS)
-        seeded = await eval_js(page, """
+        seeded = await eval_js(
+            page,
+            """
             () => {
                 const list = document.getElementById('hot-preview-list');
                 if (!list) return -1;
@@ -145,7 +152,8 @@ async def test_hot_channel_button_visible_with_many_preview_items():
                 }
                 return list.children.length;
             }
-        """)
+        """,
+        )
         assert seeded == 50, (
             f"preview injection did not take effect (returned {seeded}) — "
             "#hot-preview-list was missing. The layout assertions below would "
@@ -164,12 +172,9 @@ async def test_hot_channel_button_visible_with_many_preview_items():
         card_top = card_box["y"]
         card_bottom = card_box["y"] + card_box["height"]
 
-        assert card_top <= button_top, (
-            f"Button top ({button_top}) is above card top ({card_top})"
-        )
+        assert card_top <= button_top, f"Button top ({button_top}) is above card top ({card_top})"
         assert button_bottom <= card_bottom, (
-            f"Button bottom ({button_bottom}) is below card bottom ({card_bottom}). "
-            f"Button is being pushed out of view."
+            f"Button bottom ({button_bottom}) is below card bottom ({card_bottom}). Button is being pushed out of view."
         )
 
         slack = 50
@@ -231,7 +236,9 @@ async def test_gallery_scrolls_internally_not_whole_card():
         # layout check that is normally instant. Fail AT the injection instead,
         # where the cause is still visible.
         await page.wait_for_selector("#gallery-container", timeout=UI_TIMEOUT_MS)
-        injected = await eval_js(page, """
+        injected = await eval_js(
+            page,
+            """
             () => {
                 const grid = document.getElementById('gallery-container');
                 if (!grid) return -1;
@@ -245,7 +252,8 @@ async def test_gallery_scrolls_internally_not_whole_card():
                 }
                 return grid.children.length;
             }
-        """)
+        """,
+        )
         assert injected == 100, (
             f"gallery injection did not take effect (returned {injected}) — "
             "#gallery-container was missing or unwritable. The scroll wait "
@@ -258,7 +266,9 @@ async def test_gallery_scrolls_internally_not_whole_card():
         # container and the numbers below would be an empty container's --
         # which is exactly how this test failed on CI.
         await _wait_for_gallery_quiet(page)
-        gallery_scroll = await eval_js(page, """
+        gallery_scroll = await eval_js(
+            page,
+            """
             () => {
                 const g = document.getElementById('gallery-container');
                 const main = g ? g.closest('.gallery-main') : null;
@@ -272,7 +282,8 @@ async def test_gallery_scrolls_internally_not_whole_card():
                     winHeight: window.innerHeight,
                 };
             }
-        """)
+        """,
+        )
         assert gallery_scroll["children"] == 100, (
             f"the app rewrote the gallery container while the test measured it "
             f"({gallery_scroll['children']} children left, expected 100) — the "

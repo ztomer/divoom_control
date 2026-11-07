@@ -21,6 +21,7 @@ These tests pin the three things that must not regress:
   3. the pass is not a one-trick pony: a SECOND, different undefined name is
      caught too, and a name that IS defined is not reported.
 """
+
 from __future__ import annotations
 
 import ast
@@ -58,8 +59,7 @@ def test_the_pass_finds_a_name_that_is_used_and_never_defined():
 
 def test_the_pass_reports_the_line_the_name_is_used_on():
     problems = undefined_names(PRE_FIX_SNIPPET)
-    expected = {i for i, line in enumerate(PRE_FIX_SNIPPET.splitlines(), 1)
-                if "_GRAY" in line}
+    expected = {i for i, line in enumerate(PRE_FIX_SNIPPET.splitlines(), 1) if "_GRAY" in line}
     lines = {lineno for name, lineno in problems if name == "_GRAY"}
     assert lines == expected, (problems, expected)
 
@@ -143,14 +143,18 @@ def test_the_two_scripts_no_longer_reach_for_the_tuis_private_colours():
     for name in ("hw_smoke.py", "hw_walk_modes.py"):
         text = (REPO / "scripts" / name).read_text(encoding="utf-8")
         tree = ast.parse(text)
-        used = {n.id for n in ast.walk(tree)
-                if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
+        used = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
         assert not (used & set(banned)), f"{name} uses {used & set(banned)}"
 
 
 def test_the_gate_runs_and_is_green_on_this_tree():
     """The gate itself must still run — a check that cannot fail is not a gate."""
-    r = subprocess.run([sys.executable, str(REPO / "tools" / "check_scripts.py")],
-                       capture_output=True, text=True, cwd=str(REPO),
-                       stdin=subprocess.DEVNULL, check=False)
+    r = subprocess.run(
+        [sys.executable, str(REPO / "tools" / "check_scripts.py")],
+        capture_output=True,
+        text=True,
+        cwd=str(REPO),
+        stdin=subprocess.DEVNULL,
+        check=False,
+    )
     assert r.returncode == 0, r.stdout + r.stderr

@@ -25,6 +25,7 @@ Why static-analysis + Playwright, not full behavioral tests:
   tested headlessly; their transport-level correctness is covered
   by the existing `test_e2e_mock_device.py` test file.
 """
+
 import re
 import sys
 from pathlib import Path
@@ -56,19 +57,14 @@ def test_gallery_has_no_device_list():
     src = TEMPLATES_JS
     g_match = re.search(
         r'<div class="gallery-full-layout">(.*?)</div>\s*`;',
-        src, re.DOTALL,
+        src,
+        re.DOTALL,
     )
     assert g_match is not None, "gallery-full-layout block not found in templates"
     block = g_match.group(1)
-    assert "sync-targets-list" not in block, (
-        "Gallery must not embed the sync-targets-list — it lives in Routines."
-    )
-    assert 'id="gallery-classify-tabs"' in block, (
-        "Gallery should have classify tabs (#gallery-classify-tabs)."
-    )
-    assert 'id="gallery-container"' in block, (
-        "Gallery should have the gallery container."
-    )
+    assert "sync-targets-list" not in block, "Gallery must not embed the sync-targets-list — it lives in Routines."
+    assert 'id="gallery-classify-tabs"' in block, "Gallery should have classify tabs (#gallery-classify-tabs)."
+    assert 'id="gallery-container"' in block, "Gallery should have the gallery container."
 
 
 def test_hot_channel_has_no_gallery_grid():
@@ -79,22 +75,15 @@ def test_hot_channel_has_no_gallery_grid():
     src = (REPO_ROOT / "divoom_gui" / "web_ui" / "templates_pixel_art.js").read_text()
     hc_match = re.search(
         r'id="pixel-hot-channel">(.*?)<!-- PLAYLISTS sub-tab -->',
-        src, re.DOTALL,
+        src,
+        re.DOTALL,
     )
     assert hc_match is not None, "the Hot Channel sub-tab was not found in templates_pixel_art.js"
     block = hc_match.group(1)
-    assert 'class="gallery-grid"' not in block, (
-        "Hot Channel must not have a gallery grid."
-    )
-    assert 'id="gallery-classify-tabs"' not in block, (
-        "Hot Channel must not have gallery classify tabs."
-    )
-    assert 'id="hot-update-btn"' in block, (
-        "Hot Channel must have the hot update button."
-    )
-    assert 'id="hot-preview-list"' in block, (
-        "Hot Channel must have the hot preview list."
-    )
+    assert 'class="gallery-grid"' not in block, "Hot Channel must not have a gallery grid."
+    assert 'id="gallery-classify-tabs"' not in block, "Hot Channel must not have gallery classify tabs."
+    assert 'id="hot-update-btn"' in block, "Hot Channel must have the hot update button."
+    assert 'id="hot-preview-list"' in block, "Hot Channel must have the hot preview list."
 
 
 def test_both_layouts_full_width():
@@ -105,13 +94,9 @@ def test_both_layouts_full_width():
         r"\.hot-channel-layout,\s*\.gallery-full-layout\s*\{[^}]*grid-template-columns:\s*([^;]+);",
         css,
     )
-    assert m is not None, (
-        "Combined .hot-channel-layout, .gallery-full-layout rule not found in CSS"
-    )
+    assert m is not None, "Combined .hot-channel-layout, .gallery-full-layout rule not found in CSS"
     cols = m.group(1).strip()
-    assert cols == "1fr", (
-        f"Expected single-column '1fr', got {cols!r}."
-    )
+    assert cols == "1fr", f"Expected single-column '1fr', got {cols!r}."
 
 
 def test_target_row_has_no_mac_or_style_tabs():
@@ -123,12 +108,10 @@ def test_target_row_has_no_mac_or_style_tabs():
     assert fn_match is not None, "renderSyncTargets not found in gallery.js"
     fn_body = fn_match.group(1)
     assert "target-addr" not in fn_body, (
-        "renderSyncTargets still creates a .target-addr element — "
-        "the MAC address should be removed."
+        "renderSyncTargets still creates a .target-addr element — the MAC address should be removed."
     )
     assert "styleTabs" not in fn_body and 'class="tabs-row"' not in fn_body, (
-        "renderSyncTargets still creates a gallery style chooser — "
-        "it was removed per user request."
+        "renderSyncTargets still creates a gallery style chooser — it was removed per user request."
     )
 
 
@@ -149,22 +132,18 @@ def test_target_addr_css_class_removed():
 # ──────────────────────────────────────────────────────────────────
 
 
-
 def test_routines_panel_content_exists():
     """R33: the Routines panel (own top-level panel) must exist with
     the 'Auto-Sync Gallery' card (renamed from Hot-Channel Schedule)."""
     src = ROUTINES_JS.read_text()
-    assert "DivoomTemplates.routines" in src, (
-        "routines template not found"
-    )
+    assert "DivoomTemplates.routines" in src, "routines template not found"
     assert "Auto-Sync Gallery" in src, (
         "Routines panel should be titled 'Auto-Sync Gallery' "
         "(user picked this over 'Hot-Channel Schedule' in planning doc §8)."
     )
     # Old terminology must NOT appear.
     assert "Hot-Channel" not in src, (
-        "Routines panel still mentions 'Hot-Channel' — should be "
-        "renamed to 'Auto-Sync Gallery' per user pick."
+        "Routines panel still mentions 'Hot-Channel' — should be renamed to 'Auto-Sync Gallery' per user pick."
     )
     # The form elements must exist.
     assert 'id="routines-auto-sync-enabled"' in src, "Missing routines-auto-sync-enabled toggle"
@@ -176,18 +155,10 @@ def test_routines_panel_content_exists():
 def test_settings_js_wires_routines_form():
     """settings.js must wire the routines auto-save handlers."""
     src = SETTINGS_JS
-    assert "routines-auto-sync-enabled" in src, (
-        "settings.js doesn't reference the routines enabled toggle."
-    )
-    assert "routines-interval-tabs" in src, (
-        "settings.js doesn't reference the interval tabs."
-    )
-    assert "saveSchedule" in src, (
-        "settings.js should define saveSchedule() for auto-save."
-    )
-    assert "loadRoutinesAutoSync" in src, (
-        "settings.js should define loadRoutinesAutoSync() to load the config."
-    )
+    assert "routines-auto-sync-enabled" in src, "settings.js doesn't reference the routines enabled toggle."
+    assert "routines-interval-tabs" in src, "settings.js doesn't reference the interval tabs."
+    assert "saveSchedule" in src, "settings.js should define saveSchedule() for auto-save."
+    assert "loadRoutinesAutoSync" in src, "settings.js should define loadRoutinesAutoSync() to load the config."
 
 
 def test_gallery_js_drops_schedule_handlers():
@@ -207,8 +178,7 @@ def test_gallery_js_drops_schedule_handlers():
     )
     # No reference to the old save-button id (active code path).
     assert not re.search(r"(getElementById|querySelector)\s*\(\s*[\"']hc-save-schedule-btn[\"']\s*\)", src), (
-        "gallery.js still binds the old hc-save-schedule-btn click handler — "
-        "it moved to settings.js."
+        "gallery.js still binds the old hc-save-schedule-btn click handler — it moved to settings.js."
     )
 
 
@@ -221,16 +191,13 @@ def test_appbar_volume_slider_exists():
     """The appbar must have a new volume slider with id
     'appbar-volume-slider' and a value display."""
     html = INDEX_HTML.read_text()
-    assert 'id="appbar-volume-slider"' in html, (
-        "appbar-volume-slider element not found in index.html"
-    )
-    assert 'id="appbar-volume-value"' in html, (
-        "appbar-volume-value display not found in index.html"
-    )
+    assert 'id="appbar-volume-slider"' in html, "appbar-volume-slider element not found in index.html"
+    assert 'id="appbar-volume-value"' in html, "appbar-volume-value display not found in index.html"
     # Range should be 0-15 (the protocol's actual range).
     m = re.search(
         r'<input[^>]*id="appbar-volume-slider"[^>]*>',
-        html, re.DOTALL,
+        html,
+        re.DOTALL,
     )
     assert m is not None
     slider_html = m.group(0)
@@ -249,11 +216,11 @@ def test_appbar_volume_handler_in_app_js():
     src = APP_JS
     assert "appbar-volume-slider" in src, "the web UI doesn't reference the volume slider id."
     assert "set_volume" in src, (
-        "nothing calls window.pywebview.api.set_volume — the slider's change "
-        "handler must push the value to the device.")
+        "nothing calls window.pywebview.api.set_volume — the slider's change handler must push the value to the device."
+    )
     assert "get_panel_levels" in src, (
-        "nothing calls get_panel_levels — the slider must show the shown "
-        "panel's current volume.")
+        "nothing calls get_panel_levels — the slider must show the shown panel's current volume."
+    )
 
 
 def test_gui_api_exposes_set_volume_and_get_panel_levels():
@@ -262,9 +229,11 @@ def test_gui_api_exposes_set_volume_and_get_panel_levels():
     `divoom_gui/panels.py`)."""
     src = PANELS_PY.read_text()
     assert re.search(r"def\s+set_volume\s*\(\s*self\s*,\s*mac:\s*str\s*,\s*volume:\s*int\s*\)", src), (
-        "panels.py has no set_volume(self, mac: str, volume: int).")
+        "panels.py has no set_volume(self, mac: str, volume: int)."
+    )
     assert re.search(r"def\s+get_panel_levels\s*\(\s*self\s*,\s*mac:\s*str\s*\)", src), (
-        "panels.py has no get_panel_levels(self, mac: str).")
+        "panels.py has no get_panel_levels(self, mac: str)."
+    )
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -290,7 +259,8 @@ def test_scoreboard_panel_has_number_inputs_and_no_buttons():
     html = INDEX_HTML.read_text()
     m = re.search(
         r'<div class="channel-panel" id="panel-scoreboard">(.+?)</div>\s*</div>\s*</div>',
-        html, re.DOTALL,
+        html,
+        re.DOTALL,
     )
     assert m is not None, "panel-scoreboard not found in index.html"
     block = m.group(1)
@@ -331,11 +301,11 @@ def test_scoreboard_now_switches_channel():
     )
     # Ambient must remain skipped — now alongside Text (Round 7), since each
     # has its own Apply/Push button rather than a channel switch.
-    assert ('activeChannel === "ambient"' in src
-            or '["ambient", "text"].includes' in src
-            or '["ambient", "text", "sessions"].includes' in src), (
-        "channels.js: ambient must remain in the skip list (it has its own Apply button)."
-    )
+    assert (
+        'activeChannel === "ambient"' in src
+        or '["ambient", "text"].includes' in src
+        or '["ambient", "text", "sessions"].includes' in src
+    ), "channels.js: ambient must remain in the skip list (it has its own Apply button)."
 
 
 def test_scoreboard_handler_in_channels_js():
@@ -403,11 +373,9 @@ def test_no_battery_badge_intentionally_not_implemented():
     )
     appjs = APP_JS
     assert "battery" not in appjs.lower(), (
-        "Found 'battery' in app.js. See comment in "
-        "test_no_battery_badge_intentionally_not_implemented."
+        "Found 'battery' in app.js. See comment in test_no_battery_badge_intentionally_not_implemented."
     )
     api = GUI_API_PY.read_text()
     assert "get_battery" not in api, (
-        "Found 'get_battery' in gui_api.py. See comment in "
-        "test_no_battery_badge_intentionally_not_implemented."
+        "Found 'get_battery' in gui_api.py. See comment in test_no_battery_badge_intentionally_not_implemented."
     )

@@ -13,6 +13,7 @@ draws with ``render_widget {kind: "weather"}``. What these pin:
 
 Skipped if a browser isn't installed.
 """
+
 import base64
 import io
 from pathlib import Path
@@ -32,9 +33,9 @@ INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.htm
 
 def _png_data_url() -> str:
     from PIL import Image
+
     buf = io.BytesIO()
-    Image.frombytes("RGB", (2, 2), b"\xff\x00\x00\x00\xff\x00\x00\x00\xff\xff\xff\xff").save(
-        buf, format="PNG")
+    Image.frombytes("RGB", (2, 2), b"\xff\x00\x00\x00\xff\x00\x00\x00\xff\xff\xff\xff").save(buf, format="PNG")
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
@@ -101,8 +102,7 @@ async def test_the_card_shows_the_frame_and_the_reading_beside_it():
     async with async_playwright() as p:
         browser, page = await _open(p, "ok")
         try:
-            await wait_js(page, "() => document.getElementById('weather-device-preview')"
-                                "?.dataset.state === 'ok'")
+            await wait_js(page, "() => document.getElementById('weather-device-preview')?.dataset.state === 'ok'")
             s = await eval_js(page, _CARD_STATE)
             assert s["imgShown"] and s["imgSrc"] == FRAME, s
             assert not s["noteShown"], s
@@ -121,8 +121,7 @@ async def test_a_failed_frame_says_why_and_shows_no_reading():
     async with async_playwright() as p:
         browser, page = await _open(p, "fail")
         try:
-            await wait_js(page, "() => document.getElementById('weather-device-preview')"
-                                "?.dataset.state === 'failed'")
+            await wait_js(page, "() => document.getElementById('weather-device-preview')?.dataset.state === 'failed'")
             s = await eval_js(page, _CARD_STATE)
             assert not s["imgShown"] and s["imgSrc"] == "", s
             assert s["noteShown"] and "503" in s["note"], s
@@ -150,10 +149,8 @@ async def test_loading_is_its_own_placeholder_distinct_from_failure():
 
             # Same card, now failed: the text differs AND the box differs, so the
             # two states are told apart without relying on colour.
-            await eval_js(page, "() => { window.__weather.mode = 'fail'; "
-                                "window.refreshWeatherPreview(); }")
-            await wait_js(page, "() => document.getElementById('weather-device-preview')"
-                                "?.dataset.state === 'failed'")
+            await eval_js(page, "() => { window.__weather.mode = 'fail'; window.refreshWeatherPreview(); }")
+            await wait_js(page, "() => document.getElementById('weather-device-preview')?.dataset.state === 'failed'")
             failed = await eval_js(page, _CARD_STATE)
             assert failed["note"] != loading["note"], (loading, failed)
             assert failed["border"] != loading["border"], (loading, failed)
@@ -171,12 +168,9 @@ async def test_a_failure_after_a_frame_takes_the_stale_frame_down():
     async with async_playwright() as p:
         browser, page = await _open(p, "ok")
         try:
-            await wait_js(page, "() => document.getElementById('weather-device-preview')"
-                                "?.dataset.state === 'ok'")
-            await eval_js(page, "() => { window.__weather.mode = 'fail'; "
-                                "window.refreshWeatherPreview(); }")
-            await wait_js(page, "() => document.getElementById('weather-device-preview')"
-                                "?.dataset.state === 'failed'")
+            await wait_js(page, "() => document.getElementById('weather-device-preview')?.dataset.state === 'ok'")
+            await eval_js(page, "() => { window.__weather.mode = 'fail'; window.refreshWeatherPreview(); }")
+            await wait_js(page, "() => document.getElementById('weather-device-preview')?.dataset.state === 'failed'")
             s = await eval_js(page, _CARD_STATE)
             assert not s["imgShown"] and s["imgSrc"] == "", s
             assert s["temp"].strip() in ("–", "--"), s

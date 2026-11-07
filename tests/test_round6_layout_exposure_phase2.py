@@ -1,6 +1,7 @@
 """Round6 layout & exposure checks — later rounds (r9/r10/r11/r18/r33/
 r15/r12/r40), browser render and custom-art coverage. Split from
 test_round6_layout_and_exposure.py."""
+
 import re
 import sys
 from pathlib import Path
@@ -49,12 +50,8 @@ def test_r9_settings_js_wires_display_and_guards_reset():
     assert "set_screen_mirror" in src, "settings.js does not call set_screen_mirror."
     # Factory reset must be confirmed (dialog + typed RESET token) before calling.
     assert "factory_reset" in src, "settings.js does not call factory_reset."
-    assert 'factory_reset?.(mac, "RESET")' in src, (
-        "factory_reset must be called with the literal 'RESET' token."
-    )
-    assert "window.prompt" in src and "RESET" in src, (
-        "Factory reset must require a typed RESET confirmation."
-    )
+    assert 'factory_reset?.(mac, "RESET")' in src, "factory_reset must be called with the literal 'RESET' token."
+    assert "window.prompt" in src and "RESET" in src, "Factory reset must require a typed RESET confirmation."
 
 
 def test_r9_gui_api_exposes_display_bridges():
@@ -64,9 +61,7 @@ def test_r9_gui_api_exposes_display_bridges():
     assert re.search(r"def\s+set_screen_dir\s*\(", src), "missing set_screen_dir bridge."
     assert re.search(r"def\s+set_screen_mirror\s*\(", src), "missing set_screen_mirror bridge."
     assert re.search(r"def\s+factory_reset\s*\(", src), "missing factory_reset bridge."
-    assert 'str(confirm) != "RESET"' in src, (
-        "factory_reset must refuse unless the caller passes the 'RESET' token."
-    )
+    assert 'str(confirm) != "RESET"' in src, "factory_reset must refuse unless the caller passes the 'RESET' token."
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -95,6 +90,7 @@ def test_r10_gui_api_and_lib_expose_notification():
     assert "1 <= t <= 14" in tools, "send_notification must guard app_type 1-14."
     # command id registered
     from pathlib import Path as _P
+
     cmds = (REPO_ROOT / "divoom_lib" / "models" / "commands.py").read_text()
     assert '"set android ancs": 0x50' in cmds, "0x50 ANCS command not registered."
 
@@ -194,7 +190,7 @@ def test_r11_appbar_phase3():
     html = INDEX_HTML.read_text()
     # R32: the corner connectivity indicator pill is gone.
     assert 'class="appbar-transports corner-transports"' not in html
-    assert 'corner-transports' not in html, "the corner indicator markup should be removed (R32)"
+    assert "corner-transports" not in html, "the corner indicator markup should be removed (R32)"
     # 4c: the appbar keeps its drag-spacer; the brightness slider itself
     # moved to the deck (`global-brightness-slider`, Spatial Bench f59e558).
     header = re.search(r'<header class="integrated-appbar.+?</header>', html, re.DOTALL).group(0)
@@ -217,8 +213,7 @@ def test_r11_scoreboard_restyle_blue_over_red():
     m = re.search(r'<div class="scoreboard-display">(.+?)</div>\s*<button', html, re.DOTALL)
     assert m is not None, "scoreboard-display wrapper missing"
     block = m.group(1)
-    assert block.index("scoreboard-row blue") < block.index("scoreboard-row red"), \
-        "BLUE row must come before RED"
+    assert block.index("scoreboard-row blue") < block.index("scoreboard-row red"), "BLUE row must come before RED"
     assert 'id="scoreboard-blue"' in block and 'id="scoreboard-red"' in block
     css = _channels_css()
     assert ".scoreboard-score" in css and ".scoreboard-row" in css
@@ -239,9 +234,7 @@ def test_r18_subtabs_have_icons_and_fit_content():
     with the channel row), Routines sub-tabs also carry icons, and the pill row
     sizes to its content rather than the full window width."""
     src = TEMPLATES_JS
-    for did in ("settings-devices",
-                "settings-divoom", "settings-connectivity",
-                "settings-appearance"):
+    for did in ("settings-devices", "settings-divoom", "settings-connectivity", "settings-appearance"):
         m = re.search(rf'data-(?:tools|settings)-tab="{did}"[^>]*>(.*?)</button>', src, re.DOTALL)
         assert m and "tab-icon" in m.group(1), f"{did} tab button is missing a .tab-icon"
     # R33: Routines sub-tab icons live in the routines template.
@@ -252,8 +245,9 @@ def test_r18_subtabs_have_icons_and_fit_content():
     tabs_css = (REPO_ROOT / "divoom_gui" / "web_ui" / "tabs.css").read_text()
     assert "fit-content" in tabs_css, ".tabs-row should size to content (item b)"
     settings_css = (REPO_ROOT / "divoom_gui" / "web_ui" / "settings.css").read_text()
-    assert re.search(r"\.theme-buttons\s*\{[^}]*inline-flex", settings_css), \
+    assert re.search(r"\.theme-buttons\s*\{[^}]*inline-flex", settings_css), (
         "theme selector should size to content (item b)"
+    )
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -281,9 +275,7 @@ async def test_gallery_and_hot_channel_layouts_render_cleanly():
         # ── Gallery sub-tab ──
         await page.click('[data-pixel-tab="pixel-gallery"]')
         await page.wait_for_selector("#pixel-gallery.active")
-        assert await page.locator("#gallery-classify-tabs").count() == 1, (
-            "Gallery sub-tab should have classify tabs."
-        )
+        assert await page.locator("#gallery-classify-tabs").count() == 1, "Gallery sub-tab should have classify tabs."
         assert await page.locator("#gallery-container").count() == 1, (
             "Gallery sub-tab should have the gallery container."
         )
@@ -291,12 +283,8 @@ async def test_gallery_and_hot_channel_layouts_render_cleanly():
         # ── Hot Channel sub-tab ──
         await page.click('[data-pixel-tab="pixel-hot-channel"]')
         await page.wait_for_selector("#pixel-hot-channel.active")
-        assert await page.locator("#hot-update-btn").count() == 1, (
-            "Hot Channel sub-tab should have the update button."
-        )
-        assert await page.locator("#hot-preview-list").count() == 1, (
-            "Hot Channel sub-tab should have the preview list."
-        )
+        assert await page.locator("#hot-update-btn").count() == 1, "Hot Channel sub-tab should have the update button."
+        assert await page.locator("#hot-preview-list").count() == 1, "Hot Channel sub-tab should have the preview list."
 
         # The appbar volume slider must still exist.
         assert await page.locator("#appbar-volume-slider").count() == 1, (
@@ -305,9 +293,9 @@ async def test_gallery_and_hot_channel_layouts_render_cleanly():
         # And the Control Panel must have the Scoreboard tab.
         await page.click('[data-tab="control-panel"]')
         await page.wait_for_selector("#control-panel.active")
-        assert await page.locator(
-            '.tab-btn[data-channel="scoreboard"]'
-        ).count() == 1, "Scoreboard tab-btn not found in Control Panel"
+        assert await page.locator('.tab-btn[data-channel="scoreboard"]').count() == 1, (
+            "Scoreboard tab-btn not found in Control Panel"
+        )
 
         await browser.close()
 
@@ -326,21 +314,22 @@ def test_r33_tools_content_moved_to_channels_and_routines():
     idx = INDEX_HTML.read_text()
     assert re.search(
         r'<button[^>]*data-tab="sessions"[^>]*>'
-        r'(?:\s*<svg.*?</svg>)?\s*<span>\s*Sessions\s*</span>\s*</button>',
-        idx, re.DOTALL,
+        r"(?:\s*<svg.*?</svg>)?\s*<span>\s*Sessions\s*</span>\s*</button>",
+        idx,
+        re.DOTALL,
     ), "Sessions channel tab missing from index.html."
     assert 'id="panel-sessions"' in idx, "Sessions panel missing from index.html."
     # Time sub-tab exists in Routines.
     routines = ROUTINES_JS.read_text()
     assert re.search(
         r'<button[^>]*data-routines-tab="routines-time"[^>]*>'
-        r'(?:\s*<svg.*?</svg>)?\s*Time\s*</button>',
-        routines, re.DOTALL,
+        r"(?:\s*<svg.*?</svg>)?\s*Time\s*</button>",
+        routines,
+        re.DOTALL,
     ), "Routines Time sub-tab is missing — it should contain Alarms + Anniversary."
     # Old Tools tab no longer navigable (no sidebar button).
-    assert 'data-tab="tools"' not in idx.split('<!-- R33')[0], (
-        "Tools nav button still in sidebar."
-    )
+    assert 'data-tab="tools"' not in idx.split("<!-- R33")[0], "Tools nav button still in sidebar."
+
 
 def test_r15_unified_segmented_pill_css():
     """R15 §1+§7: tab chrome lives in `tabs.css` as the single source of
@@ -352,12 +341,8 @@ def test_r15_unified_segmented_pill_css():
     settings_css = SETTINGS_CSS.read_text()
 
     # tabs.css defines the unified `.tabs-row` and `.tab-btn` rules.
-    assert re.search(r"\.tabs-row\s*\{", tabs_css), (
-        "tabs.css is missing the .tabs-row wrapper rule."
-    )
-    assert re.search(r"\.tabs-row\s+\.tab-btn\s*\{", tabs_css), (
-        "tabs.css is missing the .tabs-row .tab-btn rule."
-    )
+    assert re.search(r"\.tabs-row\s*\{", tabs_css), "tabs.css is missing the .tabs-row wrapper rule."
+    assert re.search(r"\.tabs-row\s+\.tab-btn\s*\{", tabs_css), "tabs.css is missing the .tabs-row .tab-btn rule."
     assert re.search(r"\.tabs-row\s+\.tab-btn\.active\s*\{", tabs_css), (
         "tabs.css is missing the .tabs-row .tab-btn.active rule."
     )
@@ -392,9 +377,12 @@ def test_r33_anniversary_moved_into_routines_time():
     # Anniversary MUST NOT be in the Sessions panel (in index.html channels).
     idx = INDEX_HTML.read_text()
     assert 'id="panel-sessions"' in idx, "Sessions panel not found"
-    assert 'id="memorial-save"' not in idx.split('id="panel-sessions"')[1].split('</div>\n                            </div>\n                        </div>')[0], (
-        "Anniversary/Memorial must not be in the Sessions panel."
-    )
+    assert (
+        'id="memorial-save"'
+        not in idx.split('id="panel-sessions"')[1].split(
+            "</div>\n                            </div>\n                        </div>"
+        )[0]
+    ), "Anniversary/Memorial must not be in the Sessions panel."
 
 
 def test_r12_weather_moved_into_live_widgets():
@@ -407,9 +395,7 @@ def test_r12_weather_moved_into_live_widgets():
     lw = re.search(r"window\.DivoomTemplates\.widgets\s*=\s*`(.+?)`;", src, re.DOTALL)
     assert lw is not None, "Live Widgets (widgets:) block not found in templates.js"
     lw_block = lw.group(1)
-    assert 'id="widget-card-weather"' in lw_block, (
-        "Weather card (widget-card-weather) is missing from Live Widgets."
-    )
+    assert 'id="widget-card-weather"' in lw_block, "Weather card (widget-card-weather) is missing from Live Widgets."
     assert 'id="weather-device-preview"' in lw_block, (
         "Weather preview box (#weather-device-preview) is missing from Live Widgets."
     )
@@ -433,7 +419,8 @@ def test_r40_device_settings_section_one_pane_with_segmented_pills():
     (not toggles), and the Danger zone block at the bottom."""
     src = re.search(
         r"window\.DivoomTemplates\.deviceSettings\s*=\s*`(.+?)`;",
-        TEMPLATES_JS, re.DOTALL,
+        TEMPLATES_JS,
+        re.DOTALL,
     )
     assert src is not None, "deviceSettings template not found"
     block = src.group(1)
@@ -445,10 +432,17 @@ def test_r40_device_settings_section_one_pane_with_segmented_pills():
     for old in ["hour24-toggle", "tempf-toggle", "lowpower-toggle"]:
         assert f'id="{old}"' not in block, f"old toggle {old} should be a segmented pill now"
     # Other controls preserved, plus the renamed update-time button.
-    for _id in ["device-name-input", "auto-off-min", "screen-dir-tabs",
-                "screen-mirror-toggle", "sync-time-btn", "factory-reset-btn"]:
+    for _id in [
+        "device-name-input",
+        "auto-off-min",
+        "screen-dir-tabs",
+        "screen-mirror-toggle",
+        "sync-time-btn",
+        "factory-reset-btn",
+    ]:
         assert f'id="{_id}"' in block, f"Device Settings missing {_id}"
     assert "Update device time" in block, "sync button must read 'Update device time'"
     # Danger zone is the last block.
-    assert block.rfind("danger-card") > block.rfind('id="screen-mirror-toggle"'), \
+    assert block.rfind("danger-card") > block.rfind('id="screen-mirror-toggle"'), (
         "Danger zone must come at the bottom of the pane"
+    )

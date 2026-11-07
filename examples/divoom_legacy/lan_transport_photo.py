@@ -44,9 +44,14 @@ class LanPhotoMixin:
 
             await lan.set_album_cover(clock_id=7, file_id="abc123", photo_id=1)
         """
-        return await self.post("Photo/SetAlbumCover", {
-            "ClockId": clock_id, "FileId": file_id, "PhotoId": photo_id,
-        })
+        return await self.post(
+            "Photo/SetAlbumCover",
+            {
+                "ClockId": clock_id,
+                "FileId": file_id,
+                "PhotoId": photo_id,
+            },
+        )
 
     @via(Transport.LAN)
     async def delete_photo(self, clock_id: int, photo_list: list[int]) -> dict:
@@ -59,9 +64,13 @@ class LanPhotoMixin:
 
             await lan.delete_photo(clock_id=7, photo_list=[1, 2])
         """
-        return await self.post("Photo/DeletePhoto", {
-            "ClockId": clock_id, "PhotoList": photo_list,
-        })
+        return await self.post(
+            "Photo/DeletePhoto",
+            {
+                "ClockId": clock_id,
+                "PhotoList": photo_list,
+            },
+        )
 
     @via(Transport.LAN)
     async def remove_photo_from_album(self, clock_id: int, photo_list: list[int]) -> dict:
@@ -75,9 +84,13 @@ class LanPhotoMixin:
 
             await lan.remove_photo_from_album(clock_id=7, photo_list=[1, 2])
         """
-        return await self.post("Photo/RemovePhotoFromAlbum", {
-            "ClockId": clock_id, "PhotoList": photo_list,
-        })
+        return await self.post(
+            "Photo/RemovePhotoFromAlbum",
+            {
+                "ClockId": clock_id,
+                "PhotoList": photo_list,
+            },
+        )
 
     @via(Transport.LAN)
     async def move_photo_to_album(self, to_clock_id: int, photo_list: list[int]) -> dict:
@@ -90,14 +103,23 @@ class LanPhotoMixin:
 
             await lan.move_photo_to_album(to_clock_id=8, photo_list=[1, 2])
         """
-        return await self.post("Photo/DevicePhotoToAlbum", {
-            "ToClockId": to_clock_id, "PhotoList": photo_list,
-        })
+        return await self.post(
+            "Photo/DevicePhotoToAlbum",
+            {
+                "ToClockId": to_clock_id,
+                "PhotoList": photo_list,
+            },
+        )
 
     @via(Transport.LAN)
     async def get_photo_list(
-        self, clock_id: int, *, parent_clock_id: int = 0, parent_item_id: int = 0,
-        limit: int = 30, page: int = 1,
+        self,
+        clock_id: int,
+        *,
+        parent_clock_id: int = 0,
+        parent_item_id: int = 0,
+        limit: int = 30,
+        page: int = 1,
     ) -> dict:
         """
         Paginated listing of photos within a given album.
@@ -111,7 +133,13 @@ class LanPhotoMixin:
         """
         start = (page - 1) * limit + 1
         end = page * limit
-        return await self.post("Photo/GetPhotoList", {
-            "ClockId": clock_id, "ParentClockId": parent_clock_id,
-            "ParentItemId": parent_item_id, "StartNum": start, "EndNum": end,
-        })
+        return await self.post(
+            "Photo/GetPhotoList",
+            {
+                "ClockId": clock_id,
+                "ParentClockId": parent_clock_id,
+                "ParentItemId": parent_item_id,
+                "StartNum": start,
+                "EndNum": end,
+            },
+        )

@@ -23,6 +23,7 @@ A file written by an older build still carries the old keys. They are
 REPORTED (a warning, so the owner learns the file is stale) and IGNORED, and
 the next save drops them — the migration is the save, not a silent rewrite.
 """
+
 from __future__ import annotations
 
 import json
@@ -88,7 +89,7 @@ def load_config() -> dict:
                         path,
                         ", ".join(stale),
                     )
-        except (OSError, ValueError):
+        except OSError, ValueError:
             pass
     return _normalize(cfg)
 
@@ -107,6 +108,7 @@ def save_config(cfg: dict) -> bool:
     merged = _normalize(merged)
     try:
         from divoom_lib.utils.atomic_io import atomic_write_text
+
         atomic_write_text(_config_path(), json.dumps(merged, indent=2))
         return True
     except OSError:
@@ -125,6 +127,6 @@ def _normalize(cfg: dict) -> dict:
     }
     try:
         out["interval"] = max(MIN_INTERVAL, min(MAX_INTERVAL, int(cfg.get("interval", DEFAULT_INTERVAL))))
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         out["interval"] = DEFAULTS["interval"]
     return out

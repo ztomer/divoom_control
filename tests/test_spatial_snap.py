@@ -7,6 +7,7 @@ ON another panel, panels of different sizes, a chain of three, corners, and the
 bench's bounds. The browser test that drags a real node is
 `tests/test_e2e_bench_snap.py`.
 """
+
 from __future__ import annotations
 
 import json
@@ -32,8 +33,13 @@ pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node not i
 
 
 def _snap(*cases):
-    r = subprocess.run(["node", "-e", _HARNESS, "--", str(SNAP_JS), json.dumps(cases)],
-                       capture_output=True, text=True, check=True, stdin=subprocess.DEVNULL)
+    r = subprocess.run(
+        ["node", "-e", _HARNESS, "--", str(SNAP_JS), json.dumps(cases)],
+        capture_output=True,
+        text=True,
+        check=True,
+        stdin=subprocess.DEVNULL,
+    )
     return json.loads(r.stdout)
 
 
@@ -51,9 +57,9 @@ def test_a_near_miss_within_the_threshold_snaps_flush_and_lines_up():
     # 8 px short of A's right edge and 5 px low: flush, top-aligned.
     assert _land(rect(158, 105), [a]) == (150, 100, True)
     # The same from the other three sides.
-    assert _land(rect(42, 96), [a]) == (50, 100, True)       # left of A
-    assert _land(rect(103, 41), [a]) == (100, 50, True)      # above A
-    assert _land(rect(97, 159), [a]) == (100, 150, True)     # below A
+    assert _land(rect(42, 96), [a]) == (50, 100, True)  # left of A
+    assert _land(rect(103, 41), [a]) == (100, 50, True)  # above A
+    assert _land(rect(97, 159), [a]) == (100, 150, True)  # below A
 
 
 def test_just_past_the_threshold_stays_where_it_was_dropped():
@@ -72,8 +78,8 @@ def test_a_drop_on_another_panel_is_pushed_to_the_nearest_flush_spot():
 
 
 def test_panels_of_different_sizes_meet_edge_to_edge():
-    big = rect(100, 100, 100, 100)          # a 64x64 panel's chassis next to...
-    small = rect(206, 140, 40, 40)          # ...a 16x16's, dropped 6 px off
+    big = rect(100, 100, 100, 100)  # a 64x64 panel's chassis next to...
+    small = rect(206, 140, 40, 40)  # ...a 16x16's, dropped 6 px off
     assert _land(small, [big]) == (200, 140, True), "flush, kept where it was along the edge"
     assert _land(rect(206, 104, 40, 40), [big]) == (200, 100, True), "top-aligned when near the top"
     assert _land(rect(206, 157, 40, 40), [big]) == (200, 160, True), "bottom-aligned when near the bottom"
@@ -81,7 +87,7 @@ def test_panels_of_different_sizes_meet_edge_to_edge():
 
 def test_a_chain_of_three_is_one_contiguous_row():
     a = rect(0, 0)
-    b = rect(50, 0)                          # already flush right of A
+    b = rect(50, 0)  # already flush right of A
     x, y, snapped = _land(rect(107, 3), [a, b])
     assert (x, y, snapped) == (100, 0, True), "C joins the row after B"
     # Dropped onto the A|B seam, C is pushed out to the nearest flush spot --

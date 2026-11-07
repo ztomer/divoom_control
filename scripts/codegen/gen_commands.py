@@ -175,7 +175,7 @@ def emit_model(model: dict) -> list:
         "        CANONICAL_NAMES",
         "            .iter()",
         "            .find(|(_, cmd)| *cmd == self)",
-        "            .map_or(\"\", |(name, _)| *name)",
+        '            .map_or("", |(name, _)| *name)',
         "    }",
         "}",
         "",
@@ -212,7 +212,7 @@ def emit_model(model: dict) -> list:
         "    type Error = &'static str;",
         "",
         "    fn try_from(value: &str) -> Result<Self, Self::Error> {",
-        "        crate::command_names::command(value).ok_or(\"unknown divoom command name\")",
+        '        crate::command_names::command(value).ok_or("unknown divoom command name")',
         "    }",
         "}",
         "",
@@ -305,14 +305,12 @@ def main():
         cwd=src.parent.parent,
         check=False,
         capture_output=True,
-        text=True, stdin=subprocess.DEVNULL,
+        text=True,
+        stdin=subprocess.DEVNULL,
     )
     if formatted.returncode != 0:
         print(f"warning: cargo fmt did not run: {formatted.stderr.strip()}", file=sys.stderr)
-    print(
-        f"wrote {len(models.COMMANDS)} commands / {len(model)} ids -> "
-        + " ".join(name for name, _ in artefacts)
-    )
+    print(f"wrote {len(models.COMMANDS)} commands / {len(model)} ids -> " + " ".join(name for name, _ in artefacts))
 
 
 if __name__ == "__main__":

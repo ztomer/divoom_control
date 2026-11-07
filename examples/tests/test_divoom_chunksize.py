@@ -8,6 +8,7 @@ refactored to inherit from the (newer) Divoom class instead of
 `DivoomProtocol`. The fix adds `chunksize` back as a default
 construction-time attribute.
 """
+
 from divoom_lib import models
 from divoom_legacy.divoom import Divoom
 

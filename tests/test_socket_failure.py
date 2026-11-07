@@ -4,6 +4,7 @@ The behaviour under test is "the user finds out WHY". Before this, a daemon that
 refused to bind exited with its explanation on stderr, which the GUI redirects
 to a log file, and the client reported only that it had run out of patience.
 """
+
 from __future__ import annotations
 
 import json
@@ -31,9 +32,7 @@ def write_report(sock: str, body: str) -> None:
 
 
 def test_reads_reason_remedy_and_transience(sock):
-    write_report(sock, "reason: /x is a directory, not a socket\n"
-                       "remedy: Move it yourself.\n"
-                       "transient: false\n")
+    write_report(sock, "reason: /x is a directory, not a socket\nremedy: Move it yourself.\ntransient: false\n")
     f = read_socket_failure(sock)
     assert f == SocketFailure(
         reason="/x is a directory, not a socket",
@@ -55,8 +54,7 @@ def test_absent_report_is_none_not_an_error(sock):
 
 def test_a_reason_containing_a_colon_survives(sock):
     # Reasons quote paths and errnos, both of which contain colons.
-    write_report(sock, "reason: permission denied for /x: Operation not permitted\n"
-                       "remedy: Delete it as that user.\n")
+    write_report(sock, "reason: permission denied for /x: Operation not permitted\nremedy: Delete it as that user.\n")
     f = read_socket_failure(sock)
     assert f is not None
     assert f.reason == "permission denied for /x: Operation not permitted"
@@ -89,8 +87,7 @@ def test_explain_falls_back_when_nothing_was_reported(sock):
 
 
 def test_explain_prefers_the_daemons_own_words(sock):
-    write_report(sock, "reason: /x is a regular file, not a socket\n"
-                       "remedy: Move it.\n")
+    write_report(sock, "reason: /x is a regular file, not a socket\nremedy: Move it.\n")
     out = explain_daemon_failure(sock, "no reason reported")
     assert "regular file" in out and "Move it." in out
 
@@ -109,9 +106,9 @@ def test_daemon_health_carries_the_reason_to_the_banner(monkeypatch, sock):
     monkeypatch.delenv("DIVOOM_DAEMON_HOST", raising=False)
     monkeypatch.setattr("divoom_gui.daemon_bridge.daemon_alive", lambda *a, **k: False)
     monkeypatch.setattr("divoom_client.daemon_protocol.DEFAULT_SOCKET_PATH", sock)
-    write_report(sock, "reason: /x is a directory, not a socket\n"
-                       "remedy: Move or delete that file yourself.\n"
-                       "transient: false\n")
+    write_report(
+        sock, "reason: /x is a directory, not a socket\nremedy: Move or delete that file yourself.\ntransient: false\n"
+    )
 
     class Probe(scanner_mixin.ScannerMixin):
         pass

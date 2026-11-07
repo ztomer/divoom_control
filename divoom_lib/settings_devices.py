@@ -24,6 +24,7 @@ The table's shape::
 is not a device address is a FINDING: the loop cannot resolve it, and it says
 so rather than skipping it in silence.
 """
+
 from __future__ import annotations
 
 import configparser
@@ -89,12 +90,7 @@ def is_device_address(key: str) -> bool:
         return len(parts) == 4 and all(p.isdigit() for p in parts)
     hex_digits = sum(1 for ch in key if ch in "0123456789abcdefABCDEF")
     separators = sum(1 for ch in key if ch in "-:")
-    return (
-        hex_digits >= 4
-        and separators >= 1
-        and hex_digits + separators == len(key)
-        and len(key) <= 38
-    )
+    return hex_digits >= 4 and separators >= 1 and hex_digits + separators == len(key) and len(key) <= 38
 
 
 def registered_devices() -> list[tuple[str, int]]:
@@ -133,7 +129,7 @@ def _as_classify(value) -> int | None:
     """A gallery id, or ``None`` when the value is not one."""
     try:
         classify = int(str(value).strip())
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
     return classify if classify > 0 else None
 
@@ -172,11 +168,7 @@ def set_registered(addresses, galleries=None, known=None) -> bool:
 
     # The table's own settings survive; the device entries are rebuilt from
     # what the caller said, and what it did NOT see stays.
-    kept = {
-        key: value
-        for key, value in parser.items("gallery")
-        if key.lower() in RESERVED_KEYS
-    }
+    kept = {key: value for key, value in parser.items("gallery") if key.lower() in RESERVED_KEYS}
     for addr, classify in existing.items():
         if addr not in seen or addr in wanted:
             kept[addr] = str(classify)

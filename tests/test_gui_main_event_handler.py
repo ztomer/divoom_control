@@ -16,10 +16,10 @@ if str(_REPO) not in sys.path:
 from divoom_gui import gui_main  # noqa: E402
 
 
-
 # ─────────────────────────── _make_daemon_event_handler ──────────────────────
 # (the happy-path event types are already covered by test_gui_event_forwarder.py;
 # these fill in the remaining defensive branches.)
+
 
 class _FakeWindow:
     def __init__(self, destroy_raises=False, evaluate_js_raises=False):
@@ -57,6 +57,7 @@ def test_event_handler_unknown_event_type_is_ignored():
 
 def test_event_handler_shutdown_lifecycle_import_failure_returns(monkeypatch):
     import divoom_lib.lifecycle_config as lifecycle_config
+
     monkeypatch.delattr(lifecycle_config, "get_keep_daemon_alive")
     w = _FakeWindow()
     on_event = gui_main._make_daemon_event_handler(w)
@@ -65,10 +66,8 @@ def test_event_handler_shutdown_lifecycle_import_failure_returns(monkeypatch):
 
 
 def test_event_handler_shutdown_destroy_exception_is_swallowed(monkeypatch):
-    monkeypatch.setattr("divoom_lib.lifecycle_config.should_follow_daemon_shutdown",
-                         lambda keep_alive: True)
-    monkeypatch.setattr("divoom_lib.lifecycle_config.get_keep_daemon_alive",
-                         lambda: False)
+    monkeypatch.setattr("divoom_lib.lifecycle_config.should_follow_daemon_shutdown", lambda keep_alive: True)
+    monkeypatch.setattr("divoom_lib.lifecycle_config.get_keep_daemon_alive", lambda: False)
     w = _FakeWindow(destroy_raises=True)
     on_event = gui_main._make_daemon_event_handler(w)
     on_event({"type": "shutdown"})  # destroy() raises -> caught
@@ -83,6 +82,7 @@ def test_event_handler_evaluate_js_exception_is_swallowed():
 
 
 # ─────────────────────────────── _start_shutdown_follower ────────────────────
+
 
 def test_start_shutdown_follower_notifies_ondaemondown_and_backs_off(monkeypatch):
     """The follower subscribes on a daemon thread; when subscribe() returns/raises

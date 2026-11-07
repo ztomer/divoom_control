@@ -6,6 +6,7 @@ list may only SHRINK. A new oversized file fails the suite; shrinking an allowed
 file below 500 and not removing it from the list also fails (so the debt is
 actively retired, not forgotten).
 """
+
 from pathlib import Path
 
 import pytest

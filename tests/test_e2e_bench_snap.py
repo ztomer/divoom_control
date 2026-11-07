@@ -13,6 +13,7 @@ hardware (docs/ROADMAP.md, P6.1).
 
 Skipped if a browser isn't installed (runs with --run-browser).
 """
+
 from pathlib import Path
 
 import asyncio
@@ -21,13 +22,19 @@ import time
 import pytest
 
 from tests.support.browser import (
-    add_init_js, eval_js, install_toast_recorder, launch, require_browser, wait_js, wait_toast)
+    add_init_js,
+    eval_js,
+    install_toast_recorder,
+    launch,
+    require_browser,
+    wait_js,
+    wait_toast,
+)
 
 INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.html"
 
 A, B, LAN = "AA:00:00:00:00:01", "BB:00:00:00:00:02", "LAN:10.0.0.5"
-REFUSAL = ("Not a wall slot: this app draws images over Bluetooth only, and has no "
-           "Wi-Fi image command yet.")
+REFUSAL = "Not a wall slot: this app draws images over Bluetooth only, and has no Wi-Fi image command yet."
 
 _MOCK_API = """
 window.__panels = %PANELS%;
@@ -51,13 +58,22 @@ window.pywebview = { api: new Proxy({}, { get: (_t, name) => (...args) => {
 
 
 def _panel(mac, model="DitooPlus", px=16, refusal=None):
-    return {"mac": mac, "connected": True, "selected": False, "model": model, "width": px,
-            "height": px, "model_source": "name", "features": {"speaker": False},
-            "wall_refusal": refusal}
+    return {
+        "mac": mac,
+        "connected": True,
+        "selected": False,
+        "model": model,
+        "width": px,
+        "height": px,
+        "model_source": "name",
+        "features": {"speaker": False},
+        "wall_refusal": refusal,
+    }
 
 
 async def _open(p, panels, owned):
     import json
+
     browser = await launch(p)
     page = await browser.new_page(viewport={"width": 1280, "height": 900})
     await add_init_js(page, _MOCK_API.replace("%PANELS%", json.dumps(panels)))
@@ -73,8 +89,12 @@ async def _open(p, panels, owned):
 
 
 async def _box(page, mac):
-    return await eval_js(page, """(m) => { const n = document.getElementById('spatial-node-' + m);
-        return {x: n.offsetLeft, y: n.offsetTop, w: n.offsetWidth, h: n.offsetHeight}; }""", mac)
+    return await eval_js(
+        page,
+        """(m) => { const n = document.getElementById('spatial-node-' + m);
+        return {x: n.offsetLeft, y: n.offsetTop, w: n.offsetWidth, h: n.offsetHeight}; }""",
+        mac,
+    )
 
 
 async def _node_box(page, mac, timeout: float = 10.0):
@@ -103,8 +123,7 @@ async def _node_box(page, mac, timeout: float = 10.0):
         if box is not None:
             return box
         if time.monotonic() >= deadline:
-            raise AssertionError(
-                f"the bench node {mac} never had a box in {timeout}s")
+            raise AssertionError(f"the bench node {mac} never had a box in {timeout}s")
         await asyncio.sleep(0.05)
 
 
@@ -138,10 +157,12 @@ async def test_a_panel_dragged_near_another_snaps_flush_and_lines_up():
             await _drag(page, B, -(gap - 5), 6)
             got = await _box(page, B)
             assert (got["x"], got["y"]) == (a["x"] + a["w"], a["y"]), (
-                f"B must sit flush against A's right edge, tops aligned: A={a} B={got}")
+                f"B must sit flush against A's right edge, tops aligned: A={a} B={got}"
+            )
             saved = await eval_js(page, "(m) => window.SpatialRooms.getSavedPositions()[m]", B)
             assert (saved["x"], saved["y"]) == (got["x"], got["y"]), (
-                f"the saved position (what a wall cuts by) must be the snapped one: {saved}")
+                f"the saved position (what a wall cuts by) must be the snapped one: {saved}"
+            )
         finally:
             await browser.close()
 
@@ -174,24 +195,33 @@ async def test_a_panel_on_wifi_says_why_it_is_not_a_wall_slot_and_is_left_out():
         try:
             await eval_js(page, "(m) => window.Divoom.onSelection({type: 'selection', mac: m})", LAN)
             await wait_js(page, f"() => window.SpatialStage.getSelectedMac() === '{LAN}'")
-            note = await eval_js(page, """() => { const n = document.getElementById('deck-wall-note');
-                return n && !n.hidden ? n.textContent : null; }""")
+            note = await eval_js(
+                page,
+                """() => { const n = document.getElementById('deck-wall-note');
+                return n && !n.hidden ? n.textContent : null; }""",
+            )
             assert note and REFUSAL in note, f"the deck must say why: {note!r}"
 
             await eval_js(page, "(m) => window.Divoom.onSelection({type: 'selection', mac: m})", A)
             await wait_js(page, f"() => window.SpatialStage.getSelectedMac() === '{A}'")
             assert await eval_js(page, "() => document.getElementById('deck-wall-note').hidden"), (
-                "a Bluetooth panel has no such note")
+                "a Bluetooth panel has no such note"
+            )
 
-            await eval_js(page, """() => { document.getElementById('file-path-input').value = '/tmp/art.png';
-                document.getElementById('apply-wall-art').click(); }""")
+            await eval_js(
+                page,
+                """() => { document.getElementById('file-path-input').value = '/tmp/art.png';
+                document.getElementById('apply-wall-art').click(); }""",
+            )
             toast = await wait_toast(page, "Kitchen")
             assert REFUSAL in toast["rendered"]["text"], toast
             calls = await eval_js(page, "() => window.__calls")
             import json
+
             sent = [json.loads(c["args"][0]) for c in calls if c["m"] == "update_wall_slots"]
             assert sent and all(LAN not in s and A in s for s in sent), (
-                f"the wall's slots must leave the Wi-Fi panel out: {sent}")
+                f"the wall's slots must leave the Wi-Fi panel out: {sent}"
+            )
             assert any(c["m"] == "display_wall_image" for c in calls), "the rest of the wall still gets the image"
         finally:
             await browser.close()
@@ -208,12 +238,19 @@ async def test_a_wall_image_that_one_panel_did_not_take_names_that_panel():
     async with async_playwright() as p:
         browser, page = await _open(p, [_panel(A), _panel(B)], _owned(A, B))
         try:
-            await eval_js(page, """(b) => { window.__api.display_wall_image = () => ({
+            await eval_js(
+                page,
+                """(b) => { window.__api.display_wall_image = () => ({
                 success: false, previews: {},
                 error: `wall: ${b} did not take it (the transfer failed)`,
-                failed: {[b]: 'the transfer failed'}, degraded: []}); }""", B)
-            await eval_js(page, """() => { document.getElementById('file-path-input').value = '/tmp/art.png';
-                document.getElementById('apply-wall-art').click(); }""")
+                failed: {[b]: 'the transfer failed'}, degraded: []}); }""",
+                B,
+            )
+            await eval_js(
+                page,
+                """() => { document.getElementById('file-path-input').value = '/tmp/art.png';
+                document.getElementById('apply-wall-art').click(); }""",
+            )
             toast = await wait_toast(page, "Shelf", kind="error")
             text = toast["rendered"]["text"]
             assert "the transfer failed" in text, f"the reason is kept: {text!r}"

@@ -5,6 +5,7 @@ along with the decoder itself. `gallery_sync.py` no longer imports it — the
 daemon downloads and decodes, and this process only caches the answers — so the
 native dylib is no longer a precondition for importing the GUI module at all.
 """
+
 import sys
 import threading
 from pathlib import Path
@@ -22,8 +23,7 @@ class FakeDaemonClient:
     instead of a hand-rolled POST, a credential cache and a decoder.
     """
 
-    def __init__(self, file_list=None, previews=None, fetch_error=None,
-                 preview_errors=None):
+    def __init__(self, file_list=None, previews=None, fetch_error=None, preview_errors=None):
         self.file_list = file_list if file_list is not None else []
         self.previews = previews or {}
         self.fetch_error = fetch_error
@@ -31,11 +31,10 @@ class FakeDaemonClient:
         self.fetch_calls = []
         self.preview_calls = []
 
-    def fetch_gallery(self, classify, limit=30, file_sort=1, *, mac=None,
-                      all_sizes=False):
+    def fetch_gallery(self, classify, limit=30, file_sort=1, *, mac=None, all_sizes=False):
         self.fetch_calls.append(
-            {"classify": classify, "limit": limit, "file_sort": file_sort,
-             "mac": mac, "all_sizes": all_sizes})
+            {"classify": classify, "limit": limit, "file_sort": file_sort, "mac": mac, "all_sizes": all_sizes}
+        )
         if self.fetch_error is not None:
             raise self.fetch_error
         return self.file_list

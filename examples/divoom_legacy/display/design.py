@@ -14,6 +14,7 @@ Sub-commands implemented:
 Reference: https://github.com/futpib/divoom-ditoo-pro-controller
            https://github.com/d03n3rfr1tz3/hass-divoom
 """
+
 from __future__ import annotations
 
 import logging
@@ -55,13 +56,9 @@ class Design:
     async def _send_subcmd(self, subcmd: int, args: list) -> bool:
         """Send a 0xBD command with the given subcmd + args."""
         full_args = [subcmd] + args
-        return await self.communicator.send_command(
-            COMMANDS["set design"], full_args
-        )
+        return await self.communicator.send_command(COMMANDS["set design"], full_args)
 
-    async def set_eq(
-        self, dynamic: bool = False, mode: int = 0, stream: bool = False
-    ) -> bool:
+    async def set_eq(self, dynamic: bool = False, mode: int = 0, stream: bool = False) -> bool:
         """Set the EQ/equalizer (0xBD 0x1E, Ditoo-Mic).
 
         Args:
@@ -69,9 +66,7 @@ class Design:
             mode: EQ mode 0-7 (specific to firmware).
             stream: streaming mode (1) vs single-shot (0).
         """
-        self.logger.info(
-            f"Setting EQ dynamic={dynamic} mode={mode} stream={stream} (0xBD 0x1E)..."
-        )
+        self.logger.info(f"Setting EQ dynamic={dynamic} mode={mode} stream={stream} (0xBD 0x1E)...")
         args = [
             0x01 if dynamic else 0x00,
             int(mode) & 0xFF,
@@ -88,18 +83,14 @@ class Design:
         self.logger.info(f"Setting language to {lang} (0xBD 0x26)...")
         return await self._send_subcmd(SUB_LANGUAGE, [int(lang) & 0xFF])
 
-    async def set_user_define_time(
-        self, hour: int, minute: int, second: int = 0
-    ) -> bool:
+    async def set_user_define_time(self, hour: int, minute: int, second: int = 0) -> bool:
         """Set user-define time (0xBD 0x14).
 
         Payload: [hour, minute, second] — exact format per Divoom
         firmware. Verified by futpib (extended_command.rs:11) but
         not live-tested on Timoo.
         """
-        self.logger.info(
-            f"Setting user-define time {hour:02d}:{minute:02d}:{second:02d} (0xBD 0x14)..."
-        )
+        self.logger.info(f"Setting user-define time {hour:02d}:{minute:02d}:{second:02d} (0xBD 0x14)...")
         return await self._send_subcmd(
             SUB_USER_DEFINE_TIME_SET,
             [hour & 0xFF, minute & 0xFF, second & 0xFF],

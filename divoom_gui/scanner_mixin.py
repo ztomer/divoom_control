@@ -16,11 +16,14 @@ from divoom_lib.utils.atomic_io import atomic_write_text, atomic_write_config
 
 logger = logging.getLogger("divoom_gui")
 
+
 class ScannerMixin:
     """Bluetooth scanning, discovery, and device selection — via the daemon."""
+
     def save_scan_settings(self, timeout: int, limit: int) -> bool:
         try:
             import configparser
+
             config_file = Path.home() / ".config" / "divoom-control" / "config.ini"
             config_file.parent.mkdir(parents=True, exist_ok=True)
             cfg = configparser.ConfigParser()
@@ -41,8 +44,7 @@ class ScannerMixin:
         connect (empty if none / last connect succeeded)."""
         return getattr(self, "_last_connect_error", "") or ""
 
-    def set_device_activity(self, mac: str, kind: str, name: str = "",
-                            preview: str = "") -> bool:
+    def set_device_activity(self, mac: str, kind: str, name: str = "", preview: str = "") -> bool:
         """R46 #3 / R50: tell the daemon what a device is showing so the menubar
         can render a per-device tile. ``preview`` is an optional PNG data URL for
         the tile thumbnail. Best-effort (a missing daemon is fine)."""
@@ -50,8 +52,7 @@ class ScannerMixin:
             client = self._client()
             if client is None:
                 return False
-            return bool(client.set_device_activity(
-                mac, kind, name or None, preview or None).get("success"))
+            return bool(client.set_device_activity(mac, kind, name or None, preview or None).get("success"))
         except Exception as e:
             logger.debug(f"set_device_activity failed: {e}")
             return False
@@ -92,8 +93,7 @@ class ScannerMixin:
                 connected = False
             # The daemon's ACTIVE panel rides along so the bench can follow a
             # switch made elsewhere (menubar, CLI).
-            return json.dumps({"connected": connected, "state": state,
-                               "selected": status.get("selected")})
+            return json.dumps({"connected": connected, "state": state, "selected": status.get("selected")})
         except Exception as e:
             logger.debug(f"get_connection_state failed: {e}")
             return json.dumps({"connected": False, "state": "disconnected"})
@@ -118,6 +118,7 @@ class ScannerMixin:
             return json.dumps({"daemon": True})
         try:
             from divoom_gui.daemon_bridge import daemon_alive
+
             alive = bool(daemon_alive())
         except Exception as e:
             logger.debug(f"daemon_health failed: {e}")
@@ -132,6 +133,7 @@ class ScannerMixin:
         try:
             from divoom_client.daemon_protocol import DEFAULT_SOCKET_PATH
             from divoom_client.socket_failure import read_socket_failure
+
             failure = read_socket_failure(DEFAULT_SOCKET_PATH)
             if failure is not None:
                 payload["reason"] = failure.reason
@@ -146,6 +148,7 @@ class ScannerMixin:
         needed. Backs the banner's Reconnect button and the frontend's silent
         auto-reconnect. Returns JSON ``{"daemon": bool}``."""
         from divoom_gui.daemon_bridge import ensure_daemon
+
         self._daemon_client = None
         try:
             client = ensure_daemon()
@@ -157,6 +160,7 @@ class ScannerMixin:
             logger.info("Daemon reconnected (client re-ensured).")
             # P2.7: a NEW daemon starts with no panels; ask it for ours back.
             from divoom_gui import panel_relink
+
             panel_relink.after_ensure(self, client)
         return json.dumps({"daemon": client is not None})
 
@@ -166,6 +170,7 @@ class ScannerMixin:
         on every scan but nothing ever read them back."""
         import configparser
         from divoom_client.daemon_config import DEFAULT_SCAN_TIMEOUT, DEFAULT_SCAN_LIMIT
+
         timeout, limit = int(DEFAULT_SCAN_TIMEOUT), DEFAULT_SCAN_LIMIT
         try:
             config_file = Path.home() / ".config" / "divoom-control" / "config.ini"
@@ -190,7 +195,7 @@ class ScannerMixin:
             if not isinstance(known, list):
                 return json.dumps([])
             detected = set()
-            for d in (getattr(self, "discovered_list", None) or []):
+            for d in getattr(self, "discovered_list", None) or []:
                 addr = d.get("address") or d.get("ip")
                 if addr:
                     detected.add(addr)
@@ -207,8 +212,7 @@ class ScannerMixin:
                 if addr in seen:
                     continue
                 seen.add(addr)
-                out.append({"address": addr, "name": d.get("name", addr),
-                            "detected": False})
+                out.append({"address": addr, "name": d.get("name", addr), "detected": False})
             return json.dumps(out)
         except Exception as e:
             logger.warning(f"get_known_devices failed: {e}")
@@ -220,6 +224,7 @@ class ScannerMixin:
         # the user's chosen timeout (Divoom scans are slow — 30-60s — hence the
         # large defaults).
         from divoom_client.daemon_config import load_daemon_config
+
         cfg = load_daemon_config()
         if timeout is None:
             timeout = int(cfg.scan_timeout)
@@ -273,6 +278,7 @@ class ScannerMixin:
             merged = list(known.values())
             atomic_write_text(cache_file, json.dumps(merged, indent=2))
             import configparser
+
             config_file = cfg_dir / "config.ini"
             cfg = configparser.ConfigParser()
             if config_file.exists():
@@ -361,17 +367,14 @@ class ScannerMixin:
                 reply = client.connect_device(lan_ip=ip, lan_token=token)
             else:
                 device_name = self._device_name_for(address)
-                reply = client.connect_device(
-                    mac=address, device_name=device_name, use_ios_le_protocol=True)
+                reply = client.connect_device(mac=address, device_name=device_name, use_ios_le_protocol=True)
 
             if not reply.get("success") or not reply.get("connected"):
                 # BLE Hardening P1: keep the daemon's actionable message/reason
                 # so the GUI toast says WHY (asleep / BT off / held by phone),
                 # not just "Failed to connect".
-                self._last_connect_error = (
-                    reply.get("message") or reply.get("error") or "Could not connect")
-                logger.error(f"Daemon connect failed: {reply.get('reason', '')} "
-                             f"{reply.get('error', reply)}")
+                self._last_connect_error = reply.get("message") or reply.get("error") or "Could not connect"
+                logger.error(f"Daemon connect failed: {reply.get('reason', '')} {reply.get('error', reply)}")
                 return False
 
             if not DaemonDeviceProxy(client, target="device", mac=address).is_connected:
@@ -380,6 +383,7 @@ class ScannerMixin:
 
             self._last_connect_error = ""
             from divoom_gui import panel_relink
+
             panel_relink.remember(self, address)
             return True
         except Exception as e:
@@ -416,6 +420,7 @@ class ScannerMixin:
     def _persist_last_connected(self, address: str) -> None:
         try:
             import configparser
+
             config_file = Path.home() / ".config" / "divoom-control" / "config.ini"
             config_file.parent.mkdir(parents=True, exist_ok=True)
             cfg = configparser.ConfigParser()
@@ -448,7 +453,8 @@ class ScannerMixin:
                     # preset. Skip this save instead.
                     logger.warning(
                         f"presets.json exists but is unreadable ({parse_err}); "
-                        "skipping last-active-slots save to avoid wiping presets")
+                        "skipping last-active-slots save to avoid wiping presets"
+                    )
                     return
             presets["_last_active_slots_"] = self.wall_slots
             # Atomic write so a crash mid-write can't corrupt the file other

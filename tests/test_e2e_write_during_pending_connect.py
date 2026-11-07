@@ -25,6 +25,7 @@ gate are checked -- the wall (whose link the app-wide flag carries) and a
 panel (whose link its own record carries) -- because the two views are the
 same fact and must agree.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -97,11 +98,15 @@ async def test_a_wall_write_is_sent_while_a_connect_is_in_flight():
         try:
             # The wall, linked: the app is connected to it and the wall has
             # slots, so the app knows a display is there.
-            await eval_js(page, """(wall) => {
+            await eval_js(
+                page,
+                """(wall) => {
                 window.DivoomState.assignedSlots = {AA: {x: 0, y: 0, name: 'Desk'}};
                 document.getElementById('banner-device-mac').textContent = wall;
                 window.setConnectionState({mode: 'active', transport: 'wall', mac: wall, name: 'Virtual Wall'});
-            }""", WALL)
+            }""",
+                WALL,
+            )
             # A connect now IN FLIGHT, and it stays in flight: the test owns
             # the state, so the assertion below cannot be won by luck.
             await eval_js(page, "() => window.connectDevice('Ditoo', 'AA:00:00:00:00:01')")
@@ -123,8 +128,11 @@ async def test_a_wall_write_is_sent_while_a_connect_is_in_flight():
                 f"the write must name the wall it was aimed at, got {writes[0]['args']!r}"
             )
             # And it must NOT have been refused on the way.
-            hint = await eval_js(page, "() => window.__divoomToasts.some(t =>"
-                                      " t.rendered && t.rendered.text.indexOf('Connect a device first') >= 0)")
+            hint = await eval_js(
+                page,
+                "() => window.__divoomToasts.some(t =>"
+                " t.rendered && t.rendered.text.indexOf('Connect a device first') >= 0)",
+            )
             assert not hint, "the write was refused with 'Connect a device first' instead of being sent"
         finally:
             await browser.close()
@@ -147,12 +155,16 @@ async def test_a_panel_write_is_sent_while_a_connect_is_in_flight():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await eval_js(page, """(panel) => {
+            await eval_js(
+                page,
+                """(panel) => {
                 window.DivoomState.discoveredDevices = [
                     {address: panel, name: 'Ditoo', daemonOwned: true, activityState: 'active'}];
                 document.getElementById('banner-device-mac').textContent = panel;
                 window.setConnectionState({mode: 'active', transport: 'ble', mac: panel, name: 'Ditoo'});
-            }""", PANEL)
+            }""",
+                PANEL,
+            )
             await eval_js(page, "(panel) => window.connectDevice('Ditoo2', panel)", PANEL)
             await wait_js(page, "() => typeof window.__release === 'function'")
 

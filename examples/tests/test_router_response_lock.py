@@ -9,6 +9,7 @@ Teeth: drop the `async with self._response_lock` in
 connection.py:send_command_and_wait_for_response and the two coroutines
 interleave — one sees the other's command id in the scalar → assertion fails.
 """
+
 import asyncio
 import logging
 import sys

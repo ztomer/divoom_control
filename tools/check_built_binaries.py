@@ -25,6 +25,7 @@ Not built is not a failure. CI builds only what it needs, and a fresh checkout
 has nothing at all; failing there would make the gate fire on the absence of a
 problem. A binary that EXISTS and disagrees is the failure.
 """
+
 from __future__ import annotations
 
 import sys
@@ -76,11 +77,10 @@ def main() -> int:
             if got is None:
                 failures.append(
                     f"{rel} does not answer --version — it predates the flag, "
-                    f"so it is older than {expected}. Rebuild: {rebuild_hint(name)}")
+                    f"so it is older than {expected}. Rebuild: {rebuild_hint(name)}"
+                )
             else:
-                failures.append(
-                    f"{rel} reports {got}, but this tree is {expected}. "
-                    f"Rebuild: {rebuild_hint(name)}")
+                failures.append(f"{rel} reports {got}, but this tree is {expected}. Rebuild: {rebuild_hint(name)}")
 
     if failures:
         err("[built-bins] stale binaries on disk")

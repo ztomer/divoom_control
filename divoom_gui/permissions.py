@@ -16,6 +16,7 @@ Bluetooth is already primed by the daemon's first scan (its prompt is declared i
 the Info.plist and surfaces because the GUI is foreground), so it isn't repeated
 here.
 """
+
 from __future__ import annotations
 
 import logging
@@ -44,14 +45,11 @@ def _prime_automation() -> None:
         # Spotify just to ask. `... is running` doesn't send an Apple Event; the
         # `tell ... to get player state` does — that's what raises the Automation
         # prompt (now owned by the foreground GUI, so it's visible).
-        script = (
-            f'if application "{app}" is running then\n'
-            f'    tell application "{app}" to get player state\n'
-            f'end if'
-        )
+        script = f'if application "{app}" is running then\n    tell application "{app}" to get player state\nend if'
         try:
-            subprocess.run(["osascript", "-e", script],
-                           capture_output=True, timeout=5, stdin=subprocess.DEVNULL, check=False)
+            subprocess.run(
+                ["osascript", "-e", script], capture_output=True, timeout=5, stdin=subprocess.DEVNULL, check=False
+            )
             logger.debug("primed Automation for %s", app)
         except Exception as e:
             logger.debug("automation prime for %s failed: %s", app, e)
@@ -72,5 +70,4 @@ def prime_permissions() -> None:
     if not _AUTOMATION_TARGETS:
         logger.debug("no Apple Events targets to prime (now-playing uses MediaRemote)")
         return
-    threading.Thread(target=_prime_automation, name="perm-prime",
-                     daemon=True).start()
+    threading.Thread(target=_prime_automation, name="perm-prime", daemon=True).start()

@@ -62,9 +62,7 @@ class TestConstruction:
     def test_construction_with_device_kind_looks_up_channel(self):
         t = BTSppTransport(mac_address="11-75-58-3f-fd-aa", device_kind="pixoo")
         assert t.channel_id == 1
-        t2 = BTSppTransport(
-            mac_address="11-75-58-54-b9-13", device_kind="timoo"
-        )
+        t2 = BTSppTransport(mac_address="11-75-58-54-b9-13", device_kind="timoo")
         assert t2.channel_id == 2
 
     def test_explicit_channel_overrides_device_kind(self):
@@ -240,7 +238,7 @@ class TestSendFrame:
         tears everything down (disconnect) before propagating."""
         t = BTSppTransport(mac_address="11-75-58-54-b9-13", channel_id=2)
         t.OPEN_TIMEOUT_S = 0.05
-        monkeypatch.setattr(t, "_find_serial_port", lambda: None)   # skip serial path
+        monkeypatch.setattr(t, "_find_serial_port", lambda: None)  # skip serial path
         monkeypatch.setattr(t, "_start_runloop", lambda: None)
         monkeypatch.setattr(t, "_open_blocking", lambda: None)
         disc = {"n": 0}
@@ -249,11 +247,12 @@ class TestSendFrame:
         async def _disc():
             disc["n"] += 1
             await real()
+
         monkeypatch.setattr(t, "disconnect", _disc)
 
         with pytest.raises(BtSppTransportError, match="timed out"):
             await t.connect()
-        assert disc["n"] == 1   # failed connect cleaned up
+        assert disc["n"] == 1  # failed connect cleaned up
 
     @pytest.mark.asyncio
     async def test_send_translates_non_zero_write_rc(self):
@@ -307,9 +306,7 @@ class TestDisconnectNoOp:
 
 class TestNotificationDataclass:
     def test_construction(self):
-        n = BtSppNotification(
-            command_id=0x46, payload=b"\x01\x02", framing="basic"
-        )
+        n = BtSppNotification(command_id=0x46, payload=b"\x01\x02", framing="basic")
         assert n.command_id == 0x46
         assert n.payload == b"\x01\x02"
         assert n.framing == "basic"
@@ -330,17 +327,19 @@ class TestNotificationDataclass:
 
 # ── Serial Port Fallback Tests ───────────────────────────────────────────────
 
+
 class TestSerialFallback:
     @pytest.mark.asyncio
     async def test_find_serial_port(self):
         t = BTSppTransport(mac_address="11-75-58-54-b9-13", device_name="Timoo-audio-4")
-        
+
         from unittest.mock import patch
+
         with patch("glob.glob") as mock_glob:
             mock_glob.return_value = [
                 "/dev/cu.Bluetooth-Incoming-Port",
                 "/dev/cu.Timoo-audio-4",
-                "/dev/cu.Adv360Pro-SerialPort"
+                "/dev/cu.Adv360Pro-SerialPort",
             ]
             port = t._find_serial_port()
             assert port == "/dev/cu.Timoo-audio-4"
@@ -348,44 +347,44 @@ class TestSerialFallback:
     @pytest.mark.asyncio
     async def test_find_serial_port_prefix_match(self):
         t = BTSppTransport(mac_address="11-75-58-54-b9-13", device_name="Ditoo-light-2")
-        
+
         from unittest.mock import patch
+
         with patch("glob.glob") as mock_glob:
-            mock_glob.return_value = [
-                "/dev/cu.Ditoo-audio-2",
-                "/dev/cu.Bluetooth-Incoming"
-            ]
+            mock_glob.return_value = ["/dev/cu.Ditoo-audio-2", "/dev/cu.Bluetooth-Incoming"]
             port = t._find_serial_port()
             assert port == "/dev/cu.Ditoo-audio-2"
 
     @pytest.mark.asyncio
     async def test_serial_connect_send_disconnect(self):
         t = BTSppTransport(mac_address="11-75-58-54-b9-13", device_name="Timoo-audio-4")
-        
+
         from unittest.mock import MagicMock, AsyncMock, patch
+
         mock_serial = MagicMock()
         mock_port = MagicMock()
         mock_port.is_open = True
         mock_serial.Serial.return_value = mock_port
-        
-        with patch("glob.glob", return_value=["/dev/cu.Timoo-audio-4"]), \
-             patch("sys.platform", "darwin"), \
-             patch.dict("sys.modules", {"serial": mock_serial, "IOBluetooth": MagicMock()}):
-            
+
+        with (
+            patch("glob.glob", return_value=["/dev/cu.Timoo-audio-4"]),
+            patch("sys.platform", "darwin"),
+            patch.dict("sys.modules", {"serial": mock_serial, "IOBluetooth": MagicMock()}),
+        ):
             # Mock sleep locally in the transport module to run instantly
             with patch("divoom_lib.bt_spp_transport.asyncio.sleep", new_callable=AsyncMock):
                 await t.connect()
-            
+
             assert t._serial_port is mock_port
             assert t.is_connected is True
             assert t.mtu == 200
-            
+
             # Test send: the frame arrives already framed (L4), and the serial
             # fallback must write those exact bytes.
             frame = bytes.fromhex("01030046490002")
             await t.send_frame(frame)
             mock_port.write.assert_called_once_with(frame)
-            
+
             # Test disconnect
             await t.disconnect()
             assert t._serial_port is None

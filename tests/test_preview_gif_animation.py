@@ -9,6 +9,7 @@ The instrument is calibrated in-test: the same assertion is shown to FAIL
 on the old drawImage path (player disabled) before it is trusted on the
 new one.
 """
+
 import base64
 import io
 from pathlib import Path
@@ -28,8 +29,7 @@ def _two_frame_gif(size: int = 16, delay_ms: int = 200) -> str:
     PIL = pytest.importorskip("PIL.Image")
     frames = [PIL.new("RGB", (size, size), RED), PIL.new("RGB", (size, size), BLUE)]
     buf = io.BytesIO()
-    frames[0].save(buf, format="GIF", save_all=True, append_images=frames[1:],
-                   duration=delay_ms, loop=0, disposal=1)
+    frames[0].save(buf, format="GIF", save_all=True, append_images=frames[1:], duration=delay_ms, loop=0, disposal=1)
     return "data:image/gif;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
@@ -118,7 +118,9 @@ async def test_static_png_and_non_gif_sources_take_the_static_path():
     png = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
     async with async_playwright() as p:
         browser, page = await _open(p)
-        res = await eval_js(page, """(src) => {
+        res = await eval_js(
+            page,
+            """(src) => {
             const disp = window.DisplayPreviewRegistry.get('PNG:TEST');
             disp.setFrame(src);
             return new Promise(resolve => setTimeout(() => {
@@ -128,7 +130,9 @@ async def test_static_png_and_non_gif_sources_take_the_static_path():
                 resolve({ decoded: !!(disp.gif && disp.gif.active), px: [d[0], d[1], d[2]],
                           nonGif: window.GifFrames.decode('data:image/png;base64,AAAA') });
             }, 200));
-        }""", png)
+        }""",
+            png,
+        )
         assert not res["decoded"], "a PNG must not be treated as an animation"
         assert tuple(res["px"]) == BLUE, res
         assert res["nonGif"] is None

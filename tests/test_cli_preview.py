@@ -7,6 +7,7 @@ no daemon, a daemon too old to answer, a registered panel with no link, an
 unknown `--mac` -- is an entry with `frame: null` and a reason, never a blank
 image that looks like data.
 """
+
 from __future__ import annotations
 
 import base64
@@ -76,8 +77,16 @@ def live_daemon(settings):
 
 
 def _run(*argv: str) -> sp.CompletedProcess:
-    return sp.run([sys.executable, "-m", "divoom_lib.cli", *argv], capture_output=True,
-                  text=True, timeout=60, cwd=REPO_ROOT, stdin=sp.DEVNULL, env=os.environ.copy(), check=False)
+    return sp.run(
+        [sys.executable, "-m", "divoom_lib.cli", *argv],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        cwd=REPO_ROOT,
+        stdin=sp.DEVNULL,
+        env=os.environ.copy(),
+        check=False,
+    )
 
 
 def _gradient() -> bytes:
@@ -96,11 +105,15 @@ def test_a_pushed_image_comes_back_as_the_same_pixels(live_daemon, tmp_path):
 
     socket_path, client = live_daemon
     rgb = _gradient()
-    reply = client.send_command("device_call", {
-        "mac": A, "method": "show_image", "args": [],
-        "kwargs": {"w": 16, "h": 16,
-                   "frames": [{"rgb_b64": base64.b64encode(rgb).decode(), "time_ms": 100}]},
-    })
+    reply = client.send_command(
+        "device_call",
+        {
+            "mac": A,
+            "method": "show_image",
+            "args": [],
+            "kwargs": {"w": 16, "h": 16, "frames": [{"rgb_b64": base64.b64encode(rgb).decode(), "time_ms": 100}]},
+        },
+    )
     assert reply.get("success") is True, reply
     before = client.send_command("mock_sent", {"mac": A})
 
@@ -161,8 +174,10 @@ class _OldDaemon(_Fake):
     def send_command(self, command, args=None, **_kw):
         self.sent.append(command)
         return {
-            "device_status": {"success": True, "devices": [
-                {"mac": A, "connected": True, "model": "Pixoo", "width": 16, "height": 16}]},
+            "device_status": {
+                "success": True,
+                "devices": [{"mac": A, "connected": True, "model": "Pixoo", "width": 16, "height": 16}],
+            },
             "owned_devices": {"success": True, "devices": [{"address": A, "name": "Pixoo-1"}]},
         }.get(command, {"success": False, "code": "unknown_command", "error": "x"})
 
@@ -196,7 +211,7 @@ def test_every_state_the_command_emits_is_documented():
     import divoom_lib.cli_preview as mod
 
     source = Path(mod.__file__).read_text(encoding="utf-8")
-    code = source[source.index('"""', 3) + 3:]
+    code = source[source.index('"""', 3) + 3 :]
     emitted = set(re.findall(r'_absent\([^,]+,\s*"([a-z_]+)"', code))
     emitted |= set(re.findall(r'"state":\s*"([a-z_]+)"', code))
     assert {"error", "not_running", "unsupported", "running"} <= emitted, emitted

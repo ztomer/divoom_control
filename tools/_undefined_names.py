@@ -36,16 +36,26 @@ follow `exec`/`eval` strings, and it treats a comprehension's targets as
 scoped to the comprehension (Python 3's rule) — so `[x for x in y]` followed
 by a bare `x` IS reported, because that is a NameError at runtime.
 """
+
 from __future__ import annotations
 
 import ast
 import builtins
 
 # Names every module has, whether or not it assigned them.
-_MODULE_DUNDERS = frozenset({
-    "__name__", "__file__", "__doc__", "__package__", "__spec__",
-    "__loader__", "__builtins__", "__debug__", "__class__",
-})
+_MODULE_DUNDERS = frozenset(
+    {
+        "__name__",
+        "__file__",
+        "__doc__",
+        "__package__",
+        "__spec__",
+        "__loader__",
+        "__builtins__",
+        "__debug__",
+        "__class__",
+    }
+)
 
 _BUILTINS = frozenset(dir(builtins)) | _MODULE_DUNDERS
 
@@ -60,8 +70,7 @@ class _Scope:
         # Where a walrus (`:=`) inside this scope binds. Python binds it in the
         # nearest enclosing FUNCTION scope, skipping comprehension scopes
         # (PEP 572), so a comprehension carries its parent's answer.
-        self.walrus_scope = parent.walrus_scope if (
-            kind == "comprehension" and parent is not None) else self
+        self.walrus_scope = parent.walrus_scope if (kind == "comprehension" and parent is not None) else self
 
     def defines(self, name: str) -> bool:
         """Is `name` bound in this scope, or in a scope that encloses it?
@@ -128,8 +137,7 @@ def _pattern_names(node: ast.AST) -> list[str]:
 
 
 def _arg_names(args: ast.arguments) -> list[str]:
-    out = [a.arg for a in
-           list(args.posonlyargs) + list(args.args) + list(args.kwonlyargs)]
+    out = [a.arg for a in list(args.posonlyargs) + list(args.args) + list(args.kwonlyargs)]
     if args.vararg:
         out.append(args.vararg.arg)
     if args.kwarg:
@@ -147,9 +155,11 @@ def _walrus_targets(node: ast.AST) -> list[str]:
 
 
 def _annotations(args: ast.arguments) -> list[ast.AST]:
-    out = [a.annotation for a in
-           list(args.posonlyargs) + list(args.args) + list(args.kwonlyargs)
-           if a.annotation is not None]
+    out = [
+        a.annotation
+        for a in list(args.posonlyargs) + list(args.args) + list(args.kwonlyargs)
+        if a.annotation is not None
+    ]
     return out
 
 
@@ -252,8 +262,7 @@ class _Finder:
         self._seen.add(key)
         self.problems.append((name, lineno))
 
-    def _expr(self, node: ast.AST | None, scope: _Scope,
-              in_annotation: bool = False) -> None:
+    def _expr(self, node: ast.AST | None, scope: _Scope, in_annotation: bool = False) -> None:
         if node is None:
             return
         kind = type(node)

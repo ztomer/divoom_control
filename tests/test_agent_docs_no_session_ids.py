@@ -41,9 +41,7 @@ def test_entry_doc_names_no_opencode_session_id(name):
 
 @pytest.mark.parametrize("name", ENTRY_DOCS)
 def test_entry_doc_says_how_to_find_the_latest_session(name):
-    assert "opencode session list" in _read(name), (
-        f"{name} lost the non-rotting instruction for finding a session"
-    )
+    assert "opencode session list" in _read(name), f"{name} lost the non-rotting instruction for finding a session"
 
 
 @pytest.mark.parametrize("name", ENTRY_DOCS)

@@ -6,6 +6,7 @@ server and other non-GUI clients can reuse the proxy without a backwards
 so existing GUI call-sites and tests (`from divoom_gui.daemon_bridge import ...`)
 keep working.
 """
+
 from __future__ import annotations
 
 from divoom_client.daemon_client import (  # noqa: F401

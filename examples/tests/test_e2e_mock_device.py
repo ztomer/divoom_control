@@ -46,8 +46,6 @@ async def test_connect_uses_injected_mock():
     assert dev.client is mock  # not replaced by a real BleakClient
 
 
-
-
 @pytest.mark.asyncio
 async def test_show_effects_lan_unsupported():
     """VJ effects should return False and warn on LAN devices."""
@@ -55,28 +53,12 @@ async def test_show_effects_lan_unsupported():
     # Instantiate with a dummy lan_ip to simulate a Wi-Fi/LAN device
     dev = Divoom(mac=MAC, client=mock, lan_ip="192.168.1.100", use_ios_le_protocol=False)
     assert dev.display.communicator.lan is not None
-    
+
     ok = await dev.display.show_effects(number=5)
     assert ok is False
-    
+
     ok_switch = await dev.display.switch_channel("vj")
     assert ok_switch is False
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 @pytest.mark.asyncio
@@ -84,13 +66,10 @@ async def test_weather_set_rejects_out_of_range():
     """Temps outside -127..128 raise ValueError."""
     dev, _ = await _connected_divoom()
     from divoom_legacy.system.weather import Weather
+
     w = Weather(dev)
     with pytest.raises(ValueError):
         await w.set(200, 1)
-
-
-
-
 
 
 @pytest.mark.asyncio
@@ -98,16 +77,14 @@ async def test_watchface_roundtrip_script_e2e(monkeypatch):
     """Verify that verify_device in the watchface roundtrip script successfully
     interacts with the Divoom facade using MockBleakClient."""
     from test_watchface_roundtrip import verify_device
-    
+
     original_divoom_init = Divoom.__init__
-    
+
     def mock_divoom_init(self, *args, **kwargs):
         kwargs["client"] = MockBleakClient(kwargs.get("mac", "AA:BB:CC:DD:EE:FF"))
         original_divoom_init(self, *args, **kwargs)
-        
+
     monkeypatch.setattr(Divoom, "__init__", mock_divoom_init)
-    
+
     success = await verify_device("AA:BB:CC:DD:EE:FF", "MockDevice", dial=3)
     assert success is True
-
-

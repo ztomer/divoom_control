@@ -25,9 +25,11 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 def _export_keep() -> list[str]:
     out = subprocess.run(
-        ["bash", "-c", 'set -a; . "$1"; printf %s "${GOH_EXPORT_KEEP-}"', "_",
-         str(ROOT / ".gatesrc")],
-        capture_output=True, text=True, stdin=subprocess.DEVNULL, check=True,
+        ["bash", "-c", 'set -a; . "$1"; printf %s "${GOH_EXPORT_KEEP-}"', "_", str(ROOT / ".gatesrc")],
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        check=True,
     )
     return out.stdout.split()
 
@@ -36,15 +38,14 @@ def test_the_export_keeps_no_build_output():
     built = [k for k in _export_keep() if k == "target" or k.startswith("target/")]
     assert not built, (
         f"GOH_EXPORT_KEEP carries a build output into the export: {built} -- a "
-        "step that rebuilds it moves its own proven key (P1.17)")
+        "step that rebuilds it moves its own proven key (P1.17)"
+    )
 
 
 def test_the_python_step_builds_the_daemon_its_tests_spawn():
     script = (ROOT / "scripts" / "py_ci.sh").read_text()
-    code = "\n".join(line for line in script.splitlines()
-                     if not line.lstrip().startswith("#"))
+    code = "\n".join(line for line in script.splitlines() if not line.lstrip().startswith("#"))
     build = re.search(r"(?m)^\s*cargo build -p divoomd --locked\s*$", code)
     pytest = re.search(r"python3 -m pytest", code)
     assert build, "scripts/py_ci.sh must build the daemon the spawning tests run"
-    assert pytest and build.start() < pytest.start(), (
-        "the daemon must be built BEFORE the suite that spawns it")
+    assert pytest and build.start() < pytest.start(), "the daemon must be built BEFORE the suite that spawns it"

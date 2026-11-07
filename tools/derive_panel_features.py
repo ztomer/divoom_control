@@ -35,6 +35,7 @@ this runs on a machine that has them:
 `tests/test_panel_features_parity.py` compares its output with the daemon's
 table whenever the sources and a JDK are present.
 """
+
 from __future__ import annotations
 
 import json
@@ -46,11 +47,34 @@ import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-SOURCE = (REPO / "references" / "apk" / "decompiled_src" / "sources" / "com" / "divoom"
-          / "Divoom" / "utils" / "DeviceFunction" / "DeviceFunction.java")
-DISCOVER_SOURCE = (REPO / "references" / "apk" / "decompiled_src" / "sources" / "com"
-                   / "divoom" / "Divoom" / "view" / "fragment" / "discover" / "model"
-                   / "DiscoverModel.java")
+SOURCE = (
+    REPO
+    / "references"
+    / "apk"
+    / "decompiled_src"
+    / "sources"
+    / "com"
+    / "divoom"
+    / "Divoom"
+    / "utils"
+    / "DeviceFunction"
+    / "DeviceFunction.java"
+)
+DISCOVER_SOURCE = (
+    REPO
+    / "references"
+    / "apk"
+    / "decompiled_src"
+    / "sources"
+    / "com"
+    / "divoom"
+    / "Divoom"
+    / "view"
+    / "fragment"
+    / "discover"
+    / "model"
+    / "DiscoverModel.java"
+)
 
 # The switches reported, each as (output key, enum class, the constant that
 # means "on"). Only switches whose CONSUMERS in the vendor app were read and
@@ -92,8 +116,7 @@ FLAGS = (
     ("wifi", "WifiBlueArchEnum", "WifiArchMode"),
     ("radio", "FmModeEnum", "SupportFm"),
 )
-PIXELS = {"DevicePixel16": 16, "DevicePixel32": 32, "DevicePixel64": 64,
-          "DevicePixel128": 128, "DevicePixel256": 256}
+PIXELS = {"DevicePixel16": 16, "DevicePixel32": 32, "DevicePixel64": 64, "DevicePixel128": 128, "DevicePixel256": 256}
 
 # The app's UI architectures that get the COMMON light screen
 # (`LightCommonMainFragment`, JumpControl.java:196). Its config list
@@ -130,7 +153,7 @@ def _method_body(src: str) -> str:
         depth += c == "{"
         depth -= c == "}"
         i += 1
-    return src[start:i - 1]
+    return src[start : i - 1]
 
 
 def _fields(src: str) -> list[str]:
@@ -181,7 +204,7 @@ def discover_screens(src: str) -> dict[str, list[str]]:
             depth += c == "{"
             depth -= c == "}"
             i += 1
-        body = src[m.end(): i - 1]
+        body = src[m.end() : i - 1]
         screens = re.findall(r"HomeBeanType\.(\w+)", body)
         out[name] = [_screen_id(s) for s in screens]
     return out
@@ -204,13 +227,14 @@ def _java(src: str) -> str:
             f"  static void setBlueMode({name} e) {{ mode = e; }}\n"
             f"  static void setGalleyMode({name} e) {{ mode = e; }}\n"
             f"  static void setNewMode() {{ mode = {name}.values()[{name}.values().length - 1]; }}\n"
-            f"  static {name} getMode() {{ return mode; }}\n}}\n")
+            f"  static {name} getMode() {{ return mode; }}\n}}\n"
+        )
     flags = ", ".join(f'"{k}", {cls}.mode == {cls}.{on}' for k, cls, on in FLAGS)
     fields = "\n  ".join(_fields(src))
     return f"""
 import java.util.*;
 public class Harness {{
-{''.join(stubs)}
+{"".join(stubs)}
 static class DeviceFunction {{
   static int f11383y0 = 40;
   static String f11382x0 = "DeviceFunction";
@@ -221,7 +245,7 @@ static class DeviceFunction {{
 static class J {{ static void C(Object o) {{}} static void B(Object o) {{}} }}
 static class DesignSendModel {{ static void clearWifiSendMd5() {{}} }}
 static class AbstractC0519k {{ static void d(Object a, Object b) {{}} }}
-enum DeviceTypeEnum {{ {', '.join(enums['DeviceTypeEnum'])};
+enum DeviceTypeEnum {{ {", ".join(enums["DeviceTypeEnum"])};
   static DeviceTypeEnum device_type;
   static void setDeviceMode(DeviceTypeEnum deviceTypeEnum) {{
 {_method_body(src)}
@@ -261,13 +285,11 @@ def derive() -> list[dict]:
         path = Path(tmp) / "Harness.java"
         path.write_text(_java(src), encoding="utf-8")
         for argv in (["javac", "-nowarn", "-d", tmp, str(path)], ["java", "-cp", tmp, "Harness"]):
-            out = subprocess.run(argv, check=False, capture_output=True, text=True,
-                                 stdin=subprocess.DEVNULL)
+            out = subprocess.run(argv, check=False, capture_output=True, text=True, stdin=subprocess.DEVNULL)
             if out.returncode:
                 raise SystemExit(f"{argv[0]} failed:\n{out.stderr[-4000:]}")
     rows = json.loads(out.stdout)
-    screens = discover_screens(DISCOVER_SOURCE.read_text(encoding="utf-8")) \
-        if DISCOVER_SOURCE.is_file() else {}
+    screens = discover_screens(DISCOVER_SOURCE.read_text(encoding="utf-8")) if DISCOVER_SOURCE.is_file() else {}
     for r in rows:
         r["pixels"] = PIXELS[r["pixels"]]
         r["screens"] = screens.get(r["discover"], [])
@@ -282,8 +304,7 @@ def rust_rows(rows: list[dict]) -> str:
         on = " | ".join(k.upper() for k, _, _ in FLAGS if r[k]) or "NONE"
         if r["vj"]:
             on = "VJ" if on == "NONE" else on + " | VJ"
-        lines.append(
-            f'    ("{r["model"]}", {on}, "{r["clock"]}", "{r["discover"]}", "{r["arch"]}"),')
+        lines.append(f'    ("{r["model"]}", {on}, "{r["clock"]}", "{r["discover"]}", "{r["arch"]}"),')
     return "\n".join(lines)
 
 

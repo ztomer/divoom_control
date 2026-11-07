@@ -17,6 +17,7 @@ The gestures are held to the enumeration in
 `tests/test_wall_writes_name_the_panel.py`: every bridge method that writes
 to the wall has one here, or a reason it has none.
 """
+
 from __future__ import annotations
 
 import json
@@ -25,7 +26,15 @@ from pathlib import Path
 
 import pytest
 
-from tests.support.browser import add_init_js, eval_js, install_toast_recorder, launch, require_browser, wait_js, wait_toast
+from tests.support.browser import (
+    add_init_js,
+    eval_js,
+    install_toast_recorder,
+    launch,
+    require_browser,
+    wait_js,
+    wait_toast,
+)
 from tests.support.daemon_binary import find_divoomd
 from tests.support.gui_daemon_stack import IsolatedStack
 
@@ -43,32 +52,54 @@ window.pywebview = { api: new Proxy({}, { get: (_t, name) => (...args) =>
 
 #: Each wall write's gesture, and the failure toast it raises.
 GESTURES = {
-    "switch_channel": ("Failed to switch channel",
-                       "document.querySelector('.tab-btn[data-channel=\"vj\"]').click()"),
-    "set_vj_effect": ("Failed to apply VJ effect",
-                      "document.querySelector('#vj-effects-grid [data-value=\"2\"]').click()"),
-    "set_visualization": ("Failed to apply EQ",
-                          "document.querySelector('#eq-visualizer-grid [data-value=\"1\"]').click()"),
-    "set_clock": ("Failed to apply clock",
-                  "document.querySelector('#clock-faces-grid [data-value=\"2\"]').click()"),
-    "set_clock_rich": ("Failed to apply clock", """(() => { const c = document.getElementById('clock-rich-date');
-                       c.checked = true; c.dispatchEvent(new Event('change')); })()"""),
-    "set_solid_light": ("Failed to apply ambient",
-                        "document.querySelector('#ambient-mode-grid [data-value=\"0\"]').click()"),
-    "push_text": ("Failed to push text", """(() => { document.getElementById('text-content-input').value = 'HI';
-                  document.getElementById('push-text-btn').click(); })()"""),
-    "set_scoreboard": ("Failed to set scoreboard", """(() => { const r = document.getElementById('scoreboard-red');
-                       r.value = 3; r.dispatchEvent(new Event('change')); })()"""),
+    "switch_channel": ("Failed to switch channel", "document.querySelector('.tab-btn[data-channel=\"vj\"]').click()"),
+    "set_vj_effect": (
+        "Failed to apply VJ effect",
+        "document.querySelector('#vj-effects-grid [data-value=\"2\"]').click()",
+    ),
+    "set_visualization": (
+        "Failed to apply EQ",
+        "document.querySelector('#eq-visualizer-grid [data-value=\"1\"]').click()",
+    ),
+    "set_clock": ("Failed to apply clock", "document.querySelector('#clock-faces-grid [data-value=\"2\"]').click()"),
+    "set_clock_rich": (
+        "Failed to apply clock",
+        """(() => { const c = document.getElementById('clock-rich-date');
+                       c.checked = true; c.dispatchEvent(new Event('change')); })()""",
+    ),
+    "set_solid_light": (
+        "Failed to apply ambient",
+        "document.querySelector('#ambient-mode-grid [data-value=\"0\"]').click()",
+    ),
+    "push_text": (
+        "Failed to push text",
+        """(() => { document.getElementById('text-content-input').value = 'HI';
+                  document.getElementById('push-text-btn').click(); })()""",
+    ),
+    "set_scoreboard": (
+        "Failed to set scoreboard",
+        """(() => { const r = document.getElementById('scoreboard-red');
+                       r.value = 3; r.dispatchEvent(new Event('change')); })()""",
+    ),
     # The deck's levels are the wall's while it is the display (P6.6).
-    "set_brightness": ("The wall did not take the brightness", """(() => {
+    "set_brightness": (
+        "The wall did not take the brightness",
+        """(() => {
                        const s = document.getElementById('global-brightness-slider');
-                       s.value = 40; s.dispatchEvent(new Event('change')); })()"""),
-    "set_volume": ("The wall did not take the volume", """(() => {
+                       s.value = 40; s.dispatchEvent(new Event('change')); })()""",
+    ),
+    "set_volume": (
+        "The wall did not take the volume",
+        """(() => {
                    const s = document.getElementById('appbar-volume-slider');
-                   s.value = 7; s.dispatchEvent(new Event('change')); })()"""),
-    "display_wall_image": ("Failed to split and sync wall image", """(() => {
+                   s.value = 7; s.dispatchEvent(new Event('change')); })()""",
+    ),
+    "display_wall_image": (
+        "Failed to split and sync wall image",
+        """(() => {
                            document.getElementById('file-path-input').value = window.__IMAGE__;
-                           document.getElementById('apply-wall-art').click(); })()"""),
+                           document.getElementById('apply-wall-art').click(); })()""",
+    ),
 }
 
 #: Wall writes with no gesture here, and why. Each is held to the same reply
@@ -84,13 +115,15 @@ def test_every_wall_write_has_a_gesture_or_a_reason(tmp_path):
     silently left out of the real-chain check."""
     from tests.support.bridge_calls import recorded_api
     from tests.test_wall_writes_name_the_panel import _FailingWall, _wall_writes
+
     with recorded_api(tmp_path) as api:
         api._daemon_client = _FailingWall()
         api.wall_slots = {A: {"x": 0, "y": 0, "size": 16}, B: {"x": 1, "y": 0, "size": 16}}
         found = set(_wall_writes(api))
     assert found == set(GESTURES) | set(NOT_FROM_THE_PAGE), (
         f"no gesture: {sorted(found - set(GESTURES) - set(NOT_FROM_THE_PAGE))}; "
-        f"stale: {sorted((set(GESTURES) | set(NOT_FROM_THE_PAGE)) - found)}")
+        f"stale: {sorted((set(GESTURES) | set(NOT_FROM_THE_PAGE)) - found)}"
+    )
 
 
 @pytest.fixture
@@ -105,7 +138,8 @@ def stack():
     try:
         for mac, failing in ((A, False), (B, True)):
             reply = s.client.send_command(
-                "connect", {"mock": True, "mac": mac, "name": "Ditoo-Plus", "failing": failing})
+                "connect", {"mock": True, "mac": mac, "name": "Ditoo-Plus", "failing": failing}
+            )
             assert reply.get("success") is True, reply
         yield s
     finally:
@@ -119,28 +153,43 @@ async def test_each_wall_write_names_the_panel_that_did_not_take_it(stack, tmp_p
 
     image = tmp_path / "wall.png"
     Image.new("RGB", (32, 16), (200, 40, 10)).save(image)
-    slots = {A: {"x": 0, "y": 0, "size": 16, "name": "Desk", "room": "wall"},
-             B: {"x": 1, "y": 0, "size": 16, "name": "Shelf", "room": "wall"}}
+    slots = {
+        A: {"x": 0, "y": 0, "size": 16, "name": "Desk", "room": "wall"},
+        B: {"x": 1, "y": 0, "size": 16, "name": "Shelf", "room": "wall"},
+    }
 
     async with async_playwright() as p:
         browser = await launch(p)
         try:
             page = await browser.new_page(viewport={"width": 1280, "height": 900})
             await install_toast_recorder(page)
-            await add_init_js(page, f"window.__BRIDGE_URL__ = {json.dumps(stack.bridge_url)};\n"
-                              f"window.__IMAGE__ = {json.dumps(str(image))};\n" + _REAL_BRIDGE_API)
+            await add_init_js(
+                page,
+                f"window.__BRIDGE_URL__ = {json.dumps(stack.bridge_url)};\n"
+                f"window.__IMAGE__ = {json.dumps(str(image))};\n" + _REAL_BRIDGE_API,
+            )
             await page.goto(f"file://{INDEX_HTML}")
-            await wait_js(page, "() => !!window.Divoom?.onOwnedDevices"
-                                " && !!document.querySelector('#vj-effects-grid [data-value]')")
-            await eval_js(page, """([a, b]) => window.Divoom.onOwnedDevices({type: 'owned_devices', devices: [
+            await wait_js(
+                page,
+                "() => !!window.Divoom?.onOwnedDevices && !!document.querySelector('#vj-effects-grid [data-value]')",
+            )
+            await eval_js(
+                page,
+                """([a, b]) => window.Divoom.onOwnedDevices({type: 'owned_devices', devices: [
                 {address: a, name: 'Desk', kind: 'clock', state: 'active'},
-                {address: b, name: 'Shelf', kind: 'clock', state: 'active'}]})""", [A, B])
+                {address: b, name: 'Shelf', kind: 'clock', state: 'active'}]})""",
+                [A, B],
+            )
             # The bench's wall, then the wall chosen as the display (the
             # selector's Virtual Wall button).
-            await eval_js(page, """async (slots) => {
+            await eval_js(
+                page,
+                """async (slots) => {
                 window.DivoomState.assignedSlots = slots;
                 await window.pywebview.api.update_wall_slots(JSON.stringify(slots));
-                window.connectDevice('Virtual Wall', 'MatrixWall'); }""", slots)
+                window.connectDevice('Virtual Wall', 'MatrixWall'); }""",
+                slots,
+            )
             await wait_js(page, "() => window._activeDeviceMac() === 'MatrixWall'")
 
             missed = {}

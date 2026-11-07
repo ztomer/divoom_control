@@ -1,5 +1,6 @@
 """gallery_sync coverage: cached-gallery readers and the fetch_gallery
 worker (split from test_gallery_sync_coverage.py)."""
+
 import json
 import logging
 from pathlib import Path
@@ -16,6 +17,7 @@ from tests.support.gallery_sync_common import (  # noqa: F401
 
 # ─────────────────────────── _load_cached_gallery ───────────────────────────
 
+
 def test_load_cached_gallery_malformed_json_returns_empty(tmp_path, monkeypatch):
     """Corrupt JSON on disk must not raise — caught, warned, empty list."""
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -30,6 +32,7 @@ def test_load_cached_gallery_malformed_json_returns_empty(tmp_path, monkeypatch)
 
 
 # ───────────────────────── get_cached_gallery_files ─────────────────────────
+
 
 def test_get_cached_gallery_files_no_dir_returns_empty(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -108,7 +111,6 @@ def test_get_cached_gallery_files_encode_failure_is_warned_not_raised(tmp_path, 
     assert out == []  # the one file failed to encode -> excluded, no crash
 
 
-
 # ────────────────────────────── fetch_gallery ───────────────────────────────
 #
 # R70 P2.2. These used to drive a fake `urllib.request.urlopen` answering both
@@ -140,19 +142,16 @@ def test_fetch_gallery_asks_the_daemon_and_streams_every_item(tmp_path, monkeypa
             {"FileId": "bbb", "FileName": "Old", "LikeCnt": 1, "FileType": 5},
             {"FileName": "NoFileId"},
         ],
-        previews={"aaa": "data:image/gif;base64,R0lGODlhAQABAAAAACw=",
-                  "bbb": "data:image/png;base64,iVBORw0KGgo="},
+        previews={"aaa": "data:image/gif;base64,R0lGODlhAQABAAAAACw=", "bbb": "data:image/png;base64,iVBORw0KGgo="},
     )
     m = _daemon_host(tmp_path, monkeypatch, client)
     assert m.fetch_gallery(classify=18, target_size=16, mac="AA:BB") == "[]"
     _wait_for_fetch_thread()
 
-    assert client.fetch_calls == [
-        {"classify": 18, "limit": 30, "file_sort": 1, "mac": "AA:BB", "all_sizes": False}]
+    assert client.fetch_calls == [{"classify": 18, "limit": 30, "file_sort": 1, "mac": "AA:BB", "all_sizes": False}]
     assert set(client.preview_calls) == {"aaa", "bbb"}
 
-    saved = json.loads(
-        (tmp_path / ".config" / "divoom-control" / "gallery_cache.json").read_text())
+    saved = json.loads((tmp_path / ".config" / "divoom-control" / "gallery_cache.json").read_text())
     assert {i["name"] for i in saved} == {"New", "Old", "NoFileId"}
     assert saved[0]["preview_url"].startswith("data:image/gif;base64,")
     assert m.window.evaluate_js.call_count >= 4  # 3 progressive + 1 final
@@ -183,11 +182,13 @@ def test_the_cached_gallery_lists_only_the_panels_own_size(tmp_path, monkeypatch
     m = _daemon_host(tmp_path, monkeypatch, client)
     cache = tmp_path / ".config" / "divoom-control" / "gallery_cache.json"
     cache.parent.mkdir(parents=True, exist_ok=True)
-    items = json.dumps([
-        {"file_id": "group1_a", "name": "small", "size": 16},
-        {"file_id": "group1_b", "name": "big", "size": 64},
-        {"file_id": "group1_c", "name": "unknown"},
-    ])
+    items = json.dumps(
+        [
+            {"file_id": "group1_a", "name": "small", "size": 16},
+            {"file_id": "group1_b", "name": "big", "size": 64},
+            {"file_id": "group1_c", "name": "unknown"},
+        ]
+    )
     cache.write_text(items)
     small = json.loads(m.fetch_gallery(classify=1, target_size=16))
     _wait_for_fetch_thread()  # the background fetch rewrites the cache
@@ -199,15 +200,16 @@ def test_the_cached_gallery_lists_only_the_panels_own_size(tmp_path, monkeypatch
 
 
 def test_fetched_items_carry_the_size_they_were_fetched_for(tmp_path, monkeypatch):
-    client = FakeDaemonClient(file_list=[
-        {"FileId": "group1_x", "FileName": "X", "FileSize": 4},
-        {"FileId": "group1_y", "FileName": "Y"},
-    ])
+    client = FakeDaemonClient(
+        file_list=[
+            {"FileId": "group1_x", "FileName": "X", "FileSize": 4},
+            {"FileId": "group1_y", "FileName": "Y"},
+        ]
+    )
     m = _daemon_host(tmp_path, monkeypatch, client)
     m.fetch_gallery(classify=1, target_size=64, mac="AA:BB")
     _wait_for_fetch_thread()
-    saved = json.loads(
-        (tmp_path / ".config" / "divoom-control" / "gallery_cache.json").read_text())
+    saved = json.loads((tmp_path / ".config" / "divoom-control" / "gallery_cache.json").read_text())
     assert [i["size"] for i in saved] == [64, None]  # the item's own FileSize
 
 
@@ -220,8 +222,7 @@ def test_an_auth_failure_marks_the_banner_expired(tmp_path, monkeypatch):
     """
     from divoom_client.daemon_cloud import CloudUnavailable
 
-    client = FakeDaemonClient(
-        fetch_error=CloudUnavailable("UserNewGuest failed (RC=10)", "auth"))
+    client = FakeDaemonClient(fetch_error=CloudUnavailable("UserNewGuest failed (RC=10)", "auth"))
     m = _daemon_host(tmp_path, monkeypatch, client)
     m.fetch_gallery(classify=1, target_size=16)
     _wait_for_fetch_thread()
@@ -234,8 +235,7 @@ def test_an_auth_failure_marks_the_banner_expired(tmp_path, monkeypatch):
 def test_a_cloud_failure_is_reported_but_not_as_expired(tmp_path, monkeypatch):
     from divoom_client.daemon_cloud import CloudUnavailable
 
-    client = FakeDaemonClient(
-        fetch_error=CloudUnavailable("Divoom said no (RC=5)", "cloud"))
+    client = FakeDaemonClient(fetch_error=CloudUnavailable("Divoom said no (RC=5)", "cloud"))
     m = _daemon_host(tmp_path, monkeypatch, client)
     m.fetch_gallery(classify=1, target_size=16)
     _wait_for_fetch_thread()
@@ -264,8 +264,7 @@ def test_one_undecodable_item_does_not_empty_the_gallery(tmp_path, monkeypatch, 
     from divoom_client.daemon_cloud import CloudUnavailable
 
     client = FakeDaemonClient(
-        file_list=[{"FileId": "good", "FileName": "Good"},
-                   {"FileId": "bad", "FileName": "Bad"}],
+        file_list=[{"FileId": "good", "FileName": "Good"}, {"FileId": "bad", "FileName": "Bad"}],
         previews={"good": "data:image/gif;base64,R0lGODlhAQABAAAAACw="},
         preview_errors={"bad": CloudUnavailable("unrecognized container magic", "cloud")},
     )
@@ -274,8 +273,7 @@ def test_one_undecodable_item_does_not_empty_the_gallery(tmp_path, monkeypatch, 
         m.fetch_gallery(classify=1, target_size=16)
         _wait_for_fetch_thread()
 
-    saved = json.loads(
-        (tmp_path / ".config" / "divoom-control" / "gallery_cache.json").read_text())
+    saved = json.loads((tmp_path / ".config" / "divoom-control" / "gallery_cache.json").read_text())
     assert len(saved) == 2
     by_name = {i["name"]: i for i in saved}
     assert by_name["Good"]["preview_url"].startswith("data:")
@@ -285,8 +283,8 @@ def test_one_undecodable_item_does_not_empty_the_gallery(tmp_path, monkeypatch, 
 
 def test_broadcast_failures_are_warned_not_raised(tmp_path, monkeypatch, caplog):
     client = FakeDaemonClient(
-        file_list=[{"FileId": "aaa", "FileName": "A"}],
-        previews={"aaa": "data:image/gif;base64,R0lGODlhAQABAAAAACw="})
+        file_list=[{"FileId": "aaa", "FileName": "A"}], previews={"aaa": "data:image/gif;base64,R0lGODlhAQABAAAAACw="}
+    )
     m = _daemon_host(tmp_path, monkeypatch, client)
     m.window.evaluate_js.side_effect = RuntimeError("webview gone")
     with caplog.at_level(logging.WARNING):
@@ -296,11 +294,11 @@ def test_broadcast_failures_are_warned_not_raised(tmp_path, monkeypatch, caplog)
 
 
 def test_cache_save_failure_is_warned(tmp_path, monkeypatch, caplog):
-    client = FakeDaemonClient(file_list=[{"FileId": "aaa", "FileName": "A"}],
-                              previews={"aaa": "data:image/png;base64,iVBORw0KGgo="})
+    client = FakeDaemonClient(
+        file_list=[{"FileId": "aaa", "FileName": "A"}], previews={"aaa": "data:image/png;base64,iVBORw0KGgo="}
+    )
     m = _daemon_host(tmp_path, monkeypatch, client)
-    with patch("divoom_gui.gallery_sync.atomic_write_text",
-               side_effect=OSError("disk full")):
+    with patch("divoom_gui.gallery_sync.atomic_write_text", side_effect=OSError("disk full")):
         with caplog.at_level(logging.WARNING):
             m.fetch_gallery(classify=1, target_size=16)
             _wait_for_fetch_thread()

@@ -2,6 +2,7 @@
 
 Extracts the display/lighting command surface.
 """
+
 from __future__ import annotations
 
 import logging
@@ -24,7 +25,7 @@ class LightingApi(ApiBase, WidgetFrameMixin):
         client = self._client
         if client is None or not isinstance(mac, str) or not mac:
             return  # no panel named: stop nothing, least of all the daemon's default
-        for target in (list(self._wall_slots) if mac == WALL else [mac]):
+        for target in list(self._wall_slots) if mac == WALL else [mac]:
             try:
                 client.live_jobs_stop_for(target)
             except Exception as e:
@@ -35,38 +36,53 @@ class LightingApi(ApiBase, WidgetFrameMixin):
         named, its live widgets stopped, then the write, answered as its
         outcome (P6.4: on the wall, the panel that did not take it). No panel
         named, no write -- and nothing stopped on a panel nobody chose."""
+
         def takeover():
             logger.info(f"GUI Action: {what} on {mac}")
             self._stop_live_widgets(mac)
+
         return self._write(mac, what, on_wall if mac == WALL else on_panel, before=takeover)
 
     def set_solid_light(self, mac: str, color: str, brightness: int, mode_type: int = 0) -> dict:
-        return self._show(mac, f"solid light {color} (brightness={brightness}, mode_type={mode_type})",
-                          lambda t: t.set_light(color, brightness),
-                          lambda t: t.display.show_light(color, brightness, True, mode_type))
+        return self._show(
+            mac,
+            f"solid light {color} (brightness={brightness}, mode_type={mode_type})",
+            lambda t: t.set_light(color, brightness),
+            lambda t: t.display.show_light(color, brightness, True, mode_type),
+        )
 
     def set_clock(self, mac: str, style: int, color: str = None) -> dict:
-        return self._show(mac, f"clock style {style} with color {color}",
-                          lambda t: t.show_clock(clock=style),
-                          lambda t: t.display.show_clock(clock=style, color=color))
+        return self._show(
+            mac,
+            f"clock style {style} with color {color}",
+            lambda t: t.show_clock(clock=style),
+            lambda t: t.display.show_clock(clock=style, color=color),
+        )
 
     def switch_channel(self, mac: str, channel: str) -> dict:
-        return self._show(mac, f"channel {channel}",
-                          lambda t: t.switch_channel(channel),
-                          lambda t: t.display.switch_channel(channel))
+        return self._show(
+            mac, f"channel {channel}", lambda t: t.switch_channel(channel), lambda t: t.display.switch_channel(channel)
+        )
 
     def set_vj_effect(self, mac: str, number: int) -> dict:
-        return self._show(mac, f"VJ effect {number}",
-                          lambda t: t.show_effects(number=int(number)),
-                          lambda t: t.display.show_effects(number=int(number)))
+        return self._show(
+            mac,
+            f"VJ effect {number}",
+            lambda t: t.show_effects(number=int(number)),
+            lambda t: t.display.show_effects(number=int(number)),
+        )
 
     def set_visualization(self, mac: str, number: int) -> dict:
-        return self._show(mac, f"visualizer {number}",
-                          lambda t: t.show_visualization(number=int(number)),
-                          lambda t: t.display.show_visualization(number=int(number)))
+        return self._show(
+            mac,
+            f"visualizer {number}",
+            lambda t: t.show_visualization(number=int(number)),
+            lambda t: t.display.show_visualization(number=int(number)),
+        )
 
-    def push_text(self, mac: str, text: str, color: str = "#FFFFFF", font_size: int = 1,
-                  speed: int = 50, effect_style: int = 1) -> dict:
+    def push_text(
+        self, mac: str, text: str, color: str = "#FFFFFF", font_size: int = 1, speed: int = 50, effect_style: int = 1
+    ) -> dict:
         """Render the text on the DAEMON and push it as an image.
 
         R32 §D: the 0x87 "set light phone word attr" sequence does NOT render on
@@ -92,14 +108,18 @@ class LightingApi(ApiBase, WidgetFrameMixin):
             # Drawn at the NAMED panel's size: the text is for the panel
             # clicked, not whichever one is selected when this runs.
             _extras, png_path = self._widget_frame(
-                "text", self._device_size(mac),
-                {"text": str(text), "color": color, "font_size": int(font_size)})
+                "text", self._device_size(mac), {"text": str(text), "color": color, "font_size": int(font_size)}
+            )
         except Exception as e:
             logger.error(f"push_text failed: {e}")
             return write_refused(f"the text could not be drawn: {e}")
         # A rendered card is a picture, not pixel art (D14).
-        return self._show(mac, "text", lambda t: t.show_image(str(png_path), art="picture"),
-                          lambda t: t.display.show_image(str(png_path), art="picture"))
+        return self._show(
+            mac,
+            "text",
+            lambda t: t.show_image(str(png_path), art="picture"),
+            lambda t: t.display.show_image(str(png_path), art="picture"),
+        )
 
     def _device_size(self, mac: str) -> int:
         """The named display's pixel size as the daemon resolved it, or 16.
@@ -116,8 +136,7 @@ class LightingApi(ApiBase, WidgetFrameMixin):
         except Exception:
             return 16
 
-    def display_wall_image(self, mac: str, file_path: str, art: str,
-                           cell_size: int | None = None) -> dict:
+    def display_wall_image(self, mac: str, file_path: str, art: str, cell_size: int | None = None) -> dict:
         """Show an image on the display ``mac`` names: one panel, or the wall
         when it says `MatrixWall` (P5.7).
 
@@ -162,12 +181,21 @@ class LightingApi(ApiBase, WidgetFrameMixin):
             # them -- a write that failed apart from a slot with no panel.
             return {**write_refused(str(e), getattr(e, "reply", None)), "previews": {}}
 
-    def set_clock_rich(self, mac: str, style: int = 0, twentyfour: bool = True,
-                       humidity: bool = False, weather: bool = False,
-                       date: bool = False, color: str = "#ffffff") -> dict:
+    def set_clock_rich(
+        self,
+        mac: str,
+        style: int = 0,
+        twentyfour: bool = True,
+        humidity: bool = False,
+        weather: bool = False,
+        date: bool = False,
+        color: str = "#ffffff",
+    ) -> dict:
         def rich(t):
-            return t.display.set_clock_rich(style=style, twentyfour=twentyfour, humidity=humidity,
-                                            weather=weather, date=date, color=color)
+            return t.display.set_clock_rich(
+                style=style, twentyfour=twentyfour, humidity=humidity, weather=weather, date=date, color=color
+            )
+
         return self._show(mac, f"rich clock (style={style}, twentyfour={twentyfour})", rich, rich)
 
     def play_album(self, mac: str, album_id: int) -> dict:
@@ -177,16 +205,14 @@ class LightingApi(ApiBase, WidgetFrameMixin):
         not a composite image), so that target mode is rejected up front."""
         logger.info(f"GUI Action: Playing album {album_id} on device...")
         from divoom_gui.api import _lan_error
+
         if mac == WALL:
-            return _lan_error("play the album",
-                              "a Virtual Wall has no single device to play it on",
-                              "wall")
+            return _lan_error("play the album", "a Virtual Wall has no single device to play it on", "wall")
         self._stop_live_widgets(mac)
         try:
             val = int(album_id)
-        except (TypeError, ValueError):
-            return _lan_error("play the album", f"{album_id!r} is not an album id",
-                              "input")
+        except TypeError, ValueError:
+            return _lan_error("play the album", f"{album_id!r} is not an album id", "input")
         return self._lan_action(mac, "play the album", lambda t: t.lan.play_album(val))
 
     def push_playlist(self, mac: str, play_id: int) -> dict:
@@ -196,18 +222,15 @@ class LightingApi(ApiBase, WidgetFrameMixin):
         composite image), so that target mode is rejected up front."""
         logger.info(f"GUI Action: Pushing playlist {play_id} to device...")
         from divoom_gui.api import _lan_error
+
         if mac == WALL:
-            return _lan_error("push the playlist",
-                              "a Virtual Wall has no single device to play it on",
-                              "wall")
+            return _lan_error("push the playlist", "a Virtual Wall has no single device to play it on", "wall")
         self._stop_live_widgets(mac)
         try:
             val = int(play_id)
-        except (TypeError, ValueError):
-            return _lan_error("push the playlist", f"{play_id!r} is not a playlist id",
-                              "input")
-        return self._lan_action(mac, "push the playlist",
-                                lambda t: t.lan.send_playlist(val))
+        except TypeError, ValueError:
+            return _lan_error("push the playlist", f"{play_id!r} is not a playlist id", "input")
+        return self._lan_action(mac, "push the playlist", lambda t: t.lan.send_playlist(val))
 
     def send_danmaku_text(self, mac: str, text: str, color: str = "#FFFFFF") -> dict:
         """Send a Danmaku scrolling bullet-chat overlay (Danmaku/SendText,
@@ -230,19 +253,16 @@ class LightingApi(ApiBase, WidgetFrameMixin):
         """
         logger.info("GUI Action: Sending Danmaku overlay text...")
         from divoom_gui.api import _lan_error
+
         if mac == WALL:
-            return _lan_error("send the overlay",
-                              "a Virtual Wall has no single device to draw it on",
-                              "wall")
+            return _lan_error("send the overlay", "a Virtual Wall has no single device to draw it on", "wall")
         text = (text or "").strip()
         if not text:
             return _lan_error("send the overlay", "there is no text to send", "input")
         # Keyword args: the daemon handler reads "Text"/"TextColor" by name
         # (get_arg_str(kw, ...)), and positional args would silently land as
         # neither — the command would ACK having sent an empty string.
-        return self._lan_action(
-            mac, "send the overlay",
-            lambda t: t.lan.send_danmaku_text(Text=text, TextColor=color))
+        return self._lan_action(mac, "send the overlay", lambda t: t.lan.send_danmaku_text(Text=text, TextColor=color))
 
     def play_aid_sleep(self, mac: str, sleep_id: int, sleep_type: int = 0) -> bool:
         """Play a browsed AidSleep cloud sound on the device (AidSleep/Play —
@@ -259,4 +279,3 @@ class LightingApi(ApiBase, WidgetFrameMixin):
         except Exception as e:
             logger.error(f"AidSleep play failed: {e}")
             return False
-

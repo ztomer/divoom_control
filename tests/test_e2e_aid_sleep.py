@@ -5,6 +5,7 @@ test_e2e_playlists.py.
 
 Skipped if Playwright / a browser isn't installed.
 """
+
 import pytest
 from pathlib import Path
 from tests.support.browser import (
@@ -61,10 +62,10 @@ async def test_sleep_sounds_tab_loads_the_default_type_on_open():
     async with async_playwright() as p:
         browser, page = await _open_sleep_sounds_tab(p)
         try:
-            await wait_js(page, 
-                "() => document.querySelectorAll('#aid-sleep-list .cloud-clock-row').length > 0")
+            await wait_js(page, "() => document.querySelectorAll('#aid-sleep-list .cloud-clock-row').length > 0")
             names = await page.eval_on_selector_all(
-                "#aid-sleep-list .cloud-clock-name", "els => els.map(e => e.textContent)")
+                "#aid-sleep-list .cloud-clock-name", "els => els.map(e => e.textContent)"
+            )
             assert names == ["Gentle Rain", "Window Rain"]
         finally:
             await browser.close()
@@ -78,11 +79,11 @@ async def test_switching_sound_type_reloads_the_list():
     async with async_playwright() as p:
         browser, page = await _open_sleep_sounds_tab(p)
         try:
-            await wait_js(page, 
-                "() => document.querySelectorAll('#aid-sleep-list .cloud-clock-row').length > 0")
+            await wait_js(page, "() => document.querySelectorAll('#aid-sleep-list .cloud-clock-row').length > 0")
             await page.click("#aid-sleep-type-tabs .tab-btn[data-sleep-type='1']")
-            await wait_js(page, 
-                "() => document.querySelector('#aid-sleep-list .cloud-clock-name')?.textContent === 'Fan Hum'")
+            await wait_js(
+                page, "() => document.querySelector('#aid-sleep-list .cloud-clock-name')?.textContent === 'Fan Hum'"
+            )
         finally:
             await browser.close()
 
@@ -95,12 +96,14 @@ async def test_play_without_a_device_shows_connect_prompt_and_does_not_call_play
     async with async_playwright() as p:
         browser, page = await _open_sleep_sounds_tab(p)
         try:
-            await eval_js(page, """() => {
+            await eval_js(
+                page,
+                """() => {
                 window.__playAidSleepCalls = [];
                 window.__api.play_aid_sleep = (mac, sleepId, type) => { window.__playAidSleepCalls.push([mac, sleepId, type]); return true; };
-            }""")
-            await wait_js(page, 
-                "() => document.querySelectorAll('#aid-sleep-list .cloud-clock-row').length > 0")
+            }""",
+            )
+            await wait_js(page, "() => document.querySelectorAll('#aid-sleep-list .cloud-clock-row').length > 0")
             await page.click("#aid-sleep-list .cloud-clock-apply-btn")
             # On the guard toast's own words and kind, not on "a toast is
             # showing": this page raises its own on a timer (app_init.js:281),
@@ -126,14 +129,16 @@ async def test_play_with_a_device_calls_play_aid_sleep_with_the_real_sleep_id():
     async with async_playwright() as p:
         browser, page = await _open_sleep_sounds_tab(p)
         try:
-            await eval_js(page, """() => {
+            await eval_js(
+                page,
+                """() => {
                 window.DivoomState.discoveredDevices = [{ address: 'E9:DITOO', name: 'Ditoo-light-2' }];
                 window.DivoomState.appConnected = true;
                 window.__playAidSleepCalls = [];
                 window.__api.play_aid_sleep = (mac, sleepId, type) => { window.__playAidSleepCalls.push([mac, sleepId, type]); return true; };
-            }""")
-            await wait_js(page, 
-                "() => document.querySelectorAll('#aid-sleep-list .cloud-clock-row').length > 0")
+            }""",
+            )
+            await wait_js(page, "() => document.querySelectorAll('#aid-sleep-list .cloud-clock-row').length > 0")
             await page.click("#aid-sleep-list .cloud-clock-apply-btn")
             await wait_js(page, "() => (window.__playAidSleepCalls || []).length > 0")
             calls = await eval_js(page, "() => window.__playAidSleepCalls")

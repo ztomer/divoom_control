@@ -52,22 +52,23 @@ class Capabilities:
     `panel_resolution * N` × `panel_resolution * M` — compute that
     separately (see `wall_resolution` in `divoom_lib/wall.py`).
     """
-    panel_resolution: int                  # 16 / 32 / 64 (per-panel pixels, square)
-    has_fm: bool                          # FM radio chip
-    has_sd: bool                          # SD card slot for music
-    has_lightning: bool                   # 0x45 channel 0x01 (light effects)
-    has_scoreboard: bool                  # 0x45 channel 0x06 (sports scoreboard)
-    has_anim_8b: bool                     # 0x8B 3-phase animation streaming
-    has_orientation: bool                 # 0xBD 0x23 (rotate display)
-    has_screen_mirror: bool               # 0xBD 0x24 (mirror display)
-    has_factory_reset: bool               # 0xBD 0x25 (factory reset)
-    has_alarm: bool                       # 0x42 / 0x43 (alarms)
-    has_sleep: bool                       # 0x40 / 0x41 (sleep aid)
-    has_weather: bool                     # 0x5D / 0x5E (weather widget)
-    has_low_power: bool                   # 0xB2 / 0xB3 (low power mode)
-    has_24h_clock: bool                   # 0x2C (12/24h clock)
-    has_temp_unit: bool                   # 0x2B (°C/°F)
-    has_mic: bool                         # device has a microphone
+
+    panel_resolution: int  # 16 / 32 / 64 (per-panel pixels, square)
+    has_fm: bool  # FM radio chip
+    has_sd: bool  # SD card slot for music
+    has_lightning: bool  # 0x45 channel 0x01 (light effects)
+    has_scoreboard: bool  # 0x45 channel 0x06 (sports scoreboard)
+    has_anim_8b: bool  # 0x8B 3-phase animation streaming
+    has_orientation: bool  # 0xBD 0x23 (rotate display)
+    has_screen_mirror: bool  # 0xBD 0x24 (mirror display)
+    has_factory_reset: bool  # 0xBD 0x25 (factory reset)
+    has_alarm: bool  # 0x42 / 0x43 (alarms)
+    has_sleep: bool  # 0x40 / 0x41 (sleep aid)
+    has_weather: bool  # 0x5D / 0x5E (weather widget)
+    has_low_power: bool  # 0xB2 / 0xB3 (low power mode)
+    has_24h_clock: bool  # 0x2C (12/24h clock)
+    has_temp_unit: bool  # 0x2B (°C/°F)
+    has_mic: bool  # device has a microphone
     notes: tuple[str, ...] = field(default_factory=tuple)
 
 
@@ -132,6 +133,8 @@ BASELINE = Capabilities(
 # microphone -- and off for the PixelBag. This table's rows are its own
 # assertion about the hardware, and the daemon claims no microphone at all.
 
+# One aligned row per device; exploded one keyword per line the table doubles in length.
+# fmt: off
 DEVICE_CAPABILITIES: dict[str, Capabilities] = {
     # first written as the 16×16 group
     "TIMEBOX_NORMAL": replace(BASELINE, panel_resolution=16, has_fm=True, has_sd=False, has_scoreboard=False, has_orientation=False, has_screen_mirror=False, has_factory_reset=False, has_mic=False, notes=("Original Timebox; very limited.",)),
@@ -174,9 +177,11 @@ DEVICE_CAPABILITIES: dict[str, Capabilities] = {
     "PixelBagBIPI":   replace(BASELINE, panel_resolution=16, has_fm=False, has_sd=False, has_scoreboard=False, has_orientation=True, has_screen_mirror=True, has_factory_reset=True, has_mic=False, notes=("Pixel Bag BIPI.",)),
     "Zooe":           replace(BASELINE, panel_resolution=16, has_fm=False, has_sd=True, has_scoreboard=False, has_orientation=True, has_screen_mirror=True, has_factory_reset=True, has_mic=False, notes=("Zooe (battery, no FM/SD).",)),
 }
+# fmt: on
 
 
 # ── Identifier 1: explicit device_type ─────────────────────────────────────
+
 
 def capabilities_for(device_type: str | None) -> Capabilities:
     """Look up capabilities by explicit device_type, or return the baseline
@@ -198,8 +203,7 @@ def capabilities_for(device_type: str | None) -> Capabilities:
 # correct capabilities without per-call kwarqs.
 
 REGISTRY_PATH = Path(
-    os.environ.get("DIVOOM_CONTROL_REGISTRY")
-    or (Path.home() / ".config" / "divoom-control" / "devices.json")
+    os.environ.get("DIVOOM_CONTROL_REGISTRY") or (Path.home() / ".config" / "divoom-control" / "devices.json")
 )
 
 
@@ -233,15 +237,12 @@ class DeviceRegistry:
         try:
             data = json.loads(self.path.read_text())
             if isinstance(data, dict):
-                self._entries = {
-                    k.lower(): v for k, v in data.items() if isinstance(v, str)
-                }
+                self._entries = {k.lower(): v for k, v in data.items() if isinstance(v, str)}
         except (OSError, json.JSONDecodeError) as e:
             # Corrupt file: log and start fresh. Never crash on a registry read.
             import logging
-            logging.getLogger(__name__).warning(
-                "DeviceRegistry: %s is corrupt (%s); starting empty.", self.path, e
-            )
+
+            logging.getLogger(__name__).warning("DeviceRegistry: %s is corrupt (%s); starting empty.", self.path, e)
             self._entries = {}
 
     def lookup(self, mac: str) -> Optional[Capabilities]:
@@ -255,10 +256,7 @@ class DeviceRegistry:
     def register(self, mac: str, device_type: str) -> None:
         """Add or update the MAC → device_type mapping and persist."""
         if device_type not in DEVICE_CAPABILITIES:
-            raise ValueError(
-                f"unknown device_type {device_type!r}; "
-                f"valid: {sorted(DEVICE_CAPABILITIES.keys())}"
-            )
+            raise ValueError(f"unknown device_type {device_type!r}; valid: {sorted(DEVICE_CAPABILITIES.keys())}")
         self._ensure_loaded()
         self._entries[mac.lower()] = device_type
         self._save()
@@ -280,9 +278,7 @@ class DeviceRegistry:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         # Write with original-case MACs for human readability.
         original_case = json.loads(json.dumps(self._entries))  # shallow copy
-        self.path.write_text(
-            json.dumps(dict(sorted(self._entries.items())), indent=2) + "\n"
-        )
+        self.path.write_text(json.dumps(dict(sorted(self._entries.items())), indent=2) + "\n")
 
 
 # ── Identifier 3: BLE advertisement fingerprint ────────────────────────────
@@ -324,7 +320,6 @@ def capabilities_from_manufacturer_data(
         payload = manufacturer_data.get(company_id)
         if not payload:
             continue
-        if tuple(payload[:len(prefix)]) == prefix:
+        if tuple(payload[: len(prefix)]) == prefix:
             return capabilities_for(device_type)
     return None
-

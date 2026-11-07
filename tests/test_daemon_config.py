@@ -5,6 +5,7 @@ Verifies the named defaults, file-write-on-missing, override parsing (incl. the
 scan_read_timeout slack helper. No magic numbers should reach the call sites —
 they read this config instead.
 """
+
 import sys
 from pathlib import Path
 
@@ -62,7 +63,7 @@ def test_overrides_parsed_and_zero_limit_preserved(tmp_path):
     p.write_text(
         "[daemon]\n"
         "scan_timeout = 45\n"
-        "scan_limit = 0\n"          # 0 = no cap, must survive
+        "scan_limit = 0\n"  # 0 = no cap, must survive
         "scan_read_slack = 5\n"
         "client_timeout = 1.5\n"
     )

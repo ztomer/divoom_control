@@ -1,10 +1,12 @@
-
 from divoom_legacy.sender_protocol import CommandSender
 from divoom_lib.models import (
     COMMANDS,
-    SPC_CONTROL_INITIALIZE, SPC_CONTROL_RESET,
-    PSC_CONTROL_SET_SCROLLING_MODE_SPEED, PSC_CONTROL_SENDING_IMAGE_DATA
+    SPC_CONTROL_INITIALIZE,
+    SPC_CONTROL_RESET,
+    PSC_CONTROL_SET_SCROLLING_MODE_SPEED,
+    PSC_CONTROL_SENDING_IMAGE_DATA,
 )
+
 
 class Drawing:
     """
@@ -18,7 +20,7 @@ class Drawing:
         async def main():
             device_address = "XX:XX:XX:XX:XX:XX"  # Replace with your device's address
             divoom = Divoom(mac=device_address)
-            
+
             try:
                 await divoom.connect()
                 # This is a low-level command. Consider using a higher-level library for image processing.
@@ -30,6 +32,7 @@ class Drawing:
         if __name__ == "__main__":
             asyncio.run(main())
     """
+
     def __init__(self, divoom: CommandSender):
         """
         Initializes the Drawing controller.
@@ -43,15 +46,15 @@ class Drawing:
     async def set_light_pic(self, pic_data: list) -> bool:
         """
         Display user-drawn pictures on the device (0x44).
-        
+
         Args:
             pic_data (list): The encoded picture data.
-        
+
         Returns:
             bool: True if the command was sent successfully, False otherwise.
-        
+
         Usage::
-            
+
             # This is a low-level command. Consider using a higher-level library for image processing.
             # await divoom.drawing.set_light_pic(pic_data=[...])
         """
@@ -72,24 +75,27 @@ class Drawing:
 
         Returns:
             bool: True if the command was sent successfully, False otherwise.
-        
+
         Usage::
-            
+
             # This is a low-level command.
             # await divoom.drawing.drawing_mul_pad_ctrl(screen_id=0, r=255, g=0, b=0, num_points=1, offset_list=[0])
         """
         self.logger.info(
-            f"Drawing mul pad control: screen_id={screen_id}, color=({r},{g},{b}), num_points={num_points} (0x3a)...")
+            f"Drawing mul pad control: screen_id={screen_id}, color=({r},{g},{b}), num_points={num_points} (0x3a)..."
+        )
         args = []
-        args += screen_id.to_bytes(1, byteorder='big')
-        args += r.to_bytes(1, byteorder='big')
-        args += g.to_bytes(1, byteorder='big')
-        args += b.to_bytes(1, byteorder='big')
-        args += num_points.to_bytes(1, byteorder='big')
+        args += screen_id.to_bytes(1, byteorder="big")
+        args += r.to_bytes(1, byteorder="big")
+        args += g.to_bytes(1, byteorder="big")
+        args += b.to_bytes(1, byteorder="big")
+        args += num_points.to_bytes(1, byteorder="big")
         args.extend(offset_list)
         return await self.communicator.send_command(COMMANDS["drawing mul pad ctrl"], args)
 
-    async def drawing_big_pad_ctrl(self, canvas_width: int, screen_id: int, r: int, g: int, b: int, num_points: int, offset_list: list):
+    async def drawing_big_pad_ctrl(
+        self, canvas_width: int, screen_id: int, r: int, g: int, b: int, num_points: int, offset_list: list
+    ):
         """
         Control the large screen drawing pad.
 
@@ -104,21 +110,22 @@ class Drawing:
 
         Returns:
             bool: True if the command was sent successfully, False otherwise.
-        
+
         Usage::
-            
+
             # This is a low-level command.
             # await divoom.drawing.drawing_big_pad_ctrl(canvas_width=32, screen_id=0, r=255, g=0, b=0, num_points=1, offset_list=[0])
         """
         self.logger.info(
-            f"Drawing big pad control: canvas_width={canvas_width}, screen_id={screen_id}, color=({r},{g},{b}), num_points={num_points} (0x3b)...")
+            f"Drawing big pad control: canvas_width={canvas_width}, screen_id={screen_id}, color=({r},{g},{b}), num_points={num_points} (0x3b)..."
+        )
         args = []
-        args += canvas_width.to_bytes(1, byteorder='big')
-        args += screen_id.to_bytes(1, byteorder='big')
-        args += r.to_bytes(1, byteorder='big')
-        args += g.to_bytes(1, byteorder='big')
-        args += b.to_bytes(1, byteorder='big')
-        args += num_points.to_bytes(1, byteorder='big')
+        args += canvas_width.to_bytes(1, byteorder="big")
+        args += screen_id.to_bytes(1, byteorder="big")
+        args += r.to_bytes(1, byteorder="big")
+        args += g.to_bytes(1, byteorder="big")
+        args += b.to_bytes(1, byteorder="big")
+        args += num_points.to_bytes(1, byteorder="big")
         args.extend(offset_list)
         return await self.communicator.send_command(COMMANDS["drawing big pad ctrl"], args)
 
@@ -135,19 +142,18 @@ class Drawing:
 
         Returns:
             bool: True if the command was sent successfully, False otherwise.
-        
+
         Usage::
-            
+
             # This is a low-level command.
             # await divoom.drawing.drawing_pad_ctrl(r=255, g=0, b=0, num_points=1, offset_list=[0])
         """
-        self.logger.info(
-            f"Drawing pad control: color=({r},{g},{b}), num_points={num_points} (0x58)...")
+        self.logger.info(f"Drawing pad control: color=({r},{g},{b}), num_points={num_points} (0x58)...")
         args = []
-        args += r.to_bytes(1, byteorder='big')
-        args += g.to_bytes(1, byteorder='big')
-        args += b.to_bytes(1, byteorder='big')
-        args += num_points.to_bytes(1, byteorder='big')
+        args += r.to_bytes(1, byteorder="big")
+        args += g.to_bytes(1, byteorder="big")
+        args += b.to_bytes(1, byteorder="big")
+        args += num_points.to_bytes(1, byteorder="big")
         args.extend(offset_list)
         return await self.communicator.send_command(COMMANDS["drawing pad ctrl"], args)
 
@@ -157,9 +163,9 @@ class Drawing:
 
         Returns:
             bool: True if the command was sent successfully, False otherwise.
-        
+
         Usage::
-            
+
             await divoom.drawing.drawing_pad_exit()
         """
         self.logger.info("Drawing pad exit (0x5a)...")
@@ -176,17 +182,16 @@ class Drawing:
 
         Returns:
             bool: True if the command was sent successfully, False otherwise.
-        
+
         Usage::
-            
+
             # This is a low-level command.
             # await divoom.drawing.drawing_mul_encode_single_pic(screen_id=0, data_length=100, data=[...])
         """
-        self.logger.info(
-            f"Drawing mul encode single pic: screen_id={screen_id}, data_length={data_length} (0x5b)...")
+        self.logger.info(f"Drawing mul encode single pic: screen_id={screen_id}, data_length={data_length} (0x5b)...")
         args = []
-        args += screen_id.to_bytes(1, byteorder='big')
-        args += data_length.to_bytes(2, byteorder='little')
+        args += screen_id.to_bytes(1, byteorder="big")
+        args += data_length.to_bytes(2, byteorder="little")
         args.extend(data)
         return await self.communicator.send_command(COMMANDS["drawing mul encode single pic"], args)
 
@@ -202,18 +207,19 @@ class Drawing:
 
         Returns:
             bool: True if the command was sent successfully, False otherwise.
-        
+
         Usage::
-            
+
             # This is a low-level command.
             # await divoom.drawing.drawing_mul_encode_pic(screen_id=0, total_length=100, pic_id=1, pic_data=[...])
         """
         self.logger.info(
-            f"Drawing mul encode pic: screen_id={screen_id}, total_length={total_length}, pic_id={pic_id} (0x5c)...")
+            f"Drawing mul encode pic: screen_id={screen_id}, total_length={total_length}, pic_id={pic_id} (0x5c)..."
+        )
         args = []
-        args += screen_id.to_bytes(1, byteorder='big')
-        args += total_length.to_bytes(2, byteorder='little')
-        args += pic_id.to_bytes(1, byteorder='big')
+        args += screen_id.to_bytes(1, byteorder="big")
+        args += total_length.to_bytes(2, byteorder="little")
+        args += pic_id.to_bytes(1, byteorder="big")
         args.extend(pic_data)
         return await self.communicator.send_command(COMMANDS["drawing mul encode pic"], args)
 
@@ -223,9 +229,9 @@ class Drawing:
 
         Returns:
             bool: True if the command was sent successfully, False otherwise.
-        
+
         Usage::
-            
+
             await divoom.drawing.drawing_mul_encode_gif_play()
         """
         self.logger.info("Drawing mul encode GIF play (0x6b)...")
@@ -242,17 +248,16 @@ class Drawing:
 
         Returns:
             bool: True if the command was sent successfully, False otherwise.
-        
+
         Usage::
-            
+
             # This is a low-level command.
             # await divoom.drawing.drawing_encode_movie_play(frame_id=1, data_length=100, data=[...])
         """
-        self.logger.info(
-            f"Drawing encode movie play: frame_id={frame_id}, data_length={data_length} (0x6c)...")
+        self.logger.info(f"Drawing encode movie play: frame_id={frame_id}, data_length={data_length} (0x6c)...")
         args = []
-        args += frame_id.to_bytes(2, byteorder='little')
-        args += data_length.to_bytes(2, byteorder='little')
+        args += frame_id.to_bytes(2, byteorder="little")
+        args += data_length.to_bytes(2, byteorder="little")
         args.extend(data)
         return await self.communicator.send_command(COMMANDS["drawing encode movie play"], args)
 
@@ -268,18 +273,19 @@ class Drawing:
 
         Returns:
             bool: True if the command was sent successfully, False otherwise.
-        
+
         Usage::
-            
+
             # This is a low-level command.
             # await divoom.drawing.drawing_mul_encode_movie_play(screen_id=0, frame_id=1, data_length=100, data=[...])
         """
         self.logger.info(
-            f"Drawing mul encode movie play: screen_id={screen_id}, frame_id={frame_id}, data_length={data_length} (0x6d)...")
+            f"Drawing mul encode movie play: screen_id={screen_id}, frame_id={frame_id}, data_length={data_length} (0x6d)..."
+        )
         args = []
-        args += screen_id.to_bytes(1, byteorder='big')
-        args += frame_id.to_bytes(2, byteorder='little')
-        args += data_length.to_bytes(2, byteorder='little')
+        args += screen_id.to_bytes(1, byteorder="big")
+        args += frame_id.to_bytes(2, byteorder="little")
+        args += data_length.to_bytes(2, byteorder="little")
         args.extend(data)
         return await self.communicator.send_command(COMMANDS["drawing mul encode movie play"], args)
 
@@ -292,14 +298,13 @@ class Drawing:
 
         Returns:
             bool: True if the command was sent successfully, False otherwise.
-        
+
         Usage::
-            
+
             # Start movie playback
             await divoom.drawing.drawing_ctrl_movie_play(1)
         """
-        self.logger.info(
-            f"Drawing control movie play: command={control_command} (0x6e)...")
+        self.logger.info(f"Drawing control movie play: command={control_command} (0x6e)...")
         args = [control_command]
         return await self.communicator.send_command(COMMANDS["drawing ctrl movie play"], args)
 
@@ -314,18 +319,17 @@ class Drawing:
 
         Returns:
             bool: True if the command was sent successfully, False otherwise.
-        
+
         Usage::
-            
+
             # Clear the screen with black
             await divoom.drawing.drawing_mul_pad_enter(0, 0, 0)
         """
-        self.logger.info(
-            f"Drawing mul pad enter: color=({r},{g},{b}) (0x6f)...")
+        self.logger.info(f"Drawing mul pad enter: color=({r},{g},{b}) (0x6f)...")
         args = []
-        args += r.to_bytes(1, byteorder='big')
-        args += g.to_bytes(1, byteorder='big')
-        args += b.to_bytes(1, byteorder='big')
+        args += r.to_bytes(1, byteorder="big")
+        args += g.to_bytes(1, byteorder="big")
+        args += b.to_bytes(1, byteorder="big")
         return await self.communicator.send_command(COMMANDS["drawing mul pad enter"], args)
 
     def _handle_spc_initialize(self, kwargs: dict) -> list | None:
@@ -333,14 +337,16 @@ class Drawing:
         image_length = kwargs.get("image_length")
         image_data = kwargs.get("image_data")
         if device_id is not None and image_length is not None and image_data is not None:
-            return list(device_id.to_bytes(1, byteorder='big')) + \
-                   list(image_length.to_bytes(2, byteorder='little')) + \
-                   image_data
+            return (
+                list(device_id.to_bytes(1, byteorder="big"))
+                + list(image_length.to_bytes(2, byteorder="little"))
+                + image_data
+            )
         self.logger.error("Missing parameters for Initialize sand paint control.")
         return None
 
     def _handle_spc_reset(self, kwargs: dict) -> list | None:
-        return [] # No additional data
+        return []  # No additional data
 
     _spc_handlers = {
         SPC_CONTROL_INITIALIZE: _handle_spc_initialize,
@@ -357,9 +363,9 @@ class Drawing:
 
         Returns:
             bool: True if the command was sent successfully, False otherwise.
-        
+
         Usage::
-            
+
             # Reset the sand painting
             await divoom.drawing.sand_paint_ctrl(1)
         """
@@ -374,8 +380,7 @@ class Drawing:
             else:
                 return False
         else:
-            self.logger.warning(
-                f"Unknown control for sand_paint_ctrl: {control}")
+            self.logger.warning(f"Unknown control for sand_paint_ctrl: {control}")
             return False
         return await self.communicator.send_command(COMMANDS["sand paint ctrl"], args)
 
@@ -383,8 +388,7 @@ class Drawing:
         mode = kwargs.get("mode")
         speed = kwargs.get("speed")
         if mode is not None and speed is not None:
-            return list(mode.to_bytes(1, byteorder='big')) + \
-                   list(speed.to_bytes(2, byteorder='little'))
+            return list(mode.to_bytes(1, byteorder="big")) + list(speed.to_bytes(2, byteorder="little"))
         self.logger.error("Missing 'mode' or 'speed' for Setting Scrolling Mode and Speed.")
         return None
 
@@ -393,9 +397,7 @@ class Drawing:
         pic_id = kwargs.get("pic_id")
         data = kwargs.get("data")
         if total_length is not None and pic_id is not None and data is not None:
-            return list(total_length.to_bytes(2, byteorder='little')) + \
-                   list(pic_id.to_bytes(1, byteorder='big')) + \
-                   data
+            return list(total_length.to_bytes(2, byteorder="little")) + list(pic_id.to_bytes(1, byteorder="big")) + data
         self.logger.error("Missing parameters for Sending Image Data.")
         return None
 
@@ -414,9 +416,9 @@ class Drawing:
 
         Returns:
             bool: True if the command was sent successfully, False otherwise.
-        
+
         Usage::
-            
+
             # Set scrolling mode and speed
             await divoom.drawing.pic_scan_ctrl(0, mode=1, speed=100)
         """
@@ -448,7 +450,6 @@ class Drawing:
             else:
                 return False
         else:
-            self.logger.warning(
-                f"Unknown control for pic_scan_ctrl: {control}")
+            self.logger.warning(f"Unknown control for pic_scan_ctrl: {control}")
             return False
         return await self.communicator.send_command(COMMANDS["pic scan ctrl"], args)

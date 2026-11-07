@@ -10,6 +10,7 @@ The recorder answers only what the real `DaemonClient` has: a GUI that calls a
 client method that does not exist fails here, rather than being answered by a
 fake that accepts any name.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -41,19 +42,63 @@ NOT_CALLED = {
 
 #: An argument for a parameter with no default, by name.
 ARGS = {
-    "mac": A, "address": A, "enable": True, "enabled": True, "on": True,
-    "is_24h": True, "fahrenheit": False, "action": "start", "file_id": "f1",
-    "symbol": "AAPL", "text": "hi", "name": "Desk", "title": "hi",
-    "color": "#ffffff", "index": 0, "minutes": 5, "hour": 7, "minute": 30,
-    "month": 1, "day": 2, "direction": 1, "freq_x10": 1015, "app_type": 7,
-    "confirm": "RESET", "payload_json": '{"0": "f1"}', "page": 0,
-    "brightness": 50, "volume": 5, "channel": "vj", "number": 3, "style": 2,
-    "on_off": 1, "album_id": 1, "play_id": 1, "sleep_id": 1, "kind": "clock",
-    "method": "design.use_user_define_index", "classify": 18, "keyword": "x",
-    "lat": 1.0, "lon": 2.0, "message": "m", "value": True, "ip": "10.0.0.9",
-    "token": 1, "email": "a@b.c", "password": "p", "json_text": "[]",
-    "slots_json": "{}", "topology_data": {}, "config": "{}", "dial_type": "x",
-    "sleep_type": 0, "timeout": 1, "limit": 1, "sort": 1, "file_size": 1,
+    "mac": A,
+    "address": A,
+    "enable": True,
+    "enabled": True,
+    "on": True,
+    "is_24h": True,
+    "fahrenheit": False,
+    "action": "start",
+    "file_id": "f1",
+    "symbol": "AAPL",
+    "text": "hi",
+    "name": "Desk",
+    "title": "hi",
+    "color": "#ffffff",
+    "index": 0,
+    "minutes": 5,
+    "hour": 7,
+    "minute": 30,
+    "month": 1,
+    "day": 2,
+    "direction": 1,
+    "freq_x10": 1015,
+    "app_type": 7,
+    "confirm": "RESET",
+    "payload_json": '{"0": "f1"}',
+    "page": 0,
+    "brightness": 50,
+    "volume": 5,
+    "channel": "vj",
+    "number": 3,
+    "style": 2,
+    "on_off": 1,
+    "album_id": 1,
+    "play_id": 1,
+    "sleep_id": 1,
+    "kind": "clock",
+    "method": "design.use_user_define_index",
+    "classify": 18,
+    "keyword": "x",
+    "lat": 1.0,
+    "lon": 2.0,
+    "message": "m",
+    "value": True,
+    "ip": "10.0.0.9",
+    "token": 1,
+    "email": "a@b.c",
+    "password": "p",
+    "json_text": "[]",
+    "slots_json": "{}",
+    "topology_data": {},
+    "config": "{}",
+    "dial_type": "x",
+    "sleep_type": 0,
+    "timeout": 1,
+    "limit": 1,
+    "sort": 1,
+    "file_size": 1,
     "art": "picture",
 }
 
@@ -73,8 +118,7 @@ class RecordingDaemon:
         self.requests.append((name, kw))
         return {"success": True, "result": True, "started": True}
 
-    def device_call(self, method, args=None, kwargs=None, target="device",
-                    blobs=None, token=None, mac=None):
+    def device_call(self, method, args=None, kwargs=None, target="device", blobs=None, token=None, mac=None):
         self._record("device_call", method=method, target=target, mac=mac)
         return {"success": True, "result": True}
 
@@ -102,6 +146,7 @@ class RecordingDaemon:
 
     def __getattr__(self, name):
         from divoom_client.daemon_protocol import DaemonClient
+
         if name.startswith("_"):
             raise AttributeError(name)
         if not hasattr(DaemonClient, name):
@@ -110,14 +155,15 @@ class RecordingDaemon:
         return lambda *a, **kw: {"success": True}
 
     def panel_requests(self):
-        return [(name, PANEL_REQUESTS[name](kw), kw) for name, kw in self.requests
-                if name in PANEL_REQUESTS]
+        return [(name, PANEL_REQUESTS[name](kw), kw) for name, kw in self.requests if name in PANEL_REQUESTS]
 
 
 def public_methods():
     from divoom_gui.gui_api import DivoomGuiAPI
-    return sorted((name, fn) for name, fn in inspect.getmembers(DivoomGuiAPI, inspect.isfunction)
-                  if not name.startswith("_"))
+
+    return sorted(
+        (name, fn) for name, fn in inspect.getmembers(DivoomGuiAPI, inspect.isfunction) if not name.startswith("_")
+    )
 
 
 def names_its_panel(fn) -> bool:
@@ -143,12 +189,16 @@ def args_for(fn, panel):
 def recorded_api(tmp_path):
     """A real `DivoomGuiAPI` whose daemon client is a `RecordingDaemon`."""
     from divoom_gui import daemon_bridge
+
     daemon = RecordingDaemon()
-    with patch("pathlib.Path.home", return_value=tmp_path), \
-         patch.object(daemon_bridge, "ensure_daemon", lambda *a, **k: daemon), \
-         patch.object(daemon_bridge, "daemon_alive", lambda *a, **k: True), \
-         patch("subprocess.run"):
+    with (
+        patch("pathlib.Path.home", return_value=tmp_path),
+        patch.object(daemon_bridge, "ensure_daemon", lambda *a, **k: daemon),
+        patch.object(daemon_bridge, "daemon_alive", lambda *a, **k: True),
+        patch("subprocess.run"),
+    ):
         from divoom_gui.gui_api import DivoomGuiAPI
+
         gui = DivoomGuiAPI()
         gui._daemon_client = daemon
         frame = tmp_path / "frame.png"

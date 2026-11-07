@@ -38,8 +38,21 @@ Public API
 - `is_native_available()` — `True` if the dylib is loaded.
 - `CHANNELS_RGB` / `CHANNELS_RGBA` — channel count constants.
 """
-from divoom_legacy.native.downscaler import CHANNELS_RGB, CHANNELS_RGBA, downsample_lanczos, is_native_available as _downscaler_is_native_available, reset_for_tests as _downscaler_reset_for_tests
-from divoom_legacy.native.image_encoder import encode_animation_frame, encode_animation, encode_static_image, is_native_available as _encoder_is_native_available, reset_for_tests as _encoder_reset_for_tests
+
+from divoom_legacy.native.downscaler import (
+    CHANNELS_RGB,
+    CHANNELS_RGBA,
+    downsample_lanczos,
+    is_native_available as _downscaler_is_native_available,
+    reset_for_tests as _downscaler_reset_for_tests,
+)
+from divoom_legacy.native.image_encoder import (
+    encode_animation_frame,
+    encode_animation,
+    encode_static_image,
+    is_native_available as _encoder_is_native_available,
+    reset_for_tests as _encoder_reset_for_tests,
+)
 
 
 def is_native_available() -> bool:

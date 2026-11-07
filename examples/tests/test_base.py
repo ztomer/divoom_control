@@ -1,5 +1,6 @@
 """DivoomBase connection-lifecycle coverage (ex test_base.py; notification,
 send and protocol-encoding coverage live in sibling modules)."""
+
 import asyncio
 
 import pytest
@@ -23,6 +24,7 @@ async def test_divoom_base_init(divoom_base_instance, mock_bleak_client):
     assert base._expected_response_command is None
     assert base.message_buf == bytearray()
 
+
 @pytest.mark.asyncio
 async def test_is_connected_property(divoom_base_instance, mock_bleak_client):
     """Test the is_connected property."""
@@ -32,27 +34,30 @@ async def test_is_connected_property(divoom_base_instance, mock_bleak_client):
     mock_bleak_client.is_connected = False
     assert base.is_connected is False
 
+
 @pytest.mark.asyncio
 async def test_connect_success(divoom_base_instance, mock_bleak_client):
     """Test successful connection."""
     base = divoom_base_instance
     mock_bleak_client.connect.return_value = None
-    mock_bleak_client.is_connected = False # Start as disconnected to trigger connect()
-    
+    mock_bleak_client.is_connected = False  # Start as disconnected to trigger connect()
+
     await base.connect()
     mock_bleak_client.connect.assert_called_once()
     mock_bleak_client.start_notify.assert_called_once_with(base.NOTIFY_CHARACTERISTIC_UUID, base.notification_handler)
     assert base.is_connected
+
 
 @pytest.mark.asyncio
 async def test_connect_already_connected(divoom_base_instance, mock_bleak_client):
     """Test connect when already connected."""
     base = divoom_base_instance
     mock_bleak_client.is_connected = True
-    
+
     await base.connect()
     mock_bleak_client.connect.assert_not_called()
     mock_bleak_client.start_notify.assert_not_called()
+
 
 @pytest.mark.asyncio
 async def test_connect_no_mac_address(divoom_base_instance):
@@ -62,6 +67,7 @@ async def test_connect_no_mac_address(divoom_base_instance):
     with pytest.raises(ValueError, match="No MAC address provided or discovered. Cannot connect."):
         await base.connect()
 
+
 @pytest.mark.asyncio
 async def test_connect_missing_uuids(divoom_base_instance):
     """Test connect with missing characteristic UUIDs."""
@@ -69,6 +75,7 @@ async def test_connect_missing_uuids(divoom_base_instance):
     base.WRITE_CHARACTERISTIC_UUID = None
     with pytest.raises(ValueError, match="Characteristic UUIDs not fully set. Cannot connect."):
         await base.connect()
+
 
 @pytest.mark.asyncio
 async def test_connect_bleak_error(divoom_base_instance, mock_bleak_client):
@@ -78,22 +85,24 @@ async def test_connect_bleak_error(divoom_base_instance, mock_bleak_client):
     with pytest.raises(ConnectionError, match="Failed to connect to AA:BB:CC:DD:EE:FF: Connection failed"):
         await base.connect()
 
+
 @pytest.mark.asyncio
 async def test_disconnect_success(divoom_base_instance, mock_bleak_client):
     """Test successful disconnection."""
     base = divoom_base_instance
     mock_bleak_client.is_connected = True
     mock_bleak_client.disconnect.return_value = None
-    
+
     await base.disconnect()
     mock_bleak_client.disconnect.assert_called_once()
     assert not base.is_connected
+
 
 @pytest.mark.asyncio
 async def test_disconnect_not_connected(divoom_base_instance, mock_bleak_client):
     """Test disconnect when not connected."""
     base = divoom_base_instance
     mock_bleak_client.is_connected = False
-    
+
     await base.disconnect()
     mock_bleak_client.disconnect.assert_not_called()

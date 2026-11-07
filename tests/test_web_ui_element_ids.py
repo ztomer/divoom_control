@@ -22,6 +22,7 @@ per-file). Ids assembled from template interpolation (`id="item-${n}"`) are not
 readable by a literal `getElementById("...")` call, so they are out of scope in
 both directions.
 """
+
 from __future__ import annotations
 
 import re
@@ -40,8 +41,7 @@ LOOKUP = re.compile(r'getElementById\(\s*"([^"${]+)"\s*\)')
 
 
 def _read(pattern: re.Pattern, suffix: str) -> set[str]:
-    return {m for p in sorted(UI.rglob(f"*{suffix}"))
-            for m in pattern.findall(p.read_text(encoding="utf-8"))}
+    return {m for p in sorted(UI.rglob(f"*{suffix}")) for m in pattern.findall(p.read_text(encoding="utf-8"))}
 
 
 def defined_ids() -> set[str]:
@@ -59,14 +59,13 @@ def looked_up() -> dict[str, set[str]]:
 
 def test_no_js_reads_an_element_that_nothing_defines():
     have = defined_ids()
-    problems = {name: sorted(ids - have) for name, ids in looked_up().items()
-                if ids - have}
+    problems = {name: sorted(ids - have) for name, ids in looked_up().items() if ids - have}
     assert not problems, (
         "web_ui JS reads element id(s) that nothing defines:\n"
         + "\n".join(f"  {k}: {v}" for k, v in problems.items())
         + "\ngetElementById returns null here, and the `?.` style in this "
-          "codebase turns that into a silent false/empty value rather than an "
-          "error -- the control is dead and the console stays clean."
+        "codebase turns that into a silent false/empty value rather than an "
+        "error -- the control is dead and the console stays clean."
     )
 
 
@@ -81,20 +80,19 @@ def test_the_clock_rich_controls_are_wired_end_to_end():
     html = (UI / "index.html").read_text(encoding="utf-8")
     js = (UI / "channels_grids.js").read_text(encoding="utf-8")
 
-    for box in ("clock-rich-weather", "clock-rich-date",
-                "clock-rich-humidity", "clock-rich-24h"):
+    for box in ("clock-rich-weather", "clock-rich-date", "clock-rich-humidity", "clock-rich-24h"):
         assert f'id="{box}"' in html, f"{box} checkbox missing from index.html"
         assert box in js, f"{box} is defined in markup but nothing reads it"
         # 2026-09-13: drawn as a toggle switch (the state) beside its name
         # (the label), never a bare checkbox and never a switch alone.
         i = html.index(f'id="{box}"')
-        assert 'class="switch alarm-switch"' in html[i - 120:i], f"{box} is not a toggle"
-        assert "slider-round" in html[i:i + 120], f"{box} has no switch knob"
+        assert 'class="switch alarm-switch"' in html[i - 120 : i], f"{box} is not a toggle"
+        assert "slider-round" in html[i : i + 120], f"{box} has no switch knob"
 
     assert "set_clock_rich(" in js, "the rich clock API call is gone from the JS"
     assert "set_clock(" in js, (
-        "the plain set_clock path disappeared -- with no extras ticked the "
-        "behaviour is supposed to be unchanged")
+        "the plain set_clock path disappeared -- with no extras ticked the behaviour is supposed to be unchanged"
+    )
 
 
 def test_the_scan_actually_finds_things():
@@ -112,4 +110,3 @@ def test_the_gate_would_catch_a_renamed_id():
     have = defined_ids()
     assert "clock-rich-weather" in have
     assert "clock-rich-weatherr" not in have, "typo-id unexpectedly defined"
-

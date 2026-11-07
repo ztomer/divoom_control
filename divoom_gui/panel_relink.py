@@ -19,6 +19,7 @@ Only panels the NEW daemon does not already hold are linked, one at a time
 banner's reconnect returns at once; the daemon's own status events repaint
 each dot as its link comes back.
 """
+
 from __future__ import annotations
 
 import logging
@@ -64,10 +65,8 @@ def after_ensure(host, client) -> bool:
         return False
     if abs(started - previous) <= SAME_INSTANCE_TOLERANCE_S:
         return False
-    logger.info("Daemon was respawned; relinking %d panel(s): %s",
-                len(held), ", ".join(held))
-    t = threading.Thread(target=_relink, args=(host, client, held),
-                         name="divoom-relink", daemon=True)
+    logger.info("Daemon was respawned; relinking %d panel(s): %s", len(held), ", ".join(held))
+    t = threading.Thread(target=_relink, args=(host, client, held), name="divoom-relink", daemon=True)
     host._relink_thread = t
     t.start()
     return True
@@ -76,8 +75,7 @@ def after_ensure(host, client) -> bool:
 def _relink(host, client, held: list[str]) -> None:
     try:
         status = client.device_status()
-        have = {d.get("mac") for d in (status.get("devices") or [])
-                if isinstance(d, dict) and d.get("connected")}
+        have = {d.get("mac") for d in (status.get("devices") or []) if isinstance(d, dict) and d.get("connected")}
     except Exception as e:
         logger.warning("relink: device_status failed (%s); linking every held panel", e)
         have = set()
@@ -85,5 +83,6 @@ def _relink(host, client, held: list[str]) -> None:
         if address in have:
             continue
         ok = host._link(client, address)
-        logger.info("relink %s: %s", address, "linked" if ok else
-                    f"failed ({getattr(host, '_last_connect_error', '')})")
+        logger.info(
+            "relink %s: %s", address, "linked" if ok else f"failed ({getattr(host, '_last_connect_error', '')})"
+        )

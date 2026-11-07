@@ -15,6 +15,7 @@ source. Tests that exercise the migration branch monkeypatch the module's
 ``__file__`` global to a fake location under ``tmp_path`` so they never read
 or (worse) ``unlink()`` the real repo file.
 """
+
 import json
 import sys
 from pathlib import Path
@@ -32,6 +33,8 @@ from tests.support.presets_manager_common import (  # noqa: F401
     _cfg_dir,
     home,
 )
+
+
 class _FakeCreds:
     def __init__(self, valid=True, email="cloud@example.com"):
         self._valid = valid
@@ -42,6 +45,7 @@ class _FakeCreds:
 
 
 # ── _get_presets_file migration (lines 19-25) ──────────────────────────────
+
 
 def test_get_presets_file_migrates_old_file(home, monkeypatch):
     tmp_path = home
@@ -95,6 +99,7 @@ def test_get_presets_file_migration_failure_is_logged_not_raised(home, monkeypat
 
 # ── save_credentials exception path (lines 63-65) ──────────────────────────
 
+
 def test_save_credentials_returns_false_on_exception(home, monkeypatch):
     def _boom(*a, **k):
         raise RuntimeError("kaboom")
@@ -105,6 +110,7 @@ def test_save_credentials_returns_false_on_exception(home, monkeypatch):
 
 
 # ── load_config: presets branch, devices cache branch, cloud block ────────
+
 
 def test_load_config_no_config_file_uses_defaults(home):
     """config_file.exists() False branch (93->103)."""
@@ -120,14 +126,19 @@ def test_load_config_loads_and_filters_slots(home):
     tmp_path = home
     cfg_dir = _cfg_dir(tmp_path)
     presets_file = cfg_dir / "presets.json"
-    presets_file.write_text(json.dumps({
-        "_last_active_slots_": {
-            "AA:11:22:33:44:55": {"name": "Living Room", "x": 0},
-            "BB:00:00:00:00:00": None,
-            "CC:00:00:00:00:00": {"x": 1},  # missing name
-            "AA:BB:CC:DD:EE:FF": {"name": "mock", "x": 2},  # placeholder mac
-        }
-    }), encoding="utf-8")
+    presets_file.write_text(
+        json.dumps(
+            {
+                "_last_active_slots_": {
+                    "AA:11:22:33:44:55": {"name": "Living Room", "x": 0},
+                    "BB:00:00:00:00:00": None,
+                    "CC:00:00:00:00:00": {"x": 1},  # missing name
+                    "AA:BB:CC:DD:EE:FF": {"name": "mock", "x": 2},  # placeholder mac
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
 
     h = Host()
     data = json.loads(h.load_config())
@@ -227,6 +238,7 @@ def test_load_config_outer_exception_returns_empty_json(home, monkeypatch):
 
 # ── load_lan_devices (lines 207-216) ───────────────────────────────────────
 
+
 def test_load_lan_devices_no_file_returns_empty(home):
     """presets_file.exists() False branch (207->213)."""
     h = Host()
@@ -236,8 +248,9 @@ def test_load_lan_devices_no_file_returns_empty(home):
 def test_load_lan_devices_happy_path(home):
     tmp_path = home
     cfg_dir = _cfg_dir(tmp_path)
-    (cfg_dir / "presets.json").write_text(json.dumps({"lan_devices": [{"ip": "1.2.3.4", "token": 9}]}),
-                                           encoding="utf-8")
+    (cfg_dir / "presets.json").write_text(
+        json.dumps({"lan_devices": [{"ip": "1.2.3.4", "token": 9}]}), encoding="utf-8"
+    )
     h = Host()
     assert json.loads(h.load_lan_devices()) == [{"ip": "1.2.3.4", "token": 9}]
 
@@ -251,13 +264,17 @@ def test_load_lan_devices_corrupt_file_returns_empty(home):
 
 
 def test_load_lan_devices_outer_exception_returns_empty(home, monkeypatch):
-    monkeypatch.setattr(presets_manager.PresetsManagerMixin, "_get_presets_file",
-                         lambda self: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr(
+        presets_manager.PresetsManagerMixin,
+        "_get_presets_file",
+        lambda self: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
     h = Host()
     assert json.loads(h.load_lan_devices()) == []
 
 
 # ── add_lan_device (lines 224-236, both any() arms) ────────────────────────
+
 
 def test_add_lan_device_corrupt_file_starts_fresh(home):
     tmp_path = home
@@ -296,13 +313,15 @@ def test_add_lan_device_appends_new_ip(home):
 
 
 def test_add_lan_device_exception_returns_false(home, monkeypatch):
-    monkeypatch.setattr(presets_manager, "atomic_write_text",
-                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("fail")))
+    monkeypatch.setattr(
+        presets_manager, "atomic_write_text", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("fail"))
+    )
     h = Host()
     assert h.add_lan_device("1.2.3.4", 1) is False
 
 
 # ── delete_lan_device (lines 243-255) ──────────────────────────────────────
+
 
 def test_delete_lan_device_corrupt_file_starts_fresh(home):
     tmp_path = home
@@ -319,9 +338,9 @@ def test_delete_lan_device_removes_matching_ip(home):
     tmp_path = home
     cfg_dir = _cfg_dir(tmp_path)
     presets_file = cfg_dir / "presets.json"
-    presets_file.write_text(json.dumps({"lan_devices": [
-        {"ip": "1.2.3.4", "token": 1}, {"ip": "5.6.7.8", "token": 2}
-    ]}), encoding="utf-8")
+    presets_file.write_text(
+        json.dumps({"lan_devices": [{"ip": "1.2.3.4", "token": 1}, {"ip": "5.6.7.8", "token": 2}]}), encoding="utf-8"
+    )
     h = Host()
     assert h.delete_lan_device("1.2.3.4") is True
     data = json.loads(presets_file.read_text(encoding="utf-8"))
@@ -329,7 +348,8 @@ def test_delete_lan_device_removes_matching_ip(home):
 
 
 def test_delete_lan_device_exception_returns_false(home, monkeypatch):
-    monkeypatch.setattr(presets_manager, "atomic_write_text",
-                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("fail")))
+    monkeypatch.setattr(
+        presets_manager, "atomic_write_text", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("fail"))
+    )
     h = Host()
     assert h.delete_lan_device("1.2.3.4") is False

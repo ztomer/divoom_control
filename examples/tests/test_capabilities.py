@@ -243,6 +243,7 @@ def test_advertised_fingerprints_table_is_empty_by_default():
 def test_divoom_capabilities_property_returns_capabilities():
     """Divoom.capabilities returns a Capabilities instance."""
     from divoom_legacy import Divoom
+
     d = Divoom(mac="AA:BB:CC:DD:EE:FF")
     caps = d.capabilities
     assert isinstance(caps, Capabilities)
@@ -253,6 +254,7 @@ def test_divoom_capabilities_property_returns_capabilities():
 def test_divoom_capabilities_uses_explicit_device_type():
     """Explicit device_type kwarg beats everything else."""
     from divoom_legacy import Divoom
+
     d = Divoom(mac="AA:BB:CC:DD:EE:FF", device_type="TivooMax")
     assert d.capabilities.panel_resolution == 16  # the APK's size (P3.1)
     assert d.capabilities.has_fm is False  # the app's own radio rows (P3.4)
@@ -262,6 +264,7 @@ def test_divoom_capabilities_uses_registry(monkeypatch, tmp_path: Path):
     """If device_type is unset, the MAC registry is consulted."""
     from divoom_legacy import Divoom
     from divoom_lib.models.capabilities import DeviceRegistry
+
     reg_path = tmp_path / "devices.json"
     reg = DeviceRegistry(path=reg_path)
     reg.register("11-75-58-3f-fd-aa", "DITOO")
@@ -276,8 +279,10 @@ def test_divoom_capabilities_uses_manufacturer_data():
     """If advertisement_data is provided and the fingerprint table has a
     match, the MAC + device_type are bypassed."""
     from divoom_legacy import Divoom
+
     # Inject a fake fingerprint and matching manufacturer data.
     from divoom_lib.models import capabilities as caps_mod
+
     caps_mod.ADVERTISED_FINGERPRINTS[(0x0D00, (0x42,))] = "TivooMax"
     try:
         d = Divoom(mac="AA:BB:CC:DD:EE:FF", advertisement_data={0x0D00: b"\x42\x01\x02"})
@@ -290,6 +295,7 @@ def test_divoom_capabilities_uses_manufacturer_data():
 def test_divoom_capabilities_falls_back_to_baseline():
     """If nothing matches, baseline (most-limited Pixoo defaults)."""
     from divoom_legacy import Divoom
+
     d = Divoom(mac="AA:BB:CC:DD:EE:FF")
     # No device_type, no registry, no advertisement_data.
     assert d.capabilities.panel_resolution == 16

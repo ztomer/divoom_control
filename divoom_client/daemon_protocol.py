@@ -13,6 +13,7 @@ All messages are newline-delimited JSON ("NDJSON"): one compact JSON object per
 line. This module has the framing, the message/event shapes, and a thin client.
 The server lives in ``divoom_client/daemon.py``; clients are the menubar + the GUI.
 """
+
 from __future__ import annotations
 
 import base64
@@ -23,6 +24,7 @@ import time
 from typing import Any, Callable, Iterable
 
 from .daemon_host_data import HostDataMixin
+from .daemon_panel import PanelDataMixin
 from .daemon_cloud import CloudDataMixin, CloudUnavailable  # noqa: F401
 
 DEFAULT_SOCKET_PATH = "/tmp/divoom.sock"
@@ -35,7 +37,7 @@ DEFAULT_TCP_PORT = 9009
 # times over a fraction of a second; liveness probes opt out (retries=0) so
 # ensure_daemon's readiness poll stays fast when no daemon is up.
 DEFAULT_CONNECT_RETRIES = 4
-CONNECT_RETRY_BASE_DELAY = 0.06   # grows 0.06, 0.12, 0.24, 0.48 (~0.9s worst case)
+CONNECT_RETRY_BASE_DELAY = 0.06  # grows 0.06, 0.12, 0.24, 0.48 (~0.9s worst case)
 CONNECT_RETRY_MAX_DELAY = 0.5
 
 # Cap the client's reply buffer too — a buggy/hostile daemon shouldn't be able
@@ -57,7 +59,7 @@ ENV_SOCKET = "DIVOOM_SOCKET"
 # Event types streamed to subscribers.
 EVENT_STATUS = "status"
 EVENT_NOTIFICATION = "notification"
-EVENT_SHUTDOWN = "shutdown"   # R40 §9: daemon is stopping — subscribers may follow it down
+EVENT_SHUTDOWN = "shutdown"  # R40 §9: daemon is stopping — subscribers may follow it down
 
 SUBSCRIBE_COMMAND = "subscribe"
 
@@ -82,14 +84,13 @@ def iter_messages(buffer: bytes) -> tuple[list[dict], bytes]:
             continue
         try:
             messages.append(json.loads(line.decode("utf-8")))
-        except (ValueError, UnicodeDecodeError):
+        except ValueError, UnicodeDecodeError:
             continue
     return messages, remainder
 
 
 # ── message/event constructors ──────────────────────────────────────────
-def make_request(command: str, args: dict | None = None,
-                 token: str | None = None) -> dict:
+def make_request(command: str, args: dict | None = None, token: str | None = None) -> dict:
     req: dict = {"command": command, "args": args or {}}
     if token:
         req["token"] = token
@@ -114,7 +115,7 @@ def make_notification_event(app_type: int, title: str, body: str, routed: bool) 
 
 
 # ── client ──────────────────────────────────────────────────────────────
-class DaemonClient(HostDataMixin, CloudDataMixin):
+class DaemonClient(HostDataMixin, CloudDataMixin, PanelDataMixin):
     """Thin Unix-socket client. Used by the menubar + GUI to talk to the daemon.
 
     Never raises on a missing/closed daemon — `send_command` returns an error
@@ -122,11 +123,17 @@ class DaemonClient(HostDataMixin, CloudDataMixin):
     state (it may not be launched yet).
     """
 
-    def __init__(self, socket_path: str = DEFAULT_SOCKET_PATH,
-                 timeout: float | None = None,
-                 *, host: str | None = None, port: int | None = None,
-                 token: str | None = None):
+    def __init__(
+        self,
+        socket_path: str = DEFAULT_SOCKET_PATH,
+        timeout: float | None = None,
+        *,
+        host: str | None = None,
+        port: int | None = None,
+        token: str | None = None,
+    ):
         from divoom_client.daemon_config import load_daemon_config
+
         self.socket_path = socket_path
         # Default the quick-command read timeout from the daemon config so the
         # "2 seconds" lives in one place (daemon.ini) rather than here.
@@ -136,8 +143,7 @@ class DaemonClient(HostDataMixin, CloudDataMixin):
         self.token = token
 
     @classmethod
-    def from_env(cls, socket_path: str = DEFAULT_SOCKET_PATH,
-                 timeout: float | None = None) -> "DaemonClient":
+    def from_env(cls, socket_path: str = DEFAULT_SOCKET_PATH, timeout: float | None = None) -> "DaemonClient":
         """Build a client from env: if DIVOOM_DAEMON_HOST is set, target that
         remote daemon over TCP (with DIVOOM_DAEMON_TOKEN); else the local Unix
         socket."""
@@ -162,9 +168,14 @@ class DaemonClient(HostDataMixin, CloudDataMixin):
             s.connect(self.socket_path)
         return s
 
-    def send_command(self, command: str, args: dict | None = None,
-                     *, read_timeout: float | None = None,
-                     connect_retries: int = DEFAULT_CONNECT_RETRIES) -> dict:
+    def send_command(
+        self,
+        command: str,
+        args: dict | None = None,
+        *,
+        read_timeout: float | None = None,
+        connect_retries: int = DEFAULT_CONNECT_RETRIES,
+    ) -> dict:
         """One-shot request/response. Returns the daemon's reply dict, or
         ``{"success": False, "error": ..., "unreachable": True}`` if the daemon
         isn't reachable.
@@ -188,13 +199,17 @@ class DaemonClient(HostDataMixin, CloudDataMixin):
         for attempt in range(connect_retries + 1):
             try:
                 s = self._connect()
-            except (ConnectionRefusedError, FileNotFoundError,
-                    ConnectionResetError, ConnectionAbortedError, BlockingIOError) as e:
+            except (
+                ConnectionRefusedError,
+                FileNotFoundError,
+                ConnectionResetError,
+                ConnectionAbortedError,
+                BlockingIOError,
+            ) as e:
                 # Transient: socket not accepting yet / daemon restarting. Retry.
                 last_err = e
                 if attempt < connect_retries:
-                    delay = min(CONNECT_RETRY_MAX_DELAY,
-                                CONNECT_RETRY_BASE_DELAY * (2 ** attempt))
+                    delay = min(CONNECT_RETRY_MAX_DELAY, CONNECT_RETRY_BASE_DELAY * (2**attempt))
                     time.sleep(delay)
                     continue
                 return {"success": False, "error": str(e), "unreachable": True}
@@ -218,14 +233,19 @@ class DaemonClient(HostDataMixin, CloudDataMixin):
                     return msgs[0] if msgs else {"success": False, "error": "no reply"}
             except (OSError, ValueError) as e:
                 return {"success": False, "error": str(e)}
-        return {"success": False,
-                "error": str(last_err) if last_err else "daemon unreachable",
-                "unreachable": True}
+        return {"success": False, "error": str(last_err) if last_err else "daemon unreachable", "unreachable": True}
 
-    def device_call(self, method: str, args: list | None = None,
-                    kwargs: dict | None = None, *, target: str = "device",
-                    blobs: dict[int, bytes] | None = None,
-                    token: str | None = None, mac: str | None = None) -> dict:
+    def device_call(
+        self,
+        method: str,
+        args: list | None = None,
+        kwargs: dict | None = None,
+        *,
+        target: str = "device",
+        blobs: dict[int, bytes] | None = None,
+        token: str | None = None,
+        mac: str | None = None,
+    ) -> dict:
         """Proxy a device method through the daemon (R17 P5): the daemon owns the
         BLE connection and runs ``divoom.<method>(*args, **kwargs)``. ``target``
         selects the single device ("device") or the daemon-owned wall ("wall").
@@ -241,7 +261,9 @@ class DaemonClient(HostDataMixin, CloudDataMixin):
 
         Returns the daemon reply ``{"success", "result"|"error"}``."""
         payload: dict = {
-            "method": method, "args": args or [], "kwargs": kwargs or {},
+            "method": method,
+            "args": args or [],
+            "kwargs": kwargs or {},
             "target": target,
         }
         # 2026-09-12: name the panel. A mac-less call means "the daemon's
@@ -252,17 +274,15 @@ class DaemonClient(HostDataMixin, CloudDataMixin):
         if token:
             payload["token"] = token
         if blobs:
-            payload["blobs"] = {
-                str(i): base64.b64encode(b).decode("ascii") for i, b in blobs.items()
-            }
+            payload["blobs"] = {str(i): base64.b64encode(b).decode("ascii") for i, b in blobs.items()}
         # R42 §6: device methods can be SLOW — a wall show_image streams 0x8B
         # to every wall device sequentially (10-30s+). The 2s quick-command
         # timeout abandoned those calls mid-stream ("images are not pushed").
         # A long read timeout is safe: it only applies while a live daemon is
         # processing; a dead daemon still fails fast at connect.
         from divoom_client.daemon_config import load_daemon_config
-        return self.send_command("device_call", payload,
-                                 read_timeout=load_daemon_config().sync_read_timeout)
+
+        return self.send_command("device_call", payload, read_timeout=load_daemon_config().sync_read_timeout)
 
     def exclusive_start(self, token: str) -> dict:
         """Begin an exclusive-mode session on the daemon. Only ``device_call``
@@ -275,14 +295,16 @@ class DaemonClient(HostDataMixin, CloudDataMixin):
         daemon went on to acquire → orphaned token + a spurious failure to the GUI,
         wedging the device until the 30s G3 idle release."""
         from divoom_client.daemon_config import load_daemon_config
-        return self.send_command("exclusive_start", {"token": token},
-                                 read_timeout=load_daemon_config().sync_read_timeout)
+
+        return self.send_command(
+            "exclusive_start", {"token": token}, read_timeout=load_daemon_config().sync_read_timeout
+        )
 
     def exclusive_end(self, token: str) -> dict:
         """End the exclusive-mode session for ``token``. Returns the daemon reply."""
         from divoom_client.daemon_config import load_daemon_config
-        return self.send_command("exclusive_end", {"token": token},
-                                 read_timeout=load_daemon_config().sync_read_timeout)
+
+        return self.send_command("exclusive_end", {"token": token}, read_timeout=load_daemon_config().sync_read_timeout)
 
     # ── notifications (the daemon owns the single macOS monitor) ──────────
     def start_notifications(self) -> dict:
@@ -305,25 +327,41 @@ class DaemonClient(HostDataMixin, CloudDataMixin):
         return self.send_command("set_routing", {"rules": [list(r) for r in rules]})
 
     # ── device ownership / lifecycle (R17 P5 full cutover) ────────────────
-    def connect_device(self, *, mac: str | None = None, lan_ip: str | None = None,
-                       lan_token: int = 0, device_name: str | None = None,
-                       use_ios_le_protocol: bool = True) -> dict:
+    def connect_device(
+        self,
+        *,
+        mac: str | None = None,
+        lan_ip: str | None = None,
+        lan_token: int = 0,
+        device_name: str | None = None,
+        use_ios_le_protocol: bool = True,
+    ) -> dict:
         """Ask the daemon to own + connect a device (BLE via ``mac`` or LAN via
         ``lan_ip``). Returns status fields (connected/mac/lan_ip/wall).
 
         Uses the longer ``connect_timeout`` (BLE setup is slow — the 2s default
         read timeout would give up mid-handshake and surface as "timed out")."""
         from divoom_client.daemon_config import load_daemon_config
-        return self.send_command("connect", {
-            "mac": mac, "lan_ip": lan_ip, "lan_token": lan_token,
-            "device_name": device_name, "use_ios_le_protocol": use_ios_le_protocol,
-        }, read_timeout=load_daemon_config().connect_timeout)
+
+        return self.send_command(
+            "connect",
+            {
+                "mac": mac,
+                "lan_ip": lan_ip,
+                "lan_token": lan_token,
+                "device_name": device_name,
+                "use_ios_le_protocol": use_ios_le_protocol,
+            },
+            read_timeout=load_daemon_config().connect_timeout,
+        )
 
     def disconnect_device(self, mac: str | None = None) -> dict:
         """Disconnect one panel (``mac``) or, with no ``mac``, the whole fleet."""
         from divoom_client.daemon_config import load_daemon_config
-        return self.send_command("disconnect", {"mac": mac} if mac else None,
-                                 read_timeout=load_daemon_config().connect_timeout)
+
+        return self.send_command(
+            "disconnect", {"mac": mac} if mac else None, read_timeout=load_daemon_config().connect_timeout
+        )
 
     def shutdown(self) -> dict:
         """Ask the daemon to stop its process (clean kill switch). Best-effort:
@@ -347,13 +385,15 @@ class DaemonClient(HostDataMixin, CloudDataMixin):
         # wait longer than that or the read times out before the (successful)
         # reply arrives. The fallbacks + the read slack live in daemon.ini.
         from divoom_client.daemon_config import load_daemon_config
+
         cfg = load_daemon_config()
         if timeout is None:
             timeout = cfg.scan_timeout
         if limit is None:
             limit = cfg.scan_limit
         return self.send_command(
-            "scan", {"timeout": timeout, "limit": limit},
+            "scan",
+            {"timeout": timeout, "limit": limit},
             read_timeout=cfg.scan_read_timeout(timeout),
         )
 
@@ -363,93 +403,12 @@ class DaemonClient(HostDataMixin, CloudDataMixin):
         # GUI never got its wall handle, and every wall push then failed with
         # "no wall configured" even though the daemon-side wall was healthy).
         from divoom_client.daemon_config import load_daemon_config
-        return self.send_command("wall_configure",
-                                 {"slots": slots, "cell_size": cell_size},
-                                 read_timeout=load_daemon_config().connect_timeout)
 
-    def get_topology(self) -> dict:
-        return self.send_command("get_topology")
-
-    def set_topology(self, topology: dict) -> dict:
-        return self.send_command("set_topology", {"topology": topology})
-
-    def probe_lan(self) -> dict:
-        return self.send_command("probe_lan")
-
-    def live_job_start(self, mac: str, kind: str, params: dict) -> dict:
-        return self.send_command("live_job_start", {"mac": mac, "kind": kind, "params": params})
-
-    def live_job_stop(self, mac: str, kind: str) -> dict:
-        return self.send_command("live_job_stop", {"mac": mac, "kind": kind})
-
-    def live_job_list(self, mac: str | None = None) -> dict:
-        return self.send_command("live_job_list", {"mac": mac})
-
-    def live_jobs_stop_for(self, mac: str | None = None) -> dict:
-        """Stop all live jobs for a device (default: the daemon's active device).
-        Called before a channel/display switch so a running widget doesn't
-        clobber it on its next tick."""
-        return self.send_command("live_jobs_stop_for", {"mac": mac})
-
-    def set_device_activity(self, mac: str, kind: str, name: str | None = None,
-                            preview: str | None = None) -> dict:
-        """R46 #3 / R50: record what a device is showing (for the menubar tiles).
-        ``preview`` is an optional rasterized PNG data URL for the tile thumbnail."""
-        return self.send_command("set_device_activity",
-                                 {"mac": mac, "kind": kind, "name": name,
-                                  "preview": preview})
-
-    def get_device_activity(self) -> dict:
-        """R46 #3: {mac: {name, kind, at}} of what each device is showing."""
-        return self.send_command("get_device_activity", {})
-
-    def sync_artwork(self, file_id: str, *, mac: str | None = None,
-                     default_size: int | None = None,
-                     target: str = "device") -> dict:
-        """Ask the daemon to download a gallery asset and stream it to the owned
-        device/wall (binary stays in the daemon process).
-
-        Uses the long ``sync_read_timeout`` — the daemon only replies after the
-        download + full BLE stream, which takes far longer than the quick-command
-        timeout (a short read here falsely reported every upload as failed).
-        Pixel art: shown only on a panel (``mac``) of its own size (D14)."""
-        from divoom_client.daemon_config import load_daemon_config
-        args = {"file_id": file_id, "target": target, "mac": mac,
-                "default_size": default_size}
-        return self.send_command("sync_artwork", {k: v for k, v in args.items() if v is not None},
-                                 read_timeout=load_daemon_config().sync_read_timeout)
-
-    def custom_art_push(self, file_ids: list[str], page: int,
-                        slot: int | None = None,
-                        slots: dict | None = None,
-                        mac: str | None = None) -> dict:
-        """Push cloud files to custom art ``page`` (0-2) on the panel ``mac``
-        names (without it, the daemon's selected one: `art.rs`). ``slots`` is
-        the full-page {slot 0-11: file_id} mapping (unmapped slots are
-        cleared); ``file_ids`` from ``slot`` on is the legacy form."""
-        from divoom_client.daemon_config import load_daemon_config
-        args = {"file_ids": file_ids, "page": page, "slot": slot, "slots": slots}
-        if mac:
-            args["mac"] = mac
-        return self.send_command("custom_art_push", args,
-                                 read_timeout=load_daemon_config().sync_read_timeout)
-
-    def hot_update(self, *, device_size: int = 16, show: bool = True,
-                   address: str = "", by: str = "button") -> dict:
-        """Start a HOT channel update in the background on the daemon (returns
-        immediately). Call ``hot_update_progress()`` to poll progress.
-        ``address`` names the panel; the daemon records the run's verdict under
-        it, ``by`` saying which path ran it (``button`` or ``sync_now``; U.5)."""
         return self.send_command(
-            "hot_update",
-            {"device_size": device_size, "show": show, "address": address, "by": by},
-            read_timeout=30)
-
-    def hot_update_progress(self) -> dict:
-        """Query the current HOT channel update progress. Returns a phase dict:
-        ``{"phase": "idle"|"starting"|"fetching_manifest"|"downloading"|"uploading"|"done"|"error",
-        "current": int, "total": int, ...}``."""
-        return self.send_command("hot_update_progress", {})
+            "wall_configure",
+            {"slots": slots, "cell_size": cell_size},
+            read_timeout=load_daemon_config().connect_timeout,
+        )
 
     def subscribe(
         self,
@@ -489,5 +448,5 @@ class DaemonClient(HostDataMixin, CloudDataMixin):
                     events, buf = iter_messages(buf)
                     for ev in events:
                         on_event(ev)
-        except (OSError, ValueError):
+        except OSError, ValueError:
             return False

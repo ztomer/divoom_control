@@ -11,6 +11,7 @@ Usage:
     python -m examples.set_radio 87.5
     python -m examples.set_radio 87.5 --mac AA:BB:CC:DD:EE:FF
 """
+
 from __future__ import annotations
 
 import argparse
@@ -24,6 +25,7 @@ async def main(mhz: float, mac: str | None, timeout: float) -> int:
     freq_x10 = int(round(mhz * 10))
     if mac is None:
         from divoom_legacy.utils.discovery import discover_all_divoom_devices
+
         devices = await discover_all_divoom_devices(timeout=timeout)
         if not devices:
             print("No Divoom devices found.", file=sys.stderr)

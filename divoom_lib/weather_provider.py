@@ -38,6 +38,7 @@ without touching the weather-card code::
     info = await get_weather()
     print(info.temperature_c, info.weather_type, info.location)
 """
+
 from __future__ import annotations
 
 import logging
@@ -61,54 +62,54 @@ class WeatherProviderKind(str, Enum):
 # https://open-meteo.com/weather-documentation and wttr.in's docs.
 # (wttr.in returns the same code via ``weatherCode``.)
 WEATHER_CODE_TO_DIVOOM: dict[int, int] = {
-    113: WeatherType.Clear,        # Sunny / clear
-    116: WeatherType.CloudySky,    # Partly cloudy
-    119: WeatherType.CloudySky,    # Cloudy
-    122: WeatherType.CloudySky,    # Overcast
-    143: WeatherType.Fog,          # Mist
-    176: WeatherType.Rain,         # Patchy rain possible
-    179: WeatherType.Snow,         # Patchy snow possible
-    182: WeatherType.Snow,         # Patchy sleet possible
-    185: WeatherType.Fog,          # Patchy freezing drizzle
-    200: WeatherType.Thunderstorm, # Thundery outbreaks
-    227: WeatherType.Snow,         # Blowing snow
-    230: WeatherType.Snow,         # Blizzard
-    248: WeatherType.Fog,          # Fog
-    260: WeatherType.Fog,          # Freezing fog
-    263: WeatherType.Rain,         # Patchy light drizzle
-    266: WeatherType.Rain,         # Light drizzle
-    281: WeatherType.Rain,         # Freezing drizzle
-    284: WeatherType.Rain,         # Heavy freezing drizzle
-    293: WeatherType.Rain,         # Patchy light rain
-    296: WeatherType.Rain,         # Light rain
-    299: WeatherType.Rain,         # Moderate rain at times
-    302: WeatherType.Rain,         # Moderate rain
-    305: WeatherType.Rain,         # Heavy rain at times
-    308: WeatherType.Rain,         # Heavy rain
-    311: WeatherType.Rain,         # Light freezing rain
-    314: WeatherType.Rain,         # Moderate / heavy freezing rain
-    317: WeatherType.Snow,         # Light sleet
-    320: WeatherType.Snow,         # Moderate / heavy sleet
-    323: WeatherType.Snow,         # Patchy light snow
-    326: WeatherType.Snow,         # Light snow
-    329: WeatherType.Snow,         # Patchy moderate snow
-    332: WeatherType.Snow,         # Moderate snow
-    335: WeatherType.Snow,         # Patchy heavy snow
-    338: WeatherType.Snow,         # Heavy snow
-    350: WeatherType.Snow,         # Ice pellets
-    353: WeatherType.Rain,         # Light rain shower
-    356: WeatherType.Rain,         # Moderate / heavy rain shower
-    359: WeatherType.Rain,         # Torrential rain shower
-    362: WeatherType.Snow,         # Light sleet showers
-    365: WeatherType.Snow,         # Moderate / heavy sleet showers
-    368: WeatherType.Snow,         # Light snow showers
-    371: WeatherType.Snow,         # Moderate / heavy snow showers
-    374: WeatherType.Snow,         # Light ice pellet showers
-    377: WeatherType.Snow,         # Moderate / heavy ice pellet showers
-    386: WeatherType.Thunderstorm, # Patchy light rain w/ thunder
-    389: WeatherType.Thunderstorm, # Moderate / heavy rain w/ thunder
-    392: WeatherType.Thunderstorm, # Patchy light snow w/ thunder
-    395: WeatherType.Thunderstorm, # Moderate / heavy snow w/ thunder
+    113: WeatherType.Clear,  # Sunny / clear
+    116: WeatherType.CloudySky,  # Partly cloudy
+    119: WeatherType.CloudySky,  # Cloudy
+    122: WeatherType.CloudySky,  # Overcast
+    143: WeatherType.Fog,  # Mist
+    176: WeatherType.Rain,  # Patchy rain possible
+    179: WeatherType.Snow,  # Patchy snow possible
+    182: WeatherType.Snow,  # Patchy sleet possible
+    185: WeatherType.Fog,  # Patchy freezing drizzle
+    200: WeatherType.Thunderstorm,  # Thundery outbreaks
+    227: WeatherType.Snow,  # Blowing snow
+    230: WeatherType.Snow,  # Blizzard
+    248: WeatherType.Fog,  # Fog
+    260: WeatherType.Fog,  # Freezing fog
+    263: WeatherType.Rain,  # Patchy light drizzle
+    266: WeatherType.Rain,  # Light drizzle
+    281: WeatherType.Rain,  # Freezing drizzle
+    284: WeatherType.Rain,  # Heavy freezing drizzle
+    293: WeatherType.Rain,  # Patchy light rain
+    296: WeatherType.Rain,  # Light rain
+    299: WeatherType.Rain,  # Moderate rain at times
+    302: WeatherType.Rain,  # Moderate rain
+    305: WeatherType.Rain,  # Heavy rain at times
+    308: WeatherType.Rain,  # Heavy rain
+    311: WeatherType.Rain,  # Light freezing rain
+    314: WeatherType.Rain,  # Moderate / heavy freezing rain
+    317: WeatherType.Snow,  # Light sleet
+    320: WeatherType.Snow,  # Moderate / heavy sleet
+    323: WeatherType.Snow,  # Patchy light snow
+    326: WeatherType.Snow,  # Light snow
+    329: WeatherType.Snow,  # Patchy moderate snow
+    332: WeatherType.Snow,  # Moderate snow
+    335: WeatherType.Snow,  # Patchy heavy snow
+    338: WeatherType.Snow,  # Heavy snow
+    350: WeatherType.Snow,  # Ice pellets
+    353: WeatherType.Rain,  # Light rain shower
+    356: WeatherType.Rain,  # Moderate / heavy rain shower
+    359: WeatherType.Rain,  # Torrential rain shower
+    362: WeatherType.Snow,  # Light sleet showers
+    365: WeatherType.Snow,  # Moderate / heavy sleet showers
+    368: WeatherType.Snow,  # Light snow showers
+    371: WeatherType.Snow,  # Moderate / heavy snow showers
+    374: WeatherType.Snow,  # Light ice pellet showers
+    377: WeatherType.Snow,  # Moderate / heavy ice pellet showers
+    386: WeatherType.Thunderstorm,  # Patchy light rain w/ thunder
+    389: WeatherType.Thunderstorm,  # Moderate / heavy rain w/ thunder
+    392: WeatherType.Thunderstorm,  # Patchy light snow w/ thunder
+    395: WeatherType.Thunderstorm,  # Moderate / heavy snow w/ thunder
 }
 
 # Default location when no env override is set. Berlin is a wttr.in-
@@ -266,20 +267,14 @@ class WTTrInProvider:
         try:
             import aiohttp  # imported lazily so tests without aiohttp can still use Stub
         except ImportError as exc:
-            raise WeatherProviderError(
-                f"aiohttp not available: {exc}"
-            ) from exc
+            raise WeatherProviderError(f"aiohttp not available: {exc}") from exc
 
         own_session = self._session is None
-        session = self._session or aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=self._timeout_s)
-        )
+        session = self._session or aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self._timeout_s))
         try:
             async with session.get(url, params=params) as resp:
                 if resp.status != 200:
-                    raise WeatherProviderError(
-                        f"wttr.in returned HTTP {resp.status} for {loc!r}"
-                    )
+                    raise WeatherProviderError(f"wttr.in returned HTTP {resp.status} for {loc!r}")
                 data = await resp.json(content_type=None)
         except Exception as exc:  # network, timeout, decode, anything
             raise WeatherProviderError(f"wttr.in fetch failed: {exc}") from exc
@@ -292,21 +287,11 @@ class WTTrInProvider:
             temp_c = int(round(float(current["temp_C"])))
             weather_code = int(current["weatherCode"])
             area = data.get("nearest_area", [{}])[0]
-            area_name = (
-                area.get("areaName", [{}])[0].get("value")
-                if isinstance(area.get("areaName"), list)
-                else None
-            )
-            country = (
-                area.get("country", [{}])[0].get("value")
-                if isinstance(area.get("country"), list)
-                else None
-            )
+            area_name = area.get("areaName", [{}])[0].get("value") if isinstance(area.get("areaName"), list) else None
+            country = area.get("country", [{}])[0].get("value") if isinstance(area.get("country"), list) else None
             display = ", ".join(filter(None, [area_name, country])) or loc
         except (KeyError, IndexError, TypeError, ValueError) as exc:
-            raise WeatherProviderError(
-                f"wttr.in response missing expected fields: {exc}"
-            ) from exc
+            raise WeatherProviderError(f"wttr.in response missing expected fields: {exc}") from exc
 
         return WeatherInfo(
             temperature_c=temp_c,

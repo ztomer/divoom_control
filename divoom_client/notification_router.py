@@ -4,6 +4,7 @@ Split out of ``macos_notifications.py`` to keep that file under the 500-LOC cap.
 Holds DEFAULT_ROUTING, the persisted routing table (load/save/validate), and the
 MacAppRouter. Re-exported from ``macos_notifications`` for backward-compatible
 imports."""
+
 from __future__ import annotations
 
 import logging
@@ -17,22 +18,22 @@ logger = logging.getLogger(__name__)
 
 
 DEFAULT_ROUTING: list[tuple[str, int]] = [
-    ("whatsapp",   NOTIFICATION_APPS["WHATSAPP"]),
-    ("facebook",   NOTIFICATION_APPS["FACEBOOK"]),
-    ("messenger",  NOTIFICATION_APPS["MESSENGER"]),
-    ("instagram",  NOTIFICATION_APPS["INSTAGRAM"]),
-    ("twitter",    NOTIFICATION_APPS["TWITTER"]),
-    ("snapchat",   NOTIFICATION_APPS["SNAPCHAT"]),
-    ("line",       NOTIFICATION_APPS["LINE"]),
-    ("wechat",     NOTIFICATION_APPS["WECHAT"]),
-    ("kakao",      NOTIFICATION_APPS["KAKAO"]),
-    ("qq",         NOTIFICATION_APPS["QQ"]),
-    ("viber",      NOTIFICATION_APPS["VIBER"]),
-    ("skype",      NOTIFICATION_APPS["SKYPE"]),
+    ("whatsapp", NOTIFICATION_APPS["WHATSAPP"]),
+    ("facebook", NOTIFICATION_APPS["FACEBOOK"]),
+    ("messenger", NOTIFICATION_APPS["MESSENGER"]),
+    ("instagram", NOTIFICATION_APPS["INSTAGRAM"]),
+    ("twitter", NOTIFICATION_APPS["TWITTER"]),
+    ("snapchat", NOTIFICATION_APPS["SNAPCHAT"]),
+    ("line", NOTIFICATION_APPS["LINE"]),
+    ("wechat", NOTIFICATION_APPS["WECHAT"]),
+    ("kakao", NOTIFICATION_APPS["KAKAO"]),
+    ("qq", NOTIFICATION_APPS["QQ"]),
+    ("viber", NOTIFICATION_APPS["VIBER"]),
+    ("skype", NOTIFICATION_APPS["SKYPE"]),
     # SMS / iMessage / Mail → "text message" (the device's catch-all).
-    ("mobilesms",      NOTIFICATION_APPS["TEXT_MESSAGE"]),
-    ("messages",       NOTIFICATION_APPS["TEXT_MESSAGE"]),
-    ("mail",           NOTIFICATION_APPS["TEXT_MESSAGE"]),
+    ("mobilesms", NOTIFICATION_APPS["TEXT_MESSAGE"]),
+    ("messages", NOTIFICATION_APPS["TEXT_MESSAGE"]),
+    ("mail", NOTIFICATION_APPS["TEXT_MESSAGE"]),
     ("com.apple.mail", NOTIFICATION_APPS["TEXT_MESSAGE"]),
 ]
 
@@ -69,13 +70,11 @@ def _validate_rules(raw: Any) -> list[tuple[str, int]]:
             continue
         try:
             app_type_int = int(app_type)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             logger.warning(f"routing entry {i} has non-integer app_type: {entry!r}; skipping")
             continue
         if app_type_int not in _VALID_APP_TYPES:
-            logger.warning(
-                f"routing entry {i} app_type={app_type_int} not in NOTIFICATION_APPS; skipping"
-            )
+            logger.warning(f"routing entry {i} app_type={app_type_int} not in NOTIFICATION_APPS; skipping")
             continue
         clean.append((substr.lower(), app_type_int))
     return clean
@@ -100,6 +99,7 @@ def load_routing_table(path: Optional[Path] = None) -> list[tuple[str, int]]:
         return list(DEFAULT_ROUTING)
     try:
         import json as _json
+
         with open(p, "r", encoding="utf-8") as f:
             raw = _json.load(f)
         rules = _validate_rules(raw)
@@ -124,14 +124,15 @@ def save_routing_table(
     Returns the resolved path.
     """
     import json as _json
+
     p = Path(path) if path is not None else ROUTING_PATH
     p.parent.mkdir(parents=True, exist_ok=True)
     # Re-validate on the way out so a save() can't persist garbage.
     clean = _validate_rules([list(r) for r in rules])
     clean.sort(key=lambda r: r[0])
     from divoom_lib.utils.atomic_io import atomic_write_text
-    atomic_write_text(p, _json.dumps([list(r) for r in clean],
-                                     indent=2, ensure_ascii=False) + "\n")
+
+    atomic_write_text(p, _json.dumps([list(r) for r in clean], indent=2, ensure_ascii=False) + "\n")
     return p
 
 

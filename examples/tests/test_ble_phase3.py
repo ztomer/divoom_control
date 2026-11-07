@@ -5,6 +5,7 @@ live jobs don't connect-storm CoreBluetooth; the wall reports per-slot typed
 results (which screen failed and why) and self-heals a dropped slot before
 pushing instead of freezing its content.
 """
+
 import asyncio
 import sys
 from pathlib import Path
@@ -24,6 +25,7 @@ def _run(coro):
 
 # ── connect serialization ──────────────────────────────────────────────────
 
+
 def test_connect_handshake_is_serialized_across_devices():
     """Two devices connecting at once must never overlap inside the handshake —
     the per-loop connect lock funnels them one at a time."""
@@ -33,7 +35,7 @@ def test_connect_handshake_is_serialized_across_devices():
         async def connect(self):
             overlap["now"] += 1
             overlap["max"] = max(overlap["max"], overlap["now"])
-            await asyncio.sleep(0.02)          # hold the "handshake" open
+            await asyncio.sleep(0.02)  # hold the "handshake" open
             overlap["now"] -= 1
             await super().connect()
 
@@ -43,18 +45,19 @@ def test_connect_handshake_is_serialized_across_devices():
         return devs
 
     devs = _run(_drive())
-    assert overlap["max"] == 1                  # never two handshakes at once
+    assert overlap["max"] == 1  # never two handshakes at once
     assert all(d.is_connected for d in devs)
 
 
 def test_connect_lock_is_per_loop_not_cross_loop_bound():
     """A fresh event loop gets its own lock (no 'bound to a different loop')."""
     _run(ensure_connected(FakeBleDevice()))
-    _run(ensure_connected(FakeBleDevice()))     # would raise if the lock leaked
+    _run(ensure_connected(FakeBleDevice()))  # would raise if the lock leaked
     assert len(ble_connection._connect_locks) >= 1
 
 
 # ── bounded-concurrency multi-connect with per-key typed results ────────────
+
 
 def test_connect_devices_returns_per_key_results():
     good = FakeBleDevice()
@@ -96,10 +99,12 @@ def test_connect_devices_bounds_concurrency():
 
 # ── wall: per-slot results + partial-ok + total-failure reason ──────────────
 
+
 def _make_wall(devices):
     """Build a DivoomWall but swap its real Divooms for fakes (no BLE)."""
     from divoom_legacy.wall import DivoomWall
     from divoom_legacy.device_slot import DeviceSlot
+
     configs = [{"mac": f"AA:{i}", "x": i, "y": 0, "size": 16} for i in range(len(devices))]
     wall = DivoomWall(configs)
     wall.devices = []
@@ -123,6 +128,7 @@ def test_wall_connect_reports_which_slot_failed():
 
 def test_wall_connect_raises_only_on_total_failure():
     from divoom_legacy.ble_connection import BleConnectionError
+
     a = FakeBleDevice(raise_on_connect=Exception("bluetooth is off"))
     b = FakeBleDevice(raise_on_connect=Exception("bluetooth is off"))
     wall = _make_wall([a, b])
@@ -132,8 +138,10 @@ def test_wall_connect_raises_only_on_total_failure():
 
 # ── wall: show_image self-heals a dropped slot before pushing ───────────────
 
+
 class _PushDevice(FakeBleDevice):
     """A fake slot with a .display.show_image that records pushes."""
+
     def __init__(self, **kw):
         super().__init__(**kw)
         self.pushes = 0
@@ -143,31 +151,34 @@ class _PushDevice(FakeBleDevice):
             async def show_image(self, path, time=None):
                 outer.pushes += 1
                 return True
+
         self.display = _Display()
 
 
 def test_wall_show_image_reconnects_dropped_slot(tmp_path, monkeypatch):
     img = tmp_path / "x.png"
     from PIL import Image
+
     Image.new("RGB", (16, 16), (10, 20, 30)).save(img)
 
     alive = _PushDevice()
     _run(alive.connect())
     dropped = _PushDevice()
     _run(dropped.connect())
-    dropped.drop()                      # OS-level drop → is_alive False
+    dropped.drop()  # OS-level drop → is_alive False
 
     wall = _make_wall([alive, dropped])
     ok = _run(wall.show_image(str(img)))
     assert ok is True
-    assert dropped.is_alive             # self-healed
-    assert dropped.connect_calls == 2   # reconnected before pushing
+    assert dropped.is_alive  # self-healed
+    assert dropped.connect_calls == 2  # reconnected before pushing
     assert alive.pushes == 1 and dropped.pushes == 1
 
 
 def test_wall_show_image_reports_unrecoverable_slot(tmp_path):
     img = tmp_path / "x.png"
     from PIL import Image
+
     Image.new("RGB", (16, 16), (10, 20, 30)).save(img)
 
     alive = _PushDevice()
@@ -175,10 +186,10 @@ def test_wall_show_image_reports_unrecoverable_slot(tmp_path):
     dead = _PushDevice(connect_results=[True])
     _run(dead.connect())
     dead.drop()
-    dead._raise = Exception("was not found")   # can't be revived
+    dead._raise = Exception("was not found")  # can't be revived
 
     wall = _make_wall([alive, dead])
     ok = _run(wall.show_image(str(img)))
-    assert ok is False                  # partial — one slot couldn't be revived
-    assert alive.pushes == 1            # the healthy slot still updated
+    assert ok is False  # partial — one slot couldn't be revived
+    assert alive.pushes == 1  # the healthy slot still updated
     assert dead.pushes == 0

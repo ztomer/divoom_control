@@ -8,6 +8,7 @@ These tests pin the rules the daemon's Rust side also implements
 (``divoomd/src/settings_devices.rs``), and the two are held in step by
 ``tools/check_hotchannel_parity.py``.
 """
+
 from __future__ import annotations
 
 import sys
@@ -70,21 +71,22 @@ def test_a_device_without_a_gallery_gets_the_clouds_default(settings_file):
 
 
 def test_an_unusable_gallery_value_falls_back(settings_file):
-    settings_file.write_text(
-        "[gallery]\na9fccb71-3d3d-4de3-c381-0de382cdc4aa = oops\n", encoding="utf-8"
-    )
+    settings_file.write_text("[gallery]\na9fccb71-3d3d-4de3-c381-0de382cdc4aa = oops\n", encoding="utf-8")
     assert sd.device_classify("a9fccb71-3d3d-4de3-c381-0de382cdc4aa") == 18
 
 
 def test_registering_writes_the_table_and_keeps_the_rest(settings_file):
     settings_file.write_text(SETTINGS, encoding="utf-8")
-    assert sd.set_registered(
-        ["f90d2cc9-420e-65f9-9e06-f9554470fced"],
-        known=[
-            "f90d2cc9-420e-65f9-9e06-f9554470fced",
-            "a9fccb71-3d3d-4de3-c381-0de382cdc4aa",
-        ],
-    ) is True
+    assert (
+        sd.set_registered(
+            ["f90d2cc9-420e-65f9-9e06-f9554470fced"],
+            known=[
+                "f90d2cc9-420e-65f9-9e06-f9554470fced",
+                "a9fccb71-3d3d-4de3-c381-0de382cdc4aa",
+            ],
+        )
+        is True
+    )
     text = settings_file.read_text(encoding="utf-8")
     assert "a9fccb71-3d3d-4de3-c381-0de382cdc4aa" not in text, (
         "a device the caller SAW and no longer wants must leave the table"
@@ -113,17 +115,18 @@ def test_a_write_that_saw_nothing_unregisters_nothing(settings_file):
 
     assert sd.set_registered([], known=[]) is True
 
-    assert sd.registered_devices() == before, (
-        "a write that did not see a device must not unregister it"
-    )
+    assert sd.registered_devices() == before, "a write that did not see a device must not unregister it"
 
 
 def test_a_device_the_caller_did_not_see_stays_registered(settings_file):
     settings_file.write_text(SETTINGS, encoding="utf-8")
-    assert sd.set_registered(
-        ["f90d2cc9-420e-65f9-9e06-f9554470fced"],
-        known=["f90d2cc9-420e-65f9-9e06-f9554470fced"],
-    ) is True
+    assert (
+        sd.set_registered(
+            ["f90d2cc9-420e-65f9-9e06-f9554470fced"],
+            known=["f90d2cc9-420e-65f9-9e06-f9554470fced"],
+        )
+        is True
+    )
     assert ("a9fccb71-3d3d-4de3-c381-0de382cdc4aa", 17) in sd.registered_devices(), (
         "a device the caller did not see must stay registered"
     )

@@ -17,6 +17,7 @@ guard the things that have to stay true in CI:
   7. The browser e2e drivers are declared in the ``[e2e]`` extra, not
      hardcoded in a CI workflow.
 """
+
 from __future__ import annotations
 
 import re
@@ -48,8 +49,8 @@ def _pkg_name(spec: str) -> str:
     and ``pyobjc-framework-cocoa`` are the SAME key — otherwise a rename of
     case reads as a difference in both directions and hides the real one.
     """
-    name = spec.split(";")[0].strip()          # environment marker
-    name = name.split("[")[0].strip()          # extras
+    name = spec.split(";")[0].strip()  # environment marker
+    name = name.split("[")[0].strip()  # extras
     name = re.split(r"[<>=!~\s\[]", name, maxsplit=1)[0].strip()
     return re.sub(r"[-_.]+", "-", name).lower()
 
@@ -122,6 +123,7 @@ def test_pyproject_declares_cli_entry_point() -> None:
 def test_cli_main_callable() -> None:
     """The entry point must point at a callable."""
     from divoom_lib import cli
+
     assert callable(cli.main)
 
 
@@ -262,8 +264,7 @@ def test_browser_driver_declared_in_the_extra_not_literal_in_ci() -> None:
 
     assert not offenders, (
         "browser driver versions are hardcoded in a workflow; declare them in "
-        "the [e2e] extra in pyproject.toml so there is exactly one copy:\n  "
-        + "\n  ".join(offenders)
+        "the [e2e] extra in pyproject.toml so there is exactly one copy:\n  " + "\n  ".join(offenders)
     )
 
     data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
@@ -295,6 +296,7 @@ def test_shell_wrapper_still_present() -> None:
     assert wrapper.exists()
     # It should be executable on macOS/Linux (chmod +x).
     import stat
+
     mode = wrapper.stat().st_mode
     assert mode & stat.S_IXUSR, "./divoom-control is not executable"
 

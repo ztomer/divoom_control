@@ -5,6 +5,7 @@ The server-side startup-race tests (real SocketServer instances) depend on
 the archived divoom_client.socket_server module and moved to
 archive/tests/ (removed in R66; in git history) test_daemon_socket_hardening.py.
 """
+
 import sys
 from pathlib import Path
 
@@ -18,17 +19,27 @@ from divoom_client.daemon_protocol import DaemonClient, encode_message
 
 # ── client: bounded connect-retry on a transient refusal ───────────────────
 
+
 def test_send_command_retries_transient_connection_refused(monkeypatch):
     """A connect that's refused a couple times then succeeds must transparently
     recover — the user never sees 'Connection refused'."""
     calls = {"n": 0}
 
     class _FakeSock:
-        def __enter__(self): return self
-        def __exit__(self, *a): return False
-        def settimeout(self, _t): pass
-        def sendall(self, _d): pass
-        def recv(self, _n): return encode_message({"success": True, "ok": 1})
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def settimeout(self, _t):
+            pass
+
+        def sendall(self, _d):
+            pass
+
+        def recv(self, _n):
+            return encode_message({"success": True, "ok": 1})
 
     def _flaky_connect(self):
         calls["n"] += 1
@@ -42,7 +53,7 @@ def test_send_command_retries_transient_connection_refused(monkeypatch):
     c = DaemonClient("/tmp/whatever.sock")
     reply = c.send_command("device_status")
     assert reply.get("success") is True
-    assert calls["n"] == 3          # refused twice, succeeded on the third
+    assert calls["n"] == 3  # refused twice, succeeded on the third
 
 
 def test_send_command_gives_up_after_retries(monkeypatch):
@@ -75,8 +86,7 @@ def test_liveness_probe_fast_fails_without_retry(monkeypatch):
 
     monkeypatch.setattr(DaemonClient, "_connect", _refused)
     slept = {"n": 0}
-    monkeypatch.setattr(daemon_protocol.time, "sleep",
-                        lambda _s: slept.__setitem__("n", slept["n"] + 1))
+    monkeypatch.setattr(daemon_protocol.time, "sleep", lambda _s: slept.__setitem__("n", slept["n"] + 1))
 
     c = DaemonClient("/tmp/whatever.sock")
     reply = c.send_command("device_status", connect_retries=0)
@@ -88,14 +98,24 @@ def test_read_error_after_connect_is_not_retried(monkeypatch):
     """Once connected, a read failure is returned as-is (it may be a legit slow
     op, not a connection problem) — we must NOT reconnect-storm on it."""
     import socket
+
     connects = {"n": 0}
 
     class _BadReadSock:
-        def __enter__(self): return self
-        def __exit__(self, *a): return False
-        def settimeout(self, _t): pass
-        def sendall(self, _d): pass
-        def recv(self, _n): raise socket.timeout("read timed out")
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def settimeout(self, _t):
+            pass
+
+        def sendall(self, _d):
+            pass
+
+        def recv(self, _n):
+            raise socket.timeout("read timed out")
 
     def _ok_connect(self):
         connects["n"] += 1
@@ -105,4 +125,4 @@ def test_read_error_after_connect_is_not_retried(monkeypatch):
     c = DaemonClient("/tmp/whatever.sock")
     reply = c.send_command("device_status")
     assert reply.get("success") is False
-    assert connects["n"] == 1        # connected once, did NOT retry on read error
+    assert connects["n"] == 1  # connected once, did NOT retry on read error

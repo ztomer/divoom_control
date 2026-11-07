@@ -19,6 +19,7 @@ reports confidence. So each kind is checked by taking the bytes the daemon
 returned and proving the GUI wrote exactly those — the one comparison a second
 renderer cannot satisfy.
 """
+
 from __future__ import annotations
 
 import base64
@@ -41,7 +42,7 @@ def daemon_kinds() -> list[str]:
     defect the test is guarding against one level up.
     """
     src = (REPO / "divoomd" / "src" / "render_widget.rs").read_text()
-    m = re.search(r'pub const KINDS: &\[&str\] = &\[(.*?)\];', src, re.S)
+    m = re.search(r"pub const KINDS: &\[&str\] = &\[(.*?)\];", src, re.S)
     assert m, "render_widget.rs no longer declares KINDS"
     return re.findall(r'"([a-z_]+)"', m.group(1))
 
@@ -60,7 +61,9 @@ class Recorder(WidgetFrameMixin):
     def __init__(self, raw: bytes, size: int, kind: str, extras: dict | None = None):
         self.raw = raw
         payload = {
-            "success": True, "kind": kind, "size": size,
+            "success": True,
+            "kind": kind,
+            "size": size,
             "frame_rgb_b64": base64.b64encode(raw).decode(),
         }
         payload.update(extras or {})
@@ -98,7 +101,8 @@ def test_the_gui_writes_exactly_the_bytes_the_daemon_returned(kind):
     raw = hard_edged(size)
     _extras, path = Recorder(raw, size, kind)._widget_frame(kind, size)
     assert Image.open(path).convert("RGB").tobytes() == raw, (
-        f"{kind}: the frame on screen is not the frame the daemon rendered")
+        f"{kind}: the frame on screen is not the frame the daemon rendered"
+    )
 
 
 @pytest.mark.parametrize("kind", daemon_kinds())
@@ -121,6 +125,7 @@ def test_no_kind_is_rendered_twice_at_different_sizes(kind):
 
 # ── the GUI has no renderer left to drift WITH ───────────────────────────────
 
+
 def test_the_gui_package_constructs_no_pixels():
     """The structural half: `tools/check_gui_is_a_client.py` enforces this
     repo-wide, and this states the property in the language of the defect.
@@ -134,7 +139,12 @@ def test_the_gui_package_constructs_no_pixels():
 
     result = subprocess.run(
         [sys.executable, str(REPO / "tools" / "check_gui_is_a_client.py")],
-        capture_output=True, text=True, cwd=REPO, stdin=subprocess.DEVNULL, check=False)
+        capture_output=True,
+        text=True,
+        cwd=REPO,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    )
     assert result.returncode == 0, result.stdout + result.stderr
 
 
@@ -177,6 +187,7 @@ def test_every_kind_the_daemon_renders_is_previewed_through_the_funnel():
     missing = kinds - asked - set(NOT_PREVIEWED)
     assert not missing, (
         f"the daemon renders {sorted(missing)} but no GUI surface asks for it "
-        "through _widget_frame -- a GUI preview of it would be a second renderer")
+        "through _widget_frame -- a GUI preview of it would be a second renderer"
+    )
     stale = set(NOT_PREVIEWED) & asked
     assert not stale, f"NOT_PREVIEWED lists kinds the GUI now previews: {sorted(stale)}"

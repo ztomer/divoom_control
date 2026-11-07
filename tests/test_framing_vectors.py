@@ -16,9 +16,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from divoom_lib import framing
 
-VECTORS = json.loads(
-    (Path(__file__).parent.parent / "divoomd" / "tests" / "framing_vectors.json").read_text()
-)
+VECTORS = json.loads((Path(__file__).parent.parent / "divoomd" / "tests" / "framing_vectors.json").read_text())
 
 
 def _h(b) -> str:
@@ -51,9 +49,7 @@ def test_parse_basic_vectors_reproduce():
     for c in VECTORS["parse_basic"]:
         msgs, remainder = framing.parse_basic_protocol_frames(bytearray(bytes.fromhex(c["in"])))
         got = {
-            "messages": [
-                {"command_id": m["command_id"], "payload": _h(m["payload"])} for m in msgs
-            ],
+            "messages": [{"command_id": m["command_id"], "payload": _h(m["payload"])} for m in msgs],
             "remainder": _h(remainder),
         }
         assert got["messages"] == c["messages"], f"parse_basic msgs for {c['in']}"
@@ -63,6 +59,6 @@ def test_parse_basic_vectors_reproduce():
 def test_resync_vector_present():
     """The MAX_BASIC_FRAME corrupt-length resync case must stay in the vectors;
     losing it silently un-pins the R53.18 stall guard on both sides."""
-    assert any(
-        c["in"].startswith("01ffff") for c in VECTORS["parse_basic"]
-    ), "corrupt-length resync vector missing — regenerate with gen_framing_vectors.py"
+    assert any(c["in"].startswith("01ffff") for c in VECTORS["parse_basic"]), (
+        "corrupt-length resync vector missing — regenerate with gen_framing_vectors.py"
+    )

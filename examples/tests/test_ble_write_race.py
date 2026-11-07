@@ -17,6 +17,7 @@ These tests verify:
   5. `disconnect()` clears the flag.
   6. The flag starts False on a fresh transport.
 """
+
 import pytest
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -30,7 +31,7 @@ def mock_protocol_instance():
     Yields (protocol, transport) so tests can poke at the BLETransport
     directly — the flag lives there, not on the protocol facade.
     """
-    with patch('divoom_legacy.divoom.BleakClient') as mock_bleak_client:
+    with patch("divoom_legacy.divoom.BleakClient") as mock_bleak_client:
         mock_bleak_client.return_value = AsyncMock()
         protocol = DivoomProtocol(mac="AA:BB:CC:DD:EE:FF", device_name="MockDevice")
         protocol.client.is_connected = True
@@ -85,14 +86,6 @@ def test_flag_not_set_on_timeout_exception(mock_protocol_instance):
     _, transport = mock_protocol_instance
     transport._flag_connection_broken(Exception("Timeout waiting for response"))
     assert transport._connection_likely_broken is False
-
-
-
-
-
-
-
-
 
 
 @pytest.mark.asyncio

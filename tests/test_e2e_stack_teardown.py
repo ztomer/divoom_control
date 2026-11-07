@@ -16,6 +16,7 @@ Every stub here is a shell script standing in for a real binary, so the paths
 exercised are the real `subprocess` ones — a mocked `Popen` would prove the
 funnel calls `close()` without proving `close()` reaps anything.
 """
+
 from __future__ import annotations
 
 import os
@@ -85,8 +86,7 @@ def _capture_pids(monkeypatch) -> list[int]:
             super().__init__(*a, **kw)
             pids.append(self.pid)
 
-    monkeypatch.setattr(
-        "tests.support.gui_daemon_stack.subprocess.Popen", _Recording)
+    monkeypatch.setattr("tests.support.gui_daemon_stack.subprocess.Popen", _Recording)
     return pids
 
 
@@ -117,13 +117,13 @@ def test_bridge_that_never_binds_leaves_no_daemon_behind(tmp_path, monkeypatch):
     # Binds the socket so bring-up gets past _wait_for_socket, then idles.
     daemon = _script(
         tmp_path / "divoomd",
-        f"python3 -c \"import socket,time; "
+        f'python3 -c "import socket,time; '
         f"s=socket.socket(socket.AF_UNIX); s.bind('{sock}'); s.listen(1); "
-        f"time.sleep(30)\"\n")
+        f'time.sleep(30)"\n',
+    )
     bridge = _script(tmp_path / "bridge.py", "sleep 30\n")
 
-    monkeypatch.setattr(stack_mod.IsolatedStack, "_wait_for_socket",
-                        lambda self, path, timeout: None)
+    monkeypatch.setattr(stack_mod.IsolatedStack, "_wait_for_socket", lambda self, path, timeout: None)
     pids = _capture_pids(monkeypatch)
 
     with pytest.raises(BaseException):

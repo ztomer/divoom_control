@@ -7,6 +7,7 @@ GUI, the menubar agent, and tests all read the same source of truth. Default is
 (quitting any of them brings the others down). When **True**, they're
 independent.
 """
+
 from __future__ import annotations
 
 import configparser
@@ -51,6 +52,7 @@ def set_keep_daemon_alive(value: bool, path: Path = CONFIG_FILE) -> bool:
             cfg.add_section(SECTION)
         cfg.set(SECTION, KEY, "true" if value else "false")
         from divoom_lib.utils.atomic_io import atomic_write_config
+
         atomic_write_config(path, cfg)
         return True
     except (configparser.Error, OSError) as e:
@@ -82,6 +84,7 @@ def set_quit_menubar_on_exit(value: bool, path: Path = CONFIG_FILE) -> bool:
             cfg.add_section(SECTION)
         cfg.set(SECTION, KEY_QUIT_MENUBAR, "true" if value else "false")
         from divoom_lib.utils.atomic_io import atomic_write_config
+
         atomic_write_config(path, cfg)
         return True
     except (configparser.Error, OSError) as e:
@@ -90,6 +93,7 @@ def set_quit_menubar_on_exit(value: bool, path: Path = CONFIG_FILE) -> bool:
 
 
 # ── pure decision helpers (no I/O — trivially testable) ──────────────────────
+
 
 def should_quit_menubar_on_exit(keep_alive: bool, quit_menubar: bool) -> bool:
     """When the dashboard exits: terminate the native menu-bar agent? Only when

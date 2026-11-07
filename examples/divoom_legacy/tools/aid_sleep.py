@@ -1,4 +1,3 @@
-
 import json
 
 from divoom_legacy.sender_protocol import CommandSender
@@ -75,24 +74,36 @@ class AidSleep:
 
             await divoom.aid_sleep.play(sleep_id=123, sleep_type=1)
         """
-        return await self._send_json_command(
-            "AidSleep/Play", {"SleepId": sleep_id, "Type": sleep_type})
+        return await self._send_json_command("AidSleep/Play", {"SleepId": sleep_id, "Type": sleep_type})
 
     async def exit(self) -> bool:
         """Stop AidSleep playback and exit the mode."""
         return await self._send_json_command("AidSleep/Exit", {})
 
-    async def add(self, sleep_id: int, sleep_type: int, name: str,
-                   file_id: str, language: str = "", audio_type: int = 0,
-                   video_type: int = 0) -> bool:
+    async def add(
+        self,
+        sleep_id: int,
+        sleep_type: int,
+        name: str,
+        file_id: str,
+        language: str = "",
+        audio_type: int = 0,
+        video_type: int = 0,
+    ) -> bool:
         """Add a track to the device's on-device AidSleep library."""
-        return await self._send_json_command("AidSleep/Add", {
-            "SleepId": sleep_id, "Type": sleep_type, "Name": name,
-            "FileId": file_id, "Language": language,
-            "AudioType": audio_type, "VideoType": video_type,
-        })
+        return await self._send_json_command(
+            "AidSleep/Add",
+            {
+                "SleepId": sleep_id,
+                "Type": sleep_type,
+                "Name": name,
+                "FileId": file_id,
+                "Language": language,
+                "AudioType": audio_type,
+                "VideoType": video_type,
+            },
+        )
 
     async def delete(self, sleep_id: int, sleep_type: int) -> bool:
         """Remove a track from the device's on-device AidSleep library."""
-        return await self._send_json_command(
-            "AidSleep/Delete", {"SleepId": sleep_id, "Type": sleep_type})
+        return await self._send_json_command("AidSleep/Delete", {"SleepId": sleep_id, "Type": sleep_type})

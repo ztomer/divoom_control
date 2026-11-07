@@ -18,6 +18,7 @@ import json
 import os
 from pathlib import Path
 
+
 def _state_path() -> Path:
     # Honour HOME as read now (tests move it), not as read at import.
     override = os.environ.get("DIVOOM_HOT_VERDICTS")
@@ -30,7 +31,7 @@ def all_verdicts() -> dict:
     """Every panel's verdict, ``{panel id: entry}`` (never raises)."""
     try:
         data = json.loads(_state_path().read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return {}
     panels = data.get("panels") if isinstance(data, dict) else None
     if not isinstance(panels, dict):

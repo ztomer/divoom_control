@@ -17,6 +17,7 @@ This is a *library* function: not just for cover art. Future callers:
   - Live wallpaper rendering
   - Any time we need to push a palette-quantized image to a Divoom device
 """
+
 from __future__ import annotations
 
 import ctypes
@@ -31,8 +32,16 @@ logger = logging.getLogger("divoom_lib")
 # and get a single function that does the right thing (fast path native,
 # fallback Python). The Python encoder is also importable directly for
 # parity tests.
-from divoom_legacy.utils.divoom_image_encode import encode_animation_frame as _py_encode_animation_frame, encode_static_image as _py_encode_static_image, encode_animation as _py_encode_animation, Frame
-from divoom_legacy.utils.divoom_image_encode_32 import encode_animation_frame_32 as _py_encode_animation_frame_32, pre_frames as _py_pre_frames_32
+from divoom_legacy.utils.divoom_image_encode import (
+    encode_animation_frame as _py_encode_animation_frame,
+    encode_static_image as _py_encode_static_image,
+    encode_animation as _py_encode_animation,
+    Frame,
+)
+from divoom_legacy.utils.divoom_image_encode_32 import (
+    encode_animation_frame_32 as _py_encode_animation_frame_32,
+    pre_frames as _py_pre_frames_32,
+)
 
 _lib = None
 _lib_load_error: str | None = None
@@ -42,6 +51,7 @@ _lib_load_error: str | None = None
 # one shared library. native_lib.library_path() resolves the per-platform name
 # (.dylib/.so/.dll).
 from divoom_lib.native_lib import library_path
+
 _DYLIB_PATH = library_path()
 
 # Animation packet chunk size (must match C DIVOOM_ANIMATION_CHUNK_SIZE)
@@ -63,55 +73,55 @@ def _load_lib():
         handle = ctypes.CDLL(str(_DYLIB_PATH))
         handle.divoom_encode_animation_frame.argtypes = [
             ctypes.POINTER(ctypes.c_ubyte),  # const uint8_t* rgb
-            ctypes.c_int,                    # int w
-            ctypes.c_int,                    # int h
-            ctypes.c_uint16,                 # uint16_t time_ms
+            ctypes.c_int,  # int w
+            ctypes.c_int,  # int h
+            ctypes.c_uint16,  # uint16_t time_ms
             ctypes.POINTER(ctypes.c_ubyte),  # uint8_t* out
-            ctypes.c_int,                    # int out_size
+            ctypes.c_int,  # int out_size
         ]
         handle.divoom_encode_animation_frame.restype = ctypes.c_int
         handle.divoom_encode_animation_packets.argtypes = [
             ctypes.POINTER(ctypes.c_ubyte),  # const uint8_t* frames_blob
-            ctypes.c_int,                    # int total_len
+            ctypes.c_int,  # int total_len
             ctypes.POINTER(ctypes.c_ubyte),  # uint8_t* out
-            ctypes.c_int,                    # int out_size
+            ctypes.c_int,  # int out_size
         ]
         handle.divoom_encode_animation_packets.restype = ctypes.c_int
         handle.divoom_encode_static_image.argtypes = [
             ctypes.POINTER(ctypes.c_ubyte),  # const uint8_t* rgb
-            ctypes.c_int,                    # int w
-            ctypes.c_int,                    # int h
+            ctypes.c_int,  # int w
+            ctypes.c_int,  # int h
             ctypes.POINTER(ctypes.c_ubyte),  # uint8_t* out
-            ctypes.c_int,                    # int out_size
+            ctypes.c_int,  # int out_size
         ]
         handle.divoom_encode_static_image.restype = ctypes.c_int
         # Round 4: 32x32 frame encoder (Pixoo Max / Tivoo Max extended LED)
         handle.divoom_encode_animation_frame_32.argtypes = [
             ctypes.POINTER(ctypes.c_ubyte),  # const uint8_t* rgb
-            ctypes.c_int,                    # int w
-            ctypes.c_int,                    # int h
-            ctypes.c_uint16,                 # uint16_t time_ms
+            ctypes.c_int,  # int w
+            ctypes.c_int,  # int h
+            ctypes.c_uint16,  # uint16_t time_ms
             ctypes.POINTER(ctypes.c_ubyte),  # uint8_t* out
-            ctypes.c_int,                    # int out_size
+            ctypes.c_int,  # int out_size
         ]
         handle.divoom_encode_animation_frame_32.restype = ctypes.c_int
         # Round 4: 0x8B 3-phase chunker
         handle.divoom_encode_animation_8b.argtypes = [
             ctypes.POINTER(ctypes.c_ubyte),  # const uint8_t* frames_blob
-            ctypes.c_int,                    # int total_len
+            ctypes.c_int,  # int total_len
             ctypes.POINTER(ctypes.c_ubyte),  # uint8_t* out
-            ctypes.c_int,                    # int out_size
+            ctypes.c_int,  # int out_size
         ]
         handle.divoom_encode_animation_8b.restype = ctypes.c_int
         # Round 4: pre-frames (32x32 only)
         handle.divoom_write_pre_frame_1.argtypes = [
             ctypes.POINTER(ctypes.c_ubyte),  # uint8_t* out
-            ctypes.c_int,                    # int out_size
+            ctypes.c_int,  # int out_size
         ]
         handle.divoom_write_pre_frame_1.restype = ctypes.c_int
         handle.divoom_write_pre_frame_2.argtypes = [
             ctypes.POINTER(ctypes.c_ubyte),  # uint8_t* out
-            ctypes.c_int,                    # int out_size
+            ctypes.c_int,  # int out_size
         ]
         handle.divoom_write_pre_frame_2.restype = ctypes.c_int
         _lib = handle
@@ -123,9 +133,7 @@ def _load_lib():
         return None
 
 
-def _c_encode_animation_frame(
-    rgb: bytes, w: int, h: int, time_ms: int
-) -> bytes | None:
+def _c_encode_animation_frame(rgb: bytes, w: int, h: int, time_ms: int) -> bytes | None:
     """Call the C encoder. Returns the encoded frame bytes, or None on error."""
     lib = _load_lib()
     if lib is None:
@@ -140,9 +148,7 @@ def _c_encode_animation_frame(
     try:
         in_buf = (ctypes.c_ubyte * in_size).from_buffer_copy(rgb)
         out_buf = (ctypes.c_ubyte * out_size)()
-        rc = lib.divoom_encode_animation_frame(
-            in_buf, w, h, ctypes.c_uint16(time_ms), out_buf, out_size
-        )
+        rc = lib.divoom_encode_animation_frame(in_buf, w, h, ctypes.c_uint16(time_ms), out_buf, out_size)
         if rc < 0:
             return None
         return bytes(out_buf[:rc])
@@ -162,9 +168,7 @@ def _c_encode_animation_packets(frames_blob: bytes) -> bytes | None:
     try:
         in_buf = (ctypes.c_ubyte * total_len).from_buffer_copy(frames_blob)
         out_buf = (ctypes.c_ubyte * out_size)()
-        rc = lib.divoom_encode_animation_packets(
-            in_buf, total_len, out_buf, out_size
-        )
+        rc = lib.divoom_encode_animation_packets(in_buf, total_len, out_buf, out_size)
         if rc < 0:
             return None
         # Each packet is 3 + chunk_size. The C writes them back-to-back
@@ -190,9 +194,7 @@ def _c_encode_static_image(rgb: bytes, w: int, h: int) -> bytes | None:
     try:
         in_buf = (ctypes.c_ubyte * in_size).from_buffer_copy(rgb)
         out_buf = (ctypes.c_ubyte * out_size)()
-        rc = lib.divoom_encode_static_image(
-            in_buf, w, h, out_buf, out_size
-        )
+        rc = lib.divoom_encode_static_image(in_buf, w, h, out_buf, out_size)
         if rc < 0:
             return None
         return bytes(out_buf[:rc])
@@ -201,9 +203,7 @@ def _c_encode_static_image(rgb: bytes, w: int, h: int) -> bytes | None:
         return None
 
 
-def encode_animation_frame(
-    rgb: bytes, w: int, h: int, time_ms: int
-) -> bytes:
+def encode_animation_frame(rgb: bytes, w: int, h: int, time_ms: int) -> bytes:
     """Encode one animation frame. Uses the C dylib if available, else Python.
 
     Byte-identical to the pure-Python encoder (the dylib is built to
@@ -245,7 +245,7 @@ def encode_animation(frames: List[Frame]) -> List[bytes]:
     if lib is not None:
         # Try the C path: encode each frame, concatenate, packetize.
         encoded_frames = []
-        for (rgb, w, h, t) in frames:
+        for rgb, w, h, t in frames:
             frame_bytes = _c_encode_animation_frame(rgb, w, h, t)
             if frame_bytes is None:
                 # Fall back to Python for this frame, then bail to
@@ -273,9 +273,7 @@ def encode_animation(frames: List[Frame]) -> List[bytes]:
 # ── Round 4: 32x32 encoder + 0x8B 3-phase ─────────────────────────────
 
 
-def _c_encode_animation_frame_32(
-    rgb: bytes, w: int, h: int, time_ms: int
-) -> bytes | None:
+def _c_encode_animation_frame_32(rgb: bytes, w: int, h: int, time_ms: int) -> bytes | None:
     """Call the C 32x32 frame encoder. Returns encoded bytes, or None on error."""
     lib = _load_lib()
     if lib is None:
@@ -288,16 +286,12 @@ def _c_encode_animation_frame_32(
     try:
         in_buf = (ctypes.c_ubyte * in_size).from_buffer_copy(rgb)
         out_buf = (ctypes.c_ubyte * out_size)()
-        rc = lib.divoom_encode_animation_frame_32(
-            in_buf, w, h, ctypes.c_uint16(time_ms), out_buf, out_size
-        )
+        rc = lib.divoom_encode_animation_frame_32(in_buf, w, h, ctypes.c_uint16(time_ms), out_buf, out_size)
         if rc < 0:
             return None
         return bytes(out_buf[:rc])
     except Exception as e:
-        logger.warning(
-            "image_encoder: native 32x32 call failed (%s) — using Python fallback", e
-        )
+        logger.warning("image_encoder: native 32x32 call failed (%s) — using Python fallback", e)
         return None
 
 
@@ -348,22 +342,16 @@ def _c_encode_animation_8b(frames_blob: bytes) -> bytes | None:
     try:
         in_buf = (ctypes.c_ubyte * total_len).from_buffer_copy(frames_blob)
         out_buf = (ctypes.c_ubyte * out_size)()
-        rc = lib.divoom_encode_animation_8b(
-            in_buf, total_len, out_buf, out_size
-        )
+        rc = lib.divoom_encode_animation_8b(in_buf, total_len, out_buf, out_size)
         if rc < 0:
             return None
         return bytes(out_buf[:rc])
     except Exception as e:
-        logger.warning(
-            "image_encoder: native 0x8B call failed (%s) — using Python fallback", e
-        )
+        logger.warning("image_encoder: native 0x8B call failed (%s) — using Python fallback", e)
         return None
 
 
-def encode_animation_frame_32(
-    rgb: bytes, w: int, h: int, time_ms: int
-) -> bytes:
+def encode_animation_frame_32(rgb: bytes, w: int, h: int, time_ms: int) -> bytes:
     """Encode one 32x32 animation frame. C fast path, Python fallback."""
     result = _c_encode_animation_frame_32(rgb, w, h, time_ms)
     if result is not None:
@@ -391,7 +379,7 @@ def encode_animation_8b_phases(frames: List[Frame]) -> List[bytes]:
     if not frames:
         return []
     encoded: list[bytes] = []
-    for (rgb, w, h, t) in frames:
+    for rgb, w, h, t in frames:
         if w == 32 and h == 32:
             fb = _c_encode_animation_frame_32(rgb, w, h, t)
             if fb is None:
@@ -405,6 +393,7 @@ def encode_animation_8b_phases(frames: List[Frame]) -> List[bytes]:
     packed = _c_encode_animation_8b(blob)
     if packed is None:
         from divoom_legacy.display.animation_8b import build_8b_phases
+
         return build_8b_phases(frames)
     total_len = len(blob)
     n_chunks = (total_len + 255) // 256

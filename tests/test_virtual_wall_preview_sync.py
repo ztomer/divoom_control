@@ -3,6 +3,7 @@ Verifies that the Virtual Wall Arranger canvas and Spatial Stage Main Bench shar
 the exact same pixel-perfect DisplayPreview rendering, channel switching (Clock, EQ,
 Frame, Wall), and two-way coordinate synchronization with SpatialRooms.
 """
+
 import asyncio
 from pathlib import Path
 import pytest
@@ -29,7 +30,9 @@ async def test_virtual_wall_arranger_retired_and_bench_clock_rendering():
         await answer_arrangement(page)
 
         dev1 = "11:22:33:44:55:01"
-        res = await eval_js(page, """(d1) => {
+        res = await eval_js(
+            page,
+            """(d1) => {
             // Seed 1 device in discoveredDevices and assign it to a wall slot
             window.DivoomState = window.DivoomState || {};
             window.DivoomState.discoveredDevices = [
@@ -74,7 +77,9 @@ async def test_virtual_wall_arranger_retired_and_bench_clock_rendering():
                 stageOrangeGlyph: sOrangeGlyph,
                 hasArranger: !!arrangerCanvas
             };
-        }""", dev1)
+        }""",
+            dev1,
+        )
 
         assert "error" not in res, f"Setup error: {res}"
         assert res["hasArranger"] is False, "Redundant #arranger-canvas should not be in DOM"
@@ -103,7 +108,9 @@ async def test_main_bench_frame_and_eq_rendering():
         await answer_arrangement(page)
 
         dev1 = "11:22:33:44:55:01"
-        res = await eval_js(page, """(d1) => {
+        res = await eval_js(
+            page,
+            """(d1) => {
             window.DivoomState = window.DivoomState || {};
             window.DivoomState.discoveredDevices = [
                 { address: d1, name: "Pixoo-Wall", room: "Wall" }
@@ -142,7 +149,9 @@ async def test_main_bench_frame_and_eq_rendering():
                 eqNonBlack,
                 stageOrange
             };
-        }""", dev1)
+        }""",
+            dev1,
+        )
 
         assert res.get("error") is None
         assert res["eqNonBlack"] > 0
@@ -167,7 +176,9 @@ async def test_virtual_wall_spatial_rooms_preset_sync():
         await answer_arrangement(page)
 
         dev1 = "AA:BB:CC:DD:EE:01"
-        sync_res = await eval_js(page, """(d1) => {
+        sync_res = await eval_js(
+            page,
+            """(d1) => {
             window.DivoomState = window.DivoomState || {};
             window.DivoomState.assignedSlots = {
                 [d1]: { x: 30, y: 40, width: 80, height: 80, size: 16, name: "Timoo-Sync" }
@@ -200,7 +211,9 @@ async def test_virtual_wall_spatial_rooms_preset_sync():
                 spatialY: savedPos ? savedPos.y : null,
                 spatialRoom: savedRoom
             };
-        }""", dev1)
+        }""",
+            dev1,
+        )
 
         assert sync_res["slotX"] == 120
         assert sync_res["slotY"] == 80

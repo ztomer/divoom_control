@@ -11,7 +11,13 @@ and the Animation8B high-level `send()` wrapper (empty frames / all-phases-ok
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from divoom_legacy.display.animation_8b import Animation8B, build_8b_phases, CONTROL_START_SENDING, CONTROL_SENDING_DATA, CONTROL_TERMINATE_SENDING
+from divoom_legacy.display.animation_8b import (
+    Animation8B,
+    build_8b_phases,
+    CONTROL_START_SENDING,
+    CONTROL_SENDING_DATA,
+    CONTROL_TERMINATE_SENDING,
+)
 from divoom_lib.models import COMMANDS
 
 

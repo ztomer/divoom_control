@@ -34,6 +34,7 @@ What is left for the human: whether the panel's PHYSICAL pixels show that
 frame — bezel, glass, colour, crop. Nothing on this machine can see a panel;
 only the owner's eyes can.
 """
+
 from __future__ import annotations
 
 import base64
@@ -71,7 +72,7 @@ class Expectation:
     """What the operator is told, and what the machine concluded."""
 
     text: str = ""
-    verdict: str = ""      # "", "FAIL" or "SKIP"
+    verdict: str = ""  # "", "FAIL" or "SKIP"
     detail: str = ""
 
 
@@ -79,7 +80,7 @@ def reply_of(client, command: str, args: dict | None = None) -> dict:
     """One socket command, as a dict. Never raises: a dead socket is an answer."""
     try:
         reply = client.send_command(command, args or {})
-    except Exception as exc:                      # noqa: BLE001 — a dead socket IS the answer
+    except Exception as exc:  # noqa: BLE001 — a dead socket IS the answer
         return {"success": False, "error": f"{type(exc).__name__}: {exc}"}
     if isinstance(reply, dict):
         return reply
@@ -101,12 +102,13 @@ def decode_data_url(url: str) -> bytes | None:
     payload = url.split(",", 1)[1] if url.startswith("data:") and "," in url else url
     try:
         return base64.b64decode(payload)
-    except (binascii.Error, ValueError):
+    except binascii.Error, ValueError:
         return None
 
 
-def painted_png(client, mac: str, kind: str = "", wait: float = 0.0,
-                poll: float = FRAME_POLL) -> tuple[bytes | None, dict]:
+def painted_png(
+    client, mac: str, kind: str = "", wait: float = 0.0, poll: float = FRAME_POLL
+) -> tuple[bytes | None, dict]:
     """The PNG the daemon last PAINTED on `mac`, and the activity record.
 
     `kind` asks for one activity kind. A job that has not painted yet leaves
@@ -126,8 +128,7 @@ def painted_png(client, mac: str, kind: str = "", wait: float = 0.0,
     return None, record
 
 
-def rendered_png(client, kind: str, size: int = 16,
-                 params: dict | None = None) -> bytes | None:
+def rendered_png(client, kind: str, size: int = 16, params: dict | None = None) -> bytes | None:
     """The PNG the daemon SAYS it renders for `kind` — its own `render_widget`."""
     args: dict = {"kind": kind, "size": size}
     if params:
@@ -140,36 +141,31 @@ def rendered_png(client, kind: str, size: int = 16,
         return None
     try:
         raw = base64.b64decode(b64)
-    except (binascii.Error, ValueError):
+    except binascii.Error, ValueError:
         return None
     if len(raw) < size * size * 3:
         return None
-    return raw_to_png(raw[:size * size * 3], size)
+    return raw_to_png(raw[: size * size * 3], size)
 
 
 def raw_to_png(rgb: bytes, size: int) -> bytes:
     """A PNG of a size x size RGB buffer — written by hand, so this module
     needs no imaging library to produce evidence."""
     stride = size * 3
-    rows = b"".join(
-        b"\x00" + rgb[y * stride:(y + 1) * stride] for y in range(size)
-    )
+    rows = b"".join(b"\x00" + rgb[y * stride : (y + 1) * stride] for y in range(size))
 
     def chunk(tag: bytes, data: bytes) -> bytes:
         body = tag + data
-        return (struct.pack(">I", len(data)) + body
-                + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF))
+        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
 
     ihdr = struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0)
-    return (b"\x89PNG\r\n\x1a\n"
-            + chunk(b"IHDR", ihdr)
-            + chunk(b"IDAT", zlib.compress(rows, 9))
-            + chunk(b"IEND", b""))
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(rows, 9)) + chunk(b"IEND", b"")
 
 
 def _pixels(png: bytes):
     """(size, pixel list) of a PNG — the imaging library's job."""
     from PIL import Image
+
     im = Image.open(io.BytesIO(png)).convert("RGB")
     return im.size, list(im.get_flattened_data())
 
@@ -178,8 +174,7 @@ def stats(png: bytes) -> dict:
     """What is knowable about a frame without looking at a panel."""
     (w, h), pixels = _pixels(png)
     colours = len(set(pixels))
-    return {"size": (w, h), "colours": colours, "blank": colours <= 1,
-            "pixels": len(pixels)}
+    return {"size": (w, h), "colours": colours, "blank": colours <= 1, "pixels": len(pixels)}
 
 
 def diff_png(a: bytes, b: bytes) -> tuple[int, int]:
@@ -218,9 +213,9 @@ def describe(png: bytes, path: str = "") -> str:
     """The operator's text: what the frame is, and what it looks like."""
     info = stats(png)
     w, h = info["size"]
-    lines = [f"the daemon painted a {w}x{h} frame"
-             f" ({info['colours']} distinct colours"
-             f"{', BLANK' if info['blank'] else ''})"]
+    lines = [
+        f"the daemon painted a {w}x{h} frame ({info['colours']} distinct colours{', BLANK' if info['blank'] else ''})"
+    ]
     if path:
         lines.append(f"saved: {path}")
     lines.append("as text:")

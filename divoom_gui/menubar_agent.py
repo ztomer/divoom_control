@@ -17,6 +17,7 @@ process started, and the quit path stops THAT process. A pid alone is not an
 identity (the OS reuses pids), so the start time is what makes a stale
 identity name nothing instead of naming an innocent process.
 """
+
 from __future__ import annotations
 
 import logging
@@ -77,8 +78,9 @@ def _spawn_menubar_agent(resolve_bundled) -> None:
         # the binary now on disk.
         binary = _resolve_menubar_binary(resolve_bundled)
         if not binary:
-            logger.warning("Native menu-bar binary (divoom-menubar) not found; "
-                           "build it with ./build.sh. No menu-bar this session.")
+            logger.warning(
+                "Native menu-bar binary (divoom-menubar) not found; build it with ./build.sh. No menu-bar this session."
+            )
             return
         # Tell the agent how to relaunch this GUI from "Launch Dashboard".
         env = dict(os.environ)
@@ -89,9 +91,11 @@ def _spawn_menubar_agent(resolve_bundled) -> None:
             env["DIVOOM_GUI_SCRIPT"] = ""
         else:
             from divoom_client.daemon_client import bundle_python
+
             env["DIVOOM_GUI_PYTHON"] = bundle_python() or sys.executable
             env["DIVOOM_GUI_SCRIPT"] = str(Path(__file__).resolve().parent / "gui_main.py")
         from divoom_client import helper_app
+
         bundle = helper_app.helper_bundle(binary)
         if bundle is not None:
             # An app of its own, NOT this app's child: a helper this app
@@ -105,7 +109,9 @@ def _spawn_menubar_agent(resolve_bundled) -> None:
         agent = subprocess.Popen(
             [binary],
             env=env,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
             start_new_session=True,
         )
         _record_menubar_identity(agent.pid, binary)
@@ -123,6 +129,7 @@ def _ask_agent_to_step_down(timeout: float = 2.0) -> bool:
     """
     import socket
     from divoom_client import helper_identity
+
     path = helper_identity.run_dir() / "divoom-menubar.sock"
     try:
         with socket.socket(socket.AF_UNIX) as s:
@@ -142,6 +149,7 @@ def _record_menubar_identity(pid: int, command: str) -> None:
     """
     try:
         from divoom_client import helper_identity
+
         helper_identity.write(helper_identity.MENUBAR, pid, command)
     except Exception as e:
         logger.debug(f"menu-bar identity not recorded: {e}")
@@ -163,8 +171,8 @@ def _terminate_menubar_agent() -> None:
         return
     try:
         from divoom_client import helper_identity
+
         stopped = _ask_agent_to_step_down() or helper_identity.stop(helper_identity.MENUBAR)
-        logger.info("Terminated menu-bar agent (shared-lifecycle quit): %s",
-                    "stopped" if stopped else "not running")
+        logger.info("Terminated menu-bar agent (shared-lifecycle quit): %s", "stopped" if stopped else "not running")
     except Exception as e:
         logger.debug(f"menu-bar terminate skipped: {e}")

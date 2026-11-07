@@ -2,6 +2,7 @@
 
 Split from `test_gui_main_main.py` (500-line cap); same harness.
 """
+
 import pytest
 
 from divoom_gui import gui_main

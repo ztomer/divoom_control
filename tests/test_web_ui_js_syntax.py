@@ -6,6 +6,7 @@ exactly how the R23 web_ui split blanked the Clock/EQ/VJ/Ambient channel grids
 (2026-06-08 regression). This runs `node --check` on each file. Skipped if node
 isn't installed.
 """
+
 import shutil
 import subprocess
 from pathlib import Path
@@ -19,7 +20,9 @@ _JS = sorted(_WEB_UI.glob("*.js"))
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
 @pytest.mark.parametrize("js", _JS, ids=lambda p: p.name)
 def test_web_ui_js_parses(js: Path):
-    r = subprocess.run(["node", "--check", str(js)], capture_output=True, text=True, stdin=subprocess.DEVNULL, check=False)
+    r = subprocess.run(
+        ["node", "--check", str(js)], capture_output=True, text=True, stdin=subprocess.DEVNULL, check=False
+    )
     assert r.returncode == 0, f"{js.name} has a JS syntax error:\n{r.stderr}"
 
 

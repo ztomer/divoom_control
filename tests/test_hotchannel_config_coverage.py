@@ -4,6 +4,7 @@ Complements tests/test_hotchannel_config.py by exercising the remaining
 defensive branches: a non-dict JSON payload, save_config's OSError path, and
 _normalize's interval coercion.
 """
+
 import json
 import sys
 from pathlib import Path

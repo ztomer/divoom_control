@@ -23,6 +23,7 @@ What these pin:
 
 Skipped if a browser isn't installed (runs with --run-browser).
 """
+
 from pathlib import Path
 
 import pytest
@@ -72,12 +73,19 @@ async def _open(p):
     await add_init_js(page, _MOCK_API)
     await page.goto(f"file://{INDEX_HTML}")
     await wait_js(page, "() => !!window.Divoom?.onOwnedDevices && !!window.SpatialStage")
-    await eval_js(page, """([a, b]) => window.Divoom.onOwnedDevices({type: 'owned_devices', devices: [
+    await eval_js(
+        page,
+        """([a, b]) => window.Divoom.onOwnedDevices({type: 'owned_devices', devices: [
         {address: a, name: 'Desk', kind: 'clock', state: 'active'},
-        {address: b, name: 'Kitchen', kind: 'clock', state: 'active'}]})""", [A, B])
+        {address: b, name: 'Kitchen', kind: 'clock', state: 'active'}]})""",
+        [A, B],
+    )
     # The daemon's description of each panel has arrived.
-    await wait_js(page, f"() => {{ const d = (window.DivoomState.discoveredDevices || [])"
-                        f".find(x => x.address === '{A}'); return !!(d && d.features); }}")
+    await wait_js(
+        page,
+        f"() => {{ const d = (window.DivoomState.discoveredDevices || [])"
+        f".find(x => x.address === '{A}'); return !!(d && d.features); }}",
+    )
     return browser, page
 
 
@@ -97,19 +105,20 @@ async def test_the_cards_follow_the_panel_in_hand():
             await _select(page, A)
             cards = await eval_js(page, _CARDS)
             assert cards == {"radio": True, "vj": True}, (
-                f"the panel with a radio and the VJ channel must be offered both: {cards}")
+                f"the panel with a radio and the VJ channel must be offered both: {cards}"
+            )
 
             # The other panel has neither: the cards go with the selection.
             await _select(page, B)
             cards = await eval_js(page, _CARDS)
             assert cards == {"radio": False, "vj": False}, (
-                f"the cards still show the previous panel's abilities: {cards}")
+                f"the cards still show the previous panel's abilities: {cards}"
+            )
 
             # ...and back again, so it is the SELECTION that moves them.
             await _select(page, A)
             cards = await eval_js(page, _CARDS)
-            assert cards == {"radio": True, "vj": True}, (
-                f"the cards did not come back with the panel: {cards}")
+            assert cards == {"radio": True, "vj": True}, f"the cards did not come back with the panel: {cards}"
         finally:
             await browser.close()
 
@@ -126,24 +135,35 @@ async def test_a_panel_the_daemon_has_not_described_is_offered_neither():
         browser, page = await _open(p)
         try:
             # A third panel the daemon has not described (it cannot name it).
-            await eval_js(page, """([a, c]) => window.Divoom.onOwnedDevices({type: 'owned_devices', devices: [
+            await eval_js(
+                page,
+                """([a, c]) => window.Divoom.onOwnedDevices({type: 'owned_devices', devices: [
                 {address: a, name: 'Desk', kind: 'clock', state: 'active'},
-                {address: c, name: 'Mystery', kind: 'clock', state: 'active'}]})""", [A, C])
+                {address: c, name: 'Mystery', kind: 'clock', state: 'active'}]})""",
+                [A, C],
+            )
             await _select(page, C)
             cards = await eval_js(page, _CARDS)
-            assert cards == {"radio": False, "vj": False}, (
-                f"an undescribed panel must be offered neither: {cards}")
+            assert cards == {"radio": False, "vj": False}, f"an undescribed panel must be offered neither: {cards}"
 
             # Its description arrives: the cards follow it.
-            await eval_js(page, """(c) => { window.__fleet.panels[c] =
+            await eval_js(
+                page,
+                """(c) => { window.__fleet.panels[c] =
                 {mac: c, connected: true, selected: false, model: 'TivooLcd',
                  width: 128, height: 128, model_source: 'name',
                  features: {speaker: true, radio: true, vj: true}};
-                window.refreshPanelFacts(); }""", C)
-            await wait_js(page, f"""() => {{ const d = (window.DivoomState.discoveredDevices || [])
-                .find(x => x.address === '{C}'); return !!(d && d.features && d.features.radio); }}""")
+                window.refreshPanelFacts(); }""",
+                C,
+            )
+            await wait_js(
+                page,
+                f"""() => {{ const d = (window.DivoomState.discoveredDevices || [])
+                .find(x => x.address === '{C}'); return !!(d && d.features && d.features.radio); }}""",
+            )
             cards = await eval_js(page, _CARDS)
             assert cards == {"radio": True, "vj": True}, (
-                f"the cards did not follow the description that arrived: {cards}")
+                f"the cards did not follow the description that arrived: {cards}"
+            )
         finally:
             await browser.close()

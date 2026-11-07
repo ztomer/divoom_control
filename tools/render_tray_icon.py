@@ -80,17 +80,20 @@ fn main() {
 }
 """
         )
-        (d / "Cargo.toml").write_text(
-            '[package]\nname = "probe"\nversion = "0.0.0"\nedition = "2021"\n'
-        )
+        (d / "Cargo.toml").write_text('[package]\nname = "probe"\nversion = "0.0.0"\nedition = "2021"\n')
         # `tray_glyph_probe` exposes IconState::ALL outside cfg(test); see the
         # workspace lints in Cargo.toml.
         base = dict(os.environ)
         base["RUSTFLAGS"] = (base.get("RUSTFLAGS", "") + " --cfg tray_glyph_probe").strip()
         # The build stays in `d`, which this `with` removes; see _cargo_env.
         r = subprocess.run(
-            ["cargo", "run", "--quiet"], capture_output=True, text=True, cwd=d, timeout=900,
-            stdin=subprocess.DEVNULL, env=probe_env(d, base),
+            ["cargo", "run", "--quiet"],
+            capture_output=True,
+            text=True,
+            cwd=d,
+            timeout=900,
+            stdin=subprocess.DEVNULL,
+            env=probe_env(d, base),
             check=False,
         )
     if r.returncode != 0:
@@ -99,7 +102,7 @@ fn main() {
     for line in r.stdout.splitlines():
         if not line.startswith(MARKER):
             continue
-        name, w, h, hexs = line[len(MARKER):].split(" ")
+        name, w, h, hexs = line[len(MARKER) :].split(" ")
         rgba = bytes.fromhex(hexs)
         if len(rgba) != int(w) * int(h) * 4:
             raise ProbeError(f"{name}: {len(rgba)} bytes is not {w}x{h} RGBA")
@@ -111,12 +114,7 @@ fn main() {
 
 # ── a minimal PNG writer, so the tool needs no third-party imaging library ────
 def _chunk(tag: bytes, data: bytes) -> bytes:
-    return (
-        struct.pack(">I", len(data))
-        + tag
-        + data
-        + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
-    )
+    return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
 
 
 def write_png(path: Path, width: int, height: int, rgb: bytes) -> None:
@@ -202,8 +200,12 @@ SHEET_SCALE = 2
 BARS = {"dark": (0x2A, 0x2A, 0x2E), "light": (0xEC, 0xEC, 0xEC)}
 # (bar, device px per pt, greyscale)
 COLUMNS = [
-    ("dark", 2, False), ("dark", 1, False), ("dark", 2, True),
-    ("light", 2, False), ("light", 1, False), ("light", 2, True),
+    ("dark", 2, False),
+    ("dark", 1, False),
+    ("dark", 2, True),
+    ("light", 2, False),
+    ("light", 1, False),
+    ("light", 2, True),
 ]
 # tray-icon 0.26 keeps a bitmap's pixel height as its point height, shrinking
 # only what is taller than this cap (macos/icon.rs `to_nsimage`).

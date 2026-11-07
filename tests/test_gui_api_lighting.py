@@ -14,6 +14,7 @@ from gui_main import DivoomGuiAPI
 
 MAC = "AA:00:00:00:00:01"
 
+
 class TestLightingApiCoverage(unittest.TestCase):
     """R61 planning item 1 coverage push: LightingApi
     (divoom_gui/api/lighting.py) exception handlers, the text-render
@@ -25,6 +26,7 @@ class TestLightingApiCoverage(unittest.TestCase):
         self.presets_patcher = patch("pathlib.Path.exists", return_value=False)
         self.presets_patcher.start()
         import tempfile
+
         self.temp_dir = tempfile.TemporaryDirectory()
         self.home_patcher = patch("pathlib.Path.home", return_value=Path(self.temp_dir.name))
         self.home_patcher.start()
@@ -42,6 +44,7 @@ class TestLightingApiCoverage(unittest.TestCase):
         class _BadClient:
             def live_jobs_stop_for(self, mac):
                 raise RuntimeError("boom")
+
         self.api._daemon_client = _BadClient()
         self.api.lighting._stop_live_widgets(MAC)  # must not raise
 
@@ -102,13 +105,13 @@ class TestLightingApiCoverage(unittest.TestCase):
         fake = MagicMock()
         fake.wall_configure.return_value = {"success": True, "wall": True}
 
-        def _device_call(method, args=None, kwargs=None, target="device",
-                         blobs=None, token=None, mac=None):
+        def _device_call(method, args=None, kwargs=None, target="device", blobs=None, token=None, mac=None):
             if method == "get_last_previews":
                 if isinstance(previews_result, Exception):
                     raise previews_result
                 return {"success": True, "result": previews_result}
             return {"success": True, "result": True}
+
         fake.device_call.side_effect = _device_call
         return fake
 
@@ -176,9 +179,13 @@ class TestLightingApiCoverage(unittest.TestCase):
         fake = MagicMock()
         fake.wall_configure.return_value = {"success": True, "wall": True}
         fake.device_call.return_value = {
-            "success": False, "code": "device_failed", "result": False,
+            "success": False,
+            "code": "device_failed",
+            "result": False,
             "error": f"wall: {b} did not take it (the write failed); {c} has no panel linked",
-            "failed": {b: "the write failed"}, "degraded": [c]}
+            "failed": {b: "the write failed"},
+            "degraded": [c],
+        }
         self.api._daemon_client = fake
         self.api.wall_slots = {m: {"x": i, "y": 0, "size": 16} for i, m in enumerate((a, b, c))}
         result = self.api.lighting.display_wall_image("MatrixWall", "/tmp/x.png", "picture", 16)
@@ -193,8 +200,11 @@ class TestLightingApiCoverage(unittest.TestCase):
         dev = MagicMock()
         dev.display.set_clock_rich = AsyncMock(return_value=True)
         self._on(dev)
-        self.assertTrue(self.api.lighting.set_clock_rich(
-            MAC, style=2, twentyfour=False, humidity=True, weather=True, date=True, color="#123456")["success"])
+        self.assertTrue(
+            self.api.lighting.set_clock_rich(
+                MAC, style=2, twentyfour=False, humidity=True, weather=True, date=True, color="#123456"
+            )["success"]
+        )
         kw = dev.display.set_clock_rich.call_args.kwargs
         self.assertEqual(kw["style"], 2)
         self.assertTrue(kw["humidity"])
@@ -221,8 +231,10 @@ class TestLightingApiCoverage(unittest.TestCase):
         self.api._daemon_client = mock_client
         self.api.wall_slots = {"AA:00:00:00:00:01": {}, "BB:00:00:00:00:02": {}}
         self.api.lighting._stop_live_widgets("MatrixWall")
-        self.assertEqual([c.args for c in mock_client.live_jobs_stop_for.call_args_list],
-                         [("AA:00:00:00:00:01",), ("BB:00:00:00:00:02",)])
+        self.assertEqual(
+            [c.args for c in mock_client.live_jobs_stop_for.call_args_list],
+            [("AA:00:00:00:00:01",), ("BB:00:00:00:00:02",)],
+        )
 
     def test_stop_live_widgets_naming_no_panel_stops_nothing(self):
         """A mac-less stop is the daemon's ACTIVE panel: never what a write meant."""
@@ -247,12 +259,12 @@ class TestLightingApiCoverage(unittest.TestCase):
         does -- goes to the display the click named (P5.7)."""
         mock_client = MagicMock()
         self.api._daemon_client = mock_client
-        with patch.object(Path, "exists", return_value=True), \
-             patch.object(Path, "stat") as mock_stat, \
-             patch.object(self.api, "display_wall_image", return_value={"success": True}) as mock_wall_img:
+        with (
+            patch.object(Path, "exists", return_value=True),
+            patch.object(Path, "stat") as mock_stat,
+            patch.object(self.api, "display_wall_image", return_value={"success": True}) as mock_wall_img,
+        ):
             mock_stat.return_value.st_size = 100
             res = self.api.play_gallery_art("11:22:33:44:55:66", "art_123")
             self.assertTrue(res["success"])
             self.assertEqual(mock_wall_img.call_args.args[0], "11:22:33:44:55:66")
-
-

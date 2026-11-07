@@ -4,6 +4,7 @@ with a mock ``window.pywebview.api``, same harness as test_e2e_ux_feedback.py.
 
 Skipped if Playwright / a browser isn't installed.
 """
+
 import pytest
 from pathlib import Path
 from tests.support.browser import (
@@ -62,15 +63,13 @@ async def test_clock_panel_loads_dial_types_and_first_list_on_open():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await wait_js(page, 
-                "() => document.querySelectorAll('#cloud-clock-type-select option').length > 0")
-            options = await page.eval_on_selector_all(
-                "#cloud-clock-type-select option", "els => els.map(e => e.value)")
+            await wait_js(page, "() => document.querySelectorAll('#cloud-clock-type-select option').length > 0")
+            options = await page.eval_on_selector_all("#cloud-clock-type-select option", "els => els.map(e => e.value)")
             assert options == ["Social", "Normal"]
-            await wait_js(page, 
-                "() => document.querySelectorAll('#cloud-clock-list .cloud-clock-row').length > 0")
+            await wait_js(page, "() => document.querySelectorAll('#cloud-clock-list .cloud-clock-row').length > 0")
             names = await page.eval_on_selector_all(
-                "#cloud-clock-list .cloud-clock-name", "els => els.map(e => e.textContent)")
+                "#cloud-clock-list .cloud-clock-name", "els => els.map(e => e.textContent)"
+            )
             assert names == ["Facebook Video", "YouTube Account"]
         finally:
             await browser.close()
@@ -84,11 +83,12 @@ async def test_switching_dial_type_reloads_the_list():
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await wait_js(page, 
-                "() => document.querySelectorAll('#cloud-clock-type-select option').length > 0")
+            await wait_js(page, "() => document.querySelectorAll('#cloud-clock-type-select option').length > 0")
             await page.select_option("#cloud-clock-type-select", "Normal")
-            await wait_js(page, 
-                "() => document.querySelector('#cloud-clock-list .cloud-clock-name')?.textContent === 'Classic Digital Clock'")
+            await wait_js(
+                page,
+                "() => document.querySelector('#cloud-clock-list .cloud-clock-name')?.textContent === 'Classic Digital Clock'",
+            )
         finally:
             await browser.close()
 
@@ -101,12 +101,14 @@ async def test_apply_without_a_device_shows_connect_prompt_and_does_not_call_set
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await eval_js(page, """() => {
+            await eval_js(
+                page,
+                """() => {
                 window.__setClockCalls = [];
                 window.__api.set_clock = (mac, style, color) => { window.__setClockCalls.push([mac, style, color]); return {success: true}; };
-            }""")
-            await wait_js(page, 
-                "() => document.querySelectorAll('#cloud-clock-list .cloud-clock-row').length > 0")
+            }""",
+            )
+            await wait_js(page, "() => document.querySelectorAll('#cloud-clock-list .cloud-clock-row').length > 0")
             await page.click("#cloud-clock-list .cloud-clock-apply-btn")
             # On the guard toast's own words and kind, not on "a toast is
             # showing": this page raises its own on a timer (app_init.js:281),
@@ -134,14 +136,16 @@ async def test_apply_with_a_device_calls_set_clock_with_the_real_clock_id():
         try:
             # A panel the daemon reported: with none there is nothing to apply
             # to, and the write path refuses rather than invent one (P5.5).
-            await eval_js(page, """() => {
+            await eval_js(
+                page,
+                """() => {
                 window.DivoomState.discoveredDevices = [{ address: 'E9:DITOO', name: 'Ditoo-light-2' }];
                 window.DivoomState.appConnected = true;
                 window.__setClockCalls = [];
                 window.__api.set_clock = (mac, style, color) => { window.__setClockCalls.push([mac, style, color]); return {success: true}; };
-            }""")
-            await wait_js(page, 
-                "() => document.querySelectorAll('#cloud-clock-list .cloud-clock-row').length > 0")
+            }""",
+            )
+            await wait_js(page, "() => document.querySelectorAll('#cloud-clock-list .cloud-clock-row').length > 0")
             await page.click("#cloud-clock-list .cloud-clock-apply-btn")
             await wait_js(page, "() => (window.__setClockCalls || []).length > 0")
             calls = await eval_js(page, "() => window.__setClockCalls")
@@ -205,34 +209,44 @@ async def test_an_unreachable_daemon_names_the_reason_instead_of_showing_nothing
     async with async_playwright() as p:
         browser, page = await _open_with(p, _MOCK_API_UNREACHABLE)
         try:
-            await wait_js(page, """() => {
+            await wait_js(
+                page,
+                """() => {
                 const el = document.querySelector('.cloud-problem-reason');
                 return !!el && el.textContent.includes('background service');
-            }""")
+            }""",
+            )
             # The hint must ADD something, not echo the reason. Seen on screen
             # during the P6.2 pass, "Could not load ...: the background service
             # is not running" followed by "The background service is not
             # running." read as a stutter — so the hint is now what to DO, and
             # `cloud_result.js` drops any hint the reason already contains.
-            hint = await eval_js(page, """() => {
+            hint = await eval_js(
+                page,
+                """() => {
                 const el = document.querySelector('.cloud-problem-hint');
                 return el ? el.textContent : '';
-            }""")
-            reason = await eval_js(page, """() => {
+            }""",
+            )
+            reason = await eval_js(
+                page,
+                """() => {
                 const el = document.querySelector('.cloud-problem-reason');
                 return el ? el.textContent : '';
-            }""")
+            }""",
+            )
             assert hint, "an unreachable service should say what to do"
             assert "Reopen" in hint, hint
             assert hint.rstrip(".").lower() not in reason.lower(), (
-                f"the hint only restates the reason: {hint!r} / {reason!r}")
+                f"the hint only restates the reason: {hint!r} / {reason!r}"
+            )
         finally:
             await browser.close()
 
 
 # ── 2026-09-13: the store's faces, with pictures, at the panel's resolution ──
 
-_FACE_PNG = (Path(__file__).parent / "fixtures" / "clock_face_128.txt")
+_FACE_PNG = Path(__file__).parent / "fixtures" / "clock_face_128.txt"
 
 
 async def test_store_faces_show_the_picture_as_drawn_and_at_the_panels_resolution():
@@ -247,7 +261,11 @@ async def test_store_faces_show_the_picture_as_drawn_and_at_the_panels_resolutio
     async with async_playwright() as p:
         browser, page = await _open(p)
         try:
-            await eval_js(page, "() => {" + f"const faceUrl = {face_url!r};" + """
+            await eval_js(
+                page,
+                "() => {"
+                + f"const faceUrl = {face_url!r};"
+                + """
                 window.__previews = [];
                 window.__api.get_store_clock_faces = () => [
                     {clock_id: 998, name: "Digital Tech", image_file_id: "group1/x", clock_type: 0, category: "Normal"},
@@ -259,27 +277,40 @@ async def test_store_faces_show_the_picture_as_drawn_and_at_the_panels_resolutio
                 window.__api.set_clock = (mac, style, color) => { window.__setClockCalls.push([mac, style, color]); return {success: true}; };
                 window.DivoomState.cloudClockStoreLoaded = false;
                 window.loadCloudClockTypes();
-            }""")
+            }""",
+            )
             await wait_js(page, "() => document.querySelectorAll('#cloud-clock-store .clock-face-card').length === 2")
             # The picture arrives from the daemon by file id; the device view is rasterized from it.
-            await wait_js(page, """() => {
+            await wait_js(
+                page,
+                """() => {
                 const c = document.querySelector('#cloud-clock-store .clock-face-card[data-clock-id="998"]');
                 return c && c.querySelector('.clock-face-original').src.startsWith('data:image/png')
                          && c.querySelector('.clock-face-device').src.startsWith('data:image/png');
-            }""")
-            info = await eval_js(page, """() => {
+            }""",
+            )
+            info = await eval_js(
+                page,
+                """() => {
                 const c = document.querySelector('#cloud-clock-store .clock-face-card[data-clock-id="998"]');
                 const dev = c.querySelector('.clock-face-device');
                 const img = new Image(); img.src = dev.src;
                 return { previews: window.__previews, caption: c.children[1].querySelector('.clock-face-caption')?.textContent,
                          devNatural: [img.naturalWidth, img.naturalHeight], origSrcLen: c.querySelector('.clock-face-original').src.length };
-            }""")
+            }""",
+            )
             assert info["previews"] == ["group1/x"], info
             assert "16x16" in (info["caption"] or ""), info
             # The device view is a real 16x16 raster (the rasterizer decoded synchronously from a data URL).
-            await wait_js(page, """() => { const d = document.querySelector('#cloud-clock-store .clock-face-card[data-clock-id="998"] .clock-face-device'); return d.naturalWidth === 16 && d.naturalHeight === 16; }""")
+            await wait_js(
+                page,
+                """() => { const d = document.querySelector('#cloud-clock-store .clock-face-card[data-clock-id="998"] .clock-face-device'); return d.naturalWidth === 16 && d.naturalHeight === 16; }""",
+            )
             # A face without a picture still lists, honestly, with no image.
-            no_pic = await eval_js(page, """() => document.querySelector('#cloud-clock-store .clock-face-card[data-clock-id="999"] .clock-face-original').getAttribute('src')""")
+            no_pic = await eval_js(
+                page,
+                """() => document.querySelector('#cloud-clock-store .clock-face-card[data-clock-id="999"] .clock-face-original').getAttribute('src')""",
+            )
             assert not no_pic
             await page.click('#cloud-clock-store .clock-face-card[data-clock-id="998"] .cloud-clock-apply-btn')
             await wait_js(page, "() => (window.__setClockCalls || []).length > 0")

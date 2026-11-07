@@ -51,6 +51,7 @@ def _lum(rgb: tuple[int, int, int]) -> float:
     def lin(c: int) -> float:
         x = c / 255
         return x / 12.92 if x <= 0.03928 else ((x + 0.055) / 1.055) ** 2.4
+
     r, g, b = rgb
     return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
 
@@ -78,12 +79,13 @@ def _pixels(reply: dict) -> list[tuple[int, int, int]]:
     if not reply.get("success"):
         raise SystemExit(f"render_widget failed: {reply}")
     raw = base64.b64decode(reply["frame_rgb_b64"])
-    return [tuple(raw[i:i + 3]) for i in range(0, len(raw), 3)]
+    return [tuple(raw[i : i + 3]) for i in range(0, len(raw), 3)]
 
 
 def _cover(light: bool):
     """A synthetic album cover: a light one (a white field, a dark title) or a dark one."""
     from PIL import Image, ImageDraw
+
     img = Image.new("RGB", (480, 480), (236, 232, 222) if light else (22, 24, 34))
     d = ImageDraw.Draw(img)
     d.ellipse((90, 90, 390, 390), fill=(200, 60, 40) if light else (60, 140, 220))
@@ -101,14 +103,35 @@ def frames(sock: str) -> list[tuple[str, list[tuple[int, int, int]]]]:
     out = [("sysmon", _pixels(_ask(sock, "render_widget", {"kind": "sysmon", "size": SIZE})))]
     for code, name in ((1, "clear"), (3, "cloudy"), (6, "rain"), (8, "snow")):
         for t in (23, -5):
-            out.append((f"weather {name} {t}C", _pixels(_ask(sock, "render_widget", {
-                "kind": "weather", "size": SIZE, "params": {"temperature_c": t, "weather": code}}))))
+            out.append(
+                (
+                    f"weather {name} {t}C",
+                    _pixels(
+                        _ask(
+                            sock,
+                            "render_widget",
+                            {"kind": "weather", "size": SIZE, "params": {"temperature_c": t, "weather": code}},
+                        )
+                    ),
+                )
+            )
     for light in (True, False):
         cover = _cover(light)
         label = "light cover" if light else "dark cover"
-        out.append((f"album_art {label}", _pixels(_ask(sock, "render_widget", {
-            "kind": "album_art", "size": SIZE, "params": {"image_b64": _png_b64(cover)}}))))
+        out.append(
+            (
+                f"album_art {label}",
+                _pixels(
+                    _ask(
+                        sock,
+                        "render_widget",
+                        {"kind": "album_art", "size": SIZE, "params": {"image_b64": _png_b64(cover)}},
+                    )
+                ),
+            )
+        )
         from PIL import Image
+
         small = cover.resize((SIZE, SIZE), Image.Resampling.NEAREST)
         out.append((f"custom_art {label}", list(small.get_flattened_data())))
     return out
@@ -119,6 +142,7 @@ def judge(px: list[tuple[int, int, int]]) -> tuple[int, int]:
     colour -- the widgets paint a near-black ground, not 0), and how many of
     those are under 3:1 against that ground."""
     from collections import Counter
+
     ground = Counter(px).most_common(1)[0][0]
     ink = [p for p in px if p != ground]
     return len(ink), sum(1 for p in ink if _ratio(p, ground) < MIN_RATIO)
@@ -126,6 +150,7 @@ def judge(px: list[tuple[int, int, int]]) -> tuple[int, int]:
 
 def _panel(px):
     from PIL import Image, ImageDraw
+
     side = SIZE * PITCH + 2 * BEZEL
     img = Image.new("RGB", (side, side), FACE)
     d = ImageDraw.Draw(img)
@@ -137,6 +162,7 @@ def _panel(px):
 
 def sheet(rows, out: Path) -> None:
     from PIL import Image, ImageDraw
+
     panel = _panel(rows[0][1])
     cols = 4
     cell_w, cell_h = panel.width + PAD, panel.height + PAD + 30
@@ -151,8 +177,9 @@ def sheet(rows, out: Path) -> None:
             y = PAD + (i // cols) * cell_h
             img.paste(_panel(px), (x, y))
             lit, dim = judge(px)
-            ImageDraw.Draw(img).text((x, y + panel.height + 6), f"{label}  ink {lit}  dim {dim}",
-                                     fill=ink, font_size=14)
+            ImageDraw.Draw(img).text(
+                (x, y + panel.height + 6), f"{label}  ink {lit}  dim {dim}", fill=ink, font_size=14
+            )
     out.parent.mkdir(parents=True, exist_ok=True)
     img.save(out)
 
@@ -162,8 +189,13 @@ def _start_daemon(tmp: Path) -> tuple[subprocess.Popen, str]:
         raise SystemExit(f"no {DAEMON}: cargo build -p divoomd --no-default-features")
     sock = str(tmp / "d.sock")
     env = dict(os.environ, HOME=str(tmp), DIVOOM_SOCKET=sock)
-    proc = subprocess.Popen([str(DAEMON), "--socket", sock], env=env, stdin=subprocess.DEVNULL,
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    proc = subprocess.Popen(
+        [str(DAEMON), "--socket", sock],
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
     for _ in range(100):
         if Path(sock).exists():
             return proc, sock

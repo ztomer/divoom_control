@@ -22,6 +22,7 @@ They agree today. This pins that, the same way `check_hotchannel_parity.py`
 pins the other shared file — written while the two still match, which is the
 only cheap time to write it.
 """
+
 from __future__ import annotations
 
 import configparser
@@ -46,7 +47,7 @@ def rust_true_words() -> set[str]:
     assert i != -1, "keep_daemon_alive not found in launch.rs"
     j = src.find("matches!(", i)
     assert j != -1, "the truthiness match! is gone from keep_daemon_alive"
-    window = src[j:j + 400]
+    window = src[j : j + 400]
     return set(re.findall(r'"([a-z0-9]+)"', window))
 
 
@@ -59,7 +60,8 @@ def test_the_menubar_accepts_exactly_configparsers_true_words():
         f"  configparser:    {sorted(python)}\n"
         f"The GUI decides whether to leave the daemon running; the menubar "
         f"decides whether to kill it. Disagreement means the daemon dies under "
-        f"a GUI that expected it alive, or survives a requested shutdown.")
+        f"a GUI that expected it alive, or survives a requested shutdown."
+    )
 
 
 def test_the_scan_actually_finds_the_words():

@@ -17,7 +17,7 @@ DEVICES_DATABASE = {
         "has_speaker": True,
         "has_battery": True,
         "ble_prefixes": ["timoo"],
-        "mockup_asset": "timoo.png"
+        "mockup_asset": "timoo.png",
     },
     "ditoo": {
         "model_name": "Divoom Ditoo Pro / Ditoo Plus",
@@ -28,7 +28,7 @@ DEVICES_DATABASE = {
         "has_speaker": True,
         "has_battery": True,
         "ble_prefixes": ["ditoo", "ditto"],
-        "mockup_asset": "ditoo.png"
+        "mockup_asset": "ditoo.png",
     },
     "pixoo": {
         "model_name": "Divoom Pixoo Max / Pixoo",
@@ -39,7 +39,7 @@ DEVICES_DATABASE = {
         "has_speaker": False,
         "has_battery": True,
         "ble_prefixes": ["pixoo", "pixoo-light"],
-        "mockup_asset": "pixoo.png"
+        "mockup_asset": "pixoo.png",
     },
     "timebox": {
         "model_name": "Divoom Timebox Evo",
@@ -50,7 +50,7 @@ DEVICES_DATABASE = {
         "has_speaker": True,
         "has_battery": True,
         "ble_prefixes": ["timebox", "evo"],
-        "mockup_asset": "timebox.png"
+        "mockup_asset": "timebox.png",
     },
     "tivoo": {
         "model_name": "Divoom Tivoo Max / Tivoo",
@@ -61,7 +61,7 @@ DEVICES_DATABASE = {
         "has_speaker": True,
         "has_battery": True,
         "ble_prefixes": ["tivoo"],
-        "mockup_asset": "tivoo.png"
+        "mockup_asset": "tivoo.png",
     },
     "pixoo64": {
         "model_name": "Divoom Pixoo 64",
@@ -72,7 +72,7 @@ DEVICES_DATABASE = {
         "has_speaker": False,
         "has_battery": False,
         "ble_prefixes": ["pixoo64", "pixoo-64"],
-        "mockup_asset": "pixoo64.png"
+        "mockup_asset": "pixoo64.png",
     },
     "timegate": {
         "model_name": "Divoom TimeGate",
@@ -83,9 +83,10 @@ DEVICES_DATABASE = {
         "has_speaker": False,
         "has_battery": False,
         "ble_prefixes": ["timegate"],
-        "mockup_asset": "timegate.png"
-    }
+        "mockup_asset": "timegate.png",
+    },
 }
+
 
 def lookup_device_by_name(ble_name: str) -> Optional[Dict[str, Any]]:
     """
@@ -94,13 +95,13 @@ def lookup_device_by_name(ble_name: str) -> Optional[Dict[str, Any]]:
     """
     if not ble_name:
         return None
-        
+
     name_lower = ble_name.lower()
     for key, spec in DEVICES_DATABASE.items():
         for prefix in spec["ble_prefixes"]:
             if prefix in name_lower:
                 return spec
-                
+
     # Return a default 16x16 device if no matches found
     return {
         "model_name": ble_name,
@@ -111,5 +112,5 @@ def lookup_device_by_name(ble_name: str) -> Optional[Dict[str, Any]]:
         "has_speaker": False,
         "has_battery": True,
         "ble_prefixes": [],
-        "mockup_asset": "pixoo.png"
+        "mockup_asset": "pixoo.png",
     }

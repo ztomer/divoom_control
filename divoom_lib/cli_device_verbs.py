@@ -27,6 +27,7 @@ name this module no longer uses, and every test of the device verbs would fail
 against a real daemon instead of a fake. Module-qualified access keeps ONE
 definition site and ONE patch point. Do not "tidy" these into from-imports.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -56,8 +57,11 @@ async def resolve_target_mac(args: argparse.Namespace) -> str:
         if st.get("mac"):
             mac = st["mac"]
         elif len(st.get("devices") or []) > 1:
-            cli_commands._err("several panels are connected and none is the active one; pass --mac, "
-                 "or `select --mac` one: " + ", ".join(d["mac"] for d in st["devices"]), 2)
+            cli_commands._err(
+                "several panels are connected and none is the active one; pass --mac, "
+                "or `select --mac` one: " + ", ".join(d["mac"] for d in st["devices"]),
+                2,
+            )
         else:
             # Nothing linked: scan through the daemon and take the first.
             results = cli_commands._scan(client, args.timeout)
@@ -119,25 +123,26 @@ async def cmd_capabilities(args: argparse.Namespace) -> int:
     chassis = status.get("chassis") or {}
     screens = status.get("screens")
     if args.json:
-        cli_commands._print({
-            "mac": mac,
-            "model": status.get("model"),
-            "model_source": status.get("model_source"),
-            "width": status.get("width"),
-            "height": status.get("height"),
-            "chassis": chassis or None,
-            "features": features or None,
-            "screens": screens,
-        }, as_json=True)
+        cli_commands._print(
+            {
+                "mac": mac,
+                "model": status.get("model"),
+                "model_source": status.get("model_source"),
+                "width": status.get("width"),
+                "height": status.get("height"),
+                "chassis": chassis or None,
+                "features": features or None,
+                "screens": screens,
+            },
+            as_json=True,
+        )
     else:
         print(f"Device: {mac}")
-        print(f"  model:           {status.get('model') or 'unknown'} "
-              f"({status.get('model_source') or 'no name'})")
+        print(f"  model:           {status.get('model') or 'unknown'} ({status.get('model_source') or 'no name'})")
         width = status.get("width")
         print(f"  size:            {f'{width}x{width}' if width else 'unknown'}")
         if chassis:
-            print(f"  chassis:         {chassis.get('family')} "
-                  f"({chassis.get('w_mm')}x{chassis.get('h_mm')} mm)")
+            print(f"  chassis:         {chassis.get('family')} ({chassis.get('w_mm')}x{chassis.get('h_mm')} mm)")
         if features:
             for key in sorted(features):
                 if key in ("source", "clock_style"):
@@ -209,12 +214,12 @@ async def cmd_set_alarm(args: argparse.Namespace) -> int:
 # owns the mapping. Kept as a reference for the wire values, NOT used: a second
 # copy is what tools/check_weather_parity.py exists to prevent.
 WEATHER_NAME_TO_ID_REFERENCE = {
-    "clear":        1,
-    "cloudy":       3,
+    "clear": 1,
+    "cloudy": 3,
     "thunderstorm": 5,
-    "rain":         6,
-    "snow":         8,
-    "fog":          9,
+    "rain": 6,
+    "snow": 8,
+    "fog": 9,
 }
 
 
@@ -246,5 +251,3 @@ async def cmd_push_gif(args: argparse.Namespace) -> int:
     if not path.exists():
         cli_commands._err(f"file not found: {path}", 2)
     _delegate_device_verb("push-gif", [str(path)], await resolve_target_mac(args), args)
-
-

@@ -36,6 +36,7 @@ list on success and a REASON on failure, and `cause` is a flag
 (``unreachable`` / ``auth`` / ``cloud``) rather than parsed error text, so the
 UI can branch without matching on wording that may be reworded.
 """
+
 from __future__ import annotations
 
 import logging
@@ -47,8 +48,7 @@ logger = logging.getLogger("divoom_gui")
 class CloudPanelMixin:
     """`_cloud_list` and nothing else. Mixed into the GUI API."""
 
-    def _cloud_list(self, what: str,
-                    call: Callable[[Any], list]) -> dict:
+    def _cloud_list(self, what: str, call: Callable[[Any], list]) -> dict:
         """Run one cloud browse through the daemon and wrap the outcome.
 
         ``what`` names the thing being fetched, for a message a user can read
@@ -63,8 +63,7 @@ class CloudPanelMixin:
         except Exception as exc:  # ensure_daemon can fail outright
             return self._cloud_error(what, str(exc), "unreachable")
         if client is None:
-            return self._cloud_error(
-                what, "the background service is not running", "unreachable")
+            return self._cloud_error(what, "the background service is not running", "unreachable")
 
         try:
             items = call(client)
@@ -81,5 +80,4 @@ class CloudPanelMixin:
     @staticmethod
     def _cloud_error(what: str, reason: str, cause: str) -> dict:
         logger.error("%s unavailable (%s): %s", what, cause, reason)
-        return {"ok": False, "items": [], "error": f"Could not load {what}: {reason}",
-                "cause": cause}
+        return {"ok": False, "items": [], "error": f"Could not load {what}: {reason}", "cause": cause}

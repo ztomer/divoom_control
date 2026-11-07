@@ -8,6 +8,7 @@ and patch the delegate functions at their SOURCE module (the mixin does a
 fresh local `from divoom_lib.lifecycle_config import X` on every call, so
 patching `divoom_lib.lifecycle_config.X` is picked up).
 """
+
 from __future__ import annotations
 
 import sys

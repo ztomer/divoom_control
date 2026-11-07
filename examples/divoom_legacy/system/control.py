@@ -12,6 +12,7 @@ Provides:
 
 Reference: https://github.com/d03n3rfr1tz3/hass-divoom
 """
+
 from __future__ import annotations
 
 import logging
@@ -42,9 +43,7 @@ class Control:
             key: Key code (per Ditoo firmware: 0x00=up, 0x01=down, 0x02=back, 0x03=ok).
         """
         self.logger.info(f"Setting keyboard key={key} (0x23)...")
-        return await self.communicator.send_command(
-            COMMANDS["set keyboard"], [key & 0xFF]
-        )
+        return await self.communicator.send_command(COMMANDS["set keyboard"], [key & 0xFF])
 
     async def set_hot(self, enabled: bool) -> bool:
         """Enable/disable hot mode (0x26).
@@ -54,9 +53,7 @@ class Control:
         """
         v = 0x01 if enabled else 0x00
         self.logger.info(f"Setting hot to {v} (0x26)...")
-        return await self.communicator.send_command(
-            COMMANDS["set hot"], [v]
-        )
+        return await self.communicator.send_command(COMMANDS["set hot"], [v])
 
     async def set_light_mode(self, channel: int) -> bool:
         """Set the light / show-lyrics mode (0x45).
@@ -68,6 +65,4 @@ class Control:
             channel: 0-15 (per Divoom firmware; see models.constants).
         """
         self.logger.info(f"Setting light mode channel={channel} (0x45)...")
-        return await self.communicator.send_command(
-            COMMANDS["set light mode"], [channel & 0xFF]
-        )
+        return await self.communicator.send_command(COMMANDS["set light mode"], [channel & 0xFF])

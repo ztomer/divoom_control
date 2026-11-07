@@ -66,9 +66,7 @@ logger = logging.getLogger("push_protocol_diagnostic")
 # to /tmp/divoom_push_diagnostic.log regardless of pytest's capture.
 _file_handler = logging.FileHandler(DIAGNOSTIC_LOG_PATH, mode="w")
 _file_handler.setLevel(LOG_LEVEL)
-_file_handler.setFormatter(
-    logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-)
+_file_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
 logger.addHandler(_file_handler)
 
 
@@ -139,8 +137,7 @@ class TestPushProtocolDiagnostic(unittest.IsolatedAsyncioTestCase):
         img = Image.new("RGB", (TEST_IMAGE_SIDE, TEST_IMAGE_SIDE), TEST_IMAGE_COLOR)
         img.save(test_image_path)
         logger.info("=" * 70)
-        logger.info("TEST IMAGE: %s (%dx%d, %s)",
-                    test_image_path, TEST_IMAGE_SIDE, TEST_IMAGE_SIDE, TEST_IMAGE_COLOR)
+        logger.info("TEST IMAGE: %s (%dx%d, %s)", test_image_path, TEST_IMAGE_SIDE, TEST_IMAGE_SIDE, TEST_IMAGE_COLOR)
 
         # 3. Push the image — every byte goes to the log
         logger.info("=" * 70)
@@ -170,11 +167,9 @@ class TestPushProtocolDiagnostic(unittest.IsolatedAsyncioTestCase):
                 logger.info("  %s  [CHANNEL-SWITCH 0x45 0x05]  %s", label, hex_str)
             elif data and data[0] == 0x44:
                 image_data_seen = True
-                logger.info("  %s  [IMAGE 0x44]            %s ... (%d bytes total)",
-                            label, hex_str[:60], len(data))
+                logger.info("  %s  [IMAGE 0x44]            %s ... (%d bytes total)", label, hex_str[:60], len(data))
             elif data and data[0] == 0x49:
-                logger.info("  %s  [ANIM-FRAME 0x49]       %s ... (%d bytes total)",
-                            label, hex_str[:60], len(data))
+                logger.info("  %s  [ANIM-FRAME 0x49]       %s ... (%d bytes total)", label, hex_str[:60], len(data))
             else:
                 logger.info("  %s  [cmd 0x%02x]            %s", label, data[0] if data else 0, hex_str[:60])
 

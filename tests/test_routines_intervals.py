@@ -10,6 +10,7 @@ The §4 contract is three-fold:
 3. The config has a MAX_INTERVAL guardrail (30 days) so a typo in
    the JSON file doesn't disable syncing for years.
 """
+
 from __future__ import annotations
 
 import json
@@ -17,6 +18,8 @@ import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
+
+
 def _cat(paths: list[Path]) -> str:
     parts = []
     for p in paths:
@@ -24,14 +27,17 @@ def _cat(paths: list[Path]) -> str:
             parts.append(p.read_text())
     return "\n".join(parts)
 
-TEMPLATES_JS = _cat([
-    REPO_ROOT / "divoom_gui" / "web_ui" / "templates_tools.js",
-    REPO_ROOT / "divoom_gui" / "web_ui" / "templates_gallery.js",
-    REPO_ROOT / "divoom_gui" / "web_ui" / "templates_widgets.js",
-    REPO_ROOT / "divoom_gui" / "web_ui" / "templates_settings.js",
-    REPO_ROOT / "divoom_gui" / "web_ui" / "templates_routines.js",
-    REPO_ROOT / "divoom_gui" / "web_ui" / "templates_device_settings.js",
-])
+
+TEMPLATES_JS = _cat(
+    [
+        REPO_ROOT / "divoom_gui" / "web_ui" / "templates_tools.js",
+        REPO_ROOT / "divoom_gui" / "web_ui" / "templates_gallery.js",
+        REPO_ROOT / "divoom_gui" / "web_ui" / "templates_widgets.js",
+        REPO_ROOT / "divoom_gui" / "web_ui" / "templates_settings.js",
+        REPO_ROOT / "divoom_gui" / "web_ui" / "templates_routines.js",
+        REPO_ROOT / "divoom_gui" / "web_ui" / "templates_device_settings.js",
+    ]
+)
 SETTINGS_CSS = REPO_ROOT / "divoom_gui" / "web_ui" / "settings.css"
 
 from divoom_lib.hotchannel_config import (
@@ -74,10 +80,7 @@ def test_danger_card_visual_marker() -> None:
         r"\.card\.glass-card\.danger-card\s*\{[^}]*border:\s*1px solid rgba\(239,\s*68,\s*68",
         css,
         re.DOTALL,
-    ), (
-        ".card.glass-card.danger-card is missing a red border treatment "
-        "in settings.css."
-    )
+    ), ".card.glass-card.danger-card is missing a red border treatment in settings.css."
 
 
 def test_factory_reset_btn_still_present() -> None:
@@ -86,7 +89,7 @@ def test_factory_reset_btn_still_present() -> None:
     src = TEMPLATES_JS
     assert re.search(
         r'<button\s+id="factory-reset-btn"[^>]*class="glow-btn danger"[^>]*>'
-        r'\s*Factory reset device…\s*</button>',
+        r"\s*Factory reset device…\s*</button>",
         src,
     ), "factory-reset-btn is missing — should be in the new Danger zone card."
 
@@ -105,9 +108,7 @@ def test_routines_select_has_six_options() -> None:
     body = tabs_match.group(1)
     values = re.findall(r'data-interval="(\d+)"', body)
     expected = ["3600", "21600", "43200", "86400", "604800", "2592000"]
-    assert values == expected, (
-        f"Expected interval tabs {expected}, got {values}."
-    )
+    assert values == expected, f"Expected interval tabs {expected}, got {values}."
 
 
 def test_routines_interval_labels_are_human_readable() -> None:
@@ -119,12 +120,8 @@ def test_routines_interval_labels_are_human_readable() -> None:
         re.DOTALL,
     )
     body = tabs_match.group(1)
-    assert re.search(r'data-interval="604800"[^>]*>7d<', body), (
-        "7d interval tab should have label '7d'."
-    )
-    assert re.search(r'data-interval="2592000"[^>]*>30d<', body), (
-        "30d interval tab should have label '30d'."
-    )
+    assert re.search(r'data-interval="604800"[^>]*>7d<', body), "7d interval tab should have label '7d'."
+    assert re.search(r'data-interval="2592000"[^>]*>30d<', body), "30d interval tab should have label '30d'."
 
 
 # ── 3. Config round-trip + MAX_INTERVAL guardrail ─────────────────────
@@ -142,9 +139,7 @@ def test_long_interval_round_trips(tmp_path: Path, monkeypatch) -> None:
         cfg["interval"] = value
         save_config(cfg)
         loaded = load_config()
-        assert loaded["interval"] == value, (
-            f"Interval {value}s did not round-trip; got {loaded['interval']}."
-        )
+        assert loaded["interval"] == value, f"Interval {value}s did not round-trip; got {loaded['interval']}."
         assert loaded["enabled"] is True
 
 
@@ -157,8 +152,7 @@ def test_max_interval_clamps_typos(tmp_path: Path, monkeypatch) -> None:
 
     loaded = load_config()
     assert loaded["interval"] == MAX_INTERVAL, (
-        f"interval=6048000 should be clamped to MAX_INTERVAL ({MAX_INTERVAL}); "
-        f"got {loaded['interval']}."
+        f"interval=6048000 should be clamped to MAX_INTERVAL ({MAX_INTERVAL}); got {loaded['interval']}."
     )
 
 
@@ -170,14 +164,11 @@ def test_min_interval_unchanged(tmp_path: Path, monkeypatch) -> None:
 
     loaded = load_config()
     assert loaded["interval"] == MIN_INTERVAL, (
-        f"interval=5 should be clamped to MIN_INTERVAL ({MIN_INTERVAL}); "
-        f"got {loaded['interval']}."
+        f"interval=5 should be clamped to MIN_INTERVAL ({MIN_INTERVAL}); got {loaded['interval']}."
     )
 
 
 def test_max_interval_constant_value() -> None:
     """The constant is exactly 30 days in seconds — guards against
     typos in the constant itself."""
-    assert MAX_INTERVAL == 30 * 24 * 60 * 60, (
-        f"MAX_INTERVAL should be 30 days = 2592000, got {MAX_INTERVAL}."
-    )
+    assert MAX_INTERVAL == 30 * 24 * 60 * 60, f"MAX_INTERVAL should be 30 days = 2592000, got {MAX_INTERVAL}."

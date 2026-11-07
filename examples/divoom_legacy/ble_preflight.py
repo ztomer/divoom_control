@@ -17,6 +17,7 @@ is unit-tested without CoreBluetooth, and any inability to read the state (not
 macOS, PyObjC missing, adapter state never settles) returns ``ok`` rather than
 blocking a scan that might have worked.
 """
+
 from __future__ import annotations
 
 import logging
@@ -47,6 +48,7 @@ def _read_authorization() -> int:
     CoreBluetooth isn't available (non-macOS) — the caller treats that as
     'can't check, don't block'."""
     from CoreBluetooth import CBCentralManager
+
     return int(CBCentralManager.authorization())
 
 
@@ -69,8 +71,7 @@ def _read_power_state(timeout: float = 0.6) -> int | None:
     deadline = NSDate.dateWithTimeIntervalSinceNow_(timeout)
     state = int(mgr.state())
     while state == STATE_UNKNOWN and NSDate.date().compare_(deadline) < 0:
-        NSRunLoop.currentRunLoop().runMode_beforeDate_(
-            NSDefaultRunLoopMode, NSDate.dateWithTimeIntervalSinceNow_(0.05))
+        NSRunLoop.currentRunLoop().runMode_beforeDate_(NSDefaultRunLoopMode, NSDate.dateWithTimeIntervalSinceNow_(0.05))
         state = int(mgr.state())
     return state if state != STATE_UNKNOWN else None
 
@@ -84,8 +85,7 @@ def _no_power_probe(**_kw) -> int | None:
     return None
 
 
-def preflight_bluetooth(*, read_auth=_read_authorization,
-                        read_power=_no_power_probe) -> ConnectResult:
+def preflight_bluetooth(*, read_auth=_read_authorization, read_power=_no_power_probe) -> ConnectResult:
     """Return an ``ok`` ConnectResult when Bluetooth is usable, or a typed
     ``PERMISSION`` / ``ADAPTER_OFF`` reason (with an actionable ``message``)
     when it definitively isn't. Indeterminate / unreadable → ``ok`` (never block
@@ -102,9 +102,9 @@ def preflight_bluetooth(*, read_auth=_read_authorization,
 
     if auth in (AUTH_DENIED, AUTH_RESTRICTED):
         logger.warning("preflight: Bluetooth permission denied (auth=%s)", auth)
-        return ConnectResult(False, ConnectionState.FAILED,
-                             reason=FailureReason.PERMISSION,
-                             detail=f"CBManagerAuthorization={auth}")
+        return ConnectResult(
+            False, ConnectionState.FAILED, reason=FailureReason.PERMISSION, detail=f"CBManagerAuthorization={auth}"
+        )
 
     # auth is allowed or not-yet-determined (a scan will prompt) — check power.
     try:
@@ -115,17 +115,17 @@ def preflight_bluetooth(*, read_auth=_read_authorization,
 
     if power == STATE_POWERED_OFF:
         logger.warning("preflight: Bluetooth adapter is powered off")
-        return ConnectResult(False, ConnectionState.FAILED,
-                             reason=FailureReason.ADAPTER_OFF,
-                             detail="CBManagerState=poweredOff")
+        return ConnectResult(
+            False, ConnectionState.FAILED, reason=FailureReason.ADAPTER_OFF, detail="CBManagerState=poweredOff"
+        )
     if power == STATE_UNSUPPORTED:
-        return ConnectResult(False, ConnectionState.FAILED,
-                             reason=FailureReason.ADAPTER_OFF,
-                             detail="CBManagerState=unsupported")
+        return ConnectResult(
+            False, ConnectionState.FAILED, reason=FailureReason.ADAPTER_OFF, detail="CBManagerState=unsupported"
+        )
     if power == STATE_UNAUTHORIZED:
-        return ConnectResult(False, ConnectionState.FAILED,
-                             reason=FailureReason.PERMISSION,
-                             detail="CBManagerState=unauthorized")
+        return ConnectResult(
+            False, ConnectionState.FAILED, reason=FailureReason.PERMISSION, detail="CBManagerState=unauthorized"
+        )
 
     # poweredOn, resetting, or indeterminate (None) → don't block.
     return ConnectResult(True, ConnectionState.CONNECTED)

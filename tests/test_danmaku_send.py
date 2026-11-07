@@ -15,6 +15,7 @@ the parts that are knowable without a matrix:
 * wall mode is refused, since an overlay targets one device's own display;
 * empty text never reaches the device.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -51,8 +52,7 @@ def api(monkeypatch):
     state: dict = {}
     obj = LightingApi.__new__(LightingApi)
     obj._state_getter = lambda: state
-    monkeypatch.setattr(obj, "_display", lambda mac: _FakeTarget(calls) if mac else None,
-                        raising=False)
+    monkeypatch.setattr(obj, "_display", lambda mac: _FakeTarget(calls) if mac else None, raising=False)
     monkeypatch.setattr(obj, "_run_async", lambda coro, **kw: coro, raising=False)
     obj._calls = calls
     obj._state = state
@@ -102,6 +102,7 @@ def test_wall_mode_is_refused(api):
 def test_a_device_error_is_reported_not_raised(api, monkeypatch):
     """A failing send must return False, not propagate into the pywebview
     bridge thread where it would surface as a dead button."""
+
     def boom(_coro, **_kw):
         raise RuntimeError("LAN unreachable")
 
@@ -128,8 +129,7 @@ def test_the_ui_states_that_the_render_is_unconfirmed():
     """
     from pathlib import Path
 
-    html = (Path(__file__).parent.parent / "divoom_gui" / "web_ui"
-            / "index.html").read_text()
+    html = (Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.html").read_text()
     assert 'id="send-danmaku-btn"' in html
     assert "Not yet verified on real hardware" in html
 
@@ -141,14 +141,13 @@ def test_the_ui_states_that_the_render_is_unconfirmed():
 # daemon knew the real answer the whole time and the bool discarded it. Same
 # defect R70 fixed for cloud browse, on the other transport.
 
+
 def test_no_lan_capability_is_distinguishable_from_a_plain_failure(api, monkeypatch):
     """The whole point: 'this device has no LAN' is its own state."""
     from divoom_client.daemon_proxy import _DeviceCallError
 
     def refuse(_coro, **_kw):
-        raise _DeviceCallError(
-            "this device is connected over Bluetooth, which has no LAN API",
-            "no_lan_capability")
+        raise _DeviceCallError("this device is connected over Bluetooth, which has no LAN API", "no_lan_capability")
 
     monkeypatch.setattr(api, "_run_async", refuse, raising=False)
     reply = api.send_danmaku_text(MAC, "hello")

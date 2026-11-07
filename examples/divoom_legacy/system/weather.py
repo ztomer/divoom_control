@@ -26,6 +26,7 @@ Usage::
     await divoom.weather.set_temperature(-5)
     await divoom.weather.set_weather(WeatherType.Snow)
 """
+
 from __future__ import annotations
 
 import logging
@@ -73,21 +74,13 @@ class Weather:
         """Send the device's current temperature and weather icon in
         one call. Returns True on successful transmission."""
         if not self.MIN_TEMP <= int(temperature) <= self.MAX_TEMP:
-            raise ValueError(
-                f"temperature {temperature} out of range "
-                f"[{self.MIN_TEMP}..{self.MAX_TEMP}]"
-            )
+            raise ValueError(f"temperature {temperature} out of range [{self.MIN_TEMP}..{self.MAX_TEMP}]")
         encoded = self._encode_temperature(int(temperature))
         wt = int(weather_type)
         self._temperature = int(temperature)
         self._weather_type = wt
-        logger.info(
-            f"Sending weather: temp={temperature}°C (0x{encoded:02X}) "
-            f"weather_type={wt} (0x5F)..."
-        )
-        return await self._divoom.send_command(
-            COMMANDS["set temp"], [encoded, wt]
-        )
+        logger.info(f"Sending weather: temp={temperature}°C (0x{encoded:02X}) weather_type={wt} (0x5F)...")
+        return await self._divoom.send_command(COMMANDS["set temp"], [encoded, wt])
 
     async def set_temperature(self, temperature: int) -> bool:
         """Update only the temperature (preserves the current weather type)."""

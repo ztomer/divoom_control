@@ -4,6 +4,7 @@ A flaky device read retries with a short timeout and degrades to the last-good
 value (or a typed unknown) instead of returning a bare ``None`` the UI can't
 distinguish from a real value.
 """
+
 import asyncio
 import logging
 import sys
@@ -28,6 +29,7 @@ def _run(coro):
 
 # ── read_with_retry primitive ──────────────────────────────────────────────
 
+
 def test_fresh_value_is_returned_and_cached():
     cache = ReadCache()
 
@@ -45,11 +47,10 @@ def test_retries_then_succeeds():
     async def _read():
         calls["n"] += 1
         if calls["n"] < 2:
-            return None          # first reply lost
+            return None  # first reply lost
         return 7
 
-    res = _run(read_with_retry(_read, attempts=3, sleep=_nosleep, cache=ReadCache(),
-                               cache_key="b"))
+    res = _run(read_with_retry(_read, attempts=3, sleep=_nosleep, cache=ReadCache(), cache_key="b"))
     assert res.ok and res.value == 7 and calls["n"] == 2
 
 
@@ -58,10 +59,9 @@ def test_exhausted_with_cache_serves_last_good():
     cache.put("name", "Ditoo")
 
     async def _read():
-        return None              # always unanswered now
+        return None  # always unanswered now
 
-    res = _run(read_with_retry(_read, attempts=2, sleep=_nosleep,
-                               cache=cache, cache_key="name"))
+    res = _run(read_with_retry(_read, attempts=2, sleep=_nosleep, cache=cache, cache_key="name"))
     assert res.ok is True
     assert res.value == "Ditoo"
     assert res.from_cache is True
@@ -72,20 +72,18 @@ def test_exhausted_without_cache_is_typed_unknown():
     async def _read():
         return None
 
-    res = _run(read_with_retry(_read, attempts=2, sleep=_nosleep,
-                               cache=ReadCache(), cache_key="name"))
+    res = _run(read_with_retry(_read, attempts=2, sleep=_nosleep, cache=ReadCache(), cache_key="name"))
     assert res.ok is False
-    assert res.known is False            # UI renders a dash, not a wrong value
-    assert res.reason is FailureReason.DROPPED   # replied empty → invalid
+    assert res.known is False  # UI renders a dash, not a wrong value
+    assert res.reason is FailureReason.DROPPED  # replied empty → invalid
 
 
 def test_timeout_is_retried_then_typed():
     async def _read():
-        await asyncio.sleep(1.0)         # exceeds the per-attempt timeout
+        await asyncio.sleep(1.0)  # exceeds the per-attempt timeout
         return 1
 
-    res = _run(read_with_retry(_read, attempts=2, timeout=0.01, sleep=_nosleep,
-                               cache=ReadCache(), cache_key="b"))
+    res = _run(read_with_retry(_read, attempts=2, timeout=0.01, sleep=_nosleep, cache=ReadCache(), cache_key="b"))
     assert res.ok is False and res.reason is FailureReason.TIMEOUT
 
 
@@ -96,9 +94,9 @@ def test_validate_rejects_junk_and_retries():
         calls["n"] += 1
         return -1 if calls["n"] == 1 else 99
 
-    res = _run(read_with_retry(_read, attempts=3, sleep=_nosleep,
-                               validate=lambda v: v >= 0,
-                               cache=ReadCache(), cache_key="b"))
+    res = _run(
+        read_with_retry(_read, attempts=3, sleep=_nosleep, validate=lambda v: v >= 0, cache=ReadCache(), cache_key="b")
+    )
     assert res.ok and res.value == 99 and calls["n"] == 2
 
 
@@ -106,8 +104,7 @@ def test_exception_in_read_does_not_propagate():
     async def _read():
         raise RuntimeError("ble write blew up")
 
-    res = _run(read_with_retry(_read, attempts=2, sleep=_nosleep,
-                               cache=ReadCache(), cache_key="b"))
+    res = _run(read_with_retry(_read, attempts=2, sleep=_nosleep, cache=ReadCache(), cache_key="b"))
     assert res.ok is False and res.reason is FailureReason.UNKNOWN
 
 
@@ -117,16 +114,17 @@ async def _nosleep(_d):
 
 # ── wired into Device.get_brightness / get_device_name ─────────────────────
 
+
 class _FakeComm:
     """Minimal communicator the Device read methods use."""
-    def __init__(self, *, name_response=None, brightness_payload=None,
-                 use_ios_le_protocol=True):
+
+    def __init__(self, *, name_response=None, brightness_payload=None, use_ios_le_protocol=True):
         self.logger = logging.getLogger("fakecomm")
         self.use_ios_le_protocol = use_ios_le_protocol
         self._expected_response_command = None
         self._name_response = name_response
         self._brightness_payload = brightness_payload
-        self.device_name = ""        # no advertised name → reads go to the device
+        self.device_name = ""  # no advertised name → reads go to the device
         self.fail = False
 
     def drain_notifications(self):
@@ -152,6 +150,7 @@ class _FakeComm:
 
 def _device(comm):
     from divoom_legacy.system.device import Device
+
     return Device(comm)
 
 
@@ -159,16 +158,16 @@ def test_get_brightness_fresh_then_cached_on_drop():
     # payload[6] is the brightness byte.
     comm = _FakeComm(brightness_payload=[0, 0, 0, 0, 0, 0, 80])
     dev = _device(comm)
-    assert _run(dev.get_brightness()) == 80      # fresh
-    comm.fail = True                              # device stops answering
-    assert _run(dev.get_brightness()) == 80       # served from last-good cache
+    assert _run(dev.get_brightness()) == 80  # fresh
+    comm.fail = True  # device stops answering
+    assert _run(dev.get_brightness()) == 80  # served from last-good cache
 
 
 def test_get_brightness_unknown_when_never_read():
     comm = _FakeComm(brightness_payload=None)
     comm.fail = True
     dev = _device(comm)
-    assert _run(dev.get_brightness()) is None     # no value, nothing cached → unknown
+    assert _run(dev.get_brightness()) is None  # no value, nothing cached → unknown
 
 
 def test_get_device_name_fresh_then_cached_on_drop():
@@ -179,4 +178,4 @@ def test_get_device_name_fresh_then_cached_on_drop():
     dev = _device(comm)
     assert _run(dev.get_device_name()) == name
     comm.fail = True
-    assert _run(dev.get_device_name()) == name    # last-good
+    assert _run(dev.get_device_name()) == name  # last-good

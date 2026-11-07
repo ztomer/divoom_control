@@ -1,5 +1,6 @@
 """cmd_identify + cmd_mcp_server coverage (split from
 test_cli_commands_coverage.py)."""
+
 from __future__ import annotations
 
 import json
@@ -37,6 +38,7 @@ def _identify_client(monkeypatch, devices):
     class _C:
         def scan(self, timeout=None, limit=None):
             return {"success": True, "devices": devices}
+
     monkeypatch.setattr(cli_commands, "_daemon_client", lambda: _C())
 
 
@@ -49,11 +51,18 @@ async def test_cmd_identify_errors_when_nothing_found(monkeypatch) -> None:
 
 async def test_cmd_identify_json(monkeypatch, capsys) -> None:
     # The daemon's scan carries the advertisement (company id -> hex bytes).
-    _identify_client(monkeypatch, [{"address": "AA:BB:CC:DD:EE:FF", "name": "Pixoo",
-                                    "manufacturer_data": {"1": "0102"}, "service_uuids": ["1234"]}])
-    rc = await cli_commands.cmd_identify(
-        _parse("identify", "--timeout", "0.01", "--json")
+    _identify_client(
+        monkeypatch,
+        [
+            {
+                "address": "AA:BB:CC:DD:EE:FF",
+                "name": "Pixoo",
+                "manufacturer_data": {"1": "0102"},
+                "service_uuids": ["1234"],
+            }
+        ],
     )
+    rc = await cli_commands.cmd_identify(_parse("identify", "--timeout", "0.01", "--json"))
     assert rc == 0
     data = json.loads(capsys.readouterr().out)
     entry = data["AA:BB:CC:DD:EE:FF"]
@@ -63,8 +72,17 @@ async def test_cmd_identify_json(monkeypatch, capsys) -> None:
 
 
 async def test_cmd_identify_text(monkeypatch, capsys) -> None:
-    _identify_client(monkeypatch, [{"address": "AA:BB:CC:DD:EE:FF", "name": "Pixoo",
-                                    "manufacturer_data": {"1": "0102"}, "service_uuids": ["1234"]}])
+    _identify_client(
+        monkeypatch,
+        [
+            {
+                "address": "AA:BB:CC:DD:EE:FF",
+                "name": "Pixoo",
+                "manufacturer_data": {"1": "0102"},
+                "service_uuids": ["1234"],
+            }
+        ],
+    )
     rc = await cli_commands.cmd_identify(_parse("identify", "--timeout", "0.01"))
     assert rc == 0
     out = capsys.readouterr().out
@@ -93,9 +111,7 @@ def _fake_execv(recorded: list):
 
 
 async def test_cmd_mcp_server_errors_when_daemon_unreachable(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "divoom_client.daemon_client.ensure_daemon", lambda *a, **k: None
-    )
+    monkeypatch.setattr("divoom_client.daemon_client.ensure_daemon", lambda *a, **k: None)
     with pytest.raises(SystemExit) as exc:
         await cli_commands.cmd_mcp_server(_parse("mcp-server"))
     assert exc.value.code == 1
@@ -104,18 +120,14 @@ async def test_cmd_mcp_server_errors_when_daemon_unreachable(monkeypatch) -> Non
 async def test_cmd_mcp_server_local_happy_path(monkeypatch) -> None:
     """The local path: the daemon is ensured, then the native server is exec'd."""
     fake_client = object()
-    monkeypatch.setattr(
-        "divoom_client.daemon_client.ensure_daemon", lambda *a, **k: fake_client
-    )
+    monkeypatch.setattr("divoom_client.daemon_client.ensure_daemon", lambda *a, **k: fake_client)
     monkeypatch.setattr(cli_commands, "_divoomd_binary", lambda: "/opt/divoomd")
     monkeypatch.setattr(os, "environ", os.environ.copy())
     execs: list = []
     monkeypatch.setattr(os, "execv", _fake_execv(execs))
 
     with pytest.raises(SystemExit):
-        await cli_commands.cmd_mcp_server(
-            _parse("mcp-server", "--socket", "/tmp/fake-divoom-test.sock")
-        )
+        await cli_commands.cmd_mcp_server(_parse("mcp-server", "--socket", "/tmp/fake-divoom-test.sock"))
 
     assert execs == [("/opt/divoomd", ["/opt/divoomd", "mcp"])]
 
@@ -123,8 +135,9 @@ async def test_cmd_mcp_server_local_happy_path(monkeypatch) -> None:
     # could never offer the destructive tools (lane MCP.DV).
     execs.clear()
     with pytest.raises(SystemExit):
-        await cli_commands.cmd_mcp_server(_parse(
-            "mcp-server", "--socket", "/tmp/fake-divoom-test.sock", "--allow-destructive"))
+        await cli_commands.cmd_mcp_server(
+            _parse("mcp-server", "--socket", "/tmp/fake-divoom-test.sock", "--allow-destructive")
+        )
     assert execs == [("/opt/divoomd", ["/opt/divoomd", "mcp", "--allow-destructive"])]
     # The child inherits the daemon target; without this it would silently
     # connect to /tmp/divoom.sock and report the daemon as down.
@@ -137,9 +150,7 @@ async def test_cmd_mcp_server_remote_host_sets_env(monkeypatch) -> None:
     # monkeypatch discards on teardown.
     monkeypatch.setattr(os, "environ", os.environ.copy())
     fake_client = object()
-    monkeypatch.setattr(
-        "divoom_client.daemon_client.ensure_daemon", lambda *a, **k: fake_client
-    )
+    monkeypatch.setattr("divoom_client.daemon_client.ensure_daemon", lambda *a, **k: fake_client)
     monkeypatch.setattr(cli_commands, "_divoomd_binary", lambda: "/opt/divoomd")
     execs: list = []
     monkeypatch.setattr(os, "execv", _fake_execv(execs))
@@ -175,8 +186,6 @@ async def test_cmd_mcp_server_passes_mac_to_the_daemon_it_may_spawn(monkeypatch)
     monkeypatch.setattr(os, "execv", _fake_execv([]))
 
     with pytest.raises(SystemExit):
-        await cli_commands.cmd_mcp_server(
-            _parse("mcp-server", "--socket", "/tmp/x.sock", "--mac", "11:22:33:44:55:66")
-        )
+        await cli_commands.cmd_mcp_server(_parse("mcp-server", "--socket", "/tmp/x.sock", "--mac", "11:22:33:44:55:66"))
 
     assert seen["mac"] == "11:22:33:44:55:66"

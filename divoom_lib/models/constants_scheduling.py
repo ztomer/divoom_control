@@ -61,6 +61,7 @@ DIVOOM_DISP_SCORE_MODE = 1
 DIVOOM_DISP_NOISE_MODE = 2
 DIVOOM_DISP_COUNT_TIME_DOWN = 3
 
+
 # TIME DISPLAY TYPES (from node-divoom-timebox-evo/src/types.ts)
 class TimeDisplayType:
     FullScreen = 0
@@ -70,6 +71,7 @@ class TimeDisplayType:
     FullScreenNegative = 4
     AnalogRound = 5
 
+
 # LIGHTNING TYPES (from node-divoom-timebox-evo/src/types.ts)
 class LightningType:
     PlainColor = 0
@@ -77,6 +79,7 @@ class LightningType:
     Plants = 2
     NoMosquitto = 3
     Sleeping = 4
+
 
 # WEATHER TYPES (from node-divoom-timebox-evo/src/types.ts)
 class WeatherType:
@@ -86,6 +89,7 @@ class WeatherType:
     Rain = 6
     Snow = 8
     Fog = 9
+
 
 # VJ EFFECT TYPES (from node-divoom-timebox-evo/src/types.ts)
 class VJEffectType:
@@ -105,6 +109,7 @@ class VJEffectType:
     PinkBlueWave = 13
     RainbowCross = 14
     RainbowShapes = 15
+
 
 # Notification mirroring app types (SPP_SET_ANDROID_ANCS, cmd 0x50).
 # Source: APK SppProc NOTIFICATION_APPS enum. NOTE: the device wire protocol
@@ -132,5 +137,5 @@ TIMEBOX_CONST = {
     "TimeType": TimeDisplayType,
     "LightningType": LightningType,
     "WeatherType": WeatherType,
-    "VJEffectType": VJEffectType
+    "VJEffectType": VJEffectType,
 }

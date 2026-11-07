@@ -55,7 +55,7 @@ def test_partial_save_merges(cfg_path):
     hc.save_config({"enabled": True})  # partial
     cfg = hc.load_config()
     assert cfg["enabled"] is True
-    assert cfg["interval"] == 1200      # preserved
+    assert cfg["interval"] == 1200  # preserved
 
 
 def test_interval_floor(cfg_path):
@@ -67,12 +67,17 @@ def test_the_device_list_is_not_in_this_file_any_more(cfg_path):
     """The old shape had `targets` and `device_galleries`. The devices live in
     the app's settings now, so a file that still carries them must not grow a
     device list back — and saving must not write one."""
-    cfg_path.write_text(json.dumps({
-        "enabled": True,
-        "interval": 86400,
-        "targets": ["AA:BB:CC:DD:EE:FF"],
-        "device_galleries": {"AA:BB:CC:DD:EE:FF": 9},
-    }), encoding="utf-8")
+    cfg_path.write_text(
+        json.dumps(
+            {
+                "enabled": True,
+                "interval": 86400,
+                "targets": ["AA:BB:CC:DD:EE:FF"],
+                "device_galleries": {"AA:BB:CC:DD:EE:FF": 9},
+            }
+        ),
+        encoding="utf-8",
+    )
 
     cfg = hc.load_config()
     assert "targets" not in cfg
@@ -89,11 +94,16 @@ def test_the_device_list_is_not_in_this_file_any_more(cfg_path):
 def test_a_stale_file_is_reported(cfg_path, caplog):
     """A file that still carries the old keys must SAY so. Silently ignoring a
     stale device list is how the empty-list bug stayed invisible for 36 days."""
-    cfg_path.write_text(json.dumps({
-        "enabled": True,
-        "interval": 86400,
-        "targets": ["AA:BB:CC:DD:EE:FF"],
-    }), encoding="utf-8")
+    cfg_path.write_text(
+        json.dumps(
+            {
+                "enabled": True,
+                "interval": 86400,
+                "targets": ["AA:BB:CC:DD:EE:FF"],
+            }
+        ),
+        encoding="utf-8",
+    )
 
     with caplog.at_level(logging.WARNING):
         hc.load_config()

@@ -19,6 +19,7 @@ What these pin, against a fake bridge that records every call:
 
 Skipped if a browser isn't installed (runs with --run-browser).
 """
+
 import json
 import re
 from pathlib import Path
@@ -89,7 +90,8 @@ async def test_no_panel_known_shows_an_honest_empty_state():
             s = await eval_js(page, _SCREEN)
             assert s["nodes"] == [], f"the bench drew panels nobody reported: {s['nodes']}"
             assert s["empty"] and "Scan" in s["empty"] and "Settings" in s["empty"], (
-                f"the empty bench must say how to add a panel: {s}")
+                f"the empty bench must say how to add a panel: {s}"
+            )
             assert s["deckName"] == "No panel selected", s
             assert not s["levelsShown"], f"no panel, so no levels: {s}"
             assert s["active"] is None and s["selected"] is None, s
@@ -106,7 +108,9 @@ async def test_no_bridge_call_names_a_panel_the_daemon_never_reported():
         browser, page = await _open(p)
         try:
             # Walk the app: every section, every channel card, a control on each.
-            await eval_js(page, """async () => {
+            await eval_js(
+                page,
+                """async () => {
                 const pause = () => new Promise(r => setTimeout(r, 60));
                 for (const b of document.querySelectorAll('.nav-btn[data-tab]')) { b.click(); await pause(); }
                 document.querySelector('.nav-btn[data-tab="control-panel"]').click();
@@ -122,7 +126,8 @@ async def test_no_bridge_call_names_a_panel_the_daemon_never_reported():
                 // success: record on "the selected panel" by passing none.
                 window.setDeviceActivity(null, 'playlist', {playId: 1});
                 await pause();
-            }""")
+            }""",
+            )
             sent = await _macs_sent(page)
             assert sent == set(), f"bridge calls named panels the daemon never reported: {sorted(sent)}"
             # Nor the banner's placeholder text passed off as a panel address.
@@ -131,12 +136,18 @@ async def test_no_bridge_call_names_a_panel_the_daemon_never_reported():
             assert fake == [], f"bridge calls named a placeholder as their panel: {fake}"
 
             # The daemon reports one: from now on, that one and only that one.
-            await eval_js(page, """(m) => { window.__panels = [{mac: m, connected: true, model: 'DitooPlus',
+            await eval_js(
+                page,
+                """(m) => { window.__panels = [{mac: m, connected: true, model: 'DitooPlus',
                     width: 16, height: 16, features: {speaker: true}}];
                 window.Divoom.onOwnedDevices({type: 'owned_devices', devices: [
-                    {address: m, name: 'Shelf', kind: 'clock', state: 'active'}]}); }""", REAL)
+                    {address: m, name: 'Shelf', kind: 'clock', state: 'active'}]}); }""",
+                REAL,
+            )
             await wait_js(page, f"() => !!document.getElementById('spatial-node-{REAL}')")
-            await eval_js(page, "() => document.querySelector('#clock-faces-grid .selector-cell[data-value=\"2\"]').click()")
+            await eval_js(
+                page, "() => document.querySelector('#clock-faces-grid .selector-cell[data-value=\"2\"]').click()"
+            )
             await eval_js(page, "() => new Promise(r => setTimeout(r, 200))")
             s = await eval_js(page, _SCREEN)
             assert s["nodes"] == [f"spatial-node-{REAL}"] and s["empty"] is None, s

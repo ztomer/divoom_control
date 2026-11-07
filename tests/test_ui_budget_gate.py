@@ -4,6 +4,7 @@ suite is refused, and the two shapes where a short timeout IS the assertion pass
 The gate exists because 44 literal budgets survived a hand sweep, and one of them
 (`timeout=2000` on a tab click) refused a pre-push at host load on 2026-10-31.
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -32,9 +33,7 @@ def test_a_literal_budget_on_the_house_wait_is_refused():
 
 def test_a_named_budget_and_no_budget_pass():
     src = HEADER + (
-        "async def t(page):\n"
-        "    await page.click('#tab')\n"
-        "    await wait_js(page, '() => 1', timeout=UI_TIMEOUT_MS)\n"
+        "async def t(page):\n    await page.click('#tab')\n    await wait_js(page, '() => 1', timeout=UI_TIMEOUT_MS)\n"
     )
     assert gate.literal_budgets(src) == []
 
@@ -69,6 +68,12 @@ def test_a_module_that_drives_no_page_is_out_of_scope(tmp_path):
 
 
 def test_the_repo_holds_no_literal_ui_budget():
-    r = subprocess.run([sys.executable, "tools/check_ui_budgets.py"], cwd=REPO, check=False,
-                       capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    r = subprocess.run(
+        [sys.executable, "tools/check_ui_budgets.py"],
+        cwd=REPO,
+        check=False,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+    )
     assert r.returncode == 0, r.stdout + r.stderr

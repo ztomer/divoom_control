@@ -2,6 +2,7 @@
 
 Thin façade over pywebview window.
 """
+
 from __future__ import annotations
 
 from divoom_gui.api import ApiBase
@@ -27,9 +28,13 @@ class WindowApi(ApiBase):
             loop_thread.stop()
         window = self._state_getter().get("window")
         if window:
+
             def _destroy():
                 import time
+
                 time.sleep(0.1)
                 window.destroy()
+
             import threading
+
             threading.Thread(target=_destroy, daemon=True).start()

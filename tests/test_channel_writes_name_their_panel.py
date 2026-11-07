@@ -13,6 +13,7 @@ the `mac` each `device_call` carries -- the field the daemon routes by
 channel write; a method added to the bridge without a row fails
 `test_every_channel_write_is_in_the_table`.
 """
+
 from __future__ import annotations
 
 import inspect
@@ -48,8 +49,7 @@ class _Daemon:
         self.stops: list[str | None] = []
         self.selected: str | None = None
 
-    def device_call(self, method, args=None, kwargs=None, target="device",
-                    blobs=None, token=None, mac=None):
+    def device_call(self, method, args=None, kwargs=None, target="device", blobs=None, token=None, mac=None):
         self.calls.append((method, mac))
         return {"success": True, "result": True}
 
@@ -72,6 +72,7 @@ class _Daemon:
 def api(tmp_path):
     with patch("pathlib.Path.home", return_value=tmp_path):
         from divoom_gui.gui_api import DivoomGuiAPI
+
         gui = DivoomGuiAPI()
     gui._daemon_client = _Daemon()
     frame = tmp_path / "text.png"
@@ -86,20 +87,22 @@ def test_every_channel_write_is_in_the_table():
     channel controls call must be listed above, or nobody checks its route."""
     from divoom_gui.gui_api import DivoomGuiAPI
 
-    js = "".join(p.read_text() for p in
-                 (Path(__file__).parent.parent / "divoom_gui" / "web_ui").glob("*.js"))
-    named = {name for name, fn in inspect.getmembers(DivoomGuiAPI, inspect.isfunction)
-             if list(inspect.signature(fn).parameters)[1:2] == ["mac"]
-             and (f"{name}(w.mac" in js or f"{name}(t.mac" in js)}
+    js = "".join(p.read_text() for p in (Path(__file__).parent.parent / "divoom_gui" / "web_ui").glob("*.js"))
+    named = {
+        name
+        for name, fn in inspect.getmembers(DivoomGuiAPI, inspect.isfunction)
+        if list(inspect.signature(fn).parameters)[1:2] == ["mac"] and (f"{name}(w.mac" in js or f"{name}(t.mac" in js)
+    }
     assert named == {row[0] for row in CHANNEL_WRITES}, (
         f"in the UI but not the table: {named - {r[0] for r in CHANNEL_WRITES}}; "
-        f"in the table but not the UI: {({r[0] for r in CHANNEL_WRITES}) - named}")
+        f"in the table but not the UI: {({r[0] for r in CHANNEL_WRITES}) - named}"
+    )
 
 
 @pytest.mark.parametrize("method,args,call", CHANNEL_WRITES, ids=[r[0] for r in CHANNEL_WRITES])
 def test_a_write_reaches_the_panel_it_names_after_the_selection_moved(api, method, args, call):
     api.select_device(A)
-    api.select_device(B)   # the user moved on before this write ran
+    api.select_device(B)  # the user moved on before this write ran
     reply = getattr(api, method)(A, *args)
     assert reply is True or (isinstance(reply, dict) and (reply.get("success") or reply.get("ok"))), reply
     daemon = api._daemon_client
@@ -110,7 +113,7 @@ def test_a_write_reaches_the_panel_it_names_after_the_selection_moved(api, metho
 
 @pytest.mark.parametrize("method,args,call", CHANNEL_WRITES, ids=[r[0] for r in CHANNEL_WRITES])
 def test_a_write_naming_no_panel_is_refused(api, method, args, call):
-    api.select_device(B)   # the old implicit route, which must not be taken
+    api.select_device(B)  # the old implicit route, which must not be taken
     reply = getattr(api, method)("", *args)
     assert reply is False or (isinstance(reply, dict) and not (reply.get("success") or reply.get("ok"))), reply
     assert reply is False or reply.get("error"), f"{method} refused with no reason: {reply}"

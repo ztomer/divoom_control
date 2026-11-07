@@ -25,6 +25,7 @@ across the tree and fails if any addresses an app that is not listed here — an
 fails the other way too, if a player is primed that nothing addresses, so we
 cannot leave the user consenting to something unused.
 """
+
 from __future__ import annotations
 
 from typing import NamedTuple
@@ -49,17 +50,14 @@ class MediaPlayer(NamedTuple):
 # grant. They stay listed because the registry is what the drift gate checks
 # against: if a future player has to be driven over AppleScript, flipping its
 # flag here is the single edit that also primes it.
-_VIA_MEDIA_REMOTE = (
-    "reached through macOS MediaRemote (the system Now Playing source), which "
-    "needs no Automation grant"
-)
+_VIA_MEDIA_REMOTE = "reached through macOS MediaRemote (the system Now Playing source), which needs no Automation grant"
 
 PLAYERS: tuple[MediaPlayer, ...] = (
     MediaPlayer(
         app_name="Kaset",
         needs_apple_events=False,
         why=f"YouTube Music client — {_VIA_MEDIA_REMOTE}. Verified 2026-08-29: "
-            "returns title, artist and real cover-art bytes.",
+        "returns title, artist and real cover-art bytes.",
     ),
     MediaPlayer(
         app_name="Spotify",
@@ -74,8 +72,7 @@ PLAYERS: tuple[MediaPlayer, ...] = (
     MediaPlayer(
         app_name="Feishin",
         needs_apple_events=False,
-        why="Navidrome/Subsonic client — read via its cached credentials, "
-            "never Apple Events.",
+        why="Navidrome/Subsonic client — read via its cached credentials, never Apple Events.",
     ),
 )
 

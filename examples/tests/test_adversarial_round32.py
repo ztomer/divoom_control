@@ -10,6 +10,7 @@
 - ConnectionApi.scan_devices must call self._client() (method form) — it used the
   property form → got a bound method → AttributeError → always-empty scan.
 """
+
 import asyncio
 import json
 import logging
@@ -21,6 +22,7 @@ sys.path.append(str(Path(__file__).parent.parent / "divoom_gui"))
 
 
 # ── Hashimoto: exclusive RPC timeout ────────────────────────────────────────
+
 
 def test_exclusive_rpcs_use_long_read_timeout():
     from divoom_client.daemon_protocol import DaemonClient
@@ -45,6 +47,7 @@ def test_exclusive_rpcs_use_long_read_timeout():
 
 # ── Linus: memorial decode tolerance ────────────────────────────────────────
 
+
 def test_get_memorial_time_tolerates_truncated_utf8():
     from divoom_legacy.scheduling.alarm import Alarm
     from divoom_lib import models as _c  # GMT_* / MEMORIAL_COUNT live in models
@@ -54,7 +57,7 @@ def test_get_memorial_time_tolerates_truncated_utf8():
     ts = _c.GMT_TITLE_NAME_START
 
     rec = bytearray(gmt_len)
-    rec[ts:ts + 3] = b"\xf0\x9f\x8e"  # first 3 bytes of a 4-byte emoji → dangling
+    rec[ts : ts + 3] = b"\xf0\x9f\x8e"  # first 3 bytes of a 4-byte emoji → dangling
     response = bytes(rec) * count
 
     class _Dev:
@@ -71,13 +74,16 @@ def test_get_memorial_time_tolerates_truncated_utf8():
 
 # ── Carmack: urllib.parse import ────────────────────────────────────────────
 
+
 def test_media_source_imports_urllib_parse():
     import divoom_legacy.utils.media_source as ms
+
     # quote() is reachable without relying on urllib.request's import side-effect
     assert ms.urllib.parse.quote("a b") == "a%20b"
 
 
 # ── Uncle Bob: ConnectionApi.scan_devices calls the client ──────────────────
+
 
 def test_connection_scan_devices_calls_client():
     from divoom_gui.api.connection import ConnectionApi

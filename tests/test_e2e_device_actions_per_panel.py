@@ -17,6 +17,7 @@ the whole chain against a real daemon.
 
 Skipped if a browser isn't installed (runs with --run-browser).
 """
+
 from pathlib import Path
 
 import pytest
@@ -30,15 +31,37 @@ A, B = "AA:00:00:00:00:01", "BB:00:00:00:00:02"
 
 #: Every bridge method a gesture below may call that acts on a panel.
 ACTIONS = (
-    "start_sleep", "stop_sleep", "set_timer", "set_countdown", "set_noise", "set_screen_mirror",
-    "set_hour_type", "set_temp_unit", "set_low_power", "set_screen_dir", "sync_time",
-    "set_device_name", "set_auto_power_off", "set_memorial", "factory_reset",
-    "send_notification", "set_fm_frequency", "set_alarm", "toggle_music_sync",
-    "toggle_stocks_sync", "toggle_sysmon_sync", "toggle_weather_sync", "apply_stock_ticker",
-    "play_gallery_art", "hot_channel_update", "custom_art_push", "device_call",
+    "start_sleep",
+    "stop_sleep",
+    "set_timer",
+    "set_countdown",
+    "set_noise",
+    "set_screen_mirror",
+    "set_hour_type",
+    "set_temp_unit",
+    "set_low_power",
+    "set_screen_dir",
+    "sync_time",
+    "set_device_name",
+    "set_auto_power_off",
+    "set_memorial",
+    "factory_reset",
+    "send_notification",
+    "set_fm_frequency",
+    "set_alarm",
+    "toggle_music_sync",
+    "toggle_stocks_sync",
+    "toggle_sysmon_sync",
+    "toggle_weather_sync",
+    "apply_stock_ticker",
+    "play_gallery_art",
+    "hot_channel_update",
+    "custom_art_push",
+    "device_call",
 )
 
-_MOCK_API = """
+_MOCK_API = (
+    """
 const __GIF = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 window.__fleet = {
   panels: {
@@ -81,7 +104,10 @@ window.confirm = () => true;
 window.prompt = () => 'RESET';
 localStorage.setItem('divoom_custom_art_slots', JSON.stringify(
     [[{fileId: 'f1', thumb: ''}].concat(new Array(11).fill(null)), new Array(12).fill(null), new Array(12).fill(null)]));
-""".replace("%A%", A).replace("%B%", B).replace("%ACTIONS%", repr(list(ACTIONS)))
+""".replace("%A%", A)
+    .replace("%B%", B)
+    .replace("%ACTIONS%", repr(list(ACTIONS)))
+)
 
 _CLICK = "(s) => { const el = document.querySelector(s); if (!el) throw new Error('no ' + s); el.click(); }"
 
@@ -103,8 +129,11 @@ GESTURES = [
     ("hot channel", "#hot-update-btn", {"hot_channel_update"}),
     ("custom art push", "#push-custom-art-btn", {"custom_art_push"}),
     ("custom art page", '#panel-design .page-tab[data-page="1"]', {"device_call"}),
-    ("a live widget", "#widget-card-sysmon",
-     {"toggle_music_sync", "toggle_stocks_sync", "toggle_sysmon_sync", "toggle_weather_sync"}),
+    (
+        "a live widget",
+        "#widget-card-sysmon",
+        {"toggle_music_sync", "toggle_stocks_sync", "toggle_sysmon_sync", "toggle_weather_sync"},
+    ),
 ]
 
 
@@ -113,12 +142,19 @@ async def _open(p):
     page = await browser.new_page(viewport={"width": 1280, "height": 900})
     await add_init_js(page, _MOCK_API)
     await page.goto(f"file://{INDEX_HTML}")
-    await wait_js(page, "() => !!window.Divoom?.onOwnedDevices && !!window.SpatialStage"
-                        " && !!window.ChannelSettings && !!document.getElementById('sync-time-btn')"
-                        " && !!document.querySelector('#panel-design .page-tab')")
-    await eval_js(page, """([a, b]) => window.Divoom.onOwnedDevices({type: 'owned_devices', devices: [
+    await wait_js(
+        page,
+        "() => !!window.Divoom?.onOwnedDevices && !!window.SpatialStage"
+        " && !!window.ChannelSettings && !!document.getElementById('sync-time-btn')"
+        " && !!document.querySelector('#panel-design .page-tab')",
+    )
+    await eval_js(
+        page,
+        """([a, b]) => window.Divoom.onOwnedDevices({type: 'owned_devices', devices: [
         {address: a, name: 'Desk', kind: 'clock', state: 'active'},
-        {address: b, name: 'Kitchen', kind: 'clock', state: 'active'}]})""", [A, B])
+        {address: b, name: 'Kitchen', kind: 'clock', state: 'active'}]})""",
+        [A, B],
+    )
     await eval_js(page, "() => window.buildCustomArtSlots && window.buildCustomArtSlots()")
     return browser, page
 
@@ -133,8 +169,7 @@ async def _settle(page, ms=150):
 
 
 async def _calls(page):
-    return [(c["m"], c["args"]) for c in await eval_js(page, "() => window.__fleet.calls")
-            if c["m"] in ACTIONS]
+    return [(c["m"], c["args"]) for c in await eval_js(page, "() => window.__fleet.calls") if c["m"] in ACTIONS]
 
 
 async def _clear(page):
@@ -153,7 +188,7 @@ async def test_every_device_action_names_the_panel_clicked():
                 await _select(page, A)
                 await _clear(page)
                 await eval_js(page, _CLICK, selector)
-                await _select(page, B)   # the user moves on at once
+                await _select(page, B)  # the user moves on at once
                 await _settle(page)
                 sent = await _calls(page)
                 assert {m for m, _ in sent} >= expected, f"{what} did not call {expected}: {sent}"
@@ -174,10 +209,13 @@ async def test_a_rename_ticker_and_gallery_push_name_the_panel_clicked():
         try:
             await _select(page, A)
             await _clear(page)
-            await eval_js(page, "() => { document.getElementById('device-name-input').value = 'Desk 2';"
-                                " document.getElementById('device-name-save').click(); }")
+            await eval_js(
+                page,
+                "() => { document.getElementById('device-name-input').value = 'Desk 2';"
+                " document.getElementById('device-name-save').click(); }",
+            )
             await _select(page, B)
-            await eval_js(page, "() => window.displayTicker('AAPL')")   # B is selected now
+            await eval_js(page, "() => window.displayTicker('AAPL')")  # B is selected now
             await _select(page, A)
             await eval_js(page, "() => window.loadGallery()")
             await wait_js(page, "() => !!document.querySelector('.gallery-item')")
@@ -206,13 +244,15 @@ async def test_a_debounced_alarm_write_names_the_panel_clicked_not_the_one_selec
         browser, page = await _open(p)
         try:
             await _select(page, A)
-            await eval_js(page, "() => window.dispatchEvent(new CustomEvent('tab-changed', {detail: {tab: 'routines'}}))")
+            await eval_js(
+                page, "() => window.dispatchEvent(new CustomEvent('tab-changed', {detail: {tab: 'routines'}}))"
+            )
             await wait_js(page, "() => window.__fleet.calls.some(c => c.m === 'get_alarms')")
             await _settle(page)
             await _clear(page)
             await eval_js(page, _CLICK, "#alarms-add-btn")
             await wait_js(page, "() => !!document.querySelector('#alarms-list .alarm-day-cell')")
-            await eval_js(page, _CLICK, "#alarms-list .alarm-day-cell")   # debounced 500 ms
+            await eval_js(page, _CLICK, "#alarms-list .alarm-day-cell")  # debounced 500 ms
             await _select(page, B)
             await _settle(page, 800)
             sent = [(m, args) for m, args in await _calls(page) if m == "set_alarm"]
@@ -234,8 +274,14 @@ async def test_a_debounced_alarm_write_names_the_panel_clicked_not_the_one_selec
 def test_every_device_action_resolves_its_panel_in_one_place():
     """No device action asks "which panel" by itself: the mac comes from
     `ChannelSettings` (P5.2/P5.6), and nothing calls the old mac-less form."""
-    writers = ("settings_features.js", "alarms_editor.js", "widgets.js", "gallery.js",
-               "gallery_hot.js", "custom_art.js")
+    writers = (
+        "settings_features.js",
+        "alarms_editor.js",
+        "widgets.js",
+        "gallery.js",
+        "gallery_hot.js",
+        "custom_art.js",
+    )
     for name in writers:
         js = (WEB_UI / name).read_text(encoding="utf-8")
         assert "requireDevice" not in js, f"{name} checks for 'a' device instead of naming one"

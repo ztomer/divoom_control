@@ -52,6 +52,7 @@ HONEST SCOPE:
   * Paths under /tmp are not checked for existence: a socket path is absent
     between runs, and a gate that cries wolf is a gate nobody runs.
 """
+
 from __future__ import annotations
 
 import json
@@ -172,15 +173,11 @@ def read_launchctl_status(run=subprocess.run) -> dict[str, tuple[str, str]]:
         raise LaunchctlUnreadable(f"`launchctl list` could not run: {exc}") from exc
     if done.returncode != 0:
         detail = (done.stderr or "").strip().splitlines()[:1]
-        raise LaunchctlUnreadable(
-            f"`launchctl list` exited {done.returncode}"
-            + (f": {detail[0]}" if detail else "")
-        )
+        raise LaunchctlUnreadable(f"`launchctl list` exited {done.returncode}" + (f": {detail[0]}" if detail else ""))
     statuses = launchctl_status(done.stdout)
     if not statuses:
         raise LaunchctlUnreadable(
-            "`launchctl list` printed no job rows — its output is not the "
-            "PID/Status/Label table this parser reads"
+            "`launchctl list` printed no job rows — its output is not the PID/Status/Label table this parser reads"
         )
     return statuses
 
@@ -276,16 +273,9 @@ def check(
         #    for this repo's jobs; another repo's is reported, not fatal (see
         #    the note on warnings below).
         program = job.program
-        missing_program = (
-            program.startswith("/")
-            and not is_volatile(program)
-            and not Path(program).exists()
-        )
+        missing_program = program.startswith("/") and not is_volatile(program) and not Path(program).exists()
         if missing_program:
-            message = (
-                f"{job.label}: runs {program}, which does not exist — the job "
-                f"can never start"
-            )
+            message = f"{job.label}: runs {program}, which does not exist — the job can never start"
             if scope:
                 findings.append(message)
             else:
@@ -295,10 +285,7 @@ def check(
         root = f"{repo_root}/"
         for arg in job.args[1:]:
             if arg.startswith(root) and not is_volatile(arg) and not Path(arg).exists():
-                findings.append(
-                    f"{job.label}: names {arg}, which does not exist — the file "
-                    f"moved or was deleted"
-                )
+                findings.append(f"{job.label}: names {arg}, which does not exist — the file moved or was deleted")
         if not scope:
             continue
         # 4. A job of this repo's that nobody declared: the definition is
@@ -319,9 +306,7 @@ def check(
         else:
             pid, status = state
             if pid == "-" and status not in ("0", ""):
-                findings.append(
-                    f"{job.label}: dead — launchd's last exit status is {status}"
-                )
+                findings.append(f"{job.label}: dead — launchd's last exit status is {status}")
     # Another repo's DEAD job: reported, not fatal. It is not this repo's to
     # fix, and a gate that fails on another repo's problem gets switched off.
     for job in installed:
@@ -332,10 +317,7 @@ def check(
             continue
         pid, status = state
         if pid == "-" and status not in ("0", ""):
-            warnings.append(
-                f"{job.label} (another repo's): dead — launchd's last exit "
-                f"status is {status}"
-            )
+            warnings.append(f"{job.label} (another repo's): dead — launchd's last exit status is {status}")
     return findings, warnings, counts
 
 
@@ -374,20 +356,15 @@ def self_test() -> list[str]:
         deleted = repo / "divoom_lib" / "deleted_daemon.py"
         declaration = repo / "docs" / "launchd_jobs.json"
 
-        _write_plist(agents / "com.divoom.healthy.plist", "com.divoom.healthy",
-                     [sys.executable, str(script)])
-        _write_plist(agents / "com.divoom.missing.plist", "com.divoom.missing",
-                     [sys.executable, str(deleted)])
-        _write_plist(agents / "com.divoom.failed.plist", "com.divoom.failed",
-                     [sys.executable, str(script)])
-        _write_plist(agents / "com.divoom.undeclared.plist", "com.divoom.undeclared",
-                     [sys.executable, str(script)])
+        _write_plist(agents / "com.divoom.healthy.plist", "com.divoom.healthy", [sys.executable, str(script)])
+        _write_plist(agents / "com.divoom.missing.plist", "com.divoom.missing", [sys.executable, str(deleted)])
+        _write_plist(agents / "com.divoom.failed.plist", "com.divoom.failed", [sys.executable, str(script)])
+        _write_plist(agents / "com.divoom.undeclared.plist", "com.divoom.undeclared", [sys.executable, str(script)])
         _write_declaration(
             declaration,
             [
                 {"label": "com.divoom.healthy", "program": "divoom_lib/live_daemon.py"},
-                {"label": "com.divoom.missing",
-                 "program": "divoom_lib/deleted_daemon.py"},
+                {"label": "com.divoom.missing", "program": "divoom_lib/deleted_daemon.py"},
                 {"label": "com.divoom.failed", "program": "divoom_lib/live_daemon.py"},
             ],
         )
@@ -406,33 +383,23 @@ def self_test() -> list[str]:
                 f"scope is not what it claims"
             )
         if len(findings) != 4:
-            problems.append(
-                f"the self-test produced {len(findings)} findings for 4 broken "
-                f"jobs: {findings}"
-            )
+            problems.append(f"the self-test produced {len(findings)} findings for 4 broken jobs: {findings}")
         else:
-            if not any("deleted_daemon.py" in f and "does not exist" in f
-                       for f in findings):
+            if not any("deleted_daemon.py" in f and "does not exist" in f for f in findings):
                 problems.append(
                     "the self-test did NOT flag the job whose file was deleted — "
                     "this checker cannot see the 36-day failure"
                 )
             if not any("exit status is 2" in f for f in findings):
-                problems.append(
-                    "the self-test did NOT flag the job whose last run failed"
-                )
+                problems.append("the self-test did NOT flag the job whose last run failed")
             if not any("NOT declared" in f for f in findings):
-                problems.append(
-                    "the self-test did NOT flag the job nobody declared"
-                )
+                problems.append("the self-test did NOT flag the job nobody declared")
         healthy = [j for j in read_jobs(agents) if j.label == "com.divoom.healthy"]
         if healthy:
             healthy_findings, _w, _c = check(repo, agents, statuses, declaration)
             healthy_only = [f for f in healthy_findings if "healthy" in f]
             if healthy_only:
-                problems.append(
-                    f"the self-test flagged a HEALTHY job: {healthy_only}"
-                )
+                problems.append(f"the self-test flagged a HEALTHY job: {healthy_only}")
     return problems
 
 
@@ -455,22 +422,24 @@ def main() -> int:
             err(f"[launchd-jobs] cannot judge the installed jobs: {exc}")
             return 1
     findings, warnings, counts = check(REPO, AGENTS_DIR, statuses, DECLARATION)
-    if AGENTS_DIR.is_dir() and scope_is_empty(
-        "launchd-jobs", counts["installed"], unit="launchd agents"
-    ):
+    if AGENTS_DIR.is_dir() and scope_is_empty("launchd-jobs", counts["installed"], unit="launchd agents"):
         return 1
     for w in warnings:
         warn(f"[launchd-jobs] {w}")
     if findings:
-        err(f"[launchd-jobs] {len(findings)} finding(s) — "
+        err(
+            f"[launchd-jobs] {len(findings)} finding(s) — "
             f"{counts['declared']} declared job(s), {counts['mine']} of this "
-            f"repo's installed")
+            f"repo's installed"
+        )
         for f in findings:
             info(f"  {f}")
         return 1
-    ok(f"[launchd-jobs] OK — {counts['declared']} declared job(s), "
-       f"{counts['mine']} of this repo's installed, none dead, and the checker "
-       f"proved it can see one")
+    ok(
+        f"[launchd-jobs] OK — {counts['declared']} declared job(s), "
+        f"{counts['mine']} of this repo's installed, none dead, and the checker "
+        f"proved it can see one"
+    )
     return 0
 
 

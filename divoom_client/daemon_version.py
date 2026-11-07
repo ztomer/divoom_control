@@ -9,6 +9,7 @@ say so.
 
 Split out of `daemon_client.py` when that file crossed the house 500-line cap.
 """
+
 from __future__ import annotations
 
 import logging
@@ -65,6 +66,7 @@ def expected_daemon_version() -> str | None:
     # Source checkout: pyproject is the gated source of truth.
     try:
         import tomllib
+
         root = Path(__file__).resolve().parent.parent
         pyproject = root / "pyproject.toml"
         if pyproject.is_file():
@@ -90,8 +92,7 @@ def expected_daemon_version() -> str | None:
     return None
 
 
-def running_daemon_version(socket_path: str = DEFAULT_SOCKET_PATH,
-                           timeout: float = 1.0) -> str | None:
+def running_daemon_version(socket_path: str = DEFAULT_SOCKET_PATH, timeout: float = 1.0) -> str | None:
     """The version a live daemon reports, or None if it reports none.
 
     A daemon built before R67 has no `daemon_version` field at all, so None
@@ -115,8 +116,8 @@ def _stop_stale_daemon(socket_path: str, running: str | None, expected: str) -> 
     behind for the replacement to trip over.
     """
     logger.warning(
-        "daemon on %s reports version %s but %s is expected — restarting it",
-        socket_path, running or "<none>", expected)
+        "daemon on %s reports version %s but %s is expected — restarting it", socket_path, running or "<none>", expected
+    )
     try:
         DaemonClient(socket_path, timeout=2.0).send_command("shutdown")
     except Exception as e:

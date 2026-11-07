@@ -13,6 +13,7 @@
 Loads the real index.html via file:// in headless Chromium. Skipped if Playwright
 / a browser isn't available (these run when a browser is installed).
 """
+
 import pytest
 from pathlib import Path
 from tests.support.browser import eval_js, launch as launch_browser, require_browser
@@ -31,7 +32,8 @@ async def test_settings_moved_to_appbar_gear():
             page = await browser.new_page()
             await page.goto(f"file://{INDEX_HTML}")
             await page.wait_for_load_state("domcontentloaded")
-            result = await eval_js(page, 
+            result = await eval_js(
+                page,
                 """() => {
                     const sidebarSettings = [...document.querySelectorAll('.sidebar .nav-btn[data-tab]')]
                         .some(b => b.getAttribute('data-tab') === 'settings');
@@ -43,7 +45,7 @@ async def test_settings_moved_to_appbar_gear():
                         hasGear: !!gear,
                         lastId: lastChild ? lastChild.id : null,
                     };
-                }"""
+                }""",
             )
             assert not result["sidebarSettings"], "Settings nav button should be removed from the sidebar (R32)"
             assert result["hasGear"], "appbar must have a Settings gear pill with data-tab='settings'"
@@ -51,8 +53,9 @@ async def test_settings_moved_to_appbar_gear():
             # The scan indicator is now the lowest element (its space is always
             # reserved so a scan doesn't reflow the preview); the wall button and
             # device dots sit just above it.
-            assert result["lastId"] in ("scan-indicator", "device-dots", "wall-button"), \
+            assert result["lastId"] in ("scan-indicator", "device-dots", "wall-button"), (
                 "device-selector cluster (dots / wall button / scan indicator) should be the bottom of the sidebar (R33/R52)"
+            )
         finally:
             await browser.close()
 
@@ -71,12 +74,13 @@ async def test_corner_transport_indicator_removed():
             page = await browser.new_page(viewport={"width": 1100, "height": 720})
             await page.goto(f"file://{INDEX_HTML}")
             await page.wait_for_load_state("domcontentloaded")
-            counts = await eval_js(page, 
+            counts = await eval_js(
+                page,
                 """() => ({
                     pill: document.querySelectorAll('.corner-transports, .appbar-transports').length,
                     dots: ['tr-ble-dot','tr-lan-dot','tr-cloud-dot','tr-ext-dot']
                         .filter(id => document.getElementById(id)).length,
-                })"""
+                })""",
             )
             assert counts["pill"] == 0, "the corner connectivity pill should be gone"
             assert counts["dots"] == 0, "the corner transport dots should be gone"

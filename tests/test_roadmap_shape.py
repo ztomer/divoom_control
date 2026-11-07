@@ -20,6 +20,7 @@ Shipped work leaves the plan (CHANGELOG records it), so SHIPPED/DONE/CLOSED is
 not a status. A dependency may only point at the same or an EARLIER phase,
 which is what makes the phase order mean something.
 """
+
 from __future__ import annotations
 
 import re
@@ -49,7 +50,7 @@ def _items(plan: str) -> dict[str, tuple[int, str]]:
     out: dict[str, tuple[int, str]] = {}
     for i, h in enumerate(heads):
         end = heads[i + 1].start() if i + 1 < len(heads) else len(plan)
-        body = plan[h.end():end]
+        body = plan[h.end() : end]
         body = re.split(r"^#{1,4} (?!#)", body, maxsplit=1, flags=re.M)[0]
         assert h.group(1) not in out, f"duplicate roadmap item id {h.group(1)}"
         out[h.group(1)] = (int(h.group(2)), body)
@@ -67,8 +68,7 @@ def check_items(text: str) -> list[str]:
         if st is None:
             problems.append(f"{iid}: no **Status:** line")
         elif st.group(1).rstrip(".,") not in STATUSES:
-            problems.append(f"{iid}: status {st.group(1)!r} is not one of {STATUSES}"
-                            " (shipped work leaves the plan)")
+            problems.append(f"{iid}: status {st.group(1)!r} is not one of {STATUSES} (shipped work leaves the plan)")
         done = re.search(r"^\*\*Done when:\*\*\s*(.+)", body, re.M)
         if done is None or len(done.group(1).strip()) < 10:
             problems.append(f"{iid}: no **Done when:** condition")
@@ -77,8 +77,7 @@ def check_items(text: str) -> list[str]:
             if ref not in items:
                 problems.append(f"{iid}: depends on {ref}, which is not an item")
             elif items[ref][0] > phase:
-                problems.append(f"{iid} (phase {phase}) depends on {ref} "
-                                f"from a LATER phase {items[ref][0]}")
+                problems.append(f"{iid} (phase {phase}) depends on {ref} from a LATER phase {items[ref][0]}")
     return problems
 
 
@@ -95,8 +94,10 @@ def check_paths(text: str, tracked: set[str]) -> list[str]:
             if path not in tracked and path.rstrip("/") not in dirs:
                 problems.append(f"`{tok}` does not exist")
         elif path.endswith(CODE_EXT):
-            problems.append(f"`{tok}` is not repo-relative (write the path from the "
-                            "repo root, or name an outside crate without a slash)")
+            problems.append(
+                f"`{tok}` is not repo-relative (write the path from the "
+                "repo root, or name an outside crate without a slash)"
+            )
     return problems
 
 
@@ -131,13 +132,16 @@ def test_a_well_formed_plan_passes():
     assert check_items(GOOD) == []
 
 
-@pytest.mark.parametrize("bad, expect", [
-    (GOOD.replace("**Status:** OPEN", "**Status:** SHIPPED"), "not one of"),
-    (GOOD.replace("**Done when:** the census prints counts by kind\n", ""), "Done when"),
-    (GOOD.replace("**Depends on:** P1.1", "**Depends on:** P9.9"), "not an item"),
-    (GOOD.replace("#### P1.1 — first", "#### P3.1 — first").replace("P1.1", "P3.1"), "LATER phase"),
-    ("## Plan\nnothing here\n", "holds no"),
-])
+@pytest.mark.parametrize(
+    "bad, expect",
+    [
+        (GOOD.replace("**Status:** OPEN", "**Status:** SHIPPED"), "not one of"),
+        (GOOD.replace("**Done when:** the census prints counts by kind\n", ""), "Done when"),
+        (GOOD.replace("**Depends on:** P1.1", "**Depends on:** P9.9"), "not an item"),
+        (GOOD.replace("#### P1.1 — first", "#### P3.1 — first").replace("P1.1", "P3.1"), "LATER phase"),
+        ("## Plan\nnothing here\n", "holds no"),
+    ],
+)
 def test_each_rule_bites(bad, expect):
     assert any(expect in p for p in check_items(bad)), check_items(bad)
 

@@ -1,4 +1,5 @@
 """Shared helpers for the split cli_commands test modules."""
+
 from divoom_lib import cli as cli_module
 
 

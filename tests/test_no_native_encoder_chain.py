@@ -191,8 +191,7 @@ def test_the_recording_that_replaced_the_c_is_present_and_dense() -> None:
         assert relative in tracked(), f"{relative} records what the C produced and must be tracked"
         vectors = json.loads((REPO / relative).read_text())
         assert len(vectors[direction]) >= floor, (
-            f"{relative}: {direction} has {len(vectors[direction])} cases, expected "
-            f"at least {floor}"
+            f"{relative}: {direction} has {len(vectors[direction])} cases, expected at least {floor}"
         )
 
 
@@ -208,21 +207,16 @@ def test_the_image_path_no_longer_refuses_for_a_missing_encoder() -> None:
     """
     display = (REPO / "divoomd" / "src" / "device_call" / "basic" / "display.rs").read_text()
     assert "encoder not available" not in display, (
-        "display.rs refuses again for a missing encoder, but the encoder is Rust "
-        "in this binary and cannot be missing"
+        "display.rs refuses again for a missing encoder, but the encoder is Rust in this binary and cannot be missing"
     )
     daemon = (REPO / "divoomd" / "src" / "daemon.rs").read_text()
-    assert "encoder" not in daemon, (
-        "Daemon::encoder() is back: there is no library to load and no lazy init "
-        "to do"
-    )
+    assert "encoder" not in daemon, "Daemon::encoder() is back: there is no library to load and no lazy init to do"
 
 
 def test_the_exemption_list_is_still_needed() -> None:
     for path, reason in ALLOWED_ELSEWHERE.items():
         assert path in tracked(), (
-            f"{path} is exempted but is no longer tracked ({reason}); drop it "
-            "from ALLOWED_ELSEWHERE"
+            f"{path} is exempted but is no longer tracked ({reason}); drop it from ALLOWED_ELSEWHERE"
         )
 
 

@@ -13,6 +13,7 @@ can actually trigger — mid-flight disconnect, reconnect loops, connect to a
 device that isn't there, connect-while-already-connected, and device ops after
 disconnect.
 """
+
 import os
 import signal
 import subprocess
@@ -37,9 +38,7 @@ from divoom_client.daemon_protocol import DaemonClient
 # dedicated one makes the suite independent of whatever else is running, and
 # keeps the guard below meaningful: a daemon answering HERE really is a
 # leftover from a previous run of this file.
-DEFAULT_SOCKET_PATH = os.environ.get(
-    "DIVOOM_TEST_SOCKET", "/tmp/divoom_e2e_tests.sock"
-)
+DEFAULT_SOCKET_PATH = os.environ.get("DIVOOM_TEST_SOCKET", "/tmp/divoom_e2e_tests.sock")
 
 # Handle for the daemon THIS test file spawned — an int pid (disclaimed
 # posix_spawn path) or a subprocess.Popen (fallback path). Only ever
@@ -212,8 +211,7 @@ def test_connect_offline_lan_ip_errors_then_recovers():
     try:
         # An unreachable LAN IP exercises the "device is off / not there" path
         # without Bluetooth. Must fail cleanly and leave the daemon usable.
-        res = c.send_command("connect", {"lan_ip": "192.168.255.254", "lan_token": 0},
-                              read_timeout=10)
+        res = c.send_command("connect", {"lan_ip": "192.168.255.254", "lan_token": 0}, read_timeout=10)
         assert res.get("success") is False
         assert "error" in res
         # Daemon still responds and a subsequent (mock) connect works.

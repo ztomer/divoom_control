@@ -1,16 +1,19 @@
 # divoom_api/channels/time.py
 from divoom_legacy.divoom import Divoom as DivoomBase
 from divoom_lib.models import TimeDisplayType
+
 # color2HexString is a module-level helper in utils.converters, NOT a method
 # on Divoom — calling it via self._divoom_instance.color2HexString raised
 # AttributeError at runtime (R53.43).
 from divoom_lib.utils.converters import color2HexString
 from typing import Optional, Dict, Any
 
+
 class TimeChannel:
     """
     This class is used to display the Time Channel on the Divoom Timebox Evo.
     """
+
     _PACKAGE_PREFIX = "450001"
 
     def __init__(self, divoom_instance: DivoomBase, opts: Optional[Dict[str, Any]] = None):
@@ -21,7 +24,7 @@ class TimeChannel:
             "showWeather": False,
             "showTemp": False,
             "showCalendar": False,
-            "color": "FFFFFF" # Default color
+            "color": "FFFFFF",  # Default color
         }
         if opts:
             self._opts.update(opts)
@@ -38,10 +41,10 @@ class TimeChannel:
         """
         color_hex = color2HexString(self._opts["color"])
 
-        command_code = int(self._PACKAGE_PREFIX[0:2], 16) # 0x45
+        command_code = int(self._PACKAGE_PREFIX[0:2], 16)  # 0x45
         args = [
-            int(self._PACKAGE_PREFIX[2:4], 16), # 00
-            int(self._PACKAGE_PREFIX[4:6], 16), # 01
+            int(self._PACKAGE_PREFIX[2:4], 16),  # 00
+            int(self._PACKAGE_PREFIX[4:6], 16),  # 01
             self._opts["type"],
             1 if self._opts["showTime"] else 0,
             1 if self._opts["showWeather"] else 0,

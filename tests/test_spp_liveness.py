@@ -5,6 +5,7 @@ WITHOUT closing the port or setting `_close_event`, so `is_connected` kept
 returning True (the port stays `.is_open`) while no data would ever arrive again.
 `is_alive` now also requires the reader thread to be live on the serial path.
 """
+
 import logging
 import sys
 from pathlib import Path
@@ -22,6 +23,7 @@ class _FakePort:
 class _FakeThread:
     def __init__(self, alive):
         self._alive = alive
+
     def is_alive(self):
         return self._alive
 
@@ -35,8 +37,8 @@ def test_is_alive_false_when_serial_reader_died():
     t = _t()
     t._serial_port = _FakePort(is_open=True)
     t._serial_read_thread = _FakeThread(alive=False)
-    assert t.is_connected is True      # lags True — port never got closed
-    assert t.is_alive is False         # honest: the reader is dead
+    assert t.is_connected is True  # lags True — port never got closed
+    assert t.is_alive is False  # honest: the reader is dead
 
 
 def test_is_alive_true_when_serial_reader_live():
@@ -67,10 +69,11 @@ def test_serial_read_loop_logs_and_exits_on_error(caplog):
 
     class _BoomPort:
         is_open = True
+
         def read(self, _n):
             raise OSError("device unplugged")
 
     t._serial_port = _BoomPort()
     with caplog.at_level(logging.WARNING):
-        t._serial_read_loop()          # returns when the read raises
+        t._serial_read_loop()  # returns when the read raises
     assert any("serial read loop" in r.message.lower() for r in caplog.records)

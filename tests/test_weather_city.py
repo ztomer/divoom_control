@@ -11,6 +11,7 @@ merely present:
   `CityId`. Lat/lon is the one field pair both namespaces agree on;
 * it can be CLEARED, without editing a config file by hand.
 """
+
 from __future__ import annotations
 
 import configparser
@@ -26,13 +27,13 @@ def gui(tmp_path, monkeypatch):
     """A mixin instance whose config.ini is in tmp_path, not the real HOME."""
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
     # Every env override off, so tests see the saved tier rather than an env one.
-    for var in ("DIVOOM_CONTROL_WEATHER_LAT", "DIVOOM_CONTROL_WEATHER_LON",
-                "DIVOOM_CONTROL_WEATHER_LOCATION"):
+    for var in ("DIVOOM_CONTROL_WEATHER_LAT", "DIVOOM_CONTROL_WEATHER_LON", "DIVOOM_CONTROL_WEATHER_LOCATION"):
         monkeypatch.delenv(var, raising=False)
     return WeatherCityMixin()
 
 
 # ── persistence ───────────────────────────────────────────────────────────────
+
 
 def test_saving_a_city_stores_coordinates_not_the_name(gui, tmp_path):
     assert gui.set_weather_city("52.52", "13.405", "Berlin") is True
@@ -87,6 +88,7 @@ def test_saving_preserves_other_config_sections(gui, tmp_path):
 
 # ── resolution order ──────────────────────────────────────────────────────────
 
+
 def test_a_saved_city_is_used_when_no_env_override_is_set(gui):
     gui.set_weather_city("48.85", "2.35", "Paris")
     assert weather_provider.resolve_location(None) == "48.85,2.35"
@@ -122,6 +124,7 @@ def test_a_corrupt_config_falls_through_to_ip_geolocation(gui, tmp_path):
 
 
 # ── search ────────────────────────────────────────────────────────────────────
+
 
 def test_search_forwards_to_the_daemon(gui, monkeypatch):
     """R70 P2.1: the seam is the DAEMON now, not a CloudClient built here."""

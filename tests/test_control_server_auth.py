@@ -13,6 +13,7 @@ The Unix-socket variant stays tokenless, and that exemption is EARNED rather
 than assumed: it chmods the socket to 0600 explicitly instead of inheriting the
 caller's umask. Filesystem permissions are a real boundary.
 """
+
 from __future__ import annotations
 
 import os
@@ -111,8 +112,7 @@ def test_a_socket_whose_mode_cannot_be_set_is_never_listened_on(monkeypatch):
     """Fail closed (P2.1): if the chmod fails, the bound socket is closed and
     the error propagates -- it is never activated at the umask's mode."""
     activated, closed = [], []
-    monkeypatch.setattr(cs._UnixHTTPServer, "server_activate",
-                        lambda self: activated.append(True))
+    monkeypatch.setattr(cs._UnixHTTPServer, "server_activate", lambda self: activated.append(True))
     real_close = cs._UnixHTTPServer.server_close
 
     def spy_close(self):

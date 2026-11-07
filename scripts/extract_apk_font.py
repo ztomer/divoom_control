@@ -25,21 +25,19 @@ Usage::
     python3 scripts/extract_apk_font.py            # default font
     python3 scripts/extract_apk_font.py <src.bin> <dst.bin>
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-DEFAULT_SRC = (
-    REPO / "references" / "apk" / "decompiled_src" / "resources" / "assets"
-    / "divoom_fond16_default.bin"
-)
+DEFAULT_SRC = REPO / "references" / "apk" / "decompiled_src" / "resources" / "assets" / "divoom_fond16_default.bin"
 DEFAULT_DST = REPO / "divoom_lib" / "fonts" / "divoom_fond16_default_ascii.bin"
 
-GLYPH_BYTES = 32          # 16x16 @ 1bpp
-FIRST_CP = 0x20           # space (blank)
-LAST_CP = 0x7E            # '~'
+GLYPH_BYTES = 32  # 16x16 @ 1bpp
+FIRST_CP = 0x20  # space (blank)
+LAST_CP = 0x7E  # '~'
 
 
 def _decode_apk_glyph(blob: bytes, cp: int) -> list[list[int]]:
@@ -48,10 +46,7 @@ def _decode_apk_glyph(blob: bytes, cp: int) -> list[list[int]]:
     g = blob[idx * GLYPH_BYTES : idx * GLYPH_BYTES + GLYPH_BYTES]
     # 2 bytes/row, little-endian 16-bit, MSB = leftmost — the *stored* (rotated)
     # orientation.
-    raw = [
-        [((g[r * 2] | (g[r * 2 + 1] << 8)) >> (15 - x)) & 1 for x in range(16)]
-        for r in range(16)
-    ]
+    raw = [[((g[r * 2] | (g[r * 2 + 1] << 8)) >> (15 - x)) & 1 for x in range(16)] for r in range(16)]
     # 270deg-CW transform -> upright glyph.
     return [[raw[c][15 - r] for c in range(16)] for r in range(16)]
 
@@ -97,7 +92,7 @@ def _pack_upright(mat: list[list[int]]) -> bytes:
         for x in range(16):
             if row[x]:
                 val |= 1 << (15 - x)
-        out.append((val >> 8) & 0xFF)   # high byte first (MSB-left, big-endian row)
+        out.append((val >> 8) & 0xFF)  # high byte first (MSB-left, big-endian row)
         out.append(val & 0xFF)
     return bytes(out)
 

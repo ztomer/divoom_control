@@ -1,5 +1,6 @@
 """ScannerMixin connect/lan-token/device-name coverage (split from
 test_scanner_mixin.py)."""
+
 import configparser
 import json
 import pytest
@@ -8,6 +9,7 @@ from tests.support.scanner_support import CACHE_REL, CONFIG_REL, host  # noqa: F
 
 
 # ── connect_single_device ──────────────────────────────────────────────────
+
 
 def test_connect_single_device_matrix_wall(host, tmp_path):
     assert host.connect_single_device("MatrixWall") is True
@@ -24,6 +26,7 @@ def test_connect_single_device_no_daemon(host, monkeypatch):
 
 def test_connect_single_device_lan_success(host, monkeypatch, tmp_path):
     from unittest.mock import MagicMock
+
     monkeypatch.setattr(host, "reconnect_daemon", lambda: None)
     client = MagicMock()
     client.connect_device.return_value = {"success": True, "connected": True}
@@ -43,6 +46,7 @@ def test_connect_single_device_lan_success(host, monkeypatch, tmp_path):
 
 def test_connect_single_device_ble_fail_reply_sets_last_error(host, monkeypatch):
     from unittest.mock import MagicMock
+
     monkeypatch.setattr(host, "reconnect_daemon", lambda: None)
     client = MagicMock()
     client.connect_device.return_value = {"success": False, "message": "asleep"}
@@ -55,6 +59,7 @@ def test_connect_single_device_ble_fail_reply_sets_last_error(host, monkeypatch)
 
 def test_connect_single_device_reports_success_but_not_connected(host, monkeypatch):
     from unittest.mock import MagicMock
+
     monkeypatch.setattr(host, "reconnect_daemon", lambda: None)
     client = MagicMock()
     client.connect_device.return_value = {"success": True, "connected": True}
@@ -81,19 +86,20 @@ def test_connect_single_device_exception_sets_last_error(host, monkeypatch):
 
 # ── _lan_token_for ──────────────────────────────────────────────────────────
 
+
 def test_lan_token_for_no_presets_file(host):
     assert host._lan_token_for("192.168.1.50") == 0
 
 
 def test_lan_token_for_match_found(host):
-    host._presets_file.write_text(json.dumps(
-        {"lan_devices": [{"ip": "192.168.1.50", "token": 4242}]}), encoding="utf-8")
+    host._presets_file.write_text(
+        json.dumps({"lan_devices": [{"ip": "192.168.1.50", "token": 4242}]}), encoding="utf-8"
+    )
     assert host._lan_token_for("192.168.1.50") == 4242
 
 
 def test_lan_token_for_no_match_returns_zero(host):
-    host._presets_file.write_text(json.dumps(
-        {"lan_devices": [{"ip": "10.0.0.1", "token": 1}]}), encoding="utf-8")
+    host._presets_file.write_text(json.dumps({"lan_devices": [{"ip": "10.0.0.1", "token": 1}]}), encoding="utf-8")
     assert host._lan_token_for("192.168.1.50") == 0
 
 
@@ -104,11 +110,11 @@ def test_lan_token_for_malformed_json_returns_zero(host):
 
 # ── _device_name_for ─────────────────────────────────────────────────────
 
+
 def test_device_name_for_found_in_discovered_list(host):
     # A non-matching entry first, so the loop's false-branch (continue to next
     # item) fires before the matching entry is found.
-    host.discovered_list = [{"address": "ZZ:ZZ", "name": "Other"},
-                            {"address": "AA:BB", "name": "Pixoo-Live"}]
+    host.discovered_list = [{"address": "ZZ:ZZ", "name": "Other"}, {"address": "AA:BB", "name": "Pixoo-Live"}]
     assert host._device_name_for("AA:BB") == "Pixoo-Live"
 
 
@@ -117,10 +123,15 @@ def test_device_name_for_found_in_cache_file(host, tmp_path):
     cache_file.parent.mkdir(parents=True, exist_ok=True)
     # Same shape: a non-matching entry before the match, exercising the
     # cache-file loop's continue branch too.
-    cache_file.write_text(json.dumps([
-        {"address": "ZZ:ZZ", "name": "Other"},
-        {"address": "AA:BB", "name": "Pixoo-Cached"},
-    ]), encoding="utf-8")
+    cache_file.write_text(
+        json.dumps(
+            [
+                {"address": "ZZ:ZZ", "name": "Other"},
+                {"address": "AA:BB", "name": "Pixoo-Cached"},
+            ]
+        ),
+        encoding="utf-8",
+    )
     assert host._device_name_for("AA:BB") == "Pixoo-Cached"
 
 
@@ -140,8 +151,7 @@ def test_device_name_for_cache_loop_exhausts_without_match(host, tmp_path):
     the trailing `return None` — distinct from the malformed-JSON except path."""
     cache_file = tmp_path / CACHE_REL
     cache_file.parent.mkdir(parents=True, exist_ok=True)
-    cache_file.write_text(json.dumps([{"address": "XX:XX", "name": "Other"}]),
-                          encoding="utf-8")
+    cache_file.write_text(json.dumps([{"address": "XX:XX", "name": "Other"}]), encoding="utf-8")
     assert host._device_name_for("AA:BB") is None
 
 
@@ -154,6 +164,7 @@ def test_select_device_tells_the_daemon_and_binds_nothing(host):
     placeholder is not sent, or it would overwrite a choice made elsewhere on
     every GUI start."""
     from unittest.mock import MagicMock
+
     client = MagicMock()
     host._daemon_client = client
     assert host.select_device("e9a41e1e-ditoo") is True

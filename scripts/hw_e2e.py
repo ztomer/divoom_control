@@ -22,6 +22,7 @@ Usage:
     hw_e2e.py --scenario all --device Pixoo-1
     hw_e2e.py --preflight                 # just the environment assertions
 """
+
 from __future__ import annotations
 
 import argparse
@@ -123,10 +124,10 @@ class Daemon:
             raise DaemonError(f"{command}: empty reply")
         return json.loads(buf.decode())
 
-    def device_call(self, method: str, args: list | None = None,
-                    kwargs: dict | None = None, timeout: float | None = None) -> dict:
-        return self.call("device_call", timeout=timeout, method=method,
-                         args=args or [], kwargs=kwargs or {})
+    def device_call(
+        self, method: str, args: list | None = None, kwargs: dict | None = None, timeout: float | None = None
+    ) -> dict:
+        return self.call("device_call", timeout=timeout, method=method, args=args or [], kwargs=kwargs or {})
 
 
 # ── environment assertions ────────────────────────────────────────────────
@@ -188,6 +189,7 @@ def ensure_connected(d: Daemon, dev: dict) -> bool:
 # Each returns True on success. Each is DESTRUCTIVE to what is on screen and
 # restores a neutral state at the end, so a failure mid-run is still tidy.
 
+
 def scenario_ambient(d: Daemon, dwell: float, trace: TxTrace) -> bool:
     """Every ambient mode must reach the device as a DISTINCT 0x45 payload.
 
@@ -225,8 +227,7 @@ def scenario_ambient(d: Daemon, dwell: float, trace: TxTrace) -> bool:
     hr()
     distinct = set(sent.values())
     if len(sent) > 1 and len(distinct) == 1:
-        err(f"all {len(sent)} modes sent the SAME payload {distinct.pop()}"
-            " — the mode byte is being dropped")
+        err(f"all {len(sent)} modes sent the SAME payload {distinct.pop()} — the mode byte is being dropped")
         return False
     if len(distinct) != len(sent):
         err(f"{len(sent)} modes produced only {len(distinct)} distinct payloads")
@@ -262,8 +263,7 @@ def scenario_clock(d: Daemon, dwell: float, trace: TxTrace) -> bool:
     ]
     for kwargs, label, hot_byte in cases:
         trace.mark()
-        reply = d.device_call("display.show_clock",
-                              kwargs={"clock": 0, "color": "#FFFFFF", **kwargs})
+        reply = d.device_call("display.show_clock", kwargs={"clock": 0, "color": "#FFFFFF", **kwargs})
         if not reply.get("success"):
             err(f"{label}: {reply.get('error')}")
             passed = False
@@ -404,16 +404,12 @@ SCENARIOS = {
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--socket", default=DEFAULT_SOCKET)
-    ap.add_argument("--trace", default=DEFAULT_TRACE,
-                    help="daemon DIVOOMD_BLE_DEBUG log to assert wire bytes against")
+    ap.add_argument("--trace", default=DEFAULT_TRACE, help="daemon DIVOOMD_BLE_DEBUG log to assert wire bytes against")
     ap.add_argument("--device", default=None, help="substring of the device name")
-    ap.add_argument("--scenario", default="all",
-                    help="one of: " + ", ".join(SCENARIOS) + ", or 'all'")
-    ap.add_argument("--dwell", type=float, default=3.0,
-                    help="seconds to hold each visual state so it can be seen")
+    ap.add_argument("--scenario", default="all", help="one of: " + ", ".join(SCENARIOS) + ", or 'all'")
+    ap.add_argument("--dwell", type=float, default=3.0, help="seconds to hold each visual state so it can be seen")
     ap.add_argument("--iterations", type=int, default=5, help="reconnect soak cycles")
     ap.add_argument("--list", action="store_true", help="discover devices and exit")
     ap.add_argument("--preflight", action="store_true", help="environment checks only")

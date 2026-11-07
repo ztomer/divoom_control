@@ -25,6 +25,7 @@ Game IDs (per futpib, 1-indexed):
 
 Reference: https://github.com/d03n3rfr1tz3/hass-divoom
 """
+
 import time
 import asyncio
 from divoom_lib import models as constants
@@ -67,6 +68,7 @@ class Game:
 
         asyncio.run(main())
     """
+
     def __init__(self, communicator: CommandSender):
         self.communicator = communicator
         self.logger = communicator.logger
@@ -132,9 +134,7 @@ class Game:
             key: 1=left, 2=right, 3=up, 4=down, 5=ok.
         """
         self.logger.info(f"Game key down {key} (0x17)...")
-        return await self.communicator.send_command(
-            constants.COMMANDS["set game ctrl info"], [key & 0xFF]
-        )
+        return await self.communicator.send_command(constants.COMMANDS["set game ctrl info"], [key & 0xFF])
 
     async def set_key_up(self, key: int) -> bool:
         """
@@ -144,9 +144,7 @@ class Game:
             key: 1=left, 2=right, 3=up, 4=down, 5=ok.
         """
         self.logger.info(f"Game key up {key} (0x21)...")
-        return await self.communicator.send_command(
-            constants.COMMANDS["set game ctrl key up info"], [key & 0xFF]
-        )
+        return await self.communicator.send_command(constants.COMMANDS["set game ctrl key up info"], [key & 0xFF])
 
     async def set_magic_ball_answer(self, answer: int) -> bool:
         """
@@ -156,9 +154,7 @@ class Game:
             answer: 0-19 (per Divoom firmware; answers are device-defined).
         """
         self.logger.info(f"Magic ball answer={answer} (0x88)...")
-        return await self.communicator.send_command(
-            constants.COMMANDS["send game shark"], [answer & 0xFF]
-        )
+        return await self.communicator.send_command(constants.COMMANDS["send game shark"], [answer & 0xFF])
 
     async def exit_game(self) -> bool:
         """

@@ -1,4 +1,5 @@
 """Shared helpers for the split hot-update test modules."""
+
 import pytest
 
 from divoom_legacy.tools.hot_update import HotFile, clear_hot_manifest_cache

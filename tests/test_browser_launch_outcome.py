@@ -3,6 +3,7 @@
 The stale-LaunchServices text below is the failure pre-push hit on 2026-11-02
 (camoufox at a recycled pid, exit 1 after 130 ms), verbatim but for the paths.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -33,8 +34,9 @@ Call log:
 #: The same exit, but the browser said why: that is not the LaunchServices case.
 SPOKE = STALE_LS.replace(
     "[pid=41929][err] *** You are running in headless mode.\n",
-    "[pid=41929][err] *** You are running in headless mode.\n"
-    "[pid=41929][err] Error: profile is locked\n", 1)
+    "[pid=41929][err] *** You are running in headless mode.\n[pid=41929][err] Error: profile is locked\n",
+    1,
+)
 CRASHED = STALE_LS.replace("exitCode=1, signal=null", "exitCode=null, signal=SIGSEGV")
 TIMEOUT = "BrowserType.launch: Timeout 180000ms exceeded."
 
@@ -65,6 +67,7 @@ class _Starts:
 def _async(start):
     async def go():
         return start()
+
     return go
 
 
@@ -72,8 +75,7 @@ def _async(start):
 def test_one_relaunch_on_the_external_cause_and_it_is_recorded(mode):
     start = _Starts(STALE_LS)
     with pytest.warns(bl.BrowserRelaunched, match=bl.STALE_LS_PID):
-        got = (asyncio.run(bl.launch_async(_async(start))) if mode == "async"
-               else bl.launch_blocking(start))
+        got = asyncio.run(bl.launch_async(_async(start))) if mode == "async" else bl.launch_blocking(start)
     assert (got, start.calls) == ("browser", 2)
 
 

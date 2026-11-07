@@ -33,6 +33,7 @@ which needs no mock transport.
 Skipped if Playwright / a browser isn't installed, or no divoomd binary is
 built (`cargo build` in divoomd/ first).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -121,9 +122,11 @@ class _EventRelay:
         fut = asyncio.run_coroutine_threadsafe(
             eval_js(
                 self._page,
-                "(ev) => { if (window.Divoom && window.Divoom.onDaemonEvent) "
-                "window.Divoom.onDaemonEvent(ev); }", ev),
-            self._loop)
+                "(ev) => { if (window.Divoom && window.Divoom.onDaemonEvent) window.Divoom.onDaemonEvent(ev); }",
+                ev,
+            ),
+            self._loop,
+        )
         try:
             fut.result(timeout=2.0)
         except Exception:
@@ -147,7 +150,8 @@ def gui_daemon_stack():
     if os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS"):
         pytest.skip(
             "real-DivoomGuiAPI bridge needs a macOS GUI (Aqua) session; "
-            "pywebview import hangs on headless CI. Runs locally.")
+            "pywebview import hangs on headless CI. Runs locally."
+        )
     bin_path = _find_rust_binary()
     if bin_path is None:
         pytest.skip("Rust divoomd binary not found. Run `cargo build` in divoomd/ first.")
@@ -161,8 +165,7 @@ def gui_daemon_stack():
 async def _open(p, stack):
     browser = await launch_browser(p)
     page = await browser.new_page()
-    await add_init_js(page, 
-        f"window.__BRIDGE_URL__ = {json.dumps(stack.bridge_url)};\n" + _REAL_BRIDGE_API)
+    await add_init_js(page, f"window.__BRIDGE_URL__ = {json.dumps(stack.bridge_url)};\n" + _REAL_BRIDGE_API)
     # Before goto: the recorder has to predate the app's own assignment of
     # window.showToast, or it misses toasts.
     await install_toast_recorder(page)
@@ -173,8 +176,7 @@ async def _open(p, stack):
 
 
 async def _dot_class(page) -> str:
-    return await eval_js(page, 
-        "() => document.getElementById('global-status-dot').className")
+    return await eval_js(page, "() => document.getElementById('global-status-dot').className")
 
 
 @pytest.mark.asyncio
@@ -192,15 +194,14 @@ async def test_real_connect_then_refresh_shows_active_dot(gui_daemon_stack):
         try:
             await eval_js(page, "() => { window.DivoomState.appConnected = true; }")
             await eval_js(page, "() => window.refreshConnectionState()")
-            await wait_js(page, 
+            await wait_js(
+                page,
                 "() => document.getElementById('global-status-dot')"
-                ".className === 'transport-mark mark-ble mark-linked'")
-            assert (await _dot_class(page)).split() == [
-                "transport-mark", "mark-ble", "mark-linked"]
+                ".className === 'transport-mark mark-ble mark-linked'",
+            )
+            assert (await _dot_class(page)).split() == ["transport-mark", "mark-ble", "mark-linked"]
 
-            state = await eval_js(page, 
-                "() => window.pywebview.api.get_connection_state()"
-                ".then(r => JSON.parse(r))")
+            state = await eval_js(page, "() => window.pywebview.api.get_connection_state().then(r => JSON.parse(r))")
             # The fields this test is ABOUT, not the whole response shape. The
             # state legitimately grew a `selected` key (the daemon reports which
             # panel is active -- tests/test_device_status.py asserts the
@@ -210,9 +211,7 @@ async def test_real_connect_then_refresh_shows_active_dot(gui_daemon_stack):
             # the test to every field the daemon will ever add.
             assert state["connected"] is True, state
             assert state["state"] == "connected", state
-            assert state["selected"] == "MOCK_MAC", (
-                "the device just connected must be the selected one", state
-            )
+            assert state["selected"] == "MOCK_MAC", ("the device just connected must be the selected one", state)
         finally:
             await browser.close()
 
@@ -269,16 +268,16 @@ async def test_real_drop_then_refresh_shows_inactive_dot(gui_daemon_stack):
             # flag, and the assertion below races. Same class as the
             # LAN-failure test above; it surfaced when R66 moved these suites
             # to camoufox/Firefox, where the ordering differs from Chromium.
-            await wait_js(page, 
-                "() => window.DivoomState.appConnected === false")
-            await wait_js(page, 
-                "() => document.getElementById('global-status-dot')"
-                ".className === 'transport-mark mark-ble mark-open'")
-            assert await eval_js(page,
-                "() => document.getElementById('global-status-dot')"
-                ".getAttribute('aria-label')") == "Connection status: disconnected"
-            assert await eval_js(page, 
-                "() => window.DivoomState.appConnected") is False
+            await wait_js(page, "() => window.DivoomState.appConnected === false")
+            await wait_js(
+                page,
+                "() => document.getElementById('global-status-dot').className === 'transport-mark mark-ble mark-open'",
+            )
+            assert (
+                await eval_js(page, "() => document.getElementById('global-status-dot').getAttribute('aria-label')")
+                == "Connection status: disconnected"
+            )
+            assert await eval_js(page, "() => window.DivoomState.appConnected") is False
         finally:
             await browser.close()
 
@@ -305,9 +304,10 @@ async def test_real_event_relay_degraded_then_disconnected(gui_daemon_stack):
 
             _simulate_drop_or_skip(stack)
 
-            await wait_js(page, 
-                "() => document.getElementById('global-status-dot')"
-                ".className === 'transport-mark mark-ble mark-open'")
+            await wait_js(
+                page,
+                "() => document.getElementById('global-status-dot').className === 'transport-mark mark-ble mark-open'",
+            )
 
             # Wait on the channel this test actually asserts about.
             #
@@ -340,11 +340,14 @@ async def test_real_connect_single_device_failure_unreachable_lan(gui_daemon_sta
     async with async_playwright() as p:
         browser, page = await _open(p, stack)
         try:
-            await eval_js(page, """() => {
+            await eval_js(
+                page,
+                """() => {
                 window.DivoomState.discoveredDevices = [{address: 'LAN:127.0.0.1', name: 'Unreachable'}];
                 window.renderDeviceDots && window.renderDeviceDots();
                 window.connectDevice('Unreachable', 'LAN:127.0.0.1');
-            }""")
+            }""",
+            )
             # Wait for the CONDITION BEING ASSERTED (the error toast), not a
             # proxy for it. This used to wait on the status dot flipping to
             # inactive and then read the toast, assuming the error toast had
@@ -368,8 +371,9 @@ async def test_real_connect_single_device_failure_unreachable_lan(gui_daemon_sta
             # P7.2: the SHAPE is the transport, and the target that failed to
             # connect is a Wi-Fi screen, so the mark is the square -- hollow,
             # because there is no link.
-            await wait_js(page,
-                "() => document.getElementById('global-status-dot')"
-                ".className === 'transport-mark mark-lan mark-open'")
+            await wait_js(
+                page,
+                "() => document.getElementById('global-status-dot').className === 'transport-mark mark-lan mark-open'",
+            )
         finally:
             await browser.close()

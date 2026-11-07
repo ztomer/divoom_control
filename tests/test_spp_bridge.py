@@ -21,6 +21,7 @@ justified `# pragma: no cover`, matching the gui_main.py/audio_visualizer.py
 precedent (see `git show 11d5beb -- divoom_gui/gui_main.py`) rather than a
 blanket file exclusion.
 """
+
 import asyncio
 import json
 import sys
@@ -35,9 +36,11 @@ from divoom_client import spp_bridge
 
 # ── Fakes ───────────────────────────────────────────────────────────────────
 
+
 class FakeStdinReader:
     """Stands in for asyncio.StreamReader: readline() replays a scripted list
     of byte-lines, then signals EOF with b"" (matching real StreamReader)."""
+
     _source_traceback = None
 
     def __init__(self, lines):
@@ -53,6 +56,7 @@ class DummyLoop:
     """Stands in for the real event loop: connect_read_pipe would normally
     bind a real OS pipe to the protocol; here we just no-op so the already
     (monkeypatched) FakeStdinReader is used instead."""
+
     async def connect_read_pipe(self, protocol_factory, pipe):
         protocol_factory()
         return None, None
@@ -91,14 +95,17 @@ def _line(obj):
 def patch_stdin(monkeypatch):
     """Wire spp_bridge.read_stdin_loop's asyncio.StreamReader()/get_event_loop()
     calls to our fakes, scripted with `lines` (list of dicts or raw bytes)."""
+
     def _apply(lines):
         encoded = [l if isinstance(l, (bytes, bytearray)) else _line(l) for l in lines]
         monkeypatch.setattr(spp_bridge.asyncio, "StreamReader", lambda: FakeStdinReader(encoded))
         monkeypatch.setattr(spp_bridge.asyncio, "get_event_loop", lambda: DummyLoop())
+
     return _apply
 
 
 # ── read_stdin_loop ──────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_write_command_writes_the_frames_bytes_verbatim(patch_stdin):
@@ -138,10 +145,7 @@ async def test_the_old_payload_form_is_refused_by_name(patch_stdin, capsys):
     assert transport.sent == []
     out = capsys.readouterr().out
     errors = [json.loads(l) for l in out.strip().splitlines() if l.strip()]
-    assert any(
-        e.get("type") == "error" and "older than the daemon" in e.get("error", "")
-        for e in errors
-    ), errors
+    assert any(e.get("type") == "error" and "older than the daemon" in e.get("error", "") for e in errors), errors
 
 
 @pytest.mark.asyncio
@@ -154,19 +158,19 @@ async def test_a_write_without_a_frame_is_refused(patch_stdin, capsys):
     assert transport.sent == []
     out = capsys.readouterr().out
     errors = [json.loads(l) for l in out.strip().splitlines() if l.strip()]
-    assert any(
-        e.get("type") == "error" and "frame" in e.get("error", "") for e in errors
-    ), errors
+    assert any(e.get("type") == "error" and "frame" in e.get("error", "") for e in errors), errors
 
 
 @pytest.mark.asyncio
 async def test_disconnect_command_breaks_loop_without_sending(patch_stdin):
     transport = FakeTransport()
     # A write AFTER disconnect must never be reached.
-    patch_stdin([
-        {"command": "disconnect"},
-        {"command": "write", "frame": "01030046490002"},
-    ])
+    patch_stdin(
+        [
+            {"command": "disconnect"},
+            {"command": "write", "frame": "01030046490002"},
+        ]
+    )
 
     await spp_bridge.read_stdin_loop(transport)
 
@@ -176,10 +180,12 @@ async def test_disconnect_command_breaks_loop_without_sending(patch_stdin):
 @pytest.mark.asyncio
 async def test_unknown_command_is_ignored_and_loop_continues(patch_stdin):
     transport = FakeTransport()
-    patch_stdin([
-        {"command": "ping"},
-        {"command": "write", "frame": "01030046490002"},
-    ])
+    patch_stdin(
+        [
+            {"command": "ping"},
+            {"command": "write", "frame": "01030046490002"},
+        ]
+    )
 
     await spp_bridge.read_stdin_loop(transport)
 
@@ -189,10 +195,12 @@ async def test_unknown_command_is_ignored_and_loop_continues(patch_stdin):
 @pytest.mark.asyncio
 async def test_malformed_json_line_reports_error_and_continues(patch_stdin, capsys):
     transport = FakeTransport()
-    patch_stdin([
-        b"not json at all\n",
-        {"command": "write", "frame": "01030046490002"},
-    ])
+    patch_stdin(
+        [
+            b"not json at all\n",
+            {"command": "write", "frame": "01030046490002"},
+        ]
+    )
 
     await spp_bridge.read_stdin_loop(transport)
 
@@ -235,6 +243,7 @@ async def test_empty_line_eof_ends_loop_immediately(patch_stdin):
 
 # ── read_notifications_loop ─────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_notification_loop_prints_and_marks_done(capsys):
     transport = FakeTransport()
@@ -276,6 +285,7 @@ async def test_notification_loop_exits_on_first_exception(capsys):
 
 
 # ── main() ───────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_main_connects_prints_connected_and_runs_loops(monkeypatch, capsys):

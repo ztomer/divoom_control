@@ -10,13 +10,14 @@ Launches the custom frameless PyWebView window.
 # UnicodeDecodeError on the non-ASCII Kare glyphs. Apply a UTF-8 locale FIRST,
 # before any other import does locale-sensitive I/O. (No-op when already UTF-8.)
 import locale as _locale
+
 for _loc in ("en_US.UTF-8", "C.UTF-8"):
     try:
         _locale.setlocale(_locale.LC_ALL, _loc)
         break
     except Exception:  # pragma: no cover - runs at import, before any fixture;
-        pass            # exercised by a subprocess in test_gui_main_bootstrap.py
-                         # (coverage can't attribute a child process's lines here)
+        pass  # exercised by a subprocess in test_gui_main_bootstrap.py
+        # (coverage can't attribute a child process's lines here)
 
 import os
 import sys
@@ -37,7 +38,7 @@ from divoom_lib import divoom_auth
 # loaded into the one process that must never own the radio, and its macOS TCC
 # surface with it. The GUI reaches devices through DaemonDeviceProxy.
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("divoom_gui")
 
 
@@ -76,8 +77,9 @@ def _pywebview_1820_bug_present() -> bool:
     try:
         import inspect
         from webview.platforms.cocoa import BrowserView
+
         src = inspect.getsource(BrowserView.move)
-    except (ImportError, OSError, TypeError):
+    except ImportError, OSError, TypeError:
         return False
 
     return "self.screen.origin.x + x" in src
@@ -93,8 +95,7 @@ def _resolve_web_ui() -> Path:
     mei = getattr(sys, "_MEIPASS", None)
     if mei:
         m = Path(mei)
-        cands += [m / "divoom_gui" / "web_ui", m / "web_ui",
-                  m.parent / "Resources" / "divoom_gui" / "web_ui"]
+        cands += [m / "divoom_gui" / "web_ui", m / "web_ui", m.parent / "Resources" / "divoom_gui" / "web_ui"]
     for c in cands:
         if (c / "index.html").exists():
             return c
@@ -109,8 +110,7 @@ def _resolve_bundled_binary(name: str) -> "str | None":
         return override
     mei = getattr(sys, "_MEIPASS", None)
     if mei:
-        for c in (Path(mei) / "bin" / name, Path(mei) / name,
-                  Path(mei).parent / "Resources" / "bin" / name):
+        for c in (Path(mei) / "bin" / name, Path(mei) / name, Path(mei).parent / "Resources" / "bin" / name):
             if c.exists():
                 return str(c)
     rp = os.environ.get("RESOURCEPATH")
@@ -142,6 +142,7 @@ from divoom_gui.menubar_agent import (  # noqa: E402
 
 def main():
     import argparse
+
     parser = argparse.ArgumentParser(description="Divoom Control Center")
     # R15 §6: the menubar "Open Notifications..." item launches with these so the
     # GUI opens straight to a given tab/card.
@@ -162,6 +163,7 @@ def main():
     if os.environ.get("DIVOOM_CONTROL_SERVER") in ("1", "true", "yes"):
         try:
             from control_server import serve_in_background
+
             port = int(os.environ.get("DIVOOM_CONTROL_PORT", "8787"))
             serve_in_background(api, port=port)
             logger.info(f"Control server enabled on http://127.0.0.1:{port}")
@@ -173,6 +175,7 @@ def main():
     if sock_path:
         try:
             from control_server import serve_unix_in_background
+
             serve_unix_in_background(api, sock_path)
             logger.info(f"Control server enabled on unix:{sock_path}")
         except Exception as e:
@@ -201,11 +204,10 @@ def main():
             import AppKit
 
             if _pywebview_1820_bug_present():
+
                 def _patched_move(self, x, y):
                     flipped_y = self.screen.size.height - y
-                    self.window.setFrameTopLeftPoint_(
-                        AppKit.NSPoint(x, self.screen.origin.y + flipped_y)
-                    )
+                    self.window.setFrameTopLeftPoint_(AppKit.NSPoint(x, self.screen.origin.y + flipped_y))
 
                 BrowserView.move = _patched_move
                 logger.info("Applied pywebview #1820 multi-monitor drag patch")
@@ -216,6 +218,7 @@ def main():
 
     import time
     from urllib.parse import urlencode
+
     query = {"t": int(time.time())}
     if cli_args.tab:
         query["tab"] = cli_args.tab
@@ -226,7 +229,7 @@ def main():
         title="Divoom Control Center",
         url=url_str,
         js_api=api,
-        width=1080,   # R24 #8: fits 3 columns in Monthly Best
+        width=1080,  # R24 #8: fits 3 columns in Monthly Best
         height=768,
         resizable=True,
         frameless=True,  # Integrated custom Appbar
@@ -245,6 +248,7 @@ def main():
     if sys.platform == "darwin":
         try:
             from divoom_gui.daemon_bridge import ensure_daemon
+
             # The daemon runs the scheduled monthly-best push only when the
             # process that owns the schedule says it may. The app owns it (the
             # Routines card's Auto-Sync), so the app says so; a daemon spawned
@@ -263,8 +267,9 @@ def main():
             if api._daemon_client is not None:
                 logger.info("Eagerly spawned daemon (TCC-disclaimed) before GUI host.")
             else:
-                logger.warning("Eager daemon spawn did not become ready; "
-                               "UI will auto-reconnect / offer a Reconnect banner.")
+                logger.warning(
+                    "Eager daemon spawn did not become ready; UI will auto-reconnect / offer a Reconnect banner."
+                )
         except Exception as e:
             logger.warning(f"eager daemon spawn failed: {e}")
     _spawn_menubar_agent(_resolve_bundled_binary)
@@ -273,6 +278,7 @@ def main():
     # prompt was otherwise raised invisibly by the headless daemon.
     try:
         from divoom_gui.permissions import prime_permissions
+
         prime_permissions()
     except Exception as e:
         logger.debug(f"permission priming skipped: {e}")
@@ -292,11 +298,16 @@ def main():
         _shutdown_sent.set()
         try:
             from divoom_lib.lifecycle_config import (
-                get_keep_daemon_alive, get_quit_menubar_on_exit,
-                should_stop_daemon_on_dashboard_quit, should_quit_menubar_on_exit)
+                get_keep_daemon_alive,
+                get_quit_menubar_on_exit,
+                should_stop_daemon_on_dashboard_quit,
+                should_quit_menubar_on_exit,
+            )
+
             keep_alive = get_keep_daemon_alive()
             if should_stop_daemon_on_dashboard_quit(keep_alive):
                 from divoom_client.daemon_protocol import DaemonClient, DEFAULT_SOCKET_PATH
+
                 logger.info(f"{reason}; stopping daemon (shared lifecycle).")
                 DaemonClient(DEFAULT_SOCKET_PATH, timeout=1.0).shutdown()
                 # The daemon is on its way out: its identity goes with it, so
@@ -352,8 +363,7 @@ def _make_daemon_event_handler(window):
         etype = ev.get("type")
         if etype == EVENT_SHUTDOWN:
             try:
-                from divoom_lib.lifecycle_config import (
-                    get_keep_daemon_alive, should_follow_daemon_shutdown)
+                from divoom_lib.lifecycle_config import get_keep_daemon_alive, should_follow_daemon_shutdown
             except Exception:
                 return
             if should_follow_daemon_shutdown(get_keep_daemon_alive()):
@@ -366,8 +376,16 @@ def _make_daemon_event_handler(window):
         # status + notification + owned_devices + notif_status + hot_progress →
         # web UI, for immediate honest rendering (R59/event-driven; replaces the
         # 4s polling heartbeats). Each maps to window.Divoom.on<Event>.
-        if etype in ("status", "notification", "owned_devices",
-                     "notif_status", "hot_progress", "hot_status", "activity", "selection"):
+        if etype in (
+            "status",
+            "notification",
+            "owned_devices",
+            "notif_status",
+            "hot_progress",
+            "hot_status",
+            "activity",
+            "selection",
+        ):
             handler = {
                 "status": "onDaemonEvent",
                 "notification": "onDaemonEvent",
@@ -380,11 +398,10 @@ def _make_daemon_event_handler(window):
             }.get(etype)
             try:
                 payload = _json.dumps(ev, separators=(",", ":"))
-                window.evaluate_js(
-                    f"if(window.Divoom&&window.Divoom.{handler}){{"
-                    f"window.Divoom.{handler}({payload});}}")
+                window.evaluate_js(f"if(window.Divoom&&window.Divoom.{handler}){{window.Divoom.{handler}({payload});}}")
             except Exception:
                 pass
+
     return on_event
 
 
@@ -402,21 +419,21 @@ def _start_shutdown_follower(window) -> None:
 
     def _run():
         from divoom_client.daemon_protocol import DaemonClient, DEFAULT_SOCKET_PATH
+
         while True:
             try:
                 # Named, so a follower that reconnects after its stream died
                 # takes its own slot back (P2.4). The GUI is single-instance
                 # (single_instance.py), so one live process holds this name.
                 DaemonClient(DEFAULT_SOCKET_PATH, timeout=2.0).subscribe(
-                    _make_daemon_event_handler(window), client_id=GUI_CLIENT_ID)
+                    _make_daemon_event_handler(window), client_id=GUI_CLIENT_ID
+                )
             except Exception as e:
                 logger.debug(f"daemon event follower stopped: {e}")
             finally:
                 # subscribe returned → daemon is down (socket closed). Tell the UI.
                 try:
-                    window.evaluate_js(
-                        "if(window.Divoom&&window.Divoom.onDaemonDown){"
-                        "window.Divoom.onDaemonDown();}")
+                    window.evaluate_js("if(window.Divoom&&window.Divoom.onDaemonDown){window.Divoom.onDaemonDown();}")
                 except Exception:
                     pass
             # back off, then resubscribe (self-heal on daemon restart)
@@ -434,6 +451,7 @@ def _forget_daemon_identity() -> None:
     """
     try:
         from divoom_client import helper_identity
+
         helper_identity.forget(helper_identity.DAEMON)
     except Exception as e:
         logger.debug(f"daemon identity not cleared: {e}")

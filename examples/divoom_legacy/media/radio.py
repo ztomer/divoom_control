@@ -1,8 +1,6 @@
-
 from divoom_legacy.sender_protocol import CommandSender
-from divoom_lib.models import (
-    COMMANDS
-)
+from divoom_lib.models import COMMANDS
+
 
 class Radio:
     """
@@ -16,7 +14,7 @@ class Radio:
         async def main():
             device_address = "XX:XX:XX:XX:XX:XX"  # Replace with your device's address
             divoom = Divoom(mac=device_address)
-            
+
             try:
                 await divoom.connect()
                 await divoom.radio.set_radio_frequency(875) # 87.5 MHz
@@ -27,6 +25,7 @@ class Radio:
         if __name__ == "__main__":
             asyncio.run(main())
     """
+
     def __init__(self, divoom: CommandSender):
         """
         Initializes the Radio controller.
@@ -46,12 +45,12 @@ class Radio:
 
         Returns:
             bool: True if the command was sent successfully, False otherwise.
-        
+
         Usage::
-            
+
             # Set FM radio to 87.5 MHz
             await divoom.radio.set_radio_frequency(875)
         """
         self.logger.info(f"Setting radio frequency to {frequency} (0x61)...")
-        args = list(frequency.to_bytes(2, byteorder='little'))
+        args = list(frequency.to_bytes(2, byteorder="little"))
         return await self._divoom.send_command(COMMANDS["set radio frequency"], args)

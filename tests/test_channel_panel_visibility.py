@@ -17,6 +17,7 @@ Class invariant pinned here: exactly one Channels-tab panel is visible at all
 times, and it is the one whose tab button is highlighted; Custom Art is
 untouched by channel activity.
 """
+
 from pathlib import Path
 
 import pytest
@@ -28,9 +29,27 @@ INDEX_HTML = Path(__file__).resolve().parent.parent / "divoom_gui" / "web_ui" / 
 # Every kind the daemon, the menubar, the widgets and the GUI itself can put
 # on the activity bus. Only the CHANNEL_PANELS subset has a panel.
 ACTIVITY_KINDS = [
-    "clock", "vj", "visualizer", "ambient", "scoreboard", "text", "sessions",
-    "design", "custom", "hot", "eq", "lighting", "cloud", "image", "sysmon",
-    "music", "stocks", "weather", "playlist", "photo_album", "aid_sleep",
+    "clock",
+    "vj",
+    "visualizer",
+    "ambient",
+    "scoreboard",
+    "text",
+    "sessions",
+    "design",
+    "custom",
+    "hot",
+    "eq",
+    "lighting",
+    "cloud",
+    "image",
+    "sysmon",
+    "music",
+    "stocks",
+    "weather",
+    "playlist",
+    "photo_album",
+    "aid_sleep",
 ]
 CHANNEL_PANELS = {"clock", "vj", "visualizer", "ambient", "scoreboard", "text", "sessions"}
 
@@ -74,20 +93,29 @@ async def test_every_activity_kind_leaves_one_matching_panel_visible():
     async with async_playwright() as p:
         browser, page = await _open(p)
         mac = "44:55:66:77:88:99"
-        await eval_js(page, """(mac) => {
+        await eval_js(
+            page,
+            """(mac) => {
             window.DivoomState.discoveredDevices = [{ address: mac, name: "Pixoo-Test", room: "Desk" }];
             window.SpatialStage.refresh();
-        }""", mac)
+        }""",
+            mac,
+        )
 
         initial = await eval_js(page, PANEL_STATE_JS)
         _assert_one_visible_matching_tab(initial, "initial load")
         assert initial["designVisible"], "Custom Art panel hidden on initial load"
 
         for kind in ACTIVITY_KINDS:
-            state = await eval_js(page, """([mac, kind]) => {
+            state = await eval_js(
+                page,
+                """([mac, kind]) => {
                 window.Divoom.onActivity({ type: 'activity', mac, kind });
                 return (%s)();
-            }""" % PANEL_STATE_JS, [mac, kind])
+            }"""
+                % PANEL_STATE_JS,
+                [mac, kind],
+            )
             _assert_one_visible_matching_tab(state, f"after kind={kind!r}")
             if kind in CHANNEL_PANELS:
                 assert state["activeTab"] == kind, f"kind={kind!r} did not select its own tab"
@@ -105,13 +133,18 @@ async def test_saved_non_panel_channel_rehydrates_without_blanking():
     async with async_playwright() as p:
         browser, page = await _open(p)
         mac = "55:66:77:88:99:AA"
-        state = await eval_js(page, """([mac, stateJs]) => {
+        state = await eval_js(
+            page,
+            """([mac, stateJs]) => {
             window.saveDeviceChannel(mac, 'image', { src: '' });
             window.DivoomState.discoveredDevices = [{ address: mac, name: "Ditoo-Test", room: "Desk" }];
             window.SpatialStage.refresh();
             if (window.syncChannelControlsToDisplay) window.syncChannelControlsToDisplay(mac);
             return (%s)();
-        }""" % PANEL_STATE_JS, [mac, None])
+        }"""
+            % PANEL_STATE_JS,
+            [mac, None],
+        )
         _assert_one_visible_matching_tab(state, "after rehydrating a saved 'image' channel")
         assert state["designVisible"], "rehydrating 'image' hid the Custom Art panel"
         await browser.close()
@@ -125,10 +158,15 @@ async def test_channel_tab_click_never_touches_custom_art():
     async with async_playwright() as p:
         browser, page = await _open(p)
         for ch in sorted(CHANNEL_PANELS):
-            state = await eval_js(page, """([ch, _]) => {
+            state = await eval_js(
+                page,
+                """([ch, _]) => {
                 document.querySelector(`.tab-btn[data-channel="${ch}"]`).click();
                 return (%s)();
-            }""" % PANEL_STATE_JS, [ch, None])
+            }"""
+                % PANEL_STATE_JS,
+                [ch, None],
+            )
             _assert_one_visible_matching_tab(state, f"after clicking tab {ch!r}")
             assert state["activeTab"] == ch
             assert state["designVisible"], f"clicking tab {ch!r} hid the Custom Art panel"

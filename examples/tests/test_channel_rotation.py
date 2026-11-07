@@ -7,20 +7,28 @@ from bleak import BleakClient
 
 from divoom_legacy import Divoom
 from divoom_legacy.utils.discovery import discover_device, discover_characteristics, pick_char_uuid
-from divoom_lib.models import CHANNEL_ID_TIME, CHANNEL_ID_LIGHTNING, CHANNEL_ID_CLOUD, CHANNEL_ID_VJ_EFFECTS, CHANNEL_ID_VISUALIZATION, CHANNEL_ID_ANIMATION, CHANNEL_ID_SCOREBOARD
+from divoom_lib.models import (
+    CHANNEL_ID_TIME,
+    CHANNEL_ID_LIGHTNING,
+    CHANNEL_ID_CLOUD,
+    CHANNEL_ID_VJ_EFFECTS,
+    CHANNEL_ID_VISUALIZATION,
+    CHANNEL_ID_ANIMATION,
+    CHANNEL_ID_SCOREBOARD,
+)
 
 # Configure logging for the test
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class TestChannelRotation(unittest.IsolatedAsyncioTestCase):
 
+class TestChannelRotation(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         logger.info("Starting real device setup...")
         ble_device, device_id = await discover_device(name_substring="Timoo", address=None)
 
         self.assertIsNotNone(ble_device, "Could not discover Tivoom device.")
-        
+
         # Connect to the device to discover characteristics
         client = BleakClient(ble_device.address)
         try:
@@ -45,7 +53,7 @@ class TestChannelRotation(unittest.IsolatedAsyncioTestCase):
                 write_characteristic_uuid=write_uuid,
                 notify_characteristic_uuid=notify_uuid,
                 read_characteristic_uuid=read_uuid,
-                client=client # Pass the already connected client
+                client=client,  # Pass the already connected client
             )
             # No need to call await self.divoom.connect() here, as the client is already connected
             logger.info(f"Divoom object initialized with connected client for Tivoo device at {device_id}")
@@ -81,5 +89,6 @@ class TestChannelRotation(unittest.IsolatedAsyncioTestCase):
 
         logger.info("Finished test_channel_rotation.")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

@@ -24,6 +24,7 @@ checked, nor calls on external libs (`BleakScanner`), nor data flow
 (`d['address']`). What rots silently is facade/method renames — the
 R73 class — and that is exactly what this pins.
 """
+
 from __future__ import annotations
 
 import ast
@@ -45,7 +46,9 @@ sys.path.insert(0, str(EXAMPLES))
 try:
     import divoom_legacy.divoom as _divoom_mod  # noqa: E402
 except ModuleNotFoundError as exc:  # pragma: no cover - environment, not logic
-    err(f"[examples] cannot import the facade: {exc}. This check needs the package's runtime deps: `pip install -r requirements.txt`.")
+    err(
+        f"[examples] cannot import the facade: {exc}. This check needs the package's runtime deps: `pip install -r requirements.txt`."
+    )
     sys.exit(2)
 from divoom_lib.models.capabilities import Capabilities  # noqa: E402
 
@@ -106,17 +109,9 @@ def check_module(mod_name: str, facades: dict[str, type], failures: list[str]) -
             if not isinstance(target, ast.Name):
                 continue
             value = stmt.value
-            if (
-                isinstance(value, ast.Call)
-                and isinstance(value.func, ast.Name)
-                and value.func.id == "Divoom"
-            ):
+            if isinstance(value, ast.Call) and isinstance(value.func, ast.Name) and value.func.id == "Divoom":
                 types[target.id] = _divoom_mod.Divoom
-            elif (
-                isinstance(value, ast.Attribute)
-                and isinstance(value.value, ast.Name)
-                and value.value.id in types
-            ):
+            elif isinstance(value, ast.Attribute) and isinstance(value.value, ast.Name) and value.value.id in types:
                 base = types[value.value.id]
                 if base is _divoom_mod.Divoom and value.attr in facades:
                     types[target.id] = facades[value.attr]
@@ -137,15 +132,11 @@ def check_module(mod_name: str, facades: dict[str, type], failures: list[str]) -
             for hop in chain[1:]:
                 if typ is _divoom_mod.Divoom:
                     if hop not in facades and not has_member(typ, hop):
-                        failures.append(
-                            f"{mod_name}: `Divoom.{hop}` names no facade attr or method"
-                        )
+                        failures.append(f"{mod_name}: `Divoom.{hop}` names no facade attr or method")
                         break
                     typ = facades.get(hop, typ)
                 elif not has_member(typ, hop):
-                    failures.append(
-                        f"{mod_name}: `{typ.__name__}.{hop}` does not exist"
-                    )
+                    failures.append(f"{mod_name}: `{typ.__name__}.{hop}` does not exist")
                     break
                 else:
                     nxt = getattr(typ, hop, None)
@@ -192,8 +183,7 @@ def main() -> int:
         for fl in failures:
             info(fl)
         return 1
-    ok(f"[examples] OK — {len(modules)} modules import, "
-       f"{n_imports} imports + facade chains resolve")
+    ok(f"[examples] OK — {len(modules)} modules import, {n_imports} imports + facade chains resolve")
     return 0
 
 

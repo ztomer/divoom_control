@@ -26,6 +26,7 @@ draw is answered at 64 with every frame; a caller WITHOUT the lease is refused
 and told who holds it; after the TTL the lapsed lease cannot be renewed. Any
 of those wrong is a FAIL with the reply quoted. Only then is a person asked.
 """
+
 from __future__ import annotations
 
 import base64
@@ -49,8 +50,7 @@ FRAME_MS = 500
 
 # Every name this check sends, so `tools/check_hw_verify_methods.py` can hold
 # them to the daemon's MCP catalog and socket command table.
-MCP_TOOLS = ("get_capabilities", "lease_acquire", "push_animation",
-             "show_text", "lease_renew")
+MCP_TOOLS = ("get_capabilities", "lease_acquire", "push_animation", "show_text", "lease_renew")
 SOCKET_COMMANDS = ("device_status", "live_jobs_stop_for", "live_job_start")
 
 
@@ -60,8 +60,7 @@ def agent_gif(size: int = EXIT_SIZE) -> bytes:
 
     frames = [Image.new("RGB", (size, size), rgb) for rgb in AGENT_FRAMES]
     out = io.BytesIO()
-    frames[0].save(out, format="GIF", save_all=True, append_images=frames[1:],
-                   duration=FRAME_MS, loop=0)
+    frames[0].save(out, format="GIF", save_all=True, append_images=frames[1:], duration=FRAME_MS, loop=0)
     return out.getvalue()
 
 
@@ -74,12 +73,17 @@ class McpSession:
         self._timeout = timeout
         self._id = 0
         self._proc = subprocess.Popen(
-            [binary, "mcp"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL, env=env, text=True)
-        self._rpc("initialize", {"protocolVersion": "2025-06-18",
-                                 "capabilities": {},
-                                 "clientInfo": {"name": "hw_verify",
-                                                "version": "1"}})
+            [binary, "mcp"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            env=env,
+            text=True,
+        )
+        self._rpc(
+            "initialize",
+            {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "hw_verify", "version": "1"}},
+        )
         self._send({"jsonrpc": "2.0", "method": "notifications/initialized"})
 
     def _send(self, msg: dict) -> None:
@@ -89,8 +93,7 @@ class McpSession:
 
     def _rpc(self, method: str, params: dict) -> dict:
         self._id += 1
-        self._send({"jsonrpc": "2.0", "id": self._id, "method": method,
-                    "params": params})
+        self._send({"jsonrpc": "2.0", "id": self._id, "method": method, "params": params})
         assert self._proc.stdout is not None
         line = self._proc.stdout.readline()
         if not line:
@@ -124,8 +127,7 @@ def resolve_divoomd(override: str = "") -> str:
     """The `divoomd` the GUI would run, by the same resolver."""
     from divoom_client import binary_resolver
 
-    found = binary_resolver.resolve(
-        "divoomd", override=override or os.environ.get("DIVOOM_RUST_BINARY"))
+    found = binary_resolver.resolve("divoomd", override=override or os.environ.get("DIVOOM_RUST_BINARY"))
     if not found:
         raise RuntimeError("no divoomd binary found (build it, or pass --divoomd)")
     return str(found)
@@ -134,30 +136,31 @@ def resolve_divoomd(override: str = "") -> str:
 def precondition(status: dict) -> str:
     """Why this panel cannot run the exit, or "" when it can."""
     if status.get("lan_ip"):
-        return ("the panel is linked over Wi-Fi, and the daemon has no image "
-                "command on its LAN transport (ROADMAP P6.2): neither the "
-                "agent's draw nor the live widget can reach it. Link a 64x64 "
-                "panel over Bluetooth, or land P6.2 first")
+        return (
+            "the panel is linked over Wi-Fi, and the daemon has no image "
+            "command on its LAN transport (ROADMAP P6.2): neither the "
+            "agent's draw nor the live widget can reach it. Link a 64x64 "
+            "panel over Bluetooth, or land P6.2 first"
+        )
     w, h = status.get("width"), status.get("height")
     if (w, h) != (EXIT_SIZE, EXIT_SIZE):
         said = f"{w}x{h}" if w and h else "of unknown size (no model name)"
-        return (f"the exit is a {EXIT_SIZE}x{EXIT_SIZE} panel and the daemon "
-                f"describes this one as {said}; select a 64x64 panel (the "
-                f"packet drives the selected one) and run it again")
+        return (
+            f"the exit is a {EXIT_SIZE}x{EXIT_SIZE} panel and the daemon "
+            f"describes this one as {said}; select a 64x64 panel (the "
+            f"packet drives the selected one) and run it again"
+        )
     return ""
 
 
-def run_scenario(client, ctx: dict, session, ttl_ms: int,
-                 sleep=time.sleep) -> tuple[list[str], dict]:
+def run_scenario(client, ctx: dict, session, ttl_ms: int, sleep=time.sleep) -> tuple[list[str], dict]:
     """Drive the exit. Returns `(faults, evidence)`; no faults is a clean run."""
     mac = ctx["mac"]
     faults: list[str] = []
     evidence: dict = {}
 
     client.send_command("live_jobs_stop_for", {"mac": mac})
-    job = client.send_command(
-        "live_job_start",
-        {"mac": mac, "kind": "sysmon", "params": {"size": EXIT_SIZE}})
+    job = client.send_command("live_job_start", {"mac": mac, "kind": "sysmon", "params": {"size": EXIT_SIZE}})
     if not isinstance(job, dict) or job.get("success") is False:
         return [f"the live widget did not start: {job}"], evidence
     sleep(ctx.get("job_settle", 6.0))
@@ -166,22 +169,18 @@ def run_scenario(client, ctx: dict, session, ttl_ms: int,
     if bad or (cap.get("width"), cap.get("height")) != (EXIT_SIZE, EXIT_SIZE):
         return [f"get_capabilities over MCP does not say 64x64: {cap}"], evidence
 
-    bad, lease = session.call(
-        "lease_acquire", {"mac": mac, "ttl_ms": ttl_ms, "holder": "hw_verify agent"})
+    bad, lease = session.call("lease_acquire", {"mac": mac, "ttl_ms": ttl_ms, "holder": "hw_verify agent"})
     token = lease.get("lease") if not bad else None
     if not token:
         return [f"lease_acquire was not granted: {lease}"], evidence
 
     data = base64.b64encode(agent_gif()).decode()
-    bad, drawn = session.call(
-        "push_animation", {"mac": mac, "data": data, "lease": token})
+    bad, drawn = session.call("push_animation", {"mac": mac, "data": data, "lease": token})
     evidence["drawn"] = drawn
     if bad or drawn.get("size") != EXIT_SIZE or drawn.get("frames") != len(AGENT_FRAMES):
-        faults.append(f"the agent's draw was not {EXIT_SIZE} px with "
-                      f"{len(AGENT_FRAMES)} frames: {drawn}")
+        faults.append(f"the agent's draw was not {EXIT_SIZE} px with {len(AGENT_FRAMES)} frames: {drawn}")
 
-    bad, refused = session.call(
-        "show_text", {"mac": mac, "text": "No", "size": 16})
+    bad, refused = session.call("show_text", {"mac": mac, "text": "No", "size": 16})
     evidence["refused"] = refused
     if not bad or "hw_verify agent" not in str(refused.get("error", "")):
         faults.append(f"a caller without the lease was not refused by name: {refused}")
@@ -206,9 +205,10 @@ def bind(check_base):
     @dataclass
     class McpLease(check_base):
         """Phase 4's exit, on the panel the operator is watching."""
+
         ttl_ms: int = 8000
         divoomd: str = ""
-        session_factory: object = None   # a seam: tests inject a fake session
+        session_factory: object = None  # a seam: tests inject a fake session
         tags: list[str] = field(default_factory=lambda: ["P4"])
 
         def drive(self, client, ctx):
@@ -220,8 +220,8 @@ def bind(check_base):
                 ctx["mcp_lease"] = {"skip": why}
                 return True, f"precondition: {why}"
             factory = self.session_factory or (
-                lambda: McpSession(resolve_divoomd(ctx.get("divoomd", self.divoomd)),
-                                   ctx["socket"]))
+                lambda: McpSession(resolve_divoomd(ctx.get("divoomd", self.divoomd)), ctx["socket"])
+            )
             session = factory()
             try:
                 faults, evidence = run_scenario(client, ctx, session, self.ttl_ms)
@@ -240,18 +240,18 @@ def bind(check_base):
             for i, rgb in enumerate(AGENT_FRAMES):
                 png = expect.raw_to_png(bytes(rgb) * (EXIT_SIZE * EXIT_SIZE), EXIT_SIZE)
                 path = expect.save_png(png, ctx["frames_dir"], f"{self.id}_agent_{i}.png")
-                lines.append(f"the agent's frame {i}: solid RGB{rgb}, "
-                             f"{FRAME_MS} ms, saved: {path}")
-            lines.append(f"those {len(AGENT_FRAMES)} frames looped for "
-                         f"{self.ttl_ms / 1000:.0f} s, then the lease lapsed")
-            png, record = expect.painted_png(
-                client, ctx["mac"], kind="sysmon", wait=expect.FRAME_WAIT)
+                lines.append(f"the agent's frame {i}: solid RGB{rgb}, {FRAME_MS} ms, saved: {path}")
+            lines.append(
+                f"those {len(AGENT_FRAMES)} frames looped for {self.ttl_ms / 1000:.0f} s, then the lease lapsed"
+            )
+            png, record = expect.painted_png(client, ctx["mac"], kind="sysmon", wait=expect.FRAME_WAIT)
             if png is None:
                 return Expectation(
                     verdict="FAIL",
                     detail=f"after the lease lapsed the daemon painted no sysmon "
-                           f"frame within {expect.FRAME_WAIT:.0f}s (activity "
-                           f"kind={record.get('kind') or 'nothing'})")
+                    f"frame within {expect.FRAME_WAIT:.0f}s (activity "
+                    f"kind={record.get('kind') or 'nothing'})",
+                )
             path = expect.save_png(png, ctx["frames_dir"], f"{self.id}_widget.png")
             lines.append("and then the widget came back:")
             lines.append(expect.describe(png, path))

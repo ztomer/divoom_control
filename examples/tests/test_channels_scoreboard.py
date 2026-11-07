@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock
 from divoom_legacy.display.scoreboard_channel import ScoreBoardChannel
 from divoom_legacy.divoom import Divoom as DivoomBase
 
+
 @pytest.fixture
 def mock_divoom_instance():
     """Fixture for a mock DivoomBase instance with _int2hexlittle method."""
@@ -11,26 +12,26 @@ def mock_divoom_instance():
     mock._int2hexlittle = MagicMock(side_effect=lambda x: f"{(x & 0xFF):02x}{((x >> 8) & 0xFF):02x}")
     return mock
 
+
 @pytest.mark.asyncio
 async def test_scoreboard_channel_init_defaults(mock_divoom_instance):
     """Test ScoreBoardChannel initialization with default scores."""
     channel = ScoreBoardChannel(mock_divoom_instance)
-    
+
     assert channel._divoom_instance == mock_divoom_instance
     assert channel._opts["red"] == 0
     assert channel._opts["blue"] == 0
 
+
 @pytest.mark.asyncio
 async def test_scoreboard_channel_init_custom_opts(mock_divoom_instance):
     """Test ScoreBoardChannel initialization with custom scores."""
-    custom_opts = {
-        "red": 10,
-        "blue": 5
-    }
+    custom_opts = {"red": 10, "blue": 5}
     channel = ScoreBoardChannel(mock_divoom_instance, opts=custom_opts)
-    
+
     assert channel._opts["red"] == 10
     assert channel._opts["blue"] == 5
+
 
 @pytest.mark.asyncio
 async def test_scoreboard_channel_show(mock_divoom_instance):
@@ -39,6 +40,7 @@ async def test_scoreboard_channel_show(mock_divoom_instance):
 
     await channel.show()
     mock_divoom_instance.send_command.assert_called_once()
+
 
 @pytest.mark.asyncio
 async def test_scoreboard_channel_update_message(mock_divoom_instance):
@@ -57,6 +59,7 @@ async def test_scoreboard_channel_update_message(mock_divoom_instance):
     mock_divoom_instance._int2hexlittle.assert_any_call(123)
     mock_divoom_instance._int2hexlittle.assert_any_call(45)
 
+
 @pytest.mark.asyncio
 async def test_scoreboard_channel_red_setter(mock_divoom_instance):
     """Test the red setter updates option and clamping."""
@@ -70,6 +73,7 @@ async def test_scoreboard_channel_red_setter(mock_divoom_instance):
 
     channel.red = -10
     assert channel._opts["red"] == 0
+
 
 @pytest.mark.asyncio
 async def test_scoreboard_channel_blue_setter(mock_divoom_instance):

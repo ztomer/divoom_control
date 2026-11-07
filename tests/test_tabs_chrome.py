@@ -7,6 +7,7 @@ Channels, Tools, Settings, and Theme. Legacy class names in
 settings.css are aliases — the new `.tab-btn` / `.tabs-row` is the
 source of truth.
 """
+
 from __future__ import annotations
 
 import re
@@ -19,6 +20,8 @@ CHANNELS_CSS = REPO_ROOT / "divoom_gui" / "web_ui" / "channels.css"
 STYLE_CSS = REPO_ROOT / "divoom_gui" / "web_ui" / "style.css"
 STYLE_EXTRA_CSS = REPO_ROOT / "divoom_gui" / "web_ui" / "style_extra.css"
 INDEX_HTML = REPO_ROOT / "divoom_gui" / "web_ui" / "index.html"
+
+
 def _cat(paths: list[Path]) -> str:
     parts = []
     for p in paths:
@@ -26,13 +29,16 @@ def _cat(paths: list[Path]) -> str:
             parts.append(p.read_text())
     return "\n".join(parts)
 
-TEMPLATES_JS = _cat([
-    REPO_ROOT / "divoom_gui" / "web_ui" / "templates_tools.js",
-    REPO_ROOT / "divoom_gui" / "web_ui" / "templates_gallery.js",
-    REPO_ROOT / "divoom_gui" / "web_ui" / "templates_widgets.js",
-    REPO_ROOT / "divoom_gui" / "web_ui" / "templates_settings.js",
-    REPO_ROOT / "divoom_gui" / "web_ui" / "templates_routines.js",
-])
+
+TEMPLATES_JS = _cat(
+    [
+        REPO_ROOT / "divoom_gui" / "web_ui" / "templates_tools.js",
+        REPO_ROOT / "divoom_gui" / "web_ui" / "templates_gallery.js",
+        REPO_ROOT / "divoom_gui" / "web_ui" / "templates_widgets.js",
+        REPO_ROOT / "divoom_gui" / "web_ui" / "templates_settings.js",
+        REPO_ROOT / "divoom_gui" / "web_ui" / "templates_routines.js",
+    ]
+)
 ROUTINES_JS = REPO_ROOT / "divoom_gui" / "web_ui" / "templates_routines.js"
 
 
@@ -117,9 +123,7 @@ def test_settings_css_does_not_duplicate_chrome() -> None:
         src,
         re.DOTALL,
     )
-    assert len(matches) == 1, (
-        f"settings.css has {len(matches)} legacy-active rules; expected 1"
-    )
+    assert len(matches) == 1, f"settings.css has {len(matches)} legacy-active rules; expected 1"
 
 
 def test_channels_css_dropped_chrome() -> None:
@@ -174,9 +178,7 @@ def test_no_legacy_channel_card_in_index_html() -> None:
     assert html.count('class="tab-btn') >= 7
     # The old class should be gone from the channel row (it may still
     # appear in a comment, but not as an element class).
-    assert 'class="channel-card' not in html, (
-        "index.html still has a .channel-card element — should be .tab-btn"
-    )
+    assert 'class="channel-card' not in html, "index.html still has a .channel-card element — should be .tab-btn"
 
 
 def test_no_legacy_settings_tab_btn_in_templates() -> None:
@@ -244,9 +246,7 @@ def test_tabs_row_is_centered() -> None:
     on .tab-content.active preventing horizontal shift when scrollbar toggles."""
     src = TABS_CSS.read_text()
     m = re.search(r"\.tabs-row\s*\{([^}]*)\}", src)
-    assert m and "margin-left: auto" in m.group(1), (
-        ".tabs-row should be centered with margin auto"
-    )
+    assert m and "margin-left: auto" in m.group(1), ".tabs-row should be centered with margin auto"
 
 
 def test_settings_tab_pane_does_not_wrap_content() -> None:
@@ -259,8 +259,7 @@ def test_settings_tab_pane_does_not_wrap_content() -> None:
     # The tabs-section opens, the tab row opens+closes, THEN the section closes —
     # so there must be >= 2 </div> between the pane open and the first content panel.
     assert between.count("</div>") >= 2, (
-        "Settings .tabs-section is not closed before the content panels "
-        "(it would wrap the whole panel)"
+        "Settings .tabs-section is not closed before the content panels (it would wrap the whole panel)"
     )
 
 
@@ -269,12 +268,8 @@ def test_settings_tab_pane_does_not_wrap_content() -> None:
 
 def test_index_html_links_tabs_css() -> None:
     html = INDEX_HTML.read_text()
-    assert 'href="tabs.css"' in html, (
-        "index.html is missing the <link rel='stylesheet' href='tabs.css'>"
-    )
+    assert 'href="tabs.css"' in html, "index.html is missing the <link rel='stylesheet' href='tabs.css'>"
     # tabs.css must come after style.css (so it can override the design tokens).
     style_pos = html.find('href="style.css"')
     tabs_pos = html.find('href="tabs.css"')
-    assert tabs_pos > style_pos, (
-        "tabs.css must be linked AFTER style.css so its rules win over the base"
-    )
+    assert tabs_pos > style_pos, "tabs.css must be linked AFTER style.css so its rules win over the base"

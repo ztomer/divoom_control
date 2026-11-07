@@ -64,35 +64,40 @@ async def _find_first(match, timeout: float):
     return found["dev"]
 
 
-async def discover_device(name_substring: str | None = None, address: str | None = None) -> tuple[BleakClient | str | None, str | None]:
+async def discover_device(
+    name_substring: str | None = None, address: str | None = None
+) -> tuple[BleakClient | str | None, str | None]:
     """
     Discovers a BLE device by name substring or address. Early-exits on the first
     match. Returns a tuple of (ble_device, device_id).
     """
     if not address:
-        logger.info("Scanning for a device named like '%s' (early-exit, <=%.0fs)...",
-                    name_substring, NAME_SCAN_TIMEOUT)
+        logger.info("Scanning for a device named like '%s' (early-exit, <=%.0fs)...", name_substring, NAME_SCAN_TIMEOUT)
         ble_device = await _find_first(
             lambda d: bool(d.name and name_substring and name_substring.lower() in d.name.lower()),
-            timeout=NAME_SCAN_TIMEOUT)
+            timeout=NAME_SCAN_TIMEOUT,
+        )
         if not ble_device:
             logger.error("No Bluetooth device found with name containing '%s'.", name_substring)
             return None, None
         logger.info("Found device: %s (%s) — using this device.", ble_device.name, ble_device.address)
     else:
-        logger.info("Resolving address %s to BLEDevice (early-exit, <=%.0fs)...",
-                    address, ADDR_SCAN_TIMEOUT)
+        logger.info("Resolving address %s to BLEDevice (early-exit, <=%.0fs)...", address, ADDR_SCAN_TIMEOUT)
         ble_device = await _find_first(
             lambda d: d.address == address or bool(d.name and address.lower() in d.name.lower()),
-            timeout=ADDR_SCAN_TIMEOUT)
+            timeout=ADDR_SCAN_TIMEOUT,
+        )
         if ble_device:
             logger.info("Resolved address to BLEDevice: %s (%s)", ble_device.name, ble_device.address)
         else:
-            logger.warning("Could not resolve address to BLEDevice quickly; will attempt connect using raw address string.")
+            logger.warning(
+                "Could not resolve address to BLEDevice quickly; will attempt connect using raw address string."
+            )
             ble_device = address
 
     device_id = ble_device.address if hasattr(ble_device, "address") else ble_device
     return ble_device, device_id
+
 
 async def discover_characteristics(client: BleakClient) -> tuple[list, list, list]:
     """
@@ -107,8 +112,7 @@ async def discover_characteristics(client: BleakClient) -> tuple[list, list, lis
     services_present = False
     while tries < 6:
         try:
-            services_present = getattr(
-                client, "services", None) and any(client.services)
+            services_present = getattr(client, "services", None) and any(client.services)
         except BleakError:
             services_present = False
         if services_present:
@@ -120,8 +124,7 @@ async def discover_characteristics(client: BleakClient) -> tuple[list, list, lis
         extra_tries = 0
         while extra_tries < 40:
             try:
-                services_present = getattr(
-                    client, "services", None) and any(client.services)
+                services_present = getattr(client, "services", None) and any(client.services)
             except BleakError:
                 services_present = False
             if services_present:
@@ -129,7 +132,9 @@ async def discover_characteristics(client: BleakClient) -> tuple[list, list, lis
             await asyncio.sleep(0.1)
             extra_tries += 1
         if not services_present:
-            logger.warning("Service discovery did not populate `client.services` after waiting; continuing but operations may fail.")
+            logger.warning(
+                "Service discovery did not populate `client.services` after waiting; continuing but operations may fail."
+            )
 
     write_chars = []
     notify_chars = []
@@ -137,15 +142,16 @@ async def discover_characteristics(client: BleakClient) -> tuple[list, list, lis
     for service in client.services:
         for ch in service.characteristics:
             props = set(ch.properties or [])
-            if 'write' in props or 'write-without-response' in props or 'write_without_response' in props:
+            if "write" in props or "write-without-response" in props or "write_without_response" in props:
                 write_chars.append(ch)
-            if 'notify' in props:
+            if "notify" in props:
                 notify_chars.append(ch)
-            if 'read' in props:
+            if "read" in props:
                 read_chars.append(ch)
     return write_chars, notify_chars, read_chars
 
-def pick_char_uuid(preferred_uuid: str | None, candidates: list, prefix_hint: str | None = '49535343') -> str | None:
+
+def pick_char_uuid(preferred_uuid: str | None, candidates: list, prefix_hint: str | None = "49535343") -> str | None:
     """
     Helper to pick a matching characteristic UUID from discovered list,
     prioritizing characteristics with both write and notify properties.
@@ -163,15 +169,15 @@ def pick_char_uuid(preferred_uuid: str | None, candidates: list, prefix_hint: st
 
     for c in candidates:
         props = set(c.properties or [])
-        is_writeable = 'write' in props or 'write-without-response' in props
-        is_notifiable = 'notify' in props
+        is_writeable = "write" in props or "write-without-response" in props
+        is_notifiable = "notify" in props
 
         if is_writeable and is_notifiable:
             if prefix_hint and c.uuid.lower().startswith(prefix_hint.lower()):
                 write_notify_candidates_with_hint.append(c.uuid)
             else:
                 write_notify_candidates_no_hint.append(c.uuid)
-    
+
     if write_notify_candidates_with_hint:
         return write_notify_candidates_with_hint[0]
     if write_notify_candidates_no_hint:
@@ -182,7 +188,7 @@ def pick_char_uuid(preferred_uuid: str | None, candidates: list, prefix_hint: st
         for c in candidates:
             if c.uuid.lower().startswith(prefix_hint.lower()):
                 return c.uuid
-    
+
     # 4. Final fallback: return the first candidate if any
     return candidates[0].uuid if candidates else None
 
@@ -190,10 +196,12 @@ def pick_char_uuid(preferred_uuid: str | None, candidates: list, prefix_hint: st
 def check_bluetooth_permission() -> tuple[bool, str]:
     """Check macOS Bluetooth authorization status without triggering a silent process abort."""
     import sys
+
     if sys.platform != "darwin":
         return True, "ok"
     try:
         import CoreBluetooth
+
         auth = CoreBluetooth.CBCentralManager.authorization()
         if auth in (1, 2):
             return False, f"macOS Bluetooth authorization is denied or restricted (status={auth})"
@@ -228,9 +236,11 @@ async def discover_all_divoom_devices(timeout: float = 5.0, expected: int = 0) -
 
     logger.info(
         "Scanning for Divoom BLE devices (timeout=%.1fs, early-exit at %s)...",
-        timeout, expected if expected > 0 else "off")
+        timeout,
+        expected if expected > 0 else "off",
+    )
 
-    found: dict[str, dict] = {}            # address -> {name, address}, deduped
+    found: dict[str, dict] = {}  # address -> {name, address}, deduped
     done = asyncio.Event()
 
     def _on_detect(device, _adv):
@@ -238,7 +248,7 @@ async def discover_all_divoom_devices(timeout: float = 5.0, expected: int = 0) -
             found[device.address] = {"name": device.name, "address": device.address}
             logger.info("Found Divoom device: %s (%s)", device.name, device.address)
             if expected > 0 and len(found) >= expected:
-                done.set()                 # early-exit: we have them all
+                done.set()  # early-exit: we have them all
 
     scanner = BleakScanner(detection_callback=_on_detect)
     try:
@@ -246,7 +256,7 @@ async def discover_all_divoom_devices(timeout: float = 5.0, expected: int = 0) -
         try:
             await asyncio.wait_for(done.wait(), timeout=timeout)
         except asyncio.TimeoutError:
-            pass                           # window elapsed — return whatever we found
+            pass  # window elapsed — return whatever we found
     finally:
         try:
             await asyncio.wait_for(scanner.stop(), timeout=5.0)

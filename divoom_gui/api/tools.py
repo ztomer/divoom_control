@@ -10,6 +10,7 @@ panel and followed by a click on another renamed the second. A Tools action
 on the wall is refused: an alarm or a timer is one panel's, and the wall used
 to resolve to whichever panel the bench had held last.
 """
+
 from __future__ import annotations
 
 import json
@@ -36,6 +37,7 @@ class ToolsApi(ApiBase):
     @staticmethod
     def _alarm_cache_path():
         from pathlib import Path
+
         return Path.home() / ".config" / "divoom-control" / "alarms.json"
 
     def _load_alarm_cache(self) -> dict:
@@ -82,34 +84,48 @@ class ToolsApi(ApiBase):
         # (see _store_alarm_cache); a call naming no panel gets none.
         return json.dumps(self._load_alarm_cache().get(mac, []) if isinstance(mac, str) else [])
 
-    def set_alarm(self, mac: str, index: int, enabled, hour: int, minute: int,
-                  week: int = 0, mode: int = 0, trigger_mode: int = 0) -> bool:
-        logger.info(f"GUI Action: Set alarm {index} {int(hour):02d}:{int(minute):02d} "
-                    f"enabled={enabled} week={week} on {mac}...")
+    def set_alarm(
+        self, mac: str, index: int, enabled, hour: int, minute: int, week: int = 0, mode: int = 0, trigger_mode: int = 0
+    ) -> bool:
+        logger.info(
+            f"GUI Action: Set alarm {index} {int(hour):02d}:{int(minute):02d} enabled={enabled} week={week} on {mac}..."
+        )
         status = 1 if (enabled in (True, 1, "1", "true", "True")) else 0
-        ok = self._tool_call(mac, lambda d: d.alarm.set_alarm(
-            int(index), status, int(hour), int(minute), int(week),
-            int(mode), int(trigger_mode)), "alarm")
+        ok = self._tool_call(
+            mac,
+            lambda d: d.alarm.set_alarm(
+                int(index), status, int(hour), int(minute), int(week), int(mode), int(trigger_mode)
+            ),
+            "alarm",
+        )
         if ok:
-            self._store_alarm_cache(mac, int(index), {
-                "status": status, "hour": int(hour), "minute": int(minute),
-                "week": int(week),
-            })
+            self._store_alarm_cache(
+                mac,
+                int(index),
+                {
+                    "status": status,
+                    "hour": int(hour),
+                    "minute": int(minute),
+                    "week": int(week),
+                },
+            )
         return ok
 
     # ── Sleep Aid ────────────────────────────────────────────────────
 
-    def start_sleep(self, mac: str, minutes: int = 30, color: str = "#2040ff",
-                    volume: int = 10) -> bool:
+    def start_sleep(self, mac: str, minutes: int = 30, color: str = "#2040ff", volume: int = 10) -> bool:
         from divoom_lib.utils.converters import color_to_rgb_list
+
         try:
             rgb = color_to_rgb_list(color)
         except Exception as e:
             logger.error(f"start_sleep: bad colour {color!r}: {e}")
             return False
-        return self._tool_call(mac, lambda d: d.sleep.show_sleep(
-            sleeptime=int(minutes), volume=int(volume), color=rgb, on=1),
-            f"sleep {minutes}min color={color} vol={volume}")
+        return self._tool_call(
+            mac,
+            lambda d: d.sleep.show_sleep(sleeptime=int(minutes), volume=int(volume), color=rgb, on=1),
+            f"sleep {minutes}min color={color} vol={volume}",
+        )
 
     def stop_sleep(self, mac: str) -> bool:
         return self._tool_call(mac, lambda d: d.sleep.show_sleep(on=0), "stop sleep")
@@ -128,20 +144,28 @@ class ToolsApi(ApiBase):
             return False
 
     def set_timer(self, mac: str, action: str = "start") -> bool:
-        from divoom_lib.models import (
-            STI_CTRL_FLAG_TIMER_STARTED, STI_CTRL_FLAG_TIMER_PAUSED, STI_CTRL_FLAG_TIMER_RESET)
-        flag = {"start": STI_CTRL_FLAG_TIMER_STARTED, "stop": STI_CTRL_FLAG_TIMER_PAUSED,
-                "reset": STI_CTRL_FLAG_TIMER_RESET}.get(action, STI_CTRL_FLAG_TIMER_STARTED)
+        from divoom_lib.models import STI_CTRL_FLAG_TIMER_STARTED, STI_CTRL_FLAG_TIMER_PAUSED, STI_CTRL_FLAG_TIMER_RESET
+
+        flag = {
+            "start": STI_CTRL_FLAG_TIMER_STARTED,
+            "stop": STI_CTRL_FLAG_TIMER_PAUSED,
+            "reset": STI_CTRL_FLAG_TIMER_RESET,
+        }.get(action, STI_CTRL_FLAG_TIMER_STARTED)
         return self._tool_call(mac, lambda d: d.timer.set_timer(flag), f"timer {action}")
 
     def set_countdown(self, mac: str, action: str = "start", minutes: int = 5, seconds: int = 0) -> bool:
         from divoom_lib.models import STI_CTRL_FLAG_COUNTDOWN_START, STI_CTRL_FLAG_COUNTDOWN_CANCEL
+
         flag = STI_CTRL_FLAG_COUNTDOWN_CANCEL if action == "stop" else STI_CTRL_FLAG_COUNTDOWN_START
-        return self._tool_call(mac, lambda d: d.countdown.set_countdown(flag, int(minutes), int(seconds)),
-                               f"countdown {action} {minutes}:{seconds}")
+        return self._tool_call(
+            mac,
+            lambda d: d.countdown.set_countdown(flag, int(minutes), int(seconds)),
+            f"countdown {action} {minutes}:{seconds}",
+        )
 
     def set_noise(self, mac: str, action: str = "start") -> bool:
         from divoom_lib.models import STI_CTRL_FLAG_NOISE_START, STI_CTRL_FLAG_NOISE_STOP
+
         flag = STI_CTRL_FLAG_NOISE_STOP if action == "stop" else STI_CTRL_FLAG_NOISE_START
         return self._tool_call(mac, lambda d: d.noise.set_noise(flag), f"noise {action}")
 
@@ -151,7 +175,9 @@ class ToolsApi(ApiBase):
         return self._tool_call(mac, lambda d: d.system.set_hour_type(1 if self._as_bool(is_24h) else 0), "hour type")
 
     def set_temp_unit(self, mac: str, fahrenheit) -> bool:
-        return self._tool_call(mac, lambda d: d.device.set_temp_type(1 if self._as_bool(fahrenheit) else 0), "temp unit")
+        return self._tool_call(
+            mac, lambda d: d.device.set_temp_type(1 if self._as_bool(fahrenheit) else 0), "temp unit"
+        )
 
     def sync_time(self, mac: str) -> bool:
         """Set the device clock to this machine's local time.
@@ -173,12 +199,15 @@ class ToolsApi(ApiBase):
         the device to the year 2000 and report success.
         """
         import datetime
+
         now = datetime.datetime.now()
         return self._tool_call(
-            mac, lambda d: d.system.set_date_time(
-                year=now.year, month=now.month, day=now.day,
-                hour=now.hour, minute=now.minute, second=now.second),
-            "time sync")
+            mac,
+            lambda d: d.system.set_date_time(
+                year=now.year, month=now.month, day=now.day, hour=now.hour, minute=now.minute, second=now.second
+            ),
+            "time sync",
+        )
 
     def set_device_name(self, mac: str, name: str) -> bool:
         return self._tool_call(mac, lambda d: d.device.set_device_name(str(name)), "device name")
@@ -199,13 +228,10 @@ class ToolsApi(ApiBase):
         # system./device./sound./bare for THIS command but only device./bare for
         # set_low_power below, and a path it does not accept falls through to a
         # generic "unknown method" that says nothing about the typo.
-        return self._tool_call(
-            mac, lambda d: d.device.set_auto_power_off(int(minutes)), "auto power off")
+        return self._tool_call(mac, lambda d: d.device.set_auto_power_off(int(minutes)), "auto power off")
 
     def set_low_power(self, mac: str, on) -> bool:
-        return self._tool_call(
-            mac, lambda d: d.device.set_low_power(1 if self._as_bool(on) else 0),
-            "low power")
+        return self._tool_call(mac, lambda d: d.device.set_low_power(1 if self._as_bool(on) else 0), "low power")
 
     def set_fm_frequency(self, mac: str, freq_x10: int) -> bool:
         return self._tool_call(mac, lambda d: d.radio.set_radio_frequency(int(freq_x10)), "fm")
@@ -214,19 +240,20 @@ class ToolsApi(ApiBase):
         on = 1 if self._as_bool(enabled) else 0
         have = 1 if title else 0
         return self._tool_call(
-            mac, lambda d: d.alarm.set_memorial_time(int(index), on, int(month), int(day),
-                                                int(hour), int(minute), have, str(title)),
-            "memorial")
+            mac,
+            lambda d: d.alarm.set_memorial_time(
+                int(index), on, int(month), int(day), int(hour), int(minute), have, str(title)
+            ),
+            "memorial",
+        )
 
     # ── Display orientation + factory reset ──────────────────────────
 
     def set_screen_dir(self, mac: str, direction) -> bool:
-        return self._tool_call(mac, lambda d: d.design.set_screen_dir(int(direction)),
-                               "screen direction")
+        return self._tool_call(mac, lambda d: d.design.set_screen_dir(int(direction)), "screen direction")
 
     def set_screen_mirror(self, mac: str, on) -> bool:
-        return self._tool_call(mac, lambda d: d.design.set_screen_mirror(self._as_bool(on)),
-                               "screen mirror")
+        return self._tool_call(mac, lambda d: d.design.set_screen_mirror(self._as_bool(on)), "screen mirror")
 
     def factory_reset(self, mac: str, confirm="") -> bool:
         if str(confirm) != "RESET":
@@ -240,8 +267,7 @@ class ToolsApi(ApiBase):
         """A channel control: it names its panel like the rest (P5.6), and
         answers the write's outcome (P6.4)."""
         logger.info(f"GUI Action: Setting scoreboard on {mac} on_off={on_off} red={red} blue={blue}...")
-        return self._write(mac, "scoreboard", lambda t: t.scoreboard.set_scoreboard(
-            int(on_off), int(red), int(blue)))
+        return self._write(mac, "scoreboard", lambda t: t.scoreboard.set_scoreboard(int(on_off), int(red), int(blue)))
 
     def get_work_mode(self, mac: str):
         logger.info(f"GUI Action: Getting the work mode of {mac}...")
@@ -261,8 +287,5 @@ class ToolsApi(ApiBase):
             return False
         msg = str(text or "").strip()
         if msg:
-            return self._tool_call(
-                mac, lambda d: d.notification.show_notification_text(t, msg),
-                "notification")
-        return self._tool_call(
-            mac, lambda d: d.notification.show_notification(t), "notification")
+            return self._tool_call(mac, lambda d: d.notification.show_notification_text(t, msg), "notification")
+        return self._tool_call(mac, lambda d: d.notification.show_notification(t), "notification")

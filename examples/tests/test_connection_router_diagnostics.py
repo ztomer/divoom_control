@@ -1,5 +1,6 @@
 """Connection-router coverage: diagnostic/probing forwards and compatibility
 hooks (split from test_connection_router_coverage.py)."""
+
 import asyncio
 import json
 import logging
@@ -26,6 +27,7 @@ from support.connection_router_common import (  # noqa: F401
 
 # ── Diagnostic / probing forwards: hasattr(transport) True vs fall back ────
 
+
 def test_probe_write_characteristics_forwards_to_transport_when_supported(monkeypatch):
     conn = _make_conn(monkeypatch)
 
@@ -33,8 +35,9 @@ def test_probe_write_characteristics_forwards_to_transport_when_supported(monkey
         return "transport-result"
 
     conn._active_transport.probe_write_characteristics_and_try_channel_switch = fake
-    result = _run(conn.probe_write_characteristics_and_try_channel_switch(
-        ["w1"], ["n1"], ["r1"], {}, "/tmp/cache", "dev1"))
+    result = _run(
+        conn.probe_write_characteristics_and_try_channel_switch(["w1"], ["n1"], ["r1"], {}, "/tmp/cache", "dev1")
+    )
 
     assert result == "transport-result"
 
@@ -52,8 +55,9 @@ def test_probe_write_characteristics_falls_back_to_probing_module(monkeypatch):
         return "probing-module-result"
 
     monkeypatch.setattr(probing, "probe_write_characteristics_and_try_channel_switch", fake_probe)
-    result = _run(conn.probe_write_characteristics_and_try_channel_switch(
-        ["w1"], ["n1"], ["r1"], {}, "/tmp/cache", "dev1"))
+    result = _run(
+        conn.probe_write_characteristics_and_try_channel_switch(["w1"], ["n1"], ["r1"], {}, "/tmp/cache", "dev1")
+    )
 
     assert result == "probing-module-result"
 
@@ -179,6 +183,7 @@ def test_handle_cached_payload_falls_back_to_probing_module(monkeypatch):
 
 
 # ── Lower-level compatibility hooks ─────────────────────────────────────────
+
 
 def test_handle_ios_le_notification_forwards_and_falls_back(monkeypatch):
     conn = _make_conn(monkeypatch)

@@ -75,6 +75,7 @@ async def test_get_work_mode(device, comm):
 async def test_get_work_mode_empty(device, comm):
     async def empty(*a, **k):
         return []
+
     comm.send_command_and_wait_for_response = empty
     assert await device.get_work_mode() is None
 
@@ -115,6 +116,7 @@ async def test_send_sd_status(device, comm):
 async def test_get_device_temp(device, comm):
     async def resp(*a, **k):
         return [0, 21, 0, 0, 0, 0, 0]
+
     comm.send_command_and_wait_for_response = resp
     out = await device.get_device_temp()
     assert out == {"format": 0, "value": 21}
@@ -123,6 +125,7 @@ async def test_get_device_temp(device, comm):
 async def test_get_device_temp_short(device, comm):
     async def resp(*a, **k):
         return [0]
+
     comm.send_command_and_wait_for_response = resp
     assert await device.get_device_temp() is None
 
@@ -145,6 +148,7 @@ async def test_send_net_temp_disp(device, comm):
 async def test_get_net_temp_disp(device, comm):
     async def resp(*a, **k):
         return [1, 0, 1, 0, 1, 0x2D, 0x00]
+
     comm.send_command_and_wait_for_response = resp
     out = await device.get_net_temp_disp()
     assert out == {"display_modes": [1, 0, 1, 0, 1], "time_minutes": 45}
@@ -153,6 +157,7 @@ async def test_get_net_temp_disp(device, comm):
 async def test_get_net_temp_disp_short(device, comm):
     async def resp(*a, **k):
         return [1]
+
     comm.send_command_and_wait_for_response = resp
     assert await device.get_net_temp_disp() is None
 

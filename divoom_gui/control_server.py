@@ -51,7 +51,7 @@ def list_methods(api) -> list[dict]:
             continue
         try:
             sig = str(inspect.signature(attr))
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             sig = "(...)"
         out.append({"name": name, "signature": sig})
     return out
@@ -62,7 +62,7 @@ def _maybe_json(value):
     if isinstance(value, (str, bytes)):
         try:
             return json.loads(value)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return value.decode() if isinstance(value, bytes) else value
     return value
 
@@ -159,7 +159,7 @@ def make_handler(api, token: str | None):
                 return self._send(401, {"ok": False, "error": "unauthorized"})
             if not self.path.startswith("/api/"):
                 return self._send(404, {"ok": False, "error": "not found"})
-            method = self.path[len("/api/"):].strip("/")
+            method = self.path[len("/api/") :].strip("/")
             if method not in methods:
                 return self._send(404, {"ok": False, "error": f"unknown method {method!r}"})
 
@@ -209,7 +209,8 @@ def serve(api, host: str = "127.0.0.1", port: int = 8787, token: str | None = No
             "the TCP control server needs DIVOOM_CONTROL_TOKEN (or an explicit "
             "token=): it exposes the entire GUI API, and localhost is not an "
             "authorisation boundary. Use serve_unix() for a tokenless local "
-            "surface — a 0600 socket is a real one.")
+            "surface — a 0600 socket is a real one."
+        )
     httpd = ThreadingHTTPServer((host, port), make_handler(api, token))
     logger.info("Divoom control server listening on http://%s:%d", host, port)
     return httpd
@@ -285,8 +286,15 @@ class _UnixHTTPConnection:
         return self._conn.getresponse()
 
 
-def call(method: str, *args, base_url: str | None = None, socket_path: str | None = None,
-         token: str | None = None, timeout: float = 30.0, **kwargs):
+def call(
+    method: str,
+    *args,
+    base_url: str | None = None,
+    socket_path: str | None = None,
+    token: str | None = None,
+    timeout: float = 30.0,
+    **kwargs,
+):
     """Invoke a control-server method over TCP (base_url) or a unix socket.
 
     Pass either positional ``*args`` (sent as a JSON array) or ``**kwargs`` (sent
@@ -320,8 +328,10 @@ def call(method: str, *args, base_url: str | None = None, socket_path: str | Non
 def _build_api():
     import sys
     from pathlib import Path
+
     sys.path.append(str(Path(__file__).parent))
     from gui_main import DivoomGuiAPI
+
     return DivoomGuiAPI()
 
 

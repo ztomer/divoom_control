@@ -20,6 +20,7 @@ Reading the report rather than re-deriving the diagnosis in Python is
 deliberate: the daemon is the process that actually tried to bind, it holds the
 real errno, and a second implementation here would be free to drift from it.
 """
+
 from __future__ import annotations
 
 import logging

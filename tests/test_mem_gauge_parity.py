@@ -15,6 +15,7 @@ Two layers, because only one of them can run everywhere:
   outlive the code it describes.
 * macOS: the real measurement agrees within the harness's tolerance.
 """
+
 from __future__ import annotations
 
 import json
@@ -64,11 +65,9 @@ def test_lockfile_parser_refuses_ambiguity():
 
 
 def test_am_definition_arithmetic():
-    c = {"internal_page_count": 10, "purgeable_count": 3, "wire_count": 4,
-         "compressor_page_count": 5}
+    c = {"internal_page_count": 10, "purgeable_count": 3, "wire_count": 4, "compressor_page_count": 5}
     am = gauge.am_definition(c, 16384)
-    assert am == {"app": 7 * 16384, "wired": 4 * 16384, "compressed": 5 * 16384,
-                  "used": 16 * 16384}
+    assert am == {"app": 7 * 16384, "wired": 4 * 16384, "compressed": 5 * 16384, "used": 16 * 16384}
     # Purgeable can exceed internal for an instant; App Memory floors at zero.
     assert gauge.am_definition({**c, "purgeable_count": 99}, 1)["app"] == 0
 
@@ -86,13 +85,17 @@ def test_non_macos_reports_skipped_not_agreement(monkeypatch, capsys):
 
 
 # ── the real measurement ───────────────────────────────────────────────────
-@pytest.mark.skipif(sys.platform != "darwin",
-                    reason="Activity Monitor's memory definition only exists on macOS")
-@pytest.mark.skipif(shutil.which("cargo") is None,
-                    reason="cargo is needed to compile the locked sysinfo")
+@pytest.mark.skipif(sys.platform != "darwin", reason="Activity Monitor's memory definition only exists on macOS")
+@pytest.mark.skipif(shutil.which("cargo") is None, reason="cargo is needed to compile the locked sysinfo")
 def test_used_memory_matches_activity_monitor_definition():
-    r = subprocess.run([sys.executable, str(TOOL), "--json"],
-                       capture_output=True, text=True, timeout=900, stdin=subprocess.DEVNULL, check=False)
+    r = subprocess.run(
+        [sys.executable, str(TOOL), "--json"],
+        capture_output=True,
+        text=True,
+        timeout=900,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    )
     assert r.returncode in (0, 1), f"harness could not measure:\n{r.stderr}{r.stdout}"
     m = json.loads(r.stdout)
     assert m["sysinfo_version"] == _locked_version()

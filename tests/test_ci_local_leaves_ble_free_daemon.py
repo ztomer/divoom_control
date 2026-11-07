@@ -13,6 +13,7 @@ step carries its own restore: `scripts/ble_free_after.sh CMD...` runs CMD and
 then rebuilds the BLE-free daemon whatever CMD's status, and `py_ci.sh`
 traps the same on exit.
 """
+
 from __future__ import annotations
 
 import os
@@ -68,10 +69,7 @@ def _fake_cargo(tmp_path: Path, rc: int) -> tuple[dict[str, str], Path]:
     cargo = bindir / "cargo"
     # The first call is the wrapped command and answers FAKE_RC; later ones succeed.
     cargo.write_text(
-        '#!/bin/sh\n'
-        f'echo "$*" >> "{log}"\n'
-        f'[ "$(wc -l < "{log}")" -eq 1 ] && exit "${{FAKE_RC:-0}}"\n'
-        'exit 0\n'
+        f'#!/bin/sh\necho "$*" >> "{log}"\n[ "$(wc -l < "{log}")" -eq 1 ] && exit "${{FAKE_RC:-0}}"\nexit 0\n'
     )
     cargo.chmod(cargo.stat().st_mode | stat.S_IXUSR)
     env = dict(os.environ, PATH=f"{bindir}:{os.environ['PATH']}", FAKE_RC=str(rc))
@@ -80,8 +78,14 @@ def _fake_cargo(tmp_path: Path, rc: int) -> tuple[dict[str, str], Path]:
 
 def _run(args: list[str], env: dict[str, str]) -> subprocess.CompletedProcess:
     return subprocess.run(
-        ["bash", str(WRAPPER), *args], cwd=ROOT, env=env, capture_output=True,
-        text=True, timeout=60, stdin=subprocess.DEVNULL, check=False,
+        ["bash", str(WRAPPER), *args],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        stdin=subprocess.DEVNULL,
+        check=False,
     )
 
 
@@ -127,16 +131,16 @@ def _fake_py_ci_tools(tmp_path: Path, *, pytest_rc: int, restore_rc: int) -> tup
     py = ROOT.joinpath(".python-version").read_text().strip()
     tools = {
         "python3": (
-            '#!/bin/sh\n'
+            "#!/bin/sh\n"
             f'echo "python3 $*" >> "{log}"\n'
             f'[ "$1" = "-c" ] && {{ echo "{py}"; exit 0; }}\n'
-            f'exit {pytest_rc}\n'
+            f"exit {pytest_rc}\n"
         ),
         "cargo": (
-            '#!/bin/sh\n'
+            "#!/bin/sh\n"
             f'echo "cargo $*" >> "{log}"\n'
             f'case "$*" in *--no-default-features*) exit {restore_rc};; esac\n'
-            'exit 0\n'
+            "exit 0\n"
         ),
     }
     for name, body in tools.items():
@@ -149,8 +153,14 @@ def _fake_py_ci_tools(tmp_path: Path, *, pytest_rc: int, restore_rc: int) -> tup
 
 def _run_py_ci(env: dict[str, str]) -> subprocess.CompletedProcess:
     return subprocess.run(
-        ["bash", str(PY_CI)], cwd=ROOT, env=env, capture_output=True,
-        text=True, timeout=60, stdin=subprocess.DEVNULL, check=False,
+        ["bash", str(PY_CI)],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        stdin=subprocess.DEVNULL,
+        check=False,
     )
 
 

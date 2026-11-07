@@ -12,11 +12,13 @@ sys.path.append(str(Path(__file__).parent.parent / "divoom_gui"))
 
 from gui_main import DivoomGuiAPI
 
+
 class TestGuiApiTopLevelCoverage(unittest.TestCase):
     def setUp(self):
         self.presets_patcher = patch("pathlib.Path.exists", return_value=False)
         self.presets_patcher.start()
         import tempfile
+
         self.temp_dir = tempfile.TemporaryDirectory()
         self.home_patcher = patch("pathlib.Path.home", return_value=Path(self.temp_dir.name))
         self.home_patcher.start()
@@ -46,8 +48,10 @@ class TestGuiApiTopLevelCoverage(unittest.TestCase):
 
     def test_init_loads_virtual_device_from_primary_path(self):
         device_info = {"BluetoothDeviceId": 42, "DevicePassword": 7}
-        with patch.object(Path, "exists", self._primary_path_exists), \
-             patch.object(Path, "read_text", return_value=json.dumps(device_info)):
+        with (
+            patch.object(Path, "exists", self._primary_path_exists),
+            patch.object(Path, "read_text", return_value=json.dumps(device_info)),
+        ):
             api = DivoomGuiAPI()
         try:
             self.assertEqual(api.device_id, 42)
@@ -56,8 +60,10 @@ class TestGuiApiTopLevelCoverage(unittest.TestCase):
             api.loop_thread.stop()
 
     def test_init_virtual_device_bad_json_is_swallowed(self):
-        with patch.object(Path, "exists", self._primary_path_exists), \
-             patch.object(Path, "read_text", return_value="not valid json{"):
+        with (
+            patch.object(Path, "exists", self._primary_path_exists),
+            patch.object(Path, "read_text", return_value="not valid json{"),
+        ):
             api = DivoomGuiAPI()
         try:
             self.assertEqual(api.device_id, 0)
@@ -79,7 +85,6 @@ class TestGuiApiTopLevelCoverage(unittest.TestCase):
 
     def test_connection_wrappers_forward_to_collaborator(self):
         self.api.connection = MagicMock()
-
 
     # ---- thin pass-through wrappers to Lighting/Tools/Widgets APIs ---------
 
@@ -119,17 +124,21 @@ class TestGuiApiTopLevelCoverage(unittest.TestCase):
     def test_close_window_stops_daemon_when_lifecycle_shared(self):
         fake_client = MagicMock()
         self.api._daemon_client = fake_client
-        with patch("divoom_lib.lifecycle_config.get_keep_daemon_alive", return_value=False), \
-             patch("divoom_lib.lifecycle_config.should_stop_daemon_on_dashboard_quit", return_value=True), \
-             patch("threading.Thread"):
+        with (
+            patch("divoom_lib.lifecycle_config.get_keep_daemon_alive", return_value=False),
+            patch("divoom_lib.lifecycle_config.should_stop_daemon_on_dashboard_quit", return_value=True),
+            patch("threading.Thread"),
+        ):
             self.api.close_window()
         fake_client.shutdown.assert_called_once()
 
     def test_close_window_swallows_lifecycle_check_error(self):
         fake_client = MagicMock()
         self.api._daemon_client = fake_client
-        with patch("divoom_lib.lifecycle_config.get_keep_daemon_alive", side_effect=RuntimeError("boom")), \
-             patch("threading.Thread"):
+        with (
+            patch("divoom_lib.lifecycle_config.get_keep_daemon_alive", side_effect=RuntimeError("boom")),
+            patch("threading.Thread"),
+        ):
             self.api.close_window()  # must not raise
         fake_client.shutdown.assert_not_called()
 
@@ -137,8 +146,7 @@ class TestGuiApiTopLevelCoverage(unittest.TestCase):
 
     def test_live_job_list_no_daemon(self):
         with patch.object(self.api, "_client", return_value=None):
-            self.assertEqual(self.api.live_job_list("AA:BB"),
-                             {"success": False, "error": "daemon unavailable"})
+            self.assertEqual(self.api.live_job_list("AA:BB"), {"success": False, "error": "daemon unavailable"})
 
     def test_live_job_list_delegates_to_daemon(self):
         fake = MagicMock()
@@ -150,10 +158,12 @@ class TestGuiApiTopLevelCoverage(unittest.TestCase):
     # ---- get_notification_listener_status: daemon-unavailable branch ------
 
     def test_get_notification_listener_status_daemon_unavailable(self):
-        with patch("sys.platform", new="darwin"), \
-             patch("divoom_client.macos_notifications.find_notification_db_path", return_value=None), \
-             patch("divoom_client.macos_notifications.load_routing_table", return_value=[]), \
-             patch.object(self.api, "_client", return_value=None):
+        with (
+            patch("sys.platform", new="darwin"),
+            patch("divoom_client.macos_notifications.find_notification_db_path", return_value=None),
+            patch("divoom_client.macos_notifications.load_routing_table", return_value=[]),
+            patch.object(self.api, "_client", return_value=None),
+        ):
             s = self.api.get_notification_listener_status()
         self.assertTrue(s["platform_supported"])
         self.assertFalse(s["running"])
@@ -171,8 +181,10 @@ class TestGuiApiTopLevelCoverage(unittest.TestCase):
     def test_save_notification_routing_set_routing_failure(self):
         fake = MagicMock()
         fake.set_routing.return_value = {"success": False, "error": "device busy"}
-        with patch("divoom_client.macos_notifications.load_routing_table", return_value=[("x", 1)]), \
-             patch.object(self.api, "_client", return_value=fake):
+        with (
+            patch("divoom_client.macos_notifications.load_routing_table", return_value=[("x", 1)]),
+            patch.object(self.api, "_client", return_value=fake),
+        ):
             result = self.api.save_notification_routing('[["whatsapp", 6]]')
         self.assertEqual(result["error"], "device busy")
         self.assertEqual(result["rules"], [["x", 1]])
@@ -189,20 +201,22 @@ class TestGuiApiTopLevelCoverage(unittest.TestCase):
         fake = MagicMock()
         fake.device_call.return_value = {"success": True, "result": 42}
         with patch.object(self.api, "_client", return_value=fake):
-            result = json.loads(self.api.device_call(
-                "AA:00:00:00:00:01", "get_brightness", [1], {"a": 2}, blobs={"b": "x"}, token="tok"))
+            result = json.loads(
+                self.api.device_call(
+                    "AA:00:00:00:00:01", "get_brightness", [1], {"a": 2}, blobs={"b": "x"}, token="tok"
+                )
+            )
         self.assertEqual(result, {"success": True, "result": 42})
         fake.device_call.assert_called_with(
-            "get_brightness", [1], {"a": 2}, target="device", blobs={"b": "x"}, token="tok",
-            mac="AA:00:00:00:00:01")
+            "get_brightness", [1], {"a": 2}, target="device", blobs={"b": "x"}, token="tok", mac="AA:00:00:00:00:01"
+        )
 
     def test_device_call_names_the_wall_as_the_wall(self):
         fake = MagicMock()
         fake.device_call.return_value = {"success": True}
         with patch.object(self.api, "_client", return_value=fake):
             self.api.device_call("MatrixWall", "get_last_previews")
-        fake.device_call.assert_called_with(
-            "get_last_previews", None, None, target="wall", blobs=None, token=None)
+        fake.device_call.assert_called_with("get_last_previews", None, None, target="wall", blobs=None, token=None)
 
     def test_device_call_naming_no_panel_is_refused(self):
         fake = MagicMock()
@@ -237,10 +251,11 @@ class TestGuiApiTopLevelCoverage(unittest.TestCase):
 
     def test_mcp_server_lifecycle_delegates_to_controller(self):
         from divoom_gui.mcp_control import MCPController, MCPStatus
+
         fake_ctl = MagicMock()
-        fake_ctl.start.return_value = MCPStatus(running=True, pid=123, started_at=1.0,
-                                                mac="AA:BB", log_path="/tmp/log",
-                                                last_log_lines=["hi"], error=None)
+        fake_ctl.start.return_value = MCPStatus(
+            running=True, pid=123, started_at=1.0, mac="AA:BB", log_path="/tmp/log", last_log_lines=["hi"], error=None
+        )
         fake_ctl.stop.return_value = MCPStatus(running=False)
         fake_ctl.is_running.return_value = True
         fake_ctl.status.return_value = MCPStatus(running=True, pid=123)
@@ -256,6 +271,7 @@ class TestGuiApiTopLevelCoverage(unittest.TestCase):
 
     def test_start_mcp_server_empty_mac_passes_none(self):
         from divoom_gui.mcp_control import MCPController, MCPStatus
+
         fake_ctl = MagicMock()
         fake_ctl.start.return_value = MCPStatus(running=False)
         with patch.object(MCPController, "instance", return_value=fake_ctl):
@@ -295,4 +311,3 @@ class TestGuiApiTopLevelCoverage(unittest.TestCase):
         result = self.api.set_topology(json_str)
         self.assertTrue(result["success"])
         fake.set_topology.assert_called_with({"devices": {"11:22": {"x": 10, "y": 20}}})
-

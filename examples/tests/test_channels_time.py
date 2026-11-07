@@ -4,6 +4,7 @@ from divoom_legacy.display.time_channel import TimeChannel
 from divoom_legacy.divoom import Divoom as DivoomBase
 from divoom_lib.models import TimeDisplayType
 
+
 @pytest.fixture
 def mock_divoom_instance():
     """Fixture for a mock DivoomBase instance.
@@ -21,11 +22,12 @@ def mock_divoom_instance():
     mock.send_command = AsyncMock()
     return mock
 
+
 @pytest.mark.asyncio
 async def test_time_channel_init_defaults(mock_divoom_instance):
     """Test TimeChannel initialization with default options."""
     channel = TimeChannel(mock_divoom_instance)
-    
+
     assert channel._divoom_instance == mock_divoom_instance
     assert channel._opts["type"] == TimeDisplayType.FullScreen
     assert channel._opts["showTime"] is True
@@ -33,6 +35,7 @@ async def test_time_channel_init_defaults(mock_divoom_instance):
     assert channel._opts["showTemp"] is False
     assert channel._opts["showCalendar"] is False
     assert channel._opts["color"] == "FFFFFF"
+
 
 @pytest.mark.asyncio
 async def test_time_channel_init_custom_opts(mock_divoom_instance):
@@ -43,16 +46,17 @@ async def test_time_channel_init_custom_opts(mock_divoom_instance):
         "showWeather": True,
         "showTemp": True,
         "showCalendar": True,
-        "color": "00FF00"
+        "color": "00FF00",
     }
     channel = TimeChannel(mock_divoom_instance, opts=custom_opts)
-    
+
     assert channel._opts["type"] == TimeDisplayType.Rainbow
     assert channel._opts["showTime"] is False
     assert channel._opts["showWeather"] is True
     assert channel._opts["showTemp"] is True
     assert channel._opts["showCalendar"] is True
     assert channel._opts["color"] == "00FF00"
+
 
 @pytest.mark.asyncio
 async def test_time_channel_show(mock_divoom_instance):
@@ -62,17 +66,21 @@ async def test_time_channel_show(mock_divoom_instance):
     await channel.show()
     mock_divoom_instance.send_command.assert_called_once()
 
+
 @pytest.mark.asyncio
 async def test_time_channel_update_message(mock_divoom_instance):
     """Test _update_message sends the correct command with converted arguments."""
-    channel = TimeChannel(mock_divoom_instance, opts={
-        "type": TimeDisplayType.WithBox,
-        "showTime": True,
-        "showWeather": False,
-        "showTemp": True,
-        "showCalendar": False,
-        "color": "FF00FF"
-    })
+    channel = TimeChannel(
+        mock_divoom_instance,
+        opts={
+            "type": TimeDisplayType.WithBox,
+            "showTime": True,
+            "showWeather": False,
+            "showTemp": True,
+            "showCalendar": False,
+            "color": "FF00FF",
+        },
+    )
 
     await channel._update_message()
 
@@ -89,6 +97,7 @@ async def test_time_channel_update_message(mock_divoom_instance):
     expected_args = [0x00, 0x01, TimeDisplayType.WithBox, 1, 0, 1, 0, 0xFF, 0x00, 0xFF]
     mock_divoom_instance.send_command.assert_called_once_with(0x45, expected_args)
 
+
 @pytest.mark.asyncio
 async def test_time_channel_type_setter(mock_divoom_instance):
     """Test the type setter updates option."""
@@ -96,6 +105,7 @@ async def test_time_channel_type_setter(mock_divoom_instance):
 
     channel.type = TimeDisplayType.AnalogRound
     assert channel._opts["type"] == TimeDisplayType.AnalogRound
+
 
 @pytest.mark.asyncio
 async def test_time_channel_color_setter(mock_divoom_instance):
@@ -105,6 +115,7 @@ async def test_time_channel_color_setter(mock_divoom_instance):
     channel.color = "000000"
     assert channel._opts["color"] == "000000"
 
+
 @pytest.mark.asyncio
 async def test_time_channel_show_time_setter(mock_divoom_instance):
     """Test the show_time setter updates option."""
@@ -112,6 +123,7 @@ async def test_time_channel_show_time_setter(mock_divoom_instance):
 
     channel.show_time = False
     assert channel._opts["showTime"] is False
+
 
 @pytest.mark.asyncio
 async def test_time_channel_show_weather_setter(mock_divoom_instance):
@@ -121,6 +133,7 @@ async def test_time_channel_show_weather_setter(mock_divoom_instance):
     channel.show_weather = True
     assert channel._opts["showWeather"] is True
 
+
 @pytest.mark.asyncio
 async def test_time_channel_show_temp_setter(mock_divoom_instance):
     """Test the show_temp setter updates option."""
@@ -128,6 +141,7 @@ async def test_time_channel_show_temp_setter(mock_divoom_instance):
 
     channel.show_temp = True
     assert channel._opts["showTemp"] is True
+
 
 @pytest.mark.asyncio
 async def test_time_channel_show_calendar_setter(mock_divoom_instance):

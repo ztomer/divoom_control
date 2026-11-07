@@ -101,8 +101,7 @@ def am_definition(c: dict[str, int], page: int) -> dict[str, int]:
     app = max(0, c["internal_page_count"] - c["purgeable_count"]) * page
     wired = c["wire_count"] * page
     compressed = c["compressor_page_count"] * page
-    return {"app": app, "wired": wired, "compressed": compressed,
-            "used": app + wired + compressed}
+    return {"app": app, "wired": wired, "compressed": compressed, "used": app + wired + compressed}
 
 
 def verdict(delta_pp: float, tolerance_pp: float = TOLERANCE_PP) -> bool:
@@ -120,14 +119,27 @@ class _Mach:
         # vm_statistics64 from <mach/vm_statistics.h>, through the last field
         # sysinfo (or Activity Monitor's components) needs. The kernel fills
         # `count` integer_t's and reports how many it wrote.
-        fields = [(n, c_nat)
-                  for n in ("free_count", "active_count", "inactive_count", "wire_count")]
-        fields += [(n, c_u64) for n in ("zero_fill_count", "reactivations", "pageins", "pageouts",
-                                        "faults", "cow_faults", "lookups", "hits", "purges")]
+        fields = [(n, c_nat) for n in ("free_count", "active_count", "inactive_count", "wire_count")]
+        fields += [
+            (n, c_u64)
+            for n in (
+                "zero_fill_count",
+                "reactivations",
+                "pageins",
+                "pageouts",
+                "faults",
+                "cow_faults",
+                "lookups",
+                "hits",
+                "purges",
+            )
+        ]
         fields += [("purgeable_count", c_nat), ("speculative_count", c_nat)]
         fields += [(n, c_u64) for n in ("decompressions", "compressions", "swapins", "swapouts")]
-        fields += [(n, c_nat) for n in ("compressor_page_count", "throttled_count",
-                                        "external_page_count", "internal_page_count")]
+        fields += [
+            (n, c_nat)
+            for n in ("compressor_page_count", "throttled_count", "external_page_count", "internal_page_count")
+        ]
         fields += [("total_uncompressed_pages_in_compressor", c_u64)]
         self._Stats = type("vm_statistics64", (ctypes.Structure,), {"_fields_": fields})
         self.names = [n for n, _ in fields]
@@ -153,8 +165,7 @@ class _Mach:
         want = self._ct.sizeof(st) // 4
         count = self._ct.c_uint32(want)
         host_vm_info64 = 4
-        rc = self._lib.host_statistics64(self._host, host_vm_info64,
-                                         self._ct.byref(st), self._ct.byref(count))
+        rc = self._lib.host_statistics64(self._host, host_vm_info64, self._ct.byref(st), self._ct.byref(count))
         if rc != 0 or count.value < want:
             raise OSError(f"host_statistics64 rc={rc}, filled {count.value}/{want} words")
         return {n: int(getattr(st, n)) for n in self.names}
@@ -175,7 +186,11 @@ def build_probe(version: str) -> Path:
     shutil.copyfile(ROOT / "Cargo.lock", PROBE_DIR / "Cargo.lock")
     r = subprocess.run(
         ["cargo", "build", "--release", "--quiet", "--message-format=json"],
-        capture_output=True, text=True, cwd=PROBE_DIR, timeout=900, stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        cwd=PROBE_DIR,
+        timeout=900,
+        stdin=subprocess.DEVNULL,
         # Built inside PROBE_DIR, so clearing the temp dir clears the build
         # too, rather than orphaning it under ~/.cargo/build; see _cargo_env.
         env=probe_env(PROBE_DIR),
@@ -193,7 +208,9 @@ def build_probe(version: str) -> Path:
 
 
 def run_probe(exe: Path) -> tuple[int, int]:
-    out = subprocess.run([str(exe)], capture_output=True, text=True, timeout=30, check=True, stdin=subprocess.DEVNULL).stdout
+    out = subprocess.run(
+        [str(exe)], capture_output=True, text=True, timeout=30, check=True, stdin=subprocess.DEVNULL
+    ).stdout
     line = next((s for s in out.splitlines() if s.startswith("MEMPROBE ")), None)
     if line is None:
         raise RuntimeError(f"probe printed no MEMPROBE line: {out!r}")
@@ -211,20 +228,31 @@ def measure(version: str, rounds: int, source: str = "Cargo.lock") -> dict:
         si_total, si_used = run_probe(exe)
         after = am_definition(mach.counters(), page)
         am = {k: (before[k] + after[k]) // 2 for k in before}
-        samples.append({
-            "sysinfo_total": si_total, "sysinfo_used": si_used, "am": am,
-            "bracket_bytes": abs(after["used"] - before["used"]),
-            "delta_bytes": si_used - am["used"],
-            "delta_pp": 100.0 * (si_used - am["used"]) / si_total,
-        })
+        samples.append(
+            {
+                "sysinfo_total": si_total,
+                "sysinfo_used": si_used,
+                "am": am,
+                "bracket_bytes": abs(after["used"] - before["used"]),
+                "delta_bytes": si_used - am["used"],
+                "delta_pp": 100.0 * (si_used - am["used"]) / si_total,
+            }
+        )
     mid = sorted(samples, key=lambda s: s["delta_pp"])[len(samples) // 2]
     return {
-        "platform": "darwin", "sysinfo_version": version, "version_source": source,
-        "page_size": page, "os_total": memsize, "sysinfo_total": mid["sysinfo_total"],
-        "sysinfo_used": mid["sysinfo_used"], "am": mid["am"],
-        "delta_bytes": mid["delta_bytes"], "delta_pp": mid["delta_pp"],
+        "platform": "darwin",
+        "sysinfo_version": version,
+        "version_source": source,
+        "page_size": page,
+        "os_total": memsize,
+        "sysinfo_total": mid["sysinfo_total"],
+        "sysinfo_used": mid["sysinfo_used"],
+        "am": mid["am"],
+        "delta_bytes": mid["delta_bytes"],
+        "delta_pp": mid["delta_pp"],
         "delta_pp_sd": statistics.pstdev(s["delta_pp"] for s in samples),
-        "tolerance_pp": TOLERANCE_PP, "rounds": samples,
+        "tolerance_pp": TOLERANCE_PP,
+        "rounds": samples,
         "agree": verdict(mid["delta_pp"]) and mid["sysinfo_total"] == memsize,
     }
 
@@ -237,21 +265,29 @@ def report(m: dict) -> None:
     tot = m["sysinfo_total"]
     pct = lambda b: f"{100.0 * b / tot:6.2f}%"  # noqa: E731
     am = m["am"]
-    info(f"sysinfo {m['sysinfo_version']} ({m['version_source']})  ↔  Activity Monitor definition "
-         f"from host_statistics64, page {m['page_size']} B, median of {len(m['rounds'])} rounds")
+    info(
+        f"sysinfo {m['sysinfo_version']} ({m['version_source']})  ↔  Activity Monitor definition "
+        f"from host_statistics64, page {m['page_size']} B, median of {len(m['rounds'])} rounds"
+    )
     info(f"total            {_gib(tot)}   (hw.memsize {_gib(m['os_total'])})")
     info(f"sysinfo used     {_gib(m['sysinfo_used'])}  {pct(m['sysinfo_used'])}")
-    info(f"AM App+Wir+Comp  {_gib(am['used'])}  {pct(am['used'])}   "
-         f"= {am['app'] / 2**30:.3f} + {am['wired'] / 2**30:.3f} + {am['compressed'] / 2**30:.3f}")
-    info(f"delta            {m['delta_bytes']:+,} B   {m['delta_pp']:+.3f} pp   "
-         f"(round sd {m['delta_pp_sd']:.3f} pp, tolerance ±{m['tolerance_pp']} pp)")
+    info(
+        f"AM App+Wir+Comp  {_gib(am['used'])}  {pct(am['used'])}   "
+        f"= {am['app'] / 2**30:.3f} + {am['wired'] / 2**30:.3f} + {am['compressed'] / 2**30:.3f}"
+    )
+    info(
+        f"delta            {m['delta_bytes']:+,} B   {m['delta_pp']:+.3f} pp   "
+        f"(round sd {m['delta_pp_sd']:.3f} pp, tolerance ±{m['tolerance_pp']} pp)"
+    )
     if m["sysinfo_total"] != m["os_total"]:
         err("sysinfo's total_memory() is not hw.memsize -- the denominator moved too")
     if m["agree"]:
         ok("used_memory() is Activity Monitor's App + Wired + Compressed")
     else:
-        err("used_memory() no longer matches Activity Monitor's App + Wired + Compressed "
-            "-- sysinfo changed what it measures; re-derive the sysmon.rs comment")
+        err(
+            "used_memory() no longer matches Activity Monitor's App + Wired + Compressed "
+            "-- sysinfo changed what it measures; re-derive the sysmon.rs comment"
+        )
 
 
 def main(argv: list[str] | None = None) -> int:

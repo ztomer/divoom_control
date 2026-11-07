@@ -15,6 +15,7 @@ These tests pin the two properties that make the smoke an instrument:
   1. a branch that RAISES is a FAIL, and the run exits non-zero;
   2. a clean run exits 0 — so the non-zero above means something.
 """
+
 from __future__ import annotations
 
 import sys
@@ -32,9 +33,13 @@ class FakeClient:
     """Enough DaemonClient for the smoke's discover phase, with faults."""
 
     def __init__(self, devices=None, status_raises=False, scan_raises=False):
-        self._devices = devices if devices is not None else [
-            {"name": "Ditoo-light-2", "address": "AA:BB:CC:DD:EE:01"},
-        ]
+        self._devices = (
+            devices
+            if devices is not None
+            else [
+                {"name": "Ditoo-light-2", "address": "AA:BB:CC:DD:EE:01"},
+            ]
+        )
         self._status_raises = status_raises
         self._scan_raises = scan_raises
 
@@ -59,10 +64,12 @@ def _run(monkeypatch, client, phase="discover"):
 
 
 def test_a_clean_discover_exits_zero_and_names_the_devices(monkeypatch, capsys):
-    client = FakeClient(devices=[
-        {"name": "Ditoo-light-2", "address": "AA:BB:CC:DD:EE:01"},
-        {"name": "Pixoo-1", "address": "AA:BB:CC:DD:EE:02"},
-    ])
+    client = FakeClient(
+        devices=[
+            {"name": "Ditoo-light-2", "address": "AA:BB:CC:DD:EE:01"},
+            {"name": "Pixoo-1", "address": "AA:BB:CC:DD:EE:02"},
+        ]
+    )
     assert _run(monkeypatch, client) == 0
     out = capsys.readouterr()
     assert "Ditoo-light-2" in out.out
@@ -87,12 +94,9 @@ def test_a_raising_scan_is_a_failure_and_exits_nonzero(monkeypatch, capsys):
     assert "scan blew up" in captured.out + captured.err
 
 
-def test_a_run_that_finds_devices_still_names_them_when_a_later_branch_raises(
-        monkeypatch, capsys):
+def test_a_run_that_finds_devices_still_names_them_when_a_later_branch_raises(monkeypatch, capsys):
     """The original bug exactly: the scan WORKED, the reporting raised."""
-    client = FakeClient(devices=[{"name": "Tivoo-Max-light-3",
-                                  "address": "AA:BB:CC:DD:EE:03"}],
-                        status_raises=True)
+    client = FakeClient(devices=[{"name": "Tivoo-Max-light-3", "address": "AA:BB:CC:DD:EE:03"}], status_raises=True)
     rc = _run(monkeypatch, client)
     assert rc != 0
     captured = capsys.readouterr()

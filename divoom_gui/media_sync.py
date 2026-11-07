@@ -15,8 +15,10 @@ from divoom_gui.sysmon_widget import SysmonWidgetMixin
 
 logger = logging.getLogger("divoom_gui")
 
+
 class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
     """Mixin for macOS active playback tracker, stock tickers, sysmon widget, and frame pushing."""
+
     def get_current_track_info(self, mac: str = "") -> str:
         """What is playing — asked of the DAEMON, not discovered here.
 
@@ -46,16 +48,14 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
 
             if not reply.get("available", False):
                 # Honest unavailable state: say WHY rather than looking idle.
-                return json.dumps({"available": False,
-                                   "reason": reply.get("reason", "unavailable")})
+                return json.dumps({"available": False, "reason": reply.get("reason", "unavailable")})
             # `has_track`, not `playing`: since D.FX2 the daemon's `playing`
             # is false for a PAUSED track, which the card still shows (with
             # is_playing false) rather than going idle.
             if not reply.get("has_track", False):
                 # Idle, but say WHY when the daemon can: a stopped player
                 # holding the Now Playing session hides a playing one.
-                return json.dumps({"available": True, "playing": False,
-                                   "hint": reply.get("hint", "")})
+                return json.dumps({"available": True, "playing": False, "hint": reply.get("hint", "")})
 
             preview = ""
             artwork = ""
@@ -72,21 +72,23 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
                 mime = reply.get("artwork_mime") or "image/jpeg"
                 artwork = f"data:{mime};base64,{art_b64}"
 
-            return json.dumps({
-                "available": True,
-                "playing": True,
-                "track": reply.get("title"),
-                "artist": reply.get("artist"),
-                "album": reply.get("album"),
-                "source": reply.get("source"),
-                "identity": reply.get("identity"),
-                # Paused is not playing: MediaRemote keeps reporting a session's
-                # track after it is paused, so the card must be able to say so
-                # rather than showing a stopped player as live.
-                "is_playing": reply.get("is_playing", False),
-                "preview": preview,
-                "artwork": artwork,
-            })
+            return json.dumps(
+                {
+                    "available": True,
+                    "playing": True,
+                    "track": reply.get("title"),
+                    "artist": reply.get("artist"),
+                    "album": reply.get("album"),
+                    "source": reply.get("source"),
+                    "identity": reply.get("identity"),
+                    # Paused is not playing: MediaRemote keeps reporting a session's
+                    # track after it is paused, so the card must be able to say so
+                    # rather than showing a stopped player as live.
+                    "is_playing": reply.get("is_playing", False),
+                    "preview": preview,
+                    "artwork": artwork,
+                }
+            )
         except Exception as e:
             logger.warning(f"now_playing failed: {e}")
             return json.dumps({})
@@ -109,8 +111,7 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
         daemon's `image` crate, which sniffs the container the same way PIL did.
         """
         try:
-            _extras, frame_path = self._widget_frame(
-                "album_art", size, {"image_b64": artwork_b64})
+            _extras, frame_path = self._widget_frame("album_art", size, {"image_b64": artwork_b64})
             return self._frame_to_data_url(frame_path)
         except Exception as e:
             logger.debug(f"artwork preview failed: {e}")
@@ -121,8 +122,7 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
         wall, else the daemon's resolution for that panel, else ``default``."""
         try:
             if mac == "MatrixWall":
-                sizes = [s.get("size", default) for s in (self.wall_slots or {}).values()
-                         if isinstance(s, dict)]
+                sizes = [s.get("size", default) for s in (self.wall_slots or {}).values() if isinstance(s, dict)]
                 return min(sizes) if sizes else default
             return self._panel_pixels(mac) or default
         except Exception:
@@ -161,8 +161,7 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
         # names the wall panel that did not take the frame (P6.4).
         show = target.show_image if mac == "MatrixWall" else target.display.show_image
         # A rendered frame (cover art, a card) is a picture: scaled (D14).
-        return write_outcome("frame", mac,
-                             lambda: self._run_async(show(str(frame_path), art="picture")))
+        return write_outcome("frame", mac, lambda: self._run_async(show(str(frame_path), art="picture")))
 
     @staticmethod
     def _frame_to_data_url(frame_path) -> str:
@@ -189,13 +188,17 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
         try:
             sz = int(size) if size and int(size) > 0 else self._size_of(mac or None)
             extras, frame_path = self._widget_frame("stocks", sz, {"symbol": symbol})
-            return json.dumps({
-                "ok": True, "size": sz, "symbol": extras.get("symbol", symbol),
-                "preview": self._frame_to_data_url(frame_path),
-                "price": extras.get("price", 0.0),
-                "change": extras.get("change", 0.0),
-                "pct_change": extras.get("pct_change", 0.0),
-            })
+            return json.dumps(
+                {
+                    "ok": True,
+                    "size": sz,
+                    "symbol": extras.get("symbol", symbol),
+                    "preview": self._frame_to_data_url(frame_path),
+                    "price": extras.get("price", 0.0),
+                    "change": extras.get("change", 0.0),
+                    "pct_change": extras.get("pct_change", 0.0),
+                }
+            )
         except Exception as e:
             logger.error(f"get_ticker_preview failed: {e}")
             return json.dumps({"ok": False, "error": str(e)})
@@ -213,19 +216,22 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
         try:
             sz = int(size) if size and int(size) > 0 else self._size_of(mac or None)
             location = self._weather_location()
-            extras, frame_path = self._widget_frame(
-                "weather", sz, {"location": location} if location else {})
+            extras, frame_path = self._widget_frame("weather", sz, {"location": location} if location else {})
             preview = self._frame_to_data_url(frame_path)
             if not preview:
                 raise RuntimeError(f"the weather frame at {frame_path} could not be read")
-            return json.dumps({
-                "ok": True, "size": sz, "preview": preview,
-                "temperature_c": extras.get("temperature_c"),
-                "weather": extras.get("weather"),
-                # The daemon names the city it resolved; with neither it nor an
-                # override the honest answer is "unknown", never a stand-in.
-                "location": extras.get("location") or location or "unknown",
-            })
+            return json.dumps(
+                {
+                    "ok": True,
+                    "size": sz,
+                    "preview": preview,
+                    "temperature_c": extras.get("temperature_c"),
+                    "weather": extras.get("weather"),
+                    # The daemon names the city it resolved; with neither it nor an
+                    # override the honest answer is "unknown", never a stand-in.
+                    "location": extras.get("location") or location or "unknown",
+                }
+            )
         except Exception as e:
             logger.error(f"get_weather_preview failed: {e}")
             return json.dumps({"ok": False, "error": str(e)})
@@ -245,13 +251,15 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
         try:
             size = self._size_of(mac)
             extras, frame_path = self._widget_frame("stocks", size, {"symbol": symbol})
-            return json.dumps({
-                **self._push_frame(mac, frame_path),
-                "preview": self._frame_to_data_url(frame_path),
-                "price": extras.get("price", 0.0),
-                "change": extras.get("change", 0.0),
-                "pct_change": extras.get("pct_change", 0.0),
-            })
+            return json.dumps(
+                {
+                    **self._push_frame(mac, frame_path),
+                    "preview": self._frame_to_data_url(frame_path),
+                    "price": extras.get("price", 0.0),
+                    "change": extras.get("change", 0.0),
+                    "pct_change": extras.get("pct_change", 0.0),
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to apply stock ticker: {e}")
             return json.dumps({"success": False, "error": str(e)})
@@ -295,10 +303,17 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
         default = ["AAPL", "GOOGL", "MSFT", "TSLA", "BTC-USD", "ETH-USD"]
         try:
             import subprocess
+
             out = subprocess.run(
                 ["defaults", "read", "com.apple.stocks"],
-                capture_output=True, text=True, timeout=4, stdin=subprocess.DEVNULL, check=False)
+                capture_output=True,
+                text=True,
+                timeout=4,
+                stdin=subprocess.DEVNULL,
+                check=False,
+            )
             import re
+
             syms = re.findall(r'"?symbol"?\s*=\s*"?([A-Z][A-Z0-9.\-]{0,9})"?', out.stdout)
             cleaned = []
             for s in syms:
@@ -334,6 +349,7 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
         """
         try:
             from divoom_lib.weather_provider import resolve_location
+
             return resolve_location(None) or ""
         except Exception as e:
             logger.debug(f"could not resolve the weather location: {e}")
@@ -351,8 +367,7 @@ class MediaSyncMixin(SysmonWidgetMixin, GallerySyncMixin):
             return bool(reply.get("success", False))
         return bool(reply)
 
-    def _toggle_live_job(self, mac: str, enable: bool, kind: str,
-                         params: dict | None = None) -> bool:
+    def _toggle_live_job(self, mac: str, enable: bool, kind: str, params: dict | None = None) -> bool:
         """Start or stop one live job on the panel ``mac`` names, and report
         what the daemon actually said.
 

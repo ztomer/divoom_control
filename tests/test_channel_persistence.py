@@ -6,6 +6,7 @@ Verifies that:
 3. Daemon broadcast 'activity' events invoke window.Divoom.onActivity, syncing
    preview and UI controls across external clients (CLI/menubar/GUI).
 """
+
 import asyncio
 from pathlib import Path
 import pytest
@@ -29,7 +30,9 @@ async def test_save_and_get_device_channel():
         await wait_js(page, "() => typeof window.saveDeviceChannel === 'function'")
 
         mac = "AA:BB:CC:11:22:33"
-        res = await eval_js(page, """(m) => {
+        res = await eval_js(
+            page,
+            """(m) => {
             window.saveDeviceChannel(m, 'cloud', { style: 1 });
             const saved = window.getDeviceChannel(m);
             const lowerSaved = window.getDeviceChannel(m.toLowerCase());
@@ -39,7 +42,9 @@ async def test_save_and_get_device_channel():
                 lowerSaved,
                 rawStorage: rawStorage ? JSON.parse(rawStorage) : null
             };
-        }""", mac)
+        }""",
+            mac,
+        )
 
         assert res["saved"]["channel"] == "cloud"
         assert res["saved"]["opts"] == {"style": 1}
@@ -66,7 +71,9 @@ async def test_rehydration_on_bench_refresh():
         await answer_arrangement(page)
 
         dev = "22:33:44:55:66:77"
-        res = await eval_js(page, """(mac) => {
+        res = await eval_js(
+            page,
+            """(mac) => {
             // Seed saved channel in localStorage before refresh
             window.saveDeviceChannel(mac, 'visualizer', { style: 3 });
 
@@ -87,7 +94,9 @@ async def test_rehydration_on_bench_refresh():
                 mode: preview.mode,
                 activeTab: activeTab
             };
-        }""", dev)
+        }""",
+            dev,
+        )
 
         assert res["channel"] == "visualizer"
         assert res["mode"] == "glyph"
@@ -110,7 +119,9 @@ async def test_on_activity_event_sync():
         await wait_js(page, "() => !!window.Divoom?.onActivity")
 
         dev = "33:44:55:66:77:88"
-        res = await eval_js(page, """(mac) => {
+        res = await eval_js(
+            page,
+            """(mac) => {
             window.DivoomState = window.DivoomState || {};
             window.DivoomState.discoveredDevices = [
                 { address: mac, name: "Timoo-Desk", room: "Desk" }
@@ -136,7 +147,9 @@ async def test_on_activity_event_sync():
                 mode: preview.mode,
                 activeTab: activeTab
             };
-        }""", dev)
+        }""",
+            dev,
+        )
 
         assert res["saved"]["channel"] == "clock"
         assert res["channel"] == "clock"
@@ -162,15 +175,21 @@ async def test_on_activity_with_pixels_updates_the_preview():
         await wait_js(page, "() => !!window.Divoom?.onActivity")
 
         dev = "44:55:66:77:88:AA"
-        png = ("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ"
-               "AAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==")
-        res = await eval_js(page, """([mac, png]) => {
+        png = (
+            "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ"
+            "AAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
+        )
+        res = await eval_js(
+            page,
+            """([mac, png]) => {
             window.DivoomState.discoveredDevices = [{ address: mac, name: "Pixoo-Frame", room: "Desk" }];
             if (window.SpatialStage?.refresh) window.SpatialStage.refresh();
             window.Divoom.onActivity({ type: 'activity', mac, kind: 'music', preview: png });
             const disp = window.DisplayPreviewRegistry.get(mac);
             return { mode: disp.mode, src: disp.frameSrc, channel: disp.channel };
-        }""", [dev, png])
+        }""",
+            [dev, png],
+        )
         assert res["channel"] == "music"
         assert res["mode"] == "frame", "the preview must show the frame, not a glyph"
         assert res["src"] == png

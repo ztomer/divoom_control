@@ -13,6 +13,7 @@ If you need a visual icon, use:
 
 The check is a fast scan — runs in <100ms even on a large repo.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -24,29 +25,38 @@ from tests.support.repo_files import repo_files
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EXTS = {".py", ".js", ".css", ".html", ".md", ".txt", ".toml", ".cfg", ".ini", ".sh", ".yml", ".yaml"}
-EXEMPT_DIRS = {"references", ".git", "__pycache__", "node_modules",
-               ".venv", "venv", "divoom_lib.egg-info",
-               # transient release-build artifacts (py2app output, build venv)
-               "build", "dist", ".buildvenv"}
+EXEMPT_DIRS = {
+    "references",
+    ".git",
+    "__pycache__",
+    "node_modules",
+    ".venv",
+    "venv",
+    "divoom_lib.egg-info",
+    # transient release-build artifacts (py2app output, build venv)
+    "build",
+    "dist",
+    ".buildvenv",
+}
 
 # Standard emoji Unicode blocks. Keep this list narrow — false
 # positives are better than misses. A char is an "emoji" if its
 # codepoint falls in any of these blocks.
 EMOJI_RANGES = [
-    (0x1F300, 0x1F5FF),   # symbols & pictographs
-    (0x1F600, 0x1F64F),   # emoticons
-    (0x1F680, 0x1F6FF),   # transport & map
-    (0x1F700, 0x1F77F),   # alchemical
-    (0x1F780, 0x1F7FF),   # geometric extended
-    (0x1F800, 0x1F8FF),   # supplemental arrows
-    (0x1F900, 0x1F9FF),   # supplemental symbols
-    (0x1FA00, 0x1FA6F),   # chess
-    (0x1FA70, 0x1FAFF),   # symbols extended-A
-    (0x1F1E6, 0x1F1FF),   # regional indicators (flags)
-    (0x2600, 0x26FF),     # misc symbols
-    (0x2700, 0x27BF),     # dingbats
-    (0x2300, 0x23FF),     # misc technical (clock, hourglass)
-    (0x2B00, 0x2BFF),     # arrows
+    (0x1F300, 0x1F5FF),  # symbols & pictographs
+    (0x1F600, 0x1F64F),  # emoticons
+    (0x1F680, 0x1F6FF),  # transport & map
+    (0x1F700, 0x1F77F),  # alchemical
+    (0x1F780, 0x1F7FF),  # geometric extended
+    (0x1F800, 0x1F8FF),  # supplemental arrows
+    (0x1F900, 0x1F9FF),  # supplemental symbols
+    (0x1FA00, 0x1FA6F),  # chess
+    (0x1FA70, 0x1FAFF),  # symbols extended-A
+    (0x1F1E6, 0x1F1FF),  # regional indicators (flags)
+    (0x2600, 0x26FF),  # misc symbols
+    (0x2700, 0x27BF),  # dingbats
+    (0x2300, 0x23FF),  # misc technical (clock, hourglass)
+    (0x2B00, 0x2BFF),  # arrows
 ]
 
 
@@ -57,8 +67,17 @@ EMOJI_RANGES = [
 # rule in CLAUDE.md (→ ✓ ✗ ⚠ ↔ ↑ ↓ + ← ⌘ ⌥ ⌨). Listed by CODEPOINT so this file
 # never contains the literal glyphs.
 ALLOWED_CODEPOINTS = {
-    0x2192, 0x2713, 0x2717, 0x26A0, 0x2194, 0x2191, 0x2193,  # → ✓ ✗ ⚠ ↔ ↑ ↓
-    0x2190, 0x2318, 0x2325, 0x2328,                          # ← ⌘ ⌥ ⌨
+    0x2192,
+    0x2713,
+    0x2717,
+    0x26A0,
+    0x2194,
+    0x2191,
+    0x2193,  # → ✓ ✗ ⚠ ↔ ↑ ↓
+    0x2190,
+    0x2318,
+    0x2325,
+    0x2328,  # ← ⌘ ⌥ ⌨
 }
 
 
@@ -105,19 +124,18 @@ def test_no_emoji_in_repo() -> None:
         for line_no, line in enumerate(text.splitlines(), start=1):
             for ch in line:
                 if _is_emoji(ch):
-                    offenders.append((
-                        str(p.relative_to(REPO_ROOT)),
-                        line_no,
-                        line.strip()[:80],
-                        ord(ch),
-                    ))
+                    offenders.append(
+                        (
+                            str(p.relative_to(REPO_ROOT)),
+                            line_no,
+                            line.strip()[:80],
+                            ord(ch),
+                        )
+                    )
                     break  # one finding per line is enough
     assert not offenders, (
         "Emoji characters found in repo (R14 §6 forbids them):\n  "
-        + "\n  ".join(
-            f"{path}:{ln}  U+{cp:04X}  {line}"
-            for (path, ln, line, cp) in offenders[:20]
-        )
+        + "\n  ".join(f"{path}:{ln}  U+{cp:04X}  {line}" for (path, ln, line, cp) in offenders[:20])
         + (f"\n  ... and {len(offenders) - 20} more" if len(offenders) > 20 else "")
     )
 
@@ -133,12 +151,12 @@ def test_emoji_range_table_includes_known_blocks() -> None:
     # Quick spot check: a few well-known emoji codepoints.
     assert _is_emoji(chr(0x1F697))  # transport
     assert _is_emoji(chr(0x1F389))  # symbols
-    assert _is_emoji(chr(0x2600))   # sun (misc symbols, forbidden)
-    assert _is_emoji(chr(0x2705))   # check-mark-button (dingbats, forbidden)
+    assert _is_emoji(chr(0x2600))  # sun (misc symbols, forbidden)
+    assert _is_emoji(chr(0x2705))  # check-mark-button (dingbats, forbidden)
     # ...but the permitted Kare icons are NOT flagged (mirror the house gate).
     assert not _is_emoji("\u2713")  # \u2713 allowed
     assert not _is_emoji("\u2717")  # \u2717 allowed
-    assert not _is_emoji("\u26A0")  # \u26A0 allowed
+    assert not _is_emoji("\u26a0")  # \u26A0 allowed
     # And some non-emoji Latin/ASCII characters should NOT be flagged.
     assert not _is_emoji("a")
     assert not _is_emoji("Z")

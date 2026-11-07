@@ -54,16 +54,14 @@ def _wait_for_socket(path: Path, timeout: float = 10.0, proc=None) -> None:
             if proc is not None and proc.poll() is not None:
                 break
             time.sleep(0.1)
-    raise RuntimeError(
-        f"daemon socket {path} never came up: {_why_no_daemon(path, proc)}")
+    raise RuntimeError(f"daemon socket {path} never came up: {_why_no_daemon(path, proc)}")
 
 
 def _why_no_daemon(path: Path, proc=None) -> str:
     """The daemon's own account of the failure, if it left one."""
     failure = Path(f"{path}.failure")
     if failure.exists():
-        return " / ".join(
-            line.strip() for line in failure.read_text().splitlines() if line.strip())
+        return " / ".join(line.strip() for line in failure.read_text().splitlines() if line.strip())
     if proc is not None and proc.poll() is not None:
         err = ""
         try:
@@ -89,7 +87,10 @@ def mock_daemon():
     path = Path(tmpdir) / "daemon.sock"
     proc = subprocess.Popen(
         [str(_DIVOOMD), "--socket", str(path)],
-        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        text=True,
+        stdin=subprocess.DEVNULL,
     )
     try:
         _wait_for_socket(path, proc=proc)
@@ -159,9 +160,7 @@ def test_connect_event_carries_connected_and_mac(mock_daemon):
         # before issuing connect, so we don't miss the broadcast.
         sub.wait_for(lambda evs: any(e.get("type") == "status" for e in evs), timeout=3)
         DaemonClient(socket_path=mock_daemon).send_command("connect", {"mock": True})
-        snap = sub.wait_for(
-            lambda evs: any(e.get("type") == "status" and e.get("connected") is True for e in evs)
-        )
+        snap = sub.wait_for(lambda evs: any(e.get("type") == "status" and e.get("connected") is True for e in evs))
     finally:
         sub.close()
     status_evs = [e for e in snap if e.get("type") == "status"]
@@ -179,13 +178,9 @@ def test_disconnect_event_reports_connected_false(mock_daemon):
         sub.wait_for(lambda evs: any(e.get("type") == "status" for e in evs), timeout=3)
         client = DaemonClient(socket_path=mock_daemon)
         assert client.send_command("connect", {"mock": True}).get("success") is True
-        sub.wait_for(
-            lambda evs: any(e.get("type") == "status" and e.get("connected") is True for e in evs)
-        )
+        sub.wait_for(lambda evs: any(e.get("type") == "status" and e.get("connected") is True for e in evs))
         client.send_command("disconnect")
-        snap = sub.wait_for(
-            lambda evs: any(e.get("type") == "status" and e.get("connected") is False for e in evs)
-        )
+        snap = sub.wait_for(lambda evs: any(e.get("type") == "status" and e.get("connected") is False for e in evs))
     finally:
         sub.close()
     disc = [e for e in snap if e.get("type") == "status" and e.get("connected") is False]
@@ -201,20 +196,14 @@ def test_owned_devices_event_on_connect_and_disconnect(mock_daemon):
     try:
         sub.wait_for(lambda evs: any(e.get("type") == "status" for e in evs), timeout=3)
         DaemonClient(socket_path=mock_daemon).send_command("connect", {"mock": True})
-        snap = sub.wait_for(
-            lambda evs: any(e.get("type") == "owned_devices" for e in evs)
-        )
+        snap = sub.wait_for(lambda evs: any(e.get("type") == "owned_devices" for e in evs))
         owned = [e for e in snap if e.get("type") == "owned_devices"]
         assert owned, f"no owned_devices event: {snap}"
         devs = owned[-1].get("devices", [])
         assert any(d.get("address") == "MOCK_MAC" for d in devs), f"owned set missing mac: {devs}"
 
         DaemonClient(socket_path=mock_daemon).send_command("disconnect")
-        snap2 = sub.wait_for(
-            lambda evs: any(
-                e.get("type") == "owned_devices" and e.get("devices") == [] for e in evs
-            )
-        )
+        snap2 = sub.wait_for(lambda evs: any(e.get("type") == "owned_devices" and e.get("devices") == [] for e in evs))
         cleared = [e for e in snap2 if e.get("type") == "owned_devices" and e.get("devices") == []]
         assert cleared, f"owned_devices not cleared on disconnect: {snap2}"
     finally:

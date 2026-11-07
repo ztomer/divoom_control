@@ -8,6 +8,7 @@ on the bench and in the sidebar. Two causes, both pinned here:
 * the status handler moved the one global dot for ANY panel's event and
   recorded nothing per panel.
 """
+
 from pathlib import Path
 
 import pytest
@@ -44,14 +45,20 @@ async def test_status_moves_only_the_named_panel_and_the_jewel_is_honest():
         await wait_js(page, "() => !!window.Divoom?.onDaemonEvent && !!window.SpatialStage && !!window.jewelClassFor")
         # The bench draws once the daemon's arrangement is read; this test has
         # no bridge otherwise, so one answers that read and is taken away.
-        await eval_js(page, """async () => {
+        await eval_js(
+            page,
+            """async () => {
             window.pywebview = { api: { %s } };
             await window.SpatialRooms.loadTopology();
             delete window.pywebview;
-        }""" % "get_topology: () => Promise.resolve({success: true, topology: {rooms: ['Desk'], wall_linked: true, devices: {}}})")
+        }"""
+            % "get_topology: () => Promise.resolve({success: true, topology: {rooms: ['Desk'], wall_linked: true, devices: {}}})",
+        )
 
         ditoo, pixoo = "E9:DITOO", "A9:PIXOO"
-        state = await eval_js(page, """([d, px, stateJs]) => {
+        state = await eval_js(
+            page,
+            """([d, px, stateJs]) => {
             window.DivoomState.discoveredDevices = [
                 { address: d, name: "Ditoo", room: "Desk" },
                 { address: px, name: "Pixoo", room: "Desk" },
@@ -65,7 +72,10 @@ async def test_status_moves_only_the_named_panel_and_the_jewel_is_honest():
             document.getElementById('banner-device-mac').textContent = d;
             window.setConnectionState({ mode: 'active', transport: 'ble', mac: d, name: 'Ditoo' });
             return (%s)();
-        }""" % STATE_JS, [ditoo, pixoo, None])
+        }"""
+            % STATE_JS,
+            [ditoo, pixoo, None],
+        )
         assert state["byMac"][ditoo]["jewel"] == "online", state
         assert state["byMac"][pixoo]["jewel"] == "online", state
         assert state["appConnected"]
@@ -73,7 +83,9 @@ async def test_status_moves_only_the_named_panel_and_the_jewel_is_honest():
         # An owned_devices event alone (no status event after it) must
         # repaint the bench and the deck: a panel the daemon just adopted
         # shows online everywhere, not only in the sidebar chips.
-        state = await eval_js(page, """([d, px, _]) => {
+        state = await eval_js(
+            page,
+            """([d, px, _]) => {
             window.DivoomState.discoveredDevices.forEach(x => { x.daemonOwned = false; x.activityState = 'disconnected'; });
             window.SpatialStage.refresh();
             const before = (%s)();
@@ -82,48 +94,71 @@ async def test_status_moves_only_the_named_panel_and_the_jewel_is_honest():
                 { address: px, name: "Pixoo", kind: "clock", state: "active" },
             ]});
             return { before, after: (%s)() };
-        }""" % (STATE_JS, STATE_JS), [ditoo, pixoo, None])
+        }"""
+            % (STATE_JS, STATE_JS),
+            [ditoo, pixoo, None],
+        )
         assert state["before"]["byMac"][ditoo]["jewel"] == "standby"
         assert state["after"]["byMac"][ditoo]["jewel"] == "online", state["after"]
         assert state["after"]["deckJewel"] == "online", state["after"]
 
         # The PIXOO drops: the Ditoo (selected) must stay connected, the
         # Pixoo's jewel must go to standby.
-        state = await eval_js(page, """([d, px, _]) => {
+        state = await eval_js(
+            page,
+            """([d, px, _]) => {
             window.Divoom.onDaemonEvent({ type: 'status', connected: false, state: 'disconnected', mac: px });
             return (%s)();
-        }""" % STATE_JS, [ditoo, pixoo, None])
+        }"""
+            % STATE_JS,
+            [ditoo, pixoo, None],
+        )
         assert state["byMac"][pixoo]["state"] == "disconnected"
         assert state["byMac"][pixoo]["jewel"] == "standby", state
         assert state["byMac"][ditoo]["jewel"] == "online", state
         assert state["appConnected"], "a drop of another panel must not disconnect the selected one"
 
         # The PIXOO degrades and recovers; the Ditoo is untouched throughout.
-        state = await eval_js(page, """([d, px, _]) => {
+        state = await eval_js(
+            page,
+            """([d, px, _]) => {
             window.Divoom.onDaemonEvent({ type: 'status', connected: true, state: 'degraded', mac: px });
             const mid = (%s)();
             window.Divoom.onDaemonEvent({ type: 'status', connected: true, state: 'active', mac: px });
             return { mid, end: (%s)() };
-        }""" % (STATE_JS, STATE_JS), [ditoo, pixoo, None])
+        }"""
+            % (STATE_JS, STATE_JS),
+            [ditoo, pixoo, None],
+        )
         assert state["mid"]["byMac"][pixoo]["jewel"] == "amber"
         assert state["end"]["byMac"][pixoo]["jewel"] == "online"
         assert state["mid"]["appConnected"] and state["end"]["appConnected"]
 
         # The DITOO (selected) drops: the global dot goes inactive.
-        state = await eval_js(page, """([d, px, _]) => {
+        state = await eval_js(
+            page,
+            """([d, px, _]) => {
             window.Divoom.onDaemonEvent({ type: 'status', connected: false, state: 'disconnected', mac: d });
             return (%s)();
-        }""" % STATE_JS, [ditoo, pixoo, None])
+        }"""
+            % STATE_JS,
+            [ditoo, pixoo, None],
+        )
         assert state["byMac"][ditoo]["jewel"] == "standby", state
         assert state["deckJewel"] == "standby", f"the sidebar card's jewel must follow the selected panel: {state}"
         assert not state["appConnected"], "the selected panel dropped; the app is not connected"
         assert state["byMac"][pixoo]["jewel"] == "online"
 
         # A fleet-wide status (names nobody) moves everyone.
-        state = await eval_js(page, """([d, px, _]) => {
+        state = await eval_js(
+            page,
+            """([d, px, _]) => {
             window.Divoom.onDaemonEvent({ type: 'status', connected: false, state: 'idle' });
             return (%s)();
-        }""" % STATE_JS, [ditoo, pixoo, None])
+        }"""
+            % STATE_JS,
+            [ditoo, pixoo, None],
+        )
         assert all(v["jewel"] == "standby" for v in state["byMac"].values()), state
         await browser.close()
 
@@ -142,7 +177,9 @@ async def test_bench_selection_always_reaches_python_including_the_fallback():
         await page.goto(f"file://{INDEX_HTML}")
         await page.wait_for_load_state("domcontentloaded")
         await wait_js(page, "() => !!window.SpatialStage")
-        res = await eval_js(page, """async () => {
+        res = await eval_js(
+            page,
+            """async () => {
             const calls = [];
             window.pywebview = { api: { select_device: (m, prov) => { calls.push([m, !!prov]); return Promise.resolve(true); },
                                         get_topology: () => Promise.resolve({success: true, topology: {rooms: ['Desk'], wall_linked: true, devices: {}}}), set_topology: () => Promise.resolve({success: true}) } };
@@ -163,7 +200,8 @@ async def test_bench_selection_always_reaches_python_including_the_fallback():
                 { address: 'T1:TIMOO', name: 'Timoo', state: 'active', selected: true },
                 { address: 'E9:DITOO', name: 'Ditoo', state: 'active', selected: false }]});
             return { afterFallback, afterClick, afterDaemon, sel: window.SpatialStage.getSelectedMac(), calls };
-        }""")
+        }""",
+        )
         # The fallback is PROVISIONAL: Python binds its proxy, the daemon is not told.
         assert res["afterFallback"]["sel"] == "T1:TIMOO"
         assert res["afterFallback"]["calls"] == [["T1:TIMOO", True]], res
@@ -186,7 +224,9 @@ async def test_require_device_and_fleet_status_are_per_panel():
         await page.goto(f"file://{INDEX_HTML}")
         await page.wait_for_load_state("domcontentloaded")
         await wait_js(page, "() => !!window.requireDevice && !!window.panelIsLinked")
-        res = await eval_js(page, """() => {
+        res = await eval_js(
+            page,
+            """() => {
             window.showToast = () => {};
             const d = 'E9:DITOO', px = 'A9:PIXOO';
             window.DivoomState.discoveredDevices = [
@@ -212,7 +252,8 @@ async def test_require_device_and_fleet_status_are_per_panel():
             const pxBack = { px: window.requireDevice(px), linked: window.panelIsLinked(px),
                              count: window.getFleetStatus().connectedCount };
             return { both, pxDown, allDown, pxBack };
-        }""")
+        }""",
+        )
         assert res["both"] == {"sel": True, "px": True, "count": 2}
         assert res["pxDown"] == {"sel": True, "px": False, "count": 1, "appConnected": True}
         assert res["allDown"] == {"sel": False, "count": 0, "appConnected": False}
@@ -235,14 +276,17 @@ async def test_bench_node_drag_moves_the_panel_and_a_still_click_connects_it():
         await page.goto(f"file://{INDEX_HTML}")
         await page.wait_for_load_state("domcontentloaded")
         await wait_js(page, "() => !!window.SpatialStage && !!window.SpatialDrag")
-        await eval_js(page, """async () => {
+        await eval_js(
+            page,
+            """async () => {
             window.__connects = [];
             window.connectDevice = (name, addr) => { window.__connects.push(addr); };
             window.pywebview = { api: { select_device: () => Promise.resolve(true), get_topology: () => Promise.resolve({success: true, topology: {rooms: ['Desk'], wall_linked: true, devices: {}}}), set_topology: () => Promise.resolve({success: true}) } };
             await window.SpatialRooms.loadTopology();
             window.DivoomState.discoveredDevices = [{ address: 'E9:DITOO', name: 'Ditoo' }];
             window.SpatialStage.refresh();
-        }""")
+        }""",
+        )
         node = page.locator("#spatial-node-E9\\:DITOO")
         box = await node.bounding_box()
         assert box, "the bench renders the panel"
@@ -274,15 +318,21 @@ async def test_the_bench_starts_open_and_a_collapse_is_remembered():
         await page.goto(f"file://{INDEX_HTML}")
         await page.wait_for_load_state("domcontentloaded")
         await wait_js(page, "() => !!window.SpatialStage")
-        state = await eval_js(page, """() => ({
+        state = await eval_js(
+            page,
+            """() => ({
             bench: getComputedStyle(document.getElementById('appbar-bench-view')).display,
-            ribbon: getComputedStyle(document.getElementById('appbar-ribbon-view')).display })""")
+            ribbon: getComputedStyle(document.getElementById('appbar-ribbon-view')).display })""",
+        )
         assert state["bench"] != "none" and state["ribbon"] == "none", f"fresh start is collapsed: {state}"
         await page.add_init_script("try { localStorage.setItem('spatial_stage_collapsed', 'true'); } catch (_) {}")
         await page.goto(f"file://{INDEX_HTML}")
         await wait_js(page, "() => !!window.SpatialStage")
-        state = await eval_js(page, """() => ({
+        state = await eval_js(
+            page,
+            """() => ({
             bench: getComputedStyle(document.getElementById('appbar-bench-view')).display,
-            ribbon: getComputedStyle(document.getElementById('appbar-ribbon-view')).display })""")
+            ribbon: getComputedStyle(document.getElementById('appbar-ribbon-view')).display })""",
+        )
         assert state["bench"] == "none" and state["ribbon"] != "none", f"a remembered collapse was ignored: {state}"
         await browser.close()

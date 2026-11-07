@@ -7,6 +7,7 @@ from divoom_lib.utils.atomic_io import atomic_write_text, atomic_write_config  #
 
 logger = logging.getLogger("divoom_gui")
 
+
 class PresetsManagerMixin:
     def _get_presets_file(self) -> Path:
         """Return path to presets.json under the user config directory.
@@ -60,6 +61,7 @@ class PresetsManagerMixin:
         logger.info("GUI Action: Loading configurations...")
         try:
             from divoom_client.daemon_config import DEFAULT_SCAN_TIMEOUT, DEFAULT_SCAN_LIMIT
+
             default_timeout, default_limit = int(DEFAULT_SCAN_TIMEOUT), DEFAULT_SCAN_LIMIT
             config_file = Path.home() / ".config" / "divoom-control" / "config.ini"
             cfg = configparser.ConfigParser()
@@ -68,10 +70,10 @@ class PresetsManagerMixin:
             limit = default_limit
             lan_ip = ""
             lan_token = 0
-            
+
             last_connected_device = ""
             last_detected_count = 0
-            
+
             # Per-field int coercion that degrades to the default instead of
             # throwing: a single non-numeric field (corrupt/hand-edited
             # config.ini) used to escape to the outer except and return {} —
@@ -79,7 +81,7 @@ class PresetsManagerMixin:
             def _safe_int(value: str, default: int) -> int:
                 try:
                     return int(value)
-                except (TypeError, ValueError):
+                except TypeError, ValueError:
                     return default
 
             if config_file.exists():
@@ -91,7 +93,7 @@ class PresetsManagerMixin:
                 last_detected_count = _safe_int(cfg.get("gui", "last_detected_count", fallback="0"), 0)
                 lan_ip = cfg.get("lan", "device_ip", fallback="")
                 lan_token = _safe_int(cfg.get("lan", "local_token", fallback="0"), 0)
-                
+
             presets_file = self._get_presets_file()
             slots = {}
             if presets_file.exists():
@@ -102,12 +104,13 @@ class PresetsManagerMixin:
                     # the mock "AA:BB:CC:DD:EE:FF" address) so the canvas never
                     # shows an "undefined" device.
                     slots = {
-                        mac: s for mac, s in (raw_slots or {}).items()
+                        mac: s
+                        for mac, s in (raw_slots or {}).items()
                         if isinstance(s, dict) and s.get("name") and mac and mac != "AA:BB:CC:DD:EE:FF"
                     }
                 except Exception:
                     pass
-            
+
             devices_cache_file = Path.home() / ".config" / "divoom-control" / "discovered_devices.json"
             cached_devices = []
             if devices_cache_file.exists():
@@ -115,7 +118,7 @@ class PresetsManagerMixin:
                     cached_devices = json.loads(devices_cache_file.read_text(encoding="utf-8"))
                 except Exception:
                     pass
-                    
+
             cloud_connected = False
             cloud_email = ""
             cloud_password_store = ""
@@ -132,23 +135,29 @@ class PresetsManagerMixin:
                     logger.debug("cached credentials unavailable: %s", exc)
             if self.cached_creds and self.cached_creds.is_valid():
                 cloud_connected = True
-                cloud_email = self.cached_creds.email if (hasattr(self.cached_creds, "email") and self.cached_creds.email) else email
+                cloud_email = (
+                    self.cached_creds.email
+                    if (hasattr(self.cached_creds, "email") and self.cached_creds.email)
+                    else email
+                )
                 cloud_password_store = getattr(self.cached_creds, "password_store", "") or ""
 
-            return json.dumps({
-                "email": email,
-                "timeout": timeout,
-                "limit": limit,
-                "last_connected_device": last_connected_device,
-                "slots": slots,
-                "lan_ip": lan_ip,
-                "lan_token": lan_token,
-                "devices": cached_devices,
-                "cloud_connected": cloud_connected,
-                "cloud_email": cloud_email,
-                "cloud_password_store": cloud_password_store,
-                "last_detected_count": last_detected_count
-            })
+            return json.dumps(
+                {
+                    "email": email,
+                    "timeout": timeout,
+                    "limit": limit,
+                    "last_connected_device": last_connected_device,
+                    "slots": slots,
+                    "lan_ip": lan_ip,
+                    "lan_token": lan_token,
+                    "devices": cached_devices,
+                    "cloud_connected": cloud_connected,
+                    "cloud_email": cloud_email,
+                    "cloud_password_store": cloud_password_store,
+                    "last_detected_count": last_detected_count,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to load config: {e}")
             return json.dumps({})
@@ -212,22 +221,23 @@ class PresetsManagerMixin:
         logger.info("Opening save file dialog for settings export...")
         try:
             import webview
+
             window = getattr(self, "window", None)
             if not window:
                 logger.error("No webview window reference available in PresetsManagerMixin.")
                 return False
-            
+
             result = window.create_file_dialog(
                 webview.SAVE_DIALOG,
                 save_filename="divoom_settings_backup.json",
-                file_types=('JSON files (*.json)', 'All files (*.*)')
+                file_types=("JSON files (*.json)", "All files (*.*)"),
             )
-            
+
             path = result[0] if isinstance(result, list) else result
             if not path:
                 logger.info("Export cancelled by user.")
                 return False
-                
+
             return self._export_settings_to_path(path)
         except Exception as e:
             logger.error(f"Error opening export file dialog: {e}")
@@ -238,7 +248,7 @@ class PresetsManagerMixin:
         try:
             config_dir = Path.home() / ".config" / "divoom-control"
             data = {}
-            
+
             # 1. presets.json
             presets_file = config_dir / "presets.json"
             if presets_file.exists():
@@ -246,12 +256,12 @@ class PresetsManagerMixin:
                     data["presets"] = json.loads(presets_file.read_text(encoding="utf-8"))
                 except Exception as e:
                     logger.warning(f"Failed to read presets.json for export: {e}")
-                    
+
             # 2. config.ini
             config_file = config_dir / "config.ini"
             if config_file.exists():
                 data["config_ini"] = config_file.read_text(encoding="utf-8")
-                
+
             # 3. alarms.json
             alarms_file = config_dir / "alarms.json"
             if alarms_file.exists():
@@ -259,7 +269,7 @@ class PresetsManagerMixin:
                     data["alarms"] = json.loads(alarms_file.read_text(encoding="utf-8"))
                 except Exception as e:
                     logger.warning(f"Failed to read alarms.json for export: {e}")
-                    
+
             # 4. hotchannel.json
             hotchannel_file = config_dir / "hotchannel.json"
             if hotchannel_file.exists():
@@ -267,7 +277,7 @@ class PresetsManagerMixin:
                     data["hotchannel"] = json.loads(hotchannel_file.read_text(encoding="utf-8"))
                 except Exception as e:
                     logger.warning(f"Failed to read hotchannel.json for export: {e}")
-                    
+
             # 5. notification_routing.json
             routing_file = config_dir / "notification_routing.json"
             if routing_file.exists():
@@ -287,22 +297,21 @@ class PresetsManagerMixin:
         logger.info("Opening open file dialog for settings import...")
         try:
             import webview
+
             window = getattr(self, "window", None)
             if not window:
                 logger.error("No webview window reference available in PresetsManagerMixin.")
                 return False
-            
+
             result = window.create_file_dialog(
-                webview.OPEN_DIALOG,
-                allow_multiple=False,
-                file_types=('JSON files (*.json)', 'All files (*.*)')
+                webview.OPEN_DIALOG, allow_multiple=False, file_types=("JSON files (*.json)", "All files (*.*)")
             )
-            
+
             path = result[0] if (isinstance(result, list) and len(result) > 0) else result
             if not path:
                 logger.info("Import cancelled by user.")
                 return False
-                
+
             return self._import_settings_from_path(path)
         except Exception as e:
             logger.error(f"Error opening import file dialog: {e}")
@@ -314,35 +323,31 @@ class PresetsManagerMixin:
             backup_data = json.loads(Path(path).read_text(encoding="utf-8"))
             config_dir = Path.home() / ".config" / "divoom-control"
             config_dir.mkdir(parents=True, exist_ok=True)
-            
+
             # Restore presets.json
             if "presets" in backup_data:
-                atomic_write_text(config_dir / "presets.json",
-                                  json.dumps(backup_data["presets"], indent=2))
+                atomic_write_text(config_dir / "presets.json", json.dumps(backup_data["presets"], indent=2))
 
             # Restore config.ini (holds the cloud password → 0600)
             if "config_ini" in backup_data:
-                atomic_write_text(config_dir / "config.ini",
-                                  backup_data["config_ini"], mode=0o600)
+                atomic_write_text(config_dir / "config.ini", backup_data["config_ini"], mode=0o600)
 
             # Restore alarms.json
             if "alarms" in backup_data:
-                atomic_write_text(config_dir / "alarms.json",
-                                  json.dumps(backup_data["alarms"], indent=2))
+                atomic_write_text(config_dir / "alarms.json", json.dumps(backup_data["alarms"], indent=2))
 
             # Restore hotchannel.json
             if "hotchannel" in backup_data:
-                atomic_write_text(config_dir / "hotchannel.json",
-                                  json.dumps(backup_data["hotchannel"], indent=2))
+                atomic_write_text(config_dir / "hotchannel.json", json.dumps(backup_data["hotchannel"], indent=2))
 
             # Restore notification_routing.json
             if "notification_routing" in backup_data:
-                atomic_write_text(config_dir / "notification_routing.json",
-                                  json.dumps(backup_data["notification_routing"], indent=2))
-                
+                atomic_write_text(
+                    config_dir / "notification_routing.json", json.dumps(backup_data["notification_routing"], indent=2)
+                )
+
             logger.info("Import completed successfully.")
             return True
         except Exception as e:
             logger.error(f"Failed to import settings: {e}")
             return False
-

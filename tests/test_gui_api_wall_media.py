@@ -7,14 +7,20 @@ import pytest
 
 from tests.support.gui_api_base import GuiApiTestBase
 
+
 class TestGuiApiWallMedia(GuiApiTestBase):
     def _fake_wall_client(self):
         """A fake daemon client for wall ops: wall_configure succeeds and
         device_call (target='wall') records the dotted method + returns True."""
         fake = MagicMock()
         fake.wall_configure.return_value = {"success": True, "wall": True}
-        fake.device_status.return_value = {"success": True, "connected": False,
-                                           "mac": None, "lan_ip": None, "wall": True}
+        fake.device_status.return_value = {
+            "success": True,
+            "connected": False,
+            "mac": None,
+            "lan_ip": None,
+            "wall": True,
+        }
         fake.device_call.return_value = {"success": True, "result": True}
         return fake
 
@@ -29,9 +35,9 @@ class TestGuiApiWallMedia(GuiApiTestBase):
 
         # The bench's wall selector is the mac a wall write names (P5.6).
         self.assertTrue(self.api.set_solid_light("MatrixWall", "00FFCC", 100)["success"])
-        fake.device_call.assert_called_with("set_light", ["00FFCC", 100], {},
-                                            target="wall", blobs=None, token=None,
-                                            mac=None)
+        fake.device_call.assert_called_with(
+            "set_light", ["00FFCC", 100], {}, target="wall", blobs=None, token=None, mac=None
+        )
 
         self.assertTrue(self.api.set_clock("MatrixWall", 3)["success"])
         # show_clock is called with clock=3 (kwargs)
@@ -43,9 +49,9 @@ class TestGuiApiWallMedia(GuiApiTestBase):
         """2.c/2.d: VJ + EQ selectors dispatch to the daemon-owned wall."""
         fake = self._fake_wall_client()
         self.api._daemon_client = fake
-        self.api.update_wall_slots(json.dumps(
-            {"AA:BB:CC:DD:EE:FF": {"x": 0, "y": 0, "size": 16, "width": 120, "height": 120}}
-        ))
+        self.api.update_wall_slots(
+            json.dumps({"AA:BB:CC:DD:EE:FF": {"x": 0, "y": 0, "size": 16, "width": 120, "height": 120}})
+        )
 
         self.assertTrue(self.api.set_vj_effect("MatrixWall", 5)["success"])
         self.assertEqual(fake.device_call.call_args.args[0], "show_effects")
@@ -64,12 +70,15 @@ class TestGuiApiWallMedia(GuiApiTestBase):
         """4.c/4.d: the target bridge writes the app's SETTINGS (the one home
         for the device list) and the schedule bridge writes hotchannel.json."""
         cfg = {"enabled": False, "interval": 3600}
-        with patch("divoom_lib.settings_devices.set_registered", return_value=True) as mset, \
-             patch("divoom_lib.settings_devices.registered_devices",
-                   return_value=[("a9fccb71-3d3d-4de3-c381-0de382cdc4aa", 18)]), \
-             patch("divoom_lib.hotchannel_config.load_config", return_value=cfg), \
-             patch("divoom_lib.hotchannel_config.save_config", return_value=True) as msave:
-
+        with (
+            patch("divoom_lib.settings_devices.set_registered", return_value=True) as mset,
+            patch(
+                "divoom_lib.settings_devices.registered_devices",
+                return_value=[("a9fccb71-3d3d-4de3-c381-0de382cdc4aa", 18)],
+            ),
+            patch("divoom_lib.hotchannel_config.load_config", return_value=cfg),
+            patch("divoom_lib.hotchannel_config.save_config", return_value=True) as msave,
+        ):
             self.assertTrue(self.api.set_sync_targets(json.dumps(["AA", "BB"])))
             mset.assert_called_once_with(["AA", "BB"], {}, [])
 
@@ -92,9 +101,14 @@ class TestGuiApiWallMedia(GuiApiTestBase):
 
         client = MagicMock()
         client.render_widget.return_value = {
-            "success": True, "kind": "stocks", "size": 32,
+            "success": True,
+            "kind": "stocks",
+            "size": 32,
             "frame_rgb_b64": _b64.b64encode(bytes(32 * 32 * 3)).decode(),
-            "symbol": "AAPL", "price": 100.0, "change": 1.0, "pct_change": 1.0,
+            "symbol": "AAPL",
+            "price": 100.0,
+            "change": 1.0,
+            "pct_change": 1.0,
         }
         with patch.object(type(self.api), "_client", lambda self: client):
             res = json.loads(self.api.get_ticker_preview("AA:00:00:00:00:01", "AAPL", 32))
@@ -111,9 +125,14 @@ class TestGuiApiWallMedia(GuiApiTestBase):
         self.api.wall_slots = {}
         client = MagicMock()
         client.render_widget.return_value = {
-            "success": True, "kind": "stocks", "size": 16,
+            "success": True,
+            "kind": "stocks",
+            "size": 16,
             "frame_rgb_b64": _b64.b64encode(bytes(16 * 16 * 3)).decode(),
-            "symbol": "AAPL", "price": 1.0, "change": 0.0, "pct_change": 0.0,
+            "symbol": "AAPL",
+            "price": 1.0,
+            "change": 0.0,
+            "pct_change": 0.0,
         }
         with patch.object(type(self.api), "_client", lambda self: client):
             res = json.loads(self.api.apply_stock_ticker("", "AAPL"))
@@ -125,10 +144,13 @@ class TestGuiApiWallMedia(GuiApiTestBase):
         """5.e: tickers save/load, de-duped and upper-cased."""
         import tempfile, os
         from pathlib import Path as _P
+
         tmp = _P(tempfile.mkdtemp()) / "tickers.json"
         # Override the setUp-wide Path.exists=False so the read path works.
-        with patch.object(type(self.api), "_tickers_path", lambda self: tmp), \
-             patch("pathlib.Path.exists", return_value=True):
+        with (
+            patch.object(type(self.api), "_tickers_path", lambda self: tmp),
+            patch("pathlib.Path.exists", return_value=True),
+        ):
             self.assertTrue(self.api.set_tickers(json.dumps(["aapl", "AAPL", "btc-usd", ""])))
             self.assertEqual(json.loads(self.api.get_tickers()), ["AAPL", "BTC-USD"])
 
@@ -143,9 +165,16 @@ class TestGuiApiWallMedia(GuiApiTestBase):
         expected: green stub, broken widget.)
         """
         import base64 as _b64
-        reply = {"success": True, "size": size, "kind": "sysmon",
-                 "cpu": 12, "mem": 43, "battery": 80,
-                 "frame_rgb_b64": _b64.b64encode(bytes(size * size * 3)).decode()}
+
+        reply = {
+            "success": True,
+            "size": size,
+            "kind": "sysmon",
+            "cpu": 12,
+            "mem": 43,
+            "battery": 80,
+            "frame_rgb_b64": _b64.b64encode(bytes(size * size * 3)).decode(),
+        }
         reply.update(overrides)
         stub = MagicMock()
         stub.render_widget.return_value = reply
@@ -172,8 +201,7 @@ class TestGuiApiWallMedia(GuiApiTestBase):
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.dict(os.environ,
-                            {"DIVOOM_SOCKET": os.path.join(tmp, "absent.sock")}):
+            with patch.dict(os.environ, {"DIVOOM_SOCKET": os.path.join(tmp, "absent.sock")}):
                 with patch.object(type(self.api), "_client", lambda self: None):
                     prev = json.loads(self.api.get_system_stats_preview(16))
                     self.assertFalse(prev["ok"])
@@ -206,26 +234,25 @@ class TestGuiApiWallMedia(GuiApiTestBase):
         """
         import tempfile
         from pathlib import Path as _P
+
         sock = _P(tempfile.mkdtemp()) / "custom.sock"
         sock.with_suffix(".sock.failure").write_text(
             "reason: /tmp/custom.sock is a regular file, not a socket\n"
             "remedy: Move or delete that file yourself, then start the daemon again.\n"
-            "transient: false\n")
+            "transient: false\n"
+        )
         client = MagicMock()
         client.socket_path = str(sock)
-        client.render_widget.return_value = {"success": False, "error": "[Errno 2]",
-                                             "unreachable": True}
+        client.render_widget.return_value = {"success": False, "error": "[Errno 2]", "unreachable": True}
         with patch.object(type(self.api), "_client", lambda self: client):
             prev = json.loads(self.api.get_system_stats_preview(16))
         self.assertFalse(prev["ok"])
-        self.assertIn("not a socket", prev["error"],
-                      "the daemon's own recorded reason should reach the card")
+        self.assertIn("not a socket", prev["error"], "the daemon's own recorded reason should reach the card")
 
     def test_a_daemon_level_error_is_surfaced_verbatim(self):
         """The opposite case: the daemon ANSWERED, so use its words, not ours."""
         client = MagicMock()
-        client.render_widget.return_value = {"success": False,
-                                             "error": "sysmon is disabled"}
+        client.render_widget.return_value = {"success": False, "error": "sysmon is disabled"}
         with patch.object(type(self.api), "_client", lambda self: client):
             prev = json.loads(self.api.get_system_stats_preview(16))
         self.assertFalse(prev["ok"])
@@ -250,21 +277,27 @@ class TestGuiApiWallMedia(GuiApiTestBase):
         frame = _b64.b64encode(bytes(16 * 16 * 3)).decode()
         client = MagicMock()
         client.render_widget.return_value = {
-            "success": True, "kind": "stocks", "size": 16,
+            "success": True,
+            "kind": "stocks",
+            "size": 16,
             "frame_rgb_b64": frame,
-            "symbol": "AAPL", "price": 105.5, "change": 1.2, "pct_change": 1.15,
+            "symbol": "AAPL",
+            "price": 105.5,
+            "change": 1.2,
+            "pct_change": 1.15,
         }
         dev = MagicMock()
         dev.display.show_image = AsyncMock(return_value=True)
         self.api.lighting._display = lambda mac, **_kw: dev if mac == "AA:00:00:00:00:01" else None
-        with patch.object(type(self.api), "_client", lambda self: client), \
-             patch.object(self.api, "_size_of", side_effect=lambda mac, default=16: 16):
+        with (
+            patch.object(type(self.api), "_client", lambda self: client),
+            patch.object(self.api, "_size_of", side_effect=lambda mac, default=16: 16),
+        ):
             res_dict = json.loads(self.api.apply_stock_ticker("AA:00:00:00:00:01", "AAPL"))
             self.assertTrue(res_dict["success"])
             self.assertEqual(res_dict["price"], 105.5)
             self.assertEqual(res_dict["change"], 1.2)
-            client.render_widget.assert_called_once_with(
-                "stocks", size=16, params={"symbol": "AAPL"})
+            client.render_widget.assert_called_once_with("stocks", size=16, params={"symbol": "AAPL"})
             dev.display.show_image.assert_awaited_once()
 
     def test_ticker_preview_and_push_come_from_one_call(self):
@@ -275,25 +308,30 @@ class TestGuiApiWallMedia(GuiApiTestBase):
         raw = bytes(range(256)) * 3  # 768 bytes = a 16x16 RGB frame
         client = MagicMock()
         client.render_widget.return_value = {
-            "success": True, "kind": "stocks", "size": 16,
+            "success": True,
+            "kind": "stocks",
+            "size": 16,
             "frame_rgb_b64": _b64.b64encode(raw).decode(),
-            "symbol": "AAPL", "price": 1.0, "change": 0.0, "pct_change": 0.0,
+            "symbol": "AAPL",
+            "price": 1.0,
+            "change": 0.0,
+            "pct_change": 0.0,
         }
         with patch.object(type(self.api), "_client", lambda self: client):
             preview = json.loads(self.api.get_ticker_preview("AA:00:00:00:00:01", "AAPL", 16))
         self.assertTrue(preview["ok"], preview)
 
         from PIL import Image
-        written = Image.open(
-            Path(__file__).resolve().parent.parent / "scratch" / "stocks_16.png")
-        self.assertEqual(written.convert("RGB").tobytes(), raw,
-                         "the preview must be the daemon's bytes, unaltered")
+
+        written = Image.open(Path(__file__).resolve().parent.parent / "scratch" / "stocks_16.png")
+        self.assertEqual(written.convert("RGB").tobytes(), raw, "the preview must be the daemon's bytes, unaltered")
 
     def test_lan_device_operations(self):
         """Add / load / delete LAN devices against a real temp presets file (the
         writers are atomic — temp-file + os.replace — so a write_text mock would
         be bypassed; use real storage instead)."""
         import tempfile
+
         # This test needs a real file on disk, so drop setUp's global
         # Path.exists/Path.home patches for its duration.
         self.presets_patcher.stop()
@@ -324,8 +362,10 @@ class TestGuiApiWallMedia(GuiApiTestBase):
     def test_run_async_times_out_instead_of_hanging(self):
         """A3: a wedged async chain must not block the JS-API thread forever — it
         raises after the timeout instead."""
+
         async def _hang():
             await asyncio.sleep(5)
+
         with self.assertRaises(RuntimeError):
             self.api._run_async(_hang(), timeout=0.2)
 

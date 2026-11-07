@@ -11,6 +11,7 @@ The fix: when the JSON cache is empty OR contains only manual
 file_id="9999" entries, fall back to scanning the on-disk directory
 via `get_cached_gallery_files()`.
 """
+
 import json
 import shutil
 import sys
@@ -20,10 +21,12 @@ from unittest.mock import patch
 
 import pytest
 
+
 def _import_gallery_sync():
     """Import gui/gallery_sync.py (it no longer touches the retired media_decoder)."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from divoom_gui.gallery_sync import GallerySyncMixin
+
     return GallerySyncMixin
 
 
@@ -45,16 +48,12 @@ def test_load_cached_gallery_rebuilds_from_directory_when_stale(tmp_path, monkey
     # Fake cache directory with 3 real items.
     cache_dir = tmp_path / ".config" / "divoom-control" / "cache_gallery"
     cache_dir.mkdir(parents=True)
-    for name, ext in [("group1_M00_01_AAA", "gif"),
-                      ("group1_M00_02_BBB", "png"),
-                      ("group1_M00_03_CCC", "jpg")]:
+    for name, ext in [("group1_M00_01_AAA", "gif"), ("group1_M00_02_BBB", "png"), ("group1_M00_03_CCC", "jpg")]:
         (cache_dir / f"{name}.{ext}").write_bytes(b"\x00" * 16)
 
     # Stale JSON cache with a manual entry.
     cache_file = tmp_path / ".config" / "divoom-control" / "gallery_cache.json"
-    cache_file.write_text(json.dumps([
-        {"name": "NeonSkull", "file_id": "9999", "likes": 1500, "preview_url": ""}
-    ]))
+    cache_file.write_text(json.dumps([{"name": "NeonSkull", "file_id": "9999", "likes": 1500, "preview_url": ""}]))
 
     out = m._load_cached_gallery()
 

@@ -9,6 +9,7 @@ the release build stops at its last step (engineering rule #17).
 The scan covers what git would commit, so a new helper script is caught before
 it is staged.
 """
+
 from __future__ import annotations
 
 import re
@@ -45,8 +46,8 @@ def test_no_script_uses_a_deprecated_hdiutil_verb():
 def test_the_scan_catches_the_line_it_replaced(tmp_path: Path):
     script = tmp_path / "build.sh"
     script.write_text(
-        '# hdiutil create in a comment is fine\n'
+        "# hdiutil create in a comment is fine\n"
         'hdiutil create -volname "X" -srcfolder s -ov -format UDZO x.dmg\n'
-        'diskutil image create from --format UDZO s x.dmg\n'
+        "diskutil image create from --format UDZO s x.dmg\n"
     )
     assert offenders([script], tmp_path) == ["build.sh:2"]

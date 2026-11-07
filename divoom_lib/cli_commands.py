@@ -3,6 +3,7 @@
 The argument parser + dispatcher live in cli.py; this module holds the per-command
 coroutines and their helpers. Imported back into cli.py to build COMMANDS.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -58,11 +59,15 @@ def _daemon_client(args: argparse.Namespace | None = None):
     so with nothing running it says what to start.
     """
     from divoom_client.daemon_client import ensure_daemon
+
     client = ensure_daemon(_socket_path(args), spawn=False)
     if client is None:
-        _err("no divoomd daemon is running. Start the Divoom app (it owns the "
-             "Bluetooth grant) or the dev daemon bundle "
-             "(scripts/make_dev_daemon_app.sh), then retry.", 3)
+        _err(
+            "no divoomd daemon is running. Start the Divoom app (it owns the "
+            "Bluetooth grant) or the dev daemon bundle "
+            "(scripts/make_dev_daemon_app.sh), then retry.",
+            3,
+        )
     return client
 
 
@@ -120,8 +125,7 @@ async def cmd_pair(args: argparse.Namespace) -> int:
     if not args.device_type:
         _err("--type is required for `pair`", 2)
     if args.device_type not in DEVICE_CAPABILITIES:
-        _err(f"unknown device_type {args.device_type!r}; "
-             f"valid: {sorted(DEVICE_CAPABILITIES.keys())}", 2)
+        _err(f"unknown device_type {args.device_type!r}; valid: {sorted(DEVICE_CAPABILITIES.keys())}", 2)
     reg = DeviceRegistry()
     reg.register(args.mac, args.device_type)
     if args.json:
@@ -146,9 +150,11 @@ async def cmd_identify(args: argparse.Namespace) -> int:
 
     if args.json:
         out = {
-            addr: {"name": r.get("name"), "manufacturer_data": {
-                hex(int(k)): v for k, v in r["manufacturer_data"].items()},
-                "service_uuids": list(r.get("service_uuids") or [])}
+            addr: {
+                "name": r.get("name"),
+                "manufacturer_data": {hex(int(k)): v for k, v in r["manufacturer_data"].items()},
+                "service_uuids": list(r.get("service_uuids") or []),
+            }
             for addr, r in found.items()
         }
         _print(out, as_json=True)
@@ -159,8 +165,10 @@ async def cmd_identify(args: argparse.Namespace) -> int:
                 print(f"  manufacturer_data: company_id=0x{int(company_id):04x} bytes={payload}")
             for u in r.get("service_uuids") or []:
                 print(f"  service_uuid: {u}")
-        print("\nAdd a fingerprint to ADVERTISED_FINGERPRINTS in "
-              "divoom_lib/models/capabilities.py as (company_id, prefix_bytes) -> device_type.")
+        print(
+            "\nAdd a fingerprint to ADVERTISED_FINGERPRINTS in "
+            "divoom_lib/models/capabilities.py as (company_id, prefix_bytes) -> device_type."
+        )
     return 0
 
 
@@ -292,5 +300,3 @@ def cmd_menubar(args: argparse.Namespace) -> int:
         file=sys.stderr,
     )
     return 1
-
-

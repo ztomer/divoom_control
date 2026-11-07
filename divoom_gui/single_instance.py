@@ -26,6 +26,7 @@ never came forward. Verified on 2026-09-07: four crash reports, each preceded
 front a process that already exists. That is the invariant, and
 ``tools/check_applescript_launch.py`` gates it repo-wide.
 """
+
 from __future__ import annotations
 
 import logging
@@ -38,6 +39,7 @@ _GUI_LOCK_FH = None  # kept open for the process lifetime to hold the lock
 
 def lock_path() -> str:
     import tempfile
+
     return os.path.join(tempfile.gettempdir(), "divoom_gui.lock")
 
 
@@ -56,6 +58,7 @@ def ensure_single_instance() -> bool:
     global _GUI_LOCK_FH
     try:
         import fcntl
+
         fd = os.open(lock_path(), os.O_CREAT | os.O_RDWR, 0o644)
         try:
             fh = os.fdopen(fd, "r+")
@@ -64,7 +67,7 @@ def ensure_single_instance() -> bool:
             raise
         try:
             fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError:      # BlockingIOError included -- someone else holds it
+        except OSError:  # BlockingIOError included -- someone else holds it
             fh.close()
             return False
         fh.seek(0)
@@ -73,7 +76,7 @@ def ensure_single_instance() -> bool:
         fh.flush()
         _GUI_LOCK_FH = fh
         return True
-    except (OSError, BlockingIOError):
+    except OSError, BlockingIOError:
         return False
 
 
@@ -83,7 +86,7 @@ def running_gui_pid() -> int | None:
     try:
         with open(lock_path()) as fh:
             return int(fh.read().strip())
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return None
 
 
@@ -99,13 +102,15 @@ def focus_running_gui(pid: int | None) -> None:
         return
     script = (
         'tell application "System Events"\n'
-        f'    set procs to (every process whose unix id is {pid})\n'
-        '    if procs is not {} then set frontmost of item 1 of procs to true\n'
-        'end tell'
+        f"    set procs to (every process whose unix id is {pid})\n"
+        "    if procs is not {} then set frontmost of item 1 of procs to true\n"
+        "end tell"
     )
     try:
         import subprocess
-        subprocess.run(["osascript", "-e", script],
-                       check=False, capture_output=True, timeout=5, stdin=subprocess.DEVNULL)
+
+        subprocess.run(
+            ["osascript", "-e", script], check=False, capture_output=True, timeout=5, stdin=subprocess.DEVNULL
+        )
     except Exception as e:
         logger.debug("focus of pid %s skipped: %s", pid, e)

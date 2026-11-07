@@ -21,8 +21,7 @@ REPO = Path(__file__).resolve().parents[1]
 
 def test_tests_and_examples_tests_collect_in_one_invocation():
     proc = subprocess.run(
-        [sys.executable, "-m", "pytest", "tests", "examples/tests",
-         "--collect-only", "-q"],
+        [sys.executable, "-m", "pytest", "tests", "examples/tests", "--collect-only", "-q"],
         cwd=REPO,
         capture_output=True,
         text=True,
@@ -30,7 +29,5 @@ def test_tests_and_examples_tests_collect_in_one_invocation():
         check=False,
     )
     assert proc.returncode == 0, (
-        "collecting tests/ and examples/tests/ together failed:\n"
-        + proc.stdout[-2000:]
-        + proc.stderr[-2000:]
+        "collecting tests/ and examples/tests/ together failed:\n" + proc.stdout[-2000:] + proc.stderr[-2000:]
     )

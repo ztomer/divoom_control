@@ -11,6 +11,7 @@ loop). `BTSppTransport` mixes this in; the methods rely on its instance attribut
 `BtSppNotification` lives here (not in bt_spp_transport) so this module needs no
 import back into bt_spp_transport — bt_spp_transport re-exports it for callers.
 """
+
 from __future__ import annotations
 
 import queue
@@ -43,18 +44,18 @@ class _SppRfcommMixin:
         self._close_event.clear()
         self._rx_queue = queue.Queue()
         self._rx_buf = bytearray()
-        self._runloop_thread = threading.Thread(
-            target=self._runloop_main, name="bt-spp-runloop", daemon=True
-        )
+        self._runloop_thread = threading.Thread(target=self._runloop_main, name="bt-spp-runloop", daemon=True)
         self._runloop_thread.start()
         for _ in range(50):
             if self._runloop is not None:
                 return
             import time as _t
+
             _t.sleep(0.02)
 
     def _runloop_main(self) -> None:
         from Foundation import NSDate, NSRunLoop, NSRunLoopCommonModes
+
         self._runloop = NSRunLoop.currentRunLoop()
         while not self._close_event.is_set():
             self._runloop.runMode_beforeDate_(
@@ -67,6 +68,7 @@ class _SppRfcommMixin:
             self.logger.debug(f"Performing SDP query for {self.mac_address}...")
             device.performSDPQuery_(None)
             import time
+
             for _ in range(30):
                 services = device.services() or []
                 if services:
@@ -76,7 +78,8 @@ class _SppRfcommMixin:
             def _get_chan(s):
                 try:
                     rc, chan = s.getRFCOMMChannelID_(None)
-                    if rc == 0: return chan
+                    if rc == 0:
+                        return chan
                 except Exception:
                     try:
                         return s.getRFCOMMChannelID()
@@ -88,10 +91,12 @@ class _SppRfcommMixin:
                 name = getattr(s, "getServiceName", lambda: None)()
                 if name and "serial" in name.lower():
                     c = _get_chan(s)
-                    if c > 0: return c
+                    if c > 0:
+                        return c
             for s in services:
                 c = _get_chan(s)
-                if c > 0: return c
+                if c > 0:
+                    return c
         except Exception as e:
             self.logger.warning(f"SDP query failed: {e}")
         return None
@@ -140,9 +145,7 @@ class _SppRfcommMixin:
             delegate.retain()
             self._delegate = delegate
 
-            rc, channel = device.openRFCOMMChannelAsync_withChannelID_delegate_(
-                None, self.channel_id, delegate
-            )
+            rc, channel = device.openRFCOMMChannelAsync_withChannelID_delegate_(None, self.channel_id, delegate)
             rc = int(rc)
             if rc != 0:
                 self._last_error = f"openRFCOMMChannelAsync_ returned {rc}"
@@ -155,9 +158,8 @@ class _SppRfcommMixin:
 
     def _on_data(self, chunk: bytes) -> None:
         self._rx_buf.extend(chunk)
-        while (
-            len(self._rx_buf) >= models.IOS_LE_MIN_DATA_LENGTH
-            and bytes(self._rx_buf[:4]) == bytes(models.IOS_LE_HEADER)
+        while len(self._rx_buf) >= models.IOS_LE_MIN_DATA_LENGTH and bytes(self._rx_buf[:4]) == bytes(
+            models.IOS_LE_HEADER
         ):
             length_field = int.from_bytes(self._rx_buf[4:6], "little")
             frame_len = length_field + 7
@@ -176,18 +178,21 @@ class _SppRfcommMixin:
                 continue
             raw = bytes(self._rx_buf[:frame_len])
             del self._rx_buf[:frame_len]
-            self._rx_queue.put(BtSppNotification(
-                command_id=parsed["command_id"], payload=parsed["payload"],
-                framing=self.FRAMING_IOS_LE, packet_number=parsed["packet_number"], raw=raw
-            ))
-        if self._rx_buf and (
-            len(self._rx_buf) < 4
-            or bytes(self._rx_buf[:4]) != bytes(models.IOS_LE_HEADER)
-        ):
+            self._rx_queue.put(
+                BtSppNotification(
+                    command_id=parsed["command_id"],
+                    payload=parsed["payload"],
+                    framing=self.FRAMING_IOS_LE,
+                    packet_number=parsed["packet_number"],
+                    raw=raw,
+                )
+            )
+        if self._rx_buf and (len(self._rx_buf) < 4 or bytes(self._rx_buf[:4]) != bytes(models.IOS_LE_HEADER)):
             msgs, remaining = parse_basic_protocol_frames(bytearray(self._rx_buf))
             self._rx_buf = bytearray(remaining)
             for m in msgs:
-                self._rx_queue.put(BtSppNotification(
-                    command_id=m["command_id"], payload=bytes(m["payload"]),
-                    framing=self.FRAMING_BASIC, raw=b""
-                ))
+                self._rx_queue.put(
+                    BtSppNotification(
+                        command_id=m["command_id"], payload=bytes(m["payload"]), framing=self.FRAMING_BASIC, raw=b""
+                    )
+                )

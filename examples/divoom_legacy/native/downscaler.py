@@ -18,6 +18,7 @@ This is a *library* function: not just for cover art. Future callers:
   - Animation frame rescaling
   - Any time we need a fast, deterministic downscale to a Divoom buffer
 """
+
 from __future__ import annotations
 
 import ctypes
@@ -38,6 +39,7 @@ _lib_load_error: str | None = None
 # native_src/downsample.c (LANCZOS3) into one shared library.
 # native_lib.library_path() resolves the per-platform name (.dylib/.so/.dll).
 from divoom_lib.native_lib import library_path
+
 _DYLIB_PATH = library_path()
 
 
@@ -56,12 +58,12 @@ def _load_lib():
         handle = ctypes.CDLL(str(_DYLIB_PATH))
         handle.downsample_lanczos3.argtypes = [
             ctypes.POINTER(ctypes.c_ubyte),  # const uint8_t* in
-            ctypes.c_int,                    # int in_w
-            ctypes.c_int,                    # int in_h
+            ctypes.c_int,  # int in_w
+            ctypes.c_int,  # int in_h
             ctypes.POINTER(ctypes.c_ubyte),  # uint8_t* out
-            ctypes.c_int,                    # int out_w
-            ctypes.c_int,                    # int out_h
-            ctypes.c_int,                    # int channels
+            ctypes.c_int,  # int out_w
+            ctypes.c_int,  # int out_h
+            ctypes.c_int,  # int channels
         ]
         handle.downsample_lanczos3.restype = ctypes.c_int
         _lib = handle
@@ -73,9 +75,7 @@ def _load_lib():
         return None
 
 
-def _pil_downsample(
-    in_bytes: bytes, in_w: int, in_h: int, out_w: int, out_h: int, channels: int
-) -> bytes:
+def _pil_downsample(in_bytes: bytes, in_w: int, in_h: int, out_w: int, out_h: int, channels: int) -> bytes:
     """Reference LANCZOS3 downscale via PIL. Kept completely separate from
     the C path so each can be reasoned about and tested in isolation."""
     mode = "RGB" if channels == CHANNELS_RGB else "RGBA"
@@ -104,14 +104,10 @@ def downsample_lanczos(
     if channels not in (CHANNELS_RGB, CHANNELS_RGBA):
         raise ValueError(f"channels must be {CHANNELS_RGB} or {CHANNELS_RGBA}, got {channels}")
     if in_w <= 0 or in_h <= 0 or out_w <= 0 or out_h <= 0:
-        raise ValueError(
-            f"dimensions must be positive, got in=({in_w},{in_h}) out=({out_w},{out_h})"
-        )
+        raise ValueError(f"dimensions must be positive, got in=({in_w},{in_h}) out=({out_w},{out_h})")
     expected_in = in_w * in_h * channels
     if len(in_bytes) != expected_in:
-        raise ValueError(
-            f"in_bytes length {len(in_bytes)} != in_w*in_h*channels = {expected_in}"
-        )
+        raise ValueError(f"in_bytes length {len(in_bytes)} != in_w*in_h*channels = {expected_in}")
 
     lib = _load_lib()
     if lib is not None:
@@ -119,16 +115,12 @@ def downsample_lanczos(
             in_buf = (ctypes.c_ubyte * len(in_bytes)).from_buffer_copy(in_bytes)
             out_size = out_w * out_h * channels
             out_buf = (ctypes.c_ubyte * out_size)()
-            rc = lib.downsample_lanczos3(
-                in_buf, in_w, in_h, out_buf, out_w, out_h, channels
-            )
+            rc = lib.downsample_lanczos3(in_buf, in_w, in_h, out_buf, out_w, out_h, channels)
             if rc != 0:
                 raise OSError(f"downsample_lanczos3 returned rc={rc}")
             return bytes(out_buf)
         except Exception as e:
-            logger.warning(
-                "downscaler: native call failed (%s) — using PIL fallback", e
-            )
+            logger.warning("downscaler: native call failed (%s) — using PIL fallback", e)
 
     return _pil_downsample(in_bytes, in_w, in_h, out_w, out_h, channels)
 

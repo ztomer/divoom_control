@@ -6,6 +6,7 @@ import pytest
 
 from tests.support.gui_api_base import GuiApiTestBase
 
+
 class TestGuiApiNotifications(GuiApiTestBase):
     # ── macOS notification mirroring (daemon-owned) ─────────────────────
     # The daemon is the single owner of the monitor; the GUI delegates over
@@ -15,8 +16,11 @@ class TestGuiApiNotifications(GuiApiTestBase):
     def _fake_client(self, *, state="idle", counters=None, error=None):
         """A DaemonClient stub whose notification RPCs return canned replies."""
         c = MagicMock()
-        reply = {"success": error is None, "state": state,
-                 "counters": counters or {"seen": 0, "routed": 0, "dropped": 0}}
+        reply = {
+            "success": error is None,
+            "state": state,
+            "counters": counters or {"seen": 0, "routed": 0, "dropped": 0},
+        }
         if error:
             reply["error"] = error
         c.start_notifications.return_value = reply
@@ -31,8 +35,7 @@ class TestGuiApiNotifications(GuiApiTestBase):
             self.assertFalse(self.api.stop_notification_listener()["running"])
 
     @patch("sys.platform", new="darwin")
-    @patch("divoom_client.macos_notifications.find_notification_db_path",
-           return_value=Path("/fake/db.sqlite"))
+    @patch("divoom_client.macos_notifications.find_notification_db_path", return_value=Path("/fake/db.sqlite"))
     def test_start_notification_listener_delegates_to_daemon(self, _db):
         client = self._fake_client(state="active")
         with patch.object(self.api, "_client", return_value=client):
@@ -55,8 +58,7 @@ class TestGuiApiNotifications(GuiApiTestBase):
         self.assertIn("macOS", result["error"])
 
     @patch("sys.platform", new="darwin")
-    @patch("divoom_client.macos_notifications.find_notification_db_path",
-           return_value=Path("/fake/db.sqlite"))
+    @patch("divoom_client.macos_notifications.find_notification_db_path", return_value=Path("/fake/db.sqlite"))
     def test_start_notification_listener_reports_daemon_error(self, _db):
         client = self._fake_client(state="error", error="db not found")
         with patch.object(self.api, "_client", return_value=client):
@@ -86,10 +88,11 @@ class TestGuiApiNotifications(GuiApiTestBase):
         import divoom_client.macos_notifications as mn
 
         assert not hasattr(mn, "MacNotificationMonitor"), (
-            "the local notification monitor is back; the daemon owns polling")
+            "the local notification monitor is back; the daemon owns polling"
+        )
         assert not hasattr(mn, "parse_notification_record"), (
-            "the local record parser is back; divoomd/src/notification_db.rs "
-            "owns it")
+            "the local record parser is back; divoomd/src/notification_db.rs owns it"
+        )
         # ...and the presentation helpers the Settings card needs are still here.
         assert hasattr(mn, "find_notification_db_path")
         assert hasattr(mn, "load_routing_table")
@@ -97,16 +100,18 @@ class TestGuiApiNotifications(GuiApiTestBase):
     # ── status snapshot + routing save (Settings card) ────────────────
 
     @patch("sys.platform", new="darwin")
-    @patch("divoom_client.macos_notifications.find_notification_db_path",
-           return_value=Path("/fake/db.sqlite"))
+    @patch("divoom_client.macos_notifications.find_notification_db_path", return_value=Path("/fake/db.sqlite"))
     def test_get_notification_listener_status_shape(self, _db):
         """The status dict has every key the JS side renders; counters + state
         come from the daemon, rules from disk."""
-        client = self._fake_client(state="active",
-                                   counters={"seen": 12, "routed": 8, "dropped": 4})
-        with patch("divoom_client.macos_notifications.load_routing_table",
-                   return_value=[("whatsapp", 6), ("com.apple.mail", 7)]), \
-             patch.object(self.api, "_client", return_value=client):
+        client = self._fake_client(state="active", counters={"seen": 12, "routed": 8, "dropped": 4})
+        with (
+            patch(
+                "divoom_client.macos_notifications.load_routing_table",
+                return_value=[("whatsapp", 6), ("com.apple.mail", 7)],
+            ),
+            patch.object(self.api, "_client", return_value=client),
+        ):
             s = self.api.get_notification_listener_status()
 
         self.assertTrue(s["platform_supported"])
@@ -130,9 +135,10 @@ class TestGuiApiNotifications(GuiApiTestBase):
     def test_save_notification_routing_delegates_to_daemon(self):
         """save_notification_routing validates then forwards to set_routing."""
         client = self._fake_client()
-        with patch("divoom_client.macos_notifications.load_routing_table",
-                   return_value=[("whatsapp", 6)]), \
-             patch.object(self.api, "_client", return_value=client):
+        with (
+            patch("divoom_client.macos_notifications.load_routing_table", return_value=[("whatsapp", 6)]),
+            patch.object(self.api, "_client", return_value=client),
+        ):
             result = self.api.save_notification_routing('[["whatsapp", 6]]')
         self.assertIsNone(result["error"])
         self.assertEqual(result["rules"], [["whatsapp", 6]])
@@ -142,9 +148,10 @@ class TestGuiApiNotifications(GuiApiTestBase):
         """Invalid JSON returns the previous rules and a non-null error,
         without ever touching the daemon."""
         client = self._fake_client()
-        with patch("divoom_client.macos_notifications.load_routing_table",
-                   return_value=[("whatsapp", 6)]), \
-             patch.object(self.api, "_client", return_value=client):
+        with (
+            patch("divoom_client.macos_notifications.load_routing_table", return_value=[("whatsapp", 6)]),
+            patch.object(self.api, "_client", return_value=client),
+        ):
             result = self.api.save_notification_routing("this is not json")
         self.assertIsNotNone(result["error"])
         self.assertIn("Invalid", result["error"])
@@ -153,9 +160,10 @@ class TestGuiApiNotifications(GuiApiTestBase):
 
     def test_save_notification_routing_daemon_unavailable(self):
         """No daemon → previous rules + error, nothing written."""
-        with patch("divoom_client.macos_notifications.load_routing_table",
-                   return_value=[("whatsapp", 6)]), \
-             patch.object(self.api, "_client", return_value=None):
+        with (
+            patch("divoom_client.macos_notifications.load_routing_table", return_value=[("whatsapp", 6)]),
+            patch.object(self.api, "_client", return_value=None),
+        ):
             result = self.api.save_notification_routing('[["whatsapp", 6]]')
         self.assertIn("daemon", result["error"])
         self.assertEqual(result["rules"], [["whatsapp", 6]])
@@ -182,8 +190,11 @@ class TestGuiApiNotifications(GuiApiTestBase):
         """A configured remote daemon is never spawned/probed locally — report
         healthy and let real calls surface any transport error."""
         import os
-        with patch.dict(os.environ, {"DIVOOM_DAEMON_HOST": "192.168.1.50"}), \
-             patch("divoom_gui.daemon_bridge.daemon_alive", return_value=False):
+
+        with (
+            patch.dict(os.environ, {"DIVOOM_DAEMON_HOST": "192.168.1.50"}),
+            patch("divoom_gui.daemon_bridge.daemon_alive", return_value=False),
+        ):
             res = json.loads(self.api.daemon_health())
         self.assertTrue(res["daemon"])  # remote short-circuits the local probe
 
@@ -207,8 +218,7 @@ class TestGuiApiNotifications(GuiApiTestBase):
 
     def test_reconnect_daemon_swallows_spawn_error(self):
         self.api._daemon_client = "stale"
-        with patch("divoom_gui.daemon_bridge.ensure_daemon",
-                   side_effect=RuntimeError("spawn boom")):
+        with patch("divoom_gui.daemon_bridge.ensure_daemon", side_effect=RuntimeError("spawn boom")):
             res = json.loads(self.api.reconnect_daemon())
         self.assertFalse(res["daemon"])
         self.assertIsNone(self.api._daemon_client)

@@ -19,6 +19,7 @@ so the assertion is what the daemon did, not what the page believes.
 Skipped like the rest of the real-daemon suite: no browser, no divoomd built
 for this tree, or a headless CI runner (pywebview needs an Aqua session).
 """
+
 from __future__ import annotations
 
 import json
@@ -92,14 +93,20 @@ async def test_a_channel_switch_lands_on_the_panel_clicked_not_the_one_selected_
         browser = await launch(p)
         try:
             page = await browser.new_page(viewport={"width": 1280, "height": 900})
-            await add_init_js(page, f"window.__BRIDGE_URL__ = {json.dumps(stack.bridge_url)};\n"
-                              + _REAL_BRIDGE_API)
+            await add_init_js(page, f"window.__BRIDGE_URL__ = {json.dumps(stack.bridge_url)};\n" + _REAL_BRIDGE_API)
             await page.goto(f"file://{INDEX_HTML}")
-            await wait_js(page, "() => !!window.Divoom?.onOwnedDevices && !!window.SpatialStage"
-                                " && !!document.querySelector('.tab-btn[data-channel=\"vj\"]')")
-            await eval_js(page, """([a, b]) => window.Divoom.onOwnedDevices({type: 'owned_devices', devices: [
+            await wait_js(
+                page,
+                "() => !!window.Divoom?.onOwnedDevices && !!window.SpatialStage"
+                " && !!document.querySelector('.tab-btn[data-channel=\"vj\"]')",
+            )
+            await eval_js(
+                page,
+                """([a, b]) => window.Divoom.onOwnedDevices({type: 'owned_devices', devices: [
                 {address: a, name: 'Desk', kind: 'clock', state: 'active'},
-                {address: b, name: 'Kitchen', kind: 'clock', state: 'active'}]})""", [A, B])
+                {address: b, name: 'Kitchen', kind: 'clock', state: 'active'}]})""",
+                [A, B],
+            )
 
             await eval_js(page, "(m) => window.Divoom.onSelection({type: 'selection', mac: m})", A)
             await wait_js(page, f"() => window.SpatialStage.getSelectedMac() === '{A}'")
@@ -114,13 +121,17 @@ async def test_a_channel_switch_lands_on_the_panel_clicked_not_the_one_selected_
             await wait_js(page, f"() => window.SpatialStage.getSelectedMac() === '{B}'")
             await wait_js(page, "() => window.__landed.filter(n => n === 'select_device').length >= 2")
             assert stack.client.send_command("device_status", {}).get("selected") == B, (
-                "the selection reached the backend before the held write")
+                "the selection reached the backend before the held write"
+            )
 
             await wait_js(page, "() => window.__landed.includes('switch_channel')")
             on_a, reply = _kind_on(stack, A)
             on_b, _ = _kind_on(stack, B)
-            sent = [c for c in await eval_js(page, "() => window.__sent")
-                    if c["name"] in ("switch_channel", "select_device")]
+            sent = [
+                c
+                for c in await eval_js(page, "() => window.__sent")
+                if c["name"] in ("switch_channel", "select_device")
+            ]
             died = stack.daemon_proc.poll()
             if died is not None:
                 out, err = stack._drain(stack.daemon_proc)

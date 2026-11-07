@@ -93,7 +93,4 @@ def test_device_call_parity():
     assert python_methods, "facade enumeration produced no methods"
 
     gaps = sorted(python_methods - rust_keys - ALLOWLIST)
-    assert not gaps, (
-        f"{len(gaps)} Python facade method(s) have no Rust device_call handler: "
-        + ", ".join(gaps)
-    )
+    assert not gaps, f"{len(gaps)} Python facade method(s) have no Rust device_call handler: " + ", ".join(gaps)

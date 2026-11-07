@@ -14,6 +14,7 @@ Usage:
     daemon_ping.py [--socket PATH] [--wait SECONDS]   # exit 0 when reachable
     daemon_ping.py --instances                        # exit 0 when exactly 1 alive
 """
+
 from __future__ import annotations
 
 import argparse
@@ -45,7 +46,7 @@ def ping(sock_path: str, timeout: float = 3.0) -> dict | None:
             buf += chunk
         s.close()
         return json.loads(buf.decode())
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return None
 
 
@@ -64,9 +65,15 @@ def live_daemons() -> list[tuple[int, str]]:
     """Every running divoomd, as (pid, command). Uses an absolute ps path: `ps`
     is alias-rewritten on this machine and mangles the flags."""
     try:
-        out = subprocess.run(["/bin/ps", "-Ao", "pid,command"],
-                             capture_output=True, text=True, timeout=10, stdin=subprocess.DEVNULL, check=True).stdout
-    except (OSError, subprocess.SubprocessError):
+        out = subprocess.run(
+            ["/bin/ps", "-Ao", "pid,command"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            stdin=subprocess.DEVNULL,
+            check=True,
+        ).stdout
+    except OSError, subprocess.SubprocessError:
         return []
     found = []
     for line in out.splitlines()[1:]:
@@ -107,10 +114,8 @@ def check_instances() -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--socket", default=DEFAULT_SOCKET)
-    ap.add_argument("--wait", type=float, default=0.0,
-                    help="poll up to N seconds for the daemon to come up")
-    ap.add_argument("--instances", action="store_true",
-                    help="instead: assert exactly one divoomd is alive")
+    ap.add_argument("--wait", type=float, default=0.0, help="poll up to N seconds for the daemon to come up")
+    ap.add_argument("--instances", action="store_true", help="instead: assert exactly one divoomd is alive")
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
 

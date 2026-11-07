@@ -6,10 +6,12 @@ from bleak import BleakScanner, BleakClient
 from bleak.exc import BleakError
 from divoom_legacy.utils import discovery
 
+
 # Suppress logging output during tests for cleaner output
 @pytest.fixture(autouse=True)
 def no_logging(caplog):
     caplog.set_level(logging.CRITICAL)
+
 
 @pytest.fixture
 def mock_bleak_device():
@@ -19,21 +21,25 @@ def mock_bleak_device():
     device.address = "AA:BB:CC:DD:EE:FF"
     return device
 
+
 @pytest.fixture
 def mock_bleak_scanner_discover():
     """Mock BleakScanner.discover."""
-    with patch('divoom_legacy.utils.discovery.BleakScanner.discover', new_callable=AsyncMock) as mock_discover:
+    with patch("divoom_legacy.utils.discovery.BleakScanner.discover", new_callable=AsyncMock) as mock_discover:
         yield mock_discover
+
 
 @pytest.fixture
 def mock_bleak_client():
     """Mock a BleakClient instance."""
     client = AsyncMock(spec=BleakClient)
-    client.services = [] # Initialize with empty services
+    client.services = []  # Initialize with empty services
     return client
+
 
 # discover_device now early-exits on first match via a detection callback (R53.16),
 # so these use the callback-based `fake_scanner` fixture (defined below).
+
 
 @pytest.mark.asyncio
 async def test_discover_device_by_name_success(fake_scanner, mock_bleak_device):
@@ -42,7 +48,8 @@ async def test_discover_device_by_name_success(fake_scanner, mock_bleak_device):
     device, device_id = await discovery.discover_device(name_substring="Divoom Mock")
     assert device is mock_bleak_device
     assert device_id == mock_bleak_device.address
-    assert fake_scanner.instances[0].stopped is True       # scanner always stopped
+    assert fake_scanner.instances[0].stopped is True  # scanner always stopped
+
 
 @pytest.mark.asyncio
 async def test_discover_device_by_name_not_found(fake_scanner, monkeypatch):
@@ -52,6 +59,7 @@ async def test_discover_device_by_name_not_found(fake_scanner, monkeypatch):
     device, device_id = await discovery.discover_device(name_substring="NonExistent")
     assert device is None and device_id is None
 
+
 @pytest.mark.asyncio
 async def test_discover_device_by_address_resolved(fake_scanner, mock_bleak_device):
     """discover_device by address — early-exits on the first address match."""
@@ -60,14 +68,16 @@ async def test_discover_device_by_address_resolved(fake_scanner, mock_bleak_devi
     assert device is mock_bleak_device
     assert device_id == mock_bleak_device.address
 
+
 @pytest.mark.asyncio
 async def test_discover_device_by_address_not_resolved(fake_scanner, monkeypatch):
     """Unresolved address falls back to the raw address string."""
     monkeypatch.setattr(discovery, "ADDR_SCAN_TIMEOUT", 0.05)
     fake_scanner.devices = []
     device, device_id = await discovery.discover_device(address="AA:BB:CC:DD:EE:FF")
-    assert device == "AA:BB:CC:DD:EE:FF"                    # raw address string
+    assert device == "AA:BB:CC:DD:EE:FF"  # raw address string
     assert device_id == "AA:BB:CC:DD:EE:FF"
+
 
 @pytest.mark.asyncio
 async def test_discover_characteristics_success(mock_bleak_client):
@@ -84,26 +94,28 @@ async def test_discover_characteristics_success(mock_bleak_client):
 
     write_chars, notify_chars, read_chars = await discovery.discover_characteristics(mock_bleak_client)
 
-    assert len(write_chars) == 2 # write_uuid, write_notify_uuid
+    assert len(write_chars) == 2  # write_uuid, write_notify_uuid
     assert mock_char_write in write_chars
     assert mock_char_write_notify in write_chars
 
-    assert len(notify_chars) == 2 # notify_uuid, write_notify_uuid
+    assert len(notify_chars) == 2  # notify_uuid, write_notify_uuid
     assert mock_char_notify in notify_chars
     assert mock_char_write_notify in notify_chars
 
-    assert len(read_chars) == 1 # read_uuid
+    assert len(read_chars) == 1  # read_uuid
     assert mock_char_read in read_chars
+
 
 @pytest.mark.asyncio
 async def test_discover_characteristics_no_services(mock_bleak_client):
     """Test discover_characteristics when no services are found."""
-    mock_bleak_client.services = [] # No services
-    
+    mock_bleak_client.services = []  # No services
+
     write_chars, notify_chars, read_chars = await discovery.discover_characteristics(mock_bleak_client)
     assert write_chars == []
     assert notify_chars == []
     assert read_chars == []
+
 
 @pytest.mark.asyncio
 async def test_discover_characteristics_bleak_error(mock_bleak_client):
@@ -114,17 +126,21 @@ async def test_discover_characteristics_bleak_error(mock_bleak_client):
     # Patch getattr to raise BleakError on the first few calls
     original_getattr = getattr
     call_count = [0]
+
     def patched_getattr(obj, name, default=None):
         if name == "services" and call_count[0] < 6:
             call_count[0] += 1
             raise BleakError("Service error")
         return original_getattr(obj, name, default)
+
     import builtins
-    with patch.object(builtins, 'getattr', patched_getattr):
+
+    with patch.object(builtins, "getattr", patched_getattr):
         write_chars, notify_chars, read_chars = await discovery.discover_characteristics(error_client)
     assert write_chars == []
     assert notify_chars == []
     assert read_chars == []
+
 
 def test_pick_char_uuid_preferred_uuid_exact_match():
     """Test pick_char_uuid with exact preferred_uuid match."""
@@ -133,11 +149,13 @@ def test_pick_char_uuid_preferred_uuid_exact_match():
     candidates = [mock_char1, mock_char2]
     assert discovery.pick_char_uuid("1234-5678-90ab", candidates) == "1234-5678-90ab"
 
+
 def test_pick_char_uuid_preferred_uuid_no_match():
     """Test pick_char_uuid with preferred_uuid but no exact match."""
     mock_char1 = MagicMock(uuid="1234-5678-90ab", properties=["write"])
     candidates = [mock_char1]
-    assert discovery.pick_char_uuid("non-existent-uuid", candidates) == "1234-5678-90ab" # Falls back to other logic
+    assert discovery.pick_char_uuid("non-existent-uuid", candidates) == "1234-5678-90ab"  # Falls back to other logic
+
 
 def test_pick_char_uuid_write_notify_with_hint():
     """Test pick_char_uuid prioritizes write+notify with hint."""
@@ -147,12 +165,14 @@ def test_pick_char_uuid_write_notify_with_hint():
     candidates = [mock_char1, mock_char2, mock_char3]
     assert discovery.pick_char_uuid(None, candidates, prefix_hint="49535343") == "49535343-3333-4444"
 
+
 def test_pick_char_uuid_write_notify_no_hint():
     """Test pick_char_uuid prioritizes write+notify without hint."""
     mock_char1 = MagicMock(uuid="1234-5678-90ab", properties=["write"])
     mock_char2 = MagicMock(uuid="abcd-efgh-ijkl", properties=["write", "notify"])
     candidates = [mock_char1, mock_char2]
     assert discovery.pick_char_uuid(None, candidates, prefix_hint="non-matching") == "abcd-efgh-ijkl"
+
 
 def test_pick_char_uuid_fallback_hint_match():
     """Test pick_char_uuid falls back to hint match."""
@@ -161,12 +181,14 @@ def test_pick_char_uuid_fallback_hint_match():
     candidates = [mock_char1, mock_char2]
     assert discovery.pick_char_uuid(None, candidates, prefix_hint="49535343") == "49535343-3333-4444"
 
+
 def test_pick_char_uuid_fallback_first_candidate():
     """Test pick_char_uuid falls back to first candidate."""
     mock_char1 = MagicMock(uuid="1234-5678-90ab", properties=["read"])
     mock_char2 = MagicMock(uuid="abcd-efgh-ijkl", properties=["notify"])
     candidates = [mock_char1, mock_char2]
     assert discovery.pick_char_uuid(None, candidates, prefix_hint="non-matching") == "1234-5678-90ab"
+
 
 def test_pick_char_uuid_empty_candidates():
     """Test pick_char_uuid with empty candidates list."""
@@ -175,6 +197,7 @@ def test_pick_char_uuid_empty_candidates():
 
 
 # ── is_divoom_name / discover_all_divoom_devices (R28 scan filter) ──────────
+
 
 def test_is_divoom_name_matches_known_products():
     assert discovery.is_divoom_name("Ditoo-light-2")
@@ -201,6 +224,7 @@ class _FakeScanner:
     """A BleakScanner stand-in: fires the detection callback for a fixed device
     list on start(), records that stop() was called. Lets us test the callback +
     early-exit path without a real BLE adapter."""
+
     instances = []
 
     def __init__(self, detection_callback=None):
@@ -211,7 +235,7 @@ class _FakeScanner:
 
     async def start(self):
         self.started = True
-        for d in self.devices:                 # class attr set by the fixture
+        for d in self.devices:  # class attr set by the fixture
             self._cb(d, None)
 
     async def stop(self):
@@ -240,7 +264,7 @@ async def test_discover_all_filters_non_divoom(fake_scanner):
     results = await discovery.discover_all_divoom_devices(timeout=0.05)
     addrs = {r["address"] for r in results}
     assert addrs == {"AA:11", "CC:33"}
-    assert fake_scanner.instances[0].stopped is True   # scanner always stopped
+    assert fake_scanner.instances[0].stopped is True  # scanner always stopped
 
 
 @pytest.mark.asyncio
@@ -259,7 +283,7 @@ async def test_discover_all_dedupes_repeated_adverts(fake_scanner):
     """A device that advertises several times is counted once."""
     fake_scanner.devices = [
         _dev("Pixoo-1", "AA:11"),
-        _dev("Pixoo-1", "AA:11"),   # repeat advert
+        _dev("Pixoo-1", "AA:11"),  # repeat advert
         _dev("Ditoo-2", "BB:22"),
     ]
     results = await discovery.discover_all_divoom_devices(timeout=0.05)
@@ -279,7 +303,7 @@ async def test_discover_all_early_exit_returns_before_timeout(fake_scanner):
     ]
     completed = await asyncio.wait_for(
         discovery.discover_all_divoom_devices(timeout=30.0, expected=4),
-        timeout=5.0,     # would raise if it actually waited the 30s window
+        timeout=5.0,  # would raise if it actually waited the 30s window
     )
     assert len(completed) == 4
     assert fake_scanner.instances[0].stopped is True
@@ -303,4 +327,3 @@ def test_check_bluetooth_permission_allowed():
         ok, reason = discovery.check_bluetooth_permission()
         assert ok is True
         assert reason == "ok"
-

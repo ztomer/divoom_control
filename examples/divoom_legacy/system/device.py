@@ -3,15 +3,22 @@ import logging
 from divoom_legacy.sender_protocol import CommandSender
 from divoom_lib.models import (
     COMMANDS,
-    CHANNEL_ID_MIN, CHANNEL_ID_MAX,
-    SD_STATUS_REMOVAL, SD_STATUS_INSERTION,
-    TEMP_FORMAT_CELSIUS, TEMP_FORMAT_FAHRENHEIT,
-    GDT_TEMP_FORMAT, GDT_TEMP_VALUE,
-    GNTD_DISPLAY_MODES_START, GNTD_TIME_MINUTES_START,
-    GDN_NAME_LENGTH, GDN_NAME_BYTES_START
+    CHANNEL_ID_MIN,
+    CHANNEL_ID_MAX,
+    SD_STATUS_REMOVAL,
+    SD_STATUS_INSERTION,
+    TEMP_FORMAT_CELSIUS,
+    TEMP_FORMAT_FAHRENHEIT,
+    GDT_TEMP_FORMAT,
+    GDT_TEMP_VALUE,
+    GNTD_DISPLAY_MODES_START,
+    GNTD_TIME_MINUTES_START,
+    GDN_NAME_LENGTH,
+    GDN_NAME_BYTES_START,
 )
 from divoom_lib.utils.converters import bool_to_byte
 from divoom_legacy.system.device_settings import DeviceSettings
+
 
 class Device(DeviceSettings):
     """
@@ -25,7 +32,7 @@ class Device(DeviceSettings):
         async def main():
             device_address = "XX:XX:XX:XX:XX:XX"  # Replace with your device's address
             divoom = Divoom(mac=device_address)
-            
+
             try:
                 await divoom.connect()
                 await divoom.device.set_brightness(50)
@@ -36,6 +43,7 @@ class Device(DeviceSettings):
         if __name__ == "__main__":
             asyncio.run(main())
     """
+
     def __init__(self, divoom: CommandSender) -> None:
         super().__init__(divoom)
 
@@ -54,6 +62,7 @@ class Device(DeviceSettings):
         cache = getattr(self.communicator, "_read_cache", None)
         if cache is None:
             from divoom_legacy.ble_reads import ReadCache
+
             cache = ReadCache()
             try:
                 self.communicator._read_cache = cache
@@ -87,9 +96,8 @@ class Device(DeviceSettings):
         only when never read and nothing cached."""
         self.logger.info("Getting brightness via get light mode (0x46)...")
         from divoom_legacy.ble_reads import read_with_retry
-        res = await read_with_retry(
-            self._read_brightness_once,
-            cache=self._read_cache(), cache_key="brightness")
+
+        res = await read_with_retry(self._read_brightness_once, cache=self._read_cache(), cache_key="brightness")
         if res.ok and res.from_cache:
             self.logger.info("get_brightness: serving last-good cached value")
         return res.value if res.ok else None
@@ -117,7 +125,9 @@ class Device(DeviceSettings):
         Switch to a specific channel (0x45).
         """
         if not (CHANNEL_ID_MIN <= channel_id <= CHANNEL_ID_MAX):
-            self.logger.error(f"Invalid channel ID: {channel_id}. Must be between {CHANNEL_ID_MIN} and {CHANNEL_ID_MAX}.")
+            self.logger.error(
+                f"Invalid channel ID: {channel_id}. Must be between {CHANNEL_ID_MIN} and {CHANNEL_ID_MAX}."
+            )
             return False
 
         self.logger.info(f"Switching to channel: {channel_id} (0x45)...")
@@ -140,26 +150,27 @@ class Device(DeviceSettings):
         response = await self.communicator.send_command_and_wait_for_response(COMMANDS["get device temp"])
         if response and len(response) >= 2:
             temp_format = response[GDT_TEMP_FORMAT]  # 1: Fahrenheit, 0: Celsius
-            temp_value = int.from_bytes(
-                response[GDT_TEMP_VALUE:GDT_TEMP_VALUE + 1], byteorder='big', signed=True)
+            temp_value = int.from_bytes(response[GDT_TEMP_VALUE : GDT_TEMP_VALUE + 1], byteorder="big", signed=True)
             return {"format": temp_format, "value": temp_value}
         return None
 
-    async def send_net_temp(self, year: int, month: int, day: int, hour: int, minute: int, num: int, temp_data: list) -> bool:
+    async def send_net_temp(
+        self, year: int, month: int, day: int, hour: int, minute: int, num: int, temp_data: list
+    ) -> bool:
         """
         Send network temperature (0x5d).
         """
         self.logger.info(f"Sending network temperature (0x5d)...")
         args = []
-        args += year.to_bytes(2, byteorder='little')
-        args += month.to_bytes(1, byteorder='big')
-        args += day.to_bytes(1, byteorder='big')
-        args += hour.to_bytes(1, byteorder='big')
-        args += minute.to_bytes(1, byteorder='big')
-        args += num.to_bytes(1, byteorder='big')
+        args += year.to_bytes(2, byteorder="little")
+        args += month.to_bytes(1, byteorder="big")
+        args += day.to_bytes(1, byteorder="big")
+        args += hour.to_bytes(1, byteorder="big")
+        args += minute.to_bytes(1, byteorder="big")
+        args += num.to_bytes(1, byteorder="big")
         for temp_val, weather_type in temp_data:
-            args += temp_val.to_bytes(1, byteorder='big', signed=True)
-            args += weather_type.to_bytes(1, byteorder='big')
+            args += temp_val.to_bytes(1, byteorder="big", signed=True)
+            args += weather_type.to_bytes(1, byteorder="big")
         return await self.communicator.send_command(COMMANDS["send net temp"], args)
 
     async def send_net_temp_disp(self, display_modes: list, time_minutes: int) -> bool:
@@ -170,7 +181,7 @@ class Device(DeviceSettings):
         args = []
         for mode in display_modes:
             args.append(bool_to_byte(mode))
-        args += time_minutes.to_bytes(2, byteorder='little')
+        args += time_minutes.to_bytes(2, byteorder="little")
         return await self.communicator.send_command(COMMANDS["send net temp disp"], args)
 
     async def get_net_temp_disp(self) -> dict | None:
@@ -181,7 +192,9 @@ class Device(DeviceSettings):
         response = await self.communicator.send_command_and_wait_for_response(COMMANDS["get net temp disp"])
         if response and len(response) >= 7:
             display_modes = [response[i] for i in range(GNTD_DISPLAY_MODES_START, GNTD_DISPLAY_MODES_START + 5)]
-            time_minutes = int.from_bytes(response[GNTD_TIME_MINUTES_START:GNTD_TIME_MINUTES_START + 2], byteorder='little')
+            time_minutes = int.from_bytes(
+                response[GNTD_TIME_MINUTES_START : GNTD_TIME_MINUTES_START + 2], byteorder="little"
+            )
             return {"display_modes": display_modes, "time_minutes": time_minutes}
         return None
 
@@ -190,12 +203,12 @@ class Device(DeviceSettings):
         Modify the Bluetooth device name (0x75).
         """
         self.logger.info(f"Setting device name to '{name}' (0x75)...")
-        name_bytes = name.encode('utf-8')
+        name_bytes = name.encode("utf-8")
         if len(name_bytes) > 16:
             self.logger.warning("Device name too long, truncating to 16 bytes.")
             name_bytes = name_bytes[:16]
         args = []
-        args += len(name_bytes).to_bytes(1, byteorder='big')
+        args += len(name_bytes).to_bytes(1, byteorder="big")
         args.extend(list(name_bytes))
         return await self.communicator.send_command(COMMANDS["set device name"], args)
 
@@ -204,9 +217,9 @@ class Device(DeviceSettings):
         if response and len(response) >= 1:
             name_length = response[GDN_NAME_LENGTH]
             if len(response) >= GDN_NAME_BYTES_START + name_length:
-                name_bytes = bytes(response[GDN_NAME_BYTES_START:GDN_NAME_BYTES_START + name_length])
+                name_bytes = bytes(response[GDN_NAME_BYTES_START : GDN_NAME_BYTES_START + name_length])
                 try:
-                    return name_bytes.decode('utf-8')
+                    return name_bytes.decode("utf-8")
                 except UnicodeDecodeError:
                     return None
         return None
@@ -224,10 +237,13 @@ class Device(DeviceSettings):
             return known
         self.logger.info("No advertised name; reading device name via 0x76...")
         from divoom_legacy.ble_reads import read_with_retry
+
         res = await read_with_retry(
             self._read_device_name_once,
             validate=lambda v: isinstance(v, str) and len(v) > 0,
-            cache=self._read_cache(), cache_key="device_name")
+            cache=self._read_cache(),
+            cache_key="device_name",
+        )
         if res.ok and res.from_cache:
             self.logger.info("get_device_name: serving last-good cached value")
         return res.value if res.ok else None
@@ -238,8 +254,8 @@ class Device(DeviceSettings):
         """
         self.logger.info(f"Sending current temp: {temp}, weather: {weather} (0x5f)...")
         args = []
-        args += temp.to_bytes(1, byteorder='big', signed=True)
-        args += weather.to_bytes(1, byteorder='big')
+        args += temp.to_bytes(1, byteorder="big", signed=True)
+        args += weather.to_bytes(1, byteorder="big")
         return await self.communicator.send_command(COMMANDS["send current temp"], args)
 
     async def set_temp_type(self, temp_type: int) -> bool:

@@ -36,9 +36,7 @@ class TestGetSdPlayName(unittest.IsolatedAsyncioTestCase):
         result = await music.get_sd_play_name()
 
         self.assertEqual(result, "Song")
-        mock_divoom.send_command_and_wait_for_response.assert_awaited_once_with(
-            COMMANDS["get sd play name"]
-        )
+        mock_divoom.send_command_and_wait_for_response.assert_awaited_once_with(COMMANDS["get sd play name"])
 
     async def test_none_response_returns_none(self):
         music, _ = make_music(response=None)
@@ -59,9 +57,7 @@ class TestGetSdMusicList(unittest.IsolatedAsyncioTestCase):
     @staticmethod
     def _entry(music_id, name):
         return (
-            music_id.to_bytes(2, byteorder="little")
-            + len(name).to_bytes(2, byteorder="little")
-            + name.encode("utf-8")
+            music_id.to_bytes(2, byteorder="little") + len(name).to_bytes(2, byteorder="little") + name.encode("utf-8")
         )
 
     async def test_parses_multiple_entries(self):
@@ -86,11 +82,7 @@ class TestGetSdMusicList(unittest.IsolatedAsyncioTestCase):
     async def test_incomplete_trailing_entry_keeps_prior_entries(self):
         # First entry complete; second entry's declared name_len overruns
         # the buffer, so parsing should stop and keep what it already has.
-        broken_tail = (
-            (2).to_bytes(2, byteorder="little")
-            + (10).to_bytes(2, byteorder="little")
-            + b"X"
-        )
+        broken_tail = (2).to_bytes(2, byteorder="little") + (10).to_bytes(2, byteorder="little") + b"X"
         response = self._entry(1, "A") + broken_tail
         music, _ = make_music(response=response)
 
@@ -212,9 +204,7 @@ class TestSdMusicInfo(unittest.IsolatedAsyncioTestCase):
         await music.set_sd_music_info(current_time=60, music_id=3, volume=10, status=1, play_mode=2)
 
         expected_args = list((60).to_bytes(2, "little")) + list((3).to_bytes(2, "little")) + [10, 1, 2]
-        mock_divoom.send_command.assert_awaited_once_with(
-            COMMANDS["set sd music info"], expected_args
-        )
+        mock_divoom.send_command.assert_awaited_once_with(COMMANDS["set sd music info"], expected_args)
 
 
 class TestSdMusicPositionAndPlayMode(unittest.IsolatedAsyncioTestCase):
@@ -228,9 +218,7 @@ class TestSdMusicPositionAndPlayMode(unittest.IsolatedAsyncioTestCase):
     async def test_set_sd_music_play_mode_sends_single_byte(self):
         music, mock_divoom = make_music()
         await music.set_sd_music_play_mode(3)
-        mock_divoom.send_command.assert_awaited_once_with(
-            COMMANDS["set sd music play mode"], [3]
-        )
+        mock_divoom.send_command.assert_awaited_once_with(COMMANDS["set sd music play mode"], [3])
 
 
 class TestAppNeedGetMusicList(unittest.IsolatedAsyncioTestCase):

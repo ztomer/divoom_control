@@ -23,6 +23,7 @@ day it is added, with no table to forget. `divoomd/src/mock_tools_tests.rs`
 pins the daemon's half: a named `device_call` lands on that panel even when
 another is selected.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -30,8 +31,15 @@ from pathlib import Path
 import pytest
 
 from tests.support.bridge_calls import (
-    A, B, NOT_CALLED, WALL, args_for as _args_for, call as _call,
-    names_its_panel as _names_its_panel, public_methods as _public_methods, recorded_api,
+    A,
+    B,
+    NOT_CALLED,
+    WALL,
+    args_for as _args_for,
+    call as _call,
+    names_its_panel as _names_its_panel,
+    public_methods as _public_methods,
+    recorded_api,
 )
 
 #: Methods that act on more than one panel by design, and say so in their API.
@@ -63,7 +71,8 @@ def test_a_panel_action_names_the_panel_it_was_given(api, name, fn):
     elif name not in FLEET_WIDE:
         assert sent == [], (
             f"{name} acts on a panel but names none: {[(r, p) for r, p, _ in sent]}. "
-            "Its first parameter must be the mac its gesture resolved (P5.7)")
+            "Its first parameter must be the mac its gesture resolved (P5.7)"
+        )
 
 
 NAMED = [m for m in METHODS if _names_its_panel(m[1])]
@@ -106,8 +115,7 @@ def test_a_live_widget_on_the_wall_is_refused_not_misrouted(api):
     `MatrixWall` made a phantom fleet entry with no link and painted nothing.
     With slots configured, a single panel named gets its widget."""
     api.wall_slots = {A: {"x": 0, "y": 0, "size": 16}}
-    for name in ("toggle_sysmon_sync", "toggle_music_sync", "toggle_weather_sync",
-                 "toggle_stocks_sync"):
+    for name in ("toggle_sysmon_sync", "toggle_music_sync", "toggle_weather_sync", "toggle_stocks_sync"):
         _call(api, name, [WALL, True])
         assert api._daemon_client.panel_requests() == [], name
         _call(api, name, [B, True])
@@ -118,8 +126,8 @@ def test_the_implicit_route_is_gone():
     """Nothing reads "the panel the bench last selected" any more: no code
     names `current_divoom` (the docs that say what it was quote it)."""
     import re
+
     root = Path(__file__).parent.parent / "divoom_gui"
     code = re.compile(r"(?<!`)\b_?current_divoom\b(?!`)")
-    offenders = [str(p.relative_to(root)) for p in root.rglob("*.py")
-                 if code.search(p.read_text(encoding="utf-8"))]
+    offenders = [str(p.relative_to(root)) for p in root.rglob("*.py") if code.search(p.read_text(encoding="utf-8"))]
     assert offenders == [], f"current_divoom is still in the code of {offenders}"

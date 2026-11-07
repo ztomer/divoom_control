@@ -30,9 +30,14 @@ BROWSER_CHROME = (16, 120)
 HARNESS_WINDOW = (1600, 1100)
 #: The camoufox fingerprint keys that fix the window, on a screen that holds it.
 HARNESS_GEOMETRY = {
-    "window.outerWidth": HARNESS_WINDOW[0], "window.outerHeight": HARNESS_WINDOW[1],
-    "window.screenX": 0, "window.screenY": 0,
-    "screen.width": 2560, "screen.height": 1440, "screen.availWidth": 2560, "screen.availHeight": 1415,
+    "window.outerWidth": HARNESS_WINDOW[0],
+    "window.outerHeight": HARNESS_WINDOW[1],
+    "window.screenX": 0,
+    "window.screenY": 0,
+    "screen.width": 2560,
+    "screen.height": 1440,
+    "screen.availWidth": 2560,
+    "screen.availHeight": 1415,
 }
 
 
@@ -102,8 +107,14 @@ def launch_options_for(*, network: bool, launching: bool) -> dict:
     # CI's macOS VM ("Apple Paravirtual device"), where seven pixel tests read
     # noise (run 42406876821). A test browser has no fingerprint to protect.
     with _gpu_probe(launching=launching):
-        opts = launch_options(headless=True, main_world_eval=True, config=HARNESS_GEOMETRY,
-                              os=fingerprint_os(), canvas_noise=False, i_know_what_im_doing=True)
+        opts = launch_options(
+            headless=True,
+            main_world_eval=True,
+            config=HARNESS_GEOMETRY,
+            os=fingerprint_os(),
+            canvas_noise=False,
+            i_know_what_im_doing=True,
+        )
     if not network:
         opts["proxy"] = OFFLINE_PROXY
     return opts

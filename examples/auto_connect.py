@@ -16,6 +16,7 @@ Combine with `divoom-control pair --mac ... --type ...` to register a
 device before running this script — the lib will then know its
 capabilities.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -68,8 +69,15 @@ if __name__ == "__main__":
     p.add_argument("--quiet", action="store_true", help="Don't print on connect.")
     ns = p.parse_args()
     try:
-        sys.exit(asyncio.run(main(
-            mac=ns.mac, timeout=ns.timeout, once=ns.once, on_connect=not ns.quiet,
-        )))
+        sys.exit(
+            asyncio.run(
+                main(
+                    mac=ns.mac,
+                    timeout=ns.timeout,
+                    once=ns.once,
+                    on_connect=not ns.quiet,
+                )
+            )
+        )
     except KeyboardInterrupt:
         sys.exit(0)

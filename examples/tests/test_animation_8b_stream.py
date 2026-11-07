@@ -5,6 +5,7 @@ chunk-INDEX offset_id (0,1,2,…) with 256-byte chunks, sent as start + N data +
 terminate. The chunk size MUST be 256 — the device places chunk N at byte N*256,
 so the monthly-best daemon's 200-byte chunks left gaps and stalled the device.
 """
+
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -39,8 +40,7 @@ async def test_stream_phases_and_chunk_index_offsets():
         ok = await anim.stream_animation_8b(blob)
     assert ok is True
 
-    calls = [c for c in comm.send_command.await_args_list
-             if c.args and c.args[0] == COMMANDS["app new send gif cmd"]]
+    calls = [c for c in comm.send_command.await_args_list if c.args and c.args[0] == COMMANDS["app new send gif cmd"]]
     # start + 3 data (APK does NOT send terminate — R35d)
     assert len(calls) == 4
     control_words = [c.args[1][0] for c in calls]
@@ -107,9 +107,11 @@ async def test_stream_serves_retransmit_requests():
     with patch("divoom_legacy.display.animation.asyncio.sleep", new=AsyncMock()):
         ok = await anim.stream_animation_8b(blob)
     assert ok is True
-    data_calls = [c for c in comm.send_command.await_args_list
-                  if c.args and c.args[0] == COMMANDS["app new send gif cmd"]
-                  and c.args[1][0] == ANSGC_CONTROL_SENDING_DATA]
+    data_calls = [
+        c
+        for c in comm.send_command.await_args_list
+        if c.args and c.args[0] == COMMANDS["app new send gif cmd"] and c.args[1][0] == ANSGC_CONTROL_SENDING_DATA
+    ]
     offset_ids = [int.from_bytes(bytes(c.args[1][5:7]), "little") for c in data_calls]
     assert offset_ids == [0, 1, 2, 1], "chunk 1 must be re-sent on request"
     # The retransmitted chunk carries the same bytes as the original.
@@ -124,8 +126,7 @@ async def test_stream_falls_back_when_device_never_acks():
     with patch("divoom_legacy.display.animation.asyncio.sleep", new=AsyncMock()):
         ok = await anim.stream_animation_8b(bytes(300))
     assert ok is True
-    calls = [c for c in comm.send_command.await_args_list
-             if c.args and c.args[0] == COMMANDS["app new send gif cmd"]]
+    calls = [c for c in comm.send_command.await_args_list if c.args and c.args[0] == COMMANDS["app new send gif cmd"]]
     assert len(calls) == 3  # start + 2 data, no terminate (R35d), no retransmits
 
 
@@ -136,8 +137,8 @@ async def test_stream_clears_expected_response_command_on_failure():
     pinned to 0x8B, mis-routing the NEXT op's notifications (cross-talk). A
     try/finally must always clear it."""
     anim, comm = _make_anim()
-    comm._expected_response_command = None              # real BLE-path attribute
-    comm.wait_for_response = AsyncMock(return_value=None)   # device never ACKs ready
+    comm._expected_response_command = None  # real BLE-path attribute
+    comm.wait_for_response = AsyncMock(return_value=None)  # device never ACKs ready
     comm.send_command = AsyncMock(side_effect=[True, False])  # start ok, chunk fails
     with patch("divoom_legacy.display.animation.asyncio.sleep", new=AsyncMock()):
         ok = await anim.stream_animation_8b(bytes(300))
@@ -149,7 +150,7 @@ async def test_stream_clears_expected_response_command_on_failure():
 async def test_stream_clears_expected_response_command_on_success():
     anim, comm = _make_anim()
     comm._expected_response_command = None
-    comm.wait_for_response = AsyncMock(return_value=None)   # falls back to sleep
+    comm.wait_for_response = AsyncMock(return_value=None)  # falls back to sleep
     with patch("divoom_legacy.display.animation.asyncio.sleep", new=AsyncMock()):
         ok = await anim.stream_animation_8b(bytes(300))
     assert ok is True
@@ -192,8 +193,6 @@ async def test_stream_listens_for_0x8b_during_stream_and_cleans_up():
     assert cmd8b not in comm._listen_commands, "0x8B must be removed after the stream"
 
 
-
-
 # ── R61 coverage push: set_gif_speed / set_light_phone_gif ───────────────────
 
 
@@ -204,7 +203,7 @@ async def test_set_gif_speed_sends_le_speed():
     assert result is True
     cmd, args = comm.send_command.await_args_list[-1].args
     assert cmd == COMMANDS["set gif speed"]
-    assert args == list((300).to_bytes(2, byteorder='little'))
+    assert args == list((300).to_bytes(2, byteorder="little"))
 
 
 @pytest.mark.asyncio
@@ -214,7 +213,7 @@ async def test_set_light_phone_gif_builds_expected_payload():
     assert result is True
     cmd, args = comm.send_command.await_args_list[-1].args
     assert cmd == COMMANDS["set light phone gif"]
-    expected = list((10).to_bytes(2, byteorder='little')) + [2] + [1, 2, 3]
+    expected = list((10).to_bytes(2, byteorder="little")) + [2] + [1, 2, 3]
     assert args == expected
 
 
@@ -232,9 +231,7 @@ async def test_app_new_send_gif_cmd_start_sending_missing_file_size():
 @pytest.mark.asyncio
 async def test_app_new_send_gif_cmd_sending_data_missing_params():
     anim, comm = _make_anim()
-    result = await anim.app_new_send_gif_cmd(
-        control_word=ANSGC_CONTROL_SENDING_DATA, file_size=10
-    )
+    result = await anim.app_new_send_gif_cmd(control_word=ANSGC_CONTROL_SENDING_DATA, file_size=10)
     assert result is False
     comm.send_command.assert_not_called()
 
@@ -350,9 +347,7 @@ async def test_serve_8b_retransmits_ignores_non_retransmit_payload_then_stops():
 async def test_serve_8b_retransmits_skips_out_of_range_index():
     anim, comm = _make_anim()
     # idx=100 * chunk_size(256) >= file_size(300) -> out-of-range, `continue`.
-    comm.wait_for_response = AsyncMock(
-        side_effect=[bytes([1]) + (100).to_bytes(2, "little"), None]
-    )
+    comm.wait_for_response = AsyncMock(side_effect=[bytes([1]) + (100).to_bytes(2, "little"), None])
     await anim._serve_8b_retransmits(bytes(300), 300, 256, False)
     comm.send_command.assert_not_called()
 
@@ -377,7 +372,7 @@ async def test_set_rhythm_gif_builds_expected_payload():
     assert result is True
     cmd, args = comm.send_command.await_args_list[-1].args
     assert cmd == COMMANDS["set rhythm gif"]
-    expected = [1] + list((10).to_bytes(2, byteorder='little')) + [2] + [9, 9]
+    expected = [1] + list((10).to_bytes(2, byteorder="little")) + [2] + [9, 9]
     assert args == expected
 
 
@@ -388,5 +383,5 @@ async def test_app_send_eq_gif_builds_expected_payload():
     assert result is True
     cmd, args = comm.send_command.await_args_list[-1].args
     assert cmd == COMMANDS["app send eq gif"]
-    expected = [1] + list((10).to_bytes(2, byteorder='little')) + [2] + [9, 9]
+    expected = [1] + list((10).to_bytes(2, byteorder="little")) + [2] + [9, 9]
     assert args == expected

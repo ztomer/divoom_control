@@ -27,6 +27,7 @@ browser process. The pid-advance loop, the verdict and the lookups are
 functions of injected collaborators and are tested without any of that
 (tests/test_recycled_pid_probe.py).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -118,8 +119,7 @@ def verdict(exit_status: int | None) -> tuple[int, str]:
     if exit_status is None:
         return 0, f"camoufox still running after {WATCH_S:.0f} s -> launched cleanly"
     return 1, (
-        f"camoufox exited {exit_status} inside {WATCH_S:.0f} s -> bound to a "
-        "dead app's record (the D.CFXSBX signature)"
+        f"camoufox exited {exit_status} inside {WATCH_S:.0f} s -> bound to a dead app's record (the D.CFXSBX signature)"
     )
 
 
@@ -161,9 +161,20 @@ def log_lines_for(pid: int) -> list[str]:
     """What the unified log says about how `pid` was launched."""
     time.sleep(2)  # the log lags the launch
     out = subprocess.run(
-        ["log", "show", "--last", "1m", "--style", "compact", "--predicate",
-         f'eventMessage CONTAINS "launchedByLS" AND processID == {pid}'],
-        stdin=subprocess.DEVNULL, capture_output=True, text=True, check=False,
+        [
+            "log",
+            "show",
+            "--last",
+            "1m",
+            "--style",
+            "compact",
+            "--predicate",
+            f'eventMessage CONTAINS "launchedByLS" AND processID == {pid}',
+        ],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=False,
     ).stdout
     return launched_by_ls_lines(out)
 

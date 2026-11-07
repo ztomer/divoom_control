@@ -3,15 +3,28 @@ import asyncio
 from divoom_legacy.sender_protocol import CommandSender
 from divoom_lib.models import (
     COMMANDS,
-    ANSGC_CONTROL_START_SENDING, ANSGC_CONTROL_SENDING_DATA, ANSGC_CONTROL_TERMINATE_SENDING,
-    SUG_CONTROL_START_SAVING, SUG_CONTROL_TRANSMIT_DATA, SUG_CONTROL_TRANSMISSION_END,
-    SUG_DATA_LED_EDITOR, SUG_DATA_SCROLL_ANIMATION,
-    ANUD_CONTROL_START_SENDING, ANUD_CONTROL_SENDING_DATA, ANUD_CONTROL_TERMINATE_SENDING,
-    ABUD_CONTROL_START_SENDING, ABUD_CONTROL_SENDING_DATA, ABUD_CONTROL_TERMINATE_SENDING,
-    ABUD_CONTROL_DELETE, ABUD_CONTROL_PLAY_ARTWORK, ABUD_CONTROL_DELETE_ALL_BY_INDEX,
-    AGUDI_CONTROL_WORD_SUCCESS, AGUDI_CONTROL_WORD_FAILURE
+    ANSGC_CONTROL_START_SENDING,
+    ANSGC_CONTROL_SENDING_DATA,
+    ANSGC_CONTROL_TERMINATE_SENDING,
+    SUG_CONTROL_START_SAVING,
+    SUG_CONTROL_TRANSMIT_DATA,
+    SUG_CONTROL_TRANSMISSION_END,
+    SUG_DATA_LED_EDITOR,
+    SUG_DATA_SCROLL_ANIMATION,
+    ANUD_CONTROL_START_SENDING,
+    ANUD_CONTROL_SENDING_DATA,
+    ANUD_CONTROL_TERMINATE_SENDING,
+    ABUD_CONTROL_START_SENDING,
+    ABUD_CONTROL_SENDING_DATA,
+    ABUD_CONTROL_TERMINATE_SENDING,
+    ABUD_CONTROL_DELETE,
+    ABUD_CONTROL_PLAY_ARTWORK,
+    ABUD_CONTROL_DELETE_ALL_BY_INDEX,
+    AGUDI_CONTROL_WORD_SUCCESS,
+    AGUDI_CONTROL_WORD_FAILURE,
 )
 from divoom_legacy.display.animation_user import AnimationUserDefine
+
 
 class Animation(AnimationUserDefine):
     """
@@ -25,7 +38,7 @@ class Animation(AnimationUserDefine):
         async def main():
             device_address = "XX:XX:XX:XX:XX:XX"  # Replace with your device's address
             divoom = Divoom(mac=device_address)
-            
+
             try:
                 await divoom.connect()
                 await divoom.animation.set_gif_speed(100)
@@ -36,6 +49,7 @@ class Animation(AnimationUserDefine):
         if __name__ == "__main__":
             asyncio.run(main())
     """
+
     def __init__(self, divoom: CommandSender):
         """
         Initializes the Animation controller.
@@ -50,7 +64,7 @@ class Animation(AnimationUserDefine):
         Set the animation speed for GIFs.
         """
         self.logger.info(f"Setting GIF speed to {speed}ms (0x16)...")
-        args = speed.to_bytes(2, byteorder='little')
+        args = speed.to_bytes(2, byteorder="little")
         return await self.communicator.send_command(COMMANDS["set gif speed"], list(args))
 
     async def set_light_phone_gif(self, total_len: int, gif_id: int, gif_data: list) -> bool:
@@ -59,15 +73,15 @@ class Animation(AnimationUserDefine):
         """
         self.logger.info(f"Setting light phone gif (0x49)...")
         args = []
-        args += total_len.to_bytes(2, byteorder='little')
-        args += gif_id.to_bytes(1, byteorder='big')
+        args += total_len.to_bytes(2, byteorder="little")
+        args += gif_id.to_bytes(1, byteorder="big")
         args.extend(gif_data)
         return await self.communicator.send_command(COMMANDS["set light phone gif"], args)
 
     def _handle_ansgc_start_sending(self, kwargs: dict) -> list | None:
         file_size = kwargs.get("file_size")
         if file_size is not None:
-            return list(file_size.to_bytes(4, byteorder='little'))
+            return list(file_size.to_bytes(4, byteorder="little"))
         self.logger.error("Missing 'file_size' for Start Sending control word.")
         return None
 
@@ -76,14 +90,16 @@ class Animation(AnimationUserDefine):
         file_offset_id = kwargs.get("file_offset_id")
         file_data = kwargs.get("file_data")
         if file_size is not None and file_offset_id is not None and file_data is not None:
-            return list(file_size.to_bytes(4, byteorder='little')) + \
-                   list(file_offset_id.to_bytes(2, byteorder='little')) + \
-                   file_data
+            return (
+                list(file_size.to_bytes(4, byteorder="little"))
+                + list(file_offset_id.to_bytes(2, byteorder="little"))
+                + file_data
+            )
         self.logger.error("Missing 'file_size', 'file_offset_id', or 'file_data' for Sending Data control word.")
         return None
 
     def _handle_ansgc_terminate_sending(self, kwargs: dict) -> list | None:
-        return [] # No additional data
+        return []  # No additional data
 
     _ansgc_handlers = {
         ANSGC_CONTROL_START_SENDING: _handle_ansgc_start_sending,
@@ -95,8 +111,7 @@ class Animation(AnimationUserDefine):
         """
         Send a new GIF animation to the device using the upgraded protocol.
         """
-        self.logger.info(
-            f"App new send GIF command with control word {control_word} (0x8b)...")
+        self.logger.info(f"App new send GIF command with control word {control_word} (0x8b)...")
         args = [control_word]
 
         handler = self._ansgc_handlers.get(control_word)
@@ -107,11 +122,12 @@ class Animation(AnimationUserDefine):
             else:
                 return False
         else:
-            self.logger.warning(
-                f"Unknown control word for app_new_send_gif_cmd: {control_word}")
+            self.logger.warning(f"Unknown control word for app_new_send_gif_cmd: {control_word}")
             return False
 
-        return await self.communicator.send_command(COMMANDS["app new send gif cmd"], args, write_with_response=write_with_response)
+        return await self.communicator.send_command(
+            COMMANDS["app new send gif cmd"], args, write_with_response=write_with_response
+        )
 
     async def stream_animation_8b(self, blob: bytes) -> bool:
         """Stream a pre-encoded animation frame blob via the 0x8B 3-phase
@@ -179,15 +195,13 @@ class Animation(AnimationUserDefine):
         # can actually serve them. Scoped to the stream; removed in finally.
         _listen = getattr(self.communicator, "_listen_commands", None)
         _listening_8b = is_ble and isinstance(_listen, set)
-        if is_ble and hasattr(self.communicator, '_expected_response_command'):
+        if is_ble and hasattr(self.communicator, "_expected_response_command"):
             self.communicator._expected_response_command = _cmd_8b
         if _listening_8b:
             _listen.add(_cmd_8b)
 
         try:
-            if not await self.app_new_send_gif_cmd(
-                control_word=ANSGC_CONTROL_START_SENDING, file_size=file_size
-            ):
+            if not await self.app_new_send_gif_cmd(control_word=ANSGC_CONTROL_START_SENDING, file_size=file_size):
                 self.logger.error("0x8B start phase failed")
                 return False
 
@@ -200,7 +214,7 @@ class Animation(AnimationUserDefine):
             chunk_size = 256  # MUST match futpib/APK (hVar.q(256)); chunk N → byte N*256
             offset_id = 0
             for i in range(0, file_size, chunk_size):
-                chunk = list(blob[i:i + chunk_size])
+                chunk = list(blob[i : i + chunk_size])
                 if not await self.app_new_send_gif_cmd(
                     control_word=ANSGC_CONTROL_SENDING_DATA,
                     file_size=file_size,
@@ -217,8 +231,7 @@ class Animation(AnimationUserDefine):
             # APK: the device may ask for dropped chunks to be re-sent; without
             # this, one lost chunk = a permanently failed upload.
             if is_ble:
-                await self._serve_8b_retransmits(blob, file_size, chunk_size,
-                                                 write_with_response)
+                await self._serve_8b_retransmits(blob, file_size, chunk_size, write_with_response)
 
             # APK: no terminate packet (CW=2). Verified on 4 hardware devices
             # (Timoo, Ditoo, Tivoo Max, Pixoo) — animation renders correctly
@@ -230,7 +243,7 @@ class Animation(AnimationUserDefine):
             # chunk-failure paths it would otherwise stay pinned to 0x8B and
             # mis-route the NEXT op's notifications (cross-talk). The during-stream
             # handshake is unchanged — this only guarantees cleanup on exit.
-            if is_ble and hasattr(self.communicator, '_expected_response_command'):
+            if is_ble and hasattr(self.communicator, "_expected_response_command"):
                 self.communicator._expected_response_command = None
             if _listening_8b:
                 _listen.discard(_cmd_8b)
@@ -259,10 +272,15 @@ class Animation(AnimationUserDefine):
                 return True
             # Anything else (stale frame, early retransmit) — keep waiting.
 
-    async def _serve_8b_retransmits(self, blob: bytes, file_size: int,
-                                    chunk_size: int, write_with_response: bool,
-                                    quiet_timeout: float = 1.0,
-                                    max_requests: int = 256) -> None:
+    async def _serve_8b_retransmits(
+        self,
+        blob: bytes,
+        file_size: int,
+        chunk_size: int,
+        write_with_response: bool,
+        quiet_timeout: float = 1.0,
+        max_requests: int = 256,
+    ) -> None:
         """Serve the device's 0x8b retransmit requests after the chunk stream —
         APK semantics: response ``[1][chunk_idx:2 LE]`` means "re-send chunk N"
         (`bluetooth/s.java` → ``DesignSendModel.resendBlueData(N)``). Stops when
@@ -273,8 +291,7 @@ class Animation(AnimationUserDefine):
             return
         for _ in range(max_requests):
             try:
-                payload = await wait(COMMANDS["app new send gif cmd"],
-                                     timeout=quiet_timeout)
+                payload = await wait(COMMANDS["app new send gif cmd"], timeout=quiet_timeout)
             except Exception:
                 return
             if payload is None:
@@ -290,7 +307,7 @@ class Animation(AnimationUserDefine):
                     control_word=ANSGC_CONTROL_SENDING_DATA,
                     file_size=file_size,
                     file_offset_id=idx,
-                    file_data=list(blob[start:start + chunk_size]),
+                    file_data=list(blob[start : start + chunk_size]),
                     write_with_response=write_with_response,
                 )
             # payload[0] == 0 here would be a late start-ACK — ignore.
@@ -299,12 +316,11 @@ class Animation(AnimationUserDefine):
         """
         Set the related information for the rhythm animation.
         """
-        self.logger.info(
-            f"Setting rhythm GIF: pos={pos}, total_length={total_length}, gif_id={gif_id} (0xb7)...")
+        self.logger.info(f"Setting rhythm GIF: pos={pos}, total_length={total_length}, gif_id={gif_id} (0xb7)...")
         args = []
-        args += pos.to_bytes(1, byteorder='big')
-        args += total_length.to_bytes(2, byteorder='little')
-        args += gif_id.to_bytes(1, byteorder='big')
+        args += pos.to_bytes(1, byteorder="big")
+        args += total_length.to_bytes(2, byteorder="little")
+        args += gif_id.to_bytes(1, byteorder="big")
         args.extend(data)
         return await self.communicator.send_command(COMMANDS["set rhythm gif"], args)
 
@@ -312,11 +328,10 @@ class Animation(AnimationUserDefine):
         """
         Send an EQ rhythm animation to the device.
         """
-        self.logger.info(
-            f"App sending EQ GIF: pos={pos}, total_length={total_length}, gif_id={gif_id} (0x1b)...")
+        self.logger.info(f"App sending EQ GIF: pos={pos}, total_length={total_length}, gif_id={gif_id} (0x1b)...")
         args = []
-        args += pos.to_bytes(1, byteorder='big')
-        args += total_length.to_bytes(2, byteorder='little')
-        args += gif_id.to_bytes(1, byteorder='big')
+        args += pos.to_bytes(1, byteorder="big")
+        args += total_length.to_bytes(2, byteorder="little")
+        args += gif_id.to_bytes(1, byteorder="big")
         args.extend(data)
         return await self.communicator.send_command(COMMANDS["app send eq gif"], args)

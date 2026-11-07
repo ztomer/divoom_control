@@ -84,8 +84,17 @@ def test_the_canvas_is_never_covered_whatever_gpu_the_host_reports(monkeypatch: 
 def test_every_process_draws_the_hosts_os() -> None:
     """Without a browser: a fresh process per draw, because the OS is drawn once per process."""
     want = PLATFORM[fingerprint_os()]
-    got = [subprocess.run([sys.executable, "-c", _DRAW, str(ROOT)], capture_output=True, text=True, stdin=subprocess.DEVNULL,
-                          check=True, timeout=60).stdout.strip() for _ in range(PROCESSES)]
+    got = [
+        subprocess.run(
+            [sys.executable, "-c", _DRAW, str(ROOT)],
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+            check=True,
+            timeout=60,
+        ).stdout.strip()
+        for _ in range(PROCESSES)
+    ]
     assert got == [want] * PROCESSES, f"fingerprint platforms {got}, host {want}"
 
 

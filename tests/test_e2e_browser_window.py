@@ -57,8 +57,7 @@ def _viewports() -> list[tuple[int, int]]:
 def _window(opts: dict) -> tuple[int, int]:
     raw = "".join(v for k, v in sorted(opts["env"].items()) if k.startswith("CAMOU_CONFIG"))
     cfg = json.loads(raw)
-    return (cfg["window.outerWidth"], cfg["window.outerHeight"],
-            cfg["screen.availWidth"], cfg["screen.availHeight"])
+    return (cfg["window.outerWidth"], cfg["window.outerHeight"], cfg["screen.availWidth"], cfg["screen.availHeight"])
 
 
 def test_the_scan_finds_the_viewports_it_guards() -> None:
@@ -73,8 +72,11 @@ def test_every_launch_draws_a_window_that_holds_every_viewport() -> None:
     need_w = max(w for w, _ in _viewports()) + BROWSER_CHROME[0]
     need_h = max(h for _, h in _viewports()) + BROWSER_CHROME[1]
     assert HARNESS_WINDOW[0] >= need_w and HARNESS_WINDOW[1] >= need_h, (HARNESS_WINDOW, need_w, need_h)
-    small = [w for w in (_window(launch_options_for(network=False, launching=False)) for _ in range(200))
-             if w[0] < need_w or w[1] < need_h or w[2] < w[0] or w[3] < w[1]]
+    small = [
+        w
+        for w in (_window(launch_options_for(network=False, launching=False)) for _ in range(200))
+        if w[0] < need_w or w[1] < need_h or w[2] < w[0] or w[3] < w[1]
+    ]
     assert not small, f"windows that cannot hold a {need_w}x{need_h} page: {sorted(set(small))}"
 
 

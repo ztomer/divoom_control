@@ -8,6 +8,7 @@ for a third of the lineup -- a Tivoo-Max at 32x32, a CyberBag at 16, an LCD
 panel at 32 where the vendor app draws 128. Two owners of one fact drift; this
 holds the second to the first.
 """
+
 from __future__ import annotations
 
 import re
@@ -20,7 +21,7 @@ RUST = Path(__file__).resolve().parents[1] / "divoomd" / "src" / "panel_model.rs
 
 def _rust_table() -> tuple[dict[str, int], int]:
     src = RUST.read_text()
-    block = src[src.index("pub const LARGER_THAN_16"):]
+    block = src[src.index("pub const LARGER_THAN_16") :]
     block = block[: block.index("];")]
     larger = {m: int(px) for m, px in re.findall(r'\("([A-Za-z0-9_]+)",\s*(\d+)\)', block)}
     default = int(re.search(r"pub const DEFAULT_PIXELS: u32 = (\d+);", src).group(1))

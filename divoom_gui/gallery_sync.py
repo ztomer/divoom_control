@@ -26,6 +26,7 @@ def native_only(items: list, panel: int) -> list:
 
 class GallerySyncMixin(GalleryHotApiMixin):
     """Mixin for cloud-voted gallery fetching and hot-channel schedule orchestration."""
+
     def _load_cached_gallery(self) -> str:
         cache_file = Path.home() / ".config" / "divoom-control" / "gallery_cache.json"
         if cache_file.exists():
@@ -39,12 +40,10 @@ class GallerySyncMixin(GalleryHotApiMixin):
                 # prevents the gallery from rendering a single bogus item
                 # when the on-disk items are otherwise present.
                 cache_dir = Path.home() / ".config" / "divoom-control" / "cache_gallery"
-                if (not parsed
-                    or all(str(a.get("file_id", "")) == "9999" for a in parsed)):
+                if not parsed or all(str(a.get("file_id", "")) == "9999" for a in parsed):
                     if cache_dir.exists() and any(cache_dir.iterdir()):
                         logger.info(
-                            "Gallery JSON cache is empty/stale; rebuilding from "
-                            "on-disk cache_gallery directory."
+                            "Gallery JSON cache is empty/stale; rebuilding from on-disk cache_gallery directory."
                         )
                         return self.get_cached_gallery_files()
                 return raw
@@ -56,7 +55,7 @@ class GallerySyncMixin(GalleryHotApiMixin):
         cache_dir = Path.home() / ".config" / "divoom-control" / "cache_gallery"
         if not cache_dir.exists():
             return "[]"
-        
+
         name_map = {}
         cache_file = Path.home() / ".config" / "divoom-control" / "gallery_cache.json"
         if cache_file.exists():
@@ -77,13 +76,15 @@ class GallerySyncMixin(GalleryHotApiMixin):
                     continue
                 safe_name = path.stem
                 ext = path.suffix.lower()
-                
+
                 # Deduplicate by stem, prioritizing .gif animations
                 if safe_name in results and results[safe_name]["ext"] == ".gif" and ext != ".gif":
                     continue
-                    
+
                 display_name = name_map.get(safe_name, path.name)
-                mime_type = "image/gif" if ext == ".gif" else ("image/jpeg" if ext in [".jpg", ".jpeg"] else "image/png")
+                mime_type = (
+                    "image/gif" if ext == ".gif" else ("image/jpeg" if ext in [".jpg", ".jpeg"] else "image/png")
+                )
                 try:
                     img_data = path.read_bytes()
                     b64_str = base64.b64encode(img_data).decode("utf-8")
@@ -92,19 +93,16 @@ class GallerySyncMixin(GalleryHotApiMixin):
                         "name": display_name,
                         "path": str(path.absolute()),
                         "preview_url": preview_url,
-                        "ext": ext
+                        "ext": ext,
                     }
                 except Exception as e:
                     logger.warning(f"Failed to encode cache file {path}: {e}")
-        
+
         final_list = []
         for safe_name, item in results.items():
-            final_list.append({
-                "file_id": safe_name,
-                "name": item["name"],
-                "path": item["path"],
-                "preview_url": item["preview_url"]
-            })
+            final_list.append(
+                {"file_id": safe_name, "name": item["name"], "path": item["path"], "preview_url": item["preview_url"]}
+            )
         return json.dumps(final_list)
 
     def play_gallery_art(self, mac: str, file_id: str) -> dict:
@@ -147,8 +145,7 @@ class GallerySyncMixin(GalleryHotApiMixin):
     # The cloud's per-item FileSize -> square edge (the APK's table).
     SIZE_OF_BIT: dict[int, int] = {1: 16, 2: 32, 4: 64, 16: 128, 32: 256}
 
-    def fetch_gallery(self, classify: int, target_size: int = 16,
-                      file_sort: int = 1, mac: str | None = None) -> str:
+    def fetch_gallery(self, classify: int, target_size: int = 16, file_sort: int = 1, mac: str | None = None) -> str:
         """Fetch the gallery items drawn for the panel ``mac`` names.
 
         Only its size: pixel art is never rescaled to another panel (D14), so
@@ -157,8 +154,7 @@ class GallerySyncMixin(GalleryHotApiMixin):
         cache and the page's staleness check); with no panel named the
         gallery is browsed unfiltered and nothing can be pushed."""
         logger.info(
-            f"GUI Action: Fetching gallery classify={classify} "
-            f"target_size={target_size} file_sort={file_sort}..."
+            f"GUI Action: Fetching gallery classify={classify} target_size={target_size} file_sort={file_sort}..."
         )
 
         try:
@@ -181,16 +177,15 @@ class GallerySyncMixin(GalleryHotApiMixin):
                 # including the auth retry, which is why none of it survives
                 # here.
                 if mac and mac != "MatrixWall":
-                    file_list = client.fetch_gallery(
-                        classify, limit=30, file_sort=file_sort, mac=mac) or []
+                    file_list = client.fetch_gallery(classify, limit=30, file_sort=file_sort, mac=mac) or []
                 else:
-                    file_list = client.fetch_gallery(
-                        classify, limit=30, file_sort=file_sort, all_sizes=True) or []
+                    file_list = client.fetch_gallery(classify, limit=30, file_sort=file_sort, all_sizes=True) or []
                 if isinstance(file_list, dict):
                     file_list = file_list.get("FileList", []) or []
 
                 cache_dir = gallery_assets.ensure_cache_dir(
-                    Path.home() / ".config" / "divoom-control" / "cache_gallery")
+                    Path.home() / ".config" / "divoom-control" / "cache_gallery"
+                )
 
                 # Previews are downloaded AND decoded by the daemon; this only
                 # caches what it returns. Kept parallel because each miss is a
@@ -199,8 +194,7 @@ class GallerySyncMixin(GalleryHotApiMixin):
                 from concurrent.futures import ThreadPoolExecutor
 
                 def preview_of(item):
-                    return gallery_assets.preview_for(
-                        client, cache_dir, item.get("FileId") or "")
+                    return gallery_assets.preview_for(client, cache_dir, item.get("FileId") or "")
 
                 with ThreadPoolExecutor(max_workers=10) as executor:
                     previews = list(executor.map(preview_of, file_list))
@@ -250,7 +244,7 @@ class GallerySyncMixin(GalleryHotApiMixin):
                 # The old code matched on "expired"/"token"/"credentials not
                 # configured" substrings — an error reworded upstream silently
                 # changed which banner the user saw.
-                is_expired = (isinstance(e, CloudUnavailable) and e.cause == "auth")
+                is_expired = isinstance(e, CloudUnavailable) and e.cause == "auth"
                 logger.error(f"Background gallery fetch failed permanently: {e}")
                 if self.window:
                     try:
@@ -271,6 +265,7 @@ class GallerySyncMixin(GalleryHotApiMixin):
         says what the daemon will actually do.
         """
         from divoom_lib import settings_devices
+
         selected = {addr for addr, _ in settings_devices.registered_devices()}
         seen, candidates = set(), []
 
@@ -278,13 +273,15 @@ class GallerySyncMixin(GalleryHotApiMixin):
             if not address or address in seen:
                 return
             seen.add(address)
-            candidates.append({
-                "address": address,
-                "name": name or "Divoom Screen",
-                "selected": address in selected,
-                "gallery_style": settings_devices.device_classify(address),
-                "device_name": name or "Divoom Screen",
-            })
+            candidates.append(
+                {
+                    "address": address,
+                    "name": name or "Divoom Screen",
+                    "selected": address in selected,
+                    "gallery_style": settings_devices.device_classify(address),
+                    "device_name": name or "Divoom Screen",
+                }
+            )
 
         try:
             cache = Path.home() / ".config" / "divoom-control" / "discovered_devices.json"
@@ -312,6 +309,7 @@ class GallerySyncMixin(GalleryHotApiMixin):
         that is how four registered devices disappeared in one write.
         """
         from divoom_lib import settings_devices
+
         try:
             checked, known = [], []
             if targets_json and isinstance(targets_json, str):
@@ -333,10 +331,12 @@ class GallerySyncMixin(GalleryHotApiMixin):
 
     def get_hot_channel_config(self) -> str:
         from divoom_lib import hotchannel_config
+
         return json.dumps(hotchannel_config.load_config())
 
     def save_hot_channel_config(self, *config, **kwargs) -> bool:
         from divoom_lib import hotchannel_config
+
         try:
             cfg = self._coerce_dict(config, kwargs)
             return hotchannel_config.save_config(cfg)
@@ -355,10 +355,11 @@ class GallerySyncMixin(GalleryHotApiMixin):
 
     @staticmethod
     def _gallery_style_key(address: str) -> str:
-        return (str(address or "").strip() or "default")
+        return str(address or "").strip() or "default"
 
     def get_gallery_style(self, address: str = "") -> int:
         import configparser
+
         key = self._gallery_style_key(address)
         try:
             path = self._gallery_config_path()
@@ -376,6 +377,7 @@ class GallerySyncMixin(GalleryHotApiMixin):
 
     def set_gallery_style(self, address: str = "", classify: int = 18) -> bool:
         import configparser
+
         key = self._gallery_style_key(address)
         try:
             path = self._gallery_config_path()
@@ -395,6 +397,7 @@ class GallerySyncMixin(GalleryHotApiMixin):
     def get_gallery_filter(self) -> str:
         """Return the current sort preference as JSON (the size is the panel's)."""
         import configparser
+
         try:
             path = self._gallery_config_path()
             if path.exists():
@@ -408,6 +411,7 @@ class GallerySyncMixin(GalleryHotApiMixin):
 
     def set_gallery_filter(self, sort: int = 1) -> bool:
         import configparser
+
         try:
             path = self._gallery_config_path()
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -425,4 +429,3 @@ class GallerySyncMixin(GalleryHotApiMixin):
         except Exception as e:
             logger.warning(f"set_gallery_filter failed: {e}")
             return False
-

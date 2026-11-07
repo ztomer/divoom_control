@@ -15,6 +15,7 @@ The cache here holds the daemon's ANSWERS. Nothing in this module sniffs a
 magic byte or decides how to decode; the mime comes from the daemon's own
 data-url, and an unknown one is not guessed at.
 """
+
 from __future__ import annotations
 
 import base64
@@ -117,6 +118,7 @@ def test_a_zero_byte_cached_file_is_treated_as_a_miss(tmp_path):
 
 
 # ── the one-time purge ───────────────────────────────────────────────────────
+
 
 def test_a_pre_r70_cache_is_cleared_exactly_once(tmp_path, caplog):
     """Old caches hold `.bin` intermediates and previews the deleted GUI

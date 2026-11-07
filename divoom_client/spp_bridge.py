@@ -2,6 +2,7 @@
 """spp_bridge.py — Subprocess bridge for Divoom Bluetooth Classic SPP.
 Pipes hex-JSON messages between divoomd (Rust) and BTSppTransport (Python/IOBluetooth).
 """
+
 import sys
 import os
 import json
@@ -16,6 +17,7 @@ from divoom_lib.bt_spp_transport import BTSppTransport
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("divoom_spp_bridge")
+
 
 async def read_stdin_loop(transport: BTSppTransport):
     # Setup async stdin reader
@@ -55,23 +57,27 @@ async def read_stdin_loop(transport: BTSppTransport):
             logger.error(f"Error handling stdin command: {e}")
             print(json.dumps({"type": "error", "error": str(e)}), flush=True)
 
+
 async def read_notifications_loop(transport: BTSppTransport):
     while True:
         try:
             # BTSppTransport puts dictionary with command_id and payload into notification_queue
             notif = await transport.notification_queue.get()
-            print(json.dumps({
-                "type": "notification",
-                "command_id": notif["command_id"],
-                "payload": list(notif["payload"])
-            }), flush=True)
+            print(
+                json.dumps(
+                    {"type": "notification", "command_id": notif["command_id"], "payload": list(notif["payload"])}
+                ),
+                flush=True,
+            )
             transport.notification_queue.task_done()
         except Exception as e:
             logger.error(f"Error in notification loop: {e}")
             break
 
+
 async def main():
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--mac", required=True)
     parser.add_argument("--channel", type=int, default=None)
@@ -80,10 +86,7 @@ async def main():
     args = parser.parse_args()
 
     transport = BTSppTransport(
-        mac_address=args.mac.replace(":", "-"),
-        channel_id=args.channel,
-        device_kind=args.kind,
-        device_name=args.name
+        mac_address=args.mac.replace(":", "-"), channel_id=args.channel, device_kind=args.kind, device_name=args.name
     )
 
     try:
@@ -94,13 +97,11 @@ async def main():
         sys.exit(1)
 
     try:
-        await asyncio.gather(
-            read_stdin_loop(transport),
-            read_notifications_loop(transport)
-        )
+        await asyncio.gather(read_stdin_loop(transport), read_notifications_loop(transport))
     finally:
         await transport.disconnect()
         print(json.dumps({"type": "disconnected"}), flush=True)
+
 
 if __name__ == "__main__":
     try:

@@ -14,8 +14,8 @@ sys.path.append(str(Path(__file__).parent.parent / "api_scraper"))
 
 from divoom_legacy import monthly_best_daemon
 
-class TestMonthlyBestDaemon(unittest.IsolatedAsyncioTestCase):
 
+class TestMonthlyBestDaemon(unittest.IsolatedAsyncioTestCase):
     def test_extract_gif_from_magic_43_invalid(self):
         """Test extract_gif_from_magic_43 returns None for non-Magic 43 data."""
         # Non-magic-43 bytes
@@ -34,13 +34,13 @@ class TestMonthlyBestDaemon(unittest.IsolatedAsyncioTestCase):
         # Next gif_len bytes: GIF data starting with GIF89a
         text = b"Hello, World!"
         gif = b"GIF89aXXXXXX"
-        
+
         payload = bytearray([43, 0, 0, 0, 0, 0])
-        payload.extend(len(text).to_bytes(4, byteorder='little'))
+        payload.extend(len(text).to_bytes(4, byteorder="little"))
         payload.extend(text)
-        payload.extend(len(gif).to_bytes(4, byteorder='little'))
+        payload.extend(len(gif).to_bytes(4, byteorder="little"))
         payload.extend(gif)
-        
+
         result = monthly_best_daemon.extract_gif_from_magic_43(bytes(payload))
         self.assertEqual(result, gif)
 
@@ -57,8 +57,7 @@ class TestMonthlyBestDaemon(unittest.IsolatedAsyncioTestCase):
         mock_divoom.animation.stream_animation_8b.assert_awaited_once_with(file_data)
 
         mock_divoom.animation.stream_animation_8b = AsyncMock(return_value=False)
-        self.assertFalse(
-            await monthly_best_daemon.stream_raw_bin_payload(mock_divoom, file_data))
+        self.assertFalse(await monthly_best_daemon.stream_raw_bin_payload(mock_divoom, file_data))
 
     def test_extract_gif_from_magic_43_truncated_header(self):
         """gif_len field would read past the buffer end -> None (line 66)."""
@@ -95,8 +94,7 @@ class TestMonthlyBestDaemon(unittest.IsolatedAsyncioTestCase):
         payload.extend(text)
         payload.extend(len(gif).to_bytes(4, byteorder="little"))
         payload.extend(gif)
-        with patch("divoom_legacy.monthly_best_daemon.struct.unpack",
-                   side_effect=struct.error("bad unpack")):
+        with patch("divoom_legacy.monthly_best_daemon.struct.unpack", side_effect=struct.error("bad unpack")):
             result = monthly_best_daemon.extract_gif_from_magic_43(bytes(payload))
         self.assertIsNone(result)
 
@@ -167,7 +165,8 @@ class TestFetchAndDownload(unittest.IsolatedAsyncioTestCase):
         args = SimpleNamespace(limit=3)
         with patch("urllib.request.urlopen", side_effect=fake_urlopen):
             items = await monthly_best_daemon._fetch_and_download(
-                18, args, self.creds, 0, 0, self.scratch_dir, self.logger)
+                18, args, self.creds, 0, 0, self.scratch_dir, self.logger
+            )
 
         # Only the 3 successful downloads count toward the limit; the trailing
         # "NeverReached" item is cut off by the limit break.
@@ -196,7 +195,8 @@ class TestFetchAndDownload(unittest.IsolatedAsyncioTestCase):
         args = SimpleNamespace(limit=5)
         with patch("urllib.request.urlopen", side_effect=fake_urlopen):
             items = await monthly_best_daemon._fetch_and_download(
-                9, args, self.creds, 42, 999, self.scratch_dir, self.logger)
+                9, args, self.creds, 42, 999, self.scratch_dir, self.logger
+            )
 
         self.assertEqual(items, [])
         self.assertEqual(captured["payload"]["DevicePassword"], 999)
@@ -214,20 +214,23 @@ class TestFetchAndDownload(unittest.IsolatedAsyncioTestCase):
         args = SimpleNamespace(limit=5)
         with patch("urllib.request.urlopen", side_effect=fake_urlopen):
             items = await monthly_best_daemon._fetch_and_download(
-                18, args, self.creds, 0, 0, self.scratch_dir, self.logger)
+                18, args, self.creds, 0, 0, self.scratch_dir, self.logger
+            )
         self.assertEqual(items, [])
 
     async def test_fetch_and_download_outer_request_exception(self):
         """A hard failure making the list request (e.g. network down) is
         caught by the outer try/except and yields an empty list
         (lines 290-292)."""
+
         def fake_urlopen(req, timeout=None):
             raise OSError("network unreachable")
 
         args = SimpleNamespace(limit=5)
         with patch("urllib.request.urlopen", side_effect=fake_urlopen):
             items = await monthly_best_daemon._fetch_and_download(
-                18, args, self.creds, 0, 0, self.scratch_dir, self.logger)
+                18, args, self.creds, 0, 0, self.scratch_dir, self.logger
+            )
         self.assertEqual(items, [])
 
 
@@ -258,9 +261,11 @@ class TestPushItemsToTarget(unittest.IsolatedAsyncioTestCase):
         ]
         logger = MagicMock()
 
-        with patch("divoom_legacy.monthly_best_daemon.discovery.discover_device", mock_discover), \
-             patch("divoom_legacy.monthly_best_daemon.Divoom", mock_divoom_cls), \
-             patch("divoom_legacy.monthly_best_daemon.asyncio.sleep", AsyncMock()) as mock_sleep:
+        with (
+            patch("divoom_legacy.monthly_best_daemon.discovery.discover_device", mock_discover),
+            patch("divoom_legacy.monthly_best_daemon.Divoom", mock_divoom_cls),
+            patch("divoom_legacy.monthly_best_daemon.asyncio.sleep", AsyncMock()) as mock_sleep,
+        ):
             await monthly_best_daemon._push_items_to_target(None, "Timoo", items, logger)
 
         mock_discover.assert_awaited_once_with(name_substring="Timoo", address=None)
@@ -282,11 +287,14 @@ class TestPushItemsToTarget(unittest.IsolatedAsyncioTestCase):
         mock_discover = AsyncMock(return_value=(None, None))
         mock_divoom_cls = MagicMock()
 
-        with patch("divoom_legacy.monthly_best_daemon.discovery.discover_device", mock_discover), \
-             patch("divoom_legacy.monthly_best_daemon.Divoom", mock_divoom_cls):
+        with (
+            patch("divoom_legacy.monthly_best_daemon.discovery.discover_device", mock_discover),
+            patch("divoom_legacy.monthly_best_daemon.Divoom", mock_divoom_cls),
+        ):
             # Must not raise -- the error is swallowed and logged.
             await monthly_best_daemon._push_items_to_target(
-                None, "Nonexistent", [{"type": "gif", "path": "x", "name": "n"}], MagicMock())
+                None, "Nonexistent", [{"type": "gif", "path": "x", "name": "n"}], MagicMock()
+            )
 
         mock_divoom_cls.assert_not_called()
 
@@ -301,11 +309,13 @@ class TestPushItemsToTarget(unittest.IsolatedAsyncioTestCase):
         mock_divoom_cls = MagicMock(return_value=mock_instance)
         mock_discover = AsyncMock()
 
-        with patch("divoom_legacy.monthly_best_daemon.discovery.discover_device", mock_discover), \
-             patch("divoom_legacy.monthly_best_daemon.Divoom", mock_divoom_cls):
+        with (
+            patch("divoom_legacy.monthly_best_daemon.discovery.discover_device", mock_discover),
+            patch("divoom_legacy.monthly_best_daemon.Divoom", mock_divoom_cls),
+        ):
             await monthly_best_daemon._push_items_to_target(
-                "11:22:33:44:55:66", "Timoo",
-                [{"type": "gif", "path": "x", "name": "n"}], MagicMock())
+                "11:22:33:44:55:66", "Timoo", [{"type": "gif", "path": "x", "name": "n"}], MagicMock()
+            )
 
         mock_discover.assert_not_awaited()
         mock_instance.connect.assert_awaited_once()
@@ -334,19 +344,20 @@ class TestMainAsync(unittest.IsolatedAsyncioTestCase):
 
     @staticmethod
     def _hc(**overrides):
-        cfg = {"enabled": False, "interval": 3600, "classify": 18,
-               "targets": [], "device_galleries": {}}
+        cfg = {"enabled": False, "interval": 3600, "classify": 18, "targets": [], "device_galleries": {}}
         cfg.update(overrides)
         return cfg
 
     async def test_dry_run_legacy_skips_push(self):
         fetch_mock = AsyncMock(return_value=[{"type": "gif", "path": "x", "name": "n"}])
         push_mock = AsyncMock()
-        with patch.object(sys, "argv", ["monthly_best_daemon.py", "--dry-run"]), \
-             patch("divoom_lib.divoom_auth.get_credentials", return_value=self.creds), \
-             patch("divoom_legacy.hotchannel_config.load_config", return_value=self._hc()), \
-             patch.object(monthly_best_daemon, "_fetch_and_download", fetch_mock), \
-             patch.object(monthly_best_daemon, "_push_items_to_target", push_mock):
+        with (
+            patch.object(sys, "argv", ["monthly_best_daemon.py", "--dry-run"]),
+            patch("divoom_lib.divoom_auth.get_credentials", return_value=self.creds),
+            patch("divoom_legacy.hotchannel_config.load_config", return_value=self._hc()),
+            patch.object(monthly_best_daemon, "_fetch_and_download", fetch_mock),
+            patch.object(monthly_best_daemon, "_push_items_to_target", push_mock),
+        ):
             await monthly_best_daemon.main_async()
 
         fetch_mock.assert_awaited_once()
@@ -355,24 +366,28 @@ class TestMainAsync(unittest.IsolatedAsyncioTestCase):
     async def test_legacy_mode_pushes_when_items_found(self):
         fetch_mock = AsyncMock(return_value=[{"type": "gif", "path": "x", "name": "n"}])
         push_mock = AsyncMock()
-        with patch.object(sys, "argv", ["monthly_best_daemon.py"]), \
-             patch("divoom_lib.divoom_auth.get_credentials", return_value=self.creds), \
-             patch("divoom_legacy.hotchannel_config.load_config", return_value=self._hc()), \
-             patch.object(monthly_best_daemon, "_fetch_and_download", fetch_mock), \
-             patch.object(monthly_best_daemon, "_push_items_to_target", push_mock):
+        with (
+            patch.object(sys, "argv", ["monthly_best_daemon.py"]),
+            patch("divoom_lib.divoom_auth.get_credentials", return_value=self.creds),
+            patch("divoom_legacy.hotchannel_config.load_config", return_value=self._hc()),
+            patch.object(monthly_best_daemon, "_fetch_and_download", fetch_mock),
+            patch.object(monthly_best_daemon, "_push_items_to_target", push_mock),
+        ):
             await monthly_best_daemon.main_async()
 
         push_mock.assert_awaited_once()
         args, _ = push_mock.call_args
-        self.assertEqual(args[0], None)   # target address (falls back to name discovery)
+        self.assertEqual(args[0], None)  # target address (falls back to name discovery)
         self.assertEqual(args[1], "Timoo")
 
     async def test_credentials_failure_exits(self):
-        with patch.object(sys, "argv", ["monthly_best_daemon.py"]), \
-             patch("divoom_lib.divoom_auth.get_credentials", side_effect=RuntimeError("no login")), \
-             patch("divoom_legacy.hotchannel_config.load_config", return_value=self._hc()), \
-             patch.object(monthly_best_daemon, "_fetch_and_download", AsyncMock()), \
-             patch.object(monthly_best_daemon, "_push_items_to_target", AsyncMock()):
+        with (
+            patch.object(sys, "argv", ["monthly_best_daemon.py"]),
+            patch("divoom_lib.divoom_auth.get_credentials", side_effect=RuntimeError("no login")),
+            patch("divoom_legacy.hotchannel_config.load_config", return_value=self._hc()),
+            patch.object(monthly_best_daemon, "_fetch_and_download", AsyncMock()),
+            patch.object(monthly_best_daemon, "_push_items_to_target", AsyncMock()),
+        ):
             with self.assertRaises(SystemExit):
                 await monthly_best_daemon.main_async()
 
@@ -382,11 +397,13 @@ class TestMainAsync(unittest.IsolatedAsyncioTestCase):
         cache_path.write_text(json.dumps({"BluetoothDeviceId": 123, "DevicePassword": 456}))
 
         fetch_mock = AsyncMock(return_value=[])
-        with patch.object(sys, "argv", ["monthly_best_daemon.py", "--dry-run"]), \
-             patch("divoom_lib.divoom_auth.get_credentials", return_value=self.creds), \
-             patch("divoom_legacy.hotchannel_config.load_config", return_value=self._hc()), \
-             patch.object(monthly_best_daemon, "_fetch_and_download", fetch_mock), \
-             patch.object(monthly_best_daemon, "_push_items_to_target", AsyncMock()):
+        with (
+            patch.object(sys, "argv", ["monthly_best_daemon.py", "--dry-run"]),
+            patch("divoom_lib.divoom_auth.get_credentials", return_value=self.creds),
+            patch("divoom_legacy.hotchannel_config.load_config", return_value=self._hc()),
+            patch.object(monthly_best_daemon, "_fetch_and_download", fetch_mock),
+            patch.object(monthly_best_daemon, "_push_items_to_target", AsyncMock()),
+        ):
             await monthly_best_daemon.main_async()
 
         call_args = fetch_mock.call_args[0]
@@ -399,11 +416,13 @@ class TestMainAsync(unittest.IsolatedAsyncioTestCase):
         cache_path.write_text("{not valid json")
 
         fetch_mock = AsyncMock(return_value=[])
-        with patch.object(sys, "argv", ["monthly_best_daemon.py", "--dry-run"]), \
-             patch("divoom_lib.divoom_auth.get_credentials", return_value=self.creds), \
-             patch("divoom_legacy.hotchannel_config.load_config", return_value=self._hc()), \
-             patch.object(monthly_best_daemon, "_fetch_and_download", fetch_mock), \
-             patch.object(monthly_best_daemon, "_push_items_to_target", AsyncMock()):
+        with (
+            patch.object(sys, "argv", ["monthly_best_daemon.py", "--dry-run"]),
+            patch("divoom_lib.divoom_auth.get_credentials", return_value=self.creds),
+            patch("divoom_legacy.hotchannel_config.load_config", return_value=self._hc()),
+            patch.object(monthly_best_daemon, "_fetch_and_download", fetch_mock),
+            patch.object(monthly_best_daemon, "_push_items_to_target", AsyncMock()),
+        ):
             await monthly_best_daemon.main_async()
 
         call_args = fetch_mock.call_args[0]
@@ -415,23 +434,24 @@ class TestMainAsync(unittest.IsolatedAsyncioTestCase):
         multi-group push branch (193-199); enabled=True keeps args.loop True
         so the loop reaches asyncio.sleep(interval) (210-211), which we make
         raise to end the test deterministically."""
-        hc_cfg = self._hc(enabled=True, interval=77, targets=["AA:BB", "CC:DD"],
-                           device_galleries={"AA:BB": 9})
+        hc_cfg = self._hc(enabled=True, interval=77, targets=["AA:BB", "CC:DD"], device_galleries={"AA:BB": 9})
         fetch_mock = AsyncMock(return_value=[{"type": "gif", "path": "x", "name": "n"}])
         push_mock = AsyncMock()
         sleep_mock = AsyncMock(side_effect=RuntimeError("stop-test-loop"))
 
-        with patch.object(sys, "argv", ["monthly_best_daemon.py", "--use-config"]), \
-             patch("divoom_lib.divoom_auth.get_credentials", return_value=self.creds), \
-             patch("divoom_legacy.hotchannel_config.load_config", return_value=hc_cfg), \
-             patch.object(monthly_best_daemon, "_fetch_and_download", fetch_mock), \
-             patch.object(monthly_best_daemon, "_push_items_to_target", push_mock), \
-             patch("divoom_legacy.monthly_best_daemon.asyncio.sleep", sleep_mock):
+        with (
+            patch.object(sys, "argv", ["monthly_best_daemon.py", "--use-config"]),
+            patch("divoom_lib.divoom_auth.get_credentials", return_value=self.creds),
+            patch("divoom_legacy.hotchannel_config.load_config", return_value=hc_cfg),
+            patch.object(monthly_best_daemon, "_fetch_and_download", fetch_mock),
+            patch.object(monthly_best_daemon, "_push_items_to_target", push_mock),
+            patch("divoom_legacy.monthly_best_daemon.asyncio.sleep", sleep_mock),
+        ):
             with self.assertRaises(RuntimeError):
                 await monthly_best_daemon.main_async()
 
-        self.assertEqual(fetch_mock.await_count, 2)   # one per classify group
-        self.assertEqual(push_mock.await_count, 2)    # one per target
+        self.assertEqual(fetch_mock.await_count, 2)  # one per classify group
+        self.assertEqual(push_mock.await_count, 2)  # one per target
         pushed_targets = {c.args[0] for c in push_mock.await_args_list}
         self.assertEqual(pushed_targets, {"AA:BB", "CC:DD"})
         sleep_mock.assert_awaited_once_with(77)
@@ -445,12 +465,15 @@ class TestMainAsync(unittest.IsolatedAsyncioTestCase):
         fetch_mock = AsyncMock(return_value=[{"type": "gif", "path": "x", "name": "n"}])
         push_mock = AsyncMock()
 
-        with patch.object(sys, "argv", ["monthly_best_daemon.py", "--use-config"]), \
-             patch("divoom_lib.divoom_auth.get_credentials", return_value=self.creds), \
-             patch("divoom_legacy.hotchannel_config.load_config",
-                   side_effect=[hc_cfg_initial, RuntimeError("disk fail")]), \
-             patch.object(monthly_best_daemon, "_fetch_and_download", fetch_mock), \
-             patch.object(monthly_best_daemon, "_push_items_to_target", push_mock):
+        with (
+            patch.object(sys, "argv", ["monthly_best_daemon.py", "--use-config"]),
+            patch("divoom_lib.divoom_auth.get_credentials", return_value=self.creds),
+            patch(
+                "divoom_legacy.hotchannel_config.load_config", side_effect=[hc_cfg_initial, RuntimeError("disk fail")]
+            ),
+            patch.object(monthly_best_daemon, "_fetch_and_download", fetch_mock),
+            patch.object(monthly_best_daemon, "_push_items_to_target", push_mock),
+        ):
             await monthly_best_daemon.main_async()
 
         fetch_mock.assert_awaited_once()
@@ -464,11 +487,13 @@ class TestMainAsync(unittest.IsolatedAsyncioTestCase):
         fetch_mock = AsyncMock()
         push_mock = AsyncMock()
 
-        with patch.object(sys, "argv", ["monthly_best_daemon.py", "--use-config", "--loop"]), \
-             patch("divoom_lib.divoom_auth.get_credentials", return_value=self.creds), \
-             patch("divoom_legacy.hotchannel_config.load_config", return_value=hc_cfg), \
-             patch.object(monthly_best_daemon, "_fetch_and_download", fetch_mock), \
-             patch.object(monthly_best_daemon, "_push_items_to_target", push_mock):
+        with (
+            patch.object(sys, "argv", ["monthly_best_daemon.py", "--use-config", "--loop"]),
+            patch("divoom_lib.divoom_auth.get_credentials", return_value=self.creds),
+            patch("divoom_legacy.hotchannel_config.load_config", return_value=hc_cfg),
+            patch.object(monthly_best_daemon, "_fetch_and_download", fetch_mock),
+            patch.object(monthly_best_daemon, "_push_items_to_target", push_mock),
+        ):
             await monthly_best_daemon.main_async()
 
         fetch_mock.assert_not_awaited()
@@ -482,12 +507,14 @@ class TestMainAsync(unittest.IsolatedAsyncioTestCase):
         fetch_mock = AsyncMock(return_value=[])
         push_mock = AsyncMock()
 
-        with patch.object(sys, "argv", ["monthly_best_daemon.py", "--use-config"]), \
-             patch("divoom_lib.divoom_auth.get_credentials", return_value=self.creds), \
-             patch("divoom_legacy.hotchannel_config.load_config", return_value=hc_cfg), \
-             patch.object(monthly_best_daemon, "_fetch_and_download", fetch_mock), \
-             patch.object(monthly_best_daemon, "_push_items_to_target", push_mock), \
-             patch("builtins.print") as mock_print:
+        with (
+            patch.object(sys, "argv", ["monthly_best_daemon.py", "--use-config"]),
+            patch("divoom_lib.divoom_auth.get_credentials", return_value=self.creds),
+            patch("divoom_legacy.hotchannel_config.load_config", return_value=hc_cfg),
+            patch.object(monthly_best_daemon, "_fetch_and_download", fetch_mock),
+            patch.object(monthly_best_daemon, "_push_items_to_target", push_mock),
+            patch("builtins.print") as mock_print,
+        ):
             await monthly_best_daemon.main_async()
 
         fetch_mock.assert_not_awaited()
@@ -496,5 +523,5 @@ class TestMainAsync(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Hot-channel config has no selected target devices", printed)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

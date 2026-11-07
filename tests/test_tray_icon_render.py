@@ -13,6 +13,7 @@ The distinctness gate itself (every pair of states differs in greyscale, on a
 light and a dark bar, at 2x and 1x, and with colour removed) is Rust, beside
 the renderer: `glyph::tests` in divoom-menubar.
 """
+
 from __future__ import annotations
 
 import re
@@ -27,9 +28,7 @@ sys.path.insert(0, str(REPO / "tools"))
 
 render = pytest.importorskip("render_tray_icon")
 
-needs_cargo = pytest.mark.skipif(
-    shutil.which("cargo") is None, reason="cargo is needed to compile the real glyph"
-)
+needs_cargo = pytest.mark.skipif(shutil.which("cargo") is None, reason="cargo is needed to compile the real glyph")
 
 
 def _icon_states() -> list[str]:

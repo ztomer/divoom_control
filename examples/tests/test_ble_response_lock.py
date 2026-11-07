@@ -7,6 +7,7 @@ Two concurrent callers would drain each other's frames and clobber the scalar
 but nothing ENFORCED that; `_response_lock` makes the invariant explicit so a
 future off-queue caller can't silently corrupt an in-flight wait.
 """
+
 import asyncio
 import logging
 import sys
@@ -20,6 +21,7 @@ from divoom_legacy.ble_notify import BleNotifyMixin
 class _T(BleNotifyMixin):
     """Minimal host for the mixin: a real lock + queue, a stub send_command that
     simulates the device replying with a frame matching the expected scalar."""
+
     def __init__(self):
         self.logger = logging.getLogger("test_response_lock")
         self.notification_queue = asyncio.Queue()
@@ -34,7 +36,8 @@ class _T(BleNotifyMixin):
         self.lock_states.append(self._response_lock.locked())
         # device replies with the frame the caller is waiting for
         self.notification_queue.put_nowait(
-            {"command_id": self._expected_response_command, "payload": bytes([command & 0xFF])})
+            {"command_id": self._expected_response_command, "payload": bytes([command & 0xFF])}
+        )
         return True
 
 
@@ -42,7 +45,7 @@ def test_lock_held_across_send_and_wait():
     t = _T()
     r = asyncio.run(t.send_command_and_wait_for_response(0x44, timeout=1.0))
     assert r == b"\x44"
-    assert t.lock_states == [True]      # lock was held during send+wait
+    assert t.lock_states == [True]  # lock was held during send+wait
 
 
 def test_concurrent_waits_serialize_without_crosstalk():
@@ -57,7 +60,7 @@ def test_concurrent_waits_serialize_without_crosstalk():
         )
 
     a, b = asyncio.run(main())
-    assert a == b"\x10" and b == b"\x20"   # no cross-talk; each its own payload
+    assert a == b"\x10" and b == b"\x20"  # no cross-talk; each its own payload
 
 
 def test_not_connected_returns_none_without_touching_lock():

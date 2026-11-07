@@ -21,6 +21,7 @@ This is the second half of the pair the browser suites found when they started
 running in the local gate (P1.13): the link flag and the wall slots are two
 views of the same fact, and the app's own startup was overwriting both.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -70,8 +71,10 @@ async def _open(p):
     return browser, page
 
 
-LIVE_SLOTS = {A: {"x": 0, "y": 0, "size": 16, "name": "Desk", "room": "wall"},
-              B: {"x": 1, "y": 0, "size": 16, "name": "Shelf", "room": "wall"}}
+LIVE_SLOTS = {
+    A: {"x": 0, "y": 0, "size": 16, "name": "Desk", "room": "wall"},
+    B: {"x": 1, "y": 0, "size": 16, "name": "Shelf", "room": "wall"},
+}
 
 
 @pytest.mark.asyncio
@@ -97,8 +100,7 @@ async def test_the_startup_restore_does_not_erase_a_live_wall():
 
             live = await eval_js(page, "() => Object.keys(window.DivoomState.assignedSlots || {})")
             assert sorted(live) == sorted(LIVE_SLOTS), (
-                "the startup restore erased the live wall: it installed the "
-                f"persisted snapshot over it ({live!r})"
+                f"the startup restore erased the live wall: it installed the persisted snapshot over it ({live!r})"
             )
             assert await eval_js(page, "() => window.isKnownTarget('MatrixWall')") is True, (
                 "the wall stopped being a known target: it vanished from the "
@@ -150,8 +152,12 @@ async def test_the_startup_restore_does_not_drop_the_daemons_live_devices():
         browser, page = await _open(p)
         try:
             # The daemon's own report, which lands while the page loads.
-            await eval_js(page, """(mac) => window.Divoom.onOwnedDevices({type: 'owned_devices', devices: [
-                {address: mac, name: 'Live Panel', kind: 'clock', state: 'active'}]})""", LIVE_PANEL)
+            await eval_js(
+                page,
+                """(mac) => window.Divoom.onOwnedDevices({type: 'owned_devices', devices: [
+                {address: mac, name: 'Live Panel', kind: 'clock', state: 'active'}]})""",
+                LIVE_PANEL,
+            )
             assert await eval_js(page, f"() => window.panelIsLinked({LIVE_PANEL!r})") is True
 
             await wait_js(page, "() => typeof window.__releaseConfig === 'function'")
@@ -159,22 +165,17 @@ async def test_the_startup_restore_does_not_drop_the_daemons_live_devices():
             await eval_js(page, "() => new Promise(r => setTimeout(r, 300))")
 
             live = await eval_js(page, "() => (window.DivoomState.discoveredDevices || []).map(d => d.address)")
-            assert LIVE_PANEL in live, (
-                "the startup restore dropped the daemon's live device: "
-                f"got {live!r}"
-            )
+            assert LIVE_PANEL in live, f"the startup restore dropped the daemon's live device: got {live!r}"
             assert await eval_js(page, f"() => window.panelIsLinked({LIVE_PANEL!r})") is True, (
                 "the daemon's live device stopped counting as linked, so a write "
                 "to it was refused with 'Connect a device first'"
             )
             # The persisted device is still restored, with the R61 "not in
             # range" treatment -- the restore's own job is unchanged.
-            assert PERSISTED_PANEL in live, (
-                f"the persisted device must still be restored, got {live!r}"
-            )
+            assert PERSISTED_PANEL in live, f"the persisted device must still be restored, got {live!r}"
             restored = await eval_js(
-                page, f"() => (window.DivoomState.discoveredDevices || [])"
-                      f".find(d => d.address === {PERSISTED_PANEL!r})")
+                page, f"() => (window.DivoomState.discoveredDevices || []).find(d => d.address === {PERSISTED_PANEL!r})"
+            )
             assert restored.get("unconfirmed") is True, (
                 f"a restored device must be tagged unconfirmed, got {restored!r}"
             )

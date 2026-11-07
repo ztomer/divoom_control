@@ -9,6 +9,7 @@ from typing import Optional, Any
 
 from . import models, framing
 from .transport_interface import DeviceTransport
+
 # BtSppNotification + the IOBluetooth RFCOMM backend live in bt_spp_rfcomm (R53.12);
 # re-export BtSppNotification so existing `from .bt_spp_transport import ...` keeps working.
 from .bt_spp_rfcomm import _SppRfcommMixin, BtSppNotification
@@ -22,14 +23,17 @@ DEFAULT_RFCOMM_CHANNEL_IDS: dict[str, int] = {
     "default": 2,
 }
 
+
 class BtSppTransportError(RuntimeError):
     pass
+
 
 class BTSppTransport(_SppRfcommMixin, DeviceTransport):
     """
     Async wrapper around macOS IOBluetooth RFCOMM SPP for Divoom devices.
     Implements the DeviceTransport interface.
     """
+
     OPEN_TIMEOUT_S: float = 8.0
     DEFAULT_READ_TIMEOUT_S: float = 3.0
     FRAMING_BASIC: str = "basic"
@@ -45,11 +49,7 @@ class BTSppTransport(_SppRfcommMixin, DeviceTransport):
     ) -> None:
         self.mac_address = mac_address
         self.device_name = device_name
-        self.channel_id = (
-            channel_id
-            if channel_id is not None
-            else DEFAULT_RFCOMM_CHANNEL_IDS.get(device_kind, 2)
-        )
+        self.channel_id = channel_id if channel_id is not None else DEFAULT_RFCOMM_CHANNEL_IDS.get(device_kind, 2)
         self.logger = logger or logging.getLogger("divoom.bt_spp")
 
         self._device = None
@@ -66,7 +66,7 @@ class BTSppTransport(_SppRfcommMixin, DeviceTransport):
 
         self._serial_port = None
         self._serial_read_thread: Optional[threading.Thread] = None
-        
+
         # DeviceTransport interface compliance
         self.notification_queue = asyncio.Queue()
         self._rx_task: Optional[asyncio.Task] = None
@@ -102,13 +102,14 @@ class BTSppTransport(_SppRfcommMixin, DeviceTransport):
         if not self.device_name:
             return None
         import glob
+
         ports = glob.glob("/dev/cu.*")
         sanitized_target = self.device_name.lower().replace("-", "").replace(" ", "").replace("_", "")
         for p in ports:
             sanitized_p = p.lower().replace("-", "").replace(" ", "").replace("_", "")
             if sanitized_target in sanitized_p or sanitized_p in sanitized_target:
                 return p
-        
+
         parts = self.device_name.split("-")
         prefix = parts[0].strip()
         if len(prefix) >= 3:
@@ -145,16 +146,18 @@ class BTSppTransport(_SppRfcommMixin, DeviceTransport):
             self.notification_queue.get_nowait()
 
         import sys
+
         if sys.platform == "darwin":
             try:
                 import serial
+
                 port = self._find_serial_port()
                 if port:
                     self.logger.info(f"macOS: Found virtual serial port: {port}. Connecting...")
                     self._serial_port = serial.Serial(port, 115200, timeout=1.0)
                     self.logger.info("macOS: Connected. Stabilizing serial link...")
                     await asyncio.sleep(2.0)
-                    
+
                     self._serial_read_thread = threading.Thread(
                         target=self._serial_read_loop, name="bt-spp-serial-read", daemon=True
                     )
@@ -166,11 +169,11 @@ class BTSppTransport(_SppRfcommMixin, DeviceTransport):
                 self.logger.warning(f"macOS: Serial connection failed: {e}. Trying IOBluetooth...")
                 if self._serial_port:
                     try:
-                        self._serial_port.close()   # makes the read loop exit
+                        self._serial_port.close()  # makes the read loop exit
                     except Exception:
                         pass
                     self._serial_port = None
-                self._serial_read_thread = None   # R53: closing the port exits it
+                self._serial_read_thread = None  # R53: closing the port exits it
 
         # R53: tear everything down on ANY failure here, so a failed IOBluetooth
         # open doesn't leak the runloop thread (only disconnect() sets _close_event).
@@ -192,7 +195,7 @@ class BTSppTransport(_SppRfcommMixin, DeviceTransport):
             self.logger.info(f"BT Classic SPP open: {self.mac_address} channel {self.channel_id}")
             self._rx_task = asyncio.create_task(self._rx_loop())
         except BaseException:
-            await self.disconnect()   # stop the runloop thread + close the channel
+            await self.disconnect()  # stop the runloop thread + close the channel
             raise
 
     async def disconnect(self) -> None:
@@ -224,7 +227,7 @@ class BTSppTransport(_SppRfcommMixin, DeviceTransport):
         if self._runloop_thread is not None:
             await asyncio.to_thread(self._runloop_thread.join, 2.0)
             self._runloop_thread = None
-            
+
         self._device = None
         self._delegate = None
         self._runloop = None
@@ -250,6 +253,7 @@ class BTSppTransport(_SppRfcommMixin, DeviceTransport):
             raise ValueError("refusing to write an empty frame")
 
         if self._serial_port and self._serial_port.is_open:
+
             def _do_serial_write():
                 with self._write_lock:
                     if self._serial_port is None:
@@ -272,9 +276,7 @@ class BTSppTransport(_SppRfcommMixin, DeviceTransport):
         await asyncio.to_thread(_do_write)
         self.logger.debug(f"[BT-SPP ] sent {len(frame)}B: {frame.hex()}")
 
-    async def read_notification(
-        self, timeout: float = DEFAULT_READ_TIMEOUT_S
-    ) -> BtSppNotification:
+    async def read_notification(self, timeout: float = DEFAULT_READ_TIMEOUT_S) -> BtSppNotification:
         loop = asyncio.get_running_loop()
         try:
             return await asyncio.wait_for(
@@ -288,10 +290,7 @@ class BTSppTransport(_SppRfcommMixin, DeviceTransport):
         while self.is_connected:
             try:
                 notif = await self.read_notification(timeout=1.0)
-                response_payload = {
-                    'command_id': notif.command_id,
-                    'payload': bytearray(notif.payload)
-                }
+                response_payload = {"command_id": notif.command_id, "payload": bytearray(notif.payload)}
                 self.notification_queue.put_nowait(response_payload)
             except asyncio.TimeoutError:
                 continue
@@ -314,14 +313,16 @@ class BTSppTransport(_SppRfcommMixin, DeviceTransport):
             except asyncio.TimeoutError:
                 break
 
-            response_cmd_id = response.get('command_id')
+            response_cmd_id = response.get("command_id")
             is_expected_response = response_cmd_id == command_id
-            is_generic_ack = response_cmd_id == models.GENERIC_ACK_COMMAND_ID and command_id in models.GENERIC_ACK_COMMANDS
+            is_generic_ack = (
+                response_cmd_id == models.GENERIC_ACK_COMMAND_ID and command_id in models.GENERIC_ACK_COMMANDS
+            )
 
             if is_expected_response:
                 self.logger.debug(f"Got matching response for command ID 0x{command_id:02x}")
                 self._expected_response_command = None
-                return response.get('payload')
+                return response.get("payload")
             elif is_generic_ack:
                 self.logger.debug(f"Received generic ACK for command 0x{command_id:02x}. Continuing to wait.")
         return None

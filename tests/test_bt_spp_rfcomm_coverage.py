@@ -10,6 +10,7 @@ call-time `import` *inside* the method under test, so we inject fakes into
 sys.modules for the duration of each test via patch.dict, and never let the
 real modules (if actually installed) get touched.
 """
+
 from __future__ import annotations
 
 import queue
@@ -118,9 +119,7 @@ class TestDiscoverRfcommChannel:
         dev = MagicMock()
         # Named "serial" so the first loop tries it via _get_chan; both selectors
         # raise, so it must fall through the second loop too and land on None.
-        dev.services.return_value = [
-            _FakeService("Serial Port", 1, raise_on_none_arg=True, raise_on_noarg_too=True)
-        ]
+        dev.services.return_value = [_FakeService("Serial Port", 1, raise_on_none_arg=True, raise_on_noarg_too=True)]
         assert t._discover_rfcomm_channel(dev) is None
 
     def test_serial_named_service_with_invalid_channel_continues_to_next(self):
@@ -130,8 +129,8 @@ class TestDiscoverRfcommChannel:
         t = _t()
         dev = MagicMock()
         dev.services.return_value = [
-            _FakeService("Serial Port A", None),   # named 'serial' but c <= 0
-            _FakeService("Serial Port B", 6),      # named 'serial', valid
+            _FakeService("Serial Port A", None),  # named 'serial' but c <= 0
+            _FakeService("Serial Port B", 6),  # named 'serial', valid
         ]
         assert t._discover_rfcomm_channel(dev) == 6
 
@@ -302,9 +301,7 @@ class TestRunloop:
 
         t._runloop_thread = _AliveThread()
         called = {"n": 0}
-        monkeypatch.setattr(
-            threading, "Thread", lambda *a, **k: called.__setitem__("n", called["n"] + 1)
-        )
+        monkeypatch.setattr(threading, "Thread", lambda *a, **k: called.__setitem__("n", called["n"] + 1))
         t._start_runloop()
         assert called["n"] == 0  # never spawned a new thread
 
@@ -381,7 +378,7 @@ class TestOnDataEdgeCases:
         assert t._rx_queue.qsize() == 0
         assert bytes(t._rx_buf[:4]) == bytes(models.IOS_LE_HEADER)  # still parked, not dropped
 
-        t._on_data(frame[len(partial):])
+        t._on_data(frame[len(partial) :])
         assert t._rx_queue.qsize() == 1
         notif = t._rx_queue.get_nowait()
         assert notif.command_id == frame_payload[0]

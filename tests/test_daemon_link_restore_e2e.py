@@ -14,6 +14,7 @@ panel, and the list the daemon writes is named (DIVOOM_LINKS_PATH) so this
 test's file is its own — a mock panel is a test double and belongs in a
 test's list, never in the user's.
 """
+
 import os
 import signal
 import subprocess
@@ -121,9 +122,7 @@ def test_a_panel_a_client_linked_comes_back_after_a_daemon_restart():
             if "DEV_A" in _linked_macs(client):
                 break
             time.sleep(0.2)
-        assert "DEV_A" in _linked_macs(client), (
-            "the panel the daemon held did not come back after the restart"
-        )
+        assert "DEV_A" in _linked_macs(client), "the panel the daemon held did not come back after the restart"
     finally:
         _stop_daemon()
         os.environ.pop("DIVOOM_LINKS_PATH", None)
@@ -152,9 +151,7 @@ def test_a_panel_the_user_dropped_does_not_come_back():
             if "DEV_B" in _linked_macs(client):
                 break
             time.sleep(0.2)
-        assert "DEV_B" not in _linked_macs(client), (
-            "a panel the user dropped came back after the restart"
-        )
+        assert "DEV_B" not in _linked_macs(client), "a panel the user dropped came back after the restart"
     finally:
         _stop_daemon()
         os.environ.pop("DIVOOM_LINKS_PATH", None)

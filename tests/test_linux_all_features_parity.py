@@ -47,9 +47,7 @@ def _ci_all_features_lint() -> list[str]:
 
 
 def _script_clippy_args() -> list[str]:
-    match = re.search(
-        r"^CI_CLIPPY_ARGS=\((.+)\)$", SCRIPT.read_text(encoding="utf-8"), re.M
-    )
+    match = re.search(r"^CI_CLIPPY_ARGS=\((.+)\)$", SCRIPT.read_text(encoding="utf-8"), re.M)
     assert match, "CI_CLIPPY_ARGS is gone from scripts/check_linux_all_features.sh"
     return shlex.split(match.group(1))
 
@@ -80,6 +78,4 @@ def test_the_lint_runs_in_the_local_gate() -> None:
     the house rule #3 rejects: it runs when somebody remembers.
     """
     gatesrc = (ROOT / ".gatesrc").read_text(encoding="utf-8")
-    assert "scripts/check_linux_all_features.sh" in gatesrc, (
-        "the Linux --all-features lint is not in GOH_CI_STEPS"
-    )
+    assert "scripts/check_linux_all_features.sh" in gatesrc, "the Linux --all-features lint is not in GOH_CI_STEPS"

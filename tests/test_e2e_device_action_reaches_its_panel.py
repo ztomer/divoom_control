@@ -19,6 +19,7 @@ asserted is what the DAEMON did: the name each mock panel now reports
 Skipped like the rest of the real-daemon suite: no browser, no divoomd built
 for this tree, or a headless CI runner (pywebview needs an Aqua session).
 """
+
 from __future__ import annotations
 
 import json
@@ -57,28 +58,36 @@ def stack():
 
 def _name_of(stack, mac):
     reply = stack.client.send_command(
-        "device_call", {"method": "device.get_device_name", "args": [], "kwargs": {}, "mac": mac})
+        "device_call", {"method": "device.get_device_name", "args": [], "kwargs": {}, "mac": mac}
+    )
     return reply.get("result"), reply
 
 
 def _jobs_on(stack, mac):
     reply = stack.client.send_command("live_job_list", {"mac": mac})
-    return sorted(j.get("kind") for j in (reply.get("jobs") or [])
-                  if not j.get("done") and not j.get("cancelled")), reply
+    return sorted(
+        j.get("kind") for j in (reply.get("jobs") or []) if not j.get("done") and not j.get("cancelled")
+    ), reply
 
 
 async def _page(p, stack):
     browser = await launch(p)
     page = await browser.new_page(viewport={"width": 1280, "height": 900})
-    await add_init_js(page, f"window.__BRIDGE_URL__ = {json.dumps(stack.bridge_url)};\n"
-                      + _REAL_BRIDGE_API)
+    await add_init_js(page, f"window.__BRIDGE_URL__ = {json.dumps(stack.bridge_url)};\n" + _REAL_BRIDGE_API)
     await page.goto(f"file://{INDEX_HTML}")
-    await wait_js(page, "() => !!window.Divoom?.onOwnedDevices && !!window.SpatialStage"
-                        " && !!window.ChannelSettings && !!document.getElementById('device-name-save')"
-                        " && !!document.getElementById('widget-card-sysmon')")
-    await eval_js(page, """([a, b]) => window.Divoom.onOwnedDevices({type: 'owned_devices', devices: [
+    await wait_js(
+        page,
+        "() => !!window.Divoom?.onOwnedDevices && !!window.SpatialStage"
+        " && !!window.ChannelSettings && !!document.getElementById('device-name-save')"
+        " && !!document.getElementById('widget-card-sysmon')",
+    )
+    await eval_js(
+        page,
+        """([a, b]) => window.Divoom.onOwnedDevices({type: 'owned_devices', devices: [
         {address: a, name: 'Desk', kind: 'clock', state: 'active'},
-        {address: b, name: 'Kitchen', kind: 'clock', state: 'active'}]})""", [A, B])
+        {address: b, name: 'Kitchen', kind: 'clock', state: 'active'}]})""",
+        [A, B],
+    )
     return browser, page
 
 
@@ -106,11 +115,15 @@ async def test_a_rename_lands_on_the_panel_clicked_not_the_one_selected_since(st
         try:
             await _select(page, A, 1)
             await eval_js(page, "() => { window.__hold.set_device_name = 1200; }")
-            await eval_js(page, "() => { document.getElementById('device-name-input').value = 'Desk 2';"
-                                " document.getElementById('device-name-save').click(); }")
+            await eval_js(
+                page,
+                "() => { document.getElementById('device-name-input').value = 'Desk 2';"
+                " document.getElementById('device-name-save').click(); }",
+            )
             await _select(page, B, 2)
             assert stack.client.send_command("device_status", {}).get("selected") == B, (
-                "the selection reached the backend before the held write")
+                "the selection reached the backend before the held write"
+            )
 
             await wait_js(page, "() => window.__landed.includes('set_device_name')")
             _alive(stack, await eval_js(page, "() => window.__sent.map(c => c.name)"))
@@ -131,8 +144,11 @@ async def test_a_live_widget_starts_on_the_panel_clicked_not_the_one_selected_si
         try:
             await _select(page, A, 1)
             await eval_js(page, "() => document.querySelector('.nav-btn[data-tab=\"data-sources\"]').click()")
-            await eval_js(page, "() => { document.getElementById('sysmon-live').checked = true;"
-                                " window.__hold.toggle_sysmon_sync = 1200; }")
+            await eval_js(
+                page,
+                "() => { document.getElementById('sysmon-live').checked = true;"
+                " window.__hold.toggle_sysmon_sync = 1200; }",
+            )
             await eval_js(page, "() => document.getElementById('widget-card-sysmon').click()")
             await _select(page, B, 2)
 

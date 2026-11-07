@@ -1,5 +1,6 @@
 """Async context-manager coverage for BTSppTransport (split from
 test_bt_spp_transport_coverage.py)."""
+
 from __future__ import annotations
 
 import logging

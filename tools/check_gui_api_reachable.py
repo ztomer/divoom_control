@@ -23,6 +23,7 @@ Claiming the other twenty were dead would have been a guess dressed as a
 finding. They are recorded as what they are — flagged, not yet reviewed — so
 the list can only shrink and nobody re-discovers them from scratch.
 """
+
 from __future__ import annotations
 
 import ast
@@ -87,14 +88,11 @@ def api_methods() -> set[str]:
         ) from exc
 
     return {
-        name
-        for name in dir(DivoomGuiAPI)
-        if not name.startswith("_") and callable(getattr(DivoomGuiAPI, name, None))
+        name for name in dir(DivoomGuiAPI) if not name.startswith("_") and callable(getattr(DivoomGuiAPI, name, None))
     }
 
 
-def python_callers(names: set[str],
-                   roots: tuple[Path, ...] = PY_SURFACE) -> dict[str, list[str]]:
+def python_callers(names: set[str], roots: tuple[Path, ...] = PY_SURFACE) -> dict[str, list[str]]:
     """Where each name is called from in the shipped Python surface.
 
     **AST, not a text scan, and that choice has a history.** Two gates in this
@@ -139,10 +137,13 @@ def python_callers(names: set[str],
             # which sends it to review -- the safe direction, since the bucket
             # is a work marker and never an exemption.
             for node in ast.walk(tree):
-                if (isinstance(node, ast.Attribute) and node.attr in found
-                        and isinstance(node.value, ast.Name)
-                        and node.value.id == "self"
-                        and id(node) not in delegated):
+                if (
+                    isinstance(node, ast.Attribute)
+                    and node.attr in found
+                    and isinstance(node.value, ast.Name)
+                    and node.value.id == "self"
+                    and id(node) not in delegated
+                ):
                     try:
                         where = path.relative_to(REPO)
                     except ValueError:
@@ -176,8 +177,7 @@ def web_ui_blob() -> str:
     parts = []
     for ext in ("*.js", "*.html"):
         for path in sorted(WEB_UI.rglob(ext)):
-            parts.append(strip_comments(
-                path.read_text(encoding="utf-8", errors="ignore")))
+            parts.append(strip_comments(path.read_text(encoding="utf-8", errors="ignore")))
     return "\n".join(parts)
 
 
@@ -196,8 +196,7 @@ def main() -> int:
     if stale:
         err(f"[api-reachable] {len(stale)} stale allowlist entr(ies)")
         for name in stale:
-            info(f"{name} now HAS a web_ui caller (or no longer exists) — "
-                 f"delete it from ALLOWLIST")
+            info(f"{name} now HAS a web_ui caller (or no longer exists) — delete it from ALLOWLIST")
         return 1
 
     offenders = sorted(unreached - set(ALLOWLIST))
@@ -218,8 +217,7 @@ def main() -> int:
     dead = sorted(n for n in unreached if not callers[n])
 
     unreviewed = sum(1 for r in ALLOWLIST.values() if r.startswith("unreviewed"))
-    ok(f"[api-reachable] OK — {len(methods)} API methods, "
-       f"{len(unreached)} allowlisted")
+    ok(f"[api-reachable] OK — {len(methods)} API methods, {len(unreached)} allowlisted")
     info(f"  {len(py_only)} reached from Python only, {len(dead)} from nowhere")
     for name in sorted(py_only):
         locs = py_only[name]
@@ -228,9 +226,11 @@ def main() -> int:
     for name in dead:
         info(f"    NO CALLER    {name}")
     if unreviewed:
-        warn(f"  {unreviewed} are 'unreviewed': awaiting a decision, not "
-             f"confirmed dead. python-only is a work marker, NOT a pass — the "
-             f"caller may itself be dead.")
+        warn(
+            f"  {unreviewed} are 'unreviewed': awaiting a decision, not "
+            f"confirmed dead. python-only is a work marker, NOT a pass — the "
+            f"caller may itself be dead."
+        )
     return 0
 
 

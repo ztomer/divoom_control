@@ -17,6 +17,7 @@ does `t.lan.set_brightness(v) if t.lan else t.device.set_brightness(v)`. That
 shape already answers the capability question, by falling back to the transport
 the device does have. It is the absence of any answer that this test is for.
 """
+
 from __future__ import annotations
 
 import ast
@@ -35,8 +36,7 @@ SCOPE = (LIGHTING, PANELS)
 
 
 def _scope_tree() -> ast.Module:
-    return ast.Module(body=[n for f in SCOPE for n in ast.parse(f.read_text(encoding="utf-8")).body],
-                      type_ignores=[])
+    return ast.Module(body=[n for f in SCOPE for n in ast.parse(f.read_text(encoding="utf-8")).body], type_ignores=[])
 
 
 def _lan_methods(tree: ast.AST) -> dict[str, ast.FunctionDef]:
@@ -46,16 +46,14 @@ def _lan_methods(tree: ast.AST) -> dict[str, ast.FunctionDef]:
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         for sub in ast.walk(node):
-            if (isinstance(sub, ast.Attribute) and sub.attr == "lan"
-                    and isinstance(sub.value, ast.Name)):
+            if isinstance(sub, ast.Attribute) and sub.attr == "lan" and isinstance(sub.value, ast.Name):
                 out[node.name] = node
                 break
     return out
 
 
 def _uses_funnel(fn: ast.AST) -> bool:
-    return any(isinstance(n, ast.Attribute) and n.attr == "_lan_action"
-               for n in ast.walk(fn))
+    return any(isinstance(n, ast.Attribute) and n.attr == "_lan_action" for n in ast.walk(fn))
 
 
 def _branches_on_lan(fn: ast.AST) -> bool:
@@ -70,10 +68,7 @@ def _branches_on_lan(fn: ast.AST) -> bool:
 
 def test_every_lan_surface_goes_through_the_funnel():
     tree = _scope_tree()
-    offenders = [
-        name for name, fn in _lan_methods(tree).items()
-        if not _uses_funnel(fn) and not _branches_on_lan(fn)
-    ]
+    offenders = [name for name, fn in _lan_methods(tree).items() if not _uses_funnel(fn) and not _branches_on_lan(fn)]
     assert not offenders, (
         "these LAN-backed methods bypass `_lan_action`, so on a Bluetooth-only "
         "device they can only answer 'it failed' and the user cannot tell a "
@@ -105,8 +100,7 @@ def test_a_bypassing_method_would_be_caught():
         "    def push_thing(self, mac, v):\n"
         "        return self._dispatch(mac, lambda t: t.lan.send_thing(v))\n"
     )
-    offenders = [n for n, fn in _lan_methods(bad).items()
-                 if not _uses_funnel(fn) and not _branches_on_lan(fn)]
+    offenders = [n for n, fn in _lan_methods(bad).items() if not _uses_funnel(fn) and not _branches_on_lan(fn)]
     assert offenders == ["push_thing"]
 
 
@@ -116,6 +110,7 @@ def test_a_bypassing_method_would_be_caught():
 # the three surfaces actually answer with a usable cause, because "calls
 # _lan_action" and "reports something a user can act on" are different claims.
 
+
 class _FakeLan:
     def __init__(self, rec):
         self._rec = rec
@@ -124,6 +119,7 @@ class _FakeLan:
         def call(*a, **kw):
             self._rec.append((name, a, kw))
             return True
+
         return call
 
 
@@ -142,8 +138,7 @@ def api(monkeypatch):
     obj = LightingApi.__new__(LightingApi)
     obj._state_getter = lambda: state
     # P5.6: `_display(mac)` is the one place a named panel becomes a target.
-    monkeypatch.setattr(obj, "_display", lambda mac: _FakeTarget(calls) if mac else None,
-                        raising=False)
+    monkeypatch.setattr(obj, "_display", lambda mac: _FakeTarget(calls) if mac else None, raising=False)
     monkeypatch.setattr(obj, "_run_async", lambda coro, **kw: coro, raising=False)
     monkeypatch.setattr(obj, "_stop_live_widgets", lambda mac: None, raising=False)
     obj._calls = calls
@@ -151,10 +146,13 @@ def api(monkeypatch):
     return obj
 
 
-@pytest.mark.parametrize("method,arg,verb", [
-    ("play_album", 7, "play the album"),
-    ("push_playlist", 3, "push the playlist"),
-])
+@pytest.mark.parametrize(
+    "method,arg,verb",
+    [
+        ("play_album", 7, "play the album"),
+        ("push_playlist", 3, "push the playlist"),
+    ],
+)
 def test_success_reports_ok(api, method, arg, verb):
     reply = getattr(api, method)(MAC, arg)
     assert reply["ok"] is True, reply
@@ -167,9 +165,7 @@ def test_no_lan_capability_reaches_the_caller(api, monkeypatch, method, arg):
     from divoom_client.daemon_proxy import _DeviceCallError
 
     def refuse(_coro, **_kw):
-        raise _DeviceCallError(
-            "this device is connected over Bluetooth, which has no LAN API",
-            "no_lan_capability")
+        raise _DeviceCallError("this device is connected over Bluetooth, which has no LAN API", "no_lan_capability")
 
     monkeypatch.setattr(api, "_run_async", refuse, raising=False)
     reply = getattr(api, method)(MAC, arg)

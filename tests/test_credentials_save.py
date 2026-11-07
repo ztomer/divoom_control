@@ -22,6 +22,7 @@ field, so a plain re-save submits `""`. Overwriting the stored password with
 that erased the credential, and the next 23h token-cache expiry degraded the
 account to a guest token -- "credentials get erased from time to time".
 """
+
 from __future__ import annotations
 
 import pytest
@@ -92,7 +93,8 @@ def test_the_gui_no_longer_writes_config_ini_itself(tmp_path, monkeypatch):
     client = _FakeClient()
     _Host(client).save_credentials("me@example.com", "s3cret")
     assert not list(tmp_path.rglob("config.ini")), (
-        f"save_credentials still writes config.ini: {list(tmp_path.rglob('*'))}")
+        f"save_credentials still writes config.ini: {list(tmp_path.rglob('*'))}"
+    )
 
 
 def test_the_daemons_answer_decides_the_result():

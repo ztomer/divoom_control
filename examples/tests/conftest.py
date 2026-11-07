@@ -4,6 +4,7 @@ opt-in flags and leak guard the main suite uses (imported, not copied).
 
     python3 -m pytest examples/tests -q
 """
+
 import sys
 from pathlib import Path
 

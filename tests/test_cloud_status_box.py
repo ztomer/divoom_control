@@ -5,6 +5,7 @@ Settings has to say so, and the box had two painters (startup and the save
 path) that had already drifted in wording. Both now call
 `window.renderCloudStatus`; this drives it under node with a stub DOM.
 """
+
 import json
 import shutil
 import subprocess
@@ -46,7 +47,10 @@ process.stdout.write(JSON.stringify(out));
 def _render(cases):
     r = subprocess.run(
         ["node", "-e", _HARNESS, "--", str(SETTINGS_JS), json.dumps(cases)],
-        capture_output=True, text=True, check=True, stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=True,
+        stdin=subprocess.DEVNULL,
     )
     return json.loads(r.stdout)
 
@@ -56,11 +60,13 @@ needs_node = pytest.mark.skipif(shutil.which("node") is None, reason="node not i
 
 @needs_node
 def test_connected_names_the_account_and_where_the_password_lives():
-    out = _render([
-        ["keychain", "connected", {"cloud_email": "me@x.com", "cloud_password_store": "Keychain"}],
-        ["file", "connected", {"cloud_email": "me@x.com", "cloud_password_store": "config.ini"}],
-        ["old_daemon", "connected", {"cloud_email": "me@x.com"}],
-    ])
+    out = _render(
+        [
+            ["keychain", "connected", {"cloud_email": "me@x.com", "cloud_password_store": "Keychain"}],
+            ["file", "connected", {"cloud_email": "me@x.com", "cloud_password_store": "config.ini"}],
+            ["old_daemon", "connected", {"cloud_email": "me@x.com"}],
+        ]
+    )
     assert out["keychain"]["text"] == "Connected as me@x.com Password stored in Keychain."
     assert out["file"]["text"] == "Connected as me@x.com Password stored in config.ini."
     # A daemon that does not report the store gets no claim, not a wrong one.
@@ -70,10 +76,12 @@ def test_connected_names_the_account_and_where_the_password_lives():
 
 @needs_node
 def test_signed_out_is_a_setup_step_not_an_alarm():
-    out = _render([
-        ["out", "signed_out", {}],
-        ["failed", "failed", {}],
-    ])
+    out = _render(
+        [
+            ["out", "signed_out", {}],
+            ["failed", "failed", {}],
+        ]
+    )
     assert "Not signed in" in out["out"]["text"]
     assert out["out"]["color"] != out["failed"]["color"], "signed-out painted like a fault"
     assert out["failed"]["color"] == "#ef4444"
@@ -85,7 +93,11 @@ def test_both_writers_go_through_the_one_renderer():
         src = js.read_text()
         assert "renderCloudStatus(" in src, js.name
         # No second painter: nobody else touches the box's innerHTML/style.
-        body = src.replace(src[src.index("window.renderCloudStatus = function"):
-                               src.index("window.refreshCloudStatus")], "") \
-            if "window.renderCloudStatus = function" in src else src
+        body = (
+            src.replace(
+                src[src.index("window.renderCloudStatus = function") : src.index("window.refreshCloudStatus")], ""
+            )
+            if "window.renderCloudStatus = function" in src
+            else src
+        )
         assert "divoom-cloud-status-box" not in body, f"{js.name} paints the box itself"

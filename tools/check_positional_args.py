@@ -21,6 +21,7 @@ fails when a compacted read is shadowed by a non-numeric parameter. Only TYPE
 ANNOTATIONS are used — an earlier version also guessed from parameter names and
 produced false positives, which is how a gate stops being believed.
 """
+
 from __future__ import annotations
 
 import ast
@@ -85,10 +86,7 @@ def python_signatures() -> dict[str, list[tuple[str, str]]]:
         for node in ast.walk(tree):
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
-            params = [
-                (a.arg, ast.unparse(a.annotation) if a.annotation else "")
-                for a in node.args.args[1:]
-            ]
+            params = [(a.arg, ast.unparse(a.annotation) if a.annotation else "") for a in node.args.args[1:]]
             annotated = sum(1 for _, ann in params if ann)
             prev = sigs.get(node.name)
             if prev is None or annotated > sum(1 for _, ann in prev if ann):
@@ -113,7 +111,7 @@ def balanced_body(src: str, start: int, hard_end: int) -> str:
         elif c == "}":
             depth -= 1
             if seen and depth <= 0:
-                return src[start:i + 1]
+                return src[start : i + 1]
     return src[start:hard_end]
 
 
@@ -144,8 +142,7 @@ def rust_arms() -> list[tuple[str, list[str], set[int], Path]]:
     out = []
     for path in sorted(RUST_DIR.rglob("*.rs")):
         src = strip_rust_comments(path.read_text(encoding="utf-8"))
-        marks = [(m.start(), m.end(), re.findall(r'"([a-z_.0-9]+)"', m.group(1)))
-                 for m in ARM_RE.finditer(src)]
+        marks = [(m.start(), m.end(), re.findall(r'"([a-z_.0-9]+)"', m.group(1))) for m in ARM_RE.finditer(src)]
         for i, (_, end, names) in enumerate(marks):
             # Bound the body by BRACE DEPTH, not by the next arm. Taking
             # everything up to the next arm made the LAST arm in a file swallow
@@ -174,8 +171,11 @@ def main() -> int:
         checked += 1
         for n in sorted(idxs):
             shadow = next(
-                ((pos, nm, ann) for pos, (nm, ann) in enumerate(params)
-                 if pos <= n and any(t in ann for t in NON_NUMERIC)),
+                (
+                    (pos, nm, ann)
+                    for pos, (nm, ann) in enumerate(params)
+                    if pos <= n and any(t in ann for t in NON_NUMERIC)
+                ),
                 None,
             )
             if shadow:
@@ -183,7 +183,8 @@ def main() -> int:
                 offenders.append(
                     f"{path.relative_to(REPO)}: {method} reads args[{n}], but "
                     f"`{nm}: {ann}` at position {pos} is dropped from the "
-                    f"compacted list — use pos_i64/pos_bool(raw_args, {n}, ...)")
+                    f"compacted list — use pos_i64/pos_bool(raw_args, {n}, ...)"
+                )
                 break
 
     if offenders:

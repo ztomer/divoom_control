@@ -6,6 +6,7 @@ import pytest
 
 from tests.support.gui_api_base import GuiApiTestBase
 
+
 class TestGuiApiHotAndCustomArt(GuiApiTestBase):
     def test_hot_channel_update_targets_and_stamps_the_panel_it_names(self):
         """The daemon updates the panel the click named and stamps the
@@ -47,18 +48,20 @@ class TestGuiApiHotAndCustomArt(GuiApiTestBase):
         panel, naming itself; it never opens a link itself (the fleet owns
         the panel's link) and never re-writes the last-connected panel."""
         import threading
+
         fake = MagicMock()
         fake.hot_update.return_value = {"success": True, "started": True}
         fake.hot_update_progress.return_value = {"phase": "done", "result": {}}
         self.api._daemon_client = fake
         self.api.window = MagicMock()
         done = threading.Event()
-        self.api.window.evaluate_js.side_effect = (
-            lambda js: done.set() if "onSyncNowComplete" in js else None)
+        self.api.window.evaluate_js.side_effect = lambda js: done.set() if "onSyncNowComplete" in js else None
         regs = [("AA:00", 18), ("BB:00", 17)]
-        with patch("divoom_lib.settings_devices.registered_devices", return_value=regs), \
-             patch.object(self.api, "_size_of", side_effect=lambda mac, default=16: 16), \
-             patch.object(self.api, "connect_single_device") as connect:
+        with (
+            patch("divoom_lib.settings_devices.registered_devices", return_value=regs),
+            patch.object(self.api, "_size_of", side_effect=lambda mac, default=16: 16),
+            patch.object(self.api, "connect_single_device") as connect,
+        ):
             assert json.loads(self.api.sync_now())["success"] is True
             assert done.wait(10), "Sync Now never completed"
         connect.assert_not_called()
@@ -93,8 +96,7 @@ class TestGuiApiHotAndCustomArt(GuiApiTestBase):
         with patch.object(self.api, "_client", return_value=fake):
             out = json.loads(self.api.custom_art_push("AA:BB:CC:DD:EE:FF", '{"0": "f1", "2": "f2"}', 3))
         assert out == {"success": True}
-        fake.custom_art_push.assert_called_once_with([], 3, slots={"0": "f1", "2": "f2"},
-                                                     mac="AA:BB:CC:DD:EE:FF")
+        fake.custom_art_push.assert_called_once_with([], 3, slots={"0": "f1", "2": "f2"}, mac="AA:BB:CC:DD:EE:FF")
 
     def test_custom_art_push_list_payload(self):
         """Legacy file-id list form: passed through with an explicit slot."""
@@ -104,4 +106,3 @@ class TestGuiApiHotAndCustomArt(GuiApiTestBase):
             out = json.loads(self.api.custom_art_push("AA:BB:CC:DD:EE:FF", '["f1", "f2"]', 1, slot=5))
         assert out == {"success": True}
         fake.custom_art_push.assert_called_once_with(["f1", "f2"], 1, 5, mac="AA:BB:CC:DD:EE:FF")
-

@@ -21,6 +21,7 @@ The patch is applied when this module is imported, which
 ``tests/conftest.py`` does at configuration time -- before any suite opens a
 browser.
 """
+
 from __future__ import annotations
 
 import importlib
@@ -53,15 +54,18 @@ def give_navigation_budget(obj) -> None:
 
 def _wrap(original):
     if inspect.iscoroutinefunction(original):
+
         async def wrapper(self, *args, **kwargs):
             made = await original(self, *args, **kwargs)
             give_navigation_budget(made)
             return made
     else:
+
         def wrapper(self, *args, **kwargs):
             made = original(self, *args, **kwargs)
             give_navigation_budget(made)
             return made
+
     wrapper.__divoom_navigation_budget__ = True
     return wrapper
 

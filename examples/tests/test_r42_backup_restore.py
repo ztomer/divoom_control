@@ -1,4 +1,5 @@
 """Tests for R42: Settings backup/restore, presets file saving/loading, and wall split caching."""
+
 import json
 import sys
 from pathlib import Path
@@ -7,6 +8,7 @@ import pytest
 
 sys.path.append(str(Path(__file__).parent.parent))
 sys.path.append(str(Path(__file__).parent.parent / "divoom_gui"))
+
 
 def test_settings_export_import_roundtrip(tmp_path, monkeypatch):
     from divoom_gui.presets_manager import PresetsManagerMixin
@@ -70,20 +72,19 @@ async def test_wall_split_cache(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
     # Create mock device configs
-    device_configs = [
-        {"mac": "AA:BB:CC:DD:EE:FF", "x": 0, "y": 0, "size": 16}
-    ]
+    device_configs = [{"mac": "AA:BB:CC:DD:EE:FF", "x": 0, "y": 0, "size": 16}]
 
     # Patch Divoom class
     mock_divoom = MagicMock()
     mock_divoom.mac = "AA:BB:CC:DD:EE:FF"
     mock_divoom.display.show_image = AsyncMock(return_value=True)
 
-    with patch('divoom_legacy.wall.Divoom', return_value=mock_divoom):
+    with patch("divoom_legacy.wall.Divoom", return_value=mock_divoom):
         wall = DivoomWall(device_configs)
 
         # Create a small dummy image file
         from PIL import Image
+
         img_path = tmp_path / "test_image.png"
         img = Image.new("RGB", (16, 16), color="red")
         img.save(img_path)

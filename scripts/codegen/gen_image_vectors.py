@@ -57,7 +57,21 @@ U8P = ctypes.POINTER(ctypes.c_ubyte)
 # pixel, and larger-than-panel so the downsampler is on the path at all. The
 # palette encoders target 16x16 and the 32x32 one targets 32x32, so anything
 # bigger proves the downscale and anything else proves the crop.
-PALETTE_SIZES = [(1, 1), (2, 2), (3, 3), (4, 4), (5, 7), (7, 5), (8, 8), (3, 1), (1, 3), (16, 16), (17, 13), (32, 32), (64, 64)]
+PALETTE_SIZES = [
+    (1, 1),
+    (2, 2),
+    (3, 3),
+    (4, 4),
+    (5, 7),
+    (7, 5),
+    (8, 8),
+    (3, 1),
+    (1, 3),
+    (16, 16),
+    (17, 13),
+    (32, 32),
+    (64, 64),
+]
 COLOUR_COUNTS = [1, 2, 5, 17, 64, 256]
 FRAME_TIMES = [0, 1, 500, 1000, 65535]
 SIZE_32 = [(32, 32)]
@@ -80,7 +94,14 @@ def _load() -> ctypes.CDLL:
     lib.divoom_encode_animation_frame.restype = ctypes.c_int
     lib.divoom_encode_static_image.argtypes = [U8P, ctypes.c_int, ctypes.c_int, U8P, ctypes.c_int]
     lib.divoom_encode_static_image.restype = ctypes.c_int
-    lib.divoom_encode_animation_frame_32.argtypes = [U8P, ctypes.c_int, ctypes.c_int, ctypes.c_uint16, U8P, ctypes.c_int]
+    lib.divoom_encode_animation_frame_32.argtypes = [
+        U8P,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_uint16,
+        U8P,
+        ctypes.c_int,
+    ]
     lib.divoom_encode_animation_frame_32.restype = ctypes.c_int
     return lib
 
@@ -114,7 +135,9 @@ def rgb_n(w: int, h: int, nc: int, seed: int) -> bytes:
     return b"".join(pal[(x * 7 + y * 13) % nc] for y in range(h) for x in range(w))
 
 
-def record(direction: str, w: int, h: int, rgb: bytes, t: int | None, c_bytes: bytes | None, py_bytes: bytes | None) -> dict:
+def record(
+    direction: str, w: int, h: int, rgb: bytes, t: int | None, c_bytes: bytes | None, py_bytes: bytes | None
+) -> dict:
     case = {"w": w, "h": h, "rgb": rgb.hex()}
     if t is not None:
         case["time"] = t
@@ -129,7 +152,7 @@ def record(direction: str, w: int, h: int, rgb: bytes, t: int | None, c_bytes: b
     case["out"] = c_bytes.hex()
     if py_bytes is not None and py_bytes != c_bytes:
         raise SystemExit(
-            f"✗ {direction} {w}x{h} colours={len({bytes(rgb[i:i+3]) for i in range(0, len(rgb), 3)})} "
+            f"✗ {direction} {w}x{h} colours={len({bytes(rgb[i : i + 3]) for i in range(0, len(rgb), 3)})} "
             f"time={t}: the two implementations DISAGREE and this script will not "
             f"pick a winner.\n  C:     {c_bytes[:48].hex()}\n  python: {py_bytes[:48].hex()}"
         )
@@ -170,8 +193,13 @@ def main() -> None:
     # The zero-dimension divergence, captured as a case rather than left as a
     # sentence in a docstring: it is the one place the two implementations
     # differ, and a port has to know about it.
-    for direction, fn in (("static", lambda: c_static(lib, b"", 0, 0)), ("frame", lambda: c_frame(lib, b"", 0, 0, 500))):
-        out[direction].append({"w": 0, "h": 0, "rgb": "", **({"time": 500} if direction == "frame" else {}), "refused": True})
+    for direction, fn in (
+        ("static", lambda: c_static(lib, b"", 0, 0)),
+        ("frame", lambda: c_frame(lib, b"", 0, 0, 500)),
+    ):
+        out[direction].append(
+            {"w": 0, "h": 0, "rgb": "", **({"time": 500} if direction == "frame" else {}), "refused": True}
+        )
 
     total = sum(len(v) for v in out.values())
     dest = REPO / "divoomd" / "tests" / "image_vectors.json"

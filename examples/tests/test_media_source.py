@@ -28,22 +28,6 @@ def _psutil_stub(**fns):
     return patch.dict(sys.modules, {"psutil": module})
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def test_fetch_stock_ticker():
     mock_data = {
         "chart": {
@@ -103,29 +87,7 @@ def test_render_system_stats_frame(tmp_path):
 # ── R61 coverage push: get_current_playing_track branches ──────────────────
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # ── R61 coverage push: fetch_album_art_url error/malformed paths ───────────
-
-
-
-
 
 
 # ── R61 coverage push: render_and_downsample_artwork error/fallback paths ──
@@ -150,12 +112,6 @@ def _jpeg_bytes():
     buf = BytesIO()
     high_res.save(buf, format="JPEG")
     return buf.getvalue()
-
-
-
-
-
-
 
 
 # ── R61 coverage push: fetch_stock_ticker error/malformed paths ────────────

@@ -5,19 +5,22 @@ from divoom_legacy.utils import image_processing
 import tempfile
 import logging
 
+
 # Suppress logging output during tests for cleaner output
 @pytest.fixture(autouse=True)
 def no_logging(caplog):
     caplog.set_level(logging.CRITICAL)
 
+
 @pytest.fixture
 def create_static_image_file():
     """Fixture to create a temporary static image file."""
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-        img = Image.new('RGB', (16, 16), color = 'red')
+        img = Image.new("RGB", (16, 16), color="red")
         img.save(tmp.name)
         yield tmp.name
     os.remove(tmp.name)
+
 
 @pytest.fixture
 def create_gif_image_file():
@@ -25,11 +28,12 @@ def create_gif_image_file():
     with tempfile.NamedTemporaryFile(suffix=".gif", delete=False) as tmp:
         images = []
         for i in range(3):
-            img = Image.new('RGB', (16, 16), color = (i*50, i*100, i*150))
+            img = Image.new("RGB", (16, 16), color=(i * 50, i * 100, i * 150))
             images.append(img)
         images[0].save(tmp.name, save_all=True, append_images=images[1:], duration=100, loop=0)
         yield tmp.name
     os.remove(tmp.name)
+
 
 def test_process_image_static(create_static_image_file):
     """process_image with a static PNG returns 1 frame with width/height/duration."""
@@ -45,8 +49,9 @@ def test_process_image_static(create_static_image_file):
     assert duration_ms == 1000  # default for static
     # Check a few pixel values (red image)
     assert rgb[0] == 255  # R
-    assert rgb[1] == 0    # G
-    assert rgb[2] == 0    # B
+    assert rgb[1] == 0  # G
+    assert rgb[2] == 0  # B
+
 
 def test_process_image_gif(create_gif_image_file):
     """process_image with a GIF returns N frames with per-frame durations."""
@@ -71,6 +76,7 @@ def test_process_image_gif(create_gif_image_file):
     assert rgb_1[2] == 150
     assert dur_1 == 100
 
+
 def test_process_image_file_not_found():
     """process_image with a non-existent file returns an empty result."""
     frames, frames_count, width, height = image_processing.process_image("non_existent_file.png")
@@ -78,10 +84,11 @@ def test_process_image_file_not_found():
     assert frames == []
     assert width == 0 and height == 0
 
+
 def test_process_image_passes_time_to_static_frame():
     """The `time` parameter sets the static frame's duration."""
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-        Image.new('RGB', (4, 4), color='red').save(tmp.name)
+        Image.new("RGB", (4, 4), color="red").save(tmp.name)
         try:
             frames, count, w, h = image_processing.process_image(tmp.name, time=500)
             assert count == 1
@@ -92,11 +99,12 @@ def test_process_image_passes_time_to_static_frame():
 
 # ── Round 11 (item 1b): device-size resize + duration clamp ─────────────
 
+
 def test_process_image_resizes_to_device_size():
     """A large source is resized to (size,size) before encoding — this is the
     fix for the 'int too big to convert' overflow on full-res gallery gifs."""
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-        Image.new('RGB', (240, 240), color='blue').save(tmp.name)
+        Image.new("RGB", (240, 240), color="blue").save(tmp.name)
         try:
             frames, count, w, h = image_processing.process_image(tmp.name, size=16)
             assert (w, h) == (16, 16)
@@ -111,10 +119,9 @@ def test_process_image_clamps_frame_duration_to_u16():
     """Frame duration is a 2-byte field; oversized GIF durations are clamped
     so encode_animation_frame never sees > 65535 (no overflow)."""
     with tempfile.NamedTemporaryFile(suffix=".gif", delete=False) as tmp:
-        imgs = [Image.new('RGB', (16, 16), color=(i, 0, 0)) for i in range(2)]
+        imgs = [Image.new("RGB", (16, 16), color=(i, 0, 0)) for i in range(2)]
         # duration far beyond the u16 max
-        imgs[0].save(tmp.name, save_all=True, append_images=imgs[1:],
-                     duration=100000, loop=0)
+        imgs[0].save(tmp.name, save_all=True, append_images=imgs[1:], duration=100000, loop=0)
         try:
             frames, count, w, h = image_processing.process_image(tmp.name, size=16)
             for _, _, _, dur in frames:
@@ -127,10 +134,10 @@ def test_process_image_large_gif_encodes_without_overflow():
     """End-to-end regression: a large multi-frame gif, resized to the device
     grid, encodes via the animation encoder without 'int too big to convert'."""
     from divoom_legacy.display.animation_8b import _build_animation_blob
+
     with tempfile.NamedTemporaryFile(suffix=".gif", delete=False) as tmp:
-        imgs = [Image.new('RGB', (200, 200), color=(i * 40, 10, 10)) for i in range(5)]
-        imgs[0].save(tmp.name, save_all=True, append_images=imgs[1:],
-                     duration=120, loop=0)
+        imgs = [Image.new("RGB", (200, 200), color=(i * 40, 10, 10)) for i in range(5)]
+        imgs[0].save(tmp.name, save_all=True, append_images=imgs[1:], duration=120, loop=0)
         try:
             frames, count, w, h = image_processing.process_image(tmp.name, size=16)
             assert count == 5 and (w, h) == (16, 16)

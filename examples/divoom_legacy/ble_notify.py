@@ -10,6 +10,7 @@ relies on its attributes (``logger``, ``notification_queue``,
 ``use_ios_le_protocol``, ``_listen_commands``, ``is_connected``) and its
 ``send_command()``.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -21,10 +22,16 @@ from divoom_lib import models, framing
 class BleNotifyMixin:
     def notification_handler(self, sender: int, data: bytearray) -> None:
         if self.logger.isEnabledFor(logging.DEBUG):
-            expected_cmd_str = f"0x{self._expected_response_command:02x}" if self._expected_response_command is not None else "None"
+            expected_cmd_str = (
+                f"0x{self._expected_response_command:02x}" if self._expected_response_command is not None else "None"
+            )
             self.logger.debug(
                 "Notification from %s: use_ios_le=%s expected=%s data=%s",
-                sender, self.use_ios_le_protocol, expected_cmd_str, data.hex())
+                sender,
+                self.use_ios_le_protocol,
+                expected_cmd_str,
+                data.hex(),
+            )
         elif self.logger.isEnabledFor(logging.INFO):
             self.logger.info("Raw notification data: %s", data.hex())
 
@@ -36,19 +43,27 @@ class BleNotifyMixin:
     def _handle_ios_le_notification(self, data: bytes) -> bool:
         parsed = framing.parse_ios_le_notification(data)
         if parsed is not None:
-            command_identifier = parsed['command_id']
-            response_data = parsed['payload']
+            command_identifier = parsed["command_id"]
+            response_data = parsed["payload"]
 
             if self.logger.isEnabledFor(logging.INFO):
                 self.logger.info(
                     "Parsed iOS LE response: Cmd ID: 0x%02x, Packet Num: %s, Data: %s, Checksum: 0x%04x",
-                    command_identifier, parsed['packet_number'], response_data.hex(), parsed['checksum'])
+                    command_identifier,
+                    parsed["packet_number"],
+                    response_data.hex(),
+                    parsed["checksum"],
+                )
 
-            response_payload = {'command_id': command_identifier, 'payload': response_data}
+            response_payload = {"command_id": command_identifier, "payload": response_data}
             expected_cmd = self._expected_response_command
 
             is_expected_response = expected_cmd is not None and command_identifier == expected_cmd
-            is_generic_ack = expected_cmd is not None and command_identifier == models.GENERIC_ACK_COMMAND_ID and expected_cmd in models.GENERIC_ACK_COMMANDS
+            is_generic_ack = (
+                expected_cmd is not None
+                and command_identifier == models.GENERIC_ACK_COMMAND_ID
+                and expected_cmd in models.GENERIC_ACK_COMMANDS
+            )
             # R36b: device-driven protocols (hot update) receive UNSOLICITED
             # frames (e.g. 0xF7 file requests) — queue any command in the
             # listen set without consuming _expected_response_command.
@@ -70,7 +85,8 @@ class BleNotifyMixin:
                 return True
             else:
                 self.logger.warning(
-                    f"Response command 0x{command_identifier:02x} does not match expected command {f'0x{expected_cmd:02x}' if expected_cmd is not None else 'None'}.")
+                    f"Response command 0x{command_identifier:02x} does not match expected command {f'0x{expected_cmd:02x}' if expected_cmd is not None else 'None'}."
+                )
         else:
             self.logger.warning(f"Unrecognized notification data (not iOS LE Protocol format): {data.hex()}")
         return False
@@ -86,8 +102,7 @@ class BleNotifyMixin:
             self.notification_queue.put_nowait(response_payload)
         return True
 
-    async def wait_for_any_response(self, command_ids: list[int],
-                                    timeout: float = 10.0) -> tuple[int, bytes] | None:
+    async def wait_for_any_response(self, command_ids: list[int], timeout: float = 10.0) -> tuple[int, bytes] | None:
         """Wait for the first inbound frame whose command id is in
         ``command_ids``; returns ``(command_id, payload)`` or ``None`` on
         timeout. Unlike :meth:`wait_for_response` this serves DEVICE-DRIVEN
@@ -104,9 +119,9 @@ class BleNotifyMixin:
                 response = await asyncio.wait_for(self.notification_queue.get(), timeout=remaining)
             except asyncio.TimeoutError:
                 return None
-            cmd = response.get('command_id')
+            cmd = response.get("command_id")
             if cmd in wanted:
-                return cmd, response.get('payload')
+                return cmd, response.get("payload")
             self.logger.debug(f"wait_for_any: ignoring 0x{cmd:02x}")
 
     async def wait_for_response(self, command_id: int, timeout: float = 10.0) -> bytes | None:
@@ -122,23 +137,33 @@ class BleNotifyMixin:
             except asyncio.TimeoutError:
                 break
 
-            response_cmd_id = response.get('command_id')
+            response_cmd_id = response.get("command_id")
             is_expected_response = response_cmd_id == command_id
-            is_generic_ack = response_cmd_id == models.GENERIC_ACK_COMMAND_ID and command_id in models.GENERIC_ACK_COMMANDS
+            is_generic_ack = (
+                response_cmd_id == models.GENERIC_ACK_COMMAND_ID and command_id in models.GENERIC_ACK_COMMANDS
+            )
 
             if is_expected_response:
-                self.logger.debug(f"Got matching response for command ID 0x{command_id:02x} (Received 0x{response_cmd_id:02x})")
+                self.logger.debug(
+                    f"Got matching response for command ID 0x{command_id:02x} (Received 0x{response_cmd_id:02x})"
+                )
                 self._expected_response_command = None
-                return response.get('payload')
+                return response.get("payload")
             elif is_generic_ack:
-                self.logger.debug(f"Received generic ACK (0x33) for command 0x{command_id:02x}. Continuing to wait for final data response.")
+                self.logger.debug(
+                    f"Received generic ACK (0x33) for command 0x{command_id:02x}. Continuing to wait for final data response."
+                )
             else:
-                self.logger.warning(f"Got unexpected response. Expected 0x{command_id:02x}, got 0x{response_cmd_id:02x}. Discarding.")
+                self.logger.warning(
+                    f"Got unexpected response. Expected 0x{command_id:02x}, got 0x{response_cmd_id:02x}. Discarding."
+                )
 
         self.logger.warning(f"Timeout waiting for notification response to command ID: 0x{command_id:02x}")
         return None
 
-    async def send_command_and_wait_for_response(self, command: int | str, args: list | None = None, timeout: float = 10.0) -> bytes | None:
+    async def send_command_and_wait_for_response(
+        self, command: int | str, args: list | None = None, timeout: float = 10.0
+    ) -> bytes | None:
         if not self.is_connected:
             self.logger.error(f"Cannot send command '{command}': Not connected to a Divoom device.")
             return None
@@ -153,7 +178,8 @@ class BleNotifyMixin:
             self.logger.warning(
                 "send_command_and_wait_for_response(0x%02x) contended — another "
                 "response wait is in flight; serializing to avoid cross-talk",
-                command_id if isinstance(command_id, int) else 0)
+                command_id if isinstance(command_id, int) else 0,
+            )
         async with self._response_lock:
             while not self.notification_queue.empty():
                 self.notification_queue.get_nowait()

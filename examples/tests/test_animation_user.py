@@ -6,12 +6,22 @@ import pytest
 
 from divoom_lib.models import (
     COMMANDS,
-    SUG_CONTROL_START_SAVING, SUG_CONTROL_TRANSMIT_DATA, SUG_CONTROL_TRANSMISSION_END,
-    SUG_DATA_LED_EDITOR, SUG_DATA_SCROLL_ANIMATION,
-    ANUD_CONTROL_START_SENDING, ANUD_CONTROL_SENDING_DATA, ANUD_CONTROL_TERMINATE_SENDING,
-    ABUD_CONTROL_START_SENDING, ABUD_CONTROL_SENDING_DATA, ABUD_CONTROL_TERMINATE_SENDING,
-    ABUD_CONTROL_DELETE, ABUD_CONTROL_PLAY_ARTWORK, ABUD_CONTROL_DELETE_ALL_BY_INDEX,
-    AGUDI_CONTROL_WORD_SUCCESS, AGUDI_CONTROL_WORD_FAILURE,
+    SUG_CONTROL_START_SAVING,
+    SUG_CONTROL_TRANSMIT_DATA,
+    SUG_CONTROL_TRANSMISSION_END,
+    SUG_DATA_LED_EDITOR,
+    SUG_DATA_SCROLL_ANIMATION,
+    ANUD_CONTROL_START_SENDING,
+    ANUD_CONTROL_SENDING_DATA,
+    ANUD_CONTROL_TERMINATE_SENDING,
+    ABUD_CONTROL_START_SENDING,
+    ABUD_CONTROL_SENDING_DATA,
+    ABUD_CONTROL_TERMINATE_SENDING,
+    ABUD_CONTROL_DELETE,
+    ABUD_CONTROL_PLAY_ARTWORK,
+    ABUD_CONTROL_DELETE_ALL_BY_INDEX,
+    AGUDI_CONTROL_WORD_SUCCESS,
+    AGUDI_CONTROL_WORD_FAILURE,
 )
 from divoom_legacy.display.animation_user import AnimationUserDefine
 
@@ -47,6 +57,7 @@ def anim(comm):
 
 
 # --- set_user_gif: LED editor branch (SUG_CONTROL_START_SAVING / TRANSMISSION_END) ---
+
 
 async def test_set_user_gif_led_editor_success(anim, comm):
     result = await anim.set_user_gif(
@@ -84,6 +95,7 @@ async def test_set_user_gif_led_editor_missing_speed(anim, comm):
 
 
 # --- set_user_gif: scroll animation branch ---
+
 
 async def test_set_user_gif_scroll_animation_success(anim, comm):
     result = await anim.set_user_gif(
@@ -130,6 +142,7 @@ async def test_set_user_gif_missing_data_empty_list(anim, comm):
 
 # --- set_user_gif: transmit data branch ---
 
+
 async def test_set_user_gif_transmit_data_success(anim, comm):
     result = await anim.set_user_gif(SUG_CONTROL_TRANSMIT_DATA, data=[1, 2, 3])
     assert result is True
@@ -151,6 +164,7 @@ async def test_set_user_gif_transmit_data_no_data(anim, comm):
 
 # --- set_user_gif: unknown control word ---
 
+
 async def test_set_user_gif_unknown_control_word(anim, comm):
     result = await anim.set_user_gif(0xFF)
     assert result is False
@@ -158,6 +172,7 @@ async def test_set_user_gif_unknown_control_word(anim, comm):
 
 
 # --- modify_user_gif_items ---
+
 
 async def test_modify_user_gif_items_success(anim, comm):
     comm.wait_response = [7]
@@ -182,9 +197,12 @@ async def test_modify_user_gif_items_none_response(anim, comm):
 
 # --- app_new_user_define ---
 
+
 async def test_app_new_user_define_start_sending_success(anim, comm):
     result = await anim.app_new_user_define(
-        ANUD_CONTROL_START_SENDING, file_size=1024, index=2,
+        ANUD_CONTROL_START_SENDING,
+        file_size=1024,
+        index=2,
     )
     assert result is True
     cmd, args = comm.calls[-1]
@@ -202,7 +220,10 @@ async def test_app_new_user_define_start_sending_missing(anim, comm):
 
 async def test_app_new_user_define_sending_data_success(anim, comm):
     result = await anim.app_new_user_define(
-        ANUD_CONTROL_SENDING_DATA, file_size=10, file_offset_id=1, file_data=[9, 9],
+        ANUD_CONTROL_SENDING_DATA,
+        file_size=10,
+        file_offset_id=1,
+        file_data=[9, 9],
     )
     assert result is True
     args = last_args(comm)
@@ -230,9 +251,13 @@ async def test_app_new_user_define_unknown_control_word(anim, comm):
 
 # --- app_big64_user_define ---
 
+
 async def test_app_big64_start_sending_success(anim, comm):
     result = await anim.app_big64_user_define(
-        ABUD_CONTROL_START_SENDING, file_size=2048, index=1, file_id=555,
+        ABUD_CONTROL_START_SENDING,
+        file_size=2048,
+        index=1,
+        file_id=555,
     )
     assert result is True
     cmd, args = comm.calls[-1]
@@ -248,7 +273,10 @@ async def test_app_big64_start_sending_missing(anim, comm):
 
 async def test_app_big64_sending_data_success(anim, comm):
     result = await anim.app_big64_user_define(
-        ABUD_CONTROL_SENDING_DATA, file_size=10, file_offset_id=1, file_data=[1, 2],
+        ABUD_CONTROL_SENDING_DATA,
+        file_size=10,
+        file_offset_id=1,
+        file_data=[1, 2],
     )
     assert result is True
     args = last_args(comm)
@@ -269,7 +297,9 @@ async def test_app_big64_terminate_sending(anim, comm):
 
 async def test_app_big64_delete_success(anim, comm):
     result = await anim.app_big64_user_define(
-        ABUD_CONTROL_DELETE, file_id=123, index=4,
+        ABUD_CONTROL_DELETE,
+        file_id=123,
+        index=4,
     )
     assert result is True
     args = last_args(comm)
@@ -278,7 +308,9 @@ async def test_app_big64_delete_success(anim, comm):
 
 async def test_app_big64_play_artwork_success(anim, comm):
     result = await anim.app_big64_user_define(
-        ABUD_CONTROL_PLAY_ARTWORK, file_id=123, index=4,
+        ABUD_CONTROL_PLAY_ARTWORK,
+        file_id=123,
+        index=4,
     )
     assert result is True
     args = last_args(comm)
@@ -293,7 +325,8 @@ async def test_app_big64_delete_or_play_missing(anim, comm):
 
 async def test_app_big64_delete_all_by_index_success(anim, comm):
     result = await anim.app_big64_user_define(
-        ABUD_CONTROL_DELETE_ALL_BY_INDEX, index=3,
+        ABUD_CONTROL_DELETE_ALL_BY_INDEX,
+        index=3,
     )
     assert result is True
     args = last_args(comm)
@@ -313,6 +346,7 @@ async def test_app_big64_unknown_control_word(anim, comm):
 
 
 # --- app_get_user_define_info ---
+
 
 async def test_app_get_user_define_info_none_response(anim, comm):
     comm.wait_response = None

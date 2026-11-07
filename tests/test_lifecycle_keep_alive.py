@@ -8,6 +8,7 @@ The daemon's-own shutdown-broadcast test (which spins up a real archived
 divoom_client.daemon.DivoomDaemon) moved to
 archive/tests/ (removed in R66; in git history) test_lifecycle_keep_alive.py.
 """
+
 import sys
 from pathlib import Path
 
@@ -21,9 +22,10 @@ from divoom_client.daemon_protocol import EVENT_SHUTDOWN
 
 # ── flag persistence ──────────────────────────────────────────────────────
 
+
 def test_flag_defaults_false_and_roundtrips(tmp_path):
     p = tmp_path / "config.ini"
-    assert lc.get_keep_daemon_alive(p) is False          # default
+    assert lc.get_keep_daemon_alive(p) is False  # default
     assert lc.set_keep_daemon_alive(True, p) is True
     assert lc.get_keep_daemon_alive(p) is True
     assert lc.set_keep_daemon_alive(False, p) is True
@@ -40,12 +42,15 @@ def test_flag_read_tolerates_missing_and_garbage(tmp_path):
     other.write_text("[gui]\ntimeout = 9\n")
     lc.set_keep_daemon_alive(True, other)
     import configparser
-    c = configparser.ConfigParser(); c.read(other)
+
+    c = configparser.ConfigParser()
+    c.read(other)
     assert c.get("gui", "timeout") == "9"
     assert c.getboolean("gui", "keep_daemon_alive") is True
 
 
 # ── pure decision helpers (shared lifecycle ↔ NOT keep-alive) ──────────────
+
 
 @pytest.mark.parametrize("keep,expect", [(False, True), (True, False)])
 def test_decision_helpers(keep, expect):
@@ -56,9 +61,10 @@ def test_decision_helpers(keep, expect):
 
 # ── quit_menubar_on_exit flag + its decision helper ────────────────────────
 
+
 def test_quit_menubar_flag_defaults_true_and_roundtrips(tmp_path):
     p = tmp_path / "config.ini"
-    assert lc.get_quit_menubar_on_exit(p) is True           # default
+    assert lc.get_quit_menubar_on_exit(p) is True  # default
     assert lc.set_quit_menubar_on_exit(False, p) is True
     assert lc.get_quit_menubar_on_exit(p) is False
     assert lc.set_quit_menubar_on_exit(True, p) is True
@@ -78,14 +84,18 @@ def test_quit_menubar_read_tolerates_missing_and_garbage(tmp_path):
     assert lc.get_quit_menubar_on_exit(both) is False
 
 
-@pytest.mark.parametrize("keep,quit_mb,expect", [
-    (False, True, True),    # shared lifecycle + opted in → terminate menu bar
-    (False, False, False),  # shared but user keeps the tray → leave it
-    (True, True, False),    # keep-alive (independent) → never terminate
-    (True, False, False),
-])
+@pytest.mark.parametrize(
+    "keep,quit_mb,expect",
+    [
+        (False, True, True),  # shared lifecycle + opted in → terminate menu bar
+        (False, False, False),  # shared but user keeps the tray → leave it
+        (True, True, False),  # keep-alive (independent) → never terminate
+        (True, False, False),
+    ],
+)
 def test_should_quit_menubar_on_exit(keep, quit_mb, expect):
     assert lc.should_quit_menubar_on_exit(keep, quit_mb) is expect
+
 
 # The three menubar-client lifecycle tests that lived here (shutdown dispatch,
 # follow-on-dropped-subscription, resubscribe-on-transient-drop) exercised the

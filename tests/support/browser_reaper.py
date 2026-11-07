@@ -52,8 +52,7 @@ from dataclasses import dataclass
 
 #: argv[0] of a browser this suite started: the camoufox cache, reached
 #: through a session's fake HOME (macOS cache dir, or the XDG one on Linux).
-TEST_BROWSER = re.compile(
-    r"^(?P<home>/\S*?/divoom-test-home-[^/\s]+)/(?:Library/Caches|\.cache)/camoufox/")
+TEST_BROWSER = re.compile(r"^(?P<home>/\S*?/divoom-test-home-[^/\s]+)/(?:Library/Caches|\.cache)/camoufox/")
 #: The process Playwright starts a browser under. A browser whose parent is
 #: not this has lost its driver, and nothing will ever close it.
 DRIVER_MARK = "run-driver"
@@ -98,7 +97,11 @@ def parse_table(text: str) -> list[Proc]:
 def table() -> list[Proc]:
     out = subprocess.run(
         ["ps", "-axww", "-o", "pid=,ppid=,pgid=,uid=,command="],
-        stdin=subprocess.DEVNULL, capture_output=True, text=True, check=True).stdout
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
     return parse_table(out)
 
 
@@ -111,8 +114,7 @@ def active_home() -> str | None:
 
 def under_home(home: str, procs: list[Proc]) -> list[Proc]:
     real = os.path.realpath(home)
-    return [p for p in procs
-            if p.session_home and os.path.realpath(p.session_home) in (home, real)]
+    return [p for p in procs if p.session_home and os.path.realpath(p.session_home) in (home, real)]
 
 
 def orphans(procs: list[Proc]) -> list[Proc]:
@@ -153,8 +155,9 @@ def _profile_dir(command: str) -> str | None:
     if not m:
         return None
     path = m.group(1)
-    if (os.path.basename(path).startswith("playwright_firefoxdev_profile-")
-            and os.path.dirname(os.path.realpath(path)) == os.path.realpath(tempfile.gettempdir())):
+    if os.path.basename(path).startswith("playwright_firefoxdev_profile-") and os.path.dirname(
+        os.path.realpath(path)
+    ) == os.path.realpath(tempfile.gettempdir()):
         return path
     return None
 
@@ -169,7 +172,7 @@ def kill(victims: list[Proc]) -> int:
     for v in victims:
         try:
             os.kill(v.pid, signal.SIGKILL)
-        except (ProcessLookupError, PermissionError):
+        except ProcessLookupError, PermissionError:
             pass
     wanted = {(v.pid, v.command) for v in victims}
     deadline = time.monotonic() + REAP_WAIT_S
@@ -206,12 +209,18 @@ def sweep_orphans() -> int:
 
 # ── Ownership: who removes a fake HOME ───────────────────────────────────────
 
+
 def process_started(pid: int) -> str | None:
     """The process's start time as the OS reports it, or None if it is gone.
     A pid alone is not an identity (the OS reuses them); pid + start time is."""
     done = subprocess.run(
-        ["/bin/ps", "-p", str(pid), "-o", "lstart="], stdin=subprocess.DEVNULL,
-        capture_output=True, text=True, check=False, env={**os.environ, "LC_ALL": "C"})
+        ["/bin/ps", "-p", str(pid), "-o", "lstart="],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "LC_ALL": "C"},
+    )
     started = done.stdout.strip()
     return started if done.returncode == 0 and started else None
 
@@ -231,7 +240,7 @@ def owner_alive(home: str) -> bool | None:
         with open(os.path.join(home, OWNER_FILE)) as f:
             pid_text, _, started = f.read().partition("\n")
         pid = int(pid_text)
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return None
     live = process_started(pid)
     return live is not None and live == started.strip()
@@ -245,8 +254,13 @@ def held_by_process(home: str, procs: list[Proc]) -> bool:
         return True
     try:
         done = subprocess.run(
-            ["lsof", "-t", "+D", real], stdin=subprocess.DEVNULL,
-            capture_output=True, text=True, timeout=LSOF_WAIT_S, check=False)
+            ["lsof", "-t", "+D", real],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=LSOF_WAIT_S,
+            check=False,
+        )
     except FileNotFoundError:
         return False  # no lsof here: the command-line check above is all there is
     except subprocess.TimeoutExpired:
@@ -323,7 +337,8 @@ def check_launch_allowed() -> None:
     if LAUNCH_ALLOWED is False:
         raise BrowserLaunchRefused(
             "a browser was launched in a run without --run-browser; the default run "
-            "launches nothing (tests/support/browser_reaper.py, D.REV3)")
+            "launches nothing (tests/support/browser_reaper.py, D.REV3)"
+        )
 
 
 def register_launched() -> list[int]:
@@ -340,14 +355,17 @@ def register_launched() -> list[int]:
         return []
     procs = table()
     by_pid = {p.pid: p for p in procs}
-    fresh = [p.pgid for p in under_home(home, procs)
-             if p.pid == p.pgid and p.pgid not in _known
-             and descends_from(p.ppid, os.getpid(), by_pid)]
+    fresh = [
+        p.pgid
+        for p in under_home(home, procs)
+        if p.pid == p.pgid and p.pgid not in _known and descends_from(p.ppid, os.getpid(), by_pid)
+    ]
     if not fresh:
         raise UnreapableBrowser(
             f"launched a browser with no process under the test home {home}: "
             "its executable must run through $HOME/Library/Caches/camoufox, "
-            "or nothing can reap it (tests/support/browser_reaper.py)")
+            "or nothing can reap it (tests/support/browser_reaper.py)"
+        )
     _known.update(fresh)
     _frames[-1].extend(fresh)
     return fresh
@@ -376,17 +394,20 @@ def _wrap(original):
     import inspect
 
     if inspect.iscoroutinefunction(original):
+
         async def launch(self, *args, **kwargs):
             check_launch_allowed()
             browser = await original(self, *args, **kwargs)
             register_launched()
             return browser
     else:
+
         def launch(self, *args, **kwargs):
             check_launch_allowed()
             browser = original(self, *args, **kwargs)
             register_launched()
             return browser
+
     launch.__divoom_reaped__ = True
     return launch
 

@@ -26,6 +26,7 @@ What these pin, each against the fake daemon's per-mac answers:
 
 Skipped if a browser isn't installed (runs with --run-browser).
 """
+
 from pathlib import Path
 
 import pytest
@@ -94,9 +95,13 @@ async def _open(p):
     await page.goto(f"file://{INDEX_HTML}")
     await wait_js(page, "() => !!window.Divoom?.onOwnedDevices && !!window.SpatialStage")
     # The daemon adopts both panels: the broadcast every client gets.
-    await eval_js(page, """([a, b]) => window.Divoom.onOwnedDevices({type: 'owned_devices', devices: [
+    await eval_js(
+        page,
+        """([a, b]) => window.Divoom.onOwnedDevices({type: 'owned_devices', devices: [
         {address: a, name: 'Ditoo 64 Desk', kind: 'clock', state: 'active'},
-        {address: b, name: 'Kitchen', kind: 'clock', state: 'active'}]})""", [A, B])
+        {address: b, name: 'Kitchen', kind: 'clock', state: 'active'}]})""",
+        [A, B],
+    )
     return browser, page
 
 
@@ -105,8 +110,11 @@ async def _select(page, mac):
 
 
 async def _deck_shows(page, mac, brightness):
-    await wait_js(page, f"""() => document.getElementById('deck-device-name').textContent.trim() !== ''
-        && document.getElementById('global-brightness-value').textContent === '{brightness}'""")
+    await wait_js(
+        page,
+        f"""() => document.getElementById('deck-device-name').textContent.trim() !== ''
+        && document.getElementById('global-brightness-value').textContent === '{brightness}'""",
+    )
     return await eval_js(page, _DECK)
 
 
@@ -151,9 +159,12 @@ async def test_a_write_names_its_panel_and_the_other_panel_keeps_its_value():
         try:
             await _select(page, B)
             await _deck_shows(page, B, "90%")
-            await eval_js(page, """() => { const s = document.getElementById('global-brightness-slider');
+            await eval_js(
+                page,
+                """() => { const s = document.getElementById('global-brightness-slider');
                 for (const v of [70, 60, 55]) { s.value = String(v); s.dispatchEvent(new Event('input', {bubbles: true})); }
-                s.dispatchEvent(new Event('change', {bubbles: true})); }""")
+                s.dispatchEvent(new Event('change', {bubbles: true})); }""",
+            )
             await wait_js(page, "() => window.__fleet.writes.length > 0")
             await eval_js(page, "() => new Promise(r => setTimeout(r, 250))")
             writes = await eval_js(page, "() => window.__fleet.writes")
@@ -163,14 +174,18 @@ async def test_a_write_names_its_panel_and_the_other_panel_keeps_its_value():
             a = await _deck_shows(page, A, "30%")
             assert a["bSlider"] == "30", f"A must show A's brightness, not B's last write: {a}"
 
-            await eval_js(page, """() => { const s = document.getElementById('appbar-volume-slider');
+            await eval_js(
+                page,
+                """() => { const s = document.getElementById('appbar-volume-slider');
                 s.value = '9'; s.dispatchEvent(new Event('input', {bubbles: true}));
-                s.dispatchEvent(new Event('change', {bubbles: true})); }""")
+                s.dispatchEvent(new Event('change', {bubbles: true})); }""",
+            )
             await wait_js(page, "() => window.__fleet.writes.length > 1")
             await eval_js(page, "() => new Promise(r => setTimeout(r, 250))")
             writes = await eval_js(page, "() => window.__fleet.writes")
             assert writes[1:] == [{"m": "set_volume", "args": [A, 9]}], (
-                f"one volume gesture, one write, naming the panel: {writes}")
+                f"one volume gesture, one write, naming the panel: {writes}"
+            )
 
             await _select(page, B)
             b = await _deck_shows(page, B, "55%")
@@ -191,10 +206,17 @@ async def test_no_write_to_a_panel_that_is_not_linked():
             await _deck_shows(page, A, "30%")
             # The OTHER panel stays linked, so "the app is connected" is true;
             # the selected one is not, and that is the one the slider is for.
-            await eval_js(page, "(a) => window.Divoom.onDaemonEvent({type: 'status', connected: false, state: 'disconnected', mac: a})", A)
+            await eval_js(
+                page,
+                "(a) => window.Divoom.onDaemonEvent({type: 'status', connected: false, state: 'disconnected', mac: a})",
+                A,
+            )
             for slider in ("global-brightness-slider", "appbar-volume-slider"):
-                await eval_js(page, f"""() => {{ const s = document.getElementById('{slider}');
-                    s.value = '3'; s.dispatchEvent(new Event('change', {{bubbles: true}})); }}""")
+                await eval_js(
+                    page,
+                    f"""() => {{ const s = document.getElementById('{slider}');
+                    s.value = '3'; s.dispatchEvent(new Event('change', {{bubbles: true}})); }}""",
+                )
             await eval_js(page, "() => new Promise(r => setTimeout(r, 250))")
             assert await eval_js(page, "() => window.__fleet.writes") == []
         finally:
@@ -219,8 +241,7 @@ async def test_a_slow_read_for_the_panel_you_left_does_not_paint_the_one_you_are
             await _deck_shows(page, B, "90%")
             await eval_js(page, "() => new Promise(r => setTimeout(r, 700))")
             state = await eval_js(page, _DECK)
-            assert state["b"] == "90%" and state["bSlider"] == "90", (
-                f"A's late reply landed on B: {state}")
+            assert state["b"] == "90%" and state["bSlider"] == "90", f"A's late reply landed on B: {state}"
         finally:
             await browser.close()
 
@@ -258,6 +279,9 @@ async def test_no_name_guesser_is_left():
         finally:
             await browser.close()
     web_ui = INDEX_HTML.parent
-    offenders = [f.name for f in web_ui.glob("*.js")
-                 if "resolveDeviceSpec" in f.read_text() or "getDeviceDimensions" in f.read_text()]
+    offenders = [
+        f.name
+        for f in web_ui.glob("*.js")
+        if "resolveDeviceSpec" in f.read_text() or "getDeviceDimensions" in f.read_text()
+    ]
     assert offenders == [], offenders

@@ -15,6 +15,7 @@ Comparing 3 vs 4 tells us instantly:
   - raw finds nothing -> permission/hardware (screens not advertising, or denied).
   - authorization != 3 -> it's a permission grant problem.
 """
+
 import asyncio
 import sys
 from pathlib import Path
@@ -22,6 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 # The Divoom-filtered scan uses the retired library's discovery helper.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "examples"))
+
 
 def report_environment() -> None:
     """Interpreter and CoreBluetooth authorization, before any scan. A
@@ -31,6 +33,7 @@ def report_environment() -> None:
 
     try:
         from CoreBluetooth import CBCentralManager
+
         auth = CBCentralManager.authorization()
         names = {0: "notDetermined", 1: "restricted", 2: "DENIED", 3: "ALLOWED"}
         print("CB auth     :", auth, f"({names.get(auth, '?')})")
@@ -54,6 +57,7 @@ async def main() -> None:
     print("Divoom-filtered scan (what the app's Scan button uses):")
     try:
         from divoom_legacy.utils import discovery
+
         divs = await discovery.discover_all_divoom_devices(timeout=8.0)
         print(f"  -> {len(divs)}: {divs}")
     except Exception as e:

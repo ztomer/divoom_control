@@ -142,25 +142,25 @@ async def _render(out: Path) -> list[dict]:
 
             # The motion off: a pulsing dot is not reproducible, and the sheet
             # is a still frame by definition.
-            await eval_js(page, """() => {
+            await eval_js(
+                page,
+                """() => {
                 const s = document.createElement('style');
                 s.textContent = '*, *::before, *::after {'
                     + ' animation: none !important; transition: none !important; }';
                 document.head.appendChild(s);
                 window.DivoomState.discoveredDevices = [];
                 return true;
-            }""")
+            }""",
+            )
 
             states = []
             for name, args in STATES:
                 await eval_js(page, "() => window.setConnectionState(%s)" % json.dumps(args))
-                cls = await eval_js(
-                    page, "() => document.getElementById('global-status-dot').className"
-                )
+                cls = await eval_js(page, "() => document.getElementById('global-status-dot').className")
                 label = await eval_js(
                     page,
-                    "() => document.getElementById('global-status-dot')"
-                    ".getAttribute('aria-label')",
+                    "() => document.getElementById('global-status-dot').getAttribute('aria-label')",
                 )
                 states.append({"name": name, "cls": cls, "label": label})
 

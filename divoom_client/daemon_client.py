@@ -20,6 +20,7 @@ It gives clients:
 Nothing here imports BLE or pywebview — it's pure client plumbing and unit-tested
 against a fake daemon in ``tests/test_daemon_bridge.py``.
 """
+
 from __future__ import annotations
 
 import logging
@@ -74,8 +75,7 @@ def daemon_alive(socket_path: str = DEFAULT_SOCKET_PATH, timeout: float = 0.5) -
     return _client_alive(DaemonClient(socket_path, timeout=timeout))
 
 
-def _spawn_disclaimed_macos(cmd: list[str], log_path: str,
-                            env: dict[str, str] | None = None) -> int:
+def _spawn_disclaimed_macos(cmd: list[str], log_path: str, env: dict[str, str] | None = None) -> int:
     """Spawn ``cmd`` with macOS TCC responsibility DISCLAIMED, returning the pid.
 
     This is the crux of making BLE work from the GUI without user intervention.
@@ -98,8 +98,8 @@ def _spawn_disclaimed_macos(cmd: list[str], log_path: str,
     import ctypes.util
 
     libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
-    attr_t = ctypes.c_void_p   # posix_spawnattr_t (opaque pointer on macOS)
-    fa_t = ctypes.c_void_p     # posix_spawn_file_actions_t
+    attr_t = ctypes.c_void_p  # posix_spawnattr_t (opaque pointer on macOS)
+    fa_t = ctypes.c_void_p  # posix_spawn_file_actions_t
     libc.posix_spawnattr_init.argtypes = [ctypes.POINTER(attr_t)]
     libc.posix_spawnattr_setflags.argtypes = [ctypes.POINTER(attr_t), ctypes.c_short]
     libc.posix_spawnattr_destroy.argtypes = [ctypes.POINTER(attr_t)]
@@ -107,12 +107,21 @@ def _spawn_disclaimed_macos(cmd: list[str], log_path: str,
     libc.posix_spawn_file_actions_init.argtypes = [ctypes.POINTER(fa_t)]
     libc.posix_spawn_file_actions_destroy.argtypes = [ctypes.POINTER(fa_t)]
     libc.posix_spawn_file_actions_addopen.argtypes = [
-        ctypes.POINTER(fa_t), ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_uint]
+        ctypes.POINTER(fa_t),
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_int,
+        ctypes.c_uint,
+    ]
     libc.posix_spawn_file_actions_adddup2.argtypes = [ctypes.POINTER(fa_t), ctypes.c_int, ctypes.c_int]
     libc.posix_spawn.argtypes = [
-        ctypes.POINTER(ctypes.c_int), ctypes.c_char_p,
-        ctypes.POINTER(fa_t), ctypes.POINTER(attr_t),
-        ctypes.POINTER(ctypes.c_char_p), ctypes.POINTER(ctypes.c_char_p)]
+        ctypes.POINTER(ctypes.c_int),
+        ctypes.c_char_p,
+        ctypes.POINTER(fa_t),
+        ctypes.POINTER(attr_t),
+        ctypes.POINTER(ctypes.c_char_p),
+        ctypes.POINTER(ctypes.c_char_p),
+    ]
 
     POSIX_SPAWN_SETSID = 0x0400
     attr = attr_t()
@@ -128,17 +137,16 @@ def _spawn_disclaimed_macos(cmd: list[str], log_path: str,
         try:
             libc.posix_spawn_file_actions_addopen(ctypes.byref(fa), 0, b"/dev/null", os.O_RDONLY, 0)
             libc.posix_spawn_file_actions_addopen(
-                ctypes.byref(fa), 1, log_path.encode(),
-                os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+                ctypes.byref(fa), 1, log_path.encode(), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644
+            )
             libc.posix_spawn_file_actions_adddup2(ctypes.byref(fa), 1, 2)
 
             argv = (ctypes.c_char_p * (len(cmd) + 1))(*[a.encode() for a in cmd], None)
-            env_items = (env if env is not None else os.environ)
+            env_items = env if env is not None else os.environ
             env_pairs = [f"{k}={v}" for k, v in env_items.items()]
             envp = (ctypes.c_char_p * (len(env_pairs) + 1))(*[e.encode() for e in env_pairs], None)
             pid = ctypes.c_int()
-            rc = libc.posix_spawn(ctypes.byref(pid), cmd[0].encode(),
-                                  ctypes.byref(fa), ctypes.byref(attr), argv, envp)
+            rc = libc.posix_spawn(ctypes.byref(pid), cmd[0].encode(), ctypes.byref(fa), ctypes.byref(attr), argv, envp)
             if rc != 0:
                 raise OSError(f"posix_spawn failed rc={rc}")
             return pid.value
@@ -171,8 +179,7 @@ def spawn_daemon(
     # in `ensure_daemon`, that made an infinite loop: spawn stale, notice the
     # mismatch, shut it down, spawn the same stale binary again. See
     # `divoom_client/binary_resolver.py`.
-    resolved = binary_resolver.resolve(
-        "divoomd", override=os.environ.get("DIVOOM_RUST_BINARY"))
+    resolved = binary_resolver.resolve("divoomd", override=os.environ.get("DIVOOM_RUST_BINARY"))
     rust_bin = str(resolved) if resolved else None
     # No encoder library to hand over any more. The daemon used to be pointed at
     # a bundled `libdivoom_compact` through DIVOOMD_ENCODER_LIB because its
@@ -188,8 +195,7 @@ def spawn_daemon(
             # Name what IS built and what it says. "not found" is a lie when the
             # binary is sitting right there at the wrong version, and it sends
             # the reader looking for a missing file instead of a stale one.
-            detail = "; ".join(
-                f"{p} reports {v or '<no --version>'}" for p, v in stale)
+            detail = "; ".join(f"{p} reports {v or '<no --version>'}" for p, v in stale)
             raise RuntimeError(
                 f"no divoomd matching this tree's version — {detail}. "
                 f"Rebuild: {binary_resolver.rebuild_hint('divoomd')}"
@@ -237,6 +243,7 @@ def spawn_daemon(
         # as an app of its own -- which also makes it its own responsible
         # process for TCC, what the disclaim below buys a fork.
         from divoom_client import helper_app
+
         bundle = helper_app.helper_bundle(rust_bin)
         if bundle is not None:
             try:
@@ -244,8 +251,7 @@ def spawn_daemon(
                 pid = _socket_holder(socket_path)
                 logger.info("Opened the daemon (%s) pid=%s", bundle.name, pid)
             except Exception as e:
-                logger.warning("Opening %s failed (%s); forking it instead.",
-                               bundle.name, e)
+                logger.warning("Opening %s failed (%s); forking it instead.", bundle.name, e)
             else:
                 _record_identity(pid, rust_bin)
                 return pid
@@ -268,8 +274,12 @@ def spawn_daemon(
         _out = _err = subprocess.DEVNULL
     logger.info("Spawning daemon (Popen, detach=%s): %s", detach, " ".join(cmd))
     proc = subprocess.Popen(
-        cmd, stdout=_out, stderr=_err, stdin=subprocess.DEVNULL,
-        start_new_session=detach, env=spawn_env,
+        cmd,
+        stdout=_out,
+        stderr=_err,
+        stdin=subprocess.DEVNULL,
+        start_new_session=detach,
+        env=spawn_env,
     )
     pid = getattr(proc, "pid", None)
     if isinstance(pid, int):
@@ -282,9 +292,9 @@ def _socket_holder(socket_path: str, wait: float = 8.0) -> int:
     is not returned by `open`, and the socket is what the daemon owns."""
     deadline = time.monotonic() + wait
     while True:
-        done = subprocess.run(["/usr/sbin/lsof", "-t", socket_path],
-                              capture_output=True, text=True,
-                              stdin=subprocess.DEVNULL, check=False)
+        done = subprocess.run(
+            ["/usr/sbin/lsof", "-t", socket_path], capture_output=True, text=True, stdin=subprocess.DEVNULL, check=False
+        )
         pids = [int(p) for p in (done.stdout or "").split() if p.isdigit()]
         if pids:
             return pids[0]
@@ -356,8 +366,7 @@ def ensure_daemon(
                 logger.error(
                     "replacement daemon did not start within %.1fs: %s",
                     wait_timeout,
-                    explain_daemon_failure(
-                        socket_path, "no reason reported by the daemon"),
+                    explain_daemon_failure(socket_path, "no reason reported by the daemon"),
                 )
                 return None
         return DaemonClient(socket_path)
@@ -379,6 +388,7 @@ def ensure_daemon(
         explain_daemon_failure(socket_path, "no reason reported by the daemon"),
     )
     return None
+
 
 # The device proxy lives in daemon_proxy.py (500-line cap); re-exported so
 # `from divoom_client.daemon_client import DaemonDeviceProxy` keeps working.

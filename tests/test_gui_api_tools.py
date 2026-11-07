@@ -15,6 +15,7 @@ from gui_main import DivoomGuiAPI
 #: The panel every Tools call names (P5.7).
 A = "AA:00:00:00:00:01"
 
+
 class TestToolsApiCoverage(unittest.TestCase):
     """R61 planning item 1 coverage push: ToolsApi (divoom_gui/api/tools.py)
     error paths, validation branches, and getters the main suite above
@@ -26,6 +27,7 @@ class TestToolsApiCoverage(unittest.TestCase):
         self.presets_patcher = patch("pathlib.Path.exists", return_value=False)
         self.presets_patcher.start()
         import tempfile
+
         self.temp_dir = tempfile.TemporaryDirectory()
         self.home_patcher = patch("pathlib.Path.home", return_value=Path(self.temp_dir.name))
         self.home_patcher.start()
@@ -230,7 +232,7 @@ class TestToolsApiCoverage(unittest.TestCase):
     def test_set_scoreboard_naming_no_panel_is_refused(self):
         dev = MagicMock()
         dev.scoreboard.set_scoreboard = AsyncMock(return_value=True)
-        self._on(dev)   # A answers; the call names nobody
+        self._on(dev)  # A answers; the call names nobody
         self.assertFalse(self.api.set_scoreboard("", 1, 10, 20)["success"])
         dev.scoreboard.set_scoreboard.assert_not_called()
 

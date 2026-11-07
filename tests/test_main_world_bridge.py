@@ -12,6 +12,7 @@ global AND the unbridged call does not. A test that only checked the bridge
 would keep passing on a browser where the bridge had become unnecessary, and
 tell us nothing on the day it becomes insufficient again.
 """
+
 from __future__ import annotations
 
 import json
@@ -29,6 +30,7 @@ MAIN_WORLD_PAGE = (
 
 
 # ── pure helpers ──────────────────────────────────────────────────────────────
+
 
 def test_main_world_prefixes():
     assert B.main_world("window.X") == "mw:window.X"
@@ -56,7 +58,7 @@ def test_bootstrap_carries_the_source_as_a_js_literal():
 
 def test_bootstrap_survives_quotes_and_script_tags():
     """A mock containing `</script>` must not break out of the injected node."""
-    src = "window.q = \"a'b\\\"c</script>\";"
+    src = 'window.q = "a\'b\\"c</script>";'
     out = B.main_world_bootstrap(src)
     # textContent, never innerHTML -- the payload is never parsed as HTML.
     assert "textContent" in out
@@ -92,6 +94,7 @@ def test_main_world_timeout_is_an_assertion_error():
 
 
 # ── the toast wait: keyed on identity, never on a count ───────────────────────
+
 
 def test_toast_condition_matches_the_RECORDED_render():
     """The claim these waits exist for is about the SCREEN.
@@ -150,7 +153,7 @@ def test_recorder_is_installed_before_the_app_defines_showtoast():
     src = B.TOAST_RECORDER_JS
     assert "Object.defineProperty(window, 'showToast'" in src
     assert "window.__divoomToasts = history" in src
-    assert "document.getElementById(\"toast\")" in src
+    assert 'document.getElementById("toast")' in src
 
 
 def test_toast_recorder_missing_is_an_assertion_error():
@@ -165,11 +168,11 @@ def test_toast_recorder_missing_is_an_assertion_error():
 TOAST_PAGE = (
     "data:text/html,<div id='toast' class='toast'></div><script>"
     "window.showToast = function (message, type, transport) {"
-    "  const el = document.getElementById(\"toast\");"
+    '  const el = document.getElementById("toast");'
     "  if (!el) return;"
-    "  el.className = \"toast \" + (type || \"success\") + \" show\";"
+    '  el.className = "toast " + (type || "success") + " show";'
     "  el.innerHTML = message + (transport ?"
-    "    \"<span class='toast-transport'>\" + transport + \"</span>\" : \"\");"
+    '    "<span class=\'toast-transport\'>" + transport + "</span>" : "");'
     "};"
     "</script>"
 )
@@ -193,9 +196,7 @@ async def test_wait_toast_ignores_a_foreign_toast():
             await B.install_toast_recorder(page)
             await page.goto(TOAST_PAGE)
             # A toast the app raises on its own, on a timer no test controls.
-            await B.eval_js(
-                page, "() => window.showToast('Startup: Auto-scanning screens...',"
-                      " 'success')")
+            await B.eval_js(page, "() => window.showToast('Startup: Auto-scanning screens...', 'success')")
             # ...which does not satisfy a wait for this test's toast.
             assert await B.eval_js(page, B.toast_condition("Bluetooth", kind="error")) is None
             with pytest.raises(B.MainWorldTimeout):
@@ -203,8 +204,7 @@ async def test_wait_toast_ignores_a_foreign_toast():
 
             # The toast this test is about does satisfy it, and the record is
             # what was RENDERED, kind and transport marker included.
-            await B.eval_js(
-                page, "() => window.showToast('no LAN API on this device', 'error', ' LAN')")
+            await B.eval_js(page, "() => window.showToast('no LAN API on this device', 'error', ' LAN')")
             toast = await B.wait_toast(page, "no LAN API", kind="error")
             assert toast["rendered"]["text"] == "no LAN API on this device LAN"
             assert "error" in toast["rendered"]["className"].split()
@@ -230,8 +230,10 @@ async def test_wait_toast_ignores_a_toast_that_never_reached_the_screen():
             await B.install_toast_recorder(page)
             await page.goto(TOAST_PAGE)
             await B.eval_js(
-                page, "() => { document.getElementById('toast').remove();"
-                      " window.showToast('no LAN API on this device', 'error', ' LAN'); }")
+                page,
+                "() => { document.getElementById('toast').remove();"
+                " window.showToast('no LAN API on this device', 'error', ' LAN'); }",
+            )
             assert await B.eval_js(page, "() => window.__divoomToasts.length") == 1
             assert await B.eval_js(page, B.toast_condition("no LAN API")) is None
             with pytest.raises(B.MainWorldTimeout):
@@ -276,9 +278,7 @@ async def test_bridge_reaches_the_main_world_and_plain_evaluate_does_not():
             # ever starts returning the value, the bridge has become
             # unnecessary -- which is worth knowing deliberately.
             assert await page.evaluate("() => window.APP_GLOBAL") is None
-            assert await page.evaluate(
-                "() => document.getElementById('visible').textContent"
-            ) == "in the dom"
+            assert await page.evaluate("() => document.getElementById('visible').textContent") == "in the dom"
         finally:
             await b.close()
 
@@ -295,8 +295,7 @@ async def test_init_script_runs_before_the_pages_own_scripts():
             page = await b.new_page()
             await B.add_init_js(
                 page,
-                "window.__api = {ok: true};"
-                "window.BOOT_ORDER = (window.BOOT_ORDER || []).concat('mock');",
+                "window.__api = {ok: true};window.BOOT_ORDER = (window.BOOT_ORDER || []).concat('mock');",
             )
             await page.goto(MAIN_WORLD_PAGE)
 

@@ -18,6 +18,7 @@ check-applescript-launch: fixtures
     on purpose. The marker is honoured only under tests/ -- shipped code has no
     opt-out -- and this is the only file in the repo that carries it.
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -36,6 +37,7 @@ from tests.support.repo_files import repo_files  # noqa: E402
 
 # ---------------------------------------------------------------- calibration
 
+
 def test_the_exact_shipped_line_is_caught():
     """The instrument must produce the failing answer on the real defect."""
     bad = gate.scan_text(
@@ -46,12 +48,12 @@ def test_the_exact_shipped_line_is_caught():
 
 
 def test_bundle_id_form_is_caught():
-    bad = gate.scan_text('s = \'tell application id "org.python.python" to activate\'\n', ".py")
+    bad = gate.scan_text("s = 'tell application id \"org.python.python\" to activate'\n", ".py")
     assert bad == ["org.python.python"]
 
 
 def test_shell_script_is_caught():
-    bad = gate.scan_text('osascript -e \'tell application "Music" to play\'\n', ".sh")
+    bad = gate.scan_text("osascript -e 'tell application \"Music\" to play'\n", ".sh")
     assert bad == ["Music"]
 
 
@@ -62,36 +64,42 @@ def test_rust_is_caught():
 
 # ------------------------------------------------------------- the safe forms
 
+
 def test_system_events_is_permitted():
     """Addressing by unix id can only front an existing process."""
-    assert gate.scan_text(
-        'script = (\n'
-        '    \'tell application "System Events"\\n\'\n'
-        '    \'    set procs to (every process whose unix id is 42)\\n\'\n'
-        '    \'end tell\'\n'
-        ')\n',
-        ".py",
-    ) == []
+    assert (
+        gate.scan_text(
+            "script = (\n"
+            "    'tell application \"System Events\"\\n'\n"
+            "    '    set procs to (every process whose unix id is 42)\\n'\n"
+            "    'end tell'\n"
+            ")\n",
+            ".py",
+        )
+        == []
+    )
 
 
 def test_is_running_guard_is_permitted():
     """The divoom_gui/permissions.py shape: never launches Music or Spotify."""
-    assert gate.scan_text(
-        'script = (\n'
-        '    f\'if application "{app}" is running then\\n\'\n'
-        '    f\'    tell application "Music" to get player state\\n\'\n'
-        '    \'end if\'\n'
-        ')\n'
-        'guard = \'application "Music" is running\'\n',
-        ".py",
-    ) == []
+    assert (
+        gate.scan_text(
+            "script = (\n"
+            "    f'if application \"{app}\" is running then\\n'\n"
+            "    f'    tell application \"Music\" to get player state\\n'\n"
+            "    'end if'\n"
+            ")\n"
+            "guard = 'application \"Music\" is running'\n",
+            ".py",
+        )
+        == []
+    )
 
 
 def test_guard_for_a_different_app_does_not_excuse_it():
     """A guard is per app name, not a blanket amnesty for the file."""
     bad = gate.scan_text(
-        'a = \'application "Music" is running\'\n'
-        'b = \'tell application "Spotify" to pause\'\n',
+        "a = 'application \"Music\" is running'\nb = 'tell application \"Spotify\" to pause'\n",
         ".py",
     )
     assert bad == ["Spotify"]
@@ -99,18 +107,20 @@ def test_guard_for_a_different_app_does_not_excuse_it():
 
 # ------------------------------------------------------- prose is not code
 
+
 def test_python_docstring_is_not_a_violation():
     assert gate.scan_text('"""Uses `tell application "Python" to activate`."""\n', ".py") == []
 
 
 def test_attribute_docstring_is_not_a_violation():
     """The exact shape that reddened the gate's own first run."""
-    assert gate.scan_text(
-        'class P:\n'
-        '    name: str\n'
-        '    """The macOS name used in `tell application "..."`."""\n',
-        ".py",
-    ) == []
+    assert (
+        gate.scan_text(
+            'class P:\n    name: str\n    """The macOS name used in `tell application "..."`."""\n',
+            ".py",
+        )
+        == []
+    )
 
 
 def test_python_comment_is_not_a_violation():
@@ -130,6 +140,7 @@ def test_unparseable_python_is_skipped_not_crashed():
 
 
 # --------------------------------------------- f-strings and computed names
+
 
 def test_fstring_fragments_do_not_glue_into_a_false_positive():
     """The gate failed on ITSELF this way.
@@ -154,11 +165,12 @@ def test_a_computed_app_name_is_a_documented_blind_spot():
     The one dynamic caller in the repo (divoom_gui/permissions.py) is covered
     by tests/test_permissions.py, which asserts it never launches a player.
     """
-    src = 's = f\'tell application "{app}" to activate\'\n'
+    src = "s = f'tell application \"{app}\" to activate'\n"
     assert gate.scan_text(src, ".py") == []
 
 
 # ---------------------------------------------------------------- exemption
+
 
 def test_marker_exempts_a_tests_file():
     assert gate.is_exempt("tests/test_applescript_launch_gate.py", gate.FIXTURE_MARKER)
@@ -166,8 +178,7 @@ def test_marker_exempts_a_tests_file():
 
 def test_marker_does_not_exempt_shipped_code():
     """The rug check: a module cannot wave itself through with a comment."""
-    for rel in ("divoom_gui/gui_main.py", "tools/x.py", "scripts/x.sh",
-                "divoomd/src/main.rs", "nottests/x.py"):
+    for rel in ("divoom_gui/gui_main.py", "tools/x.py", "scripts/x.sh", "divoomd/src/main.rs", "nottests/x.py"):
         assert not gate.is_exempt(rel, gate.FIXTURE_MARKER), rel
 
 
@@ -180,13 +191,13 @@ def test_this_file_is_the_only_marked_file():
     marked = [
         p.relative_to(REPO).as_posix()
         for p in repo_files(REPO, (".py",))
-        if gate.FIXTURE_MARKER in p.read_text(errors="replace")
-        and p.name != "check_applescript_launch.py"
+        if gate.FIXTURE_MARKER in p.read_text(errors="replace") and p.name != "check_applescript_launch.py"
     ]
     assert marked == ["tests/test_applescript_launch_gate.py"], marked
 
 
 # ------------------------------------------------------------------ live tree
+
 
 def test_gate_refuses_to_pass_over_an_empty_scope(tmp_path):
     """Inspecting nothing is abstaining, not passing -- a rename would otherwise
@@ -203,19 +214,30 @@ def test_gate_refuses_to_pass_over_an_empty_scope(tmp_path):
         (tmp_path / "tools" / src.name).write_bytes(src.read_bytes())
     gate_py = "tools/check_applescript_launch.py"
 
-    full = subprocess.run([sys.executable, gate_py], cwd=tmp_path, capture_output=True, text=True, stdin=subprocess.DEVNULL, check=False)
+    full = subprocess.run(
+        [sys.executable, gate_py], cwd=tmp_path, capture_output=True, text=True, stdin=subprocess.DEVNULL, check=False
+    )
     assert full.returncode == 1, full.stdout
     assert "0 files" in full.stdout
 
-    staged = subprocess.run([sys.executable, gate_py, "--staged"], cwd=tmp_path,
-                            capture_output=True, text=True, stdin=subprocess.DEVNULL, check=False)
+    staged = subprocess.run(
+        [sys.executable, gate_py, "--staged"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    )
     assert staged.returncode == 0, staged.stdout
 
 
 def test_gate_passes_on_current_tree():
     r = subprocess.run(
         [sys.executable, "tools/check_applescript_launch.py"],
-        cwd=REPO, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
         check=False,
     )
     assert r.returncode == 0, r.stdout + r.stderr

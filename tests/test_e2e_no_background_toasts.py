@@ -16,6 +16,7 @@ scan, touch nothing, and no toast may appear. (A bridge that fails EVERY call
 is a blind instrument: startup stops at its first read, the scan never runs,
 and the old code passed.)
 """
+
 import pytest
 
 from tests.support.browser import add_init_js, eval_js, install_toast_recorder, launch, require_browser, wait_js
@@ -64,8 +65,9 @@ async def test_the_startup_scans_failure_is_said_in_the_scan_card():
         try:
             await wait_js(page, "() => !!window.runBleScan")
             await eval_js(page, "() => window.runBleScan({auto: true})")
-            await wait_js(page, "() => (document.getElementById('scan-result')?.textContent || '')"
-                                ".includes('Scan failed')")
+            await wait_js(
+                page, "() => (document.getElementById('scan-result')?.textContent || '').includes('Scan failed')"
+            )
             text = await eval_js(page, "() => document.getElementById('scan-result').textContent")
             assert text.startswith("✗ Scan failed: backend gone"), text
         finally:

@@ -12,11 +12,13 @@ from divoom_legacy.ble_notify import BleNotifyMixin
 from divoom_lib.transport_interface import DeviceTransport
 from divoom_lib.exceptions import DeviceAddressMissingError, CharacteristicConfigError, DeviceConnectionError
 
+
 class BLETransport(BleNotifyMixin, DeviceTransport):
     """
     Bluetooth Low Energy (BLE) transport client for Divoom devices.
     Implements the DeviceTransport interface.
     """
+
     # R53: bound every raw bleak await so a dead/asleep/held device can't hang the
     # connection forever. ensure_connected bounds the FIRST connect, but the
     # internal reconnect path (send_payload → connect) bypasses it — bound here.
@@ -24,16 +26,19 @@ class BLETransport(BleNotifyMixin, DeviceTransport):
     NOTIFY_TIMEOUT = 6.0
     STOP_NOTIFY_TIMEOUT = 3.0
     DISCONNECT_TIMEOUT = 5.0
+
     def __init__(self, cfg: models.DivoomConfig, logger: logging.Logger, divoom: Any = None) -> None:
         self.mac = cfg.mac
         self.device_name = cfg.device_name
         self.logger = logger
         self._divoom = divoom
-        
+
         self.WRITE_CHARACTERISTIC_UUID = cfg.write_characteristic_uuid
         self.NOTIFY_CHARACTERISTIC_UUID = cfg.notify_characteristic_uuid
         self.READ_CHARACTERISTIC_UUID = cfg.read_characteristic_uuid
-        self.SPP_CHARACTERISTIC_UUID = cfg.spp_characteristic_uuid if cfg.spp_characteristic_uuid else models.DEFAULT_SPP_CHARACTERISTIC_UUID
+        self.SPP_CHARACTERISTIC_UUID = (
+            cfg.spp_characteristic_uuid if cfg.spp_characteristic_uuid else models.DEFAULT_SPP_CHARACTERISTIC_UUID
+        )
         self.escapePayload = cfg.escapePayload
         self.use_ios_le_protocol = cfg.use_ios_le_protocol
 
@@ -41,6 +46,7 @@ class BLETransport(BleNotifyMixin, DeviceTransport):
             self.client = cfg.client
         elif self.mac:
             from divoom_legacy.divoom import BleakClient
+
             # BLE Hardening P2: subscribe to the OS-level disconnect signal so a
             # drop flips our health state IMMEDIATELY instead of being inferred
             # from the next failed write (macOS CoreBluetooth's is_connected lags).
@@ -106,13 +112,16 @@ class BLETransport(BleNotifyMixin, DeviceTransport):
             self.logger.error("No MAC address provided or discovered. Cannot connect.")
             raise DeviceAddressMissingError("No MAC address provided or discovered. Cannot connect.")
 
-        is_mock = (self.client and "MockBleakClient" in self.client.__class__.__name__) or os.environ.get("DIVOOM_MOCK_BLE") in ("1", "true", "yes")
+        is_mock = (self.client and "MockBleakClient" in self.client.__class__.__name__) or os.environ.get(
+            "DIVOOM_MOCK_BLE"
+        ) in ("1", "true", "yes")
 
         # Resolve device name if not set
         if not is_mock and not self.device_name:
             if len(self.mac) == 17 and ("-" in self.mac or ":" in self.mac):
                 try:
                     from IOBluetooth import IOBluetoothDevice
+
                     dev = IOBluetoothDevice.deviceWithAddressString_(self.mac.replace(":", "-"))
                     if dev:
                         self.device_name = dev.getName()
@@ -122,6 +131,7 @@ class BLETransport(BleNotifyMixin, DeviceTransport):
                 try:
                     import json
                     from pathlib import Path
+
                     cache_file = Path.home() / ".config" / "divoom-control" / "discovered_devices.json"
                     if cache_file.exists():
                         devices = json.loads(cache_file.read_text(encoding="utf-8"))
@@ -145,9 +155,11 @@ class BLETransport(BleNotifyMixin, DeviceTransport):
             # holding this MAC first, or CoreBluetooth refuses the second connect
             # (single↔wall switch). See divoom_lib/ble_registry.
             from divoom_legacy import ble_registry
+
             await ble_registry.evict(self.mac, self)
             if not self.client or getattr(self.client, "address", None) != self.mac:
                 from divoom_legacy.divoom import BleakClient
+
                 self.client = BleakClient(self.mac, disconnected_callback=self._on_os_disconnect)
 
         if not self.client.is_connected:
@@ -158,13 +170,13 @@ class BLETransport(BleNotifyMixin, DeviceTransport):
                 self.logger.info(f"Connected to Divoom device at {self.mac}")
             except asyncio.TimeoutError:
                 self.logger.error(f"Connect to {self.mac} timed out after {self.CONNECT_TIMEOUT}s")
-                raise DeviceConnectionError(
-                    f"Connect to {self.mac} timed out after {self.CONNECT_TIMEOUT}s")
+                raise DeviceConnectionError(f"Connect to {self.mac} timed out after {self.CONNECT_TIMEOUT}s")
             except Exception as e:
                 self.logger.error(f"Failed to connect to {self.mac}: {e}")
                 raise DeviceConnectionError(f"Failed to connect to {self.mac}: {e}")
         if not is_mock:
             from divoom_legacy import ble_registry
+
             ble_registry.register(self.mac, self)
 
         # A freshly-(re)established OS-level link is NOT broken. Clear any stale
@@ -181,16 +193,19 @@ class BLETransport(BleNotifyMixin, DeviceTransport):
                     "skipping start_notify (macOS CoreBluetooth 'already started' guard)."
                 )
             else:
-                cb = self._divoom.notification_handler if (self._divoom and hasattr(self._divoom, "notification_handler")) else self.notification_handler
+                cb = (
+                    self._divoom.notification_handler
+                    if (self._divoom and hasattr(self._divoom, "notification_handler"))
+                    else self.notification_handler
+                )
                 # R53: bound start_notify too — a wedged GATT subscribe otherwise
                 # hangs connect() (and any write-lock-holding reconnect) forever.
                 try:
                     await asyncio.wait_for(
-                        self.client.start_notify(self.NOTIFY_CHARACTERISTIC_UUID, cb),
-                        timeout=self.NOTIFY_TIMEOUT)
+                        self.client.start_notify(self.NOTIFY_CHARACTERISTIC_UUID, cb), timeout=self.NOTIFY_TIMEOUT
+                    )
                 except asyncio.TimeoutError:
-                    raise DeviceConnectionError(
-                        f"start_notify timed out after {self.NOTIFY_TIMEOUT}s on {self.mac}")
+                    raise DeviceConnectionError(f"start_notify timed out after {self.NOTIFY_TIMEOUT}s on {self.mac}")
                 self._notifications_started = True
                 self.logger.info(f"Enabled notifications for {self.NOTIFY_CHARACTERISTIC_UUID}")
         else:
@@ -200,10 +215,12 @@ class BLETransport(BleNotifyMixin, DeviceTransport):
 
         # Dynamic auto-probe of the BLE framing (iOS-LE vs Basic) — see ble_probe.
         from divoom_legacy.ble_probe import autoprobe_protocol
+
         await autoprobe_protocol(self)
 
     async def disconnect(self) -> None:
         from divoom_legacy import ble_registry
+
         ble_registry.unregister(self.mac, self)
         if self.client and self.client.is_connected:
             # R53: actually release the OS-side notify subscription before
@@ -213,8 +230,8 @@ class BLETransport(BleNotifyMixin, DeviceTransport):
             if self._notifications_started and self.NOTIFY_CHARACTERISTIC_UUID:
                 try:
                     await asyncio.wait_for(
-                        self.client.stop_notify(self.NOTIFY_CHARACTERISTIC_UUID),
-                        timeout=self.STOP_NOTIFY_TIMEOUT)
+                        self.client.stop_notify(self.NOTIFY_CHARACTERISTIC_UUID), timeout=self.STOP_NOTIFY_TIMEOUT
+                    )
                 except Exception as e:
                     self.logger.debug("stop_notify on %s failed (continuing): %s", self.mac, e)
             try:
@@ -222,8 +239,7 @@ class BLETransport(BleNotifyMixin, DeviceTransport):
                 await asyncio.wait_for(self.client.disconnect(), timeout=self.DISCONNECT_TIMEOUT)
                 self.logger.info("Disconnected from Divoom device at %s", self.mac)
             except asyncio.TimeoutError:
-                self.logger.warning("Disconnect from %s timed out after %.0fs",
-                                    self.mac, self.DISCONNECT_TIMEOUT)
+                self.logger.warning("Disconnect from %s timed out after %.0fs", self.mac, self.DISCONNECT_TIMEOUT)
             except Exception as e:
                 self.logger.error("Error disconnecting from %s: %s", self.mac, e)
         # Reset the notification-subscription flag so a future connect()
@@ -238,7 +254,9 @@ class BLETransport(BleNotifyMixin, DeviceTransport):
     # _handle_basic_protocol_notification / wait_for_any_response /
     # wait_for_response / send_command_and_wait_for_response live in BleNotifyMixin.
 
-    async def send_command(self, command: int | str, args: list | None = None, write_with_response: bool = False) -> bool:
+    async def send_command(
+        self, command: int | str, args: list | None = None, write_with_response: bool = False
+    ) -> bool:
         if args is None:
             args = []
         if isinstance(command, str):
@@ -262,16 +280,18 @@ class BLETransport(BleNotifyMixin, DeviceTransport):
             elapsed = now - self._last_write_time
             if elapsed < 0.05:
                 await asyncio.sleep(0.05 - elapsed)
-            
+
             try:
                 res = await self._send_payload_locked(payload_bytes, max_retries, **kwargs)
                 return res
             finally:
                 self._last_write_time = time.time()
 
-    async def _send_payload_locked(self, payload_bytes: list, max_retries: int = 3, retry_delay: float = 0.1, write_with_response: bool = False) -> bool:
+    async def _send_payload_locked(
+        self, payload_bytes: list, max_retries: int = 3, retry_delay: float = 0.1, write_with_response: bool = False
+    ) -> bool:
         for attempt in range(max_retries):
-            backoff = retry_delay * (2 ** attempt)
+            backoff = retry_delay * (2**attempt)
             # Treat the connection as broken if EITHER:
             #   - self.is_connected is False (the OS-level flag is honest)
             #   - self._connection_likely_broken is True (a recent write
@@ -308,7 +328,11 @@ class BLETransport(BleNotifyMixin, DeviceTransport):
                         continue
 
             if self.use_ios_le_protocol:
-                send_func = self._divoom._send_ios_le_payload if (self._divoom and hasattr(self._divoom, "_send_ios_le_payload")) else self._send_ios_le_payload
+                send_func = (
+                    self._divoom._send_ios_le_payload
+                    if (self._divoom and hasattr(self._divoom, "_send_ios_le_payload"))
+                    else self._send_ios_le_payload
+                )
                 if await send_func(payload_bytes, write_with_response):
                     self._connection_likely_broken = False  # success — clear
                     return True
@@ -316,7 +340,11 @@ class BLETransport(BleNotifyMixin, DeviceTransport):
                     return False
                 await asyncio.sleep(backoff)
             else:
-                send_func = self._divoom._send_basic_protocol_payload if (self._divoom and hasattr(self._divoom, "_send_basic_protocol_payload")) else self._send_basic_protocol_payload
+                send_func = (
+                    self._divoom._send_basic_protocol_payload
+                    if (self._divoom and hasattr(self._divoom, "_send_basic_protocol_payload"))
+                    else self._send_basic_protocol_payload
+                )
                 if await send_func(payload_bytes, write_with_response):
                     self._connection_likely_broken = False  # success — clear
                     return True
@@ -345,7 +373,9 @@ class BLETransport(BleNotifyMixin, DeviceTransport):
         try:
             if self.logger.isEnabledFor(logging.DEBUG):
                 self.logger.debug("PAYLOAD OUT (iOS LE): %s", message_bytes.hex())
-            await self.client.write_gatt_char(self.WRITE_CHARACTERISTIC_UUID, message_bytes, response=write_with_response)
+            await self.client.write_gatt_char(
+                self.WRITE_CHARACTERISTIC_UUID, message_bytes, response=write_with_response
+            )
             return True
         except Exception as e:
             self.logger.error(f"Error sending iOS LE payload: {e}")
@@ -357,8 +387,10 @@ class BLETransport(BleNotifyMixin, DeviceTransport):
         chunk_size = models.DEFAULT_CHUNK_SIZE
 
         if len(full_message) > chunk_size:
-            self.logger.debug(f"Message too long ({len(full_message)} bytes), splitting into chunks of {chunk_size} bytes.")
-            chunks = [full_message[i:i + chunk_size] for i in range(0, len(full_message), chunk_size)]
+            self.logger.debug(
+                f"Message too long ({len(full_message)} bytes), splitting into chunks of {chunk_size} bytes."
+            )
+            chunks = [full_message[i : i + chunk_size] for i in range(0, len(full_message), chunk_size)]
 
             success = True
             for i, chunk in enumerate(chunks):
@@ -369,7 +401,7 @@ class BLETransport(BleNotifyMixin, DeviceTransport):
                     await self.client.write_gatt_char(self.WRITE_CHARACTERISTIC_UUID, chunk, response=chunk_response)
                     await asyncio.sleep(0.05)
                 except Exception as e:
-                    self.logger.error(f"Error sending chunk {i+1}: {e}")
+                    self.logger.error(f"Error sending chunk {i + 1}: {e}")
                     self._flag_connection_broken(e)
                     success = False
                     break
@@ -378,7 +410,9 @@ class BLETransport(BleNotifyMixin, DeviceTransport):
             try:
                 if self.logger.isEnabledFor(logging.DEBUG):
                     self.logger.debug("PAYLOAD OUT: %s (char %s)", full_message.hex(), self.WRITE_CHARACTERISTIC_UUID)
-                await self.client.write_gatt_char(self.WRITE_CHARACTERISTIC_UUID, full_message, response=write_with_response)
+                await self.client.write_gatt_char(
+                    self.WRITE_CHARACTERISTIC_UUID, full_message, response=write_with_response
+                )
                 return True
             except Exception as e:
                 self.logger.error(f"Error sending payload: {e}")

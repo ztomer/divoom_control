@@ -7,6 +7,7 @@ the subcommand was silently reset to None by the subcommand that should have
 read it. The class is every shared flag on every subcommand, so this test
 walks the parser itself rather than a list someone has to keep current.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -25,8 +26,7 @@ FLAGS = {
     "verbose": (["--verbose"], True),
 }
 #: The value each flag holds when it is NOT given, in either position.
-DEFAULTS = {"mac": None, "socket": None, "timeout": 10.0, "device_type": None,
-            "json": False, "verbose": False}
+DEFAULTS = {"mac": None, "socket": None, "timeout": 10.0, "device_type": None, "json": False, "verbose": False}
 
 SAMPLE = {int: "1", float: "1.0"}
 

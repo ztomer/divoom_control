@@ -13,6 +13,7 @@ so something has to compare them, and it should be a test rather than a comment.
 The Rust side is read out of the source because these are compile-time string
 literals, not an exported constant.
 """
+
 from __future__ import annotations
 
 import re
@@ -44,10 +45,7 @@ def test_the_socket_name_is_the_one_the_daemon_target_documents() -> None:
     # socket name drifting to a second literal in cli_commands.py.
     source = (REPO_ROOT / "divoom_lib" / "cli_commands.py").read_text(encoding="utf-8")
     bare = re.findall(r'"(DIVOOM_[A-Z_]+)"', source)
-    assert not bare, (
-        f"use the ENV_* constants from divoom_client.daemon_protocol, not bare "
-        f"literals: {bare}"
-    )
+    assert not bare, f"use the ENV_* constants from divoom_client.daemon_protocol, not bare literals: {bare}"
 
 
 def test_the_defaults_the_two_sides_fall_back_to_are_the_same_path() -> None:

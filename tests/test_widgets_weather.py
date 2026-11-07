@@ -11,6 +11,7 @@ Three contract tests:
 3. The widgets.js auto-fetch + auto-push on selection flow is wired
    (the card reads get_weather_preview; the panel is a daemon live job).
 """
+
 from __future__ import annotations
 
 import re
@@ -20,6 +21,7 @@ REPO_ROOT = Path(__file__).parent.parent
 WIDGETS_JS = REPO_ROOT / "divoom_gui" / "web_ui" / "widgets.js"
 WEATHER_JS = REPO_ROOT / "divoom_gui" / "web_ui" / "widgets_weather.js"
 
+
 def _cat(paths: list[Path]) -> str:
     parts = []
     for p in paths:
@@ -27,17 +29,22 @@ def _cat(paths: list[Path]) -> str:
             parts.append(p.read_text())
     return "\n".join(parts)
 
-TEMPLATES_JS = _cat([
-    REPO_ROOT / "divoom_gui" / "web_ui" / "templates_tools.js",
-    REPO_ROOT / "divoom_gui" / "web_ui" / "templates_gallery.js",
-    REPO_ROOT / "divoom_gui" / "web_ui" / "templates_widgets.js",
-    REPO_ROOT / "divoom_gui" / "web_ui" / "templates_settings.js",
-])
 
-SETTINGS_JS = _cat([
-    REPO_ROOT / "divoom_gui" / "web_ui" / "settings_hardware.js",
-    REPO_ROOT / "divoom_gui" / "web_ui" / "settings_features.js",
-])
+TEMPLATES_JS = _cat(
+    [
+        REPO_ROOT / "divoom_gui" / "web_ui" / "templates_tools.js",
+        REPO_ROOT / "divoom_gui" / "web_ui" / "templates_gallery.js",
+        REPO_ROOT / "divoom_gui" / "web_ui" / "templates_widgets.js",
+        REPO_ROOT / "divoom_gui" / "web_ui" / "templates_settings.js",
+    ]
+)
+
+SETTINGS_JS = _cat(
+    [
+        REPO_ROOT / "divoom_gui" / "web_ui" / "settings_hardware.js",
+        REPO_ROOT / "divoom_gui" / "web_ui" / "settings_features.js",
+    ]
+)
 
 
 def _live_widgets_block() -> str:
@@ -52,7 +59,7 @@ def _settings_devices_block() -> str:
     src = TEMPLATES_JS
     m = re.search(
         r'<div class="settings-tab-content active" id="settings-devices">'
-        r'(.+?)</div>\s*</div>\s*</div>\s*<!--\s*2\.\s*DIVOOM\s*TAB',
+        r"(.+?)</div>\s*</div>\s*</div>\s*<!--\s*2\.\s*DIVOOM\s*TAB",
         src,
         re.DOTALL,
     )
@@ -73,9 +80,7 @@ def _settings_devices_block() -> str:
 
 def test_weather_card_in_live_widgets() -> None:
     lw = _live_widgets_block()
-    assert 'id="widget-card-weather"' in lw, (
-        "Weather card (widget-card-weather) is not in Live Widgets."
-    )
+    assert 'id="widget-card-weather"' in lw, "Weather card (widget-card-weather) is not in Live Widgets."
 
 
 def test_weather_card_has_no_panel_hint() -> None:
@@ -98,9 +103,7 @@ def test_weather_card_has_no_panel_hint() -> None:
     body_match = re.search(r'<div class="card-body[^"]*"[^>]*>([\s\S]+)</div>\s*</div>', body, re.DOTALL)
     assert body_match, "weather card-body not found"
     body_inner = body_match.group(1)
-    assert "panel-hint" not in body_inner, (
-        "Weather card has a panel-hint — should be preview-only."
-    )
+    assert "panel-hint" not in body_inner, "Weather card has a panel-hint — should be preview-only."
     # R40 §4: the "Push to Device" button was replaced by a Live (15m) header
     # toggle, so the body has no push button.
     assert "pushWeatherToDevice" not in body_inner, (
@@ -163,9 +166,7 @@ def test_settings_devices_block_no_longer_has_notif_cards() -> None:
     # The old card-header had h3>Notification</h3> and h3>macOS
     # Notifications</h3> — check the explicit text in the Devices
     # block.
-    assert "<h3>Notification</h3>" not in devices, (
-        "Old 'Notification' h3 header is still in Settings → Devices."
-    )
+    assert "<h3>Notification</h3>" not in devices, "Old 'Notification' h3 header is still in Settings → Devices."
     assert "<h3>macOS Notifications</h3>" not in devices, (
         "Old 'macOS Notifications' h3 header is still in Settings → Devices."
     )
@@ -179,8 +180,7 @@ def test_widgets_js_refreshes_the_weather_frame_on_select() -> None:
     # selectWidget("weather") refreshes the card through refreshWeatherPreview,
     # which lives in widgets_weather.js and reads get_weather_preview (P5.4).
     assert "refreshWeatherPreview" in src, "widgets.js never refreshes the weather card."
-    assert "get_weather_preview" in WEATHER_JS.read_text(), (
-        "widgets_weather.js does not read get_weather_preview.")
+    assert "get_weather_preview" in WEATHER_JS.read_text(), "widgets_weather.js does not read get_weather_preview."
     # R40 §4: the Weather Live toggle polls every 15 minutes.
     assert re.search(
         r"15\s*\*\s*60\s*\*\s*1000",
@@ -193,9 +193,7 @@ def test_widgets_js_weather_device_push_is_a_daemon_job() -> None:
     starts/stops it via toggle_weather_sync (it no longer calls push_weather
     on its own timer)."""
     src = WIDGETS_JS.read_text()
-    assert "toggle_weather_sync" in src, (
-        "widgets.js does not start the daemon weather job via toggle_weather_sync."
-    )
+    assert "toggle_weather_sync" in src, "widgets.js does not start the daemon weather job via toggle_weather_sync."
 
 
 def test_widgets_js_stops_weather_preview_poller_on_tab_leave() -> None:
@@ -208,9 +206,7 @@ def test_widgets_js_stops_weather_preview_poller_on_tab_leave() -> None:
         src,
     )
     assert tab_leave, "tab-leave branch (with 'Stop local preview pollers' comment) not found"
-    assert "stopWeatherPolling()" in tab_leave.group(0), (
-        "tab-leave handler does not call stopWeatherPolling()."
-    )
+    assert "stopWeatherPolling()" in tab_leave.group(0), "tab-leave handler does not call stopWeatherPolling()."
 
 
 def test_widgets_js_clears_weather_active_class_on_tab_leave() -> None:
@@ -229,6 +225,5 @@ def test_settings_js_dead_push_weather_handler_removed() -> None:
     dead code now (button removed in R15 §3)."""
     src = SETTINGS_JS
     assert "push-weather-btn" not in src, (
-        "settings.js still references the removed #push-weather-btn — "
-        "should be cleaned up."
+        "settings.js still references the removed #push-weather-btn — should be cleaned up."
     )

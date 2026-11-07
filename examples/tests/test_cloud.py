@@ -2,6 +2,7 @@
 
 Network is mocked at divoom_auth._post; no real requests are made.
 """
+
 from __future__ import annotations
 
 from unittest.mock import patch
@@ -53,8 +54,15 @@ def _fake_post(path, body):
         return {
             "ReturnCode": 0,
             "SleepList": [
-                {"SleepId": 7, "Name": "Rain", "FileId": "f1", "Language": "en",
-                 "AudioType": 0, "VideoType": 0, "AddFlag": 0},
+                {
+                    "SleepId": 7,
+                    "Name": "Rain",
+                    "FileId": "f1",
+                    "Language": "en",
+                    "AudioType": 0,
+                    "VideoType": 0,
+                    "AddFlag": 0,
+                },
             ],
         }
     if path == "Playlist/GetMyList":
@@ -62,8 +70,15 @@ def _fake_post(path, body):
         return {
             "ReturnCode": 0,
             "PlayList": [
-                {"PlayId": 42, "Name": "Chill", "Count": 3, "CoverFileId": "c1",
-                 "Describe": "", "HideFlag": 0, "AddFlag": 0},
+                {
+                    "PlayId": 42,
+                    "Name": "Chill",
+                    "Count": 3,
+                    "CoverFileId": "c1",
+                    "Describe": "",
+                    "HideFlag": 0,
+                    "AddFlag": 0,
+                },
             ],
         }
     if path == "Playlist/GetMyImageList":
@@ -85,8 +100,10 @@ def _fake_post(path, body):
 def test_guest_login_sends_device_identity():
     """R61: User/NewGuest must carry Type/SubType/DeviceId/devicePassword
     (the missing fields that produced RC=10)."""
-    with patch.object(divoom_auth, "_load_virtual_device", return_value=VDEV), \
-         patch.object(divoom_auth, "_post", side_effect=_fake_post) as post:
+    with (
+        patch.object(divoom_auth, "_load_virtual_device", return_value=VDEV),
+        patch.object(divoom_auth, "_post", side_effect=_fake_post) as post,
+    ):
         creds = divoom_auth._login_guest()
     assert creds.token == 12345 and creds.user_id == 67890
     # find the NewGuest call
@@ -106,8 +123,11 @@ def test_guest_login_rc10_raises():
         if path == "User/NewGuest":
             return {"ReturnCode": 10, "ReturnMessage": "guest disabled"}
         raise AssertionError(path)
-    with patch.object(divoom_auth, "_load_virtual_device", return_value=VDEV), \
-         patch.object(divoom_auth, "_post", side_effect=fake_rc10):
+
+    with (
+        patch.object(divoom_auth, "_load_virtual_device", return_value=VDEV),
+        patch.object(divoom_auth, "_post", side_effect=fake_rc10),
+    ):
         try:
             divoom_auth._login_guest()
             assert False, "expected RuntimeError"
@@ -176,6 +196,7 @@ def test_get_dial_type_rc_nonzero_raises():
         if path == "Channel/GetDialType":
             return {"ReturnCode": 5, "ReturnMessage": "bad"}
         raise AssertionError(path)
+
     with patch.object(divoom_auth, "_post", side_effect=fake_fail):
         try:
             cloud.CloudClient().get_dial_types()
@@ -202,6 +223,7 @@ def test_category_file_list_rc_nonzero_raises():
         if path == "GetCategoryFileListV2":
             return {"ReturnCode": 5, "ReturnMessage": "bad"}
         raise AssertionError(path)
+
     c = _client()
     with patch.object(divoom_auth, "_post", side_effect=fake_fail):
         try:
@@ -231,8 +253,10 @@ def test_category_file_list_retries_once_on_expired_token():
         raise AssertionError(path)
 
     c = _client()
-    with patch.object(divoom_auth, "_load_virtual_device", return_value=VDEV), \
-         patch.object(divoom_auth, "_post", side_effect=fake_expired_then_ok):
+    with (
+        patch.object(divoom_auth, "_load_virtual_device", return_value=VDEV),
+        patch.object(divoom_auth, "_post", side_effect=fake_expired_then_ok),
+    ):
         files = c.get_category_file_list(7)
     assert calls["n"] == 2
     assert files[0]["FileName"] == "Neon"
@@ -243,6 +267,7 @@ def test_search_weather_city_rc_nonzero_raises():
         if path == "Weather/SearchCity":
             return {"ReturnCode": 5, "ReturnMessage": "bad"}
         raise AssertionError(path)
+
     c = _client()
     with patch.object(divoom_auth, "_post", side_effect=fake_fail):
         try:
@@ -255,8 +280,10 @@ def test_search_weather_city_rc_nonzero_raises():
 def test_ensure_creds_authenticates_lazily_when_none_supplied():
     """A CloudClient built with no creds authenticates on first real call."""
     c = cloud.CloudClient()
-    with patch.object(divoom_auth, "_load_virtual_device", return_value=VDEV), \
-         patch.object(divoom_auth, "_post", side_effect=_fake_post):
+    with (
+        patch.object(divoom_auth, "_load_virtual_device", return_value=VDEV),
+        patch.object(divoom_auth, "_post", side_effect=_fake_post),
+    ):
         files = c.get_category_file_list(7)
     assert files[0]["FileName"] == "Neon"
     assert c.creds is not None and c.device_id == VDEV["BluetoothDeviceId"]
@@ -266,7 +293,9 @@ def test_no_device_password_omits_field_from_request():
     """device_pw=0 (no bound device) must not send a DevicePassword field."""
     c = cloud.CloudClient(
         creds=divoom_auth.DivoomCredentials(token=12345, user_id=67890),
-        device_id=VDEV["BluetoothDeviceId"], device_pw=0)
+        device_id=VDEV["BluetoothDeviceId"],
+        device_pw=0,
+    )
     with patch.object(divoom_auth, "_post", side_effect=_fake_post) as post:
         c.get_category_file_list(7)
         c.search_weather_city("New")
@@ -291,8 +320,10 @@ def test_search_weather_city_retries_once_on_expired_token():
         raise AssertionError(path)
 
     c = _client()
-    with patch.object(divoom_auth, "_load_virtual_device", return_value=VDEV), \
-         patch.object(divoom_auth, "_post", side_effect=fake_expired_then_ok):
+    with (
+        patch.object(divoom_auth, "_load_virtual_device", return_value=VDEV),
+        patch.object(divoom_auth, "_post", side_effect=fake_expired_then_ok),
+    ):
         cities = c.search_weather_city("New")
     assert calls["n"] == 2
     assert cities[0]["Name"] == "New York"
@@ -322,6 +353,7 @@ def test_get_aid_sleep_list_rc_nonzero_raises():
         if path == "AidSleep/GetAllList":
             return {"ReturnCode": 5, "ReturnMessage": "bad"}
         raise AssertionError(path)
+
     c = _client()
     with patch.object(divoom_auth, "_post", side_effect=fake_fail):
         try:
@@ -336,6 +368,7 @@ def test_get_aid_sleep_list_registers_a_device_when_none_bound():
     BluetoothDeviceId (RC=3 otherwise) -- a client with device_id=0 must
     register one via BlueDevice/NewDevice before the AidSleep call, then use
     the returned id/password on the actual request."""
+
     def fake_post(path, body):
         if path == "APP/GetServerUTC":
             return {"ReturnCode": 0, "UTC": 1700000000}
@@ -347,9 +380,11 @@ def test_get_aid_sleep_list_registers_a_device_when_none_bound():
 
     c = cloud.CloudClient(creds=divoom_auth.DivoomCredentials(token=12345, user_id=67890))
     assert c.device_id == 0
-    with patch("divoom_lib.utils.atomic_io.atomic_write_text"), \
-         patch.object(divoom_auth, "_load_virtual_device", return_value={}), \
-         patch.object(divoom_auth, "_post", side_effect=fake_post) as post:
+    with (
+        patch("divoom_lib.utils.atomic_io.atomic_write_text"),
+        patch.object(divoom_auth, "_load_virtual_device", return_value={}),
+        patch.object(divoom_auth, "_post", side_effect=fake_post) as post,
+    ):
         tracks = c.get_aid_sleep_list(0)
     assert tracks[0]["Name"] == "Rain"
     assert c.device_id == 999888777
@@ -385,6 +420,7 @@ def test_get_my_playlists_rc_nonzero_raises():
         if path == "Playlist/GetMyList":
             return {"ReturnCode": 5, "ReturnMessage": "bad"}
         raise AssertionError(path)
+
     c = _client()
     with patch.object(divoom_auth, "_post", side_effect=fake_fail):
         try:
@@ -408,6 +444,7 @@ def test_get_photo_albums_rc_nonzero_raises():
         if path == "Photo/GetAlbumList":
             return {"ReturnCode": 5, "ReturnMessage": "bad"}
         raise AssertionError(path)
+
     c = _client()
     with patch.object(divoom_auth, "_post", side_effect=fake_fail):
         try:

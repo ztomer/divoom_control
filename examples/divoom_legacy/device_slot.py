@@ -1,4 +1,5 @@
 """DeviceSlot dataclass — replaces the ad-hoc 6-tuple in DivoomWall."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -20,6 +21,7 @@ class DeviceSlot:
         width: Pixel width (for free-form layouts).
         height: Pixel height (for free-form layouts).
     """
+
     device: Divoom
     x: int = 0
     y: int = 0

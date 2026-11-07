@@ -8,6 +8,7 @@ forever after the first click. Drives the real event path end to end:
 click -> hot_channel_update() -> window.Divoom.onHotProgress("done") -> the
 button must re-enable.
 """
+
 import pytest
 from pathlib import Path
 from tests.support.browser import (
@@ -41,12 +42,15 @@ async def _open_hot_channel_tab(p):
     await add_init_js(page, _MOCK_API)
     await page.goto(f"file://{INDEX_HTML}")
     await page.wait_for_load_state("domcontentloaded")
-    await wait_js(page, "() => !!window.DivoomState && !!window.Divoom?.onOwnedDevices"
-                        " && !!window.SpatialStage")
+    await wait_js(page, "() => !!window.DivoomState && !!window.Divoom?.onOwnedDevices && !!window.SpatialStage")
     # The update is for ONE panel, named at the click (P5.7): there has to be
     # one, selected -- "connected" with no panel names nothing.
-    await eval_js(page, """(m) => window.Divoom.onOwnedDevices({type: 'owned_devices', devices: [
-        {address: m, name: 'Desk', kind: 'clock', state: 'active'}]})""", PANEL)
+    await eval_js(
+        page,
+        """(m) => window.Divoom.onOwnedDevices({type: 'owned_devices', devices: [
+        {address: m, name: 'Desk', kind: 'clock', state: 'active'}]})""",
+        PANEL,
+    )
     await eval_js(page, "(m) => window.Divoom.onSelection({type: 'selection', mac: m})", PANEL)
     await wait_js(page, f"() => window.SpatialStage.getSelectedMac() === '{PANEL}'")
     await page.click('.nav-btn[data-tab="pixel-art"]')
@@ -64,22 +68,22 @@ async def test_hot_channel_button_reenables_after_done_event():
         browser, page = await _open_hot_channel_tab(p)
         try:
             await page.click("#hot-update-btn")
-            await wait_js(page, 
-                "() => document.getElementById('hot-update-btn').disabled === true")
+            await wait_js(page, "() => document.getElementById('hot-update-btn').disabled === true")
             assert await eval_js(page, "() => window.__updates") == [[PANEL]]
 
             # Simulate the daemon's real completion event.
-            await eval_js(page, """() => {
+            await eval_js(
+                page,
+                """() => {
                 window.Divoom.onHotProgress({
                     type: "hot_progress", phase: "done",
                     result: { served: ["a.gif"], manifest: 1, downloaded: 1 },
                 });
-            }""")
+            }""",
+            )
 
-            await wait_js(page, 
-                "() => document.getElementById('hot-update-btn').disabled === false")
-            disabled = await eval_js(page, 
-                "() => document.getElementById('hot-update-btn').disabled")
+            await wait_js(page, "() => document.getElementById('hot-update-btn').disabled === false")
+            disabled = await eval_js(page, "() => document.getElementById('hot-update-btn').disabled")
             assert disabled is False
         finally:
             await browser.close()
@@ -94,14 +98,15 @@ async def test_hot_channel_button_reenables_after_error_event():
         browser, page = await _open_hot_channel_tab(p)
         try:
             await page.click("#hot-update-btn")
-            await wait_js(page, 
-                "() => document.getElementById('hot-update-btn').disabled === true")
+            await wait_js(page, "() => document.getElementById('hot-update-btn').disabled === true")
 
-            await eval_js(page, """() => {
+            await eval_js(
+                page,
+                """() => {
                 window.Divoom.onHotProgress({ type: "hot_progress", phase: "error", error: "boom" });
-            }""")
+            }""",
+            )
 
-            await wait_js(page, 
-                "() => document.getElementById('hot-update-btn').disabled === false")
+            await wait_js(page, "() => document.getElementById('hot-update-btn').disabled === false")
         finally:
             await browser.close()

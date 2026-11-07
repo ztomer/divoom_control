@@ -12,6 +12,7 @@ The concrete damage each one caused is in its own docstring; they are worth
 keeping together so the next "the GUI could just compute this" has somewhere to
 be argued with.
 """
+
 from __future__ import annotations
 
 
@@ -31,8 +32,7 @@ class HostDataMixin:
         ~360KB, so a poller should watch ``identity`` (which excludes artwork)
         and only fetch the bytes when it changes.
         """
-        return self.send_command("now_playing",
-                                 {"include_artwork": bool(include_artwork)})
+        return self.send_command("now_playing", {"include_artwork": bool(include_artwork)})
 
     def players(self) -> dict:
         """Every media player the daemon can see, and which is playing.
@@ -71,8 +71,7 @@ class HostDataMixin:
         """
         return self.send_command("sysmon", {"size": int(size)})
 
-    def render_widget(self, kind: str, size: int = 16,
-                      params: dict | None = None) -> dict:
+    def render_widget(self, kind: str, size: int = 16, params: dict | None = None) -> dict:
         """The exact pixels the daemon would push for ``kind``.
 
         R70 P1.2/P1.3. The generalization of :meth:`sysmon`, and the reason it
@@ -100,4 +99,5 @@ class HostDataMixin:
     @staticmethod
     def _render_widget_timeout() -> float:
         from divoom_client.daemon_config import load_daemon_config
+
         return load_daemon_config().cloud_timeout

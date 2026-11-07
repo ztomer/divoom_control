@@ -2,6 +2,7 @@
 
 Extracts the ScannerMixin surface + daemon lifecycle methods.
 """
+
 from __future__ import annotations
 
 import json
@@ -22,7 +23,7 @@ class ConnectionApi(ApiBase):
     def scan_devices(self, timeout: float = 10.0) -> str:
         logger.info("GUI Action: Scanning for devices...")
         try:
-            client = self._client()   # method form (ConnectionApi shadows the base property)
+            client = self._client()  # method form (ConnectionApi shadows the base property)
             if client is None:
                 return json.dumps([])
             reply = client.scan(timeout=timeout, limit=4)
@@ -35,6 +36,7 @@ class ConnectionApi(ApiBase):
 
     def _client(self):
         from divoom_gui.daemon_bridge import ensure_daemon
+
         if self._state_getter().get("_daemon_client") is None:
             self._state_getter()["_daemon_client"] = ensure_daemon()
         return self._state_getter().get("_daemon_client")
@@ -50,6 +52,7 @@ class ConnectionApi(ApiBase):
 
     def update_wall_slots(self, json_text: str) -> None:
         import json as _json
+
         self._state_getter()["wall_slots"] = _json.loads(json_text)
 
     # ── Window controls ─────────────────────────────────────────────────
@@ -70,9 +73,13 @@ class ConnectionApi(ApiBase):
             loop_thread.stop()
         window = self._state_getter().get("window")
         if window:
+
             def _destroy():
                 import time
+
                 time.sleep(0.1)
                 window.destroy()
+
             import threading
+
             threading.Thread(target=_destroy, daemon=True).start()

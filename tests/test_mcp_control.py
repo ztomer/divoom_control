@@ -11,6 +11,7 @@ subprocess. The MCP server is a long-lived stdio process (see
 tests/test_mcp_server.py for the no-pipe-stdio guard it needs); accidentally
 spawning a real one here would hang the test suite.
 """
+
 from __future__ import annotations
 
 import signal
@@ -104,8 +105,10 @@ def test_start_passes_no_mac_flag_to_the_daemon(tmp_path) -> None:
     which already owns the device (R28). The mac is still recorded for the
     status card, but sending it would be inventing a flag."""
     ctl = MCPController(log_path=tmp_path / "x.log")
-    with patch("divoom_gui.mcp_control.subprocess.Popen", return_value=_fake_popen()) as popen, \
-         patch("divoom_client.binary_resolver.resolve", return_value="/opt/divoomd"):
+    with (
+        patch("divoom_gui.mcp_control.subprocess.Popen", return_value=_fake_popen()) as popen,
+        patch("divoom_client.binary_resolver.resolve", return_value="/opt/divoomd"),
+    ):
         status = ctl.start(mac="11:22:33:44:55:66")
     assert popen.call_args[0][0] == ["/opt/divoomd", "mcp"]
     assert status.mac == "11:22:33:44:55:66"
@@ -120,9 +123,10 @@ def test_start_resolves_the_daemon_BY_VERSION_not_by_walking_paths(tmp_path) -> 
     time.
     """
     ctl = MCPController(log_path=tmp_path / "x.log")
-    with patch("divoom_gui.mcp_control.subprocess.Popen", return_value=_fake_popen()) as popen, \
-         patch("divoom_client.binary_resolver.resolve",
-               return_value="/resolved/by/version/divoomd") as resolve:
+    with (
+        patch("divoom_gui.mcp_control.subprocess.Popen", return_value=_fake_popen()) as popen,
+        patch("divoom_client.binary_resolver.resolve", return_value="/resolved/by/version/divoomd") as resolve,
+    ):
         ctl.start()
     resolve.assert_called_once_with("divoomd")
     assert popen.call_args[0][0][0] == "/resolved/by/version/divoomd"
@@ -136,8 +140,10 @@ def test_start_reports_an_honest_error_when_no_daemon_resolves(tmp_path) -> None
     so, not report a healthy server.
     """
     ctl = MCPController(log_path=tmp_path / "x.log")
-    with patch("divoom_client.binary_resolver.resolve", return_value=None), \
-         patch("divoom_gui.mcp_control.subprocess.Popen") as popen:
+    with (
+        patch("divoom_client.binary_resolver.resolve", return_value=None),
+        patch("divoom_gui.mcp_control.subprocess.Popen") as popen,
+    ):
         status = ctl.start()
     assert status.running is False
     assert "divoomd" in (status.error or "")
@@ -152,8 +158,10 @@ def test_start_never_spawns_the_gui_binary(tmp_path) -> None:
     never `sys.executable` with a `-m` module, which inside the app is the GUI.
     """
     ctl = MCPController(log_path=tmp_path / "x.log")
-    with patch("divoom_gui.mcp_control.subprocess.Popen", return_value=_fake_popen()) as popen, \
-         patch("divoom_client.binary_resolver.resolve", return_value="/opt/divoomd"):
+    with (
+        patch("divoom_gui.mcp_control.subprocess.Popen", return_value=_fake_popen()) as popen,
+        patch("divoom_client.binary_resolver.resolve", return_value="/opt/divoomd"),
+    ):
         ctl.start()
     cmd = popen.call_args[0][0]
     assert "-m" not in cmd, "spawning a Python module is what launched a second GUI"
@@ -168,17 +176,20 @@ def test_start_truncates_existing_log(tmp_path) -> None:
     log_path.write_text("stale crash from a previous session\n")
     ctl = MCPController(log_path=log_path)
     fake_proc = _fake_popen()
-    with patch("divoom_gui.mcp_control.subprocess.Popen", return_value=fake_proc), \
-         patch("divoom_client.binary_resolver.resolve", return_value="/opt/divoomd"):
+    with (
+        patch("divoom_gui.mcp_control.subprocess.Popen", return_value=fake_proc),
+        patch("divoom_client.binary_resolver.resolve", return_value="/opt/divoomd"),
+    ):
         ctl.start()
     assert log_path.read_bytes() == b""
 
 
 def test_start_file_not_found_returns_error_status(tmp_path) -> None:
     ctl = MCPController(log_path=tmp_path / "x.log")
-    with patch("divoom_gui.mcp_control.subprocess.Popen",
-               side_effect=FileNotFoundError("nope")), \
-         patch("divoom_client.binary_resolver.resolve", return_value="/opt/divoomd"):
+    with (
+        patch("divoom_gui.mcp_control.subprocess.Popen", side_effect=FileNotFoundError("nope")),
+        patch("divoom_client.binary_resolver.resolve", return_value="/opt/divoomd"),
+    ):
         status = ctl.start()
     assert status.running is False
     assert status.error is not None
@@ -188,8 +199,10 @@ def test_start_file_not_found_returns_error_status(tmp_path) -> None:
 
 def test_start_oserror_returns_error_status(tmp_path) -> None:
     ctl = MCPController(log_path=tmp_path / "x.log")
-    with patch("divoom_gui.mcp_control.subprocess.Popen", side_effect=OSError("boom")), \
-         patch("divoom_client.binary_resolver.resolve", return_value="/opt/divoomd"):
+    with (
+        patch("divoom_gui.mcp_control.subprocess.Popen", side_effect=OSError("boom")),
+        patch("divoom_client.binary_resolver.resolve", return_value="/opt/divoomd"),
+    ):
         status = ctl.start()
     assert status.running is False
     assert status.error is not None
@@ -212,8 +225,10 @@ def test_stop_sends_sigterm_and_clears_state(tmp_path) -> None:
     ctl._started_at = 1.0
     ctl._mac = "AA"
     ctl._started_this_session = True
-    with patch("divoom_gui.mcp_control.os.killpg") as killpg, \
-         patch("divoom_gui.mcp_control.os.getpgid", return_value=555):
+    with (
+        patch("divoom_gui.mcp_control.os.killpg") as killpg,
+        patch("divoom_gui.mcp_control.os.getpgid", return_value=555),
+    ):
         status = ctl.stop()
     killpg.assert_called_once_with(555, signal.SIGTERM)
     fake_proc.wait.assert_called_once()
@@ -229,8 +244,10 @@ def test_stop_escalates_to_sigkill_on_timeout(tmp_path) -> None:
     fake_proc = _fake_popen(pid=777, poll_return=None)
     fake_proc.wait.side_effect = [subprocess.TimeoutExpired(cmd="x", timeout=3.0), None]
     ctl._proc = fake_proc
-    with patch("divoom_gui.mcp_control.os.killpg") as killpg, \
-         patch("divoom_gui.mcp_control.os.getpgid", return_value=777):
+    with (
+        patch("divoom_gui.mcp_control.os.killpg") as killpg,
+        patch("divoom_gui.mcp_control.os.getpgid", return_value=777),
+    ):
         ctl.stop()
     assert killpg.call_count == 2
     killpg.assert_any_call(777, signal.SIGTERM)
@@ -246,8 +263,7 @@ def test_stop_second_wait_also_times_out_is_swallowed(tmp_path) -> None:
         subprocess.TimeoutExpired(cmd="x", timeout=1.0),
     ]
     ctl._proc = fake_proc
-    with patch("divoom_gui.mcp_control.os.killpg"), \
-         patch("divoom_gui.mcp_control.os.getpgid", return_value=778):
+    with patch("divoom_gui.mcp_control.os.killpg"), patch("divoom_gui.mcp_control.os.getpgid", return_value=778):
         status = ctl.stop()
     assert status.running is False
 
@@ -281,7 +297,7 @@ def test_status_tails_log_when_started_this_session(tmp_path) -> None:
     ctl = MCPController(log_path=log_path)
     ctl._started_this_session = True
     status = ctl.status()
-    assert status.last_log_lines == lines[-MCPController.LOG_TAIL_LINES:]
+    assert status.last_log_lines == lines[-MCPController.LOG_TAIL_LINES :]
 
 
 def test_status_missing_log_file_returns_empty_lines(tmp_path) -> None:
@@ -324,6 +340,7 @@ def test_instance_returns_singleton() -> None:
 
 # ── R70 P4.2: it actually serves MCP ─────────────────────────────────────────
 
+
 def test_the_spawned_process_really_answers_json_rpc(tmp_path) -> None:
     """The end-to-end proof, and the one P4.1 showed was missing.
 
@@ -339,17 +356,28 @@ def test_the_spawned_process_really_answers_json_rpc(tmp_path) -> None:
     from tests.support.daemon_binary import require_divoomd
 
     exe = require_divoomd()
-    proc = sp.Popen([str(exe), "mcp"], stdin=sp.PIPE, stdout=sp.PIPE,
-                    stderr=sp.DEVNULL, text=True)
+    proc = sp.Popen([str(exe), "mcp"], stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.DEVNULL, text=True)
     try:
         requests = (
             # rmcp (lane MCP.DV) refuses an initialize without the fields
             # the spec requires, as a real MCP host always sends them.
-            json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-                "protocolVersion": "2025-11-25", "capabilities": {},
-                "clientInfo": {"name": "test_mcp_control", "version": "0"}}}) + "\n"
-            + json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n"
-            + json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}) + "\n"
+            json.dumps(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {
+                        "protocolVersion": "2025-11-25",
+                        "capabilities": {},
+                        "clientInfo": {"name": "test_mcp_control", "version": "0"},
+                    },
+                }
+            )
+            + "\n"
+            + json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"})
+            + "\n"
+            + json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
+            + "\n"
         )
         out, _ = proc.communicate(requests, timeout=30)
     except sp.TimeoutExpired:
@@ -378,6 +406,7 @@ def test_the_spawned_process_really_answers_json_rpc(tmp_path) -> None:
 # dying with the Python MCP implementation it happened to sit beside. The sample
 # log text is the native server's now: the point of the test is that a stale
 # traceback is not surfaced, not which module wrote it.
+
 
 def test_mcp_controller_hides_stale_log_on_fresh_launch(tmp_path) -> None:
     """The card must not show a log left over from a previous session.

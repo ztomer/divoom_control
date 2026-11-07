@@ -13,6 +13,7 @@ subprocess) against a real `divoomd` with two mock panels, with no fake in
 between, and decodes what comes back: each panel's preview is that panel's
 half of the image.
 """
+
 from __future__ import annotations
 
 import base64
@@ -50,8 +51,7 @@ def stack():
 
 def _bridge(stack, method, *args):
     body = json.dumps({"method": method, "args": list(args)}).encode()
-    req = urllib.request.Request(f"{stack.bridge_url}/call", data=body,
-                                 headers={"Content-Type": "application/json"})
+    req = urllib.request.Request(f"{stack.bridge_url}/call", data=body, headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=60) as r:
         reply = json.loads(r.read())
     assert "error" not in reply, reply
@@ -60,6 +60,7 @@ def _bridge(stack, method, *args):
 
 def _colour_of(data_url: str):
     from PIL import Image
+
     head, body = data_url.split(";base64,", 1)
     img = Image.open(io.BytesIO(base64.b64decode(body))).convert("RGB")
     return head, img.size, set(img.get_flattened_data())
@@ -67,6 +68,7 @@ def _colour_of(data_url: str):
 
 def test_a_wall_push_returns_each_panels_own_preview(stack, tmp_path):
     from PIL import Image
+
     picture = Image.new("RGB", (32, 16), BLUE)
     picture.paste(Image.new("RGB", (16, 16), RED), (0, 0))
     path = tmp_path / "wall.png"
@@ -76,8 +78,7 @@ def test_a_wall_push_returns_each_panels_own_preview(stack, tmp_path):
     # the daemon before anything is pushed.
     panels = json.loads(_bridge(stack, "get_panels"))
     assert sorted(p["mac"] for p in panels["panels"]) == [A, B], panels
-    _bridge(stack, "update_wall_slots", json.dumps({
-        A: {"x": 0, "y": 0, "size": 16}, B: {"x": 1, "y": 0, "size": 16}}))
+    _bridge(stack, "update_wall_slots", json.dumps({A: {"x": 0, "y": 0, "size": 16}, B: {"x": 1, "y": 0, "size": 16}}))
     result = _bridge(stack, "display_wall_image", WALL, str(path), "picture", 16)
 
     assert result.get("success") is True, result

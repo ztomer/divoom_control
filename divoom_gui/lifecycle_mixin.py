@@ -12,6 +12,7 @@ These must live on the top-level API class (a mixin, not a composed sub-API) so
 pywebview exposes them directly as ``api.get_*()`` — nested objects aren't
 bridged. The storage/decision logic lives in :mod:`divoom_lib.lifecycle_config`.
 """
+
 from __future__ import annotations
 
 import json
@@ -25,18 +26,22 @@ class LifecycleSettingsMixin:
 
     def get_keep_daemon_alive(self) -> bool:
         from divoom_lib.lifecycle_config import get_keep_daemon_alive
+
         return get_keep_daemon_alive()
 
     def set_keep_daemon_alive(self, value) -> bool:
         from divoom_lib.lifecycle_config import set_keep_daemon_alive
+
         return set_keep_daemon_alive(bool(value))
 
     def get_quit_menubar_on_exit(self) -> bool:
         from divoom_lib.lifecycle_config import get_quit_menubar_on_exit
+
         return get_quit_menubar_on_exit()
 
     def set_quit_menubar_on_exit(self, value) -> bool:
         from divoom_lib.lifecycle_config import set_quit_menubar_on_exit
+
         return set_quit_menubar_on_exit(bool(value))
 
     def get_versions(self) -> str:
@@ -62,8 +67,10 @@ class LifecycleSettingsMixin:
         the same pyproject version at build time)."""
         import sys
         from pathlib import Path
+
         try:
             import tomllib
+
             pp = Path(__file__).resolve().parents[1] / "pyproject.toml"
             if pp.is_file():
                 with pp.open("rb") as f:
@@ -72,6 +79,7 @@ class LifecycleSettingsMixin:
             pass
         try:
             import plistlib
+
             mei = getattr(sys, "_MEIPASS", None)  # PyInstaller: Contents/Frameworks
             if mei:
                 plist = Path(mei).parent / "Info.plist"

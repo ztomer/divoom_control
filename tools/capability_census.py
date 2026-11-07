@@ -40,6 +40,7 @@ allowlisted per row, each entry carrying the verdict from
 `docs/CAPABILITY_MAP.md`, and the list is a ratchet: a new call fails, and so
 does an entry that no longer matches.
 """
+
 from __future__ import annotations
 
 import ast
@@ -65,14 +66,21 @@ _ARM_AFTER = re.compile(r'\|\s*"([a-z_][a-z_0-9.]*)"')
 # `lifecycle_config` are deliberately absent: writing a config file the client
 # owns is a client job, and flagging it would bury the real findings.
 OWNED_LIB = (
-    "cloud", "divoom_auth", "weather_provider", "media_decoder",
-    "system", "display", "tools", "lan_transport", "wall", "hotchannel_config",
+    "cloud",
+    "divoom_auth",
+    "weather_provider",
+    "media_decoder",
+    "system",
+    "display",
+    "tools",
+    "lan_transport",
+    "wall",
+    "hotchannel_config",
     # The settings' `[gallery]` table — the ONE home for the hot channel's
     # device list. The GUI writes it; the daemon reads it. Shared state, the
     # same shape hotchannel_config was, so it is gated the same way.
     "settings_devices",
 )
-
 
 
 # ── the ratchet (R72 P5.1) ───────────────────────────────────────────────────
@@ -92,27 +100,20 @@ OWNED_LIB = (
 # omit and the one that matters.
 REACHES_ALLOWLIST: dict[str, str] = {
     # client-local: pure preference resolution, env vars and a saved city.
-    "divoom_gui/media_sync.py::resolve_location":
-        "client-local — pure, no network; the daemon fetches the weather",
-    "divoom_gui/weather_city.py::saved_location":
-        "client-local — which city the user picked is the client's own state",
+    "divoom_gui/media_sync.py::resolve_location": "client-local — pure, no network; the daemon fetches the weather",
+    "divoom_gui/weather_city.py::saved_location": "client-local — which city the user picked is the client's own state",
     # shared-state: one file, two parsers, held in step by
     # tools/check_hotchannel_parity.py rather than by deleting either reader.
-    "divoom_gui/gallery_sync.py::hotchannel_config.load_config":
-        "shared-state — gated by check_hotchannel_parity.py",
-    "divoom_gui/gallery_sync.py::hotchannel_config.save_config":
-        "shared-state — gated by check_hotchannel_parity.py",
+    "divoom_gui/gallery_sync.py::hotchannel_config.load_config": "shared-state — gated by check_hotchannel_parity.py",
+    "divoom_gui/gallery_sync.py::hotchannel_config.save_config": "shared-state — gated by check_hotchannel_parity.py",
     # The settings' `[gallery]` table: the GUI writes it, the daemon reads it.
     # ONE home for the device list — the same table, not a second copy.
-    "divoom_gui/gallery_hot_api.py::settings_devices.registered_devices":
-        "shared-state — one home for the fact; gated by check_hotchannel_parity.py",
-    "divoom_gui/gallery_sync.py::settings_devices.device_classify":
-        "shared-state — one home for the fact; gated by check_hotchannel_parity.py",
-    "divoom_gui/gallery_sync.py::settings_devices.registered_devices":
-        "shared-state — one home for the fact; gated by check_hotchannel_parity.py",
-    "divoom_gui/gallery_sync.py::settings_devices.set_registered":
-        "shared-state — one home for the fact; gated by check_hotchannel_parity.py",
+    "divoom_gui/gallery_hot_api.py::settings_devices.registered_devices": "shared-state — one home for the fact; gated by check_hotchannel_parity.py",
+    "divoom_gui/gallery_sync.py::settings_devices.device_classify": "shared-state — one home for the fact; gated by check_hotchannel_parity.py",
+    "divoom_gui/gallery_sync.py::settings_devices.registered_devices": "shared-state — one home for the fact; gated by check_hotchannel_parity.py",
+    "divoom_gui/gallery_sync.py::settings_devices.set_registered": "shared-state — one home for the fact; gated by check_hotchannel_parity.py",
 }
+
 
 def row(text: str) -> None:
     """One census finding, on STDOUT.
@@ -122,6 +123,7 @@ def row(text: str) -> None:
     that explain them, so the report read as though the tool had crashed.
     """
     print(f"  \u2717 {text}", flush=True)
+
 
 def daemon_capabilities() -> set[str]:
     """Every command the daemon answers, read from its Rust match arms."""
@@ -166,7 +168,7 @@ def _is_owned_lib(path: str) -> bool:
     tail = path
     for prefix in _LIB_PREFIXES:
         if path.startswith(prefix + "."):
-            tail = path[len(prefix) + 1:]
+            tail = path[len(prefix) + 1 :]
             break
     return any(tail == m or tail.startswith(m + ".") for m in OWNED_LIB)
 
@@ -211,23 +213,24 @@ def scan_python(caps: set[str]) -> tuple[list[tuple], list[tuple], list[tuple]]:
             # daemon owns.
             seen_here: set[tuple[str, str]] = set()
             for node in ast.walk(tree):
-                if (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
-                        and node.value.id in owned_aliases):
+                if (
+                    isinstance(node, ast.Attribute)
+                    and isinstance(node.value, ast.Name)
+                    and node.value.id in owned_aliases
+                ):
                     where = f"{rel}:{node.lineno}"
                     lib = owned_aliases[node.value.id]
                     if node.attr in caps:
                         direct.append((where, node.attr, lib))
                     else:
                         reaches.append((where, f"{node.value.id}.{node.attr}", lib))
-                elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
-                        and node.func.id in owned_aliases:
+                elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in owned_aliases:
                     # `from divoom_lib.weather_provider import resolve_location`
                     # then `resolve_location(...)` — no attribute to match on.
                     key = (f"{rel}:{node.lineno}", node.func.id)
                     if key not in seen_here:
                         seen_here.add(key)
-                        reaches.append((key[0], node.func.id,
-                                        owned_aliases[node.func.id]))
+                        reaches.append((key[0], node.func.id, owned_aliases[node.func.id]))
 
             # WRAPPED: def <capability>(...) whose body reaches into divoom_lib
             for fn in ast.walk(tree):
@@ -237,20 +240,20 @@ def scan_python(caps: set[str]) -> tuple[list[tuple], list[tuple], list[tuple]]:
                     continue
                 local = _divoom_lib_aliases(fn)
                 used = {k: v for k, v in local.items() if _is_owned_lib(v)}
-                used |= {k: v for k, v in owned_aliases.items()
-                         if any(isinstance(n, ast.Name) and n.id == k
-                                for n in ast.walk(fn))}
+                used |= {
+                    k: v
+                    for k, v in owned_aliases.items()
+                    if any(isinstance(n, ast.Name) and n.id == k for n in ast.walk(fn))
+                }
                 if used:
-                    wrapped.append((f"{rel}:{fn.lineno}", fn.name,
-                                    ", ".join(sorted(set(used.values())))))
+                    wrapped.append((f"{rel}:{fn.lineno}", fn.name, ", ".join(sorted(set(used.values())))))
     return direct, wrapped, reaches
 
 
 def main() -> int:
     caps = daemon_capabilities()
     section("capability census")
-    info(f"daemon owns {len(caps)} command names "
-         f"(socket dispatch + device_call match arms)")
+    info(f"daemon owns {len(caps)} command names (socket dispatch + device_call match arms)")
 
     direct, wrapped, reaches = scan_python(caps)
 
@@ -286,8 +289,7 @@ def main() -> int:
     failed = False
 
     if direct or wrapped:
-        err(f"[capability] {len(direct) + len(wrapped)} site(s) do a job the "
-            f"daemon owns")
+        err(f"[capability] {len(direct) + len(wrapped)} site(s) do a job the daemon owns")
         info("These have no allowlist by design. Route them through the daemon.")
         failed = True
 
@@ -315,8 +317,7 @@ def main() -> int:
     if failed:
         return 1
 
-    ok(f"[capability] OK — 0 DIRECT, 0 WRAPPED, "
-       f"{len(seen)} allowlisted REACHES")
+    ok(f"[capability] OK — 0 DIRECT, 0 WRAPPED, {len(seen)} allowlisted REACHES")
     return 0
 
 

@@ -1,5 +1,6 @@
 # divoom_lib/models/config.py
 
+
 class DivoomConfig:
     def __init__(
         self,

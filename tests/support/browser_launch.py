@@ -84,8 +84,10 @@ def _failed(exc: Exception, attempt: int) -> BrowserLaunchFailed:
     if cause is None:
         head = "the browser did not start (cause not classified)"
     else:
-        head = (f"the browser did not start: {cause} (macOS bound its pid to a dead "
-                "app's LaunchServices record; tests/support/browser_launch.py)")
+        head = (
+            f"the browser did not start: {cause} (macOS bound its pid to a dead "
+            "app's LaunchServices record; tests/support/browser_launch.py)"
+        )
     if attempt > 1:
         head += f", on relaunch {attempt - 1} as well"
     return BrowserLaunchFailed(f"{head}\n{exc}", cause)
@@ -98,8 +100,9 @@ def _launch_error():
 
 
 def _relaunch_note(exc: Exception) -> None:
-    warnings.warn(BrowserRelaunched(
-        f"browser relaunched once after {STALE_LS_PID}: {str(exc).splitlines()[0]}"), stacklevel=3)
+    warnings.warn(
+        BrowserRelaunched(f"browser relaunched once after {STALE_LS_PID}: {str(exc).splitlines()[0]}"), stacklevel=3
+    )
 
 
 async def launch_async(start):

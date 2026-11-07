@@ -27,6 +27,7 @@ Protocol (device-driven; all multi-byte fields little-endian):
      file done. The device then 0xF7-requests the next file, or goes silent.
 5. Quiet for ``IDLE_DONE_TIMEOUT`` = up to date. (0x9F pauses/cancels.)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -44,9 +45,9 @@ HOT_API_URL = "https://appin.divoom-gz.com/Hot/GetHotFiles32"
 HOT_FILE_BASE = "https://fin.divoom-gz.com/"
 USER_AGENT = "okhttp/4.12.0"
 
-CHUNK_SIZE = 256          # APK: 256.0d packet size, zero-padded last packet
+CHUNK_SIZE = 256  # APK: 256.0d packet size, zero-padded last packet
 INTER_PACKET_DELAY = 0.02  # APK: Thread.sleep(20) between hot packets
-IDLE_DONE_TIMEOUT = 5.0   # APK: 5s without a device request = up to date
+IDLE_DONE_TIMEOUT = 5.0  # APK: 5s without a device request = up to date
 HTTP_TIMEOUT = 15
 
 # DeviceType by pixel size (GetHotFilesRequest semantics).
@@ -76,7 +77,7 @@ class HotFile:
     def packet(self, idx: int) -> bytes:
         """256-byte packet ``idx`` of the body, zero-padded (APK ``r()``)."""
         start = idx * CHUNK_SIZE
-        chunk = self.body[start:start + CHUNK_SIZE]
+        chunk = self.body[start : start + CHUNK_SIZE]
         return chunk + bytes(CHUNK_SIZE - len(chunk))
 
     @property
@@ -89,7 +90,8 @@ def fetch_hot_manifest(device_type: int) -> list[HotFile]:
     req = urllib.request.Request(
         HOT_API_URL,
         data=json.dumps({"DeviceType": device_type, "IsTest": False}).encode(),
-        headers={"Content-Type": "application/json", "User-Agent": USER_AGENT})
+        headers={"Content-Type": "application/json", "User-Agent": USER_AGENT},
+    )
     with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as r:
         data = json.loads(r.read())
     files = []
@@ -103,8 +105,7 @@ def fetch_hot_manifest(device_type: int) -> list[HotFile]:
 def download_hot_file(f: HotFile) -> bool:
     """Download + sha1-verify one hot file body (raw container, per APK for
     sub-128px devices)."""
-    req = urllib.request.Request(HOT_FILE_BASE + f.file_id,
-                                 headers={"User-Agent": USER_AGENT})
+    req = urllib.request.Request(HOT_FILE_BASE + f.file_id, headers={"User-Agent": USER_AGENT})
     with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as r:
         body = r.read()
     if f.sha1 and hashlib.sha1(body).hexdigest().lower() != f.sha1.lower():
@@ -154,8 +155,7 @@ async def _load_hot_files(device_type: int, progress_cb=None) -> tuple[list[HotF
         except Exception as e:
             logger.warning(f"hot file {f.file_id}: download failed: {e}")
         if progress_cb:
-            progress_cb({"phase": "downloading", "current": i + 1,
-                         "total": len(files), "file_id": f.file_id})
+            progress_cb({"phase": "downloading", "current": i + 1, "total": len(files), "file_id": f.file_id})
     if ok_dl:
         _manifest_cache[device_type] = (now, files)
     return files, ok_dl, False
@@ -185,10 +185,12 @@ class HotUpdate:
     @staticmethod
     def _file_info_payload(f: HotFile) -> list[int]:
         """0x9D body (APK ``x1``): vendorId:4 + fileSize:4 + checksum:4 + version:4."""
-        return (list(f.vendor_id.to_bytes(4, "little"))
-                + list(len(f.body).to_bytes(4, "little"))
-                + list(f.checksum.to_bytes(4, "little"))
-                + list(f.version.to_bytes(4, "little")))
+        return (
+            list(f.vendor_id.to_bytes(4, "little"))
+            + list(len(f.body).to_bytes(4, "little"))
+            + list(f.checksum.to_bytes(4, "little"))
+            + list(f.version.to_bytes(4, "little"))
+        )
 
     @staticmethod
     def _pick_file(files: list[HotFile], vendor_id: int, version: int) -> HotFile | None:
@@ -215,8 +217,9 @@ class HotUpdate:
             honest "unconfirmed", NOT a clean success (ACK ≠ device-confirmed).
         """
         total = f.packet_count
-        self.logger.info(f"hot: streaming {f.file_id} v{f.version} "
-                         f"({len(f.body)}B, packets {start_packet}..{total - 1})")
+        self.logger.info(
+            f"hot: streaming {f.file_id} v{f.version} ({len(f.body)}B, packets {start_packet}..{total - 1})"
+        )
         for idx in range(start_packet, total):
             payload = list(idx.to_bytes(2, "little")) + list(f.packet(idx))
             if not await self.divoom.send_command(_CMD_DATA, payload):
@@ -240,11 +243,9 @@ class HotUpdate:
             if len(payload) >= 3 and payload[0] == 0:
                 idx = int.from_bytes(bytes(payload[1:3]), "little")
                 self.logger.info(f"hot: resend packet {idx}")
-                await self.divoom.send_command(
-                    _CMD_DATA, list(idx.to_bytes(2, "little")) + list(f.packet(idx)))
+                await self.divoom.send_command(_CMD_DATA, list(idx.to_bytes(2, "little")) + list(f.packet(idx)))
 
-    async def update(self, *, device_size: int = 16,
-                     progress_cb=None) -> dict:
+    async def update(self, *, device_size: int = 16, progress_cb=None) -> dict:
         """Run a full hot-channel update. Returns a summary dict.
         If ``progress_cb`` is provided it is called with a phase dict at each
         stage: ``{"phase": "fetching_manifest"|"downloading"|"uploading"|"done",
@@ -267,10 +268,8 @@ class HotUpdate:
             return {"success": False, "error": "no hot files downloadable"}
         if from_cache and progress_cb:
             # Jump the download bar — nothing was re-fetched.
-            progress_cb({"phase": "downloading", "current": len(files),
-                         "total": len(files)})
-        self.logger.info(f"hot: manifest {len(files)} files, {ok_dl} downloaded"
-                         f"{' (cached)' if from_cache else ''}")
+            progress_cb({"phase": "downloading", "current": len(files), "total": len(files)})
+        self.logger.info(f"hot: manifest {len(files)} files, {ok_dl} downloaded{' (cached)' if from_cache else ''}")
 
         listen = getattr(comm, "_listen_commands", None)
         if isinstance(listen, set):
@@ -289,8 +288,7 @@ class HotUpdate:
                     payload, self._pending_request = self._pending_request, None
                     cmd = _CMD_REQUEST
                 else:
-                    got = await wait_any([_CMD_REQUEST, _CMD_PAUSE],
-                                         timeout=IDLE_DONE_TIMEOUT)
+                    got = await wait_any([_CMD_REQUEST, _CMD_PAUSE], timeout=IDLE_DONE_TIMEOUT)
                     if got is None:
                         break  # quiet — device is up to date
                     cmd, payload = got
@@ -307,8 +305,7 @@ class HotUpdate:
                     self.logger.info("hot: no matching file; ending session")
                     break
                 if not await self.divoom.send_command(_CMD_INFO, self._file_info_payload(f)):
-                    return {"success": False, "error": "file info (0x9D) write failed",
-                            "served": served}
+                    return {"success": False, "error": "file info (0x9D) write failed", "served": served}
                 got = await wait_any([_CMD_INFO, _CMD_REQUEST], timeout=IDLE_DONE_TIMEOUT)
                 if got is None:
                     self.logger.warning("hot: no 0x9D ack; ending session")
@@ -323,11 +320,11 @@ class HotUpdate:
                 start = int.from_bytes(bytes(p2[1:3]), "little") if len(p2) >= 3 else 0
                 ok, confirmed = await self._stream_file(f, start, wait_any)
                 if ok:
-                    served.append({"file_id": f.file_id, "version": f.version,
-                                   "confirmed": confirmed})
+                    served.append({"file_id": f.file_id, "version": f.version, "confirmed": confirmed})
                     if progress_cb:
-                        progress_cb({"phase": "uploading", "current": len(served),
-                                     "total": ok_dl, "file_id": f.file_id})
+                        progress_cb(
+                            {"phase": "uploading", "current": len(served), "total": ok_dl, "file_id": f.file_id}
+                        )
         finally:
             if isinstance(listen, set):
                 listen.difference_update({_CMD_REQUEST, _CMD_INFO, _CMD_DATA, _CMD_PAUSE})
@@ -336,9 +333,13 @@ class HotUpdate:
         # acknowledged (done-ack or moved-on); served files that streamed but went
         # silent are in `served` with confirmed=False. A caller that needs honesty
         # compares confirmed against len(served).
-        result = {"success": True, "served": served,
-                  "manifest": len(files), "downloaded": ok_dl,
-                  "confirmed": sum(1 for s in served if s.get("confirmed"))}
+        result = {
+            "success": True,
+            "served": served,
+            "manifest": len(files),
+            "downloaded": ok_dl,
+            "confirmed": sum(1 for s in served if s.get("confirmed")),
+        }
         if progress_cb:
             progress_cb({"phase": "done", **result})
         self.logger.info(f"hot: session complete — {len(served)} file(s) served")

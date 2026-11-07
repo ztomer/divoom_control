@@ -15,6 +15,7 @@ only hides the duplicate.
 
 Skipped if Playwright / a browser isn't installed (runs in CI's `--run-browser`).
 """
+
 import pytest
 from pathlib import Path
 from tests.support.browser import (
@@ -51,11 +52,15 @@ async def _open(p):
     await wait_js(page, "() => !!window.DivoomState && !!document.getElementById('global-brightness-slider')")
     # A linked, selected panel: the one sender is allowed to write to IT (P5.1:
     # the gate is that panel's link, not the app-wide appConnected flag).
-    await eval_js(page, """(mac) => {
+    await eval_js(
+        page,
+        """(mac) => {
         window.Divoom.onOwnedDevices({type: 'owned_devices', devices: [
             {address: mac, name: 'Ditoo', kind: 'clock', state: 'active'}]});
         window.Divoom.onSelection({type: 'selection', mac: mac});
-    }""", PANEL)
+    }""",
+        PANEL,
+    )
     return browser, page
 
 
@@ -174,9 +179,6 @@ async def test_no_brightness_write_without_a_linked_panel():
             # Give a stray sender every chance to fire before asserting absence.
             await eval_js(page, "() => new Promise(r => setTimeout(r, 250))")
             writes = await _brightness_writes(page)
-            assert writes == [], (
-                "no panel is linked, so the slider must not write the device; got "
-                f"{writes}"
-            )
+            assert writes == [], f"no panel is linked, so the slider must not write the device; got {writes}"
         finally:
             await browser.close()

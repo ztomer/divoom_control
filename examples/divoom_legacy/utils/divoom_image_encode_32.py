@@ -16,6 +16,7 @@ target device rejects the standard format.
 
 See `docs/APK_COMPARISON.md` for full byte-level comparison.
 """
+
 from __future__ import annotations
 
 from typing import List
@@ -27,7 +28,7 @@ SCREENSIZE_32 = 32
 
 def pre_frames() -> List[bytes]:
     """Legacy: pre-frames are NOT in the APK protocol. Returns empty list.
-    
+
     Kept for backward compat with callers that import it. The APK's
     `pixelEncode()` does not send pre-frames for any screen size.
     """
@@ -35,7 +36,10 @@ def pre_frames() -> List[bytes]:
 
 
 def encode_animation_frame_32(
-    rgb_bytes: bytes, w: int, h: int, time_ms: int,
+    rgb_bytes: bytes,
+    w: int,
+    h: int,
+    time_ms: int,
 ) -> bytes:
     """Encode a single 32×32 animation frame using the standard AA format.
 

@@ -46,6 +46,7 @@ from tests.support import browser_reaper
 from tests.support.browser_launch import launch_async
 from tests.support.browser_options import launch_options_for
 
+
 class SharedBrowserWrongLoop(RuntimeError):
     """A test asked for the shared browser from an event loop that is not the
     one that started it."""
@@ -134,7 +135,8 @@ async def shared_browser() -> SharedBrowser:
     if loop is not _session_loop:
         raise SharedBrowserWrongLoop(
             "the shared browser lives on the session loop and this is another one; browser "
-            "suites run on the session loop (tests/conftest.py, tests/support/browser_shared.py)")
+            "suites run on the session loop (tests/conftest.py, tests/support/browser_shared.py)"
+        )
     host = _async_host
     if host is not None and host.browser.is_connected():
         await host.sweep()
@@ -162,7 +164,8 @@ async def _start_async(loop) -> _AsyncHost:
         playwright = await async_playwright().start()
         try:
             browser = await launch_async(
-                lambda: playwright.firefox.launch(**launch_options_for(network=False, launching=True)))
+                lambda: playwright.firefox.launch(**launch_options_for(network=False, launching=True))
+            )
         except BaseException:
             await playwright.stop()
             raise

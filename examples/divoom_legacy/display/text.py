@@ -1,10 +1,15 @@
-
 from divoom_legacy.sender_protocol import CommandSender
 from divoom_lib.models import (
     COMMANDS,
-    LPWA_CONTROL_SPEED, LPWA_CONTROL_EFFECTS, LPWA_CONTROL_DISPLAY_BOX,
-    LPWA_CONTROL_FONT, LPWA_CONTROL_COLOR, LPWA_CONTROL_CONTENT, LPWA_CONTROL_IMAGE_EFFECTS
+    LPWA_CONTROL_SPEED,
+    LPWA_CONTROL_EFFECTS,
+    LPWA_CONTROL_DISPLAY_BOX,
+    LPWA_CONTROL_FONT,
+    LPWA_CONTROL_COLOR,
+    LPWA_CONTROL_CONTENT,
+    LPWA_CONTROL_IMAGE_EFFECTS,
 )
+
 
 class Text:
     """
@@ -18,7 +23,7 @@ class Text:
         async def main():
             device_address = "XX:XX:XX:XX:XX:XX"  # Replace with your device's address
             divoom = Divoom(mac=device_address)
-            
+
             try:
                 await divoom.connect()
                 await divoom.text.set_text_content("Hello", text_box_id=1)
@@ -29,6 +34,7 @@ class Text:
         if __name__ == "__main__":
             asyncio.run(main())
     """
+
     def __init__(self, divoom: CommandSender):
         """
         Initializes the Text controller.
@@ -43,14 +49,14 @@ class Text:
         speed = kwargs.get("speed")
         text_box_id = kwargs.get("text_box_id")
         if speed is not None and text_box_id is not None:
-            return list(speed.to_bytes(2, byteorder='little')) + list(text_box_id.to_bytes(1, byteorder='big'))
+            return list(speed.to_bytes(2, byteorder="little")) + list(text_box_id.to_bytes(1, byteorder="big"))
         self.logger.error("Missing 'speed' or 'text_box_id' for Text Speed control.")
         return None
 
     def _handle_lpwa_effects(self, kwargs: dict) -> list | None:
         effect_style = kwargs.get("effect_style")
         if effect_style is not None:
-            return list(effect_style.to_bytes(1, byteorder='big'))
+            return list(effect_style.to_bytes(1, byteorder="big"))
         self.logger.error("Missing 'effect_style' for Text Effects control.")
         return None
 
@@ -61,11 +67,13 @@ class Text:
         height = kwargs.get("height")
         text_box_id = kwargs.get("text_box_id")
         if all(v is not None for v in [x, y, width, height, text_box_id]):
-            return list(x.to_bytes(1, byteorder='big')) + \
-                   list(y.to_bytes(1, byteorder='big')) + \
-                   list(width.to_bytes(1, byteorder='big')) + \
-                   list(height.to_bytes(1, byteorder='big')) + \
-                   list(text_box_id.to_bytes(1, byteorder='big'))
+            return (
+                list(x.to_bytes(1, byteorder="big"))
+                + list(y.to_bytes(1, byteorder="big"))
+                + list(width.to_bytes(1, byteorder="big"))
+                + list(height.to_bytes(1, byteorder="big"))
+                + list(text_box_id.to_bytes(1, byteorder="big"))
+            )
         self.logger.error("Missing parameters for Text Display Box control.")
         return None
 
@@ -73,7 +81,7 @@ class Text:
         font_size = kwargs.get("font_size")
         text_box_id = kwargs.get("text_box_id")
         if font_size is not None and text_box_id is not None:
-            return list(font_size.to_bytes(1, byteorder='big')) + list(text_box_id.to_bytes(1, byteorder='big'))
+            return list(font_size.to_bytes(1, byteorder="big")) + list(text_box_id.to_bytes(1, byteorder="big"))
         self.logger.error("Missing 'font_size' or 'text_box_id' for Text Font control.")
         return None
 
@@ -82,8 +90,9 @@ class Text:
         text_box_id = kwargs.get("text_box_id")
         if color is not None and text_box_id is not None:
             from divoom_lib.utils.converters import color_to_rgb_list
+
             rgb_color = color_to_rgb_list(color)
-            return rgb_color + list(text_box_id.to_bytes(1, byteorder='big'))
+            return rgb_color + list(text_box_id.to_bytes(1, byteorder="big"))
         self.logger.error("Missing 'color' (RGB list) or 'text_box_id' for Text Color control.")
         return None
 
@@ -91,10 +100,12 @@ class Text:
         text_content = kwargs.get("text_content")
         text_box_id = kwargs.get("text_box_id")
         if text_content is not None and text_box_id is not None:
-            content_bytes = text_content.encode('utf-8')
-            return list(len(content_bytes).to_bytes(2, byteorder='little')) + \
-                   list(content_bytes) + \
-                   list(text_box_id.to_bytes(1, byteorder='big'))
+            content_bytes = text_content.encode("utf-8")
+            return (
+                list(len(content_bytes).to_bytes(2, byteorder="little"))
+                + list(content_bytes)
+                + list(text_box_id.to_bytes(1, byteorder="big"))
+            )
         self.logger.error("Missing 'text_content' or 'text_box_id' for Text Content control.")
         return None
 
@@ -102,7 +113,7 @@ class Text:
         effect_style = kwargs.get("effect_style")
         text_box_id = kwargs.get("text_box_id")
         if effect_style is not None and text_box_id is not None:
-            return list(effect_style.to_bytes(1, byteorder='big')) + list(text_box_id.to_bytes(1, byteorder='big'))
+            return list(effect_style.to_bytes(1, byteorder="big")) + list(text_box_id.to_bytes(1, byteorder="big"))
         self.logger.error("Missing 'effect_style' or 'text_box_id' for Image Effects control.")
         return None
 
@@ -130,14 +141,13 @@ class Text:
 
         Returns:
             bool: True if the command was sent successfully, False otherwise.
-        
+
         Usage::
-            
+
             # Set the text color to red
             await divoom.text.set_light_phone_word_attr(5, color=(255, 0, 0), text_box_id=1)
         """
-        self.logger.info(
-            f"Setting light phone word attribute with control {control} (0x87)...")
+        self.logger.info(f"Setting light phone word attribute with control {control} (0x87)...")
         args = [control]
 
         handler = self._lpwa_handlers.get(control)
@@ -148,8 +158,7 @@ class Text:
             else:
                 return False
         else:
-            self.logger.warning(
-                f"Unknown control word for set_light_phone_word_attr: {control}")
+            self.logger.warning(f"Unknown control word for set_light_phone_word_attr: {control}")
             return False
 
         return await self.communicator.send_command(COMMANDS["set light phone word attr"], args)
@@ -164,9 +173,9 @@ class Text:
 
         Returns:
             bool: True if the command was sent successfully, False otherwise.
-        
+
         Usage::
-            
+
             # Set the text content to "Hello"
             await divoom.text.set_text_content("Hello", text_box_id=1)
         """

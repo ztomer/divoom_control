@@ -9,27 +9,27 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from divoom_legacy.wall import DivoomWall, wall_resolution
 
-class TestDivoomWall(unittest.IsolatedAsyncioTestCase):
 
+class TestDivoomWall(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.device_configs = [
-            {"mac": "AA:BB:CC:DD:EE:01", "x": 0, "y": 0, "size": 16}, # Top-left
-            {"mac": "AA:BB:CC:DD:EE:02", "x": 1, "y": 0, "size": 16}, # Top-right
-            {"mac": "AA:BB:CC:DD:EE:03", "x": 0, "y": 1, "size": 16}, # Bottom-left
-            {"mac": "AA:BB:CC:DD:EE:04", "x": 1, "y": 1, "size": 16}  # Bottom-right
+            {"mac": "AA:BB:CC:DD:EE:01", "x": 0, "y": 0, "size": 16},  # Top-left
+            {"mac": "AA:BB:CC:DD:EE:02", "x": 1, "y": 0, "size": 16},  # Top-right
+            {"mac": "AA:BB:CC:DD:EE:03", "x": 0, "y": 1, "size": 16},  # Bottom-left
+            {"mac": "AA:BB:CC:DD:EE:04", "x": 1, "y": 1, "size": 16},  # Bottom-right
         ]
 
-    @patch('divoom_legacy.wall.Divoom', new_callable=MagicMock)
+    @patch("divoom_legacy.wall.Divoom", new_callable=MagicMock)
     def test_wall_init(self, mock_divoom_class):
         """Test DivoomWall initialization and dimensions."""
         wall = DivoomWall(self.device_configs)
-        
+
         self.assertEqual(len(wall.devices), 4)
         self.assertEqual(wall.total_width, 32)
         self.assertEqual(wall.total_height, 32)
         self.assertEqual(wall.grid_unit_size, 16)
 
-    @patch('divoom_legacy.wall.Divoom', new_callable=MagicMock)
+    @patch("divoom_legacy.wall.Divoom", new_callable=MagicMock)
     async def test_wall_connect_disconnect(self, mock_divoom_class):
         """Test DivoomWall connect and disconnect async methods."""
         # Setup mocks — start DISCONNECTED and flip to connected on connect(),
@@ -43,6 +43,7 @@ class TestDivoomWall(unittest.IsolatedAsyncioTestCase):
             async def _connect(_m=mc):
                 _m.is_connected = True
                 _m.is_alive = True
+
             mc.connect = AsyncMock(side_effect=_connect)
             mc.disconnect = AsyncMock(return_value=None)
             mc.is_connected = False
@@ -53,21 +54,21 @@ class TestDivoomWall(unittest.IsolatedAsyncioTestCase):
             mock_clients.append(mc)
 
         mock_divoom_class.side_effect = mock_clients
-        
+
         wall = DivoomWall(self.device_configs)
         await wall.connect()
-        
+
         for mc in mock_clients:
             mc.connect.assert_called_once()
-            
+
         self.assertTrue(wall.is_connected)
-        
+
         await wall.disconnect()
         for mc in mock_clients:
             mc.disconnect.assert_called_once()
 
-    @patch('divoom_legacy.wall.Divoom', new_callable=MagicMock)
-    @patch('divoom_legacy.wall.Image.open')
+    @patch("divoom_legacy.wall.Divoom", new_callable=MagicMock)
+    @patch("divoom_legacy.wall.Image.open")
     async def test_wall_show_image(self, mock_image_open, mock_divoom_class):
         """Test DivoomWall splitting and cropping logic for show_image."""
         # Mock main image
@@ -76,7 +77,7 @@ class TestDivoomWall(unittest.IsolatedAsyncioTestCase):
         mock_img.crop = MagicMock(return_value=mock_img)
         mock_img.resize = MagicMock(return_value=mock_img)
         mock_image_open.return_value = mock_img
-        
+
         # Setup mock Divoom clients
         mock_clients = []
         for _ in range(4):
@@ -84,8 +85,9 @@ class TestDivoomWall(unittest.IsolatedAsyncioTestCase):
             mc.display.show_image = AsyncMock(return_value=True)
             mock_clients.append(mc)
         mock_divoom_class.side_effect = mock_clients
-        
+
         orig_exists = Path.exists
+
         def mock_exists(self_path):
             return "mock_path.png" in str(self_path)
 
@@ -96,7 +98,7 @@ class TestDivoomWall(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(success)
         finally:
             Path.exists = orig_exists
-            
+
             # Verify cropping bounds for each grid coordinate
             # Top-left slot (0, 0)
             mock_img.resize.assert_called_with((32, 32), Image.NEAREST)
@@ -107,17 +109,15 @@ class TestDivoomWall(unittest.IsolatedAsyncioTestCase):
             mock_img.crop.assert_any_call((0, 16, 16, 32))
             # Bottom-right slot (1, 1)
             mock_img.crop.assert_any_call((16, 16, 32, 32))
-            
+
             # Verify all Divoom show_image methods were called
             for mc in mock_clients:
                 mc.display.show_image.assert_called_once()
 
-    @patch('divoom_legacy.wall.Divoom', new_callable=MagicMock)
-    @patch('divoom_legacy.wall.ImageSequence.Iterator')
-    @patch('divoom_legacy.wall.Image.open')
-    async def test_wall_show_image_zero_frames_reports_failure(
-        self, mock_image_open, mock_iter, mock_divoom_class
-    ):
+    @patch("divoom_legacy.wall.Divoom", new_callable=MagicMock)
+    @patch("divoom_legacy.wall.ImageSequence.Iterator")
+    @patch("divoom_legacy.wall.Image.open")
+    async def test_wall_show_image_zero_frames_reports_failure(self, mock_image_open, mock_iter, mock_divoom_class):
         """R53.28: a truncated/animated source that yields 0 frames must make
         show_image report FAILURE (the screens got nothing) — not vacuous
         success. Teeth: the old code did a bare `continue`, leaving all_ok=True
@@ -147,7 +147,7 @@ class TestDivoomWall(unittest.IsolatedAsyncioTestCase):
         finally:
             Path.exists = orig_exists
 
-    @patch('divoom_legacy.wall.Divoom', new_callable=MagicMock)
+    @patch("divoom_legacy.wall.Divoom", new_callable=MagicMock)
     async def test_wall_set_light_and_clock(self, mock_divoom_class):
         """Test DivoomWall batch operations: set_light and show_clock."""
         mock_clients = []
@@ -157,20 +157,20 @@ class TestDivoomWall(unittest.IsolatedAsyncioTestCase):
             mc.display.show_clock = AsyncMock(return_value=True)
             mock_clients.append(mc)
         mock_divoom_class.side_effect = mock_clients
-        
+
         wall = DivoomWall(self.device_configs)
-        
+
         res_light = await wall.set_light("FF0000", brightness=80)
         self.assertTrue(res_light)
         for mc in mock_clients:
             mc.display.show_light.assert_called_once_with(color="FF0000", brightness=80)
-            
+
         res_clock = await wall.show_clock(clock=2)
         self.assertTrue(res_clock)
         for mc in mock_clients:
             mc.display.show_clock.assert_called_once_with(clock=2)
 
-    @patch('divoom_legacy.wall.Divoom', new_callable=MagicMock)
+    @patch("divoom_legacy.wall.Divoom", new_callable=MagicMock)
     async def test_wall_switch_channel_volume_brightness(self, mock_divoom_class):
         """R17 P5: wall-level fan-out methods added so the daemon-owned wall is
         callable via a single device_call (no GUI-side per-device iteration)."""
@@ -199,10 +199,11 @@ class TestDivoomWall(unittest.IsolatedAsyncioTestCase):
         for mc in mock_clients:
             mc.device.set_brightness.assert_called_once_with(55)
 
-    @patch('divoom_legacy.wall.Divoom', new_callable=MagicMock)
+    @patch("divoom_legacy.wall.Divoom", new_callable=MagicMock)
     async def test_wall_push_text(self, mock_divoom_class):
         """Wall push_text runs the LPWA sequence on every screen with its size."""
         from divoom_lib.models import LPWA_CONTROL_CONTENT
+
         mock_clients = []
         for _ in range(4):
             mc = MagicMock()
@@ -216,15 +217,14 @@ class TestDivoomWall(unittest.IsolatedAsyncioTestCase):
             controls = [c.args[0] for c in mc.text.set_light_phone_word_attr.call_args_list]
             self.assertIn(LPWA_CONTROL_CONTENT, controls)
 
-
-    @patch('divoom_legacy.wall.Divoom', new_callable=MagicMock)
+    @patch("divoom_legacy.wall.Divoom", new_callable=MagicMock)
     async def test_wall_show_image_missing_file_returns_false(self, mock_divoom_class):
         """show_image on a nonexistent path must fail fast (no crop/stream attempt)."""
         wall = DivoomWall(self.device_configs)
         ok = await wall.show_image("/no/such/file/anywhere.png")
         self.assertFalse(ok)
 
-    @patch('divoom_legacy.wall.Divoom', new_callable=MagicMock)
+    @patch("divoom_legacy.wall.Divoom", new_callable=MagicMock)
     async def test_is_alive_true_when_all_slots_alive(self, mock_divoom_class):
         mock_clients = []
         for _ in range(4):
@@ -235,13 +235,13 @@ class TestDivoomWall(unittest.IsolatedAsyncioTestCase):
         wall = DivoomWall(self.device_configs)
         self.assertTrue(wall.is_alive)
 
-    @patch('divoom_legacy.wall.Divoom', new_callable=MagicMock)
+    @patch("divoom_legacy.wall.Divoom", new_callable=MagicMock)
     async def test_is_alive_false_when_no_devices(self, mock_divoom_class):
         wall = DivoomWall(self.device_configs)
         wall.devices = []
         self.assertFalse(wall.is_alive)
 
-    @patch('divoom_legacy.wall.Divoom', new_callable=MagicMock)
+    @patch("divoom_legacy.wall.Divoom", new_callable=MagicMock)
     async def test_wall_set_brightness_lan_path(self, mock_divoom_class):
         """R17: a slot with a LAN transport attached uses lan.set_brightness,
         not the BLE device.set_brightness fallback."""
@@ -257,8 +257,8 @@ class TestDivoomWall(unittest.IsolatedAsyncioTestCase):
         for mc in mock_clients:
             mc.lan.set_brightness.assert_called_once_with(42)
 
-    @patch('divoom_legacy.wall.Divoom', new_callable=MagicMock)
-    @patch('divoom_legacy.wall.Image.open')
+    @patch("divoom_legacy.wall.Divoom", new_callable=MagicMock)
+    @patch("divoom_legacy.wall.Image.open")
     async def test_wall_show_image_partial_slot_failure(self, mock_image_open, mock_divoom_class):
         """A slot whose show_image returns False (not an exception) must flip
         all_ok to False (the `elif not res` branch)."""
@@ -285,7 +285,7 @@ class TestDivoomWall(unittest.IsolatedAsyncioTestCase):
         finally:
             Path.exists = orig_exists
 
-    @patch('divoom_legacy.wall.Divoom', new_callable=MagicMock)
+    @patch("divoom_legacy.wall.Divoom", new_callable=MagicMock)
     async def test_get_last_previews_encodes_data_urls(self, mock_divoom_class):
         """get_last_previews base64-encodes cached preview bytes and picks the
         MIME type from the GIF magic bytes vs PNG default."""
@@ -301,13 +301,13 @@ class TestDivoomWall(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(previews["AA:BB:CC:DD:EE:02"].startswith("data:image/png;base64,"))
         self.assertNotIn("AA:BB:CC:DD:EE:03", previews)
 
-
-    @patch('divoom_legacy.wall.Divoom', new_callable=MagicMock)
+    @patch("divoom_legacy.wall.Divoom", new_callable=MagicMock)
     async def test_grid_animated_image_real_frames_skips_freeform_resize(self, mock_divoom_class):
         """Uniform-grid (non-free-form) animated show_image: the per-frame
         loop must take the `is_free_form is False` branch (crop only, no
         extra per-slot resize)."""
         import tempfile
+
         mock_clients = []
         for _ in range(4):
             mc = MagicMock()
@@ -345,8 +345,8 @@ class TestDivoomWallFreeForm(unittest.IsolatedAsyncioTestCase):
             {"mac": "AA:BB:CC:DD:EE:02", "x": 32, "y": 0, "width": 32, "height": 16, "size": 16},
         ]
 
-    @patch('divoom_legacy.wall.Divoom', new_callable=MagicMock)
-    @patch('divoom_legacy.wall.Image.open')
+    @patch("divoom_legacy.wall.Divoom", new_callable=MagicMock)
+    @patch("divoom_legacy.wall.Image.open")
     async def test_free_form_static_image_crop_and_resize(self, mock_image_open, mock_divoom_class):
         mock_img = MagicMock(spec=Image.Image)
         mock_img.is_animated = False
@@ -362,6 +362,7 @@ class TestDivoomWallFreeForm(unittest.IsolatedAsyncioTestCase):
         mock_divoom_class.side_effect = mock_clients
 
         import tempfile
+
         with tempfile.TemporaryDirectory() as home_td:
             orig_home = Path.home
             Path.home = staticmethod(lambda: Path(home_td))
@@ -380,13 +381,14 @@ class TestDivoomWallFreeForm(unittest.IsolatedAsyncioTestCase):
         for mc in mock_clients:
             mc.display.show_image.assert_called_once()
 
-    @patch('divoom_legacy.wall.Divoom', new_callable=MagicMock)
+    @patch("divoom_legacy.wall.Divoom", new_callable=MagicMock)
     async def test_free_form_animated_image_real_frames(self, mock_divoom_class):
         """Real (non-mocked) 2-frame animated GIF through the free-form path
         exercises the per-frame crop+resize loop and the frames[0].save call.
         Redirects Path.home() to a tmp dir so the split-cache write doesn't
         touch the real ~/.config/divoom-control/cache_wall."""
         import tempfile
+
         mock_clients = []
         for _ in range(2):
             mc = MagicMock()
@@ -455,5 +457,5 @@ class TestWallResolution(unittest.TestCase):
             wall_resolution(32, 1, 0)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

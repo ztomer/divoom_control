@@ -57,8 +57,7 @@ class WeatherCityMixin(CloudPanelMixin):
         keyword = (keyword or "").strip()
         if not keyword:
             return {"ok": True, "items": [], "error": "", "cause": ""}
-        return self._cloud_list(
-            "city search results", lambda c: c.search_weather_city(keyword))
+        return self._cloud_list("city search results", lambda c: c.search_weather_city(keyword))
 
     def get_weather_city(self) -> dict:
         """The saved override, as `{"location": ..., "name": ...}`.
@@ -81,8 +80,7 @@ class WeatherCityMixin(CloudPanelMixin):
             logger.warning(f"get_weather_city failed: {e}")
         return {"location": saved_location(), "name": name}
 
-    def set_weather_city(self, lat: str = "", lon: str = "",
-                         name: str = "") -> bool:
+    def set_weather_city(self, lat: str = "", lon: str = "", name: str = "") -> bool:
         """Save (or, with empty lat/lon, clear) the weather-location override.
 
         Clearing is a first-class outcome, not an edge case: the user must be
@@ -109,9 +107,7 @@ class WeatherCityMixin(CloudPanelMixin):
             cfg[WEATHER_CONFIG_SECTION]["location"] = location
             cfg[WEATHER_CONFIG_SECTION]["city_name"] = str(name or "") if location else ""
             atomic_write_config(path, cfg, mode=0o600)  # config.ini holds creds
-            logger.info(
-                "weather location set to %s",
-                f"{location} ({name})" if location else "IP geolocation")
+            logger.info("weather location set to %s", f"{location} ({name})" if location else "IP geolocation")
             return True
         except ValueError:
             logger.error(f"set_weather_city got non-numeric coordinates: {lat!r},{lon!r}")

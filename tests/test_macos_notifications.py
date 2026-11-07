@@ -12,6 +12,7 @@ Strategy:
   `threading.Event` sink to wait for the first delivery instead of
   using `time.sleep` from the test (which would flake).
 """
+
 from __future__ import annotations
 
 import plistlib
@@ -33,12 +34,6 @@ from divoom_client.macos_notifications import (
 
 
 # ── `parse_notification_record` ──────────────────────────────────────
-
-
-
-
-
-
 
 
 # ── `MacAppRouter` ────────────────────────────────────────────────────
@@ -91,20 +86,6 @@ def test_default_routing_has_no_duplicate_keys() -> None:
         seen.add(substr)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # ── `find_notification_db_path` (real system) ────────────────────────
 
 
@@ -116,5 +97,3 @@ def test_find_notification_db_path_returns_none_off_macos() -> None:
 
 
 # ── Module surface ────────────────────────────────────────────────────
-
-

@@ -9,9 +9,13 @@ auto power-off timer, and sleep light/color.
 from divoom_legacy.sender_protocol import CommandSender
 from divoom_lib.models import (
     COMMANDS,
-    SONG_DISPLAY_OFF, SONG_DISPLAY_ON, SONG_DISPLAY_QUERY,
-    POVVC_GET, POVVC_SET,
-    SOUND_CONTROL_DISABLE, SOUND_CONTROL_ENABLE,
+    SONG_DISPLAY_OFF,
+    SONG_DISPLAY_ON,
+    SONG_DISPLAY_QUERY,
+    POVVC_GET,
+    POVVC_SET,
+    SOUND_CONTROL_DISABLE,
+    SOUND_CONTROL_ENABLE,
 )
 
 
@@ -56,9 +60,7 @@ class SoundControl:
             await divoom.sound.set_song_display_control(SONG_DISPLAY_ON)
         """
         self.logger.info(f"Setting song display control to {control} (0x83)...")
-        return await self.communicator.send_command(
-            COMMANDS["set song dis ctrl"], [control]
-        )
+        return await self.communicator.send_command(COMMANDS["set song dis ctrl"], [control])
 
     # ── Power-On Voice Volume ─────────────────────────────────────────────────
 
@@ -92,8 +94,7 @@ class SoundControl:
 
             await divoom.sound.set_power_on_voice_volume(POVVC_SET, volume=50)
         """
-        self.logger.info(
-            f"Setting power-on voice volume (0xbb) with control {control}...")
+        self.logger.info(f"Setting power-on voice volume (0xbb) with control {control}...")
         args = [control]
         handler = self._povvc_handlers.get(control)
         if handler:
@@ -103,12 +104,9 @@ class SoundControl:
             else:
                 return False
         else:
-            self.logger.warning(
-                f"Unknown control for set_power_on_voice_volume: {control}")
+            self.logger.warning(f"Unknown control for set_power_on_voice_volume: {control}")
             return False
-        return await self.communicator.send_command(
-            COMMANDS["set poweron voice vol"], args
-        )
+        return await self.communicator.send_command(COMMANDS["set poweron voice vol"], args)
 
     # ── Ambient Sound Control ─────────────────────────────────────────────────
 
@@ -124,9 +122,7 @@ class SoundControl:
             await divoom.sound.set_sound_control(SOUND_CONTROL_ENABLE)
         """
         self.logger.info(f"Setting sound control to {enable} (0xa7)...")
-        return await self.communicator.send_command(
-            COMMANDS["set sound ctrl"], [enable]
-        )
+        return await self.communicator.send_command(COMMANDS["set sound ctrl"], [enable])
 
     async def get_sound_control(self) -> int | None:
         """
@@ -141,9 +137,7 @@ class SoundControl:
             status = await divoom.sound.get_sound_control()
         """
         self.logger.info("Getting sound control status (0xa8)...")
-        response = await self.communicator.send_command_and_wait_for_response(
-            COMMANDS["get sound ctrl"]
-        )
+        response = await self.communicator.send_command_and_wait_for_response(COMMANDS["get sound ctrl"])
         if response and len(response) >= 1:
             return response[0]
         return None
@@ -161,12 +155,9 @@ class SoundControl:
 
             await divoom.sound.set_auto_power_off(30)
         """
-        self.logger.info(
-            f"Setting auto power-off to {minutes} minutes (0xab)...")
-        args = list(minutes.to_bytes(2, byteorder='little'))
-        return await self.communicator.send_command(
-            COMMANDS["set auto power off"], args
-        )
+        self.logger.info(f"Setting auto power-off to {minutes} minutes (0xab)...")
+        args = list(minutes.to_bytes(2, byteorder="little"))
+        return await self.communicator.send_command(COMMANDS["set auto power off"], args)
 
     async def get_auto_power_off(self) -> int | None:
         """
@@ -180,11 +171,9 @@ class SoundControl:
             minutes = await divoom.sound.get_auto_power_off()
         """
         self.logger.info("Getting auto power-off timer (0xac)...")
-        response = await self.communicator.send_command_and_wait_for_response(
-            COMMANDS["get auto power off"]
-        )
+        response = await self.communicator.send_command_and_wait_for_response(COMMANDS["get auto power off"])
         if response and len(response) >= 2:
-            return int.from_bytes(response[0:2], byteorder='little')
+            return int.from_bytes(response[0:2], byteorder="little")
         return None
 
     # ── Sleep Light/Color ─────────────────────────────────────────────────────
@@ -201,6 +190,4 @@ class SoundControl:
             await divoom.sound.set_sleep_color(0, 0, 32)
         """
         self.logger.info(f"Setting sleep color RGB({r},{g},{b}) (0xad)...")
-        return await self.communicator.send_command(
-            COMMANDS.get("set sleep color", 0xad), [r, g, b]
-        )
+        return await self.communicator.send_command(COMMANDS.get("set sleep color", 0xAD), [r, g, b])

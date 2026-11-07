@@ -23,6 +23,7 @@ Both directions are pinned throughout: `--staged` must NOT reach layer 3 (the
 pre-commit hook stays deliberately narrow), and fast mode must both announce
 what it skipped and actually skip it.
 """
+
 from __future__ import annotations
 
 import os
@@ -53,7 +54,12 @@ def _run(script: Path, *args: str, **env: str) -> subprocess.CompletedProcess:
     e.update(env)
     return subprocess.run(
         ["bash", str(script), *args],
-        cwd=REPO, env=e, capture_output=True, text=True, timeout=120, stdin=subprocess.DEVNULL,
+        cwd=REPO,
+        env=e,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        stdin=subprocess.DEVNULL,
         check=False,
     )
 
@@ -62,7 +68,9 @@ def test_repo_gates_is_executable_and_parses():
     """A layer that cannot execute is a layer that silently does nothing."""
     assert REPO_GATES.is_file(), "tools/repo_gates.sh is missing"
     assert os.access(REPO_GATES, os.X_OK), "tools/repo_gates.sh is not executable"
-    r = subprocess.run(["bash", "-n", str(REPO_GATES)], capture_output=True, text=True, stdin=subprocess.DEVNULL, check=False)
+    r = subprocess.run(
+        ["bash", "-n", str(REPO_GATES)], capture_output=True, text=True, stdin=subprocess.DEVNULL, check=False
+    )
     assert r.returncode == 0, r.stderr
 
 
@@ -115,8 +123,7 @@ def test_gate_staged_does_not_reach_layer_three(tmp_path):
     """Pre-commit stays narrow: staged scope must not run the whole CI."""
     r = _run(GATE, "--staged", DIVOOM_IN_REPO_GATES="1", GOH_DIR=_wiring_goh(tmp_path))
     assert "re-entered" not in (r.stdout + r.stderr), (
-        "tools/gate.sh --staged reached layer 3; the pre-commit hook is "
-        "supposed to be the fast, staged-only scope"
+        "tools/gate.sh --staged reached layer 3; the pre-commit hook is supposed to be the fast, staged-only scope"
     )
 
 
@@ -140,9 +147,7 @@ def test_fast_mode_announces_and_actually_skips():
     assert r.returncode == 0, r.stdout + r.stderr
     combined = r.stdout + r.stderr
     assert "SKIPPING" in combined, f"fast mode did not announce itself:\n{combined}"
-    assert "py_ci.sh" not in r.stdout, (
-        "fast mode announced a skip it did not perform:\n" + r.stdout
-    )
+    assert "py_ci.sh" not in r.stdout, "fast mode announced a skip it did not perform:\n" + r.stdout
 
 
 @requires_goh
@@ -161,4 +166,5 @@ def test_no_env_var_can_skip_the_gate_entirely():
         r = _run(REPO_GATES, "--dry-run", **{name: "1"})
         assert f"{steps.group(1)} step(s)" in r.stdout, (
             f"{name}=1 changed the step list; a silent full-bypass variable is "
-            f"exactly the hole R71 P0 closed.\n{r.stdout}")
+            f"exactly the hole R71 P0 closed.\n{r.stdout}"
+        )

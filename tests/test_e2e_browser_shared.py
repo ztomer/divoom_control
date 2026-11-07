@@ -12,6 +12,7 @@ tests hold the three things that keep that true:
 * no suite takes a browser by any other road -- the class ("a launch per
   test") cannot come back by a new suite calling the launcher itself.
 """
+
 from __future__ import annotations
 
 import re
@@ -68,7 +69,9 @@ def _reaches_the_seam() -> set[str]:
     imports = re.compile(
         r"^\s*(?:from\s+tests\.(?:support\.)?(\w+)\s+import"
         r"|from\s+tests\.support\s+import\s+([\w, ]+)"
-        r"|import\s+tests\.(?:support\.)?(\w+))", re.MULTILINE)
+        r"|import\s+tests\.(?:support\.)?(\w+))",
+        re.MULTILINE,
+    )
     deps: dict[str, set[str]] = {}
     for path in [*TESTS.glob("test_*.py"), *(TESTS / "support").glob("*.py")]:
         names: set[str] = set()
@@ -97,8 +100,9 @@ def test_every_module_that_reaches_the_seam_is_a_browser_suite():
 
     reach = _reaches_the_seam()
     assert SELF.removesuffix(".py") in reach and len(reach) > 40, sorted(reach)
-    missed = sorted(name for name in reach
-                    if not S.runs_on_session_loop(types.SimpleNamespace(__file__=str(TESTS / f"{name}.py"))))
+    missed = sorted(
+        name for name in reach if not S.runs_on_session_loop(types.SimpleNamespace(__file__=str(TESTS / f"{name}.py")))
+    )
     assert not missed, f"reach the browser seam but are not judged browser suites: {missed}"
 
 
@@ -109,14 +113,23 @@ def test_the_browser_suites_run_on_the_session_loop(request):
     import inspect
 
     reach = _reaches_the_seam()
-    browser_async = [i for i in request.session.items if inspect.iscoroutinefunction(getattr(i, "obj", None))
-                     and Path(i.module.__file__).stem in reach]
+    browser_async = [
+        i
+        for i in request.session.items
+        if inspect.iscoroutinefunction(getattr(i, "obj", None)) and Path(i.module.__file__).stem in reach
+    ]
     mine = [i for i in browser_async if Path(i.module.__file__).name == SELF]
     assert mine or request.config.option.keyword or request.config.option.markexpr, (
-        "this module's own async tests were collected, so the check cannot be empty")
-    off = [i.nodeid for i in browser_async
-           if (i.get_closest_marker("asyncio") is None
-               or i.get_closest_marker("asyncio").kwargs.get("loop_scope") != "session")]
+        "this module's own async tests were collected, so the check cannot be empty"
+    )
+    off = [
+        i.nodeid
+        for i in browser_async
+        if (
+            i.get_closest_marker("asyncio") is None
+            or i.get_closest_marker("asyncio").kwargs.get("loop_scope") != "session"
+        )
+    ]
     assert not off, f"browser tests off the session loop: {off[:5]}"
 
 
@@ -188,6 +201,7 @@ async def test_a_replaced_browser_has_its_driver_stopped():
 
 # ── the class gate: no suite takes a browser except through the seam ─────────
 
+
 def _suites():
     return [p for p in sorted(TESTS.glob("test_*.py")) if p.name != SELF]
 
@@ -202,7 +216,11 @@ def test_no_suite_launches_a_browser_per_test():
         text = path.read_text(encoding="utf-8")
         for name in banned:
             if re.search(rf"\b{name}\b", text):
-                if path.name in ("test_browser_launch_outcome.py", "test_e2e_browser_guard.py", "test_e2e_browser_reaped.py"):
+                if path.name in (
+                    "test_browser_launch_outcome.py",
+                    "test_e2e_browser_guard.py",
+                    "test_e2e_browser_reaped.py",
+                ):
                     continue  # they test the launch helpers themselves, with fakes
                 offenders.append(f"{path.name}: {name}")
     assert not offenders, "launch through tests.support.browser.launch/launch_sync: " + ", ".join(offenders)

@@ -27,10 +27,23 @@ from divoom_gui.api.window import WindowApi
 
 logger = logging.getLogger("divoom_gui")
 
-class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin,
-                   LifecycleSettingsMixin, ClockFacesMixin, PlaylistsMixin, AidSleepMixin,
-                   PhotoAlbumsMixin, WeatherCityMixin, LightingForwardMixin, PanelsMixin):
+
+class DivoomGuiAPI(
+    DebugMixin,
+    MediaSyncMixin,
+    PresetsManagerMixin,
+    ScannerMixin,
+    LifecycleSettingsMixin,
+    ClockFacesMixin,
+    PlaylistsMixin,
+    AidSleepMixin,
+    PhotoAlbumsMixin,
+    WeatherCityMixin,
+    LightingForwardMixin,
+    PanelsMixin,
+):
     """The PyWebView JS api bridge orchestrator."""
+
     def __init__(self) -> None:
         self.loop_thread = AsyncLoopThread()
         self.loop_thread.start()
@@ -94,6 +107,7 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
         """Return a live DaemonClient, auto-spawning the daemon if needed (R17
         P5). Cached; ``None`` only if the daemon can't be reached/started."""
         from divoom_gui.daemon_bridge import ensure_daemon
+
         if self._daemon_client is None:
             self._daemon_client = ensure_daemon()
         return self._daemon_client
@@ -105,6 +119,7 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
         # legit op (a 60s scan, a slow BLE push); on expiry we cancel + raise so
         # the GUI surfaces an error instead of hanging.
         import concurrent.futures
+
         future = asyncio.run_coroutine_threadsafe(coro, self.loop_thread.loop)
         try:
             return future.result(timeout=timeout)
@@ -123,8 +138,8 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
         # Tie the daemon's lifecycle to the GUI: stop the daemon we spawned so it
         # doesn't linger after the window closes (clean kill switch).
         try:
-            from divoom_lib.lifecycle_config import (
-                get_keep_daemon_alive, should_stop_daemon_on_dashboard_quit)
+            from divoom_lib.lifecycle_config import get_keep_daemon_alive, should_stop_daemon_on_dashboard_quit
+
             if self._daemon_client is not None and should_stop_daemon_on_dashboard_quit(get_keep_daemon_alive()):
                 self._daemon_client.shutdown()
         except Exception as e:
@@ -146,8 +161,9 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
     def set_visualization(self, mac: str, number: int) -> dict:
         return self.lighting.set_visualization(mac, number)
 
-    def push_text(self, mac: str, text: str, color: str = "#FFFFFF", font_size: int = 1,
-                  speed: int = 50, effect_style: int = 1) -> dict:
+    def push_text(
+        self, mac: str, text: str, color: str = "#FFFFFF", font_size: int = 1, speed: int = 50, effect_style: int = 1
+    ) -> dict:
         return self.lighting.push_text(mac, text, color, font_size, speed, effect_style)
 
     def send_danmaku_text(self, mac: str, text: str, color: str = "#FFFFFF") -> dict:
@@ -157,12 +173,12 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
     def get_alarms(self, mac: str) -> str:
         return self.tools.get_alarms(mac)
 
-    def set_alarm(self, mac: str, index: int, enabled, hour: int, minute: int,
-                  week: int = 0, mode: int = 0, trigger_mode: int = 0) -> bool:
+    def set_alarm(
+        self, mac: str, index: int, enabled, hour: int, minute: int, week: int = 0, mode: int = 0, trigger_mode: int = 0
+    ) -> bool:
         return self.tools.set_alarm(mac, index, enabled, hour, minute, week, mode, trigger_mode)
 
-    def start_sleep(self, mac: str, minutes: int = 30, color: str = "#2040ff",
-                    volume: int = 10) -> bool:
+    def start_sleep(self, mac: str, minutes: int = 30, color: str = "#2040ff", volume: int = 10) -> bool:
         return self.tools.start_sleep(mac, minutes, color, volume)
 
     def stop_sleep(self, mac: str) -> bool:
@@ -171,8 +187,7 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
     def set_timer(self, mac: str, action: str = "start") -> bool:
         return self.tools.set_timer(mac, action)
 
-    def set_countdown(self, mac: str, action: str = "start", minutes: int = 5,
-                      seconds: int = 0) -> bool:
+    def set_countdown(self, mac: str, action: str = "start", minutes: int = 5, seconds: int = 0) -> bool:
         return self.tools.set_countdown(mac, action, minutes, seconds)
 
     def set_noise(self, mac: str, action: str = "start") -> bool:
@@ -196,10 +211,16 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
     def set_low_power(self, mac: str, on) -> bool:
         return self.tools.set_low_power(mac, on)
 
-
-    def set_clock_rich(self, mac: str, style: int = 0, twentyfour: bool = True,
-                       humidity: bool = False, weather: bool = False,
-                       date: bool = False, color: str = "#ffffff") -> dict:
+    def set_clock_rich(
+        self,
+        mac: str,
+        style: int = 0,
+        twentyfour: bool = True,
+        humidity: bool = False,
+        weather: bool = False,
+        date: bool = False,
+        color: str = "#ffffff",
+    ) -> dict:
         return self.lighting.set_clock_rich(mac, style, twentyfour, humidity, weather, date, color)
 
     def set_fm_frequency(self, mac: str, freq_x10: int) -> bool:
@@ -253,6 +274,7 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
             return {"running": False, "error": "daemon unavailable"}
         reply = client.start_notifications()
         from divoom_client.macos_notifications import find_notification_db_path
+
         db_path = find_notification_db_path()
         out = {
             "running": self._daemon_state_running(reply),
@@ -292,8 +314,11 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
             }
         """
         from divoom_client.macos_notifications import (
-            ROUTING_PATH, load_routing_table, find_notification_db_path,
+            ROUTING_PATH,
+            load_routing_table,
+            find_notification_db_path,
         )
+
         if sys.platform != "darwin":
             return {
                 "platform_supported": False,
@@ -342,6 +367,7 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
         """
         from divoom_client.macos_notifications import load_routing_table
         import json as _json
+
         try:
             parsed = _json.loads(json_text) if json_text.strip() else []
         except _json.JSONDecodeError as e:
@@ -385,8 +411,9 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
         top = topology_data.get("topology", topology_data) if isinstance(topology_data, dict) else {}
         return client.set_topology(top)
 
-    def device_call(self, mac: str, method: str, args: list = None, kwargs: dict = None,
-                    blobs: dict = None, token: str = None) -> str:
+    def device_call(
+        self, mac: str, method: str, args: list = None, kwargs: dict = None, blobs: dict = None, token: str = None
+    ) -> str:
         """Generic device method proxy (exposed to JS), on the panel it NAMES.
 
         P5.7: it used to send no mac, so the daemon ran it on its selected
@@ -399,11 +426,9 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
         if client is None:
             return json.dumps({"success": False, "error": "daemon unavailable"})
         if mac == "MatrixWall":
-            reply = client.device_call(method, args, kwargs, target="wall",
-                                       blobs=blobs, token=token)
+            reply = client.device_call(method, args, kwargs, target="wall", blobs=blobs, token=token)
         else:
-            reply = client.device_call(method, args, kwargs, target="device",
-                                       blobs=blobs, token=token, mac=mac)
+            reply = client.device_call(method, args, kwargs, target="device", blobs=blobs, token=token, mac=mac)
         return json.dumps(reply)
 
     def open_file_dialog(self) -> str | None:
@@ -412,14 +437,10 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
             if not self.window:
                 logger.error("No webview window reference available.")
                 return None
-            
-            file_types = ('Image files (*.png;*.jpg;*.jpeg;*.gif)', 'All files (*.*)')
-            result = self.window.create_file_dialog(
-                webview.OPEN_DIALOG,
-                allow_multiple=False,
-                file_types=file_types
-            )
-            
+
+            file_types = ("Image files (*.png;*.jpg;*.jpeg;*.gif)", "All files (*.*)")
+            result = self.window.create_file_dialog(webview.OPEN_DIALOG, allow_multiple=False, file_types=file_types)
+
             if result and len(result) > 0:
                 logger.info(f"Selected file: {result[0]}")
                 return result[0]
@@ -455,6 +476,7 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
         spawned daemon can target a specific device. Returns a status dict (see
         ``mcp_server_status()``)."""
         from divoom_gui.mcp_control import MCPController, status_to_dict
+
         ctl = MCPController.instance()
         target_mac = mac or None
         return status_to_dict(ctl.start(mac=target_mac))
@@ -462,10 +484,12 @@ class DivoomGuiAPI(DebugMixin, MediaSyncMixin, PresetsManagerMixin, ScannerMixin
     def stop_mcp_server(self) -> dict:
         """Stop the MCP server subprocess (no-op if not running)."""
         from divoom_gui.mcp_control import MCPController, status_to_dict
+
         ctl = MCPController.instance()
         return status_to_dict(ctl.stop())
 
     def mcp_server_status(self) -> dict:
         """Snapshot of the subprocess state (JSON-friendly)."""
         from divoom_gui.mcp_control import MCPController, status_to_dict
+
         return status_to_dict(MCPController.instance().status())

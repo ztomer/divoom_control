@@ -24,6 +24,7 @@ threw it away. :class:`CloudUnavailable` carries it back, with a ``cause`` the
 UI can branch on so the three states stay DISTINGUISHABLE rather than collapsing
 into one generic sentence, which would be no better than ``[]``.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -94,8 +95,7 @@ class CloudUnavailable(RuntimeError):
 # Divoom's own return codes for an expired/mismatched token. The daemon already
 # retries once on these; seeing one in a final reply means the retry also failed,
 # which is an account problem and not a transient one.
-_AUTH_MARKERS = ("RC=9", "RC=10", "RC=11", "UserNewGuest", "not configured",
-                 "no credentials", "Token")
+_AUTH_MARKERS = ("RC=9", "RC=10", "RC=11", "UserNewGuest", "not configured", "no credentials", "Token")
 
 
 def _classify(reply: dict) -> str:
@@ -123,12 +123,12 @@ class CloudDataMixin:
         from divoom_client.daemon_config import load_daemon_config
 
         reply = self.send_command(
-            command, args or {},
+            command,
+            args or {},
             read_timeout=load_daemon_config().cloud_timeout,
         )
         if not isinstance(reply, dict):
-            raise CloudUnavailable(
-                f"{command}: malformed reply from the background service", "cloud")
+            raise CloudUnavailable(f"{command}: malformed reply from the background service", "cloud")
         if not reply.get("success"):
             cause = _classify(reply)
             reason = str(reply.get("error") or "the background service said no")
@@ -147,8 +147,7 @@ class CloudDataMixin:
         return self.cloud_call("store_clock_faces", {"limit": limit, "page": page}) or []
 
     def get_dial_list(self, dial_type: str, page: int = 1) -> list:
-        return self.cloud_call(
-            "get_dial_list", {"dial_type": dial_type, "page": page}) or []
+        return self.cloud_call("get_dial_list", {"dial_type": dial_type, "page": page}) or []
 
     def list_clock_faces(self, dial_type: str | None = None, page: int = 1) -> list:
         """First category's list when ``dial_type`` is omitted (daemon-side
@@ -161,27 +160,17 @@ class CloudDataMixin:
 
     # ── playlists (Playlist/GetMyList) ───────────────────────────────────────
     def get_my_playlists(self, limit: int = 30, page: int = 1) -> list:
-        return self.cloud_call(
-            "get_my_playlists", {"limit": limit, "page": page}) or []
+        return self.cloud_call("get_my_playlists", {"limit": limit, "page": page}) or []
 
-    def get_playlist_images(self, play_id: int, limit: int = 30,
-                            page: int = 1) -> list:
-        return self.cloud_call(
-            "get_playlist_images",
-            {"play_id": play_id, "limit": limit, "page": page}) or []
+    def get_playlist_images(self, play_id: int, limit: int = 30, page: int = 1) -> list:
+        return self.cloud_call("get_playlist_images", {"play_id": play_id, "limit": limit, "page": page}) or []
 
     # ── sleep sounds (AidSleep/GetAllList) ───────────────────────────────────
-    def get_aid_sleep_list(self, sleep_type: int, limit: int = 30,
-                           page: int = 1) -> list:
-        return self.cloud_call(
-            "get_aid_sleep_list",
-            {"sleep_type": sleep_type, "limit": limit, "page": page}) or []
+    def get_aid_sleep_list(self, sleep_type: int, limit: int = 30, page: int = 1) -> list:
+        return self.cloud_call("get_aid_sleep_list", {"sleep_type": sleep_type, "limit": limit, "page": page}) or []
 
-    def get_my_aid_sleep_list(self, sleep_type: int, limit: int = 30,
-                              page: int = 1) -> list:
-        return self.cloud_call(
-            "get_my_aid_sleep_list",
-            {"sleep_type": sleep_type, "limit": limit, "page": page}) or []
+    def get_my_aid_sleep_list(self, sleep_type: int, limit: int = 30, page: int = 1) -> list:
+        return self.cloud_call("get_my_aid_sleep_list", {"sleep_type": sleep_type, "limit": limit, "page": page}) or []
 
     # ── photo albums (Photo/GetAlbumList) ────────────────────────────────────
     def get_photo_albums(self) -> list:
@@ -192,8 +181,9 @@ class CloudDataMixin:
         return self.cloud_call("search_weather_city", {"keyword": keyword}) or []
 
     # ── gallery (GetCategoryFileListV2) ──────────────────────────────────────
-    def fetch_gallery(self, classify: int, limit: int = 30, file_sort: int = 1,
-                      *, mac: str | None = None, all_sizes: bool = False) -> Any:
+    def fetch_gallery(
+        self, classify: int, limit: int = 30, file_sort: int = 1, *, mac: str | None = None, all_sizes: bool = False
+    ) -> Any:
         """The cloud-voted gallery listing.
 
         The GUI used to POST this itself — its own credential cache, its own
@@ -211,8 +201,7 @@ class CloudDataMixin:
             args["all_sizes"] = True
         return self.cloud_call("fetch_gallery", args)
 
-    def get_category_file_list(self, classify: int | None = None,
-                               limit: int = 20) -> Any:
+    def get_category_file_list(self, classify: int | None = None, limit: int = 20) -> Any:
         args: dict = {"limit": limit}
         if classify is not None:
             args["classify"] = classify
@@ -228,26 +217,27 @@ class CloudDataMixin:
         value is how a caller ends up special-casing which command it used.
         """
         from divoom_client.daemon_config import load_daemon_config
-        reply = self.send_command(
-            "get_cached_credentials", {},
-            read_timeout=load_daemon_config().cloud_timeout)
+
+        reply = self.send_command("get_cached_credentials", {}, read_timeout=load_daemon_config().cloud_timeout)
         if not isinstance(reply, dict) or not reply.get("success"):
             raise CloudUnavailable(
                 str((reply or {}).get("error") or "credentials unavailable"),
-                _classify(reply if isinstance(reply, dict) else {}))
+                _classify(reply if isinstance(reply, dict) else {}),
+            )
         return DaemonCredentials.from_reply(reply.get("credentials"))
 
     def get_credentials(self, force_refresh: bool = False) -> "DaemonCredentials | None":
         """Log in if needed. **This one can go to the network** — never call it
         on a status poll or at startup; that is what the cached read is for."""
         from divoom_client.daemon_config import load_daemon_config
+
         reply = self.send_command(
-            "get_credentials", {"force_refresh": bool(force_refresh)},
-            read_timeout=load_daemon_config().cloud_timeout)
+            "get_credentials", {"force_refresh": bool(force_refresh)}, read_timeout=load_daemon_config().cloud_timeout
+        )
         if not isinstance(reply, dict) or not reply.get("success"):
             raise CloudUnavailable(
-                str((reply or {}).get("error") or "login failed"),
-                _classify(reply if isinstance(reply, dict) else {}))
+                str((reply or {}).get("error") or "login failed"), _classify(reply if isinstance(reply, dict) else {})
+            )
         return DaemonCredentials.from_reply(reply)
 
     def save_credentials(self, email: str, password: str) -> "DaemonCredentials":
@@ -258,13 +248,15 @@ class CloudDataMixin:
         the daemon-side store is where that gets fixed once, for every client.
         """
         from divoom_client.daemon_config import load_daemon_config
+
         reply = self.send_command(
-            "save_credentials", {"email": email, "password": password},
-            read_timeout=load_daemon_config().cloud_timeout)
+            "save_credentials", {"email": email, "password": password}, read_timeout=load_daemon_config().cloud_timeout
+        )
         if not isinstance(reply, dict) or not reply.get("success"):
             raise CloudUnavailable(
                 str((reply or {}).get("error") or "could not save credentials"),
-                _classify(reply if isinstance(reply, dict) else {}))
+                _classify(reply if isinstance(reply, dict) else {}),
+            )
         return DaemonCredentials.from_reply(reply)
 
     def hot_manifest(self, device_size: int = 16) -> list:
@@ -291,12 +283,11 @@ class CloudDataMixin:
         halves lived on side by side.
         """
         from divoom_client.daemon_config import load_daemon_config
+
         reply = self.send_command(
-            "get_animated_preview", {"file_id": file_id},
-            read_timeout=load_daemon_config().cloud_timeout)
+            "get_animated_preview", {"file_id": file_id}, read_timeout=load_daemon_config().cloud_timeout
+        )
         if not isinstance(reply, dict) or not reply.get("success"):
             reply = reply if isinstance(reply, dict) else {}
-            raise CloudUnavailable(
-                str(reply.get("error") or f"no preview for {file_id}"),
-                _classify(reply))
+            raise CloudUnavailable(str(reply.get("error") or f"no preview for {file_id}"), _classify(reply))
         return str(reply.get("preview") or "")

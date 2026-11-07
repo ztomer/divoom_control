@@ -12,6 +12,7 @@ Usage:
     python -m examples.push_animated_gif path/to/animation.gif
     python -m examples.push_animated_gif path/to/animation.gif --mac AA:BB:CC:DD:EE:FF
 """
+
 from __future__ import annotations
 
 import argparse
@@ -28,6 +29,7 @@ async def main(path: Path, mac: str | None, timeout: float) -> int:
         return 1
     if mac is None:
         from divoom_legacy.utils.discovery import discover_all_divoom_devices
+
         devices = await discover_all_divoom_devices(timeout=timeout)
         if not devices:
             print("No Divoom devices found.", file=sys.stderr)

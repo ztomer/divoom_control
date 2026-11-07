@@ -13,6 +13,7 @@ Replies are JSON strings in the `{ok, ...}` shape the web UI already unwraps.
 A value the daemon could not read is `null`, never a guess: the UI shows it as
 unknown.
 """
+
 from __future__ import annotations
 
 import json
@@ -31,8 +32,19 @@ WALL = "MatrixWall"
 #: per-model switches) and `screens` (what the app offers that model) are the
 #: panel's description: the GUI reads them and derives nothing of its own
 #: (P3.4).
-PANEL_FIELDS = ("mac", "connected", "selected", "model", "width", "height", "model_source",
-                "chassis", "features", "screens", "wall_refusal")
+PANEL_FIELDS = (
+    "mac",
+    "connected",
+    "selected",
+    "model",
+    "width",
+    "height",
+    "model_source",
+    "chassis",
+    "features",
+    "screens",
+    "wall_refusal",
+)
 
 
 class PanelsMixin:
@@ -40,6 +52,7 @@ class PanelsMixin:
 
     def _panel_proxy(self, mac: str):
         from divoom_gui.daemon_bridge import DaemonDeviceProxy
+
         client = self._client()
         if client is None:
             return None
@@ -118,5 +131,4 @@ class PanelsMixin:
     def set_volume(self, mac: str, volume: int) -> dict:
         val = max(0, min(15, int(volume)))
         logger.info("GUI Action: volume %s on %s", val, mac)
-        return self._level_write(
-            mac, "volume", lambda w: w.set_volume(val), lambda p: p.music.set_volume(val))
+        return self._level_write(mac, "volume", lambda w: w.set_volume(val), lambda p: p.music.set_volume(val))

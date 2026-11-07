@@ -28,6 +28,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+
 # The suite never sees the user's home (2026-11-01). Test daemons were started
 # with the developer's HOME, so each one read and REWROTE the owner's
 # `~/.config/divoom-control` -- one pytest run at 02:04 rewrote the owner's
@@ -61,8 +62,14 @@ def _isolate_home() -> None:
     # Name the owner: a SIGKILLed run never reaches the atexit rmtree below, so
     # the next session start removes this home once this process is gone.
     browser_reaper.claim_home(str(fake))
-    for rel in (".gitconfig", ".config/git", ".cache", "Library/Caches/camoufox",
-                "Library/Caches/ms-playwright", "Library/Caches/Mozilla.sccache"):
+    for rel in (
+        ".gitconfig",
+        ".config/git",
+        ".cache",
+        "Library/Caches/camoufox",
+        "Library/Caches/ms-playwright",
+        "Library/Caches/Mozilla.sccache",
+    ):
         src = real / rel
         if src.exists():
             (fake / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -90,26 +97,28 @@ _isolate_home()
 
 # Modules whose tests require a physically present Divoom device (they call
 # divoom_lib.utils.discovery.discover_device() in setUp and connect over BLE).
-HARDWARE_TEST_MODULES = frozenset({
-    "test_alarm_functions",
-    "test_brightness",
-    "test_channel_rotation",
-    "test_channel_switching",
-    "test_display_functions",
-    "test_e2e_live_hardware_connect_disconnect",
-    "test_game_functions",
-    "test_light_functions",
-    "test_music_functions",
-    "test_push_protocol_diagnostic",
-    "test_show_image_hw",
-    "test_sleep_functions",
-    "test_smoke_display_aliases_hw",
-    "test_system_functions",
-    "test_timeplan_functions",
-    "test_tool_functions",
-    "test_tool_timer_functions",
-    "test_watchface_roundtrip",
-})
+HARDWARE_TEST_MODULES = frozenset(
+    {
+        "test_alarm_functions",
+        "test_brightness",
+        "test_channel_rotation",
+        "test_channel_switching",
+        "test_display_functions",
+        "test_e2e_live_hardware_connect_disconnect",
+        "test_game_functions",
+        "test_light_functions",
+        "test_music_functions",
+        "test_push_protocol_diagnostic",
+        "test_show_image_hw",
+        "test_sleep_functions",
+        "test_smoke_display_aliases_hw",
+        "test_system_functions",
+        "test_timeplan_functions",
+        "test_tool_functions",
+        "test_tool_timer_functions",
+        "test_watchface_roundtrip",
+    }
+)
 
 
 def _add_option_once(parser, *args, **kwargs):
@@ -148,9 +157,9 @@ def pytest_addoption(parser):
         action="store_true",
         default=False,
         help="Run tests that launch a real browser (Playwright/camoufox). "
-             "Excluded by default: they need the camoufox binary present and "
-             "are process-contention sensitive -- one of them fails under the "
-             "full suite and passes alone (TargetClosedError, kill EPERM).",
+        "Excluded by default: they need the camoufox binary present and "
+        "are process-contention sensitive -- one of them fails under the "
+        "full suite and passes alone (TargetClosedError, kill EPERM).",
     )
     _add_option_once(
         parser,
@@ -158,7 +167,7 @@ def pytest_addoption(parser):
         action="store_true",
         default=False,
         help="Run integration tests that require live Divoom cloud access "
-             "(network egress + guest login). Skipped in CI / offline.",
+        "(network egress + guest login). Skipped in CI / offline.",
     )
 
 
@@ -197,16 +206,13 @@ def pytest_collection_modifyitems(config, items):
     from tests.support import browser_shared
 
     for item in items:
-        if (inspect.iscoroutinefunction(getattr(item, "obj", None))
-                and browser_shared.runs_on_session_loop(item.module)):
+        if inspect.iscoroutinefunction(getattr(item, "obj", None)) and browser_shared.runs_on_session_loop(item.module):
             item.add_marker(pytest.mark.asyncio(loop_scope="session"), append=False)
 
     run_hw = config.getoption("--run-hardware")
     if run_hw:
         return
-    skip_hw = pytest.mark.skip(
-        reason="requires a physical Divoom device; run with --run-hardware"
-    )
+    skip_hw = pytest.mark.skip(reason="requires a physical Divoom device; run with --run-hardware")
     for item in items:
         if item.module.__name__.split(".")[-1] in HARDWARE_TEST_MODULES:
             item.add_marker(skip_hw)
@@ -270,4 +276,3 @@ async def _shared_browser_async():
     yield
     await browser_shared.shutdown_async()
     browser_shared.bind_session_loop(None)
-

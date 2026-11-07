@@ -16,6 +16,7 @@ Rendering is proportional (each glyph trimmed to its column bounding box, with a
 configurable inter-glyph gap) and pixel-exact: a pixel is either fully on (the
 requested colour) or untouched — there is no anti-aliasing, ever.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -32,7 +33,7 @@ _ASSET_HALF = _BLOBS / "divoom_fond16_default_half.bin"
 _CELL = 16
 _GLYPH_BYTES = 32
 _FIRST_CP = 0x20  # space
-_LAST_CP = 0x7E   # ~
+_LAST_CP = 0x7E  # ~
 _FALLBACK_CP = 0x3F  # '?' for unsupported codepoints
 
 # Codepoint range table matching the APK's CmdManager / F2.d internal table.
@@ -66,9 +67,12 @@ class BitmapFont:
     CELL = _CELL
     SPACE_WIDTH = 3  # blank advance for ' ' (px)
 
-    def __init__(self, path: Optional[Path] = None,
-                 range_table: Optional[list[tuple[int, int]]] = None,
-                 expected_glyphs: Optional[int] = None) -> None:
+    def __init__(
+        self,
+        path: Optional[Path] = None,
+        range_table: Optional[list[tuple[int, int]]] = None,
+        expected_glyphs: Optional[int] = None,
+    ) -> None:
         """Load a bitmap font.
 
         Parameters
@@ -88,15 +92,11 @@ class BitmapFont:
         if range_table is None and expected_glyphs is None:
             expected = (_LAST_CP - _FIRST_CP + 1) * _GLYPH_BYTES
             if len(blob) < expected:
-                raise ValueError(
-                    f"bitmap font {path or _ASSET} too small: {len(blob)} < {expected}"
-                )
+                raise ValueError(f"bitmap font {path or _ASSET} too small: {len(blob)} < {expected}")
         if expected_glyphs is not None and range_table is None:
             expected = expected_glyphs * _GLYPH_BYTES
             if len(blob) < expected:
-                raise ValueError(
-                    f"bitmap font too small: {len(blob)} < {expected}"
-                )
+                raise ValueError(f"bitmap font too small: {len(blob)} < {expected}")
         self._blob = blob
         self._range_table = range_table
 
@@ -143,7 +143,7 @@ class BitmapFont:
             off = self._find_glyph_offset(_FALLBACK_CP)
             if off is None:
                 return [0] * _CELL
-        g = self._blob[off: off + _GLYPH_BYTES]
+        g = self._blob[off : off + _GLYPH_BYTES]
         return [(g[r * 2] << 8) | g[r * 2 + 1] for r in range(_CELL)]
 
     @staticmethod
@@ -185,8 +185,7 @@ class BitmapFont:
 
     # ── rendering ──────────────────────────────────────────────────────
 
-    def draw_text(self, draw, xy, text: str, fill, *, gap: int = 1,
-                  max_width: Optional[int] = None) -> int:
+    def draw_text(self, draw, xy, text: str, fill, *, gap: int = 1, max_width: Optional[int] = None) -> int:
         """Stamp ``text`` onto a ``PIL.ImageDraw`` at ``xy`` with crisp pixels.
 
         Proportional spacing; no anti-aliasing. If ``max_width`` is given, glyphs
@@ -219,11 +218,10 @@ class BitmapFont:
                 for c in range(c0, c1 + 1):
                     if (v >> (15 - c)) & 1:
                         draw.point((x + (c - c0), yy), fill=fill)
-            x += (c1 - c0 + 1)
+            x += c1 - c0 + 1
         return x - x0
 
-    def render(self, text: str, fill=(255, 255, 255), *, gap: int = 1,
-               bg=(0, 0, 0), mode: str = "RGB"):
+    def render(self, text: str, fill=(255, 255, 255), *, gap: int = 1, bg=(0, 0, 0), mode: str = "RGB"):
         """Render ``text`` to a tightly-cropped ``PIL.Image`` (height = 16)."""
         from PIL import Image, ImageDraw  # local import: PIL optional at import time
 

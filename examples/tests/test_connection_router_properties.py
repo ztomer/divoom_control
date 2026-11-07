@@ -1,6 +1,7 @@
 """Connection-router coverage: forwarding properties, public delegation and
 notification-handler plumbing (split from
 test_connection_router_coverage.py)."""
+
 import asyncio
 import json
 import logging
@@ -27,6 +28,7 @@ from support.connection_router_common import (  # noqa: F401
 
 # ── is_connected / is_alive / use_spp properties ────────────────────────────
 
+
 def test_is_connected_delegates_to_active_transport(monkeypatch):
     conn = _make_conn(monkeypatch)
     conn._active_transport.client.is_connected = True
@@ -37,7 +39,7 @@ def test_is_alive_uses_transport_is_alive_when_present(monkeypatch):
     conn = _make_conn(monkeypatch)
     conn._active_transport.client.is_connected = True
     conn._active_transport._connection_likely_broken = True
-    assert conn.is_alive is False    # connected per OS, but a drop is pending
+    assert conn.is_alive is False  # connected per OS, but a drop is pending
 
 
 def test_is_alive_falls_back_to_is_connected_when_unsupported(monkeypatch):
@@ -59,6 +61,7 @@ def test_use_spp_property(monkeypatch):
 
 # ── notification_handler() ──────────────────────────────────────────────────
 
+
 def test_notification_handler_forwards_when_supported(monkeypatch):
     conn = _make_conn(monkeypatch)
     seen = {}
@@ -76,10 +79,11 @@ def test_notification_handler_noop_when_unsupported(monkeypatch):
         pass
 
     conn._active_transport = _NoHandler()
-    conn.notification_handler(1, bytearray(b"x"))   # must not raise
+    conn.notification_handler(1, bytearray(b"x"))  # must not raise
 
 
 # ── send_command() (public router method — bypasses transport routing) ─────
+
 
 def test_send_command_success_builds_payload_and_delegates(monkeypatch):
     conn = _make_conn(monkeypatch)
@@ -129,6 +133,7 @@ def test_send_command_exception_is_caught(monkeypatch, caplog):
 
 # ── send_payload() / wait_for_response() (public delegation) ───────────────
 
+
 def test_send_payload_public_delegates_to_active_transport(monkeypatch):
     conn = _make_conn(monkeypatch)
     called = {}
@@ -166,6 +171,7 @@ def test_disconnect_public_delegates(monkeypatch):
 
 
 # ── send_command_and_wait_for_response(): string command + contention log ──
+
 
 def test_send_command_and_wait_for_response_resolves_string_command(monkeypatch):
     conn = _make_conn(monkeypatch)
@@ -235,6 +241,7 @@ def test_send_command_and_wait_for_response_logs_when_lock_contended(monkeypatch
 
 # ── wait_for_any_response() / _listen_commands ──────────────────────────────
 
+
 def test_wait_for_any_response_returns_none_when_unsupported(monkeypatch):
     conn = _make_conn(monkeypatch)
 
@@ -277,6 +284,7 @@ def test_listen_commands_property_defaults_none_when_unsupported(monkeypatch):
 
 # ── _spp_client property/setter ─────────────────────────────────────────────
 
+
 def test_spp_client_getter_returns_active_transport_when_use_spp(monkeypatch):
     conn = _make_conn(monkeypatch)
     conn._use_spp = True
@@ -308,6 +316,7 @@ def test_spp_client_setter_ignores_none(monkeypatch):
 
 # ── mac / device_name properties (both SPP and BLE branches) ───────────────
 
+
 def test_mac_property_ble_branch(monkeypatch):
     conn = _make_conn(monkeypatch)
     assert conn.mac == conn._active_transport.mac
@@ -338,6 +347,7 @@ def test_device_name_property_roundtrip(monkeypatch):
 
 # ── characteristic UUID / escapePayload / use_ios_le_protocol / client /
 #    notification_queue / message_buf setters — both hasattr branches ───────
+
 
 def test_characteristic_and_misc_setters_forward_when_supported(monkeypatch):
     conn = _make_conn(monkeypatch)
@@ -393,8 +403,8 @@ def test_characteristic_and_misc_setters_noop_when_unsupported(monkeypatch):
     assert conn.NOTIFY_CHARACTERISTIC_UUID == ""
     assert conn.READ_CHARACTERISTIC_UUID == ""
     assert conn.SPP_CHARACTERISTIC_UUID == ""
-    assert conn.escapePayload is True   # default per getattr(..., True)
-    assert conn.use_ios_le_protocol is False   # default per getattr(..., False)
+    assert conn.escapePayload is True  # default per getattr(..., True)
+    assert conn.use_ios_le_protocol is False  # default per getattr(..., False)
     assert conn.client is None
     assert conn.message_buf == bytearray()
 
@@ -419,5 +429,5 @@ def test_expected_response_command_noop_when_unsupported(monkeypatch):
         pass
 
     conn._active_transport = _Bare()
-    conn._expected_response_command = 0x11    # setter no-ops (no such attr)
-    assert conn._expected_response_command is None   # getter default
+    conn._expected_response_command = 0x11  # setter no-ops (no such attr)
+    assert conn._expected_response_command is None  # getter default

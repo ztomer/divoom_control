@@ -10,6 +10,7 @@ Usage:
     python -m examples.discover_and_connect
     python -m examples.discover_and_connect --timeout 20
 """
+
 from __future__ import annotations
 
 import argparse

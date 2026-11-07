@@ -16,6 +16,7 @@ TCC "responsible process" and macOS shows the normal Allow-Bluetooth prompt
 (instead of crashing on first CoreBluetooth touch). See scripts/make_app_bundle.sh
 for the background.
 """
+
 import os
 import tomllib
 from pathlib import Path
@@ -45,10 +46,8 @@ def _version() -> str:
 
 
 VERSION = _version()
-BT_DESC = ("Divoom Control uses Bluetooth to discover and control your Divoom "
-           "pixel display.")
-AE_DESC = ("Divoom Control reads the now-playing track from Music and Spotify to "
-           "show album art on your screen.")
+BT_DESC = "Divoom Control uses Bluetooth to discover and control your Divoom pixel display."
+AE_DESC = "Divoom Control reads the now-playing track from Music and Spotify to show album art on your screen."
 
 APP = ["divoom_gui/gui_main.py"]
 
@@ -58,13 +57,15 @@ APP = ["divoom_gui/gui_main.py"]
 # DIVOOMD_ENCODER_LIB at the bundled dylib. Skipped if divoomd isn't built (the
 # Python daemon then ships as the fallback). build_release.sh builds divoomd first.
 _RES_FILES = [
-    p for p in (
+    p
+    for p in (
         "target/release/divoomd",
         # The native Rust menubar agent — the GUI spawns it (see gui_main
         # _resolve_menubar_binary, which finds it via RESOURCEPATH). Replaces the
         "target/release/divoom-menubar",
         "divoom_lib/libdivoom_compact.dylib",
-    ) if os.path.exists(p)
+    )
+    if os.path.exists(p)
 ]
 DATA_FILES = [("", _RES_FILES)] if _RES_FILES else []
 
@@ -79,15 +80,31 @@ OPTIONS = {
     # tree (not byte-compiled into the zip), so web_ui/, fonts/ and the native
     # dylib travel with their package and resolve via Path(__file__).parent.
     "packages": [
-        "divoom_lib", "divoom_client", "divoom_gui",
-        "bleak", "aiohttp", "PIL", "webview",
-        "objc", "Foundation", "AppKit", "CoreBluetooth", "WebKit", "Quartz",
+        "divoom_lib",
+        "divoom_client",
+        "divoom_gui",
+        "bleak",
+        "aiohttp",
+        "PIL",
+        "webview",
+        "objc",
+        "Foundation",
+        "AppKit",
+        "CoreBluetooth",
+        "WebKit",
+        "Quartz",
     ],
-    "includes": ["divoom_lib.cli"],   # spawned via -m, so pull it in explicitly
+    "includes": ["divoom_lib.cli"],  # spawned via -m, so pull it in explicitly
     # Belt-and-suspenders: never let the reverse-engineered APK / dev trees in.
     "excludes": [
-        "references", "tests", "scripts", "examples", "docs",
-        "pytest", "_pytest", "py2app",
+        "references",
+        "tests",
+        "scripts",
+        "examples",
+        "docs",
+        "pytest",
+        "_pytest",
+        "py2app",
     ],
     "plist": {
         "CFBundleName": "Divoom",

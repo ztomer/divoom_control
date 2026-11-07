@@ -98,10 +98,7 @@ def _significant(source: str) -> str:
 
 def rust_variants() -> dict[str, int]:
     """`{variant: id}` for every enum variant the generated model declares."""
-    return {
-        m.group("name"): int(m.group("id"), 16)
-        for m in VARIANT.finditer(MODEL_RS.read_text())
-    }
+    return {m.group("name"): int(m.group("id"), 16) for m in VARIANT.finditer(MODEL_RS.read_text())}
 
 
 def variant_name(command: str) -> str:
@@ -132,8 +129,7 @@ def test_the_rust_command_model_exists() -> None:
     # Without this the rest of the file would compare two empty sets and pass,
     # which is the failure mode of a checker over an absent subject.
     assert VARIANT.search(MODEL_RS.read_text()), (
-        f"{MODEL_RS.name} declares no command variants: the typed model the "
-        "L2 phase exists to add is not there"
+        f"{MODEL_RS.name} declares no command variants: the typed model the L2 phase exists to add is not there"
     )
 
 
@@ -144,8 +140,7 @@ def test_every_python_command_is_spellable_in_rust() -> None:
     unspellable = {
         name: variant_name(name)
         for name in models.COMMANDS
-        if variant_name(name) not in variants
-        and f'alias = "{name}"' not in source
+        if variant_name(name) not in variants and f'alias = "{name}"' not in source
     }
     assert not unspellable, f"commands with no Rust spelling: {unspellable}"
 
@@ -177,11 +172,7 @@ def test_no_rust_variant_without_a_python_command() -> None:
 
 def test_every_variant_carries_the_python_id() -> None:
     want = expected_variants()
-    wrong = {
-        name: (got, want[name])
-        for name, got in rust_variants().items()
-        if name in want and got != want[name]
-    }
+    wrong = {name: (got, want[name]) for name, got in rust_variants().items() if name in want and got != want[name]}
     assert not wrong, f"variants whose id disagrees with Python: {wrong}"
 
 
@@ -257,16 +248,12 @@ def test_the_codegen_output_is_current() -> None:
         cwd=REPO,
         check=True,
         capture_output=True,
-        env={**os.environ, "PYTHONPATH": str(REPO)}, stdin=subprocess.DEVNULL,
+        env={**os.environ, "PYTHONPATH": str(REPO)},
+        stdin=subprocess.DEVNULL,
     )
-    stale = [
-        path.name
-        for path in GENERATED
-        if _significant(path.read_text()) != before[path.name]
-    ]
+    stale = [path.name for path in GENERATED if _significant(path.read_text()) != before[path.name]]
     assert not stale, (
-        f"stale after regeneration: {stale} — re-run "
-        "scripts/codegen/gen_commands.py and cargo fmt -p divoomd"
+        f"stale after regeneration: {stale} — re-run scripts/codegen/gen_commands.py and cargo fmt -p divoomd"
     )
 
 

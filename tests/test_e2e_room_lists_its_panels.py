@@ -25,6 +25,7 @@ a drag) and read what the bench draws.
 
 Skipped if a browser isn't installed (runs with --run-browser).
 """
+
 import json
 
 import pytest
@@ -32,8 +33,11 @@ import pytest
 from tests.support.browser import add_init_js, eval_js, install_toast_recorder, launch, require_browser, wait_js
 from tests.test_e2e_bench_snap import INDEX_HTML, _drag, _panel
 
-A, B, T = "aa000000-0000-4000-8000-000000000001", "bb000000-0000-4000-8000-000000000002", \
-    "cc000000-0000-4000-8000-000000000003"
+A, B, T = (
+    "aa000000-0000-4000-8000-000000000001",
+    "bb000000-0000-4000-8000-000000000002",
+    "cc000000-0000-4000-8000-000000000003",
+)
 NAMES = {A: "Pixoo-1", B: "Ditoo-light-2", T: "Timoo-light-4"}
 
 _MOCK_API = """
@@ -65,11 +69,14 @@ async def _open(p, macs, topology=None, stored_rooms=None):
     # (what the owner's machine held), seeded before load: it must count for
     # nothing.
     topology = topology or {"rooms": ["Desk", "Shelf", "Wall"], "wall_linked": True, "devices": {}}
-    init = (_MOCK_API.replace("%PANELS%", json.dumps([_panel(m) for m in macs]))
-            .replace("%TOPOLOGY%", json.dumps(topology)))
+    init = _MOCK_API.replace("%PANELS%", json.dumps([_panel(m) for m in macs])).replace(
+        "%TOPOLOGY%", json.dumps(topology)
+    )
     if stored_rooms:
-        init = (f"try {{ localStorage.setItem('divoom_stage_rooms', {json.dumps(json.dumps(stored_rooms))}); }}"
-                " catch (_) {}\n" + init)
+        init = (
+            f"try {{ localStorage.setItem('divoom_stage_rooms', {json.dumps(json.dumps(stored_rooms))}); }}"
+            " catch (_) {}\n" + init
+        )
     await add_init_js(page, init)
     await install_toast_recorder(page)
     await page.goto(f"file://{INDEX_HTML}")
@@ -128,8 +135,11 @@ async def test_a_panel_moved_to_another_room_shows_only_there():
             empty = await eval_js(page, "() => document.getElementById('spatial-bench-room-empty')?.textContent")
             assert empty and "Desk" in empty, f"an empty room says so, by name: {empty!r}"
             assert await _show(page, "all") == sorted([A, B, T]), "All is every panel"
-            counts = await eval_js(page, """() => Object.fromEntries([...document.querySelectorAll('.stage-room-pill')]
-                .map(p => [p.dataset.room, p.querySelector('.stage-room-pill-count').textContent]))""")
+            counts = await eval_js(
+                page,
+                """() => Object.fromEntries([...document.querySelectorAll('.stage-room-pill')]
+                .map(p => [p.dataset.room, p.querySelector('.stage-room-pill-count').textContent]))""",
+            )
             assert counts["Shelf"] == "(2)" and counts["Ethan"] == "(1)" and counts["Desk"] == "(0)", counts
         finally:
             await browser.close()
@@ -160,7 +170,8 @@ async def test_a_panel_taken_out_of_a_room_stays_out_after_a_drag():
             await wait_js(page, f"() => window.__calls.length > {before}")
             assert await eval_js(page, _ON_BENCH) == [A], "the drag must not put it back"
             assert await eval_js(page, f"() => window.SpatialRooms.roomOf('{B}')") == "", (
-                "the stored room stays empty after the drag saved the layout")
+                "the stored room stays empty after the drag saved the layout"
+            )
             sent = [c["args"][0] for c in await eval_js(page, "() => window.__calls")]
             # What the daemon holds is each panel's LAST entry sent (it replaces
             # an entry whole): fold the writes.
@@ -169,7 +180,8 @@ async def test_a_panel_taken_out_of_a_room_stays_out_after_a_drag():
                 held.update(w.get("devices", {}))
             assert held[A]["room"] == "Shelf", held
             assert B in held and held[B].get("room") is None, (
-                f"the daemon is told the panel has no room -- not Shelf, and not an invented Desk: {held}")
+                f"the daemon is told the panel has no room -- not Shelf, and not an invented Desk: {held}"
+            )
         finally:
             await browser.close()
 
@@ -185,19 +197,24 @@ async def test_the_rooms_the_daemon_stored_are_read_as_stored():
     from playwright.async_api import async_playwright
 
     ghosts = {f"11:22:33:44:55:0{i}": {"room": "Desk", "x": 50 * i, "y": 100} for i in range(1, 5)}
-    topology = {"rooms": ["Desk", "Shelf", "Wall", "Ethan"], "wall_linked": True, "devices": {
-        **ghosts,
-        A: {"room": "Shelf", "x": 681, "y": 39},
-        B.upper(): {"room": "Shelf", "x": 502, "y": 95},
-        T: {"room": "Ethan", "x": 448, "y": 110},
-    }}
+    topology = {
+        "rooms": ["Desk", "Shelf", "Wall", "Ethan"],
+        "wall_linked": True,
+        "devices": {
+            **ghosts,
+            A: {"room": "Shelf", "x": 681, "y": 39},
+            B.upper(): {"room": "Shelf", "x": 502, "y": 95},
+            T: {"room": "Ethan", "x": 448, "y": 110},
+        },
+    }
     async with async_playwright() as p:
         browser, page = await _open(p, [A, B, T], topology, stored_rooms={T: "Shelf"})
         try:
             await eval_js(page, "() => window.SpatialRooms.loadTopology()")
             assert await _show(page, "Ethan") == [T]
             assert await _show(page, "Shelf") == sorted([A, B]), (
-                "the Shelf lists its panels, the upper-case key included, and not the Timoo's stale local room")
+                "the Shelf lists its panels, the upper-case key included, and not the Timoo's stale local room"
+            )
             assert await _show(page, "Desk") == [], "the placements of panels nobody reports are drawn nowhere"
         finally:
             await browser.close()
@@ -223,11 +240,13 @@ async def test_an_open_add_room_form_survives_a_redraw_of_the_pills(event):
             await page.fill(".stage-room-input", "Ethan")
             await eval_js(page, "(e) => window.dispatchEvent(new CustomEvent(e, {detail: {}}))", event)
             assert await eval_js(page, "() => document.querySelector('.stage-room-input')?.value") == "Ethan", (
-                "the redraw took the open form and its typed name")
+                "the redraw took the open form and its typed name"
+            )
             await page.click(".stage-room-confirm-btn")
             await wait_js(page, "() => !!document.querySelector('.stage-room-pill[data-room=\"Ethan\"]')")
             assert await eval_js(page, "() => document.querySelector('.stage-room-input')") is None, (
-                "the form closes once the room is added")
+                "the form closes once the room is added"
+            )
         finally:
             await browser.close()
 
