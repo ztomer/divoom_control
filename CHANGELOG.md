@@ -4,6 +4,27 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## Unreleased
+
+- **The "monthly best" category is a daily pick, not a sliding window
+  (P9.8 answered, 2026-11-07).** Measured from the daemon's own fetch
+  snapshots (`~/.config/divoom-control/hotchannel_fetches.json`, 14 runs on
+  2026-10-26, 11-01, 11-02 and 11-06). Classify 18, the Recommend gallery the
+  schedule pushes: every panel fetched the SAME 10 files on a given day, and
+  each day's 10 shared NOTHING with the previous day's (0 kept across all
+  three day pairs), dated anywhere from 2019-01-21 to 2026-08-12 -- the cloud
+  picks a new set from its whole archive each day, so there is no window
+  width to state. Classify 17, for contrast, IS a window of recent uploads:
+  every file was dated within about 10 days of the fetch, with 0-2 kept from
+  one day to the next. The 24-hour cadence (`divoomd/src/monthly_best.rs`)
+  stands.
+- **The roadmap reworked** (2026-11-07): open work in execution order
+  (agent-runnable, owner-gated, hardware-gated, time-gated, upstream-gated),
+  the owner's rulings in one section, and every closed narrative left to
+  `git show 1c13851:docs/ROADMAP.md`. New: P1.22 (CI red on main since
+  v0.45.0), P1.23 (the dependency graph current), P1.24, P1.25 (RS.DV),
+  P4.8 (OW.46), P9.11 (zbus 6 for ksni), P9.12 (WG.5), P9.13 (WG.LIGHTDARK).
+
 ## v0.45.0 — Camoufox 0.5.9 and browser 158.0.1-beta.41 (2026-11-05)
 
 - **Camoufox dependency and browser pin update.** Updates `camoufox==0.5.9` and

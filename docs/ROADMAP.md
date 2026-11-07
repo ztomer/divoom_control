@@ -1,13 +1,18 @@
 # Roadmap — divoom-control
 
 The ONE forward-looking document (`AGENTS.md`). It holds what is not done yet,
-in the order it should be done, and the standing rules new work must respect.
-What shipped is in `CHANGELOG.md`; round plans and pruned sections are in git
-history (`git log -p -- docs/ROADMAP.md`).
+in the order it should be done, the owner's rulings, and the standing rules new
+work must respect. What shipped is in `CHANGELOG.md`. Closed narrative --
+every "Landed" paragraph, the Phase 0-6 histories and the release table -- is
+in git history: the last full version before the 2026-11-07 rework is
+`git show 1c13851:docs/ROADMAP.md`, and the one before the 2026-10-14
+rephase is `git show a8a848d:docs/ROADMAP.md`.
 
-**How to read the Plan.** Phases run in order; an item may depend only on items
-in its own or an earlier phase. Each item says why it matters, what "done"
-means in terms someone can check, and where the evidence is. Statuses:
+**How to read the Plan.** Stages run in EXECUTION order: Stage 1 is what an
+agent can do now, top to bottom; the stages after it wait on something
+outside the agent's hands, and each names what. An item's id (`P<n>.<m>`) is
+kept from the phase that opened it, so commits and the umbrella queue that
+cite it still resolve; the stage it sits in is where it is worked. Statuses:
 
 | Status | Meaning |
 |---|---|
@@ -17,594 +22,209 @@ means in terms someone can check, and where the evidence is. Statuses:
 | `WATCH` | Nothing to do until an outside event; the trigger is named. |
 
 `tests/test_roadmap_shape.py` enforces that shape: every item has a status and a
-**Done when**, no dependency points at a later phase, and every repo path cited
-anywhere in this file exists. Shipped items are deleted from the Plan, not
+**Done when**, no dependency points at a later phase id, and every repo path
+cited anywhere in this file exists. Shipped items are deleted from the Plan, not
 marked SHIPPED -- that marker is refused.
 
-Premises were last checked against the code on **2026-10-14** (HEAD `a38e2df`,
-the goh 0.27.0 hook reinstall on top of the 2026-10-12 plan commit `a8a848d`).
-Fourteen items have landed since (P1.1 `15ff359` on 2026-10-15; P1.6, the
-build/install platform gate, and P1.7, the RX frame parser's one-byte resync, on
-2026-10-16; P1.12, the framing-vector generator, P1.5, the two-suite
-collection fix, P1.2, the PyInstaller pin from a committed file, P1.4, the
-coverage floor ratcheted to the measurement, P1.3, the stale `tao` comments
-in CI, P1.8, the 52 hand-rolled status markers, P1.11, the short-frame panic
-fixed on both sides, P1.10, CI reading Python from `.python-version`, and
-P1.9, the release bumping the cask through the tap's gate, also on
-2026-10-17; P7.1, the tray glyph's shapes, on 2026-10-18; P1.13, the browser
-suites run in the local gate, on 2026-10-19, in `1760a79`, `7080f72`, `414ab5e`
-and `0627eb5`; P7.2, the connection dot's shape-and-fill vocabulary, on
-2026-10-20, ruled by the owner and landed), so the items below have
-NOT been re-derived against a later HEAD -- check an item against the code before
-working it. Phase 0 is new (goh 0.27.0's fallout,
-measured); the old Phase 0 became Phase 1 and every later phase moved up by one
-(P9 unchanged), and the old P0.8 (camoufox) is now P0.2. Each phase states its
-goal, exit criterion and rough size in sessions (S = under one, M = one or two,
-L = three or more).
+**Premises checked 2026-11-07** at `593408f` (local main, one commit ahead of
+`origin/main` at `6372678`): the newest tag is `v0.45.0`, the installed app
+reports `0.45.0`, and the Homebrew cask is `0.45.0` (tap `f001d4b`). Every
+item below was re-read against that tree; the evidence for each change is in
+the commit that made this rework.
 
-**One exception to "not re-derived": the 2026-10-20 hardware round.** P2.7,
-P5.3, P6.1, P6.2, P9.3 and P9.7 were re-derived against the installed v0.41.3
-bundle and the code at `0d4fb76`, with four panels on the bench; each entry
-below carries its verdict and what is left. P2.7 landed and is deleted from
-the Plan.
+**Umbrella queue ids** (`~/Projects/ROADMAP-consolidated.md`) that map here:
+D3 -> P5.16; D7 -> P6.1; D8 -> P6.2; OW.46 -> P4.8; RS.DV -> P1.25;
+WG.5 and WG.7 -> P9.12; WG.LIGHTDARK -> P9.13.
+
 ---
 
 ## Plan
 
-### Phase 0 — wire in goh 0.27.0
+### Stage 1 — agent-runnable, in execution order
 
-**Goal:** `tools/gate.sh --full` green at HEAD and pushed (`a8a848d` and the
-hook reinstall `a38e2df` are waiting on it). **Exit:** the pre-push gate
-accepts `git push`; each item's named step is green and was seen red.
-**Size:** M (one session; P0.1 is the bulk). Measured 2026-10-14 on
-`a38e2df`: structural stops at its first red (stdin), so the rest was read
-with `GOH_SUBPROCESS_STDIN=off` written into a scratch `.gatesrc` (not
-committed): 22 of 25 steps green in 7 min 59 s at load ~140, three red.
+**Goal:** main green in CI, the dependency graph current, and the per-panel
+model finished. **Exit:** every Stage 1 item deleted. The divoom gate runs 8
+camoufox browsers (~8 GB): run it once per landing, never in a loop.
 
-#### Phase 0 ships in `a8a848d..229c96d`; what is left
+#### P1.22 — CI's browser step is red on main since v0.45.0 (D.CIB85)
+**Status:** OPEN
+**Why:** the `tests` job failed on the `v0.45.0` tag (run 42158445750) and on
+main at `6372678` (run 42158513910): 5 failed, 2364 passed, 222 skipped. All
+five die before a page opens, inside camoufox's fingerprint generator:
+`launch_options` (`tests/support/browser_options.py:64`) ->
+fpgen's `unpacker.lookup_value_list` -> `base64.b85decode` ->
+`binascii.Error: Incomplete Base85 group` (one, the host-OS test, as the
+subprocess's exit status 1). The same five pass on this machine
+(2026-11-07, `--run-browser`, 5 passed) with the SAME camoufox 0.5.9, fpgen
+1.3.0 and Python 3.15 -- so the difference is the fingerprint DATA fpgen
+holds, which CI fetches fresh on every run and this machine has cached. That
+is the shape the local gate cannot see: the dev machine's cache masks a
+broken fresh install. The release was cut over a red CI.
+**Done when:** a fresh-cache run reproduces it locally (fpgen's data
+directory pointed at an empty temp dir) and is watched red; the cause is
+fixed or the data pinned the way `.camoufox-build` pins the browser; the
+local gate runs the browser suites on a fresh fpgen cache so the class
+cannot hide again; and CI's `tests` job is green on main.
 
-All six items landed and the full gate is green. They are deleted rather than
-annotated, per this file's header:
+#### P1.23 — The dependency graph is current
+**Status:** OPEN
+**Why:** measured 2026-11-07 (`cargo update --dry-run --verbose`): 64
+compatible updates are waiting in `Cargo.lock` (among them btleplug 0.13.5,
+bluez-async 0.9.0, ksni 0.3.7, aws-lc-sys 0.47.0), and three DIRECT majors
+are behind in `divoomd/Cargo.toml`: `color_quant` 1.1 -> 2.0, `rusqlite`
+0.40 -> 0.41, `sysinfo` 0.39 -> 0.40. On the Python side camoufox 0.5.9
+allows `playwright` <1.63 and 1.62.0 is out, while 1.60.0 is installed. House
+rule: the newest release, each major in its own commit.
+**Done when:** the lock is refreshed in one commit; each of the three majors
+moves in its own commit (`sysinfo` re-derived with
+`tools/mem_gauge_compare.py`, per the standing rule on what a number MEANS);
+`playwright` is on the newest version camoufox allows, with the browser
+suites run against it; `cargo update --dry-run --verbose` prints no
+`Unchanged` line except the ones P9.11 and P9.4 name.
 
-- **P0.1** — `56a6a2b` — every call names its stdin, declared not seeded
-- **P0.2** — `439fdcd` — the check names the shared cache as the cause and the tests fake the active build
-- **P0.3** — `c0bce0a` + `4c4828e` — the gate judges its own tree, and the accept test drives a fixture
-- **P0.4** — `20b3df2` + `6aa6f5c` — the reader frames by line; a two-events-in-one-chunk case is watched red
-- **P0.5** — `229c96d` — all floors set, the `[subject]` line is gone
-- **P0.6** — `f70919b` — rustls 0.23.46, no ignore entry
-
-Two things the phase found that are NOT its items, tracked where they belong:
-
-- `tests/test_empty_scope_guard.py`'s ratchet asserted `legitimate` must be
-  empty, which is not what that section means (see the entry's own header);
-  rewritten, with both directions proven red.
-- The py_ci coverage floor now binds on every run (`23b512f`) — it was
-  reporting "NOT enforced" because the two camoufox probes disagreed.
-
-Landed after (2026-10-21): the stdin sweep's row for this repo was closed on
-2026-10-14 (`56a6a2b`, P0.1), and the tree has moved since, so the floor was
-re-measured with the house's own tool and set WITH the tree: 73 process calls
-across 53 files, every one of them declaring its stdin, and no allowlist file
-at all — nothing is seeded, so there is no 'unreviewed' debt to work off. The
-step is NAMED in `.gatesrc` now (`GOH_SUBPROCESS_STDIN=on`): it has run by
-default since goh 0.27.0, and a gate a repo inherits from a default is a gate
-nobody turned on. Both directions were watched red first — with every
-declaration stripped the check names all 73 calls, and with the floor raised
-above what the scan reads it names the floor key.
-
-### Phase 1 — correctness defects and drift (small, independent)
-
-**Goal:** no known defect or gate hole stays open while feature work starts.
-**Exit:** every P1 item's *Done when* is a test or gate that was watched red
-first. **Size:** M (all items landed). Depends on Phase 0
-(nothing pushes until it lands).
-
-**Phase 1 complete** (2026-10-17): all eleven P1 items landed (P1.1, P1.2, P1.3,
-P1.4, P1.5, P1.6, P1.7, P1.8, P1.9, P1.10, P1.11).
-
-Landed after (2026-10-18): a probe crate's cargo build removed with its temp
-dir -- the tray-icon verifier left a build under `~/.cargo/build` per run
-because the house `build-dir` hashes a fresh path every time; every Python
-cargo build spawn in `tools/` and `scripts/` now takes its environment from
-`probe_env`, and a class check fails any that does not (`45cc5e5`;
-`tools/_cargo_env.py`, `tests/test_cargo_probe_env.py`).
-Landed after (2026-10-18): main CI's browser step, red on run 39171574815 on two
-different tests, was one app defect -- a Spatial Bench re-render (every scan
-result, activity event and owned-device broadcast, including the startup scan a
-second after load) re-applied selection side effects: it moved the channel tab
-the user had opened, rebuilt the node under an open drag, and repainted a level
-slider under the pointer. A refresh now syncs only on a change of panel, never
-moves a tab the user opened, waits for a drop, and leaves a held slider alone
-(`divoom_gui/web_ui/spatial_stage.js`, `divoom_gui/web_ui/spatial_drag.js`,
-`divoom_gui/web_ui/panel_facts.js`; `tests/test_e2e_rerender_keeps_user_state.py`,
-which fires the refresh inside each gesture, 4 red before). Running the suites
-eight-wide to reproduce CI's contention found two test-side instances of the
-same "the page moved on while the test looked" shape, both fixed: a gallery
-fixture tile the app drops as broken (180 ms fade) and three backend mocks
-that released on a 120-3000 ms timer instead of when the test said so, and
-a GIF-frame probe that read a 400 ms loop through a real 260 ms timer (now a
-pinned clock, `tests/test_preview_gif_animation.py`).
-Landed after (2026-10-19): P1.13, the browser suites run in the local gate.
-The camoufox build is declared once, in `.camoufox-build`
-(`official/prerelease/156.0.1-beta.39`, the newest release and the dev
-machine's build; owner ruling: CI uses the local machine's version). CI fetches
-that spec, and CI and `GOH_CI_STEPS` both run `scripts/browser_e2e.sh`, which
-refuses any other active build with the install command; the parity exemption
-is gone (`tests/test_camoufox_install_check.py` fails a build literal outside
-the pin). The suites are hermetic too: the test browser's
-off-machine traffic goes to a closed port, because waiting on Google Fonts made
-`Page.goto` time out under load (`tests/support/browser_options.py`, `414ab5e`).
-Landed after (2026-10-19): the browser suites running eight-wide in the local
-gate found two app defects, both the same class -- the app's own startup
-overwrote state it already had. `setConnectionState` wrote two views of one
-fact (the panel's own link flags and the app-wide `appConnected`) and
-disagreed on what a PENDING connect means: the banner keeps the last known
-device until the connect resolves, the link flag did not, and for the Virtual
-Wall -- which has no `discoveredDevices` record of its own -- that flag is what
-`requireDevice()` gates every wall write on, so those writes were refused with
-"Connect a device first" and dropped. Separately, the app's startup restore
-installed the PERSISTED snapshot over the live state (an empty snapshot
-erasing it too, since `{}` is truthy in JavaScript): the wall stopped being a
-known target and writes aimed at it went to a single panel instead, and the
-daemon's own live devices were dropped from `discoveredDevices`, so
-`panelIsLinked` said "not linked" for a panel that was linked
-(`divoom_gui/web_ui/connection_events.js`, `divoom_gui/web_ui/app_init.js`;
-`tests/test_e2e_write_during_pending_connect.py`,
-`tests/test_e2e_startup_restore_keeps_live_state.py`, both red before;
-`0627eb5`).
-
-Landed after (2026-10-21): P1.14, the web UI's JavaScript has a syntax gate.
-The rule is the browser's: one classic script per file, parsed independently
-(the browser makes one Script Record per `<script src>`), and the payload of a
-template literal is NOT code -- the browser parses only the `${...}` holes.
-The node reader uses `vm.Script`, which IS the Script goal a `<script src>`
-uses; `node --check` runs too, but its goal flips to CommonJS (or, on node
-22+, to module), so it ACCEPTS a file the browser refuses (a top-level
-`return`, an `import`, a top-level `await`) -- a difference that is not
-academic, because such a file never loads and the app loses a whole tab
-without a word. The pure-Python reader is the fallback
-where node is absent, it runs on EVERY run so it is never dormant, and its
-scope is stated: it is a LEXER (unterminated literals, unbalanced brackets,
-unclosed `${}` holes) and it cannot see `const x = ;`. The gate was adopted
-into gates_of_heck (`GOH_JS_SYNTAX=on` in `.gatesrc`) and CI's checks job; it
-covers every `.js` file under `divoom_gui/web_ui/`, not only the ones
-`index.html` names (two of them are loaded by the test suite instead). Both
-directions watched RED first, on a copy of the real tree with the historical
-defect planted: a stray backtick inside a template literal in
-`templates_settings.js`.
-Landed after (2026-10-21): P1.16, the gallery's internal-scroll test stopped
-racing the gallery's own render. The app schedules its gallery load 50ms
-after the Gallery sub-tab is clicked (`settings_features.js`), and that load
-replaces the container's contents wholesale; the test injected its tiles
-straight after the click, so it measured a container the app was about to
-empty, and CI run 39542787961 read "gallery never overflowed: scrollHeight
-316, clientHeight 316" -- an EMPTY container's numbers, which name the symptom
-and not the cause. Reproduced here on the CI runner's own viewport (the
-container is 316px tall in both) by loading the machine: the app's write has
-to land between the injection and the first poll, and that window is one
-browser round trip. The test now watches the container with a
-MutationObserver and waits for TWO things: the app's OWN write (the one
-that says "this container is mine now") and then stillness. Stillness alone is
-not enough, and the first CI run of that fix proved it -- the gallery's load
-is scheduled with `setTimeout(window.loadGallery, 50)`, and a timer fires
-when the MAIN THREAD is free, which on a loaded runner was 450ms later: the
-container had never been written, it read as quiet, the test injected, and
-the app's load landed 20ms later and emptied the container underneath it. The
-test also asserts that the tiles SURVIVED the measurement, that the grid
-overflows, and that neither the card nor the page scrolls (the two halves of
-what the test's name claims, and the second of which it had never checked).
-
-Landed after (2026-10-21): P1.15, the daemon's startup lock is released
-EXPLICITLY, and the reason it outlived the process is named. A `flock` belongs
-to the OPEN FILE DESCRIPTION, not to the descriptor: a descriptor is one
-reference to a description, and the lock lives until the LAST reference goes
-away. A child process that inherits the descriptor holds another reference to
-the SAME description, so the parent's `close()` does not release the lock --
-the lock outlives the process that took it, and the next daemon is told
-"another divoomd is starting up" by a daemon that is not running. The daemon
-starts children (`spp.rs` starts a Python helper), the window is the
-fork-to-exec gap -- short, not zero, and longer on a loaded machine -- and
-that is CI run 39523759110. Reproduced 4 times in 320 runs of the 435-test
-lib binary (twice as `StartupInProgress` on the lock, twice as
-`UnresponsiveListener` on the socket), and then DETERMINISTICALLY:
-`a_released_lock_is_released_even_when_a_child_inherited_the_descriptor` gives
-a child a copy of the lock's descriptor and watches the second `acquire` fail
-with CI's own message. `StartupLock` now unlocks (`flock(LOCK_UN)`) when it is
-dropped, so the release means "I am giving the lock up" and not "the last
-descriptor is gone"; the same test is that fix's green. The same window seen
-through the SOCKET rather than the lock is the `clears_a_stale_socket` variant
-(`UnresponsiveListener`: a child that inherited the listener's descriptor keeps
-the socket listening, and the probe finds a listener that never answers). Its
-production exposure is bounded -- the daemon unlinks the socket path before it
-exits, so the path is gone -- and it is left as a named variant, not as a fix.
-
-Landed (2026-11-02): P1.20, the browser suites' fingerprint claims the host's OS
-(`tests/support/browser_options.py` `fingerprint_os`). camoufox drew the OS at
-random, weighted toward Windows, once per process; a Windows fingerprint on a Mac
-lists fonts the host lacks and every `new_page` took 2.5-2.6 s instead of
-0.12-0.16 s, so CI's serial browser step took 58-91 min on a Windows draw and
-13-23 min on a macOS one, the same 278 tests. Test
-`tests/test_e2e_browser_host_os.py`: red unpinned (7 of 8 processes drew
-`Win32`; pages 2.56/2.55/4.02 s).
-
-Landed (2026-11-02): P1.21, one browser per session, a fresh context per test
-(`tests/support/browser_shared.py`; `launch` in `tests/support/browser.py` hands
-every async suite a handle on it). 57 of 58 suites launched a browser per test,
-about 2.2 s each before any page. The browser belongs to one event loop, so
-`tests/conftest.py` puts the browser suites' async tests on the session loop;
-a handle's `close()` closes its contexts, and the next `launch` closes any a
-test left open. A launch from another loop is `SharedBrowserWrongLoop`, never a
-quiet second browser. Test `tests/test_e2e_browser_shared.py` (isolation, one
-browser, session loop, no suite names the launchers). Serial browser step
-(`DIVOOM_BROWSER_WORKERS=0 scripts/browser_e2e.sh`), measured back to back on
-this machine at load 30-57 (other repos building): 11 min 52 s, 307 passed
-before; 5 min 15 s, 313 passed after (the six new tests included); an earlier
-quiet-machine "before" was 6 min 50 s. Not shared, by design: the sync API
-(`launch_sync`; `sync_playwright()` keeps its loop registered while a test's own
-`with` block is open, so a second instance fails), whose suites already hold one
-browser per module or one test. CI browser step on `24ab74e` (run 41544702215, success): 331 s, was
-942 s on run 41520841922. Also fixed: `test_recycled_pid_probe.py`'s
-`994 not in kernel.spawned` could never fail (the fake kernel skips taken pids);
-it now asserts the exact pids spent, red when the stop condition is broken.
-
-Landed (2026-11-02): P1.19, the cask's uninstall stops the menu-bar helper app
-(tap `365f463`: every process running out of the installed bundle, and the
-holder of the tray's lock, are stopped after the identity pass).
-
-Landed (2026-11-01): P1.17 (D.FX3; its commits, `42e3dc4` among them, cite it as P1.14, the JS-syntax gate's number), the pre-push export keeps no build
-output: `GOH_EXPORT_KEEP` no longer names `target/debug/divoomd` (a kept file's
-bytes key goh's proven cache, and six steps rebuilt it, so none was ever
-recorded as proven), and `scripts/py_ci.sh` builds the daemon its spawning
-tests run, as CI's Python job does (`42e3dc4`;
-`tests/test_export_keeps_no_build_output.py`). Not yet observed: a second
-`tools/gate.sh --full` on an unchanged tree reporting those steps proven.
-
-### Phase 2 — daemon liveness and safety
-
-**Goal:** the daemon can say who holds it, never hangs on one peer, and
-notices its own wedge. **Exit:** P2.1-P2.6 each pinned by a test that stalls,
-floods or wedges the real socket server; P2.7 has a trace or is gone (the
-trace was taken 2026-10-18; P2.7 and P2.8 are now fixes with named causes).
-**Size:** L (P2.5 and P2.6 are each M). **Risk:** P2.3's deadlines must not
-cut a legitimately slow `sync_artwork`; per-command budgets, not one global.
-P2.7 needs a panel and the GUI's Bluetooth grant (Hardware reference below).
-
-Landed (2026-10-17): P2.1, the socket made owner-only by the daemon rather
-than the umask;
-P2.2, `get_status` reporting every connection by kind with ages, peer pid and in-flight command;
-P2.3, every command under a per-command deadline (`divoomd/src/deadlines.rs`);
-P2.4, a named subscriber (`client_id`) replacing its own slot before staleness eviction;
-P2.5, a lagging subscriber caught up to the latest value per key (`divoomd/src/events.rs`);
-P2.6, an in-process watchdog that exits a wedged daemon within 30 s (`divoomd/src/watchdog.rs`).
-
-Landed (2026-10-19): P2.8, a lost link retires itself and is reported (event +
-`device_status`), and every read that gets no answer fails with a code instead
-of `success: true, result: null` -- the class, not the one read the report
-named: 28 reads across the daemon's `device_call` layer, the MCP read tool,
-and the live widget's push (`divoomd/src/device_call/read.rs`,
-`divoomd/src/daemon/link.rs`, `divoomd/src/transport.rs`).
-
-Landed (2026-10-20): P2.7, the panel relinking after a daemon restart is
-CONFIRMED on hardware (the GUI respawns the daemon and the panel re-links with
-no click; two SIGTERMs, `==== daemon spawn from pid 35435 ====` then
-`[ble][connect]` and `device_status` showing the panel linked).
-
-Landed (2026-10-20): P2.7's REMAINDER — the panels a CLI or an MCP client
-linked, and the wall's slots, which the GUI's relink never covered. The
-daemon now writes down what it holds (`~/.config/divoom-control/links.json`:
-the id and the connect request that made each link, and the wall's slots) and
-replays it on startup, one panel at a time. The GUI's own relink stays — it
-is the client's path, and the two agree because the daemon skips a panel it
-already holds. The restore reaches for the radio, so it is the spawn that
-carries the Bluetooth grant (the app's client) that asks for it
-(`divoomd/src/links.rs`, `divoomd/tests/link_restore.rs`,
-`tests/test_daemon_link_restore_e2e.py`).
-
-Landed (2026-10-24): P2.9, the scan and the connect ask CoreBluetooth for the
-peripherals the system already holds, so a panel connected at the OS level
-(`Pixoo-1`) is found by `scan` and reached by `connect` without an
-advertisement (`e5b0b92`: `divoomd/src/ble.rs`, `divoomd/src/ble/connect.rs`,
-`divoomd/src/central.rs`); D19, the menubar's popup menu anchored flush at the
-bottom of the status button (`8cccf6e`: `divoom-menubar/src/tray.rs`); both
-released as v0.41.8 (E75; tag, GitHub release and DMG are out and the app is
-installed at 0.41.8, `9423ee0` also fixed the refusal-at-the-cap EPIPE the
-tokio 1.54.1 refresh exposed). OPEN: the Homebrew cask is still 0.41.7 --
-`tap_rewrite.py` rejects the cask's quoted heredoc (`<<~'DIVOOM_STOP_HELPERS'`)
-as an unbalanced block, a goh defect; re-run `scripts/release.sh --skip-build`
-after goh accepts quoted heredoc tags.
-
-### Phase 3 — the daemon knows what each panel is
-
-**Goal:** one owner (the daemon) for each panel's model, size and failure
-codes. **Exit:** `device_status` carries model/size and errors carry codes,
-with tests per model class. **Size:** M. **Release check (needs a panel):**
-P3.3 changed what the weather widget looks like on every panel; it needs the
-R12-style visual pass on hardware before release. **Done on a 16x16 Ditoo
-2026-11-01** (bench webcam, calibrated): the panel showed the daemon's own
-weather frame -- the cloud and the temperature with its degree mark -- pixel
-for pixel. The 64x64 half (P4's multi-frame draw) needs a 64x64 panel in view.
-
-Landed (2026-10-17): P3.1, `device_status` carrying each panel's model and resolution from the APK's own tables (`divoomd/src/panel_model.rs`);
-P3.2, a stable `code` on every device failure, branched on by the Settings card (`divoomd/src/error_code.rs`);
-P3.3, weather drawn by us as a `render_widget` frame and pushed like every other widget, the firmware's clock face no longer selected (`divoomd/src/live_jobs/weather_frame.rs`).
-
-Landed (2026-10-22): P3.4, the panel's DESCRIPTION is the daemon's and the
-clients read it -- the chassis (which product it is and how big), the vendor
-app's per-model switch for the radio, and the app's own
-home list for the model, which is what the panel CAN SHOW
-(`divoomd/src/panel_features.rs`, `divoomd/src/panel_screens.rs`,
-`divoomd/src/panel_model.rs`, derived by `tools/derive_panel_features.py`,
-which now parses the app's `DiscoverModel.s()` home list as well as running
-its `setDeviceMode`); the web UI's chassis table and its name-based FM and VJ
-rules are gone (`divoom_gui/web_ui/panel_facts.js`,
-`divoom_gui/web_ui/channels_grids.js`); the CLI's per-model capability table
-is the retired library's copy again, held to the daemon's by the parity test,
-and the CLI's verbs read the daemon (`divoom_lib/cli_device_verbs.py`);
-P3.5, the daemon REFUSES to tune a panel it knows has no radio, with the
-`unsupported` code, and `get_capabilities` carries the whole description
-(`divoomd/src/device_call/basic.rs`, `divoomd/src/mcp_tools.rs`).
-
-Landed (2026-10-22): P3.6, the channel cards follow the panel IN HAND -- the
-selection decides them, and a connect reply does not
-(`divoom_gui/web_ui/spatial_stage.js`,
-`divoom_gui/web_ui/connection_events.js`,
-`divoom_gui/web_ui/channels_grids.js`,
-`tests/test_e2e_channel_cards_follow_the_panel.py`).
-
-**The radio was the wrong fact, and it reached the screen.** The table said
-the app decides no FM per model -- "FmModeEnum only allows FM as an alarm
-sound" -- and that belief had the web UI offering the FM card to every panel
-whose NAME contained "tivoo" or "ditoo". The app decides it twice over: it
-offers the FM home screen to exactly the models whose `FmModeEnum` is
-`SupportFm` (the Timebox and the Tiivoo 2), and it keeps the FM entry in the
-alarm and sleep sound lists for exactly those two. Fifteen rows of the
-retired table were the wrong way round, and the CLI's radio gate let the
-tuning through.
-
-**What is NOT claimed.** The app's home list is the app's UI, not the
-protocol: a model the app has no branch for (the Divoom D-base) gets an
-EMPTY list, which is not the same as a model that can show nothing, so the
-daemon refuses a panel on a definite statement (a switch) and never on an
-absent screen. The app's `MicEnum` is not claimed either: it is ON for the
-plain Pixoo, a picture frame with no microphone, so a switch whose consumers
-do not say what the key claims is not a fact about the panel. The daemon's
-chassis table is the products' published sizes,
-which no switch in the app states; the millimetres are a fact about the
-product, and the web UI keeps only the generic row for a panel the daemon has
-not described.
-
-### Phase 4 — MCP as a display surface
-
-**Goal:** an external agent can discover each panel, draw on it at its real
-resolution, and share it with background jobs without collisions. The
-catalog had 14 tools when this phase opened; it has 26 (22 offered unless
-`--allow-destructive`).
-**Exit:** an MCP client draws a full-resolution multi-frame image on a 64x64
-panel while a live job runs, and the panel returns to the job when the lease
-expires (e2e over the real `divoomd mcp` entry point). **Size:** L.
-
-Landed (2026-10-26, lanes MCP.DV + API.DV): the server on rmcp, every tool annotated (read / write / destructive, destructive behind `--allow-destructive`) with an `outputSchema` and `structuredContent`, `get_screen_previews` with image content, and goh's MCP wire gate on (`GOH_MCP_SERVERS`); see CHANGELOG.
-
-Landed (2026-10-17): P4.1, `get_capabilities` describing the named panel with model, size and the vendor app's per-model features (`divoomd/src/panel_features.rs`, derived by `tools/derive_panel_features.py`);
-P4.2, `list_screens` listing every known or placed screen with its size, live link and place (`screens` in `get_topology`);
-P4.3, `show_image` drawing at the panel's size under a `resize` policy, every decoded frame held to the 256-colour palette (`divoomd/src/image_fit.rs`);
-P4.4, `push_animation` playing every frame with its own duration through one multi-frame `show_image` call;
-P4.5, text, live jobs, scoreboard, timer and countdown as MCP tools in the one catalog, every integer range stated once (`divoomd/src/arg_bounds.rs`);
-P4.6, screen leases: `lease_acquire`/`lease_renew`/`lease_release` with a mandatory bounded TTL, the live widget paused under a lease and repainted from its newest frame when the lease ends or lapses, `show_image` pushes conflated latest-wins (`divoomd/src/lease.rs`; the Phase 4 exit is `divoomd/tests/mcp_lease_e2e.rs`);
-P4.7, `notify`: text shown under a screen lease whose TTL is the notification's bounded duration (`arg_bounds::NOTIFY_DURATION_MS`), so the panel comes back when the lease lapses with nothing waiting (`divoomd/tests/notify_tool.rs`).
-
-**The exit, re-checked (2026-10-22):** green against the real entry point --
-`divoomd/tests/mcp_lease_e2e.rs` launches the real `divoomd mcp` binary as an
-MCP client's config does, against a real daemon on a unix socket with a mock
-64x64 panel running a live widget: the agent leases the screen, plays a
-full-resolution two-frame image on it, a second caller is refused, and the
-agent stops renewing -- as a crashed agent would -- and the panel goes back to
-its widget. **The hardware half is still owed:** the four panels on the bench
-are all 16x16, so a REAL 64x64 panel has never drawn a full-resolution
-multi-frame image through this path. The mock is a 64x64 panel in every way
-the daemon can see; the glass is the owner's eyes.
-
-**2026-10-24: the exit reads the wire, and the hardware half is one
-command.** The e2e now decodes the 0x8B stream the mock panel received (two
-frames of exactly 4096 pixels, red then blue, 100 ms each) instead of trusting
-the tool's `size: 64`, and requires the widget's own 64x64 frame on the wire
-after the lapse instead of trusting `restored: "job"` -- each watched red
-against a fault the old test passed. The owner's step:
-`scripts/hw_verify.py --only mcp_lease` with a 64x64 panel selected
-(`scripts/hw_mcp_lease.py`; the GUI running, as for the rest of the packet).
-It drives the real `divoomd mcp`, decides the lease, draw, refusal and lapse
-by machine, then shows the agent's frames and the widget's returning frame
-for the person at the panel to compare. Run as the owner will, against a mock
-64x64 panel, it ends UNKNOWN (nobody looked), never PASS
-(`tests/test_hw_mcp_lease.py`).
-**Two things the hardware run will settle besides the glass, measured against
-the code.** (1) The panel must be linked over Bluetooth or SPP: `show_image`
-and the live widgets are 0x8B-only and a LAN transport has neither (P6.2), so
-a Pixoo-64 reached over Wi-Fi cannot run the exit at all, and the check SKIPs
-it saying so. (2) The 64x64 frame the daemon streams -- one `AA` frame of 4096
-palette-indexed pixels -- has never been accepted by a 64x64 panel: the mock
-takes any bytes, and the cloud's own 64x64 art is the tiled magic-26 format
-(`divoomd/src/art_codec/iframe.rs`). So the first run tests the encoding as
-well as the eyes; a panel that shows nothing is that finding, not the lease's.
-**Done when:** `scripts/hw_verify.py --only mcp_lease` on a Bluetooth-linked
-64x64 panel records PASS, and Phase 4 is deleted from the Plan.
-
-### Phase 5 — the GUI models each panel, not "the" panel
-
-**Goal:** every per-panel fact the GUI shows is read from and written to the
-daemon by mac. **Exit:** browser tests across two panels for P5.1/P5.2; the
-menubar no longer closes on a status change. **Size:** M.
-
-Landed (2026-11-01): P5.17 (D.FX4), a bench node draws the whole clock at 16x16 and the same cells as the channel card: the digital layout lives once, in `divoom_gui/web_ui/clock_digits.js`, on the panel's 16-cell grid ("12:00" in exactly 16 columns), drawn by the node at its resolution and by the card at 4 px a cell; both private font tables deleted (`0d42fbc`; `tests/test_browser_bench_clock_fits.py` at 16, 32 and 64). `docs/assets/bench-light.png` still shows the old crop until `tools/render_bench.py` is re-run.
-
-Landed (2026-11-01): the arrangement survives a restart -- the daemon's topology is its ONE store: the bench holds the daemon's copy and nothing else, shows a loading state (with the reason) until it is read, retries the read, refuses every write before it, and sends only what changed; a room list merges and a room leaves it only by `remove_rooms`; an off panel keeps its wall slot; the page keeps its storage across launches (`private_mode=False`); and the Python suite runs under a throwaway HOME with its own daemon log, so no test reaches the owner's state (`divoom_gui/web_ui/spatial_rooms.js`, `divoomd/src/wall/cmds.rs`, `tests/conftest.py`, `tests/test_e2e_arrangement_is_the_daemons.py`, `tests/test_suite_leaves_the_owner_alone.py`).
-
-Landed (2026-11-01): P5.15, no `cargo test` run reaches the developer's HOME: one `divoomd::home::home()` is the only HOME reader (config dir, estate secrets, routing, notification DB), and inside a cargo test binary (`deps/<crate>-<16 hex>`) a HOME outside the temp directory is replaced by a throwaway one for the process, a test's own temp HOME honoured; the two integration tests that spawn the binary hand it that home, held by a source scan (`divoomd/src/home.rs`, `divoomd/src/home_isolation_tests.rs`).
-
-Landed (2026-10-31): P5.13 (umbrella U.5, the owner's pick 2026-10-31: "A: verdict line (Recommended)"), one lasting hot-channel verdict line per panel under Update Hot Channel and, shorter, in each Auto-Sync row -- glyph + words, colour only on the glyph -- read from ONE per-panel record in `hotchannel_state.json` (`panels`) that the button, Sync Now and the daily schedule all write, failures included, broadcast as `hot_status`; progress events name their panel; the startup scan reports in the scan card, never as a toast (`divoomd/src/hot_verdict.rs`, `divoom_gui/web_ui/hot_verdict.js`, `tests/test_e2e_hot_verdict.py`, `tests/test_e2e_no_background_toasts.py`, `tools/render_hot_verdict.py`). D.DV2: stored state admits only panel ids a real device reported, the invented fleet and test-mac wall dropped on load (`divoomd/src/reported_panels.rs`); one owner holds a panel's link -- `connect` waits for the radio and answers a held panel from the fleet, the scheduler borrows and gives back only what it opened (`divoomd/src/monthly_best_link.rs`, `divoomd/src/connection_owner_tests.rs`); the Linux all-features gate starts and stops colima itself (`tests/test_linux_all_features_runtime.py`). D.DV1: the stored-gallery read (`0x8E`) removed.
-
-Landed (2026-10-31): P5.12 (umbrella U.4), a room lists exactly the panels assigned to it -- the bench draws a room's panels and no others, absent rather than greyed; a panel's room is read by one `SpatialRooms.roomOf` and written by one `SpatialRooms.assignRoom`, so the bench keeps no copy a drag, Center or Snap could write back over a removal; "no room" is no room in the bench, the wall and the daemon (no invented Desk); the daemon's stored entry decides a panel's room on load, and `set_topology` keeps one key per panel whatever its letter case (`divoom_gui/web_ui/spatial_rooms.js`, `divoom_gui/web_ui/spatial_rooms_ui.js`, `tests/test_e2e_room_lists_its_panels.py`, `divoomd/src/wall/cmds.rs`).
-
-Landed (2026-10-18): P5.10, every failure reply carrying an `ErrorCode` -- the code-less `err_reply` deleted, `error_code.rs` the only place a reply's `success` is written, the wire checking every reply, five codes added (`device_failed`, `busy`, `unauthorized`, `upstream_failed`, `internal`) and the code table in `docs/MCP_SERVER.md` held to the enum (`3459280`; `divoomd/src/reply_code_sweep_tests.rs`, `divoomd/src/reply_shape_scan_tests.rs`, `divoomd/src/ancs.rs`);
-P5.9, a job, activity record or screen lease refused on a panel a racing `disconnect` forgot (its slots closed for whoever still holds it, pinned by a forced interleaving) and `Fleet::adopt` attaching under one lock hold, the web UI sending `set_device_activity` only for a panel the daemon reported, and every missing required argument refused `bad_request` from one command table the dispatcher checks first (`58898ed`; `divoomd/src/device/slot.rs`, `divoomd/src/command_args.rs`, `tests/test_e2e_activity_only_for_reported_panels.py`);
-P5.8, a live job or activity record naming a panel no link ever made a fleet entry refused with `unknown_device` naming the mac, the fleet's only constructor private behind `Fleet::adopt` and the client path a `Fleet::known` lookup, a linked-then-dropped panel keeping a new job waiting, `MatrixWall` refused as the wall surface rather than a panel, and MCP/CLI tool errors carrying the daemon's `code` (`0f73dda`; `divoomd/src/device/fleet.rs`, `divoomd/src/error_code.rs`, `divoomd/tests/unknown_panel.rs`);
-P5.7, every other bridge call that acts on a panel -- the Tools tab, the alarms editor, the live widgets, the stock tile, the gallery, hot-channel and custom-art pushes, `device_call` -- naming it first through `ApiBase._display(mac)` (the wall refused for one-panel actions and named, never defaulted, for the rest), `current_divoom` deleted, and one test enumerating every public bridge method so a new one without a mac fails (`691e0b5`; `tests/test_device_actions_name_their_panel.py`, `tests/test_e2e_device_action_reaches_its_panel.py`, `divoomd/src/mock_tools_tests.rs`);
-P5.6, every channel bridge call naming the panel its click resolved, through one `ApiBase._display(mac)` to the daemon, a call naming no panel refused, `_target()` and `current_target_mode` deleted, and `_LanView` forwarding the daemon's `lan.*` calls so albums, playlists and the overlay work through the real proxy (`0a8aa81`; `divoom_gui/api/__init__.py`, `tests/test_e2e_channel_write_reaches_its_panel.py`, `tests/test_channel_writes_name_their_panel.py`, `divoomd/src/mock_channel_tests.rs`);
-P5.5, with no panel known the bench showing an empty state that says how to add one and the deck "No panel selected" with no levels, the active-panel lookup answering null instead of an invented mac (`f56b550`; `window.isKnownTarget` in `divoom_gui/web_ui/app_globals.js`, `tests/test_e2e_no_invented_fleet.py`);
-P5.2, every channel control writing the selected display's own per-channel settings through one funnel that resolves the display at the gesture via `DisplayPreviewRegistry.getActive()`, the app-wide channel globals deleted (`78608ea`; `divoom_gui/web_ui/channel_settings.js`, `tests/test_e2e_channel_settings_per_panel.py`);
-P5.4, the weather card showing the PNG of `render_widget {kind: "weather"}` with the reading beside it, the SVG renderer and `get_weather` deleted, loading and failure as distinct placeholders that say why (`4ac2bcf`; `divoom_gui/web_ui/widgets_weather.js`, the converse call-site check in `tests/test_widget_drift.py`);
-P5.3, the menubar updating labels, the "Active panel" check and the notification items in place, rebuilding only when the set of rows changes, decided by diffing one `MenuModel` signature (`28f54cd`; `divoom-menubar/src/menu_model.rs`). That meets the exit's menubar half in code; holding the menu open through a fleet change on screen is not yet checked (2026-10-18: the console was locked, so no NSMenu could be held open or captured; 2026-10-18 unlocked, full-screen control for clicking the status item was declined, so it is still unchecked; a two-mock-panel smoke -- selection A, B, A and a row rename over the socket -- left the menubar running). **2026-10-20, the machine half is CONFIRMED and the on-screen half is still the owner's eyes:** the status item's AX "help" text tracks the live fleet model ("4 of 4 panels online — active: Pixoo-1 / Tivoo-Max-light-3 / Timoo-light-4") and changes when `select_device` changes the active panel, so the menubar's model is live; the MENU could not be opened from this session at all (the console is at the login window, and an AXPress on a known-good control — FineTune — opened no window and produced no AXMenu change, so the block is the environment, not divoom-menubar). Holding it open on screen is the last unchecked half. **2026-11-01 (queue D3, installed v0.43.1, the owner's ruling "automate everything you can"):** still not capturable from an agent session, for a measured reason: full-screen control was refused twice ("user interrupt" -- the owner was at the machine), and the status item's only AX action, `AXPress`, opens no menu (no `AXMenu` child appears, before or after a 1 s wait), so neither route can hold the NSMenu open. The pass did find and fix a map-versus-territory defect on the same surface: the AX help text read "no device connected (3 of 3 panels online)" with the hollow Idle glyph, because the daemon's `active` link word was online for the count and not for the icon (`1d8f34e`, `state::link_online`). The held-open check is now P5.16;
-P5.1, brightness, volume and panel size read and written per mac through the daemon, both name-based size guessers deleted, switching panels shows that panel's values (`f1f7b3b`; `divoom_gui/panels.py`, `divoom_gui/web_ui/panel_facts.js`, `tests/test_e2e_panel_levels_per_panel.py`, `divoomd/src/mock_levels_tests.rs`).
+#### P1.24 — The export-keep fix is observed proven on an unchanged tree
+**Status:** OPEN
+**Why:** P1.17 (`42e3dc4`, 2026-11-01) stopped `GOH_EXPORT_KEEP` naming
+`target/debug/divoomd`, so the six steps that rebuilt it can be recorded as
+proven (`tests/test_export_keeps_no_build_output.py`). goh's half -- the
+proven cache honouring the artifacts a step declares -- landed in goh
+`1c2f9a6`. Nobody has yet seen a second `tools/gate.sh --full` on an
+unchanged tree report those steps proven.
+**Done when:** two back-to-back `tools/gate.sh --full` runs on one tree, the
+second reporting the daemon-building steps proven (and skipped), are cited
+here, or the step that is not is named and fixed.
 
 #### P5.11 — Every art listing is per panel, like the gallery (D14 follow-up)
 **Status:** OPEN
 **Why:** D14 made `fetch_gallery` list by the named panel's size and refuse
-pixel art not drawn for the panel (`art_not_native`), but five other listings
+pixel art not drawn for the panel (`art_not_native`), but four other listings
 still answer with no panel and no size: `get_category_file_list`,
 `get_dial_list`, `get_my_playlists`/`get_playlist_images` and
-`get_aid_sleep_list` (the fifth, `custom_art_query_page`, was removed by
-D.DV1)
-(`divoomd/src/daemon/dispatch.rs`, `divoomd/src/cloud_cmds.rs`). A GUI or
-MCP client can list art from them that the panel would then refuse, or a
-playlist the panel would play scaled. Which of them carry a per-item size
-(the gallery's `FileSize`), and which are already per device type on the
-cloud's side, is not yet measured.
+`get_aid_sleep_list` (re-checked 2026-11-07: `get_category_file_list(classify,
+limit)` still takes no mac; `divoomd/src/daemon/dispatch.rs`,
+`divoomd/src/cloud_cmds.rs`). A GUI or MCP client can list art from them that
+the panel would then refuse, or a playlist the panel would play scaled. Which
+of them carry a per-item size (the gallery's `FileSize`), and which are
+already per device type on the cloud's side, is not yet measured.
 **Done when:** each listing either takes `mac` and lists only what that panel
 shows natively (the reply counting what it left out, as `fetch_gallery`'s
 `not_native` does), or is recorded here as device-type-scoped by the cloud
 with the evidence; a mock-panel test per command, 16x16 and 64x64.
 
-#### P5.16 — The menubar's menu held open through a fleet change, on screen (P5.3's last half)
+#### P1.25 — The protocol core and the CLI in Rust (umbrella RS.DV)
+**Status:** OPEN
+**Why:** the owner put it on the roadmap ("add 1-5, 7 to the roadmap. old
+phones runs once per device, speed is not an issue"): packet framing,
+escaping, the 16-bit LSB checksum, frame timing and the daemon IPC client
+still have Python copies in `divoom_lib` and `divoom_client` on the
+hardware and CLI paths. It must keep the standing rule below that Python is
+the WIRE FORMAT oracle until the Rust is byte-equal on recorded frames, and
+the one structural exception: macOS Classic SPP is unreachable from Rust, so
+`divoom_client/spp_bridge.py` stays until that changes. Largest item here;
+it goes last in this stage and is split into its own lanes when started.
+**Done when:** packet framing, escaping, checksums, frame timing and the
+daemon IPC client live in Rust (`divoomd` or a `divoom-cli` crate),
+byte-equal to the Python on recorded frames, with no Python left on the
+hardware or CLI path except the SPP co-process; released and installed.
+
+### Stage 2 — owner-gated (the owner's hands, eyes or call)
+
+#### P5.16 — The menubar's menu held open through a fleet change, on screen (umbrella D3)
 **Status:** BLOCKED (on a session that may take the screen)
 **Why:** P5.3 updates rows in place and rebuilds only when the set of rows
 changes (`divoom-menubar/src/menu_model.rs`); the model half is unit-tested
-and the live model is confirmed through the status item's AX help text. What
-no agent has seen is the NSMenu itself staying open while a row renames. On
-2026-11-01 full-screen control was refused ("user interrupt") and `AXPress`
-on the status item opens no menu, so there is no route from a session that
-must leave the owner's screen alone.
-**2026-11-02 (D.MENULIVE):** QA found the open menu frozen (the active
-panel still the old one 2 s after a CLI select) and the cause was in code: the
-popup tracks in a nested run loop inside winit's handler, so nothing refreshed
-it; an open menu now refreshes itself from a tracking-mode run-loop source that
-the subscribe thread signals on each daemon event (D.MENUEVENT; first a 250 ms
-timer) (`divoom-menubar/src/menu_live.rs`, unit-tested). The capture below is
-still the on-screen proof.
+and the live model is confirmed through the status item's AX help text. Since
+D.MENULIVE/D.MENUEVENT (v0.44.0) an open menu refreshes from the daemon's
+event stream through a tracking-mode run-loop source
+(`divoom-menubar/src/menu_live.rs`, unit-tested). What no agent has seen is
+the NSMenu itself staying open while a row renames: on 2026-11-01 full-screen
+control was refused ("user interrupt") and `AXPress` on the status item opens
+no menu, so there is no route from a session that must leave the owner's
+screen alone. The owner's ruling for this queue: "automate everything you
+can" -- this is the part that cannot be.
 **Done when:** the menu is held open (a real click) while `select_device`
 moves the active panel and a row renames over the socket, and two captures
-show the check and the name change in the open menu with no close/reopen.
+show the check and the name change in the open menu with no close/reopen,
+light and dark; or the defects found are filed.
 
-#### P5.14 — One hot-channel pipeline? (U.5 follow-up)
-**Status:** DECISION (owner)
-**Why:** P5.13's option C, held back to be asked on its own: the Auto-Sync
-switch (the daily schedule) stores the cloud's Recommend gallery on each panel,
-while Sync Now beside it and the Hot tab's button run the panel's own Hot pull
--- two contents under one card. Since U.5 the verdict line says which path ran
-("by the schedule", "by Sync Now"), so the difference is visible, not solved.
-**Done when:** the owner has picked one pipeline for all three paths (the
-panel's Hot pull, or the stored Recommend push) or kept both, recorded here
-with the date.
-
-### Phase 6 — the multi-panel wall
-
-**Goal:** a wall is placed by snapping, and LAN panels can join it.
-**Exit:** P6.1's *Done when*. **Size:** M. Needs two panels for the final
-check.
-
-Landed (2026-10-18): P6.6, with the wall chosen the deck's brightness and
-volume are the wall's -- one gesture one wall write that reaches every slot,
-the toast naming each slot that did not take it, volume offered only when
-every slot's panel has a speaker by the daemon's word, and a mock panel's
-wire readable over the socket (`mock_sent`) so the test sees the write
-arrive (`039d719`, `092e9b0`; `divoom_gui/web_ui/panel_facts.js`,
-`divoom_gui/web_ui/spatial_stage.js`, `tests/test_e2e_wall_levels.py`,
-`divoomd/src/daemon_mock.rs`);
-P6.4, every GUI display write -- light, clock, channel,
-VJ, visualizer, text, scoreboard, brightness, volume, the ticker and the wall
-image -- answering one outcome through one funnel that keeps the daemon's
-reply, and the page's toast naming each wall panel that did not take it by
-its bench name (`402773c`; `divoom_gui/api/__init__.py`,
-`divoom_gui/web_ui/display_write.js`, `tests/test_wall_writes_name_the_panel.py`,
-`tests/test_e2e_wall_write_names_the_panel.py`);
-P6.5, the wall answering `get_last_previews` with each
-slot's cut as the slicer produced it (kept only for a slot that took the push),
-the wall's methods a declared table held to its arms, and a test holding every
-socket command and `device_call` the GUI or a test fake uses to the daemon's
-tables -- which also found the wall's rich clock, scoreboard and stock ticker
-refused, all three fixed (`3aed256`; `divoomd/src/wall/previews.rs`,
-`divoomd/src/wall_preview_tests.rs`, `tests/test_bridge_commands_exist_in_daemon.py`,
-`tests/test_e2e_wall_previews.py`);
-P6.3, a wall reply naming each linked panel whose write
-failed (`failed`, with the reason) apart from each slot with no panel
-(`degraded`), every wall command returning one outcome per slot
-(`WallOutcome`) instead of one `bool`, the wall switching channels from the
-panel's own table, and the wall image push's toast naming the panel by its
-bench name (`066c124`; `divoomd/src/wall/outcome.rs`,
-`divoomd/src/wall_outcome_tests.rs`, `tests/test_e2e_bench_snap.py`);
-P6.1's code, dragged panels snapping flush and lined up
-through one pure function, the saved position the snapped one, and a LAN panel
-refused as a wall slot with its reason by the daemon (`wall_configure`'s
-`refused`, `device_status`'s `wall_refusal`) and in the deck and the wall push
-(`eaf199b`; `divoom_gui/web_ui/spatial_snap.js`, `tests/test_spatial_snap.py`,
-`tests/test_e2e_bench_snap.py`, `divoomd/src/wall_lan_tests.rs`).
-
-#### P6.1 — Snap adjacent panels into one surface: the hardware check
+#### P6.1 — Snap adjacent panels into one surface: the hardware check (umbrella D7)
 **Status:** BLOCKED (on a photograph of the two real panels; the machine half is done)
-**Why:** the snapping and the refusal are tested in the browser and the daemon,
-but nothing has shown one image across two real panels placed by snapping:
-the slots are the bench's chassis drawings, so a bezel or a size the drawing
-gets wrong would show as a gap or a step at the seam that no test can see.
-**Measured 2026-10-20 (Pixoo-1 + Timoo-light-4 as one wall, machine half
-CONFIRMED):** `wall_configure` with a grid layout (x=0, x=1) and with a
-free-form layout (x=0, x=16) both give EXACT adjacent halves — a blue marker
-column lands at source column 15 in slot A and nowhere in slot B, the two cuts
-are 16x16 each, 0 of 256 pixels differ from the source halves, and the tile
-width is exactly 32 = 16 + 16. The geometry the daemon cuts is right.
-**What is left is the glass, not the arithmetic:** the bench geometry is
-chassis-based (`getWallSlots` in `divoom_gui/web_ui/spatial_rooms.js` uses
-`enc.w_mm * 0.65`), while the visible screen square is inset, so the picture
-ON the panels is discontinuous by the bezel width — measured 21 bench px for
-Pixoo + Timoo. No camera on this machine sees a panel (it sees a lamp), so
-this half needs the owner's photograph.
+**Why:** the snapping and the LAN refusal are tested in the browser and the
+daemon (`divoom_gui/web_ui/spatial_snap.js`, `tests/test_e2e_bench_snap.py`),
+and on 2026-10-20 the daemon's cut was CONFIRMED exact on Pixoo-1 +
+Timoo-light-4 (grid and free-form layouts, 0 of 256 pixels off per half). What
+is left is the glass: the bench geometry is chassis-based (`getWallSlots` in
+`divoom_gui/web_ui/spatial_rooms.js` uses `enc.w_mm * 0.65`) while the visible
+screen square is inset, so the picture ON the panels is discontinuous by the
+bezel width -- measured 21 bench px for Pixoo + Timoo. No camera here sees the
+two panels; four panels are present at the bench.
 **Done when:** two real panels dragged edge to edge on the bench show one
 image across the seam with no gap, overlap or step (photographed), or the
 error is measured and the slot geometry corrected.
 
-#### P6.2 — A panel on Wi-Fi as a wall slot
-**Status:** BLOCKED (on a LAN panel bound to the account; the upload path is
-KNOWN)
-**Why:** P6.1 found the limit is not the wall: the daemon cannot draw an image
-on a LAN panel at all (a LAN transport has no `send_command` or
-`stream_animation_8b`; `divoomd/src/device_call/lan.rs` has no image command),
-and the refusal is stated (`divoomd/src/wall/refusal.rs`).
-**Correction (2026-10-20): this item's blocker as written was wrong.** The
-roadmap said the vendor app's Wi-Fi upload "did not decompile"; it DID. The
-APK smali carries `DesignSendModel.sendByLocalHttp` ->
-`HttpCommand.DrawPixelLocalHttp = "Draw/PixelLocalHttp"`, a multipart POST to
-`http://<DevicePrivateIP>:9000/upload` (`OkHttpUtils.uploadFileToLocalDevice`),
-plus `Draw/EqLocalHttp`, and `DrawPixelLocalHttpRequest` carries fileName,
-imageName, flag, authorId, nickName, headFileId, headFileName, lcdIndex and
-soundFileName. So the request shape is not the unknown.
-**What IS the blocker (measured 2026-10-20):** there is no LAN panel to draw
-on. The account is signed in (user_id 401414409; the session token is
-redacted here, as everywhere else in this repo) but
-`Device/GetListV2` and `Device/GetList` both answer `DeviceList: []`, and
-port 9000 is closed on every 192.168.0.1-254 (192.168.0.175 answered once,
-then went down). The daemon's LAN transport still has no image command, so
-even with a panel the draw is code to write.
+#### P6.2 — A panel on Wi-Fi as a wall slot (umbrella D8)
+**Status:** BLOCKED (on a LAN panel bound to the account; the upload path is KNOWN)
+**Why:** the daemon cannot draw an image on a LAN panel at all (a LAN
+transport has no `send_command` or `stream_animation_8b`;
+`divoomd/src/device_call/lan.rs` has no image command), and the refusal is
+stated (`divoomd/src/wall/refusal.rs`). The request shape is known from the
+APK: `DesignSendModel.sendByLocalHttp` -> `Draw/PixelLocalHttp`, a multipart
+POST to `http://<DevicePrivateIP>:9000/upload`, plus `Draw/EqLocalHttp`;
+`DrawPixelLocalHttpRequest` carries fileName, imageName, flag, authorId,
+nickName, headFileId, headFileName, lcdIndex and soundFileName. The blocker
+(measured 2026-10-20): the account (user_id 401414409) lists no device
+(`Device/GetListV2` and `Device/GetList` both `DeviceList: []`) and port 9000
+is closed on the LAN. The Timoo and the Tivoo-Max are the Wi-Fi models; one
+of them bound to the account unblocks it.
 **Done when:** a Wi-Fi image command is written against the smali's own
 `Draw/PixelLocalHttp` shape (or the public HTTP API's `Draw/SendHttpGif`
 checked on a real LAN panel), the daemon draws a slot over it, and the
-refusal is deleted — which needs a Wi-Fi panel bound to the account first.
+refusal is deleted.
 
-### Phase 9 — parked on something outside this repo
+#### P5.14 — One hot-channel pipeline? (U.5 follow-up)
+**Status:** DECISION (owner)
+**Why:** the Auto-Sync switch (the daily schedule) stores the cloud's
+Recommend gallery (classify 18) on each panel, while Sync Now beside it and
+the Hot tab's button run the panel's own Hot pull -- two contents under one
+card. Since U.5 the verdict line says which path ran ("by the schedule", "by
+Sync Now"), so the difference is visible, not solved.
+**Done when:** the owner has picked one pipeline for all three paths (the
+panel's Hot pull, or the stored Recommend push) or kept both, recorded here
+with the date.
 
-**Goal:** none until the named trigger fires; each item says what unparks it.
+#### P9.13 — Each widget follows light and dark and magnetises to the Dock (umbrella WG.LIGHTDARK)
+**Status:** DECISION (owner)
+**Why:** the owner asked for it on the roadmaps and NOT built now: "it should
+be possible to magnetize the spaces to the dock. routines mascot (and all the
+other widgets) should respect light/ dark mode, and should be able to
+magnetize to the dock as well. do not implement now, just add to the
+roadmaps". The umbrella holds it behind OW.86 ("Say go when you want them
+built") and ZoneWM's ZW.DOCKMAG; divoom's widget is P9.12's.
+**Done when:** the owner says go, and then: a both-appearance render test of
+the divoom preview widget watched red first, and the installed widget read
+in Light and Dark docked to the SpaceBar and to the Dock.
 
+### Stage 3 — hardware-gated (a panel, a capture, or a trace)
 
-Landed (2026-11-01): P9.3 (queue D5, the owner's ruling "automate everything you can"), the four widgets judged against a light AND a dark room from the daemon's own frames -- `render_widget` is byte-identical to what the panel is sent (P9.3's 2026-10-20 round) -- drawn as LEDs on the panel face at a real-scale pitch and MEASURED, since no camera here can see the bench: sysmon, weather (clear, cloudy, rain, snow at 23 and -5 degrees), album_art and custom_art (a light and a dark cover) all draw every inked diode at 3:1 or better against the frame's own ground, on both backdrops (`tools/render_widget_backdrops.py`, `docs/assets/widget-backdrops.png`; the dim counter calibrated both ways). Verdict PASS after one fix the pass found: a 16 px weather frame wrote -5 as an overline beside a 5, because the half-size font blob stores every glyph from row 0 (`2e9d0e1`, `divoomd/src/live_jobs/font.rs`). Not judged, and not judgeable without a photograph: how the widgets' near-black ground (5,6,12) glows on the physical diodes in a dark room.
-
-Landed (2026-11-01): P9.7 (queue D4), a widgetless lease gives back the firmware channel that re-selecting puts back -- the clock (0) and the cloud channel (2), photographed on a Ditoo through the calibrated bench webcam; a pushed image (0x46 = 5) gets `restored: "none"` because a re-selected channel 5 shows the custom gallery, and the light channel (1) is not restored because its one-byte select left the panel dark with brightness 0 (`divoomd/src/lease.rs` `RESTORABLE_CHANNELS`; CHANGELOG 2026-11-01).
+#### P4.8 — Phase 4's hardware half: a 64x64 Bluetooth panel runs the lease (umbrella OW.46)
+**Status:** BLOCKED (on a 64x64 panel linked over Bluetooth or SPP; the bench's four are 16x16)
+**Why:** Phase 4's exit is green against the real `divoomd mcp` entry point
+with a mock 64x64 panel (`divoomd/tests/mcp_lease_e2e.rs` decodes the 0x8B
+stream: two 4096-pixel frames, red then blue, then the widget's own 64x64
+frame after the lapse). A REAL 64x64 panel has never drawn a full-resolution
+multi-frame image through this path. The owner's step is one command:
+`scripts/hw_verify.py --only mcp_lease` with a 64x64 panel selected
+(`scripts/hw_mcp_lease.py`; it ends UNKNOWN, never PASS, when nobody looked:
+`tests/test_hw_mcp_lease.py`). Two things the run settles besides the glass:
+(1) the panel must be on Bluetooth or SPP -- a Wi-Fi-only Pixoo-64 cannot run
+it until P6.2's LAN image command exists, and the check SKIPs saying so; (2)
+the one-`AA`-frame 4096-pixel encoding the daemon streams has never been
+accepted by a 64x64 panel (the cloud's own 64x64 art is the tiled magic-26
+format, `divoomd/src/art_codec/iframe.rs`), so a panel that shows nothing is
+that finding, not the lease's.
+**Done when:** `scripts/hw_verify.py --only mcp_lease` on a Bluetooth-linked
+64x64 panel records PASS and a camera frame shows the multi-frame draw; or
+this item records why no 64x64 Bluetooth panel is in view.
 
 #### P9.1 — `search_weather_city` fails server-side
 **Status:** BLOCKED (on a capture of the official app's city search)
@@ -623,99 +243,145 @@ The GUI Text channel pushes a static image and ignores its speed/effect
 arguments (`divoom_gui/api/lighting.py`).
 **Done when:** a device acks 0x7C in a trace, then a GUI control is wired.
 
-#### P9.4 — Two `objc2` majors in the lock
-**Status:** WATCH
-**Why:** winit 0.30 pins `objc2` 0.5 (0.5.3 in the lock on 2026-10-12);
-everything else is on 0.6 (0.6.5). No type crosses between them, so it costs
-build time only.
-**Done when:** a stable winit on `objc2` 0.6 is taken and the lock holds one
-(`cargo tree -i objc2` prints one version).
-
 #### P9.6 — The June 2026 hardware deferrals, re-checked on the Rust daemon
 **Status:** BLOCKED (on a hardware session with an SPP panel and the 4-panel rig)
-**Why:** the June 2026 adversarial review loop (Python era) closed with five
-items it could not settle without hardware. One is gone (the C static encoder
-was deleted in v0.40.0) and one was P1.7, landed 2026-10-16. The other three
-were never re-checked
-after the port: (a) SPP framing vs BLE (escaping, packet number, write pacing,
-response-timeout clearing) now that `divoom_client/spp_bridge.py` carries bytes
-the daemon frames; (b) a 0x8B retransmit request arriving in the re-arm window
-of the animation stream (`divoomd/src/ble.rs` phase 3); (c) a custom-art ACK
-treated as success while the 0x8E read-back is unreliable
-(`divoomd/src/device_call/animation.rs`).
+**Why:** three items from the June 2026 adversarial review (Python era) were
+never re-checked after the port: (a) SPP framing vs BLE (escaping, packet
+number, write pacing, response-timeout clearing) now that
+`divoom_client/spp_bridge.py` carries bytes the daemon frames; (b) a 0x8B
+retransmit request arriving in the re-arm window of the animation stream
+(`divoomd/src/ble.rs` phase 3); (c) a custom-art ACK treated as success while
+no read-back exists (`divoomd/src/device_call/animation.rs`; P9.10).
 **Done when:** each of (a)-(c) has a `DIVOOMD_BLE_DEBUG` trace read with the
 A/B rule (Hardware reference below) and is either closed with the trace cited
 or becomes its own OPEN item with a reproduction.
 
-#### P9.5 — Python majors that cannot be taken yet
-**Status:** WATCH
-**Why:** `multidict` 7 (aiohttp caps <7), `pyee` 14 (playwright caps <14) and
-`playwright` 1.63 (camoufox 0.5.5 caps <1.61) are unreachable, not declined.
-**Done when:** each parent widens its cap and the major moves in its own commit.
+#### P9.10 — The stored gallery cannot be READ BACK on this hardware
+**Status:** WATCH (the trigger is named: a panel that answers `0x8E`)
+**Why:** the push STORES the art in the device's own gallery
+(`divoomd/src/gallery_store.rs`, the custom-art page; save `0xB1`, play
+`0xBD [0x17, page]`). The write's only proof is the device's ACK: `0x8E`
+("App get user define info") timed out on all four of the owner's panels
+(measured 2026-10-21), so the read was REMOVED (D.DV1, owner ruling OW.36,
+2026-10-31: "drop gallery read, keep local record"). What the device was
+given is the app's own record (`hotchannel_fetches.json`,
+`hotchannel_state.json`). Re-checked 2026-11-07: with the read gone, nothing
+in the daemon asks `0x8E` any more, so this trigger fires only on a NEW panel
+model probed by hand.
+**Done when:** a panel model answers `0x8E` with the ids of what the push
+stored (then the read comes back for that model and the run reports the store
+CONFIRMED), or the owner says the art is on the panel and this item is
+deleted.
 
-#### P9.8 — Is the "monthly best" category a sliding window?
-**Status:** WATCH
-**Why:** the owner asked on 2026-10-21 whether the category slides and said
-they were not sure. The name says "monthly", the content is refreshed almost
-daily, and the files it returns carry dates from 2020 to 2026 — so neither the
-name nor a single snapshot can answer it. It is a MEASUREMENT, and the
-measurement is now being taken: every scheduled push writes down what the
-category returned — the file names, the dates they carry and their ids — into
-the daemon's log and into
-`~/.config/divoom-control/hotchannel_fetches.json` (the last 14 runs).
-**What is left:** two dated snapshots a day apart, and the diff between them.
-**Done when:** two runs' snapshots exist on different days, and the diff says
-which files came and which went — then the answer (window or not, and of what
-width) is written down in `CHANGELOG.md` and this item is deleted.
+### Stage 4 — time-gated (waits for the data to arrive)
 
 #### P9.9 — The magic-26 family's other frame flags are not read
 **Status:** WATCH
-**Why:** the gallery's magic-26 containers are the flag-`0x0C` form (a
-palette and LSB-first indices in a 4x4 grid of 16x16 tiles), and
-`divoomd/src/art_codec/iframe.rs` reads that, the raw forms (`0x0B`, `0x11`),
-the 128x128 palette form (`0x12`) and the quadtree (`0x15`). Two more flags
-exist in the app's own dispatcher and are NOT read here: `0x00`, the
-standard 7-byte `AA` form the daemon itself encodes (the app picks its size
-from the picture, not from the container's grid), and `0x14`, the palette
-form in the "net" colour order, which the app converts with
-`convert_rgb_local_to_net_128` before it shows it. Both are REFUSED rather
-than guessed at, and no gallery file has carried either.
-**The trigger is named:** the run now prints the frame flag of every file it
-could not show, so the first `0x00` or `0x14` in a gallery run is visible in
-the daemon's log. (A magic-26 animation is also decoded to its first 24
-frames — the same bound the magic-9 and magic-18 decoders carry — so a long
-animation plays as its first 12 seconds.)
+**Why:** `divoomd/src/art_codec/iframe.rs` reads the flag-`0x0C` gallery form,
+the raw forms (`0x0B`, `0x11`), the 128x128 palette form (`0x12`) and the
+quadtree (`0x15`). Two flags in the app's own dispatcher are REFUSED rather
+than guessed at: `0x00` (the standard 7-byte `AA` form; the app sizes it from
+the picture) and `0x14` (the palette form in the "net" colour order, converted
+by `convert_rgb_local_to_net_128`). No gallery file has carried either. The
+run prints the frame flag of every file it could not show, so the first
+`0x00` or `0x14` is visible in the daemon's log. (A magic-26 animation is
+decoded to its first 24 frames, the same bound as magic-9 and magic-18.)
 **Done when:** a gallery file carries a flag this decoder refuses, and the
 refusal is lifted by reading that flag out of the native library the same way
-`0x0C` was — or the flags are shown never to appear and this item is deleted.
+`0x0C` was -- or the flags are shown never to appear and this item is deleted.
 
-#### P9.10 — The stored gallery cannot be READ BACK on this hardware
-**Status:** WATCH (the trigger is named: a panel that answers `0x8E`)
-**Why:** the push now STORES the art in the device's own gallery — the
-custom-art page, `divoomd/src/gallery_store.rs`, the only persistent art
-store this protocol has for a 16×16 panel — instead of only streaming it
-past. The WRITE is the device's own acknowledgement of the save command
-(`0xB1`, the app's own page writer), and the panel is then told to PLAY the
-stored page (`0xBD [0x17, page]`). What is MISSING is the READ-back: `0x8E`
-("App get user define info" — the file ids a page holds) does not answer.
-Measured 2026-10-21 on all four of the owner's panels (Pixoo-1,
-Ditoo-light-2, Tivoo-Max-light-3, Timoo-light-4): every `0x8E` timed out,
-while `0xB6` ("how many user-defined items") answers on three of them and
-`0xBD [0x15]` ("get user define time") answers on all four — so the panels
-are alive and the store is not the missing thing. The protocol has no screen
-readback either, so what is ON the panel cannot be read from this side.
-**The trigger is named:** the run asks the device after every store and
-prints its answer, so the first `0x8E` that answers is visible in the
-daemon's log.
-**Done when:** a panel answers `0x8E` with the ids of what the push stored —
-then the run can report the store as CONFIRMED instead of "the device
-accepted the save" — or the owner says the art is on the panel and this item
-is deleted.
+### Stage 5 — upstream-gated (another project must move first)
+
+#### P9.4 — Two `objc2` majors in the lock
+**Status:** WATCH
+**Why:** winit 0.30 (0.30.13 in the lock) pins `objc2` 0.5 (0.5.3); everything
+else is on 0.6 (0.6.5). No type crosses between them, so it costs build time
+only. Re-checked 2026-11-07: the newest winit is `0.31.0-beta.4`, not a
+stable release.
+**Done when:** a stable winit on `objc2` 0.6 is taken and the lock holds one
+(`cargo tree -i objc2` prints one version).
+
+#### P9.5 — Python majors that cannot be taken yet
+**Status:** WATCH
+**Why:** re-checked 2026-11-07: `multidict` 7 (7.2.1 out; aiohttp 3.14.4 caps
+<7), `pyee` 14+ (16.0.1 out; playwright 1.60 caps <14) and `playwright` 1.63+
+(1.64.1 out; camoufox 0.5.9 caps <1.63) are unreachable, not declined. The
+reachable step inside the caps (playwright 1.62) is P1.23's.
+**Done when:** each parent widens its cap and the major moves in its own commit.
+
+#### P9.11 — zbus 6 for the Linux tray (`ksni`)
+**Status:** WATCH
+**Why:** `divoom-menubar/Cargo.toml` builds the Linux tray with tray-icon's
+GTK-free `ksni` backend; ksni (0.3.7, the newest) depends on `zbus` 5
+(5.19.0 in the lock) while zbus 6 (6.2.1) is out. The umbrella's upstream list
+carries it with monitor's `secret-service`.
+**Done when:** a ksni release on zbus 6 is taken and `cargo tree -i zbus`
+prints one 6.x version.
+
+#### P9.12 — One live preview widget per panel (umbrella WG.5, under WG.7)
+**Status:** BLOCKED (on WG.7's design record in ZoneWM: where the shared SpaceBarKit client lives and how a Rust app draws with it)
+**Why:** the owner's rulings: "let's add additional routines like desktop
+widgets (magnetised box/ system style) - remaining account usage on each of
+our sources (claude, opencode, agy, gemini web), bigkoff routine like widget,
+ztaxes fire, divoom control preview for each device." (2026-10-25); "The FIRE
+widget belongs to Zinc, the divoom devices previews widgets belong to
+divoom-control, etc" (2026-10-26); "Correction - each app will have it's own
+widget. they are drawable without zonewm. theyll just be system widgets
+otherwise, and token-pool will be a widget app" (2026-10-26); "have options
+for both" (2026-10-26). The widget draws from divoom-control's own frame
+renderer (the same pixels it sends), one per paired device, with no device
+writes. WG.7's design is ZoneWM's (the protocol's owner) and comes first;
+OW.54 answered 2026-11-02 that a self-signed WidgetKit extension appears in the
+macOS 27 widget gallery.
+**Done when:** divoom-control draws one live preview widget per paired device
+with SpaceBarKit from its own frame renderer, docking when ZoneWM runs and a
+system widget otherwise, with no device writes; released and installed.
+
+---
+
+## Decisions not to re-litigate
+
+Each is a ruling or a measured choice; reopening one needs new evidence, not
+a new opinion.
+
+- **CI uses the local machine's camoufox version** (owner ruling, 2026-10-19).
+  The build is declared once, in `.camoufox-build`, read by CI and by
+  `scripts/browser_e2e.sh` through `tools/camoufox_installed.py`.
+- **The stored-gallery read is dropped, the local record kept** (owner ruling
+  OW.36, 2026-10-31: "drop gallery read, keep local record"). See P9.10.
+- **One hot-channel verdict line per panel** (U.5, the owner's pick
+  2026-10-31: "A: verdict line (Recommended)"). Option C is P5.14's question.
+- **"Automate everything you can"** (owner ruling for queue D3/D5,
+  2026-11-01): a hardware or on-screen check is done by machine wherever a
+  machine can see it; what is left for the owner is named, as in P5.16.
+- **The "monthly best" push is classify 18 (the cloud's Recommend gallery)
+  on a 24-hour cadence**, because the content turns over daily: measured
+  2026-11-07 over four days, the 10 files a panel gets share nothing with the
+  previous day's and are dated anywhere from 2019 to 2026 -- a daily pick,
+  not a sliding window (`CHANGELOG.md`, Unreleased; was P9.8).
+- **The daemon refuses a panel only on a definite switch, never on an absent
+  screen.** The app's home list is its UI, not the protocol (the D-base gets
+  an empty list); `MicEnum` is not claimed (it is ON for the plain Pixoo,
+  which has no microphone); the chassis table is the products' published
+  sizes (Phase 3, 2026-10-22).
+- **A lease gives back only a channel that re-selecting restores**: the
+  clock (0) and the cloud channel (2); a pushed image gets `restored: "none"`
+  and the light channel (1) is not restored, because its one-byte select left
+  the panel dark at brightness 0 (`divoomd/src/lease.rs`
+  `RESTORABLE_CHANNELS`; P9.7, 2026-11-01).
+- **The shared test browser is async-only.** The sync API (`launch_sync`)
+  keeps one browser per module or test, because `sync_playwright()` keeps its
+  loop registered while a test's `with` block is open (P1.21, 2026-11-02).
+- **The startup lock's SOCKET variant is named, not fixed.** A child that
+  inherited the listener's descriptor keeps the socket listening
+  (`UnresponsiveListener`, `divoomd/src/socket_bind.rs`); its exposure is
+  bounded because the daemon unlinks the socket path before it exits (P1.15,
+  2026-10-21). New evidence of it in the field reopens it.
+- **Gated capabilities are decisions, not gaps** (see Standing rules).
 
 ---
 
 ## Standing rules
-
 
 ### The per-device rule (read before adding any per-panel state)
 
@@ -763,7 +429,8 @@ Python builder, and Python was right every time, which is why parity gates
 (`tools/check_weather_parity.py`, `tools/check_hotchannel_parity.py`) exist.
 One exception is structural, not a duplicate: macOS Classic SPP is unreachable
 from Rust, so `divoomd/src/spp.rs` spawns `divoom_client/spp_bridge.py` and
-still owns the device.
+still owns the device. (P1.25 moves the rest of the wire to Rust under this
+rule: byte-equal first, then the Python goes.)
 
 ### Rules that came from shipped bugs
 
@@ -775,7 +442,8 @@ still owns the device.
 - **A test owns the in-flight state it asserts on.** A mock that answers on a
   timer makes "during the call" a window a loaded runner overshoots; hold the
   promise and release it from the test (`tests/test_e2e_ux_feedback.py`).
-
+- **The app's startup never overwrites state it already has** (the persisted
+  snapshot over live state, a pending connect's link flag; `0627eb5`).
 - **A deletion is only as safe as its consumer list**, and the list is never
   the one you remember: v0.40.0 missed the archived `examples/tests/` suite and
   the callers that EXECUTE things (CI workflows, the Linux host, `build.sh`).
@@ -788,12 +456,15 @@ still owns the device.
   pin looks like discipline and staleness looks identical. Move it in its own
   commit when the channel moves, after running the browser suites against the
   candidate: edit `.camoufox-build` (the only copy) and run the install command
-  `tools/camoufox_installed.py` prints.
+  `tools/camoufox_installed.py` prints (or `--install`).
 - **A dependency bump can change what a number MEANS.** sysinfo 0.30 -> 0.39
   changed `used_memory()`'s formula under the same signature; v0.41.0 then
   misread its own measurement. Re-derive with `tools/mem_gauge_compare.py`
   (gated by `tests/test_mem_gauge_parity.py`), and judge visual bumps on
   `tools/render_tray_icon.py` sheets, not on a full live menu bar.
+- **A `flock` belongs to the open file description**, so a child that
+  inherited the descriptor keeps the lock; release it explicitly
+  (`flock(LOCK_UN)` on drop), never by "the last descriptor is gone" (P1.15).
 - **Gated capabilities are decisions, not gaps.** 5-LCD commands wait on a Times
   Gate this project has no reason to own; `Voice/SendText` waits on a real
   render, because a similar command once ACKed cleanly and drew nothing. Danmaku
@@ -824,10 +495,9 @@ come back.
 
 Start the GUI first: it owns the Bluetooth grant, and the packet refuses to
 spawn its own daemon. `--self-test` exits **3 = PARTIAL** until a device is
-connected. `tools/check_hw_verify_methods.py` gates the packet's method names
-against the daemon's match arms. `album_art` needs something PLAYING — with no
-track the music job has nothing to push, and a dark panel then means "nothing
-playing", not "broken". `search_weather_city` is the XFAIL canary (see above).
+connected. `album_art` needs something PLAYING — with no track the music job
+has nothing to push, and a dark panel then means "nothing playing", not
+"broken". `search_weather_city` is the XFAIL canary (P9.1).
 
 **The exit code is the verdict.** `scripts/hw_verify.py` exits 0 when every
 check that ran was answered, **1** when a check FAILED — including a branch
@@ -852,13 +522,17 @@ For a traced daemon, `scripts/make_dev_daemon_app.sh` (`DIVOOMD_BLE_DEBUG=1`,
 log at `/tmp/divoom_dev_daemon.log`, lines tagged `[ble <id>]`); quit the GUI
 first or it respawns its own daemon over the socket. Then drive
 `/tmp/divoom.sock`: `connect {mac}` works directly, while `scan` often reports
-"already in progress" while the GUI scans (and see the reconnect item above).
+"already in progress" while the GUI scans.
 `cargo test` rebuilds `target/debug/divoomd` WITH default features, so a
 BLE-free build does not stay BLE-free across a test run.
 
 **Reading a trace.** A device ECHOES `basic frame cmd=0xNN` for opcodes its
 firmware implements. A silence proves nothing on its own — send a known-good
 command (`0x45`) first in the SAME window and compare.
+
+**The bench.** Four 16x16 panels (Pixoo-1, Ditoo-light-2, Tivoo-Max-light-3,
+Timoo-light-4) and a calibrated bench webcam that sees the Ditoo; no 64x64
+panel and no LAN-bound panel.
 
 ---
 
@@ -870,11 +544,11 @@ is judged against; when one moves, change it here in the same commit.
 | Measure | Value | Where it is enforced |
 |---|---|---|
 | Local gate | 30 `GOH_CI_STEPS` (incl. the browser suites and CI's Linux `--all-features` lint, 2026-10-20) + `scripts/py_ci.sh` = 31 steps, run by `pre-push` on the pushed commit in a clean worktree | `.gatesrc`, `tools/gate.sh`, `scripts/ci_local.sh` |
-| Python tests (default) | 2095, 176 skipped (2026-10-20) | `pytest.ini` (`testpaths = tests`) |
+| Python tests (default) | 2364 passed, 222 skipped, 5 failed (CI run 42158513910, 2026-11-06; the 5 are P1.22) | `pytest.ini` (`testpaths = tests`) |
 | `examples/tests` | 1022 passed, 73 skipped (2026-10-19) | `scripts/py_ci.sh` |
-| Browser subset | 230 passed (2026-10-19, beta.39, `-n 8`; in the local gate and CI, through `scripts/browser_e2e.sh`) | `scripts/browser_e2e.sh` |
+| Browser subset (serial) | 313 passed, 5 min 15 s (2026-11-02, `24ab74e`); CI step 331 s on run 41544702215 | `scripts/browser_e2e.sh` |
 | Rust tests | 659 (2026-10-20) | `cargo test --locked` |
-| Python coverage floor | 89.0 (see P1.4) | `scripts/py_ci.sh` |
+| Python coverage floor | 89.0 | `scripts/py_ci.sh` |
 | Rust coverage floor | 42 | `scripts/rust_coverage.sh` |
 | File length | 500 lines, allowlist empty | gates_of_heck structural layer |
 | Process calls | 73 in 53 files, every one declaring its stdin (2026-10-21) | gates_of_heck structural layer (`goh subprocess-stdin`) |
@@ -883,7 +557,7 @@ is judged against; when one moves, change it here in the same commit.
 **Flake ledger** (one line each; a repeat earns an investigation):
 - 2026-09-13, full gate at load ~20: `socket_bind::tests::clears_a_stale_socket`
   saw `UnresponsiveListener` (a connect to a dropped listener's file succeeded,
-  then silence). 5/5 green alone.
+  then silence). 5/5 green alone. (The named variant in Decisions.)
 - 2026-10-14, full gate at load ~140, under `cargo llvm-cov` only:
   `a_subscriber_that_stops_reading_is_dropped_and_frees_its_slot` parsed two
   NDJSON lines as one (P0.4). 3/3 green alone.
@@ -904,36 +578,15 @@ monitor and app_updates; each belongs to the repo named.
 
 - **Restriction lints** (`unwrap_used`, `expect_used`, `panic`) are adopted
   nowhere. A correctness campaign with its own review, not a switch to flip.
-- **homebrew-tap's T2.3 (the cask's `pkill`) is UNBLOCKED as of 2026-10-20.**
-  The tap's cask stopped the app's helpers with a NAME PATTERN, because they
-  had no stable identity. They have one now: the app writes an identity file
-  per helper it spawns (`~/.config/divoom-control/run/divoomd.pid`,
-  `.../divoom-menubar.pid`), naming the process by pid AND by the moment it
-  started, so a stale identity from a crashed run names nothing and the
-  reader leaves an innocent process alone. The cask's change is the TAP's to
-  make; this repo's half (the identity, the quit path that clears it, and the
-  `pkill` this repo used for the same job) is done.
 - **PATH decides which build of a tool runs, and installers do not check.**
   `app_updates` shows the fix: after copying, ask the binary its identity and
   confirm `command -v` resolves to the copy just written. The user's `.zshrc`
   PATH entry for routines is theirs to change, not this repo's.
-- **`routines` needs an in-process self-watchdog** for the same reason as P2.6.
+- **`routines` needs an in-process self-watchdog** for the same reason as P2.6
+  (it has an external one, `routines watch` under launchd, re-checked
+  2026-11-07; the in-process half is routines' call).
 - **antiknob** shares the tray-icon question (fixed the same way, 2026-10-05) and
   keeps its own plan in its `PLAN.md`.
-- **gates_of_heck's proven-step cache treats a step's EXIT STATUS as its
-  effect, and a build's effect is an ARTIFACT.** The pre-push gate runs in a
-  FRESH worktree; the cache (`GOH_PROVEN`, on by default) skips a step whose
-  exit status it recorded earlier on the same tree — so a skipped
-  `cargo build -p divoomd --locked` leaves NO binary behind, and the later
-  `py_ci` step then fails with "divoomd (Rust daemon) binary not found" on
-  the daemon-spawn tests (`tests/test_daemon_connect_edge_e2e.py`),
-  for a reason that has nothing to do with the tree. Measured 2026-10-20: the
-  cache had been filled by an earlier push attempt on the SAME commit, so
-  step 27 was skipped as "proven on this tree 8m ago" and step 30 failed.
-  The cache must key on what a later step CONSUMES, or the step list must not
-  let a skipped step feed a later one. (Not fixed here: gates_of_heck is
-  another repository. Reproduce with `GOH_PROVEN=0 git push` — every step
-  then runs and the suite is green.)
 
 ---
 
@@ -949,19 +602,12 @@ HTTP, and Classic SPP through the co-process above.
 **Protocol coverage.** Cloud HTTP: 533/533 endpoints catalogued in
 `docs/cloud_api/` (16 batches). WiFi/LAN: all 45 commands from the APK's
 `HttpCommand.java` implemented; the backend-only ones are the gated
-capabilities above.
+capabilities above. MCP: 26 tools (22 offered unless `--allow-destructive`),
+on rmcp.
 
-**Shipped, by release:** `CHANGELOG.md` -- the newest stanza is `v0.41.3`
-(2026-10-19: the browser e2e suites run in the local gate, and the app's own
-startup no longer overwrites live state); the release table this file carried
-until 2026-10-14 is `git show a8a848d:docs/ROADMAP.md`.
+**Shipped, by release:** `CHANGELOG.md` -- the newest stanza is `v0.45.0`
+(2026-11-05: Camoufox 0.5.9 and browser 158.0.1-beta.41).
 
----
-
-## Sources consolidated (2026-10-12)
-
-Every agent session that ever worked on this repo was read and given a
-disposition on 2026-10-12, then removed; nothing in them is open beyond the
-items above. The table (opencode loop, Antigravity, Gemini CLI, Claude
-desktop and memory, the landed worktree, the cross-project plans) is
+**Sources consolidated.** Every agent session that worked on this repo was
+read and given a disposition on 2026-10-12, then removed; the table is
 `git show a8a848d:docs/ROADMAP.md`.
