@@ -26,8 +26,8 @@ from tests.support.browser import (
 INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.html"
 
 A, B, LAN = "AA:00:00:00:00:01", "BB:00:00:00:00:02", "LAN:10.0.0.5"
-REFUSAL = ("Not a wall slot: images reach panels over Bluetooth only, and the Wi-Fi "
-           "image upload Divoom's own app uses is not known.")
+REFUSAL = ("Not a wall slot: this app draws images over Bluetooth only, and has no "
+           "Wi-Fi image command yet.")
 
 _MOCK_API = """
 window.__panels = %PANELS%;

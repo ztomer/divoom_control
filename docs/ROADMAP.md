@@ -148,38 +148,46 @@ show the check and the name change in the open menu with no close/reopen,
 light and dark; or the defects found are filed.
 
 #### P6.1 — Snap adjacent panels into one surface: the hardware check (umbrella D7)
-**Status:** BLOCKED (on a photograph of the two real panels; the machine half is done)
-**Why:** the snapping and the LAN refusal are tested in the browser and the
-daemon (`divoom_gui/web_ui/spatial_snap.js`, `tests/test_e2e_bench_snap.py`),
-and on 2026-10-20 the daemon's cut was CONFIRMED exact on Pixoo-1 +
-Timoo-light-4 (grid and free-form layouts, 0 of 256 pixels off per half). What
-is left is the glass: the bench geometry is chassis-based (`getWallSlots` in
-`divoom_gui/web_ui/spatial_rooms.js` uses `enc.w_mm * 0.65`) while the visible
-screen square is inset, so the picture ON the panels is discontinuous by the
-bezel width -- measured 21 bench px for Pixoo + Timoo. No camera here sees the
-two panels; four panels are present at the bench.
-**Done when:** two real panels dragged edge to edge on the bench show one
-image across the seam with no gap, overlap or step (photographed), or the
-error is measured and the slot geometry corrected.
+**Status:** DECISION (owner)
+**Why:** council 2026-11-07, `docs/council-p6.md` (the facts, five personas,
+the measurements and decisions 1-4). The daemon's cut is exact in PIXELS
+(2026-10-20, Pixoo-1 + Timoo-light-4, 0 of 256 off per half), but the glass
+cannot be one picture as built: the bench and the free-form cut use the
+CHASSIS (`getWallSlots` in `divoom_gui/web_ui/spatial_rooms.js`,
+`enc.w_mm * 0.65`), so each bezel is squeezed into the cut instead of hiding
+canvas, and no two bench panels share a pixel pitch (9.9 / 6.9 / 4.0 / 3.75
+mm per pixel, `divoomd/src/panel_model.rs` `FAMILIES`). The "21 bench px"
+seam is derived from that table, not photographed. Nothing shares a clock
+across panels and nothing re-sends a dropped panel's piece. Recommended:
+pictures on a physical canvas cut at each SCREEN rectangle, pixel art only
+across equal pitches, still images only until drift is measured, a dropped
+panel marked and re-sent on relink. Before any code, the owner measures M1
+(each family's screen rectangle, a ruler) and M2-M5 on the proving pair.
+**Done when:** the owner has answered decisions 1-4 of `docs/council-p6.md`
+and M1 is recorded there; then the screen rectangle is in `FAMILIES`, the
+free-form cut uses it (a test watched red on today's chassis cut), and a
+photograph of the proving pair shows one picture across the seam (M5).
 
 #### P6.2 — A panel on Wi-Fi as a wall slot (umbrella D8)
-**Status:** BLOCKED (on a LAN panel bound to the account; the upload path is KNOWN)
-**Why:** the daemon cannot draw an image on a LAN panel at all (a LAN
-transport has no `send_command` or `stream_animation_8b`;
-`divoomd/src/device_call/lan.rs` has no image command), and the refusal is
-stated (`divoomd/src/wall/refusal.rs`). The request shape is known from the
-APK: `DesignSendModel.sendByLocalHttp` -> `Draw/PixelLocalHttp`, a multipart
-POST to `http://<DevicePrivateIP>:9000/upload`, plus `Draw/EqLocalHttp`;
-`DrawPixelLocalHttpRequest` carries fileName, imageName, flag, authorId,
-nickName, headFileId, headFileName, lcdIndex and soundFileName. The blocker
-(measured 2026-10-20): the account (user_id 401414409) lists no device
-(`Device/GetListV2` and `Device/GetList` both `DeviceList: []`) and port 9000
-is closed on the LAN. The Timoo and the Tivoo-Max are the Wi-Fi models; one
-of them bound to the account unblocks it.
-**Done when:** a Wi-Fi image command is written against the smali's own
-`Draw/PixelLocalHttp` shape (or the public HTTP API's `Draw/SendHttpGif`
-checked on a real LAN panel), the daemon draws a slot over it, and the
-refusal is deleted.
+**Status:** DECISION (owner)
+**Why:** council 2026-11-07, `docs/council-p6.md` (decisions 5-6). The
+premise this row carried until today was false: the Timoo and the Tivoo-Max
+are Bluetooth-architecture models, not Wi-Fi ones -- the vendor app puts only
+the Pixoo64Wifi family, Pixoo16Wifi, Lcd5Wifi and the photo frames on its
+Wi-Fi architecture, and the daemon's own table agrees
+(`divoomd/src/panel_features.rs`: no `WIFI` on `TIMOO` or `TivooMax`). No
+panel in the house can be a Wi-Fi slot. The app's upload is known
+(`Draw/PixelLocalHttp`, multipart to `:9000/upload`, needs a cloud-bound
+device, its `LocalToken` and an encoder for the app's art format that
+`divoomd/src/art_codec.rs` lacks); the daemon's LAN transport
+(`divoomd/src/device_call/lan.rs`) has no image command, and the refusal now
+says exactly that (`divoomd/src/wall/refusal.rs`). Recommended: "Not planned"
+until a Wi-Fi panel is in the house (a Pixoo-64 would also serve P4.8); with
+one, probe both routes read-only, draw on it alone, then admit it as a still
+slot.
+**Done when:** the owner has answered decision 5 (acquire a Wi-Fi panel, or
+this row moves to Not planned); with a panel, a Wi-Fi image command draws on
+it, the daemon draws a slot over it, and the refusal is deleted.
 
 #### P5.14 — One hot-channel pipeline? (U.5 follow-up)
 **Status:** DECISION (owner)

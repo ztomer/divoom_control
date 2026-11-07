@@ -6,6 +6,17 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **Council on P6.1 and P6.2 (umbrella D7, D8; owner: "council",
+  2026-11-07).** `docs/council-p6.md`: the facts read from the code, the
+  decompiled app and the owner's config (no device written), five personas
+  plus a hardware realist, five bench measurements (M1-M5) and six owner
+  decisions. Two corrections landed with it: the Timoo and the Tivoo-Max are
+  NOT Wi-Fi panels (the app's `WifiBlueArchEnum` and the daemon's own
+  `panel_features.rs` agree), so P6.2's blocker as written could never clear;
+  and the LAN wall refusal no longer tells users the Wi-Fi upload "is not
+  known" -- it is known (`Draw/PixelLocalHttp`); the daemon has no command for
+  it (`divoomd/src/wall/refusal.rs`, `tests/test_e2e_bench_snap.py`). P6.1 and
+  P6.2 are now DECISION (owner).
 - **The "monthly best" category is a daily pick, not a sliding window
   (P9.8 answered, 2026-11-07).** Measured from the daemon's own fetch
   snapshots (`~/.config/divoom-control/hotchannel_fetches.json`, 14 runs on

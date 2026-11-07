@@ -24,6 +24,11 @@
 - **[divoom_docs/](divoom_docs/)** — captured upstream/device docs.
 - **[cloud_api/](cloud_api/)** — cloud HTTP API catalog (533/533 endpoints).
 
+## Design inputs
+- **[council-p6.md](council-p6.md)** — the 2026-11-07 council on P6.1 (panels
+  as one surface) and P6.2 (a Wi-Fi panel as a wall slot): facts, findings,
+  measurements and the owner's open decisions.
+
 ## Operations
 - **[RELEASING.md](RELEASING.md)** — release process (.dmg, Homebrew cask).
 - **`scripts/ci_local.sh`** — the full CI-equivalent gate; run before pushing.
