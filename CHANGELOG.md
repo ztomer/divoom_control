@@ -6,6 +6,31 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **A link failure is the LINK's, and the link-drop stress test is ordered
+  by an event (D.LINKDROP).** CI run 42413546443 (a docs-only commit) failed
+  `a_link_drop_keeps_the_widget_and_a_reconnect_resumes_it_cleanly` with a
+  frame on the reconnected panel 300 ms after the reconnect. The race: the
+  test slept 5.2 s and trusted the job's 5 s tick to queue its frame on the
+  held link first; a runner stall across both deadlines flips them, because
+  tokio's current-thread `block_on` polls the test body before an overdue
+  spawned task. The drop and reconnect then ran first and the job's tick ran
+  after them, rendering against and pushing onto the NEW link -- a correct
+  resume the assertion could not tell from a stale frame. Reproduced every
+  run by a spawned task that blocks the runtime thread across the tick; the
+  test now waits for the frame to be QUEUED (`CommandQueue::pending()`), and
+  breaking the old-link fence still turns it red. The two sibling scenarios
+  that also ordered by sleeps (`stop_is_a_fence...`, `disconnect_stops...`)
+  could pass vacuously the same way and now wait on the census too.
+  Reading the reconnect path for the same shape found three real defects,
+  each red first through a new mock seam that holds a write IN FLIGHT
+  (`MockTransport::hold_writes`): a write that failed on a link a reconnect
+  had already replaced called `link_failed(mac)`, which retired the healthy
+  NEW link and broadcast a drop (now `link_failed(mac, &link, ..)`, a
+  compare-and-detach, at all five call sites); a frame the stop/retire fence
+  dropped came back `Ok(())` and was recorded and broadcast as landed (now
+  `PushFailure::Fenced`); and a late landing on a replaced link wrote a
+  screen record and `activity` event onto the new one.
+
 - **The default run launches no browser, not even camoufox's GPU probe
   (D.REV3).** camoufox 0.5.9's `launch_options` launches a whole browser to
   read the host GPU, and the default run (no `--run-browser`) reads launch

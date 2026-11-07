@@ -19,88 +19,13 @@
 //! `scripts/build_libdivoom.sh` on every platform) has encoded it. The
 //! encoder assertion below is deliberate: without it every count reads zero,
 //! which is the pass condition for half the scenarios.
-use divoomd::daemon::{Daemon, DeviceTransport};
 use divoomd::protocol::make_request;
 use divoomd::socket_server::Handler;
 use serde_json::json;
-use std::sync::Arc;
 use std::time::Duration;
 
-async fn daemon_with_mock(mac: &str) -> Arc<Daemon> {
-    let d = Arc::new(Daemon::new());
-    d.initialize_self_weak(Arc::downgrade(&d));
-    let conn = d
-        .handle(make_request(
-            "connect",
-            Some(json!({"mock": true, "mac": mac})),
-            None,
-        ))
-        .await;
-    assert_eq!(conn["success"], json!(true), "mock connect: {conn}");
-    // No encoder precondition any more: the encoder is Rust inside this binary,
-    // so "is it available" is not a question about the machine any more. The
-    // assertion it guarded (build the dylib first) has no subject left.
-    d
-}
-
-/// Number of commands the mock behind `mac` has received so far.
-async fn sent_count(d: &Daemon, mac: &str) -> usize {
-    let t = d
-        .fleet
-        .get(mac)
-        .await
-        .expect("device known")
-        .transport()
-        .await
-        .expect("device connected");
-    match &*t {
-        DeviceTransport::Mock(m) => m.sent_commands.lock().unwrap().len(),
-        _ => panic!("expected a mock transport"),
-    }
-}
-
-/// The queue every command to `mac` goes through right now.
-async fn queue_of(d: &Daemon, mac: &str) -> divoomd::command_queue::CommandQueue {
-    d.fleet
-        .get(mac)
-        .await
-        .expect("device known")
-        .link()
-        .await
-        .expect("device connected")
-        .queue
-        .clone()
-}
-
-async fn start_job(d: &Daemon, mac: &str, kind: &str) -> serde_json::Value {
-    d.handle(make_request(
-        "live_job_start",
-        Some(json!({"kind": kind, "mac": mac, "params": {"size": 16}})),
-        None,
-    ))
-    .await
-}
-
-async fn stop_job(d: &Daemon, mac: &str, kind: &str) -> serde_json::Value {
-    d.handle(make_request(
-        "live_job_stop",
-        Some(json!({"kind": kind, "mac": mac})),
-        None,
-    ))
-    .await
-}
-
-/// Poll until the mock has received at least `n` commands, or give up.
-async fn wait_for_sent(d: &Daemon, mac: &str, n: usize, budget: Duration) -> usize {
-    let deadline = tokio::time::Instant::now() + budget;
-    loop {
-        let c = sent_count(d, mac).await;
-        if c >= n || tokio::time::Instant::now() >= deadline {
-            return c;
-        }
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
-}
+mod live_jobs_support;
+use live_jobs_support::*;
 
 #[tokio::test]
 async fn stop_is_a_fence_even_for_a_frame_already_queued() {
@@ -117,8 +42,14 @@ async fn stop_is_a_fence_even_for_a_frame_already_queued() {
         start_job(&d, "DEV_A", "sysmon").await["success"],
         json!(true)
     );
-    // Let the job compute its first frame and enqueue the push behind us.
-    tokio::time::sleep(Duration::from_millis(400)).await;
+    // Let the job compute its first frame and enqueue the push behind us --
+    // waited for as an EVENT. A 400 ms sleep here passed vacuously whenever
+    // the job's first render took longer: the stop then ran before any frame
+    // was queued, and the fence was never exercised (D.LINKDROP).
+    assert!(
+        wait_until(Duration::from_secs(5), || queue.pending() >= 1).await,
+        "the job's first frame never queued behind the hold"
+    );
     assert_eq!(
         sent_count(&d, "DEV_A").await,
         0,
@@ -231,7 +162,14 @@ async fn disconnect_stops_jobs_and_a_reconnect_gets_no_ghost_frame() {
     // Hold the queue so the NEXT frame is queued, then disconnect underneath it.
     let queue = queue_of(&d, "DEV_A").await;
     let permit = queue.acquire(None).await.expect("hold the device");
-    tokio::time::sleep(Duration::from_millis(5200)).await; // one job interval
+    // The next frame must really be queued before the disconnect, or the
+    // scenario under test never happens (a stalled runner used to run the
+    // disconnect first and pass vacuously -- D.LINKDROP).
+    let stall = runtime_stall_across_the_next_tick();
+    assert!(
+        wait_until(Duration::from_secs(8), || queue.pending() >= 1).await,
+        "the job's next frame never queued on the held link"
+    );
     let disc = d.handle(make_request("disconnect", None, None)).await;
     assert_eq!(disc["success"], json!(true), "{disc}");
     assert_eq!(
@@ -249,18 +187,7 @@ async fn disconnect_stops_jobs_and_a_reconnect_gets_no_ghost_frame() {
         0,
         "a frame from the pre-disconnect job landed on the reconnected device"
     );
-}
-
-async fn daemon_with_mock_on(d: &Daemon, mac: &str) -> serde_json::Value {
-    let conn = d
-        .handle(make_request(
-            "connect",
-            Some(json!({"mock": true, "mac": mac})),
-            None,
-        ))
-        .await;
-    assert_eq!(conn["success"], json!(true), "mock reconnect: {conn}");
-    conn
+    stall.await.expect("the stall task ran");
 }
 
 #[tokio::test]
@@ -275,9 +202,23 @@ async fn a_link_drop_keeps_the_widget_and_a_reconnect_resumes_it_cleanly() {
     assert!(wait_for_sent(&d, "DEV_A", 1, Duration::from_secs(3)).await >= 1);
 
     // Hold the link so the next frame queues on it, then drop the link.
+    //
+    // ORDER BY EVENT, NOT BY CLOCK (D.LINKDROP, CI run 42413546443). This
+    // used to sleep 5.2 s and trust that the job's 5 s tick had queued its
+    // frame by then. A runtime thread stalled across BOTH deadlines breaks
+    // that: tokio's current-thread `block_on` polls the test body before an
+    // overdue spawned task, so the drop and the reconnect ran first and the
+    // job's tick ran AFTER them -- rendering against, and pushing onto, the
+    // new link. That frame was never queued on the dropped one; the old
+    // assertion could not tell the two apart and went red on a correct
+    // daemon. The stall below reproduces the CI runner's every run.
     let old_queue = queue_of(&d, "DEV_A").await;
     let permit = old_queue.acquire(None).await.expect("hold the device");
-    tokio::time::sleep(Duration::from_millis(5200)).await; // one job interval
+    let stall = runtime_stall_across_the_next_tick();
+    assert!(
+        wait_until(Duration::from_secs(8), || old_queue.pending() >= 1).await,
+        "the job's next frame never queued on the held link"
+    );
     let drop_res = d
         .handle(make_request("mock_simulate_drop", None, None))
         .await;
@@ -302,6 +243,7 @@ async fn a_link_drop_keeps_the_widget_and_a_reconnect_resumes_it_cleanly() {
         0,
         "a frame queued on the dropped link landed on the new one"
     );
+    stall.await.expect("the stall task ran");
     // ...and the SAME job resumes pushing on the new link within its interval.
     let resumed = wait_for_sent(&d, "DEV_A", 1, Duration::from_secs(8)).await;
     assert!(

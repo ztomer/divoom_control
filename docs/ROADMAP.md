@@ -450,6 +450,14 @@ rule: byte-equal first, then the Python goes.)
   misread its own measurement. Re-derive with `tools/mem_gauge_compare.py`
   (gated by `tests/test_mem_gauge_parity.py`), and judge visual bumps on
   `tools/render_tray_icon.py` sheets, not on a full live menu bar.
+- **Work bound to a link reports to THAT link.** A completion path (a late
+  write failure, a landing) acts through a compare-and-detach on the link it
+  ran on (`Fleet::detach_link`), never by the panel's id, which names the NEW
+  link after a reconnect (D.LINKDROP; `src/live_jobs/frame_link_tests.rs`).
+- **A stress scenario is ordered by an event, never by a gap between two
+  deadlines.** A stalled runner fires both in one turn, and tokio's
+  current-thread `block_on` polls the test body first; wait on a census
+  (`CommandQueue::pending()`) instead (D.LINKDROP).
 - **A `flock` belongs to the open file description**, so a child that
   inherited the descriptor keeps the lock; release it explicitly
   (`flock(LOCK_UN)` on drop), never by "the last descriptor is gone" (P1.15).
