@@ -156,7 +156,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         cmd = install_command(spec)
         print(f"installing pinned camoufox browser {spec}...", file=sys.stderr)
-        proc = subprocess.run(cmd, shell=True, stdin=subprocess.DEVNULL)
+        proc = subprocess.run(cmd, shell=True, stdin=subprocess.DEVNULL, check=False)
         if proc.returncode != 0:
             print(f"camoufox install failed with exit code {proc.returncode}", file=sys.stderr)
             return 1
