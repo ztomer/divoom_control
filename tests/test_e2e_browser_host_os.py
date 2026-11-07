@@ -51,6 +51,20 @@ def test_the_host_has_a_fingerprint_os() -> None:
     assert fingerprint_os() == {"Darwin": "macos", "Linux": "linux"}[platform.system()]
 
 
+@pytest.mark.parametrize(("host", "want"), [("Darwin", "macos"), ("Linux", "linux")])
+def test_each_supported_host_names_its_os(monkeypatch: pytest.MonkeyPatch, host: str, want: str) -> None:
+    monkeypatch.setattr(platform, "system", lambda: host)
+    assert fingerprint_os() == want
+
+
+@pytest.mark.parametrize("host", ["Windows", "FreeBSD", ""])
+def test_an_unsupported_host_is_refused_not_guessed(monkeypatch: pytest.MonkeyPatch, host: str) -> None:
+    """Any other host must stop the launch: a guessed OS is the slow foreign-font fingerprint."""
+    monkeypatch.setattr(platform, "system", lambda: host)
+    with pytest.raises(RuntimeError, match="macOS and Linux"):
+        fingerprint_os()
+
+
 def test_every_process_draws_the_hosts_os() -> None:
     """Without a browser: a fresh process per draw, because the OS is drawn once per process."""
     want = PLATFORM[fingerprint_os()]
