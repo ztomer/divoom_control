@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -148,8 +149,28 @@ def main(argv: list[str] | None = None) -> int:
     if args == ["--spec"]:
         print(spec)
         return 0
+    if args == ["--install"]:
+        version = installed_version()
+        if expected and version == expected:
+            print(f"camoufox browser present: {version}")
+            return 0
+        cmd = install_command(spec)
+        print(f"installing pinned camoufox browser {spec}...", file=sys.stderr)
+        proc = subprocess.run(cmd, shell=True, stdin=subprocess.DEVNULL)
+        if proc.returncode != 0:
+            print(f"camoufox install failed with exit code {proc.returncode}", file=sys.stderr)
+            return 1
+        new_version = installed_version()
+        if expected and new_version != expected:
+            print(
+                f"camoufox install finished but active version is {new_version}, expected {expected}",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"camoufox browser present: {new_version}")
+        return 0
     if args:
-        print("usage: camoufox_installed.py [--spec]", file=sys.stderr)
+        print("usage: camoufox_installed.py [--spec | --install]", file=sys.stderr)
         return 2
     version = installed_version()
     if version is None:

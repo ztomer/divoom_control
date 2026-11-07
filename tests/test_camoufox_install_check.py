@@ -160,6 +160,17 @@ def test_the_pin_file_is_the_expected_build_and_the_spec_ci_installs() -> None:
     assert pin.endswith("/" + _pinned_build())
 
 
+def test_install_flag_reports_present_when_already_installed() -> None:
+    """`--install` exits 0 immediately without installing if active version matches pin."""
+    pytest.importorskip("camoufox.pkgman")
+    result = subprocess.run(
+        [sys.executable, str(CHECKER), "--install"],
+        capture_output=True, text=True, cwd=REPO_ROOT, timeout=60, stdin=subprocess.DEVNULL, check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "camoufox browser present" in result.stdout
+
+
 @pytest.mark.parametrize(
     "content",
     ["", "156.0.1-beta.39\n", "official/nightly/156.0.1-beta.39\n", "official/stable/1.0-beta.1\nofficial/stable/1.0-beta.2\n"],

@@ -19,7 +19,7 @@ cd "$ROOT"
 # shellcheck source=/Users/ztomer/Projects/gates_of_heck/tui/lib.sh
 source "${GOH_DIR:-$HOME/Projects/gates_of_heck}/tui/lib.sh"
 
-python3 tools/camoufox_installed.py || die "the browser suites need the pinned camoufox build (above)"
+python3 tools/camoufox_installed.py --install || die "the browser suites need the pinned camoufox build (above)"
 
 suites=()
 while IFS= read -r f; do suites+=("$f"); done < <(grep -l playwright tests/test_*.py)
