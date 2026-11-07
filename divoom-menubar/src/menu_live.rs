@@ -223,11 +223,6 @@ mod tests {
         );
     }
 
-    /// D.MENUEVENT: an open menu is driven by the daemon's event stream, not by
-    /// a clock. With no event the tick runs once (on opening, to catch up with
-    /// what changed since the last poll); an event from another thread -- the
-    /// subscribe thread -- runs it again, in the menu-tracking mode, and the
-    /// shown model follows the new active panel.
     /// D.REV1: two `WhileOpen`s overlap whenever the new one is built before
     /// the old one drops (`self.live = start(..)`), or a menu opens while
     /// another tracks. Whichever drops first, the survivor still follows
@@ -258,6 +253,11 @@ mod tests {
         );
     }
 
+    /// D.MENUEVENT: an open menu is driven by the daemon's event stream, not by
+    /// a clock. With no event the tick runs once (on opening, to catch up with
+    /// what changed since the last poll); an event from another thread -- the
+    /// subscribe thread -- runs it again, in the menu-tracking mode, and the
+    /// shown model follows the new active panel.
     #[test]
     fn an_open_menu_follows_an_event_and_does_not_poll() {
         use std::sync::{mpsc, Arc, Mutex};
