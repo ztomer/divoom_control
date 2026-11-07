@@ -6,6 +6,18 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **Review fixes on D.BLEDBG, D.E2ELAUNCH and D.E2EOS.** `scripts/py_ci.sh`
+  no longer swallows a failed BLE-free restore (`|| true`): a green suite
+  whose restore fails now fails the run, tested by driving the real script
+  with its tools faked. The shared test browser is bound to the session
+  loop, so a first launch from any other loop is refused instead of
+  starting a browser that dies with that loop, and a browser that died has
+  its playwright driver stopped when it is replaced (one node process leaked
+  per crash before). The session-loop gate picks browser suites by imports,
+  not by the predicate it checks, and the seam gate holds every module that
+  reaches `tests.support.browser`; `fingerprint_os()`'s refusal of an
+  unsupported host is tested in both directions.
+
 - **CI green again: fpgen 1.3.0 cannot draw a fingerprint on Python 3.15
   (P1.22, D.CIB85).** Five tests had failed on main since v0.45.0 with
   `binascii.Error: Incomplete Base85 group`. The cause was not cached data:
