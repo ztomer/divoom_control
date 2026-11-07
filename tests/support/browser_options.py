@@ -64,8 +64,13 @@ def launch_options_for(*, network: bool) -> dict:
     # its screen constraint is not always honoured (1600x900 screens were still
     # drawn under min_height=1300, 4 in 1000). The OS is the host's (fingerprint_os).
     # The rest stays random.
+    # canvas_noise=False: the suites READ canvas pixels (previews, the bench
+    # clock, GIF frames). camoufox 0.5.9 covers the canvas with a placeholder
+    # unless the host's GPU is one fpgen records -- true of this Mac, false of
+    # CI's macOS VM ("Apple Paravirtual device"), where seven pixel tests read
+    # noise (run 42406876821). A test browser has no fingerprint to protect.
     opts = launch_options(headless=True, main_world_eval=True, config=HARNESS_GEOMETRY,
-                          os=fingerprint_os(), i_know_what_im_doing=True)
+                          os=fingerprint_os(), canvas_noise=False, i_know_what_im_doing=True)
     if not network:
         opts["proxy"] = OFFLINE_PROXY
     return opts

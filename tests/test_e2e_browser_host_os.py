@@ -72,6 +72,19 @@ def test_an_unsupported_host_is_refused_not_guessed(monkeypatch: pytest.MonkeyPa
         fingerprint_os()
 
 
+@pytest.mark.parametrize("gpu", [("Apple", "Apple Paravirtual device"), ("Apple", "Apple M1"), None])
+def test_the_canvas_is_never_covered_whatever_gpu_the_host_reports(monkeypatch: pytest.MonkeyPatch, gpu) -> None:
+    """The suites read canvas pixels. camoufox covers the canvas when the host GPU
+    is one fpgen does not record (CI's macOS VM), so seven pixel tests read
+    noise there and passed here (run 42406876821)."""
+    import camoufox.host_rendering as hr
+
+    from tests.support.browser_options import launch_options_for
+
+    monkeypatch.setattr(hr, "_host_gpu", lambda *a: gpu)
+    assert not hr.has_canvas_placeholder(launch_options_for(network=False)["firefox_user_prefs"])
+
+
 def test_every_process_draws_the_hosts_os() -> None:
     """Without a browser: a fresh process per draw, because the OS is drawn once per process."""
     want = PLATFORM[fingerprint_os()]
