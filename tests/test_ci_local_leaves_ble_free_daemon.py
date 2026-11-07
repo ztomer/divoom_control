@@ -52,8 +52,11 @@ def test_every_ble_building_ci_step_restores_the_ble_free_daemon() -> None:
 
 def test_py_ci_restores_on_exit_before_it_builds_the_ble_daemon() -> None:
     text = PY_CI.read_text()
-    trap = re.search(r"^trap .*ble_free_after\.sh.* --restore.* EXIT", text, re.MULTILINE)
-    assert trap, "py_ci.sh must trap EXIT into scripts/ble_free_after.sh --restore"
+    assert re.search(r"^\s+\"\$ROOT/scripts/ble_free_after\.sh\" --restore", text, re.MULTILINE), (
+        "py_ci.sh's EXIT trap must run scripts/ble_free_after.sh --restore"
+    )
+    trap = re.search(r"^trap restore_ble_free EXIT$", text, re.MULTILINE)
+    assert trap, "py_ci.sh must trap EXIT into restore_ble_free"
     build = re.search(r"^cargo build -p divoomd --locked$", text, re.MULTILINE)
     assert build and trap.start() < build.start(), "the trap must precede the BLE build"
 
@@ -112,3 +115,63 @@ def test_a_failed_restore_fails_the_step(tmp_path: Path) -> None:
     (tmp_path / "bin" / "cargo").write_text("#!/bin/sh\nexit 3\n")
     r = _run(["--restore"], env)
     assert r.returncode == 3
+
+
+def _fake_py_ci_tools(tmp_path: Path, *, pytest_rc: int, restore_rc: int) -> tuple[dict[str, str], Path]:
+    """py_ci.sh's own tools, faked: python3 answers the version probe and runs a
+    pytest that exits `pytest_rc`; cargo's BLE build passes and its BLE-free
+    restore exits `restore_rc`."""
+    log = tmp_path / "calls.log"
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    py = ROOT.joinpath(".python-version").read_text().strip()
+    tools = {
+        "python3": (
+            '#!/bin/sh\n'
+            f'echo "python3 $*" >> "{log}"\n'
+            f'[ "$1" = "-c" ] && {{ echo "{py}"; exit 0; }}\n'
+            f'exit {pytest_rc}\n'
+        ),
+        "cargo": (
+            '#!/bin/sh\n'
+            f'echo "cargo $*" >> "{log}"\n'
+            f'case "$*" in *--no-default-features*) exit {restore_rc};; esac\n'
+            'exit 0\n'
+        ),
+    }
+    for name, body in tools.items():
+        tool = bindir / name
+        tool.write_text(body)
+        tool.chmod(tool.stat().st_mode | stat.S_IXUSR)
+    env = dict(os.environ, PATH=f"{bindir}:{os.environ['PATH']}", NO_COLOR="1")
+    return env, log
+
+
+def _run_py_ci(env: dict[str, str]) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["bash", str(PY_CI)], cwd=ROOT, env=env, capture_output=True,
+        text=True, timeout=60, stdin=subprocess.DEVNULL, check=False,
+    )
+
+
+def test_py_ci_fails_when_its_restore_fails_after_a_green_suite(tmp_path: Path) -> None:
+    """A green py_ci that left the BLE daemon behind is the lie D.BLEDBG removed."""
+    env, log = _fake_py_ci_tools(tmp_path, pytest_rc=0, restore_rc=3)
+    r = _run_py_ci(env)
+    calls = log.read_text().splitlines()
+    assert "cargo " + " ".join(RESTORE) in calls, calls
+    assert r.returncode == 3, (r.returncode, r.stderr[-400:])
+
+
+def test_py_ci_keeps_the_suites_status_over_a_failed_restore(tmp_path: Path) -> None:
+    env, log = _fake_py_ci_tools(tmp_path, pytest_rc=5, restore_rc=3)
+    r = _run_py_ci(env)
+    assert "cargo " + " ".join(RESTORE) in log.read_text().splitlines()
+    assert r.returncode == 5, (r.returncode, r.stderr[-400:])
+
+
+def test_py_ci_passes_when_the_suites_and_the_restore_do(tmp_path: Path) -> None:
+    env, log = _fake_py_ci_tools(tmp_path, pytest_rc=0, restore_rc=0)
+    r = _run_py_ci(env)
+    assert r.returncode == 0, r.stderr[-400:]
+    assert log.read_text().splitlines()[-1] == "cargo " + " ".join(RESTORE)

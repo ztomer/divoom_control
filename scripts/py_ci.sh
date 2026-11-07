@@ -124,7 +124,16 @@ COV_PRECISION=2
 # That build is BLE-enabled (the default features, as CI builds it) and would
 # stay in target/debug/divoomd for every later local run (D.BLEDBG): restore the
 # BLE-free dev build however this script ends, before the build can happen.
-trap '"$ROOT/scripts/ble_free_after.sh" --restore || true' EXIT
+# A failed restore fails the script (the suite's own failure wins): a green run
+# that left a BLE daemon behind is the defect, not a detail
+# (tests/test_ci_local_leaves_ble_free_daemon.py drives both).
+restore_ble_free() {
+    local rc=$? restore_rc=0
+    "$ROOT/scripts/ble_free_after.sh" --restore || restore_rc=$?
+    [ "$rc" -ne 0 ] && exit "$rc"
+    exit "$restore_rc"
+}
+trap restore_ble_free EXIT
 info "cargo build -p divoomd --locked (the daemon the spawning tests run)"
 cargo build -p divoomd --locked
 
