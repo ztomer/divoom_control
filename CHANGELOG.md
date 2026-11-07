@@ -6,6 +6,20 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **CI green again: fpgen 1.3.0 cannot draw a fingerprint on Python 3.15
+  (P1.22, D.CIB85).** Five tests had failed on main since v0.45.0 with
+  `binascii.Error: Incomplete Base85 group`. The cause was not cached data:
+  this machine's fpgen had been EDITED in place in user site-packages
+  (`if s == '!': return 0`; its RECORD hash no longer matched), and CI
+  installs the published wheel, whose `base85_to_int` hands the one
+  one-character index in fpgen's data to `b85decode`, which 3.15 refuses.
+  `tests/support/fpgen_compat.py` now decodes fpgen's indices with 3.14's
+  meaning at the launch seam on every machine, pinned against every index
+  fpgen holds and re-examined when fpgen moves past 1.3.0; and
+  `tests/test_installed_dependencies_are_published.py` fails when any file of
+  the [e2e] closure no longer matches what pip installed, so a privately
+  repaired dependency cannot mask a fresh install again.
+
 - **Council on P6.1 and P6.2 (umbrella D7, D8; owner: "council",
   2026-11-07).** `docs/council-p6.md`: the facts read from the code, the
   decompiled app and the owner's config (no device written), five personas

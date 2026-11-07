@@ -46,26 +46,6 @@ WG.5 and WG.7 -> P9.12; WG.LIGHTDARK -> P9.13.
 model finished. **Exit:** every Stage 1 item deleted. The divoom gate runs 8
 camoufox browsers (~8 GB): run it once per landing, never in a loop.
 
-#### P1.22 — CI's browser step is red on main since v0.45.0 (D.CIB85)
-**Status:** OPEN
-**Why:** the `tests` job failed on the `v0.45.0` tag (run 42158445750) and on
-main at `6372678` (run 42158513910): 5 failed, 2364 passed, 222 skipped. All
-five die before a page opens, inside camoufox's fingerprint generator:
-`launch_options` (`tests/support/browser_options.py:64`) ->
-fpgen's `unpacker.lookup_value_list` -> `base64.b85decode` ->
-`binascii.Error: Incomplete Base85 group` (one, the host-OS test, as the
-subprocess's exit status 1). The same five pass on this machine
-(2026-11-07, `--run-browser`, 5 passed) with the SAME camoufox 0.5.9, fpgen
-1.3.0 and Python 3.15 -- so the difference is the fingerprint DATA fpgen
-holds, which CI fetches fresh on every run and this machine has cached. That
-is the shape the local gate cannot see: the dev machine's cache masks a
-broken fresh install. The release was cut over a red CI.
-**Done when:** a fresh-cache run reproduces it locally (fpgen's data
-directory pointed at an empty temp dir) and is watched red; the cause is
-fixed or the data pinned the way `.camoufox-build` pins the browser; the
-local gate runs the browser suites on a fresh fpgen cache so the class
-cannot hide again; and CI's `tests` job is green on main.
-
 #### P1.23 — The dependency graph is current
 **Status:** OPEN
 **Why:** measured 2026-11-07 (`cargo update --dry-run --verbose`): 64
@@ -552,7 +532,7 @@ is judged against; when one moves, change it here in the same commit.
 | Measure | Value | Where it is enforced |
 |---|---|---|
 | Local gate | 30 `GOH_CI_STEPS` (incl. the browser suites and CI's Linux `--all-features` lint, 2026-10-20) + `scripts/py_ci.sh` = 31 steps, run by `pre-push` on the pushed commit in a clean worktree | `.gatesrc`, `tools/gate.sh`, `scripts/ci_local.sh` |
-| Python tests (default) | 2364 passed, 222 skipped, 5 failed (CI run 42158513910, 2026-11-06; the 5 are P1.22) | `pytest.ini` (`testpaths = tests`) |
+| Python tests (default) | 2364 passed, 222 skipped, 5 failed (CI run 42158513910, 2026-11-06; the 5 were P1.22, fixed by the fpgen shim) | `pytest.ini` (`testpaths = tests`) |
 | `examples/tests` | 1022 passed, 73 skipped (2026-10-19) | `scripts/py_ci.sh` |
 | Browser subset (serial) | 313 passed, 5 min 15 s (2026-11-02, `24ab74e`); CI step 331 s on run 41544702215 | `scripts/browser_e2e.sh` |
 | Rust tests | 659 (2026-10-20) | `cargo test --locked` |

@@ -54,6 +54,9 @@ def fingerprint_os() -> str:
 def launch_options_for(*, network: bool) -> dict:
     from camoufox.utils import launch_options
 
+    from tests.support import fpgen_compat
+
+    fpgen_compat.install()  # fpgen 1.3.0 cannot draw a fingerprint on 3.15 (P1.22)
     # The fingerprint's window is otherwise random, and one shorter than the
     # page made Firefox move the content up mid-test, so a gesture landed
     # above its target (CI runs 41367764353, 41370988097). Both the window AND
