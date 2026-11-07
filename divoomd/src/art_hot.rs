@@ -378,7 +378,7 @@ pub(crate) async fn run_hot_update(
                     // be sent, so the link is gone: the panel must stop
                     // reading as connected (P2.8).
                     drop(permit);
-                    daemon.link_failed(&target.id, Some(&why)).await;
+                    daemon.link_failed(&target.id, &link, Some(&why)).await;
                     return Err(why);
                 }
             };
@@ -390,7 +390,7 @@ pub(crate) async fn run_hot_update(
                 if let Err(e) = dev.send_command(0x45, &[0x02], true).await {
                     let why = format!("hot channel switch (0x45 [0x02]) failed: {e}");
                     drop(permit);
-                    daemon.link_failed(&target.id, Some(&why)).await;
+                    daemon.link_failed(&target.id, &link, Some(&why)).await;
                     return Err(why);
                 }
             }

@@ -260,7 +260,7 @@ impl Daemon {
                     .get("error")
                     .and_then(serde_json::Value::as_str)
                     .map(str::to_string);
-                self.link_failed(&target_id, reason.as_deref()).await;
+                self.link_failed(&target_id, &link, reason.as_deref()).await;
             } else {
                 let st = if failed { "degraded" } else { "active" };
                 let _ = self.tx.send(crate::daemon_connect::status_payload(

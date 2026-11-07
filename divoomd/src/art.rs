@@ -241,6 +241,7 @@ pub async fn cmd_custom_art_push(daemon: Arc<Daemon>, args: &Value) -> Value {
         daemon
             .link_failed(
                 &device.id,
+                &link,
                 Some("the panel did not take the custom art page"),
             )
             .await;

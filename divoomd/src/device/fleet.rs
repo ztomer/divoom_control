@@ -237,6 +237,15 @@ impl Fleet {
         d.detach().await
     }
 
+    /// Drop `link` from panel `id` only if it is still that panel's link
+    /// (compare-and-detach); `None` when it was already replaced or dropped.
+    /// Work bound to a link reports ITS link's failure through this, never
+    /// through [`Self::detach`], which takes whatever link the id names now.
+    pub async fn detach_link(&self, id: &str, link: &Arc<Link>) -> Option<Arc<Link>> {
+        let d = self.get(id).await?;
+        d.detach_if(link).await
+    }
+
     /// Forget one device entirely: its job stopped, its link retired (and
     /// returned so the caller can hang up), its activity and lease gone -- and
     /// those slots closed, so a request still holding the device cannot put

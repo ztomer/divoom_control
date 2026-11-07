@@ -101,6 +101,10 @@ pub(crate) enum PushFailure {
     /// widget that cannot be pushed is the job's own business, not a link
     /// event.
     Other,
+    /// The fence dropped the frame when its turn came: its job was stopped,
+    /// or its link replaced, while it waited. Nothing was sent, so nothing
+    /// may be recorded as shown -- and it is not a link failure either.
+    Fenced,
 }
 
 /// Push one already-decoded RGB frame to a device.

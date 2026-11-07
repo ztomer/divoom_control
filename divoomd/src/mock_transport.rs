@@ -1,6 +1,6 @@
 use crate::transport::BleResult;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -12,6 +12,12 @@ pub struct MockTransport {
     /// While set, every write fails and no response arrives: the panel a
     /// test needs to drive a handler down its device-failure path (P5.10).
     pub fail_writes: Arc<AtomicBool>,
+    /// A test seam: while [`Self::hold_writes`]' guard lives, every write
+    /// waits IN FLIGHT -- past the queue and the link's fences, on the wire --
+    /// the way a real radio write does while the link drops underneath it.
+    write_gate: Arc<tokio::sync::RwLock<()>>,
+    /// How many writes are waiting at that gate right now.
+    writes_waiting: Arc<AtomicUsize>,
 }
 
 /// Shared record of every command byte-pair the mock has been asked to send.
@@ -25,7 +31,30 @@ impl MockTransport {
             sent_commands: Arc::new(Mutex::new(Vec::new())),
             simulated_responses: Arc::new(Mutex::new(HashMap::new())),
             fail_writes: Arc::new(AtomicBool::new(false)),
+            write_gate: Arc::new(tokio::sync::RwLock::new(())),
+            writes_waiting: Arc::new(AtomicUsize::new(0)),
         }
+    }
+
+    /// Hold every later write in flight until the returned guard is dropped.
+    pub async fn hold_writes(&self) -> tokio::sync::OwnedRwLockWriteGuard<()> {
+        self.write_gate.clone().write_owned().await
+    }
+
+    /// Writes waiting in flight at [`Self::hold_writes`]' gate right now.
+    #[must_use]
+    pub fn writes_waiting(&self) -> usize {
+        self.writes_waiting.load(Ordering::SeqCst)
+    }
+
+    /// Pass the write gate: immediately unless a test holds it.
+    async fn on_the_wire(&self) {
+        if self.write_gate.try_read().is_ok() {
+            return;
+        }
+        self.writes_waiting.fetch_add(1, Ordering::SeqCst);
+        drop(self.write_gate.read().await);
+        self.writes_waiting.fetch_sub(1, Ordering::SeqCst);
     }
 
     /// Make every later write fail (and no response arrive), or stop doing so.
@@ -55,8 +84,9 @@ impl MockTransport {
         *n = Some(name);
     }
 
-    /// The mock does no I/O: the command is recorded now and the returned
-    /// future is already complete. Callers `.await` it exactly like the real
+    /// The mock does no I/O: the command is recorded when the returned future
+    /// is first polled, which completes at once unless a test holds the write
+    /// gate ([`Self::hold_writes`]). Callers `.await` it exactly like the real
     /// transport's (`transport.rs` matches both arms with one `.await`).
     ///
     /// # Errors
@@ -75,14 +105,16 @@ impl MockTransport {
         args: &[u8],
         _write_with_response: bool,
     ) -> impl std::future::Future<Output = BleResult<()>> + Send {
-        if self.failing() {
-            return std::future::ready(Err("mock panel: the write failed (injected)".into()));
+        let this = self.clone();
+        let args = args.to_vec();
+        async move {
+            this.on_the_wire().await;
+            if this.failing() {
+                return Err("mock panel: the write failed (injected)".into());
+            }
+            this.sent_commands.lock().unwrap().push((command_id, args));
+            Ok(())
         }
-        self.sent_commands
-            .lock()
-            .unwrap()
-            .push((command_id, args.to_vec()));
-        std::future::ready(Ok(()))
     }
 
     /// The simulated response for `command_id`, if one was staged; complete
@@ -128,8 +160,8 @@ impl MockTransport {
         )
     }
 
-    /// Records the blob as one `0x8b` command; complete immediately, like
-    /// [`Self::send_command`].
+    /// Records the blob as one `0x8b` command; complete at once unless the
+    /// write gate is held, like [`Self::send_command`].
     ///
     /// # Errors
     ///
@@ -144,14 +176,16 @@ impl MockTransport {
         &self,
         blob: &[u8],
     ) -> impl std::future::Future<Output = BleResult<bool>> + Send {
-        if self.failing() {
-            return std::future::ready(Err("mock panel: the transfer failed (injected)".into()));
+        let this = self.clone();
+        let blob = blob.to_vec();
+        async move {
+            this.on_the_wire().await;
+            if this.failing() {
+                return Err("mock panel: the transfer failed (injected)".into());
+            }
+            this.sent_commands.lock().unwrap().push((0x8bu8, blob));
+            Ok(true)
         }
-        self.sent_commands
-            .lock()
-            .unwrap()
-            .push((0x8bu8, blob.to_vec()));
-        std::future::ready(Ok(true))
     }
 
     pub async fn wait_for_any_response(

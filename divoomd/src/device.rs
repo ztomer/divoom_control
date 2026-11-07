@@ -212,6 +212,20 @@ impl Device {
         link
     }
 
+    /// [`Self::detach`], but only while `link` is still the current one.
+    pub(super) async fn detach_if(&self, link: &Arc<Link>) -> Option<Arc<Link>> {
+        let mut current = self.link.lock().await;
+        if !current.as_ref().is_some_and(|c| Arc::ptr_eq(c, link)) {
+            return None;
+        }
+        let old = current.take();
+        drop(current);
+        if let Some(ref o) = old {
+            o.retire();
+        }
+        old
+    }
+
     pub(super) async fn detach(&self) -> Option<Arc<Link>> {
         let old = self.link.lock().await.take();
         if let Some(ref o) = old {

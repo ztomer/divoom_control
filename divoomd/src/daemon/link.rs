@@ -11,9 +11,12 @@
 //! did not answer is a different thing: the link stays, and the panel is
 //! only degraded.
 
+use std::sync::Arc;
+
 use serde_json::{json, Value};
 
 use crate::daemon::Daemon;
+use crate::device::Link;
 use crate::protocol::ErrorCode;
 
 impl Daemon {
@@ -28,8 +31,17 @@ impl Daemon {
     ///
     /// `reason` says why, on the event, so a client can tell a drop from a
     /// user-initiated disconnect without asking.
-    pub(crate) async fn link_failed(&self, mac: &str, reason: Option<&str>) {
-        self.fleet.detach(mac).await;
+    ///
+    /// `failed` is the link the write was sent on. Only THAT link is retired,
+    /// and only while it is still the panel's link: a write in flight when a
+    /// reconnect replaced it fails late, and retiring by `mac` then took down
+    /// the healthy new link and reported a drop of a panel that had just come
+    /// back (D.LINKDROP). A link already replaced or dropped has nothing left
+    /// to retire or report.
+    pub(crate) async fn link_failed(&self, mac: &str, failed: &Arc<Link>, reason: Option<&str>) {
+        if self.fleet.detach_link(mac, failed).await.is_none() {
+            return;
+        }
         let mut event =
             crate::daemon_connect::status_payload(false, Some(mac), Some("disconnected"));
         if let Some(why) = reason {

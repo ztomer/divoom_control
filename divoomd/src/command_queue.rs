@@ -347,6 +347,19 @@ impl CommandQueue {
         }
     }
 
+    /// How many items are waiting for their turn (the census, not counting the
+    /// one running now). A test that must act only once a unit of work is
+    /// QUEUED waits on this instead of guessing with a clock.
+    ///
+    /// # Panics
+    ///
+    /// If the mutex guarding this value is poisoned -- another thread panicked
+    /// while holding it, so the value cannot be trusted.
+    #[must_use]
+    pub fn pending(&self) -> usize {
+        self.inner.lock().unwrap().pending.len()
+    }
+
     /// Stop the worker; pending items are dropped (their receivers error).
     ///
     /// # Panics

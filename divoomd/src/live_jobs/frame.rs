@@ -68,12 +68,16 @@ pub(super) async fn push_live_frame(
     let outcome = link
         .run(None, async move {
             if !alive.load(Ordering::SeqCst) || link_in.is_retired() {
-                return Ok(());
+                return Err(super::PushFailure::Fenced);
             }
             push_rgb_to_device(&link_in.transport, &rgb, w, h, time_ms).await
         })
         .await;
     let landed = matches!(outcome, Some(Ok(())));
+    // Landed on a connection a reconnect has since replaced: the panel's
+    // record now belongs to the NEW link, which starts with nothing on it,
+    // so the old link's landing is not written onto it (D.LINKDROP).
+    let landed = landed && !link.is_retired();
     if landed {
         device.record_screen(crate::device::screen::Screen::of_url(
             kind,
@@ -87,8 +91,10 @@ pub(super) async fn push_live_frame(
     // reported -- the same two broadcasts a user-initiated call produces
     // (P2.8). A live widget is the most common writer to a panel, so this
     // is usually how a drop is noticed at all.
+    // The failure is THIS link's: a reconnect may have replaced it while the
+    // write was in flight, and the new link is not the one that failed.
     if let Some(Err(super::PushFailure::Link(why))) = &outcome {
-        daemon.link_failed(mac, Some(why)).await;
+        daemon.link_failed(mac, &link, Some(why)).await;
     }
     // A record refused means a `disconnect` forgot the panel after the
     // frame landed: no `activity` event for a panel the fleet let go of.
