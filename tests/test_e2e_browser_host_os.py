@@ -38,8 +38,15 @@ PLATFORM = {"macos": "MacIntel", "linux": "Linux x86_64", "windows": "Win32"}
 #: OS comes up about 1 draw in 4 unpinned, so 8 all-host draws by chance is
 #: about 1 in 65,000.
 PROCESSES = 8
+#: camoufox 0.5.9's launch_options LAUNCHES A BROWSER to read the host GPU
+#: (camoufox/host_rendering.py `_host_gpu`, once per process, when the drawn OS
+#: is the host's) -- 6-10 s a draw here, and one draw passed the 60 s cap under
+#: the gate's eight-wide browser step (2026-11-07). The OS is drawn before that
+#: probe and does not depend on it, so each draw answers it with "no GPU" and
+#: costs a fingerprint, not a browser.
 _DRAW = (
     "import json, sys; sys.path.insert(0, sys.argv[1]);"
+    "import camoufox.host_rendering as hr; hr._host_gpu = lambda *a: None;"
     "from tests.support.browser_options import launch_options_for;"
     "env = launch_options_for(network=False)['env'];"
     "print(json.loads(''.join(v for k, v in sorted(env.items()) if k.startswith('CAMOU_CONFIG')))"
