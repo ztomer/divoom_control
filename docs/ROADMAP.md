@@ -453,7 +453,7 @@ rule: byte-equal first, then the Python goes.)
 - **Work bound to a link reports to THAT link.** A completion path (a late
   write failure, a landing) acts through a compare-and-detach on the link it
   ran on (`Fleet::detach_link`), never by the panel's id, which names the NEW
-  link after a reconnect (D.LINKDROP; `src/live_jobs/frame_link_tests.rs`).
+  link after a reconnect (D.LINKDROP; `divoomd/src/live_jobs/frame_link_tests.rs`).
 - **A stress scenario is ordered by an event, never by a gap between two
   deadlines.** A stalled runner fires both in one turn, and tokio's
   current-thread `block_on` polls the test body first; wait on a census
