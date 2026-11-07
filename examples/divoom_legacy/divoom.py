@@ -10,6 +10,7 @@ from divoom_lib.transport import Transport, COMMAND_TRANSPORT_MAP
 
 from divoom_lib import models
 from divoom_legacy.connection import DivoomConnection
+from divoom_legacy.divoom_compat import ConnectionCompatMixin
 from divoom_lib.models.capabilities import capabilities_for
 from divoom_legacy.display.light import Light
 from divoom_legacy.display.animation import Animation
@@ -40,7 +41,7 @@ from divoom_legacy.tool import Tool
 from divoom_legacy.game import Game
 
 
-class Divoom:
+class Divoom(ConnectionCompatMixin):
     """
     A class to interact with a Divoom device over Bluetooth Low Energy (BLE).
     Acts as the high-level facade orchestrator, registering submodules and
@@ -221,112 +222,6 @@ class Divoom:
 
     async def _wait_for_response(self, command_id: int, timeout: float = 10.0) -> bytes | None:
         return await self._conn._wait_for_response(command_id, timeout)
-
-    # ── Backwards Compatible Client Properties ───────────────────────────────────
-
-    @property
-    def client(self) -> Any:
-        return self._conn.client
-
-    @client.setter
-    def client(self, val: Any) -> None:
-        self._conn.client = val
-
-    @property
-    def notification_queue(self) -> Any:
-        return self._conn.notification_queue
-
-    @notification_queue.setter
-    def notification_queue(self, val: Any) -> None:
-        self._conn.notification_queue = val
-
-    def drain_notifications(self) -> int:
-        """Discard any queued (stale/unsolicited) notification frames so the next
-        query reads its OWN fresh response. The device sends unsolicited frames
-        on state change (e.g. a 0x46 when brightness changes), which otherwise
-        make manual read-back methods lag one step behind. Returns the count
-        drained. Mirrors the drain in send_command_and_wait_for_response."""
-        q = self._conn.notification_queue
-        n = 0
-        while not q.empty():
-            try:
-                q.get_nowait()
-                n += 1
-            except Exception:
-                break
-        return n
-
-    @property
-    def use_ios_le_protocol(self) -> bool:
-        return self._conn.use_ios_le_protocol
-
-    @use_ios_le_protocol.setter
-    def use_ios_le_protocol(self, val: bool) -> None:
-        self._conn.use_ios_le_protocol = val
-
-    @property
-    def message_buf(self) -> bytearray:
-        return self._conn.message_buf
-
-    @message_buf.setter
-    def message_buf(self, val: bytearray) -> None:
-        self._conn.message_buf = val
-
-    @property
-    def WRITE_CHARACTERISTIC_UUID(self) -> str:
-        return self._conn.WRITE_CHARACTERISTIC_UUID
-
-    @WRITE_CHARACTERISTIC_UUID.setter
-    def WRITE_CHARACTERISTIC_UUID(self, val: str) -> None:
-        self._conn.WRITE_CHARACTERISTIC_UUID = val
-
-    @property
-    def NOTIFY_CHARACTERISTIC_UUID(self) -> str:
-        return self._conn.NOTIFY_CHARACTERISTIC_UUID
-
-    @NOTIFY_CHARACTERISTIC_UUID.setter
-    def NOTIFY_CHARACTERISTIC_UUID(self, val: str) -> None:
-        self._conn.NOTIFY_CHARACTERISTIC_UUID = val
-
-    @property
-    def READ_CHARACTERISTIC_UUID(self) -> str:
-        return self._conn.READ_CHARACTERISTIC_UUID
-
-    @READ_CHARACTERISTIC_UUID.setter
-    def READ_CHARACTERISTIC_UUID(self, val: str) -> None:
-        self._conn.READ_CHARACTERISTIC_UUID = val
-
-    @property
-    def SPP_CHARACTERISTIC_UUID(self) -> str:
-        return self._conn.SPP_CHARACTERISTIC_UUID
-
-    @SPP_CHARACTERISTIC_UUID.setter
-    def SPP_CHARACTERISTIC_UUID(self, val: str) -> None:
-        self._conn.SPP_CHARACTERISTIC_UUID = val
-
-    @property
-    def escapePayload(self) -> bool:
-        return self._conn.escapePayload
-
-    @escapePayload.setter
-    def escapePayload(self, val: bool) -> None:
-        self._conn.escapePayload = val
-
-    @property
-    def max_reconnect_attempts(self) -> int:
-        return self._conn.max_reconnect_attempts
-
-    @max_reconnect_attempts.setter
-    def max_reconnect_attempts(self, val: int) -> None:
-        self._conn.max_reconnect_attempts = val
-
-    @property
-    def reconnect_delay(self) -> float:
-        return self._conn.reconnect_delay
-
-    @reconnect_delay.setter
-    def reconnect_delay(self, val: float) -> None:
-        self._conn.reconnect_delay = val
 
     @property
     def is_connected(self) -> bool:

@@ -21,11 +21,11 @@ import json
 import os
 import socket
 import time
-from typing import Any, Callable, Iterable
+from typing import Callable
 
 from .daemon_host_data import HostDataMixin
 from .daemon_panel import PanelDataMixin
-from .daemon_cloud import CloudDataMixin, CloudUnavailable  # noqa: F401
+from .daemon_cloud import CloudDataMixin
 
 DEFAULT_SOCKET_PATH = "/tmp/divoom.sock"
 DEFAULT_TCP_PORT = 9009

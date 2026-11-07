@@ -276,3 +276,66 @@ async def _shared_browser_async():
     yield
     await browser_shared.shutdown_async()
     browser_shared.bind_session_loop(None)
+
+
+# ── The native Rust daemon under test (tests/test_rust_daemon_parity*.py) ────
+# Shared by the control-plane and hardware/cloud parity suites, so it lives here
+# rather than in either one.
+@pytest.fixture
+def rust_daemon_ctx():
+    import subprocess
+    import time
+
+    from divoom_client.daemon_protocol import DaemonClient
+
+    # Resolved BY VERSION through the shared helper. This used to walk
+    # ("release", "debug") and take the first that existed, with a comment
+    # saying it "mirrors DaemonClient's dev-tree discovery" — which it did,
+    # including the bug: nothing rebuilds target/release, so a leftover release
+    # binary silently became the daemon under test. That comment is also how the
+    # copy survived the v0.28.3 fix; a mirror is only as good as its next sync.
+    from tests.support.daemon_binary import require_divoomd
+
+    bin_path = require_divoomd()
+
+    sp = f"/tmp/divoomd_parity_{os.getpid()}.sock"
+    if os.path.exists(sp):
+        os.remove(sp)
+
+    # Spawn divoomd as a subprocess
+    proc = subprocess.Popen(
+        [str(bin_path), "--socket", sp],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        stdin=subprocess.DEVNULL,
+    )
+
+    # Wait for the socket to be bound
+    bound = False
+    for _ in range(50):
+        if os.path.exists(sp):
+            bound = True
+            break
+        time.sleep(0.05)
+
+    if not bound:
+        proc.kill()
+        stdout, stderr = proc.communicate(timeout=1.0)
+        pytest.fail(f"Rust daemon failed to bind to {sp}. stdout: {stdout}, stderr: {stderr}")
+
+    try:
+        yield DaemonClient(sp)
+    finally:
+        # Shutdown cleanly via socket or SIGTERM
+        try:
+            DaemonClient(sp).send_command("shutdown")
+        except Exception:
+            pass
+        proc.terminate()
+        try:
+            proc.wait(timeout=2.0)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+        if os.path.exists(sp):
+            os.remove(sp)

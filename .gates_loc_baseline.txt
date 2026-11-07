@@ -1,9 +1,9 @@
 # Ceilings for files exempted from the 500-line cap by .gatesrc's
 # GOH_LINE_EXCLUDE. Two kinds of exemption: captured vendor API data, waived via
-# GOH_LINE_UNBOUNDED because its size is not ours to ratchet; and the seven files
-# below (2026-11-07), each <= 500 before `ruff format` (line-length 120) and over
-# it after, held at exactly their formatted size. They may only FALL: split a file,
-# lower its number, and delete the line (and its .gatesrc pattern) once it is <= 500.
+# GOH_LINE_UNBOUNDED because its size is not ours to ratchet; and any file of our
+# own held at a shrink-only ceiling (none today: the seven `ruff format` carried
+# over 500 were split in D.SPLIT). A row may only FALL: split the file, lower its
+# number, and delete the line (and its .gatesrc pattern) once it is <= 500.
 #
 # The file exists so the pairing check RUNS. Without GOH_LINE_BASELINE the gate
 # only warns, and a repo that adds an exemption for its own over-long code would
@@ -12,10 +12,3 @@
 #
 # lines path
 0 __under_cap_sentinel__
-561	tests/test_e2e_device_status_chips.py
-536	examples/divoom_legacy/divoom.py
-528	examples/tests/test_divoom_image_encode.py
-527	examples/tests/test_monthly_best_daemon.py
-509	tests/test_rust_daemon_parity.py
-507	examples/divoom_legacy/wall.py
-506	tests/test_gui_main_main.py

@@ -6,7 +6,7 @@ Split from `test_gui_main_main.py` (500-line cap); same harness.
 import pytest
 
 from divoom_gui import gui_main
-from tests.test_gui_main_main import _patch_main_common
+from tests.support.gui_main_fakes import _patch_main_common
 
 
 def test_main_keeps_the_pages_storage_across_launches(monkeypatch, tmp_path):
