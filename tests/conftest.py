@@ -13,6 +13,7 @@ hardware tests are skipped by default. Run them against a real device with::
     pytest --run-hardware
 """
 
+import asyncio
 import inspect
 import os
 import sys
@@ -262,8 +263,10 @@ def _no_leaked_device_loop_threads():
 # the loop that started it, once, at session end.
 @pytest_asyncio.fixture(scope="session", loop_scope="session", autouse=True)
 async def _shared_browser_async():
-    yield
     from tests.support import browser_shared
 
+    browser_shared.bind_session_loop(asyncio.get_running_loop())
+    yield
     await browser_shared.shutdown_async()
+    browser_shared.bind_session_loop(None)
 

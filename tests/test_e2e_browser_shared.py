@@ -60,16 +60,60 @@ async def test_close_closes_the_handles_contexts_and_not_the_browser():
         assert handle._host.browser.is_connected()
 
 
+def _reaches_the_seam() -> set[str]:
+    """Test modules that can reach the browser seam, by IMPORTS -- not by the
+    text ``runs_on_session_loop`` judges, so the two can check each other. A
+    module reaches it by importing ``tests.support.browser`` or anything that
+    does (a support helper, another suite's helpers), transitively."""
+    imports = re.compile(
+        r"^\s*(?:from\s+tests\.(?:support\.)?(\w+)\s+import"
+        r"|from\s+tests\.support\s+import\s+([\w, ]+)"
+        r"|import\s+tests\.(?:support\.)?(\w+))", re.MULTILINE)
+    deps: dict[str, set[str]] = {}
+    for path in [*TESTS.glob("test_*.py"), *(TESTS / "support").glob("*.py")]:
+        names: set[str] = set()
+        for m in imports.finditer(path.read_text(encoding="utf-8")):
+            if m.group(2):
+                names |= {n.strip().split(" as ")[0] for n in m.group(2).split(",")}
+            else:
+                names.add(m.group(1) or m.group(3))
+        deps[path.stem] = names
+    reach = {"browser", "browser_shared"}
+    grew = True
+    while grew:
+        grew = False
+        for name, names in deps.items():
+            if name not in reach and names & reach:
+                reach.add(name)
+                grew = True
+    return {name for name in reach if name.startswith("test_")}
+
+
+def test_every_module_that_reaches_the_seam_is_a_browser_suite():
+    """The class gate under the session loop: every module that can get a
+    browser through the seam -- directly or through a helper -- is one
+    ``runs_on_session_loop`` (and scripts/browser_e2e.sh) picks."""
+    import types
+
+    reach = _reaches_the_seam()
+    assert SELF.removesuffix(".py") in reach and len(reach) > 40, sorted(reach)
+    missed = sorted(name for name in reach
+                    if not S.runs_on_session_loop(types.SimpleNamespace(__file__=str(TESTS / f"{name}.py"))))
+    assert not missed, f"reach the browser seam but are not judged browser suites: {missed}"
+
+
 def test_the_browser_suites_run_on_the_session_loop(request):
     """The shared browser belongs to one event loop; every async test of a
-    module that gets its browser from the seam must be on it."""
+    module that reaches the seam is marked onto it. The modules are picked by
+    imports (``_reaches_the_seam``), never by the predicate under test."""
     import inspect
 
-    items = request.session.items
-    browser_async = [i for i in items if inspect.iscoroutinefunction(getattr(i, "obj", None))
-                     and S.runs_on_session_loop(i.module)]
-    if not browser_async:
-        pytest.skip("no browser suite is part of this run")
+    reach = _reaches_the_seam()
+    browser_async = [i for i in request.session.items if inspect.iscoroutinefunction(getattr(i, "obj", None))
+                     and Path(i.module.__file__).stem in reach]
+    mine = [i for i in browser_async if Path(i.module.__file__).name == SELF]
+    assert mine or request.config.option.keyword or request.config.option.markexpr, (
+        "this module's own async tests were collected, so the check cannot be empty")
     off = [i.nodeid for i in browser_async
            if (i.get_closest_marker("asyncio") is None
                or i.get_closest_marker("asyncio").kwargs.get("loop_scope") != "session")]
@@ -96,6 +140,50 @@ def test_a_launch_from_another_loop_is_refused_not_quietly_a_second_browser():
     finally:
         S._async_host = saved
         _Elsewhere.loop.close()
+
+
+def test_a_first_launch_off_the_session_loop_is_refused():
+    """With no browser started yet, a launch from a loop that is not the session's
+    must not start one there: that browser dies with its loop, and every later
+    test would then start a new one, quietly (Argon on 24ab74e)."""
+    import asyncio
+
+    from playwright.async_api import async_playwright
+
+    async def ask():
+        async with async_playwright() as p:
+            await launch(p)
+            await S.shutdown_async()  # reached only when the launch was wrongly allowed
+
+    saved = S._async_host
+    S._async_host = None
+    try:
+        with pytest.raises(S.SharedBrowserWrongLoop):
+            asyncio.run(ask())
+    finally:
+        S._async_host = saved
+
+
+async def test_a_replaced_browser_has_its_driver_stopped():
+    """A browser that died is replaced on the next launch; the replaced host's
+    playwright driver (a node process) must stop with it, or every crash leaks one."""
+    import asyncio
+
+    from playwright.async_api import async_playwright
+
+    async with async_playwright() as p:
+        first = await launch(p)
+        old = first._host
+        driver = old.playwright._impl_obj._connection._transport._proc
+        await old.browser.close()  # what a crash looks like to the host: disconnected
+        second = await launch(p)
+        assert second._host is not old
+        for _ in range(50):
+            if driver.returncode is not None:
+                break
+            await asyncio.sleep(0.1)
+        assert driver.returncode is not None, f"the replaced host's driver (pid {driver.pid}) is still running"
+        await second.close()
 
 
 # ── the class gate: no suite takes a browser except through the seam ─────────

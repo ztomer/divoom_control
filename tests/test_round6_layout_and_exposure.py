@@ -30,7 +30,6 @@ import sys
 from pathlib import Path
 
 import pytest
-from tests.support.browser import launch as launch_browser, require_browser
 from tests.support.round6_webui import (
     APP_JS,
     CHANNELS_JS,

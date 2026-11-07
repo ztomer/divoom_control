@@ -113,24 +113,46 @@ class SharedBrowser:
 
 
 _async_host: _AsyncHost | None = None
+#: The loop the shared browser may live on, bound by the session fixture in
+#: tests/conftest.py before any test runs. Judged against THIS, not against
+#: whichever loop happened to start the browser: a first launch from another
+#: loop used to start the browser there, it died with that loop, and every later
+#: test quietly started a new one.
+_session_loop: asyncio.AbstractEventLoop | None = None
+
+
+def bind_session_loop(loop: asyncio.AbstractEventLoop | None) -> None:
+    """The session loop (tests/conftest.py); None at session end."""
+    global _session_loop
+    _session_loop = loop
 
 
 async def shared_browser() -> SharedBrowser:
     """The session's browser, started on first use, as a fresh handle."""
     global _async_host
     loop = asyncio.get_running_loop()
-    host = _async_host
-    if host is not None and host.loop is not loop and not host.loop.is_closed():
+    if loop is not _session_loop:
         raise SharedBrowserWrongLoop(
-            "the shared browser runs on another event loop; browser suites run on the "
-            "session loop (tests/conftest.py, tests/support/browser_shared.py)")
-    if host is not None and host.loop is loop and host.browser.is_connected():
+            "the shared browser lives on the session loop and this is another one; browser "
+            "suites run on the session loop (tests/conftest.py, tests/support/browser_shared.py)")
+    host = _async_host
+    if host is not None and host.browser.is_connected():
         await host.sweep()
     else:
+        if host is not None:  # it died: stop its driver too, or each crash leaks a node process
+            await _stop(host)
         _async_host = host = await _start_async(loop)
     handle = SharedBrowser(host)
     host.handles.append(handle)
     return handle
+
+
+async def _stop(host: _AsyncHost) -> None:
+    await host.sweep()
+    with contextlib.suppress(Exception):  # already gone when the browser crashed
+        await host.browser.close()
+    with contextlib.suppress(Exception):
+        await host.playwright.stop()
 
 
 async def _start_async(loop) -> _AsyncHost:
@@ -153,8 +175,4 @@ async def shutdown_async() -> None:
     host, _async_host = _async_host, None
     if host is None or host.loop is not asyncio.get_running_loop():
         return
-    await host.sweep()
-    with contextlib.suppress(Exception):
-        await host.browser.close()
-    with contextlib.suppress(Exception):
-        await host.playwright.stop()
+    await _stop(host)
